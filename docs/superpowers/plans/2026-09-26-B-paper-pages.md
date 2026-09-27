@@ -13,14 +13,15 @@
 ## Read this first (binding rules for every task)
 
 - **Worktree:** `C:/PythonProjects/AncientMap-studio` (branch `feat/studio`). Other implementers work in the same worktree at the same time. Touch only the files listed under "File Structure". Anything else goes to the "Cross-stream requests" section at the end; do not do it yourself.
+- **Every task of this plan needs INT:I0**, the build index's integration item I0 (`docs/superpowers/plans/2026-09-26-00-index.md`, section 6): the owner-decision amendments and every confirm-round fix are in the four plans, the spec, the writer-brief asset and the owner-questions file, committed per plan by pathspec after the last confirm fix. Until that commit, the text of any task may still change: the amendment passes also changed tasks that no per-task gate named (Task 4's and Task 9's `poster`, for example), so a task built earlier can be a pre-amendment version. Check that both of these hold: `git log --oneline 622a20d..HEAD -- docs/superpowers/plans/2026-09-26-B-paper-pages.md` prints at least one commit (this plan's I0 commit), and `git status --porcelain -- docs/superpowers/specs/2026-09-26-studio-and-claude-write-design.md "docs/superpowers/plans/2026-09-26-[ABCD]-*.md" docs/superpowers/plans/2026-09-26-owner-questions.md docs/superpowers/plans/assets/writer-brief-editorial.md` prints nothing. If either check fails, stop and report it to the orchestrator. Do not start any task of this plan, the frontend Tasks 5-12 included.
 - **Commit only your own paths**, always with a pathspec, so nobody else's staged files end up in your commit:
   `git add <paths> && git commit -m "<sentence>" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- <paths>`
   Do not push. A push to `main` is a live deploy (CLAUDE.md).
 - **Working copies are CRLF** (`core.autocrlf=true`). Make edits with the Edit tool. **Never write code through bash heredocs:** they eat backslashes in this environment (see the memory note `reference-heredoc-backslash-escapes`).
 - **No fallback code** (CLAUDE.md). Malformed extras raise `PaperPageError`. An evidence anchor that does not resolve raises; it is never silently dropped. The publish gates (stream A, request CS-3: the `theo_publish` CLI's publish, correct and register-video modes, and the founder route `POST /research/{id}/publish`) run the same checks through this plan's own functions, so a raise on a live page means gate and page disagree, which is a bug to fix.
 - **One anchor rule** (stream A's contract C9, the writer brief's "anchor_text is the opening of that paragraph"): the normalised anchor is at least `MIN_ANCHOR_CHARS` (20) characters long, and exactly one paragraph's normalised text **starts with** it. Several evidence entries may open the same paragraph. The page applies it to the plain `<p>` elements it serves (Task 2); a substring match is wrong.
-- `pipeline/research_html_renderer.py` is imported by `pipeline/static_exporter.py` and the landing route, so its module-level imports stay stdlib-only. It imports `EVIDENCE_ID_RE`, `normalize_anchor_text` and `MIN_ANCHOR_CHARS` from `pipeline.lyra.theo_publishing` **inside** the functions that need them (`parse_evidence`, `parse_corrections`, `resolve_evidence_anchors`; the import would otherwise be circular, see Task 2). `pipeline.lyra.theo_publishing.EVIDENCE_ID_RE` (`ev-\d{2,}`, always applied with `.fullmatch`) is the one Python definition of the evidence-id format: gate, page, local check and case file import it, and this plan defines no copy.
-- **Line numbers are hints, anchors are binding.** The `path:NN-MM` ranges below were read on the plan's base commit. `integrate/wave1` (another session, heading for `main`) also changes `api/routes/public_v1.py`, `api/schemas/public_v1.py`, `ancient-nerds-map/src/types/anRoute.ts`, `ancient-nerds-map/src/seo/__tests__/render.test.tsx` and `tests/api/test_sitemap_lastmod.py`, and the orchestrator merges `origin/main` into `feat/studio` before implementation and again once `integrate/wave1` has landed on `main`. Locate every edit by the function name or the quoted old text, never by the cited line numbers; this matters most for Tasks 3, 4, 5, 9 and 12. When a merge meets one of this plan's test files, keep both sides' tests.
+- `pipeline/research_html_renderer.py` is imported by `pipeline/static_exporter.py` and the landing route, so its module-level imports stay stdlib-only. It imports `EVIDENCE_ID_RE`, `YOUTUBE_ID_RE`, `poster_web_path`, `normalize_anchor_text` and `MIN_ANCHOR_CHARS` from `pipeline.lyra.theo_publishing` **inside** the functions that need them (`parse_evidence`, `parse_corrections`, `parse_videos`, `resolve_evidence_anchors`; the import would otherwise be circular, see Task 2). `pipeline.lyra.theo_publishing.EVIDENCE_ID_RE` (`ev-[0-9]{2,}`: ASCII digits only, always applied with `.fullmatch`) is the one Python definition of the evidence-id format, `pipeline.lyra.theo_publishing.YOUTUBE_ID_RE` (`[A-Za-z0-9_-]{11}`, always applied with `.fullmatch`) the one definition of a YouTube video id's format, and `pipeline.lyra.theo_publishing.poster_web_path(request_id, youtube_id)` (`/data/research-images/<request_id>/video_<youtube_id>.jpg`, owner decision #13) the one definition of a video poster's path: gate, page, local check, studio ledger and case file import them, and this plan defines no copy.
+- **Line numbers are hints, anchors are binding.** `integrate/wave1`'s edits to `api/routes/public_v1.py`, `api/schemas/public_v1.py`, `ancient-nerds-map/src/types/anRoute.ts`, `ancient-nerds-map/src/seo/__tests__/render.test.tsx` and `tests/api/test_sitemap_lastmod.py` are already in `feat/studio` (merge 622a20d); every quoted anchor of this plan was re-verified verbatim on 622a20d. The orchestrator merges `origin/main` again before the push (I11b); locate edits by name or quoted text, never by line. When a merge meets one of this plan's test files, keep both sides' tests.
 - **Byte parity:** `ancient-nerds-map/src/seo/__tests__/meta.test.ts` compares `renderHead()` byte for byte with the frozen `pyref/*.html`. Do not edit any `pyref/` file. All JSON-LD additions depend on the new optional fields, which the pyref payloads do not have.
 - Python test command form (from the repo root):
   `./.venv/Scripts/python.exe -m pytest <file> -m "not integration and not live_llm" -q`
@@ -28,18 +29,20 @@
 
 ## Dependencies and order
 
+Every row also needs INT:I0 (see "Read this first"). The table lists only the needs beyond it.
+
 | Task | Needs |
 |---|---|
-| 1 | **CS-2 (A Task 2)**: `EVIDENCE_ID_RE` in `pipeline/lyra/theo_publishing.py` |
+| 1 | **CS-2 (A Task 2)**: `EVIDENCE_ID_RE`, `YOUTUBE_ID_RE` and `poster_web_path` in `pipeline/lyra/theo_publishing.py` |
 | 2 | Task 1 + **CS-2** (stream A Task 2: `normalize_anchor_text` and `MIN_ANCHOR_CHARS` in `pipeline/lyra/theo_publishing.py`) |
 | 3 | Tasks 1, 2 (and therefore CS-2) |
 | 4 | Task 1 (and therefore CS-2). Its Step 0 extends `api/schemas/public_v1.py`, which this stream owns |
 | 5-11 | frontend only, independent of the Python tasks. Run them in order (5 → 11) |
-| 12 | nothing (sitemap lastmod) |
+| 12 | nothing beyond INT:I0 (sitemap lastmod) |
 | 13 | Task 3 (the comment describes the body_html that Task 3 serves) |
 | 14 | all |
 
-Check CS-2 with `grep -cE "def normalize_anchor_text|^MIN_ANCHOR_CHARS|^EVIDENCE_ID_RE" pipeline/lyra/theo_publishing.py`: it must print `3`. If it prints less, do Tasks 5-12 first and come back to 1-4 and 13 later. Do not stub the function or copy the regex: a stub would hide the contract this plan depends on, and a copy would be a second definition of the id format (the owner's rule: never duplicate a utility, import it).
+Check CS-2 with `grep -cE "def normalize_anchor_text|^MIN_ANCHOR_CHARS|^EVIDENCE_ID_RE|^YOUTUBE_ID_RE|def poster_web_path" pipeline/lyra/theo_publishing.py`: it must print `5`. If it prints less, do Tasks 5-12 first and come back to 1-4 and 13 later. Do not stub the functions or copy a regex or the poster path: a stub would hide the contract this plan depends on, and a copy would be a second definition of the evidence-id format, the YouTube-id format or the poster path (the owner's rule: never duplicate a utility, import it).
 
 Stream A's publish, correct and register-video gates (A Tasks 15, 17, 18) and the founder publish route (A Task 21) call this plan's `paper_markdown`, `parse_evidence`, `resolve_evidence_anchors`, `paper_extras` and `PaperPageError` (CS-3), so land Tasks 1-2 early. They are ready when `grep -cE "def (paper_markdown|parse_evidence|resolve_evidence_anchors)[(]|class PaperPageError" pipeline/research_html_renderer.py` prints `4`. Tasks 1 and 2 depend only on A Task 2, so there is no cycle.
 
@@ -54,15 +57,15 @@ Stream A's publish, correct and register-video gates (A Tasks 15, 17, 18) and th
 | `api/routes/sitemap.py` | Modify | `sitemap_research`: a paper's `lastmod` is the later of its publication and its newest correction day (`_RESEARCH_SQL`) |
 | `tests/api/test_sitemap_lastmod.py` | Modify | The research lastmod query and the part file that reads it |
 | `ancient-nerds-map/src/seo/SanitizedMarkdownHtml.tsx` | Modify | Comment only: body_html also passes through `inject_evidence_anchors` (the nosemgrep justification) |
-| `tests/pipeline/test_research_paper_extras.py` | Create | Parser and validator tests for the extras (need only A Task 2's `EVIDENCE_ID_RE`) |
+| `tests/pipeline/test_research_paper_extras.py` | Create | Parser and validator tests for the extras (need only A Task 2's `EVIDENCE_ID_RE`, `YOUTUBE_ID_RE` and `poster_web_path`) |
 | `tests/pipeline/test_research_evidence_anchors.py` | Create | Anchor resolution and injection tests, plus the `normalize_anchor_text` contract test |
-| `tests/api/test_research_html_ssr.py` | Modify | Payload contract: old papers unchanged, extras present when stored, loud failures, Medium copy untouched |
+| `tests/api/test_research_html_ssr.py` | Modify | Payload contract: old papers unchanged, extras present when stored (a video's poster included), loud failures, Medium copy untouched (no anchors, no disclosure line: owner decision #23) |
 | `tests/api/test_public_v1_research_extras.py` | Create | Public API detail response with and without extras |
 | `ancient-nerds-map/src/types/anRoute.ts` | Modify | `ResearchVideo`, `ResearchCorrection`, `ResearchWriter` and the optional `ResearchRoute` fields |
 | `ancient-nerds-map/src/components/theo/paperExtras.ts` | Create | Pure helpers shared by the components and `researchMeta` (watch/thumbnail URL, newest correction date) |
 | `ancient-nerds-map/src/components/theo/PaperDisclosure.tsx` | Create | The visible AI disclosure line (`disclosureText` plus the component) |
 | `ancient-nerds-map/src/components/theo/PaperCorrections.tsx` | Create | The corrections log section (links to current ids, anchors for retired ids) |
-| `ancient-nerds-map/src/components/theo/PaperVideo.tsx` | Create | Click-to-play YouTube figure built on `news/InlineVideo` (the posterless player: spec §2.7 registers no poster) |
+| `ancient-nerds-map/src/components/theo/PaperVideo.tsx` | Create | Click-to-play YouTube figure built on `news/InlineVideo`: our own studio thumbnail as the poster when the video has one (owner decision #13, spec §2.7), the framed posterless player when it was registered without one; never a YouTube request before the click |
 | `ancient-nerds-map/src/components/theo/useEvidenceHashScroll.ts` | Create | Effect-only re-scroll to `#ev-NN` / `#corrections` once the images above have settled |
 | `ancient-nerds-map/src/styles/paper-extras.css` | Create | CSS for the anchors (scroll-margin, `:target`), video chips, disclosure and corrections |
 | `ancient-nerds-map/src/components/theo/PaperArticle.tsx` | Modify | Places disclosure, videos and corrections in the paper markup |
@@ -84,20 +87,20 @@ Nothing is deleted.
 - `pipeline.research_html_renderer.PAPER_EXTRAS_COLUMNS`: SQL select fragment (alias `r`) for the `evidence`, `videos`, `corrections` and `writer` columns (`jsonb`, decoded by psycopg2, `None` when absent).
 - `class PaperPageError(ValueError)`: the error type every validator and the resolver raise. The message names every problem.
 - `paper_markdown(report: str, title: str) -> str`: the exact markdown the page renders.
-- `parse_evidence(raw) -> list[{id, anchor_text, claim}]`, `parse_corrections(raw, evidence_ids: set[str]) -> list[{date, text, evidence_id, holds_anchor}]` (`holds_anchor` marks the correction that retired an id: the last entry naming an id that is no longer in `evidence_ids`), `parse_videos(raw, anchor_ids: set[str]) -> list[{youtube_id, title, published_at, evidence_timestamps}]`, `parse_writer(raw) -> {model, tool, research_model, published, human_review} | None`, `paper_extras(row) -> PaperExtras` (the row needs `.evidence .videos .corrections .writer`; other attributes such as `.id` are ignored).
-- `parse_evidence` and `parse_corrections` check every evidence id with `pipeline.lyra.theo_publishing.EVIDENCE_ID_RE.fullmatch`, imported inside the function. This module defines and exports no `EVIDENCE_ID_RE`: import it from `theo_publishing`.
+- `parse_evidence(raw) -> list[{id, anchor_text, claim}]`, `parse_corrections(raw, evidence_ids: set[str]) -> list[{date, text, evidence_id, holds_anchor}]` (`holds_anchor` marks the correction that retired an id: the last entry naming an id that is no longer in `evidence_ids`), `parse_videos(raw, anchor_ids: set[str], request_id: str) -> list[{youtube_id, title, published_at, evidence_timestamps, poster}]` (`poster` is the stored web path or `None` when the video was registered without one), `parse_writer(raw) -> {model, tool, research_model, published, human_review} | None`, `paper_extras(row) -> PaperExtras` (the row needs `.id .evidence .videos .corrections .writer`: `.id` is the request id in text form, as `PAPER_SUMMARY_COLUMNS` selects it (`r.id::text AS id`) and A's `check_page` passes it; it names the only valid poster path; other attributes are ignored).
+- `parse_evidence` and `parse_corrections` check every evidence id with `pipeline.lyra.theo_publishing.EVIDENCE_ID_RE.fullmatch`, and `parse_videos` checks every `youtube_id` with `pipeline.lyra.theo_publishing.YOUTUBE_ID_RE.fullmatch` and an optional `poster` against `pipeline.lyra.theo_publishing.poster_web_path(request_id, youtube_id)`, each imported inside the function. This module defines and exports none of the three: import them from `theo_publishing`.
 - `resolve_evidence_anchors(html: str, evidence: list[dict]) -> dict[str, int]`: evidence id to index of the one plain `<p>` whose `normalize_anchor_text(visible text)` starts with `normalize_anchor_text(anchor_text)`; a normalised anchor shorter than `MIN_ANCHOR_CHARS` is rejected. Raises `PaperPageError("evidence anchors do not resolve to exactly one paragraph: …")` naming each entry as `<id> matches <n> paragraphs` or `<id>: anchor_text shorter than 20 characters after normalisation`.
 - `inject_evidence_anchors(html, evidence, moments=None) -> str`, `VideoMoment(youtube_id, seconds, title)`, `evidence_video_moments(extras)`, `page_extras_payload(extras)`.
 - Rendered HTML contract: `<p id="ev-NN" class="theo-evidence">`; further ids on the same paragraph are `<span class="theo-evidence-anchor" id="ev-NN"></span>`; video links are `<a class="theo-evidence-video" href="https://www.youtube.com/watch?v=<id>&amp;t=<s>s" …>Video at m:ss</a>`; corrections are `<section id="corrections">`, and a retired id becomes `<li id="ev-NN">`. The deep link is `https://ancientnerds.com/research/<slug>#ev-NN`.
-- SSR payload (optional keys): `videos: [{youtube_id, title, published_at}]`, `corrections: [{date, text, evidence_id, holds_anchor}]`, `writer: {model, tool, research_model, published, human_review}`.
-- `api.routes.public_v1.paper_detail_extras(extras, slug) -> dict`.
-- TS: `ResearchVideo`, `ResearchCorrection`, `ResearchWriter` (`anRoute.ts`); `youtubeWatchUrl`, `youtubeThumbnailUrl`, `latestCorrectionDate` (`paperExtras.ts`); `disclosureText` (`PaperDisclosure.tsx`); `useEvidenceHashScroll` (`useEvidenceHashScroll.ts`).
+- SSR payload (optional keys): `videos: [{youtube_id, title, published_at, poster}]` (`poster`: our own thumbnail's web path, or `null`), `corrections: [{date, text, evidence_id, holds_anchor}]`, `writer: {model, tool, research_model, published, human_review}`.
+- `api.routes.public_v1.paper_detail_extras(extras, slug) -> dict`; `ResearchVideoRef.poster: str | None` (the stored web path).
+- TS: `ResearchVideo` (with `poster: string | null`), `ResearchCorrection`, `ResearchWriter` (`anRoute.ts`); `youtubeWatchUrl`, `youtubeThumbnailUrl`, `latestCorrectionDate` (`paperExtras.ts`); `disclosureText` (`PaperDisclosure.tsx`); `useEvidenceHashScroll` (`useEvidenceHashScroll.ts`).
 
 ---
 
 ### Task 1: Validate the paper extras (Python)
 
-**Prerequisite:** CS-2 is merged (`grep -cE "def normalize_anchor_text|^MIN_ANCHOR_CHARS|^EVIDENCE_ID_RE" pipeline/lyra/theo_publishing.py` prints `3`). `parse_evidence` and `parse_corrections` import `EVIDENCE_ID_RE` from there.
+**Prerequisite:** CS-2 is merged (`grep -cE "def normalize_anchor_text|^MIN_ANCHOR_CHARS|^EVIDENCE_ID_RE|^YOUTUBE_ID_RE|def poster_web_path" pipeline/lyra/theo_publishing.py` prints `5`). `parse_evidence` and `parse_corrections` import `EVIDENCE_ID_RE` from there, and `parse_videos` imports `YOUTUBE_ID_RE` and `poster_web_path`.
 
 **Files:**
 - Modify: `pipeline/research_html_renderer.py:1-13` (module docstring, imports), append a block at the end of the file (after `_orphan_re_with_stray`, line 163)
@@ -148,6 +151,11 @@ WRITER = {
     "published": "automatic",
     "human_review": False,
 }
+# The request id as PAPER_SUMMARY_COLUMNS selects it (r.id::text). A video's
+# poster is our own studio thumbnail at exactly this path (owner decision #13,
+# spec §2.7: theo_publishing.poster_web_path).
+REQ = "7f00aa00-0000-4000-8000-000000000000"
+POSTER = f"/data/research-images/{REQ}/video_dQw4w9WgXcQ.jpg"
 
 
 def _evidence(ev_id: str = "ev-01", **overrides) -> dict:
@@ -176,7 +184,7 @@ def _video(**overrides) -> dict:
 
 
 def _row(**overrides) -> SimpleNamespace:
-    row = {"evidence": None, "videos": None, "corrections": None, "writer": None}
+    row = {"id": REQ, "evidence": None, "videos": None, "corrections": None, "writer": None}
     row.update(overrides)
     return SimpleNamespace(**row)
 
@@ -209,7 +217,12 @@ class TestParseEvidence:
             }
         ]
 
-    @pytest.mark.parametrize("bad_id", ["ev-1", "ev-01a", "EV-01", "evidence-01", 3, None])
+    # "ev-\u0661\u0662" is ev- plus Arabic-Indic digits: EVIDENCE_ID_RE is ASCII-only
+    # (ev-[0-9]{2,}), like the page's PAPER_HASH_RE, so the page never injects
+    # an id that the deep-link handler cannot match.
+    @pytest.mark.parametrize(
+        "bad_id", ["ev-1", "ev-01a", "EV-01", "evidence-01", "ev-\u0661\u0662", 3, None]
+    )
     def test_rejects_ids_that_are_not_ev_nn(self, bad_id):
         with pytest.raises(PaperPageError, match="ev-NN"):
             parse_evidence([_evidence(bad_id)])
@@ -280,39 +293,63 @@ class TestParseCorrections:
 
 class TestParseVideos:
     def test_keeps_the_fields_the_page_and_api_need(self):
-        got = parse_videos([_video()], {"ev-01"})
+        got = parse_videos([_video()], {"ev-01"}, REQ)
         assert got == [
             {
                 "youtube_id": "dQw4w9WgXcQ",
                 "title": "Baalbek: the 1,000-tonne question",
                 "published_at": "2026-10-01T15:00:00+00:00",
                 "evidence_timestamps": {"ev-01": 312},
+                # Registered without a poster: a valid state, the page then
+                # shows the posterless player (owner decision #13).
+                "poster": None,
             }
         ]
+
+    def test_keeps_our_own_poster(self):
+        got = parse_videos([_video(poster=POSTER)], {"ev-01"}, REQ)
+        assert got[0]["poster"] == POSTER
+
+    @pytest.mark.parametrize(
+        "poster",
+        [
+            "/data/research-images/99999999-8888-7777-6666-555555555555/video_dQw4w9WgXcQ.jpg",
+            f"/data/research-images/{REQ}/video_aaaaaaaaaaa.jpg",
+            f"/data/research-images/{REQ}/thumbnail_1.jpg",
+            f"/data/research-images/{REQ}/video_dQw4w9WgXcQ.png",
+            f"https://ancientnerds.com/data/research-images/{REQ}/video_dQw4w9WgXcQ.jpg",
+            "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+            "",
+            None,
+        ],
+    )
+    def test_rejects_any_poster_but_the_video_path(self, poster):
+        with pytest.raises(PaperPageError, match=r"videos\[0\]\.poster must be " + POSTER):
+            parse_videos([_video(poster=poster)], {"ev-01"}, REQ)
 
     @pytest.mark.parametrize("youtube_id", ["dQw4w9WgXc", "dQw4w9WgXcQQ", "dQw4w9WgX<Q", None])
     def test_rejects_a_malformed_youtube_id(self, youtube_id):
         with pytest.raises(PaperPageError, match="youtube_id"):
-            parse_videos([_video(youtube_id=youtube_id)], {"ev-01"})
+            parse_videos([_video(youtube_id=youtube_id)], {"ev-01"}, REQ)
 
     def test_rejects_a_timestamp_for_an_unknown_evidence_id(self):
         with pytest.raises(PaperPageError, match="neither an evidence id nor retired"):
-            parse_videos([_video(evidence_timestamps={"ev-09": 10})], {"ev-01"})
+            parse_videos([_video(evidence_timestamps={"ev-09": 10})], {"ev-01"}, REQ)
 
     @pytest.mark.parametrize("seconds", [-1, 1.5, "312", True])
     def test_rejects_a_timestamp_that_is_not_whole_seconds(self, seconds):
         with pytest.raises(PaperPageError, match="whole seconds"):
-            parse_videos([_video(evidence_timestamps={"ev-01": seconds})], {"ev-01"})
+            parse_videos([_video(evidence_timestamps={"ev-01": seconds})], {"ev-01"}, REQ)
 
     def test_rejects_a_published_at_that_is_not_iso(self):
         with pytest.raises(PaperPageError, match="ISO 8601"):
-            parse_videos([_video(published_at="1 Oct 2026")], {"ev-01"})
+            parse_videos([_video(published_at="1 Oct 2026")], {"ev-01"}, REQ)
 
     def test_rejects_missing_evidence_timestamps(self):
         video = _video()
         del video["evidence_timestamps"]
         with pytest.raises(PaperPageError, match="evidence_timestamps"):
-            parse_videos([video], {"ev-01"})
+            parse_videos([video], {"ev-01"}, REQ)
 
 
 class TestParseWriter:
@@ -359,6 +396,13 @@ class TestPaperExtras:
                 )
             )
 
+    def test_the_poster_path_is_the_rows_own_request_id(self):
+        row = _row(evidence=[_evidence()], videos=[_video(poster=POSTER)])
+        assert paper_extras(row).videos[0]["poster"] == POSTER
+        other = "99999999-8888-7777-6666-555555555555"
+        with pytest.raises(PaperPageError, match=r"videos\[0\]\.poster"):
+            paper_extras(_row(id=other, evidence=[_evidence()], videos=[_video(poster=POSTER)]))
+
 
 class TestEvidenceVideoMoments:
     def test_links_only_current_evidence_in_video_order(self):
@@ -401,9 +445,14 @@ class TestPageExtrasPayload:
                     "youtube_id": "dQw4w9WgXcQ",
                     "title": "Baalbek: the 1,000-tonne question",
                     "published_at": "2026-10-01T15:00:00+00:00",
+                    "poster": None,
                 }
             ]
         }
+
+    def test_the_video_payload_carries_our_poster(self):
+        extras = paper_extras(_row(evidence=[_evidence()], videos=[_video(poster=POSTER)]))
+        assert page_extras_payload(extras)["videos"][0]["poster"] == POSTER
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -448,8 +497,9 @@ injects the #ev-NN evidence anchors into the rendered body.
 
 Module-level imports stay stdlib-only: static_exporter and the landing
 route import PUBLIC_PAPER_WHERE from here. What comes from
-pipeline.lyra.theo_publishing (EVIDENCE_ID_RE, normalize_anchor_text,
-MIN_ANCHOR_CHARS) is imported inside the functions that use it.
+pipeline.lyra.theo_publishing (EVIDENCE_ID_RE, YOUTUBE_ID_RE,
+poster_web_path, normalize_anchor_text, MIN_ANCHOR_CHARS) is imported
+inside the functions that use it.
 """
 
 import re
@@ -481,9 +531,10 @@ def paper_markdown(report: str, title: str) -> str:
 # ── Claude-written papers: evidence, videos, corrections, writer ─────────────
 # Studio spec 2026-09-26 §2.7/§3.7. Four optional result_json keys sit next to
 # the report: evidence[] (checkable claims, each tied to one paragraph by its
-# anchor_text), videos[] (registered YouTube videos and the second each
-# evidence paragraph appears at), corrections[] (the public log) and writer
-# (who wrote and published the paper, the source of the AI disclosure line).
+# anchor_text), videos[] (registered YouTube videos, the second each evidence
+# paragraph appears at and, optionally, our own poster image), corrections[]
+# (the public log) and writer (who wrote and published the paper, the source
+# of the AI disclosure line).
 # The evidence stays out of the markdown on purpose: the citation gate, TTS,
 # the Qdrant index and the CC BY API all read the report text, and none of
 # them should see anchor syntax. Papers without these keys render as before.
@@ -502,8 +553,9 @@ PAPER_EXTRAS_COLUMNS = """
 # renumbered, retired only by a correction that names them (spec §2.7). Their
 # format is pipeline.lyra.theo_publishing.EVIDENCE_ID_RE, the one definition the
 # publish gate, this page, the studio's local check and the case file share;
-# parse_evidence and parse_corrections import it inside the function.
-_YOUTUBE_ID_RE = re.compile(r"[A-Za-z0-9_-]{11}")
+# parse_evidence and parse_corrections import it inside the function. A video's
+# id format is theo_publishing.YOUTUBE_ID_RE and its poster's path
+# theo_publishing.poster_web_path, both imported by parse_videos.
 _ISO_DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _WRITER_PUBLISHED = ("automatic", "manual")
 
@@ -623,19 +675,32 @@ def parse_corrections(raw: Any, evidence_ids: set[str]) -> list[dict[str, Any]]:
     return entries
 
 
-def parse_videos(raw: Any, anchor_ids: set[str]) -> list[dict[str, Any]]:
-    """result_json.videos -> [{youtube_id, title, published_at, evidence_timestamps}].
+def parse_videos(raw: Any, anchor_ids: set[str], request_id: str) -> list[dict[str, Any]]:
+    """result_json.videos -> [{youtube_id, title, published_at, evidence_timestamps, poster}].
 
     anchor_ids are the ids a timestamp may name: the current evidence ids plus
     the ids retired by a correction (a video published before the correction
-    keeps its timestamps). A video has no poster (spec §2.7): the page shows
-    the posterless player and never loads a thumbnail from YouTube.
+    keeps its timestamps). `poster` is our own studio thumbnail (owner
+    decision #13, spec §2.7), stored only when the video was registered with
+    one and then exactly theo_publishing.poster_web_path(request_id,
+    youtube_id); the page draws it from our server inside the click-to-play
+    link. None means the video was registered without one, a valid state:
+    the page shows the posterless player. Either way the page loads nothing
+    from YouTube before the click.
     """
+    # Lazy for the same reason as in parse_evidence.
+    from pipeline.lyra.theo_publishing import YOUTUBE_ID_RE, poster_web_path
+
     entries: list[dict[str, Any]] = []
     for i, item in enumerate(_objects(raw, "videos")):
         youtube_id = item.get("youtube_id")
-        if not isinstance(youtube_id, str) or not _YOUTUBE_ID_RE.fullmatch(youtube_id):
+        if not isinstance(youtube_id, str) or not YOUTUBE_ID_RE.fullmatch(youtube_id):
             raise PaperPageError(f"videos[{i}].youtube_id must be a YouTube id, got {youtube_id!r}")
+        poster = item.get("poster")
+        if "poster" in item:
+            expected = poster_web_path(request_id, youtube_id)
+            if poster != expected:
+                raise PaperPageError(f"videos[{i}].poster must be {expected}, got {poster!r}")
         published_at = _text_field(item.get("published_at"), f"videos[{i}].published_at")
         try:
             datetime.fromisoformat(published_at)
@@ -660,6 +725,7 @@ def parse_videos(raw: Any, anchor_ids: set[str]) -> list[dict[str, Any]]:
                 "title": _text_field(item.get("title"), f"videos[{i}].title"),
                 "published_at": published_at,
                 "evidence_timestamps": dict(stamps),
+                "poster": poster,
             }
         )
     return entries
@@ -689,12 +755,17 @@ def parse_writer(raw: Any) -> dict[str, Any] | None:
 
 
 def paper_extras(row: Any) -> PaperExtras:
-    """Validate a paper row's PAPER_EXTRAS_COLUMNS in one pass (other attributes are ignored)."""
+    """Validate a paper row's PAPER_EXTRAS_COLUMNS in one pass.
+
+    row.id is the request id in text form, as PAPER_SUMMARY_COLUMNS selects it
+    (r.id::text) and the publish gate's check_page passes it: it names the one
+    valid poster path of each video. Other attributes are ignored.
+    """
     evidence = parse_evidence(row.evidence)
     current = {entry["id"] for entry in evidence}
     corrections = parse_corrections(row.corrections, current)
     retired = {c["evidence_id"] for c in corrections if c["holds_anchor"]}
-    videos = parse_videos(row.videos, current | retired)
+    videos = parse_videos(row.videos, current | retired, row.id)
     return PaperExtras(evidence, videos, corrections, parse_writer(row.writer))
 
 
@@ -719,12 +790,13 @@ def page_extras_payload(extras: PaperExtras) -> dict[str, Any]:
     """The SSR payload keys for the extras, each present only when the paper has it.
 
     An older paper gets {}, so its route payload stays byte-identical to the
-    one before this feature (ResearchRoute declares the keys optional).
+    one before this feature (ResearchRoute declares the keys optional). A
+    video's poster is its web path or None (ResearchVideo.poster).
     """
     payload: dict[str, Any] = {}
     if extras.videos:
         payload["videos"] = [
-            {key: video[key] for key in ("youtube_id", "title", "published_at")}
+            {key: video[key] for key in ("youtube_id", "title", "published_at", "poster")}
             for video in extras.videos
         ]
     if extras.corrections:
@@ -737,7 +809,7 @@ def page_extras_payload(extras: PaperExtras) -> dict[str, Any]:
 - [ ] **Step 5: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/test_research_paper_extras.py -m "not integration and not live_llm" -q`
-Expected: `47 passed`.
+Expected: `59 passed`.
 
 Then run: `./.venv/Scripts/python.exe -m ruff check pipeline/research_html_renderer.py && ./.venv/Scripts/python.exe -m ruff format --check pipeline/research_html_renderer.py && ./.venv/Scripts/python.exe -m vulture pipeline/research_html_renderer.py .vulture_whitelist.py --min-confidence 80`
 Expected: `All checks passed!`, `1 file already formatted`, no vulture output.
@@ -754,7 +826,7 @@ git commit -m "Validate a Claude-written paper's evidence, videos, corrections a
 
 ### Task 2: Inject the evidence anchors after sanitising (Python)
 
-**Prerequisite:** CS-2 is merged (`grep -cE "def normalize_anchor_text|^MIN_ANCHOR_CHARS|^EVIDENCE_ID_RE" pipeline/lyra/theo_publishing.py` prints `3`; Task 1 already needed it).
+**Prerequisite:** CS-2 is merged (`grep -cE "def normalize_anchor_text|^MIN_ANCHOR_CHARS|^EVIDENCE_ID_RE|^YOUTUBE_ID_RE|def poster_web_path" pipeline/lyra/theo_publishing.py` prints `5`; Task 1 already needed it).
 
 **Files:**
 - Modify: `pipeline/research_html_renderer.py` (one import line; append a block at the end)
@@ -1109,7 +1181,7 @@ def inject_evidence_anchors(
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/test_research_evidence_anchors.py tests/pipeline/test_research_paper_extras.py tests/pipeline/test_article_figures.py -m "not integration and not live_llm" -q`
-Expected: `83 passed` (23 + 47 + 13).
+Expected: `95 passed` (23 + 59 + 13).
 
 If `TestNormalizeAnchorTextContract` fails, stream A's `normalize_anchor_text` does not satisfy the contract in CS-2. Do not work around it here, and do not add a second normaliser: A Task 2's function is the only definition. Report the failing parametrised case to the stream A implementer. (Measured while this plan was fixed: the autolink, backslash-escape and `&amp;` cases fail without A Task 2's `html.unescape`, `<https://…>` and backslash-escape folds and pass with them; the other 20 tests pass either way.)
 
@@ -1208,6 +1280,12 @@ OLD_KEYS = {
 # far." paragraph is too short for.
 EVIDENCE_REPORT = "## Findings\n\nObsidian moved far across Anatolia."
 EVIDENCE_ANCHOR = "Obsidian moved far across"
+VIDEO = {
+    "youtube_id": "dQw4w9WgXcQ",
+    "title": "Obsidian roads",
+    "published_at": "2026-10-01T15:00:00+00:00",
+    "evidence_timestamps": {},
+}
 
 
 def _route_for(row) -> dict:
@@ -1229,14 +1307,7 @@ def test_writer_corrections_and_videos_join_the_payload():
         _paper_row(
             writer=WRITER,
             corrections=[{"date": "2026-10-02", "text": "Typo in a date."}],
-            videos=[
-                {
-                    "youtube_id": "dQw4w9WgXcQ",
-                    "title": "Obsidian roads",
-                    "published_at": "2026-10-01T15:00:00+00:00",
-                    "evidence_timestamps": {},
-                }
-            ],
+            videos=[VIDEO],
         )
     )
     assert route["writer"] == WRITER
@@ -1248,8 +1319,25 @@ def test_writer_corrections_and_videos_join_the_payload():
             "youtube_id": "dQw4w9WgXcQ",
             "title": "Obsidian roads",
             "published_at": "2026-10-01T15:00:00+00:00",
+            "poster": None,
         }
     ]
+
+
+def test_a_registered_poster_joins_the_video_payload():
+    """Owner decision #13: our own studio thumbnail, under the paper's own request id."""
+    poster = "/data/research-images/7f00aa00-0000-4000-8000-000000000000/video_dQw4w9WgXcQ.jpg"
+    route = _route_for(_paper_row(videos=[{**VIDEO, "poster": poster}]))
+    assert route["videos"][0]["poster"] == poster
+
+
+def test_a_poster_from_another_papers_folder_fails_the_page():
+    poster = "/data/research-images/99999999-8888-7777-6666-555555555555/video_dQw4w9WgXcQ.jpg"
+    row = _paper_row(videos=[{**VIDEO, "poster": poster}])
+    render, shell = _patched()
+    with render as render_mock, shell, pytest.raises(PaperPageError, match="poster must be"):
+        asyncio.run(research_paper_page("obsidian-trade-networks-anatolia", db=FakeDb([row])))
+    render_mock.assert_not_called()
 
 
 def test_evidence_paragraphs_carry_their_anchor_and_video_link():
@@ -1296,15 +1384,24 @@ def test_malformed_extras_fail_the_page():
         asyncio.run(research_paper_page("obsidian-trade-networks-anatolia", db=FakeDb([row])))
 
 
-def test_the_medium_copy_gets_no_evidence_anchors():
+def test_the_medium_copy_gets_no_evidence_anchors_and_no_disclosure_line():
+    """Owner decision #23: the AI disclosure line stays off the Medium copy.
+
+    The line is a React component of the paper page (PaperDisclosure); the
+    Medium copy is server HTML from the report alone.
+    """
     row = _paper_row(
         published_report=EVIDENCE_REPORT,
         evidence=[{"id": "ev-01", "anchor_text": EVIDENCE_ANCHOR, "claim": "x"}],
+        writer=WRITER,
     )
     resp = asyncio.run(research_medium_copy("obsidian-trade-networks-anatolia", db=FakeDb([row])))
+    body = resp.body.decode()
     assert resp.status_code == 200
-    assert "Obsidian moved far across Anatolia." in resp.body.decode()
-    assert 'id="ev-01"' not in resp.body.decode()
+    assert "Obsidian moved far across Anatolia." in body
+    assert 'id="ev-01"' not in body
+    assert "theo-paper-disclosure" not in body
+    assert "Researched by Theo" not in body
 
 
 def test_fetch_paper_selects_the_extras_columns():
@@ -1318,7 +1415,7 @@ def test_fetch_paper_selects_the_extras_columns():
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/api/test_research_html_ssr.py -m "not integration and not live_llm" -q`
-Expected: `5 failed, 8 passed`. The failures are `test_writer_corrections_and_videos_join_the_payload` (KeyError `'writer'`), `test_evidence_paragraphs_carry_their_anchor_and_video_link`, `test_an_evidence_anchor_that_resolves_nowhere_fails_the_page` and `test_malformed_extras_fail_the_page` (both `DID NOT RAISE`), and `test_fetch_paper_selects_the_extras_columns`. The two regression guards (`..._keeps_its_exact_payload`, `..._medium_copy_gets_no_evidence_anchors`) already pass and must stay green.
+Expected: `7 failed, 8 passed`. The failures are `test_writer_corrections_and_videos_join_the_payload` (KeyError `'writer'`), `test_a_registered_poster_joins_the_video_payload` (KeyError `'videos'`), `test_evidence_paragraphs_carry_their_anchor_and_video_link`, `test_a_poster_from_another_papers_folder_fails_the_page`, `test_an_evidence_anchor_that_resolves_nowhere_fails_the_page` and `test_malformed_extras_fail_the_page` (the last three `DID NOT RAISE`), and `test_fetch_paper_selects_the_extras_columns`. The two regression guards (`..._keeps_its_exact_payload`, `..._medium_copy_gets_no_evidence_anchors_and_no_disclosure_line`) already pass and must stay green.
 
 - [ ] **Step 3: Implement the route change**
 
@@ -1449,7 +1546,7 @@ with:
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/api/test_research_html_ssr.py tests/pipeline/test_research_paper_extras.py tests/pipeline/test_research_evidence_anchors.py -m "not integration and not live_llm" -q`
-Expected: `83 passed` (13 + 47 + 23).
+Expected: `97 passed` (15 + 59 + 23).
 
 Then run: `./.venv/Scripts/python.exe -m ruff check api/routes/research_html.py && ./.venv/Scripts/python.exe -m ruff format --check api/routes/research_html.py && ./.venv/Scripts/python.exe -m vulture api/routes/research_html.py pipeline/research_html_renderer.py .vulture_whitelist.py --min-confidence 80`
 Expected: `All checks passed!`, `1 file already formatted`, no vulture output (the removed imports `format_references_md` and `strip_leading_title_heading` must not linger).
@@ -1468,9 +1565,9 @@ git commit -m "Hand evidence anchors, videos, corrections and the writer record 
 
 **Files:**
 - Modify: `api/schemas/public_v1.py:590-595` (`ResearchPaperDetail`; this stream owns the file, Step 0)
-- Modify: `api/routes/public_v1.py:13-15` (imports), `:67-68` (imports), after `paper_summary_kwargs` (`:105-132`), `get_research_paper` (`:1653-1700`)
+- Modify: `api/routes/public_v1.py:13-15` (imports), `:67-68` (imports), after `paper_summary_kwargs` (`:105-132`), `get_research_paper` (`:1656-1701`)
 - Test: `tests/api/test_public_v1_research_extras.py` (create)
-- Locate each edit by the class or function name or the quoted old text, not by the line numbers: `integrate/wave1` also changes both `public_v1.py` files (see "Read this first").
+- Locate each edit by the class or function name or the quoted old text, not by the line numbers (see "Read this first").
 
 - [ ] **Step 0: Extend the public schema (its own commit)**
 
@@ -1509,6 +1606,13 @@ class ResearchVideoRef(BaseModel):
     evidence_timestamps: dict[str, int] = Field(
         description="Second of the video at which each evidence id is shown"
     )
+    poster: str | None = Field(
+        default=None,
+        description=(
+            "Web path of the video's poster on ancientnerds.com "
+            "(/data/research-images/<id>/video_<youtube_id>.jpg); null when none was registered"
+        ),
+    )
 
 
 class ResearchCorrectionOut(BaseModel):
@@ -1516,7 +1620,7 @@ class ResearchCorrectionOut(BaseModel):
 
     date: str = Field(description="Correction day (YYYY-MM-DD)")
     text: str
-    evidence_id: str | None = Field(None, description="Evidence id the correction concerns")
+    evidence_id: str | None = Field(default=None, description="Evidence id the correction concerns")
 
 
 class ResearchWriterOut(BaseModel):
@@ -1546,7 +1650,8 @@ class ResearchPaperDetail(ResearchPaperSummary):
         default_factory=list, description="Public corrections log, oldest first"
     )
     writer: ResearchWriterOut | None = Field(
-        None, description="Writer record of a Claude-written paper; null for older papers"
+        default=None,
+        description="Writer record of a Claude-written paper; null for older papers",
     )
 ```
 
@@ -1558,7 +1663,7 @@ cd C:/PythonProjects/AncientMap-studio
 ./.venv/Scripts/python.exe -m pytest tests/api/test_ai_act_marking.py tests/api/test_scope_consumers.py tests/api/test_research_html_ssr.py -m "not integration and not live_llm" -q
 ```
 
-Expected: `All checks passed!`, `1 file already formatted`, and the three test files show the same result as before the edit (the new fields all have defaults). Commit the schema alone:
+Expected: `All checks passed!`, `1 file already formatted`, and the three test files show the same result as before the edit (the new fields all have defaults): `78 passed` on 622a20d, `87 passed` once Task 3 has added its 9 tests to `test_research_html_ssr.py`. Commit the schema alone:
 
 ```bash
 git add api/schemas/public_v1.py
@@ -1591,6 +1696,8 @@ from tests.fake_sql import RecordingSession
 
 SLUG = "obsidian-trade-networks-anatolia"
 PAPER_ID = "7f00aa00-0000-4000-8000-000000000000"
+# Owner decision #13: our own studio thumbnail, stored as its web path.
+POSTER = f"/data/research-images/{PAPER_ID}/video_dQw4w9WgXcQ.jpg"
 WRITER = {
     "model": "claude-opus-5-5",
     "tool": "claude-code",
@@ -1669,7 +1776,14 @@ def test_a_claude_written_paper_exposes_evidence_videos_corrections_and_writer()
                     "title": "Obsidian roads",
                     "published_at": "2026-10-01T15:00:00+00:00",
                     "evidence_timestamps": {"ev-01": 75},
-                }
+                    "poster": POSTER,
+                },
+                {
+                    "youtube_id": "aaaaaaaaaaa",
+                    "title": "Obsidian roads, the short",
+                    "published_at": "2026-10-03T15:00:00+00:00",
+                    "evidence_timestamps": {},
+                },
             ],
             corrections=[{"date": "2026-10-02", "text": "Typo in a date."}],
             writer=WRITER,
@@ -1691,7 +1805,16 @@ def test_a_claude_written_paper_exposes_evidence_videos_corrections_and_writer()
             "published_at": "2026-10-01T15:00:00+00:00",
             "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
             "evidence_timestamps": {"ev-01": 75},
-        }
+            "poster": POSTER,
+        },
+        {
+            "youtube_id": "aaaaaaaaaaa",
+            "title": "Obsidian roads, the short",
+            "published_at": "2026-10-03T15:00:00+00:00",
+            "url": "https://www.youtube.com/watch?v=aaaaaaaaaaa",
+            "evidence_timestamps": {},
+            "poster": None,
+        },
     ]
     assert body["corrections"] == [
         {"date": "2026-10-02", "text": "Typo in a date.", "evidence_id": None}
@@ -1774,6 +1897,7 @@ def paper_detail_extras(extras: PaperExtras, slug: str) -> dict:
                 "published_at": v["published_at"],
                 "url": f"https://www.youtube.com/watch?v={v['youtube_id']}",
                 "evidence_timestamps": v["evidence_timestamps"],
+                "poster": v["poster"],
             }
             for v in extras.videos
         ],
@@ -1804,7 +1928,8 @@ with:
             "Papers written by Claude from a Theo research dossier also carry "
             "`evidence` (checkable claims with deep links to `#ev-NN` on the paper "
             "page), `videos` (YouTube videos made from the paper, with the second "
-            "each evidence item is shown at), `corrections` (the public log) and "
+            "each evidence item is shown at and the web path of our own poster "
+            "image, or null), `corrections` (the public log) and "
             "`writer` (the AI disclosure record). Older papers return empty lists "
             "and `writer: null`.\n\n"
 ```
@@ -1849,12 +1974,12 @@ with:
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/api/test_public_v1_research_extras.py tests/api/test_ai_act_marking.py tests/api/test_scope_consumers.py tests/api/test_research_html_ssr.py -m "not integration and not live_llm" -q`
-Expected: `4 passed` for the new file. The other three files show the same result as before this task (run them once before Step 3 to record it; `test_ai_act_marking.py` loads a module from `scripts/remediation/`).
+Expected: `91 passed`: 4 in the new file and 87 in the other three, which is their result before this task (baseline on 622a20d: 78 passed for the three files, plus the 9 tests Task 3 added to `test_research_html_ssr.py`; `test_ai_act_marking.py` loads a module from `scripts/remediation/`).
 
 Then run: `./.venv/Scripts/python.exe -m ruff check api/routes/public_v1.py && ./.venv/Scripts/python.exe -m ruff format --check api/routes/public_v1.py && ./.venv/Scripts/lint-imports.exe`
 Expected: `All checks passed!`, `1 file already formatted`, `Contracts: 2 kept, 0 broken.` (`api.** -> pipeline.research_html_renderer` and `pipeline.utils.**` are sanctioned families.)
 
-mypy note: the local venv reports pre-existing errors because it has the real third-party stubs; CI runs mypy without them. Compare the counts: `./.venv/Scripts/python.exe -m mypy api/routes/public_v1.py api/routes/research_html.py 2>&1 | tail -1` must print the same count before and after this task (measured on 792145e: `Found 93 errors in 14 files (checked 2 source files)`).
+mypy is clean on the merged base (measured 2026-09-26 on 622a20d). `./.venv/Scripts/python.exe -m mypy api/routes/public_v1.py api/routes/research_html.py 2>&1 | tail -1` must print `Success: no issues found in 2 source files`, and the CI gate `./.venv/Scripts/python.exe -m mypy api/ 2>&1 | tail -1` must print `Success: no issues found in <N> source files` (N = 80 unless another stream added api/ modules). Any error in api/ after Tasks 3-4 is this stream's to fix: CI's lint-backend runs `mypy api/ --no-error-summary` as a blocking gate.
 
 - [ ] **Step 5: Commit**
 
@@ -1869,10 +1994,10 @@ git commit -m "Expose a Claude-written paper's evidence, videos, corrections and
 ### Task 5: Payload types and shared helpers (frontend)
 
 **Files:**
-- Modify: `ancient-nerds-map/src/types/anRoute.ts:196-214`
+- Modify: `ancient-nerds-map/src/types/anRoute.ts:199-217`
 - Create: `ancient-nerds-map/src/components/theo/paperExtras.ts`
 - Test: `ancient-nerds-map/src/components/theo/__tests__/paperExtras.test.ts` (create)
-- Locate the `anRoute.ts` edit by the quoted old text, not by the line numbers: `integrate/wave1` also changes that file (see "Read this first").
+- Locate the `anRoute.ts` edit by the quoted old text, not by the line numbers (see "Read this first").
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1918,20 +2043,27 @@ Expected: FAIL, `Failed to resolve import "../paperExtras"`.
 
 - [ ] **Step 3: Add the types**
 
-In `ancient-nerds-map/src/types/anRoute.ts`, directly above the doc comment of `ResearchRoute` (line 196: the `/**` whose next line reads ` * One public research paper — the raw paper_summary_kwargs fields the`), insert:
+In `ancient-nerds-map/src/types/anRoute.ts`, directly above the doc comment of `ResearchRoute` (line 199: the `/**` above line 200 ` * One public research paper — the raw paper_summary_kwargs fields the`), insert:
 
 ```ts
 /**
  * A YouTube video made from a paper (result_json.videos, registered by
  * `theo_publish --register-video`). The evidence timestamps stay in Python:
- * they arrive as "Video at m:ss" links inside body_html. There is no poster
- * (spec §2.7): the page shows the posterless player.
+ * they arrive as "Video at m:ss" links inside body_html.
  */
 export interface ResearchVideo {
   youtube_id: string
   title: string
   /** Raw ISO 8601 publication time on YouTube; date display is a TS decision. */
   published_at: string
+  /**
+   * Our own studio thumbnail, served from our server:
+   * /data/research-images/<request_id>/video_<youtube_id>.jpg (owner decision
+   * #13, spec §2.7; pipeline.lyra.theo_publishing.poster_web_path). Null when
+   * the video was registered without one: the page then shows the posterless
+   * player. Either way nothing is requested from YouTube before the click.
+   */
+  poster: string | null
 }
 
 /** One entry of a paper's public corrections log (result_json.corrections). */
@@ -2014,8 +2146,10 @@ export function youtubeWatchUrl(youtubeId: string): string {
 
 /**
  * A thumbnail every YouTube video has (hqdefault; maxresdefault exists only
- * for HD uploads). Used in JSON-LD only: the page itself never loads an
- * image from YouTube before the visitor clicks play.
+ * for HD uploads). Used in JSON-LD only (a crawler reads it, the visitor's
+ * browser does not): the page itself shows our own poster
+ * (ResearchVideo.poster) or none, and never loads an image from YouTube
+ * before the visitor clicks play.
  */
 export function youtubeThumbnailUrl(youtubeId: string): string {
   return `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`
@@ -2421,8 +2555,9 @@ Create `ancient-nerds-map/src/components/theo/__tests__/PaperVideo.test.tsx`:
 ```tsx
 /**
  * A video made from the paper, rendered as the SSR sidecar renders it: a real
- * YouTube link in the framed posterless player (spec §2.7 registers no
- * poster), no image from YouTube and no iframe until a visitor clicks.
+ * YouTube link around our own poster image (owner decision #13, spec §2.7),
+ * or the framed posterless player for a video registered without one. No
+ * image from YouTube and no iframe until a visitor clicks.
  */
 
 import { renderToString } from 'react-dom/server'
@@ -2431,15 +2566,28 @@ import { describe, expect, it } from 'vitest'
 import type { ResearchVideo } from '../../../types/anRoute'
 import PaperVideo from '../PaperVideo'
 
+const POSTER = '/data/research-images/7f00aa00-0000-4000-8000-000000000000/video_dQw4w9WgXcQ.jpg'
 const VIDEO: ResearchVideo = {
   youtube_id: 'dQw4w9WgXcQ',
   title: 'Baalbek: the 1,000-tonne question',
   published_at: '2026-10-01T15:00:00+00:00',
+  poster: POSTER,
 }
 
 describe('PaperVideo', () => {
-  it('renders a real YouTube link in the posterless player, no iframe before the click', () => {
+  it('draws our own poster inside the real YouTube link, no iframe before the click', () => {
     const html = renderToString(<PaperVideo video={VIDEO} />)
+    expect(html).toContain(
+      '<a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" target="_blank" rel="noopener noreferrer" ' +
+        `class="story-video-link"><img src="${POSTER}" alt="" loading="lazy"/>`,
+    )
+    expect(html).not.toContain('is-posterless')
+    expect(html).not.toContain('<iframe')
+    expect(html).not.toContain('i.ytimg.com')
+  })
+
+  it('a video registered without a poster keeps the posterless player', () => {
+    const html = renderToString(<PaperVideo video={{ ...VIDEO, poster: null }} />)
     expect(html).toContain('<a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" target="_blank"')
     expect(html).toContain('class="story-video-link is-posterless"')
     expect(html).not.toContain('<img')
@@ -2469,9 +2617,13 @@ Create `ancient-nerds-map/src/components/theo/PaperVideo.tsx`:
  *
  * Same player as the story page (InlineVideo, the StoryArticle figure): the
  * server renders a real link to YouTube, the iframe mounts only after a
- * click, so no request reaches YouTube before the visitor asks for it. A
- * registered video has no poster (spec §2.7), so the link is always the
- * framed posterless variant (.is-posterless) with the play glyph.
+ * click, so no request reaches YouTube before the visitor asks for it. The
+ * poster is our own studio thumbnail from our server (owner decision #13,
+ * spec §2.7), loaded lazily so it never competes with the hero image; the
+ * .story-video img rule (story-page.css) reserves its 16:9 frame, so its late
+ * arrival moves no #ev-NN target (useEvidenceHashScroll does not wait for lazy
+ * images). A video registered without one keeps the framed posterless variant
+ * (.is-posterless) with the play glyph.
  */
 
 import InlineVideo from '../news/InlineVideo'
@@ -2498,13 +2650,14 @@ export default function PaperVideo({ video }: { video: ResearchVideo }) {
             href={watchUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="story-video-link is-posterless"
+            className={`story-video-link${video.poster ? '' : ' is-posterless'}`}
             onClick={e => {
               if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
               e.preventDefault()
               play()
             }}
           >
+            {video.poster && <img src={video.poster} alt="" loading="lazy" />}
             <span className="story-play" aria-hidden="true">▶</span>
           </a>
         )}
@@ -2524,14 +2677,14 @@ export default function PaperVideo({ video }: { video: ResearchVideo }) {
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `cd C:/PythonProjects/AncientMap-studio/ancient-nerds-map && npx vitest run src/components/theo/__tests__/PaperVideo.test.tsx`
-Expected: `2 passed`.
+Expected: `3 passed`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 cd C:/PythonProjects/AncientMap-studio
 git add ancient-nerds-map/src/components/theo/PaperVideo.tsx ancient-nerds-map/src/components/theo/__tests__/PaperVideo.test.tsx
-git commit -m "Embed a paper's YouTube videos as click-to-play figures" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- ancient-nerds-map/src/components/theo/PaperVideo.tsx ancient-nerds-map/src/components/theo/__tests__/PaperVideo.test.tsx
+git commit -m "Embed a paper's YouTube videos as click-to-play figures behind our own poster" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- ancient-nerds-map/src/components/theo/PaperVideo.tsx ancient-nerds-map/src/components/theo/__tests__/PaperVideo.test.tsx
 ```
 
 ---
@@ -2542,7 +2695,7 @@ git commit -m "Embed a paper's YouTube videos as click-to-play figures" -m "Co-A
 - Modify: `ancient-nerds-map/src/components/theo/PaperArticle.tsx` (whole file)
 - Modify: `ancient-nerds-map/src/seo/__tests__/fixtures.ts` (append `RESEARCH_WITH_EXTRAS`)
 - Test: `ancient-nerds-map/src/seo/__tests__/render.test.tsx` (modify)
-- Locate the `render.test.tsx` edits by the quoted old text, not by line numbers: `integrate/wave1` adds tests to that file; after a merge keep both sides' tests (see "Read this first").
+- Locate the `render.test.tsx` edits by the quoted old text, not by line numbers; after a merge keep both sides' tests (see "Read this first").
 
 - [ ] **Step 1: Add the fixture**
 
@@ -2570,6 +2723,9 @@ export const RESEARCH_WITH_EXTRAS: ResearchRoute = {
       youtube_id: 'dQw4w9WgXcQ',
       title: 'Baalbek: the 1,000-tonne question',
       published_at: '2026-10-01T15:00:00+00:00',
+      // Our own studio thumbnail (owner decision #13); the posterless variant
+      // is covered by PaperVideo.test.tsx.
+      poster: '/data/research-images/7f00aa00-0000-4000-8000-000000000000/video_dQw4w9WgXcQ.jpg',
     },
   ],
   corrections: [
@@ -2647,10 +2803,13 @@ describe('research: Claude-written paper extras (studio spec 2026-09-26 §2.7, �
     expect(html).toContain('href="https://www.youtube.com/watch?v=dQw4w9WgXcQ&amp;t=312s"')
   })
 
-  it('renders the video as a click-to-play link in the posterless player, no iframe on the server', () => {
+  it('renders the video as a click-to-play link around our own poster, no iframe on the server', () => {
     expect(html).toContain('class="story-video theo-paper-video"')
     expect(html).toContain('href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"')
-    expect(html).toContain('class="story-video-link is-posterless"')
+    expect(html).toContain(
+      'class="story-video-link"><img src="/data/research-images/7f00aa00-0000-4000-8000-000000000000/video_dQw4w9WgXcQ.jpg" alt="" loading="lazy"/>',
+    )
+    expect(html).not.toContain('is-posterless')
     expect(html).not.toContain('<iframe')
     expect(html).not.toContain('i.ytimg.com')
   })
@@ -2879,6 +3038,15 @@ describe('researchMeta: Claude-written paper extras (studio spec §2.7)', () => 
     expect(schema.dateModified).toBe('2026-10-04')
   })
 
+  it('a correction older than the current publication sets no dateModified', () => {
+    // Unpublished and published again: published_at is new, the log is kept.
+    const republished = JSON.parse(
+      researchMeta({ ...RESEARCH_WITH_EXTRAS, published_at: '2026-11-01T09:00:00' }).schema!,
+    )
+    expect(republished.datePublished).toBe('2026-11-01')
+    expect(republished).not.toHaveProperty('dateModified')
+  })
+
   it('one VideoObject per registered video', () => {
     expect(schema.video).toEqual([
       {
@@ -2905,7 +3073,7 @@ describe('researchMeta: Claude-written paper extras (studio spec §2.7)', () => 
 - [ ] **Step 2: Run the test to verify it fails**
 
 Run: `cd C:/PythonProjects/AncientMap-studio/ancient-nerds-map && npx vitest run src/seo/__tests__/meta.test.ts`
-Expected: FAIL: `dateModified is the newest correction day` (received `undefined`) and `one VideoObject per registered video` (received `undefined`). All pyref parity tests pass.
+Expected: FAIL: `dateModified is the newest correction day` (received `undefined`) and `one VideoObject per registered video` (received `undefined`). The republished-paper test and all pyref parity tests pass.
 
 - [ ] **Step 3: Implement**
 
@@ -2946,7 +3114,8 @@ Directly above `/** research_page(): das Payload trägt die rohen Zeilenfelder �
 ```ts
 /**
  * One schema.org VideoObject per registered video of a paper. The thumbnail
- * is YouTube's own (crawler metadata only; the page never loads it).
+ * is YouTube's own: crawler metadata only (the page never loads it), and it
+ * exists for every video, with or without our own poster.
  */
 function videoObject(video: ResearchVideo, paperTitle: string): string {
   return (
@@ -2984,13 +3153,17 @@ with:
   // the schema only when present: the frozen pyref heads carry neither.
   const corrections = route.corrections ?? []
   const videos = route.videos ?? []
+  const published = isoDate(route.published_at)
   const modified = corrections.length > 0 ? latestCorrectionDate(corrections) : ''
   const schema =
     '{"@context": "https://schema.org", "@type": "ScholarlyArticle", ' +
     '"digitalSourceType": "https://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia", ' +
     `"headline": ${jsonStr(route.title)}, "description": ${jsonStr(cut(summary, 300))}, ` +
-    `"datePublished": "${isoDate(route.published_at)}", ` +
-    (modified ? `"dateModified": "${modified}", ` : '') +
+    `"datePublished": "${published}", ` +
+    // An unpublished paper published again gets a new published_at and keeps
+    // its corrections log, so the newest correction can predate the
+    // publication: dateModified never goes before datePublished.
+    (modified > published ? `"dateModified": "${modified}", ` : '') +
     `"author": ${authorSchema}, ` +
     `"publisher": ${PUBLISHER}, ` +
     (route.hero_image_url ? `"image": ${jsonStr(absoluteUrl(route.hero_image_url))}, ` : '') +
@@ -3003,7 +3176,7 @@ with:
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cd C:/PythonProjects/AncientMap-studio/ancient-nerds-map && npx vitest run src/seo/__tests__ && npm run type-check`
-Expected: all SEO test files pass. `meta.test.ts` has 41 tests, and in particular `research: renderHead() == Python-Head minus <style>` and `research_person: …` stay green. Type-check prints no errors.
+Expected: all SEO test files pass. `meta.test.ts` has 42 tests (38 on 622a20d plus these 4), and in particular `research: renderHead() == Python-Head minus <style>` and `research_person: …` stay green. Type-check prints no errors.
 
 - [ ] **Step 5: Commit**
 
@@ -3153,8 +3326,9 @@ import { useEffect } from 'react'
 
 /**
  * The anchors a paper page hands out: evidence paragraphs and the corrections log.
- * The ev-NN part mirrors pipeline.lyra.theo_publishing.EVIDENCE_ID_RE (`ev-\d{2,}`,
- * applied with fullmatch), the one definition of the evidence-id format; change both together.
+ * The ev-NN part mirrors pipeline.lyra.theo_publishing.EVIDENCE_ID_RE (`ev-[0-9]{2,}`,
+ * applied with fullmatch), the one definition of the evidence-id format; change both
+ * together. A JavaScript `\d` always means [0-9], so it accepts exactly the same ids.
  */
 const PAPER_HASH_RE = /^#(ev-\d{2,}|corrections)$/
 
@@ -3243,7 +3417,7 @@ A `theo_publish --correct` run changes the served page (its text and the correct
 **Files:**
 - Modify: `api/routes/sitemap.py` (new constant `_RESEARCH_SQL` after `_COUNTRIES_SQL`, lines 121-129; `sitemap_research`, lines 273-286)
 - Test: `tests/api/test_sitemap_lastmod.py` (append)
-- Locate each edit by the constant or function name or the quoted old text, not by the line numbers: `integrate/wave1` also changes `test_sitemap_lastmod.py`; after a merge keep both sides' tests (see "Read this first").
+- Locate each edit by the constant or function name or the quoted old text, not by the line numbers; after a merge keep both sides' tests (see "Read this first").
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3289,7 +3463,7 @@ def test_the_research_part_reads_the_paper_lastmod():
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/api/test_sitemap_lastmod.py -m "not integration and not live_llm" -q`
-Expected: `2 failed, 7 passed`, both with `AttributeError: module 'api.routes.sitemap' has no attribute '_RESEARCH_SQL'`.
+Expected: `2 failed, 9 passed`, both with `AttributeError: module 'api.routes.sitemap' has no attribute '_RESEARCH_SQL'`.
 
 - [ ] **Step 3: Implement**
 
@@ -3351,7 +3525,7 @@ with:
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/api/test_sitemap_lastmod.py tests/api/test_sitemap.py -m "not integration and not live_llm" -q`
-Expected: `20 passed` (9 + 11).
+Expected: `22 passed` (11 + 11).
 
 Then run: `./.venv/Scripts/python.exe -m ruff check api/routes/sitemap.py && ./.venv/Scripts/python.exe -m ruff format --check api/routes/sitemap.py`
 Expected: `All checks passed!`, `1 file already formatted`.
@@ -3433,15 +3607,16 @@ No new code. Run every gate the pre-push hook and CI run over the touched areas,
 
 ```bash
 cd C:/PythonProjects/AncientMap-studio
-./.venv/Scripts/python.exe -m pytest -q -rs --timeout 90 -m "not integration and not live_llm"
+LYRA_ANTHROPIC_API_KEY=dummy-for-tests ./.venv/Scripts/python.exe -m pytest -q -rs --timeout 90 -m "not integration and not live_llm"
 ./.venv/Scripts/python.exe -m ruff check api/ pipeline/
 ./.venv/Scripts/python.exe -m ruff format --check api/routes/research_html.py api/routes/public_v1.py api/schemas/public_v1.py api/routes/sitemap.py pipeline/research_html_renderer.py
+./.venv/Scripts/python.exe -m mypy api/
 ./.venv/Scripts/lint-imports.exe
 ./.venv/Scripts/python.exe -m vulture api/ pipeline/ .vulture_whitelist.py --min-confidence 80
 ./.venv/Scripts/python.exe -c "import sys; sys.modules['markdown']=None; sys.modules['nh3']=None; import pipeline.lyra.orchestrator"
 ```
 
-Expected: pytest shows `0 failed`. The worktree baseline was 6994 passed / 118 skipped before the studio work. This stream adds 83 tests: 47 in `test_research_paper_extras.py`, 23 in `test_research_evidence_anchors.py`, 7 new in `test_research_html_ssr.py`, 4 in `test_public_v1_research_extras.py` and 2 new in `test_sitemap_lastmod.py`. The absolute total also moves with the other streams' merges, so the criteria are `0 failed` plus all five files passing. Then: ruff `All checks passed!`; format `5 files already formatted`; lint-imports `Contracts: 2 kept, 0 broken.`; vulture prints nothing; the Lyra import check exits 0. `research_html_renderer` imports only stdlib and `theo_image_captions` at module level, and Lyra does not import it.
+Expected: pytest shows `0 failed`. The worktree has no `.env` and must not get a copy of the production one; the dummy `LYRA_ANTHROPIC_API_KEY` only lets `tests/api/lyra/test_backends.py::TestGetBackend` build a client. Baseline on 622a20d (2026-09-26): 8231 passed, 119 skipped, 57 deselected with the dummy key (without it, exactly the three TestGetBackend tests fail). This stream adds 97 tests: 59 in `test_research_paper_extras.py`, 23 in `test_research_evidence_anchors.py`, 9 new in `test_research_html_ssr.py`, 4 in `test_public_v1_research_extras.py` and 2 new in `test_sitemap_lastmod.py`. The absolute total also moves with the other streams' merges, so the criteria are `0 failed` plus all five files passing. Then: ruff `All checks passed!`; format `5 files already formatted`; mypy `Success: no issues found in <N> source files` (N = 80 unless another stream added api/ modules; the post-merge baseline is 0 errors, and CI's lint-backend blocks on any); lint-imports `Contracts: 2 kept, 0 broken.`; vulture prints nothing; the Lyra import check exits 0. `research_html_renderer` imports only stdlib and `theo_image_captions` at module level, and Lyra does not import it.
 
 - [ ] **Step 2: Frontend gates**
 
@@ -3453,7 +3628,7 @@ npx knip --no-progress --include files,dependencies,devDependencies
 npm run build:ssr
 ```
 
-Expected: type-check clean; vitest all files pass; knip reports nothing (every new file is reachable: the components through PaperArticle, `paperExtras.ts` also through `meta.ts`, the hook through ResearchPaperPage, and `paper-extras.css` through its imports); `build:ssr` ends with `✓ built`.
+Expected: type-check clean; vitest all files pass (baseline on 622a20d: type-check clean, vitest 109 files / 1052 tests; this stream adds 5 files with 18 tests plus 7 tests in `render.test.tsx` and 4 in `meta.test.ts`); knip reports nothing (every new file is reachable: the components through PaperArticle, `paperExtras.ts` also through `meta.ts`, the hook through ResearchPaperPage, and `paper-extras.css` through its imports); `build:ssr` ends with `✓ built`.
 
 - [ ] **Step 3: Optional gates if installed on this machine**
 
@@ -3470,9 +3645,11 @@ This task changes no files. If a gate forced a fix in one of this plan's files, 
 | Spec requirement | Task |
 |---|---|
 | §2.7 display: evidence anchors resolve to one paragraph (the gate's C9 rule: prefix, ≥ 20 normalised characters, exactly one), ids never renumbered, retired ids handled | 1 (`parse_corrections` holds_anchor on the retiring entry), 2, 3, 7 |
-| §2.7 display: `result_json.videos[]` with `evidence_timestamps` → "video at mm:ss" deep link | 1 (`parse_videos`, `evidence_video_moments`), 2 (`_video_link`), 8 (embed, posterless: §2.7 has no poster) |
-| §2.7 display: corrections log | 1, 3, 7, 9, 10 (`dateModified`), 12 (sitemap `lastmod`) |
+| §2.7 display: `result_json.videos[]` with `evidence_timestamps` → "video at mm:ss" deep link | 1 (`parse_videos`, `evidence_video_moments`), 2 (`_video_link`), 8 (click-to-play embed) |
+| Owner decision #13, spec §2.7 `poster?`: our own studio thumbnail as the video poster, served from our server, no YouTube request before the click; a video registered without one keeps the posterless player | 1 (`parse_videos`: exactly `poster_web_path(request_id, youtube_id)`), 3 (payload `poster`), 4 (API `ResearchVideoRef.poster`), 5 (`ResearchVideo.poster`), 8 (`<img>` inside the link, `.is-posterless` only without one), 9 (SSR render) |
+| §2.7 display: corrections log | 1, 3, 7, 9, 10 (`dateModified`, never before `datePublished`), 12 (sitemap `lastmod`) |
 | §3.7 disclosure line from `writer`, exact wording | 1 (`parse_writer`), 6, 9 |
+| Owner decision #23: no AI disclosure in the Medium copy | 3 (`test_the_medium_copy_gets_no_evidence_anchors_and_no_disclosure_line`) |
 | Fact 10: anchors injected after nh3, research pages only | 2 (post-sanitise, scoping tests), 3 (Medium copy test), 13 (sanitising justification names the injection) |
 | Sticky header must not cover the target | 6 (`scroll-margin-top`), 11 (re-scroll after images) |
 | Old papers byte-identical | 3 (exact payload keys + body), 9 (markers absent; measured byte-identical markup), 10 (pyref parity untouched) |
@@ -3484,17 +3661,17 @@ This task changes no files. If a gate forced a fix in one of this plan's files, 
 
 **CS-1: withdrawn, now this stream's own work.** This stream owns `api/schemas/public_v1.py`: Task 4 Step 0 applies the schema additions (`ResearchEvidenceRef`, `ResearchVideoRef`, `ResearchCorrectionOut`, `ResearchWriterOut` and the extended `ResearchPaperDetail`) as its own commit. The number stays so that CS-2 to CS-9 keep their meaning.
 
-**CS-2: stream A Task 2, `pipeline/lyra/theo_publishing.py`: `normalize_anchor_text(text: str) -> str`, `MIN_ANCHOR_CHARS` (20) and `EVIDENCE_ID_RE` (`re.compile(r"ev-\d{2,}")`, always applied with `.fullmatch`).** A Task 2's definitions are the only ones; this plan carries no second normaliser and no copy of the id regex (the TypeScript `PAPER_HASH_RE` of Task 11 mirrors it and names it as its source). The page imports `normalize_anchor_text` and `MIN_ANCHOR_CHARS` inside `resolve_evidence_anchors`, and `EVIDENCE_ID_RE` inside `parse_evidence` and `parse_corrections` (none at module level). Required property, pinned by `TestNormalizeAnchorTextContract` in Task 2: for every prose paragraph `P` of a report, `normalize_anchor_text(P) == normalize_anchor_text(visible_text(markdown_to_html(P)))`, where the visible text is the `<p>` content with tags dropped and entities decoded (`_paragraph_text`). So the function bridges Python-Markdown's smarty output (curly quotes, en and em dashes from `--`/`---`, `…` from `...`), HTML entities (`&amp;`) and markdown syntax (`*`, `_` at word edges, backticks, backslash escapes, `[text](url)`, `<https://…>` autolinks, citation markers), collapses whitespace and casefolds. The eight parametrised cases in Task 2 are the contract; the autolink, backslash-escape and `&amp;` cases need A Task 2's `html.unescape`, autolink and backslash-escape folds. The matching rule built on it is A's C9 (the normalised paragraph starts with the normalised anchor, the anchor has at least `MIN_ANCHOR_CHARS` normalised characters, exactly one paragraph matches, several entries may share one), which Task 2 applies to the served `<p>` elements.
+**CS-2: stream A Task 2, `pipeline/lyra/theo_publishing.py`: `normalize_anchor_text(text: str) -> str`, `MIN_ANCHOR_CHARS` (20), `EVIDENCE_ID_RE` (`re.compile(r"ev-[0-9]{2,}")`: ASCII digits only, always applied with `.fullmatch`), `YOUTUBE_ID_RE` (`re.compile(r"[A-Za-z0-9_-]{11}")`, next to `EVIDENCE_ID_RE`, always applied with `.fullmatch`) and `poster_web_path(request_id: str, youtube_id: str) -> str` (`f"/data/research-images/{request_id}/video_{youtube_id}.jpg"`, owner decision #13).** A Task 2's definitions are the only ones; this plan carries no second normaliser, no copy of either id regex and no copy of the poster path (the TypeScript `PAPER_HASH_RE` of Task 11 mirrors the evidence-id regex and names it as its source; Task 1 pins the ASCII-only property with an `ev-\u0661\u0662` case, and the 12-character case of `test_rejects_a_malformed_youtube_id` pins the whole-string YouTube-id match: with `.match` instead of `.fullmatch` it fails). The page imports `normalize_anchor_text` and `MIN_ANCHOR_CHARS` inside `resolve_evidence_anchors`, `EVIDENCE_ID_RE` inside `parse_evidence` and `parse_corrections`, and `YOUTUBE_ID_RE` and `poster_web_path` inside `parse_videos` (none at module level). Required property, pinned by `TestNormalizeAnchorTextContract` in Task 2: for every prose paragraph `P` of a report, `normalize_anchor_text(P) == normalize_anchor_text(visible_text(markdown_to_html(P)))`, where the visible text is the `<p>` content with tags dropped and entities decoded (`_paragraph_text`). So the function bridges Python-Markdown's smarty output (curly quotes, en and em dashes from `--`/`---`, `…` from `...`), HTML entities (`&amp;`) and markdown syntax (`*`, `_` at word edges, backticks, backslash escapes, `[text](url)`, `<https://…>` autolinks, citation markers), collapses whitespace and casefolds. The eight parametrised cases in Task 2 are the contract; the autolink, backslash-escape and `&amp;` cases need A Task 2's `html.unescape`, autolink and backslash-escape folds. The matching rule built on it is A's C9 (the normalised paragraph starts with the normalised anchor, the anchor has at least `MIN_ANCHOR_CHARS` normalised characters, exactly one paragraph matches, several entries may share one), which Task 2 applies to the served `<p>` elements.
 
-**CS-3: stream A, the `publish_paper`, `correct_paper` and `register_video` gates and the founder publish route (A Task 21).** Run the page's own functions on exactly what will be stored, so that "gate passed" means "page renders": `resolve_evidence_anchors(markdown_to_html(paper_markdown(report, title)), parse_evidence(evidence))` next to A's markdown resolution (an entry must resolve both among `report_paragraphs` and among the `<p>` elements of the HTML the page serves), and `paper_extras(SimpleNamespace(evidence=…, videos=…, corrections=…, writer=…))` on the would-be `result_json` after merging corrections and videos (an extra `id=` attribute is ignored). Imports: `from pipeline.article_html_renderer import markdown_to_html` and `from pipeline.research_html_renderer import PaperPageError, paper_extras, paper_markdown, parse_evidence, resolve_evidence_anchors` **inside** the gate function (`research_html_renderer` imports `theo_publishing` back lazily, and `article_html_renderer` needs markdown/nh3, which only the API image has). Record a `PaperPageError` message as the failed gate's reason. A's gate tasks start after this plan's Tasks 1-2 (see "Dependencies and order"). This closes the CLI's path to a 500 on a live paper page. The second path is the founder route: after an unpublish, `PATCH /research/{id}` or `PATCH /research/{id}/section` can rewrite the report of a completed non-public row, and `POST /research/{id}/publish` (`publish_research` in `api/routes/theo.py`, `?repair=1` included) assembles `published_report` itself. A Task 21 (d) runs the same checks there before its UPDATE: `check_page(request_id, result)` and, when `result` carries `evidence`, `check_evidence_anchors(assembled["published_report"], paper_title, result["evidence"])` (A's acceptance function, which ends in this plan's `resolve_evidence_anchors` on the served HTML). Any issue answers HTTP 409 with the issue list, and `override` cannot bypass it (A contract C7). Together the two close every path to a 500 on a live paper page.
+**CS-3: stream A, the `publish_paper`, `correct_paper` and `register_video` gates and the founder publish route (A Task 21).** Run the page's own functions on exactly what will be stored, so that "gate passed" means "page renders": `resolve_evidence_anchors(markdown_to_html(paper_markdown(report, title)), parse_evidence(evidence))` next to A's markdown resolution (an entry must resolve both among `report_paragraphs` and among the `<p>` elements of the HTML the page serves), and `paper_extras(SimpleNamespace(id=request_id, evidence=…, videos=…, corrections=…, writer=…))` on the would-be `result_json` after merging corrections and videos (`id` is the canonical lowercase request id, as A's `check_page` passes it: it names the only valid poster path). Imports: `from pipeline.article_html_renderer import markdown_to_html` and `from pipeline.research_html_renderer import PaperPageError, paper_extras, paper_markdown, parse_evidence, resolve_evidence_anchors` **inside** the gate function (`research_html_renderer` imports `theo_publishing` back lazily, and `article_html_renderer` needs markdown/nh3, which only the API image has). Record a `PaperPageError` message as the failed gate's reason. A's gate tasks start after this plan's Tasks 1-2 (see "Dependencies and order"). This closes the CLI's path to a 500 on a live paper page. The second path is the founder route: after an unpublish, `PATCH /research/{id}` or `PATCH /research/{id}/section` can rewrite the report of a completed non-public row, and `POST /research/{id}/publish` (`publish_research` in `api/routes/theo.py`, `?repair=1` included) assembles `published_report` itself. A Task 21 (d) runs the same checks there before its UPDATE: `check_page(request_id, result)` and, when `result` carries `evidence`, `check_evidence_anchors(assembled["published_report"], paper_title, result["evidence"])` (A's acceptance function, which ends in this plan's `resolve_evidence_anchors` on the served HTML). Any issue answers HTTP 409 with the issue list, and `override` cannot bypass it (A contract C7). Together the two close every path to a 500 on a live paper page.
 
-**CS-4: stream A, stored shapes in `result_json`** (the page raises on anything else): `evidence[]` entries with `id` matching `EVIDENCE_ID_RE` (`ev-\d{2,}`) in full (unique), non-empty `anchor_text` and `claim` (other keys pass through unused); `corrections[]` entries `{date: "YYYY-MM-DD", text, evidence_id?}`, where the entry that retires an id is the last one naming it (a retired id is never named again; the page anchors the id on that entry); `videos[]` entries `{youtube_id: 11 chars [A-Za-z0-9_-], title, published_at: ISO 8601, evidence_timestamps: {"ev-NN": int >= 0}}`, with no poster (spec §2.7). A timestamp may name only a current evidence id or one retired by a correction. `writer` is `{model, tool, research_model, published: "automatic"|"manual", human_review: bool}`.
+**CS-4: stream A, stored shapes in `result_json`** (the page raises on anything else): `evidence[]` entries with `id` matching `EVIDENCE_ID_RE` (`ev-[0-9]{2,}`) in full (unique), non-empty `anchor_text` and `claim` (other keys pass through unused); `corrections[]` entries `{date: "YYYY-MM-DD", text, evidence_id?}`, where the entry that retires an id is the last one naming it (a retired id is never named again; the page anchors the id on that entry); `videos[]` entries `{youtube_id: matching YOUTUBE_ID_RE (11 chars [A-Za-z0-9_-]) in full, title, published_at: ISO 8601, evidence_timestamps: {"ev-NN": int >= 0}, poster?}`, where `poster`, stored only when one was registered, is exactly `poster_web_path(request_id, youtube_id)` (spec §2.7, owner decision #13; any other value, `null` included, raises). A timestamp may name only a current evidence id or one retired by a correction. `writer` is `{model, tool, research_model, published: "automatic"|"manual", human_review: bool}`.
 
 **CS-5: stream A: IndexNow after `--correct` and `--register-video`.** Both change the served page. Task 12 moves the sitemap `lastmod` to the newest correction day, but a crawler reads the sitemap on its own schedule, and a video registration does not move `lastmod` at all. Ping `indexnow_url(f"/research/{slug}")` as `publish_paper` does and journal the result in `side_effects`.
 
 **CS-6: stream owning `pipeline/studio/paper/gates.py` (spec §3.4 gate 6).** Resolve `anchor_text` with the same `resolve_evidence_anchors(markdown_to_html(paper_markdown(paper_md, title)), evidence)` (directly or through stream A's shared acceptance, CS-3), so that the local check, the publish gate and the page agree on the paragraph under the one C9 rule (CS-2).
 
-**CS-7: withdrawn.** Spec §2.7 registers no poster: A's `--register-video` input has no `poster` key and C sends none, so the page always shows the posterless player (Task 8) and never loads a thumbnail from YouTube. Send `evidence_timestamps` as whole seconds. If the owner wants the studio thumbnail as the poster, streams A, B and C add it together; nobody adds it alone.
+**CS-7: streams A and C, the video poster (owner decision #13, spec §2.7 `poster?` and §4.9; A, B and C land it together).** One definition: `poster` = `pipeline.lyra.theo_publishing.poster_web_path(request_id, youtube_id)` = `/data/research-images/<request_id>/video_<youtube_id>.jpg`, our own studio thumbnail served from our server. **A** (Tasks 2, 18): defines `poster_web_path` in Task 2 (CS-2); `ENVELOPES['register_video']` takes `poster` as its one optional key; `check_video_shape` reports any other value as `poster must be /data/research-images/<request_id>/video_<youtube_id>.jpg`; `register_video` gates the file under `images_root` with the existing `check_images` (gate `images`, between `duplicate` and `page`); the stored `videos[]` entry carries `poster` only when one was sent. **C** (Tasks 12, 13, 26): `video_payload(..., with_poster=True)` adds the key; `paper register-video --poster FILE` and `episode register-youtube --poster K` copy the JPEG to `video_<youtube_id>.jpg`, run a dry run without poster, upload it with `remote.upload_research_images` (verified scp), run a dry run with poster, then apply. **B** (this plan): `parse_videos` accepts exactly that path (Task 1), the payload, the API and `ResearchVideo` carry it (Tasks 3, 4, 5), and `PaperVideo` draws `<img src={poster} alt="" loading="lazy">` inside the click-to-play link (Task 8); a video registered without a poster keeps the posterless player, a valid contract state. Either way the page loads nothing from YouTube before the click; the JSON-LD `VideoObject` keeps YouTube's `thumbnailUrl` (crawler metadata, Task 10). Send `evidence_timestamps` as whole seconds.
 
 **CS-8: withdrawn, now this stream's Task 12** (`api/routes/sitemap.py`: a paper's `lastmod` is the later of its publication and its newest correction day).
 
