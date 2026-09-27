@@ -6,7 +6,10 @@
  * pixel size is measured by calculateMetadata. Cues:
  *   show <marker>       the marker appears (without a show cue: from the start)
  *   hide <marker>       it leaves
- *   highlight <marker>  the camera flies onto it (36 frames) and holds; it turns amber
+ *   highlight <marker>  the camera flies onto it (36 frames) from wherever it is and
+ *                       holds; it turns amber
+ * A close-up can push the other markers out of the frame, and the layout lint
+ * refuses a clipped marker: the script hides them (hide) before it highlights.
  * There is deliberately no measuring line: photos are oblique, so lengths
  * drawn on them would lie (owner rule); ScaleDrawing makes the comparison.
  */
@@ -16,7 +19,7 @@ import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion'
 import { type SceneCue, firstCue, visibleAt } from '../cues'
 import { imageSize, useEpisode } from '../context'
 import { LayoutBox } from '../layout/LayoutBox'
-import { type Camera, type KenBurns, blendCamera, cameraAt, focusCamera, fractionBox, kenBurnsCamera, viewFor } from '../layout/transform'
+import { type Camera, type KenBurns, cameraAt, focusCamera, fractionBox, highlightCamera, kenBurnsCamera, viewFor } from '../layout/transform'
 import { bootIn, progress } from '../motion'
 import { colors } from '../theme/colors'
 import { body, overFootage } from '../theme/type'
@@ -28,7 +31,7 @@ export type PhotoPlateProps = { image: Media; kenBurns?: KenBurns; label?: Label
 
 const FOCUS_FRAMES = 36
 
-/** Camera at a scene frame: the Ken Burns path, overridden from the latest highlight cue on. */
+/** Camera at a scene frame: the Ken Burns path until the first highlight, then each highlight's flight from where the camera is. */
 export function plateCamera(
   image: Pick<Media, 'markers'>,
   size: [number, number],
@@ -42,12 +45,12 @@ export function plateCamera(
   const [iw, ih] = size
   const keys = kenBurnsCamera(iw, ih, kenBurns)
   const t = (f: number) => (durationInFrames > 1 ? f / (durationInFrames - 1) : 0)
-  const focus = cues.filter((c) => c.do === 'highlight' && c.frame <= frame).sort((a, b) => a.frame - b.frame).pop()
-  if (!focus) return cameraAt(keys, t(frame))
-  const marker = image.markers.find((m) => m.id === focus.target)
-  if (!marker) throw new Error(`highlight cue targets unknown marker ${focus.target}`)
-  const target = focusCamera(iw, ih, fw, fh, fractionBox(marker.box, iw, ih))
-  return blendCamera(cameraAt(keys, t(focus.frame)), target, progress(frame, focus.frame, FOCUS_FRAMES))
+  const onto = (id: string) => {
+    const marker = image.markers.find((m) => m.id === id)
+    if (!marker) throw new Error(`highlight cue targets unknown marker ${id}`)
+    return focusCamera(iw, ih, fw, fh, fractionBox(marker.box, iw, ih))
+  }
+  return highlightCamera((f) => cameraAt(keys, t(f)), cues, onto, (f, start) => progress(f, start, FOCUS_FRAMES), frame)
 }
 
 export function checkPhotoPlate(p: PhotoPlateProps): string[] {

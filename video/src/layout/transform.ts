@@ -69,6 +69,29 @@ export function focusCamera(iw: number, ih: number, fw: number, fh: number, box:
   return { cx: box[0] + box[2] / 2, cy: box[1] + box[3] / 2, zoom }
 }
 
+/**
+ * Camera at `frame` of a scene whose highlight cues fly the camera onto a target
+ * (PhotoPlate markers, MapboxTopdown pins). Before the first highlight it is `base`
+ * (the Ken Burns path). Each highlight flies from the camera in effect at its own frame
+ * (the base path for the first, else wherever the previous flight had got to) onto
+ * `focus(target)`, eased by `flight(frame, cueFrame)` (0 at the cue, 1 on arrival), and
+ * holds there, so a scene that highlights one target after another never jumps back.
+ */
+export function highlightCamera(
+  base: (frame: number) => Camera,
+  cues: readonly { frame: number; do: string; target: string }[],
+  focus: (target: string) => Camera,
+  flight: (frame: number, start: number) => number,
+  frame: number,
+): Camera {
+  const hs = cues.filter((c) => c.do === 'highlight' && c.frame <= frame).sort((a, b) => a.frame - b.frame)
+  if (hs.length === 0) return base(frame)
+  let from = base(hs[0].frame)
+  for (let i = 1; i < hs.length; i++) from = blendCamera(from, focus(hs[i - 1].target), flight(hs[i].frame, hs[i - 1].frame))
+  const last = hs[hs.length - 1]
+  return blendCamera(from, focus(last.target), flight(frame, last.frame))
+}
+
 export type KenBurns = 'in' | 'out' | 'none'
 
 /** Ken Burns keyframes on the image centre: an 8 % push in, pull out, or a still frame. */
