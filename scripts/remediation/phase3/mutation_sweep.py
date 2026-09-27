@@ -23033,6 +23033,11 @@ WC_VERIFY_RECORD = "test_the_verification_the_evidence_records_is_asked_again_fr
 WC_VERIFY_STRICT = "test_a_recorded_round_is_read_strictly"
 WC_VERIFY_SHAPE = "test_a_verifier_answer_out_of_shape_is_refused_and_says_why"
 WC_VERIFY_INDEPENDENT = "test_a_verifier_who_checked_the_site_or_verified_it_before_is_refused"
+WC_VERIFY_IMPORT_ONCE = (
+    "test_a_check_round_is_imported_once_and_never_after_the_verification_is_exported"
+)
+WC_VERIFY_HANDOFFS = "test_each_verification_round_takes_a_new_empty_handoff_and_names_only_its_own"
+WC_VERIFY_MOVED = "test_a_check_that_moved_between_verify_export_and_import_is_refused"
 
 WC_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     # ── wc4: what one round drops, and when the site is cleared ──────────────────────────────
@@ -23287,6 +23292,111 @@ WC_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         """        f"            OR false);",  # mutant\n""",
         WC_WRITE_TEST,
         WC_SQL_PIN,
+    ),
+    # ── the review of 2026-09-27: every round tied to the text and the question it showed ────────
+    (
+        "wc verify wc4: a round that verified another text is read",
+        WC4_FILE,
+        '    if given["text_sha256"] != M.text_sha256(text):\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_a_round_is_tied_to_the_text_it_showed_not_only_to_its_sentence_numbers",
+    ),
+    (
+        "wc verify wc4: the build takes a check that moved under its verification",
+        WC4_FILE,
+        '    if given["text_sha256"] != M.text_sha256(text):\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_a_check_that_moved_after_the_verification_is_never_built",
+    ),
+    (
+        "wc verify wc4: the evidence's rounds are read over a moved check",
+        WC4_FILE,
+        '    if given["text_sha256"] != M.text_sha256(text):\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_RECORD,
+    ),
+    (
+        "wc cli: a check round is imported twice",
+        WC_CLI,
+        '    if (_round_dir(run, number) / "ANSWERS.jsonl").exists():\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_IMPORT_ONCE,
+    ),
+    (
+        "wc cli: a check round is imported after the verification was exported",
+        WC_CLI,
+        "    if _verify_rounds(run):\n",
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_IMPORT_ONCE,
+    ),
+    (
+        "wc verify cli: the build takes a round that asked another question",
+        WC_CLI,
+        '        if asked != given["prompt_sha256"]:\n',
+        "        if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_a_verified_round_whose_question_the_check_no_longer_gives_is_never_built",
+    ),
+    (
+        "wc verify cli: verify2 records the text before verify's drops",
+        WC_CLI,
+        "        text = str(wc4.compose(current, site.quotes).description)\n",
+        "        text = str(wc4.compose(site.decisions, site.quotes).description)  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_a_wrong_or_unsupported_sentence_is_dropped_and_the_changed_text_verified_again",
+    ),
+    (
+        "wc verify cli: verify-export reuses a handoff",
+        WC_CLI,
+        '    if any(Path(r["handoff"]).resolve() == handoff.resolve() for r in rounds):\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_HANDOFFS,
+    ),
+    (
+        "wc verify cli: verify-export writes into a handoff that is not empty",
+        WC_CLI,
+        '    if handoff.exists() and any(handoff.iterdir()):\n        raise WcRunError(f"{handoff} is not empty: a round takes a new handoff directory")\n    stage = VERIFY_STAGES[number - 1]\n',
+        '    if False:  # mutant\n        raise WcRunError(f"{handoff} is not empty: a round takes a new handoff directory")\n    stage = VERIFY_STAGES[number - 1]\n',
+        WC_VERIFY_TEST,
+        WC_VERIFY_HANDOFFS,
+    ),
+    (
+        "wc verify cli: an unknown handoff is a verification round",
+        WC_CLI,
+        '    raise WcRunError(f"{handoff} is no verification round of {run}")\n',
+        "    return _verify_rounds(run)[0]  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_HANDOFFS,
+    ),
+    (
+        "wc verify cli: a site not due is imported",
+        WC_CLI,
+        "        if status is not None or len(derived) != number - 1:\n",
+        "        if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_MOVED,
+    ),
+    (
+        "wc verify cli: a kept text the round did not show is imported",
+        WC_CLI,
+        '        if wc4.kept_numbers(current) != record["shown"][label]:\n',
+        "        if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_MOVED,
+    ),
+    (
+        "wc verify cli: a manifest not the round's record is imported",
+        WC_CLI,
+        '    if set(manifest) != asked:\n        raise WcRunError(f"{handoff}: the manifest is not the verification round\'s record")\n',
+        '    if False:  # mutant\n        raise WcRunError(f"{handoff}: the manifest is not the verification round\'s record")\n',
+        WC_VERIFY_TEST,
+        "test_a_manifest_that_is_not_the_verification_rounds_record_is_refused",
     ),
 ]
 MUTATIONS += WC_VERIFY_MUTATIONS
