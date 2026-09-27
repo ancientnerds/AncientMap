@@ -22663,12 +22663,13 @@ WC_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         WC_JUDGE_FAIL,
     ),
     (
+        # re-anchored 2026-09-27: the judge is checked against every checker and verifier of the run
         "wc cli: a judge who checked the site counts",
         WC_CLI,
-        '                "independent": answer.answered_by not in checkers[label],\n',
+        '                "independent": answer.answered_by not in workers,\n',
         '                "independent": True,  # mutant\n',
         WC_TEST,
-        "test_a_judge_who_checked_the_site_is_not_independent",
+        "test_a_judge_who_checked_a_site_of_the_run_is_not_independent",
     ),
     # ── write4: group WC ──────────────────────────────────────────────────────────────────────
     (
@@ -23019,6 +23020,386 @@ WC_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += WC_MUTATIONS
+
+# ── lane WC: the per-site verification before the build (O5 and O2, the pilots of 2026-09-27) ────
+WC_VERIFY_TEST = "tests/remediation/test_wc_verify.py"
+WC_VERIFY_DROPS = (
+    "test_a_wrong_or_unsupported_sentence_is_dropped_and_the_changed_text_is_due_again"
+)
+WC_VERIFY_INCOHERENT = (
+    "test_an_incoherent_text_drops_the_named_sentence_and_one_with_none_named_is_cleared"
+)
+WC_VERIFY_RECORD = "test_the_verification_the_evidence_records_is_asked_again_from_its_rounds"
+WC_VERIFY_STRICT = "test_a_recorded_round_is_read_strictly"
+WC_VERIFY_SHAPE = "test_a_verifier_answer_out_of_shape_is_refused_and_says_why"
+WC_VERIFY_INDEPENDENT = "test_a_verifier_who_checked_the_site_or_verified_it_before_is_refused"
+WC_VERIFY_IMPORT_ONCE = (
+    "test_a_check_round_is_imported_once_and_never_after_the_verification_is_exported"
+)
+WC_VERIFY_HANDOFFS = "test_each_verification_round_takes_a_new_empty_handoff_and_names_only_its_own"
+WC_VERIFY_MOVED = "test_a_check_that_moved_between_verify_export_and_import_is_refused"
+
+WC_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── wc4: what one round drops, and when the site is cleared ──────────────────────────────
+    (
+        "wc verify wc4: a WRONG sentence stays",
+        WC4_FILE,
+        "                if verdict == WRONG:\n",
+        "                if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_DROPS,
+    ),
+    (
+        "wc verify wc4: an UNSUPPORTED sentence stays",
+        WC4_FILE,
+        "                elif verdict == UNSUPPORTED:\n",
+        "                elif False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_DROPS,
+    ),
+    (
+        "wc verify wc4: a sentence named broken stays",
+        WC4_FILE,
+        "                drops.setdefault(shown[k - 1], DropReason.VERIFY_INCOHERENT)\n",
+        "                pass  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_INCOHERENT,
+    ),
+    (
+        "wc verify wc4: an incoherent text with none named stays",
+        WC4_FILE,
+        "        cleared = not passed and (index == len(VERIFY_STAGES) or not (coherent or broken))\n",
+        "        cleared = not passed and index == len(VERIFY_STAGES)  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_INCOHERENT,
+    ),
+    (
+        "wc verify wc4: a text verify2 did not confirm stays",
+        WC4_FILE,
+        "        cleared = not passed and (index == len(VERIFY_STAGES) or not (coherent or broken))\n",
+        "        cleared = not passed and not (coherent or broken)  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_a_second_verification_that_does_not_confirm_the_text_clears_the_site",
+    ),
+    (
+        "wc verify wc4: the pronoun rule is off after a verify drop",
+        WC4_FILE,
+        "        if not cleared:\n            current = follow_drops(current)\n",
+        "        if False:  # mutant\n            current = follow_drops(current)\n",
+        WC_VERIFY_TEST,
+        "test_a_sentence_that_leans_on_a_dropped_one_goes_with_it",
+    ),
+    (
+        "wc verify wc4: a round follows a verified site",
+        WC4_FILE,
+        '        if status is not None:\n            raise WcError(f"verification round {index}: the verification had ended ({status})")\n',
+        "        if False:  # mutant\n            pass\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_STRICT,
+    ),
+    (
+        "wc verify wc4: the sentences a round showed are not asked",
+        WC4_FILE,
+        '    if list(given["shown"]) != list(shown):\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_STRICT,
+    ),
+    (
+        "wc verify wc4: the verify reason of a check decision is read",
+        WC4_FILE,
+        "        if reason in VERIFY_REASONS:\n",
+        "        if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_RECORD,
+    ),
+    # ── wc4: the record the writer and the acceptance ask ─────────────────────────────────────
+    (
+        "wc verify wc4: a verifier who checked the site passes",
+        WC4_FILE,
+        "        if name in checkers:\n",
+        "        if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_RECORD,
+    ),
+    (
+        "wc verify wc4: one agent may verify a site twice",
+        WC4_FILE,
+        "    if len(set(names)) != len(names):\n",
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_RECORD,
+    ),
+    (
+        "wc verify wc4: the record is not asked again from its rounds",
+        WC4_FILE,
+        "    if dict(record) != expected:\n",
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_RECORD,
+    ),
+    (
+        "wc verify wc4: the final decisions are not the verified ones",
+        WC4_FILE,
+        "    if final != recorded:\n",
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_RECORD,
+    ),
+    (
+        "wc verify wc4: the evidence re-check skips the verification",
+        WC4_FILE,
+        "    problems.extend(verification_problems(evidence, description))\n",
+        "    pass  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_the_evidence_recheck_asks_the_verification_too",
+    ),
+    (
+        "wc verify wc4: an outcome without a verification is read",
+        WC4_FILE,
+        "        if isinstance(self.evidence, dict) and VERIFICATION_KEY not in self.evidence:\n",
+        "        if False:  # mutant\n",
+        WC_WRITE_TEST,
+        "test_the_gate_refuses_a_plan_whose_sites_lack_a_passed_verification",
+    ),
+    (
+        "wc verify wc4: a check record is made for an unverified text",
+        WC4_FILE,
+        '    if verification["status"] != VerifyStatus.VERIFIED.value:\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_a_check_record_is_made_only_for_a_verified_text",
+    ),
+    (
+        "wc verify wc4: the served text need not be the verified one",
+        WC4_FILE,
+        "    if check.verified_sha256 != digest:\n",
+        "    if False:  # mutant\n",
+        WC_TEST,
+        WC_INVARIANTS,
+    ),
+    (
+        "wc verify wc4: a check record without its verifiers reads",
+        WC4_FILE,
+        "            or not 1 <= len(self.verifiers) <= len(VERIFY_STAGES)\n",
+        "            or False  # mutant\n",
+        WC_TEST,
+        "test_the_check_record_reads_back_strictly_and_counts_what_its_sentences_say",
+    ),
+    # ── answers: the verifier's shape ──────────────────────────────────────────────────────────
+    (
+        "wc verify answers: a coherent text may name a broken sentence",
+        WC_ANSWERS,
+        '    if data["coherent"] and broken:\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_SHAPE,
+    ),
+    (
+        "wc verify answers: broken may name a sentence the text lacks",
+        WC_ANSWERS,
+        "        or any(not 1 <= k <= kept for k in broken)\n",
+        "        or False  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_SHAPE,
+    ),
+    # ── cli: the stage, the build, the judge, the pilot's plan ──────────────────────────────────
+    (
+        "wc verify cli: a verifier who checked the site is imported",
+        WC_CLI,
+        "        if answer.answered_by in others:\n",
+        "        if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_INDEPENDENT,
+    ),
+    (
+        "wc verify cli: verify2 may be answered by round 1's verifier",
+        WC_CLI,
+        '        others = site.checkers | {given["answered_by"] for given in earlier.get(label, [])}\n',
+        "        others = site.checkers  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_INDEPENDENT,
+    ),
+    (
+        "wc verify cli: verify-export asks sites that are not due",
+        WC_CLI,
+        "        if status is not None:\n            continue\n",
+        "        if False:  # mutant\n            continue\n",
+        WC_VERIFY_TEST,
+        "test_verify_asks_every_site_whose_check_kept_a_sentence_with_its_text_as_published",
+    ),
+    (
+        "wc verify cli: a changed verify question is imported",
+        WC_CLI,
+        '        prompt = verify_prompt(site.entry, current, site.quotes)\n        if OH.prompt_sha256(prompt) != line["prompt_sha256"]:\n',
+        "        prompt = verify_prompt(site.entry, current, site.quotes)\n        if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_a_verification_round_is_imported_only_when_it_validates_and_asks_its_own_question",
+    ),
+    (
+        "wc verify cli: the build runs on an unverified text",
+        WC_CLI,
+        '        if status is None:\n            raise WcRunError(\n                f"{label}: verification round {len(derived) + 1} "\n',
+        '        if False:  # mutant\n            raise WcRunError(\n                f"{label}: verification round {len(derived) + 1} "\n',
+        WC_VERIFY_TEST,
+        "test_nothing_is_built_before_the_verification_is_imported",
+    ),
+    (
+        "wc verify cli: a judge who verified a site counts",
+        WC_CLI,
+        '    } | {\n        r["answered_by"]\n        for final in finals.values()\n        for r in final["evidence"][wc4.VERIFICATION_KEY]["rounds"]\n    }\n',
+        "    }  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_the_judge_sees_the_text_after_the_verification_and_no_verifier_judges",
+    ),
+    (
+        "wc verify cli: SUMMARY loses each site's verification record",
+        WC_CLI,
+        '            "sites": {label: verification_summary(record) for label, record in records.items()},\n',
+        '            "sites": {},  # mutant\n',
+        WC_VERIFY_TEST,
+        "test_a_wrong_or_unsupported_sentence_is_dropped_and_the_changed_text_verified_again",
+    ),
+    (
+        "wc verify cli: a plan built again passes as the judged one",
+        WC_CLI,
+        '        if result.get("plan_sha256") != _sha256(plan):\n',
+        "        if False:  # mutant\n",
+        WC_WRITE_TEST,
+        "test_the_gate_writes_a_pilot_plan_only_as_its_judge_judged_it",
+    ),
+    # ── write4: the plan and the transaction ────────────────────────────────────────────────────
+    (
+        "wc verify write4: the plan skips the verification",
+        P4_WRITE,
+        "            + wc4.verification_problems(evidence, left)\n",
+        "            + []  # mutant\n",
+        WC_WRITE_TEST,
+        WC_PLAN_RULES,
+    ),
+    (
+        "wc verify write4: the plan loader skips the verification",
+        P4_WRITE,
+        "                unverified = wc4.verification_problems(outcome.evidence, outcome.description)\n",
+        "                unverified = []  # mutant\n",
+        WC_WRITE_TEST,
+        "test_the_gate_refuses_a_plan_whose_sites_lack_a_passed_verification",
+    ),
+    (
+        "wc verify write4: invariant 5 skips the verified text",
+        P4_WRITE,
+        """        f"            OR (u.raw_data -> {check} ->> 'verified_sha256') IS DISTINCT FROM {digest});",\n""",
+        """        f"            OR false);",  # mutant\n""",
+        WC_WRITE_TEST,
+        WC_SQL_PIN,
+    ),
+    # ── the review of 2026-09-27: every round tied to the text and the question it showed ────────
+    (
+        "wc verify wc4: a round that verified another text is read",
+        WC4_FILE,
+        '    if given["text_sha256"] != M.text_sha256(text):\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_a_round_is_tied_to_the_text_it_showed_not_only_to_its_sentence_numbers",
+    ),
+    (
+        "wc verify wc4: the build takes a check that moved under its verification",
+        WC4_FILE,
+        '    if given["text_sha256"] != M.text_sha256(text):\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_a_check_that_moved_after_the_verification_is_never_built",
+    ),
+    (
+        "wc verify wc4: the evidence's rounds are read over a moved check",
+        WC4_FILE,
+        '    if given["text_sha256"] != M.text_sha256(text):\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_RECORD,
+    ),
+    (
+        "wc cli: a check round is imported twice",
+        WC_CLI,
+        '    if (_round_dir(run, number) / "ANSWERS.jsonl").exists():\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_IMPORT_ONCE,
+    ),
+    (
+        "wc cli: a check round is imported after the verification was exported",
+        WC_CLI,
+        "    if _verify_rounds(run):\n",
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_IMPORT_ONCE,
+    ),
+    (
+        "wc verify cli: the build takes a round that asked another question",
+        WC_CLI,
+        '        if asked != given["prompt_sha256"]:\n',
+        "        if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_a_verified_round_whose_question_the_check_no_longer_gives_is_never_built",
+    ),
+    (
+        "wc verify cli: verify2 records the text before verify's drops",
+        WC_CLI,
+        "        text = str(wc4.compose(current, site.quotes).description)\n",
+        "        text = str(wc4.compose(site.decisions, site.quotes).description)  # mutant\n",
+        WC_VERIFY_TEST,
+        "test_a_wrong_or_unsupported_sentence_is_dropped_and_the_changed_text_verified_again",
+    ),
+    (
+        "wc verify cli: verify-export reuses a handoff",
+        WC_CLI,
+        '    if any(Path(r["handoff"]).resolve() == handoff.resolve() for r in rounds):\n',
+        "    if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_HANDOFFS,
+    ),
+    (
+        "wc verify cli: verify-export writes into a handoff that is not empty",
+        WC_CLI,
+        '    if handoff.exists() and any(handoff.iterdir()):\n        raise WcRunError(f"{handoff} is not empty: a round takes a new handoff directory")\n    stage = VERIFY_STAGES[number - 1]\n',
+        '    if False:  # mutant\n        raise WcRunError(f"{handoff} is not empty: a round takes a new handoff directory")\n    stage = VERIFY_STAGES[number - 1]\n',
+        WC_VERIFY_TEST,
+        WC_VERIFY_HANDOFFS,
+    ),
+    (
+        "wc verify cli: an unknown handoff is a verification round",
+        WC_CLI,
+        '    raise WcRunError(f"{handoff} is no verification round of {run}")\n',
+        "    return _verify_rounds(run)[0]  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_HANDOFFS,
+    ),
+    (
+        "wc verify cli: a site not due is imported",
+        WC_CLI,
+        "        if status is not None or len(derived) != number - 1:\n",
+        "        if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_MOVED,
+    ),
+    (
+        "wc verify cli: a kept text the round did not show is imported",
+        WC_CLI,
+        '        if wc4.kept_numbers(current) != record["shown"][label]:\n',
+        "        if False:  # mutant\n",
+        WC_VERIFY_TEST,
+        WC_VERIFY_MOVED,
+    ),
+    (
+        "wc verify cli: a manifest not the round's record is imported",
+        WC_CLI,
+        '    if set(manifest) != asked:\n        raise WcRunError(f"{handoff}: the manifest is not the verification round\'s record")\n',
+        '    if False:  # mutant\n        raise WcRunError(f"{handoff}: the manifest is not the verification round\'s record")\n',
+        WC_VERIFY_TEST,
+        "test_a_manifest_that_is_not_the_verification_rounds_record_is_refused",
+    ),
+]
+MUTATIONS += WC_VERIFY_MUTATIONS
 
 
 def digest(path: Path) -> str:

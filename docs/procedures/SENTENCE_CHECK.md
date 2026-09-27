@@ -6,23 +6,32 @@ runs is checked sentence by sentence by Opus agents against sources on the web. 
 stays (still marked as AI text), a contradicted or unsupported one goes, one unsupported clause may
 be cut out of an otherwise supported sentence, and a description with nothing left is cleared.
 
+**Every kept text is verified before it is built** (2026-09-27, owner decisions O5 and O2: every
+published sentence must be correct). Both pilots of 2026-09-27 failed the sealed judge gate on
+single items - a single checking pass lets about one error in 50-60 kept sentences through, and the
+gate allows none - so, as in lane WB (`CARD_DESCRIPTIONS.md` 2.1), an independent Opus agent
+verifies the kept text of every site (`verify`), a sentence it does not confirm is dropped, and a
+text a drop changed is verified once more by a new agent (`verify2`) or cleared (section 2, "The
+verification"; section 10).
+
 The code:
 
 | file | what |
 | --- | --- |
-| `scripts/remediation/phase4/wc4.py` | the deterministic core, pure: the sentences, the trim, the pronoun rule, the composed text and citations, the check record, the raw_data, the invariants, the journal-evidence re-check |
-| `scripts/remediation/wc/prompts.py` | the frozen texts: the check question, its re-ask block, the judge's question, both briefs (byte-pinned in `tests/remediation/test_wc.py`) |
-| `scripts/remediation/wc/answers.py` | the strict answer parsers, the fetcher (`requests`, User-Agent `AncientMapRemediation/1.0 (research)`), the quote check with the mirror and title rules |
+| `scripts/remediation/phase4/wc4.py` | the deterministic core, pure: the sentences, the trim, the pronoun rule, the verification (`run_verification`, `apply_verification`, `verification_problems`), the composed text and citations, the check record, the raw_data, the invariants, the journal-evidence re-check |
+| `scripts/remediation/wc/prompts.py` | the frozen texts: the check question, its re-ask block, the verifier's question, the judge's question, their briefs (byte-pinned in `tests/remediation/test_wc.py`) |
+| `scripts/remediation/wc/answers.py` | the strict answer parsers (check, verify, judge), the fetcher (`requests`, User-Agent `AncientMapRemediation/1.0 (research)`), the quote check with the mirror and title rules |
 | `scripts/remediation/wc/cli.py` | the commands below |
-| `scripts/remediation/phase4/write4.py` group **WC** | the journalled write (`plan_wc`, `load_wc_plan`, WC's rules in `validate_rows`, guard 3's clear tests, invariants 5-6) |
+| `scripts/remediation/phase4/write4.py` group **WC** | the journalled write (`plan_wc`, `load_wc_plan` - which refuses a plan whose sites lack a passed verification -, WC's rules in `validate_rows`, guard 3's clear tests, invariants 5-6) |
 | `output/remediation/tools/write_gate4.py --group WC --wc-plan` | the gate: dry, rehearse, apply in steps of at most 100 sites, accept |
 | `output/remediation/tools/verify_writes4.py --lane p4wc` | the step's acceptance, from the database and the journal alone |
 | `scripts/remediation/phase4/revert4.py --stamp-like 'phase4wc:...'` | the way back |
 
-Tests: `tests/remediation/test_wc.py`, `tests/remediation/test_phase4_wc_write.py`,
-`tests/api/test_wc_disclosure.py`, the SSR case in `ancient-nerds-map/src/seo/__tests__/render.test.tsx`;
-mutation cases `WC_MUTATIONS` in `scripts/remediation/phase3/mutation_sweep.py` (run with the label
-substring `"wc "`).
+Tests: `tests/remediation/test_wc.py`, `tests/remediation/test_wc_verify.py` (the verification),
+`tests/remediation/test_phase4_wc_write.py`, `tests/api/test_wc_disclosure.py`, the SSR case in
+`ancient-nerds-map/src/seo/__tests__/render.test.tsx`; mutation cases `WC_MUTATIONS` and
+`WC_VERIFY_MUTATIONS` in `scripts/remediation/phase3/mutation_sweep.py` (run with the label
+substring `"wc "`; the verification's alone with `"wc verify"`).
 
 ## 1. The population (measured)
 
@@ -136,12 +145,57 @@ question) and is measured by the pilot's judge (`coherent`).
 **The pronoun rule** (`wc4.follow_drops`): a kept sentence that leans on the sentence before it
 (`sentences.leans_on_predecessor`, Phase 4's V6 reading) goes when that one goes (`leans-on-dropped`).
 
-**The text** (`wc4.compose`, `wc4.with_markers`): the kept sentences in order, joined by one space,
-each with one `' [n]'` per distinct page of its verified quotes, ascending, numbered by first use
-across the text: in front of the final `. ! ?` (Phase 4's edit 5); after a closing quotation mark or
-bracket that follows it (`of the City." [1]`); and for a sentence without final punctuation (4 of
-15,133, all a text's last sentence) the markers and a full stop - the one character code ever adds.
-`description_citations` is rebuilt from exactly those pages: `{n, url, title, domain}`.
+**The verification** (`wc4.run_verification`, `wc4.apply_verification`; 2026-09-27). After every
+check round is imported and before the build, every site whose check kept a sentence goes to an
+independent Opus verifier - a different agent than the checker of that site - in batches of 5
+sites (stage `verify`, batches `verify-NNNN`). The question (`prompts.VERIFY_QUESTION`) is the
+pilot judge's, applied to the **kept text as it will be published**: the kept sentences in order as
+K1..Km with the trims applied, the old sentence each piece was cut from, the checker's verified
+quotes, and the dropped sentences as context only (what a kept sentence may have referred to), never
+judged. The answer is the judge's shape for the kept sentences (`answers.parse_verify`: each
+SUPPORTED, UNSUPPORTED or WRONG - a WRONG with a quote - and `coherent`) plus `broken`: the K
+numbers whose reference or meaning broke, ascending, empty when the text is coherent. The import
+checks every quote by machine on pages it fetches itself (`answers.check_quotes`, into
+`<run>/verify/pages/`) and records the outcome; it does not change a verdict. Per sentence and site:
+
+- SUPPORTED: the sentence stays;
+- UNSUPPORTED or WRONG: the sentence is dropped (`verify-unsupported`, `verify-wrong`) - a WRONG
+  also when code did not find its quote: a contradiction is never waved through as merely unproven;
+- coherent false: every sentence the verifier named in `broken` is dropped (`verify-incoherent`); an
+  incoherent text with no sentence named - the verifier could not name the broken reference - is
+  cleared (every kept sentence `verify-cleared`);
+- then the pronoun rule again: a kept sentence that leans on a sentence the verifier dropped goes.
+
+Dropping never re-adds text. A dropped sentence can break what stays (the Nyons case of pilot 2), so
+**a text a drop of `verify` changed and that still keeps a sentence** goes once more to a new agent
+(stage `verify2`, batches `verify2-NNNN`), on the text as it now stands: coherent and every sentence
+SUPPORTED keeps it; anything else clears the site (`verify-cleared`). There is no third round. A
+site ends `verified`, `cleared` or - when its check kept nothing - `nothing-kept`
+(`wc4.VerifyStatus`). The import refuses a verifier whose name checked the site (any check round)
+or verified it in round 1 (`cmd_verify_import`), and `wc4.verification_problems` refuses such a
+record again wherever it is read (section 8 says what that comparison can and cannot see).
+`build` is refused while a verification round is due and composes the text from the verified
+decisions; a site with nothing left is cleared as before.
+
+**The data ties every verification to the text it showed** (the review of 2026-09-27; lane WB's
+card tie, `CARD_DESCRIPTIONS.md` 2.1): `verify-import` records per site the sentence numbers the
+question showed (`shown`), the sha256 of the text they compose as published, markers included
+(`text_sha256`), and the question's `prompt_sha256`. `wc4.run_verification` reads a round only over
+the text it recorded: a check that composes another text under it is refused ("the check moved
+after the verifier answered") by `build`, by `wc4.verification_problems` (the plan loader, the
+plan's rules) and by the acceptance. `build` also rebuilds every round's question from the site's
+state at that round and compares it with `prompt_sha256`, so a replaced quote that leaves the text
+as it was is refused too. The commands cannot move a check under a verifier: `import` imports a
+check round once, and no check round once a verification round is exported - a check answered
+again is a new run.
+
+**The text** (`wc4.compose`, `wc4.with_markers`): the verified kept sentences in order, joined by
+one space, each with one `' [n]'` per distinct page of its verified quotes, ascending, numbered by
+first use across the text: in front of the final `. ! ?` (Phase 4's edit 5); after a closing
+quotation mark or bracket that follows it (`of the City." [1]`); and for a sentence without final
+punctuation (4 of 15,133, all a text's last sentence) the markers and a full stop - the one
+character code ever adds. `description_citations` is rebuilt from exactly those pages:
+`{n, url, title, domain}`.
 
 **The raw_data** (`wc4.written_raw_data`): the old object without `description_citations`,
 `_description_provenance`, `_description_check`; for a kept text the new citations, the check record
@@ -151,19 +205,38 @@ and `raw_data` is NULL when nothing else is left. A site whose `raw_data` was NU
 14 unclaimed texts on 2026-09-26) is cleared by its description row alone: NULL over NULL is no
 change, and the plan's rules refused the whole batch for such a row before the fix round.
 
-**The check record** `raw_data._description_check` (`wc4.DescriptionCheck`, v1): `run`, `checker`
+**The check record** `raw_data._description_check` (`wc4.DescriptionCheck`, v2 since 2026-09-27;
+no v1 record was ever written - production held none, read-only, that day): `run`, `checker`
 (`model4.AI_SYSTEM`, the Opus handoff's), `checked_sha256` (the stored March text that was asked),
-`kept` of `of`, `trimmed`, per sentence `{n, verdict, reason, cites, quote_sha256}`, and
-`desc_sha256` of the served text. It is public (`/api/sites/{id}` serves `raw_data` whole), so it
-carries each verified quote's sha256 and never its words; the words, URLs, titles, every agent
-answer and what the check said of each quote are in the journal evidence of both rows
-(`remediation_change_log.evidence`), from which `verify_writes4 --lane p4wc` re-composes the text.
+`kept` of `of`, `trimmed`, per sentence `{n, verdict, reason, cites, quote_sha256}` (a reason may be
+one of the verification's), `desc_sha256` of the served text, **`verifiers`** (the agents that
+verified it, one per verification round, in order) and **`verified_sha256`** (the `text_sha256` the
+last round recorded at its import: the sha256 of the text its verifier was shown and confirmed,
+markers included - recorded evidence, not a hash recomputed at build: `run_verification` holds it to
+what the check composes, `wc_problems` and the transaction's invariant 5 to `desc_sha256`). It is public (`/api/sites/{id}` serves `raw_data` whole), so it carries
+each verified quote's sha256 and never its words; the words, URLs, titles, every agent answer, what
+the check said of each quote, each sentence's decision before the verification (`checked`) and the
+whole verification record (`verification`: status, the sentences the check kept, every round with
+its agent, prompt and answer sha256, the verdicts with the quote check's outcome, `coherent`,
+`broken`, what it dropped and the text it judged) are in the journal evidence of both rows
+(`remediation_change_log.evidence`), from which `verify_writes4 --lane p4wc` re-composes the text
+and re-derives the verification.
 
 **The invariants** (`wc4.wc_problems`, asked by the plan, the in-database transaction, the read-back
-and the acceptance): a kept text carries its check record whose `desc_sha256` is the text's; a
-provenance beside it is lane L's and hashes the text (D4); the citations are exactly the numbers the
-markers use, `1..N` by first use, each `{n, url, title, domain}` with the URL's host (D1); the check
-record's kept sentences cite those numbers. A cleared site carries none of the three keys.
+and the acceptance): a kept text carries its check record whose `desc_sha256` and `verified_sha256`
+are the text's; a provenance beside it is lane L's and hashes the text (D4); the citations are
+exactly the numbers the markers use, `1..N` by first use, each `{n, url, title, domain}` with the
+URL's host (D1); the check record's kept sentences cite those numbers. A cleared site carries none
+of the three keys.
+
+**The verification the plan rests on** (`wc4.verification_problems`, asked by `write4.load_wc_plan`
+for every outcome - a plan fails whole -, by the plan's rules for every site's rows, by `build`, and
+by the acceptance through `evidence_problems`): the record is there; it is exactly what its rounds
+give from the check's decisions, every round read over the text it recorded (`text_sha256`); the
+evidence's final decisions are the verified ones; a kept text
+is the one the last verifier confirmed and its verification ended `verified`, a cleared site's
+`cleared` or `nothing-kept`; no verifier is an agent that checked the site, and none verified it
+twice. A plan built before the verify stage has no record and is never written.
 
 **The AI disclosure is required, not only checked where present** (EU AI Act; the review of
 2026-09-26). The journal evidence records the checked text's marking (`wc4.marking_record`: `L`,
@@ -185,12 +258,21 @@ nothing; a cleared site is a page without a description, notice or `meta name="d
 
 - Run directory: `output/remediation/wc_runner/runs/<run>/` - `ROWS.jsonl`, `READ.json`,
   `POPULATION.json`, `SITES.jsonl`, `ROUNDS.jsonl`, `round-<n>/ANSWERS.jsonl` and `REASK.json`,
-  **`pages/`** (the import's own page store), `FINAL.jsonl`, `SUMMARY.json`, `WC4.jsonl` (the gate
-  plan), `judge/` (the pilot's measurement, with its own `pages/`).
+  **`pages/`** (the import's own page store), `verify/round-<n>/ROUND.json` (the export: handoff,
+  batches, the sentences each question showed) and `VERIFIED.jsonl` (the import, per site),
+  `verify/pages/` (the pages the verifiers quoted, fetched by code), `FINAL.jsonl` (with each site's
+  `verification`: status, verifiers, each round's verdicts, coherence, broken sentences and drops),
+  `SUMMARY.json` (the verification's counts, and the same record per site under
+  `verification.sites`), `WC4.jsonl` (the gate plan: each outcome's journal evidence carries the
+  whole verification record), `judge/` (the pilot's measurement, with its own `pages/`;
+  `ROUND.json` and `RESULT.json` name the judged plan's sha256).
 - Handoff: `output/remediation/handoff/wc-<run>-r<round>/<batch>/` (`MANIFEST.jsonl`, the prompts,
   the answers), the agent's page store `<batch>/pages/` (filled by `check-answer`), and its scratch
-  `output/remediation/handoff/wc-<run>-r<round>-scratch/<batch>/`. Batches are independent: one agent
-  per batch, its own scratch and page store.
+  `output/remediation/handoff/wc-<run>-r<round>-scratch/<batch>/`; the verification's
+  `wc-<run>-verify/` and `wc-<run>-verify2/` (batches `verify-NNNN`, `verify2-NNNN`, scratch
+  `<handoff>-scratch/<batch>/`). Batches are independent: one agent per batch, its own scratch and
+  page store; a verifier batch is never answered by an agent that answered any other batch of the
+  run (the orchestrator's rule; the import refuses a name that checked or verified the site).
 - **The import never reads an agent's page store.** It fetches every quoted URL once per run into
   `<run>/pages/`, as the acceptance does (`<run>/judging/pages/`): what counts rests only on pages
   code fetched itself. A page that failed in round 1 stays failed in the re-ask.
@@ -199,8 +281,9 @@ nothing; a cleared site is a page without a description, notice or `meta name="d
 
 ## 4. The runbook
 
-From the main checkout (after `wip/wc` is merged), main venv. `R`, `P` and the handoffs are the
-names of this run; numbering continues past every earlier WC plan (`--first-batch`, section 5).
+From the main checkout (after `wip/wc` and `wip/wc2` are merged), main venv. `R`, `P` and the
+handoffs are the names of this run; numbering continues past every earlier WC plan
+(`--first-batch`, section 5).
 
     PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe
     M=output/remediation; RUNS=$M/wc_runner/runs; H=$M/handoff; L=$M/logs/p4wc
@@ -212,10 +295,11 @@ names of this run; numbering continues past every earlier WC plan (`--first-batc
     V="$PY $M/tools/verify_writes4.py --lane p4wc --allow-stamp wb-teaser-prov-%"
 
 **0. Preconditions.** WA's last P4 step is accepted (the read must see WA's texts). The gates of
-section 7 are green on the merged tree. `$M/logs/_write_apply_p4wc/` holds no batch of a plan you
-do not name. Any other later writer of these sites' `raw_data` than lane WB (a hand edit, a lane not
-named in `V`) makes the next acceptance report CHANGED LATER: read it, never widen `--allow-stamp`
-to pass it.
+section 7 are green on the merged tree. No run built before 2026-09-27's verify stage is written:
+its outcomes carry no verification, and the writer refuses them. `$M/logs/_write_apply_p4wc/` holds
+no batch of a plan you do not name. Any other later writer of these sites' `raw_data` than lane WB
+(a hand edit, a lane not named in `V`) makes the next acceptance report CHANGED LATER: read it,
+never widen `--allow-stamp` to pass it.
 
 **1. The pilot (20 sites), then its independent measurement.**
 
@@ -229,24 +313,51 @@ to pass it.
     # only if the import reports to_reask > 0 (once):
     $C export-reask --run-dir $RUNS/$P --handoff $H/wc-$P-r2
     #   ... the round-2 agents (brief with --handoff $H/wc-$P-r2), validate, import ...
+    # the verification: every site whose check kept a sentence, one NEW Opus agent per batch -
+    # never an agent that checked (the brief names it opus-wc-verify-000N)
+    $C verify-export --run-dir $RUNS/$P --handoff $H/wc-$P-verify   # stage verify, verify-000N
+    $C verify-brief  --run-dir $RUNS/$P --handoff $H/wc-$P-verify --batch-id verify-000N
+    $OH validate --dir $H/wc-$P-verify
+    $C verify-import --run-dir $RUNS/$P --handoff $H/wc-$P-verify   # prints to_verify2
+    # only if verify-import reports to_verify2 > 0 (once): the texts a drop changed, new agents
+    $C verify-export --run-dir $RUNS/$P --handoff $H/wc-$P-verify2  # stage verify2, verify2-000N
+    $C verify-brief  --run-dir $RUNS/$P --handoff $H/wc-$P-verify2 --batch-id verify2-000N
+    $OH validate --dir $H/wc-$P-verify2
+    $C verify-import --run-dir $RUNS/$P --handoff $H/wc-$P-verify2
     $C build  --run-dir $RUNS/$P --first-batch 4001                 # FINAL, SUMMARY, WC4.jsonl
-    $C judge-export --run-dir $RUNS/$P --handoff $H/wc-$P-judge
-    # per judge batch, one Opus agent that did not check (the brief names it opus-wc-judge-<batch>):
+    $C judge-export --run-dir $RUNS/$P --handoff $H/wc-$P-judge     # the post-verification text
+    # per judge batch, one FRESH Opus agent - no checker and no verifier of this run (the brief
+    # names it opus-wc-judge-<batch>):
     $C judge-brief  --run-dir $RUNS/$P --handoff $H/wc-$P-judge --batch-id judge-000N
     $OH validate --dir $H/wc-$P-judge
     $C judge-import --run-dir $RUNS/$P --handoff $H/wc-$P-judge     # RESULT.json, JUDGE_EXIT=
 
-**The pilot's pass mark** (`cli.J_THRESHOLDS`, sealed with the lane): no kept sentence the judge
-shows `WRONG` with a quote code found; at most 5 % of kept sentences `UNSUPPORTED` (a `WRONG` whose
-quote was not found counts here); no site whose kept text is incoherent (a pronoun without its
-referent, an ungrammatical trim, a trim that changed what the sentence says); every judged site
-answered by an agent that checked none of its questions. `DROP_WRONG` (a dropped sentence a source
-supports) is measured and reported, not gating: a wrong drop loses text, never publishes a false
-one. `JUDGE_EXIT=1` stops the lane: fix the cause, re-pin, and run a new pilot (a new run, a new
-seed), never a re-judge of the same answers. **The gate enforces it** (`cli.pilot_approval`): no WC
-plan is planned unless the first `--wc-plan` is a pilot run's whose `judge/RESULT.json` says
-`passed: true`, and every pilot run named passed; the gate prints each approving pilot with its
-RESULT.json sha256. So the pilot is judged before its own dry run.
+A verifier checks each answer's shape with `verify-check-answer` (the brief gives the command;
+nothing is fetched, no verdict judged) and records it with `opus_handoff.py answer`. `verify-export`
+decides the round by itself: `verify` first, `verify2` only after `verify` is imported and only for
+the sites a drop changed; it refuses with "nothing to verify" when no site is due (then build).
+`verify-import` imports a round once and refuses a verifier whose name checked or verified the site;
+it records the sha256 of the text each question showed. The check `import` imports a round once, and
+none once `verify-export` ran: a check answered again is a new run (a new `--run-dir`, new handoffs).
+`build` refuses while a round is due, and refuses a round whose recorded text (`text_sha256`) or
+question (`prompt_sha256`) the check no longer gives. The judge measures the text **after** the verification: the
+pilot passes only if the check and the verification together leave no WRONG kept sentence and no
+incoherent site.
+
+**The pilot's pass mark** (`cli.J_THRESHOLDS`, sealed with the lane, unchanged by the verification):
+no kept sentence the judge shows `WRONG` with a quote code found; at most 5 % of kept sentences
+`UNSUPPORTED` (a `WRONG` whose quote was not found counts here); no site whose kept text is
+incoherent (a pronoun without its referent, an ungrammatical trim, a trim that changed what the
+sentence says); every judged site answered by a fresh agent - since 2026-09-27 one whose name
+checked or verified **no** site of the run (it was: none of the site's own check questions).
+`DROP_WRONG` (a dropped sentence a source supports) is measured and reported, not gating: a wrong
+drop loses text, never publishes a false one. `JUDGE_EXIT=1` stops the lane: fix the cause, re-pin,
+and run a new pilot (a new run, a new seed), never a re-judge of the same answers. **The gate
+enforces it** (`cli.pilot_approval`): no WC plan is planned unless the first `--wc-plan` is a pilot
+run's whose `judge/RESULT.json` says `passed: true`, and every pilot run named passed **on exactly
+that plan** (`plan_sha256` in `RESULT.json` is the sha256 of the `WC4.jsonl` its judge judged; a
+plan built again afterwards is refused); the gate prints each approving pilot with its RESULT.json
+sha256. So the pilot is judged before its own dry run.
 
 **2. Write the pilot**, in its own step:
 
@@ -280,9 +391,29 @@ root (the gate refuses batches of a plan not named).
     $C export --run-dir $RUNS/$R --handoff $H/wc-$R-r1 --limit 500 [--after $RUNS/<unwritten chunk> ...]
     #   ... one Opus agent per batch (brief), 14-16 in parallel; validate; import;
     #   export-reask / agents / validate / import once if to_reask > 0 ...
+    $C verify-export --run-dir $RUNS/$R --handoff $H/wc-$R-verify
+    #   ... one NEW Opus agent per verify batch (verify-brief), validate, verify-import;
+    #   verify-export --handoff $H/wc-$R-verify2 / new agents / validate / verify-import once if
+    #   to_verify2 > 0 ...
     $C build  --run-dir $RUNS/$R --first-batch <the last ordinal of every earlier WC plan + 1>
 
-Repeat with `mass-02`, `mass-03`, ... until `export` refuses with "nothing to ask".
+Repeat with `mass-02`, `mass-03`, ... until `export` refuses with "nothing to ask". A chunk has
+no judge of its own: the verification is what stands between its check and its write, and the
+writer refuses a plan whose sites lack a passed verification (`write4.load_wc_plan`).
+
+**Costs of the verification** (estimates from the pilots of 2026-09-27; measure them on the next
+pilot). The population read on 2026-09-27 00:43 UTC holds 2,168 sites (8,342 sentences; WA was still
+writing, so a later read holds fewer). In both pilots 18 of 20 sites kept a sentence, so `verify`
+asks about 90 % of a chunk's sites - one question per site, 5 per batch: for the whole population
+about 1,950 questions in about 390 batches, next to the check round's 2,168 questions in 434. A
+verify question carries the kept text only (the pilots: about 3 kept sentences a site, their quotes)
+and the verifier researches every kept sentence on the web, so it costs about what a pilot judge
+question does - of the order of the ~11k tokens per site measured for Phase 4's Opus sentence audit
+(2026-09-24/25). `verify2` asks only the texts a drop changed: the judges'
+findings of the two pilots would have sent 1 and 3 of 20 sites (5-15 %, about 100-300 questions for
+the population), each a text shorter by the dropped sentence. The verification therefore adds
+roughly as much agent time as the check round itself, and no fetch time worth counting: the
+verifiers' quotes are fetched once per run and only recorded.
 
 **4. Write each chunk, one step of at most 100 sites per invocation** (5 write batches of 20), each
 accepted with 0 deviations before the next; every WC plan whose batches are in the apply root is
@@ -310,18 +441,22 @@ description.
 | `export` | a fresh population, the frozen question per site; `--pilot` a seeded draw, `--limit` a chunk | a run exported twice; `--pilot` without `--seed`; `--limit` below 1 or beside `--pilot`; an empty population ("nothing to ask"); a handoff that is not empty |
 | `check-answer` (the agent's aid) | shape, fetch into the batch's store, quotes, mirror and title rules, the text the answer leaves | nothing is recorded; exit 1 while not clean |
 | `opus_handoff.py validate` | every question answered once, no stale or orphan answer | the import runs only on a clean round |
-| `import` | the manifest is the round's record; every prompt rebuilt byte for byte; the answer's shape; every quote on the run's own fetch | a changed question (`not this question's`); an unvalidated round |
+| `import` | the manifest is the round's record; every prompt rebuilt byte for byte; the answer's shape; every quote on the run's own fetch | a changed question (`not this question's`); an unvalidated round; a round imported twice; any check round once a verification round is exported |
 | `export-reask` | the sentences round 1 could not count, with what failed | a second re-ask round |
+| `verify-export` | every check round imported; `verify`: every site whose check kept a sentence, its kept text as published; `verify2`: after `verify` is imported, every text a drop changed that keeps a sentence | a round exported but not imported; a third round; a handoff that is already a round or not empty; nothing due ("nothing to verify") |
+| `verify-check-answer` (the verifier's aid) | the answer's shape (`answers.parse_verify`) | nothing is recorded; exit 1 while not in shape |
+| `verify-import` | the round validates; every prompt rebuilt from the site's state at this round, byte for byte; the answer's shape; every quote checked on the run's own fetch (recorded, not gating: a WRONG drops either way); the sha256 of the text each question showed recorded (`text_sha256`); every site's round read by `wc4.run_verification` before anything is written | a verifier whose name checked the site or verified it in round 1; a site whose check moved since the export (no longer due, another kept set, another question); a manifest that is not the round's record; a handoff that is no verification round; a malformed answer; an unvalidated round; a round imported twice |
 | `wc4.trim` (import, `check-answer`, build) | the piece: once, between words, no bare modifier or hedge frame, no qualifier taken off what stays (a telling or doubt of the sentence, a report outside its own figure, a negation's clause), no end of an unpunctuated sentence; the rest: no new sentence problem, the opening and the end asked apart | the answer is not in shape: the sentence is re-asked once, then dropped |
-| `build` | every site's decisions, pronoun rule, text, citations, record, raw_data, evidence with the marking; `wc_problems` and `evidence_problems` (the AI disclosure the marking requires) on each | a due or unimported re-ask; `--first-batch` below 4001; a site never answered |
-| `judge-import` | the judge round validates; quotes on the judge's own fetch; independence | `JUDGE_EXIT=1` below the pass mark |
-| gate: the pilot's verdict (`cli.pilot_approval`) | the first `--wc-plan` is a pilot run's, and every pilot named has `judge/RESULT.json` `passed: true` | the whole run: nothing is planned |
+| `build` | every site's decisions, pronoun rule, verification, text, citations, record (verifiers, verified text), raw_data, evidence with the marking and the verification record; `wc_problems` and `evidence_problems` (the AI disclosure the marking requires, the verification) on each | a due or unimported re-ask; a verification round due or exported and not imported; a verification round whose recorded text (`text_sha256`) or question (`prompt_sha256`) the check no longer gives; `--first-batch` below 4001; a site never answered |
+| `judge-import` | the judge round validates; quotes on the judge's own fetch; independence from every checker and verifier of the run; `RESULT.json` names the judged plan's sha256 | `JUDGE_EXIT=1` below the pass mark |
+| gate: the pilot's verdict (`cli.pilot_approval`) | the first `--wc-plan` is a pilot run's, and every pilot named has `judge/RESULT.json` `passed: true` on exactly this plan (`plan_sha256`) | the whole run: nothing is planned |
+| gate: the verification (`write4.load_wc_plan`, `wc4.verification_problems`) | every outcome of every named plan carries a verification record that holds (section 2) | the whole run: a plan built before the verify stage, a verifier that checked the site, a record that is not what its rounds give, a round read over another text than it recorded |
 | gate dry run | reads each site's live description and raw_data (read-only); plans: a written site is the batch's while its description and WC's three keys are the outcome's (lane WB stamps others) | `written-by-p4` (a P4 text since), `asked-again-later` (a later plan asks it again and this batch did not write it), `moved-since-check` (not written by the batch and not the whole checked pair) - per site, the rest of the batch goes on |
 | gate: one site, one batch (`write4.wc_sites_planned_twice`) | no site is planned with rows by two batches | the whole run, before anything is rendered |
-| gate plan (`validate_rows`) | site-atomic pairs (kept, clear, raw_data alone for a byte-identical text, the description alone for the clear of a NULL raw_data), one evidence on both rows, the evidence's transition, `wc_problems`, the recorded marking re-derived from the row's old value and the AI disclosure it requires, no key outside the three changes, no full provenance | the whole batch |
-| in the transaction | guards 1-4 (curated site, allow-list, real change - NULL only for WC's two clear tests, old value held), invariants 1-2 (new values, journal both ways), 5 (check record hashes the description), 6 (provenance is lane L's and hashes it; a cleared description leaves none of the WC keys) | `RAISE`: nothing is written |
+| gate plan (`validate_rows`) | site-atomic pairs (kept, clear, raw_data alone for a byte-identical text, the description alone for the clear of a NULL raw_data), one evidence on both rows, the evidence's transition, `wc_problems`, the recorded marking re-derived from the row's old value and the AI disclosure it requires, the verification (`verification_problems`), no key outside the three changes, no full provenance | the whole batch |
+| in the transaction | guards 1-4 (curated site, allow-list, real change - NULL only for WC's two clear tests, old value held), invariants 1-2 (new values, journal both ways), 5 (the check record's `desc_sha256` and `verified_sha256` are the description's), 6 (provenance is lane L's and hashes it; a cleared description leaves none of the WC keys) | `RAISE`: nothing is written |
 | read-back and inverse proof | every row, the journal, `wc_problems` on the stored pair; `ROLLBACK.sql` rehearsed | `STOPPED.json` |
-| `verify_writes4 --lane p4wc --allow-stamp wb-teaser-prov-%` | the chain (a later write by lane WB counted as superseded, any other as CHANGED LATER), `wc_problems` and T08 on every written site, and that the live description, citations, check record and AI disclosure are exactly what the journal evidence of its last WC write composes (read from either row of the write) | any deviation: the step is not accepted |
+| `verify_writes4 --lane p4wc --allow-stamp wb-teaser-prov-%` | the chain (a later write by lane WB counted as superseded, any other as CHANGED LATER), `wc_problems` and T08 on every written site, and that the live description, citations, check record and AI disclosure are exactly what the journal evidence of its last WC write composes, after the verification that evidence records (read from either row of the write) | any deviation: the step is not accepted |
 | `--accept` | the log is one run of the acceptance, lane p4wc, `RESULT: 0 deviation(s)` | the next `--apply` until accepted |
 
 ## 6. How to undo
@@ -369,6 +504,25 @@ WC cases in one run **86/86 caught**, and the 340 older cases on every file the 
 (`write4.py`, `write_gate4.py`, `sentences.py`, `verify_writes4.py`, `acceptance/judge.py`,
 `text_sentences.py`, the sweep itself) **340/340 caught**, the tree byte-identical after each run.
 
+**After the verification** (2026-09-27, worktree `wip/wc2`, main venv): pytest **8,351 passed**,
+119 skipped, 57 deselected (116 skips are gitignored data absent from a worktree, 3 the older opt-in
+or retired tests above); ruff check `api/ pipeline/` clean, ruff check and format clean on the 12
+touched Python files; lint-imports 2 contracts kept; vulture clean; nothing under `pipeline/` or the
+frontend changed (no Lyra import check, no vitest run needed). Mutation sweep: the 31 verification
+cases (`"wc verify"`) **31/31 caught**, and the whole WC set (`"wc "`, the 86 earlier cases with the
+re-anchored judge case and the 31 new ones) **117/117 caught**, the tree byte-identical after each
+run. (Re-measured the same day after `SUMMARY.json` gained each site's verification record,
+`verification.sites`, and its mutation case: the counts above.) The verification's tests:
+`tests/remediation/test_wc_verify.py` (55), plus the gate's refusal, the pilot plan's tie, the
+acceptance's re-check and invariant 5 in `test_phase4_wc_write.py`.
+
+**After the review of 2026-09-27 and its fix round** (section 10; worktree `wip/wc2`, main venv):
+pytest **8,363 passed**, 119 skipped, 57 deselected (the same skips as above); ruff check `api/
+pipeline/` clean, ruff check and format clean on the 8 touched Python files; lint-imports 2
+contracts kept; vulture clean; nothing under `pipeline/` or the frontend changed. Mutation sweep:
+the whole WC set (`"wc "`, 130 cases with the 13 new ones) **130/130 caught**, the tree
+byte-identical afterwards. `test_wc_verify.py` now holds 67 tests.
+
 End-to-end smoke on live data (Duggleby Howe, one site; a machinery test, never written): export,
 brief, `check-answer` against the live Wikipedia page (the circa-date trim applied, the rejoined
 "Rev." sentence intact, a tab-title `Duggleby Howe - Wikipedia` refused as `title not on page`),
@@ -381,20 +535,33 @@ changed was refused (`the exported prompt is not this question's`), as designed.
 - The fetcher follows redirects without re-checking the target host (the same as the Opus
   re-verification's `quotes.http_client`); `not_fetchable` refuses production and non-public URLs
   before the first request.
-- **Independence of the pilot's judge is procedural.** `judge-import` compares the judge's
-  `answered_by` with every check answer's; both are the names the briefs prescribe
-  (`opus-check-r<round>-<batch>`, `opus-wc-judge-<batch>`), so the comparison catches a mislabelled
-  or reused agent, not a checker that judges under the judge's name. The Opus handoff records no
+- **Independence of the verifiers and the pilot's judge is procedural.** `verify-import` compares a
+  verifier's `answered_by` with the site's check answers and its round-1 verifier, `judge-import` the
+  judge's with every check and verification answer of the run; all are the names the briefs
+  prescribe (`opus-check-r<round>-<batch>`, `opus-wc-verify-<n>`, `opus-wc-verify2-<n>`,
+  `opus-wc-judge-<batch>`), so the comparison catches a mislabelled or reused agent, not a checker
+  that verifies or judges under another batch's name. The orchestrator spawns every verifier and
+  judge batch as a new agent that answered no other batch of the lane. The Opus handoff records no
   other identity: `CLAUDE_CODE_SESSION_ID` is visible in an agent's shell, but it is unverified
   whether batch agents of one workflow get distinct ids, and a shared id would mark every judge
   dependent and block every pilot. Independence therefore rests on spawning the judges as their own
   agents with a brief that forbids reading any other batch (the review of 2026-09-26, not changed).
 - **A trim's meaning beyond the qualifier rules** (a cut that keeps a grammatical sentence but
-  narrows or shifts it otherwise) is the agent's (rule 5) and the pilot judge's (`coherent`); code
-  refuses the forms it can read (section 2).
+  narrows or shifts it otherwise) is the agent's (rule 5), the verifier's (`coherent`, `broken`) and
+  the pilot judge's (`coherent`); code refuses the forms it can read (section 2).
+- **The tie of a verification to its text rests on the run's files** (section 2, "The data ties
+  every verification to the text it showed"). `verify-import` writes `text_sha256` and
+  `prompt_sha256` into `verify/round-<n>/VERIFIED.jsonl`, and no command rewrites a recorded round
+  or a check round a verifier was shown; a hand edit that changed a check's `ANSWERS.jsonl` and both
+  recorded hashes consistently would pass, as a forged journal would. The run directory is the
+  lane's own.
+- **The verification only drops.** A sentence a verifier wrongly finds UNSUPPORTED is lost (the
+  pilot judge measures such losses among the dropped sentences as `DROP_WRONG`, reported and not
+  gating); nothing a verifier says is ever added to a text.
 - `mass4` digests `scripts/remediation/phase4/*.py`: this lane adds `wc4.py` and changes
   `write4.py` and `sentences.py` (the group pattern `protected_pattern(*groups)`, `PROTECTED`
-  unchanged), so it is merged into a tree only when no mass4 run executes from that tree.
+  unchanged), so it is merged into a tree only when no mass4 run executes from that tree. The
+  verification of 2026-09-27 (`wip/wc2`) changes `wc4.py` and `write4.py` again: the same holds.
 - Outside the lane's own files the fix round of 2026-09-26 touched `pipeline/lyra/text_sentences.py`
   (the two halves of `is_complete_sentence`, behaviour unchanged, Lyra import check green),
   `scripts/remediation/acceptance/judge.py` (its clock and writers now `run_files.py`'s) and the
@@ -431,3 +598,33 @@ Found while testing finding 4: the clear of a site whose `raw_data` is NULL plan
 row that the plan's rules refuse, which would have stopped the whole batch (12 of the 14 unclaimed
 texts); such a clear is now its description row alone, and the acceptance reads a site's evidence
 from either row.
+
+## 10. The verification of 2026-09-27 (worktree `wip/wc2`)
+
+Both pilots of 2026-09-27 failed the sealed judge gate on single items, neither was written:
+
+| pilot | sites | kept | dropped | judge |
+| --- | --- | --- | --- | --- |
+| `pilot-2026-09-27` | 20 | 59 (39 whole, 20 trimmed) | 17 | 1 WRONG (Cloghanmore: "passage tomb-style" and "the only court tomb with carvings", disputed), 0 unsupported, 0 incoherent |
+| `pilot-2026-09-27b` (rule 1 re-pinned, eae4f88) | 20 | 51 | 22 | 1 WRONG ("carved" where the sources say built), 1 incoherent (Nyons: a trim of sentence 1 left sentence 2's "the ancient name" pointing at another referent), 1.96 % unsupported |
+
+A single checking pass lets about one error in 50-60 kept sentences through; the gate allows none.
+The same problem in lane WB (every card faithful to its description, 3 of 40 repeating a sentence the
+web contradicts) was solved by a web verification of every accepted card (`CARD_DESCRIPTIONS.md`
+2.1). Lane WC now does the same per site (section 2, "The verification"): an independent verifier
+on the kept text as published, drops only, a second verifier for a text a drop changed, the site
+cleared when that one does not confirm it; the record in the journal, the verifiers and the verified
+text's sha256 in the check record, the writer refusing a plan without it, and the pilot's fresh judge
+measuring the text after the verification against the unchanged thresholds. The next pilot is a new
+run with a new seed, built and judged with this stage.
+
+**The independent review of 2026-09-27 and its fix round.** The review of `wip/wc2` (HEAD
+`39ad5fd`, verdict "fix") reported 1 major and 2 minor findings, reproduced in a copy of that HEAD:
+
+| # | finding | outcome |
+| --- | --- | --- |
+| 1 (major) | a round was tied to its site only by sentence numbers: `text_sha256` was recomputed at build from whatever the check composed then, `prompt_sha256` was never asked again, and the check `import` could be re-run over `round-<n>/ANSWERS.jsonl` - a text no verifier saw could be built with a record saying `verified`, and `verified_sha256` always equalled `desc_sha256` | fixed: `verify-import` records `text_sha256` (a round key); `run_verification` reads a round only over that text, so `build`, the plan loader, the plan's rules and the acceptance refuse a moved check; `build` asks every round's question again against `prompt_sha256`; the check `import` is write-once and refused once a verification round is exported (lane WB's `run.import_stage`); `verified_sha256` is the recorded hash (section 2) |
+| 2 | one frozen question serves `verify` and `verify2`, and told every verifier that the sentences named in `broken` "are removed and the rest is verified again" - untrue at `verify2`, which clears the site | fixed: "they are removed; what remains is published only if a verifier confirms it, else the whole description is cleared"; `VERIFY_QUESTION` re-pinned |
+| 3 | refusals of `verify-export` and `verify-import` without a test or mutation case: a reused, non-empty or unknown handoff, a check that moved between the export and the import, a manifest that is not the round's record | fixed: a test for each (`test_wc_verify.py`), and mutation cases that disable each guard |
+
+Thirteen mutation cases were added to `WC_VERIFY_MUTATIONS` (section 7).

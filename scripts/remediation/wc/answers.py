@@ -29,6 +29,10 @@ britannica.com and whc.unesco.org, which answer requests 200 (`FETCH_MEASURED`).
 **A judge answer** (`parse_judge`) is `{site_id, kept, dropped, coherent, note}`: one verdict per kept
 sentence (`SUPPORTED`, `UNSUPPORTED`, `WRONG` - a quote needed) and per dropped one (`DROP_OK`,
 `DROP_WRONG` - a quote needed), quotes `{url, quote}`.
+
+**A verifier's answer** (`parse_verify`) is the judge's for the kept sentences, without dropped ones,
+plus `broken`: `{site_id, kept, coherent, broken, note}`, `broken` the ascending K numbers whose
+reference or meaning broke, empty when the text is coherent.
 """
 
 from __future__ import annotations
@@ -80,7 +84,8 @@ JUDGE_KEYS = frozenset({"site_id", "kept", "dropped", "coherent", "note"})
 JUDGE_KEPT_KEYS = frozenset({"k", "verdict", "quotes", "note"})
 JUDGE_DROPPED_KEYS = frozenset({"d", "verdict", "quotes", "note"})
 JUDGE_QUOTE_KEYS = frozenset({"url", "quote"})
-KEPT_VERDICTS = ("SUPPORTED", "UNSUPPORTED", "WRONG")
+VERIFY_KEYS = frozenset({"site_id", "kept", "coherent", "broken", "note"})
+KEPT_VERDICTS = wc4.VERIFY_VERDICTS
 DROPPED_VERDICTS = ("DROP_OK", "DROP_WRONG")
 MAX_QUOTES = 4
 MIN_QUOTE_CHARS = 20
@@ -376,6 +381,52 @@ def _judge_items(
         note = _text(item["note"], f"{where}: note", limit=MAX_NOTE_CHARS)
         out.append(JudgeItem(item[key[0]], item["verdict"], tuple(quotes), note))
     return tuple(out)
+
+
+@dataclass(frozen=True)
+class VerifyAnswer:
+    """A verifier's answer: the judge's kept verdicts, `coherent`, and the K numbers whose
+    reference or meaning broke (`broken`)."""
+
+    kept: tuple[JudgeItem, ...]
+    coherent: bool
+    broken: tuple[int, ...]
+    note: str
+
+
+def parse_verify(text: str, *, site_id: str, kept: int) -> VerifyAnswer:
+    """A verifier's answer about a site with `kept` kept sentences: the judge's shape for the kept
+    ones (`_judge_items`), no dropped ones, and `broken` - ascending K numbers in 1..kept, empty
+    when the text is coherent (an incoherent text with none named clears the site: the verifier
+    could not name the broken sentence)."""
+    data = load_object(text, VERIFY_KEYS)
+    if data["site_id"] != site_id:
+        raise AnswerError(f"the answer names site {data['site_id']!r}, the question {site_id}")
+    if not isinstance(data["coherent"], bool):
+        raise AnswerError("coherent is true or false")
+    broken = data["broken"]
+    if (
+        not isinstance(broken, list)
+        or any(isinstance(k, bool) or not isinstance(k, int) for k in broken)
+        or broken != sorted(set(broken))
+        or any(not 1 <= k <= kept for k in broken)
+    ):
+        raise AnswerError(f"broken {broken!r} is not a list of ascending k numbers in 1..{kept}")
+    if data["coherent"] and broken:
+        raise AnswerError("a coherent text names no broken sentence (broken is [])")
+    return VerifyAnswer(
+        kept=_judge_items(
+            data["kept"],
+            key="kept",
+            keys=JUDGE_KEPT_KEYS,
+            verdicts=KEPT_VERDICTS,
+            count=kept,
+            needs="WRONG",
+        ),
+        coherent=data["coherent"],
+        broken=tuple(broken),
+        note=_text(data["note"], "note", limit=MAX_NOTE_CHARS),
+    )
 
 
 def parse_judge(text: str, *, site_id: str, kept: int, dropped: int) -> JudgeAnswer:

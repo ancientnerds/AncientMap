@@ -623,15 +623,17 @@ class FakeDb:
 
     def _wc_invariants(self, sql: str, rows: list[dict[str, Any]]) -> None:
         """Invariants 5 and 6 of a WC chunk, with Postgres' NULL semantics: the check record hashes
-        the description (NULL on both sides is not distinct), a provenance beside it is lane L's
-        and hashes it, and a cleared description leaves none of the WC keys."""
+        the description and names it as the verified text (NULL on both sides is not distinct), a
+        provenance beside it is lane L's and hashes it, and a cleared description leaves none of
+        the WC keys."""
         for row in rows:
             if row["column"] != "raw_data":
                 continue
             site = self.sites[row["site"]]
             raw = site.raw_data or {}
             digest = _sha_or_null(site.description)
-            if (raw.get(WC4.CHECK_KEY) or {}).get("desc_sha256") != digest:
+            check = raw.get(WC4.CHECK_KEY) or {}
+            if check.get("desc_sha256") != digest or check.get("verified_sha256") != digest:
                 raise PsqlError("invariant 5 (WC): the check record's desc_sha256")
             provenance = raw.get(M.PROVENANCE_KEY)
             if provenance is not None and (
