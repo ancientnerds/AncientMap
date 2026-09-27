@@ -129,8 +129,45 @@ def test_an_imported_round_is_moved_aside_so_the_next_round_can_append(tmp_path)
     accepted = handoff.import_answers(tmp_path, SPEC)
     assert sorted(accepted) == sorted(r["task_id"] for r in second)
     assert handoff.read_jsonl(tmp_path / "verdicts.imported-0002.jsonl") == [_answer(second[1])]
-    with pytest.raises(handoff.HandoffError, match="run the workflow on pending.jsonl"):
+
+
+def test_re_import_after_an_unchanged_re_export_needs_no_verdicts_file(tmp_path):
+    handoff.export_tasks(tmp_path, _tasks())
+    rows = handoff.read_jsonl(tmp_path / "tasks.jsonl")
+    handoff.write_jsonl(tmp_path / "verdicts.jsonl", [_answer(r) for r in rows])
+    first = handoff.import_answers(tmp_path, SPEC)
+    counts = handoff.export_tasks(tmp_path, _tasks())
+    assert counts == {"tasks": 2, "pending": 0, "accepted": 2}
+    assert not (tmp_path / "verdicts.jsonl").exists()
+    assert handoff.import_answers(tmp_path, SPEC) == first
+    assert handoff.read_jsonl(tmp_path / "pending.jsonl") == []
+    assert [p.name for p in tmp_path.glob("verdicts.imported-*.jsonl")] == [
+        "verdicts.imported-0001.jsonl"
+    ]
+
+
+def test_import_without_verdicts_file_prunes_answers_of_tasks_that_left(tmp_path):
+    handoff.export_tasks(tmp_path, _tasks())
+    rows = handoff.read_jsonl(tmp_path / "tasks.jsonl")
+    handoff.write_jsonl(tmp_path / "verdicts.jsonl", [_answer(r) for r in rows])
+    handoff.import_answers(tmp_path, SPEC)
+    handoff.export_tasks(tmp_path, [_tasks()[1]])
+    assert list(handoff.import_answers(tmp_path, SPEC)) == [rows[1]["task_id"]]
+    stored = json.loads((tmp_path / "accepted.json").read_text(encoding="utf-8"))
+    assert list(stored) == [rows[1]["task_id"]]
+
+
+def test_import_without_verdicts_file_refuses_while_a_changed_task_is_pending(tmp_path):
+    handoff.export_tasks(tmp_path, _tasks())
+    rows = handoff.read_jsonl(tmp_path / "tasks.jsonl")
+    handoff.write_jsonl(tmp_path / "verdicts.jsonl", [_answer(r) for r in rows])
+    handoff.import_answers(tmp_path, SPEC)
+    before = (tmp_path / "accepted.json").read_bytes()
+    fixed = [_tasks()[0], handoff.Task("paragraph", "Check paragraph two, fixed.", {"ref": "p1"})]
+    assert handoff.export_tasks(tmp_path, fixed)["pending"] == 1
+    with pytest.raises(handoff.HandoffError, match="and 1 task is pending: run the workflow"):
         handoff.import_answers(tmp_path, SPEC)
+    assert (tmp_path / "accepted.json").read_bytes() == before
 
 
 def test_import_leaves_only_the_unanswered_tasks_pending(tmp_path):
@@ -143,5 +180,8 @@ def test_import_leaves_only_the_unanswered_tasks_pending(tmp_path):
 
 def test_import_without_verdicts_file_says_what_to_do(tmp_path):
     handoff.export_tasks(tmp_path, _tasks())
-    with pytest.raises(handoff.HandoffError, match="run the workflow on pending.jsonl"):
+    with pytest.raises(
+        handoff.HandoffError, match="2 tasks are pending: run the workflow on pending.jsonl"
+    ):
         handoff.import_answers(tmp_path, SPEC)
+    assert not (tmp_path / "accepted.json").exists()

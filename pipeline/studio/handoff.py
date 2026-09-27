@@ -19,6 +19,11 @@ tasks still without an accepted answer and moves the file aside to
 `verdicts.imported-<NNNN>.jsonl` (the next free round number), so the next round starts from
 no file, whether its workflow appends or writes. A refused file stays in place, to be
 corrected or replaced; nothing of it is merged.
+
+No verdicts.jsonl is a defined state only when every current task already has an accepted
+answer (a re-export that left nothing pending): the import then prunes accepted.json to the
+current tasks and rewrites pending.jsonl without new answers. While any task is pending, a
+missing file is refused and the count of pending tasks is named.
 """
 
 from __future__ import annotations
@@ -195,22 +200,31 @@ def import_answers(
 
     Then pending.jsonl lists only the tasks still unanswered, and the imported file moves to
     the next `verdicts.imported-<NNNN>.jsonl`. A refused file is left in place, unmerged.
+    Without verdicts.jsonl the import succeeds only when no current task is pending.
     """
     verdicts = out_dir / VERDICTS_FILE
-    if not verdicts.exists():
-        raise HandoffError(f"{verdicts} does not exist: run the workflow on pending.jsonl first")
     rows = read_jsonl(out_dir / TASKS_FILE)
     tasks = {r["task_id"]: r for r in rows}
-    valid = validate_answers(read_jsonl(verdicts), tasks, spec, extra_check)
     accepted = {k: v for k, v in load_accepted(out_dir).items() if k in tasks}
-    accepted.update(valid)
+    has_round = verdicts.exists()
+    if has_round:
+        accepted.update(validate_answers(read_jsonl(verdicts), tasks, spec, extra_check))
+    else:
+        unanswered = sum(1 for r in rows if r["task_id"] not in accepted)
+        if unanswered:
+            pending = "1 task is" if unanswered == 1 else f"{unanswered} tasks are"
+            raise HandoffError(
+                f"{verdicts} does not exist and {pending} pending: "
+                "run the workflow on pending.jsonl first"
+            )
     (out_dir / ACCEPTED_FILE).write_text(
         json.dumps(accepted, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
         newline="\n",
     )
     write_jsonl(out_dir / PENDING_FILE, [r for r in rows if r["task_id"] not in accepted])
-    verdicts.rename(_next_imported_path(out_dir))
+    if has_round:
+        verdicts.rename(_next_imported_path(out_dir))
     return accepted
 
 
