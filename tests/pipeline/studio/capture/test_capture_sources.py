@@ -2,6 +2,7 @@
 
 import asyncio
 import importlib.util
+import shutil
 
 import pytest
 
@@ -107,32 +108,57 @@ def test_the_credit_names_the_ascii_host_that_sourceviewer_draws():
 
 
 PAGE = """<!doctype html><html><head><title>Test source</title></head><body style="margin:0">
-<div style="position:fixed;top:0;left:0;right:0;height:80px;background:red" id="cookie">We use cookies</div>
+<div style="position:fixed;top:0;left:0;right:0;height:80px;background:red" id="overlay">We use cookies</div>
 <p style="margin-top:1500px">Intro text.</p>
 <p>The block, measuring <em>19.6&nbsp;m</em> in length, is estimated to weigh 1,650 tonnes.</p>
 <p id="ev-07">Evidence paragraph.</p>
 <p id="ev-02" class="theo-evidence"><span class="theo-evidence-anchor" id="ev-03" style="display:block;height:0"></span>Second evidence paragraph, anchored twice.</p>
 </body></html>"""
 
+# 'İ' (U+0130) lower-cases to two UTF-16 units, 'i' and a combining dot above: a Turkish
+# menu of place names before the article text must not shift the marks.
+TURKISH_PAGE = """<!doctype html><html><head><title>Turkish sites</title></head><body style="margin:0">
+<div style="position:fixed;top:0;left:0;right:0;height:40px" id="overlay">Menu</div>
+<p>İzmir, İznik, İstanbul, İğdır, İnegöl, İskenderun, İdil, İlgın, İmranlı, İpsala, İscehisar, İvrindi.</p>
+<p>At Göbekli Tepe its pillars are carved limestone. More text follows here.</p>
+<p>Last line: the enclosures of İstanbul’s hinterland.</p>
+</body></html>"""
 
-def _run_highlight(tmp_path, mode, needle):
+# Our paper page's shell (ancient-nerds-map/src/styles/index.css and theo.css): html,
+# body and #root are 100% tall with overflow hidden, and .theo-page is the 100vh scroller
+# with a sticky header, so the document itself does not scroll.
+PAPER_PAGE = """<!doctype html><html><head><title>Paper</title><style>
+html, body { overflow: hidden; width: 100%; height: 100%; margin: 0 }
+#root { width: 100%; height: 100%; overflow: hidden }
+.theo-page { height: 100vh; height: 100dvh; overflow-y: auto; padding-bottom: 60px }
+.page-header { position: sticky; top: 0; height: 60px; z-index: 10; background: #111 }
+</style></head><body><div id="root"><div class="theo-page">
+<header class="page-header" id="overlay">Research</header>
+<p style="margin-top:1500px">Intro text.</p>
+<p id="ev-07" class="theo-evidence">The evidence paragraph of the paper, outlined in the video.</p>
+<div style="height:3000px">Later sections.</div>
+</div></div></body></html>"""
+
+
+def _run_highlight(tmp_path, mode, needle, html=PAGE, fragment=""):
     pytest.importorskip("playwright")
     from playwright.async_api import async_playwright
 
     page_file = tmp_path / "page.html"
-    page_file.write_text(PAGE, encoding="utf-8")
+    page_file.write_text(html, encoding="utf-8")
 
     async def go():
         async with async_playwright() as p:
             browser = await p.chromium.launch(channel="chrome", headless=True)
             page = await browser.new_page(viewport={"width": 1280, "height": 800})
-            await page.goto(page_file.as_uri())
+            await page.goto(page_file.as_uri() + fragment)
             await page.add_script_tag(path=str(HIGHLIGHT_JS))
             await page.evaluate("() => window.__studio.hideOverlays()")
             box = await page.evaluate("([m, n]) => window.__studio.highlight(m, n)", [mode, needle])
             state = await page.evaluate(
                 "() => ({marks: [...document.querySelectorAll('mark.__studio-hl')].map(m => m.textContent).join('|'),"
-                " cookie: getComputedStyle(document.getElementById('cookie')).display})"
+                " overlay: getComputedStyle(document.getElementById('overlay')).display,"
+                " scrollHeight: document.documentElement.scrollHeight})"
             )
             await browser.close()
             return box, state
@@ -146,7 +172,33 @@ def test_highlight_finds_a_quote_across_inline_elements(tmp_path):
     )
     assert box is not None and box["y"] > 1500 and box["w"] > 100
     assert state["marks"] == "measuring |19.6\xa0m| in length, is estimated to weigh 1,650 tonnes"
-    assert state["cookie"] == "none"
+    assert state["overlay"] == "none"
+
+
+def test_a_lowercase_that_grows_keeps_the_marks_on_the_quote(tmp_path):
+    box, state = _run_highlight(
+        tmp_path, "quote", "its pillars are carved limestone", html=TURKISH_PAGE
+    )
+    assert box is not None
+    assert state["marks"] == "its pillars are carved limestone"
+    # the quote at the very end of the page, with an 'İ' of its own
+    box, state = _run_highlight(
+        tmp_path, "quote", "the enclosures of İSTANBUL'S hinterland.", html=TURKISH_PAGE
+    )
+    assert box is not None
+    assert state["marks"] == "the enclosures of İstanbul’s hinterland."
+
+
+@pytest.mark.parametrize(
+    ("mode", "needle"),
+    [("anchor", "ev-07"), ("quote", "the evidence paragraph of the paper")],
+)
+def test_our_paper_page_scrolls_as_a_document(tmp_path, mode, needle):
+    # the #ev-07 link scrolls .theo-page; the capture needs the box in document pixels
+    box, state = _run_highlight(tmp_path, mode, needle, html=PAPER_PAGE, fragment="#ev-07")
+    assert box is not None and box["y"] > 1500
+    assert state["scrollHeight"] > 1500 + 3000
+    assert state["overlay"] == "none"
 
 
 def test_highlight_outlines_an_evidence_anchor_and_misses_absent_text(tmp_path):
@@ -162,6 +214,23 @@ def test_a_second_evidence_id_outlines_its_whole_paragraph(tmp_path):
     paragraph, _ = _run_highlight(tmp_path, "anchor", "ev-02")
     assert span is not None and span["h"] > 10 and span["w"] > 0
     assert span == paragraph
+
+
+@pytest.mark.skipif(shutil.which("nvidia-smi") is None, reason="no NVIDIA driver on this machine")
+def test_the_capture_window_on_our_paper_page_keeps_its_context(tmp_path):
+    pytest.importorskip("playwright")
+    from PIL import Image
+
+    page_file = tmp_path / "paper.html"
+    page_file.write_text(PAPER_PAGE, encoding="utf-8")
+    out = tmp_path / "paper.png"
+    shot = asyncio.run(sources._capture(page_file.as_uri() + "#ev-07", "anchor", "ev-07", out))
+    box = shot["box"]
+    # CONTEXT_PX above and below the paragraph, not the 800 px viewport it was loaded in
+    assert shot["top"] == pytest.approx(box["y"] - CONTEXT_PX, abs=1)
+    assert shot["height"] == pytest.approx(box["h"] + 2 * CONTEXT_PX, abs=1)
+    with Image.open(out) as img:
+        assert img.size[1] == pytest.approx(shot["height"] * sources.DEVICE_SCALE, abs=2)
 
 
 def test_the_manifest_size_is_the_size_of_the_written_png(tmp_path, monkeypatch):

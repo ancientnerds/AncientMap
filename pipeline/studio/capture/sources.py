@@ -5,7 +5,11 @@ sticky layers (cookie bars, banners, sticky headers), highlights the quote (a DO
 split into <mark> pieces, highlight.js) and screenshots a window of CONTEXT_PX CSS px
 above and below it. The window is shot as the viewport, resized to it and scrolled
 there: a full-page screenshot rasterises the whole page, and a 35,000 px Wikipedia
-article took 37 s on the GPU, past Playwright's 30 s timeout (2026-09-26). Paywalled or login pages do not contain the quote, so the capture
+article took 37 s on the GPU, past Playwright's 30 s timeout (2026-09-26). The scroll
+only reaches the window when the document scrolls, so highlight.js lets out every
+ancestor of the highlight that clips it: our paper page scrolls .theo-page inside a
+100%-tall html, body and #root with overflow hidden, and without that the window stayed
+the 800 px viewport. Paywalled or login pages do not contain the quote, so the capture
 fails with the advice to use a QuoteCard. The same code captures our own paper page
 with its #ev-NN paragraph outlined (a second id of a paragraph is an empty span inside
 it, plan B; highlight.js outlines the paragraph). The paper slug and the evidence id are
