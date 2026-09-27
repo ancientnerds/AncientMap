@@ -99,7 +99,7 @@ from pipeline.utils.country_lookup import (
 )
 from pipeline.utils.text import normalize_name
 from pipeline.video import shorts_audit, shorts_brand
-from pipeline.video.shorts_render import W as FRAME_WIDTH
+from pipeline.video.shorts_render import CAPTION_MAX_PX
 
 # --------------------------------------------------------------------------------------------
 # The design's numbers
@@ -115,7 +115,7 @@ FLOOR_WAIVERS = frozenset({M.SiteFlag.CLEARED_DESCRIPTION_DEFECT, M.SiteFlag.T03
 #: V10: 80-200 characters (the S2 floor and the varchar(200) column).
 CARD_MIN, CARD_MAX = 80, 200
 #: V10: every caption word fits 1080 - 2 x 40 px (S3).
-MAX_CAPTION_PX = FRAME_WIDTH - 2 * shorts_audit.CAPTION_MARGIN
+MAX_CAPTION_PX = CAPTION_MAX_PX
 #: V6: the directional name match, rapidfuzz `partial_ratio` on the normalised name.
 NAME_MATCH = 90
 #: V11: no run of this many words shared with a restricted page.

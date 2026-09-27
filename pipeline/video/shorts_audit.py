@@ -29,8 +29,7 @@ from pipeline.video.shorts_brand import font_cmap, heading_font, missing_glyphs
 from pipeline.video.shorts_captions import display_text
 from pipeline.video.shorts_export import country_code_for, flag_path
 from pipeline.video.shorts_render import (
-    CAPTION_BORDER,
-    CAPTION_SIZE,
+    CAPTION_MAX_PX,
     FPS,
     MIN_STILL_S,
     NAME_AUDIO_DELAY_S,
@@ -40,8 +39,11 @@ from pipeline.video.shorts_render import (
     H,
     Segment,
     W,
+    caption_font,
+    caption_px,
     name_audio_at,
     name_layout,
+    word_face,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,7 +60,6 @@ FROZEN_DIFF = 0.05  # mean abs luma difference below which two frames count as i
 MAX_FROZEN_FRAMES = 10  # the return flight holds its end pose ~6 frames; more is a stall
 MIN_STILLS = 2
 MAX_NAME_LINES = 3
-CAPTION_MARGIN = 40  # a caption word must stay this far from both frame edges
 
 
 @dataclass(frozen=True)
@@ -162,7 +163,7 @@ def evaluate(m: dict) -> list[Check]:
     checks.append(
         Check(
             "captions_fit",
-            m["max_caption_w"] <= W - 2 * CAPTION_MARGIN,
+            m["max_caption_w"] <= CAPTION_MAX_PX,
             f"widest word {m['max_caption_w']} px ({m['widest_caption']!r})",
         )
     )
@@ -250,32 +251,35 @@ def _ffprobe_stream(path: Path) -> dict:
     }
 
 
-def caption_font(font_path: Path) -> ImageFont.FreeTypeFont:
-    """The caption face as the render draws it: `font_path` at CAPTION_SIZE."""
-    return ImageFont.truetype(str(font_path), CAPTION_SIZE)
-
-
-def widest_word_px(words: Iterable[str], font: ImageFont.FreeTypeFont) -> tuple[str, int]:
+def widest_word_px(
+    words: Iterable[str], font: ImageFont.FreeTypeFont, *, drawn: bool = False
+) -> tuple[str, int]:
     """The word that renders widest as a caption (as shown: edge punctuation
-    off, outline included) and its width in pixels.
+    off, outline included) and its width in pixels (`shorts_render.caption_px`):
+    every word at `font`'s size, or with `drawn` each word at the size the
+    render draws it (`shorts_render.word_face`: a word too wide at CAPTION_SIZE
+    shrinks, not below CAPTION_MIN_SIZE).
 
     Public because it is the S3 gate ("every caption word fits the frame")
     and the Phase-4 verifier (`scripts/remediation/phase4/verify4.py`, V10)
-    applies that gate to a card before it is written: one measurement, so
-    the card check and the short's audit cannot disagree about a word."""
+    and lane WB's teaser contract apply that gate to a card before it is
+    written: one measurement, so the card check and the short's audit cannot
+    disagree about a word."""
     widest, max_w = "", 0
     for word in words:
         shown = display_text(word)
-        w = int(font.getlength(shown)) + 2 * CAPTION_BORDER if shown else 0
+        w = caption_px(shown, word_face(shown, font) if drawn else font) if shown else 0
         if w > max_w:
             widest, max_w = shown, w
     return widest, max_w
 
 
 def _widest_caption(captions: list[dict], font_path: Path) -> tuple[str, int]:
-    """The caption word that renders widest (as shown: edge punctuation off,
-    outline included) and its width in pixels."""
-    return widest_word_px((word["text"] for word in captions), caption_font(font_path))
+    """The caption word that renders widest as the render draws it (as shown:
+    edge punctuation off, outline included, at its own size) and its width in
+    pixels."""
+    words = (word["text"] for word in captions)
+    return widest_word_px(words, caption_font(font_path), drawn=True)
 
 
 def card_sha256(card_text: str) -> str:

@@ -7448,7 +7448,7 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 shorts_audit: the caption audit measures on its own",
         SHORTS_AUDIT,
-        '    return widest_word_px((word["text"] for word in captions), caption_font(font_path))\n',
+        "    return widest_word_px(words, caption_font(font_path), drawn=True)\n",
         '    return "", 0  # mutant\n',
         SHORTS_TEST,
         "test_the_caption_audit_measures_through_the_public_helper",

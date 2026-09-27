@@ -34,7 +34,7 @@ from phase4 import model4 as M  # noqa: E402
 from phase4 import verify4 as V  # noqa: E402
 
 from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS, listed_domain_of  # noqa: E402
-from pipeline.video import shorts_audit  # noqa: E402
+from pipeline.video import shorts_audit, shorts_render  # noqa: E402
 
 SITE_ID = "4a5a324f-1111-4111-8111-111111111111"
 HEX_RAW = hashlib.sha256(b"the raw response").hexdigest()
@@ -501,7 +501,7 @@ def republish(case: Case, description: str) -> Case:
 # ------------------------------------------------------------------------------------------------
 
 #: A real FreeType face (Pillow's own), at the caption size the short draws.
-CAPTION_FACE = ImageFont.load_default(size=shorts_audit.CAPTION_SIZE)
+CAPTION_FACE = ImageFont.load_default(size=shorts_render.CAPTION_SIZE)
 #: What the fake face covers: Basic Latin to Latin Extended-A, as JetBrains Mono does. U+02BF
 #: (`Jabal al-ʿHayn`, plan section 7, S4) lies outside it, as it lies outside both brand fonts.
 FAKE_CMAP_LAST = 0x017F
