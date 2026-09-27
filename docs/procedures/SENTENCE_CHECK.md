@@ -177,6 +177,18 @@ record again wherever it is read (section 8 says what that comparison can and ca
 `build` is refused while a verification round is due and composes the text from the verified
 decisions; a site with nothing left is cleared as before.
 
+**The data ties every verification to the text it showed** (the review of 2026-09-27; lane WB's
+card tie, `CARD_DESCRIPTIONS.md` 2.1): `verify-import` records per site the sentence numbers the
+question showed (`shown`), the sha256 of the text they compose as published, markers included
+(`text_sha256`), and the question's `prompt_sha256`. `wc4.run_verification` reads a round only over
+the text it recorded: a check that composes another text under it is refused ("the check moved
+after the verifier answered") by `build`, by `wc4.verification_problems` (the plan loader, the
+plan's rules) and by the acceptance. `build` also rebuilds every round's question from the site's
+state at that round and compares it with `prompt_sha256`, so a replaced quote that leaves the text
+as it was is refused too. The commands cannot move a check under a verifier: `import` imports a
+check round once, and no check round once a verification round is exported - a check answered
+again is a new run.
+
 **The text** (`wc4.compose`, `wc4.with_markers`): the verified kept sentences in order, joined by
 one space, each with one `' [n]'` per distinct page of its verified quotes, ascending, numbered by
 first use across the text: in front of the final `. ! ?` (Phase 4's edit 5); after a closing
@@ -198,9 +210,10 @@ no v1 record was ever written - production held none, read-only, that day): `run
 (`model4.AI_SYSTEM`, the Opus handoff's), `checked_sha256` (the stored March text that was asked),
 `kept` of `of`, `trimmed`, per sentence `{n, verdict, reason, cites, quote_sha256}` (a reason may be
 one of the verification's), `desc_sha256` of the served text, **`verifiers`** (the agents that
-verified it, one per verification round, in order) and **`verified_sha256`** (the sha256 of the text
-the last verifier confirmed, markers included - held to `desc_sha256` by `wc_problems` and by the
-transaction's invariant 5). It is public (`/api/sites/{id}` serves `raw_data` whole), so it carries
+verified it, one per verification round, in order) and **`verified_sha256`** (the `text_sha256` the
+last round recorded at its import: the sha256 of the text its verifier was shown and confirmed,
+markers included - recorded evidence, not a hash recomputed at build: `run_verification` holds it to
+what the check composes, `wc_problems` and the transaction's invariant 5 to `desc_sha256`). It is public (`/api/sites/{id}` serves `raw_data` whole), so it carries
 each verified quote's sha256 and never its words; the words, URLs, titles, every agent answer, what
 the check said of each quote, each sentence's decision before the verification (`checked`) and the
 whole verification record (`verification`: status, the sentences the check kept, every round with
@@ -219,7 +232,8 @@ of the three keys.
 **The verification the plan rests on** (`wc4.verification_problems`, asked by `write4.load_wc_plan`
 for every outcome - a plan fails whole -, by the plan's rules for every site's rows, by `build`, and
 by the acceptance through `evidence_problems`): the record is there; it is exactly what its rounds
-give from the check's decisions; the evidence's final decisions are the verified ones; a kept text
+give from the check's decisions, every round read over the text it recorded (`text_sha256`); the
+evidence's final decisions are the verified ones; a kept text
 is the one the last verifier confirmed and its verification ended `verified`, a cleared site's
 `cleared` or `nothing-kept`; no verifier is an agent that checked the site, and none verified it
 twice. A plan built before the verify stage has no record and is never written.
@@ -323,7 +337,10 @@ nothing is fetched, no verdict judged) and records it with `opus_handoff.py answ
 decides the round by itself: `verify` first, `verify2` only after `verify` is imported and only for
 the sites a drop changed; it refuses with "nothing to verify" when no site is due (then build).
 `verify-import` imports a round once and refuses a verifier whose name checked or verified the site;
-`build` refuses while a round is due. The judge measures the text **after** the verification: the
+it records the sha256 of the text each question showed. The check `import` imports a round once, and
+none once `verify-export` ran: a check answered again is a new run (a new `--run-dir`, new handoffs).
+`build` refuses while a round is due, and refuses a round whose recorded text (`text_sha256`) or
+question (`prompt_sha256`) the check no longer gives. The judge measures the text **after** the verification: the
 pilot passes only if the check and the verification together leave no WRONG kept sentence and no
 incoherent site.
 
@@ -424,16 +441,16 @@ description.
 | `export` | a fresh population, the frozen question per site; `--pilot` a seeded draw, `--limit` a chunk | a run exported twice; `--pilot` without `--seed`; `--limit` below 1 or beside `--pilot`; an empty population ("nothing to ask"); a handoff that is not empty |
 | `check-answer` (the agent's aid) | shape, fetch into the batch's store, quotes, mirror and title rules, the text the answer leaves | nothing is recorded; exit 1 while not clean |
 | `opus_handoff.py validate` | every question answered once, no stale or orphan answer | the import runs only on a clean round |
-| `import` | the manifest is the round's record; every prompt rebuilt byte for byte; the answer's shape; every quote on the run's own fetch | a changed question (`not this question's`); an unvalidated round |
+| `import` | the manifest is the round's record; every prompt rebuilt byte for byte; the answer's shape; every quote on the run's own fetch | a changed question (`not this question's`); an unvalidated round; a round imported twice; any check round once a verification round is exported |
 | `export-reask` | the sentences round 1 could not count, with what failed | a second re-ask round |
-| `verify-export` | every check round imported; `verify`: every site whose check kept a sentence, its kept text as published; `verify2`: after `verify` is imported, every text a drop changed that keeps a sentence | a round exported but not imported; a third round; a handoff that is not empty; nothing due ("nothing to verify") |
+| `verify-export` | every check round imported; `verify`: every site whose check kept a sentence, its kept text as published; `verify2`: after `verify` is imported, every text a drop changed that keeps a sentence | a round exported but not imported; a third round; a handoff that is already a round or not empty; nothing due ("nothing to verify") |
 | `verify-check-answer` (the verifier's aid) | the answer's shape (`answers.parse_verify`) | nothing is recorded; exit 1 while not in shape |
-| `verify-import` | the round validates; every prompt rebuilt from the site's state at this round, byte for byte; the answer's shape; every quote checked on the run's own fetch (recorded, not gating: a WRONG drops either way); every site's round read by `wc4.run_verification` before anything is written | a verifier whose name checked the site or verified it in round 1; a changed question; a malformed answer; an unvalidated round; a round imported twice |
+| `verify-import` | the round validates; every prompt rebuilt from the site's state at this round, byte for byte; the answer's shape; every quote checked on the run's own fetch (recorded, not gating: a WRONG drops either way); the sha256 of the text each question showed recorded (`text_sha256`); every site's round read by `wc4.run_verification` before anything is written | a verifier whose name checked the site or verified it in round 1; a site whose check moved since the export (no longer due, another kept set, another question); a manifest that is not the round's record; a handoff that is no verification round; a malformed answer; an unvalidated round; a round imported twice |
 | `wc4.trim` (import, `check-answer`, build) | the piece: once, between words, no bare modifier or hedge frame, no qualifier taken off what stays (a telling or doubt of the sentence, a report outside its own figure, a negation's clause), no end of an unpunctuated sentence; the rest: no new sentence problem, the opening and the end asked apart | the answer is not in shape: the sentence is re-asked once, then dropped |
-| `build` | every site's decisions, pronoun rule, verification, text, citations, record (verifiers, verified text), raw_data, evidence with the marking and the verification record; `wc_problems` and `evidence_problems` (the AI disclosure the marking requires, the verification) on each | a due or unimported re-ask; a verification round due or exported and not imported; `--first-batch` below 4001; a site never answered |
+| `build` | every site's decisions, pronoun rule, verification, text, citations, record (verifiers, verified text), raw_data, evidence with the marking and the verification record; `wc_problems` and `evidence_problems` (the AI disclosure the marking requires, the verification) on each | a due or unimported re-ask; a verification round due or exported and not imported; a verification round whose recorded text (`text_sha256`) or question (`prompt_sha256`) the check no longer gives; `--first-batch` below 4001; a site never answered |
 | `judge-import` | the judge round validates; quotes on the judge's own fetch; independence from every checker and verifier of the run; `RESULT.json` names the judged plan's sha256 | `JUDGE_EXIT=1` below the pass mark |
 | gate: the pilot's verdict (`cli.pilot_approval`) | the first `--wc-plan` is a pilot run's, and every pilot named has `judge/RESULT.json` `passed: true` on exactly this plan (`plan_sha256`) | the whole run: nothing is planned |
-| gate: the verification (`write4.load_wc_plan`, `wc4.verification_problems`) | every outcome of every named plan carries a verification record that holds (section 2) | the whole run: a plan built before the verify stage, a verifier that checked the site, a record that is not what its rounds give |
+| gate: the verification (`write4.load_wc_plan`, `wc4.verification_problems`) | every outcome of every named plan carries a verification record that holds (section 2) | the whole run: a plan built before the verify stage, a verifier that checked the site, a record that is not what its rounds give, a round read over another text than it recorded |
 | gate dry run | reads each site's live description and raw_data (read-only); plans: a written site is the batch's while its description and WC's three keys are the outcome's (lane WB stamps others) | `written-by-p4` (a P4 text since), `asked-again-later` (a later plan asks it again and this batch did not write it), `moved-since-check` (not written by the batch and not the whole checked pair) - per site, the rest of the batch goes on |
 | gate: one site, one batch (`write4.wc_sites_planned_twice`) | no site is planned with rows by two batches | the whole run, before anything is rendered |
 | gate plan (`validate_rows`) | site-atomic pairs (kept, clear, raw_data alone for a byte-identical text, the description alone for the clear of a NULL raw_data), one evidence on both rows, the evidence's transition, `wc_problems`, the recorded marking re-derived from the row's old value and the AI disclosure it requires, the verification (`verification_problems`), no key outside the three changes, no full provenance | the whole batch |
@@ -499,6 +516,13 @@ run. (Re-measured the same day after `SUMMARY.json` gained each site's verificat
 `tests/remediation/test_wc_verify.py` (55), plus the gate's refusal, the pilot plan's tie, the
 acceptance's re-check and invariant 5 in `test_phase4_wc_write.py`.
 
+**After the review of 2026-09-27 and its fix round** (section 10; worktree `wip/wc2`, main venv):
+pytest **8,363 passed**, 119 skipped, 57 deselected (the same skips as above); ruff check `api/
+pipeline/` clean, ruff check and format clean on the 8 touched Python files; lint-imports 2
+contracts kept; vulture clean; nothing under `pipeline/` or the frontend changed. Mutation sweep:
+the whole WC set (`"wc "`, 130 cases with the 13 new ones) **130/130 caught**, the tree
+byte-identical afterwards. `test_wc_verify.py` now holds 67 tests.
+
 End-to-end smoke on live data (Duggleby Howe, one site; a machinery test, never written): export,
 brief, `check-answer` against the live Wikipedia page (the circa-date trim applied, the rejoined
 "Rev." sentence intact, a tab-title `Duggleby Howe - Wikipedia` refused as `title not on page`),
@@ -525,6 +549,12 @@ changed was refused (`the exported prompt is not this question's`), as designed.
 - **A trim's meaning beyond the qualifier rules** (a cut that keeps a grammatical sentence but
   narrows or shifts it otherwise) is the agent's (rule 5), the verifier's (`coherent`, `broken`) and
   the pilot judge's (`coherent`); code refuses the forms it can read (section 2).
+- **The tie of a verification to its text rests on the run's files** (section 2, "The data ties
+  every verification to the text it showed"). `verify-import` writes `text_sha256` and
+  `prompt_sha256` into `verify/round-<n>/VERIFIED.jsonl`, and no command rewrites a recorded round
+  or a check round a verifier was shown; a hand edit that changed a check's `ANSWERS.jsonl` and both
+  recorded hashes consistently would pass, as a forged journal would. The run directory is the
+  lane's own.
 - **The verification only drops.** A sentence a verifier wrongly finds UNSUPPORTED is lost (the
   pilot judge measures such losses among the dropped sentences as `DROP_WRONG`, reported and not
   gating); nothing a verifier says is ever added to a text.
@@ -587,3 +617,14 @@ cleared when that one does not confirm it; the record in the journal, the verifi
 text's sha256 in the check record, the writer refusing a plan without it, and the pilot's fresh judge
 measuring the text after the verification against the unchanged thresholds. The next pilot is a new
 run with a new seed, built and judged with this stage.
+
+**The independent review of 2026-09-27 and its fix round.** The review of `wip/wc2` (HEAD
+`39ad5fd`, verdict "fix") reported 1 major and 2 minor findings, reproduced in a copy of that HEAD:
+
+| # | finding | outcome |
+| --- | --- | --- |
+| 1 (major) | a round was tied to its site only by sentence numbers: `text_sha256` was recomputed at build from whatever the check composed then, `prompt_sha256` was never asked again, and the check `import` could be re-run over `round-<n>/ANSWERS.jsonl` - a text no verifier saw could be built with a record saying `verified`, and `verified_sha256` always equalled `desc_sha256` | fixed: `verify-import` records `text_sha256` (a round key); `run_verification` reads a round only over that text, so `build`, the plan loader, the plan's rules and the acceptance refuse a moved check; `build` asks every round's question again against `prompt_sha256`; the check `import` is write-once and refused once a verification round is exported (lane WB's `run.import_stage`); `verified_sha256` is the recorded hash (section 2) |
+| 2 | one frozen question serves `verify` and `verify2`, and told every verifier that the sentences named in `broken` "are removed and the rest is verified again" - untrue at `verify2`, which clears the site | fixed: "they are removed; what remains is published only if a verifier confirms it, else the whole description is cleared"; `VERIFY_QUESTION` re-pinned |
+| 3 | refusals of `verify-export` and `verify-import` without a test or mutation case: a reused, non-empty or unknown handoff, a check that moved between the export and the import, a manifest that is not the round's record | fixed: a test for each (`test_wc_verify.py`), and mutation cases that disable each guard |
+
+Thirteen mutation cases were added to `WC_VERIFY_MUTATIONS` (section 7).
