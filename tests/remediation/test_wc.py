@@ -766,11 +766,15 @@ def test_a_failed_fetch_is_recorded_and_its_quote_does_not_count(tmp_path: Path)
 #: 2026-09-27, after pilot pilot-2026-09-27b failed on one WRONG kept sentence and one incoherent
 #: site (Nyons): VERIFY_QUESTION and VERIFY_BRIEF added (the per-site verification before build);
 #: JUDGE_BRIEF re-pinned - the pilot's judge is fresh, no checker or verifier of the run.
+#: VERIFY_QUESTION re-pinned 2026-09-27 (the review of wip/wc2): the `broken` bullet said "the rest
+#: is verified again", untrue of verify2, which clears the site on any non-pass; it now says what
+#: both rounds do - the broken sentences go, what remains is published only once a verifier
+#: confirms it, else the description is cleared.
 PINS = {
     "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
     "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
     "CHECK_BRIEF": "5844ec9957fc97e651c2d1aead3edc08204e7a2eda981c0f02cfb1098d5291e5",
-    "VERIFY_QUESTION": "56991ce8eb31b8b3fdfa58b0daf1da1dd2a8b7ca4ce71b0be3322637ad321c00",
+    "VERIFY_QUESTION": "f2f88204af84597a7ce792bfb364b8d67c696a6c83c0d47814c050a024dc5a82",
     "VERIFY_BRIEF": "142bac74c54bdad6632c7d6876c5aba59312897172b8e517b4b11aa892979290",
     "JUDGE_QUESTION": "6aba7d0af909bcfeb5a25766696404ecc0043ff1858bec231d247f00924d495d",
     "JUDGE_BRIEF": "853b93c107c3721c2298b88ea85fef9bbc361b9c945380a1a2039f091b703060",

@@ -394,6 +394,10 @@ def test_a_wrong_or_unsupported_sentence_is_dropped_and_the_changed_text_verifie
     )
     prompt = _prompt(_hv(tmp_path, "verify2"), FX.SITE_A)
     assert "(2 kept)" in prompt and "D1: The site was excavated by Themistocles Zammit" in prompt
+    # one question serves both rounds: it says nothing that is untrue of verify2 (the review of
+    # 2026-09-27) - a broken sentence goes, and what remains is published only as confirmed
+    assert "verified again" not in prompt
+    assert "what remains is published only if a verifier confirms it" in prompt
     assert "--answered-by opus-wc-verify2-0001" in C.verify_brief(
         run, _hv(tmp_path, "verify2"), "verify2-0001"
     )

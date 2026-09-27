@@ -185,8 +185,9 @@ a phrase ("it", "the complex", "the ancient name") whose referent was dropped or
 points at something else; a trimmed sentence that is no longer grammatical; a sentence that now \
 says something else than it did; else true.
 - broken: when coherent is false, the numbers k of every kept sentence whose reference or meaning \
-broke (they are removed and the rest is verified again); when coherent is true, an empty list. If \
-you cannot name them, give an empty list with coherent false: the whole description is cleared.
+broke (they are removed; what remains is published only if a verifier confirms it, else the whole \
+description is cleared); when coherent is true, an empty list. If you cannot name them, give an \
+empty list with coherent false: the whole description is cleared.
 Sources follow the same rules as the check: Wikipedia, UNESCO, registers, museums, universities, \
 scholarly publications; never ancientnerds.com, AI aggregators, Wikipedia mirrors or a copy of this \
 description. A quote is verbatim from the page at its URL (code fetches it and searches for it) and \
