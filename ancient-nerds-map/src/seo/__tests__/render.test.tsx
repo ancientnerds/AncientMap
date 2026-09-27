@@ -21,7 +21,7 @@ import type { AnRoute } from '../../types/anRoute'
 import { renderHead, siteMeta } from '../meta'
 import { SeoRoute } from '../registry'
 import { RouteProvider } from '../RouteContext'
-import { FIXTURES, pyrefRoute } from './fixtures'
+import { FIXTURES, RESEARCH_WITH_EXTRAS, pyrefRoute } from './fixtures'
 
 function renderRoute(route: AnRoute): string {
   return renderToString(
@@ -90,6 +90,10 @@ describe('Hydration: der erste Client-Render gleicht dem Server', () => {
       expect(renderWithStorageSpy(FIXTURES[type])).toEqual([])
     })
   }
+
+  it('research with video, corrections and writer reads no browser storage', () => {
+    expect(renderWithStorageSpy(RESEARCH_WITH_EXTRAS)).toEqual([])
+  })
 })
 
 describe('research-Seiten (Task 12): der SSR-Body trägt den Python-Fragment-Inhalt', () => {
@@ -743,5 +747,59 @@ describe('Standalone-SPA-Modus (/articles.html ohne Payload)', () => {
       </RouteProvider>,
     )
     expect(html.length).toBeGreaterThan(50)
+  })
+})
+
+describe('research: Claude-written paper extras (studio spec 2026-09-26 §2.7, §3.7)', () => {
+  const html = renderRoute(RESEARCH_WITH_EXTRAS)
+
+  it('keeps the evidence anchors and video links of body_html verbatim', () => {
+    expect(html).toContain('<p id="ev-01" class="theo-evidence">')
+    expect(html).toContain('<span class="theo-evidence-anchor" id="ev-03"></span>')
+    expect(html).toContain('href="https://www.youtube.com/watch?v=dQw4w9WgXcQ&amp;t=312s"')
+  })
+
+  it('renders the video as a click-to-play link around our own poster, no iframe on the server', () => {
+    expect(html).toContain('class="story-video theo-paper-video"')
+    expect(html).toContain('href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"')
+    expect(html).toContain(
+      'class="story-video-link"><img src="/data/research-images/7f00aa00-0000-4000-8000-000000000000/video_dQw4w9WgXcQ.jpg" alt="" loading="lazy"/>',
+    )
+    expect(html).not.toContain('is-posterless')
+    expect(html).not.toContain('<iframe')
+    expect(html).not.toContain('i.ytimg.com')
+  })
+
+  it('shows the writer disclosure, visible and machine-readable', () => {
+    expect(html).toContain('<p class="theo-paper-disclosure" data-ai-generated="true">')
+    expect(html).toContain(
+      'Researched by Theo (AI research agent) · written by Claude (Anthropic) · published automatically after automated source checks, without human editorial review',
+    )
+  })
+
+  it('renders the corrections log: the retired id is its anchor, the current one a link', () => {
+    expect(html).toContain('<section id="corrections"')
+    expect(html).toContain('<li id="ev-05">')
+    expect(html).toContain('href="#ev-02"')
+    expect(html).toContain('<time dateTime="2026-10-04">October 04, 2026</time>')
+    expect(html).toContain('href="#corrections"')
+    expect(html).toContain('Corrected 2026-10-04')
+  })
+
+  it('still has exactly one h1 (the log heading is an h2)', () => {
+    expect(html.match(/<h1/g)).toHaveLength(1)
+  })
+
+  it('a paper without the extras renders none of their markup', () => {
+    const plain = renderRoute(FIXTURES.research)
+    for (const marker of [
+      'theo-paper-disclosure',
+      'theo-paper-video',
+      'id="corrections"',
+      'Corrected ',
+      'theo-evidence',
+    ]) {
+      expect(plain).not.toContain(marker)
+    }
   })
 })
