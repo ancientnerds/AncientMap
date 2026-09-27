@@ -587,11 +587,73 @@ class ResearchPaperSummary(BaseModel):
     )
 
 
+class ResearchEvidenceRef(BaseModel):
+    """One checkable claim of a Claude-written paper and its stable page anchor."""
+
+    id: str = Field(
+        description="Stable evidence id; never renumbered, retired only by a correction",
+        json_schema_extra={"example": "ev-03"},
+    )
+    claim: str = Field(description="The claim the evidence paragraph makes")
+    url: str = Field(description="Deep link to the evidence paragraph on the paper page")
+
+
+class ResearchVideoRef(BaseModel):
+    """A YouTube video made from the paper."""
+
+    youtube_id: str = Field(json_schema_extra={"example": "dQw4w9WgXcQ"})
+    title: str
+    published_at: str = Field(description="YouTube publication time (ISO 8601)")
+    url: str = Field(description="YouTube watch URL")
+    evidence_timestamps: dict[str, int] = Field(
+        description="Second of the video at which each evidence id is shown"
+    )
+    poster: str | None = Field(
+        default=None,
+        description=(
+            "Web path of the video's poster on ancientnerds.com "
+            "(/data/research-images/<id>/video_<youtube_id>.jpg); null when none was registered"
+        ),
+    )
+
+
+class ResearchCorrectionOut(BaseModel):
+    """One entry of the paper's public corrections log."""
+
+    date: str = Field(description="Correction day (YYYY-MM-DD)")
+    text: str
+    evidence_id: str | None = Field(default=None, description="Evidence id the correction concerns")
+
+
+class ResearchWriterOut(BaseModel):
+    """Who wrote and published the paper (the source of its AI disclosure)."""
+
+    model: str = Field(json_schema_extra={"example": "claude-opus-5-5"})
+    tool: str = Field(json_schema_extra={"example": "claude-code"})
+    research_model: str = Field(json_schema_extra={"example": "MiniMax-M3"})
+    published: str = Field(description="automatic | manual")
+    human_review: bool = Field(description="Whether a human editor reviewed the text")
+
+
 class ResearchPaperDetail(ResearchPaperSummary):
     """Full research paper including the Markdown body with references."""
 
     content: str = Field(
         description="Full paper in Markdown, including numbered citations and references"
+    )
+    evidence: list[ResearchEvidenceRef] = Field(
+        default_factory=list,
+        description="Checkable claims with deep links (Claude-written papers; empty otherwise)",
+    )
+    videos: list[ResearchVideoRef] = Field(
+        default_factory=list, description="YouTube videos made from this paper"
+    )
+    corrections: list[ResearchCorrectionOut] = Field(
+        default_factory=list, description="Public corrections log, oldest first"
+    )
+    writer: ResearchWriterOut | None = Field(
+        default=None,
+        description="Writer record of a Claude-written paper; null for older papers",
     )
 
 
