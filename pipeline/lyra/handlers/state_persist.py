@@ -1,21 +1,19 @@
-"""Persists a run's intermediate reasoning to the training corpus.
+"""Persists a run's intermediate reasoning to the training corpus as it happens.
 
-The convergence pipeline produces far more than the paper it ships: each
-angle's findings, the specialist analyses behind them, the synthesis, the
-debate rounds and the moderator's verdicts. All of that lives on the
-in-memory ResearchState and is gone the moment the run ends — only the
-finished paper reaches the database.
+Each angle's findings, the specialist analyses behind them, the synthesis and
+the debate are written when the stage that produces them finishes, so a run
+that dies later (quota, crash, cancellation) still leaves them behind. The
+dossier itself (moderated claims, citation registry, image pool, manifest) is
+written by handlers/dossier.py on ModeratorComplete, which also rewrites these
+kinds with their final content.
 
-This handler writes each of those artifacts when it becomes final, so the
-chain "question -> research -> argument -> paper" survives as training
-material. The run-closing artifacts (final paper metrics, citation registry)
-are NOT written here: reference pruning happens after PaperReady, so they are
-written by the worker once the run is genuinely over.
+Writes use replace semantics when the run has a request_id: one current row per
+(request_id, kind, ref), so a re-emitted event or a deferred re-run does not
+stack duplicate rows.
 
-Nothing here can fail a research run. EventBus.emit turns a handler exception
-into state.error, which the deadline loop reads as a failed run — so every
-write, including its own serialization, is wrapped. Failures are loud in the
-log and in the run's debug_log, never silent.
+Nothing here can fail a research run: these are passenger writes, logged loudly
+and recorded in the run's debug_log when they fail. The dossier writes are the
+hard ones.
 """
 
 from __future__ import annotations
@@ -30,9 +28,9 @@ from pipeline.lyra.research_events import (
     AllAnglesSaturated,
     AngleSaturated,
     DebateComplete,
-    ModeratorComplete,
     SynthesisReady,
 )
+from pipeline.lyra.research_state import findings_by_specialist
 from pipeline.lyra.training_corpus import save_artifact
 
 logger = logging.getLogger(__name__)
@@ -46,7 +44,6 @@ class StatePersistHandler(BaseHandler):
         self.bus.on(AllAnglesSaturated, self._on_all_angles_saturated)
         self.bus.on(SynthesisReady, self._on_synthesis_ready)
         self.bus.on(DebateComplete, self._on_debate_complete)
-        self.bus.on(ModeratorComplete, self._on_moderator_complete)
 
     async def _on_angle_saturated(self, event: AngleSaturated):
         angle = next((a for a in self.state.angles if a.id == event.angle_id), None)
@@ -55,13 +52,13 @@ class StatePersistHandler(BaseHandler):
         await self._save("angle_findings", angle, ref=angle.id)
 
     async def _on_all_angles_saturated(self, event: AllAnglesSaturated):
-        # The densest supervised-fine-tuning material in the pipeline: a
-        # specialist's full analysis of one angle, not just the claims that
-        # survived into the paper.
+        # Grouped from the angles' findings at this moment. state.specialist_analyses
+        # is only assembled after the run, so reading it here stored an empty dict
+        # in every production row until 2026-09-26.
         await self._save(
             "specialist_analyses",
             {
-                "analyses": self.state.specialist_analyses,
+                "analyses": findings_by_specialist(self.state.angles),
                 "panel": [asdict(s) for s in self.state.panel],
             },
         )
@@ -78,13 +75,17 @@ class StatePersistHandler(BaseHandler):
     async def _on_debate_complete(self, event: DebateComplete):
         await self._save("debate", self.state.debate_result)
 
-    async def _on_moderator_complete(self, event: ModeratorComplete):
-        await self._save("moderated", self.state.moderated_result)
-
     async def _save(self, kind: str, payload: Any, ref: str = "") -> None:
         try:
             body = asdict(payload) if hasattr(payload, "__dataclass_fields__") else payload
-            await asyncio.to_thread(save_artifact, self.state.request_id or None, kind, body, ref)
+            await asyncio.to_thread(
+                save_artifact,
+                self.state.request_id or None,
+                kind,
+                body,
+                ref,
+                replace=bool(self.state.request_id),
+            )
         except Exception as exc:
             logger.error("[archive] artifact '%s' failed: %s", kind, exc)
             self.state.log("archive", f"ARTIFACT WRITE FAILED ({kind}): {exc}")
