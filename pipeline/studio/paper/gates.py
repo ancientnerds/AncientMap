@@ -12,7 +12,8 @@ and writes check_report.json. A paper is publishable only when every gate passes
  4 specifics   every person/date/measurement/quote/title/institution of a cited paragraph is
                found in the archived texts of the sources that paragraph cites (a
                TDM-reserved source: the text the claim check read live, claims.source_texts)
- 5 coherence   every multi-word title term appears in the body; 0 numeric conflicts
+ 5 coherence   every multi-word title term appears in the prose paragraphs (the title
+               line itself does not count); 0 numeric conflicts
                (the claim check's coherence task)
  6 evidence    evidence.json validates (evidence.py): the publish gate's own rule
                (theo_publishing.check_evidence: shape, `supported` only, anchors), then every
@@ -215,9 +216,11 @@ def gate_specifics(
 
 
 def gate_coherence(title: str, report: str, status: ClaimStatus | None) -> Gate:
-    prose, _h, _r = split_artifact(report)
+    """Title terms are looked up in the prose paragraphs only: paper.md opens with the
+    `# <title>` line itself (numbering.compose), which would otherwise define every term."""
+    body = "\n".join(_plain(p.text) for p in paragraphs(report))
     terms = extract_title_terms(title)
-    undefined = [t for t, ok in check_title_terms_in_body(terms, prose).items() if not ok]
+    undefined = [t for t, ok in check_title_terms_in_body(terms, body).items() if not ok]
     conflicts = status.coherence_conflicts if status is not None else 0
     problems = []
     if undefined:

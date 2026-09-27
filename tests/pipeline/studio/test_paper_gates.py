@@ -9,9 +9,9 @@ from pipeline.studio.paper.workspace import parse_dossier, write_json
 from tests.pipeline.studio import fixtures as fx
 
 
-def _report(draft: str) -> str:
+def _report(draft: str, title: str = fx.META["title"]) -> str:
     body, registry = numbering.number_draft(draft, parse_dossier(fx.dossier_gz_bytes()))
-    markdown, _placed = numbering.compose(fx.META["title"], body, registry, [])
+    markdown, _placed = numbering.compose(title, body, registry, [])
     return markdown
 
 
@@ -146,9 +146,31 @@ def test_specifics_of_a_tdm_reserved_source_are_found_in_its_live_text():
 
 
 def test_coherence_gate_needs_title_terms_in_the_body():
-    gate = gates.gate_coherence("The Lost Obelisk of Baalbek", _report(fx.build_draft()), None)
+    title = "The Lost Obelisk of Baalbek"
+    report = _report(fx.build_draft(), title)
+    assert report.startswith(f"# {title}\n")
+    gate = gates.gate_coherence(title, report, None)
     assert gate.details["undefined_title_terms"] == ["Lost Obelisk"]
     assert "numeric coherence not checked (claim check incomplete)" in gate.details["problems"]
+
+
+def test_run_check_fails_a_title_term_only_the_title_line_carries(tmp_path):
+    ws = fx.complete_workspace(tmp_path)
+    write_json(ws.meta, dict(fx.META, title="The Lost Obelisk of Baalbek Revisited"))
+    result = gates.run_check(ws)
+    assert ws.paper.read_text(encoding="utf-8").startswith(
+        "# The Lost Obelisk of Baalbek Revisited\n"
+    )
+    failing = [g["name"] for g in result["gates"] if not g["passed"]]
+    assert failing == ["coherence", "quality"]
+    assert _gate(result, "coherence")["details"]["undefined_title_terms"] == [
+        "Lost Obelisk",
+        "Baalbek Revisited",
+    ]
+    score = result["quality_score"]
+    assert score["audit_gate_failures"]["undefined_title_terms"] == 2
+    assert score["badge"] == "Unverified"
+    assert recompute_quality_passed(score, result["audit"]) is False
 
 
 def test_pick_hero_offers_only_wide_images_when_any_exist():
