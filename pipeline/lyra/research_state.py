@@ -29,6 +29,7 @@ class ResearchPhase(enum.Enum):
     EXPLORING = "exploring"
     SYNTHESIZING = "synthesizing"
     DEBATING = "debating"
+    MODERATING = "moderating"
     WRITING = "writing"
     IMAGE_CURATION = "image_curation"
     JUDGING = "judging"
@@ -143,6 +144,13 @@ class ResearchState:
     debate_result: dict = field(default_factory=dict)
     moderated_result: dict = field(default_factory=dict)
 
+    # Dossier (handlers/dossier.py). dossier_ref is the research_artifacts.id of
+    # the manifest row, set only once the whole dossier is persisted; the
+    # orchestrator's dossier guard fails a run that ends without it.
+    # dossier_summary is what the worker stores as result_json["dossier"].
+    dossier_ref: int | None = None
+    dossier_summary: dict = field(default_factory=dict)
+
     # Paper
     paper_text: str = ""
     paper_title: str = ""
@@ -223,3 +231,19 @@ class ResearchState:
     @property
     def active_specialists(self) -> list[ActiveSpecialist]:
         return [s for s in self.panel if s.active]
+
+
+def findings_by_specialist(angles: list[ResearchAngle]) -> dict[str, list[dict]]:
+    """Every finding of every angle, grouped by the specialist that produced it.
+
+    Each finding is copied with its angle id added, so the grouping keeps the
+    context the per-angle lists had. Findings without a specialist_id group
+    under "unknown".
+    """
+    grouped: dict[str, list[dict]] = {}
+    for angle in angles:
+        for finding in angle.findings:
+            grouped.setdefault(finding.get("specialist_id", "unknown"), []).append(
+                {**finding, "angle_id": angle.id}
+            )
+    return grouped

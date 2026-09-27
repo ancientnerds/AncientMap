@@ -93,6 +93,17 @@ class ModeratorComplete(ResearchEvent):
 
 
 @dataclass
+class DossierReady(ResearchEvent):
+    """The dossier is persisted and the run is done (handlers/dossier.py).
+
+    The orchestrator's done signal since the research-only split (2026-09-26);
+    QualityPassed held that role while Theo still wrote papers.
+    """
+
+    request_id: str
+
+
+@dataclass
 class PaperReady(ResearchEvent):
     pass
 

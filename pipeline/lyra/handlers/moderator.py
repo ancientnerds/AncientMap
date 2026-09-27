@@ -1,6 +1,6 @@
 """Moderator handler -- reviews claims from synthesis + debate, drops weak
-claims, revises contested claims, and produces a filtered set of claims
-for the paper writer."""
+claims, revises contested claims, and produces the filtered claim set the
+dossier (handlers/dossier.py) hands to the Claude writer."""
 
 import asyncio
 import json
@@ -11,6 +11,7 @@ from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers import BaseHandler
 from pipeline.lyra.minimax_shared import structured_llm_call
 from pipeline.lyra.research_events import DebateComplete, ModeratorComplete
+from pipeline.lyra.research_state import ResearchPhase
 from pipeline.lyra.schemas import MODERATOR_SCHEMA
 
 logger = logging.getLogger(__name__)
@@ -20,10 +21,24 @@ PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 class ModeratorHandler(BaseHandler):
     """Reviews all claims post-debate, drops weak ones, revises contested ones."""
 
+    def __init__(self, state, bus, semaphore):
+        super().__init__(state, bus, semaphore)
+        # The forced-deadline path (handlers/deadline.py) emits DebateComplete while the
+        # debate may still run; the debate's own DebateComplete must not moderate again,
+        # or it rewrites state.moderated_result under the DossierHandler.
+        self._started = False
+
     def register(self):
         self.bus.on(DebateComplete, self._on_debate_complete)
 
     async def _on_debate_complete(self, event: DebateComplete):
+        if self._started:
+            self.state.log(
+                "moderator", "DebateComplete fired again: the claims are already moderated, ignored"
+            )
+            return
+        self._started = True
+        self.state.phase = ResearchPhase.MODERATING
         self.emit_sse(
             {
                 "type": "pipeline",
