@@ -105,17 +105,23 @@ def _candidate(entry: dict[str, Any]) -> ImageCandidate:
 
 
 def embed_images(paper: str, images: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
-    """Insert each checked image after the paragraph its anchor matches (exactly one)."""
+    """Insert each checked image after the paragraph its anchor matches (exactly one).
+
+    A selection that an edit of draft.md made stale is refused in one error naming every
+    image whose anchor no longer opens exactly one paragraph, and the way out: images-export
+    builds the paper without the selection (`build_paper(ws, with_images=False)`).
+    """
     placed: list[dict[str, Any]] = []
+    stale: list[str] = []
     for entry in images:
         paras = paragraphs(paper)
         hits = matching_paragraphs(paras, entry["anchor_text"])
         if len(hits) != 1:
-            raise StudioError(
+            stale.append(
                 f"image {entry['file']} ({entry['opportunity_id']}): its anchor matches "
-                f"{len(hits)} paragraphs of the current draft; fix images/opportunities.json "
-                "and re-run images-export/images-import"
+                f"{len(hits)} paragraphs of the current draft"
             )
+            continue
         para = paras[hits[0]]
         md = image_markdown(
             _candidate(entry), entry["web_path"], entry["rationale"], verified=entry["verified"]
@@ -130,6 +136,14 @@ def embed_images(paper: str, images: list[dict[str, Any]]) -> tuple[str, list[di
                 "paragraph_index": para.index,
                 "section_heading": para.section,
             }
+        )
+    if stale:
+        raise StudioError(
+            "images/selected.json no longer fits draft.md: "
+            + "; ".join(stale)
+            + ". Fix the anchor_text of these opportunities in images/opportunities.json, "
+            "then run `paper images-export` (it ignores the stale selection), answer its "
+            "tasks and run `paper images-import`"
         )
     return paper, placed
 
@@ -148,12 +162,20 @@ def selected_images(ws: PaperWorkspace) -> list[dict[str, Any]]:
     return read_json(path, "") if path.exists() else []
 
 
-def build_paper(ws: PaperWorkspace) -> BuiltPaper:
+def build_paper(ws: PaperWorkspace, *, with_images: bool = True) -> BuiltPaper:
+    """The numbered paper with the images of images/selected.json.
+
+    with_images=False builds it without that selection: images-export chooses the images for
+    the current draft, so a selection an edit of draft.md made stale must not stop it. Every
+    other caller builds the paper as it will be published (claims-export too: the coherence
+    task lists the measurements of the image captions).
+    """
     dossier = load_dossier(ws)
     draft = ws.require(ws.draft, "write draft.md from brief.md").read_text(encoding="utf-8")
     meta = read_json(ws.meta, "write paper_meta.json {title, card_description}")
     body, registry = number_draft(draft, dossier)
-    markdown, placed = compose(meta["title"], body, registry, selected_images(ws))
+    images = selected_images(ws) if with_images else []
+    markdown, placed = compose(meta["title"], body, registry, images)
     return BuiltPaper(markdown, registry, sources_table(registry), placed)
 
 

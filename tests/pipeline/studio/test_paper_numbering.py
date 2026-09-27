@@ -100,3 +100,44 @@ def test_an_image_anchor_that_no_longer_matches_is_refused(tmp_path):
     write_json(ws.images_dir / "selected.json", [_entry("a sentence that is not in the paper")])
     with pytest.raises(StudioError, match="matches 0 paragraphs of the current draft"):
         numbering.number(ws)
+
+
+def test_a_draft_edit_after_selection_leaves_images_export_a_build(tmp_path):
+    """A claim fix that rewrites an image paragraph's opening makes selected.json stale:
+    the published build refuses and names the way out, the build images-export uses
+    (with_images=False) still works on the edited draft."""
+    ws = fx.make_workspace(tmp_path)
+    anchor = "The Stone of the Pregnant Woman weighs about 1000 tons"
+    write_json(
+        ws.images_dir / "selected.json",
+        [
+            _entry(anchor),
+            {
+                **_entry("Jeanine Abdul Massih led the 2014 excavation", "s5e6f7a8b_dig.jpg"),
+                "opportunity_id": "op-02",
+            },
+            {
+                **_entry("a sentence that is not in the paper", "s9c0d1e2f_gone.jpg"),
+                "opportunity_id": "op-03",
+            },
+        ],
+    )
+    draft = ws.draft.read_text(encoding="utf-8")
+    edited = "Estimates for the Stone of the Pregnant Woman reach about 1000 tons"
+    ws.draft.write_text(draft.replace(anchor, edited), encoding="utf-8")
+
+    with pytest.raises(StudioError) as exc:
+        numbering.number(ws)
+    msg = str(exc.value)
+    assert msg.startswith("images/selected.json no longer fits draft.md: ")
+    assert "image s1a2b3c4d_stone.jpg (op-01): its anchor matches 0 paragraphs" in msg
+    assert "image s9c0d1e2f_gone.jpg (op-03): its anchor matches 0 paragraphs" in msg
+    assert "op-02" not in msg
+    assert "run `paper images-export` (it ignores the stale selection)" in msg
+    assert not ws.paper.exists()
+
+    built = numbering.build_paper(ws, with_images=False)
+    assert edited in built.markdown
+    assert "![" not in built.markdown
+    assert built.probative_images == []
+    assert validate_paper_artifact(built.markdown)["passed"]
