@@ -37,7 +37,7 @@ import {
   storyMeta,
 } from '../meta'
 import type { StoryRoute } from '../../types/anRoute'
-import { FIXTURES, PYREF_DIR, pyrefHead, pyrefRoute } from './fixtures'
+import { FIXTURES, PYREF_DIR, RESEARCH_WITH_EXTRAS, pyrefHead, pyrefRoute } from './fixtures'
 
 /** Bewusste Ausnahme 1: der SSR-CSS-Block (siehe Dateikommentar). */
 const stripSsrStyle = (head: string) => head.replace(/\n<style>[\s\S]*?<\/style>/, '')
@@ -286,5 +286,44 @@ describe('leere Description (b4690a3: kein content="" ausliefern)', () => {
       canonical: 'https://ancientnerds.com/x',
     })
     expect(head).not.toContain('name="description"')
+  })
+})
+
+describe('researchMeta: Claude-written paper extras (studio spec §2.7)', () => {
+  const schema = JSON.parse(researchMeta(RESEARCH_WITH_EXTRAS).schema!)
+
+  it('dateModified is the newest correction day', () => {
+    expect(schema.datePublished).toBe('2026-07-02')
+    expect(schema.dateModified).toBe('2026-10-04')
+  })
+
+  it('a correction older than the current publication sets no dateModified', () => {
+    // Unpublished and published again: published_at is new, the log is kept.
+    const republished = JSON.parse(
+      researchMeta({ ...RESEARCH_WITH_EXTRAS, published_at: '2026-11-01T09:00:00' }).schema!,
+    )
+    expect(republished.datePublished).toBe('2026-11-01')
+    expect(republished).not.toHaveProperty('dateModified')
+  })
+
+  it('one VideoObject per registered video', () => {
+    expect(schema.video).toEqual([
+      {
+        '@type': 'VideoObject',
+        name: 'Baalbek: the 1,000-tonne question',
+        description:
+          'Video companion to the research paper: Obsidian Trade Networks in Neolithic Anatolia',
+        uploadDate: '2026-10-01T15:00:00+00:00',
+        thumbnailUrl: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+        embedUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+        url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+      },
+    ])
+  })
+
+  it('a paper without extras gets neither key (the pyref heads above stay byte-identical)', () => {
+    const plain = JSON.parse(researchMeta(FIXTURES.research).schema!)
+    expect(plain).not.toHaveProperty('dateModified')
+    expect(plain).not.toHaveProperty('video')
   })
 })

@@ -23,11 +23,17 @@ import type {
   LandingRoute,
   ResearchIndexRoute,
   ResearchRoute,
+  ResearchVideo,
   SiteRoute,
   SitesIndexRoute,
   StoryArchiveRoute,
   StoryRoute,
 } from '../types/anRoute'
+import {
+  latestCorrectionDate,
+  youtubeThumbnailUrl,
+  youtubeWatchUrl,
+} from '../components/theo/paperExtras'
 import { isoDate } from './display'
 import { periodSpan, typeSections } from './grouping'
 import { blurb, collapse, cut, stripCitations } from './text'
@@ -362,6 +368,23 @@ export function countryMeta(route: CountryRoute): PageMeta {
   }
 }
 
+/**
+ * One schema.org VideoObject per registered video of a paper. The thumbnail
+ * is YouTube's own: crawler metadata only (the page never loads it), and it
+ * exists for every video, with or without our own poster.
+ */
+function videoObject(video: ResearchVideo, paperTitle: string): string {
+  return (
+    '{"@type": "VideoObject", ' +
+    `"name": ${jsonStr(video.title)}, ` +
+    `"description": ${jsonStr(`Video companion to the research paper: ${paperTitle}`)}, ` +
+    `"uploadDate": ${jsonStr(video.published_at)}, ` +
+    `"thumbnailUrl": "${youtubeThumbnailUrl(video.youtube_id)}", ` +
+    `"embedUrl": "https://www.youtube.com/embed/${video.youtube_id}", ` +
+    `"url": "${youtubeWatchUrl(video.youtube_id)}"}`
+  )
+}
+
 /** research_page(): das Payload trägt die rohen Zeilenfelder — Defaults entstehen hier. */
 export function researchMeta(route: ResearchRoute): PageMeta {
   const canonical = `${BASE_URL}/research/${encodePath(route.slug)}`
@@ -372,13 +395,27 @@ export function researchMeta(route: ResearchRoute): PageMeta {
     author === 'Theo'
       ? '{"@type": "Organization", "name": "Ancient Nerds", "description": "AI research pipeline"}'
       : `{"@type": "Person", "name": ${jsonStr(author)}}`
+  // A Claude-written paper's corrections and videos (studio spec §2.7) join
+  // the schema only when present: the frozen pyref heads carry neither.
+  const corrections = route.corrections ?? []
+  const videos = route.videos ?? []
+  const published = isoDate(route.published_at)
+  const modified = corrections.length > 0 ? latestCorrectionDate(corrections) : ''
   const schema =
     '{"@context": "https://schema.org", "@type": "ScholarlyArticle", ' +
     '"digitalSourceType": "https://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia", ' +
     `"headline": ${jsonStr(route.title)}, "description": ${jsonStr(cut(summary, 300))}, ` +
-    `"datePublished": "${isoDate(route.published_at)}", "author": ${authorSchema}, ` +
+    `"datePublished": "${published}", ` +
+    // An unpublished paper published again gets a new published_at and keeps
+    // its corrections log, so the newest correction can predate the
+    // publication: dateModified never goes before datePublished.
+    (modified > published ? `"dateModified": "${modified}", ` : '') +
+    `"author": ${authorSchema}, ` +
     `"publisher": ${PUBLISHER}, ` +
     (route.hero_image_url ? `"image": ${jsonStr(absoluteUrl(route.hero_image_url))}, ` : '') +
+    (videos.length > 0
+      ? `"video": [${videos.map(v => videoObject(v, route.title)).join(', ')}], `
+      : '') +
     '"license": "https://creativecommons.org/licenses/by/4.0/", ' +
     `"mainEntityOfPage": "${canonical}", "url": "${canonical}"}`
   return {
