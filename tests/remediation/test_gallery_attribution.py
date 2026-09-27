@@ -66,7 +66,10 @@ def test_a1_reads_the_artist_field_as_parse_attribution_does():
     found = A.resolve(_page({"Artist": USER_ANCHOR, "Attribution": "Someone else"}))
     assert isinstance(found, A.Found)
     assert (found.rule, found.field, found.span) == ("A1", "Artist", USER_ANCHOR)
-    assert (found.author, found.author_url) == ("Udimu", "https://commons.wikimedia.org/wiki/User:Udimu")
+    assert (found.author, found.author_url) == (
+        "Udimu",
+        "https://commons.wikimedia.org/wiki/User:Udimu",
+    )
 
 
 def test_an_empty_artist_field_moves_on_to_the_attribution_line():
@@ -78,7 +81,12 @@ def test_an_empty_artist_field_moves_on_to_the_attribution_line():
 def test_a_present_field_that_cannot_be_read_exactly_ends_the_row():
     """No fall-through past a field that is there: its reason is the row's."""
     found = A.resolve(
-        _page({"Attribution": "\N{REPLACEMENT CHARACTER} Codrin.B", "Credit": f"{USER_ANCHOR} ({OWN_WORK})"})
+        _page(
+            {
+                "Attribution": "\N{REPLACEMENT CHARACTER} Codrin.B",
+                "Credit": f"{USER_ANCHOR} ({OWN_WORK})",
+            }
+        )
     )
     assert isinstance(found, A.Refused)
     assert found.rule == "A2" and "replacement character" in found.reason
@@ -98,7 +106,10 @@ OTHER_AUTHOR = _info("[[User:Other|Other]]")
     ("credit", "says"),
     [
         (OWN_WORK, "carries 0 user links"),  # the {{Own}} tag with no user link
-        (f"{USER_ANCHOR} and {USER_ANCHOR.replace('Udimu', 'Other')} ({OWN_WORK})", "carries 2 user"),
+        (
+            f"{USER_ANCHOR} and {USER_ANCHOR.replace('Udimu', 'Other')} ({OWN_WORK})",
+            "carries 2 user",
+        ),
     ],
 )
 def test_an_own_work_credit_without_exactly_one_user_link_ends_the_row(credit, says):
@@ -130,10 +141,22 @@ def test_a_credit_without_the_own_work_marker_is_not_a3():
 @pytest.mark.parametrize(
     ("author", "want"),
     [
-        ("[[User:Letterix|ingostrutz]]", ("ingostrutz", "https://commons.wikimedia.org/wiki/User:Letterix")),
-        ("[[User:Simon Burchell]]", ("Simon Burchell", "https://commons.wikimedia.org/wiki/User:Simon_Burchell")),
-        ("[[:en:User:Bobak|Bobak Ha'Eri]]", ("Bobak Ha'Eri", "https://en.wikipedia.org/wiki/User:Bobak")),
-        ("[https://www.flickr.com/photos/x Claire H.]", ("Claire H.", "https://www.flickr.com/photos/x")),
+        (
+            "[[User:Letterix|ingostrutz]]",
+            ("ingostrutz", "https://commons.wikimedia.org/wiki/User:Letterix"),
+        ),
+        (
+            "[[User:Simon Burchell]]",
+            ("Simon Burchell", "https://commons.wikimedia.org/wiki/User:Simon_Burchell"),
+        ),
+        (
+            "[[:en:User:Bobak|Bobak Ha'Eri]]",
+            ("Bobak Ha'Eri", "https://en.wikipedia.org/wiki/User:Bobak"),
+        ),
+        (
+            "[https://www.flickr.com/photos/x Claire H.]",
+            ("Claire H.", "https://www.flickr.com/photos/x"),
+        ),
         ("Helena Rosengren", ("Helena Rosengren", None)),
     ],
 )
@@ -395,7 +418,11 @@ def test_a_batch_answer_without_a_query_stops_the_lane(tmp_path):
             "ns": 6,
             "title": "File:Temple.jpg",
             "revisions": [
-                {"revid": 1, "timestamp": "2026-01-01T00:00:00Z", "slots": {"main": {"content": ""}}}
+                {
+                    "revid": 1,
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "slots": {"main": {"content": ""}},
+                }
             ],
         },
     ],
@@ -405,7 +432,9 @@ def test_a_page_without_one_revision_and_its_imageinfo_is_named(tmp_path, page):
         return httpx.Response(200, json={"query": {"pages": [page]}})
 
     with Fetcher(root=tmp_path, workers=1, transport=httpx.MockTransport(handler)) as fetcher:
-        assert A.fetch_batch(fetcher, ["Temple.jpg"]) == {"Temple.jpg": "no revision or no imageinfo"}
+        assert A.fetch_batch(fetcher, ["Temple.jpg"]) == {
+            "Temple.jpg": "no revision or no imageinfo"
+        }
 
 
 def test_a_maxlag_refusal_is_asked_again_and_then_raises(tmp_path, monkeypatch):
@@ -449,7 +478,9 @@ def test_the_evidence_file_is_one_canonical_json_line_per_resolved_row(tmp_path)
     A.write_jsonl(path, plan.evidence)
     lines = path.read_text(encoding="utf-8").splitlines()
     assert [json.loads(line)["image_id"] for line in lines] == [1, 2]
-    assert all(line == json.dumps(json.loads(line), ensure_ascii=False, sort_keys=True) for line in lines)
+    assert all(
+        line == json.dumps(json.loads(line), ensure_ascii=False, sort_keys=True) for line in lines
+    )
 
 
 def test_the_evidence_file_is_read_back_whole_when_a_span_carries_a_line_separator(tmp_path):

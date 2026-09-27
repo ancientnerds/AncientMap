@@ -52,8 +52,14 @@ def image(**over: object) -> dict[str, object]:
 
 
 def truth(width: int = 3417, height: int = 2278, status: str = "ok") -> dict[str, object]:
-    return {"status": status, "canonical": "A.jpg", "width": width, "height": height,
-            "bytes": 1_000_000, "url": "https://upload.wikimedia.org/..."}
+    return {
+        "status": status,
+        "canonical": "A.jpg",
+        "width": width,
+        "height": height,
+        "bytes": 1_000_000,
+        "url": "https://upload.wikimedia.org/...",
+    }
 
 
 def site(site_id: str = SITE_A, name: str = "Site A", source: str = P.CURATED_SOURCE) -> dict:
@@ -276,8 +282,13 @@ def test_only_one_hero_per_site_is_required_not_produced() -> None:
 
 def test_a_row_planned_twice_is_refused() -> None:
     record = P.ChangeRecord(
-        image_id=11, site_id=SITE_A, site_name="Site A", role="promote",
-        old_is_hero=False, new_is_hero=True, condition="id = 11 AND is_hero = false",
+        image_id=11,
+        site_id=SITE_A,
+        site_name="Site A",
+        role="promote",
+        old_is_hero=False,
+        new_is_hero=True,
+        condition="id = 11 AND is_hero = false",
         reason="r",
     )
     plan = P.Plan(
@@ -294,10 +305,14 @@ def test_a_row_planned_twice_is_refused() -> None:
 # --------------------------------------------------------------------------------- inputs
 def test_a_tier_beside_the_snapshot_is_refused(tmp_path: Path) -> None:
     path = tmp_path / "findings.jsonl"
-    path.write_text(json.dumps({"current_value": {"image_id": 1, "tier": "D"}}) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps({"current_value": {"image_id": 1, "tier": "D"}}) + "\n", encoding="utf-8"
+    )
     assert P.load_tiers(path) == {1: "D"}
 
-    path.write_text(json.dumps({"current_value": {"image_id": 1, "tier": "E"}}) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps({"current_value": {"image_id": 1, "tier": "E"}}) + "\n", encoding="utf-8"
+    )
     with pytest.raises(P.PlanError, match="unknown tier"):
         P.load_tiers(path)
 
@@ -322,14 +337,26 @@ def test_a_cache_without_entries_is_refused(tmp_path: Path) -> None:
 def records_pair() -> list[P.ChangeRecord]:
     return [
         P.ChangeRecord(
-            image_id=10, site_id=SITE_A, site_name="Site A", role="demote",
-            old_is_hero=True, new_is_hero=False, condition="id = 10 AND is_hero = true",
-            reason="old hero is 800x533", evidence=[{"source": "test", "quote": "10"}],
+            image_id=10,
+            site_id=SITE_A,
+            site_name="Site A",
+            role="demote",
+            old_is_hero=True,
+            new_is_hero=False,
+            condition="id = 10 AND is_hero = true",
+            reason="old hero is 800x533",
+            evidence=[{"source": "test", "quote": "10"}],
         ),
         P.ChangeRecord(
-            image_id=11, site_id=SITE_A, site_name="Site A", role="promote",
-            old_is_hero=False, new_is_hero=True, condition="id = 11 AND is_hero = false",
-            reason="1600x1067 local, 3417x2278 on Commons", evidence=[{"source": "test", "quote": "11"}],
+            image_id=11,
+            site_id=SITE_A,
+            site_name="Site A",
+            role="promote",
+            old_is_hero=False,
+            new_is_hero=True,
+            condition="id = 11 AND is_hero = false",
+            reason="1600x1067 local, 3417x2278 on Commons",
+            evidence=[{"source": "test", "quote": "11"}],
         ),
     ]
 

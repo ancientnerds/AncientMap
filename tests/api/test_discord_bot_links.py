@@ -35,10 +35,18 @@ def test_inline_site_markers_become_tagged_links_without_previews():
 def test_sites_embed_uses_canonical_links():
     embed = bot._build_sites_embed(
         [
-            {"id": "9c8b7a65-4321-4cba-8000-111122223333", "name": "Göbekli Tepe", "country": "Türkiye", "period_name": "Neolithic"},
+            {
+                "id": "9c8b7a65-4321-4cba-8000-111122223333",
+                "name": "Göbekli Tepe",
+                "country": "Türkiye",
+                "period_name": "Neolithic",
+            },
             {"id": "", "name": "Nameless"},
         ]
     )
-    assert "https://ancientnerds.com/sites/t%C3%BCrkiye/g%C3%B6bekli-tepe-9c8b7a65?utm_source=discord&utm_medium=bot" in embed.description
+    assert (
+        "https://ancientnerds.com/sites/t%C3%BCrkiye/g%C3%B6bekli-tepe-9c8b7a65?utm_source=discord&utm_medium=bot"
+        in embed.description
+    )
     assert "(Neolithic, Türkiye)" in embed.description
     assert "**Nameless**" in embed.description

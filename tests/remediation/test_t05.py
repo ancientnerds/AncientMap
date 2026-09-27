@@ -56,7 +56,9 @@ class TestT05CountryValues:
 
     def test_territories_the_vocabularies_carry_are_not_flagged(self, t05):
         """Greenland and the Northern Mariana Islands are known to a vocabulary."""
-        assert t05.run(_ctx([_site("a", "Greenland"), _site("b", "Northern Mariana Islands")])) == []
+        assert (
+            t05.run(_ctx([_site("a", "Greenland"), _site("b", "Northern Mariana Islands")])) == []
+        )
 
     def test_disambiguated_name_is_set_to_the_plain_country(self, t05):
         got = t05.run(_ctx([_site("a", "Georgia (country)")]))
@@ -115,7 +117,9 @@ class TestT05CountryValues:
 
     def test_a_historical_entity_is_never_modernised(self, t05):
         """A site inside the Ottoman Empire may properly carry that name - no replacement."""
-        got = t05.run(_ctx([_site("a", "Ottoman Empire"), _site("b", "USSR"), _site("c", "Persia")]))
+        got = t05.run(
+            _ctx([_site("a", "Ottoman Empire"), _site("b", "USSR"), _site("c", "Persia")])
+        )
         assert len(got) == 3
         for f in got:
             assert f.proposal is M.Proposal.REVIEW

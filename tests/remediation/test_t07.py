@@ -57,10 +57,17 @@ class _Snap:
         return grouped
 
 
-def _site(sid: str, description: str = "", citations: list[dict[str, Any]] | None = None,
-          raw_data: Any = None) -> dict[str, Any]:
+def _site(
+    sid: str,
+    description: str = "",
+    citations: list[dict[str, Any]] | None = None,
+    raw_data: Any = None,
+) -> dict[str, Any]:
     site: dict[str, Any] = {
-        "id": sid, "source_id": "ancient_nerds", "name": f"Site {sid}", "description": description,
+        "id": sid,
+        "source_id": "ancient_nerds",
+        "name": f"Site {sid}",
+        "description": description,
     }
     if citations is not None:
         site["raw_data"] = {"description_citations": citations}
@@ -71,8 +78,12 @@ def _site(sid: str, description: str = "", citations: list[dict[str, Any]] | Non
 
 def _link(link_id: int, sid: str, url: str | None) -> dict[str, Any]:
     return {
-        "id": link_id, "site_id": sid, "content_type": "reference",
-        "content_source": "web_discovery", "content_url": url, "title": "A source",
+        "id": link_id,
+        "site_id": sid,
+        "content_type": "reference",
+        "content_source": "web_discovery",
+        "content_url": url,
+        "title": "A source",
         "link_metadata": {"domain": "gone.example", "link_type": "article"},
     }
 
@@ -103,12 +114,20 @@ def _failing_transport(raises: type[Exception]) -> tuple[httpx.MockTransport, li
     return httpx.MockTransport(handler), calls
 
 
-def _ctx(tmp_path: Path, sites: list[dict[str, Any]], links: list[dict[str, Any]],
-         transport: httpx.BaseTransport | None = None) -> Any:
+def _ctx(
+    tmp_path: Path,
+    sites: list[dict[str, Any]],
+    links: list[dict[str, Any]],
+    transport: httpx.BaseTransport | None = None,
+) -> Any:
     fetcher = Fetcher(tmp_path / "cache", max_retries=1, transport=transport)
     return SimpleNamespace(
-        sites=sites, snap=_Snap(links), cache=tmp_path / "cache", out=tmp_path,
-        fetch=fetcher, net=lambda: fetcher,
+        sites=sites,
+        snap=_Snap(links),
+        cache=tmp_path / "cache",
+        out=tmp_path,
+        fetch=fetcher,
+        net=lambda: fetcher,
     )
 
 
@@ -158,9 +177,19 @@ class TestT07DeadLinks:
     def test_a_cited_404_goes_to_review_and_is_never_cleared(self, tmp_path):
         """Clearing the link row would not touch the published footnote that cites it."""
         sid = "site-a"
-        site = _site(sid, description="The fort was built in 500 BC [1].",
-                     citations=[{"n": 1, "url": CITED, "title": "Source",
-                                 "domain": "gone.example", "claim": "built 500 BC"}])
+        site = _site(
+            sid,
+            description="The fort was built in 500 BC [1].",
+            citations=[
+                {
+                    "n": 1,
+                    "url": CITED,
+                    "title": "Source",
+                    "domain": "gone.example",
+                    "claim": "built 500 BC",
+                }
+            ],
+        )
         transport, _ = _routes({CITED: (404, None)})
         ctx = _ctx(tmp_path, [site], [_link(3, sid, CITED)], transport)
 
@@ -180,9 +209,19 @@ class TestT07DeadLinks:
     def test_a_citation_without_a_marker_does_not_make_a_link_cited(self, tmp_path):
         """The array alone is not a citation: the text has to point at it (T08 owns that)."""
         sid = "site-a"
-        site = _site(sid, description="The fort was built in 500 BC.",
-                     citations=[{"n": 1, "url": CITED, "title": "Source",
-                                 "domain": "gone.example", "claim": "built 500 BC"}])
+        site = _site(
+            sid,
+            description="The fort was built in 500 BC.",
+            citations=[
+                {
+                    "n": 1,
+                    "url": CITED,
+                    "title": "Source",
+                    "domain": "gone.example",
+                    "claim": "built 500 BC",
+                }
+            ],
+        )
         transport, _ = _routes({CITED: (404, None)})
         ctx = _ctx(tmp_path, [site], [_link(3, sid, CITED)], transport)
 
@@ -272,9 +311,11 @@ class TestT07NeverCallsAnUnverifiedLinkDead:
 
     def test_a_refused_citation_is_reported_as_unverified_citation(self, tmp_path):
         sid = "site-a"
-        site = _site(sid, description="A claim [1].",
-                     citations=[{"n": 1, "url": CITED, "title": "S", "domain": "d",
-                                 "claim": "c"}])
+        site = _site(
+            sid,
+            description="A claim [1].",
+            citations=[{"n": 1, "url": CITED, "title": "S", "domain": "d", "claim": "c"}],
+        )
         transport, _ = _routes({CITED: (403, None)})
         ctx = _ctx(tmp_path, [site], [_link(1, sid, CITED)], transport)
 
@@ -293,7 +334,7 @@ class TestT07Collector:
         sid_a, sid_b = "site-a", "site-b"
         links = [
             _link(1, sid_a, GONE),
-            _link(2, sid_b, GONE),                 # same URL on another site
+            _link(2, sid_b, GONE),  # same URL on another site
             _link(3, sid_a, "https://ok.example/"),
         ]
         transport, calls = _routes({GONE: (404, None), "https://ok.example/": (200, None)})
@@ -357,17 +398,28 @@ class TestT07Collector:
         assert T07.run(ctx) == [], "applies_to() and run() must agree on the same site"
 
     def test_classify_covers_every_status_family(self):
-        cases = {None: "unreachable", 200: "reachable", 302: "reachable", 404: "gone",
-                 410: "gone-permanent", 401: "refused", 403: "refused", 429: "refused",
-                 400: "refused", 501: "refused", 500: "server-error", 503: "server-error",
-                 451: "unclassified"}
+        cases = {
+            None: "unreachable",
+            200: "reachable",
+            302: "reachable",
+            404: "gone",
+            410: "gone-permanent",
+            401: "refused",
+            403: "refused",
+            429: "refused",
+            400: "refused",
+            501: "refused",
+            500: "server-error",
+            503: "server-error",
+            451: "unclassified",
+        }
         for status, expected in cases.items():
             assert T07.classify({"status": status}) == expected, status
 
     def test_a_raw_data_that_is_not_an_object_fails_loudly(self, tmp_path):
         """A snapshot shape change must stop the run, not silently drop every citation."""
         sid = "site-a"
-        site = _site(sid, description="A claim [1].", raw_data="{\"description_citations\": []}")
+        site = _site(sid, description="A claim [1].", raw_data='{"description_citations": []}')
         transport, _ = _routes({GONE: (200, None)})
         ctx = _ctx(tmp_path, [site], [_link(1, sid, GONE)], transport)
 
