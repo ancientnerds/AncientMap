@@ -7,9 +7,11 @@
 //     'anchor' outlines the element with that id (our paper page's #ev-NN), or, when the id
 //     sits on an empty span.theo-evidence-anchor (the second and later evidence ids of a
 //     paragraph, plan B), the p.theo-evidence around it. Returns the highlight box in page
-//     CSS pixels {x, y, w, h}, or null when nothing matches, a piece of the quote has no
-//     box, or a box around the highlight cuts part of it off from the reader (a truncated
-//     paywall body, a "read more" clamp): sources.py then advises a QuoteCard. Before
+//     CSS pixels {x, y, w, h} of the first occurrence the reader sees whole. An occurrence
+//     with a piece that has no box, or that a box around it cuts off from the reader (a
+//     truncated paywall body, a "read more" clamp, a screen-reader-only span, an ellipsis),
+//     is unmarked and passed over; null when no occurrence is left (sources.py then
+//     advises a QuoteCard), or when the anchor has no visible box. Before
 //     measuring, the scrollers around the highlight are let out (unclip), so the document
 //     itself scrolls: our paper page keeps html, body and #root at 100% with overflow
 //     hidden and scrolls .theo-page instead (index.css, theo.css), and the capture window
@@ -98,6 +100,75 @@
     }
     return false
   }
+  // The text the reader sees, folded for matching, and one map entry per UTF-16 unit of it:
+  // [text node, start, end] of the page character it came from.
+  const readText = () => {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    let text = ''
+    const map = []
+    let space = true
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!readable(node)) continue
+      const s = node.textContent
+      let start = 0
+      for (const ch of s) {
+        const end = start + ch.length
+        const c = fold(ch)
+        if (c !== ' ' || !space) {
+          text += c
+          for (let k = 0; k < c.length; k++) map.push([node, start, end])
+          space = c === ' '
+        }
+        start = end
+      }
+    }
+    return { text, map }
+  }
+  // Wraps the page characters behind text[at, at + length) in <mark class="__studio-hl">
+  // pieces, one per covered text node the search read (a hidden node inside the range is
+  // not quoted).
+  const markText = (map, at, length) => {
+    const [startNode, startOffset] = map[at]
+    const [endNode, , endOffset] = map[at + length - 1]
+    const range = document.createRange()
+    range.setStart(startNode, startOffset)
+    range.setEnd(endNode, endOffset)
+    const pieces = []
+    const inRange = document.createTreeWalker(range.commonAncestorContainer.nodeType === 3 ? range.commonAncestorContainer.parentNode : range.commonAncestorContainer, NodeFilter.SHOW_TEXT)
+    for (let node = inRange.nextNode(); node; node = inRange.nextNode()) {
+      if (range.intersectsNode(node) && readable(node)) pieces.push(node)
+    }
+    const marks = []
+    for (const node of pieces) {
+      const s = node === startNode ? startOffset : 0
+      const e = node === endNode ? endOffset : node.textContent.length
+      if (e <= s) continue
+      const middle = node.splitText(s)
+      middle.splitText(e - s)
+      const mark = document.createElement('mark')
+      mark.className = '__studio-hl'
+      middle.parentNode.insertBefore(mark, middle)
+      mark.appendChild(middle)
+      marks.push(mark)
+    }
+    return marks
+  }
+  // Undoes markText: the marked text goes back into its parent, and the text nodes it was
+  // split from are merged again.
+  const unmark = (marks) => {
+    const parents = new Set(marks.map((m) => m.parentNode))
+    for (const mark of marks) mark.replaceWith(...mark.childNodes)
+    for (const parent of parents) parent.normalize()
+  }
+  // True when the reader sees every marked piece whole. A piece the search read can still
+  // have no box (the text of a <textarea>, of an SVG <text>): that part of the quote is not
+  // on the page; collapsed white space may lack one. Then the scrollers around the pieces
+  // are let out and no box around them may cut one off.
+  const seenWhole = (marks) => {
+    if (marks.some((m) => m.textContent.trim() !== '' && m.getClientRects().length === 0)) return false
+    for (const mark of marks) unclip(mark)
+    return !marks.some(clipped)
+  }
   const unionBox = (rects) => {
     const xs = rects.flatMap((r) => [r.left, r.right])
     const ys = rects.flatMap((r) => [r.top, r.bottom])
@@ -134,60 +205,23 @@
       const style = document.createElement('style')
       style.textContent = 'mark.__studio-hl{background:rgba(0,204,102,.28);color:inherit;box-shadow:0 0 0 2px rgba(0,204,102,.9);border-radius:2px}'
       document.head.appendChild(style)
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
-      let text = ''
-      // one entry per UTF-16 unit of text: [text node, start, end] of the page character
-      const map = []
-      let space = true
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        if (!readable(node)) continue
-        const s = node.textContent
-        let start = 0
-        for (const ch of s) {
-          const end = start + ch.length
-          const c = fold(ch)
-          if (c !== ' ' || !space) {
-            text += c
-            for (let k = 0; k < c.length; k++) map.push([node, start, end])
-            space = c === ' '
-          }
-          start = end
-        }
-      }
       const q = normalize(needle)
-      const at = text.indexOf(q)
-      if (at < 0 || q.length === 0) return null
-      const [startNode, startOffset] = map[at]
-      const [endNode, , endOffset] = map[at + q.length - 1]
-      const range = document.createRange()
-      range.setStart(startNode, startOffset)
-      range.setEnd(endNode, endOffset)
-      // the covered text nodes the search read (a hidden node inside the range is not quoted)
-      const pieces = []
-      const inRange = document.createTreeWalker(range.commonAncestorContainer.nodeType === 3 ? range.commonAncestorContainer.parentNode : range.commonAncestorContainer, NodeFilter.SHOW_TEXT)
-      for (let node = inRange.nextNode(); node; node = inRange.nextNode()) {
-        if (range.intersectsNode(node) && readable(node)) pieces.push(node)
+      if (q.length === 0) return null
+      // Every occurrence in turn: the first one in the DOM can be a copy the reader does not
+      // see whole (a screen-reader-only span, a closed accordion, a teaser clipped with an
+      // ellipsis, a hidden carousel slide) before the one the page shows.
+      let page = readText()
+      for (let at = page.text.indexOf(q); at >= 0; at = page.text.indexOf(q, at + 1)) {
+        const marks = markText(page.map, at, q.length)
+        if (seenWhole(marks)) {
+          highlighted = marks
+          return unionBox(marks.flatMap((m) => [...m.getClientRects()]))
+        }
+        unmark(marks)
+        // unmark merged the split text nodes back: the same text, mapped to new nodes
+        page = readText()
       }
-      const marks = []
-      for (const node of pieces) {
-        const s = node === startNode ? startOffset : 0
-        const e = node === endNode ? endOffset : node.textContent.length
-        if (e <= s) continue
-        const middle = node.splitText(s)
-        middle.splitText(e - s)
-        const mark = document.createElement('mark')
-        mark.className = '__studio-hl'
-        middle.parentNode.insertBefore(mark, middle)
-        mark.appendChild(middle)
-        marks.push(mark)
-      }
-      // a piece the search read can still have no box (the text of a <textarea>, of an SVG
-      // <text>): that part of the quote is not on the page; collapsed white space may lack one
-      if (marks.some((m) => m.textContent.trim() !== '' && m.getClientRects().length === 0)) return null
-      for (const mark of marks) unclip(mark)
-      if (marks.some(clipped)) return null
-      highlighted = marks
-      return unionBox(marks.flatMap((m) => [...m.getClientRects()]))
+      return null
     },
     box() {
       if (highlighted.length === 0) return null

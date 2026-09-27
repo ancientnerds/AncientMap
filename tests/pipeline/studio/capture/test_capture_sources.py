@@ -243,11 +243,28 @@ def test_a_second_evidence_id_outlines_its_whole_paragraph(tmp_path):
         f'<div style="display:none">{WEIGHT}</div>',
         f'<script type="application/ld+json">{{"articleBody": "{WEIGHT}"}}</script>',
         f'<p style="visibility:hidden">{WEIGHT}</p>',
+        # copies the search reads but a clipping box cuts off: a screen-reader-only span,
+        # a closed accordion, a teaser clipped with an ellipsis
+        '<span style="position:absolute;width:1px;height:1px;overflow:hidden;'
+        f'clip:rect(0,0,0,0)">{WEIGHT}</span>',
+        f'<div style="max-height:0;overflow:hidden"><p>{WEIGHT}</p></div>',
+        '<p style="width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+        f"{WEIGHT}</p>",
+        # a copy the search reads that no box of the page draws
+        f"<textarea>{WEIGHT}</textarea>",
     ],
-    ids=["display-none", "json-ld", "visibility-hidden"],
+    ids=[
+        "display-none",
+        "json-ld",
+        "visibility-hidden",
+        "sr-only",
+        "closed-accordion",
+        "ellipsis",
+        "textarea",
+    ],
 )
 def test_a_copy_the_reader_does_not_see_is_passed_over(tmp_path, unseen):
-    # the first copy in the DOM has no visible box; the one the reader sees is highlighted
+    # the first copy in the DOM is hidden or cut off; the one the reader sees is highlighted
     box, state = _run_highlight(tmp_path, "quote", WEIGHT, html=_page(unseen + SHOWN))
     assert box is not None and box["y"] >= 1500 and box["w"] > 100
     assert state["marks"] == WEIGHT

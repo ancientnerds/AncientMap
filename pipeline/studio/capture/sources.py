@@ -10,9 +10,10 @@ only reaches the window when the document scrolls, so highlight.js lets out the
 scrollers around the highlight and a clipping box that overflows only because of them:
 our paper page scrolls .theo-page inside a 100%-tall html, body and #root with overflow
 hidden, and without that the window stayed the 800 px viewport. Only text the page shows
-its readers counts: a quote that is absent, hidden (display:none, a script's JSON-LD) or
-cut off by a clipping box (a paywall body truncated with CSS, a "read more" clamp) fails
-with the advice to use a QuoteCard. The same code captures our own paper page
+its readers counts: the first copy of the quote they see whole is highlighted, and a
+quote with no such copy, because every copy is absent, hidden (display:none, a script's
+JSON-LD) or cut off by a clipping box (a paywall body truncated with CSS, a "read more"
+clamp, a screen-reader-only span), fails with the advice to use a QuoteCard. The same code captures our own paper page
 with its #ev-NN paragraph outlined (a second id of a paragraph is an empty span inside
 it, plan B; highlight.js outlines the paragraph). The paper slug and the evidence id are
 checked with the one definition of each (pipeline.studio.config.check_slug, plan C;
