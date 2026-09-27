@@ -12,6 +12,7 @@
  * thumbnails and narration clips. SceneView hands blocks scene-relative cue frames.
  */
 import { REGISTRY_BLOCKS } from './blocks/schemas'
+import { FRAME } from './layout/zones'
 import { validate } from './schema'
 import { CLAIM_STATUSES, type ClaimStatus } from './theme/colors'
 
@@ -163,6 +164,8 @@ export function parseTimeline(raw: unknown): Timeline {
   const width = int(t.width, '$.width', 2)
   const height = int(t.height, '$.height', 2)
   if (width % 2 || height % 2) throw new TimelineError('$', `dimensions must be even, got ${width}x${height}`)
+  // Contract C8 fixes the frame like the fps: every zone and layout constant is in 1080p pixels (layout/zones.ts).
+  if (width !== FRAME.w || height !== FRAME.h) throw new TimelineError('$', `expected ${FRAME.w}x${FRAME.h}, got ${width}x${height}`)
   const durationInFrames = int(t.durationInFrames, '$.durationInFrames', 1)
   const inside = (frame: number, path: string) => {
     if (frame >= durationInFrames) throw new TimelineError(path, `frame ${frame} is past the end (${durationInFrames})`)

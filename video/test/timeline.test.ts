@@ -18,6 +18,7 @@ describe('parseTimeline (plan C contract C8)', () => {
   })
   it.each([
     ['odd dimensions', (t: Json) => { t.width = 1919 }, /dimensions must be even/],
+    ['another frame size', (t: Json) => { t.width = 1280; t.height = 720 }, /expected 1920x1080, got 1280x720/],
     ['wrong version', (t: Json) => { t.version = 2 }, /\$\.version: expected 1/],
     ['another frame rate', (t: Json) => { t.fps = 30 }, /\$\.fps: expected 60/],
     ['an unknown top-level key', (t: Json) => { t.intro = true }, /unknown key\(s\) intro/],
