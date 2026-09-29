@@ -80,6 +80,7 @@ from pipeline.studio.capture.vite import (
     display_awake,
     local_site,
 )
+from pipeline.utils.geo import is_valid_coordinates
 
 VIEWPORT = (1920, 1080)
 DEVICE_SCALE = 2
@@ -139,7 +140,7 @@ def _point(value: Any, where: str) -> dict[str, float]:
     if not isinstance(value, dict) or set(value) != {"lat", "lng"}:
         raise CaptureError(f"{where} must be {{'lat': .., 'lng': ..}}, got {value!r}")
     lat, lng = as_number(value["lat"], f"{where}.lat"), as_number(value["lng"], f"{where}.lng")
-    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+    if not is_valid_coordinates(lat, lng):
         raise CaptureError(f"{where}: ({lat}, {lng}) is not a coordinate")
     return {"lat": lat, "lng": lng}
 

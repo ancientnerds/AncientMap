@@ -28,6 +28,7 @@ from pipeline.studio.capture.platform import (
     validate_actions,
     wait_ready,
 )
+from pipeline.utils import geo
 
 
 def test_validate_accepts_the_declarative_vocabulary():
@@ -81,6 +82,19 @@ def test_validate_accepts_the_declarative_vocabulary():
 def test_validate_rejects_bad_actions(actions, message):
     with pytest.raises(CaptureError, match=message):
         validate_actions(actions)
+
+
+def test_coordinates_are_checked_by_the_shared_geo_utility():
+    # repo rule: import a utility, never duplicate it (capture/mapbox.py does the same)
+    assert platform_take.is_valid_coordinates is geo.is_valid_coordinates
+    assert validate_actions([{"do": "proximity", "at": {"lat": -90, "lng": 180}}])[0]["at"] == {
+        "lat": -90.0,
+        "lng": 180.0,
+    }
+    with pytest.raises(
+        CaptureError, match=r"actions\[0\]\.at: \(0\.0, 180\.5\) is not a coordinate"
+    ):
+        validate_actions([{"do": "proximity", "at": {"lat": 0, "lng": 180.5}}])
 
 
 def test_take_url_turns_on_demo_and_video_mode():
