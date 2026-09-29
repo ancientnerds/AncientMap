@@ -6,6 +6,8 @@ import re
 import pytest
 from PIL import Image
 
+from pipeline import research_html_renderer
+from pipeline.research_html_renderer import video_clock
 from pipeline.studio import casefile, package, timeline
 from pipeline.studio.errors import StudioError
 from pipeline.video.shorts_ledger import sha256_file
@@ -33,9 +35,12 @@ def _parts(seconds=5.0):
 
 
 def test_clock():
-    assert package.clock(0) == "0:00"
-    assert package.clock(71.9) == "1:11"
-    assert package.clock(3725) == "1:02:05"
+    # The description's chapter and evidence times and the paper page's "Video at" links name
+    # the same moments: one formatter prints both.
+    assert package.video_clock is research_html_renderer.video_clock
+    assert video_clock(0) == "0:00"
+    assert video_clock(71.9) == "1:11"
+    assert video_clock(3725) == "1:02:05"
 
 
 def test_srt_uses_display_words_and_never_overlaps():

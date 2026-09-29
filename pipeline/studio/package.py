@@ -27,10 +27,10 @@ package is built only from the audited render of the current timeline: render/le
 from __future__ import annotations
 
 import json
-import math
 from typing import Any
 
 from pipeline.lyra.text_sentences import split_sentences
+from pipeline.research_html_renderer import video_clock
 from pipeline.studio.casefile import CaseFile, refs_in
 from pipeline.studio.episode import EpisodeWorkspace, load_all, load_json, require_valid
 from pipeline.studio.errors import StudioError
@@ -49,13 +49,6 @@ THUMB_JPEG_MAX_BYTES = 2 * 1024 * 1024
 CATEGORY_ID = 27
 CHAPTER_MIN_S = 10
 CHAPTERS_MIN = 3
-
-
-def clock(seconds: float) -> str:
-    total = int(math.floor(seconds))
-    h, rest = divmod(total, 3600)
-    m, s = divmod(rest, 60)
-    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
 def global_words(
@@ -141,14 +134,16 @@ def description(
     lines = [split_sentences(hook_beats[0]["display"])[0].strip(), ""]
     if chapter_list:
         lines.append("Chapters")
-        lines.extend(f"{clock(c['start_s'])} {c['title']}" for c in chapter_list)
+        lines.extend(f"{video_clock(c['start_s'])} {c['title']}" for c in chapter_list)
         lines.append("")
     paper = episode["paper"]
     if paper is not None and stamps:
         by_anchor = {e.paper_anchor: e for e in cf.evidence if e.paper_anchor}
         lines.append(f"Evidence (the full paper: {paper_url(paper['slug'])})")
         for ev, sec in sorted(stamps.items(), key=lambda kv: kv[1]):
-            lines.append(f"{clock(sec)} {by_anchor[ev].statement} {paper_url(paper['slug'], ev)}")
+            lines.append(
+                f"{video_clock(sec)} {by_anchor[ev].statement} {paper_url(paper['slug'], ev)}"
+            )
         lines.append("")
     credits = [
         f"Image: {m.attribution} ({m.license}) {m.source_url}" for m in _used_media(script, cf)

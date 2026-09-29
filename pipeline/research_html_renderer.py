@@ -17,6 +17,7 @@ poster_web_path, normalize_anchor_text, MIN_ANCHOR_CHARS) is imported
 inside the functions that use it.
 """
 
+import math
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -600,8 +601,12 @@ def resolve_evidence_anchors(html: str, evidence: list[dict[str, Any]]) -> dict[
     return _anchor_paragraphs(html, _paragraphs(html), evidence)
 
 
-def _clock(seconds: int) -> str:
-    hours, rest = divmod(seconds, 3600)
+def video_clock(seconds: float) -> str:
+    """A position in a video as YouTube writes it: H:MM:SS from the first hour on, M:SS
+    below, a fraction of a second floored (71.9 is 1:11). The one formatter of the paper
+    page's "Video at" links and the studio's chapter and evidence lines
+    (pipeline/studio/package.py), which name the same moments."""
+    hours, rest = divmod(math.floor(seconds), 3600)
     minutes, secs = divmod(rest, 60)
     return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
 
@@ -611,7 +616,7 @@ def _video_link(moment: VideoMoment) -> str:
     title = escape(f"Watch this passage in the video: {moment.title}", quote=True)
     return (
         f' <a class="theo-evidence-video" href="{url}" target="_blank" '
-        f'rel="noopener noreferrer" title="{title}">Video at {_clock(moment.seconds)}</a>'
+        f'rel="noopener noreferrer" title="{title}">Video at {video_clock(moment.seconds)}</a>'
     )
 
 
