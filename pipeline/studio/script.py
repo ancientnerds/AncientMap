@@ -202,6 +202,13 @@ def scene_seconds(beat: dict[str, Any], speech_s: float) -> float:
     return max(float(beat["min_s"]), lead + speech_s + tail)
 
 
+def scene_frames(beat: dict[str, Any], speech_s: float) -> int:
+    """A beat's scene length in frames at FPS: scene_seconds rounded up to a whole frame, the one
+    count timeline.py emits and _clip_length checks a clip against. The rounding to 6 places
+    keeps float noise from adding a frame (8.3 s * 60 is 498.00000000000006, the scene 498)."""
+    return math.ceil(round(scene_seconds(beat, speech_s) * FPS, 6))
+
+
 def is_number(value: Any) -> bool:
     """A JSON number: int or float, never a bool (episode.music_problems uses it too)."""
     return isinstance(value, (int, float)) and not isinstance(value, bool)
@@ -842,7 +849,7 @@ def validate_script(
         if entry["platform"]:
             platform.append((bid, seconds))
         if props is not None and block in CLIP_BLOCKS and words is not None:
-            _clip_length(bid, props, seconds, report)
+            _clip_length(bid, props, scene_frames(beat, speech), report)
         report.errors.extend(
             _glyph_problems(bid, beat, entry["drawn"], props, entities, kinds, captures)
         )
@@ -1034,11 +1041,12 @@ def _map_credit(
     report.errors.append(f"{bid}: a map scene carries the in-frame credit {list(MAP_CREDITS)}")
 
 
-def _clip_length(bid: str, props: dict[str, Any], seconds: float, report: ScriptReport) -> None:
-    """The renderer refuses a clip that ends before its scene (video/src/blocks/clips.ts)."""
+def _clip_length(bid: str, props: dict[str, Any], frames: int, report: ScriptReport) -> None:
+    """The renderer refuses a clip that ends before its scene (video/src/blocks/clips.ts);
+    `frames` is the scene's scene_frames."""
     clip = props["clip"]
     start = props.get("start_s", 0)
-    need = start + math.ceil(round(seconds * FPS, 6)) / FPS
+    need = start + frames / FPS
     if need > clip["duration_s"] + 1e-6:
         report.errors.append(
             f"{bid}: capture {clip['id']} is {clip['duration_s']} s long; the scene needs "

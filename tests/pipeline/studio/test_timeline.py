@@ -98,6 +98,35 @@ def test_script_and_timeline_list_captures_with_the_case_file_walker():
     assert script.capture_ids_in is casefile.capture_ids_in
 
 
+def test_script_and_timeline_count_a_scene_with_one_scene_frames():
+    """A clip `episode script` accepts is one the renderer takes: timeline.py emits the scene
+    length script.scene_frames counts and keeps no frame rounding of its own. 8.3 s is
+    498.00000000000006 frames in floats; both sides make it 498."""
+    from pipeline.studio import script
+
+    assert timeline.scene_frames is script.scene_frames
+    data = sf.mutated_script(lambda d: d["beats"][2].update(min_s=8.3))
+    words = sf.words_for(data)
+    cf = casefile.from_dict(ef.casefile())
+    t = timeline.compile_timeline(data, words, cf, sf.manifests(), EPISODE)
+    frames = t["scenes"][2]["durationInFrames"]
+    assert frames == 498
+
+    def clip_errors(clip_frames):
+        captures = sf.manifests()
+        captures["platform-01"]["duration_s"] = clip_frames / 60
+        report = script.validate_script(
+            data, cf, sf.REGISTRY, slug="baalbek-c5", fmt="full", words=words, captures=captures
+        )
+        return [e for e in report.errors if "record a longer take" in e]
+
+    assert clip_errors(frames) == []
+    assert clip_errors(frames - 1) == [
+        f"b03: capture platform-01 is {497 / 60} s long; the scene needs 8.300 s from 0 s "
+        "(record a longer take or shorten the beat)"
+    ]
+
+
 def test_missing_words_are_an_error():
     data = sf.script()
     words = sf.words_for(data)

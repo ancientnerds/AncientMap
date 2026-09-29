@@ -435,6 +435,15 @@ def test_a_clip_must_cover_its_scene():
     )
 
 
+def test_scene_frames_round_up_to_a_whole_frame_without_float_noise():
+    # max(3.0, 0.35 + 5.0 + 0.6) = 5.95 s -> 357 frames; a thousandth more starts frame 358
+    assert script.scene_frames({"min_s": 3.0}, 5.0) == 357
+    assert script.scene_frames({"min_s": 3.0}, 5.001) == 358
+    # 8.3 * 60 is 498.00000000000006 in floats: the scene is 498 frames, not 499
+    assert 8.3 * script.FPS > 498
+    assert script.scene_frames({"min_s": 8.3}, 1.0) == 498
+
+
 def test_capture_specs_show_only_verified_case_file_data():
     quarry = {"lat": 33.99917, "lng": 36.20028}
 

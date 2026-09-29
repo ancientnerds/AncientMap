@@ -14,11 +14,12 @@
      "credits": [{"sceneId": "b03", "text": "© Mapbox © Maxar"}],
      "thumbnails": [{"frame": 214, "text": "Who moved it?"}, ... exactly 3]}
 
-A scene lasts ceil(max(min_s, lead + speech + tail) * fps) frames; its narration starts
-after the lead; cues and captions are placed on the word timings of the display text (a cue
-on the word `script.cue_word_index` finds: whole display words, never a match inside a longer
-word). A cue is exactly {frame, do, target} plus `value` for status and meter, and lies inside
-its scene.
+Every frame is counted at script.FPS. A scene lasts `script.scene_frames` frames,
+ceil(max(min_s, lead + speech + tail) * fps), the count `episode script` checks a clip against;
+its narration starts after the lead; cues and captions are placed on the word timings of the
+display text (a cue on the word `script.cue_word_index` finds: whole display words, never a
+match inside a longer word). A cue is exactly {frame, do, target} plus `value` for status and
+meter, and lies inside its scene.
 Captions exist only for hook beats. Every path is relative to the per-render public dir.
 The word timings must belong to the current display text and voice/<beat>.mp3 to the current
 spoken text, voice and speed (voice.stale_beats); anything else is `episode voice` again.
@@ -36,15 +37,11 @@ from typing import Any
 from pipeline.studio.casefile import CaseFile, capture_ids_in, refs_in, resolve_refs, resolved
 from pipeline.studio.episode import EpisodeWorkspace, load_all, require_valid
 from pipeline.studio.errors import StudioError
-from pipeline.studio.script import LEAD_S, ROLES, VALUE_VERBS, cue_word_index, scene_seconds
+from pipeline.studio.script import FPS, LEAD_S, ROLES, VALUE_VERBS, cue_word_index, scene_frames
 from pipeline.studio.voice import stale_beats
 
 WIDTH = 1920
 HEIGHT = 1080
-
-
-def _frames_ceil(seconds: float, fps: int) -> int:
-    return math.ceil(round(seconds * fps, 6))
 
 
 def verdict_frame(timeline: dict[str, Any]) -> int | None:
@@ -90,7 +87,6 @@ def compile_timeline(
 ) -> dict[str, Any]:
     from pipeline.video.shorts_captions import Word, display_text
 
-    fps = int(script["fps"])
     entities = resolved(cf)
     media_ids = {m.id for m in cf.media}
     scenes: list[dict[str, Any]] = []
@@ -110,8 +106,8 @@ def compile_timeline(
             raise StudioError(
                 f"{bid}: words.json was aligned to another display text; run `episode voice`"
             )
-        duration = _frames_ceil(scene_seconds(beat, float(timing["duration_s"])), fps)
-        voice_from = cursor + round(float(beat.get("lead_s", LEAD_S)) * fps)
+        duration = scene_frames(beat, float(timing["duration_s"]))
+        voice_from = cursor + round(float(beat.get("lead_s", LEAD_S)) * FPS)
         starts[bid] = cursor
         narration.append({"src": f"voice/{bid}.mp3", "from": voice_from})
         aligned = [Word(w["w"], float(w["s"]), float(w["e"])) for w in timing["words"]]
@@ -120,7 +116,7 @@ def compile_timeline(
             index = cue_word_index(beat["display"], cue["at_word"])
             if index is None:
                 raise StudioError(f"{bid}: cue word {cue['at_word']!r} is not a display word")
-            frame = voice_from + round(aligned[index].start * fps)
+            frame = voice_from + round(aligned[index].start * FPS)
             if not cursor <= frame < cursor + duration:
                 raise StudioError(
                     f"{bid} cue {n}: frame {frame} outside the scene [{cursor}, {cursor + duration})"
@@ -143,12 +139,12 @@ def compile_timeline(
         if beat.get("hook", False):
             for w in aligned:
                 if display_text(w.text):
-                    start = voice_from + round(w.start * fps)
+                    start = voice_from + round(w.start * FPS)
                     captions.append(
                         {
                             "text": w.text.upper(),
                             "from": start,
-                            "to": max(start + 1, voice_from + round(w.end * fps)),
+                            "to": max(start + 1, voice_from + round(w.end * FPS)),
                         }
                     )
         new = set(beat["evidence"]) - seen_evidence
@@ -174,7 +170,7 @@ def compile_timeline(
     music = episode["music"]
     compiled = {
         "version": 1,
-        "fps": fps,
+        "fps": FPS,
         "width": WIDTH,
         "height": HEIGHT,
         "durationInFrames": cursor,
