@@ -223,6 +223,36 @@ def test_a_quantity_shown_in_a_chart_keeps_its_range():
     )
 
 
+def test_a_shown_quantity_rests_only_on_verified_evidence():
+    """Spec 4.2: every evidence item the script uses is verified, and a shown quantity uses its
+    own evidence, whichever ids the beat lists."""
+    data = ef.casefile()
+    data["quantities"][0]["evidence"] = ["e1", "e2"]
+    cf = casefile.from_dict(data)
+
+    def chart(d):
+        d["beats"][7]["visual"] = {
+            "block": "BarChart",
+            "props": {
+                "title": "Block weights",
+                "unit": "t",
+                "basis": "published estimates",
+                "bars": [
+                    {"id": "q1", "label": "2014 block", "value": [1500, 1650]},
+                    {"id": "b-podium", "label": "Podium block", "value": 800},
+                ],
+            },
+        }
+        d["beats"][7].update(evidence=["e1"], factual=True)
+        d["beats"][7]["cues"] = [{"at_word": "tool", "do": "show", "target": "q1"}]
+
+    report = _validate(sf.mutated_script(chart), cf=cf)
+    assert [e for e in report.errors if e.startswith("b08")] == [
+        "b08: element q1 shows quantity q1, whose evidence e2 is unverified, not verified"
+    ]
+    assert not [d for d in report.deferred if d.startswith("b08")]
+
+
 def test_charts_are_linear_and_a_scale_zoom_shows_quantities():
     """Owner decision 31: no log axis anywhere; a ratio beyond 1:400 is a linear ScaleZoom."""
 

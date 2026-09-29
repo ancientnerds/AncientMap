@@ -52,6 +52,7 @@ from pipeline.studio.casefile import (
     CaptureNotRecorded,
     CaseFile,
     CaseFileError,
+    Evidence,
     Place,
     Quantity,
     refs_in,
@@ -525,11 +526,15 @@ def _quantity_elements(block: str, raw: dict[str, Any]) -> list[Any]:
 
 
 def _quantity_problems(
-    block: str, raw: dict[str, Any], quantities: dict[str, Quantity]
+    block: str,
+    raw: dict[str, Any],
+    quantities: dict[str, Quantity],
+    evidence: dict[str, Evidence],
 ) -> list[str]:
     """Only a BarChart bar or a ScaleZoom end shows a quantity: its value and the block's unit
     are the case file's (a range [low, high] only a BarChart draws: linear bars, owner decision
-    31). No other props element may use a quantity id."""
+    31), and every evidence item the quantity rests on is verified (spec 4.2; the beat's own
+    evidence list may name only some of them). No other props element may use a quantity id."""
     shown = _quantity_elements(block, raw)
     problems: list[str] = []
     for element in _dicts_with_id(raw):
@@ -542,6 +547,13 @@ def _quantity_problems(
                 "ScaleZoom end shows a quantity"
             )
             continue
+        for eid in quantity.evidence:
+            status = evidence[eid].verification.status
+            if status != "verified":
+                problems.append(
+                    f"element {element['id']} shows quantity {quantity.id}, whose evidence "
+                    f"{eid} is {status}, not verified"
+                )
         if block == "ScaleZoom" and isinstance(quantity.value, list):
             problems.append(
                 f"element {element['id']}: a range quantity is shown as a range in a BarChart, "
@@ -807,7 +819,9 @@ def validate_script(
         for cid in _capture_ids_in(raw):
             if cid not in specs:
                 report.errors.append(f"{bid}: $capture {cid!r} is not declared in captures")
-        report.errors.extend(f"{bid}: {p}" for p in _quantity_problems(block, raw, quantities))
+        report.errors.extend(
+            f"{bid}: {p}" for p in _quantity_problems(block, raw, quantities, evidence)
+        )
         if block == "ClaimBoard" and isinstance(raw.get("claims"), list):
             for claim in raw["claims"]:
                 if _is_ref(claim) and claim["$ref"] in claim_ids:
