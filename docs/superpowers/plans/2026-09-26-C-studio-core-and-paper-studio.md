@@ -7742,6 +7742,18 @@ def test_resolve_refs_replaces_entities_and_captures():
     assert casefile.refs_in(props) == ["m1", "e1"]
 
 
+def test_capture_ids_in_finds_every_capture_ref_at_any_depth():
+    props = {
+        "clip": {"$capture": "platform-01"},
+        "image": {"$ref": "m1"},
+        "panels": [{"page": {"$capture": "source-01"}}, [{"$capture": "map-01"}]],
+        "label": "$capture",
+        "mixed": {"$capture": "not-a-ref", "extra": 1},
+    }
+    assert casefile.capture_ids_in(props) == ["platform-01", "source-01", "map-01"]
+    assert casefile.capture_ids_in({"$ref": "m1"}) == []
+
+
 def test_unrecorded_and_unknown_refs_fail_differently():
     entities = casefile.resolved(casefile.from_dict(ef.casefile()))
     with pytest.raises(casefile.CaptureNotRecorded):
@@ -7779,7 +7791,9 @@ are set only by `status` cues, never in the case file.
 
 Script props reference case-file entities as {"$ref": "<id>"} and captures as
 {"$capture": "<id>"}; `resolve_refs` replaces them with the shapes in `resolved()` /
-the capture manifest, paths relative to the per-render public dir.
+the capture manifest, paths relative to the per-render public dir. `refs_in` and
+`capture_ids_in` list the ids a props value references (the one walker script.py and
+timeline.py share).
 """
 
 from __future__ import annotations
@@ -8313,12 +8327,23 @@ def refs_in(value: Any) -> list[str]:
     if isinstance(value, list):
         return [r for v in value for r in refs_in(v)]
     return []
+
+
+def capture_ids_in(value: Any) -> list[str]:
+    """Every capture id a props value references with {"$capture": id}."""
+    if isinstance(value, dict):
+        if set(value) == {"$capture"}:
+            return [value["$capture"]]
+        return [c for v in value.values() for c in capture_ids_in(v)]
+    if isinstance(value, list):
+        return [c for v in value for c in capture_ids_in(v)]
+    return []
 ```
 
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/test_casefile.py -m "not integration and not live_llm" -q`
-Expected: `24 passed`
+Expected: `25 passed`
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
@@ -10740,6 +10765,7 @@ from pipeline.studio.casefile import (
     Evidence,
     Place,
     Quantity,
+    capture_ids_in,
     refs_in,
     resolve_refs,
     resolved,
@@ -11116,16 +11142,6 @@ def _capture_bindings(specs: dict[str, dict[str, Any]], cf: CaseFile, report: Sc
                 )
 
 
-def _capture_ids_in(value: Any) -> list[str]:
-    if isinstance(value, dict):
-        if set(value) == {"$capture"}:
-            return [value["$capture"]]
-        return [c for v in value.values() for c in _capture_ids_in(v)]
-    if isinstance(value, list):
-        return [c for v in value for c in _capture_ids_in(v)]
-    return []
-
-
 def _dicts_with_id(value: Any) -> list[dict[str, Any]]:
     if isinstance(value, dict):
         own = [value] if isinstance(value.get("id"), str) else []
@@ -11285,7 +11301,7 @@ def _glyph_problems(
         )
     if "credit" in visual:
         texts.append(("visual.credit", visual["credit"]))
-    for cid in _capture_ids_in(visual["props"]):
+    for cid in capture_ids_in(visual["props"]):
         if captures is not None and cid in captures:
             texts.extend(capture_strings(captures[cid], f"capture {cid}"))
     for ref in refs_in(visual["props"]):
@@ -11502,7 +11518,7 @@ def validate_script(
             item = evidence.get(ref)
             if item is not None and item.verification.status != "verified":
                 report.errors.append(f"{bid}: props show evidence {ref}, which is not verified")
-        for cid in _capture_ids_in(raw):
+        for cid in capture_ids_in(raw):
             if cid not in specs:
                 report.errors.append(f"{bid}: $capture {cid!r} is not declared in captures")
         report.errors.extend(
@@ -11715,7 +11731,7 @@ def _map_credit(
     """A map scene carries a map credit: its own, or one its captures recorded."""
     texts = [visual.get("credit", "")]
     pending = False
-    for cid in _capture_ids_in(visual["props"]):
+    for cid in capture_ids_in(visual["props"]):
         if captures is not None and cid in captures:
             texts.extend(captures[cid]["credits"])
         else:
@@ -13643,6 +13659,15 @@ def test_ticker_chapters_credits_and_music():
     }
 
 
+def test_script_and_timeline_list_captures_with_the_case_file_walker():
+    """The capture credits script.py checks are the ones the timeline emits: both modules take
+    a beat's capture ids from casefile.capture_ids_in, neither keeps a copy of its own."""
+    from pipeline.studio import script
+
+    assert timeline.capture_ids_in is casefile.capture_ids_in
+    assert script.capture_ids_in is casefile.capture_ids_in
+
+
 def test_missing_words_are_an_error():
     data = sf.script()
     words = sf.words_for(data)
@@ -13783,7 +13808,7 @@ import json
 import math
 from typing import Any
 
-from pipeline.studio.casefile import CaseFile, refs_in, resolve_refs, resolved
+from pipeline.studio.casefile import CaseFile, capture_ids_in, refs_in, resolve_refs, resolved
 from pipeline.studio.episode import EpisodeWorkspace, load_all, require_valid
 from pipeline.studio.errors import StudioError
 from pipeline.studio.script import LEAD_S, ROLES, VALUE_VERBS, cue_word_index, scene_seconds
@@ -13795,16 +13820,6 @@ HEIGHT = 1080
 
 def _frames_ceil(seconds: float, fps: int) -> int:
     return math.ceil(round(seconds * fps, 6))
-
-
-def _capture_ids(value: Any) -> list[str]:
-    if isinstance(value, dict):
-        if set(value) == {"$capture"}:
-            return [value["$capture"]]
-        return [c for v in value.values() for c in _capture_ids(v)]
-    if isinstance(value, list):
-        return [c for v in value for c in _capture_ids(v)]
-    return []
 
 
 def verdict_frame(timeline: dict[str, Any]) -> int | None:
@@ -13921,7 +13936,7 @@ def compile_timeline(
         texts: list[str] = []
         if beat["visual"].get("credit"):
             texts.append(beat["visual"]["credit"])
-        for cid in _capture_ids(props):
+        for cid in capture_ids_in(props):
             texts.extend(captures[cid]["credits"])
         for ref in refs_in(props):
             if ref in media_ids:
@@ -13995,7 +14010,7 @@ Expected: `tests/pipeline/studio/golden_timeline.json` exists; its `durationInFr
 - [ ] **Step 5: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/test_timeline.py -m "not integration and not live_llm" -q`
-Expected: `12 passed`
+Expected: `13 passed`
 
 - [ ] **Step 6: Lint gate.** Expected: clean.
 
