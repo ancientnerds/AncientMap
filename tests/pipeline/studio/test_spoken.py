@@ -115,6 +115,10 @@ from pipeline.studio import spoken
         # "point" before a word that is no digit is a word, not a decimal point
         ("At one point ten thousand people lived here", "At one point 10,000 people lived here"),
         ("At one point eleven men climbed", "At one point 11 men climbed"),
+        # and before a digit word it may be either
+        ("At one point five hundred men marched", "At one point 500 men marched"),
+        ("At one point five thousand people lived here", "At one point 5,000 people lived here"),
+        ("one point five hundred", "1.5 hundred"),
     ],
 )
 def test_equivalent_spellings(said, shown):
@@ -217,6 +221,12 @@ def test_equivalent_spellings(said, shown):
             "token 2: spoken 'point' vs display '10000'",
         ),
         ("two point twelve", "2 12", "token 1: spoken 'point' vs display '12'"),
+        (
+            "At one point five hundred men",
+            "At 1 500 men",
+            "token 2: spoken 'point' vs display '500'",
+        ),
+        ("two point five metres", "2.6 m", "token 0: spoken '2.5' vs display '2.6'"),
         # either reading of a British "hundred and" must match the caption exactly
         (
             "two hundred and fifty thousand people",

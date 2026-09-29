@@ -10,7 +10,8 @@ never 46. Any other difference is a script error.
 
 Where the words allow two readings, both stand and `spelling_mismatch` accepts a display that
 shows either: the British "two hundred and fifty thousand" is 250,000, "between five hundred
-and one thousand" is 500 and 1,000. `normalize_tokens` gives the primary reading, every
+and one thousand" is 500 and 1,000; "one point five" is 1.5, but in "at one point five
+hundred men" it is 1, "point" and 500. `normalize_tokens` gives the primary reading, every
 number run read as far as it goes. Known limit: two numbers spoken back to back with no
 punctuation between them, the second a British "hundred and" group, read like the plan's
 "one thousand five hundred and one thousand six hundred fifty" (1,500 and 1,650), so "a
@@ -191,8 +192,8 @@ def _small_continues(
 def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]] | None:
     """Parse the number-word run starting at words[i]: its readings as (canonical digits, next
     index), the run read as far as it goes first, then each earlier end the words also allow
-    (only before a British "and", see `_british_and`). The run ends at the first word that
-    closes a clause."""
+    (before a British "and", see `_british_and`, or a decimal "point"). The run ends at the
+    first word that closes a clause."""
     if (
         words[i] in ("a", "an")
         and i not in stops
@@ -274,7 +275,9 @@ def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, in
         ordinal = f"{total + current + UNIT_ORDINALS[words[i]]}{ORDINALS[words[i]][-2:]}"
         return [(ordinal, i + 1), *ends]
     # a decimal needs a digit word after "point": "one point ten thousand" is 1, "point" and
-    # 10,000, never 1 with "point" swallowed
+    # 10,000, never 1 with "point" swallowed. Before a digit word the "point" may still be a
+    # word, "at one point five hundred men" is 1, "point" and 500 too: that end is a second
+    # reading
     digits = ""
     if (
         i - 1 not in stops
@@ -284,6 +287,7 @@ def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, in
         and words[i + 1] in ONES
         and ONES[words[i + 1]] < 10
     ):
+        ends.append((_format(total + current), i))
         i += 1
         while i < len(words) and words[i] in ONES and ONES[words[i]] < 10:
             digits += str(ONES[words[i]])
@@ -331,8 +335,8 @@ def normalize_tokens(text: str) -> list[str]:
 def spelling_mismatch(spoken: str, display: str) -> str | None:
     """None when some reading of `spoken` has the tokens of some reading of `display`, so the
     two differ only in number/unit spelling; else where they diverge. Nearly every text has one
-    reading; where the words allow two (a British "hundred and"), the display shows which one
-    the narrator meant. The report follows the readings that agree longest, each continued in
+    reading; where the words allow two (a British "hundred and", a "point" that may be a word),
+    the display shows which one the narrator meant. The report follows the readings that agree longest, each continued in
     its primary reading, so for a text with one reading it names the first differing token."""
     a_words, a_stops = _words(spoken)
     b_words, b_stops = _words(display)
