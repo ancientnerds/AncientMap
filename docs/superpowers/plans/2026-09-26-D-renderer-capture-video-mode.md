@@ -12509,7 +12509,7 @@ git commit -m "Capture source pages and our paper page with the quote highlighte
 - Create: `pipeline/studio/capture/platform.py`, `pipeline/studio/capture/nerv_cursor.js`
 - Test: `tests/pipeline/studio/capture/test_capture_platform.py`
 
-Playwright drives headed Chrome at 1920x1080 CSS px with device scale 2 on `globe.html?demo=1&video=1&hud=<scale>` (Task 33's capture mode) and records a CDP screencast (up to the display's pixel size: 2880x1620 on the workstation, 60 fps, measured 2026-09-26). The declarative actions are the spec's (`search`, `click_result`, `pause_rotation`, `fly_wait`, `open_details`, `measure`, `toggle_layer`, `wait`) plus the three the owner's platform moments need: `zoom` (the site's own zoom into Mapbox: clicking a search result only rotates the globe, `useFlyToAnimation.ts`, so the Measure moment needs it; the take scrolls the mouse wheel at the flown-to site until the zoom slider reads the percent), `proximity` (the Proximity tab: "set on globe", then a click on the place) and `filter` (spec 4.10 type B: a Filter panel mode, then a legend entry; `age` is a range slider without entries, so it is not a filter mode). `toggle_layer` refuses the Layers panel's `Satellite` base-map toggle in any case before anything starts (owner correction 2026-09-26: no satellite toggle in globe sections; satellite shows in the details page or a Mapbox take). The cursor is fast (0.25 s moves, paced against a deadline so slow CDP round trips never stretch a move; 45 ms keystrokes; owner rule: retention first) and drawn by the injected NERV cursor, because a screencast never contains the OS cursor. Measure and proximity points are clicked where the page draws them (`window.__DEMO.screenPoint`); two measure points less than 60 CSS px apart on screen refuse the take (the measurement would be noise: zoom in first). `hud` must lie in 0.5..2 (the page throws outside it and would never get ready). A page that is not ready within 120 s fails with the likely cause (production without the `?video=1` frontend), every other Playwright or ffmpeg failure becomes a `CaptureError` carrying its message, and the site's analytics tracker is blocked so a take of production is no visit. A take whose screencast delivers fewer than 24 frames per second while the cursor moves would stutter and fails; a screencast that delivered no frame at all (possible for a take without cursor moves, where the frame-rate check has nothing to measure) and a venv without Playwright are `CaptureError`s too, never a traceback. Frames and timestamps become a 60 fps HEVC clip; every action start is an event the renderer's virtual camera can follow.
+Playwright drives headed Chrome at 1920x1080 CSS px with device scale 2 on `globe.html?demo=1&video=1&hud=<scale>` (Task 33's capture mode) and records a CDP screencast (up to the display's pixel size: 2880x1620 on the workstation, 60 fps, measured 2026-09-26). The declarative actions are the spec's (`search`, `click_result`, `pause_rotation`, `fly_wait`, `open_details`, `measure`, `toggle_layer`, `wait`) plus the three the owner's platform moments need: `zoom` (the site's own zoom into Mapbox: clicking a search result only rotates the globe, `useFlyToAnimation.ts`, so the Measure moment needs it; the take scrolls the mouse wheel at the flown-to site until the zoom slider reads the percent), `proximity` (the Proximity tab: "set on globe", then a click on the place) and `filter` (spec 4.10 type B: a Filter panel mode, then a legend entry; `age` is a range slider without entries, so it is not a filter mode). `toggle_layer` refuses the Layers panel's `Satellite` base-map toggle in any case before anything starts (owner correction 2026-09-26: no satellite toggle in globe sections; satellite shows in the details page or a Mapbox take). The cursor is fast (0.25 s moves, paced against a deadline so slow CDP round trips never stretch a move; 45 ms keystrokes; owner rule: retention first) and drawn by the injected NERV cursor, because a screencast never contains the OS cursor. Measure and proximity points are clicked where the page draws them (`window.__DEMO.screenPoint`); two measure points less than 60 CSS px apart on screen refuse the take (the measurement would be noise: zoom in first). `hud` must lie in 0.5..2 (the page throws outside it and would never get ready). A page that is not ready within 120 s fails with the likely cause (production without the `?video=1` frontend), every other Playwright or ffmpeg failure becomes a `CaptureError` carrying its message, and the site's analytics tracker is blocked so a take of production is no visit. A take whose screencast delivers fewer than 24 frames per second while the cursor moves would stutter and fails; a screencast that delivered no frame at all (possible for a take without cursor moves, where the frame-rate check has nothing to measure) and a venv without Playwright are `CaptureError`s too, never a traceback. Frames and timestamps become a 60 fps HEVC clip; every action start is an event the renderer's virtual camera can follow. The take ends only after the screencast has stopped and every frame it kept has landed (review fix 2026-09-29, `_Screencast.stop`): the first version took the end before the stop, so a frame swapped in between lay after the end and `encode.concat_script` refused the whole take (a reviewer's probe measured 3 of 12 takes). A frame Chrome still sends after the stop's response (measured 2026-09-29: 4 of 25 stops, each a few ms before the end) is not part of the take, because it would land while the browser closes and its ack would fail there. Tests: `test_the_take_ends_after_the_frame_that_arrives_with_the_stop`, `test_a_frame_sent_after_the_stop_is_not_part_of_the_take`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -13261,13 +13261,58 @@ class _Driver:
             raise CaptureError(f"unhandled action {do}")
 
 
+class _Screencast:
+    """The page's CDP screencast: each frame lands in `frames_dir`, its timestamp in `take`."""
+
+    def __init__(self, cdp: Any, take: Take, frames_dir: Path) -> None:
+        self.cdp = cdp
+        self.take = take
+        self.frames_dir = frames_dir
+        self.pending: set[asyncio.Future[None]] = set()
+        cdp.on("Page.screencastFrame", self._handler)
+
+    async def _on_frame(self, params: dict[str, Any]) -> None:
+        index = len(self.take.timestamps)
+        (self.frames_dir / f"f{index:06d}.jpg").write_bytes(base64.b64decode(params["data"]))
+        self.take.timestamps.append(float(params["metadata"]["timestamp"]))
+        await self.cdp.send("Page.screencastFrameAck", {"sessionId": params["sessionId"]})
+
+    def _handler(self, params: dict[str, Any]) -> None:
+        task = asyncio.ensure_future(self._on_frame(params))
+        self.pending.add(task)
+        task.add_done_callback(self.pending.discard)
+
+    async def start(self) -> None:
+        await self.cdp.send(
+            "Page.startScreencast",
+            {
+                "format": "jpeg",
+                "quality": 80,
+                "maxWidth": VIEWPORT[0] * DEVICE_SCALE,
+                "maxHeight": VIEWPORT[1] * DEVICE_SCALE,
+                "everyNthFrame": 1,
+            },
+        )
+
+    async def stop(self) -> None:
+        """Stop and end the take. The take keeps the frames that arrived before the stop's
+        response: Chrome can still send one it encoded while the stop was on its way
+        (measured 2026-09-29: 4 of 25 stops), and that one would land while the browser
+        closes, where its ack fails. The end comes last, once every kept frame has landed,
+        because a frame can arrive with the stop's response and a take that ends before its
+        last frame fails the encode (encode.concat_script)."""
+        await self.cdp.send("Page.stopScreencast")
+        self.cdp.remove_listener("Page.screencastFrame", self._handler)
+        await asyncio.gather(*self.pending)
+        self.take.end_ts = time.time()
+
+
 async def _record(
     base_url: str, hud: float, actions: list[dict[str, Any]], frames_dir: Path
 ) -> Take:
     from playwright.async_api import async_playwright  # local-only dependency
 
     take = Take()
-    pending: set[asyncio.Future[None]] = set()
     async with async_playwright() as p:
         browser = await p.chromium.launch(channel="chrome", headless=False, args=CHROME_ARGS)
         context = await browser.new_context(
@@ -13280,39 +13325,15 @@ async def _record(
         await page.goto(take_url(base_url, hud), wait_until="load", timeout=90_000)
         await wait_ready(page)
         take.renderer = require_nvidia(await page.evaluate(RENDERER_JS), "platform take")
-        cdp = await context.new_cdp_session(page)
-
-        async def on_frame(params: dict[str, Any]) -> None:
-            index = len(take.timestamps)
-            (frames_dir / f"f{index:06d}.jpg").write_bytes(base64.b64decode(params["data"]))
-            take.timestamps.append(float(params["metadata"]["timestamp"]))
-            await cdp.send("Page.screencastFrameAck", {"sessionId": params["sessionId"]})
-
-        def handler(params: dict[str, Any]) -> None:
-            task = asyncio.ensure_future(on_frame(params))
-            pending.add(task)
-            task.add_done_callback(pending.discard)
-
-        cdp.on("Page.screencastFrame", handler)
+        screencast = _Screencast(await context.new_cdp_session(page), take, frames_dir)
         driver = _Driver(page, take)
         await page.mouse.move(*START_POS)
-        await cdp.send(
-            "Page.startScreencast",
-            {
-                "format": "jpeg",
-                "quality": 80,
-                "maxWidth": VIEWPORT[0] * DEVICE_SCALE,
-                "maxHeight": VIEWPORT[1] * DEVICE_SCALE,
-                "everyNthFrame": 1,
-            },
-        )
+        await screencast.start()
         await asyncio.sleep(LEAD_S)
         for action in actions:
             await driver.run(action)
         await asyncio.sleep(TAIL_S)
-        take.end_ts = time.time()
-        await cdp.send("Page.stopScreencast")
-        await asyncio.gather(*pending)
+        await screencast.stop()
         await browser.close()
     return take
 

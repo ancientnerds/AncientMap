@@ -2,7 +2,9 @@
 Chrome, the driver's clicks run here on small synthetic pages in headless Chrome."""
 
 import asyncio
+import base64
 import importlib.util
+import itertools
 import math
 import time
 import types
@@ -11,6 +13,7 @@ from contextlib import nullcontext
 import pytest
 
 from pipeline.studio.capture import platform as platform_take
+from pipeline.studio.capture.encode import concat_script
 from pipeline.studio.capture.manifest import CaptureError
 from pipeline.studio.capture.platform import (
     KEY_DELAY_MS,
@@ -21,6 +24,7 @@ from pipeline.studio.capture.platform import (
     VIEWPORT,
     Take,
     _Driver,
+    _Screencast,
     eased_path,
     events_from_marks,
     frame_size,
@@ -271,6 +275,82 @@ def test_a_screencast_without_frames_is_a_capture_error(tmp_path, monkeypatch):
     }
     with pytest.raises(CaptureError, match="platform-01: the screencast delivered no frames"):
         record_platform(tmp_path, spec)
+
+
+class _ScreencastCdp:
+    """A CDP session that emits a screencast frame, stamped now, on `frame()`; its
+    Page.stopScreencast delivers one last frame before it returns."""
+
+    def __init__(self):
+        self.listeners = {}
+        self.sent = []
+
+    def on(self, event, handler):
+        self.listeners.setdefault(event, []).append(handler)
+
+    def remove_listener(self, event, handler):
+        self.listeners[event].remove(handler)
+
+    def frame(self):
+        params = {
+            "data": base64.b64encode(b"jpeg").decode(),
+            "metadata": {"timestamp": time.time()},
+            "sessionId": 1,
+        }
+        for handler in self.listeners.get("Page.screencastFrame", []):
+            handler(params)
+
+    async def send(self, method, params=None):
+        self.sent.append(method)
+        if method == "Page.stopScreencast":
+            self.frame()
+
+
+def _screencast_take(frames_dir, after_stop=lambda cdp: None):
+    """Start a screencast on `_ScreencastCdp`, take one frame, stop it, then `after_stop(cdp)`."""
+    cdp, take = _ScreencastCdp(), Take()
+
+    async def go():
+        screencast = _Screencast(cdp, take, frames_dir)
+        await screencast.start()
+        cdp.frame()
+        await asyncio.sleep(0)
+        await screencast.stop()
+        after_stop(cdp)
+        await asyncio.sleep(0)
+
+    asyncio.run(go())
+    return cdp, take
+
+
+def test_the_take_ends_after_the_frame_that_arrives_with_the_stop(tmp_path, monkeypatch):
+    """The globe renders every frame, so a frame swapped while the stop is on its way can
+    arrive with the stop's response; a take that ended before it would fail the encode."""
+    clock = itertools.count(100)
+    monkeypatch.setattr(time, "time", lambda: float(next(clock)))
+    cdp, take = _screencast_take(tmp_path)
+    assert len(take.timestamps) == 2
+    assert take.end_ts >= max(take.timestamps)
+    assert concat_script(take.timestamps, take.end_ts, 60)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["f000000.jpg", "f000001.jpg"]
+    # the last frame is written and acknowledged before stop() returns
+    assert cdp.sent == [
+        "Page.startScreencast",
+        "Page.screencastFrameAck",
+        "Page.stopScreencast",
+        "Page.screencastFrameAck",
+    ]
+
+
+def test_a_frame_sent_after_the_stop_is_not_part_of_the_take(tmp_path):
+    """Chrome can send a frame after the stop's response (measured 2026-09-29: 4 of 25
+    stops); it would land while the browser closes and fail its ack there."""
+    cdp, take = _screencast_take(tmp_path, after_stop=lambda cdp: cdp.frame())
+    assert len(take.timestamps) == 2
+    assert take.end_ts >= max(take.timestamps)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["f000000.jpg", "f000001.jpg"]
+    assert cdp.sent.count("Page.screencastFrameAck") == 2
+    assert cdp.listeners["Page.screencastFrame"] == []
 
 
 def _drive(html, steps):

@@ -519,13 +519,58 @@ class _Driver:
             raise CaptureError(f"unhandled action {do}")
 
 
+class _Screencast:
+    """The page's CDP screencast: each frame lands in `frames_dir`, its timestamp in `take`."""
+
+    def __init__(self, cdp: Any, take: Take, frames_dir: Path) -> None:
+        self.cdp = cdp
+        self.take = take
+        self.frames_dir = frames_dir
+        self.pending: set[asyncio.Future[None]] = set()
+        cdp.on("Page.screencastFrame", self._handler)
+
+    async def _on_frame(self, params: dict[str, Any]) -> None:
+        index = len(self.take.timestamps)
+        (self.frames_dir / f"f{index:06d}.jpg").write_bytes(base64.b64decode(params["data"]))
+        self.take.timestamps.append(float(params["metadata"]["timestamp"]))
+        await self.cdp.send("Page.screencastFrameAck", {"sessionId": params["sessionId"]})
+
+    def _handler(self, params: dict[str, Any]) -> None:
+        task = asyncio.ensure_future(self._on_frame(params))
+        self.pending.add(task)
+        task.add_done_callback(self.pending.discard)
+
+    async def start(self) -> None:
+        await self.cdp.send(
+            "Page.startScreencast",
+            {
+                "format": "jpeg",
+                "quality": 80,
+                "maxWidth": VIEWPORT[0] * DEVICE_SCALE,
+                "maxHeight": VIEWPORT[1] * DEVICE_SCALE,
+                "everyNthFrame": 1,
+            },
+        )
+
+    async def stop(self) -> None:
+        """Stop and end the take. The take keeps the frames that arrived before the stop's
+        response: Chrome can still send one it encoded while the stop was on its way
+        (measured 2026-09-29: 4 of 25 stops), and that one would land while the browser
+        closes, where its ack fails. The end comes last, once every kept frame has landed,
+        because a frame can arrive with the stop's response and a take that ends before its
+        last frame fails the encode (encode.concat_script)."""
+        await self.cdp.send("Page.stopScreencast")
+        self.cdp.remove_listener("Page.screencastFrame", self._handler)
+        await asyncio.gather(*self.pending)
+        self.take.end_ts = time.time()
+
+
 async def _record(
     base_url: str, hud: float, actions: list[dict[str, Any]], frames_dir: Path
 ) -> Take:
     from playwright.async_api import async_playwright  # local-only dependency
 
     take = Take()
-    pending: set[asyncio.Future[None]] = set()
     async with async_playwright() as p:
         browser = await p.chromium.launch(channel="chrome", headless=False, args=CHROME_ARGS)
         context = await browser.new_context(
@@ -538,39 +583,15 @@ async def _record(
         await page.goto(take_url(base_url, hud), wait_until="load", timeout=90_000)
         await wait_ready(page)
         take.renderer = require_nvidia(await page.evaluate(RENDERER_JS), "platform take")
-        cdp = await context.new_cdp_session(page)
-
-        async def on_frame(params: dict[str, Any]) -> None:
-            index = len(take.timestamps)
-            (frames_dir / f"f{index:06d}.jpg").write_bytes(base64.b64decode(params["data"]))
-            take.timestamps.append(float(params["metadata"]["timestamp"]))
-            await cdp.send("Page.screencastFrameAck", {"sessionId": params["sessionId"]})
-
-        def handler(params: dict[str, Any]) -> None:
-            task = asyncio.ensure_future(on_frame(params))
-            pending.add(task)
-            task.add_done_callback(pending.discard)
-
-        cdp.on("Page.screencastFrame", handler)
+        screencast = _Screencast(await context.new_cdp_session(page), take, frames_dir)
         driver = _Driver(page, take)
         await page.mouse.move(*START_POS)
-        await cdp.send(
-            "Page.startScreencast",
-            {
-                "format": "jpeg",
-                "quality": 80,
-                "maxWidth": VIEWPORT[0] * DEVICE_SCALE,
-                "maxHeight": VIEWPORT[1] * DEVICE_SCALE,
-                "everyNthFrame": 1,
-            },
-        )
+        await screencast.start()
         await asyncio.sleep(LEAD_S)
         for action in actions:
             await driver.run(action)
         await asyncio.sleep(TAIL_S)
-        take.end_ts = time.time()
-        await cdp.send("Page.stopScreencast")
-        await asyncio.gather(*pending)
+        await screencast.stop()
         await browser.close()
     return take
 
