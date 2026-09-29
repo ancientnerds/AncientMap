@@ -22,6 +22,14 @@ from pipeline.studio import spoken
         ("FIFTEEN PER CENT", "15 percent"),
         ("two point five metres long", "2.5 m long"),
         ("the fifteenth century", "the 15th century"),
+        # compound ordinals are one ordinal
+        ("the twenty-first dynasty", "the 21st dynasty"),
+        ("the Thirty-First Dynasty", "the 31st dynasty"),
+        ("the twenty-second and twenty-third days", "the 22nd and 23rd days"),
+        ("the one hundred thirty-second day", "the 132nd day"),
+        ("the fortieth day", "the 40th day"),
+        ("the ninetieth year", "the 90th year"),
+        ("twenty, first", "20, 1st"),
         ("an eight hundred-tonne block", "an 800-tonne block"),
         ("nineteen oh five", "1905"),
         ("twenty-four blocks", "24 blocks"),
@@ -192,6 +200,17 @@ def test_equivalent_spellings(said, shown):
             "token 2: spoken 'point' vs display '10000'",
         ),
         ("two point twelve", "2 12", "token 1: spoken 'point' vs display '12'"),
+        # a compound ordinal is never a number and an ordinal
+        (
+            "the twenty-first dynasty",
+            "the 20 1st dynasty",
+            "token 1: spoken '21st' vs display '20'",
+        ),
+        (
+            "the twenty-first dynasty",
+            "the 22nd dynasty",
+            "token 1: spoken '21st' vs display '22nd'",
+        ),
         # "per cent" is one unit in any case, and a caption that drops it is caught
         (
             "Fifteen Per cent of the stone",

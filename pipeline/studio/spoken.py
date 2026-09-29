@@ -29,8 +29,12 @@ ORDINALS = {
     "sixth": "6th", "seventh": "7th", "eighth": "8th", "ninth": "9th", "tenth": "10th",
     "eleventh": "11th", "twelfth": "12th", "thirteenth": "13th", "fourteenth": "14th",
     "fifteenth": "15th", "sixteenth": "16th", "seventeenth": "17th", "eighteenth": "18th",
-    "nineteenth": "19th", "twentieth": "20th", "thirtieth": "30th",
+    "nineteenth": "19th", "twentieth": "20th", "thirtieth": "30th", "fortieth": "40th",
+    "fiftieth": "50th", "sixtieth": "60th", "seventieth": "70th", "eightieth": "80th",
+    "ninetieth": "90th",
 }  # fmt: skip
+# the ordinals that end a compound one after a tens word: "twenty-first" is "21st"
+UNIT_ORDINALS = {w: int(o[:-2]) for w, o in ORDINALS.items() if int(o[:-2]) < 10}
 UNITS = {
     "t": "t", "tonne": "t", "tonnes": "t", "ton": "t", "tons": "t",
     "m": "m", "metre": "m", "metres": "m", "meter": "m", "meters": "m",
@@ -223,6 +227,16 @@ def _number_run(words: list[str], stops: set[int], i: int) -> tuple[str, int] | 
             break
         if i - 1 in stops:
             break
+    # a run that ends on a tens word may end on a unit ordinal: "twenty-first" is 21st and
+    # "one hundred thirty-second" 132nd, never 20 and 1st
+    if (
+        prev == "small"
+        and words[i - 1] in TENS
+        and i - 1 not in stops
+        and i < len(words)
+        and words[i] in UNIT_ORDINALS
+    ):
+        return f"{total + current + UNIT_ORDINALS[words[i]]}{ORDINALS[words[i]][-2:]}", i + 1
     # a decimal needs a digit word after "point": "one point ten thousand" is 1, "point" and
     # 10,000, never 1 with "point" swallowed
     digits = ""
