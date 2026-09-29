@@ -201,7 +201,8 @@ def scene_seconds(beat: dict[str, Any], speech_s: float) -> float:
     return max(float(beat["min_s"]), lead + speech_s + tail)
 
 
-def _number(value: Any) -> bool:
+def is_number(value: Any) -> bool:
+    """A JSON number: int or float, never a bool (episode.music_problems uses it too)."""
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
@@ -267,8 +268,8 @@ def _same_place(cf: CaseFile, cid: str, point: Any, report: ScriptReport) -> Non
         return
     lat, lng = point.get("lat"), point.get("lng")
     if not (
-        _number(lat)
-        and _number(lng)
+        is_number(lat)
+        and is_number(lng)
         and abs(lat - place.lat) <= COORD_TOLERANCE
         and abs(lng - place.lng) <= COORD_TOLERANCE
     ):
@@ -283,7 +284,7 @@ def _same_place(cf: CaseFile, cid: str, point: Any, report: ScriptReport) -> Non
 def place_at(cf: CaseFile, point: Any) -> Place | None:
     """The case-file place whose coordinates `point` ({lat, lng}) lies on, or None."""
     lat, lng = (point.get("lat"), point.get("lng")) if isinstance(point, dict) else (None, None)
-    if not (_number(lat) and _number(lng)):
+    if not (is_number(lat) and is_number(lng)):
         return None
     return next(
         (
@@ -460,10 +461,10 @@ def _beat_field_problems(beat: dict[str, Any]) -> list[str]:
         problems.append("evidence must be a list of evidence ids")
     if not isinstance(beat["cues"], list):
         problems.append("cues must be a list")
-    if not _number(beat["min_s"]) or beat["min_s"] <= 0:
+    if not is_number(beat["min_s"]) or beat["min_s"] <= 0:
         problems.append("min_s must be a number > 0")
     for key in ("lead_s", "tail_s"):
-        if key in beat and (not _number(beat[key]) or beat[key] < 0):
+        if key in beat and (not is_number(beat[key]) or beat[key] < 0):
             problems.append(f"{key} must be a number >= 0")
     for key in ("hook", "factual"):
         if key in beat and not isinstance(beat[key], bool):
@@ -967,7 +968,7 @@ def _thumbnails(
                 f"{where}: beat {beat} comes after the first verdict cue (beat "
                 f"{beats[verdict_at]['id']}): a thumbnail never shows the answer"
             )
-        if not _number(at) or not 0 <= at < 1:
+        if not is_number(at) or not 0 <= at < 1:
             report.errors.append(f"{where}: at is the share of the beat's scene, 0 <= at < 1")
         if not isinstance(text, str):
             report.errors.append(f"{where}: text must be a string")

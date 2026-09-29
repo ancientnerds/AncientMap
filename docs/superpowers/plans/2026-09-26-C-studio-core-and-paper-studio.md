@@ -10886,7 +10886,8 @@ def scene_seconds(beat: dict[str, Any], speech_s: float) -> float:
     return max(float(beat["min_s"]), lead + speech_s + tail)
 
 
-def _number(value: Any) -> bool:
+def is_number(value: Any) -> bool:
+    """A JSON number: int or float, never a bool (episode.music_problems uses it too)."""
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
@@ -10952,8 +10953,8 @@ def _same_place(cf: CaseFile, cid: str, point: Any, report: ScriptReport) -> Non
         return
     lat, lng = point.get("lat"), point.get("lng")
     if not (
-        _number(lat)
-        and _number(lng)
+        is_number(lat)
+        and is_number(lng)
         and abs(lat - place.lat) <= COORD_TOLERANCE
         and abs(lng - place.lng) <= COORD_TOLERANCE
     ):
@@ -10968,7 +10969,7 @@ def _same_place(cf: CaseFile, cid: str, point: Any, report: ScriptReport) -> Non
 def place_at(cf: CaseFile, point: Any) -> Place | None:
     """The case-file place whose coordinates `point` ({lat, lng}) lies on, or None."""
     lat, lng = (point.get("lat"), point.get("lng")) if isinstance(point, dict) else (None, None)
-    if not (_number(lat) and _number(lng)):
+    if not (is_number(lat) and is_number(lng)):
         return None
     return next(
         (
@@ -11145,10 +11146,10 @@ def _beat_field_problems(beat: dict[str, Any]) -> list[str]:
         problems.append("evidence must be a list of evidence ids")
     if not isinstance(beat["cues"], list):
         problems.append("cues must be a list")
-    if not _number(beat["min_s"]) or beat["min_s"] <= 0:
+    if not is_number(beat["min_s"]) or beat["min_s"] <= 0:
         problems.append("min_s must be a number > 0")
     for key in ("lead_s", "tail_s"):
-        if key in beat and (not _number(beat[key]) or beat[key] < 0):
+        if key in beat and (not is_number(beat[key]) or beat[key] < 0):
             problems.append(f"{key} must be a number >= 0")
     for key in ("hook", "factual"):
         if key in beat and not isinstance(beat[key], bool):
@@ -11652,7 +11653,7 @@ def _thumbnails(
                 f"{where}: beat {beat} comes after the first verdict cue (beat "
                 f"{beats[verdict_at]['id']}): a thumbnail never shows the answer"
             )
-        if not _number(at) or not 0 <= at < 1:
+        if not is_number(at) or not 0 <= at < 1:
             report.errors.append(f"{where}: at is the share of the beat's scene, 0 <= at < 1")
         if not isinstance(text, str):
             report.errors.append(f"{where}: text must be a string")
@@ -11826,7 +11827,7 @@ git commit -m "Validate episode scripts against the case file and the renderer's
 
 ### Task 18: episode.py and review.py
 
-`load_all` also validates the music bed as the renderer plays it (C8), keeps only the capture manifests recorded from the current spec (`spec_sha256`), reports every marker without an accepted crop check (Task 14b), and checks the paper link: `casefile.paper` equals `episode.json`'s paper, every case-file `paper_anchor` is an evidence id of `<STUDIO_ASSETS>/papers/<id>/evidence.json` (no workspace: the anchor cannot be verified), and the episode's paper slug is the slug a successful publish returned (`paper.workspace.published_slug`). The paper workspace is found beside the episodes (`EpisodeWorkspace.paper_dir`), so tests need no environment.
+`load_all` also validates the music bed as the renderer plays it (C8), keeps only the capture manifests recorded from the current spec (`spec_sha256`), reports every marker without an accepted crop check (Task 14b), and checks the paper link: `casefile.paper` equals `episode.json`'s paper in both directions (both null, or the same `{request_id, slug}`: a paper episode whose case file leaves the paper out is reported like a case file naming another paper), every case-file `paper_anchor` is an evidence id of `<STUDIO_ASSETS>/papers/<id>/evidence.json` (no workspace: the anchor cannot be verified; no paper in episode.json: the anchor needs it), and the episode's paper slug is the slug a successful publish returned (`paper.workspace.published_slug`). The paper workspace is found beside the episodes (`EpisodeWorkspace.paper_dir`), so tests need no environment. No copies of existing helpers: every JSON file (episode.json, script.json, words.json, capture manifests, the paper's evidence.json) is read with `paper.workspace.read_json` (Task 4's reader: a syntax error in a hand-written file is a `StudioError` naming the file, so the CLI prints `error: script.json is not valid JSON: ...` and exits 2 instead of a traceback), imported as `load_json`, the name render, package and cli_episode import from `episode`; and `music_problems` uses Task 17's public `script.is_number`.
 
 Owner decision 15: a world distribution's dots are site ids, with the curated coordinates the globe shows. `sites.py` resolves a capture spec's `site_ids` from the repo-root export `public/data/sites/index.json` (gitignored; I13 downloads the current one read-only from production into this checkout) into unlabelled places; only curated `ancient_nerds` sites count (the export also carries every other source's raw sites: such an id, or an unknown one, is a `StudioError` naming the id and its source). `load_captures` hashes that resolved spec, the same one `episode capture` (Task 20) records and stores the hash of, so a take recorded from an older export counts as not recorded. The export's country `c` of a curated site is the one `country` a Mapbox fly-in or orbit may highlight (C7): Task 17 requires the take's case-file place to carry a `site_id`, and `episode.country_problems` (run by `load_all`) compares `country` with that site's `c`.
 
@@ -11845,6 +11846,7 @@ import pytest
 
 from pipeline.studio import casefile, episode, review, script, sites
 from pipeline.studio.errors import StudioError
+from pipeline.studio.paper import workspace
 from tests.pipeline.studio import episode_fixtures as ef
 from tests.pipeline.studio import script_fixtures as sf
 
@@ -11996,6 +11998,53 @@ def test_the_paper_link_is_checked(tmp_path):
     ef.write_casefile(ws.root, other)
     errors = episode.load_all(ws, sf.REGISTRY).report.errors
     assert "casefile.json paper differs from episode.json paper" in errors
+
+
+def test_the_paper_link_is_checked_both_ways(tmp_path):
+    ws = _init(tmp_path)
+    ef.write_casefile(ws.root, ef.mutated(paper=None))
+    assert episode.load_all(ws, sf.REGISTRY).report.errors == [
+        "casefile.json paper differs from episode.json paper"
+    ]
+    bare = _ws(tmp_path / "bare")
+    episode.init_episode(bare, paper=None, topic_type="A", fmt="full", music=None)
+    ef.ready_workspace(bare.root)
+    bare.script.write_text(json.dumps(sf.script()), encoding="utf-8")
+    assert episode.load_all(bare, sf.REGISTRY).report.errors == [
+        "casefile.json paper differs from episode.json paper",
+        "e1: paper_anchor ev-01 needs the paper in episode.json",
+    ]
+    ef.write_casefile(bare.root, ef.mutated(paper=None))
+    assert episode.load_all(bare, sf.REGISTRY).report.errors == [
+        "e1: paper_anchor ev-01 needs the paper in episode.json"
+    ]
+    ef.write_casefile(bare.root, ef.mutated(paper=None, evidence__0__paper_anchor=None))
+    assert episode.load_all(bare, sf.REGISTRY).report.errors == []
+
+
+def test_a_json_syntax_error_is_a_studio_error(tmp_path):
+    """A hand-written file with a syntax error is refused by name, not with a traceback:
+    __main__ turns a StudioError into `error: ...` and exit 2."""
+    ws = _init(tmp_path)
+    evidence = ws.paper_dir(ef.REQ) / "evidence.json"
+    manifest = ws.captures_dir / "platform-01.json"
+    for path in (ws.script, ws.config, evidence, manifest):
+        before = path.read_text(encoding="utf-8") if path.exists() else None
+        path.write_text('{"id": "x",}', encoding="utf-8")
+        with pytest.raises(StudioError, match=rf"^{path.name} is not valid JSON: "):
+            episode.load_all(ws, sf.REGISTRY)
+        if before is None:
+            path.unlink()
+        else:
+            path.write_text(before, encoding="utf-8")
+    assert episode.load_all(ws, sf.REGISTRY).report.errors == []
+
+
+def test_episode_reuses_the_shared_json_reader_and_number_check():
+    """No copies: the paper workspace's read_json and script's number predicate."""
+    assert episode.load_json is workspace.read_json
+    assert episode.is_number is script.is_number
+    assert not hasattr(episode, "_number") and not hasattr(script, "_number")
 
 
 def test_an_unchecked_marker_blocks_the_episode(tmp_path):
@@ -12229,9 +12278,13 @@ package/       the upload package
 `load_all` validates everything together: episode.json, the case file (icons from the
 renderer's registry), the script against the case file, words and the current captures, a
 Mapbox take's `country` against the site export (`country_problems`), the marker crop checks,
-and the paper link: casefile.paper equals episode.json's paper, every
-paper_anchor is an evidence id of that paper's workspace (<STUDIO_ASSETS>/papers/<id>/), and
-episode.json's paper slug is the slug the publish returned.
+and the paper link: casefile.paper equals episode.json's paper (both null, or the same
+{request_id, slug}), every paper_anchor is an evidence id of that paper's workspace
+(<STUDIO_ASSETS>/papers/<id>/), and episode.json's paper slug is the slug the publish returned.
+
+Every JSON file is read with the paper workspace's `read_json` (a missing file names its hint,
+a syntax error is a StudioError naming the file), imported here as `load_json`, the name
+render, package and cli_episode import from this module.
 """
 
 from __future__ import annotations
@@ -12246,10 +12299,12 @@ from pipeline.studio.blocks import claim_icons, load_registry
 from pipeline.studio.casefile import TOPIC_TYPES, CaseFile, load_casefile
 from pipeline.studio.errors import StudioError
 from pipeline.studio.paper.workspace import published_slug
+from pipeline.studio.paper.workspace import read_json as load_json
 from pipeline.studio.script import (
     FORMATS,
     GLOBE_SCENES_OF,
     ScriptReport,
+    is_number,
     place_at,
     validate_script,
 )
@@ -12404,10 +12459,6 @@ def episode_problems(data: Any, slug: str) -> list[str]:
     return problems
 
 
-def _number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
-
-
 def music_problems(music: Any) -> list[str]:
     """The music bed as the renderer plays it: gainDb (<= 0) in pauses, gainDb +
     underNarrationDb (<= 0, relative) under each narration span, integer frame ramps."""
@@ -12424,13 +12475,13 @@ def music_problems(music: Any) -> list[str]:
         problems.append("music.file must be a bare file name (in video-assets/music/)")
     if not isinstance(music["credit"], str) or not music["credit"].strip():
         problems.append("music.credit must name the track (it goes into the description)")
-    if not _number(music["gainDb"]) or music["gainDb"] > 0:
+    if not is_number(music["gainDb"]) or music["gainDb"] > 0:
         problems.append("music.gainDb must be a number <= 0")
     duck = music["duck"]
     if not isinstance(duck, dict) or set(duck) != DUCK_KEYS:
         problems.append(f"music.duck keys must be exactly {sorted(DUCK_KEYS)}")
         return problems
-    if not _number(duck["underNarrationDb"]) or duck["underNarrationDb"] > 0:
+    if not is_number(duck["underNarrationDb"]) or duck["underNarrationDb"] > 0:
         problems.append("music.duck.underNarrationDb must be a number <= 0 (relative to gainDb)")
     for key in ("attackFrames", "releaseFrames"):
         value = duck[key]
@@ -12440,19 +12491,11 @@ def music_problems(music: Any) -> list[str]:
 
 
 def load_episode(ws: EpisodeWorkspace) -> dict[str, Any]:
-    if not ws.config.exists():
-        raise StudioError(f"{ws.config} does not exist: run `episode init {ws.slug}`")
-    data = json.loads(ws.config.read_text(encoding="utf-8"))
+    data = load_json(ws.config, f"run `episode init {ws.slug}`")
     problems = episode_problems(data, ws.slug)
     if problems:
         raise StudioError("; ".join(problems))
     return data
-
-
-def load_json(path: Path, hint: str) -> Any:
-    if not path.exists():
-        raise StudioError(f"{path} does not exist: {hint}")
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def load_words(ws: EpisodeWorkspace) -> dict[str, Any] | None:
@@ -12480,7 +12523,7 @@ def load_captures(ws: EpisodeWorkspace, script: Any) -> dict[str, dict[str, Any]
     paths = sorted(ws.captures_dir.glob("*.json")) if ws.captures_dir.exists() else []
     out = {}
     for path in paths:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
+        manifest = load_json(path, "")
         spec = specs.get(manifest["id"])
         if spec is None:
             continue
@@ -12518,10 +12561,12 @@ def paper_problems(ws: EpisodeWorkspace, episode: dict[str, Any], cf: CaseFile) 
     """The case file's paper and paper anchors against episode.json and the paper workspace."""
     paper = episode["paper"]
     problems: list[str] = []
-    if cf.paper is not None and (
-        paper is None
-        or (cf.paper.request_id, cf.paper.slug) != (paper["request_id"], paper["slug"])
-    ):
+    # Either side may be the one that names no paper: a paper episode's case file must name
+    # it, and a paper-less episode's case file must not.
+    linked = (
+        None if cf.paper is None else {"request_id": cf.paper.request_id, "slug": cf.paper.slug}
+    )
+    if linked != paper:
         problems.append("casefile.json paper differs from episode.json paper")
     anchored = [e for e in cf.evidence if e.paper_anchor is not None]
     if paper is None:
@@ -12544,7 +12589,7 @@ def paper_problems(ws: EpisodeWorkspace, episode: dict[str, Any], cf: CaseFile) 
             f"{e.id}: paper_anchor cannot be verified (no paper workspace)" for e in anchored
         )
         return problems
-    ids = {x["id"] for x in json.loads(evidence_file.read_text(encoding="utf-8"))}
+    ids = {x["id"] for x in load_json(evidence_file, "")}
     problems.extend(
         f"{e.id}: paper_anchor {e.paper_anchor} is not an evidence id of paper "
         f"{paper['request_id']}"
@@ -12704,7 +12749,7 @@ def render_review(
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/test_episode.py -m "not integration and not live_llm" -q`
-Expected: `13 passed`
+Expected: `16 passed`
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 

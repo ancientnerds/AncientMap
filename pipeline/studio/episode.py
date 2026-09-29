@@ -16,9 +16,13 @@ package/       the upload package
 `load_all` validates everything together: episode.json, the case file (icons from the
 renderer's registry), the script against the case file, words and the current captures, a
 Mapbox take's `country` against the site export (`country_problems`), the marker crop checks,
-and the paper link: casefile.paper equals episode.json's paper, every
-paper_anchor is an evidence id of that paper's workspace (<STUDIO_ASSETS>/papers/<id>/), and
-episode.json's paper slug is the slug the publish returned.
+and the paper link: casefile.paper equals episode.json's paper (both null, or the same
+{request_id, slug}), every paper_anchor is an evidence id of that paper's workspace
+(<STUDIO_ASSETS>/papers/<id>/), and episode.json's paper slug is the slug the publish returned.
+
+Every JSON file is read with the paper workspace's `read_json` (a missing file names its hint,
+a syntax error is a StudioError naming the file), imported here as `load_json`, the name
+render, package and cli_episode import from this module.
 """
 
 from __future__ import annotations
@@ -33,10 +37,12 @@ from pipeline.studio.blocks import claim_icons, load_registry
 from pipeline.studio.casefile import TOPIC_TYPES, CaseFile, load_casefile
 from pipeline.studio.errors import StudioError
 from pipeline.studio.paper.workspace import published_slug
+from pipeline.studio.paper.workspace import read_json as load_json
 from pipeline.studio.script import (
     FORMATS,
     GLOBE_SCENES_OF,
     ScriptReport,
+    is_number,
     place_at,
     validate_script,
 )
@@ -191,10 +197,6 @@ def episode_problems(data: Any, slug: str) -> list[str]:
     return problems
 
 
-def _number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool)
-
-
 def music_problems(music: Any) -> list[str]:
     """The music bed as the renderer plays it: gainDb (<= 0) in pauses, gainDb +
     underNarrationDb (<= 0, relative) under each narration span, integer frame ramps."""
@@ -211,13 +213,13 @@ def music_problems(music: Any) -> list[str]:
         problems.append("music.file must be a bare file name (in video-assets/music/)")
     if not isinstance(music["credit"], str) or not music["credit"].strip():
         problems.append("music.credit must name the track (it goes into the description)")
-    if not _number(music["gainDb"]) or music["gainDb"] > 0:
+    if not is_number(music["gainDb"]) or music["gainDb"] > 0:
         problems.append("music.gainDb must be a number <= 0")
     duck = music["duck"]
     if not isinstance(duck, dict) or set(duck) != DUCK_KEYS:
         problems.append(f"music.duck keys must be exactly {sorted(DUCK_KEYS)}")
         return problems
-    if not _number(duck["underNarrationDb"]) or duck["underNarrationDb"] > 0:
+    if not is_number(duck["underNarrationDb"]) or duck["underNarrationDb"] > 0:
         problems.append("music.duck.underNarrationDb must be a number <= 0 (relative to gainDb)")
     for key in ("attackFrames", "releaseFrames"):
         value = duck[key]
@@ -227,19 +229,11 @@ def music_problems(music: Any) -> list[str]:
 
 
 def load_episode(ws: EpisodeWorkspace) -> dict[str, Any]:
-    if not ws.config.exists():
-        raise StudioError(f"{ws.config} does not exist: run `episode init {ws.slug}`")
-    data = json.loads(ws.config.read_text(encoding="utf-8"))
+    data = load_json(ws.config, f"run `episode init {ws.slug}`")
     problems = episode_problems(data, ws.slug)
     if problems:
         raise StudioError("; ".join(problems))
     return data
-
-
-def load_json(path: Path, hint: str) -> Any:
-    if not path.exists():
-        raise StudioError(f"{path} does not exist: {hint}")
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def load_words(ws: EpisodeWorkspace) -> dict[str, Any] | None:
@@ -267,7 +261,7 @@ def load_captures(ws: EpisodeWorkspace, script: Any) -> dict[str, dict[str, Any]
     paths = sorted(ws.captures_dir.glob("*.json")) if ws.captures_dir.exists() else []
     out = {}
     for path in paths:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
+        manifest = load_json(path, "")
         spec = specs.get(manifest["id"])
         if spec is None:
             continue
@@ -305,10 +299,12 @@ def paper_problems(ws: EpisodeWorkspace, episode: dict[str, Any], cf: CaseFile) 
     """The case file's paper and paper anchors against episode.json and the paper workspace."""
     paper = episode["paper"]
     problems: list[str] = []
-    if cf.paper is not None and (
-        paper is None
-        or (cf.paper.request_id, cf.paper.slug) != (paper["request_id"], paper["slug"])
-    ):
+    # Either side may be the one that names no paper: a paper episode's case file must name
+    # it, and a paper-less episode's case file must not.
+    linked = (
+        None if cf.paper is None else {"request_id": cf.paper.request_id, "slug": cf.paper.slug}
+    )
+    if linked != paper:
         problems.append("casefile.json paper differs from episode.json paper")
     anchored = [e for e in cf.evidence if e.paper_anchor is not None]
     if paper is None:
@@ -331,7 +327,7 @@ def paper_problems(ws: EpisodeWorkspace, episode: dict[str, Any], cf: CaseFile) 
             f"{e.id}: paper_anchor cannot be verified (no paper workspace)" for e in anchored
         )
         return problems
-    ids = {x["id"] for x in json.loads(evidence_file.read_text(encoding="utf-8"))}
+    ids = {x["id"] for x in load_json(evidence_file, "")}
     problems.extend(
         f"{e.id}: paper_anchor {e.paper_anchor} is not an evidence id of paper "
         f"{paper['request_id']}"

@@ -6,6 +6,7 @@ import pytest
 
 from pipeline.studio import casefile, episode, review, script, sites
 from pipeline.studio.errors import StudioError
+from pipeline.studio.paper import workspace
 from tests.pipeline.studio import episode_fixtures as ef
 from tests.pipeline.studio import script_fixtures as sf
 
@@ -157,6 +158,53 @@ def test_the_paper_link_is_checked(tmp_path):
     ef.write_casefile(ws.root, other)
     errors = episode.load_all(ws, sf.REGISTRY).report.errors
     assert "casefile.json paper differs from episode.json paper" in errors
+
+
+def test_the_paper_link_is_checked_both_ways(tmp_path):
+    ws = _init(tmp_path)
+    ef.write_casefile(ws.root, ef.mutated(paper=None))
+    assert episode.load_all(ws, sf.REGISTRY).report.errors == [
+        "casefile.json paper differs from episode.json paper"
+    ]
+    bare = _ws(tmp_path / "bare")
+    episode.init_episode(bare, paper=None, topic_type="A", fmt="full", music=None)
+    ef.ready_workspace(bare.root)
+    bare.script.write_text(json.dumps(sf.script()), encoding="utf-8")
+    assert episode.load_all(bare, sf.REGISTRY).report.errors == [
+        "casefile.json paper differs from episode.json paper",
+        "e1: paper_anchor ev-01 needs the paper in episode.json",
+    ]
+    ef.write_casefile(bare.root, ef.mutated(paper=None))
+    assert episode.load_all(bare, sf.REGISTRY).report.errors == [
+        "e1: paper_anchor ev-01 needs the paper in episode.json"
+    ]
+    ef.write_casefile(bare.root, ef.mutated(paper=None, evidence__0__paper_anchor=None))
+    assert episode.load_all(bare, sf.REGISTRY).report.errors == []
+
+
+def test_a_json_syntax_error_is_a_studio_error(tmp_path):
+    """A hand-written file with a syntax error is refused by name, not with a traceback:
+    __main__ turns a StudioError into `error: ...` and exit 2."""
+    ws = _init(tmp_path)
+    evidence = ws.paper_dir(ef.REQ) / "evidence.json"
+    manifest = ws.captures_dir / "platform-01.json"
+    for path in (ws.script, ws.config, evidence, manifest):
+        before = path.read_text(encoding="utf-8") if path.exists() else None
+        path.write_text('{"id": "x",}', encoding="utf-8")
+        with pytest.raises(StudioError, match=rf"^{path.name} is not valid JSON: "):
+            episode.load_all(ws, sf.REGISTRY)
+        if before is None:
+            path.unlink()
+        else:
+            path.write_text(before, encoding="utf-8")
+    assert episode.load_all(ws, sf.REGISTRY).report.errors == []
+
+
+def test_episode_reuses_the_shared_json_reader_and_number_check():
+    """No copies: the paper workspace's read_json and script's number predicate."""
+    assert episode.load_json is workspace.read_json
+    assert episode.is_number is script.is_number
+    assert not hasattr(episode, "_number") and not hasattr(script, "_number")
 
 
 def test_an_unchecked_marker_blocks_the_episode(tmp_path):
