@@ -211,6 +211,8 @@ def _number_run(words: list[str], stops: set[int], i: int) -> tuple[str, int] | 
             break
         if i - 1 in stops:
             break
+    # a decimal needs a digit word after "point": "one point ten thousand" is 1, "point" and
+    # 10,000, never 1 with "point" swallowed
     digits = ""
     if (
         i - 1 not in stops
@@ -218,6 +220,7 @@ def _number_run(words: list[str], stops: set[int], i: int) -> tuple[str, int] | 
         and i + 1 < len(words)
         and words[i] == "point"
         and words[i + 1] in ONES
+        and ONES[words[i + 1]] < 10
     ):
         i += 1
         while i < len(words) and words[i] in ONES and ONES[words[i]] < 10:

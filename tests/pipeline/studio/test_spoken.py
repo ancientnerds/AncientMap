@@ -77,6 +77,9 @@ from pipeline.studio import spoken
         ("two point five zero metres", "2.50 m"),
         ("2.50 m", "two point five metres"),
         ("two point zero metres", "2 m"),
+        # "point" before a word that is no digit is a word, not a decimal point
+        ("At one point ten thousand people lived here", "At one point 10,000 people lived here"),
+        ("At one point eleven men climbed", "At one point 11 men climbed"),
     ],
 )
 def test_equivalent_spellings(said, shown):
@@ -156,6 +159,13 @@ def test_equivalent_spellings(said, shown):
             "12345678901234568 stones",
             "token 0: spoken '12345678901234567' vs display '12345678901234568'",
         ),
+        # a display that drops the word "point" is caught
+        (
+            "At one point ten thousand people lived here",
+            "At 1 10,000 people lived here",
+            "token 2: spoken 'point' vs display '10000'",
+        ),
+        ("two point twelve", "2 12", "token 1: spoken 'point' vs display '12'"),
     ],
 )
 def test_real_differences_are_reported(said, shown, where):
