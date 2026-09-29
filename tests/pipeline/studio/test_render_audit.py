@@ -25,6 +25,19 @@ def test_longest_black_run_on_the_limited_range():
     assert render_audit.longest_black_s([(0.0, 16.2), (0.25, 17.3), (0.5, 16.0)]) == 0.75
 
 
+def test_black_runs_are_counted_by_the_shorts_run_counter(monkeypatch):
+    # one run counter (shorts_audit.longest_frozen_run), imported, not a copy of its loop
+    seen = []
+
+    def counter(values, threshold):
+        seen.append((values, threshold))
+        return 3
+
+    monkeypatch.setattr(render_audit, "longest_frozen_run", counter)
+    assert render_audit.longest_black_s([(0.0, 16.0), (0.25, 30.0)]) == 0.75
+    assert seen == [([16.0, 30.0], render_audit.BLACK_YAVG_TV)]
+
+
 def _scene(sid, start, frames, props):
     return {"id": sid, "from": start, "durationInFrames": frames, "props": props}
 

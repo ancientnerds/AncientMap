@@ -19,7 +19,16 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from pipeline.video.shorts_audit import LOUDNESS_TOL, PEAK_MAX_DBFS, Check
+from pipeline.video.shorts_audit import (
+    LOUDNESS_TOL,
+    PEAK_MAX_DBFS,
+    Check,
+    _ffprobe_stream,
+    _frame_diffs,
+    _loudness,
+    _luma_samples,
+    longest_frozen_run,
+)
 from pipeline.video.shorts_render import TARGET_LUFS
 
 LUMA_STEP_S = 0.25
@@ -32,11 +41,8 @@ BLACK_YAVG_TV = 18.0
 
 
 def longest_black_s(samples: list[tuple[float, float]], step_s: float = LUMA_STEP_S) -> float:
-    longest = run = 0
-    for _t, yavg in samples:
-        run = run + 1 if yavg < BLACK_YAVG_TV else 0
-        longest = max(longest, run)
-    return longest * step_s
+    """The longest run of luma samples below BLACK_YAVG_TV, in seconds."""
+    return longest_frozen_run([yavg for _t, yavg in samples], BLACK_YAVG_TV) * step_s
 
 
 def clip_scenes(timeline: dict[str, Any]) -> list[tuple[int, int]]:
@@ -51,8 +57,6 @@ def clip_scenes(timeline: dict[str, Any]) -> list[tuple[int, int]]:
 
 def longest_frozen_in_clips(diffs: list[float], timeline: dict[str, Any]) -> int:
     """The longest run of unchanged frames inside any clip scene (diffs[i]: frame i -> i+1)."""
-    from pipeline.video.shorts_audit import longest_frozen_run
-
     runs = [longest_frozen_run(diffs[start : end - 1]) for start, end in clip_scenes(timeline)]
     return max(runs, default=0)
 
@@ -87,13 +91,6 @@ def evaluate(m: dict[str, Any], timeline: dict[str, Any]) -> list[Check]:
 
 
 def measure(video: Path, timeline: dict[str, Any]) -> dict[str, Any]:
-    from pipeline.video.shorts_audit import (
-        _ffprobe_stream,
-        _frame_diffs,
-        _loudness,
-        _luma_samples,
-    )
-
     stream = _ffprobe_stream(video)
     lufs, peak = _loudness(video)
     return {
