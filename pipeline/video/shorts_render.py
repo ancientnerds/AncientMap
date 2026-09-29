@@ -742,10 +742,11 @@ def caption_font(font_path: Path) -> ImageFont.FreeTypeFont:
 
 def caption_px(shown: str, face: ImageFont.FreeTypeFont) -> int:
     """The drawn width of a caption word (as shown: `display_text`) in pixels,
-    outline included, at `face`'s size. The one measurement of a caption word:
-    the render's fitting (`word_face`), the audit's S3 and through it the
-    Phase-4 verifier's V10 and lane WB's teaser contract
-    (`shorts_audit.widest_word_px`)."""
+    outline included, at `face`'s size. The one measurement of a caption word
+    (through `shorts_audit.widest_word_px`), applied at two sizes: at the size
+    the word is drawn by the render's fitting (`word_face`), the audit's S3
+    and lane WB's teaser contract; at CAPTION_SIZE by the Phase-4 verifier's
+    V10, which is therefore stricter than S3."""
     return int(face.getlength(shown)) + 2 * CAPTION_BORDER
 
 

@@ -114,7 +114,9 @@ STORED_FLOOR = 0.5
 FLOOR_WAIVERS = frozenset({M.SiteFlag.CLEARED_DESCRIPTION_DEFECT, M.SiteFlag.T03_SEVERE})
 #: V10: 80-200 characters (the S2 floor and the varchar(200) column).
 CARD_MIN, CARD_MAX = 80, 200
-#: V10: every caption word fits 1080 - 2 x 40 px (S3).
+#: V10: every caption word fits 1080 - 2 x 40 px at the caption size (`CardFit.px`) - stricter than
+#: the short's S3 and lane WB's teaser contract, which measure a word at the size the short draws it
+#: (`CardFit.drawn_px`, `shorts_render.word_face`).
 MAX_CAPTION_PX = CAPTION_MAX_PX
 #: V6: the directional name match, rapidfuzz `partial_ratio` on the normalised name.
 NAME_MATCH = 90

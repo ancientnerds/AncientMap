@@ -60,11 +60,13 @@ On the **final** card - the writer's text after the assembler's one spoken edit
   500 characters of its input, the March generator's; the fact basis here is the whole description;
 * the card names the site (`name_forms`, above);
 * the shorts can render it: every glyph in the brand font and every caption word within the frame
-  as the short draws it (`phase4.verify4.card_fit`'s `drawn_px` against `MAX_CAPTION_PX`, V10's own
-  measurement - the card is narrated and captioned). A word too wide at the caption size (a one-word
-  or hyphenated name: `Mecklenburg-Vorpommern`) is drawn smaller, down to the renderer's legibility
-  floor (`shorts_render.CAPTION_MIN_SIZE`, `word_face`); only a word that is still wider than the
-  frame at that floor is refused.
+  as the short draws it (`phase4.verify4.card_fit`'s `drawn_px` against `MAX_CAPTION_PX` - the card
+  is narrated and captioned). That is the short's own audit (S3): `shorts_render.caption_px` at the
+  size the word is drawn; V10 applies the same measurement at the caption size (`px`) and is
+  stricter. A word too wide at the caption size (a one-word or hyphenated name:
+  `Mecklenburg-Vorpommern`) is drawn smaller, down to the renderer's legibility floor
+  (`shorts_render.CAPTION_MIN_SIZE`, `word_face`); only a word that is still wider than the frame at
+  that floor is refused.
 
 What the checks cannot see - a claim the description does not make, a number written in words, a
 superlative, "no one knows", the tone, whether the card is about this site - is the checker's.

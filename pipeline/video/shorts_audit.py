@@ -260,11 +260,13 @@ def widest_word_px(
     render draws it (`shorts_render.word_face`: a word too wide at CAPTION_SIZE
     shrinks, not below CAPTION_MIN_SIZE).
 
-    Public because it is the S3 gate ("every caption word fits the frame")
-    and the Phase-4 verifier (`scripts/remediation/phase4/verify4.py`, V10)
-    and lane WB's teaser contract apply that gate to a card before it is
-    written: one measurement, so the card check and the short's audit cannot
-    disagree about a word."""
+    Public because the card checks apply it before a card is written
+    (`scripts/remediation/phase4/verify4.card_fit`). Lane WB's teaser
+    contract measures `drawn`, as S3 ("every caption word fits the frame")
+    does, so the two cannot disagree about a word. The Phase-4 verifier's
+    V10 (unchanged) measures at CAPTION_SIZE and is stricter than S3: it
+    holds a word the short would draw smaller ("Mecklenburg-Vorpommern",
+    1,409 px in Orbitron 700 at 92, drawn at 65 px 997 px)."""
     widest, max_w = "", 0
     for word in words:
         shown = display_text(word)
@@ -277,7 +279,14 @@ def widest_word_px(
 def _widest_caption(captions: list[dict], font_path: Path) -> tuple[str, int]:
     """The caption word that renders widest as the render draws it (as shown:
     edge punctuation off, outline included, at its own size) and its width in
-    pixels."""
+    pixels.
+
+    The size is the one the current render gives the word (`word_face`),
+    not one read from the mp4: S3 holds for shorts rendered with `word_face`
+    (from commit 884f185, 2026-09-27). An older short drew every word at
+    CAPTION_SIZE, so a word wider than the frame there overflowed it and
+    would pass here; none of the 16 shorts in video-assets/shorts has such a
+    word (widest 970 px at 92 px, measured 2026-09-29)."""
     words = (word["text"] for word in captions)
     return widest_word_px(words, caption_font(font_path), drawn=True)
 
