@@ -63,6 +63,13 @@ from pipeline.studio import spoken
         ("a million two hundred million", "1,000,000 200,000,000"),
         ("a hundred thousand two hundred", "100,200"),
         ("a hundred thousand two hundred, thousand more", "100,200, thousand more"),
+        # its 0-99 belongs to the hundred-group too
+        ("a hundred thousand two hundred fifty thousand", "100,000 250,000"),
+        ("three hundred thousand four hundred twenty thousand people", "300,000 420,000 people"),
+        ("seven hundred eighty-one thousand three hundred ten thousand", "781,000 310,000"),
+        ("one million two hundred fifty thousand", "1,250,000"),
+        ("a hundred thousand two hundred fifty", "100,250"),
+        ("a hundred thousand two hundred fifty, thousand more", "100,250, thousand more"),
         # nor does a year take a group that a hundred or a magnitude multiplies
         ("eighteen twelve thousand men died", "18 12,000 men died"),
         ("nineteen sixty-six thousand", "19 66,000"),
@@ -137,6 +144,22 @@ def test_equivalent_spellings(said, shown):
             "eighteen twelve thousand men died",
             "1812 thousand men died",
             "token 0: spoken '18' vs display '1812'",
+        ),
+        # nor a hundred-group with a 0-99 split off the magnitude that multiplies it
+        (
+            "a hundred thousand two hundred fifty thousand",
+            "100,200 50,000",
+            "token 0: spoken '100000' vs display '100200'",
+        ),
+        (
+            "three hundred thousand four hundred twenty thousand people",
+            "300,400 20,000 people",
+            "token 0: spoken '300000' vs display '300400'",
+        ),
+        (
+            "seven hundred eighty-one thousand three hundred ten thousand",
+            "781,300 10,000",
+            "token 0: spoken '781000' vs display '781300'",
         ),
         # two numbers that differ in any digit never share a token
         (

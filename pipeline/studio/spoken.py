@@ -117,6 +117,22 @@ def _joins_after_and(words: list[str], stops: set[int], i: int) -> bool:
     return not _multiplied(words, stops, small[1])
 
 
+def _group_magnitude(words: list[str], stops: set[int], h: int) -> int:
+    """The magnitude that multiplies the hundred-group whose "hundred" is words[h], or 0 when
+    none does. The group runs on through its 0-99: "two hundred fifty thousand" is multiplied
+    by a thousand, just as "two hundred thousand" is. A word that closes a clause ends the
+    group, and so does any word that is neither a 0-99 nor a magnitude."""
+    if h in stops:
+        return 0
+    j = h + 1
+    small = _small(words, stops, j) if j < len(words) else None
+    if small is not None:
+        if small[1] - 1 in stops:
+            return 0
+        j = small[1]
+    return MAGNITUDES[words[j]] if j < len(words) and words[j] in MAGNITUDES else 0
+
+
 def _small_continues(
     words: list[str], stops: set[int], nxt: int, prev: str, last_magnitude: float
 ) -> bool:
@@ -126,9 +142,10 @@ def _small_continues(
     hundred two hundred" are two numbers each. After a magnitude it may open the next group
     ("one thousand five hundred") or a smaller magnitude ("one million two thousand"), never
     an equal or larger one ("two thousand three thousand" is two numbers). The same holds
-    past a hundred-group: "one million two hundred thousand" goes on, "a hundred thousand two
-    hundred thousand" is two numbers. A 0-99 or a hundred that closes a clause is the run's
-    last group, so the word after it decides nothing."""
+    past a whole hundred-group, its 0-99 included: "one million two hundred fifty thousand"
+    goes on, "a hundred thousand two hundred thousand" and "a hundred thousand two hundred
+    fifty thousand" are two numbers each. A 0-99 or a hundred that closes a clause is the
+    run's last group, so the word after it decides nothing."""
     if prev == "":
         return True
     if prev == "small":
@@ -136,13 +153,7 @@ def _small_continues(
     if nxt - 1 in stops:
         return True
     if nxt < len(words) and words[nxt] == "hundred":
-        after = nxt + 1
-        return prev == "magnitude" and (
-            nxt in stops
-            or after >= len(words)
-            or words[after] not in MAGNITUDES
-            or MAGNITUDES[words[after]] < last_magnitude
-        )
+        return prev == "magnitude" and _group_magnitude(words, stops, nxt) < last_magnitude
     if nxt < len(words) and words[nxt] in MAGNITUDES:
         return MAGNITUDES[words[nxt]] < last_magnitude
     return True
