@@ -73,7 +73,9 @@ place. Ids are unique across the whole file.
    script's globe `distribution` take, curated `ancient_nerds` sites only (any other source's id
    is refused), 1-500 points together with at most 12 labelled case-file places. Find ids in the
    site export (current copy: skill studio-video, "Before the first step"):
-   `./.venv/Scripts/python.exe -c "import json,sys; q=sys.argv[1].lower(); [print(r['i'], r['n'], r.get('c'), r['la'], r['lo']) for r in json.load(open('public/data/sites/index.json', encoding='utf-8'))['sites'] if r['s'] == 'ancient_nerds' and q in r['n'].lower()]" <name part>`
+   `./.venv/Scripts/python.exe -X utf8 -c "import json,sys; q=sys.argv[1].lower(); [print(r['i'], r['n'], r.get('c'), r['la'], r['lo']) for r in json.load(open('public/data/sites/index.json', encoding='utf-8'))['sites'] if r['s'] == 'ancient_nerds' and q in r['n'].lower()]" <name part>`
+   Keep `-X utf8`: the Bash tool hands Python a cp1252 pipe, and the first name outside cp1252
+   (ı, Ş, ł, ě) would end the listing with a `UnicodeEncodeError`.
 6. **Quantities.** Where sources differ, `value` is `[low, high]` (low < high) and `basis` says
    so. `evidence` lists existing evidence ids. A chart bar or ScaleZoom end that uses the id
    shows exactly this value and unit.
@@ -84,14 +86,15 @@ place. Ids are unique across the whole file.
 8. **Markers.** `box` is `[x, y, w, h]` as fractions of the stored pixels, tight on the object
    its `label` names; `"verified": "crop-check"` is required by the format, the proof is step 10.
 9. **Verify evidence.** Run the workflow **`studio-casefile-verify`** (Workflow tool by name,
-   `args` = the episode workspace path). It checks each item that is not yet `verified` against
+   `args: {"workspace": "<absolute path of <STUDIO_ASSETS>/episodes/<slug>>"}`; a bare path
+   string is refused). It checks each item that is not yet `verified` against
    `source.url` and the verbatim quote, or with a `paper_anchor` against
    `papers/<id>/evidence.json`, and writes `verification = {status, by, at, method}`, leaving
    every other key untouched. `refuted`: fix the statement or drop the item. `unverified`: find a
    source that can be checked, or drop the item.
 10. **Crop-check markers.** `studio episode markers-export <slug>` (it validates the case file
-    first and lists every problem), the workflow **`studio-marker-check`** (`args` = the episode
-    workspace path), then `studio episode markers-import <slug>`. `misses`: fix the box or
+    first and lists every problem), the workflow **`studio-marker-check`** (the same `args` as
+    step 9), then `studio episode markers-import <slug>`. `misses`: fix the box or
     remove the marker, then export again (a changed box, label or picture is a new task).
 11. `studio episode check <slug>` (needs `script.json`) reports what is left: an unverified item
     the script uses, a marker without `hits`, a paper link or anchor that does not match.

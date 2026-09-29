@@ -54,9 +54,10 @@ research request id (a lowercase uuid), never the slug.
 
 ## Workflows (the handoff seam)
 
-Run each with the Workflow tool by name, passing the paper workspace path as `args`. They write
-answers only; the import step validates them by machine and refuses the whole file on any
-problem (listed). A refused `verdicts.jsonl` stays in place: remove it and run the workflow
+Run each with the Workflow tool by name and
+`args: {"workspace": "<absolute path of <STUDIO_ASSETS>/papers/<id>>"}`; a bare path string is
+refused (`args.workspace must be the absolute path of ...`). They write answers only; the import
+step validates them by machine and refuses the whole file on any problem (listed). A refused `verdicts.jsonl` stays in place: remove it and run the workflow
 again. Never write or edit an answer by hand.
 
 | Workflow | Answers | Then |
