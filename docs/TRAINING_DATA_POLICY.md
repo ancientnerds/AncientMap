@@ -19,11 +19,28 @@ and reviewed rarely, while their legal consequences surface years later.
 
 | Store | Content | Written by |
 | --- | --- | --- |
-| `theo_source_archive` | Full text and gzipped original HTML of every source a research run reads, plus adapter abstracts for sources never fetched | `handlers/content_fetch.py`, `training_corpus.persist_run_corpus` |
-| `theo_source_archive_runs` | Which run saw which source, under which search query, and whether the finished paper cited it | `training_corpus.persist_run_corpus` |
-| `research_artifacts` | Intermediate reasoning: angle findings, specialist analyses, synthesis, debate, moderator verdicts, final paper metrics, citation registry, failure snapshots, curator input/output, miner candidates | `handlers/state_persist.py`, `theo_worker`, `curator`, `graph_miner` |
+| `theo_source_archive` | Full text and gzipped original HTML of every source a research run reads, plus adapter abstracts for sources never fetched. Archive completion adds the full text of each source a moderated claim cites that has none yet: Wikipedia articles, the pages `doi.org` redirects to, PDFs (extracted text) and YouTube transcripts copied from `news_videos` | `handlers/content_fetch.py`, `training_corpus.persist_run_corpus`, `archive_completion.py` |
+| `theo_source_archive_runs` | Which run saw which source, under which search query, and whether a moderated claim cited it (`cited`, see below) | `training_corpus.persist_run_corpus`, `archive_completion.py` |
+| `research_artifacts` | Intermediate reasoning: angle findings, specialist analyses, synthesis, debate, moderator verdicts, citation registry, the research dossier (manifest and image candidate pool), failure snapshots, curator input/output, miner candidates. Runs from before Theo became research-only also left final paper metrics | `handlers/state_persist.py`, `handlers/dossier.py`, `theo_worker`, `curator`, `graph_miner` |
 | `thinking_log_archive` | Activity-feed rows moved here by the 90/365-day prune instead of being deleted | `thinking_log.prune_thinking_log` |
 | `research_requests_archive` | Whole-row copy of a research request taken before a user deletes it | `api/routes/theo.py` |
+
+`theo_source_archive_runs.cited` means "cited by a moderated claim": a final,
+revised or speculative claim of the run's moderator cites the source. Theo only
+researches; the paper is written later in the local paper studio, so a run has
+no finished paper whose citations it could record. Rows written before Theo
+became research-only mean that the finished paper cited the source.
+
+Two tools read the corpus back. The dossier export
+(`python -m pipeline.lyra.theo_dossier export`) reads a researched run's
+dossier from `research_artifacts` and the texts of its sources from
+`theo_source_archive`; `python -m pipeline.studio paper pull` stores those
+texts in the local paper workspace (`texts/<source_id>.txt`), where the Claude
+writer and the claim check read them. Archive completion reads which of the
+cited sources already have a full text. Both take the best archive row per
+source: a fetched full text before a TDM reservation before an adapter
+abstract, the newest row within each class. The export ships a text only from
+a row that has a body and no reservation.
 
 The pre-existing content stores (`news_videos.transcript_text`,
 `news_articles.content`, `unified_sites`, `source_records`) are already
@@ -32,8 +49,15 @@ durable and are not changed by this policy.
 ## Legal basis and limits
 
 **Lawful access.** Only publicly reachable pages are fetched. Nothing
-circumvents a paywall, a login, or a technical access restriction. `doi.org`
-is excluded from the archive because it resolves to publisher landing pages.
+circumvents a paywall, a login, or a technical access restriction. During a
+run, `handlers/content_fetch.py` keeps `doi.org` out of the archive because it
+resolves to publisher landing pages; that exclusion stays. Archive completion
+(`archive_completion.py`, once per run after the moderator) follows a
+`doi.org` redirect to the publisher's page and archives what that page serves,
+under the same TDM check as every other fetch: the reservation is looked up
+for the host and path the redirect ends on, and in the page's
+`tdm-reservation` meta tag. The row keeps the URL the source was cited under
+and that URL's domain (a `doi.org` host); the publisher's host is not stored.
 
 **Reservation of rights (§ 44b(3) UrhG).** A machine-readable reservation is
 honoured. Before archiving a host's content the pipeline reads
@@ -47,6 +71,17 @@ If a host cannot be reached for the check, the resulting rows carry
 `tdm_signal = 'check_failed'`. Those rows are unchecked, not cleared, and must
 be re-verified before any export that includes them.
 
+**TDM-reserved sources (owner decision 16, 2026-09-26).** The text of a
+TDM-reserved source is never archived: `training_corpus.archive_documents`
+stores a reserved document without its body, whichever tool fetched it, and
+archive completion counts the source as `tdm_reserved` in the run's dossier
+manifest. A paper may still cite it like any source. The local claim check of
+the paper studio (`python -m pipeline.studio paper claims-export` and
+`claims-import`) reads such a source live from its URL and keeps the text it
+read only in the local paper workspace, as `claims_check/live/<source_id>.txt`;
+that file is never uploaded or archived. An evidence quote on the published
+paper may come from that text (owner, 2026-09-27).
+
 **Retention.** Corpus data is retained as long as it is necessary for the
 purpose above (§ 44b(2) sentence 2). Review annually; delete the corpus if the
 model project is abandoned.
@@ -57,6 +92,10 @@ served by deleting the affected rows:
 ```sql
 DELETE FROM theo_source_archive WHERE domain = '<host>';
 ```
+
+Rows archived through a `doi.org` redirect carry a `doi.org` domain, not the
+publisher's host (see "Lawful access"), so a publisher's objection also needs
+a match on its DOIs (the `doi` column or the DOI in `url`).
 
 ## Export rules
 
