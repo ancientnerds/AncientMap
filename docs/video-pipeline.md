@@ -13,6 +13,15 @@
 > keeps its `rendered` row, so publishing must check the site's scope then. Neither the batch
 > nor `short --site`/`--name` exports a retired site (E4, migration 0020).
 
+> **Status (2026-09-29): no runner, no renderer.** The weekly pipeline's orchestrator became the
+> site-Shorts production pipeline on 2026-09-17 (`465415e`: `python -m pipeline.video pipeline`), and
+> its Remotion project in `video/` (the `WeeklyVideo` composition) was replaced by the studio renderer
+> (plan D Task 1 of the studio build, `docs/superpowers/plans/2026-09-26-D-renderer-capture-video-mode.md`).
+> The Python modules of phases 1-4 and 6 (`script_adapter.py`, `voiceover.py`, `asset_collector.py`,
+> `timeline_builder.py`, `distributor.py`) stay in `pipeline/video/`, but nothing in the repository runs
+> them, and no renderer reads the timeline `timeline_builder.py` writes. Long-form YouTube episodes are
+> made by the studio: `docs/procedures/STUDIO.md`.
+
 Automated "This Week in Archaeology" — transforms weekly articles into ~10-15 minute narrated YouTube videos.
 
 ## Architecture
@@ -101,36 +110,15 @@ Automated "This Week in Archaeology" — transforms weekly articles into ~10-15 
                            │ timeline.json + audio/* + clips/* + images/*
                            ▼
  ┌───────────────────────────────────────────────────────────────────────────┐
- │  PHASE 5: REMOTION RENDERER                           video/ (TypeScript)│
+ │  PHASE 5: RENDERER — REMOVED                                             │
  │                                                                          │
- │  ┌─────────────┐  ┌───────────────────────────────────────────────────┐  │
- │  │ WeeklyVideo  │  │  Composition Sequence:                           │  │
- │  │ (main comp)  │  │                                                  │  │
- │  │              │  │  ┌─────────────┐                                 │  │
- │  │  Reads       │  │  │IntroSequence│ Title card + date range         │  │
- │  │  timeline    │  │  └──────┬──────┘                                 │  │
- │  │  .json as    │  │         ▼                                        │  │
- │  │  inputProps  │  │  ┌─────────────┐ ┌──────────────────────────┐    │  │
- │  │              │  │  │ GlobeFlyTo  │→│     StorySegment         │    │  │
- │  │              │  │  │ (SLERP      │ │  screenshot → clip →     │    │  │
- │  │              │  │  │  @remotion/ │ │  wiki images + narration │    │  │
- │  │              │  │  │  three)     │ │  + LowerThird overlays   │    │  │
- │  │              │  │  └─────────────┘ └──────────────────────────┘    │  │
- │  │              │  │         │              ↕ (repeats per story)     │  │
- │  │              │  │         ▼                                        │  │
- │  │              │  │  ┌──────────────┐                                │  │
- │  │              │  │  │TransitionWipe│ "Meanwhile, in Turkey..."      │  │
- │  │              │  │  └──────┬───────┘                                │  │
- │  │              │  │         ▼                                        │  │
- │  │              │  │  ┌──────────────┐                                │  │
- │  │              │  │  │OutroSequence │ Credits scroll + website CTA   │  │
- │  │              │  │  └──────────────┘                                │  │
- │  └─────────────┘  └───────────────────────────────────────────────────┘  │
- │                                                                          │
- │  Output: final.mp4 (1080p, h264, ~10-15 min)                           │
+ │  The WeeklyVideo composition that read this timeline.json is deleted.    │
+ │  video/ now holds the studio renderer, which reads the studio's own      │
+ │  timeline.json (pipeline/studio/timeline.py), not this one. See the      │
+ │  section "Renderer" below.                                               │
  └─────────────────────────┬─────────────────────────────────────────────────┘
                            │
-                           │ final.mp4 + thumbnail.png
+                           │ (no final.mp4: nothing renders this timeline)
                            ▼
  ┌───────────────────────────────────────────────────────────────────────────┐
  │  PHASE 6: YOUTUBE DISTRIBUTOR              pipeline/video/distributor.py  │
@@ -147,60 +135,42 @@ Automated "This Week in Archaeology" — transforms weekly articles into ~10-15 
 
 ## Orchestrator
 
-```
-python -m pipeline.video.orchestrator --article-id=42
-```
+There is none. `pipeline/video/orchestrator.py` is the site-Shorts production pipeline since
+2026-09-17 (`465415e`; `python -m pipeline.video pipeline --limit N | --names-file FILE`), and the
+weekly command `python -m pipeline.video.orchestrator --article-id=<id>` with its `--dry-run`,
+`--skip-render` and `--skip-upload` flags no longer exists.
 
-| Flag | Runs | Purpose |
-|------|------|---------|
-| `--dry-run` | Phase 1 only | Print script JSON, verify structure |
-| `--skip-render` | Phases 1-4 | Generate assets, no video render |
-| `--skip-upload` | Phases 1-5 | Render video, no YouTube upload |
-| _(none)_ | Phases 1-6 | Full pipeline, upload to YouTube |
+## Renderer
 
-File: `pipeline/video/orchestrator.py`
+The weekly Remotion project (`WeeklyVideo`, `IntroSequence`, `StorySegment`, `GlobeFlyTo`,
+`TransitionWipe`, `OutroSequence` and their helpers under `video/src/`) was never rendered and is
+deleted. `video/` now holds the studio renderer: Remotion 4.0.529 with every `@remotion/*` package
+pinned to that exact version, the compositions `Episode` and `Thumbnail`, and the scripts `lint.ts`,
+`render.ts` and `still.ts`, driven by `python -m pipeline.studio episode render`. It reads the studio's
+`timeline.json` (`pipeline/studio/timeline.py`: 60 fps, scenes of registered NERV blocks), a different
+format from the weekly one below. Setup, the GPU rule and the render steps are in
+`docs/procedures/STUDIO.md`; the design is spec section 4.8 of
+`docs/superpowers/specs/2026-09-26-studio-and-claude-write-design.md`.
 
 ## File Structure
 
 ```
-pipeline/video/
+pipeline/video/            # only the weekly modules; the other files there are the site Shorts
 ├── __init__.py
 ├── script_adapter.py      # Article markdown → narration script JSON
 ├── voiceover.py           # ElevenLabs TTS + word timing
 ├── asset_collector.py     # yt-dlp clips + screenshots + WikiImages
-├── timeline_builder.py    # Merge timing + assets → Remotion inputProps
-├── distributor.py         # YouTube Data API upload
-├── orchestrator.py        # End-to-end pipeline runner
+├── timeline_builder.py    # Merge timing + assets → the weekly timeline.json (no renderer reads it)
+├── distributor.py         # YouTube Data API upload (not wired)
 └── prompts/
     └── narration_adapt.txt  # LLM prompt: article prose → spoken narration
-
-video/                     # Remotion project (TypeScript)
-├── package.json
-├── remotion.config.ts
-├── tsconfig.json
-└── src/
-    ├── index.ts            # Remotion entry point
-    ├── Root.tsx            # Composition registry
-    ├── WeeklyVideo.tsx     # Main composition (sequences all segments)
-    ├── types.ts            # Timeline JSON schema types
-    ├── compositions/
-    │   ├── IntroSequence.tsx
-    │   ├── StorySegment.tsx
-    │   ├── GlobeFlyTo.tsx       # Ported from useFlyToAnimation.ts
-    │   ├── ClipWithAttribution.tsx
-    │   ├── TransitionWipe.tsx
-    │   └── OutroSequence.tsx
-    ├── components/
-    │   ├── LowerThird.tsx       # Channel/site attribution overlay
-    │   ├── Globe3D.tsx          # Three.js globe for @remotion/three
-    │   └── KenBurns.tsx         # Pan/zoom effect on still images
-    └── utils/
-        └── timing.ts            # Frame/time conversion helpers
 ```
 
 ## The Bridge: timeline.json
 
-Python (Phases 1-4) generates `timeline.json`. Remotion (Phase 5) consumes it. This is the contract between the two stacks.
+Python (Phases 1-4) generates `timeline.json`. It was the input of the deleted `WeeklyVideo`
+composition; no renderer reads this format any more. `pipeline/video/timeline_builder.py` still writes
+it.
 
 ```json
 {
@@ -268,15 +238,9 @@ Python (Phases 1-4) generates `timeline.json`. Remotion (Phase 5) consumes it. T
 - Overall video is 60%+ original content by runtime
 - If a creator objects, remove their content and blacklist channel
 
-## Verification Checklist
+## Verification
 
-1. `python -m pipeline.video.orchestrator --article-id=X --dry-run` — verify script JSON
-2. Check ElevenLabs audio quality + word timing accuracy for first video
-3. `npx remotion studio` in `video/` — preview compositions with test data
-4. `npx remotion render WeeklyVideo --props=timeline.json` — render locally
-5. Verify globe fly-to animation renders at 30fps
-6. Check lower-third attribution over clips
-7. Upload test video as PRIVATE, verify chapters/description
-8. Full pipeline: `python -m pipeline.video.orchestrator --article-id=X`
-9. `npx tsc --noEmit` in `video/`
-10. `python -m ruff check pipeline/video/`
+The weekly checklist ran the removed orchestrator and rendered `WeeklyVideo`; neither exists. What
+still applies to the weekly modules is the static check:
+`./.venv/Scripts/python.exe -m ruff check pipeline/video/`. The checks of `video/` (`npx tsc --noEmit`,
+`npx vitest run`, the smoke render) belong to the studio renderer: `docs/procedures/STUDIO.md`.

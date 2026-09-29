@@ -204,6 +204,35 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   mit 403 und gelten als maschinell nicht lesbar. *(WD1-Review, `docs/procedures/FIELDS_WD1.md`,
   2026-09-26)*
 
+## Studio (captures and renderer)
+
+Runbook: `docs/procedures/STUDIO.md`.
+
+- **Headed Chrome draws only while the Windows display is on.** The first studio Mapbox fly-in
+  (2026-09-26, 11:41) hung for 15 minutes: the display slept, Chrome produced no animation frame, and
+  the first frame grab waited until Puppeteer's protocol timeout. With the display throttled, a
+  5-second globe take crawled for 7 minutes. The captures now hold the display awake for a take
+  (`display_awake()` in `pipeline/studio/capture/vite.py`, `SetThreadExecutionState`) and the recorder
+  scenes fail after 30 s without a frame (`NO_FRAME_MS`,
+  `ancient-nerds-map/video/scenes/studio-frames.ts`), but nothing can wake a display that is already
+  off or locked: keep it on and unlocked for every capture run. *(plan D Tasks 27 and 36, 2026-09-26)*
+- **Remotion's `bundle()` leaves a copy of the whole public dir in `%TEMP%`.** Its default output is a
+  fresh `remotion-webpack-bundle-*` directory in the system temp dir that nothing deletes, and it
+  copies the public dir, so every run left a copy of every capture on C: (67 such directories were in
+  `%TEMP%` on 2026-09-29, from the build's verification runs). The studio's node scripts bundle into
+  `render/bundle/` next to the public dir and delete it on success and failure (`withBundle`,
+  `video/scripts/cli.ts`). Delete old `%TEMP%\remotion-webpack-bundle-*` directories by hand, and
+  only while no render runs. *(plan D contract D4; build index I8 step 10, 2026-09-27)*
+- **A dev server left on a capture port serves the take from an older checkout.** Windows does not
+  end npm's children when the Python process dies, so an interrupted take leaves Vite running.
+  Without `--strictPort` the next Vite moves to another port while the page still loads from the old
+  server (with its file watcher off); an orphaned Vite on port 5199 once served takes that way
+  without an error. `record.ts` (port 5199) and the studio's `local_site()` (port 5198) start Vite
+  with `--strictPort`; `local_site()` also refuses a port that answers at any address of localhost
+  (Vite binds only the first one, `::1` here) and counts the site as ready only when its own Vite
+  announces the port. Find the stale server with `netstat -ano | findstr :5198`.
+  *(`pipeline/studio/capture/vite.py`, commit `12f5832`, 2026-09-27)*
+
 ## Nicht mehr gültig
 
 - `feedback_push_without_asking` (Push ohne Rückfrage bei grünen Gates): abgelöst durch den
