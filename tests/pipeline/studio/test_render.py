@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 
 import pytest
@@ -90,6 +91,46 @@ def test_render_runs_lint_render_still_audit_and_ledger_in_order(tmp_path, monke
     assert ledger["words_sha256"] == sha256_file(ws.words)
     assert row["script_sha256"] == sha256_file(ws.script)
     assert row["casefile_sha256"] == sha256_file(ws.casefile)
+
+
+@pytest.mark.parametrize(
+    ("name", "old", "new"),
+    [
+        ("timeline.json", '"The stone"', '"The quarry stone"'),
+        ("script.json", "This stone", "That stone"),
+        ("casefile.json", "about 1,000 tonnes.", "about 1,242 tonnes."),
+        ("voice/words.json", '"duration_s": 5.0', '"duration_s": 4.6'),
+    ],
+)
+def test_a_file_edited_during_the_render_is_not_ledgered(tmp_path, monkeypatch, name, old, new):
+    # A render runs for hours; the ledger hashes the files at its end, and `episode package`
+    # trusts those hashes to describe the video.
+    ws = ef.ready_episode(tmp_path, monkeypatch)
+    path = ws.root / name
+    inner = _runner(ws, [])
+
+    def runner(script, args, timeout):
+        if script == "render.ts":
+            text = path.read_text(encoding="utf-8")
+            assert old in text
+            path.write_text(text.replace(old, new), encoding="utf-8")
+        return inner(script, args, timeout)
+
+    def loudness(raw, out):
+        out.write_bytes(b"final")
+        return 0.0
+
+    rows = []
+    with pytest.raises(StudioError, match=rf"^{re.escape(name)} changed during the render"):
+        render.render_episode(
+            ws,
+            runner=runner,
+            loudness=loudness,
+            auditor=lambda *a: (True, []),
+            record=lambda row: rows.append(row) or {"ok": True},
+        )
+    assert rows == []
+    assert not (ws.render_dir / "ledger.json").exists()
 
 
 @pytest.mark.parametrize(

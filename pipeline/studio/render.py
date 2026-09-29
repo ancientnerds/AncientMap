@@ -29,7 +29,9 @@ Before timeline.json is rewritten, the previous render's outputs are removed, so
 render leaves nothing to package; ledger.json binds the audited render to its timeline
 (`timeline_sha256`), which `episode package` and `episode thumbnail` check, and to its word
 timings (`words_sha256`, the SRT's source), which `episode package` checks with the row's
-script and case file hashes. The three
+script and case file hashes. Those four files are hashed when the timeline is compiled and
+again before the ledger is written; a render during which one of them changed is refused
+(no ledger row, no ledger.json). The three
 thumbnail candidates (owner decisions 24, 25) are rendered by one still.ts call each;
 `episode thumbnail` re-renders one of them from another frame (render_thumbnail), under the
 rule the compiled candidates obey (timeline.thumbnail_problem: never the answer).
@@ -330,6 +332,19 @@ def render_thumbnail(
     return {"candidate": candidate, "frame": frame, "files": files, "next": "episode package"}
 
 
+def _input_hashes(ws: EpisodeWorkspace) -> dict[str, str]:
+    """sha256 of the files a render is compiled from and `episode package` describes it by."""
+    from pipeline.video.shorts_ledger import sha256_file
+
+    files = {
+        "timeline.json": ws.timeline,
+        "script.json": ws.script,
+        "casefile.json": ws.casefile,
+        "voice/words.json": ws.words,
+    }
+    return {name: sha256_file(path) for name, path in files.items()}
+
+
 def render_episode(
     ws: EpisodeWorkspace,
     *,
@@ -338,8 +353,6 @@ def render_episode(
     auditor: Callable[[Path, dict[str, Any], Path], tuple[bool, list[Any]]] = audit,
     record: Callable[[dict[str, Any]], dict[str, Any]] = record_remote,
 ) -> dict[str, Any]:
-    from pipeline.video.shorts_ledger import sha256_file
-
     loaded = load_all(ws)
     require_valid(loaded, final=True)
     # timeline.json is rewritten next: no output of an earlier render may outlive it, so a
@@ -347,6 +360,7 @@ def render_episode(
     for name in ("raw.mp4", f"{ws.slug}.mp4", *THUMBNAILS, "audit.json", "ledger.json"):
         (ws.render_dir / name).unlink(missing_ok=True)
     timeline = build_timeline(ws)
+    compiled_from = _input_hashes(ws)
     music_dir = config.video_assets() / "music"
     populate_public_dir(ws, timeline, music_dir=music_dir, fonts_dir=FONTS_DIR)
     ws.render_dir.mkdir(parents=True, exist_ok=True)
@@ -374,13 +388,19 @@ def render_episode(
     if not ok:
         failed = [c.name for c in checks if not c.ok]
         raise StudioError(f"render audit failed {failed}; see render/audit.json")
+    # The ledger hashes the files as they are now: they must still be the ones rendered.
+    changed = [name for name, sha in _input_hashes(ws).items() if sha != compiled_from[name]]
+    if changed:
+        raise StudioError(
+            f"{', '.join(changed)} changed during the render; run `episode render` again"
+        )
     row = ledger_row(ws, loaded.episode, loaded.script, timeline, final, renderers.pop())
     outcome = record(row)
     ledger = {
         "row": row,
         "outcome": outcome,
-        "timeline_sha256": sha256_file(ws.timeline),
-        "words_sha256": sha256_file(ws.words),
+        "timeline_sha256": compiled_from["timeline.json"],
+        "words_sha256": compiled_from["voice/words.json"],
     }
     (ws.render_dir / "ledger.json").write_text(json.dumps(ledger, indent=2), encoding="utf-8")
     return {"video": str(final), "gain_db": round(gain, 2), "video_sha256": row["video_sha256"]}
