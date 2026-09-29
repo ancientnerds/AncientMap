@@ -6,10 +6,23 @@ probes of pipeline/video/shorts_audit.py; `audit` writes render/audit.json.
 
 Black frames: render.ts writes BT.709 limited range, where black decodes to Y 16; the threshold
 BLACK_YAVG_TV sits 2 above it, below the darkest legitimate frames (a whole vector globe against
-black space, about Y 22-27 in video mode; the NERV background #0a0e14, Y 28). Frozen runs are measured inside clip scenes only (a scene whose
-props carry a captured clip with an fps): stills, cards and infographics hold still by design
-once their entrance ends, but a clip that holds one picture for more than FROZEN_MAX_S is a
-stalled take (cut to a card instead).
+black space, about Y 22-27 in video mode; the NERV background #0a0e14, Y 28).
+
+Frozen runs are measured inside clip scenes only (a scene whose props carry a captured clip with
+an fps): stills, cards and infographics hold still by design once their entrance ends, but a
+clip that holds one picture for more than FROZEN_MAX_S is a stalled take (cut to a card
+instead). A frame counts as unchanged when its mean luma difference to the next
+(shorts_audit._frame_diffs) is below the shorts' FROZEN_DIFF, 0.05, measured on studio takes
+on 2026-09-29 (recorded on the NVIDIA by capture.globe.record_globe, encoded as render.ts
+encodes: h264_nvenc, 16M, no B-frames; tests/pipeline/studio/frozen_reference_diffs.json).
+The slowest legitimate motion, a distribution's turn of 360 degrees in 30 s with the whole
+globe in frame, reads 0.049-0.29 per frame (camera at 12 N; 0.052-0.19 at 37 S, a view of
+mostly ocean), so it stays below 0.05 for one frame at most; a places sweep of 3 degrees/s at
+distance 1.8 reads 0.33 or more. A held picture reads 0 between keyframes, but keyframes of the
+two encodes (hevc_nvenc every 60 frames for the capture, h264_nvenc every 250 for the render)
+add single-frame spikes of 0.005-0.066. A threshold low enough to sit under those spikes would
+cut a stall into short runs: the recorder's held pose of 4.67 s reads 280 frames at 0.05 but
+109 at 0.005, which the check would pass.
 """
 
 from __future__ import annotations
@@ -20,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.video.shorts_audit import (
+    FROZEN_DIFF,
     LOUDNESS_TOL,
     PEAK_MAX_DBFS,
     Check,
@@ -57,7 +71,10 @@ def clip_scenes(timeline: dict[str, Any]) -> list[tuple[int, int]]:
 
 def longest_frozen_in_clips(diffs: list[float], timeline: dict[str, Any]) -> int:
     """The longest run of unchanged frames inside any clip scene (diffs[i]: frame i -> i+1)."""
-    runs = [longest_frozen_run(diffs[start : end - 1]) for start, end in clip_scenes(timeline)]
+    runs = [
+        longest_frozen_run(diffs[start : end - 1], FROZEN_DIFF)
+        for start, end in clip_scenes(timeline)
+    ]
     return max(runs, default=0)
 
 

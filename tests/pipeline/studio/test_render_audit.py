@@ -1,7 +1,15 @@
 from __future__ import annotations
 
-from pipeline.studio import render_audit
+import json
+from pathlib import Path
 
+from pipeline.studio import render_audit
+from pipeline.video.shorts_audit import longest_frozen_run
+
+#: shorts_audit._frame_diffs of three real takes as render.ts encodes them (provenance inside)
+REFERENCE = json.loads(
+    Path(__file__).with_name("frozen_reference_diffs.json").read_text(encoding="utf-8")
+)
 TIMELINE = {"fps": 60, "width": 1920, "height": 1080, "durationInFrames": 3600}
 GOOD = {
     "width": 1920,
@@ -57,6 +65,28 @@ def test_static_card_scenes_are_not_frozen():
     diffs = [1.0] * 600 + [0.0] * 299
     assert render_audit.longest_frozen_in_clips(diffs, timeline) == 299
     assert render_audit.longest_frozen_in_clips([0.0] * 899, {**timeline, "scenes": []}) == 0
+
+
+def _one_clip(frames):
+    clip = {"clip": {"id": "g1", "fps": 60, "src": "captures/g1.mp4"}}
+    return {**TIMELINE, "scenes": [_scene("b01", 0, frames, clip)]}
+
+
+def test_frozen_threshold_on_real_studio_takes():
+    # frame diffs of real takes (2026-09-29, render_audit's docstring): the slowest legitimate
+    # turn of the globe dips below FROZEN_DIFF for one frame at most ...
+    for take, most in (("turn_12n", 1), ("turn_37s", 0)):
+        diffs = REFERENCE[take]["diffs"]
+        assert render_audit.longest_frozen_in_clips(diffs, _one_clip(len(diffs) + 1)) == most
+    # ... while a held pose stays below it for 4.67 s, which the check fails
+    held = REFERENCE["held"]["diffs"]
+    run = render_audit.longest_frozen_in_clips(held, _one_clip(len(held) + 1))
+    assert run == 280
+    frozen = {**GOOD, "frames": TIMELINE["durationInFrames"], "longest_frozen_frames": run}
+    assert [c.ok for c in render_audit.evaluate(frozen, TIMELINE) if c.name == "frozen"] == [False]
+    # a threshold under the encoders' keyframe spikes would cut that stall into short runs
+    assert longest_frozen_run(held, 0.005) == 109
+    assert longest_frozen_run(held, 0.005) <= render_audit.FROZEN_MAX_S * TIMELINE["fps"]
 
 
 def test_good_measurements_pass():
