@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.studio.capture import globe
+from pipeline.studio.capture import platform as platform_take
 from pipeline.studio.capture.gpu import nvenc_problem
 from pipeline.studio.capture.manifest import CREDIT_MAPBOX_STREETS, CaptureError
 
@@ -365,6 +366,7 @@ class FakeRecorder:
     """Stands in for `npm run video:record`: writes what the scene would (frames, renderer, points)."""
 
     frames = 300
+    size = (1920, 1080)
     returncode = 0
     renderer = NVIDIA
 
@@ -379,7 +381,7 @@ class FakeRecorder:
         frames = Path(inp["frames_dir"])
         frames.mkdir(parents=True)
         for i in range(self.frames):
-            Image.new("RGB", (1920, 1080), (i % 255, 40, 80)).save(frames / f"f{i:06d}.jpg")
+            Image.new("RGB", self.size, (i % 255, 40, 80)).save(frames / f"f{i:06d}.jpg")
         points = {p["id"]: [[960.0, 540.0]] * self.frames for p in inp["places"]}
         Path(inp["points_path"]).write_text(json.dumps(points), encoding="utf-8")
 
@@ -430,6 +432,24 @@ def test_a_take_with_missing_frames_fails_before_the_encode(tmp_path, monkeypatc
     monkeypatch.setattr(globe, "start_recorder", Short)
     with pytest.raises(CaptureError, match="the take has 250 frames, expected 300"):
         globe.record_globe(tmp_path, FLYTO)
+
+
+def test_a_take_of_the_wrong_size_fails_before_the_encode(tmp_path, monkeypatch, workstation):
+    class Small(FakeRecorder):
+        size = (1280, 720)
+
+    def never(frames_dir, fps, out):
+        raise AssertionError("encoded a take of the wrong size")
+
+    monkeypatch.setattr(globe, "start_recorder", Small)
+    monkeypatch.setattr(globe, "sequence_to_mp4", never)
+    with pytest.raises(
+        CaptureError, match=r"g1: frames are \(1280, 720\), expected \(1920, 1080\)"
+    ):
+        globe.record_globe(tmp_path, FLYTO)
+    # One frame-size reader for every take: the globe reuses the platform's, no copy of it.
+    assert globe.frame_size is platform_take.frame_size
+    assert not hasattr(globe, "_frame_size")
 
 
 def test_an_encoder_failure_names_the_tool_and_its_stderr(tmp_path, monkeypatch, workstation):

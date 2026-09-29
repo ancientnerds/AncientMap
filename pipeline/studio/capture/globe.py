@@ -76,6 +76,7 @@ from pipeline.studio.capture.manifest import (
     require_kind,
     tool_failure,
 )
+from pipeline.studio.capture.platform import frame_size
 from pipeline.studio.capture.projection import (
     GLOBE_MAX_DISTANCE,
     GLOBE_MIN_DISTANCE,
@@ -498,13 +499,6 @@ def start_recorder(cmd: list[str], log: Any) -> subprocess.Popen[bytes]:
     return subprocess.Popen(cmd, cwd=FRONTEND_DIR, env=env, stdout=log, stderr=subprocess.STDOUT)
 
 
-def _frame_size(frames_dir: Path) -> tuple[int, int]:
-    from PIL import Image
-
-    with Image.open(frames_dir / "f000000.jpg") as first:
-        return first.size
-
-
 def record_globe(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
     """Record one globe or Mapbox take into captures/<id>.mp4 and return its manifest."""
     cid = require_kind(spec, "globe")
@@ -540,7 +534,7 @@ def record_globe(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
         raise CaptureError(
             f"{cid}: the take has {count} frames, expected {expected_frames(inp['duration_s'])}"
         )
-    size = _frame_size(frames_dir)
+    size = frame_size(frames_dir)
     if size != (WIDTH, HEIGHT):
         raise CaptureError(f"{cid}: frames are {size}, expected {(WIDTH, HEIGHT)}")
     points = (

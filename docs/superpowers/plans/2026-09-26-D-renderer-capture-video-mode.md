@@ -13427,7 +13427,7 @@ git commit -m "Record platform moments of the real site with the fast NERV curso
 - Create: `pipeline/studio/capture/globe.py`
 - Test: `tests/pipeline/studio/capture/test_capture_globe.py`
 
-`record_globe` validates the spec before any side effect (unknown keys per scene, every number typed and in range, `empire` a key of `EMPIRE_METADATA` because the frontend silently loads nothing for an unknown id, the places' `lead_s`/`interval_s` and their last light-up inside the take), writes the scene input to `captures/<id>.rec/input.json`, runs `npm run video:record -- <studio scene> --fps 60 --input ... --out ...` in the frontend with the display held awake, then checks what the scene wrote (Task 35): `renderer.json` must name the NVIDIA, the frame count must be exactly `floor(duration_s * 60 + 0.5)` (JS `Math.round`, as the scene counts; Python's `round()` rounds 304.5 to 304) and is checked before the encode, and `points.json` must hold one pixel (or null) per frame for every place. Places are projected per frame (owner rule): the scene reads `screenPoint` after every grabbed frame, and each `place` event starts at the first frame from its light-up time on where the page draws the place inside `PLACES_BAND` (the layout lint refused the Giza label of the first real places take, drawn at y 946 over the player controls) and carries its `track` to the end of the take, null where the place is hidden or leaves the band. A fixed pose is still fitted to the band (`sweep_lng_deg` 0); with a sweep the camera longitude runs from `cam_lng_from` by `sweep_lng_deg` over the take. The `distribution` scene is spec 4.10's world distribution: up to 500 places, labels optional, the whole globe in frame (distance 2.44) turning once (a sweep of 360 degrees from opposite the places' mean longitude). Every place gets its event the first time it faces the camera, and unlabelled places, which GlobeShot draws as dots without labels, are exempt from the band. The camera latitude is chosen before the take so that one turn can show every place: `distribution_pose` takes the latitude nearest the midpoint of the places' lowest and highest latitude (the midpoint itself or a whole degree within ±45) at which every place is admissible. A dot is admissible when it lies within the horizon less 5° (`|lat - cam_lat| <= acos(1/2.44) - 5`, 60.8°). A labelled place is admissible when projection.py's globe camera, the model `fit_globe_distance` uses, draws it inside `PLACES_BAND` at some camera longitude of the turn. The mean latitude used before let the dots dominate. Ten dots near 48°N and one on Rapa Nui (-27.1°) gave a mean of 41.2, which leaves the Rapa Nui dot 68.3° away, beyond the 65.8° horizon for the whole turn. `take_events` would refuse that only after a take of many minutes. When no latitude admits every place, `scene_input` refuses the spec before any side effect: split the distribution. The page's own pixels still decide in `take_events`. The dots come from our database by site id (owner decision 15): plan C's `captures.py` resolves the script's `site_ids` from the repo-root `public/data/sites/` export and hands them to `record_globe` as unlabelled places `{id: <site id>, lat, lng}`, so this module needs no change for them; a test pins that a dot keeps its site id as the event's `target` and carries no label. A fly-to with a `place` tracks its target the same way and adds the target's `place` event at the arrival; `arrive` itself carries only the frame centre. Root cause of the recorder failure the first studio capture hit (`EBML header parsing failed`, 2026-09-26): the recorder's MediaRecorder stream drops frames when its VP8 encoder falls behind (22, 66 and 0 of 300 frames in three takes); the 0-frame take is an empty WebM. The studio scenes therefore grab every frame themselves and this module encodes the numbered JPEGs (Task 25). A Mapbox fly-in waits for its tiles on every frame (5 s took 17 min), hence the 90-minute limit. A failed encode is a `CaptureError` naming ffmpeg and its stderr. The recorder is faked in the tests.
+`record_globe` validates the spec before any side effect (unknown keys per scene, every number typed and in range, `empire` a key of `EMPIRE_METADATA` because the frontend silently loads nothing for an unknown id, the places' `lead_s`/`interval_s` and their last light-up inside the take), writes the scene input to `captures/<id>.rec/input.json`, runs `npm run video:record -- <studio scene> --fps 60 --input ... --out ...` in the frontend with the display held awake, then checks what the scene wrote (Task 35): `renderer.json` must name the NVIDIA, the frame count must be exactly `floor(duration_s * 60 + 0.5)` (JS `Math.round`, as the scene counts; Python's `round()` rounds 304.5 to 304) and is checked before the encode, like the frame size (1920x1080, read from the first frame with Task 30's `platform.frame_size`, the one reader of a frame sequence's size, never a copy of it), and `points.json` must hold one pixel (or null) per frame for every place. Places are projected per frame (owner rule): the scene reads `screenPoint` after every grabbed frame, and each `place` event starts at the first frame from its light-up time on where the page draws the place inside `PLACES_BAND` (the layout lint refused the Giza label of the first real places take, drawn at y 946 over the player controls) and carries its `track` to the end of the take, null where the place is hidden or leaves the band. A fixed pose is still fitted to the band (`sweep_lng_deg` 0); with a sweep the camera longitude runs from `cam_lng_from` by `sweep_lng_deg` over the take. The `distribution` scene is spec 4.10's world distribution: up to 500 places, labels optional, the whole globe in frame (distance 2.44) turning once (a sweep of 360 degrees from opposite the places' mean longitude). Every place gets its event the first time it faces the camera, and unlabelled places, which GlobeShot draws as dots without labels, are exempt from the band. The camera latitude is chosen before the take so that one turn can show every place: `distribution_pose` takes the latitude nearest the midpoint of the places' lowest and highest latitude (the midpoint itself or a whole degree within ±45) at which every place is admissible. A dot is admissible when it lies within the horizon less 5° (`|lat - cam_lat| <= acos(1/2.44) - 5`, 60.8°). A labelled place is admissible when projection.py's globe camera, the model `fit_globe_distance` uses, draws it inside `PLACES_BAND` at some camera longitude of the turn. The mean latitude used before let the dots dominate. Ten dots near 48°N and one on Rapa Nui (-27.1°) gave a mean of 41.2, which leaves the Rapa Nui dot 68.3° away, beyond the 65.8° horizon for the whole turn. `take_events` would refuse that only after a take of many minutes. When no latitude admits every place, `scene_input` refuses the spec before any side effect: split the distribution. The page's own pixels still decide in `take_events`. The dots come from our database by site id (owner decision 15): plan C's `captures.py` resolves the script's `site_ids` from the repo-root `public/data/sites/` export and hands them to `record_globe` as unlabelled places `{id: <site id>, lat, lng}`, so this module needs no change for them; a test pins that a dot keeps its site id as the event's `target` and carries no label. A fly-to with a `place` tracks its target the same way and adds the target's `place` event at the arrival; `arrive` itself carries only the frame centre. Root cause of the recorder failure the first studio capture hit (`EBML header parsing failed`, 2026-09-26): the recorder's MediaRecorder stream drops frames when its VP8 encoder falls behind (22, 66 and 0 of 300 frames in three takes); the 0-frame take is an empty WebM. The studio scenes therefore grab every frame themselves and this module encodes the numbered JPEGs (Task 25). A Mapbox fly-in waits for its tiles on every frame (5 s took 17 min), hence the 90-minute limit. A failed encode is a `CaptureError` naming ffmpeg and its stderr. The recorder is faked in the tests.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -13444,6 +13444,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.studio.capture import globe
+from pipeline.studio.capture import platform as platform_take
 from pipeline.studio.capture.gpu import nvenc_problem
 from pipeline.studio.capture.manifest import CREDIT_MAPBOX_STREETS, CaptureError
 
@@ -13801,6 +13802,7 @@ class FakeRecorder:
     """Stands in for `npm run video:record`: writes what the scene would (frames, renderer, points)."""
 
     frames = 300
+    size = (1920, 1080)
     returncode = 0
     renderer = NVIDIA
 
@@ -13815,7 +13817,7 @@ class FakeRecorder:
         frames = Path(inp["frames_dir"])
         frames.mkdir(parents=True)
         for i in range(self.frames):
-            Image.new("RGB", (1920, 1080), (i % 255, 40, 80)).save(frames / f"f{i:06d}.jpg")
+            Image.new("RGB", self.size, (i % 255, 40, 80)).save(frames / f"f{i:06d}.jpg")
         points = {p["id"]: [[960.0, 540.0]] * self.frames for p in inp["places"]}
         Path(inp["points_path"]).write_text(json.dumps(points), encoding="utf-8")
 
@@ -13866,6 +13868,24 @@ def test_a_take_with_missing_frames_fails_before_the_encode(tmp_path, monkeypatc
     monkeypatch.setattr(globe, "start_recorder", Short)
     with pytest.raises(CaptureError, match="the take has 250 frames, expected 300"):
         globe.record_globe(tmp_path, FLYTO)
+
+
+def test_a_take_of_the_wrong_size_fails_before_the_encode(tmp_path, monkeypatch, workstation):
+    class Small(FakeRecorder):
+        size = (1280, 720)
+
+    def never(frames_dir, fps, out):
+        raise AssertionError("encoded a take of the wrong size")
+
+    monkeypatch.setattr(globe, "start_recorder", Small)
+    monkeypatch.setattr(globe, "sequence_to_mp4", never)
+    with pytest.raises(
+        CaptureError, match=r"g1: frames are \(1280, 720\), expected \(1920, 1080\)"
+    ):
+        globe.record_globe(tmp_path, FLYTO)
+    # One frame-size reader for every take: the globe reuses the platform's, no copy of it.
+    assert globe.frame_size is platform_take.frame_size
+    assert not hasattr(globe, "_frame_size")
 
 
 def test_an_encoder_failure_names_the_tool_and_its_stderr(tmp_path, monkeypatch, workstation):
@@ -13983,6 +14003,7 @@ from pipeline.studio.capture.manifest import (
     require_kind,
     tool_failure,
 )
+from pipeline.studio.capture.platform import frame_size
 from pipeline.studio.capture.projection import (
     GLOBE_MAX_DISTANCE,
     GLOBE_MIN_DISTANCE,
@@ -14405,13 +14426,6 @@ def start_recorder(cmd: list[str], log: Any) -> subprocess.Popen[bytes]:
     return subprocess.Popen(cmd, cwd=FRONTEND_DIR, env=env, stdout=log, stderr=subprocess.STDOUT)
 
 
-def _frame_size(frames_dir: Path) -> tuple[int, int]:
-    from PIL import Image
-
-    with Image.open(frames_dir / "f000000.jpg") as first:
-        return first.size
-
-
 def record_globe(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
     """Record one globe or Mapbox take into captures/<id>.mp4 and return its manifest."""
     cid = require_kind(spec, "globe")
@@ -14447,7 +14461,7 @@ def record_globe(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
         raise CaptureError(
             f"{cid}: the take has {count} frames, expected {expected_frames(inp['duration_s'])}"
         )
-    size = _frame_size(frames_dir)
+    size = frame_size(frames_dir)
     if size != (WIDTH, HEIGHT):
         raise CaptureError(f"{cid}: frames are {size}, expected {(WIDTH, HEIGHT)}")
     points = (
@@ -14479,7 +14493,7 @@ def record_globe(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/capture/test_capture_globe.py -m "not integration and not live_llm" -q -rs`
-Expected on the workstation: `28 passed`. Without NVENC (CI): `27 passed, 1 skipped` (the frame-count check now runs before the encode, so only the full take needs NVENC).
+Expected on the workstation: `29 passed`. Without NVENC (CI): `28 passed, 1 skipped` (the frame-count and frame-size checks run before the encode, so only the full take needs NVENC).
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
@@ -16387,3 +16401,11 @@ Five adversarial reviews of Task 29's commit e107bc8 found gaps. Each was confir
 - **Counts.** `test_capture_sources.py` has 57 tests, all passing on the workstation (17 at e107bc8, 35 after 36663cb). Without Playwright: 21 passed, 36 skipped. Five tests run the real `_capture` and skip without `nvidia-smi`. The capture directory gives 129 passed, 1 skipped (the non-Windows vite refusal). ruff check, ruff format --check and lint-imports (2 contracts kept) are clean. A script extracted Task 29's three complete-file blocks and found each byte-identical to its committed file.
 - **Not changed:** `manifest.py`. Its `event` and `build_manifest` still check only w, h > 0. The box is checked against the shot window in `sources.py` before the screenshot is taken.
 - **Seen, not changed:** a first copy at `opacity:0` or under `clip-path:inset(50%)` still counts as seen, and is highlighted over text the reader cannot see (probed 2026-09-29: box at y 16 before the shown copy at 1500). Refusing opacity 0 (`checkVisibility({opacityProperty: true})`) would also refuse a scroll-reveal page, whose text sits at opacity 0 until the capture scrolls there and is visible in the screenshot. That is a decision for the owner, not a review fix.
+
+### Task 31 review fix (2026-09-29, one frame-size reader)
+
+An adversarial review of Task 31's commit dcdd082 found a duplicated utility, confirmed: `globe.py`'s private `_frame_size(frames_dir)` had the same body as the public `frame_size(frames_dir)` of `platform.py` (Task 30, committed in 40927d7 before dcdd082). The copy came from this plan's own Task 31 code block.
+
+- Changed in a follow-up commit on `feat/studio` that touched only `globe.py`, its test file and this plan: `_frame_size` is gone, and `globe.py` imports `frame_size` from `pipeline.studio.capture.platform`. `platform.py` has only the standard library, sibling capture modules and `pipeline.utils.geo` at module level (Playwright and Pillow are imported inside functions) and does not import `globe`, so there is no cycle. `frame_size` stays where it is: moving it into `encode.py` would have touched `platform.py` and its tests, which belong to Task 30.
+- New test `test_a_take_of_the_wrong_size_fails_before_the_encode`: `FakeRecorder` gains a `size` (default 1920x1080), a take of 1280x720 frames fails with `g1: frames are (1280, 720), expected (1920, 1080)` before `sequence_to_mp4` is reached, and `globe.frame_size` is `platform.frame_size` with no `_frame_size` left. Run against the dcdd082 `globe.py` it fails (`module 'pipeline.studio.capture.globe' has no attribute 'frame_size'`). The frame-size check had no test before.
+- Texts: Task 31's intro, its test and module blocks and Step 4's counts (29, CI 28 + 1 skip). Task 32's and the final check's capture-suite totals are not rewritten here; they already predate the review fixes of Tasks 29 and 30.
