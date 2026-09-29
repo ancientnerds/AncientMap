@@ -14065,19 +14065,28 @@ git commit -m "Compile timeline.json frame-exact from script, words, captures an
 
 ### Task 22: render_audit.py, the post-render audit
 
-Two thresholds follow the renderer. Black: render.ts writes BT.709 limited range, where black decodes to Y 16, so `BLACK_YAVG_TV` = 18.0, limited-range black plus 2. The darkest legitimate frames stay above it: the NERV background #0a0e14 (Y 28) and a whole vector globe against black space, which a GlobeShot `distribution` turn (owner decision 14), a `places` sweep and the opening of a flyto show for their whole length (Y about 22 to 27 in video mode: measured on a 1920x1080 frame of the platform with the whole globe, converted as the capture encoder converts, 26.6 for the Europe-facing view with the side panels hidden as `?video=1` hides them, about 22 for an ocean-facing view, where the disc covers about 29 % of the frame at 31-39 and space measures 17.3). The Shorts' full-range `BLACK_YAVG` mapped onto the limited range (about 26.3) would count those takes as black and fail `episode render` after the whole render. Frozen runs: stills, cards and infographics hold still by design once their entrance ends, so the check measures only clip scenes (props with a captured clip that has an fps); a clip holding one picture for more than 4 s is a stalled take, and the script should cut to a card instead.
+Two thresholds follow the renderer. Black: render.ts writes BT.709 limited range, where black decodes to Y 16, so `BLACK_YAVG_TV` = 18.0, limited-range black plus 2. The darkest legitimate frames stay above it: the NERV background #0a0e14 (Y 28) and a whole vector globe against black space, which a GlobeShot `distribution` turn (owner decision 14), a `places` sweep and the opening of a flyto show for their whole length (Y about 22 to 27 in video mode: measured on a 1920x1080 frame of the platform with the whole globe, converted as the capture encoder converts, 26.6 for the Europe-facing view with the side panels hidden as `?video=1` hides them, about 22 for an ocean-facing view, where the disc covers about 29 % of the frame at 31-39 and space measures 17.3). The Shorts' full-range `BLACK_YAVG` mapped onto the limited range (about 26.3) would count those takes as black and fail `episode render` after the whole render. Frozen runs: stills, cards and infographics hold still by design once their entrance ends, so the check measures only clip scenes (props with a captured clip that has an fps); a clip holding one picture for more than 4 s is a stalled take, and the script should cut to a card instead. The frozen threshold is the Shorts' `FROZEN_DIFF` (0.05), measured on studio takes on 2026-09-29: a real distribution turn of 30 s (the slowest legitimate turn), recorded on the NVIDIA and encoded as render.ts encodes, stays below it for one frame at most, while a held pose stays below it for 280 frames; a lower threshold would let the encoders' keyframe spikes (0.005-0.066) cut a stall into short runs (the held pose reads 109 frames at 0.005). `tests/pipeline/studio/frozen_reference_diffs.json` holds those frame diffs: committed measurement data with its provenance inside, not written by a step of this task.
 
 **Files:**
 - Create: `pipeline/studio/render_audit.py`
 - Test: `tests/pipeline/studio/test_render_audit.py`
+- Test data: `tests/pipeline/studio/frozen_reference_diffs.json` (measured, see above)
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 from __future__ import annotations
 
-from pipeline.studio import render_audit
+import json
+from pathlib import Path
 
+from pipeline.studio import render_audit
+from pipeline.video.shorts_audit import longest_frozen_run
+
+#: shorts_audit._frame_diffs of three real takes as render.ts encodes them (provenance inside)
+REFERENCE = json.loads(
+    Path(__file__).with_name("frozen_reference_diffs.json").read_text(encoding="utf-8")
+)
 TIMELINE = {"fps": 60, "width": 1920, "height": 1080, "durationInFrames": 3600}
 GOOD = {
     "width": 1920,
@@ -14101,6 +14110,19 @@ def test_longest_black_run_on_the_limited_range():
     assert render_audit.longest_black_s([(0.0, 16.2), (0.25, 17.3), (0.5, 16.0)]) == 0.75
 
 
+def test_black_runs_are_counted_by_the_shorts_run_counter(monkeypatch):
+    # one run counter (shorts_audit.longest_frozen_run), imported, not a copy of its loop
+    seen = []
+
+    def counter(values, threshold):
+        seen.append((values, threshold))
+        return 3
+
+    monkeypatch.setattr(render_audit, "longest_frozen_run", counter)
+    assert render_audit.longest_black_s([(0.0, 16.0), (0.25, 30.0)]) == 0.75
+    assert seen == [([16.0, 30.0], render_audit.BLACK_YAVG_TV)]
+
+
 def _scene(sid, start, frames, props):
     return {"id": sid, "from": start, "durationInFrames": frames, "props": props}
 
@@ -14120,6 +14142,28 @@ def test_static_card_scenes_are_not_frozen():
     diffs = [1.0] * 600 + [0.0] * 299
     assert render_audit.longest_frozen_in_clips(diffs, timeline) == 299
     assert render_audit.longest_frozen_in_clips([0.0] * 899, {**timeline, "scenes": []}) == 0
+
+
+def _one_clip(frames):
+    clip = {"clip": {"id": "g1", "fps": 60, "src": "captures/g1.mp4"}}
+    return {**TIMELINE, "scenes": [_scene("b01", 0, frames, clip)]}
+
+
+def test_frozen_threshold_on_real_studio_takes():
+    # frame diffs of real takes (2026-09-29, render_audit's docstring): the slowest legitimate
+    # turn of the globe dips below FROZEN_DIFF for one frame at most ...
+    for take, most in (("turn_12n", 1), ("turn_37s", 0)):
+        diffs = REFERENCE[take]["diffs"]
+        assert render_audit.longest_frozen_in_clips(diffs, _one_clip(len(diffs) + 1)) == most
+    # ... while a held pose stays below it for 4.67 s, which the check fails
+    held = REFERENCE["held"]["diffs"]
+    run = render_audit.longest_frozen_in_clips(held, _one_clip(len(held) + 1))
+    assert run == 280
+    frozen = {**GOOD, "frames": TIMELINE["durationInFrames"], "longest_frozen_frames": run}
+    assert [c.ok for c in render_audit.evaluate(frozen, TIMELINE) if c.name == "frozen"] == [False]
+    # a threshold under the encoders' keyframe spikes would cut that stall into short runs
+    assert longest_frozen_run(held, 0.005) == 109
+    assert longest_frozen_run(held, 0.005) <= render_audit.FROZEN_MAX_S * TIMELINE["fps"]
 
 
 def test_good_measurements_pass():
@@ -14156,10 +14200,23 @@ probes of pipeline/video/shorts_audit.py; `audit` writes render/audit.json.
 
 Black frames: render.ts writes BT.709 limited range, where black decodes to Y 16; the threshold
 BLACK_YAVG_TV sits 2 above it, below the darkest legitimate frames (a whole vector globe against
-black space, about Y 22-27 in video mode; the NERV background #0a0e14, Y 28). Frozen runs are measured inside clip scenes only (a scene whose
-props carry a captured clip with an fps): stills, cards and infographics hold still by design
-once their entrance ends, but a clip that holds one picture for more than FROZEN_MAX_S is a
-stalled take (cut to a card instead).
+black space, about Y 22-27 in video mode; the NERV background #0a0e14, Y 28).
+
+Frozen runs are measured inside clip scenes only (a scene whose props carry a captured clip with
+an fps): stills, cards and infographics hold still by design once their entrance ends, but a
+clip that holds one picture for more than FROZEN_MAX_S is a stalled take (cut to a card
+instead). A frame counts as unchanged when its mean luma difference to the next
+(shorts_audit._frame_diffs) is below the shorts' FROZEN_DIFF, 0.05, measured on studio takes
+on 2026-09-29 (recorded on the NVIDIA by capture.globe.record_globe, encoded as render.ts
+encodes: h264_nvenc, 16M, no B-frames; tests/pipeline/studio/frozen_reference_diffs.json).
+The slowest legitimate motion, a distribution's turn of 360 degrees in 30 s with the whole
+globe in frame, reads 0.049-0.29 per frame (camera at 12 N; 0.052-0.19 at 37 S, a view of
+mostly ocean), so it stays below 0.05 for one frame at most; a places sweep of 3 degrees/s at
+distance 1.8 reads 0.33 or more. A held picture reads 0 between keyframes, but keyframes of the
+two encodes (hevc_nvenc every 60 frames for the capture, h264_nvenc every 250 for the render)
+add single-frame spikes of 0.005-0.066. A threshold low enough to sit under those spikes would
+cut a stall into short runs: the recorder's held pose of 4.67 s reads 280 frames at 0.05 but
+109 at 0.005, which the check would pass.
 """
 
 from __future__ import annotations
@@ -14169,7 +14226,17 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from pipeline.video.shorts_audit import LOUDNESS_TOL, PEAK_MAX_DBFS, Check
+from pipeline.video.shorts_audit import (
+    FROZEN_DIFF,
+    LOUDNESS_TOL,
+    PEAK_MAX_DBFS,
+    Check,
+    _ffprobe_stream,
+    _frame_diffs,
+    _loudness,
+    _luma_samples,
+    longest_frozen_run,
+)
 from pipeline.video.shorts_render import TARGET_LUFS
 
 LUMA_STEP_S = 0.25
@@ -14182,11 +14249,8 @@ BLACK_YAVG_TV = 18.0
 
 
 def longest_black_s(samples: list[tuple[float, float]], step_s: float = LUMA_STEP_S) -> float:
-    longest = run = 0
-    for _t, yavg in samples:
-        run = run + 1 if yavg < BLACK_YAVG_TV else 0
-        longest = max(longest, run)
-    return longest * step_s
+    """The longest run of luma samples below BLACK_YAVG_TV, in seconds."""
+    return longest_frozen_run([yavg for _t, yavg in samples], BLACK_YAVG_TV) * step_s
 
 
 def clip_scenes(timeline: dict[str, Any]) -> list[tuple[int, int]]:
@@ -14201,9 +14265,10 @@ def clip_scenes(timeline: dict[str, Any]) -> list[tuple[int, int]]:
 
 def longest_frozen_in_clips(diffs: list[float], timeline: dict[str, Any]) -> int:
     """The longest run of unchanged frames inside any clip scene (diffs[i]: frame i -> i+1)."""
-    from pipeline.video.shorts_audit import longest_frozen_run
-
-    runs = [longest_frozen_run(diffs[start : end - 1]) for start, end in clip_scenes(timeline)]
+    runs = [
+        longest_frozen_run(diffs[start : end - 1], FROZEN_DIFF)
+        for start, end in clip_scenes(timeline)
+    ]
     return max(runs, default=0)
 
 
@@ -14237,13 +14302,6 @@ def evaluate(m: dict[str, Any], timeline: dict[str, Any]) -> list[Check]:
 
 
 def measure(video: Path, timeline: dict[str, Any]) -> dict[str, Any]:
-    from pipeline.video.shorts_audit import (
-        _ffprobe_stream,
-        _frame_diffs,
-        _loudness,
-        _luma_samples,
-    )
-
     stream = _ffprobe_stream(video)
     lufs, peak = _loudness(video)
     return {
@@ -14272,14 +14330,15 @@ def audit(video: Path, timeline: dict[str, Any], out: Path) -> tuple[bool, list[
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/test_render_audit.py -m "not integration and not live_llm" -q`
-Expected: `4 passed`
+Expected: `6 passed`
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pipeline/studio/render_audit.py tests/pipeline/studio/test_render_audit.py
+git add pipeline/studio/render_audit.py tests/pipeline/studio/test_render_audit.py \
+  tests/pipeline/studio/frozen_reference_diffs.json
 git commit -m "Audit a rendered episode with the shorts probes: format, duration, black, frozen, loudness" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
