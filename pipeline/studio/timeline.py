@@ -33,7 +33,7 @@ import json
 import math
 from typing import Any
 
-from pipeline.studio.casefile import CaseFile, refs_in, resolve_refs, resolved
+from pipeline.studio.casefile import CaseFile, capture_ids_in, refs_in, resolve_refs, resolved
 from pipeline.studio.episode import EpisodeWorkspace, load_all, require_valid
 from pipeline.studio.errors import StudioError
 from pipeline.studio.script import LEAD_S, ROLES, VALUE_VERBS, cue_word_index, scene_seconds
@@ -45,16 +45,6 @@ HEIGHT = 1080
 
 def _frames_ceil(seconds: float, fps: int) -> int:
     return math.ceil(round(seconds * fps, 6))
-
-
-def _capture_ids(value: Any) -> list[str]:
-    if isinstance(value, dict):
-        if set(value) == {"$capture"}:
-            return [value["$capture"]]
-        return [c for v in value.values() for c in _capture_ids(v)]
-    if isinstance(value, list):
-        return [c for v in value for c in _capture_ids(v)]
-    return []
 
 
 def verdict_frame(timeline: dict[str, Any]) -> int | None:
@@ -171,7 +161,7 @@ def compile_timeline(
         texts: list[str] = []
         if beat["visual"].get("credit"):
             texts.append(beat["visual"]["credit"])
-        for cid in _capture_ids(props):
+        for cid in capture_ids_in(props):
             texts.extend(captures[cid]["credits"])
         for ref in refs_in(props):
             if ref in media_ids:

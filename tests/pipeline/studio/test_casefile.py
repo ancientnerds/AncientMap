@@ -118,6 +118,18 @@ def test_resolve_refs_replaces_entities_and_captures():
     assert casefile.refs_in(props) == ["m1", "e1"]
 
 
+def test_capture_ids_in_finds_every_capture_ref_at_any_depth():
+    props = {
+        "clip": {"$capture": "platform-01"},
+        "image": {"$ref": "m1"},
+        "panels": [{"page": {"$capture": "source-01"}}, [{"$capture": "map-01"}]],
+        "label": "$capture",
+        "mixed": {"$capture": "not-a-ref", "extra": 1},
+    }
+    assert casefile.capture_ids_in(props) == ["platform-01", "source-01", "map-01"]
+    assert casefile.capture_ids_in({"$ref": "m1"}) == []
+
+
 def test_unrecorded_and_unknown_refs_fail_differently():
     entities = casefile.resolved(casefile.from_dict(ef.casefile()))
     with pytest.raises(casefile.CaptureNotRecorded):

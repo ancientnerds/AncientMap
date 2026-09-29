@@ -55,6 +55,7 @@ from pipeline.studio.casefile import (
     Evidence,
     Place,
     Quantity,
+    capture_ids_in,
     refs_in,
     resolve_refs,
     resolved,
@@ -431,16 +432,6 @@ def _capture_bindings(specs: dict[str, dict[str, Any]], cf: CaseFile, report: Sc
                 )
 
 
-def _capture_ids_in(value: Any) -> list[str]:
-    if isinstance(value, dict):
-        if set(value) == {"$capture"}:
-            return [value["$capture"]]
-        return [c for v in value.values() for c in _capture_ids_in(v)]
-    if isinstance(value, list):
-        return [c for v in value for c in _capture_ids_in(v)]
-    return []
-
-
 def _dicts_with_id(value: Any) -> list[dict[str, Any]]:
     if isinstance(value, dict):
         own = [value] if isinstance(value.get("id"), str) else []
@@ -600,7 +591,7 @@ def _glyph_problems(
         )
     if "credit" in visual:
         texts.append(("visual.credit", visual["credit"]))
-    for cid in _capture_ids_in(visual["props"]):
+    for cid in capture_ids_in(visual["props"]):
         if captures is not None and cid in captures:
             texts.extend(capture_strings(captures[cid], f"capture {cid}"))
     for ref in refs_in(visual["props"]):
@@ -817,7 +808,7 @@ def validate_script(
             item = evidence.get(ref)
             if item is not None and item.verification.status != "verified":
                 report.errors.append(f"{bid}: props show evidence {ref}, which is not verified")
-        for cid in _capture_ids_in(raw):
+        for cid in capture_ids_in(raw):
             if cid not in specs:
                 report.errors.append(f"{bid}: $capture {cid!r} is not declared in captures")
         report.errors.extend(
@@ -1030,7 +1021,7 @@ def _map_credit(
     """A map scene carries a map credit: its own, or one its captures recorded."""
     texts = [visual.get("credit", "")]
     pending = False
-    for cid in _capture_ids_in(visual["props"]):
+    for cid in capture_ids_in(visual["props"]):
         if captures is not None and cid in captures:
             texts.extend(captures[cid]["credits"])
         else:

@@ -89,6 +89,15 @@ def test_ticker_chapters_credits_and_music():
     }
 
 
+def test_script_and_timeline_list_captures_with_the_case_file_walker():
+    """The capture credits script.py checks are the ones the timeline emits: both modules take
+    a beat's capture ids from casefile.capture_ids_in, neither keeps a copy of its own."""
+    from pipeline.studio import script
+
+    assert timeline.capture_ids_in is casefile.capture_ids_in
+    assert script.capture_ids_in is casefile.capture_ids_in
+
+
 def test_missing_words_are_an_error():
     data = sf.script()
     words = sf.words_for(data)

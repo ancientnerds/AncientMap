@@ -17,7 +17,9 @@ are set only by `status` cues, never in the case file.
 
 Script props reference case-file entities as {"$ref": "<id>"} and captures as
 {"$capture": "<id>"}; `resolve_refs` replaces them with the shapes in `resolved()` /
-the capture manifest, paths relative to the per-render public dir.
+the capture manifest, paths relative to the per-render public dir. `refs_in` and
+`capture_ids_in` list the ids a props value references (the one walker script.py and
+timeline.py share).
 """
 
 from __future__ import annotations
@@ -550,4 +552,15 @@ def refs_in(value: Any) -> list[str]:
         return [r for v in value.values() for r in refs_in(v)]
     if isinstance(value, list):
         return [r for v in value for r in refs_in(v)]
+    return []
+
+
+def capture_ids_in(value: Any) -> list[str]:
+    """Every capture id a props value references with {"$capture": id}."""
+    if isinstance(value, dict):
+        if set(value) == {"$capture"}:
+            return [value["$capture"]]
+        return [c for v in value.values() for c in capture_ids_in(v)]
+    if isinstance(value, list):
+        return [c for v in value for c in capture_ids_in(v)]
     return []
