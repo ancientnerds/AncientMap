@@ -9247,7 +9247,7 @@ git commit -m "Read the renderer's block registry and validate block props again
 
 ### Task 17: script.py, the script validator
 
-The script check covers the renderer's cue table, the props schemas, the case-file references, the brand-font rule, clip length, map credits and the Meter; the renderer's per-block semantic checks (the `check` functions of `video/src/blocks/index.ts`) first run in lint.ts's loadTimeline at the start of `episode render`, before bundling, which fails within seconds, and are fixed in the script props without a new voice (fixing props never makes the voice stale). `LOCAL_CUES` mirrors stream D's cue table (`video/src/blocks/index.ts` BLOCKS: which local verbs a block takes and which ids of its resolved props they target, including every infographic element id), and Task 27 checks it against the committed registry. Case-file data enters props only by reference (so every case-file rule applies to what the video shows); a capture is bound to a block of its kind, a globe take to its block's scenes (`GLOBE_SCENES_OF`: GlobeShot flyto/places/distribution, MapboxFlyover mapbox_flyin/mapbox_orbit, the split the renderer's credit checks make), and its spec may show only verified case-file data (places at their coordinates and under their case-file names in flyto and places takes, a distribution's named pins and top-down pins, a Mapbox take centred on a case-file place, whose optional `country` (the outline the recorder highlights) needs that place's `site_id` and is compared with that site's country in the site export by Task 18's `episode.country_problems`, platform `measure` and `proximity` points on case-file places, the verified quote, the paper anchor), while a world distribution's dots are `site_ids` (owner decision 15: unique unified_sites ids, at most 500 points with the at most 12 labelled places, resolved by `episode capture` from the repo-root site export, Task 18's `sites.py`, never case-file places, and no other take may carry `site_ids`: sites.py would resolve them into places a flyto, places or platform recorder refuses only at capture); a malformed spec (`place` not an object, `places`/`pins`/`actions` not a list) is an error, never a crash; a SourceViewer shows its own evidence; a Meter equals the case file's meter; only a BarChart bar or a ScaleZoom end may carry a quantity id, and it shows the quantity's value (a range stays a range, and only a BarChart draws one) in the quantity's unit (owner decision 31: linear only, no `scale` prop, `LOCAL_CUES['ScaleZoom']`); `visual.credit` is a non-empty string; every string the renderer draws lies in the code points the brand font files map (`DRAWABLE`: latin and most of latin-ext, but no `Ḫ Ḥ Ṣ Ṭ ʾ ʿ`, no U+2010-2012 hyphens, no `‰`), the character and its CSS upper case alike (`glyphs.py`, a verbatim mirror of `DRAWABLE` of D's `video/src/theme/glyphs.ts` that Task 27 checks: most drawn text is uppercased by CSS, and `ƒ` becomes `Ƒ`), and owner decision 32 limits that to the strings actually drawn: the props at the block's registry `drawn` paths (`glyphs.drawn_strings`), a shown capture's credits and place and pin labels (`glyphs.capture_strings`; a captured page's own `<title>` is a record in its `page` event, never drawn), hook captions, chapter titles, `visual.credit`, `Photo: <attribution> (<license>)` and the thumbnail teasers, never ids, paths, URLs or a SourceViewer's quote (pixels of the captured page); the three thumbnail candidates (owner decisions 24, 25: `thumbnails: [{beat, at, text}]`, `at` the share of the beat's scene in [0, 1)) sit in no twist, verdict or change_mind beat and in no beat after the first verdict cue (a status other than `pending` or a meter move), each with a 2-4 word teaser that names no verdict word (SUPPORTED, REFUTED, WEAKENED, CONFIRMED, DEBUNKED, PROVEN, TRUE, FALSE), and Task 21 refuses a frame at or after that cue inside its beat; every claim on a board is `pending` in the case file, introduced, evidenced and statused; cues have exactly the keys {at_word, do, target, value?}, and `at_word` names a run of whole display words (`cue_word_index`: "one" never lands on the "one" inside "stone"); the map credit may come from the capture; a clip must cover its scene once the voice exists; the hook limit counts screen time, and no hook word is longer than one caption line (`HOOK_LINE_MAX_CHARS` = 24 characters uppercased with its punctuation, stream D's constant in `video/src/captions.ts`, which Task 27 compares: the renderer breaks longer lines between words, never inside one); ShareCard is the end card, the one place the link appears in the picture, so only the last beat may use it (full episodes and slices alike); a full episode keeps spec 4.10's common spine (hook, ClaimBoard, Meter, EvidenceCard or SourceViewer, a closing ShareCard, and beats with the roles twist, verdict and change_mind in that order; slices are exempt). `script_fixtures.REGISTRY` holds the literal registry.json entries (D's `schemas.ts`) of the blocks the fixture uses.
+The script check covers the renderer's cue table, the props schemas, the case-file references, the brand-font rule, clip length, map credits and the Meter; the renderer's per-block semantic checks (the `check` functions of `video/src/blocks/index.ts`) first run in lint.ts's loadTimeline at the start of `episode render`, before bundling, which fails within seconds, and are fixed in the script props without a new voice (fixing props never makes the voice stale). `LOCAL_CUES` mirrors stream D's cue table (`video/src/blocks/index.ts` BLOCKS: which local verbs a block takes and which ids of its resolved props they target, including every infographic element id), and Task 27 checks it against the committed registry. Case-file data enters props only by reference (so every case-file rule applies to what the video shows); a capture is bound to a block of its kind, a globe take to its block's scenes (`GLOBE_SCENES_OF`: GlobeShot flyto/places/distribution, MapboxFlyover mapbox_flyin/mapbox_orbit, the split the renderer's credit checks make), and its spec may show only verified case-file data (places at their coordinates and under their case-file names in flyto and places takes, a distribution's named pins and top-down pins, a Mapbox take centred on a case-file place, whose optional `country` (the outline the recorder highlights) needs that place's `site_id` and is compared with that site's country in the site export by Task 18's `episode.country_problems`, platform `measure` and `proximity` points on case-file places, the verified quote, the paper anchor), while a world distribution's dots are `site_ids` (owner decision 15: unique unified_sites ids, at most 500 points with the at most 12 labelled places, resolved by `episode capture` from the repo-root site export, Task 18's `sites.py`, never case-file places, and no other take may carry `site_ids`: sites.py would resolve them into places a flyto, places or platform recorder refuses only at capture); a malformed spec (`place` not an object, `places`/`pins`/`actions` not a list) is an error, never a crash; a SourceViewer shows its own evidence; a Meter equals the case file's meter; only a BarChart bar or a ScaleZoom end may carry a quantity id, and it shows the quantity's value (a range stays a range, and only a BarChart draws one) in the quantity's unit (owner decision 31: linear only, no `scale` prop, `LOCAL_CUES['ScaleZoom']`), and every evidence item the quantity lists is verified, whichever ids the beat names (spec 4.2); `visual.credit` is a non-empty string; every string the renderer draws lies in the code points the brand font files map (`DRAWABLE`: latin and most of latin-ext, but no `Ḫ Ḥ Ṣ Ṭ ʾ ʿ`, no U+2010-2012 hyphens, no `‰`), the character and its CSS upper case alike (`glyphs.py`, a verbatim mirror of `DRAWABLE` of D's `video/src/theme/glyphs.ts` that Task 27 checks: most drawn text is uppercased by CSS, and `ƒ` becomes `Ƒ`), and owner decision 32 limits that to the strings actually drawn: the props at the block's registry `drawn` paths (`glyphs.drawn_strings`), a shown capture's credits and place and pin labels (`glyphs.capture_strings`; a captured page's own `<title>` is a record in its `page` event, never drawn), hook captions, chapter titles, `visual.credit`, `Photo: <attribution> (<license>)` and the thumbnail teasers, never ids, paths, URLs or a SourceViewer's quote (pixels of the captured page); the three thumbnail candidates (owner decisions 24, 25: `thumbnails: [{beat, at, text}]`, `at` the share of the beat's scene in [0, 1)) sit in no twist, verdict or change_mind beat and in no beat after the first verdict cue (a status other than `pending` or a meter move), each with a 2-4 word teaser that names no verdict word (SUPPORTED, REFUTED, WEAKENED, CONFIRMED, DEBUNKED, PROVEN, TRUE, FALSE), and Task 21 refuses a frame at or after that cue inside its beat; every claim on a board is `pending` in the case file, introduced, evidenced and statused; cues have exactly the keys {at_word, do, target, value?}, and `at_word` names a run of whole display words (`cue_word_index`: "one" never lands on the "one" inside "stone"); the map credit may come from the capture; a clip must cover its scene once the voice exists; the hook limit counts screen time, and no hook word is longer than one caption line (`HOOK_LINE_MAX_CHARS` = 24 characters uppercased with its punctuation, stream D's constant in `video/src/captions.ts`, which Task 27 compares: the renderer breaks longer lines between words, never inside one); ShareCard is the end card, the one place the link appears in the picture, so only the last beat may use it (full episodes and slices alike); a full episode keeps spec 4.10's common spine (hook, ClaimBoard, Meter, EvidenceCard or SourceViewer, a closing ShareCard, and beats with the roles twist, verdict and change_mind in that order; slices are exempt). `script_fixtures.REGISTRY` holds the literal registry.json entries (D's `schemas.ts`) of the blocks the fixture uses.
 
 **Files:**
 - Create: `pipeline/studio/script.py`, `pipeline/studio/glyphs.py`
@@ -10030,6 +10030,36 @@ def test_a_quantity_shown_in_a_chart_keeps_its_range():
     )
 
 
+def test_a_shown_quantity_rests_only_on_verified_evidence():
+    """Spec 4.2: every evidence item the script uses is verified, and a shown quantity uses its
+    own evidence, whichever ids the beat lists."""
+    data = ef.casefile()
+    data["quantities"][0]["evidence"] = ["e1", "e2"]
+    cf = casefile.from_dict(data)
+
+    def chart(d):
+        d["beats"][7]["visual"] = {
+            "block": "BarChart",
+            "props": {
+                "title": "Block weights",
+                "unit": "t",
+                "basis": "published estimates",
+                "bars": [
+                    {"id": "q1", "label": "2014 block", "value": [1500, 1650]},
+                    {"id": "b-podium", "label": "Podium block", "value": 800},
+                ],
+            },
+        }
+        d["beats"][7].update(evidence=["e1"], factual=True)
+        d["beats"][7]["cues"] = [{"at_word": "tool", "do": "show", "target": "q1"}]
+
+    report = _validate(sf.mutated_script(chart), cf=cf)
+    assert [e for e in report.errors if e.startswith("b08")] == [
+        "b08: element q1 shows quantity q1, whose evidence e2 is unverified, not verified"
+    ]
+    assert not [d for d in report.deferred if d.startswith("b08")]
+
+
 def test_charts_are_linear_and_a_scale_zoom_shows_quantities():
     """Owner decision 31: no log axis anywhere; a ratio beyond 1:400 is a linear ScaleZoom."""
 
@@ -10707,6 +10737,7 @@ from pipeline.studio.casefile import (
     CaptureNotRecorded,
     CaseFile,
     CaseFileError,
+    Evidence,
     Place,
     Quantity,
     refs_in,
@@ -11180,11 +11211,15 @@ def _quantity_elements(block: str, raw: dict[str, Any]) -> list[Any]:
 
 
 def _quantity_problems(
-    block: str, raw: dict[str, Any], quantities: dict[str, Quantity]
+    block: str,
+    raw: dict[str, Any],
+    quantities: dict[str, Quantity],
+    evidence: dict[str, Evidence],
 ) -> list[str]:
     """Only a BarChart bar or a ScaleZoom end shows a quantity: its value and the block's unit
     are the case file's (a range [low, high] only a BarChart draws: linear bars, owner decision
-    31). No other props element may use a quantity id."""
+    31), and every evidence item the quantity rests on is verified (spec 4.2; the beat's own
+    evidence list may name only some of them). No other props element may use a quantity id."""
     shown = _quantity_elements(block, raw)
     problems: list[str] = []
     for element in _dicts_with_id(raw):
@@ -11197,6 +11232,13 @@ def _quantity_problems(
                 "ScaleZoom end shows a quantity"
             )
             continue
+        for eid in quantity.evidence:
+            status = evidence[eid].verification.status
+            if status != "verified":
+                problems.append(
+                    f"element {element['id']} shows quantity {quantity.id}, whose evidence "
+                    f"{eid} is {status}, not verified"
+                )
         if block == "ScaleZoom" and isinstance(quantity.value, list):
             problems.append(
                 f"element {element['id']}: a range quantity is shown as a range in a BarChart, "
@@ -11462,7 +11504,9 @@ def validate_script(
         for cid in _capture_ids_in(raw):
             if cid not in specs:
                 report.errors.append(f"{bid}: $capture {cid!r} is not declared in captures")
-        report.errors.extend(f"{bid}: {p}" for p in _quantity_problems(block, raw, quantities))
+        report.errors.extend(
+            f"{bid}: {p}" for p in _quantity_problems(block, raw, quantities, evidence)
+        )
         if block == "ClaimBoard" and isinstance(raw.get("claims"), list):
             for claim in raw["claims"]:
                 if _is_ref(claim) and claim["$ref"] in claim_ids:
@@ -11769,7 +11813,7 @@ def _chapters(
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/test_script.py -m "not integration and not live_llm" -q`
-Expected: `32 passed`
+Expected: `33 passed`
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
