@@ -3,6 +3,7 @@ Chrome, the driver's clicks run here on small synthetic pages in headless Chrome
 
 import asyncio
 import importlib.util
+import math
 import time
 import types
 from contextlib import nullcontext
@@ -352,3 +353,45 @@ def test_a_click_whose_target_is_covered_fails_naming_what_it_would_hit():
         return await page.evaluate("window.clicks")
 
     assert _drive(COVERED_PAGE, steps) == ["canvas"]
+
+
+# the Search tab's result list (FilterPanel.tsx): title left, info button right, always shown
+RESULTS_PAGE = (
+    "<style>body{margin:0}"
+    " .search-results-list{position:fixed;left:20px;top:300px;width:400px;height:120px;"
+    "overflow-y:auto} .search-result-item{display:flex;align-items:center;height:40px}"
+    " .search-result-main{flex:1} .search-result-info-btn{width:32px;height:32px}</style>"
+    "<button class='tab-btn active'>Search</button><div class='search-results-list'>"
+    + "".join(
+        "<div class='search-result-item'><div class='search-result-main'>"
+        f"<div class='search-result-title'>{title}</div></div>"
+        "<button class='search-result-info-btn'></button></div>"
+        for title in ("Byblos", "Baalbek Stones", "Tyre")
+    )
+    + "</div><script>window.moves = []; window.opened = [];"
+    " addEventListener('mousemove', (e) => window.moves.push([e.clientX, e.clientY]), true);"
+    " document.querySelectorAll('.search-result-info-btn').forEach((b) => b.addEventListener("
+    "'click', () => window.opened.push(b.parentElement.textContent)))</script>"
+)
+
+
+def test_open_details_moves_the_cursor_in_one_eased_path_to_the_info_button():
+    # the NERV cursor follows mousemove: a hover first would jump it to the row's centre
+    # (220, 360) and back, two cuts in every details moment
+    async def steps(driver, page):
+        await page.evaluate("window.moves = []")
+        await driver.run({"do": "open_details", "title": "Baalbek Stones"})
+        button = await page.locator(".search-result-info-btn").nth(1).bounding_box()
+        return await page.evaluate("[window.moves, window.opened]"), button, driver.pos
+
+    (moves, opened), button, pos = _drive(RESULTS_PAGE, steps)
+    assert opened == ["Baalbek Stones"]
+    end = (button["x"] + button["width"] / 2, button["y"] + button["height"] / 2)
+    assert pos == pytest.approx(end)
+    (x0, y0), (x1, y1) = START_POS, end
+    length = math.dist(START_POS, end)
+    assert len(moves) >= 5
+    for x, y in moves:
+        # every cursor position lies on the straight path from where it was to the button
+        assert abs((x1 - x0) * (y0 - y) - (x0 - x) * (y1 - y0)) / length < 1.5
+        assert min(x0, x1) - 1 <= x <= max(x0, x1) + 1

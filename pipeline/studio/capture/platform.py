@@ -424,9 +424,10 @@ class _Driver:
             await self.zoom_to(action["to"])
         elif do == "open_details":
             await self.search_tab()
-            item = self.result_item(action["title"])
-            await item.hover()
-            await self.click_locator(item.locator(".search-result-info-btn"), do)
+            # the info button always shows (styles/index.css), so no hover first: Playwright's
+            # hover would jump the cursor in one step and leave self.pos behind
+            info = self.result_item(action["title"]).locator(".search-result-info-btn")
+            await self.click_locator(info, do)
         elif do == "measure":
             await self.click_locator(page.locator(".tab-btn", has_text="Measure"), do)
             a = await self.screen_point("measure point a", action["a"])
