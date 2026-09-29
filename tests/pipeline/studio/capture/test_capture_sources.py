@@ -97,6 +97,15 @@ def test_clip_window_keeps_context_and_stays_on_the_page():
     assert clip_window({"x": 0, "y": 100, "w": 500, "h": 60}, page_height=500) == (0.0, 500)
 
 
+def test_a_window_measured_again_is_no_taller_than_the_viewport_it_is_shot_in():
+    # a 100vh hero grew with the 1738 px viewport and moved the quote from y 820 to 1758:
+    # the full context would need 1835 px, the viewport (fixed from here) is 1738 px tall
+    box = {"x": 0, "y": 1758, "w": 500, "h": 17}
+    assert clip_window(box, page_height=5000, max_height=1738) == (1758 - CONTEXT_PX, 1738)
+    # a window that fits keeps its full context
+    assert clip_window(box, page_height=5000, max_height=2000) == (1758 - CONTEXT_PX, 1817)
+
+
 def test_image_box_is_in_captured_pixels():
     assert image_box({"x": 100, "y": 1000, "w": 300, "h": 40}, top=100) == [200, 1800, 600, 80]
 
@@ -412,6 +421,28 @@ def test_the_highlight_box_lies_in_the_captured_png(tmp_path, unseen):
     assert w > 100 and h > 10
     assert 0 <= x and x + w <= width
     assert 0 <= y and y + h <= height + 1  # Chromium rounds the window to whole pixels
+
+
+@pytest.mark.skipif(shutil.which("nvidia-smi") is None, reason="no NVIDIA driver on this machine")
+def test_a_viewport_tall_hero_above_the_quote_keeps_it_in_the_window(tmp_path):
+    # the header is 100vh: when the viewport grows to the window's height it grows too and
+    # moves the quote down, out of the window measured in the 800 px viewport
+    pytest.importorskip("playwright")
+    from PIL import Image
+
+    hero = _page(
+        '<header style="height:100vh">Hero</header>'
+        f'<p style="margin:20px 0">{WEIGHT}</p><div style="height:3000px">Later sections.</div>'
+    )
+    page_file = tmp_path / "hero.html"
+    page_file.write_text(hero, encoding="utf-8")
+    out = tmp_path / "hero.png"
+    shot = asyncio.run(sources._capture(page_file.as_uri(), "quote", WEIGHT, out))
+    box = shot["box"]
+    assert box["y"] > sources.VIEWPORT[1] + CONTEXT_PX  # below the grown hero
+    assert shot["top"] <= box["y"] and box["y"] + box["h"] <= shot["top"] + shot["height"]
+    with Image.open(out) as img:
+        assert img.size[1] == pytest.approx(shot["height"] * sources.DEVICE_SCALE, abs=2)
 
 
 def test_the_manifest_size_is_the_size_of_the_written_png(tmp_path, monkeypatch):

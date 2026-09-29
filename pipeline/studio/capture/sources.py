@@ -5,13 +5,16 @@ sticky layers (cookie bars, banners, sticky headers), highlights the quote (a DO
 split into <mark> pieces, highlight.js) and screenshots a window of CONTEXT_PX CSS px
 above and below it. The window is shot as the viewport, resized to it and scrolled
 there: a full-page screenshot rasterises the whole page, and a 35,000 px Wikipedia
-article took 37 s on the GPU, past Playwright's 30 s timeout (2026-09-26). The scroll
-only reaches the window when the document scrolls, so highlight.js lets out the
-scrollers around the highlight and a clipping box that overflows only because of them:
-our paper page scrolls .theo-page inside a 100%-tall html, body and #root with overflow
-hidden, and without that the window stayed the 800 px viewport. Only text the page shows
-its readers counts: the first copy of the quote they see whole is highlighted. A quote
-with no such copy fails with the advice to use a QuoteCard: every copy is absent, hidden
+article took 37 s on the GPU, past Playwright's 30 s timeout (2026-09-26). The resize
+grows a 100vh block (a hero above the quote) with the viewport, so the highlight is
+measured again in the resized viewport, whose height stays fixed from then on, and the
+window is placed there, no taller than the viewport. The scroll only reaches the window
+when the document scrolls, so highlight.js lets out the scrollers around the highlight
+and a clipping box that overflows only because of them: our paper page scrolls
+.theo-page inside a 100%-tall html, body and #root with overflow hidden, and without
+that the window stayed the 800 px viewport. Only text the page shows its readers
+counts: the first copy of the quote they see whole is highlighted. A quote with no
+such copy fails with the advice to use a QuoteCard: every copy is absent, hidden
 (display:none, a script's JSON-LD), cut off by a clipping box (a paywall body truncated
 with CSS, a "read more" clamp, a screen-reader-only span), drawn at no size (font-size 0)
 or off the page the capture shoots (a visually hidden span at left:-9999px, a copy past
@@ -68,6 +71,7 @@ SETTLE_MS = 1500
 NAV_TIMEOUT_MS = 45_000
 MIN_QUOTE_CHARS = 12
 HIGHLIGHT_JS = Path(__file__).with_name("highlight.js")
+PAGE_HEIGHT_JS = "() => document.documentElement.scrollHeight"
 # A desktop Chrome user agent: some sources serve bots a different page.
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -106,10 +110,14 @@ def source_target(spec: dict[str, Any]) -> tuple[str, str, str]:
     )
 
 
-def clip_window(box: dict[str, float], page_height: float) -> tuple[float, float]:
-    """(top, height) in CSS px of the screenshot window around the highlight."""
+def clip_window(
+    box: dict[str, float], page_height: float, max_height: float = math.inf
+) -> tuple[float, float]:
+    """(top, height) in CSS px of the screenshot window around the highlight: CONTEXT_PX
+    above and below it, on the page, and no taller than max_height (the viewport the window
+    is shot in, once its height is fixed)."""
     top = max(0.0, box["y"] - CONTEXT_PX)
-    bottom = min(page_height, box["y"] + box["h"] + CONTEXT_PX)
+    bottom = min(page_height, box["y"] + box["h"] + CONTEXT_PX, top + max_height)
     if bottom <= top:
         raise CaptureError(f"empty capture window for box {box} on a {page_height}px page")
     return top, bottom - top
@@ -174,9 +182,16 @@ async def _capture(url: str, mode: str, needle: str, out: Path) -> dict[str, Any
             )
         if box is None:
             raise CaptureError(f"#{needle} has no visible paragraph on {url}")
-        page_height = await page.evaluate("() => document.documentElement.scrollHeight")
+        page_height = await page.evaluate(PAGE_HEIGHT_JS)
         top, height = clip_window(box, page_height)
-        await page.set_viewport_size({"width": VIEWPORT[0], "height": math.ceil(height)})
+        viewport_height = math.ceil(height)
+        await page.set_viewport_size({"width": VIEWPORT[0], "height": viewport_height})
+        # A 100vh block above the highlight (a hero) grew with the viewport and moved it
+        # down: measure it again. The viewport keeps this height, so the layout does too,
+        # and the window is placed in it, no taller than it.
+        box = await page.evaluate("() => window.__studio.box()")
+        page_height = await page.evaluate(PAGE_HEIGHT_JS)
+        top, height = clip_window(box, page_height, max_height=viewport_height)
         await page.evaluate("(y) => window.scrollTo(0, y)", top)
         await page.wait_for_timeout(SETTLE_MS)
         scrolled = await page.evaluate("() => window.scrollY")
