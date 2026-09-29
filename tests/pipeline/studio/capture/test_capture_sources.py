@@ -188,6 +188,11 @@ def _page(body):
 
 WEIGHT = "The block is estimated to weigh 1,650 tonnes."
 SHOWN = f'<p style="margin-top:1500px">{WEIGHT}</p>'
+SPLIT_WEIGHT = "The block is <em>estimated</em> to weigh 1,650 tonnes."
+SR_ONLY_SPLIT = (
+    '<span id="unseen" style="position:absolute;width:1px;height:1px;overflow:hidden;'
+    f'clip:rect(0,0,0,0)">{SPLIT_WEIGHT}</span>'
+)
 # A CSS-truncated article body (max-height with overflow hidden): the teaser shows, the
 # rest is cut off from its readers.
 TRUNCATED_PAGE = _page(
@@ -214,7 +219,10 @@ def _run_highlight(tmp_path, mode, needle, html=PAGE, fragment=""):
             state = await page.evaluate(
                 "() => ({marks: [...document.querySelectorAll('mark.__studio-hl')].map(m => m.textContent).join('|'),"
                 " overlay: getComputedStyle(document.getElementById('overlay')).display,"
-                " scrollHeight: document.documentElement.scrollHeight})"
+                " scrollHeight: document.documentElement.scrollHeight,"
+                " unseen: document.getElementById('unseen') && {"
+                "html: document.getElementById('unseen').innerHTML,"
+                " nodes: document.getElementById('unseen').childNodes.length}})"
             )
             await browser.close()
             return box, state
@@ -293,6 +301,9 @@ def test_a_second_evidence_id_outlines_its_whole_paragraph(tmp_path):
         f'<span style="position:absolute;top:-9999px">{WEIGHT}</span>',
         f'<p style="font-size:0">{WEIGHT}</p>',
         f'<p style="transform:scale(0)">{WEIGHT}</p>',
+        # a screen-reader-only copy split across inline elements: its three marks are
+        # unmarked, the split text nodes merged, and the search maps the page again
+        SR_ONLY_SPLIT,
     ],
     ids=[
         "display-none",
@@ -306,6 +317,7 @@ def test_a_second_evidence_id_outlines_its_whole_paragraph(tmp_path):
         "offscreen-top",
         "font-size-0",
         "scale-0",
+        "sr-only-split",
     ],
 )
 def test_a_copy_the_reader_does_not_see_is_passed_over(tmp_path, unseen):
@@ -314,6 +326,22 @@ def test_a_copy_the_reader_does_not_see_is_passed_over(tmp_path, unseen):
     box, state = _run_highlight(tmp_path, "quote", WEIGHT, html=_page(unseen + SHOWN))
     assert box is not None and box["y"] >= 1500 and box["w"] > 100
     assert 0 <= box["x"] and box["x"] + box["w"] <= 1280
+    assert state["marks"] == WEIGHT
+
+
+def test_a_passed_over_copy_gets_its_text_nodes_back(tmp_path):
+    # unmark put the three marked pieces back and merged the text nodes markText split:
+    # the span holds its text, the <em> and its text again, as the page wrote them
+    _, state = _run_highlight(tmp_path, "quote", WEIGHT, html=_page(SR_ONLY_SPLIT + SHOWN))
+    assert state["marks"] == WEIGHT
+    assert state["unseen"] == {"html": SPLIT_WEIGHT, "nodes": 3}
+
+
+def test_of_two_copies_the_reader_sees_the_first_is_highlighted(tmp_path):
+    html = _page(SHOWN + f'<p style="margin-top:1500px">{WEIGHT}</p>')
+    box, state = _run_highlight(tmp_path, "quote", WEIGHT, html=html)
+    # the first paragraph starts at y 1500, the second 1500 px below its end
+    assert box is not None and 1500 <= box["y"] < 1600
     assert state["marks"] == WEIGHT
 
 
