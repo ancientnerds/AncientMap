@@ -8,10 +8,12 @@
 //     sits on an empty span.theo-evidence-anchor (the second and later evidence ids of a
 //     paragraph, plan B), the p.theo-evidence around it. Returns the highlight box in page
 //     CSS pixels {x, y, w, h} of the first occurrence the reader sees whole. An occurrence
-//     with a piece that has no box, or that a box around it cuts off from the reader (a
-//     truncated paywall body, a "read more" clamp, a screen-reader-only span, an ellipsis),
-//     is unmarked and passed over; null when no occurrence is left (sources.py then
-//     advises a QuoteCard), or when the anchor has no visible box. Before
+//     with a piece that has no box or one of no area (font-size 0), that a box around it
+//     cuts off from the reader (a truncated paywall body, a "read more" clamp, a
+//     screen-reader-only span, an ellipsis), or that lies off the page the capture shoots
+//     (left of or above the document's origin, past the viewport's width) is unmarked and
+//     passed over; null when no occurrence is left (sources.py then advises a QuoteCard),
+//     or when the anchor has no visible box. Before
 //     measuring, the scrollers around the highlight are let out (unclip), so the document
 //     itself scrolls: our paper page keeps html, body and #root at 100% with overflow
 //     hidden and scrolls .theo-page instead (index.css, theo.css), and the capture window
@@ -160,14 +162,23 @@
     for (const mark of marks) mark.replaceWith(...mark.childNodes)
     for (const parent of parents) parent.normalize()
   }
+  // True when the rect covers an area (font-size:0 and transform:scale(0) draw text at none).
+  const drawn = (r) => r.width > 0 && r.height > 0
+  // True when the rect lies on the page the capture shoots: not left of or above the
+  // document's origin, which no scroll reaches (a visually hidden copy at left:-9999px),
+  // and not past the viewport's width, the 1280 CSS px sources.py screenshots.
+  const onPage = (r) =>
+    r.left + scrollX >= 0 && r.right + scrollX <= document.documentElement.clientWidth && r.top + scrollY >= 0
   // True when the reader sees every marked piece whole. A piece the search read can still
-  // have no box (the text of a <textarea>, of an SVG <text>): that part of the quote is not
-  // on the page; collapsed white space may lack one. Then the scrollers around the pieces
-  // are let out and no box around them may cut one off.
+  // have no box, or boxes of no area (the text of a <textarea>, of an SVG <text>, of a copy
+  // drawn at font-size 0): that part of the quote is not on the page; collapsed white space
+  // may lack one. Then the scrollers around the pieces are let out, no box around them may
+  // cut one off, and every box of every piece lies on the page.
   const seenWhole = (marks) => {
-    if (marks.some((m) => m.textContent.trim() !== '' && m.getClientRects().length === 0)) return false
+    if (marks.some((m) => m.textContent.trim() !== '' && ![...m.getClientRects()].some(drawn))) return false
     for (const mark of marks) unclip(mark)
-    return !marks.some(clipped)
+    if (marks.some(clipped)) return false
+    return marks.every((m) => [...m.getClientRects()].every(onPage))
   }
   const unionBox = (rects) => {
     const xs = rects.flatMap((r) => [r.left, r.right])

@@ -15,6 +15,7 @@ from pipeline.studio.capture.sources import (
     capture_source,
     clip_window,
     image_box,
+    require_in_window,
     source_target,
 )
 
@@ -98,6 +99,31 @@ def test_clip_window_keeps_context_and_stays_on_the_page():
 
 def test_image_box_is_in_captured_pixels():
     assert image_box({"x": 100, "y": 1000, "w": 300, "h": 40}, top=100) == [200, 1800, 600, 80]
+
+
+@pytest.mark.parametrize(
+    ("box", "message"),
+    [
+        # a visually hidden copy at left:-9999px, one beyond the 1280 CSS px the window
+        # shoots, one across its right edge
+        ({"x": -9999, "y": 1000, "w": 293, "h": 17}, "not within the 1280 CSS px"),
+        ({"x": 2000, "y": 1000, "w": 293, "h": 17}, "not within the 1280 CSS px"),
+        ({"x": 1100, "y": 1000, "w": 293, "h": 17}, "not within the 1280 CSS px"),
+        # a copy drawn at font-size 0
+        ({"x": 100, "y": 1000, "w": 0, "h": 0}, "has no area"),
+        ({"x": 100, "y": 1000, "w": 293, "h": 0.5}, "has no area"),
+        # above and below the window
+        ({"x": 100, "y": 50, "w": 293, "h": 17}, "left the capture window"),
+        ({"x": 100, "y": 1910, "w": 293, "h": 17}, "left the capture window"),
+    ],
+)
+def test_a_highlight_the_window_does_not_show_whole_is_refused(box, message):
+    with pytest.raises(CaptureError, match=f"https://x.org/a: the highlight .*{message}"):
+        require_in_window("https://x.org/a", box, top=100, height=1817)
+
+
+def test_a_highlight_inside_the_window_passes():
+    require_in_window("https://x.org/a", {"x": 0, "y": 100, "w": 1280, "h": 1817}, 100, 1817)
 
 
 def test_the_credit_names_the_ascii_host_that_sourceviewer_draws():
@@ -252,6 +278,12 @@ def test_a_second_evidence_id_outlines_its_whole_paragraph(tmp_path):
         f"{WEIGHT}</p>",
         # a copy the search reads that no box of the page draws
         f"<textarea>{WEIGHT}</textarea>",
+        # copies placed off the page the capture reaches (a visually hidden span, left or
+        # above the document's origin) or drawn at no size
+        f'<span style="position:absolute;left:-9999px">{WEIGHT}</span>',
+        f'<span style="position:absolute;top:-9999px">{WEIGHT}</span>',
+        f'<p style="font-size:0">{WEIGHT}</p>',
+        f'<p style="transform:scale(0)">{WEIGHT}</p>',
     ],
     ids=[
         "display-none",
@@ -261,12 +293,18 @@ def test_a_second_evidence_id_outlines_its_whole_paragraph(tmp_path):
         "closed-accordion",
         "ellipsis",
         "textarea",
+        "offscreen-left",
+        "offscreen-top",
+        "font-size-0",
+        "scale-0",
     ],
 )
 def test_a_copy_the_reader_does_not_see_is_passed_over(tmp_path, unseen):
-    # the first copy in the DOM is hidden or cut off; the one the reader sees is highlighted
+    # the first copy in the DOM is hidden, cut off or off the page; the one the reader sees
+    # (at x 0, y 1500) is highlighted
     box, state = _run_highlight(tmp_path, "quote", WEIGHT, html=_page(unseen + SHOWN))
     assert box is not None and box["y"] >= 1500 and box["w"] > 100
+    assert 0 <= box["x"] and box["x"] + box["w"] <= 1280
     assert state["marks"] == WEIGHT
 
 
@@ -291,8 +329,19 @@ def test_text_in_a_display_contents_element_is_read(tmp_path):
         f"<textarea>{WEIGHT}</textarea>",
         # the page's content in a fixed scroller, which hideOverlays hides with the banners
         f'<div style="position:fixed;inset:0;overflow-y:auto">{SHOWN}</div>',
+        # a page wider than the 1280 CSS px the capture shoots: the only copy lies beyond
+        # that width, or runs past its right edge
+        f'<p style="margin:1500px 0 0 2000px;width:600px">{WEIGHT}</p>',
+        f'<p style="margin:1500px 0 0 1000px;white-space:nowrap">{WEIGHT}</p>',
     ],
-    ids=["hidden-continuation", "closed-accordion", "textarea", "fixed-scroller"],
+    ids=[
+        "hidden-continuation",
+        "closed-accordion",
+        "textarea",
+        "fixed-scroller",
+        "beyond-1280",
+        "across-1280",
+    ],
 )
 def test_a_quote_the_reader_cannot_see_whole_is_not_found(tmp_path, body):
     # sources.py turns None into the advice to use a QuoteCard
@@ -336,6 +385,33 @@ def test_the_capture_window_on_our_paper_page_keeps_its_context(tmp_path):
     assert shot["height"] == pytest.approx(box["h"] + 2 * CONTEXT_PX, abs=1)
     with Image.open(out) as img:
         assert img.size[1] == pytest.approx(shot["height"] * sources.DEVICE_SCALE, abs=2)
+
+
+@pytest.mark.skipif(shutil.which("nvidia-smi") is None, reason="no NVIDIA driver on this machine")
+@pytest.mark.parametrize(
+    "unseen",
+    [
+        f'<span style="position:absolute;left:-9999px">{WEIGHT}</span>',
+        f'<span style="position:absolute;top:-9999px">{WEIGHT}</span>',
+        f'<p style="font-size:0">{WEIGHT}</p>',
+    ],
+    ids=["offscreen-left", "offscreen-top", "font-size-0"],
+)
+def test_the_highlight_box_lies_in_the_captured_png(tmp_path, unseen):
+    # a copy off the page or at no size comes first; the manifest's box is the shown copy's
+    pytest.importorskip("playwright")
+    from PIL import Image
+
+    page_file = tmp_path / "page.html"
+    page_file.write_text(_page(unseen + SHOWN), encoding="utf-8")
+    out = tmp_path / "page.png"
+    shot = asyncio.run(sources._capture(page_file.as_uri(), "quote", WEIGHT, out))
+    x, y, w, h = image_box(shot["box"], shot["top"])
+    with Image.open(out) as img:
+        width, height = img.size
+    assert w > 100 and h > 10
+    assert 0 <= x and x + w <= width
+    assert 0 <= y and y + h <= height + 1  # Chromium rounds the window to whole pixels
 
 
 def test_the_manifest_size_is_the_size_of_the_written_png(tmp_path, monkeypatch):

@@ -10,10 +10,14 @@ only reaches the window when the document scrolls, so highlight.js lets out the
 scrollers around the highlight and a clipping box that overflows only because of them:
 our paper page scrolls .theo-page inside a 100%-tall html, body and #root with overflow
 hidden, and without that the window stayed the 800 px viewport. Only text the page shows
-its readers counts: the first copy of the quote they see whole is highlighted, and a
-quote with no such copy, because every copy is absent, hidden (display:none, a script's
-JSON-LD) or cut off by a clipping box (a paywall body truncated with CSS, a "read more"
-clamp, a screen-reader-only span), fails with the advice to use a QuoteCard. The same code captures our own paper page
+its readers counts: the first copy of the quote they see whole is highlighted. A quote
+with no such copy fails with the advice to use a QuoteCard: every copy is absent, hidden
+(display:none, a script's JSON-LD), cut off by a clipping box (a paywall body truncated
+with CSS, a "read more" clamp, a screen-reader-only span), drawn at no size (font-size 0)
+or off the page the capture shoots (a visually hidden span at left:-9999px, a copy past
+the 1280 CSS px width). After the scroll the highlight box must still lie whole in the
+shot window, on both axes and at least 1 px wide and tall (require_in_window), so the
+manifest never records a box outside its PNG. The same code captures our own paper page
 with its #ev-NN paragraph outlined (a second id of a paragraph is an empty span inside
 it, plan B; highlight.js outlines the paragraph). The paper slug and the evidence id are
 checked with the one definition of each (pipeline.studio.config.check_slug, plan C;
@@ -118,6 +122,19 @@ def ascii_host(url: str) -> str:
     return host.encode("idna").decode("ascii").removeprefix("www.")
 
 
+def require_in_window(url: str, box: dict[str, float], top: float, height: float) -> None:
+    """Raise unless the highlight box (page CSS px) lies whole in the shot window: x from 0
+    to the viewport's width, y from top to top + height, at least 1 px wide and tall."""
+    if box["w"] < 1 or box["h"] < 1:
+        raise CaptureError(f"{url}: the highlight {box} has no area")
+    if box["x"] < 0 or box["x"] + box["w"] > VIEWPORT[0]:
+        raise CaptureError(
+            f"{url}: the highlight {box} is not within the {VIEWPORT[0]} CSS px the capture shoots"
+        )
+    if box["y"] < top or box["y"] + box["h"] > top + height:
+        raise CaptureError(f"{url}: the highlight left the capture window after scrolling")
+
+
 def image_box(box: dict[str, float], top: float) -> list[float]:
     """Highlight box in pixels of the captured image."""
     return [
@@ -151,8 +168,9 @@ async def _capture(url: str, mode: str, needle: str, out: Path) -> dict[str, Any
         )
         if box is None and mode == "quote":
             raise CaptureError(
-                f"quote not found whole in the text {url} shows its readers (absent, hidden or "
-                "cut off); paywalled or login pages cannot be captured, use a QuoteCard"
+                f"quote not found whole in the text {url} shows its readers (absent, hidden, "
+                f"cut off, drawn at no size or off the {VIEWPORT[0]} CSS px page); paywalled "
+                "or login pages cannot be captured, use a QuoteCard"
             )
         if box is None:
             raise CaptureError(f"#{needle} has no visible paragraph on {url}")
@@ -163,8 +181,7 @@ async def _capture(url: str, mode: str, needle: str, out: Path) -> dict[str, Any
         await page.wait_for_timeout(SETTLE_MS)
         scrolled = await page.evaluate("() => window.scrollY")
         box = await page.evaluate("() => window.__studio.box()")
-        if not (scrolled <= box["y"] and box["y"] + box["h"] <= scrolled + height):
-            raise CaptureError(f"{url}: the highlight left the capture window after scrolling")
+        require_in_window(url, box, scrolled, height)
         await page.screenshot(
             path=str(out),
             type="png",
