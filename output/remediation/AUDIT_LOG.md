@@ -13001,3 +13001,49 @@ passed** (RESULT.json `dc0d1f65...`; 3 wrong drops reported, not gating). Writte
 write group WC over `WC4.jsonl` `799c408a...` (batch p4wc-4003, 40 rows): dry, rehearsal, apply,
 `verify_writes4 --lane p4wc` 0 deviations, accepted. The mass run follows in chunks of 500
 (`mass-2026-09-27-NN`), each through check, re-ask, verification and build before its writes.
+
+## 2026-09-29 - New session: re-queues written, the WB caption fix merged, the served-image sign-off
+
+- Lane WA re-queues (PHASE4_V3_RUNBOOK 9.1): v3's 48 due sites exported as p4-2210..p4-2213
+  (handoff `p4-v3-select-rq`), answered by fresh Opus agents, reviewed; **25 sites written** (50
+  journal rows, stamps `phase4:p4-2210..2213:chunk-0001`, 14:49Z) and accepted with 0 deviations
+  (`accept-step-42b`: 2,318 written sites re-verified with V1-V15). 3 sites wait again (until
+  2026-10-01T14:31Z), the rest are held final (to lane WC). v3d's 2 (p4-2510): nothing written;
+  Nea Paphos waits until 2026-10-01T14:31:53Z.
+- The p4 acceptance first read 501 deviations: the loop scripts did not name run `v3d` and did not
+  allow the later WB provenance stamps (`wb-teaser-prov-%`) and WC stamps (`phase4wc:%`) - the
+  rows were superseded by accepted later lanes, not wrong. Both loops now name every run and allow
+  those stamps (ac995b6); the re-run read 0 deviations.
+- `wip/wb3` merged (438257d): a caption word too wide for the frame is drawn smaller (floor 52 px)
+  and the contract refuses a card only when a word overflows at the floor; this unblocks the WB
+  labels stuck on long names (Sammallahdenmäki, Hohlenstein-Stadel, ...).
+- **Sign-off (orchestrator, under O6/O8): WD2's served-image check runs over `--population all`**
+  (WD2_SERVED_IMAGE_AND_SCOPE.md 3.2): the pre-check CONFIRMED 8 of the 10 served images the
+  acceptance judged WRONG, so a CONFIRMED is no reason to skip the vision check.
+- WD1 part 2 (`wd1-rest`): the import was refused because round r2 still missed 2 answers (the
+  continue workflow imports only after every round is complete); those two are being answered.
+
+## 2026-09-29 - Lane WD1 part 2 (`wd1-rest`) written: wave 2026-09-26d
+
+- Rounds: r0 3,359 sites (420 batches), r1 161, r2 11; every answer recorded and imported, 0
+  waiting. Decisions: period_start keep 1,205 / replace 269 / clear 1,852 / held 3; site_type keep
+  583 / replace 219 / clear 384 / held 1; source_url keep 50 / replace 97 / clear 48; coordinates
+  keep 89 / replace 4 / unresolved 672. Not counted at import: 146 quote fetch failed, 15 quote not
+  found, 9 unreadable, 1 redirect. Most clears: no two independent dated sources, or dates given only
+  as years before present (the checker reads BC/AD years) - O6 "belegt ersetzen, sonst leeren".
+- Wave 2026-09-26d: 2,296 sites (676 held: unresolved coordinates), 23 steps
+  (`fields-wd1-2026-09-26d-s001..s023`), each emit, verify, rehearse, probe-guards (guard 4 and the
+  period-bucket invariant refused their probes), apply (read-back row for row), verify, rollback
+  rehearsal, `plan.py accept`: **23/23 accepted**. Journal: period_start 2,113 (1,844 cleared),
+  period_name 2,116 (1,844 cleared), site_type 603 (384 cleared), source_url 111 (14 cleared),
+  lat/lon/geom 4 each.
+
+## 2026-09-29 - Nr. 7 Chiapa de Corzo / Zoque written (lanes `chiapa-hide`, `chiapa-name`, wip/chiapa c901d67, merged e1e53b3)
+
+- `chiapa-hide` (stamp `2026-09-29_mechanical-chiapa-hide`): the empty row `24aa135d` retired as
+  `duplicate_of:ed186ea9-...` (2 cells). Gates: check-primitive, verify, interests, emit, rehearse, probe-guards
+  (9/9 refused), apply (read-back row for row), verify, rollback rehearsal - all clean.
+- `chiapa-name` (stamp `2026-09-29_mechanical-chiapa-name`): the kept row `ed186ea9` renamed "Zoque Culture
+  Archaeological Zone" -> "Chiapa de Corzo" with its match key (`chiapa de corzo`), the rename refused until the hide
+  had landed. Gates as above, apply read-back clean, rollback rehearsal clean. Read back: the hidden row is retired,
+  the kept row is visible under the name. Undo: the name lane's ROLLBACK.sql first, then the hide's.

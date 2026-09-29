@@ -33,7 +33,7 @@ const results = await pipeline(runs, async (run) => {
   for (const stage of STAGES) {
     const H = `output/remediation/handoff/teaser-${run}-${stage}`
     const st = await agent(opText(`Determine the state of stage ${stage} of run ${run}:
-1. $PY $T status --run ${RUNS_DIR}/${run}  -> if "${stage}" is in "rounds", the stage is imported: state="imported", batches=[].
+1. $PY $T status --run ${RUNS_DIR}/${run}  -> "rounds" lists EXPORTED stages, not imported ones. Read "states": if no site is in state "due ${stage}" (the key is absent), the stage is imported: state="imported", batches=[]. If sites are "due ${stage}", it is not imported: go on with step 2.
 2. Otherwise, if the directory ${H} does not exist: $PY $T export --run ${RUNS_DIR}/${run} --stage ${stage} --handoff ${H}. If it prints "questions": 0 (nobody is due), state="nothing", batches=[]. If it exported questions, continue with step 3.
 3. $PY $OH validate --dir ${H}  -> if ok true (every question answered): state="needs-import", batches=[]. If questions are missing: state="needs-answers" and batches = the distinct batch_id values of the "missing" list (malformed or stale answers: report ok=false).`), { label: `state:${run}:${stage}`, phase: 'Stage', schema: STATE })
     if (!st || !st.ok) { out.stages.push({ stage, st }); return out }
