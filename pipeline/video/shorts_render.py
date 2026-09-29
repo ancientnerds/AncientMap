@@ -20,6 +20,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal
 
+from PIL import ImageFont
+
 from pipeline.video.media import ff_path, probe_duration, probe_frames, run_ffmpeg
 from pipeline.video.shorts_brand import FONT_BODY, FONT_HEADING, ensure_fonts, heading_font
 from pipeline.video.shorts_captions import Word, caption_words, display_text, spoken_at, srt_text
@@ -55,6 +57,8 @@ FLAG_W = 180  # flag under the name (3:2 → 120 px tall)
 # hero title: white heading font with a black outline, no box (user, 17.09.).
 CAPTION_SIZE = 92
 CAPTION_BORDER = 5
+CAPTION_MARGIN = 40  # a caption word must stay this far from both frame edges
+CAPTION_MAX_PX = W - 2 * CAPTION_MARGIN  # the widest a caption word may be drawn, outline included
 NAME_BORDER = 3
 FLAG_GAP = 72  # 34 had the flag glued to the name (user, 17.09.)
 # Camera flash at the start of every still (user, 17.09.): white at FLASH_PEAK
@@ -298,6 +302,14 @@ def wrap_lines(name: str, width: int = NAME_WRAP_CHARS) -> list[str]:
 # (wrap width, font size, line height) from large to small; the first layout
 # that needs at most NAME_MAX_LINES lines wins, the smallest is the floor.
 NAME_LAYOUTS: tuple[tuple[int, int, int], ...] = ((14, 84, 100), (20, 64, 78), (26, 52, 64))
+# The legibility floor of a caption word. A word wider than CAPTION_MAX_PX at
+# CAPTION_SIZE (a one-word or hyphenated name: "Mecklenburg-Vorpommern" is
+# 1,409 px in Orbitron 700 at 92) is drawn smaller (`word_face`), but never
+# below the size the short already sets the site's own name at in its smallest
+# layout: the same heading face, as text the design already reads on a phone
+# (52 px, 57 % of CAPTION_SIZE; only the Mapbox credit is smaller). At the
+# floor a word fits up to about 1,760 px at CAPTION_SIZE.
+CAPTION_MIN_SIZE = NAME_LAYOUTS[-1][1]
 NAME_MAX_LINES = 3
 NAME_PREFERRED_LINES = 2
 
@@ -723,13 +735,40 @@ def gain_db(measured_lufs: float, target_lufs: float = TARGET_LUFS) -> float:
     return target_lufs - measured_lufs
 
 
+def caption_font(font_path: Path) -> ImageFont.FreeTypeFont:
+    """The caption face as the render draws it: `font_path` at CAPTION_SIZE."""
+    return ImageFont.truetype(str(font_path), CAPTION_SIZE)
+
+
+def caption_px(shown: str, face: ImageFont.FreeTypeFont) -> int:
+    """The drawn width of a caption word (as shown: `display_text`) in pixels,
+    outline included, at `face`'s size. The one measurement of a caption word
+    (through `shorts_audit.widest_word_px`), applied at two sizes: at the size
+    the word is drawn by the render's fitting (`word_face`), the audit's S3
+    and lane WB's teaser contract; at CAPTION_SIZE by the Phase-4 verifier's
+    V10, which is therefore stricter than S3."""
+    return int(face.getlength(shown)) + 2 * CAPTION_BORDER
+
+
+def word_face(shown: str, face: ImageFont.FreeTypeFont) -> ImageFont.FreeTypeFont:
+    """The face a caption word is drawn with. `face` is the caption face
+    (`caption_font`, CAPTION_SIZE) and stays when the word fits CAPTION_MAX_PX
+    in it; a wider word gets the same font at the largest integer size at which
+    it fits, never below CAPTION_MIN_SIZE. A word that does not fit even there
+    is drawn at CAPTION_MIN_SIZE and overflows: the audit's captions_fit fails
+    that short, and lane WB's teaser contract refuses such a card before it is
+    written."""
+    for size in range(CAPTION_SIZE, CAPTION_MIN_SIZE, -1):
+        sized = face if size == CAPTION_SIZE else face.font_variant(size=size)
+        if caption_px(shown, sized) <= CAPTION_MAX_PX:
+            return sized
+    return face.font_variant(size=CAPTION_MIN_SIZE)
+
+
 def caption_baseline(font: Path) -> int:
     """y of the caption baseline: capital letters centred on the frame's
     middle (descenders hang below), the same for every word."""
-    from PIL import ImageFont
-
-    face = ImageFont.truetype(str(font), CAPTION_SIZE)
-    _, top, _, bottom = face.getbbox("H")
+    _, top, _, bottom = caption_font(font).getbbox("H")
     return round(H / 2 + (bottom - top) / 2)
 
 
@@ -737,10 +776,14 @@ def captions_filter(words: list[Word], text_dir: Path, font: Path = FONT_HEADING
     """One drawtext per word, shown from its start up to (not including) its
     end, centred in the frame on a shared baseline: white heading font with a
     black outline (the site's title style), no box, no edge punctuation.
-    Words go to text files (no escaping of apostrophes, commas or percent
-    signs); a token that is punctuation only (a dash) gets no caption."""
+    Every word is drawn at CAPTION_SIZE unless it is wider than the frame
+    allows there: then at its own smaller size (`word_face`), on the same
+    baseline, with the same outline and timing. Words go to text files (no
+    escaping of apostrophes, commas or percent signs); a token that is
+    punctuation only (a dash) gets no caption."""
     text_dir.mkdir(parents=True, exist_ok=True)
     baseline = caption_baseline(font)
+    face = caption_font(font)
     parts = []
     for i, word in enumerate(words):
         shown = display_text(word.text)
@@ -750,7 +793,7 @@ def captions_filter(words: list[Word], text_dir: Path, font: Path = FONT_HEADING
         f.write_text(shown, encoding="utf-8", newline=chr(10))
         parts.append(
             f"drawtext=fontfile='{ff_path(font)}':textfile='{ff_path(f)}':"
-            f"fontcolor=white:fontsize={CAPTION_SIZE}:x=(w-text_w)/2:"
+            f"fontcolor=white:fontsize={word_face(shown, face).size}:x=(w-text_w)/2:"
             f"y_align=baseline:y={baseline}:"
             f"borderw={CAPTION_BORDER}:bordercolor=black:"
             f"shadowcolor=black@0.5:shadowx=2:shadowy=2:"

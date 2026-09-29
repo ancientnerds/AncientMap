@@ -99,7 +99,7 @@ from pipeline.utils.country_lookup import (
 )
 from pipeline.utils.text import normalize_name
 from pipeline.video import shorts_audit, shorts_brand
-from pipeline.video.shorts_render import W as FRAME_WIDTH
+from pipeline.video.shorts_render import CAPTION_MAX_PX
 
 # --------------------------------------------------------------------------------------------
 # The design's numbers
@@ -114,8 +114,10 @@ STORED_FLOOR = 0.5
 FLOOR_WAIVERS = frozenset({M.SiteFlag.CLEARED_DESCRIPTION_DEFECT, M.SiteFlag.T03_SEVERE})
 #: V10: 80-200 characters (the S2 floor and the varchar(200) column).
 CARD_MIN, CARD_MAX = 80, 200
-#: V10: every caption word fits 1080 - 2 x 40 px (S3).
-MAX_CAPTION_PX = FRAME_WIDTH - 2 * shorts_audit.CAPTION_MARGIN
+#: V10: every caption word fits 1080 - 2 x 40 px at the caption size (`CardFit.px`) - stricter than
+#: the short's S3 and lane WB's teaser contract, which measure a word at the size the short draws it
+#: (`CardFit.drawn_px`, `shorts_render.word_face`).
+MAX_CAPTION_PX = CAPTION_MAX_PX
 #: V6: the directional name match, rapidfuzz `partial_ratio` on the normalised name.
 NAME_MATCH = 90
 #: V11: no run of this many words shared with a restricted page.
@@ -547,20 +549,26 @@ class CardFit:
     """S3 and S4 of the shorts gate for one card."""
 
     missing: tuple[str, ...]  #: characters the heading font cannot draw
-    widest: str  #: the widest caption word, as shown
+    widest: str  #: the widest caption word at the caption size, as shown
     px: int  #: its width in pixels, outline included
+    drawn: str  #: the widest caption word as the short draws it, each word at its own size
+    drawn_px: int  #: its drawn width in pixels (over MAX_CAPTION_PX only if it overflows the floor)
 
 
 def card_fit(name: str, card: str) -> CardFit:
     """The card through the shorts' own helpers: the heading font for name + card
     (`shorts_brand.heading_font`), its missing glyphs, and `shorts_audit.widest_word_px` over the
-    caption words (`card.split()`, as `shorts_captions` aligns them). Needs the brand fonts
-    (`video-assets/fonts`, gitignored; `shorts_brand.ensure_fonts` fetches them once)."""
+    caption words (`card.split()`, as `shorts_captions` aligns them) - at the caption size (V10),
+    and as the render draws them (lane WB's contract: a word too wide at the caption size is drawn
+    smaller, `shorts_render.word_face`). Needs the brand fonts (`video-assets/fonts`, gitignored;
+    `shorts_brand.ensure_fonts` fetches them once)."""
     shown = f"{name} {card}"
     font = shorts_brand.heading_font(shown)
     missing = shorts_brand.missing_glyphs(shown, shorts_brand.font_cmap(font))
-    widest, px = shorts_audit.widest_word_px(card.split(), shorts_audit.caption_font(font))
-    return CardFit(missing=tuple(missing), widest=widest, px=px)
+    face = shorts_audit.caption_font(font)
+    widest, px = shorts_audit.widest_word_px(card.split(), face)
+    drawn, drawn_px = shorts_audit.widest_word_px(card.split(), face, drawn=True)
+    return CardFit(missing=tuple(missing), widest=widest, px=px, drawn=drawn, drawn_px=drawn_px)
 
 
 # --------------------------------------------------------------------------------------------

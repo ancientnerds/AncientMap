@@ -4882,10 +4882,14 @@ TEASER = MECHANICAL / "teaser.py"
 TEASER_CONTRACT = REPO / "scripts/remediation/teaser/contract.py"
 TEASER_ANSWERS = REPO / "scripts/remediation/teaser/answers.py"
 TEASER_RUN = REPO / "scripts/remediation/teaser/run.py"
+SHORTS_RENDER = REPO / "pipeline/video/shorts_render.py"
+SHORTS_AUDIT = REPO / "pipeline/video/shorts_audit.py"
+PHASE4_VERIFY = REPO / "scripts/remediation/phase4/verify4.py"
 CARD_PROVENANCE = REPO / "pipeline/utils/card_provenance.py"
 PUBLIC_SITES = REPO / "pipeline/utils/public_sites.py"
 TEASER_WRITE_TESTS = "tests/remediation/test_mechanical_teaser.py"
 TEASER_TESTS = "tests/remediation/test_teaser.py"
+SHORTS_TESTS_VIDEO = "tests/pipeline/video/test_shorts.py"
 AI_ACT_TESTS = "tests/api/test_ai_act_marking.py"
 LASTMOD_TESTS = "tests/api/test_sitemap_lastmod.py"
 _TEASER_CHANGED = "test_a_site_that_changed_is_listed_not_written"
@@ -5165,7 +5169,7 @@ TEASER_CASES: list[Case] = [
             ("the shorts font", "    if measured.missing:", "test_the_shorts_font_and_frame"),
             (
                 "the caption frame",
-                "    if measured.px > V.MAX_CAPTION_PX:",
+                "    if measured.drawn_px > V.MAX_CAPTION_PX:",
                 "test_the_shorts_font_and_frame",
             ),
             (
@@ -5213,11 +5217,87 @@ TEASER_CASES: list[Case] = [
                 "test_brackets_markers_emojis_and_symbols_are_refused",
             ),
             (
+                "a long word is judged as the short draws it",
+                "    if measured.drawn_px > V.MAX_CAPTION_PX:",
+                "    if measured.px > V.MAX_CAPTION_PX:",
+                "test_a_word_too_wide_at_the_caption_size_is_drawn_smaller_and_passes",
+            ),
+            (
                 "an alias only where the description uses it",
                 "    derived += [alt for alt in sorted(set(alt_names)) if names_in(description, "
                 "[alt])]",
                 "    derived += sorted(set(alt_names))",
                 "test_an_alias_counts_only_where_the_description_uses_it",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the long caption words: drawn smaller
+    guard(
+        "teaser: the render keeps a word that fits at the caption size",
+        SHORTS_RENDER,
+        "        if caption_px(shown, sized) <= CAPTION_MAX_PX:",
+        "test_a_caption_word_too_wide_gets_the_largest_size_at_which_it_fits",
+        SHORTS_TESTS_VIDEO,
+    ),
+    *(
+        Case(f"teaser: {label}", path, old, new, test, testfile)
+        for label, path, old, new, test, testfile in (
+            (
+                "the render never draws a word below the floor",
+                SHORTS_RENDER,
+                "    for size in range(CAPTION_SIZE, CAPTION_MIN_SIZE, -1):",
+                "    for size in range(CAPTION_SIZE, 0, -1):",
+                "test_a_caption_word_is_never_drawn_below_the_floor",
+                SHORTS_TESTS_VIDEO,
+            ),
+            (
+                "the render takes the largest size that fits",
+                SHORTS_RENDER,
+                "    for size in range(CAPTION_SIZE, CAPTION_MIN_SIZE, -1):",
+                "    for size in range(CAPTION_MIN_SIZE + 1, CAPTION_SIZE + 1):",
+                "test_a_caption_word_too_wide_gets_the_largest_size_at_which_it_fits",
+                SHORTS_TESTS_VIDEO,
+            ),
+            (
+                "the render draws each word at its own size",
+                SHORTS_RENDER,
+                "fontsize={word_face(shown, face).size}:",
+                "fontsize={CAPTION_SIZE}:",
+                "test_captions_filter_draws_a_long_word_at_its_own_size",
+                SHORTS_TESTS_VIDEO,
+            ),
+            (
+                "the audit measures each word at its drawn size",
+                SHORTS_AUDIT,
+                "        w = caption_px(shown, word_face(shown, font) if drawn else font) "
+                "if shown else 0",
+                "        w = caption_px(shown, font) if shown else 0",
+                "test_the_audit_measures_each_word_at_the_size_it_is_drawn",
+                SHORTS_TESTS_VIDEO,
+            ),
+            (
+                "the short's audit measures the captions as drawn",
+                SHORTS_AUDIT,
+                "    return widest_word_px(words, caption_font(font_path), drawn=True)",
+                "    return widest_word_px(words, caption_font(font_path))",
+                "test_the_caption_audit_measures_through_the_public_helper",
+                SHORTS_TESTS_VIDEO,
+            ),
+            (
+                "card_fit measures the card as the short draws it",
+                PHASE4_VERIFY,
+                "    drawn, drawn_px = shorts_audit.widest_word_px(card.split(), face, drawn=True)",
+                "    drawn, drawn_px = shorts_audit.widest_word_px(card.split(), face)",
+                "test_card_fit_measures_each_word_as_the_short_draws_it",
+                TEASER_TESTS,
+            ),
+            (
+                "the contract refuses a word past the render's floor",
+                SHORTS_RENDER,
+                "CAPTION_MIN_SIZE = NAME_LAYOUTS[-1][1]",
+                "CAPTION_MIN_SIZE = 1",
+                "test_a_word_wider_than_the_frame_at_the_floor_is_refused",
+                TEASER_TESTS,
             ),
         )
     ),

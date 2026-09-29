@@ -7084,6 +7084,14 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "test_v10_a_caption_word_wider_than_the_frame_is_held",
     ),
     (
+        "p4 verify4: V10 measures a word as the short draws it",
+        P4_VERIFY,
+        "    if fit.px > MAX_CAPTION_PX:\n",
+        "    if fit.drawn_px > MAX_CAPTION_PX:  # mutant\n",
+        P4_VERIFY_TEST,
+        "test_v10_measures_a_caption_word_at_the_caption_size_not_as_the_short_draws_it",
+    ),
+    (
         "p4 verify4: V11 a new number passes",
         P4_VERIFY,
         "        if missing:\n",
@@ -7448,7 +7456,7 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 shorts_audit: the caption audit measures on its own",
         SHORTS_AUDIT,
-        '    return widest_word_px((word["text"] for word in captions), caption_font(font_path))\n',
+        "    return widest_word_px(words, caption_font(font_path), drawn=True)\n",
         '    return "", 0  # mutant\n',
         SHORTS_TEST,
         "test_the_caption_audit_measures_through_the_public_helper",
