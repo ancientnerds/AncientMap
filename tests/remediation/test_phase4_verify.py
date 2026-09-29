@@ -1445,6 +1445,26 @@ def test_v10_a_caption_word_wider_than_the_frame_is_held() -> None:
     assert f"the caption word {word!r}" in case.detail("V10")
 
 
+def test_v10_measures_a_caption_word_at_the_caption_size_not_as_the_short_draws_it() -> None:
+    """V10 is unchanged by lane WB's long caption words: it measures every word at CAPTION_SIZE, so
+    it holds a word the short would draw smaller - stricter than the short's S3 and the teaser
+    contract, which measure the same word at its drawn size (`CardFit.drawn_px`)."""
+    word = "Mecklenburg-Vorpommern"  # 1,137 px at the caption size in the tests' face, fits smaller
+    sentence = f"The Tarxien Temples are a complex of four megalithic structures, far from {word}."
+    fit = fake_card_fit("Tarxien Temples", sentence)
+    assert (fit.widest, fit.drawn) == (word, word)
+    assert fit.drawn_px <= V.MAX_CAPTION_PX < fit.px
+    case = make_case(
+        text=f"{sentence} {S2} {S3}",
+        picks=(Pick(sentence, (), sentence), W_PICKS[1], W_PICKS[2]),
+        card=sentence,
+        card_items=((0, ()),),
+    )
+    assert f"the caption word {word!r} is {fit.px} px, over {V.MAX_CAPTION_PX}" in case.detail(
+        "V10"
+    )
+
+
 def test_v10_the_card_speaks_circa_where_the_description_writes_c() -> None:
     sentence = "The Tarxien Temples are a complex of four megalithic structures built c. 3150 BC."
     spoken = "The Tarxien Temples are a complex of four megalithic structures built circa 3150 BC."
