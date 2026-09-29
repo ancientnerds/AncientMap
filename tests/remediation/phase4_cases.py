@@ -509,11 +509,13 @@ FAKE_CMAP_LAST = 0x017F
 
 def fake_card_fit(name: str, card: str) -> V.CardFit:
     """`card_fit` without the gitignored brand fonts: missing glyphs from a fixed Latin cmap, the
-    widest word measured by the real `shorts_audit.widest_word_px` with a real face."""
+    widest word - at the caption size and as drawn - measured by the real
+    `shorts_audit.widest_word_px` with a real face."""
     shown = f"{name} {card}"
     missing = tuple(sorted({ch for ch in shown if not ch.isspace() and ord(ch) > FAKE_CMAP_LAST}))
     widest, px = shorts_audit.widest_word_px(card.split(), CAPTION_FACE)
-    return V.CardFit(missing=missing, widest=widest, px=px)
+    drawn, drawn_px = shorts_audit.widest_word_px(card.split(), CAPTION_FACE, drawn=True)
+    return V.CardFit(missing=missing, widest=widest, px=px, drawn=drawn, drawn_px=drawn_px)
 
 
 #: The design's AI aggregators and Wikipedia mirrors (source_store, "DENY LIST").

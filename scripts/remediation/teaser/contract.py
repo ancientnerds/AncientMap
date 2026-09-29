@@ -60,8 +60,11 @@ On the **final** card - the writer's text after the assembler's one spoken edit
   500 characters of its input, the March generator's; the fact basis here is the whole description;
 * the card names the site (`name_forms`, above);
 * the shorts can render it: every glyph in the brand font and every caption word within the frame
-  (`phase4.verify4.card_fit` and `MAX_CAPTION_PX`, V10's own measurement - the card is narrated and
-  captioned).
+  as the short draws it (`phase4.verify4.card_fit`'s `drawn_px` against `MAX_CAPTION_PX`, V10's own
+  measurement - the card is narrated and captioned). A word too wide at the caption size (a one-word
+  or hyphenated name: `Mecklenburg-Vorpommern`) is drawn smaller, down to the renderer's legibility
+  floor (`shorts_render.CAPTION_MIN_SIZE`, `word_face`); only a word that is still wider than the
+  frame at that floor is refused.
 
 What the checks cannot see - a claim the description does not make, a number written in words, a
 superlative, "no one knows", the tone, whether the card is about this site - is the checker's.
@@ -91,6 +94,7 @@ from phase4.subject_gate import fold  # noqa: E402
 
 from pipeline.lyra.text_sentences import split_sentences  # noqa: E402
 from pipeline.utils.card_provenance import text_sha256  # noqa: E402
+from pipeline.video.shorts_render import CAPTION_MIN_SIZE  # noqa: E402
 
 MIN_CHARS = 160
 MAX_CHARS = 190
@@ -286,9 +290,11 @@ def problems(card: str, site: Basis, *, fit: Fit) -> list[str]:
     measured = fit(site.name, card)
     if measured.missing:
         found.append(f"font: the shorts font cannot draw {''.join(measured.missing)!r}")
-    if measured.px > V.MAX_CAPTION_PX:
+    if measured.drawn_px > V.MAX_CAPTION_PX:
         found.append(
-            f"caption: the word {measured.widest!r} is {measured.px} px, wider than the frame"
+            f"caption: the word {measured.drawn!r} is {measured.drawn_px} px wide even at the "
+            f"smallest caption size ({CAPTION_MIN_SIZE} px font), wider than the frame "
+            f"({V.MAX_CAPTION_PX} px)"
         )
     return found
 

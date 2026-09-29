@@ -547,20 +547,26 @@ class CardFit:
     """S3 and S4 of the shorts gate for one card."""
 
     missing: tuple[str, ...]  #: characters the heading font cannot draw
-    widest: str  #: the widest caption word, as shown
+    widest: str  #: the widest caption word at the caption size, as shown
     px: int  #: its width in pixels, outline included
+    drawn: str  #: the widest caption word as the short draws it, each word at its own size
+    drawn_px: int  #: its drawn width in pixels (over MAX_CAPTION_PX only if it overflows the floor)
 
 
 def card_fit(name: str, card: str) -> CardFit:
     """The card through the shorts' own helpers: the heading font for name + card
     (`shorts_brand.heading_font`), its missing glyphs, and `shorts_audit.widest_word_px` over the
-    caption words (`card.split()`, as `shorts_captions` aligns them). Needs the brand fonts
-    (`video-assets/fonts`, gitignored; `shorts_brand.ensure_fonts` fetches them once)."""
+    caption words (`card.split()`, as `shorts_captions` aligns them) - at the caption size (V10),
+    and as the render draws them (lane WB's contract: a word too wide at the caption size is drawn
+    smaller, `shorts_render.word_face`). Needs the brand fonts (`video-assets/fonts`, gitignored;
+    `shorts_brand.ensure_fonts` fetches them once)."""
     shown = f"{name} {card}"
     font = shorts_brand.heading_font(shown)
     missing = shorts_brand.missing_glyphs(shown, shorts_brand.font_cmap(font))
-    widest, px = shorts_audit.widest_word_px(card.split(), shorts_audit.caption_font(font))
-    return CardFit(missing=tuple(missing), widest=widest, px=px)
+    face = shorts_audit.caption_font(font)
+    widest, px = shorts_audit.widest_word_px(card.split(), face)
+    drawn, drawn_px = shorts_audit.widest_word_px(card.split(), face, drawn=True)
+    return CardFit(missing=tuple(missing), widest=widest, px=px, drawn=drawn, drawn_px=drawn_px)
 
 
 # --------------------------------------------------------------------------------------------

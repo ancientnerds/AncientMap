@@ -31,6 +31,7 @@ from teaser import run as R  # noqa: E402
 
 from pipeline.utils import card_provenance as CP  # noqa: E402
 from tests.remediation import teaser_cases as T  # noqa: E402
+from tests.remediation.phase4_cases import CAPTION_FACE  # noqa: E402
 
 
 def basis(site_id: str = T.SKARA, alt_names: list[str] | None = None) -> C.Basis:
@@ -102,6 +103,38 @@ def padded(card: str) -> str:
     while len(card) < C.MIN_CHARS:
         card = card[:-1] + ", and more stone walls."
     return card
+
+
+#: The one-word and hyphenated names whose caption word is wider than the frame at the caption
+#: size, measured on the live WB mass run (Orbitron 700 at 92 px: 1,001 to 1,409 px); the first
+#: two are one name, as stored and transliterated. `La Chapelle-aux-Saints` (its word
+#: `Chapelle-aux-Saints`, 1,075 px) stalled run wb-ws-2026-09-27-02 the same way.
+LONG_NAMES = (
+    "Sammallahdenmäki",
+    "Sammallahdenmaeki",
+    "Hohlenstein-Stadel",
+    "Saint-Pierre-aux-Nonnains",
+    "Sainte-Colombe-sur-Seine",
+    "Mecklenburg-Vorpommern",
+    "Strubben-Kniphorstbos",
+    "La Chapelle-aux-Saints",
+)
+#: Wider than the frame at the caption size in the tests' face (Pillow's own), fits smaller.
+LONG_NAME = "Mecklenburg-Vorpommern"
+#: Wider than the frame even at the smallest caption size, in any of the faces.
+OVERLONG_NAME = "Mecklenburg-Vorpommern-Sainte-Colombe-sur-Seine"
+
+
+def long_name_card(name: str) -> tuple[C.Basis, str]:
+    """A site called `name` and a card that passes every other check and names it."""
+    site = C.basis(
+        site_id=T.SKARA,
+        name=name,
+        country="X",
+        description=f"{name} is an ancient site of earth and stone.",
+        alt_names=[],
+    )
+    return site, padded(f"{name} rises from the fields, a place of earth and stone.")
 
 
 class TestTheMechanicalChecks:
@@ -179,10 +212,56 @@ class TestTheMechanicalChecks:
             return dataclasses.replace(T.fit(name, card), missing=("ʿ",))
 
         def wide(name: str, card: str) -> Any:
-            return dataclasses.replace(T.fit(name, card), px=C.V.MAX_CAPTION_PX + 1, widest="X")
+            return dataclasses.replace(
+                T.fit(name, card), drawn_px=C.V.MAX_CAPTION_PX + 1, drawn="X"
+            )
 
         assert any(p.startswith("font") for p in problems(T.GOOD[T.SKARA], fit=missing))
         assert any(p.startswith("caption") for p in problems(T.GOOD[T.SKARA], fit=wide))
+
+    def test_a_word_too_wide_at_the_caption_size_is_drawn_smaller_and_passes(self) -> None:
+        site, card = long_name_card(LONG_NAME)
+        assert T.fit(site.name, card).px > C.V.MAX_CAPTION_PX  # the check refused it at 92 px
+        assert C.problems(card, site, fit=T.fit) == []
+
+    def test_a_word_wider_than_the_frame_at_the_floor_is_refused(self) -> None:
+        site, card = long_name_card(OVERLONG_NAME)
+        drawn_px = T.fit(site.name, card).drawn_px
+        assert drawn_px > C.V.MAX_CAPTION_PX
+        assert C.problems(card, site, fit=T.fit) == [
+            f"caption: the word {OVERLONG_NAME!r} is {drawn_px} px wide even at the smallest "
+            f"caption size ({C.CAPTION_MIN_SIZE} px font), wider than the frame "
+            f"({C.V.MAX_CAPTION_PX} px)"
+        ]
+
+    def test_card_fit_measures_each_word_as_the_short_draws_it(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`verify4.card_fit` itself, with Pillow's own face as the heading font (the brand fonts
+        are gitignored): the width at the caption size for V10, the drawn width for the contract."""
+        font = tmp_path / "face.ttf"
+        font.write_bytes(CAPTION_FACE.font_bytes)
+        monkeypatch.setattr(C.V.shorts_brand, "heading_font", lambda text: font)
+        monkeypatch.setattr(C.V.shorts_brand, "font_cmap", lambda path: set(range(0x180)))
+        site, card = long_name_card(LONG_NAME)
+        fit = C.V.card_fit(site.name, card)
+        assert (fit.widest, fit.drawn) == (LONG_NAME, LONG_NAME)
+        assert fit.drawn_px <= C.V.MAX_CAPTION_PX < fit.px
+
+    def test_the_long_names_of_the_mass_run_pass_with_the_brand_fonts(self) -> None:
+        """The names that stalled the writer batches of runs wb-ws-2026-09-27-01, -02 and -04
+        (1,001-1,409 px at 92 px in Orbitron 700), measured with the real brand fonts by
+        `verify4.card_fit`. One test for all of them, so a machine without the fonts (CI) reports
+        one skip, not one per name."""
+        fonts = [C.V.shorts_brand.FONT_DIR / file for file in C.V.shorts_brand.FONTS]
+        if not all(path.exists() for path in fonts):
+            pytest.skip("the brand fonts (video-assets/fonts, gitignored) are not on this machine")
+        pytest.importorskip("fontTools", reason="fontTools reads the brand fonts' cmap")
+        for name in LONG_NAMES:
+            site, card = long_name_card(name)
+            fit = C.V.card_fit(site.name, card)
+            assert fit.px > C.V.MAX_CAPTION_PX >= fit.drawn_px, (name, fit)
+            assert C.problems(card, site, fit=C.V.card_fit) == [], name
 
 
 class TestTheExamples:

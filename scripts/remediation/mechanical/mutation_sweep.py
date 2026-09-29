@@ -4884,6 +4884,7 @@ TEASER_ANSWERS = REPO / "scripts/remediation/teaser/answers.py"
 TEASER_RUN = REPO / "scripts/remediation/teaser/run.py"
 SHORTS_RENDER = REPO / "pipeline/video/shorts_render.py"
 SHORTS_AUDIT = REPO / "pipeline/video/shorts_audit.py"
+PHASE4_VERIFY = REPO / "scripts/remediation/phase4/verify4.py"
 CARD_PROVENANCE = REPO / "pipeline/utils/card_provenance.py"
 PUBLIC_SITES = REPO / "pipeline/utils/public_sites.py"
 TEASER_WRITE_TESTS = "tests/remediation/test_mechanical_teaser.py"
@@ -5168,7 +5169,7 @@ TEASER_CASES: list[Case] = [
             ("the shorts font", "    if measured.missing:", "test_the_shorts_font_and_frame"),
             (
                 "the caption frame",
-                "    if measured.px > V.MAX_CAPTION_PX:",
+                "    if measured.drawn_px > V.MAX_CAPTION_PX:",
                 "test_the_shorts_font_and_frame",
             ),
             (
@@ -5214,6 +5215,12 @@ TEASER_CASES: list[Case] = [
                 '_FORBIDDEN_CATEGORIES = frozenset({"So", "Sm", "Cs", "Co", "Cn", "No"})',
                 '_FORBIDDEN_CATEGORIES = frozenset({"So", "Cs", "Co", "Cn", "No"})',
                 "test_brackets_markers_emojis_and_symbols_are_refused",
+            ),
+            (
+                "a long word is judged as the short draws it",
+                "    if measured.drawn_px > V.MAX_CAPTION_PX:",
+                "    if measured.px > V.MAX_CAPTION_PX:",
+                "test_a_word_too_wide_at_the_caption_size_is_drawn_smaller_and_passes",
             ),
             (
                 "an alias only where the description uses it",
@@ -5275,6 +5282,22 @@ TEASER_CASES: list[Case] = [
                 "    return widest_word_px(words, caption_font(font_path))",
                 "test_the_caption_audit_measures_through_the_public_helper",
                 SHORTS_TESTS_VIDEO,
+            ),
+            (
+                "card_fit measures the card as the short draws it",
+                PHASE4_VERIFY,
+                "    drawn, drawn_px = shorts_audit.widest_word_px(card.split(), face, drawn=True)",
+                "    drawn, drawn_px = shorts_audit.widest_word_px(card.split(), face)",
+                "test_card_fit_measures_each_word_as_the_short_draws_it",
+                TEASER_TESTS,
+            ),
+            (
+                "the contract refuses a word past the render's floor",
+                SHORTS_RENDER,
+                "CAPTION_MIN_SIZE = NAME_LAYOUTS[-1][1]",
+                "CAPTION_MIN_SIZE = 1",
+                "test_a_word_wider_than_the_frame_at_the_floor_is_refused",
+                TEASER_TESTS,
             ),
         )
     ),
