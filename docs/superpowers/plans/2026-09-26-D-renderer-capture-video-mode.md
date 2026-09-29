@@ -11462,7 +11462,7 @@ git commit -m "Fetch exact top-down satellite frames with pins projected onto th
 - Test: `tests/pipeline/studio/capture/test_capture_sources.py`
 - Needs: check A2 (`EVIDENCE_ID_RE`) and check C1 (plan C Task 1's `config.check_slug`)
 
-Playwright (Chrome channel, headless, with the NVIDIA flags and the renderer proof) loads the page at 1280 CSS px and device scale 2, hides fixed and sticky layers, wraps the quote in `<mark>` pieces across inline elements (a DOM Range) and shoots a window of 900 CSS px around it. The window is the viewport, resized and scrolled there, not a full-page screenshot: a full-page shot rasterises the whole page, and the 35,000 px Wikipedia article on Baalbek took 37 s on the GPU, past Playwright's 30 s timeout (measured 2026-09-26; the viewport shot takes 0.8 s). The highlight box is measured again after the resize. A page without the quote (paywall, login) fails with the advice to use a QuoteCard. On our own paper page (plan B's HTML contract) the first evidence id of a paragraph is the `<p id="ev-NN" class="theo-evidence">` itself, and every further id of that paragraph is an empty `<span class="theo-evidence-anchor" id="ev-NN">` (display block, height 0) inside it: the anchor mode outlines the paragraph for such a span, and a zero-size box is "no visible paragraph" rather than a green line. Anchors follow A, B and C: `ev-` and two or more digits, checked with plan A's `pipeline.lyra.theo_publishing.EVIDENCE_ID_RE` (contract C9: the one Python definition of the evidence-id format, applied with `fullmatch`), and the paper slug with plan C's `pipeline.studio.config.check_slug`; the module keeps no copy of either pattern (owner rule: never duplicate a utility, import it). A slug `check_slug` refuses becomes a `CaptureError` naming the capture. The manifest's width and height are read from the written PNG, never computed from the fractional CSS window. The page's Umami tracker is blocked, and a browser failure (a navigation timeout, a crashed page) is a `CaptureError` that carries Playwright's message; a venv without Playwright is a `CaptureError` before anything is written. The page's own `<title>` is recorded in the `page` event and drawn nowhere; its URL goes on screen only as the ASCII (IDNA) hostname without `www.` (`ascii_host`, the string `domainOf` draws in SourceViewer's address bar), in the credit `Source page: <host>`; and the highlighted quote only as pixels of the page image (owner decision 32: original quotes inside source screenshots are allowed). Plan C's capture step (its Task 20 `captures.py`) glyph-checks exactly the manifest's drawn strings (its credits and `place`/`pin` labels; D1), naming the capture, so a Greek, Hebrew or Chinese source page (a non-latin title, URL path or quote) passes. The highlight tests drive a local HTML file and, like the tests that fake the browser step, skip without Playwright (CI).
+Playwright (Chrome channel, headless, with the NVIDIA flags and the renderer proof) loads the page at 1280 CSS px and device scale 2, hides fixed and sticky layers, wraps the quote in `<mark>` pieces across inline elements (a DOM Range) and shoots a window of 900 CSS px around it. The window is the viewport, resized and scrolled there, not a full-page screenshot: a full-page shot rasterises the whole page, and the 35,000 px Wikipedia article on Baalbek took 37 s on the GPU, past Playwright's 30 s timeout (measured 2026-09-26; the viewport shot takes 0.8 s). The highlight box is measured again after the resize, in the resized viewport: a 100vh block above the quote (a hero) grows with the viewport and moves the quote down, so the window is placed from that second measurement and is no taller than the viewport, whose height stays fixed from then on (`clip_window`'s `max_height`). After the scroll the box must lie whole in the window, on both axes and at least 1 px wide and tall (`require_in_window`), so the manifest never records a box outside its PNG. The scroll reaches the window only when the document scrolls, so `highlight.js` lets out the scrollers around the highlight and a clipping box that overflows only because of them (our paper page scrolls `.theo-page` inside a 100%-tall `html`, `body` and `#root` with overflow hidden); a clipper that already overflowed hides that part from its readers and stays as it is. The quote is searched only in the text the page shows its readers (no `<script>` such as a JSON-LD `articleBody`, no hidden element, no hidden overlay), with whitespace, quotes and dashes normalised and the case folded per character (a Turkish `İ` lower-cases to two UTF-16 units and must not shift the marks). Every occurrence is tried in turn and the first one the reader sees whole is highlighted: a copy with a piece that has no box or only boxes of no area (a `<textarea>`, font-size 0), that a clipping box cuts off (a truncated paywall body, a "read more" clamp, a closed accordion, a screen-reader-only span, an ellipsis) or that lies off the page the capture shoots (left of or above the document's origin, past the 1280 CSS px width) is unmarked, its split text nodes merged back, and passed over. A page with no such copy (paywall, login) fails with the advice to use a QuoteCard. On our own paper page (plan B's HTML contract) the first evidence id of a paragraph is the `<p id="ev-NN" class="theo-evidence">` itself, and every further id of that paragraph is an empty `<span class="theo-evidence-anchor" id="ev-NN">` (display block, height 0) inside it: the anchor mode outlines the paragraph for such a span, and a zero-size box is "no visible paragraph" rather than a green line. Anchors follow A, B and C: `ev-` and two or more digits, checked with plan A's `pipeline.lyra.theo_publishing.EVIDENCE_ID_RE` (contract C9: the one Python definition of the evidence-id format, applied with `fullmatch`), and the paper slug with plan C's `pipeline.studio.config.check_slug`; the module keeps no copy of either pattern (owner rule: never duplicate a utility, import it). A slug `check_slug` refuses becomes a `CaptureError` naming the capture. The manifest's width and height are read from the written PNG, never computed from the fractional CSS window. The page's Umami tracker is blocked, and a browser failure (a navigation timeout, a crashed page) is a `CaptureError` that carries Playwright's message; a venv without Playwright is a `CaptureError` before anything is written. The page's own `<title>` is recorded in the `page` event and drawn nowhere; its URL goes on screen only as the ASCII (IDNA) hostname without `www.` (`ascii_host`, the string `domainOf` draws in SourceViewer's address bar), in the credit `Source page: <host>`; and the highlighted quote only as pixels of the page image (owner decision 32: original quotes inside source screenshots are allowed). Plan C's capture step (its Task 20 `captures.py`) glyph-checks exactly the manifest's drawn strings (its credits and `place`/`pin` labels; D1), naming the capture, so a Greek, Hebrew or Chinese source page (a non-latin title, URL path or quote) passes. The highlight tests drive a local HTML file and, like the tests that fake the browser step, skip without Playwright (CI).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -11473,6 +11473,7 @@ Playwright (Chrome channel, headless, with the NVIDIA flags and the renderer pro
 
 import asyncio
 import importlib.util
+import shutil
 
 import pytest
 
@@ -11485,6 +11486,7 @@ from pipeline.studio.capture.sources import (
     capture_source,
     clip_window,
     image_box,
+    require_in_window,
     source_target,
 )
 
@@ -11566,8 +11568,42 @@ def test_clip_window_keeps_context_and_stays_on_the_page():
     assert clip_window({"x": 0, "y": 100, "w": 500, "h": 60}, page_height=500) == (0.0, 500)
 
 
+def test_a_window_measured_again_is_no_taller_than_the_viewport_it_is_shot_in():
+    # a 100vh hero grew with the 1738 px viewport and moved the quote from y 820 to 1758:
+    # the full context would need 1835 px, the viewport (fixed from here) is 1738 px tall
+    box = {"x": 0, "y": 1758, "w": 500, "h": 17}
+    assert clip_window(box, page_height=5000, max_height=1738) == (1758 - CONTEXT_PX, 1738)
+    # a window that fits keeps its full context
+    assert clip_window(box, page_height=5000, max_height=2000) == (1758 - CONTEXT_PX, 1817)
+
+
 def test_image_box_is_in_captured_pixels():
     assert image_box({"x": 100, "y": 1000, "w": 300, "h": 40}, top=100) == [200, 1800, 600, 80]
+
+
+@pytest.mark.parametrize(
+    ("box", "message"),
+    [
+        # a visually hidden copy at left:-9999px, one beyond the 1280 CSS px the window
+        # shoots, one across its right edge
+        ({"x": -9999, "y": 1000, "w": 293, "h": 17}, "not within the 1280 CSS px"),
+        ({"x": 2000, "y": 1000, "w": 293, "h": 17}, "not within the 1280 CSS px"),
+        ({"x": 1100, "y": 1000, "w": 293, "h": 17}, "not within the 1280 CSS px"),
+        # a copy drawn at font-size 0
+        ({"x": 100, "y": 1000, "w": 0, "h": 0}, "has no area"),
+        ({"x": 100, "y": 1000, "w": 293, "h": 0.5}, "has no area"),
+        # above and below the window
+        ({"x": 100, "y": 50, "w": 293, "h": 17}, "left the capture window"),
+        ({"x": 100, "y": 1910, "w": 293, "h": 17}, "left the capture window"),
+    ],
+)
+def test_a_highlight_the_window_does_not_show_whole_is_refused(box, message):
+    with pytest.raises(CaptureError, match=f"https://x.org/a: the highlight .*{message}"):
+        require_in_window("https://x.org/a", box, top=100, height=1817)
+
+
+def test_a_highlight_inside_the_window_passes():
+    require_in_window("https://x.org/a", {"x": 0, "y": 100, "w": 1280, "h": 1817}, 100, 1817)
 
 
 def test_the_credit_names_the_ascii_host_that_sourceviewer_draws():
@@ -11578,32 +11614,86 @@ def test_the_credit_names_the_ascii_host_that_sourceviewer_draws():
 
 
 PAGE = """<!doctype html><html><head><title>Test source</title></head><body style="margin:0">
-<div style="position:fixed;top:0;left:0;right:0;height:80px;background:red" id="cookie">We use cookies</div>
+<div style="position:fixed;top:0;left:0;right:0;height:80px;background:red" id="overlay">We use cookies</div>
 <p style="margin-top:1500px">Intro text.</p>
 <p>The block, measuring <em>19.6&nbsp;m</em> in length, is estimated to weigh 1,650 tonnes.</p>
 <p id="ev-07">Evidence paragraph.</p>
 <p id="ev-02" class="theo-evidence"><span class="theo-evidence-anchor" id="ev-03" style="display:block;height:0"></span>Second evidence paragraph, anchored twice.</p>
 </body></html>"""
 
+# 'İ' (U+0130) lower-cases to two UTF-16 units, 'i' and a combining dot above: a Turkish
+# menu of place names before the article text must not shift the marks.
+TURKISH_PAGE = """<!doctype html><html><head><title>Turkish sites</title></head><body style="margin:0">
+<div style="position:fixed;top:0;left:0;right:0;height:40px" id="overlay">Menu</div>
+<p>İzmir, İznik, İstanbul, İğdır, İnegöl, İskenderun, İdil, İlgın, İmranlı, İpsala, İscehisar, İvrindi.</p>
+<p>At Göbekli Tepe its pillars are carved limestone. More text follows here.</p>
+<p>Last line: the enclosures of İstanbul’s hinterland.</p>
+</body></html>"""
 
-def _run_highlight(tmp_path, mode, needle):
+# Our paper page's shell (ancient-nerds-map/src/styles/index.css and theo.css): html,
+# body and #root are 100% tall with overflow hidden, and .theo-page is the 100vh scroller
+# with a sticky header, so the document itself does not scroll. Every box is border-box
+# (index.css), so .theo-page with its padding fits #root exactly.
+PAPER_PAGE = """<!doctype html><html><head><title>Paper</title><style>
+* { margin: 0; padding: 0; box-sizing: border-box }
+html, body { overflow: hidden; width: 100%; height: 100%; margin: 0 }
+#root { width: 100%; height: 100%; overflow: hidden }
+.theo-page { height: 100vh; height: 100dvh; overflow-y: auto; padding-bottom: 60px }
+.page-header { position: sticky; top: 0; height: 60px; z-index: 10; background: #111 }
+</style></head><body><div id="root"><div class="theo-page">
+<header class="page-header" id="overlay">Research</header>
+<p style="margin-top:1500px">Intro text.</p>
+<p id="ev-07" class="theo-evidence">The evidence paragraph of the paper, outlined in the video.</p>
+<div style="height:3000px">Later sections.</div>
+</div></div></body></html>"""
+
+
+def _page(body):
+    """A test page with a fixed overlay (hideOverlays hides it) above the given body."""
+    return (
+        '<!doctype html><html><head><title>t</title></head><body style="margin:0">'
+        '<div style="position:fixed;top:0;left:0;right:0;height:40px" id="overlay">Menu</div>'
+        f"{body}</body></html>"
+    )
+
+
+WEIGHT = "The block is estimated to weigh 1,650 tonnes."
+SHOWN = f'<p style="margin-top:1500px">{WEIGHT}</p>'
+SPLIT_WEIGHT = "The block is <em>estimated</em> to weigh 1,650 tonnes."
+SR_ONLY_SPLIT = (
+    '<span id="unseen" style="position:absolute;width:1px;height:1px;overflow:hidden;'
+    f'clip:rect(0,0,0,0)">{SPLIT_WEIGHT}</span>'
+)
+# A CSS-truncated article body (max-height with overflow hidden): the teaser shows, the
+# rest is cut off from its readers.
+TRUNCATED_PAGE = _page(
+    '<div style="max-height:60px;overflow:hidden"><p>The teaser paragraph of the article.</p>'
+    f'<p style="margin-top:1500px">{WEIGHT}</p></div><p>After the article.</p>'
+)
+
+
+def _run_highlight(tmp_path, mode, needle, html=PAGE, fragment=""):
     pytest.importorskip("playwright")
     from playwright.async_api import async_playwright
 
     page_file = tmp_path / "page.html"
-    page_file.write_text(PAGE, encoding="utf-8")
+    page_file.write_text(html, encoding="utf-8")
 
     async def go():
         async with async_playwright() as p:
             browser = await p.chromium.launch(channel="chrome", headless=True)
             page = await browser.new_page(viewport={"width": 1280, "height": 800})
-            await page.goto(page_file.as_uri())
+            await page.goto(page_file.as_uri() + fragment)
             await page.add_script_tag(path=str(HIGHLIGHT_JS))
             await page.evaluate("() => window.__studio.hideOverlays()")
             box = await page.evaluate("([m, n]) => window.__studio.highlight(m, n)", [mode, needle])
             state = await page.evaluate(
                 "() => ({marks: [...document.querySelectorAll('mark.__studio-hl')].map(m => m.textContent).join('|'),"
-                " cookie: getComputedStyle(document.getElementById('cookie')).display})"
+                " overlay: getComputedStyle(document.getElementById('overlay')).display,"
+                " scrollHeight: document.documentElement.scrollHeight,"
+                " unseen: document.getElementById('unseen') && {"
+                "html: document.getElementById('unseen').innerHTML,"
+                " nodes: document.getElementById('unseen').childNodes.length}})"
             )
             await browser.close()
             return box, state
@@ -11617,7 +11707,33 @@ def test_highlight_finds_a_quote_across_inline_elements(tmp_path):
     )
     assert box is not None and box["y"] > 1500 and box["w"] > 100
     assert state["marks"] == "measuring |19.6\xa0m| in length, is estimated to weigh 1,650 tonnes"
-    assert state["cookie"] == "none"
+    assert state["overlay"] == "none"
+
+
+def test_a_lowercase_that_grows_keeps_the_marks_on_the_quote(tmp_path):
+    box, state = _run_highlight(
+        tmp_path, "quote", "its pillars are carved limestone", html=TURKISH_PAGE
+    )
+    assert box is not None
+    assert state["marks"] == "its pillars are carved limestone"
+    # the quote at the very end of the page, with an 'İ' of its own
+    box, state = _run_highlight(
+        tmp_path, "quote", "the enclosures of İSTANBUL'S hinterland.", html=TURKISH_PAGE
+    )
+    assert box is not None
+    assert state["marks"] == "the enclosures of İstanbul’s hinterland."
+
+
+@pytest.mark.parametrize(
+    ("mode", "needle"),
+    [("anchor", "ev-07"), ("quote", "the evidence paragraph of the paper")],
+)
+def test_our_paper_page_scrolls_as_a_document(tmp_path, mode, needle):
+    # the #ev-07 link scrolls .theo-page; the capture needs the box in document pixels
+    box, state = _run_highlight(tmp_path, mode, needle, html=PAPER_PAGE, fragment="#ev-07")
+    assert box is not None and box["y"] > 1500
+    assert state["scrollHeight"] > 1500 + 3000
+    assert state["overlay"] == "none"
 
 
 def test_highlight_outlines_an_evidence_anchor_and_misses_absent_text(tmp_path):
@@ -11633,6 +11749,199 @@ def test_a_second_evidence_id_outlines_its_whole_paragraph(tmp_path):
     paragraph, _ = _run_highlight(tmp_path, "anchor", "ev-02")
     assert span is not None and span["h"] > 10 and span["w"] > 0
     assert span == paragraph
+
+
+@pytest.mark.parametrize(
+    "unseen",
+    [
+        f'<div style="display:none">{WEIGHT}</div>',
+        f'<script type="application/ld+json">{{"articleBody": "{WEIGHT}"}}</script>',
+        f'<p style="visibility:hidden">{WEIGHT}</p>',
+        # copies the search reads but a clipping box cuts off: a screen-reader-only span,
+        # a closed accordion, a teaser clipped with an ellipsis
+        '<span style="position:absolute;width:1px;height:1px;overflow:hidden;'
+        f'clip:rect(0,0,0,0)">{WEIGHT}</span>',
+        f'<div style="max-height:0;overflow:hidden"><p>{WEIGHT}</p></div>',
+        '<p style="width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+        f"{WEIGHT}</p>",
+        # a copy the search reads that no box of the page draws
+        f"<textarea>{WEIGHT}</textarea>",
+        # copies placed off the page the capture reaches (a visually hidden span, left or
+        # above the document's origin) or drawn at no size
+        f'<span style="position:absolute;left:-9999px">{WEIGHT}</span>',
+        f'<span style="position:absolute;top:-9999px">{WEIGHT}</span>',
+        f'<p style="font-size:0">{WEIGHT}</p>',
+        f'<p style="transform:scale(0)">{WEIGHT}</p>',
+        # a screen-reader-only copy split across inline elements: its three marks are
+        # unmarked, the split text nodes merged, and the search maps the page again
+        SR_ONLY_SPLIT,
+    ],
+    ids=[
+        "display-none",
+        "json-ld",
+        "visibility-hidden",
+        "sr-only",
+        "closed-accordion",
+        "ellipsis",
+        "textarea",
+        "offscreen-left",
+        "offscreen-top",
+        "font-size-0",
+        "scale-0",
+        "sr-only-split",
+    ],
+)
+def test_a_copy_the_reader_does_not_see_is_passed_over(tmp_path, unseen):
+    # the first copy in the DOM is hidden, cut off or off the page; the one the reader sees
+    # (at x 0, y 1500) is highlighted
+    box, state = _run_highlight(tmp_path, "quote", WEIGHT, html=_page(unseen + SHOWN))
+    assert box is not None and box["y"] >= 1500 and box["w"] > 100
+    assert 0 <= box["x"] and box["x"] + box["w"] <= 1280
+    assert state["marks"] == WEIGHT
+
+
+def test_a_passed_over_copy_gets_its_text_nodes_back(tmp_path):
+    # unmark put the three marked pieces back and merged the text nodes markText split:
+    # the span holds its text, the <em> and its text again, as the page wrote them
+    _, state = _run_highlight(tmp_path, "quote", WEIGHT, html=_page(SR_ONLY_SPLIT + SHOWN))
+    assert state["marks"] == WEIGHT
+    assert state["unseen"] == {"html": SPLIT_WEIGHT, "nodes": 3}
+
+
+def test_of_two_copies_the_reader_sees_the_first_is_highlighted(tmp_path):
+    html = _page(SHOWN + f'<p style="margin-top:1500px">{WEIGHT}</p>')
+    box, state = _run_highlight(tmp_path, "quote", WEIGHT, html=html)
+    # the first paragraph starts at y 1500, the second 1500 px below its end
+    assert box is not None and 1500 <= box["y"] < 1600
+    assert state["marks"] == WEIGHT
+
+
+def test_text_in_a_display_contents_element_is_read(tmp_path):
+    # display:contents has no box of its own; its text is laid out in the paragraph
+    html = _page(f'<p style="margin-top:1500px"><span style="display:contents">{WEIGHT}</span></p>')
+    box, state = _run_highlight(tmp_path, "quote", WEIGHT, html=html)
+    assert box is not None and box["y"] >= 1500
+    assert state["marks"] == WEIGHT
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        # a teaser the reader sees, its continuation kept in the DOM behind the paywall
+        # (the line break between them is page text: it joins the two into the quote)
+        '<p style="margin-top:1500px">The block is estimated</p>\n'
+        '<p style="display:none">to weigh 1,650 tonnes.</p>',
+        # a closed accordion
+        f'<div style="max-height:0;overflow:hidden"><p>{WEIGHT}</p></div>',
+        # the text of a form field is read by the search but drawn by no box of the page
+        f"<textarea>{WEIGHT}</textarea>",
+        # the page's content in a fixed scroller, which hideOverlays hides with the banners
+        f'<div style="position:fixed;inset:0;overflow-y:auto">{SHOWN}</div>',
+        # a page wider than the 1280 CSS px the capture shoots: the only copy lies beyond
+        # that width, or runs past its right edge
+        f'<p style="margin:1500px 0 0 2000px;width:600px">{WEIGHT}</p>',
+        f'<p style="margin:1500px 0 0 1000px;white-space:nowrap">{WEIGHT}</p>',
+    ],
+    ids=[
+        "hidden-continuation",
+        "closed-accordion",
+        "textarea",
+        "fixed-scroller",
+        "beyond-1280",
+        "across-1280",
+    ],
+)
+def test_a_quote_the_reader_cannot_see_whole_is_not_found(tmp_path, body):
+    # sources.py turns None into the advice to use a QuoteCard
+    box, _ = _run_highlight(tmp_path, "quote", WEIGHT, html=_page(body))
+    assert box is None
+
+
+def test_a_truncated_body_shows_its_teaser_and_keeps_the_rest_hidden(tmp_path):
+    teaser, state = _run_highlight(
+        tmp_path, "quote", "the teaser paragraph of the article", html=TRUNCATED_PAGE
+    )
+    assert teaser is not None
+    assert state["marks"] == "The teaser paragraph of the article"
+    # the quote lies in the part the page cuts off: letting it out would show readers'
+    # hidden text as if it were on the page
+    hidden, _ = _run_highlight(tmp_path, "quote", WEIGHT, html=TRUNCATED_PAGE)
+    assert hidden is None
+
+
+def test_an_evidence_paragraph_cut_off_by_its_box_is_not_visible(tmp_path):
+    html = _page(
+        '<div style="max-height:0;overflow:hidden">'
+        '<p id="ev-09" class="theo-evidence">Collapsed evidence.</p></div>'
+    )
+    box, _ = _run_highlight(tmp_path, "anchor", "ev-09", html=html)
+    assert box is None
+
+
+@pytest.mark.skipif(shutil.which("nvidia-smi") is None, reason="no NVIDIA driver on this machine")
+def test_the_capture_window_on_our_paper_page_keeps_its_context(tmp_path):
+    pytest.importorskip("playwright")
+    from PIL import Image
+
+    page_file = tmp_path / "paper.html"
+    page_file.write_text(PAPER_PAGE, encoding="utf-8")
+    out = tmp_path / "paper.png"
+    shot = asyncio.run(sources._capture(page_file.as_uri() + "#ev-07", "anchor", "ev-07", out))
+    box = shot["box"]
+    # CONTEXT_PX above and below the paragraph, not the 800 px viewport it was loaded in
+    assert shot["top"] == pytest.approx(box["y"] - CONTEXT_PX, abs=1)
+    assert shot["height"] == pytest.approx(box["h"] + 2 * CONTEXT_PX, abs=1)
+    with Image.open(out) as img:
+        assert img.size[1] == pytest.approx(shot["height"] * sources.DEVICE_SCALE, abs=2)
+
+
+@pytest.mark.skipif(shutil.which("nvidia-smi") is None, reason="no NVIDIA driver on this machine")
+@pytest.mark.parametrize(
+    "unseen",
+    [
+        f'<span style="position:absolute;left:-9999px">{WEIGHT}</span>',
+        f'<span style="position:absolute;top:-9999px">{WEIGHT}</span>',
+        f'<p style="font-size:0">{WEIGHT}</p>',
+    ],
+    ids=["offscreen-left", "offscreen-top", "font-size-0"],
+)
+def test_the_highlight_box_lies_in_the_captured_png(tmp_path, unseen):
+    # a copy off the page or at no size comes first; the manifest's box is the shown copy's
+    pytest.importorskip("playwright")
+    from PIL import Image
+
+    page_file = tmp_path / "page.html"
+    page_file.write_text(_page(unseen + SHOWN), encoding="utf-8")
+    out = tmp_path / "page.png"
+    shot = asyncio.run(sources._capture(page_file.as_uri(), "quote", WEIGHT, out))
+    x, y, w, h = image_box(shot["box"], shot["top"])
+    with Image.open(out) as img:
+        width, height = img.size
+    assert w > 100 and h > 10
+    assert 0 <= x and x + w <= width
+    assert 0 <= y and y + h <= height + 1  # Chromium rounds the window to whole pixels
+
+
+@pytest.mark.skipif(shutil.which("nvidia-smi") is None, reason="no NVIDIA driver on this machine")
+def test_a_viewport_tall_hero_above_the_quote_keeps_it_in_the_window(tmp_path):
+    # the header is 100vh: when the viewport grows to the window's height it grows too and
+    # moves the quote down, out of the window measured in the 800 px viewport
+    pytest.importorskip("playwright")
+    from PIL import Image
+
+    hero = _page(
+        '<header style="height:100vh">Hero</header>'
+        f'<p style="margin:20px 0">{WEIGHT}</p><div style="height:3000px">Later sections.</div>'
+    )
+    page_file = tmp_path / "hero.html"
+    page_file.write_text(hero, encoding="utf-8")
+    out = tmp_path / "hero.png"
+    shot = asyncio.run(sources._capture(page_file.as_uri(), "quote", WEIGHT, out))
+    box = shot["box"]
+    assert box["y"] > sources.VIEWPORT[1] + CONTEXT_PX  # below the grown hero
+    assert shot["top"] <= box["y"] and box["y"] + box["h"] <= shot["top"] + shot["height"]
+    with Image.open(out) as img:
+        assert img.size[1] == pytest.approx(shot["height"] * sources.DEVICE_SCALE, abs=2)
 
 
 def test_the_manifest_size_is_the_size_of_the_written_png(tmp_path, monkeypatch):
@@ -11678,31 +11987,185 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'pipeline.studio.captu
 ```js
 // Page-side helpers of pipeline/studio/capture/sources.py, installed as window.__studio.
 //   hideOverlays(): hide fixed/sticky layers (cookie bars, banners, sticky headers)
-//   highlight(mode, needle): mode 'quote' finds the text (whitespace, quotes and
-//     dashes normalised, case-insensitive, across inline elements) and wraps each
-//     covered text piece in <mark class="__studio-hl">; mode 'anchor' outlines the
-//     element with that id (our paper page's #ev-NN), or, when the id sits on an
-//     empty span.theo-evidence-anchor (the second and later evidence ids of a
-//     paragraph, plan B), the p.theo-evidence around it. Returns the highlight box
-//     in page CSS pixels {x, y, w, h}, or null when nothing matches or the anchor
-//     has no visible box.
+//   highlight(mode, needle): mode 'quote' finds the text among the text the page shows
+//     its readers (whitespace, quotes and dashes normalised, case-insensitive, across
+//     inline elements; <script>, <style>, hidden elements and the hidden overlays do not
+//     count) and wraps each covered text piece in <mark class="__studio-hl">; mode
+//     'anchor' outlines the element with that id (our paper page's #ev-NN), or, when the id
+//     sits on an empty span.theo-evidence-anchor (the second and later evidence ids of a
+//     paragraph, plan B), the p.theo-evidence around it. Returns the highlight box in page
+//     CSS pixels {x, y, w, h} of the first occurrence the reader sees whole. An occurrence
+//     with a piece that has no box or one of no area (font-size 0), that a box around it
+//     cuts off from the reader (a truncated paywall body, a "read more" clamp, a
+//     screen-reader-only span, an ellipsis), or that lies off the page the capture shoots
+//     (left of or above the document's origin, past the viewport's width) is unmarked and
+//     passed over; null when no occurrence is left (sources.py then advises a QuoteCard),
+//     or when the anchor has no visible box. Before
+//     measuring, the scrollers around the highlight are let out (unclip), so the document
+//     itself scrolls: our paper page keeps html, body and #root at 100% with overflow
+//     hidden and scrolls .theo-page instead (index.css, theo.css), and the capture window
+//     is scrolled with window.scrollTo on a page as tall as its content.
 //   box(): the current page box of the last highlight (after the viewport changed).
 (() => {
-  const NORMAL = { '‘': "'", '’': "'", '“': '"', '”': '"', '–': '-', '—': '-', ' ': ' ' }
+  const NORMAL = { '‘': "'", '’': "'", '“': '"', '”': '"', '–': '-', '—': '-', ' ': ' ' }
+  // One character (code point) folded for matching: ' ' for whitespace, else plain
+  // quotes and dashes, lower-cased. The result can be longer than the character: 'İ'
+  // (U+0130) lower-cases to 'i' plus a combining dot above, two UTF-16 units.
+  const fold = (ch) => {
+    const c = NORMAL[ch] ?? ch
+    return /\s/.test(c) ? ' ' : c.toLowerCase()
+  }
   const normalize = (s) => {
     let out = ''
     let space = true
-    for (const raw of s) {
-      const c = NORMAL[raw] ?? raw
-      if (/\s/.test(c)) {
+    for (const ch of s) {
+      const c = fold(ch)
+      if (c === ' ') {
         if (!space) out += ' '
         space = true
       } else {
-        out += c.toLowerCase()
+        out += c
         space = false
       }
     }
     return out.trim()
+  }
+  // A text node the reader sees: its element has a box and is not visibility:hidden. That
+  // leaves out <script> (a JSON-LD articleBody), <style>, <noscript>, display:none subtrees
+  // (a paywall's full text kept in the DOM) and the overlays hideOverlays() hid. An element
+  // with display:contents has no box of its own (checkVisibility() is false for it): its
+  // text is laid out in the nearest ancestor that has one.
+  const readable = (text) => {
+    let el = text.parentElement
+    if (getComputedStyle(el).visibility !== 'visible') return false
+    while (getComputedStyle(el).display === 'contents') el = el.parentElement
+    return el.checkVisibility()
+  }
+  const overflows = (node) => node.scrollHeight > node.clientHeight
+  const letOut = (node) => {
+    node.style.setProperty('overflow', 'visible', 'important')
+    node.style.setProperty('height', 'auto', 'important')
+    node.style.setProperty('max-height', 'none', 'important')
+  }
+  // Lets the document scroll to the highlight. A box the reader scrolls (overflow-y auto or
+  // scroll) is let out when its content overflows it. A box that clips (hidden, clip) is let
+  // out only when it fitted its content in the page's own layout and overflows because a
+  // scroller below it was let out: our paper page's #root around .theo-page (both 100% of
+  // the viewport, border-box in index.css). A clipper that already overflowed hides that
+  // part from its readers (a truncated paywall body, a "read more" clamp, a closed
+  // accordion) and stays as it is; clipped() then finds the highlight cut off.
+  const unclip = (el) => {
+    const ancestors = []
+    for (let node = el.parentElement; node; node = node.parentElement) ancestors.push(node)
+    const overflowed = ancestors.map(overflows)
+    ancestors.forEach((node, i) => {
+      // read after the boxes below were let out: their overflow now shows here
+      if (!overflows(node)) return
+      const y = getComputedStyle(node).overflowY
+      const scroller = y === 'auto' || y === 'scroll'
+      const clipper = y === 'hidden' || y === 'clip'
+      if (scroller || (clipper && !overflowed[i])) letOut(node)
+    })
+  }
+  // True when a box around the element cuts part of it off: on an axis where an ancestor
+  // clips its overflow, the element reaches past that ancestor's client box (1 px of slack:
+  // clientWidth and clientHeight are whole pixels). Overflow does not apply to inline and
+  // display:contents elements, so they clip nothing.
+  const clipped = (el) => {
+    const rects = [...el.getClientRects()]
+    for (let node = el.parentElement; node; node = node.parentElement) {
+      const style = getComputedStyle(node)
+      if (style.display === 'inline' || style.display === 'contents') continue
+      const clipX = style.overflowX !== 'visible'
+      const clipY = style.overflowY !== 'visible'
+      if (!clipX && !clipY) continue
+      const outer = node.getBoundingClientRect()
+      const left = outer.left + node.clientLeft
+      const top = outer.top + node.clientTop
+      for (const r of rects) {
+        if (clipX && (r.left < left - 1 || r.right > left + node.clientWidth + 1)) return true
+        if (clipY && (r.top < top - 1 || r.bottom > top + node.clientHeight + 1)) return true
+      }
+    }
+    return false
+  }
+  // The text the reader sees, folded for matching, and one map entry per UTF-16 unit of it:
+  // [text node, start, end] of the page character it came from.
+  const readText = () => {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    let text = ''
+    const map = []
+    let space = true
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!readable(node)) continue
+      const s = node.textContent
+      let start = 0
+      for (const ch of s) {
+        const end = start + ch.length
+        const c = fold(ch)
+        if (c !== ' ' || !space) {
+          text += c
+          for (let k = 0; k < c.length; k++) map.push([node, start, end])
+          space = c === ' '
+        }
+        start = end
+      }
+    }
+    return { text, map }
+  }
+  // Wraps the page characters behind text[at, at + length) in <mark class="__studio-hl">
+  // pieces, one per covered text node the search read (a hidden node inside the range is
+  // not quoted).
+  const markText = (map, at, length) => {
+    const [startNode, startOffset] = map[at]
+    const [endNode, , endOffset] = map[at + length - 1]
+    const range = document.createRange()
+    range.setStart(startNode, startOffset)
+    range.setEnd(endNode, endOffset)
+    const pieces = []
+    const inRange = document.createTreeWalker(range.commonAncestorContainer.nodeType === 3 ? range.commonAncestorContainer.parentNode : range.commonAncestorContainer, NodeFilter.SHOW_TEXT)
+    for (let node = inRange.nextNode(); node; node = inRange.nextNode()) {
+      if (range.intersectsNode(node) && readable(node)) pieces.push(node)
+    }
+    const marks = []
+    for (const node of pieces) {
+      const s = node === startNode ? startOffset : 0
+      const e = node === endNode ? endOffset : node.textContent.length
+      if (e <= s) continue
+      const middle = node.splitText(s)
+      middle.splitText(e - s)
+      const mark = document.createElement('mark')
+      mark.className = '__studio-hl'
+      middle.parentNode.insertBefore(mark, middle)
+      mark.appendChild(middle)
+      marks.push(mark)
+    }
+    return marks
+  }
+  // Undoes markText: the marked text goes back into its parent, and the text nodes it was
+  // split from are merged again.
+  const unmark = (marks) => {
+    const parents = new Set(marks.map((m) => m.parentNode))
+    for (const mark of marks) mark.replaceWith(...mark.childNodes)
+    for (const parent of parents) parent.normalize()
+  }
+  // True when the rect covers an area (font-size:0 and transform:scale(0) draw text at none).
+  const drawn = (r) => r.width > 0 && r.height > 0
+  // True when the rect lies on the page the capture shoots: not left of or above the
+  // document's origin, which no scroll reaches (a visually hidden copy at left:-9999px),
+  // and not past the viewport's width, the 1280 CSS px sources.py screenshots.
+  const onPage = (r) =>
+    r.left + scrollX >= 0 && r.right + scrollX <= document.documentElement.clientWidth && r.top + scrollY >= 0
+  // True when the reader sees every marked piece whole. A piece the search read can still
+  // have no box, or boxes of no area (the text of a <textarea>, of an SVG <text>, of a copy
+  // drawn at font-size 0): that part of the quote is not on the page; collapsed white space
+  // may lack one. Then the scrollers around the pieces are let out, no box around them may
+  // cut one off, and every box of every piece lies on the page.
+  const seenWhole = (marks) => {
+    if (marks.some((m) => m.textContent.trim() !== '' && ![...m.getClientRects()].some(drawn))) return false
+    for (const mark of marks) unclip(mark)
+    if (marks.some(clipped)) return false
+    return marks.every((m) => [...m.getClientRects()].every(onPage))
   }
   const unionBox = (rects) => {
     const xs = rects.flatMap((r) => [r.left, r.right])
@@ -11727,6 +12190,8 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'pipeline.studio.captu
         if (!hit) return null
         const el = hit.classList.contains('theo-evidence-anchor') ? hit.closest('p.theo-evidence') : hit
         if (!el) return null
+        unclip(el)
+        if (clipped(el)) return null
         const box = unionBox([el.getBoundingClientRect()])
         if (box.w < 1 || box.h < 1) return null
         el.style.setProperty('outline', '4px solid #00cc66')
@@ -11738,53 +12203,23 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'pipeline.studio.captu
       const style = document.createElement('style')
       style.textContent = 'mark.__studio-hl{background:rgba(0,204,102,.28);color:inherit;box-shadow:0 0 0 2px rgba(0,204,102,.9);border-radius:2px}'
       document.head.appendChild(style)
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
-      let text = ''
-      const map = []
-      let space = true
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        const s = node.textContent
-        for (let i = 0; i < s.length; i++) {
-          const c = NORMAL[s[i]] ?? s[i]
-          if (/\s/.test(c)) {
-            if (space) continue
-            text += ' '
-            space = true
-          } else {
-            text += c.toLowerCase()
-            space = false
-          }
-          map.push([node, i])
-        }
-      }
       const q = normalize(needle)
-      const at = text.indexOf(q)
-      if (at < 0 || q.length === 0) return null
-      const [startNode, startOffset] = map[at]
-      const [endNode, endOffset] = map[at + q.length - 1]
-      const range = document.createRange()
-      range.setStart(startNode, startOffset)
-      range.setEnd(endNode, endOffset + 1)
-      const pieces = []
-      const inRange = document.createTreeWalker(range.commonAncestorContainer.nodeType === 3 ? range.commonAncestorContainer.parentNode : range.commonAncestorContainer, NodeFilter.SHOW_TEXT)
-      for (let node = inRange.nextNode(); node; node = inRange.nextNode()) {
-        if (range.intersectsNode(node)) pieces.push(node)
+      if (q.length === 0) return null
+      // Every occurrence in turn: the first one in the DOM can be a copy the reader does not
+      // see whole (a screen-reader-only span, a closed accordion, a teaser clipped with an
+      // ellipsis, a hidden carousel slide) before the one the page shows.
+      let page = readText()
+      for (let at = page.text.indexOf(q); at >= 0; at = page.text.indexOf(q, at + 1)) {
+        const marks = markText(page.map, at, q.length)
+        if (seenWhole(marks)) {
+          highlighted = marks
+          return unionBox(marks.flatMap((m) => [...m.getClientRects()]))
+        }
+        unmark(marks)
+        // unmark merged the split text nodes back: the same text, mapped to new nodes
+        page = readText()
       }
-      const marks = []
-      for (const node of pieces) {
-        const s = node === startNode ? startOffset : 0
-        const e = node === endNode ? endOffset + 1 : node.textContent.length
-        if (e <= s) continue
-        const middle = node.splitText(s)
-        middle.splitText(e - s)
-        const mark = document.createElement('mark')
-        mark.className = '__studio-hl'
-        middle.parentNode.insertBefore(mark, middle)
-        mark.appendChild(middle)
-        marks.push(mark)
-      }
-      highlighted = marks
-      return unionBox(marks.flatMap((m) => [...m.getClientRects()]))
+      return null
     },
     box() {
       if (highlighted.length === 0) return null
@@ -11804,8 +12239,22 @@ sticky layers (cookie bars, banners, sticky headers), highlights the quote (a DO
 split into <mark> pieces, highlight.js) and screenshots a window of CONTEXT_PX CSS px
 above and below it. The window is shot as the viewport, resized to it and scrolled
 there: a full-page screenshot rasterises the whole page, and a 35,000 px Wikipedia
-article took 37 s on the GPU, past Playwright's 30 s timeout (2026-09-26). Paywalled or login pages do not contain the quote, so the capture
-fails with the advice to use a QuoteCard. The same code captures our own paper page
+article took 37 s on the GPU, past Playwright's 30 s timeout (2026-09-26). The resize
+grows a 100vh block (a hero above the quote) with the viewport, so the highlight is
+measured again in the resized viewport, whose height stays fixed from then on, and the
+window is placed there, no taller than the viewport. The scroll only reaches the window
+when the document scrolls, so highlight.js lets out the scrollers around the highlight
+and a clipping box that overflows only because of them: our paper page scrolls
+.theo-page inside a 100%-tall html, body and #root with overflow hidden, and without
+that the window stayed the 800 px viewport. Only text the page shows its readers
+counts: the first copy of the quote they see whole is highlighted. A quote with no
+such copy fails with the advice to use a QuoteCard: every copy is absent, hidden
+(display:none, a script's JSON-LD), cut off by a clipping box (a paywall body truncated
+with CSS, a "read more" clamp, a screen-reader-only span), drawn at no size (font-size 0)
+or off the page the capture shoots (a visually hidden span at left:-9999px, a copy past
+the 1280 CSS px width). After the scroll the highlight box must still lie whole in the
+shot window, on both axes and at least 1 px wide and tall (require_in_window), so the
+manifest never records a box outside its PNG. The same code captures our own paper page
 with its #ev-NN paragraph outlined (a second id of a paragraph is an empty span inside
 it, plan B; highlight.js outlines the paragraph). The paper slug and the evidence id are
 checked with the one definition of each (pipeline.studio.config.check_slug, plan C;
@@ -11856,6 +12305,7 @@ SETTLE_MS = 1500
 NAV_TIMEOUT_MS = 45_000
 MIN_QUOTE_CHARS = 12
 HIGHLIGHT_JS = Path(__file__).with_name("highlight.js")
+PAGE_HEIGHT_JS = "() => document.documentElement.scrollHeight"
 # A desktop Chrome user agent: some sources serve bots a different page.
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -11894,10 +12344,14 @@ def source_target(spec: dict[str, Any]) -> tuple[str, str, str]:
     )
 
 
-def clip_window(box: dict[str, float], page_height: float) -> tuple[float, float]:
-    """(top, height) in CSS px of the screenshot window around the highlight."""
+def clip_window(
+    box: dict[str, float], page_height: float, max_height: float = math.inf
+) -> tuple[float, float]:
+    """(top, height) in CSS px of the screenshot window around the highlight: CONTEXT_PX
+    above and below it, on the page, and no taller than max_height (the viewport the window
+    is shot in, once its height is fixed)."""
     top = max(0.0, box["y"] - CONTEXT_PX)
-    bottom = min(page_height, box["y"] + box["h"] + CONTEXT_PX)
+    bottom = min(page_height, box["y"] + box["h"] + CONTEXT_PX, top + max_height)
     if bottom <= top:
         raise CaptureError(f"empty capture window for box {box} on a {page_height}px page")
     return top, bottom - top
@@ -11908,6 +12362,19 @@ def ascii_host(url: str) -> str:
     same string as SourceViewer's address bar (video/src/format.ts domainOf)."""
     host = urlparse(url).hostname or ""
     return host.encode("idna").decode("ascii").removeprefix("www.")
+
+
+def require_in_window(url: str, box: dict[str, float], top: float, height: float) -> None:
+    """Raise unless the highlight box (page CSS px) lies whole in the shot window: x from 0
+    to the viewport's width, y from top to top + height, at least 1 px wide and tall."""
+    if box["w"] < 1 or box["h"] < 1:
+        raise CaptureError(f"{url}: the highlight {box} has no area")
+    if box["x"] < 0 or box["x"] + box["w"] > VIEWPORT[0]:
+        raise CaptureError(
+            f"{url}: the highlight {box} is not within the {VIEWPORT[0]} CSS px the capture shoots"
+        )
+    if box["y"] < top or box["y"] + box["h"] > top + height:
+        raise CaptureError(f"{url}: the highlight left the capture window after scrolling")
 
 
 def image_box(box: dict[str, float], top: float) -> list[float]:
@@ -11943,19 +12410,27 @@ async def _capture(url: str, mode: str, needle: str, out: Path) -> dict[str, Any
         )
         if box is None and mode == "quote":
             raise CaptureError(
-                f"quote not found on {url}; paywalled or login pages cannot be captured, use a QuoteCard"
+                f"quote not found whole in the text {url} shows its readers (absent, hidden, "
+                f"cut off, drawn at no size or off the {VIEWPORT[0]} CSS px page); paywalled "
+                "or login pages cannot be captured, use a QuoteCard"
             )
         if box is None:
             raise CaptureError(f"#{needle} has no visible paragraph on {url}")
-        page_height = await page.evaluate("() => document.documentElement.scrollHeight")
+        page_height = await page.evaluate(PAGE_HEIGHT_JS)
         top, height = clip_window(box, page_height)
-        await page.set_viewport_size({"width": VIEWPORT[0], "height": math.ceil(height)})
+        viewport_height = math.ceil(height)
+        await page.set_viewport_size({"width": VIEWPORT[0], "height": viewport_height})
+        # A 100vh block above the highlight (a hero) grew with the viewport and moved it
+        # down: measure it again. The viewport keeps this height, so the layout does too,
+        # and the window is placed in it, no taller than it.
+        box = await page.evaluate("() => window.__studio.box()")
+        page_height = await page.evaluate(PAGE_HEIGHT_JS)
+        top, height = clip_window(box, page_height, max_height=viewport_height)
         await page.evaluate("(y) => window.scrollTo(0, y)", top)
         await page.wait_for_timeout(SETTLE_MS)
         scrolled = await page.evaluate("() => window.scrollY")
         box = await page.evaluate("() => window.__studio.box()")
-        if not (scrolled <= box["y"] and box["y"] + box["h"] <= scrolled + height):
-            raise CaptureError(f"{url}: the highlight left the capture window after scrolling")
+        require_in_window(url, box, scrolled, height)
         await page.screenshot(
             path=str(out),
             type="png",
@@ -12017,7 +12492,7 @@ def capture_source(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/capture/test_capture_sources.py -m "not integration and not live_llm" -q -rs`
-Expected on the workstation (Playwright and Chrome installed): `17 passed`. Without Playwright (CI): `12 passed, 5 skipped`.
+Expected on the workstation (Playwright, Chrome and the NVIDIA driver installed): `57 passed`. Without Playwright (CI): `21 passed, 36 skipped`. The five `_capture` tests (our paper page's window, the three off-page and zero-size copies, the 100vh hero) run the real capture and skip without `nvidia-smi`.
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
@@ -15875,3 +16350,19 @@ Changed (commits 4bcfafd and 86e306e on `feat/studio`):
   - The Spec coverage rows 4.8 layout and 4.11, cross-stream request 1 (CI collects only `*.test.ts`; `test/gpu` is type-checked, never run) and request 3 (STUDIO.md names `npm run test:gpu` among the local checks).
 - Checked 2026-09-27: each complete-file block of `video/package.json`, `video/src/theme/fonts.ts`, `video/src/layout/LayoutBox.tsx`, `video/src/layout/LayoutGuard.tsx`, `video/test/guard.test.ts` and the three `video/test/gpu/` files occurs once in this plan and is byte-identical to the committed file (a script extracted the blocks and compared them). `npm run test:gpu` then gave `Tests  3 passed (3)` (34.5 s). On a scratch copy with the 2d44956 `LayoutBox.tsx`, `LayoutGuard.tsx` and `fonts.ts` it gave `Tests  2 failed | 1 passed (3)`: 19 lines instead of 21, and `[]` for the one-frame teaser.
 - Still open, for Task 20 or 22 and not done here: once Task 20's `lint.ts` exists, a planted timeline run through `lint.ts` should show exit code 1 with exactly its violation lines, next to the `lint clean` runs.
+
+### Task 29 review fix (2026-09-27 to 2026-09-29, the first copy the reader sees whole, inside the shot window)
+
+Five adversarial reviews of Task 29's commit e107bc8 found gaps. Each was confirmed and fixed in a follow-up commit on `feat/studio` that touched only the task's three files and added regression tests. Task 29's intro, its three complete-file blocks and Step 4's counts were rewritten in place to the committed code.
+
+- **Review 1 → 8c3b72b.** Case folding now works per character. `'İ'` (U+0130) lower-cases to two UTF-16 units, so a string-level `toLowerCase()` shifted every mark after a Turkish place name. `fold` now folds one code point at a time, and the map keeps one entry per UTF-16 unit. The same commit fixed our paper page: it scrolls `.theo-page` inside a 100%-tall `html`, `body` and `#root` with overflow hidden, so the document never scrolled and the window stayed the 800 px viewport. `highlight.js` now lets out the scrollers around the highlight.
+- **Review 2 → 2d6b6e5.** Only text the page shows its readers is searched (`readable`, with `display:contents` resolved to the nearest box). A `<script>` (a JSON-LD `articleBody`), `<style>`, a `display:none` subtree (a paywall's full text kept in the DOM), `visibility:hidden` text and the overlays `hideOverlays()` hid no longer count. A quote piece without a box (a `<textarea>`) now gets the QuoteCard advice instead of a zero box.
+- **Review 3 → 60ed39b.** `unclip` lets out a scroller (overflow-y auto or scroll) that overflows. It lets out a clipper (hidden or clip) only when the clipper fitted its content in the page's own layout and overflows because a scroller below it was let out (our paper page's `#root`). `clipped()` refuses a highlight that a box around it cuts off: a truncated paywall body, a "read more" clamp or a closed accordion. Before this fix, such a box was let out and the hidden text was shown as if it were on the page.
+- **Review 4 (rescue) → 36663cb.** The first copy in the DOM can be one the reader does not see: a screen-reader-only span, a closed accordion, an ellipsis teaser or a `<textarea>`. The search now walks every occurrence and marks each in turn. It keeps the first one the reader sees whole (`seenWhole`) and unmarks and passes over the rest. `unmark` puts the text back, `normalize()` merges the split nodes, and `readText()` maps the page again.
+- **Review 5 → fc6f30a, 2acea7d, b603850 (2026-09-29).**
+  - fc6f30a: `seenWhole` also passes over two more kinds of copy. The first is a copy with a non-blank piece whose boxes all have no area (font-size 0, `transform:scale(0)`). The second is a copy with a box off the page the capture shoots: `left + scrollX < 0`, `right + scrollX > document.documentElement.clientWidth` (1280 in standards and quirks mode, measured) or `top + scrollY < 0`. Examples are a visually hidden span at `left:-9999px` or `top:-9999px`, or a copy past 1280 CSS px on a wider page. The reviewer measured the old code on the NVIDIA: `image_box` `[-19998, 1800, 587.5, 34]` in a 2560 px wide PNG, and `[4000, ...]` for a quote at x 2000, both with no error. `sources.py`'s check after the scroll is now `require_in_window`: the box must lie within x 0 to 1280 and within the window on y, and must be at least 1 px wide and tall. The QuoteCard advice now names "drawn at no size or off the 1280 CSS px page". The module docstring paragraph was rewritten and rewrapped (it had a 118-character line).
+  - 2acea7d: after `set_viewport_size`, the box and the page height are measured again. The window is placed from them and is no taller than the viewport (`clip_window(box, page_height, max_height=viewport_height)`). The viewport keeps that height, so the vh layout does not move again. Before this fix, a `<header style="height:100vh">` above the quote grew with the viewport and pushed the quote out of the window measured at 800 px ("the highlight left the capture window after scrolling").
+  - b603850 (tests only): a screen-reader-only first copy split across an `<em>` (three marks) is passed over and gets its text nodes back (the span's `innerHTML` and its 3 child nodes). Of two visible copies, the first is highlighted. Both mutations fail the new tests: without `normalize()` the span keeps 7 nodes, and without `unmark` the marks read `The block is |estimated| to weigh 1,650 tonnes.|The block is estimated to weigh 1,650 tonnes.`
+- **Counts.** `test_capture_sources.py` has 57 tests, all passing on the workstation (17 at e107bc8, 35 after 36663cb). Without Playwright: 21 passed, 36 skipped. Five tests run the real `_capture` and skip without `nvidia-smi`. The capture directory gives 129 passed, 1 skipped (the non-Windows vite refusal). ruff check, ruff format --check and lint-imports (2 contracts kept) are clean. A script extracted Task 29's three complete-file blocks and found each byte-identical to its committed file.
+- **Not changed:** `manifest.py`. Its `event` and `build_manifest` still check only w, h > 0. The box is checked against the shot window in `sources.py` before the screenshot is taken.
+- **Seen, not changed:** a first copy at `opacity:0` or under `clip-path:inset(50%)` still counts as seen, and is highlighted over text the reader cannot see (probed 2026-09-29: box at y 16 before the shown copy at 1500). Refusing opacity 0 (`checkVisibility({opacityProperty: true})`) would also refuse a scroll-reveal page, whose text sits at opacity 0 until the capture scrolls there and is visible in the screenshot. That is a decision for the owner, not a review fix.
