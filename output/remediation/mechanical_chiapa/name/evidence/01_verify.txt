@@ -1,0 +1,18 @@
+$ apply.py --lane chiapa-name --verify   (2026-09-29T19:47:05Z) - before the hide has landed
+                                    metric                                     | value 
+-------------------------------------------------------------------------------+-------
+ curated rows retired as a duplicate                                           | 19
+ curated rows whose name_normalized is not the key of their name               | 0
+ curated sites                                                                 | 5004
+ journal rows for the rollback stamp                                           | 0
+ journal rows for this run on non-curated rows                                 | 0
+ journal rows for this run outside unified_sites.(name, name_normalized)       | 0
+ journal rows for this run renaming a site whose key moved without its key row | 0
+ journal rows for this run stamp                                               | 0
+ journal rows for this run whose key is not the key of the name it wrote       | 0
+ journal rows for this run with a site_id_ref of another site                  | 0
+ journal rows for this test id                                                 | 0
+ visible curated rows sharing their name key with another visible curated row  | 2
+
+
+EXIT=0

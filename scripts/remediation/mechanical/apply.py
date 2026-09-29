@@ -280,7 +280,9 @@ def _validate_cell(r: ChangeRecord, lane: Lane, *, rollback: bool) -> None:
     empty_side, filled_side = ("new", "old") if rollback else ("old", "new")
     values = {"old": r.old_value, "new": r.new_value}
     if r.old_value is None and r.new_value is None:
-        raise PlanError(f"{r.site_id}/{cell.name}: old and new are both NULL - NULL to NULL is not a change")
+        raise PlanError(
+            f"{r.site_id}/{cell.name}: old and new are both NULL - NULL to NULL is not a change"
+        )
     if values[filled_side] is None and not cell.clears:
         raise PlanError(
             f"{r.site_id}/{cell.name}: no {filled_side} value - this lane never "
@@ -1721,7 +1723,7 @@ def _cell_probe_cases(
         )
         probes.append(
             (
-                f"invariant-{invariant.probe_column}",
+                invariant.probe_suffix,
                 f"site invariant - {invariant.says}",
                 corrupt(index, new_value=value),
                 refusal(invariant.says),

@@ -1,0 +1,13 @@
+$ apply.py --lane chiapa-hide --check-primitive   (2026-09-29T19:46:18Z)
+                                             signature                                             
+---------------------------------------------------------------------------------------------------
+ apply_remediation_change(text, text, text, text, text, text, text, text, text, text, jsonb, uuid)
+(1 row)
+
+ casts_value_to_column_type | casts_old_value | rereads_stored_value 
+----------------------------+-----------------+----------------------
+ t                          | t               | t
+(1 row)
+
+
+EXIT=0
