@@ -2,10 +2,20 @@
 
 The narrator reads `spoken` ("about a thousand tonnes"), the captions and SRT show `display`
 ("about 1,000 tonnes"). `normalize_tokens` maps both to one canonical token list: number words
-become digits (years such as "nineteen sixty-six" and "twenty fourteen" included), thousands
-separators go, unit words and symbols become one unit token, edge punctuation and case are
-ignored. Clause punctuation after a number word (, ; : . ! ? … or a dash) still ends that
-number: "forty, six" is 40 and 6, never 46. Any other difference is a script error.
+become digits (years such as "nineteen sixty-six" and "twenty fourteen" included), ordinal
+words ordinals ("twenty-first" is 21st), thousands separators go, unit words and symbols
+become one unit token, edge punctuation and case are ignored. Clause punctuation after a
+number word (, ; : . ! ? … or a dash) still ends that number: "forty, six" is 40 and 6,
+never 46. Any other difference is a script error.
+
+Where the words allow two readings, both stand and `spelling_mismatch` accepts a display that
+shows either: the British "two hundred and fifty thousand" is 250,000, "between five hundred
+and one thousand" is 500 and 1,000. `normalize_tokens` gives the primary reading, every
+number run read as far as it goes. Known limit: two numbers spoken back to back with no
+punctuation between them, the second a British "hundred and" group, read like the plan's
+"one thousand five hundred and one thousand six hundred fifty" (1,500 and 1,650), so "a
+hundred thousand two hundred and fifty thousand" is 100,200 and 50,000; a comma after the
+first number makes it 100,000 and 250,000.
 """
 
 from __future__ import annotations
@@ -111,15 +121,29 @@ def _multiplied(words: list[str], stops: set[int], nxt: int) -> bool:
 
 
 def _joins_after_and(words: list[str], stops: set[int], i: int) -> bool:
-    """ "and" continues a number only before a final 0-99 ("two thousand and fourteen"),
-    never before a new hundred/thousand ("five hundred and one thousand" is two numbers). A
-    0-99 that closes a clause is final whatever follows it."""
+    """ "and" surely continues a number only before a final 0-99 ("two thousand and
+    fourteen"); before a 0-99 that a hundred or a magnitude multiplies it does so only in the
+    British reading of `_british_and`. A 0-99 that closes a clause is final whatever follows
+    it."""
     if i >= len(words):
         return False
     small = _small(words, stops, i)
     if small is None:
         return False
     return not _multiplied(words, stops, small[1])
+
+
+def _british_and(words: list[str], stops: set[int], i: int, last_magnitude: float) -> bool:
+    """Whether the "and" at words[i], after "hundred", may join a 0-99 that a magnitude smaller
+    than the run's last one multiplies, as British English does: "two hundred and fifty
+    thousand" is 250,000. The same words may be two numbers ("between five hundred and one
+    thousand" is 500 and 1,000), so the run keeps its end before the "and" as a second
+    reading."""
+    small = _small(words, stops, i + 1) if i + 1 < len(words) else None
+    if small is None or not _multiplied(words, stops, small[1]):
+        return False
+    after = words[small[1]]
+    return after in MAGNITUDES and MAGNITUDES[after] < last_magnitude
 
 
 def _group_magnitude(words: list[str], stops: set[int], h: int) -> int:
@@ -164,9 +188,11 @@ def _small_continues(
     return True
 
 
-def _number_run(words: list[str], stops: set[int], i: int) -> tuple[str, int] | None:
-    """Parse the number-word run starting at words[i]; (canonical digits, next index). The run
-    ends at the first word that closes a clause."""
+def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]] | None:
+    """Parse the number-word run starting at words[i]: its readings as (canonical digits, next
+    index), the run read as far as it goes first, then each earlier end the words also allow
+    (only before a British "and", see `_british_and`). The run ends at the first word that
+    closes a clause."""
     if (
         words[i] in ("a", "an")
         and i not in stops
@@ -194,13 +220,14 @@ def _number_run(words: list[str], stops: set[int], i: int) -> tuple[str, int] | 
             and words[j + 1] in ONES
             and not _multiplied(words, stops, j + 2)
         ):
-            return str(a * 100 + ONES[words[j + 1]]), j + 2
+            return [(str(a * 100 + ONES[words[j + 1]]), j + 2)]
         second = _small(words, stops, j)
         if second is not None and second[0] >= 10 and not _multiplied(words, stops, second[1]):
-            return str(a * 100 + second[0]), second[1]
+            return [(str(a * 100 + second[0]), second[1])]
     total, current = 0, 0
     prev = ""  # what the run consumed last: "", "small", "hundred", "magnitude" or "and"
     last_magnitude: float = math.inf  # the first magnitude may be any, later ones only smaller
+    ends: list[tuple[str, int]] = []  # the earlier ends of the second readings
     while i < len(words):
         w = words[i]
         small = _small(words, stops, i)
@@ -223,6 +250,14 @@ def _number_run(words: list[str], stops: set[int], i: int) -> tuple[str, int] | 
             and _joins_after_and(words, stops, i + 1)
         ):
             i, prev = i + 1, "and"
+        elif (
+            w == "and"
+            and i not in stops
+            and prev == "hundred"
+            and _british_and(words, stops, i, last_magnitude)
+        ):
+            ends.append((_format(total + current), i))
+            i, prev = i + 1, "and"
         else:
             break
         if i - 1 in stops:
@@ -236,7 +271,8 @@ def _number_run(words: list[str], stops: set[int], i: int) -> tuple[str, int] | 
         and i < len(words)
         and words[i] in UNIT_ORDINALS
     ):
-        return f"{total + current + UNIT_ORDINALS[words[i]]}{ORDINALS[words[i]][-2:]}", i + 1
+        ordinal = f"{total + current + UNIT_ORDINALS[words[i]]}{ORDINALS[words[i]][-2:]}"
+        return [(ordinal, i + 1), *ends]
     # a decimal needs a digit word after "point": "one point ten thousand" is 1, "point" and
     # 10,000, never 1 with "point" swallowed
     digits = ""
@@ -254,41 +290,72 @@ def _number_run(words: list[str], stops: set[int], i: int) -> tuple[str, int] | 
             i += 1
             if i - 1 in stops:
                 break
-    return _format(total + current, digits), i
+    return [(_format(total + current, digits), i), *ends]
 
 
-def normalize_tokens(text: str) -> list[str]:
-    words, stops = _words(text)
-    out: list[str] = []
-    i = 0
-    while i < len(words):
-        w = words[i]
-        run = _number_run(words, stops, i) if (w in ONES or w in TENS or w in ("a", "an")) else None
+def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]]:
+    """The tokens that words[i] can start, each with the index after it, the primary reading
+    first. Only a number run can have more than one."""
+    w = words[i]
+    if w in ONES or w in TENS or w in ("a", "an"):
+        run = _number_run(words, stops, i)
         if run is not None:
-            out.append(run[0])
-            i = run[1]
-            continue
-        if _DIGITS_RE.match(w):
-            whole, _, fraction = w.replace(",", "").partition(".")
-            out.append(_format(int(whole), fraction))
-        elif _ORDINAL_DIGITS_RE.match(w):
-            out.append(w)
-        elif w in ORDINALS:
-            out.append(ORDINALS[w])
-        elif w in UNITS:
-            out.append(UNITS[w])
-        else:
-            out.append(w)
-        i += 1
+            return run
+    if _DIGITS_RE.match(w):
+        whole, _, fraction = w.replace(",", "").partition(".")
+        return [(_format(int(whole), fraction), i + 1)]
+    if _ORDINAL_DIGITS_RE.match(w):
+        return [(w, i + 1)]
+    if w in ORDINALS:
+        return [(ORDINALS[w], i + 1)]
+    if w in UNITS:
+        return [(UNITS[w], i + 1)]
+    return [(w, i + 1)]
+
+
+def _primary(words: list[str], stops: set[int], i: int) -> list[str]:
+    """The tokens of words[i:] in the primary reading, every number run read as far as it goes."""
+    out: list[str] = []
+    while i < len(words):
+        token, i = _readings(words, stops, i)[0]
+        out.append(token)
     return out
 
 
+def normalize_tokens(text: str) -> list[str]:
+    """The canonical tokens of `text` in its primary reading."""
+    words, stops = _words(text)
+    return _primary(words, stops, 0)
+
+
 def spelling_mismatch(spoken: str, display: str) -> str | None:
-    """None when the two differ only in number/unit spelling; else where they diverge."""
-    a, b = normalize_tokens(spoken), normalize_tokens(display)
-    if a == b:
-        return None
-    for k, (x, y) in enumerate(zip(a, b, strict=False)):
-        if x != y:
-            return f"token {k}: spoken {x!r} vs display {y!r}"
-    return f"spoken has {len(a)} tokens, display {len(b)}"
+    """None when some reading of `spoken` has the tokens of some reading of `display`, so the
+    two differ only in number/unit spelling; else where they diverge. Nearly every text has one
+    reading; where the words allow two (a British "hundred and"), the display shows which one
+    the narrator meant. The report follows the readings that agree longest, each continued in
+    its primary reading, so for a text with one reading it names the first differing token."""
+    a_words, a_stops = _words(spoken)
+    b_words, b_stops = _words(display)
+    # both token streams in step: every (spoken index, display index) pair that k equal tokens
+    # reach, in the order of the primary readings
+    front, k = [(0, 0)], 0
+    while True:
+        reached: list[tuple[int, int]] = []
+        for i, j in front:
+            if i == len(a_words) and j == len(b_words):
+                return None
+            if i == len(a_words) or j == len(b_words):
+                continue
+            shown = _readings(b_words, b_stops, j)
+            for token, i_next in _readings(a_words, a_stops, i):
+                for other, j_next in shown:
+                    if token == other and (i_next, j_next) not in reached:
+                        reached.append((i_next, j_next))
+        if not reached:
+            break
+        front, k = reached, k + 1
+    a = _primary(a_words, a_stops, front[0][0])
+    b = _primary(b_words, b_stops, front[0][1])
+    if a and b:
+        return f"token {k}: spoken {a[0]!r} vs display {b[0]!r}"
+    return f"spoken has {k + len(a)} tokens, display {k + len(b)}"

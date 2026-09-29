@@ -95,6 +95,23 @@ from pipeline.studio import spoken
         ("two point five zero metres", "2.50 m"),
         ("2.50 m", "two point five metres"),
         ("two point zero metres", "2 m"),
+        # British "hundred and": one number, or two where the words allow it and the caption
+        # shows two
+        ("a hundred and fifty thousand tonnes", "150,000 tonnes"),
+        ("two hundred and fifty thousand people", "250,000 people"),
+        ("one million two hundred and fifty thousand", "1,250,000"),
+        ("three hundred and thirty-five million sixty-seven thousand", "335,067,000"),
+        (
+            "five million three hundred and ninety-nine thousand eight hundred and fifty-seven",
+            "5,399,857",
+        ),
+        ("between five hundred and one thousand years", "between 500 and 1,000 years"),
+        ("five hundred and one thousand votes", "501,000 votes"),
+        ("fifteen hundred and fifty thousand", "1,550,000"),
+        # known limit: back to back with no punctuation, read like the one thousand five
+        # hundred and one thousand six hundred fifty case above; a comma separates them
+        ("a hundred thousand two hundred and fifty thousand", "100,200 and 50,000"),
+        ("a hundred thousand, two hundred and fifty thousand", "100,000, 250,000"),
         # "point" before a word that is no digit is a word, not a decimal point
         ("At one point ten thousand people lived here", "At one point 10,000 people lived here"),
         ("At one point eleven men climbed", "At one point 11 men climbed"),
@@ -200,6 +217,27 @@ def test_equivalent_spellings(said, shown):
             "token 2: spoken 'point' vs display '10000'",
         ),
         ("two point twelve", "2 12", "token 1: spoken 'point' vs display '12'"),
+        # either reading of a British "hundred and" must match the caption exactly
+        (
+            "two hundred and fifty thousand people",
+            "250,001 people",
+            "token 0: spoken '250000' vs display '250001'",
+        ),
+        (
+            "between five hundred and one thousand years",
+            "between 500 and 1,001 years",
+            "token 3: spoken '1000' vs display '1001'",
+        ),
+        (
+            "two hundred and fifty thousand people",
+            "200 50,000 people",
+            "token 1: spoken 'and' vs display '50000'",
+        ),
+        (
+            "a hundred thousand two hundred and fifty thousand",
+            "100,000 250,000",
+            "token 0: spoken '100200' vs display '100000'",
+        ),
         # a compound ordinal is never a number and an ordinal
         (
             "the twenty-first dynasty",
@@ -225,3 +263,8 @@ def test_real_differences_are_reported(said, shown, where):
 
 def test_articles_stay_words():
     assert spoken.normalize_tokens("a stone and an arch") == ["a", "stone", "and", "an", "arch"]
+
+
+def test_the_primary_reading_reads_a_run_as_far_as_it_goes():
+    assert spoken.normalize_tokens("two hundred and fifty thousand people") == ["250000", "people"]
+    assert spoken.normalize_tokens("between five hundred and one thousand") == ["between", "501000"]
