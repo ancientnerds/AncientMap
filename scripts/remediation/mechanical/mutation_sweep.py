@@ -7242,6 +7242,237 @@ WD1_CASES: list[Case] = [
 CASES += WD1_CASES
 
 
+# ---------------------------------------------- HUMAN_ONLY Nr. 7: the Chiapa lanes (2026-09-29)
+#: Every guard the two Chiapa lanes added (`mechanical/chiapa.py`, `lane.CHIAPA_HIDE`,
+#: `lane.CHIAPA_NAME`): the plan-side checks, the SQL of the empty-row premise, the three survivor
+#: checks and the rename's premise that waits for the hide (evaluated in SQLite by the tests), and
+#: the probe names that keep three probes of one column apart. Every label starts with "chiapa:",
+#: so the group runs on its own: `mutation_sweep.py chiapa:`.
+CHIAPA = MECHANICAL / "chiapa.py"
+CHIAPA_TESTS = "tests/remediation/test_mechanical_chiapa.py"
+_CHIAPA_REFUSES = "test_each_check_refuses_on_its_own"
+_CHIAPA_SURVIVOR = "test_each_survivor_check_fires_for_its_kind_alone"
+_CHIAPA_WAITS = "test_the_rename_premise_is_the_hide_it_waits_for"
+CHIAPA_CASES: list[Case] = [
+    *(
+        guard(f"chiapa: {label}", CHIAPA, needle, test, CHIAPA_TESTS)
+        for label, needle, test in (
+            ("a row that is gone is planned", "    if row is None:", _CHIAPA_REFUSES),
+            (
+                "a row of another source is planned",
+                '    if row["source_id"] != P.CURATED_SOURCE:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a renamed row is hidden",
+                '    if hidden["name"] != RENAME.new:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a decided row is hidden again",
+                '    if hidden["scope_status"] is not None or hidden["scope_reason"] is not None:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a row with links or images is hidden",
+                '    if hidden["hide_premise"] != EMPTY_ROW_PREMISE:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a journal that disagrees is planned on",
+                "    if broken is not None:",
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a retired survivor is kept",
+                '    if kept["scope_status"] == RETIRED:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a pair past 100 m is one site",
+                "    if read.metres > DUPLICATE_METRES:",
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "the survivor rule is not asked",
+                '    if sorted((hidden, kept), key=survivor_rank)[0]["id"] != KEPT:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a moved name is renamed",
+                '    if kept["name"] != RENAME.old or kept["name_normalized"] is None:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a row already retired onto the kept row",
+                '    if kept["name_premise"] != duplicates_retired_onto([]):',
+                _CHIAPA_REFUSES,
+            ),
+            ("another visible row keeps the name", "    if others:", _CHIAPA_REFUSES),
+            ("a lane that wrote is re-planned", "    if written:", _CHIAPA_REFUSES),
+            (
+                "a read with two pairs is parsed",
+                '    if len(rows["pair"]) != 1 or len(rows["key"]) != 1:',
+                "test_the_tagged_lines_become_the_read",
+            ),
+        )
+    ),
+    *(
+        Case(f"chiapa: {label}", path, old, new, test, CHIAPA_TESTS)
+        for label, path, old, new, test in (
+            (
+                "a retired holder of the name blocks",
+                CHIAPA,
+                'for h in read.holders if h["scope_status"] != RETIRED)',
+                "for h in read.holders)",
+                "test_a_retired_holder_of_the_name_is_no_obstacle",
+            ),
+            (
+                "the survivor may be of any source",
+                LANE,
+                "    \"AND s.source_id = 'ancient_nerds'\"\n)",
+                '    "AND true"\n)',
+                _CHIAPA_SURVIVOR,
+            ),
+            (
+                "a survivor nobody curates passes",
+                LANE,
+                'predicate=f"NOT EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR})",',
+                'predicate=f"1 = 0 AND EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR})",',
+                _CHIAPA_SURVIVOR,
+            ),
+            (
+                "a retired survivor passes",
+                LANE,
+                "{_NAMES_SURVIVOR} AND {is_retired('s')})\"",
+                '{_NAMES_SURVIVOR} AND 1 = 0)"',
+                _CHIAPA_SURVIVOR,
+            ),
+            (
+                "a far survivor passes",
+                LANE,
+                "_SURVIVOR_FAR = f\"{sphere_metres('s', 'u')} > {DUPLICATE_METRES}\"",
+                "_SURVIVOR_FAR = f\"{sphere_metres('s', 'u')} < {DUPLICATE_METRES}\"",
+                _CHIAPA_SURVIVOR,
+            ),
+            (
+                "one site reaches 1 km",
+                LANE,
+                "DUPLICATE_METRES = 100\n",
+                "DUPLICATE_METRES = 1000\n",
+                _CHIAPA_SURVIVOR,
+            ),
+            (
+                "the empty row may hold images",
+                LANE,
+                'FROM wiki_images w WHERE w.site_id = u.id) "',
+                'FROM wiki_images w WHERE 1 = 0) "',
+                "test_the_empty_row_premise_counts_links_and_images",
+            ),
+            (
+                "the empty row may hold links",
+                LANE,
+                'FROM site_content_links c WHERE c.site_id = u.id) "',
+                'FROM site_content_links c WHERE 1 = 0) "',
+                "test_the_empty_row_premise_counts_links_and_images",
+            ),
+            (
+                "the rename counts a visible duplicate",
+                LANE,
+                "d.source_id = 'ancient_nerds' AND {is_retired('d')} \"",
+                "d.source_id = 'ancient_nerds' \"",
+                _CHIAPA_WAITS,
+            ),
+            (
+                "the rename counts any source",
+                LANE,
+                "f\"FROM unified_sites d WHERE d.source_id = 'ancient_nerds' AND ",
+                'f"FROM unified_sites d WHERE ',
+                _CHIAPA_WAITS,
+            ),
+            (
+                "the rename counts any duplicate reason",
+                LANE,
+                'f"AND d.scope_reason = {sql_literal(DUPLICATE_PREFIX)} || CAST(u.id AS text)"',
+                "f\"AND d.scope_reason LIKE {sql_literal(DUPLICATE_PREFIX + '%')}\"",
+                _CHIAPA_WAITS,
+            ),
+            (
+                "the planned premise names the lowest id",
+                LANE,
+                "highest id {max(ids) if ids else 'none'}\"",
+                "highest id {min(ids) if ids else 'none'}\"",
+                _CHIAPA_WAITS,
+            ),
+            (
+                "the rename does not wait for the hide",
+                LANE,
+                "    premise_sql=DUPLICATES_RETIRED_ONTO_SQL,",
+                "    premise_sql=None,",
+                "test_the_rename_waits_for_the_hide_both_ways",
+            ),
+            (
+                "the rename writes a key of any name",
+                LANE,
+                "    cells=NAME_CELLS,\n    write_invariant=_NAME_KEY_DIFFERS,\n)\n\n_RETIRED",
+                "    cells=NAME_CELLS,\n)\n\n_RETIRED",
+                "test_the_rename_waits_for_the_hide_both_ways",
+            ),
+            (
+                "the hide does not ask for an empty row",
+                LANE,
+                "    premise_sql=EMPTY_ROW_PREMISE_SQL,",
+                "    premise_sql=None,",
+                "test_the_survivor_checks_run_after_the_write_and_only_on_it",
+            ),
+            (
+                "the hide checks no survivor",
+                LANE,
+                "    site_invariants=DUPLICATE_SURVIVOR_INVARIANTS,",
+                "    site_invariants=(),",
+                "test_the_survivor_checks_run_after_the_write_and_only_on_it",
+            ),
+            (
+                "the hide may write any status",
+                LANE,
+                'Column("scope_status", "text", allowed_new_values=(RETIRED,), fills_null=True),',
+                'Column("scope_status", "text", allowed_new_values=SCOPE_STATUSES, fills_null=True),',
+                "test_the_hide_writes_retired_and_nothing_else",
+            ),
+            (
+                "the probes of one column share a name",
+                APPLY,
+                "                invariant.probe_suffix,",
+                '                f"invariant-{invariant.probe_column}",',
+                "test_every_guard_of_the_hide_has_its_probe",
+            ),
+            (
+                "the rename's cells carry no premise",
+                L5_DIR / "plan.py",
+                "            premise=premise,\n",
+                "",
+                "test_the_hide_and_the_rename_as_decided",
+            ),
+        )
+    ),
+    guard(
+        "chiapa: two invariants share a probe name",
+        LANE,
+        "    if len(set(probes)) != len(probes):",
+        "test_two_invariants_probing_one_column_are_named_apart",
+        CHIAPA_TESTS,
+    ),
+    guard(
+        "chiapa: a probe name is not checked",
+        LANE,
+        "        if self.probe_name and not _KEY_PREFIX.match(self.probe_name):",
+        "test_two_invariants_probing_one_column_are_named_apart",
+        CHIAPA_TESTS,
+    ),
+]
+CASES += CHIAPA_CASES
+
+
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
     """The needle does not occur exactly once: the case cannot say which guard it removes."""

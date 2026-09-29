@@ -81,7 +81,12 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 
 from bcases.classify import DUP_MAX_M  # noqa: E402
 
-from mechanical.lane import SCOPE, sql_literal  # noqa: E402
+from mechanical.lane import (  # noqa: E402
+    DUPLICATE_METRES,
+    DUPLICATE_PREFIX,
+    SCOPE,
+    sql_literal,
+)
 from mechanical.plan import (  # noqa: E402
     CURATED_SOURCE,
     UUID_RE,
@@ -111,8 +116,6 @@ BCASES = REPO / "output" / "remediation" / "bcases"
 DUPLICATES_LIST = BCASES / "DUPLICATES.jsonl"
 DUPLICATES_HELD = BCASES / "DUPLICATES_HELD.jsonl"
 LISTED_URL = "output/remediation/bcases/DUPLICATES.jsonl"
-DUPLICATE_METRES = 100
-DUPLICATE_PREFIX = "duplicate_of:"
 PENDING, IN_SCOPE = "pending", "in_scope"
 
 #: What T11 names each finding kind, and the rule that decides it here.

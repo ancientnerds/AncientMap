@@ -118,8 +118,10 @@ class PinnedName:
 #: HUMAN_ONLY Nr. 7, decided 2026-09-26 under O9: one site; the row kept is "Zoque Culture
 #: Archaeological Zone" (3 content links, 20 images, Q4384315), renamed "Chiapa de Corzo" - the
 #: English label of Q4384315, its enwiki article "Chiapa de Corzo (Mesoamerican site)". The empty
-#: row "Chiapa de Corzo" (24aa135d) is hidden by WD2 as `duplicate_of:ed186ea9-...`; until it is,
-#: the rename is not planned (two visible rows 7.4 m apart would both carry the name).
+#: row "Chiapa de Corzo" (24aa135d) is hidden as `duplicate_of:ed186ea9-...` first (two visible rows
+#: 7.4 m apart must not both carry the name). L5's `plan` ran before that hide and skipped the rename
+#: (`duplicate-not-hidden-yet`); both writes are now the lanes `chiapa-hide` and `chiapa-name`,
+#: planned from this entry by `mechanical/chiapa.py` (runbook: SITES_DB_REMEDIATION_2026-09.md, Nr. 7).
 PINNED_NAMES: dict[str, PinnedName] = {
     "ed186ea9-9ed1-415d-828b-97d9f21401d2": PinnedName(
         "Zoque Culture Archaeological Zone",

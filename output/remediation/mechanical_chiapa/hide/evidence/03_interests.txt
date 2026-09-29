@@ -1,0 +1,6 @@
+$ apply.py --lane chiapa-hide --interests   (2026-09-29T19:46:24Z)
+column          rows  value
+scope_reason    4895  <NULL>
+scope_status    4895  <NULL>
+scope_status      78  retired
+EXIT=0

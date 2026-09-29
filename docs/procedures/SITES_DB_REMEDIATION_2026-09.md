@@ -855,24 +855,14 @@ excludes none. Two rules make its harvest safe:
    ```
 
 **Hand-offs to WD2.** (1) HUMAN_ONLY Nr. 7: the empty row "Chiapa de Corzo"
-(`24aa135d-4714-47f5-96c0-d58f0bc04b6f`, 0 links, 0 images) is hidden by WD2 as
-`duplicate_of:ed186ea9-9ed1-415d-828b-97d9f21401d2` (the 20th duplicate entry, 2 cells); the rename
-of the kept row "Zoque Culture Archaeological Zone" to "Chiapa de Corzo" (the English label of its
-item Q4384315) is L5's name lane, pinned in `l5/population.py` (`PINNED_NAMES`). **WD2 has not
-built that entry yet** (`wip/wd2` at `e1ba2de`: no `24aa135d` in `bcases/DUPLICATES.jsonl` nor in
-any script; production 2026-09-26: both rows visible, scope NULL). `run.py plan` therefore plans
-the rename only when the row is retired with exactly that `scope_reason`, and otherwise skips it
-(`duplicate-not-hidden-yet` in `SKIPPED.jsonl`) - two visible rows 7.4 m apart would both carry the
-name. Since `plan` runs once, WD2's hide lands **before** L5's `plan`; check it read-only first:
-
-```sql
-SELECT scope_status, scope_reason FROM unified_sites
- WHERE id = '24aa135d-4714-47f5-96c0-d58f0bc04b6f';
--- expected: retired | duplicate_of:ed186ea9-9ed1-415d-828b-97d9f21401d2
-```
-
-If `plan` has to run before it (WD1 waiting), the Nr. 7 rename stays open and needs a name lane of
-its own stamp later - report it, do not re-run `plan`. (2) HUMAN_ONLY B1-D and B6: one rule for
+(`24aa135d-4714-47f5-96c0-d58f0bc04b6f`, 0 links, 0 images, no item) is hidden as
+`duplicate_of:ed186ea9-9ed1-415d-828b-97d9f21401d2` (2 cells), and the kept row "Zoque Culture
+Archaeological Zone" (3 links, 20 images, Q4384315) is renamed "Chiapa de Corzo", the English label
+of its item (2 cells; the pair, the names and the evidence are pinned in `l5/population.py`,
+`PINNED_NAMES`). L5's `plan` ran on 2026-09-26 before any hide existed and skipped the rename
+(`duplicate-not-hidden-yet` in `l5/SKIPPED.jsonl`), and `name-l5`'s stamp is applied - so both
+writes are lanes of their own stamp, `chiapa-hide` and then `chiapa-name` (the runbook right below);
+WD2's duplicate list (`bcases/DUPLICATES.jsonl`) does not carry the pair. (2) HUMAN_ONLY B1-D and B6: one rule for
 every duplicate candidate. The nine rows L5's sources list (Amathunta/Amathus, Tel Hermal
 Fort/Shaduppum, Ñustahispana, 39 Bridge Street Chester, the Lycian tomb entry and Amyntas Rock
 Tombs, both Temple of Artemis rows, Caesarea Philippi) are **asked** like wave 3's
@@ -882,6 +872,66 @@ shared item that names exactly this site is kept. Which row stays is WD2's retir
 a pair WD2 cannot prove to be one site (Tel Hermal Fort/Shaduppum 1.7 km, the Lycian tomb
 entry/Amyntas 1.1 km) are the ones L5 decided for each row. A site that keeps a shared item is
 listed `shared-item` for WD1 until WD2 has retired all but one of its rows.
+
+#### Nr. 7 — Chiapa de Corzo: the hide, then the rename (lanes `chiapa-hide`, `chiapa-name`)
+
+`scripts/remediation/mechanical/chiapa.py --write` plans both lanes from one read-only snapshot
+(kept as `output/remediation/mechanical_chiapa/READ.jsonl`) and refuses both unless: the empty row
+is curated, still named "Chiapa de Corzo", has no scope decision, no content link and no image, and
+its scope journal ends there; the kept row is curated, not retired, within 100 m of it
+(`lane.DUPLICATE_METRES`; 7.4 m), the survivor `scope.survivor_rank` keeps, still named "Zoque
+Culture Archaeological Zone" with its name journal ending there, and nothing is retired onto it yet;
+no visible curated row but the empty one carries the new key `chiapa de corzo`; neither stamp has
+journalled a row. Two lanes rather than one transaction: each is the shape of an applied lane -
+scope-e4's two scope cells, name-l5's name cells with the key invariant - so both run through the
+existing guards, probes and read-backs, and the order is itself a guard, not a sort order.
+
+* `chiapa-hide` (`mechanical_chiapa/hide/`, run stamp `2026-09-29_mechanical-chiapa-hide`, test id
+  `Nr7/duplicate-hide`): guard 1 curated; guard 3 both cells still NULL; guard 4 the only status
+  written is `retired`; guard 5 premise `content links 0, images 0`; after the write three disjoint
+  checks of the survivor its reason names - a curated site, not retired, within 100 m
+  (`lane.DUPLICATE_SURVIVOR_INVARIANTS`) - each probed with a row of its kind.
+* `chiapa-name` (`mechanical_chiapa/name/`, `2026-09-29_mechanical-chiapa-name`, `Nr7/rename`):
+  guard 3 the old name and key; invariant 3 the key written is the key of the name written; guard 5
+  premise `duplicates retired onto it: 1, highest id 24aa135d-4714-47f5-96c0-d58f0bc04b6f` - the
+  state the hide leaves behind. Until the hide has landed with exactly its reason the kept row reads
+  `duplicates retired onto it: 0, highest id none`, and the rename, its rehearsal and every probe
+  past guard 5 are refused (measured 2026-09-29). Rehearse and probe it only after the hide's apply.
+  Measured the other way on 2026-09-29: both pinned APPLY.sql files, the hide first, sent as one
+  transaction ending in ROLLBACK - both passed every guard, 4 journal rows inside, 0 after
+  (`mechanical_chiapa/name/evidence/06_joint-rehearsal.txt`).
+
+```bash
+$PY scripts/remediation/mechanical/chiapa.py --write   # read-only; only to re-plan, refused once a stamp wrote
+# 1. the hide
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-hide --check-primitive
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-hide --verify     # before: 19 retired duplicates
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-hide --interests
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-hide --emit       # offline, byte-identical
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-hide --rehearse
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-hide --probe-guards   # 9 probes
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-hide --apply
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-hide --verify     # after: 20, 2 journal rows
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-hide --rehearse-rollback
+# 2. the rename - only after the hide's --apply read back OK
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-name --verify
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-name --interests
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-name --emit       # offline, byte-identical
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-name --rehearse
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-name --probe-guards   # 7 probes
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-name --apply
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-name --verify
+$PY scripts/remediation/mechanical/apply.py --lane chiapa-name --rehearse-rollback
+```
+
+Exit codes of `apply.py`: 0 OK, 1 REFUSED (nothing sent), 3 NOT COMMITTED, 4 COMMITTED (psql
+unclean, read-back confirmed), 5 OUTCOME UNKNOWN, 6 COMMITTED BUT NOT CONFIRMED, 7 a probe fell
+short; an outcome is settled from the journal (the lane's run stamp), never by a retry. Undo only as
+a decision, and in reverse: the rename's `ROLLBACK.sql` first (its guard 5 needs the hide standing),
+then the hide's.
+Afterwards the hidden row's page answers 410 and the renamed one 301 (the slug resolves by the 8-hex
+id, `sites_html.site_detail`); Lyra's next boot adds "Chiapa de Corzo" to the kept row's
+`unified_site_names` as a label, and the old name stays there.
 
 #### B2-L — the two country cells (lane `country-b2`)
 
@@ -1003,7 +1053,7 @@ $PY scripts/remediation/l5/run.py import --round r1     # fetches, checks, decid
 # held sites, at most twice more (r2, r3), each in a new directory, after the newest import:
 $PY scripts/remediation/l5/run.py export-reask --handoff output/remediation/l5/handoff-r2
 #   brief / validate / import --round r2 as above
-# before the plan: WD2's hide of 24aa135d has landed (the SQL under "Hand-offs to WD2")
+# (2026-09-26: plan ran before the Nr. 7 hide - that rename is lane chiapa-name, "Hand-offs to WD2")
 $PY scripts/remediation/l5/run.py plan                  # read-only; ONCE, after the last import
 $PY scripts/remediation/l5/run.py step check --step 1   # read-only: files = plan, old values hold
 $PY scripts/remediation/l5/run.py step rehearse --step 1

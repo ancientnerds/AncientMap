@@ -1,0 +1,12 @@
+$ apply.py --lane chiapa-name --rehearse   (2026-09-29T19:47:12Z) - before the hide has landed
+INFO mechanical.apply: wrote C:\PythonProjects\AncientMap\.claude\worktrees\chiapa\output\remediation\mechanical_chiapa\name\REHEARSAL.sql (COMMIT -> ROLLBACK)
+REFUSED: psql exited 3:
+BEGIN
+SET
+SET
+CREATE TABLE
+INSERT 0 2
+
+ERROR:  Nr 7 rename: 1 planned row(s) no longer hold the premise the plan derived its value from
+CONTEXT:  PL/pgSQL function inline_code_block line 54 at RAISE
+EXIT=1

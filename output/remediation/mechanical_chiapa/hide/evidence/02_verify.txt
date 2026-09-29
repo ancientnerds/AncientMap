@@ -1,0 +1,21 @@
+$ apply.py --lane chiapa-hide --verify   (2026-09-29T19:46:21Z)
+                                    metric                                    | value 
+------------------------------------------------------------------------------+-------
+ curated rows retired as a duplicate                                          | 19
+ curated rows with a scope_status but no scope_reason                         | 0
+ curated rows with scope_status in_scope                                      | 17
+ curated rows with scope_status NULL                                          | 4895
+ curated rows with scope_status pending                                       | 14
+ curated rows with scope_status retired                                       | 78
+ curated sites                                                                | 5004
+ journal rows for the rollback stamp                                          | 0
+ journal rows for this run on non-curated rows                                | 0
+ journal rows for this run outside unified_sites.(scope_status, scope_reason) | 0
+ journal rows for this run stamp                                              | 0
+ journal rows for this run with a site_id_ref of another site                 | 0
+ journal rows for this test id                                                | 0
+ retired duplicates whose survivor is retired or not curated                  | 0
+ retired duplicates whose survivor lies further than 100 m                    | 10
+
+
+EXIT=0
