@@ -40,7 +40,10 @@ Every click scrolls its target into view first (Playwright's "visible" says noth
 a scroll container, and the Filter panel's legends and the result list scroll) and lands
 only where document.elementFromPoint hits that target, for measure and proximity the
 globe's or Mapbox's canvas: anything in the way (a floating window, a label, the edge of
-the viewport) fails the take, naming what the click would hit.
+the viewport) fails the take, naming what the click would hit. The globe acts on a
+canvas click only 250 ms later (it waits for a double click, and a second click in that
+time replaces the first), so each measure point must show in the Measure tab before the
+cursor moves on, and point b must add exactly one measurement.
 "open_details" returns to the Search tab first (the result list shows only there).
 "filter" clicks the Filter panel's mode button, then the legend entry named "label" (a
 click toggles it). "toggle_layer" never takes the Satellite base map, in any case (owner
@@ -121,6 +124,15 @@ HIT_JS = r"""(targets, [x, y]) => {
   const classes = (hit.getAttribute('class') || '').trim().split(/\s+/).filter(Boolean)
   return [hit.tagName.toLowerCase(), ...classes].join('.')
 }"""
+# The globe acts on a canvas click only 250 ms later, waiting for a double click, and a
+# click inside that time replaces the pending one (createClickHandler in
+# ancient-nerds-map/src/components/Globe/rendering/eventHandlers.ts; Mapbox acts at once).
+# So a measure point counts once the Measure tab (FilterPanel.tsx) shows it: point a as
+# the end-point hint, point b as one more measurement in the tab's count.
+REGISTER_TIMEOUT_MS = 2_000
+MEASURE_HINT = ".proximity-tab-content .radius-label"
+MEASURE_HINT_TEXT = "Click to set end point..."
+MEASURE_COUNT = ".proximity-tab-content .search-results-header > span"
 ZOOM_WHEEL_PX = 100
 ZOOM_STEP_S = 0.05
 ZOOM_TIMEOUT_S = 8.0
@@ -289,6 +301,19 @@ def parse_zoom_percent(text: str) -> int:
     return int(m.group(1))
 
 
+def measurement_label(count: int) -> str:
+    """The Measure tab's count as FilterPanel.tsx writes it ("1 measurement", "2 measurements")."""
+    return f"{count} measurement{'' if count == 1 else 's'}"
+
+
+def parse_measurement_count(text: str) -> int:
+    """The Measure tab's count ("1 measurement", "3 measurements") as an integer."""
+    m = re.fullmatch(r"\s*(\d+) measurements?\s*", text)
+    if not m:
+        raise CaptureError(f"the Measure tab reads {text!r}, not a measurement count")
+    return int(m.group(1))
+
+
 async def wait_ready(page: Any) -> None:
     """Wait until the page may be filmed; a page that never gets there names the likely cause."""
     from playwright.async_api import TimeoutError as PlaywrightTimeout  # local-only dependency
@@ -358,6 +383,25 @@ class _Driver:
             raise CaptureError(f"{name}: element has no box")
         x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
         await self.click_at(x, y, name, locator, event=event)
+
+    async def measurement_count(self) -> int:
+        """Measurements on the page; the Measure tab shows the count once there is one."""
+        label = self.page.locator(MEASURE_COUNT)
+        if not await label.count():
+            return 0
+        return parse_measurement_count(await label.inner_text())
+
+    async def registered(self, state: Any, what: str, shows: str) -> None:
+        """Wait until the page shows `state` (a locator) after the click `what`, or fail."""
+        from playwright.async_api import TimeoutError as PlaywrightTimeout  # local-only dependency
+
+        try:
+            await state.wait_for(state="visible", timeout=REGISTER_TIMEOUT_MS)
+        except PlaywrightTimeout as exc:
+            raise CaptureError(
+                f"{what}: the Measure tab does not show {shows!r} within "
+                f"{REGISTER_TIMEOUT_MS / 1000:g} s, so the page did not take the click"
+            ) from exc
 
     async def screen_point(self, name: str, where: dict[str, float]) -> tuple[float, float]:
         point = await self.page.evaluate(
@@ -437,8 +481,14 @@ class _Driver:
                     f"measure points a and b are {math.dist(a, b):.0f} px apart on screen; "
                     "zoom in first"
                 )
+            before = await self.measurement_count()
             await self.click_at(*a, "measure_a", page.locator(MAP_CANVAS))
+            hint = page.locator(MEASURE_HINT, has_text=MEASURE_HINT_TEXT)
+            await self.registered(hint, "measure point a", MEASURE_HINT_TEXT)
             await self.click_at(*b, "measure_b", page.locator(MAP_CANVAS))
+            label = measurement_label(before + 1)
+            count = page.locator(MEASURE_COUNT, has_text=re.compile(rf"^\s*{re.escape(label)}\s*$"))
+            await self.registered(count, "measure point b", label)
         elif do == "toggle_layer":
             expand = page.locator('.layer-toggle-panel .panel-minimize-btn[title="Maximize"]')
             if await expand.count():

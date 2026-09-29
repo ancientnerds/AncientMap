@@ -25,7 +25,9 @@ from pipeline.studio.capture.platform import (
     events_from_marks,
     frame_size,
     measure_gap_ok,
+    measurement_label,
     motion_fps,
+    parse_measurement_count,
     parse_zoom_percent,
     record_platform,
     screen_point_or_fail,
@@ -395,3 +397,68 @@ def test_open_details_moves_the_cursor_in_one_eased_path_to_the_info_button():
         # every cursor position lies on the straight path from where it was to the button
         assert abs((x1 - x0) * (y0 - y) - (x0 - x) * (y1 - y0)) / length < 1.5
         assert min(x0, x1) - 1 <= x <= max(x0, x1) + 1
+
+
+def test_the_measure_tab_count_is_read_as_the_page_writes_it():
+    assert [measurement_label(n) for n in (1, 2)] == ["1 measurement", "2 measurements"]
+    assert parse_measurement_count(" 3 measurements ") == 3
+    with pytest.raises(CaptureError, match="not a measurement count"):
+        parse_measurement_count("Click to set end point...")
+
+
+# The globe's clicks as createClickHandler handles them (eventHandlers.ts): a canvas click
+# acts only after a delay, and a click inside it replaces the pending one. The delay is
+# 400 ms here, not the page's 250 ms, so a driver that does not wait for point a loses it
+# every time instead of now and then. The Measure tab renders as FilterPanel.tsx does.
+MEASURE_PAGE = """<style>body{margin:0} .globe-container{position:fixed;inset:0}
+.globe-container canvas{display:block;width:100%;height:100%}
+.panel{position:fixed;left:20px;top:20px;width:300px}</style>
+<div class='globe-container'><canvas></canvas></div>
+<div class='panel'><button class='tab-btn'>Measure</button><div class='content'></div></div>
+<script>(() => {
+window.measurements = []; window.takeClicks = Infinity
+let current = [], active = false, pending = null, timer = null, clicks = 0
+const render = () => {
+  if (!active) return
+  const n = window.measurements.length
+  document.querySelector('.content').innerHTML = '<div class="proximity-tab-content">'
+    + (current.length === 1 ? '<div class="radius-label">Click to set end point...</div>' : '')
+    + (n > 0 ? `<div class="search-results-header"><span>${n} measurement${n !== 1 ? 's' : ''}`
+      + '</span><button>x</button></div>' : '')
+    + '</div>'
+}
+document.querySelector('.tab-btn').addEventListener('click', () => { active = true; render() })
+document.querySelector('canvas').addEventListener('click', (e) => {
+  if (++clicks > window.takeClicks) return
+  pending = e
+  if (timer) clearTimeout(timer)
+  timer = setTimeout(() => {
+    current.push([pending.clientX, pending.clientY])
+    if (current.length === 2) { window.measurements.push(current); current = [] }
+    render()
+  }, 400)
+})
+window.__DEMO = {screenPoint: (lat, lng) => ({x: 1000 + (lng - 36.2) * 1e4, y: 500 - (lat - 34) * 1e4})}
+})()</script>"""
+
+
+def test_each_measure_point_shows_on_the_page_before_the_cursor_moves_on(monkeypatch):
+    monkeypatch.setattr(platform_take, "REGISTER_TIMEOUT_MS", 1_000)
+    measure = {"do": "measure", "a": {"lat": 34.0, "lng": 36.2}, "b": {"lat": 34.01, "lng": 36.21}}
+
+    async def steps(driver, page):
+        await driver.run(measure)
+        await page.wait_for_timeout(500)  # past the page's delay: no click is pending any more
+        [(a, b)] = await page.evaluate("window.measurements")
+        assert (a, b) == (pytest.approx([1000, 500], abs=1), pytest.approx([1100, 400], abs=1))
+        # a page that never takes point b (or a): the take fails instead of filming it
+        for take_clicks, message in [
+            (1, r"^measure point b: the Measure tab does not show '1 measurement' within 1 s"),
+            (0, r"^measure point a: the Measure tab does not show 'Click to set end point\.\.\.'"),
+        ]:
+            await page.set_content(MEASURE_PAGE)
+            await page.evaluate(f"window.takeClicks = {take_clicks}")
+            with pytest.raises(CaptureError, match=message):
+                await driver.run(measure)
+
+    _drive(MEASURE_PAGE, steps)
