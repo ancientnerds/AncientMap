@@ -9,7 +9,7 @@ M=output/remediation; R4=$M/phase4_runner; P4=scripts/remediation/phase4
 RUNNAME=v3d-2026-09-26; RUN=$R4/runs/$RUNNAME; L=$M/logs/p4_v3d; mkdir -p $L
 ROUNDS="--plan $R4/PLAN4.v3d.jsonl --run-dir $RUN --log-dir $L --searches-off"
 RUNS="--run $R4/runs/pilot4-2026-09-24 --run $R4/runs/mass-2026-09-25 --run $R4/runs/d9-2026-09-25 --run $R4/runs/v3-2026-09-26 --run $RUN"
-ALLOW="--allow-stamp phase4l:%"
+ALLOW="--allow-stamp phase4l:% --allow-stamp wb-teaser-prov-% --allow-stamp phase4wc:%"
 AUDIT_EVERY=500
 B=$($PY $P4/mass4.py $ROUNDS 2>/dev/null | sed -n 's/^done *//p' | sed 's/,/ --batch /g; s/^/--batch /')
 [ -n "$B" ] || { echo "no done batch"; exit 1; }
