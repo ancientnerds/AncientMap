@@ -47,6 +47,7 @@ EDGE = ".,;:!?\"'()[]…—–“”‘’"
 STOPS = ",;:.!?…—–"  # trailing punctuation that closes a clause, and with it a spoken number
 _DIGITS_RE = re.compile(r"^\d{1,3}(?:,\d{3})+(?:\.\d+)?$|^\d+(?:\.\d+)?$")
 _ORDINAL_DIGITS_RE = re.compile(r"^\d+(?:st|nd|rd|th)$")
+_PER_CENT_RE = re.compile(r"\bper\s+cent\b", re.IGNORECASE)  # "Per cent" is "percent" too
 
 
 def _format(integer: int, fraction: str = "") -> str:
@@ -64,7 +65,7 @@ def _words(text: str) -> tuple[list[str], set[int]]:
     stop to its last part; a free-standing dash or comma ("forty — six") to the word before."""
     out: list[str] = []
     stops: set[int] = set()
-    for raw in text.replace("per cent", "percent").split():
+    for raw in _PER_CENT_RE.sub("percent", text).split():
         closes = raw.strip("-") == "" or any(ch in STOPS for ch in raw[len(raw.rstrip(EDGE)) :])
         token = raw.strip(EDGE).lower()
         if token.endswith("%") and token[:-1]:

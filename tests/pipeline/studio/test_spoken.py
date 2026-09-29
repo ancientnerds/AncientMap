@@ -17,6 +17,9 @@ from pipeline.studio import spoken
         ("It was cut in twenty fourteen.", "It was cut in 2014."),
         ("It was cut in two thousand and fourteen.", "It was cut in 2014."),
         ("Fifteen percent of the stone", "15% of the stone"),
+        ("Fifteen per cent of the stone", "15% of the stone"),
+        ("Fifteen Per cent of the stone", "15% of the stone"),
+        ("FIFTEEN PER CENT", "15 percent"),
         ("two point five metres long", "2.5 m long"),
         ("the fifteenth century", "the 15th century"),
         ("an eight hundred-tonne block", "an 800-tonne block"),
@@ -189,6 +192,12 @@ def test_equivalent_spellings(said, shown):
             "token 2: spoken 'point' vs display '10000'",
         ),
         ("two point twelve", "2 12", "token 1: spoken 'point' vs display '12'"),
+        # "per cent" is one unit in any case, and a caption that drops it is caught
+        (
+            "Fifteen Per cent of the stone",
+            "15 of the stone",
+            "token 1: spoken 'percent' vs display 'of'",
+        ),
     ],
 )
 def test_real_differences_are_reported(said, shown, where):
