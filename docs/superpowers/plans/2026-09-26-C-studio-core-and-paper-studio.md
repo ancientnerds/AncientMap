@@ -10267,6 +10267,15 @@ def test_a_clip_must_cover_its_scene():
     )
 
 
+def test_scene_frames_round_up_to_a_whole_frame_without_float_noise():
+    # max(3.0, 0.35 + 5.0 + 0.6) = 5.95 s -> 357 frames; a thousandth more starts frame 358
+    assert script.scene_frames({"min_s": 3.0}, 5.0) == 357
+    assert script.scene_frames({"min_s": 3.0}, 5.001) == 358
+    # 8.3 * 60 is 498.00000000000006 in floats: the scene is 498 frames, not 499
+    assert 8.3 * script.FPS > 498
+    assert script.scene_frames({"min_s": 8.3}, 1.0) == 498
+
+
 def test_capture_specs_show_only_verified_case_file_data():
     quarry = {"lat": 33.99917, "lng": 36.20028}
 
@@ -10912,6 +10921,13 @@ def scene_seconds(beat: dict[str, Any], speech_s: float) -> float:
     return max(float(beat["min_s"]), lead + speech_s + tail)
 
 
+def scene_frames(beat: dict[str, Any], speech_s: float) -> int:
+    """A beat's scene length in frames at FPS: scene_seconds rounded up to a whole frame, the one
+    count timeline.py emits and _clip_length checks a clip against. The rounding to 6 places
+    keeps float noise from adding a frame (8.3 s * 60 is 498.00000000000006, the scene 498)."""
+    return math.ceil(round(scene_seconds(beat, speech_s) * FPS, 6))
+
+
 def is_number(value: Any) -> bool:
     """A JSON number: int or float, never a bool (episode.music_problems uses it too)."""
     return isinstance(value, (int, float)) and not isinstance(value, bool)
@@ -11552,7 +11568,7 @@ def validate_script(
         if entry["platform"]:
             platform.append((bid, seconds))
         if props is not None and block in CLIP_BLOCKS and words is not None:
-            _clip_length(bid, props, seconds, report)
+            _clip_length(bid, props, scene_frames(beat, speech), report)
         report.errors.extend(
             _glyph_problems(bid, beat, entry["drawn"], props, entities, kinds, captures)
         )
@@ -11744,11 +11760,12 @@ def _map_credit(
     report.errors.append(f"{bid}: a map scene carries the in-frame credit {list(MAP_CREDITS)}")
 
 
-def _clip_length(bid: str, props: dict[str, Any], seconds: float, report: ScriptReport) -> None:
-    """The renderer refuses a clip that ends before its scene (video/src/blocks/clips.ts)."""
+def _clip_length(bid: str, props: dict[str, Any], frames: int, report: ScriptReport) -> None:
+    """The renderer refuses a clip that ends before its scene (video/src/blocks/clips.ts);
+    `frames` is the scene's scene_frames."""
     clip = props["clip"]
     start = props.get("start_s", 0)
-    need = start + math.ceil(round(seconds * FPS, 6)) / FPS
+    need = start + frames / FPS
     if need > clip["duration_s"] + 1e-6:
         report.errors.append(
             f"{bid}: capture {clip['id']} is {clip['duration_s']} s long; the scene needs "
@@ -11830,7 +11847,7 @@ def _chapters(
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/test_script.py -m "not integration and not live_llm" -q`
-Expected: `33 passed`
+Expected: `34 passed`
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
@@ -13668,6 +13685,35 @@ def test_script_and_timeline_list_captures_with_the_case_file_walker():
     assert script.capture_ids_in is casefile.capture_ids_in
 
 
+def test_script_and_timeline_count_a_scene_with_one_scene_frames():
+    """A clip `episode script` accepts is one the renderer takes: timeline.py emits the scene
+    length script.scene_frames counts and keeps no frame rounding of its own. 8.3 s is
+    498.00000000000006 frames in floats; both sides make it 498."""
+    from pipeline.studio import script
+
+    assert timeline.scene_frames is script.scene_frames
+    data = sf.mutated_script(lambda d: d["beats"][2].update(min_s=8.3))
+    words = sf.words_for(data)
+    cf = casefile.from_dict(ef.casefile())
+    t = timeline.compile_timeline(data, words, cf, sf.manifests(), EPISODE)
+    frames = t["scenes"][2]["durationInFrames"]
+    assert frames == 498
+
+    def clip_errors(clip_frames):
+        captures = sf.manifests()
+        captures["platform-01"]["duration_s"] = clip_frames / 60
+        report = script.validate_script(
+            data, cf, sf.REGISTRY, slug="baalbek-c5", fmt="full", words=words, captures=captures
+        )
+        return [e for e in report.errors if "record a longer take" in e]
+
+    assert clip_errors(frames) == []
+    assert clip_errors(frames - 1) == [
+        f"b03: capture platform-01 is {497 / 60} s long; the scene needs 8.300 s from 0 s "
+        "(record a longer take or shorten the beat)"
+    ]
+
+
 def test_missing_words_are_an_error():
     data = sf.script()
     words = sf.words_for(data)
@@ -13789,11 +13835,12 @@ Expected: FAIL with `ImportError: cannot import name 'timeline' from 'pipeline.s
      "credits": [{"sceneId": "b03", "text": "© Mapbox © Maxar"}],
      "thumbnails": [{"frame": 214, "text": "Who moved it?"}, ... exactly 3]}
 
-A scene lasts ceil(max(min_s, lead + speech + tail) * fps) frames; its narration starts
-after the lead; cues and captions are placed on the word timings of the display text (a cue
-on the word `script.cue_word_index` finds: whole display words, never a match inside a longer
-word). A cue is exactly {frame, do, target} plus `value` for status and meter, and lies inside
-its scene.
+Every frame is counted at script.FPS. A scene lasts `script.scene_frames` frames,
+ceil(max(min_s, lead + speech + tail) * fps), the count `episode script` checks a clip against;
+its narration starts after the lead; cues and captions are placed on the word timings of the
+display text (a cue on the word `script.cue_word_index` finds: whole display words, never a
+match inside a longer word). A cue is exactly {frame, do, target} plus `value` for status and
+meter, and lies inside its scene.
 Captions exist only for hook beats. Every path is relative to the per-render public dir.
 The word timings must belong to the current display text and voice/<beat>.mp3 to the current
 spoken text, voice and speed (voice.stale_beats); anything else is `episode voice` again.
@@ -13811,15 +13858,11 @@ from typing import Any
 from pipeline.studio.casefile import CaseFile, capture_ids_in, refs_in, resolve_refs, resolved
 from pipeline.studio.episode import EpisodeWorkspace, load_all, require_valid
 from pipeline.studio.errors import StudioError
-from pipeline.studio.script import LEAD_S, ROLES, VALUE_VERBS, cue_word_index, scene_seconds
+from pipeline.studio.script import FPS, LEAD_S, ROLES, VALUE_VERBS, cue_word_index, scene_frames
 from pipeline.studio.voice import stale_beats
 
 WIDTH = 1920
 HEIGHT = 1080
-
-
-def _frames_ceil(seconds: float, fps: int) -> int:
-    return math.ceil(round(seconds * fps, 6))
 
 
 def verdict_frame(timeline: dict[str, Any]) -> int | None:
@@ -13865,7 +13908,6 @@ def compile_timeline(
 ) -> dict[str, Any]:
     from pipeline.video.shorts_captions import Word, display_text
 
-    fps = int(script["fps"])
     entities = resolved(cf)
     media_ids = {m.id for m in cf.media}
     scenes: list[dict[str, Any]] = []
@@ -13885,8 +13927,8 @@ def compile_timeline(
             raise StudioError(
                 f"{bid}: words.json was aligned to another display text; run `episode voice`"
             )
-        duration = _frames_ceil(scene_seconds(beat, float(timing["duration_s"])), fps)
-        voice_from = cursor + round(float(beat.get("lead_s", LEAD_S)) * fps)
+        duration = scene_frames(beat, float(timing["duration_s"]))
+        voice_from = cursor + round(float(beat.get("lead_s", LEAD_S)) * FPS)
         starts[bid] = cursor
         narration.append({"src": f"voice/{bid}.mp3", "from": voice_from})
         aligned = [Word(w["w"], float(w["s"]), float(w["e"])) for w in timing["words"]]
@@ -13895,7 +13937,7 @@ def compile_timeline(
             index = cue_word_index(beat["display"], cue["at_word"])
             if index is None:
                 raise StudioError(f"{bid}: cue word {cue['at_word']!r} is not a display word")
-            frame = voice_from + round(aligned[index].start * fps)
+            frame = voice_from + round(aligned[index].start * FPS)
             if not cursor <= frame < cursor + duration:
                 raise StudioError(
                     f"{bid} cue {n}: frame {frame} outside the scene [{cursor}, {cursor + duration})"
@@ -13918,12 +13960,12 @@ def compile_timeline(
         if beat.get("hook", False):
             for w in aligned:
                 if display_text(w.text):
-                    start = voice_from + round(w.start * fps)
+                    start = voice_from + round(w.start * FPS)
                     captions.append(
                         {
                             "text": w.text.upper(),
                             "from": start,
-                            "to": max(start + 1, voice_from + round(w.end * fps)),
+                            "to": max(start + 1, voice_from + round(w.end * FPS)),
                         }
                     )
         new = set(beat["evidence"]) - seen_evidence
@@ -13949,7 +13991,7 @@ def compile_timeline(
     music = episode["music"]
     compiled = {
         "version": 1,
-        "fps": fps,
+        "fps": FPS,
         "width": WIDTH,
         "height": HEIGHT,
         "durationInFrames": cursor,
@@ -14010,7 +14052,7 @@ Expected: `tests/pipeline/studio/golden_timeline.json` exists; its `durationInFr
 - [ ] **Step 5: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/test_timeline.py -m "not integration and not live_llm" -q`
-Expected: `13 passed`
+Expected: `14 passed`
 
 - [ ] **Step 6: Lint gate.** Expected: clean.
 
