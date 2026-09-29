@@ -1,4 +1,5 @@
-"""Planning logic of platform takes (pipeline/studio/capture/platform.py); the take needs headed Chrome."""
+"""Planning logic of platform takes (pipeline/studio/capture/platform.py); the take needs headed
+Chrome, the driver's clicks run here on small synthetic pages in headless Chrome."""
 
 import asyncio
 import importlib.util
@@ -12,8 +13,11 @@ from pipeline.studio.capture import platform as platform_take
 from pipeline.studio.capture.manifest import CaptureError
 from pipeline.studio.capture.platform import (
     KEY_DELAY_MS,
+    MAP_CANVAS,
     MAX_TAKE_S,
     MOVE_S,
+    START_POS,
+    VIEWPORT,
     Take,
     _Driver,
     eased_path,
@@ -264,3 +268,87 @@ def test_a_screencast_without_frames_is_a_capture_error(tmp_path, monkeypatch):
     }
     with pytest.raises(CaptureError, match="platform-01: the screencast delivered no frames"):
         record_platform(tmp_path, spec)
+
+
+def _drive(html, steps):
+    """Run `steps(driver, page)` on a synthetic `html` page in headless Chrome at the take's viewport."""
+    pytest.importorskip("playwright")
+    from playwright.async_api import async_playwright
+
+    async def go():
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(channel="chrome", headless=True)
+            page = await browser.new_page(viewport={"width": VIEWPORT[0], "height": VIEWPORT[1]})
+            await page.set_content(html)
+            await page.mouse.move(*START_POS)
+            return await steps(_Driver(page, Take()), page)
+
+    return asyncio.run(go())
+
+
+# every click the page receives, as tag.class of its target
+RECORD_CLICKS_JS = (
+    "<script>window.clicks = []; document.addEventListener('click', (e) => window.clicks.push("
+    "[e.target.tagName.toLowerCase(), ...e.target.classList].join('.')))</script>"
+)
+
+# 60 legend rows in a 200 px scroll list over a full-viewport globe, like the Filter
+# panel's .category-legend-list (overflow-y: auto, styles/index.css)
+LEGEND_PAGE = (
+    "<style>body{margin:0} .globe{position:fixed;inset:0}"
+    " .category-legend-list{position:fixed;left:20px;top:100px;width:300px;height:200px;"
+    "overflow-y:auto} .category-legend-item{height:30px}</style>"
+    "<div class='globe'></div><div class='category-legend-list'>"
+    + "".join(f"<div class='category-legend-item'>Category {i}</div>" for i in range(60))
+    + "</div>"
+    + RECORD_CLICKS_JS
+)
+
+
+def test_a_click_scrolls_its_target_into_view_inside_its_list():
+    # unscrolled, "Category 20" lies at y 700-730, below the list's visible rows: a click
+    # at its box would hit the globe there and toggle nothing
+    async def steps(driver, page):
+        await driver.click_locator(driver.legend_item("category", "Category 20"), "filter")
+        return await page.evaluate("window.clicks"), driver.take.marks[0][2]
+
+    clicks, point = _drive(LEGEND_PAGE, steps)
+    assert clicks == ["div.category-legend-item"]
+    # the click (and its manifest event) is inside the list's visible 100-300 px
+    assert 100 <= point["y"] <= 300
+
+
+COVERED_PAGE = (
+    "<style>body{margin:0} .globe-container{position:fixed;inset:0}"
+    " .globe-container canvas{display:block;width:100%;height:100%}"
+    " .toggle-btn{position:fixed;left:40px;top:40px;width:120px;height:30px}"
+    " .empire-window{position:fixed;left:20px;top:20px;width:400px;height:300px}"
+    " .site-hover-tooltip{position:fixed;left:880px;top:490px;width:160px;height:24px}</style>"
+    "<div class='globe-container'><canvas></canvas></div>"
+    "<div class='toggle-buttons'><button class='toggle-btn'>Country</button></div>"
+    "<div class='empire-window'></div>"
+    "<div class='site-hover-tooltip selected-site-label'>Baalbek Stones</div>" + RECORD_CLICKS_JS
+)
+
+
+def test_a_click_whose_target_is_covered_fails_naming_what_it_would_hit():
+    async def steps(driver, page):
+        # a floating window (Empire Borders) over the Filter panel's mode button
+        with pytest.raises(
+            CaptureError,
+            match=r"^filter_mode: the click at \(100, 55\) would hit div\.empire-window, "
+            r"not its target$",
+        ):
+            await driver.click_locator(page.locator(".toggle-btn").first, "filter_mode")
+        # a measure point under the selected site's label is no click on the map
+        canvas = page.locator(MAP_CANVAS)
+        with pytest.raises(
+            CaptureError,
+            match=r"^measure_a: the click at \(900, 500\) would hit "
+            r"div\.site-hover-tooltip\.selected-site-label, not its target$",
+        ):
+            await driver.click_at(900, 500, "measure_a", canvas)
+        await driver.click_at(1500, 800, "measure_b", canvas)
+        return await page.evaluate("window.clicks")
+
+    assert _drive(COVERED_PAGE, steps) == ["canvas"]

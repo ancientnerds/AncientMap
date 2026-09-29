@@ -36,6 +36,11 @@ wheel at the centre of the view (the flown-to site) until the zoom slider reads 
 percent; the app switches to Mapbox on its own. Measure and proximity points are clicked
 where the page itself draws them (window.__DEMO.screenPoint), on the globe or on
 Mapbox; measure points closer than MIN_MEASURE_GAP_PX on screen refuse the take.
+Every click scrolls its target into view first (Playwright's "visible" says nothing about
+a scroll container, and the Filter panel's legends and the result list scroll) and lands
+only where document.elementFromPoint hits that target, for measure and proximity the
+globe's or Mapbox's canvas: anything in the way (a floating window, a label, the edge of
+the viewport) fails the take, naming what the click would hit.
 "open_details" returns to the Search tab first (the result list shows only there).
 "filter" clicks the Filter panel's mode button, then the legend entry named "label" (a
 click toggles it). "toggle_layer" never takes the Satellite base map, in any case (owner
@@ -102,6 +107,20 @@ READY_JS = (
 )
 # Closer on screen, two measure clicks measure nothing a viewer can read.
 MIN_MEASURE_GAP_PX = 60.0
+# The maps a measure or proximity click must land on: the Three.js globe's canvas
+# (sceneInit.ts appends it to .globe-container) and Mapbox's, on top in mapbox-primary-mode
+# (styles/index.css); the one not in front takes no pointer events.
+MAP_CANVAS = ".globe-container > canvas, .mapbox-globe-container canvas.mapboxgl-canvas"
+# Given a locator's elements: null when the topmost element at (x, y) is one of them or
+# inside one, else what is hit ("nothing" off the viewport). elementFromPoint skips
+# pointer-events:none, so the NERV cursor never counts.
+HIT_JS = r"""(targets, [x, y]) => {
+  const hit = document.elementFromPoint(x, y)
+  if (hit !== null && targets.some((el) => el.contains(hit))) return null
+  if (hit === null) return 'nothing'
+  const classes = (hit.getAttribute('class') || '').trim().split(/\s+/).filter(Boolean)
+  return [hit.tagName.toLowerCase(), ...classes].join('.')
+}"""
 ZOOM_WHEEL_PX = 100
 ZOOM_STEP_S = 0.05
 ZOOM_TIMEOUT_S = 8.0
@@ -313,19 +332,32 @@ class _Driver:
         self.take.moves.append((start, time.time()))
         self.pos = (x, y)
 
-    async def click_at(self, x: float, y: float, name: str | None) -> None:
-        """Move there and click; `name` marks the click as a manifest event (None: no event)."""
-        if name is not None:
+    async def click_at(
+        self, x: float, y: float, name: str, target: Any, *, event: bool = True
+    ) -> None:
+        """Move there and click, once the point hits `target` (a locator); a click named
+        `name` fails the take when anything else is in the way. `event` marks the click
+        as a manifest event."""
+        if event:
             self.mark(name, x=x, y=y)
         await self.move(x, y)
+        hit = await target.evaluate_all(HIT_JS, [x, y])
+        if hit is not None:
+            raise CaptureError(
+                f"{name}: the click at ({x:.0f}, {y:.0f}) would hit {hit}, not its target"
+            )
         await self.page.mouse.click(x, y)
 
-    async def click_locator(self, locator: Any, name: str | None) -> None:
+    async def click_locator(self, locator: Any, name: str, *, event: bool = True) -> None:
+        """Click the centre of `locator`, scrolled into view first: Playwright's "visible"
+        does not mean inside its scroll container (the legends and the result list scroll)."""
         await locator.wait_for(state="visible", timeout=10_000)
+        await locator.scroll_into_view_if_needed(timeout=10_000)
         box = await locator.bounding_box()
         if box is None:
             raise CaptureError(f"{name}: element has no box")
-        await self.click_at(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, name)
+        x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        await self.click_at(x, y, name, locator, event=event)
 
     async def screen_point(self, name: str, where: dict[str, float]) -> tuple[float, float]:
         point = await self.page.evaluate(
@@ -337,7 +369,7 @@ class _Driver:
         """Back to the Search tab: Measure and Proximity replace the result list (FilterPanel.tsx)."""
         tab = self.page.locator(".tab-btn", has_text="Search").first
         if "active" not in str(await tab.get_attribute("class")).split():
-            await self.click_locator(tab, None)
+            await self.click_locator(tab, "search_tab", event=False)
 
     def result_item(self, title: str) -> Any:
         title_re = re.compile(rf"^\s*{re.escape(title)}\s*$")
@@ -404,8 +436,8 @@ class _Driver:
                     f"measure points a and b are {math.dist(a, b):.0f} px apart on screen; "
                     "zoom in first"
                 )
-            await self.click_at(*a, "measure_a")
-            await self.click_at(*b, "measure_b")
+            await self.click_at(*a, "measure_a", page.locator(MAP_CANVAS))
+            await self.click_at(*b, "measure_b", page.locator(MAP_CANVAS))
         elif do == "toggle_layer":
             expand = page.locator('.layer-toggle-panel .panel-minimize-btn[title="Maximize"]')
             if await expand.count():
@@ -418,9 +450,11 @@ class _Driver:
             await self.click_locator(toggle, do)
         elif do == "proximity":
             await self.click_locator(page.locator(".tab-btn", has_text="Proximity"), do)
-            await self.click_locator(page.locator(".proximity-btn.set-on-globe"), None)
+            await self.click_locator(
+                page.locator(".proximity-btn.set-on-globe"), "proximity_set_on_globe", event=False
+            )
             x, y = await self.screen_point("proximity centre", action["at"])
-            await self.click_at(x, y, "proximity_center")
+            await self.click_at(x, y, "proximity_center", page.locator(MAP_CANVAS))
         elif do == "filter":
             mode_button = page.locator(
                 ".toggle-buttons .toggle-btn", has_text=FILTER_BUTTONS[action["mode"]]
