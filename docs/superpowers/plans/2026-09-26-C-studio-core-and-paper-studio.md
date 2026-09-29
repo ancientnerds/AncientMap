@@ -189,7 +189,7 @@ Run with `node --import tsx scripts/<name>.ts` and cwd `<repo>/video` (the files
 
 ### C10. Episode workspace and ledger
 
-`<STUDIO_ASSETS>/episodes/<slug>/`: `episode.json` `{version: 1, slug, paper: {request_id, slug} | null, topic_type: A|B|C|D, format: full|slice, voice: {id, speed}, music: {file, credit, gainDb: -8, duck} | null, title_candidates: [str], tags: [str], allow_ai_imagery: bool}`, `casefile.json`, `markers_check/` (C2), `script.json` (spec 4.3 plus `captures: [...]`, `thumbnails: [{beat, at, text}]` (exactly 3: `at` in [0, 1) is the share of the beat's scene, `text` a 2-4 word teaser), per beat optional `factual`, `lead_s`, `tail_s`, `role` (twist|verdict|change_mind), `visual.credit` (a non-empty string)), `review.html`, `voice/` (`<beat>.mp3`, `manifest.json`, `words.json`), `captures/`, `media/`, `timeline.json`, `render/` (`public/`, `bundle/` and `raw.mp4.parts/` (transient, removed after a failed or killed node step), `raw.mp4`, `<slug>.mp4`, `audit.json`, `lint_report.txt`, `render_log.txt`, `thumbnail_<K>_3840.png` and `thumbnail_<K>_1280.jpg` for K = 1, 2, 3, `ledger.json` = `{row, outcome, timeline_sha256}`; a render first removes the previous render's outputs, and `episode package` builds only from the audited render of the current timeline.json), `package/` (the video, the SRT, `description.txt`, `titles.txt`, `evidence_timestamps.json`, `thumbnail_<K>.jpg` (1280x720, < 2 MB) and `thumbnail_<K>_3840.png` for K = 1, 2, 3, `youtube.json` with `thumbnails: ["thumbnail_1.jpg", "thumbnail_2.jpg", "thumbnail_3.jpg"]`). The paper link: `episode.paper.slug` is the slug a successful publish returned (`papers/<id>/publish_outcome.json` read by `published_slug`), `casefile.paper` equals `episode.paper`, and every case-file `paper_anchor` is an evidence id in `papers/<id>/evidence.json`.
+`<STUDIO_ASSETS>/episodes/<slug>/`: `episode.json` `{version: 1, slug, paper: {request_id, slug} | null, topic_type: A|B|C|D, format: full|slice, voice: {id, speed}, music: {file, credit, gainDb: -8, duck} | null, title_candidates: [str], tags: [str], allow_ai_imagery: bool}`, `casefile.json`, `markers_check/` (C2), `script.json` (spec 4.3 plus `captures: [...]`, `thumbnails: [{beat, at, text}]` (exactly 3: `at` in [0, 1) is the share of the beat's scene, `text` a 2-4 word teaser), per beat optional `factual`, `lead_s`, `tail_s`, `role` (twist|verdict|change_mind), `visual.credit` (a non-empty string)), `review.html`, `voice/` (`<beat>.mp3`, `manifest.json`, `words.json`), `captures/`, `media/`, `timeline.json`, `render/` (`public/`, `bundle/` and `raw.mp4.parts/` (transient, removed after a failed or killed node step), `raw.mp4`, `<slug>.mp4`, `audit.json`, `lint_report.txt`, `render_log.txt`, `thumbnail_<K>_3840.png` and `thumbnail_<K>_1280.jpg` for K = 1, 2, 3, `ledger.json` = `{row, outcome, timeline_sha256, words_sha256}`; a render first removes the previous render's outputs and refuses to write the ledger when timeline.json, script.json, casefile.json or voice/words.json changed while it ran, and `episode package` builds only from the audited render of the current timeline.json, script.json, casefile.json and voice/words.json, with the music file the timeline mixed), `package/` (the video, the SRT, `description.txt`, `titles.txt`, `evidence_timestamps.json`, `thumbnail_<K>.jpg` (1280x720, < 2 MB) and `thumbnail_<K>_3840.png` for K = 1, 2, 3, `youtube.json` with `thumbnails: ["thumbnail_1.jpg", "thumbnail_2.jpg", "thumbnail_3.jpg"]`). The paper link: `episode.paper.slug` is the slug a successful publish returned (`papers/<id>/publish_outcome.json` read by `published_slug`), `casefile.paper` equals `episode.paper`, and every case-file `paper_anchor` is an evidence id in `papers/<id>/evidence.json`.
 Ledger CLI in the API container: `python -m pipeline.studio.ledger_cli --record < row.json` with row `{slug, paper_request_id|null, topic_type, casefile_sha256, script_sha256, voice_id, pipeline_commit, video_sha256, duration_s, rendered_at, renderer}` (`renderer` names the NVIDIA, spec 4.11; column `renderer TEXT NOT NULL`); `--publish < {video_sha256, youtube_id, published_at}`. Prints `{"ok": bool, ...}`; exit 1 on refusal.
 
 ### C11. CLI
@@ -14863,7 +14863,7 @@ git commit -m "Add the studio_episodes render ledger: migration 0026 and its con
 
 ### Task 24: render.py, from timeline to audited, ledgered MP4
 
-**Prerequisite:** stream D's `pipeline/studio/capture/gpu.py` (check D24): every `gpu: <renderer>` line of lint.ts, render.ts and still.ts goes through `require_nvidia`, render.ts must report exactly one renderer, and it goes into the ledger row. The node scripts run as `node --import tsx scripts/<name>.ts` (the pinned tsx of video/node_modules; a missing node or a timeout is a `StudioError`, the output is decoded as UTF-8). A timeout kills node's whole process tree (`taskkill /T /F`: its Chrome and compositor children would otherwise keep the NVIDIA busy, because node's own `finally` blocks never run), and a failed or killed step removes `render/bundle/` and `render/raw.mp4.parts/` from the nearly full disk. Before it rewrites timeline.json, a render removes the previous render's outputs (`raw.mp4`, `<slug>.mp4`, thumbnails, `audit.json`, `ledger.json`), so a failed render leaves nothing `episode package` could ship; `ledger.json` records the `timeline_sha256` of the render, and `episode package` refuses a timeline.json or `render/<slug>.mp4` that is not the audited render's. The loudness step re-encodes the audio once, at render.ts's 320k: the narration reaches Remotion uncompressed, so the limiter's gain reduction is measured once on a lossless WAV and added to the gain before that single encode.
+**Prerequisite:** stream D's `pipeline/studio/capture/gpu.py` (check D24): every `gpu: <renderer>` line of lint.ts, render.ts and still.ts goes through `require_nvidia`, render.ts must report exactly one renderer, and it goes into the ledger row. The node scripts run as `node --import tsx scripts/<name>.ts` (the pinned tsx of video/node_modules; a missing node or a timeout is a `StudioError`, the output is decoded as UTF-8). A timeout kills node's whole process tree (`taskkill /T /F`: its Chrome and compositor children would otherwise keep the NVIDIA busy, because node's own `finally` blocks never run), and a failed or killed step removes `render/bundle/` and `render/raw.mp4.parts/` from the nearly full disk. Before it rewrites timeline.json, a render removes the previous render's outputs (`raw.mp4`, `<slug>.mp4`, thumbnails, `audit.json`, `ledger.json`), so a failed render leaves nothing `episode package` could ship; `ledger.json` records the `timeline_sha256` and `words_sha256` of the render (its row carries `script_sha256` and `casefile_sha256`), a render during which one of those four files changed writes no ledger, and `episode package` refuses a timeline.json, script.json, casefile.json, voice/words.json or `render/<slug>.mp4` that is not the audited render's, and an episode.json music file other than the one the timeline mixed (titles, tags and the credit's wording stay editable after the render). The loudness step re-encodes the audio once, at render.ts's 320k: the narration reaches Remotion uncompressed, so the limiter's gain reduction is measured once on a lossless WAV and added to the gain before that single encode.
 
 Thumbnails (owner decisions 24, 25): timeline.json carries three candidates (`thumbnails: [{frame, text}]`, Task 21), and `episode render` runs still.ts once per candidate (`--candidate K`), which writes `render/thumbnail_<K>_3840.png` and `render/thumbnail_<K>_1280.jpg` with the candidate's teaser drawn by stream D's Thumbnail composition. `render_thumbnail` (the `episode thumbnail SLUG --candidate K --frame N` of Task 26) re-runs only still.ts for one candidate, with `--frame N`, on the audited render of the current timeline.json, and refuses a frame that could show the answer (`timeline.thumbnail_problem`).
 
@@ -14912,6 +14912,7 @@ def ready_episode(tmp_path: Path, monkeypatch):
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 
 import pytest
@@ -14998,6 +14999,49 @@ def test_render_runs_lint_render_still_audit_and_ledger_in_order(tmp_path, monke
     ledger = json.loads((ws.render_dir / "ledger.json").read_text(encoding="utf-8"))
     assert ledger["row"] == row
     assert ledger["timeline_sha256"] == sha256_file(ws.timeline)
+    assert ledger["words_sha256"] == sha256_file(ws.words)
+    assert row["script_sha256"] == sha256_file(ws.script)
+    assert row["casefile_sha256"] == sha256_file(ws.casefile)
+
+
+@pytest.mark.parametrize(
+    ("name", "old", "new"),
+    [
+        ("timeline.json", '"The stone"', '"The quarry stone"'),
+        ("script.json", "This stone", "That stone"),
+        ("casefile.json", "about 1,000 tonnes.", "about 1,242 tonnes."),
+        ("voice/words.json", '"duration_s": 5.0', '"duration_s": 4.6'),
+    ],
+)
+def test_a_file_edited_during_the_render_is_not_ledgered(tmp_path, monkeypatch, name, old, new):
+    # A render runs for hours; the ledger hashes the files at its end, and `episode package`
+    # trusts those hashes to describe the video.
+    ws = ef.ready_episode(tmp_path, monkeypatch)
+    path = ws.root / name
+    inner = _runner(ws, [])
+
+    def runner(script, args, timeout):
+        if script == "render.ts":
+            text = path.read_text(encoding="utf-8")
+            assert old in text
+            path.write_text(text.replace(old, new), encoding="utf-8")
+        return inner(script, args, timeout)
+
+    def loudness(raw, out):
+        out.write_bytes(b"final")
+        return 0.0
+
+    rows = []
+    with pytest.raises(StudioError, match=rf"^{re.escape(name)} changed during the render"):
+        render.render_episode(
+            ws,
+            runner=runner,
+            loudness=loudness,
+            auditor=lambda *a: (True, []),
+            record=lambda row: rows.append(row) or {"ok": True},
+        )
+    assert rows == []
+    assert not (ws.render_dir / "ledger.json").exists()
 
 
 @pytest.mark.parametrize(
@@ -15261,7 +15305,11 @@ a node script that times out is killed with its whole process tree (taskkill /T 
 failed or killed step removes render/bundle/ and render.ts's render/raw.mp4.parts/.
 Before timeline.json is rewritten, the previous render's outputs are removed, so a failed
 render leaves nothing to package; ledger.json binds the audited render to its timeline
-(`timeline_sha256`), which `episode package` and `episode thumbnail` check. The three
+(`timeline_sha256`), which `episode package` and `episode thumbnail` check, and to its word
+timings (`words_sha256`, the SRT's source), which `episode package` checks with the row's
+script and case file hashes. Those four files are hashed when the timeline is compiled and
+again before the ledger is written; a render during which one of them changed is refused
+(no ledger row, no ledger.json). The three
 thumbnail candidates (owner decisions 24, 25) are rendered by one still.ts call each;
 `episode thumbnail` re-renders one of them from another frame (render_thumbnail), under the
 rule the compiled candidates obey (timeline.thumbnail_problem: never the answer).
@@ -15562,6 +15610,19 @@ def render_thumbnail(
     return {"candidate": candidate, "frame": frame, "files": files, "next": "episode package"}
 
 
+def _input_hashes(ws: EpisodeWorkspace) -> dict[str, str]:
+    """sha256 of the files a render is compiled from and `episode package` describes it by."""
+    from pipeline.video.shorts_ledger import sha256_file
+
+    files = {
+        "timeline.json": ws.timeline,
+        "script.json": ws.script,
+        "casefile.json": ws.casefile,
+        "voice/words.json": ws.words,
+    }
+    return {name: sha256_file(path) for name, path in files.items()}
+
+
 def render_episode(
     ws: EpisodeWorkspace,
     *,
@@ -15570,8 +15631,6 @@ def render_episode(
     auditor: Callable[[Path, dict[str, Any], Path], tuple[bool, list[Any]]] = audit,
     record: Callable[[dict[str, Any]], dict[str, Any]] = record_remote,
 ) -> dict[str, Any]:
-    from pipeline.video.shorts_ledger import sha256_file
-
     loaded = load_all(ws)
     require_valid(loaded, final=True)
     # timeline.json is rewritten next: no output of an earlier render may outlive it, so a
@@ -15579,6 +15638,7 @@ def render_episode(
     for name in ("raw.mp4", f"{ws.slug}.mp4", *THUMBNAILS, "audit.json", "ledger.json"):
         (ws.render_dir / name).unlink(missing_ok=True)
     timeline = build_timeline(ws)
+    compiled_from = _input_hashes(ws)
     music_dir = config.video_assets() / "music"
     populate_public_dir(ws, timeline, music_dir=music_dir, fonts_dir=FONTS_DIR)
     ws.render_dir.mkdir(parents=True, exist_ok=True)
@@ -15606,9 +15666,20 @@ def render_episode(
     if not ok:
         failed = [c.name for c in checks if not c.ok]
         raise StudioError(f"render audit failed {failed}; see render/audit.json")
+    # The ledger hashes the files as they are now: they must still be the ones rendered.
+    changed = [name for name, sha in _input_hashes(ws).items() if sha != compiled_from[name]]
+    if changed:
+        raise StudioError(
+            f"{', '.join(changed)} changed during the render; run `episode render` again"
+        )
     row = ledger_row(ws, loaded.episode, loaded.script, timeline, final, renderers.pop())
     outcome = record(row)
-    ledger = {"row": row, "outcome": outcome, "timeline_sha256": sha256_file(ws.timeline)}
+    ledger = {
+        "row": row,
+        "outcome": outcome,
+        "timeline_sha256": compiled_from["timeline.json"],
+        "words_sha256": compiled_from["voice/words.json"],
+    }
     (ws.render_dir / "ledger.json").write_text(json.dumps(ledger, indent=2), encoding="utf-8")
     return {"video": str(final), "gain_db": round(gain, 2), "video_sha256": row["video_sha256"]}
 ```
@@ -15616,7 +15687,7 @@ def render_episode(
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/test_render.py -m "not integration and not live_llm" -q`
-Expected: `13 passed`
+Expected: `17 passed`
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
@@ -15633,6 +15704,7 @@ git commit -m "Render episodes: public dir, layout lint, Remotion, -14 LUFS, aud
 
 **Files:**
 - Create: `pipeline/studio/package.py`
+- Modify: `pipeline/research_html_renderer.py` (plan B's `_clock` becomes the public `video_clock(seconds: float)`, floored with `math.floor`, `import math` at the top: the one H:MM:SS / M:SS formatter, because the paper page's "Video at" links and the package's chapter and evidence lines name the same moments; `_video_link` calls it)
 - Test: `tests/pipeline/studio/test_package.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -15646,7 +15718,10 @@ import re
 import pytest
 from PIL import Image
 
-from pipeline.studio import casefile, package, timeline
+from pipeline import research_html_renderer
+from pipeline.research_html_renderer import video_clock
+from pipeline.studio import casefile, package, render, timeline
+from pipeline.studio.episode import load_all
 from pipeline.studio.errors import StudioError
 from pipeline.video.shorts_ledger import sha256_file
 from tests.pipeline.studio import episode_fixtures as ef
@@ -15673,9 +15748,12 @@ def _parts(seconds=5.0):
 
 
 def test_clock():
-    assert package.clock(0) == "0:00"
-    assert package.clock(71.9) == "1:11"
-    assert package.clock(3725) == "1:02:05"
+    # The description's chapter and evidence times and the paper page's "Video at" links name
+    # the same moments: one formatter prints both.
+    assert package.video_clock is research_html_renderer.video_clock
+    assert video_clock(0) == "0:00"
+    assert video_clock(71.9) == "1:11"
+    assert video_clock(3725) == "1:02:05"
 
 
 def test_srt_uses_display_words_and_never_overlaps():
@@ -15783,12 +15861,23 @@ def _rendered(tmp_path, monkeypatch):
     (ws.render_dir / "audit.json").write_text(
         json.dumps({"ok": True, "checks": []}), encoding="utf-8"
     )
+    monkeypatch.setattr("pipeline.video.shorts_ledger.current_commit", lambda: "f" * 40)
+    loaded = load_all(ws)
+    t = json.loads(ws.timeline.read_text(encoding="utf-8"))
     ledger = {
-        "row": {"video_sha256": sha256_file(video)},
+        "row": render.ledger_row(ws, loaded.episode, loaded.script, t, video, "NVIDIA"),
         "timeline_sha256": sha256_file(ws.timeline),
+        "words_sha256": sha256_file(ws.words),
     }
     (ws.render_dir / "ledger.json").write_text(json.dumps(ledger), encoding="utf-8")
     return ws
+
+
+def _voiced(ws, data, seconds):
+    """voice/words.json and manifest.json as `episode voice` leaves them for `data`."""
+    ws.words.write_text(json.dumps(sf.words_for(data, seconds)), encoding="utf-8")
+    manifest = sf.voice_manifest(data, seconds)
+    (ws.voice_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
 
 def test_build_package_writes_every_file(tmp_path, monkeypatch):
@@ -15841,6 +15930,64 @@ def test_package_refuses_a_timeline_newer_than_the_render(tmp_path, monkeypatch)
     with pytest.raises(StudioError, match="is not the audited render"):
         package.build_package(ws)
     assert not (ws.package_dir / f"{ws.slug}.mp4").exists()
+
+
+def test_package_refuses_a_script_revoiced_after_the_render(tmp_path, monkeypatch):
+    # The owner's review loop: a line is changed and narrated again, the render is not. The
+    # SRT and the hook sentence would carry the new line and the video the old one.
+    ws = _rendered(tmp_path, monkeypatch)
+    data = json.loads(ws.script.read_text(encoding="utf-8"))
+    for key in ("spoken", "display"):
+        data["beats"][0][key] = data["beats"][0][key].replace("This stone", "That stone")
+    ws.script.write_text(json.dumps(data), encoding="utf-8")
+    _voiced(ws, data, 4.6)
+    with pytest.raises(StudioError, match=r"script\.json changed since the render"):
+        package.build_package(ws)
+    assert list(ws.package_dir.iterdir()) == []
+
+
+def test_package_refuses_words_retimed_after_the_render(tmp_path, monkeypatch):
+    # The same script narrated again (a lost mp3, a new take): other word times than the video's.
+    ws = _rendered(tmp_path, monkeypatch)
+    _voiced(ws, json.loads(ws.script.read_text(encoding="utf-8")), 4.6)
+    with pytest.raises(StudioError, match=r"voice/words\.json changed since the render"):
+        package.build_package(ws)
+    assert list(ws.package_dir.iterdir()) == []
+
+
+def test_package_refuses_a_casefile_changed_after_the_render(tmp_path, monkeypatch):
+    # The description's evidence lines quote the case file; the video shows the rendered one.
+    ws = _rendered(tmp_path, monkeypatch)
+    rendered = ws.casefile.read_text(encoding="utf-8")
+    edited = rendered.replace("weighs about 1,000 tonnes.", "weighs about 1,242 tonnes.")
+    assert edited != rendered
+    ws.casefile.write_text(edited, encoding="utf-8")
+    with pytest.raises(StudioError, match=r"casefile\.json changed since the render"):
+        package.build_package(ws)
+    assert list(ws.package_dir.iterdir()) == []
+
+
+def test_package_credits_only_the_music_the_render_mixed(tmp_path, monkeypatch):
+    ws = _rendered(tmp_path, monkeypatch)
+    data = json.loads(ws.config.read_text(encoding="utf-8"))
+    # Titles, tags and the wording of the credit are the owner's after the render.
+    data["title_candidates"] = ["Who Moved the 1,000-Tonne Stone?"]
+    data["tags"] = ["Baalbek"]
+    data["music"]["credit"] = "Music: X (CC BY 4.0)"
+    ws.config.write_text(json.dumps(data), encoding="utf-8")
+    package.build_package(ws)
+    yt = json.loads((ws.package_dir / "youtube.json").read_text(encoding="utf-8"))
+    assert yt["title"] == "Who Moved the 1,000-Tonne Stone?" and yt["tags"] == ["Baalbek"]
+    assert "Music: X (CC BY 4.0)" in yt["description"]
+    # Another track would be credited for a mix the video does not carry.
+    data["music"]["file"] = "other.wav"
+    ws.config.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(StudioError, match=r"music/other\.wav, the render mixed music/bed\.wav"):
+        package.build_package(ws)
+    data["music"] = None
+    ws.config.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(StudioError, match=r"episode\.json music is none, the render mixed"):
+        package.build_package(ws)
 ```
 
 - [ ] **Step 2: Run it to verify it fails**
@@ -15872,18 +16019,23 @@ package/
                              "thumbnail_3.jpg"]}
     evidence_timestamps.json {ev-NN: seconds} for `episode register-youtube`
 A failed or missing render audit writes package/FAILED.json with the reasons and stops. The
-package is built only from the audited render of the current timeline: render/ledger.json's
-`timeline_sha256` must be timeline.json's and its row's `video_sha256` render/<slug>.mp4's
-(a timeline recompiled after the render, or another video, means `episode render` again).
+package is built only from the audited render and the files it was rendered from:
+render/ledger.json's `timeline_sha256` and `words_sha256` must be timeline.json's and
+voice/words.json's, its row's `script_sha256`, `casefile_sha256` and `video_sha256`
+script.json's, casefile.json's and render/<slug>.mp4's, and episode.json's music file the one
+the timeline mixed. A script, case file, voice or music edited after the render (the SRT, the
+hook sentence, the evidence lines and the credits would describe another video), a recompiled
+timeline or another video means `episode render` again; titles, tags and the wording of the
+music credit may change after it.
 """
 
 from __future__ import annotations
 
 import json
-import math
 from typing import Any
 
 from pipeline.lyra.text_sentences import split_sentences
+from pipeline.research_html_renderer import video_clock
 from pipeline.studio.casefile import CaseFile, refs_in
 from pipeline.studio.episode import EpisodeWorkspace, load_all, load_json, require_valid
 from pipeline.studio.errors import StudioError
@@ -15902,13 +16054,6 @@ THUMB_JPEG_MAX_BYTES = 2 * 1024 * 1024
 CATEGORY_ID = 27
 CHAPTER_MIN_S = 10
 CHAPTERS_MIN = 3
-
-
-def clock(seconds: float) -> str:
-    total = int(math.floor(seconds))
-    h, rest = divmod(total, 3600)
-    m, s = divmod(rest, 60)
-    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
 
 def global_words(
@@ -15994,14 +16139,16 @@ def description(
     lines = [split_sentences(hook_beats[0]["display"])[0].strip(), ""]
     if chapter_list:
         lines.append("Chapters")
-        lines.extend(f"{clock(c['start_s'])} {c['title']}" for c in chapter_list)
+        lines.extend(f"{video_clock(c['start_s'])} {c['title']}" for c in chapter_list)
         lines.append("")
     paper = episode["paper"]
     if paper is not None and stamps:
         by_anchor = {e.paper_anchor: e for e in cf.evidence if e.paper_anchor}
         lines.append(f"Evidence (the full paper: {paper_url(paper['slug'])})")
         for ev, sec in sorted(stamps.items(), key=lambda kv: kv[1]):
-            lines.append(f"{clock(sec)} {by_anchor[ev].statement} {paper_url(paper['slug'], ev)}")
+            lines.append(
+                f"{video_clock(sec)} {by_anchor[ev].statement} {paper_url(paper['slug'], ev)}"
+            )
         lines.append("")
     credits = [
         f"Image: {m.attribution} ({m.license}) {m.source_url}" for m in _used_media(script, cf)
@@ -16087,16 +16234,38 @@ def _require_audit(ws: EpisodeWorkspace) -> None:
 
 
 def _require_audited_render(ws: EpisodeWorkspace) -> None:
-    """timeline.json and render/<slug>.mp4 are exactly what the audited render recorded."""
+    """timeline.json, script.json, casefile.json, voice/words.json and render/<slug>.mp4 are
+    exactly what the audited render recorded in render/ledger.json."""
     from pipeline.video.shorts_ledger import sha256_file
 
     ledger = load_json(ws.render_dir / "ledger.json", "run `episode render` first")
-    if not ws.timeline.exists() or sha256_file(ws.timeline) != ledger["timeline_sha256"]:
-        raise StudioError("timeline.json changed since the render; run `episode render` again")
+    row = ledger["row"]
+    inputs = (
+        ("timeline.json", ws.timeline, ledger["timeline_sha256"]),
+        ("script.json", ws.script, row["script_sha256"]),
+        ("casefile.json", ws.casefile, row["casefile_sha256"]),
+        ("voice/words.json", ws.words, ledger["words_sha256"]),
+    )
+    for name, path, recorded in inputs:
+        if not path.exists() or sha256_file(path) != recorded:
+            raise StudioError(f"{name} changed since the render; run `episode render` again")
     video = ws.render_dir / f"{ws.slug}.mp4"
-    if not video.exists() or sha256_file(video) != ledger["row"]["video_sha256"]:
+    if not video.exists() or sha256_file(video) != row["video_sha256"]:
         raise StudioError(
             f"render/{ws.slug}.mp4 is not the audited render; run `episode render` again"
+        )
+
+
+def _require_rendered_music(episode: dict[str, Any], timeline: dict[str, Any]) -> None:
+    """episode.json credits the track the rendered timeline mixed (the credit's wording, the
+    titles and the tags stay the owner's to change after a render)."""
+    music, mixed = episode["music"], timeline["audio"]["music"]
+    wanted = "none" if music is None else f"music/{music['file']}"
+    rendered = "none" if mixed is None else mixed["src"]
+    if wanted != rendered:
+        raise StudioError(
+            f"episode.json music is {wanted}, the render mixed {rendered}; "
+            "run `episode render` again"
         )
 
 
@@ -16109,6 +16278,7 @@ def build_package(ws: EpisodeWorkspace) -> dict[str, Any]:
         raise StudioError("voice/words.json is missing: run `episode voice` first")
     timeline = load_json(ws.timeline, "run `episode render` (it writes timeline.json)")
     episode, script, cf = loaded.episode, loaded.script, loaded.casefile
+    _require_rendered_music(episode, timeline)
     _check_thumbnails(ws)
     chapter_list = chapters(timeline, episode["format"])
     stamps = evidence_timestamps(script, cf, timeline)
@@ -16148,7 +16318,7 @@ def build_package(ws: EpisodeWorkspace) -> dict[str, Any]:
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/test_package.py -m "not integration and not live_llm" -q`
-Expected: `10 passed`
+Expected: `14 passed`
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
@@ -17218,7 +17388,7 @@ Expected: both help texts list their subcommands (C11). `doctor` prints one line
 - [ ] **Step 8: Scope check**
 
 Run: `git status --short` and `git log --stat -28`
-Expected: this plan's commits touch only `pipeline/studio/` (outside `capture/`), `tests/pipeline/studio/` (outside `capture/`), `pipeline/video/shorts_captions.py` (Task 19) and `migrations/0026_studio_episodes.sql`.
+Expected: this plan's commits touch only `pipeline/studio/` (outside `capture/`), `tests/pipeline/studio/` (outside `capture/`), `pipeline/video/shorts_captions.py` (Task 19), `pipeline/research_html_renderer.py` (Task 25: `_clock` made public as `video_clock` for package.py) and `migrations/0026_studio_episodes.sql`.
 
 - [ ] **Step 9: Commit**
 
