@@ -27,7 +27,9 @@ a node script that times out is killed with its whole process tree (taskkill /T 
 failed or killed step removes render/bundle/ and render.ts's render/raw.mp4.parts/.
 Before timeline.json is rewritten, the previous render's outputs are removed, so a failed
 render leaves nothing to package; ledger.json binds the audited render to its timeline
-(`timeline_sha256`), which `episode package` and `episode thumbnail` check. The three
+(`timeline_sha256`), which `episode package` and `episode thumbnail` check, and to its word
+timings (`words_sha256`, the SRT's source), which `episode package` checks with the row's
+script and case file hashes. The three
 thumbnail candidates (owner decisions 24, 25) are rendered by one still.ts call each;
 `episode thumbnail` re-renders one of them from another frame (render_thumbnail), under the
 rule the compiled candidates obey (timeline.thumbnail_problem: never the answer).
@@ -374,6 +376,11 @@ def render_episode(
         raise StudioError(f"render audit failed {failed}; see render/audit.json")
     row = ledger_row(ws, loaded.episode, loaded.script, timeline, final, renderers.pop())
     outcome = record(row)
-    ledger = {"row": row, "outcome": outcome, "timeline_sha256": sha256_file(ws.timeline)}
+    ledger = {
+        "row": row,
+        "outcome": outcome,
+        "timeline_sha256": sha256_file(ws.timeline),
+        "words_sha256": sha256_file(ws.words),
+    }
     (ws.render_dir / "ledger.json").write_text(json.dumps(ledger, indent=2), encoding="utf-8")
     return {"video": str(final), "gain_db": round(gain, 2), "video_sha256": row["video_sha256"]}

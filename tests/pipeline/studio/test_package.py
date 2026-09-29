@@ -8,7 +8,8 @@ from PIL import Image
 
 from pipeline import research_html_renderer
 from pipeline.research_html_renderer import video_clock
-from pipeline.studio import casefile, package, timeline
+from pipeline.studio import casefile, package, render, timeline
+from pipeline.studio.episode import load_all
 from pipeline.studio.errors import StudioError
 from pipeline.video.shorts_ledger import sha256_file
 from tests.pipeline.studio import episode_fixtures as ef
@@ -148,12 +149,23 @@ def _rendered(tmp_path, monkeypatch):
     (ws.render_dir / "audit.json").write_text(
         json.dumps({"ok": True, "checks": []}), encoding="utf-8"
     )
+    monkeypatch.setattr("pipeline.video.shorts_ledger.current_commit", lambda: "f" * 40)
+    loaded = load_all(ws)
+    t = json.loads(ws.timeline.read_text(encoding="utf-8"))
     ledger = {
-        "row": {"video_sha256": sha256_file(video)},
+        "row": render.ledger_row(ws, loaded.episode, loaded.script, t, video, "NVIDIA"),
         "timeline_sha256": sha256_file(ws.timeline),
+        "words_sha256": sha256_file(ws.words),
     }
     (ws.render_dir / "ledger.json").write_text(json.dumps(ledger), encoding="utf-8")
     return ws
+
+
+def _voiced(ws, data, seconds):
+    """voice/words.json and manifest.json as `episode voice` leaves them for `data`."""
+    ws.words.write_text(json.dumps(sf.words_for(data, seconds)), encoding="utf-8")
+    manifest = sf.voice_manifest(data, seconds)
+    (ws.voice_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
 
 def test_build_package_writes_every_file(tmp_path, monkeypatch):
@@ -206,3 +218,61 @@ def test_package_refuses_a_timeline_newer_than_the_render(tmp_path, monkeypatch)
     with pytest.raises(StudioError, match="is not the audited render"):
         package.build_package(ws)
     assert not (ws.package_dir / f"{ws.slug}.mp4").exists()
+
+
+def test_package_refuses_a_script_revoiced_after_the_render(tmp_path, monkeypatch):
+    # The owner's review loop: a line is changed and narrated again, the render is not. The
+    # SRT and the hook sentence would carry the new line and the video the old one.
+    ws = _rendered(tmp_path, monkeypatch)
+    data = json.loads(ws.script.read_text(encoding="utf-8"))
+    for key in ("spoken", "display"):
+        data["beats"][0][key] = data["beats"][0][key].replace("This stone", "That stone")
+    ws.script.write_text(json.dumps(data), encoding="utf-8")
+    _voiced(ws, data, 4.6)
+    with pytest.raises(StudioError, match=r"script\.json changed since the render"):
+        package.build_package(ws)
+    assert list(ws.package_dir.iterdir()) == []
+
+
+def test_package_refuses_words_retimed_after_the_render(tmp_path, monkeypatch):
+    # The same script narrated again (a lost mp3, a new take): other word times than the video's.
+    ws = _rendered(tmp_path, monkeypatch)
+    _voiced(ws, json.loads(ws.script.read_text(encoding="utf-8")), 4.6)
+    with pytest.raises(StudioError, match=r"voice/words\.json changed since the render"):
+        package.build_package(ws)
+    assert list(ws.package_dir.iterdir()) == []
+
+
+def test_package_refuses_a_casefile_changed_after_the_render(tmp_path, monkeypatch):
+    # The description's evidence lines quote the case file; the video shows the rendered one.
+    ws = _rendered(tmp_path, monkeypatch)
+    rendered = ws.casefile.read_text(encoding="utf-8")
+    edited = rendered.replace("weighs about 1,000 tonnes.", "weighs about 1,242 tonnes.")
+    assert edited != rendered
+    ws.casefile.write_text(edited, encoding="utf-8")
+    with pytest.raises(StudioError, match=r"casefile\.json changed since the render"):
+        package.build_package(ws)
+    assert list(ws.package_dir.iterdir()) == []
+
+
+def test_package_credits_only_the_music_the_render_mixed(tmp_path, monkeypatch):
+    ws = _rendered(tmp_path, monkeypatch)
+    data = json.loads(ws.config.read_text(encoding="utf-8"))
+    # Titles, tags and the wording of the credit are the owner's after the render.
+    data["title_candidates"] = ["Who Moved the 1,000-Tonne Stone?"]
+    data["tags"] = ["Baalbek"]
+    data["music"]["credit"] = "Music: X (CC BY 4.0)"
+    ws.config.write_text(json.dumps(data), encoding="utf-8")
+    package.build_package(ws)
+    yt = json.loads((ws.package_dir / "youtube.json").read_text(encoding="utf-8"))
+    assert yt["title"] == "Who Moved the 1,000-Tonne Stone?" and yt["tags"] == ["Baalbek"]
+    assert "Music: X (CC BY 4.0)" in yt["description"]
+    # Another track would be credited for a mix the video does not carry.
+    data["music"]["file"] = "other.wav"
+    ws.config.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(StudioError, match=r"music/other\.wav, the render mixed music/bed\.wav"):
+        package.build_package(ws)
+    data["music"] = None
+    ws.config.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(StudioError, match=r"episode\.json music is none, the render mixed"):
+        package.build_package(ws)

@@ -87,6 +87,9 @@ def test_render_runs_lint_render_still_audit_and_ledger_in_order(tmp_path, monke
     ledger = json.loads((ws.render_dir / "ledger.json").read_text(encoding="utf-8"))
     assert ledger["row"] == row
     assert ledger["timeline_sha256"] == sha256_file(ws.timeline)
+    assert ledger["words_sha256"] == sha256_file(ws.words)
+    assert row["script_sha256"] == sha256_file(ws.script)
+    assert row["casefile_sha256"] == sha256_file(ws.casefile)
 
 
 @pytest.mark.parametrize(

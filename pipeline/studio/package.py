@@ -19,9 +19,14 @@ package/
                              "thumbnail_3.jpg"]}
     evidence_timestamps.json {ev-NN: seconds} for `episode register-youtube`
 A failed or missing render audit writes package/FAILED.json with the reasons and stops. The
-package is built only from the audited render of the current timeline: render/ledger.json's
-`timeline_sha256` must be timeline.json's and its row's `video_sha256` render/<slug>.mp4's
-(a timeline recompiled after the render, or another video, means `episode render` again).
+package is built only from the audited render and the files it was rendered from:
+render/ledger.json's `timeline_sha256` and `words_sha256` must be timeline.json's and
+voice/words.json's, its row's `script_sha256`, `casefile_sha256` and `video_sha256`
+script.json's, casefile.json's and render/<slug>.mp4's, and episode.json's music file the one
+the timeline mixed. A script, case file, voice or music edited after the render (the SRT, the
+hook sentence, the evidence lines and the credits would describe another video), a recompiled
+timeline or another video means `episode render` again; titles, tags and the wording of the
+music credit may change after it.
 """
 
 from __future__ import annotations
@@ -229,16 +234,38 @@ def _require_audit(ws: EpisodeWorkspace) -> None:
 
 
 def _require_audited_render(ws: EpisodeWorkspace) -> None:
-    """timeline.json and render/<slug>.mp4 are exactly what the audited render recorded."""
+    """timeline.json, script.json, casefile.json, voice/words.json and render/<slug>.mp4 are
+    exactly what the audited render recorded in render/ledger.json."""
     from pipeline.video.shorts_ledger import sha256_file
 
     ledger = load_json(ws.render_dir / "ledger.json", "run `episode render` first")
-    if not ws.timeline.exists() or sha256_file(ws.timeline) != ledger["timeline_sha256"]:
-        raise StudioError("timeline.json changed since the render; run `episode render` again")
+    row = ledger["row"]
+    inputs = (
+        ("timeline.json", ws.timeline, ledger["timeline_sha256"]),
+        ("script.json", ws.script, row["script_sha256"]),
+        ("casefile.json", ws.casefile, row["casefile_sha256"]),
+        ("voice/words.json", ws.words, ledger["words_sha256"]),
+    )
+    for name, path, recorded in inputs:
+        if not path.exists() or sha256_file(path) != recorded:
+            raise StudioError(f"{name} changed since the render; run `episode render` again")
     video = ws.render_dir / f"{ws.slug}.mp4"
-    if not video.exists() or sha256_file(video) != ledger["row"]["video_sha256"]:
+    if not video.exists() or sha256_file(video) != row["video_sha256"]:
         raise StudioError(
             f"render/{ws.slug}.mp4 is not the audited render; run `episode render` again"
+        )
+
+
+def _require_rendered_music(episode: dict[str, Any], timeline: dict[str, Any]) -> None:
+    """episode.json credits the track the rendered timeline mixed (the credit's wording, the
+    titles and the tags stay the owner's to change after a render)."""
+    music, mixed = episode["music"], timeline["audio"]["music"]
+    wanted = "none" if music is None else f"music/{music['file']}"
+    rendered = "none" if mixed is None else mixed["src"]
+    if wanted != rendered:
+        raise StudioError(
+            f"episode.json music is {wanted}, the render mixed {rendered}; "
+            "run `episode render` again"
         )
 
 
@@ -251,6 +278,7 @@ def build_package(ws: EpisodeWorkspace) -> dict[str, Any]:
         raise StudioError("voice/words.json is missing: run `episode voice` first")
     timeline = load_json(ws.timeline, "run `episode render` (it writes timeline.json)")
     episode, script, cf = loaded.episode, loaded.script, loaded.casefile
+    _require_rendered_music(episode, timeline)
     _check_thumbnails(ws)
     chapter_list = chapters(timeline, episode["format"])
     stamps = evidence_timestamps(script, cf, timeline)
