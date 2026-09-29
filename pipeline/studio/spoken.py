@@ -3,8 +3,8 @@
 The narrator reads `spoken` ("about a thousand tonnes"), the captions and SRT show `display`
 ("about 1,000 tonnes"). `normalize_tokens` maps both to one canonical token list: number words
 become digits (years such as "nineteen sixty-six" and "twenty fourteen" included), ordinal
-words ordinals ("twenty-first" is 21st), thousands separators go, unit words and symbols
-become one unit token, edge punctuation and case are ignored. Clause punctuation after a
+words become digit ordinals ("twenty-first" is 21st), thousands separators go, unit words and
+symbols become one unit token, edge punctuation and case are ignored. Clause punctuation after a
 number word (, ; : . ! ? … or a dash) still ends that number: "forty, six" is 40 and 6,
 never 46. Any other difference is a script error.
 
