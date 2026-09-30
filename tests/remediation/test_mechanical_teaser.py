@@ -243,6 +243,34 @@ class TestTheDecision:
         assert card.rule == "card-clear-contradicted-after-verify"
         assert json.loads(prov.new_value)["_description_provenance"]["card"] is None
 
+    def test_a_site_no_card_can_be_written_for_is_cleared_like_any_other(self) -> None:
+        """Lane WB's `name-undrawable` clear (every name form holds a glyph the shorts font cannot
+        draw, `teaser/run.py`): the site's card is cleared and the journal says why."""
+        proof = (
+            "no card can be written: every name form contains a glyph the shorts font cannot "
+            "draw - 'Jabal al-ʿHayn' ('ʿ')"
+        )
+        cleared = outcome(
+            T.JABAL,
+            status=W.CLEARED,
+            reason="name-undrawable",
+            findings=[{"card": None, "reasons": [proof]}],
+            attempts=0,
+        )
+        prov, card = W.classify(cleared, live(T.JABAL), {}, "wb-test")
+        assert (card.old_value, card.new_value) == (T.OLD_CARD, None)
+        assert card.rule == "card-clear-name-undrawable"
+        assert card.note == "card cleared (name-undrawable)"
+        assert card.evidence == (
+            {
+                "source": "lane WB run wb-test: name-undrawable",
+                "url": "output/remediation/teaser/runs/wb-test/OUTCOMES.jsonl",
+                "quote": proof,
+            },
+        )
+        assert card.premise == f"||{T.sha(T.DESCRIPTIONS[T.JABAL])}"
+        assert json.loads(prov.new_value)["_description_provenance"]["card"] is None
+
     def test_a_cleared_card_removes_the_teaser_provenance_and_writes_null(self) -> None:
         raw = json.dumps({"_card_provenance": T.teaser(T.SKARA)}, ensure_ascii=False)
         prov, card = W.classify(outcome(status=W.CLEARED), live(raw_data=raw), {}, "wb-test")

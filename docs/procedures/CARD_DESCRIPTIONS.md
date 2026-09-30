@@ -151,7 +151,9 @@ with a reason is refused, and so is a FAIL without a reason.
 A card that fails (mechanically or at the checker) is **rewritten** by a new writer whose prompt
 carries every earlier card and why it failed, and checked by a **new** checker - up to two rewrites
 (stages `write`/`check`, `rewrite1`/`check1`, `rewrite2`/`check2`). **After the second failed rewrite
-the site gets no card: it is cleared** (`failed-after-two-rewrites`).
+the site gets no card: it is cleared** (`failed-after-two-rewrites`). A site that can have no card
+at all - every name form holds a glyph the font cannot draw - is declined by its writer and cleared
+at once (`name-undrawable`, 2.3).
 
 ### 2.1 The web verification (every accepted card)
 
@@ -281,6 +283,47 @@ its card; `verify2` is never `verify`'s agent), and of a pilot judge whose name 
 of the run, catches only a reused or mistyped name - one agent reused under two batch names goes
 undetected by code. The provenance repeats the one check it can make itself: its verifier is not its
 checker.
+
+### 2.3 A site no card can be written for (`name-undrawable`, since 2026-09-30)
+
+A card must contain a name form (1.4), and every glyph of the site's name and card must be one the
+shorts font draws (1.3: `fit(site.name, card)`). A site whose **every name form contains a glyph
+neither brand font draws** can pass neither: with its name the font check refuses the card, without
+it the name check does. So `Jabal al-ʿHayn` (7ccaad38-8cfb-401e-a938-e2c792914b75; U+02BF is in
+neither Orbitron 700 nor JetBrains Mono 700) stalled batch write-014 of run wb-ws-2026-09-27-02
+(449 of 450 answered): `check-answer` reported a `name` and a `font` problem for every card, and the
+write stage had no way to decline. Owner O2/O3 (a card is a shorts-drawable teaser) and O6 ("belegt
+ersetzen, sonst leeren"): such a site gets **no card - it is cleared**, never a card without its name
+or with a glyph the short draws as a box.
+
+- **The answer**: `{"card": null, "basis": [], "undrawable": true}`, in `write`, `rewrite1` or
+  `rewrite2` (`answers.parse_writer` -> `Declined`; any other shape is refused, and the rewrite after
+  a failed verification never declines: its card passed both checks, so a name form can be drawn).
+- **Only where the contract proves it**: `check-answer` and the import accept it only if
+  `contract.undrawable_proof` does - the font check itself, the same `fit(site.name, form)` call that
+  measures every card (no second glyph table), reports a missing glyph for **every** name form. The
+  stored name is drawn with every card, so an undrawable stored name taints every form, a plain alias
+  included. For a site with a drawable form the answer is refused and names the forms that can be
+  drawn: write the card with one of them. `check-answer` prints `"ok": true, "card": null` and the
+  proof (`"undrawable": {form: [glyphs]}`) for an accepted decline.
+- **The flow**: the stage record holds `card: null` and the proof; the site is **cleared at once**
+  with reason `name-undrawable` - no check, rewrite, verification or second verification asks it
+  (`run.progress`), `attempts` is 0, and its `OUTCOMES.jsonl` row carries the proof sentence as its
+  finding (`card: null`). `mechanical/teaser.py plan` plans it like every clear (5.4: rule
+  `card-clear-name-undrawable`, card `NULL`, the teaser provenance removed, a Phase-5 card key
+  nulled, premise = the description's sha256), so a site that holds an old card loses it, and the
+  journal evidence quotes the proof.
+- **Where the writer learns of it**: the brief (`run.py brief`, appended for `write`, `rewrite1` and
+  `rewrite2` batches) and nowhere else. The questions' prompts are unchanged - an export pins its
+  prompts' sha256, and a new rule in them would stale every exported answer - so all 7,231 questions
+  of the rounds exported so far (runs wb-ws-2026-09-27-01 to -06) rebuild with their exported sha256
+  (measured 2026-09-30).
+- **Population** (measured 2026-09-30 on run wb-ws-2026-09-27-02's read-only export of the 5,004
+  curated sites): two - `Jabal al-ʿHayn` and `Gate of All Nations<U+200C> Persepolis`
+  (f9cfc5f7-a6c8-4c6f-9d82-f30151a36d6c, a zero-width non-joiner in its stored name; in no run yet).
+- **Tests and sweep**: `TestTheUndrawableProof` and `TestAnUndrawableName` in `test_teaser.py`, the
+  clear in `test_mechanical_teaser.py`; `mutation_sweep.py "teaser: undrawable"` (21 cases, all
+  fired: `output/remediation/mechanical/evidence/25_mutation_sweep_undrawable.txt`).
 
 ## 3. Storage and display
 
@@ -438,8 +481,8 @@ H=output/remediation/handoff/teaser-wb-pilot-2026-09-27     # $H-<stage>: one di
 `rewrite-v`, `check-v`, `verify2`** (2, 2.1). Then `$PY $T outcomes --run $RUN` (refused while a
 site is still due) writes `OUTCOMES.jsonl` - each accepted (checked and VERIFIED) card with its
 provenance; each cleared site with its reason: `failed-after-two-rewrites`,
-`failed-after-verify-rewrite`, `contradicted-after-verify`, `unproven-after-verify`, or
-`no-description` for a site without a description that still has a card; every row with its
+`failed-after-verify-rewrite`, `contradicted-after-verify`, `unproven-after-verify`,
+`name-undrawable` (2.3), or `no-description` for a site without a description that still has a card; every row with its
 verification state (`verification`: the last verdict, `null` for a card never verified) and every
 verification in full (`verifications`: the verifier, the card, each claim with its page, quote and
 whether the machine found it) - `OUTCOMES.md` (counts, the unproven share of the accepted cards,

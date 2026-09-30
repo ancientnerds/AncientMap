@@ -26,7 +26,8 @@ class AnswerError(ValueError):
     """The answer is not its stage's shape; the reason is shown to the agent that wrote it."""
 
 
-def _object(text: str, keys: frozenset[str]) -> dict[str, Any]:
+def _object(text: str, *shapes: frozenset[str]) -> dict[str, Any]:
+    """The answer as a JSON object whose keys are exactly one of the `shapes`."""
     stripped = text.strip()
     if not stripped.startswith("{"):
         raise AnswerError("the answer must be one JSON object and nothing else (no prose, no ```)")
@@ -34,9 +35,10 @@ def _object(text: str, keys: frozenset[str]) -> dict[str, Any]:
         data = json.loads(stripped)
     except json.JSONDecodeError as exc:
         raise AnswerError(f"not JSON: {exc}") from exc
-    if not isinstance(data, dict) or set(data) != keys:
+    if not isinstance(data, dict) or set(data) not in shapes:
         found = sorted(data) if isinstance(data, dict) else type(data).__name__
-        raise AnswerError(f"the object carries {found}, it must carry exactly {sorted(keys)}")
+        wanted = " or ".join(str(sorted(keys)) for keys in shapes)
+        raise AnswerError(f"the object carries {found}, it must carry exactly {wanted}")
     return data
 
 
@@ -73,9 +75,29 @@ def _written(data: dict[str, Any], site: C.Basis) -> Written:
     return Written(text=written, card=C.final_card(written), basis=basis)
 
 
-def parse_writer(text: str, site: C.Basis) -> Written:
-    """`{"card": str, "basis": [sentence ids, at least one]}`; the card is made final here."""
-    return _written(_object(text, frozenset({"card", "basis"})), site)
+@dataclass(frozen=True)
+class Declined:
+    """A writer's answer that no card can be written for the site: every one of its name forms
+    contains a glyph the shorts font cannot draw. The shape says nothing of whether that is true:
+    the contract proves it (`contract.undrawable_proof`), `run.parse_answer` asks it to."""
+
+
+WRITER_KEYS = frozenset({"card", "basis"})
+DECLINE_KEYS = WRITER_KEYS | {"undrawable"}
+
+
+def parse_writer(text: str, site: C.Basis) -> Written | Declined:
+    """`{"card": str, "basis": [sentence ids, at least one]}`; the card is made final here. Or, for
+    a site no card can be written for, `{"card": null, "basis": [], "undrawable": true}`."""
+    data = _object(text, WRITER_KEYS, DECLINE_KEYS)
+    if set(data) == WRITER_KEYS:
+        return _written(data, site)
+    if data["card"] is not None or data["basis"] != [] or data["undrawable"] is not True:
+        raise AnswerError(
+            'a card that cannot be written is exactly {"card": null, "basis": [], '
+            '"undrawable": true}'
+        )
+    return Declined()
 
 
 def parse_verify_writer(text: str, site: C.Basis, contradicted: int) -> Written:

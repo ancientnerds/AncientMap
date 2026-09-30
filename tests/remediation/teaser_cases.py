@@ -32,6 +32,10 @@ SACSAY = "61e8d3cd-1e93-4c78-a558-f2955a9fe221"
 MARCH = "0a000000-0000-4000-8000-000000000001"
 EMPTY = "0b000000-0000-4000-8000-000000000002"
 RETIRED_SITE = "0c000000-0000-4000-8000-000000000003"
+#: `Jabal al-ʿHayn`, the site of run wb-ws-2026-09-27-02 (batch write-014) whose one name form holds
+#: U+02BF, a glyph neither brand font draws: no card can be written for it. Its live lane-W text,
+#: byte for byte as that run's SITES.jsonl holds it.
+JABAL = "7ccaad38-8cfb-401e-a938-e2c792914b75"
 
 DESCRIPTIONS = {
     SKARA: (
@@ -89,6 +93,22 @@ DESCRIPTIONS = {
         "building dry stone walls constructed of huge stones [1]."
     ),
     MARCH: "An old March text about a hill fort built c. 500 BC by unknown people.",
+    JABAL: (
+        "Jabal al-ʿHayn is a prominent outcrop of red sandstone in Saudi Arabia, known for its "
+        "pre-historic petroglyphs, tribal markings (wusūm) and inscriptions in early Semitic "
+        "languages as well as Arabic [1]. Ancient petroglyphs carved on the rock faces of Jabal "
+        "al-ʿHayn depict horned bison, standing figures and an exceptional wild cat with a "
+        "curling tail [1]. Camels are shown in some petroglyphs that seem to be less ancient [1]. "
+        "Among the many inscriptions at Jabal al-ʿHayn are a number in Arabic which date to the "
+        "earliest years of the Islamic calendar [1]. One inscription quotes Quran, Surah 18 "
+        "Al-Kahf verse 21 [1]. The inscription was studied by Fred Donner and published in 1984 "
+        "[1]. In a second record of singular historical importance, an individual named Rāfiʿ "
+        "bin 'Alī declares \"I believe that there is no God except Him in whom the children of "
+        'Israel believed, (believing as) a Muslim Hanif; nor am I among the polytheists." This '
+        "gives a direct quote of Quran, Surah 10 Yunus verse 90 [1]. Also published by Donner is "
+        "an inscription on a boulder invoking the name of God and giving an exceptional "
+        "religious maxim [1]."
+    ),
 }
 NAMES = {
     SKARA: "Skara Brae",
@@ -98,6 +118,7 @@ NAMES = {
     MARCH: "Old Hill Fort",
     EMPTY: "Nameless Mound",
     RETIRED_SITE: "Retired Tomb",
+    JABAL: "Jabal al-ʿHayn",
 }
 SITE_OF = {name: site_id for site_id, name in NAMES.items()}
 COUNTRIES = {
@@ -108,6 +129,7 @@ COUNTRIES = {
     MARCH: "Wales",
     EMPTY: "France",
     RETIRED_SITE: "Italy",
+    JABAL: "Saudi Arabia",
 }
 
 #: The prompt's example cards (`teaser.prompts.EXAMPLES`), by site: each passes the mechanical contract
@@ -171,6 +193,10 @@ def tagged(kind_rows: dict[str, list[dict[str, Any]]], at: str = "2026-09-26 12:
 
 def writer_answer(card: str, basis: list[str] | None = None) -> str:
     return json.dumps({"card": card, "basis": basis or ["S1"]}, ensure_ascii=False)
+
+
+#: A writer's answer that no card can be written (`teaser.answers.Declined`).
+DECLINE = json.dumps({"card": None, "basis": [], "undrawable": True})
 
 
 def checker_answer(
