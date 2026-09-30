@@ -10,8 +10,8 @@ nineteen-sixties" is the 1960s, "the twenty-tens" the 2010s, "the fifteen hundre
 "the two thousands" the 2000s), thousands separators go ("1,000th" is 1000th), unit words and
 symbols become one unit token ("square metres" is m², "two millimetres" 2 mm, "twenty-three
 degrees" 23°), a range written with a dash is its two numbers and "to" ("12–15 m" is "twelve
-to fifteen metres"), edge punctuation and case are ignored, a possessive "'s" is a word of its
-own.
+to fifteen metres"), edge punctuation is ignored and so is case, save that only an upper-case
+Roman numeral is a number, a possessive "'s" is a word of its own.
 Clause punctuation after a number word (, ; : . ! ? … or a dash) still ends that number:
 "forty, six" is 40 and 6, never 46. Any other difference is a script error.
 
