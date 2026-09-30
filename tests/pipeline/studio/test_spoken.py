@@ -135,6 +135,15 @@ from pipeline.studio import spoken
         ("At one point five million people lived here", "At one point 5 million people lived here"),
         # a magnitude the run cannot take stays a word on both sides
         ("By two thousand million people lived there", "By 2000 million people lived there"),
+        # decades and centuries spoken as a plural
+        ("In the nineteen-sixties, excavators arrived.", "In the 1960s, excavators arrived."),
+        ("the nineteen sixties", "the 1960's"),
+        ("the twenty-twenties", "the 2020s"),
+        ("in the sixties", "in the '60s"),
+        ("the fifteen hundreds", "the 1500s"),
+        ("the fifteen-hundreds", "the 1500s"),
+        ("the eight hundreds BC", "the 800s BC"),
+        ("hundreds of stones", "hundreds of stones"),
     ],
 )
 def test_equivalent_spellings(said, shown):
@@ -307,6 +316,12 @@ def test_equivalent_spellings(said, shown):
             "six thousand years ago",
             "token 0: spoken '6' vs display '6000'",
         ),
+        # a decade is neither another decade nor its first year
+        ("the nineteen-sixties", "the 1970s", "token 1: spoken '1960s' vs display '1970s'"),
+        ("the nineteen-sixties", "the 1960", "token 1: spoken '1960s' vs display '1960'"),
+        ("the fifteen hundreds", "the 1600s", "token 1: spoken '1500s' vs display '1600s'"),
+        ("the fifteen hundreds", "the 15th century", "token 1: spoken '1500s' vs display '15th'"),
+        ("nineteen, sixties", "1960s", "token 0: spoken '19' vs display '1960s'"),
         # "per cent" is one unit in any case, and a caption that drops it is caught
         (
             "Fifteen Per cent of the stone",

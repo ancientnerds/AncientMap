@@ -35,6 +35,8 @@ TENS = {
     "eighty": 80, "ninety": 90,
 }  # fmt: skip
 MAGNITUDES = {"thousand": 1_000, "million": 1_000_000, "billion": 1_000_000_000}
+# the plural tens words name a decade: "the sixties" is the 60s, "the nineteen-sixties" the 1960s
+DECADES = {f"{w[:-1]}ies": v for w, v in TENS.items()}
 ORDINALS = {
     "first": "1st", "second": "2nd", "third": "3rd", "fourth": "4th", "fifth": "5th",
     "sixth": "6th", "seventh": "7th", "eighth": "8th", "ninth": "9th", "tenth": "10th",
@@ -62,6 +64,7 @@ EDGE = ".,;:!?\"'()[]…—–“”‘’"
 STOPS = ",;:.!?…—–"  # trailing punctuation that closes a clause, and with it a spoken number
 _DIGITS_RE = re.compile(r"^\d{1,3}(?:,\d{3})+(?:\.\d+)?$|^\d+(?:\.\d+)?$")
 _ORDINAL_DIGITS_RE = re.compile(r"^\d+(?:st|nd|rd|th)$")
+_DECADE_DIGITS_RE = re.compile(r"^(\d*0)['’]?s$")  # "1960s", "1960's", "60s" ("'60s" unquoted)
 _PER_CENT_RE = re.compile(r"\bper\s+cent\b", re.IGNORECASE)  # "Per cent" is "percent" too
 
 
@@ -212,10 +215,17 @@ def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, in
     first = _small(words, stops, i)
     if first is None:
         return None
+    a, j = first
+    # a decade or a century spoken as a plural: "nineteen-sixties" is the 1960s and "fifteen
+    # hundreds" the 1500s
+    if j - 1 not in stops and j < len(words):
+        if 10 <= a <= 99 and words[j] in DECADES:
+            return [(f"{a * 100 + DECADES[words[j]]}s", j + 1)]
+        if a >= 1 and words[j] == "hundreds":
+            return [(f"{a * 100}s", j + 1)]
     # year pattern: "nineteen sixty six", "twenty fourteen", "nineteen oh five"; never when a
     # hundred or a magnitude multiplies the second group ("eighteen twelve thousand" is 18 and
     # 12000, not 1812 and a stray "thousand")
-    a, j = first
     if (
         10 <= a <= 99
         and j - 1 not in stops
@@ -335,6 +345,11 @@ def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]
         if i not in stops and i + 1 < len(words) and words[i + 1] in MAGNITUDES:
             return [plain, (_scaled(int(whole), fraction, MAGNITUDES[words[i + 1]]), i + 2)]
         return [plain]
+    decade = _DECADE_DIGITS_RE.match(w)
+    if decade:
+        return [(f"{int(decade[1])}s", i + 1)]
+    if w in DECADES:
+        return [(f"{DECADES[w]}s", i + 1)]
     if _ORDINAL_DIGITS_RE.match(w):
         return [(w, i + 1)]
     if w in ORDINALS:
