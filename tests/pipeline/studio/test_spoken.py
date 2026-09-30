@@ -153,6 +153,13 @@ from pipeline.studio import spoken
         ("Ramesses the Second's temple", "Ramesses II's temple"),
         ("Ramesses II's temple", "Ramesses the Second's temple"),
         ("the second pylon", "the 2nd pylon"),
+        # "and a half" is a decimal .5, and takes a magnitude after it
+        ("four and a half metres", "4.5 m"),
+        ("twenty-one and a half metres", "21.5 m"),
+        ("four and a half metres", "4 and a half metres"),
+        ("two and a half thousand years ago", "2,500 years ago"),
+        ("four and a half billion years", "4.5 billion years"),
+        ("between two and a half and three metres", "between 2.5 and 3 m"),
     ],
 )
 def test_equivalent_spellings(said, shown):
@@ -339,6 +346,15 @@ def test_equivalent_spellings(said, shown):
             "Ramesses II temple",
             "token 2: spoken \"'s\" vs display 'temple'",
         ),
+        # "and a half" is exactly .5, and a caption that drops it is caught
+        ("four and a half metres", "4.6 m", "token 0: spoken '4.5' vs display '4.6'"),
+        ("four and a half metres", "4 m", "token 1: spoken 'and' vs display 'm'"),
+        (
+            "two and a half thousand years",
+            "2,000 years",
+            "token 0: spoken '2500' vs display '2000'",
+        ),
+        ("four, and a half", "4.5", "token 0: spoken '4' vs display '4.5'"),
         # "per cent" is one unit in any case, and a caption that drops it is caught
         (
             "Fifteen Per cent of the stone",
