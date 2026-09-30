@@ -144,6 +144,15 @@ from pipeline.studio import spoken
         ("the fifteen-hundreds", "the 1500s"),
         ("the eight hundreds BC", "the 800s BC"),
         ("hundreds of stones", "hundreds of stones"),
+        # a regnal number: "the" and an ordinal is a Roman numeral, possessive included
+        ("Ramesses the Second built it.", "Ramesses II built it."),
+        ("Thutmose the Third", "Thutmose III"),
+        ("Seti the First and Ramesses the Eleventh", "Seti I and Ramesses XI"),
+        ("Ptolemy the Fifteenth", "Ptolemy XV"),
+        ("Pope John the Twenty-Third", "Pope John XXIII"),
+        ("Ramesses the Second's temple", "Ramesses II's temple"),
+        ("Ramesses II's temple", "Ramesses the Second's temple"),
+        ("the second pylon", "the 2nd pylon"),
     ],
 )
 def test_equivalent_spellings(said, shown):
@@ -322,6 +331,14 @@ def test_equivalent_spellings(said, shown):
         ("the fifteen hundreds", "the 1600s", "token 1: spoken '1500s' vs display '1600s'"),
         ("the fifteen hundreds", "the 15th century", "token 1: spoken '1500s' vs display '15th'"),
         ("nineteen, sixties", "1960s", "token 0: spoken '19' vs display '1960s'"),
+        # a regnal number is exactly its ordinal
+        ("Ramesses the Second", "Ramesses III", "token 1: spoken 'the' vs display 'iii'"),
+        ("Thutmose the Third", "Thutmose IV", "token 1: spoken 'the' vs display 'iv'"),
+        (
+            "Ramesses the Second's temple",
+            "Ramesses II temple",
+            "token 2: spoken \"'s\" vs display 'temple'",
+        ),
         # "per cent" is one unit in any case, and a caption that drops it is caught
         (
             "Fifteen Per cent of the stone",

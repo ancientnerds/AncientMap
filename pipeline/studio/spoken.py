@@ -65,6 +65,11 @@ STOPS = ",;:.!?…—–"  # trailing punctuation that closes a clause, and with
 _DIGITS_RE = re.compile(r"^\d{1,3}(?:,\d{3})+(?:\.\d+)?$|^\d+(?:\.\d+)?$")
 _ORDINAL_DIGITS_RE = re.compile(r"^\d+(?:st|nd|rd|th)$")
 _DECADE_DIGITS_RE = re.compile(r"^(\d*0)['’]?s$")  # "1960s", "1960's", "60s" ("'60s" unquoted)
+_POSSESSIVE_RE = re.compile(r"^(.*\D)(['’]s)$")  # "II's" is "ii" and "'s"; "1960's" is a decade
+_ROMAN = (
+    (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"), (50, "l"),
+    (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
+)  # fmt: skip
 _PER_CENT_RE = re.compile(r"\bper\s+cent\b", re.IGNORECASE)  # "Per cent" is "percent" too
 
 
@@ -84,20 +89,36 @@ def _scaled(integer: int, fraction: str, magnitude: int) -> str:
     return _format(product // scale, str(product % scale).zfill(len(fraction)))
 
 
+def _roman(n: int) -> str:
+    """`n` (1-3999) in lower-case Roman numerals: 23 is "xxiii"."""
+    out = ""
+    for value, letters in _ROMAN:
+        count, n = divmod(n, value)
+        out += letters * count
+    return out
+
+
 def _words(text: str) -> tuple[list[str], set[int]]:
     """The lower-cased words without edge punctuation, and the indices of the words that close
     a clause. That punctuation is the only sign that "forty, six" is two numbers, so the number
     parser never reads past such a word. A split token ("sixty-six," or "15%,") hands the
-    stop to its last part; a free-standing dash or comma ("forty — six") to the word before."""
+    stop to its last part; a free-standing dash or comma ("forty — six") to the word before.
+    A possessive "'s" is a word of its own, so "the Second's" and "II's" differ only in the
+    number."""
     out: list[str] = []
     stops: set[int] = set()
     for raw in _PER_CENT_RE.sub("percent", text).split():
         closes = raw.strip("-") == "" or any(ch in STOPS for ch in raw[len(raw.rstrip(EDGE)) :])
         token = raw.strip(EDGE).lower()
+        possessive = _POSSESSIVE_RE.match(token)
+        if possessive:
+            token = possessive[1]
         if token.endswith("%") and token[:-1]:
             out.extend([token[:-1], "%"])
         else:
             out.extend(part for part in token.split("-") if part)
+        if possessive:
+            out.append(possessive[2])
         if closes and out:
             stops.add(len(out) - 1)
     return out, stops
@@ -330,8 +351,16 @@ def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, in
 
 def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]]:
     """The tokens that words[i] can start, each with the index after it, the primary reading
-    first. Only a number run can have more than one."""
+    first. Only a number, and "the" before an ordinal, can have more than one."""
     w = words[i]
+    if w == "the" and i not in stops and i + 1 < len(words) and words[i + 1] != "the":
+        # a regnal number: "Ramesses the Second" is "Ramesses II"
+        regnal = [
+            (_roman(int(token[:-2])), nxt)
+            for token, nxt in _readings(words, stops, i + 1)
+            if _ORDINAL_DIGITS_RE.match(token) and 0 < int(token[:-2]) < 4000
+        ]
+        return [(w, i + 1), *regnal]
     if w in ONES or w in TENS or w in ("a", "an"):
         run = _number_run(words, stops, i)
         if run is not None:
