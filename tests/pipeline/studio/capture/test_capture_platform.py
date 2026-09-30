@@ -111,6 +111,16 @@ def test_validate_accepts_the_declarative_vocabulary():
             [{"do": "toggle_layer", "label": "Coastlines", "empire": "roman"}],
             r"actions\[0\]: only 'Empire Borders' takes an empire, not 'Coastlines'",
         ),
+        # a second click on Empire Borders closes its window (Globe.tsx): one empire per take
+        (
+            [
+                {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"},
+                {"do": "wait", "s": 1.0},
+                {"do": "toggle_layer", "label": "empire borders", "empire": "parthian"},
+            ],
+            r"actions\[2\]: a take shows at most one empire: 'Empire Borders' at actions\[0\] "
+            r"opened its window, and a second click closes it",
+        ),
         (
             [{"do": "toggle_layer", "label": "Historical Routes"}],
             r"actions\[0\]: 'Historical Routes' only opens its picker window",
@@ -132,6 +142,30 @@ def test_validate_accepts_the_declarative_vocabulary():
 def test_validate_rejects_bad_actions(actions, message):
     with pytest.raises(CaptureError, match=message):
         validate_actions(actions)
+
+
+def test_the_action_contract_is_the_one_plan_d_hands_to_the_skill():
+    """Review of Task 36: b2f484f added `empire` and refused three toggles, and nothing
+    carried that to the files that teach the contract. Plan D's cross-stream request 9 (the
+    studio-video skill's platform row) and request 3 (STUDIO.md) state exactly this
+    vocabulary; a change here must change both requests in the same commit."""
+    assert {do: sorted(keys) for do, keys in platform_take.ACTIONS.items()} == {
+        "pause_rotation": [],
+        "search": ["q"],
+        "click_result": ["title"],
+        "fly_wait": ["s"],
+        "zoom": ["to"],
+        "open_details": ["title"],
+        "measure": ["a", "b"],
+        "toggle_layer": ["label"],
+        "proximity": ["at"],
+        "filter": ["label", "mode"],
+        "wait": ["s"],
+    }
+    assert platform_take.OPTIONAL == {"toggle_layer": frozenset({"empire"})}
+    assert platform_take.SATELLITE_LAYER == "satellite"
+    assert platform_take.EMPIRE_LAYER == "empire borders"
+    assert platform_take.PICKER_LAYERS == {"geological layers", "historical routes"}
 
 
 def test_coordinates_are_checked_by_the_shared_geo_utility():
@@ -740,3 +774,25 @@ def test_an_empire_the_window_does_not_show_fails_the_take(monkeypatch):
         return await page.evaluate("[window.shown, document.getElementById('empires').checked]")
 
     assert _drive(page_html, steps) == [[], False]
+
+
+def test_a_second_empire_borders_click_closes_the_window(monkeypatch):
+    """Why validate_actions allows one Empire Borders toggle per take: the window stays open
+    after the first, and the label toggles it (Globe.tsx `prev => !prev`), so a second one
+    closes it with the first empire still drawn and picks nothing."""
+    monkeypatch.setattr(platform_take, "REGISTER_TIMEOUT_MS", 1_000)
+    roman = {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"}
+
+    async def steps(driver, page):
+        await driver.run(roman)
+        with pytest.raises(
+            CaptureError,
+            match=r"^toggle_layer 'Empire Borders': the page does not show the Empire Borders "
+            r"window within 1 s",
+        ):
+            await driver.run({**roman, "empire": "greek"})
+        return await page.evaluate(
+            "[window.shown, document.querySelector('.empire-borders-window').style.display]"
+        )
+
+    assert _drive(LAYERS_PAGE, steps) == [[["roman", False]], "none"]

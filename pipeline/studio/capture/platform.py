@@ -56,9 +56,11 @@ toggles only open a picker window; their checkbox is on once something in it is 
 pipeline/historical_boundaries/empire_metadata.py): the take picks it in that window at
 its peak extent, the window's "By Period" timeline off first (on, at the 500 BC it loads
 with, Rome draws Latium only), and fails unless the empire's checkbox and then the Layers
-panel's are on. "Geological Layers" and "Historical Routes" have no picker action.
-validate_actions refuses a satellite toggle, a picker without its pick and an empire on
-any other toggle before anything starts.
+panel's are on. A take shows at most one empire: the window stays open, and a second click
+on "Empire Borders" closes it (Globe.tsx). "Geological Layers" and "Historical Routes" have
+no picker action. validate_actions refuses a satellite toggle, a picker without its pick,
+an empire on any other toggle and a second Empire Borders toggle before anything starts.
+Plan D's cross-stream request 9 hands this contract to the studio-video skill.
 Playwright is a local-only dependency (in no requirements file); it is imported inside
 the take, after the spec is validated, and a venv without it is a CaptureError.
 """
@@ -241,6 +243,7 @@ def validate_actions(actions: Any) -> list[dict[str, Any]]:
         raise CaptureError("a platform take needs a non-empty action list")
     out: list[dict[str, Any]] = []
     waits = 0.0
+    empire_at: str | None = None
     for i, action in enumerate(actions):
         where = f"actions[{i}]"
         if not isinstance(action, dict) or action.get("do") not in ACTIONS:
@@ -261,6 +264,13 @@ def validate_actions(actions: Any) -> list[dict[str, Any]]:
                 clean[key] = action[key]
         if do == "toggle_layer":
             clean.update(_toggle_layer(action, where))
+            if "empire" in clean:
+                if empire_at is not None:
+                    raise CaptureError(
+                        f"{where}: a take shows at most one empire: 'Empire Borders' at "
+                        f"{empire_at} opened its window, and a second click closes it"
+                    )
+                empire_at = where
         if "s" in keys:
             s = as_number(action["s"], f"{where}.s")
             if not 0 < s <= 10:
