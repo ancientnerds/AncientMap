@@ -51,7 +51,10 @@ click toggles it). "toggle_layer" clicks a Layers panel toggle, and the take fai
 its checkbox flips (a toggle the page disables switches nothing). Every toggle_layer
 belongs before the zoom into the Mapbox view: there the Layers panel disables its vector
 layers and Labels, and an empire only tints the map, its border far off-screen, so a
-toggle_layer in the Mapbox view (MAPBOX_VIEW) fails the take before its click. It never
+toggle_layer in the Mapbox view (MAPBOX_VIEW) fails the take before its click. The view
+switches a render or two after a zoom passes the switch point, so it is checked again right
+before each click of the toggle (the Empire Borders window's too), when a step of it does not
+show, and once the page shows the layer. It never
 takes the Satellite base map, in any case (owner correction 2026-09-26: no satellite
 toggle in globe sections; satellite shows in the details page or a Mapbox take). The
 Historical Layers toggles only open a picker window; their checkbox is on once something
@@ -420,6 +423,9 @@ class _Driver:
         self.page = page
         self.take = take
         self.pos = START_POS
+        # The toggle_layer running now (its `what`): the view is checked right before each of
+        # its clicks and when the page does not show one of its steps (on_the_globe).
+        self.toggling: str | None = None
 
     def mark(self, name: str, **extra: Any) -> None:
         self.take.marks.append((time.time(), name, extra))
@@ -438,7 +444,8 @@ class _Driver:
         self, x: float, y: float, name: str, target: Any, *, event: bool = True
     ) -> None:
         """Move there and click, once the point hits `target` (a locator); a click named
-        `name` fails the take when anything else is in the way. `event` marks the click
+        `name` fails the take when anything else is in the way, and a click of a
+        toggle_layer when the view switched to Mapbox meanwhile. `event` marks the click
         as a manifest event."""
         if event:
             self.mark(name, x=x, y=y)
@@ -448,6 +455,8 @@ class _Driver:
             raise CaptureError(
                 f"{name}: the click at ({x:.0f}, {y:.0f}) would hit {hit}, not its target"
             )
+        if self.toggling is not None:
+            await self.on_the_globe(self.toggling)
         await self.page.mouse.click(x, y)
 
     async def click_locator(self, locator: Any, name: str, *, event: bool = True) -> None:
@@ -470,12 +479,15 @@ class _Driver:
 
     async def registered(self, state: Any, what: str, missing: str) -> None:
         """Wait until the page shows `state` (a locator) after the click `what`, or fail
-        with `missing` (what the page does not show)."""
+        with `missing` (what the page does not show). During a toggle_layer a switch to the
+        Mapbox view is named as the reason instead: it disables the checkboxes."""
         from playwright.async_api import TimeoutError as PlaywrightTimeout  # local-only dependency
 
         try:
             await state.wait_for(state="visible", timeout=REGISTER_TIMEOUT_MS)
         except PlaywrightTimeout as exc:
+            if self.toggling is not None:
+                await self.on_the_globe(self.toggling)
             raise CaptureError(
                 f"{what}: {missing} within {REGISTER_TIMEOUT_MS / 1000:g} s, "
                 "so the page did not take the click"
@@ -526,6 +538,29 @@ class _Driver:
             await self.click_locator(region.locator(".region-header-compact"), "empire_region")
         await self.click_locator(row, "empire")
         await self.switched(row, True, f"empire {name!r}")
+
+    async def toggle_layer(self, action: dict[str, Any]) -> None:
+        """Click the Layers panel toggle `action["label"]` and wait until the page shows it:
+        its checkbox flips, or for Empire Borders the named empire is drawn (show_empire)
+        and the panel's checkbox is on."""
+        page = self.page
+        what = f"toggle_layer {action['label']!r}"
+        expand = page.locator('.layer-toggle-panel .panel-minimize-btn[title="Maximize"]')
+        if await expand.count():
+            await self.click_locator(expand.first, "expand_layers")
+        toggle = page.locator(
+            ".layer-toggle-panel label.layer-toggle",
+            has=page.locator(".layer-label", has_text=exact_text(action["label"])),
+        ).first
+        if "empire" in action:
+            # the click opens the window; the checkbox turns on with the empire drawn
+            await self.click_locator(toggle, "toggle_layer")
+            await self.show_empire(action["empire"])
+            await self.switched(toggle, True, f"{what} in the Layers panel")
+        else:
+            on = await toggle.locator(CHECKBOX).is_checked(timeout=10_000)
+            await self.click_locator(toggle, "toggle_layer")
+            await self.switched(toggle, not on, what)
 
     async def screen_point(self, name: str, where: dict[str, float]) -> tuple[float, float]:
         point = await self.page.evaluate(
@@ -619,27 +654,17 @@ class _Driver:
             )
         elif do == "toggle_layer":
             what = f"toggle_layer {action['label']!r}"
-            await self.on_the_globe(what)  # before any click
-            expand = page.locator('.layer-toggle-panel .panel-minimize-btn[title="Maximize"]')
-            if await expand.count():
-                await self.click_locator(expand.first, "expand_layers")
-            toggle = page.locator(
-                ".layer-toggle-panel label.layer-toggle",
-                has=page.locator(".layer-label", has_text=exact_text(action["label"])),
-            ).first
-            # Again after the click: the view switches a render or two after the zoom slider
-            # passes the switch point, so right after such a zoom it can arrive during the move.
-            if "empire" in action:
-                # the click opens the window; the checkbox turns on with the empire drawn
-                await self.click_locator(toggle, do)
+            await self.on_the_globe(what)  # before the cursor moves
+            # The view switches a render or two after the zoom slider passes the switch point,
+            # so right after such a zoom it can arrive at any step of the toggle: the view is
+            # checked right before each click (click_at), when a step does not show
+            # (registered) and once the page shows the layer.
+            self.toggling = what
+            try:
+                await self.toggle_layer(action)
                 await self.on_the_globe(what)
-                await self.show_empire(action["empire"])
-                await self.switched(toggle, True, f"{what} in the Layers panel")
-            else:
-                on = await toggle.locator(CHECKBOX).is_checked(timeout=10_000)
-                await self.click_locator(toggle, do)
-                await self.on_the_globe(what)
-                await self.switched(toggle, not on, what)
+            finally:
+                self.toggling = None
         elif do == "proximity":
             await self.click_locator(page.locator(".tab-btn", has_text="Proximity"), do)
             await self.click_locator(

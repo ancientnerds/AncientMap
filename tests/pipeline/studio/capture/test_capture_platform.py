@@ -45,27 +45,31 @@ from pipeline.utils import geo
 
 
 def test_validate_accepts_the_declarative_vocabulary():
+    # every toggle_layer comes before the zoom past the Mapbox switch point: the take refuses
+    # one in the Mapbox view at run time (Driver.on_the_globe), so this is a list a take runs
     actions = [
         {"do": "pause_rotation"},
         {"do": "search", "q": "baalbek"},
         {"do": "click_result", "title": "Baalbek Stones"},
         {"do": "fly_wait", "s": 3},
+        {"do": "toggle_layer", "label": "Coastlines"},
+        {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"},
         {"do": "zoom", "to": 90},
         {"do": "open_details", "title": "Baalbek Stones"},
         {"do": "measure", "a": {"lat": 34.0, "lng": 36.2}, "b": {"lat": 34.01, "lng": 36.21}},
-        {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"},
         {"do": "proximity", "at": {"lat": 34.0067, "lng": 36.2033}},
         {"do": "filter", "mode": "category", "label": "Pyramid"},
         {"do": "wait", "s": 1.5},
-        {"do": "toggle_layer", "label": "Coastlines"},
     ]
     out = validate_actions(actions)
     assert [a["do"] for a in out] == [a["do"] for a in actions]
-    assert out[3]["s"] == 3.0 and out[4]["to"] == 90
-    assert out[7] == {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"}
-    assert out[8]["at"] == {"lat": 34.0067, "lng": 36.2033}
-    assert out[9] == {"do": "filter", "mode": "category", "label": "Pyramid"}
-    assert out[11] == {"do": "toggle_layer", "label": "Coastlines"}
+    zoom = next(i for i, a in enumerate(out) if a["do"] == "zoom")
+    assert all(a["do"] != "toggle_layer" for a in out[zoom:])
+    assert out[3]["s"] == 3.0 and out[6]["to"] == 90
+    assert out[4] == {"do": "toggle_layer", "label": "Coastlines"}
+    assert out[5] == {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"}
+    assert out[9]["at"] == {"lat": 34.0067, "lng": 36.2033}
+    assert out[10] == {"do": "filter", "mode": "category", "label": "Pyramid"}
 
 
 @pytest.mark.parametrize(
@@ -859,6 +863,67 @@ def test_a_switch_to_the_mapbox_view_while_the_cursor_moves_fails_the_take(monke
 
     checked, marks, shown = _drive(LAYERS_PAGE, steps)
     assert checked[0] is False and marks == ["toggle_layer"] and shown == []
+
+
+def test_a_switch_while_the_take_picks_the_empire_fails_before_the_next_click(monkeypatch):
+    """Review of Task 36: the view was checked only before the toggle's move and right after
+    its click. A switch that lands while the Empire Borders window is worked (here with the
+    "By Period" click) must stop the take before the empire click, never pick it for a tint."""
+    monkeypatch.setattr(platform_take, "REGISTER_TIMEOUT_MS", 1_000)
+    roman = {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"}
+
+    async def steps(driver, page):
+        await page.evaluate(
+            "document.getElementById('period').addEventListener('change', () =>"
+            " document.body.classList.add('mapbox-primary-mode'), {once: true})"
+        )
+        with pytest.raises(CaptureError, match=MAPBOX_VIEW_MESSAGE.format(label="Empire Borders")):
+            await driver.run(validate_actions([roman])[0])
+        return (
+            await page.evaluate("window.shown"),
+            [name for _, name, _ in driver.take.marks],
+        )
+
+    shown, marks = _drive(LAYERS_PAGE, steps)
+    assert shown == [] and marks == ["toggle_layer", "empire_timeline", "empire"]
+
+
+def test_a_switch_while_the_page_takes_the_toggle_fails_the_take(monkeypatch):
+    """The page shows a toggle a render after the click; a switch that lands in that time
+    (with the checkbox's flip here) leaves the layer to the Mapbox view: the take fails on
+    the view once the checkbox shows the toggle."""
+    monkeypatch.setattr(platform_take, "REGISTER_TIMEOUT_MS", 1_000)
+
+    async def steps(driver, page):
+        await page.evaluate(
+            "(() => { const box = document.querySelector('.layer-toggle-panel input');"
+            " box.addEventListener('change', () => { box.checked = false; setTimeout(() => {"
+            " document.body.classList.add('mapbox-primary-mode'); box.checked = true }, 150) },"
+            " {once: true}) })()"
+        )
+        with pytest.raises(CaptureError, match=MAPBOX_VIEW_MESSAGE.format(label="Coastlines")):
+            await driver.run({"do": "toggle_layer", "label": "Coastlines"})
+        return [name for _, name, _ in driver.take.marks]
+
+    assert _drive(LAYERS_PAGE, steps) == ["toggle_layer"]
+
+
+def test_a_toggle_the_mapbox_view_disables_before_it_flips_names_the_view(monkeypatch):
+    """A switch that lands with the click and disables the checkbox before it flips: the
+    take fails on the view, not on a checkbox that 'did not take the click'."""
+    monkeypatch.setattr(platform_take, "REGISTER_TIMEOUT_MS", 1_000)
+
+    async def steps(driver, page):
+        await page.evaluate(
+            "(() => { const box = document.querySelector('.layer-toggle-panel input');"
+            " box.addEventListener('change', () => { box.checked = false; box.disabled = true;"
+            " setTimeout(() => document.body.classList.add('mapbox-primary-mode'), 150) },"
+            " {once: true}) })()"
+        )
+        with pytest.raises(CaptureError, match=MAPBOX_VIEW_MESSAGE.format(label="Coastlines")):
+            await driver.run({"do": "toggle_layer", "label": "Coastlines"})
+
+    _drive(LAYERS_PAGE, steps)
 
 
 def test_a_second_empire_borders_click_closes_the_window(monkeypatch):
