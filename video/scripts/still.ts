@@ -46,9 +46,9 @@ run(async () => {
   const master = path.join(outDir, masterName(candidate))
   const jpeg = path.join(outDir, jpegName(candidate))
   const fitted = await withBundle(publicDir, (serveUrl) =>
-    // No cancelSignal: renderStill never replaces its browser (Remotion 4.0.529), see cli.ts onNvidia.
-    onNvidia(serveUrl, 'Thumbnail', inputProps, async (browser, composition) => {
-      const onBrowser = { serveUrl, inputProps, puppeteerInstance: browser, chromiumOptions: RENDER_CHROMIUM }
+    // cancelSignal: onNvidia cancels a still whose page is closed from outside or crashes (owner decision Q17).
+    onNvidia(serveUrl, 'Thumbnail', inputProps, async (browser, composition, cancelSignal) => {
+      const onBrowser = { serveUrl, inputProps, puppeteerInstance: browser, chromiumOptions: RENDER_CHROMIUM, cancelSignal }
       await renderStill({ ...onBrowser, composition, output: master, imageFormat: 'png', scale: 3840 / composition.width })
       for (const quality of JPEG_QUALITIES) {
         await renderStill({ ...onBrowser, composition, output: jpeg, imageFormat: 'jpeg', jpegQuality: quality, scale: 1280 / composition.width })

@@ -75,27 +75,100 @@ export const RENDER_CHROMIUM: ChromiumOptions = { gl: 'angle' }
 export const REPLACED_BROWSER =
   'the render browser crashed mid-render and Remotion replaced it with a browser that was never proved on the NVIDIA (spec 4.11)'
 
+/** Why onNvidia fails a run in which a page of the proved browser was closed by anyone but Remotion. */
+export const PAGE_CLOSED = 'a render page of the proved browser was closed from outside mid-render; the render was cancelled at once (owner decision Q17)'
+
+/** Why onNvidia fails a run in which a page of the proved browser crashed. */
+export const PAGE_CRASHED = 'a render page of the proved browser crashed mid-render; the render was cancelled at once (owner decision Q17)'
+
+type CdpConnection = HeadlessBrowser['connection']
+type AttachedToTarget = { sessionId: string; targetInfo: { targetId: string; type: string } }
+type DetachedFromTarget = { sessionId: string; targetId: string }
+
+/**
+ * Call `onLost` the moment a page of the browser behind `connection` is closed
+ * by anyone but Remotion (PAGE_CLOSED) or crashes (PAGE_CRASHED); the returned
+ * function ends the watch. Owner decision Q17: without it, a frame that waits
+ * in Remotion's waitForReady (seek-to-frame.js) when its page is closed from
+ * outside waits for Remotion's ready timeout, render.ts's 120 s plus 3 s,
+ * because neither race that could end that wait ('disposed', 'closed-silent')
+ * fires for such a page.
+ *
+ * Read in Remotion 4.0.529's browser/Connection.js, browser/BrowserPage.js and
+ * render-frame-and-retry-target-close.js:
+ * - Every page Remotion uses gets a CDP session attached over this connection
+ *   (Target.attachToTarget, flatten), and only pages do; the connection emits
+ *   the top-level Target.attachedToTarget right after creating the session,
+ *   so the crash listener put on that session runs before the one Remotion's
+ *   Page adds later, which fails the frame with "Page crashed!".
+ * - When a page goes, the connection closes its session, which rejects the
+ *   session's pending CDP calls, and then emits Target.detachedFromTarget in
+ *   the same message handler. `onLost` runs there, before any of those
+ *   rejections reaches Remotion. A cancel from `onLost` therefore stops the
+ *   render before Remotion can answer a failed call with a replacement
+ *   browser: the frame's race ends on the cancel, and a retry path sees the
+ *   stopped signal first.
+ * - Remotion closes its own pages with Page.close(), which sends
+ *   Target.closeTarget over this connection (after selectComposition, at the
+ *   end of renderFrames, in renderStill). The watch wraps `send` to note those
+ *   targets, so their detach is no loss.
+ */
+export function watchPages(connection: CdpConnection, onLost: (why: string) => void): () => void {
+  const send = connection.send
+  const closedByRemotion = new Set<string>()
+  connection.send = function (this: CdpConnection, ...args: Parameters<CdpConnection['send']>) {
+    const [method, params] = args
+    if (method === 'Target.closeTarget') closedByRemotion.add((params as { targetId: string }).targetId)
+    return send.apply(this, args)
+  } as CdpConnection['send']
+  const pageSessions = new Map<string, NonNullable<ReturnType<CdpConnection['session']>>>()
+  const crashed = () => onLost(PAGE_CRASHED)
+  const attached = ({ sessionId, targetInfo }: AttachedToTarget) => {
+    if (targetInfo.type !== 'page') return
+    const session = connection.session(sessionId)
+    if (!session) throw new Error(`Target.attachedToTarget named session ${sessionId}, which the connection does not have`)
+    session.on('Inspector.targetCrashed', crashed)
+    pageSessions.set(sessionId, session)
+  }
+  const detached = ({ sessionId, targetId }: DetachedFromTarget) => {
+    if (!pageSessions.delete(sessionId)) return
+    if (!closedByRemotion.has(targetId)) onLost(PAGE_CLOSED)
+  }
+  connection.on('Target.attachedToTarget', attached)
+  connection.on('Target.detachedFromTarget', detached)
+  return () => {
+    connection.off('Target.attachedToTarget', attached)
+    connection.off('Target.detachedFromTarget', detached)
+    for (const session of pageSessions.values()) session.off('Inspector.targetCrashed', crashed)
+    connection.send = send
+  }
+}
+
 /**
  * Open a render browser with RENDER_CHROMIUM, resolve the composition in it and
  * prove from its WebGL renderer (the `gpu` prop calculateMetadata sets) that it
  * draws on the NVIDIA. The browser is closed when `work` ends, successfully or
  * not.
  *
- * A browser Remotion opens in place of this one (see RENDER_CHROMIUM) is never
- * proved, so a run that goes on in it breaks the GPU rule. The sign is the
- * proved browser's 'closed-silent' event: Remotion's replaceBrowser
- * (replace-browser.js) closes the browser it replaces with close({silent:
- * true}) before it opens the new one, and nothing else closes this browser
- * before the finally below (render-frames.js and renderStill close only their
- * own pages when given a puppeteerInstance). On that event onNvidia cancels
- * `cancelSignal`, which `work` passes to its renderMedia or renderFrames call,
- * and throws REPLACED_BROWSER. Cancelling matters twice: the replacement
- * renders no frame, and the render does not hang (measured 2026-09-27: after a
- * render tab was closed mid-chunk, renderMedia made the replacement and then
- * rendered nothing for 3.5 minutes, until the process was killed).
- * renderStill never replaces its browser in 4.0.529, so a `work`
- * made of renderStill calls may ignore the signal; REPLACED_BROWSER is thrown
- * after any `work` in which the event fired.
+ * onNvidia cancels `cancelSignal`, which `work` passes to each of its
+ * renderMedia, renderFrames and renderStill calls, the moment the run can no
+ * longer keep the GPU rule or finish, and then throws why:
+ * - PAGE_CLOSED or PAGE_CRASHED (watchPages, owner decision Q17): a page of
+ *   the proved browser was closed from outside or crashed.
+ * - REPLACED_BROWSER: a browser Remotion opens in place of this one (see
+ *   RENDER_CHROMIUM) is never proved, so a run that goes on in it breaks the
+ *   GPU rule. The sign is the proved browser's 'closed-silent' event:
+ *   Remotion's replaceBrowser (replace-browser.js) closes the browser it
+ *   replaces with close({silent: true}) before it opens the new one, and
+ *   nothing else closes this browser before the finally below
+ *   (render-frames.js and renderStill close only their own pages when given a
+ *   puppeteerInstance). A page lost from outside no longer gets that far (the
+ *   page watch cancels first); a whole browser that dies still does.
+ * Cancelling matters twice: a replacement renders no frame, and the render
+ * does not hang (measured 2026-09-27: after a render tab was closed
+ * mid-chunk, renderMedia made the replacement and then rendered nothing for
+ * 3.5 minutes, until the process was killed). The first reason wins, and it
+ * is thrown after any `work` in which one arose.
  */
 export async function onNvidia<T>(
   serveUrl: string,
@@ -105,23 +178,26 @@ export async function onNvidia<T>(
 ): Promise<T> {
   const browser = await openBrowser('chrome', { chromiumOptions: RENDER_CHROMIUM })
   const { cancelSignal, cancel } = makeCancelSignal()
-  let replaced = false
-  const onReplaced = () => {
-    replaced = true
+  let failure: string | null = null
+  const fail = (why: string) => {
+    failure ??= why
     cancel()
   }
+  const onReplaced = () => fail(REPLACED_BROWSER)
   browser.on('closed-silent', onReplaced)
+  const stopWatching = watchPages(browser.connection, fail)
   try {
     const composition = await selectComposition({ serveUrl, id, inputProps, puppeteerInstance: browser })
     const problem = nvidiaProblem(String(composition.props.gpu ?? ''))
     if (problem) throw new Error(problem)
     console.log(`gpu: ${composition.props.gpu}`)
     const result = await work(browser, composition, cancelSignal).catch((err: unknown) => {
-      throw replaced ? new Error(REPLACED_BROWSER, { cause: err }) : err
+      throw failure ? new Error(failure, { cause: err }) : err
     })
-    if (replaced) throw new Error(REPLACED_BROWSER)
+    if (failure) throw new Error(failure)
     return result
   } finally {
+    stopWatching()
     browser.off('closed-silent', onReplaced)
     await browser.close({ silent: true })
   }

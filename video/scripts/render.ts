@@ -5,9 +5,9 @@
  * H.264 (NVENC) + AAC 320k, 1920x1080 at the timeline's 60 fps, BT.709.
  *
  * GPU rule (spec 4.11): every chunk renders in a fresh browser whose WebGL
- * renderer is proved to be the NVIDIA (cli.ts onNvidia; a chunk in which
- * Remotion replaces that browser after a crash is cancelled and fails the
- * run), and encodes with
+ * renderer is proved to be the NVIDIA (cli.ts onNvidia; a chunk whose render
+ * page is closed from outside or crashes, or in which Remotion replaces that
+ * browser, is cancelled at once and fails the run), and encodes with
  * hardwareAcceleration 'required' (no software fallback) plus nvencOverride,
  * which pins h264_nvenc to GPU 0 and fails on any other encoder.
  *

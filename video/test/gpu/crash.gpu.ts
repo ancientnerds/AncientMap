@@ -1,33 +1,24 @@
 /**
- * A render browser that crashes mid-render fails the run (spec 4.11;
- * workstation only, not CI: it needs the RTX 3080). Run from video/:
- * `npm run test:gpu`.
+ * A render tab that is closed from outside or crashes mid-render cancels the
+ * run at once (spec 4.11, owner decision Q17; workstation only, not CI: it
+ * needs the RTX 3080). Run from video/: `npm run test:gpu`.
  *
  * scripts/render.ts renders the demo timeline (it needs only the brand fonts)
  * in chunks of 600 frames. Once the first chunk reports 25 %, each test hits
  * one of its render tabs over the Chrome DevTools protocol:
- * - CDP Page.crash kills the tab's renderer. Remotion 4.0.529 fails the frame
- *   with "Page crashed!" and does not retry it, so the run ends there.
- * - Closing the tab (Target.closeTarget, via /json/close) ends the run in one
- *   of two ways, depending on what the tab is doing when it goes:
- *   1. A CDP call of the frame fails with Target closed or Session closed,
- *      which Remotion answers with a replacement browser that was never proved
- *      on the NVIDIA. onNvidia (scripts/cli.ts) cancels the chunk, and the run
- *      exits 1 with REPLACED_BROWSER about 0.5 s after the close.
- *   2. The frame is in Remotion's waitForReady (seek-to-frame.js). Its
- *      WaitTask (DOMWorld.js) takes the destroyed context for a navigation and
- *      waits for the next one, which never comes, and neither race that could
- *      end the wait ('disposed', 'closed-silent') fires for a target closed
- *      from outside. The frame fails with Remotion's own ready
- *      timeout (READY_TIMEOUT_MS) about 123.5 s after the close; nothing is
- *      retried, no browser is replaced, and the run exits 1.
- *   Measured on the RTX 3080 on 2026-09-30: 6 of 30 runs of this file took
- *   outcome 2 (the test then takes about 131 s instead of 7.5 s), and 1 of 41
- *   runs of the closed-tab case alone. In the runs of Task 22's review
- *   (2026-09-29), 6 of 25 ended on the old 120 s watchdog with no stderr,
- *   outcome 2 cut short. In both outcomes the proved browser is the only one
- *   that draws a frame, the first chunk never completes and no second chunk
- *   starts.
+ * - CDP Page.crash kills the tab's renderer.
+ * - Target.closeTarget (via /json/close) closes the tab.
+ * onNvidia (scripts/cli.ts watchPages) sees the crash or the tab's detached
+ * session before Remotion does and cancels the chunk, and the run exits 1
+ * with PAGE_CRASHED or PAGE_CLOSED. That is the only outcome
+ * (test/gpu/pageLoss.ts; test/pageLoss.test.ts replays its recorded stderr in
+ * CI). Before Q17 a closed tab also ended in one of two other ways: Remotion
+ * replaced the proved browser (then cancelled with REPLACED_BROWSER), or a
+ * frame waiting in Remotion's waitForReady (seek-to-frame.js) was left to
+ * Remotion's ready timeout, about 123 s after the close (6 of 30 runs,
+ * measured 2026-09-30). In every outcome the proved browser is the only one
+ * that draws a frame, the first chunk never completes and no second chunk
+ * starts.
  *
  * The render browser's DevTools port: Remotion starts Chrome with
  * --remote-debugging-port=0 in a profile directory it creates under
@@ -44,59 +35,27 @@ import { fileURLToPath } from 'node:url'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { REPLACED_BROWSER } from '../../scripts/cli'
 import { SITE_PUBLIC_DIR } from '../../scripts/fontCoverage'
 import { FONT_FILES } from '../../src/theme/fonts'
+import { pageLossOf } from './pageLoss'
 
 const VIDEO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const DEMO = path.join(VIDEO_ROOT, 'src', 'fixtures', 'demo-timeline.json')
 /**
- * How long a frame waits for a closed tab in outcome 2: render.ts's
- * timeoutInMilliseconds (120_000) plus the 3 s Remotion's waitForReady adds
- * (seek-to-frame.js).
+ * The script reaches 25 % of the first chunk 7 to 32 s after its start when
+ * warm, and took more than 90 s on the first run after an npm install
+ * (measured 2026-09-30).
  */
-const READY_TIMEOUT_MS = 123_000
+const START_MS = 180_000
 /**
- * The script reaches 25 % of the first chunk 7 to 20 s after its start, and
- * outcome 2 ends 123.5 s after the close (measured 2026-09-30), so a run takes
- * at most about 145 s. The watchdog kills a run that hangs beyond that (a
- * chunk left to Remotion's replacement browser rendered nothing for 3.5
- * minutes, measured 2026-09-27) before the test timeout, so the test fails
- * with the script's output.
+ * The run must end this soon after the hit. Measured 2026-09-30 in 30 runs:
+ * 0.9 to 5.9 s after a close, 1.3 to 8.9 s after a crash. That is far
+ * below Remotion's ready timeout (render.ts's timeoutInMilliseconds plus
+ * 3 s), so a frame left waiting is killed here; pageLossOf refuses a ready
+ * timeout of any length besides.
  */
-const WATCHDOG_MS = READY_TIMEOUT_MS + 60_000
-const SLOW = WATCHDOG_MS + 30_000
-const REMOTION_REPLACES = /The browser crashed while rendering frame \d+, retrying 1 more times/
-/** Outcome 2's error; its title names the frame only in the second of seekToFrame's two waits. */
-const REMOTION_READY_TIMEOUT = new RegExp(
-  `TimeoutError: waiting for the page to render the React component(?: at frame \\d+)? failed: timeout ${READY_TIMEOUT_MS}ms exceeded`,
-)
-
-type ClosedTabOutcome = 'replaced' | 'ready timeout'
-
-/** Which of the two outcomes of a closed render tab the script's stderr shows; any other stderr throws. */
-function closedTabOutcome(stderr: string): ClosedTabOutcome {
-  if (REMOTION_REPLACES.test(stderr)) {
-    if (!stderr.includes(REPLACED_BROWSER)) throw new Error(`Remotion replaced the proved browser, but the run did not fail with REPLACED_BROWSER:\n${stderr}`)
-    return 'replaced'
-  }
-  if (REMOTION_READY_TIMEOUT.test(stderr)) return 'ready timeout'
-  throw new Error(`the run ended neither with REPLACED_BROWSER nor with Remotion's ${READY_TIMEOUT_MS} ms ready timeout:\n${stderr || '(no stderr)'}`)
-}
-
-/** The stderr of both outcomes, recorded on the RTX 3080 on 2026-09-30 (stack frames cut). */
-const RECORDED_REPLACED = [
-  '\u001b[33mThe browser crashed while rendering frame 175, retrying 1 more times. Learn more about this error under https://www.remotion.dev/docs/target-closed\u001b[39m',
-  '\u001b[33mThe browser crashed while rendering frame 173, retrying 1 more times. Learn more about this error under https://www.remotion.dev/docs/target-closed\u001b[39m',
-  '\u001b[31mError: Protocol error (Page.bringToFront): Session closed. Most likely the page has been closed.\u001b[39m',
-  `Error: ${REPLACED_BROWSER}`,
-  '    at <anonymous> (C:\\PythonProjects\\AncientMap-studio\\video\\scripts\\cli.ts:120:24)',
-].join('\n')
-const RECORDED_READY_TIMEOUT = [
-  '\u001b[33mTried to get delayRender() handles for timeout, but could not do so because of\u001b[39m \u001b[33mError: Protocol error (Runtime.callFunctionOn): Session closed. Most likely the page has been closed.\u001b[39m',
-  'TimeoutError: waiting for the page to render the React component failed: timeout 123000ms exceeded',
-  '    at new WaitTask (file:///C:/PythonProjects/AncientMap-studio/video/node_modules/@remotion/renderer/dist/esm/index.mjs:2115:28)',
-].join('\n')
+const AT_ONCE_MS = 30_000
+const SLOW = START_MS + AT_ONCE_MS + 30_000
 
 let work = ''
 let publicDir = ''
@@ -151,7 +110,12 @@ async function hitRenderTab(tmp: string, hit: Hit): Promise<void> {
   await hit(endpoint, tab)
 }
 
-/** Run render.ts on the demo in 600-frame chunks, hit a render tab once the first chunk reports 25 %, and return how the script ended. */
+/**
+ * Run render.ts on the demo in 600-frame chunks, hit a render tab once the
+ * first chunk reports 25 %, and return how the script ended. A script that
+ * does not reach the hit within START_MS, or does not end within AT_ONCE_MS
+ * of it, is killed and fails the test with its output.
+ */
 async function renderAndHit(hit: Hit): Promise<{ status: number | null; stdout: string; stderr: string }> {
   const tmp = mkdtempSync(path.join(work, 'tmp-'))
   const out = path.join(work, 'out', 'demo.mp4')
@@ -162,54 +126,44 @@ async function renderAndHit(hit: Hit): Promise<{ status: number | null; stdout: 
   )
   let stdout = ''
   let stderr = ''
+  const killed: string[] = []
+  const killAfter = (ms: number, why: string) =>
+    setTimeout(() => {
+      killed.push(why)
+      spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'])
+    }, ms)
+  const watchdogs = [killAfter(START_MS, `the first chunk did not reach 25 % within ${START_MS / 1000} s`)]
   // The hit's outcome, held until the script has ended: an error rejects the test there.
   let hitOutcome: Promise<unknown> | null = null
   child.stdout.setEncoding('utf-8').on('data', (chunk: string) => {
     stdout += chunk
-    if (!hitOutcome && /^part 1\/4 25%$/m.test(stdout)) hitOutcome = hitRenderTab(tmp, hit).then(() => null, (err: unknown) => err)
+    if (!hitOutcome && /^part 1\/4 25%$/m.test(stdout)) {
+      watchdogs.push(killAfter(AT_ONCE_MS, `the run did not end within ${AT_ONCE_MS / 1000} s of the hit`))
+      hitOutcome = hitRenderTab(tmp, hit).then(() => null, (err: unknown) => err)
+    }
   })
   child.stderr.setEncoding('utf-8').on('data', (chunk: string) => {
     stderr += chunk
   })
-  const watchdog = setTimeout(() => spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']), WATCHDOG_MS)
   const status = await new Promise<number | null>((resolve) => child.on('close', resolve))
-  clearTimeout(watchdog)
+  watchdogs.forEach(clearTimeout)
+  if (killed.length) throw new Error(`killed: ${killed.join('; ')}\n${stdout}\n${stderr}`)
   if (!hitOutcome) throw new Error(`the first chunk never reached 25 % (exit ${status}):\n${stdout}\n${stderr}`)
   const hitError = await hitOutcome
   if (hitError) throw hitError
   return { status, stdout, stderr }
 }
 
-describe('a render browser that crashes mid-render fails the run (spec 4.11)', () => {
-  it('a crashed render tab (CDP Page.crash) fails the chunk without a replacement browser', async () => {
-    const { status, stdout, stderr } = await renderAndHit(crashTab)
+describe('a render tab lost mid-render cancels the run at once (spec 4.11, owner decision Q17)', () => {
+  it.each([
+    ['crashed', 'a crashed render tab (CDP Page.crash)', crashTab],
+    ['closed', 'a render tab closed from outside (Target.closeTarget)', closeTab],
+  ] as const)('%s: %s cancels the chunk at once, and the proved browser is the only one that drew', async (loss, _what, hit) => {
+    const { status, stdout, stderr } = await renderAndHit(hit)
     expect(status, `${stdout}\n${stderr}`).toBe(1)
-    expect(stderr).toContain('Error: Page crashed!')
-    expect(stderr).not.toMatch(REMOTION_REPLACES)
-    expect(stdout.match(/^gpu: /gm)).toHaveLength(1)
-    expect(stdout).not.toMatch(/^part 2\/4/m)
-  }, SLOW)
-
-  it('a closed render tab fails the chunk: render.ts cancels Remotion\'s replacement browser with REPLACED_BROWSER, or the frame fails on Remotion\'s ready timeout', async () => {
-    const { status, stdout, stderr } = await renderAndHit(closeTab)
-    expect(status, `${stdout}\n${stderr}`).toBe(1)
-    expect(['replaced', 'ready timeout']).toContain(closedTabOutcome(stderr))
+    expect(pageLossOf(stderr)).toBe(loss)
     expect(stdout.match(/^gpu: /gm)).toHaveLength(1)
     expect(stdout).not.toMatch(/^part 1\/4 100%$/m)
     expect(stdout).not.toMatch(/^part 2\/4/m)
   }, SLOW)
-
-  it('the closed-tab check accepts exactly its two outcomes', () => {
-    expect(closedTabOutcome(RECORDED_REPLACED)).toBe('replaced')
-    expect(closedTabOutcome(RECORDED_READY_TIMEOUT)).toBe('ready timeout')
-    const atFrame = RECORDED_READY_TIMEOUT.replace('component failed', 'component at frame 175 failed')
-    expect(closedTabOutcome(atFrame)).toBe('ready timeout')
-    // The watchdog's kill leaves no stderr.
-    expect(() => closedTabOutcome('')).toThrow('(no stderr)')
-    const replacedAndGoingOn = RECORDED_REPLACED.replace(`Error: ${REPLACED_BROWSER}`, 'Error: some other failure')
-    expect(() => closedTabOutcome(replacedAndGoingOn)).toThrow('did not fail with REPLACED_BROWSER')
-    expect(() => closedTabOutcome(`${RECORDED_READY_TIMEOUT}\n${replacedAndGoingOn}`)).toThrow('did not fail with REPLACED_BROWSER')
-    expect(() => closedTabOutcome(RECORDED_READY_TIMEOUT.replace('123000ms', '120000ms'))).toThrow('neither')
-    expect(() => closedTabOutcome('Error: Page crashed!')).toThrow('neither')
-  })
 })
