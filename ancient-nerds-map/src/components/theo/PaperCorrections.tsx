@@ -19,6 +19,9 @@ import type { ResearchCorrection } from '../../types/anRoute'
 import '../../styles/paper-extras.css'
 
 export default function PaperCorrections({ corrections }: { corrections: ResearchCorrection[] }) {
+  // An id a later entry retired is anchored on that entry, so an earlier entry naming the
+  // same id links to the correction that retired it, not to a passage.
+  const retired = new Set(corrections.filter(c => c.holds_anchor).map(c => c.evidence_id))
   return (
     <section id="corrections" className="theo-paper-corrections" aria-labelledby="corrections-title">
       <h2 id="corrections-title">Corrections</h2>
@@ -32,7 +35,7 @@ export default function PaperCorrections({ corrections }: { corrections: Researc
               {` ${c.text}`}
               {linkId && (
                 <a className="theo-paper-correction-link" href={`#${linkId}`}>
-                  See the corrected passage
+                  {retired.has(linkId) ? 'See the later correction' : 'See the corrected passage'}
                 </a>
               )}
             </li>

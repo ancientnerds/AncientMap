@@ -10,9 +10,8 @@
  * during server rendering, so the SSR markup is untouched.
  *
  * The re-scroll belongs to the link, never to the reader: it is dropped once
- * the reader scrolls, touches, clicks or types, when the hash changes (an
- * in-page link such as "Corrected …" or a reference), and on a reload or a
- * history step, where the browser restores the reader's own position.
+ * the reader scrolls, touches, clicks or types, and when the hash changes (an
+ * in-page link such as "Corrected …" or a reference).
  */
 
 import { useEffect } from 'react'
@@ -36,13 +35,10 @@ export function useEvidenceHashScroll(): void {
   useEffect(() => {
     const match = PAPER_HASH_RE.exec(window.location.hash)
     if (!match) return
-    // A reload or a back/forward step restores the reader's own scroll
-    // position; the link's landing already happened on the first visit.
-    // Safari before 15 (inside Vite 5's default build target) has no
-    // navigation entry, so its navigation type is unknown and it re-scrolls
-    // as on a fresh visit.
-    const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
-    if (navigation !== undefined && (navigation.type === 'reload' || navigation.type === 'back_forward')) return
+    // A reload or a back/forward step is no exception: the paper scrolls inside
+    // .theo-page (theo.css), whose position no browser restores, so those
+    // start like a fresh visit and need the same re-scroll. A page restored
+    // from the back/forward cache is not mounted again and runs no effect.
     // The hash comes from the address bar: an id the paper does not have is
     // a stale link, not an error — the browser's own jump did nothing either.
     const target = document.getElementById(match[1])

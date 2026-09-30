@@ -217,7 +217,6 @@ PAPER_EXTRAS_COLUMNS = """
 # id format is theo_publishing.YOUTUBE_ID_RE and its poster's path
 # theo_publishing.poster_web_path, both imported by parse_videos.
 _ISO_DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
-_WRITER_PUBLISHED = ("automatic", "manual")
 
 
 class PaperPageError(ValueError):
@@ -393,14 +392,18 @@ def parse_videos(raw: Any, anchor_ids: set[str], request_id: str) -> list[dict[s
 
 def parse_writer(raw: Any) -> dict[str, Any] | None:
     """result_json.writer -> the five disclosure fields, or None for older papers."""
+    # Lazy for the same reason as in parse_evidence; the modes are the publish gate's
+    # one definition (check_writer).
+    from pipeline.lyra.theo_publishing import WRITER_PUBLISHED
+
     if raw is None:
         return None
     if not isinstance(raw, dict):
         raise PaperPageError(f"result_json.writer must be an object, got {raw!r}")
     published = raw.get("published")
-    if published not in _WRITER_PUBLISHED:
+    if published not in WRITER_PUBLISHED:
         raise PaperPageError(
-            f"writer.published must be one of {_WRITER_PUBLISHED}, got {published!r}"
+            f"writer.published must be one of {WRITER_PUBLISHED}, got {published!r}"
         )
     human_review = raw.get("human_review")
     if not isinstance(human_review, bool):
@@ -474,10 +477,12 @@ def page_extras_payload(extras: PaperExtras) -> dict[str, Any]:
 # id, integer seconds and an html-escaped title, never from raw input.
 #
 # Where they go matters as much as what they are. nh3 (html5ever) writes every
-# attribute value in double quotes, escapes '"' inside it as &quot; and leaves
-# '<' and '>' raw there, so an alt or a link title can hold "</p><img ...>" as
-# inert text; in text content it escapes '<' as &lt;. A regex over "<p>...</p>"
-# would end inside such an attribute and put the video links (whose quotes
+# attribute value in double quotes and escapes '"' inside it as &quot;; up to
+# 0.3.6 it leaves '<' and '>' raw there (0.3.7 escapes them, and
+# requirements-api.txt pins only nh3>=0.3.0), so an alt or a link title may
+# hold "</p><img ...>" as inert text, and the scanner must handle that worst
+# case whichever nh3 runs; in text content nh3 escapes '<' as &lt;. A regex
+# over "<p>...</p>" would end inside such an attribute and put the video links (whose quotes
 # close it) or the new "<p id=...>" there, turning that text into live markup.
 # So the HTML is read as tokens, one per tag including its quoted attribute
 # values and one per run of text, and only real <p> and </p> tags delimit a

@@ -216,7 +216,11 @@ def test_the_route_exposes_a_date_and_nothing_of_the_journal():
 PAPER_LASTMOD = (
     "GREATEST( COALESCE(published_at, created_at), "
     "(SELECT MAX((c->>'date')::date)::timestamp "
-    "FROM jsonb_array_elements( COALESCE(result_json::jsonb->'corrections', '[]'::jsonb) ) c) "
+    "FROM jsonb_array_elements( COALESCE(result_json::jsonb->'corrections', '[]'::jsonb) ) c),"
+)
+PAPER_VIDEO_LASTMOD = (
+    "(SELECT MAX((v->>'registered_at')::timestamptz AT TIME ZONE 'UTC') "
+    "FROM jsonb_array_elements( COALESCE(result_json::jsonb->'videos', '[]'::jsonb) ) v) "
     ") AS lastmod"
 )
 
@@ -228,6 +232,13 @@ def test_a_paper_correction_advances_its_research_page():
     the clause is pinned as a string (whitespace folded); checked read-only against the 31
     production papers on 2026-09-26."""
     assert PAPER_LASTMOD in " ".join(str(sm._RESEARCH_SQL).split())
+
+
+def test_a_video_registration_advances_its_research_page():
+    """`theo_publish --register-video` appends to result_json.videos (with its registered_at)
+    and changes the page (the player, the poster, the VideoObject JSON-LD) without touching
+    published_at. Pinned as a string for the same reason as the corrections clause."""
+    assert PAPER_VIDEO_LASTMOD in " ".join(str(sm._RESEARCH_SQL).split())
 
 
 def test_the_research_part_reads_the_paper_lastmod():

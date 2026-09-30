@@ -763,7 +763,8 @@ describe('research: Claude-written paper extras (studio spec 2026-09-26 ยง2.7, ย
     expect(html).toContain('class="story-video theo-paper-video"')
     expect(html).toContain('href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"')
     expect(html).toContain(
-      'class="story-video-link"><img src="/data/research-images/7f00aa00-0000-4000-8000-000000000000/video_dQw4w9WgXcQ.jpg" alt="" loading="lazy"/>',
+      'class="story-video-link" aria-label="Play the video: Baalbek: the 1,000-tonne question">' +
+        '<img src="/data/research-images/7f00aa00-0000-4000-8000-000000000000/video_dQw4w9WgXcQ.jpg" alt="" loading="lazy"/>',
     )
     expect(html).not.toContain('is-posterless')
     expect(html).not.toContain('<iframe')

@@ -24,7 +24,8 @@ describe('PaperVideo', () => {
     const html = renderToString(<PaperVideo video={VIDEO} />)
     expect(html).toContain(
       '<a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" target="_blank" rel="noopener noreferrer" ' +
-        `class="story-video-link"><img src="${POSTER}" alt="" loading="lazy"/>`,
+        'class="story-video-link" aria-label="Play the video: Baalbek: the 1,000-tonne question">' +
+        `<img src="${POSTER}" alt="" loading="lazy"/>`,
     )
     expect(html).not.toContain('is-posterless')
     expect(html).not.toContain('<iframe')
@@ -38,6 +39,14 @@ describe('PaperVideo', () => {
     expect(html).not.toContain('<img')
     expect(html).not.toContain('<iframe')
     expect(html).not.toContain('i.ytimg.com')
+  })
+
+  it('names the play link for screen readers in both variants', () => {
+    // The poster is alt="" and the glyph aria-hidden: without a label the link has no name.
+    for (const video of [VIDEO, { ...VIDEO, poster: null }]) {
+      const html = renderToString(<PaperVideo video={video} />)
+      expect(html).toContain('aria-label="Play the video: Baalbek: the 1,000-tonne question"')
+    }
   })
 
   it('captions the title and the publication day', () => {

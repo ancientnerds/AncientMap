@@ -2,8 +2,8 @@
  * A #ev-NN or #corrections deep link re-scrolls to its target once the images
  * above it have settled (loaded or failed). Images below the target do not
  * hold it back, the reader taking over (wheel, touch, pointer, key, an in-page
- * hash change) drops it, a reload or history step skips it, and nothing
- * happens for any other hash.
+ * hash change) drops it, a reload or history step lands like a first visit,
+ * and nothing happens for any other hash.
  *
  * @vitest-environment jsdom
  */
@@ -170,12 +170,17 @@ it('an in-page link that changes the hash before the images settle drops the re-
 })
 
 it.each(['reload', 'back_forward'] as const)(
-  'a %s navigation keeps the scroll position the browser restored',
+  'a %s navigation lands on the target like a first visit',
   async type => {
+    // The paper scrolls inside .theo-page (theo.css), whose position no browser restores:
+    // the reload or history step starts like a fresh visit and needs the same re-scroll.
     setNavigationType(type)
     window.location.hash = '#ev-07'
+    setComplete(image('hero'), false)
     await mount()
     expect(scrolled).toEqual([])
+    await settle(image('hero'), 'load')
+    expect(scrolled).toEqual(['ev-07'])
   },
 )
 

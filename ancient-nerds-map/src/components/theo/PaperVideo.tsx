@@ -37,6 +37,8 @@ export default function PaperVideo({ video }: { video: ResearchVideo }) {
             target="_blank"
             rel="noopener noreferrer"
             className={`story-video-link${video.poster ? '' : ' is-posterless'}`}
+            // The poster is decorative (alt="") and the glyph aria-hidden: the link's name.
+            aria-label={`Play the video: ${video.title}`}
             onClick={e => {
               if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
               e.preventDefault()

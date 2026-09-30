@@ -260,6 +260,13 @@ class TestParseWriter:
         with pytest.raises(PaperPageError, match="writer.model"):
             parse_writer({k: v for k, v in WRITER.items() if k != "model"})
 
+    def test_the_publication_modes_are_the_publish_gates_one_definition(self, monkeypatch):
+        """The page knows exactly the modes theo_publishing.check_writer lets through."""
+        from pipeline.lyra import theo_publishing
+
+        monkeypatch.setattr(theo_publishing, "WRITER_PUBLISHED", ("automatic", "manual", "x"))
+        assert parse_writer({**WRITER, "published": "x"})["published"] == "x"
+
 
 class TestPaperExtras:
     def test_an_older_paper_has_nothing_to_add(self):

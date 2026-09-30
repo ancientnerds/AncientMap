@@ -38,6 +38,21 @@ describe('PaperCorrections', () => {
     )
   })
 
+  it('an earlier correction of an id a later one retired links to that later entry', () => {
+    // parse_corrections gives the anchor to the retiring entry: #ev-05 lands on it, not on
+    // a passage, so the earlier entry's link must not promise one.
+    const withEarlier: ResearchCorrection[] = [
+      { date: '2026-10-01', text: 'Weight re-sourced.', evidence_id: 'ev-05', holds_anchor: false },
+      ...CORRECTIONS,
+    ]
+    const page = renderToString(<PaperCorrections corrections={withEarlier} />)
+    expect(page).toContain(
+      '<li><time dateTime="2026-10-01">October 01, 2026</time> Weight re-sourced.' +
+        '<a class="theo-paper-correction-link" href="#ev-05">See the later correction</a></li>',
+    )
+    expect(page).toContain('href="#ev-02">See the corrected passage</a>')
+  })
+
   it('a correction without an evidence id has neither', () => {
     expect(html).toContain(
       '<li><time dateTime="2026-10-05">October 05, 2026</time> Typo in a date.</li>',

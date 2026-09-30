@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { THEO_PHASES, doneSublabel, phaseForStage } from '../TheoResearchLive'
+import {
+  THEO_PHASES,
+  doneLabel,
+  doneSublabel,
+  endedWithoutDossier,
+  phaseForStage,
+} from '../TheoResearchLive'
 
 describe('Theo live panel (research only)', () => {
   it('has no write or judge phase and ends at the dossier', () => {
@@ -31,6 +37,19 @@ describe('Theo live panel (research only)', () => {
     expect(doneSublabel('researched')).toBe('DOSSIER READY')
     expect(doneSublabel('failed')).toBe('RESEARCH FAILED')
     expect(doneSublabel('cancelled')).toBe('RESEARCH CANCELLED')
+    expect(doneSublabel('deferred')).toBe('RESEARCH DEFERRED')
     expect(doneSublabel(null)).toBe('RESEARCH FINISHED')
+  })
+
+  it('never calls a failed, cancelled or deferred run complete', () => {
+    // The worker ends those runs with a `done` event too (theo_worker _process_request).
+    for (const status of ['failed', 'cancelled', 'deferred']) {
+      expect(endedWithoutDossier(status)).toBe(true)
+      expect(doneLabel(status, false)).toBe('HALTED')
+    }
+    expect(endedWithoutDossier('researched')).toBe(false)
+    expect(doneLabel('researched', false)).toBe('COMPLETE')
+    expect(doneLabel(null, false)).toBe('COMPLETE')
+    expect(doneLabel(null, true)).toBe('HALTED') // an error or timeout event
   })
 })

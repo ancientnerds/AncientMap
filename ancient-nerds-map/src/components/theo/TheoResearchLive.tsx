@@ -64,6 +64,16 @@ export function phaseForStage(stage: string, status: string): string | null {
   return null
 }
 
+/** A terminal 'done' event whose status says the run produced no dossier. */
+export function endedWithoutDossier(status: string | null): boolean {
+  return status === 'failed' || status === 'cancelled' || status === 'deferred'
+}
+
+/** Label of the finished progress bar: COMPLETE only for a run that neither failed nor stopped. */
+export function doneLabel(status: string | null, hasError: boolean): string {
+  return hasError || endedWithoutDossier(status) ? 'HALTED' : 'COMPLETE'
+}
+
 /** Sub-label of the finished progress bar, from the terminal 'done' event's status. */
 export function doneSublabel(status: string | null): string {
   if (status === 'researched') return 'DOSSIER READY'
@@ -527,6 +537,8 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
   }, [])
 
   const doneNodes = nodes.filter(n => n.status === 'done')
+  // An error or timeout event, or a terminal 'done' of a run that produced no dossier.
+  const halted = hasError || (done && endedWithoutDossier(doneStatus))
   const activeNode = nodes.find(n => n.status === 'active')
 
   // Progress computation
@@ -553,8 +565,8 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
                     <span
                       key={i}
                       className={`theo-hb-led ${
-                        done && !hasError ? 'theo-hb-led--done' :
-                        hasError ? 'theo-hb-led--dead' :
+                        halted ? 'theo-hb-led--dead' :
+                        done ? 'theo-hb-led--done' :
                         'theo-hb-led--alive'
                       }`}
                       style={{ animationDelay: `${i * 0.3}s` }}
@@ -647,7 +659,7 @@ export default function TheoResearchLive({ requestId, question, startedAt, onClo
         {/* NERV Progress Bar */}
         <div className="theo-live-progress">
           {done ? (
-            <NervLoadingBar label="COMPLETE" sublabel={doneSublabel(doneStatus)} progress={100} counter={`${doneNodes.length || Object.keys(angles).length} stages`} ledsDone={totalCount || Object.keys(angles).length} ledsTotal={totalCount || Object.keys(angles).length} />
+            <NervLoadingBar label={doneLabel(doneStatus, hasError)} sublabel={doneSublabel(doneStatus)} progress={100} counter={`${doneNodes.length || Object.keys(angles).length} stages`} ledsDone={totalCount || Object.keys(angles).length} ledsTotal={totalCount || Object.keys(angles).length} />
           ) : Object.keys(angles).length > 0 ? (() => {
             const angleList = Object.values(angles)
             const saturatedCount = angleList.filter(a => a.saturated).length
