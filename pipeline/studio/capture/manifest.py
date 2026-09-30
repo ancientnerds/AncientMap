@@ -94,31 +94,53 @@ def media_path(episode_dir: Path, cid: str, suffix: str) -> Path:
 
 
 def event(t: float, name: str, **extra: Any) -> dict[str, Any]:
-    """One manifest event; unknown extra keys are a programming error."""
+    """One manifest event, as the renderer's EVENT schema accepts it (video/src/blocks/
+    schemas.ts): t >= 0; name, target, label and url non-empty strings; title a string
+    (a page may have none); lat and lng in range; numbers where the schema has numbers.
+    Unknown extra keys are a programming error."""
+    if not isinstance(name, str) or not name:
+        raise CaptureError(f"event name must be a non-empty string, got {name!r}")
+    where = f"event {name!r}"
     unknown = set(extra) - EVENT_EXTRAS
     if unknown:
-        raise CaptureError(f"event {name!r} has unknown fields {sorted(unknown)}")
-    out: dict[str, Any] = {"t": round(float(t), 3), "name": name}
+        raise CaptureError(f"{where} has unknown fields {sorted(unknown)}")
+    seconds = as_number(t, f"{where}: t")
+    if seconds < 0:
+        raise CaptureError(f"{where}: t {seconds} is before the start of the capture")
+    out: dict[str, Any] = {"t": round(seconds, 3), "name": name}
     for key in ("x", "y"):
         if key in extra:
-            out[key] = round(float(extra[key]), 1)
+            out[key] = round(as_number(extra[key], f"{where}: {key}"), 1)
     if "box" in extra:
-        box = [round(float(v), 1) for v in extra["box"]]
+        box = [round(as_number(v, f"{where}: box"), 1) for v in extra["box"]]
         if len(box) != 4 or box[2] <= 0 or box[3] <= 0:
-            raise CaptureError(f"event {name!r}: box {extra['box']!r} is not [x, y, w, h]")
+            raise CaptureError(f"{where}: box {extra['box']!r} is not [x, y, w, h]")
         out["box"] = box
-    for key in ("target", "label", "url", "title"):
+    for key in ("target", "label", "url"):
         if key in extra:
-            out[key] = str(extra[key])
-    for key in ("lat", "lng"):
+            if not isinstance(extra[key], str) or not extra[key]:
+                raise CaptureError(f"{where}: {key} must be a non-empty string, got {extra[key]!r}")
+            out[key] = extra[key]
+    if "title" in extra:
+        if not isinstance(extra["title"], str):
+            raise CaptureError(f"{where}: title must be a string, got {extra['title']!r}")
+        out["title"] = extra["title"]
+    for key, limit in (("lat", 90.0), ("lng", 180.0)):
         if key in extra:
-            out[key] = round(float(extra[key]), 6)
+            value = as_number(extra[key], f"{where}: {key}")
+            if not -limit <= value <= limit:
+                raise CaptureError(f"{where}: {key} {value} outside {-limit:g}..{limit:g}")
+            out[key] = round(value, 6)
     if "track" in extra:
         track: list[list[float] | None] = []
         for point in extra["track"]:
             if point is not None and len(point) != 2:
-                raise CaptureError(f"event {name!r}: track point {point!r} is not [x, y]")
-            track.append(None if point is None else [round(float(v), 1) for v in point])
+                raise CaptureError(f"{where}: track point {point!r} is not [x, y]")
+            track.append(
+                None
+                if point is None
+                else [round(as_number(v, f"{where}: track"), 1) for v in point]
+            )
         out["track"] = track
     return out
 
@@ -136,13 +158,19 @@ def build_manifest(
     events: list[dict[str, Any]],
     credits: list[str],
 ) -> dict[str, Any]:
-    """Validate and assemble a manifest; raises CaptureError on any defect."""
+    """Validate and assemble a manifest; raises CaptureError on any defect.
+
+    Events are compared with the duration as the manifest keeps both, in whole
+    milliseconds: an event on the last frame of a clip is no event after its end."""
+    capture_id({"id": cid})
     if kind not in CAPTURE_KINDS:
         raise CaptureError(f"unknown capture kind {kind!r}")
     captures = (episode_dir / CAPTURES_DIR).resolve()
     resolved = path.resolve()
     if resolved.parent != captures:
         raise CaptureError(f"{path} is not directly inside {captures}")
+    if resolved.stem != cid:
+        raise CaptureError(f"{path.name} is not named after capture {cid!r} ({cid}.<ext>)")
     if not resolved.is_file():
         raise CaptureError(f"{path} does not exist")
     if width <= 0 or height <= 0:
@@ -154,12 +182,12 @@ def build_manifest(
             raise CaptureError(f"{path}: fps {fps} and duration {duration_s} must be positive")
         if width % 2 or height % 2:
             raise CaptureError(f"{path}: video size {width}x{height} must be even")
-    end = duration_s if duration_s is not None else 0.0
+    end = round(duration_s, 3) if duration_s is not None else 0.0
     last = -math.inf
     for ev in events:
         if ev["t"] < last:
             raise CaptureError(f"{path}: events out of order at {ev}")
-        if not 0 <= ev["t"] <= end + 1e-6:
+        if not 0 <= ev["t"] <= end:
             raise CaptureError(f"{path}: event {ev} outside 0..{end} s")
         last = ev["t"]
     if any(not isinstance(c, str) or not c.strip() for c in credits):
