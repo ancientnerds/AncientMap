@@ -159,6 +159,17 @@ def test_globe_takes_stay_below_the_frontends_mapbox_switch():
         scaled = (max_dist - distance) / (max_dist - min_dist) * 100
         return math.floor(max(0.0, min(66.0, scaled / threejs_camera_max * 66)) + 0.5)
 
+    # the orbit clamp before Mapbox is ready, as globeConstants.ts defines and applies it
+    source = constants.read_text(encoding="utf-8")
+    assert re.search(
+        r"export const MAPBOX_SWITCH_DISTANCE =\s*CAMERA\.MAX_DISTANCE - \(THREEJS_CAMERA_MAX / "
+        r"100\) \* \(CAMERA\.MAX_DISTANCE - CAMERA\.MIN_DISTANCE\)\n",
+        source,
+    ), "MAPBOX_SWITCH_DISTANCE changed; recompute GLOBE_MIN_DISTANCE"
+    assert (
+        "return state === 'ready' || state === 'failed' ? CAMERA.MIN_DISTANCE : "
+        "MAPBOX_SWITCH_DISTANCE" in source
+    ), "orbitMinDistance changed; recompute GLOBE_MIN_DISTANCE"
     switch_distance = max_dist - threejs_camera_max / 100 * (max_dist - min_dist)
     assert GLOBE_MIN_DISTANCE > switch_distance  # above the orbitMinDistance clamp
     assert zoom_state(GLOBE_MIN_DISTANCE) < transition

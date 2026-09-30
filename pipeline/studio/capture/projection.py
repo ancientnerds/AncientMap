@@ -30,7 +30,7 @@ FOV_RANGE_DEG = 58.5
 # animationLoop.ts) sets the zoom state to round(min(66, ((2.44 - d) / 1.42 * 100) / 80 * 66))
 # (THREEJS_CAMERA_MAX 80 of globeConstants.ts), and createAutoSwitchEffect
 # (Globe/rendering/mapboxEffects.ts) turns on Mapbox mode at TRANSITION_POINT 66 once Mapbox
-# is ready, which the background queue makes it during a take. Zoom state 66 holds for every
+# is ready, and during a take the background queue gets it ready. Zoom state 66 holds for every
 # d <= ~1.3126; before Mapbox is ready, orbitMinDistance clamps the orbit at
 # MAPBOX_SWITCH_DISTANCE (1.304, globeConstants.ts), so a closer pose is silently drawn from
 # there. 1.32 is the closest 0.02 step whose zoom state rounds to 65
