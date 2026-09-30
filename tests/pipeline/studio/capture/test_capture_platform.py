@@ -430,6 +430,107 @@ def test_a_frame_sent_after_the_stop_is_not_part_of_the_take(tmp_path):
     assert cdp.listeners["Page.screencastFrame"] == []
 
 
+def test_a_frame_that_fails_to_land_fails_the_take(tmp_path):
+    """Review of Task 30: a frame task that failed before the stop dropped out of the
+    screencast's pending set, so the stop never saw it and the take went on without the
+    frame (asyncio logged the error later, at best)."""
+
+    class AckFails(_ScreencastCdp):
+        async def send(self, method, params=None):
+            if method == "Page.screencastFrameAck" and "Page.stopScreencast" not in self.sent:
+                raise RuntimeError("Target page, context or browser has been closed")
+            await super().send(method, params)
+
+    cdp, take = AckFails(), Take()
+
+    async def go():
+        screencast = _Screencast(cdp, take, tmp_path)
+        await screencast.start()
+        cdp.frame()
+        for _ in range(3):
+            await asyncio.sleep(0)  # the frame task runs and fails before the stop
+        await screencast.stop()
+
+    with pytest.raises(
+        CaptureError,
+        match=r"^1 screencast frame\(s\) did not land: RuntimeError\('Target page, context or "
+        r"browser has been closed'\)$",
+    ) as err:
+        asyncio.run(go())
+    assert isinstance(err.value.__cause__, RuntimeError)
+
+
+NVIDIA = "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 Laptop GPU (0x0000249C) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+
+
+def test_a_failed_action_settles_the_screencast_before_the_browser_goes(tmp_path, monkeypatch):
+    """Review of Task 30: an action that failed mid-take (a covered click, a zoom timeout)
+    left the take with the screencast running and its frame tasks pending while the browser
+    closed under them."""
+    pw = pytest.importorskip("playwright.async_api")
+    cdp = _ScreencastCdp()
+    seen: dict = {}
+    screencasts: list = []
+
+    class Recorded(_Screencast):
+        def __init__(self, *args):
+            super().__init__(*args)
+            screencasts.append(self)
+
+    async def nothing(*args, **kwargs):
+        return None
+
+    async def renderer(js):
+        return NVIDIA
+
+    page = types.SimpleNamespace(
+        goto=nothing,
+        wait_for_function=nothing,
+        evaluate=renderer,
+        mouse=types.SimpleNamespace(move=nothing),
+    )
+
+    async def new_page():
+        return page
+
+    async def new_cdp_session(page):
+        return cdp
+
+    context = types.SimpleNamespace(
+        add_init_script=nothing, route=nothing, new_page=new_page, new_cdp_session=new_cdp_session
+    )
+
+    async def new_context(**kwargs):
+        return context
+
+    browser = types.SimpleNamespace(new_context=new_context, close=nothing)
+
+    async def launch(**kwargs):
+        return browser
+
+    class FakePlaywright:
+        async def __aenter__(self):
+            return types.SimpleNamespace(chromium=types.SimpleNamespace(launch=launch))
+
+        async def __aexit__(self, *exc):
+            # what the browser leaves behind when it goes
+            seen["listeners"] = list(cdp.listeners["Page.screencastFrame"])
+            seen["pending"] = [t for t in screencasts[0].tasks if not t.done()]
+            return False
+
+    async def covered(self, action):
+        cdp.frame()  # a frame arrives with the failing click
+        raise CaptureError("filter_mode: the click at (100, 55) would hit div.empire-window")
+
+    monkeypatch.setattr(pw, "async_playwright", FakePlaywright)
+    monkeypatch.setattr(platform_take, "_Screencast", Recorded)
+    monkeypatch.setattr(platform_take, "LEAD_S", 0)
+    monkeypatch.setattr(_Driver, "run", covered)
+    with pytest.raises(CaptureError, match="would hit div.empire-window"):
+        asyncio.run(platform_take._record("http://localhost:5198", 1.3, [{"do": "wait"}], tmp_path))
+    assert seen == {"listeners": [], "pending": []}
+
+
 def _drive(html, steps):
     """Run `steps(driver, page)` on a synthetic `html` page in headless Chrome at the take's viewport."""
     pytest.importorskip("playwright")
