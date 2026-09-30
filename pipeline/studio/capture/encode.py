@@ -34,7 +34,7 @@ CLIP_FILTER = (
     "scale=in_color_matrix=bt601:in_range=pc:out_color_matrix=bt709:out_range=tv,"
     "format=yuv420p"
 )
-CLIP_ENCODE = [
+_CLIP_ENCODE = [
     "-c:v",
     "hevc_nvenc",
     "-gpu",
@@ -51,8 +51,6 @@ CLIP_ENCODE = [
     "0",
     "-bf",
     "0",
-    "-g",
-    "60",
     "-pix_fmt",
     "yuv420p",
     "-tag:v",
@@ -69,7 +67,16 @@ CLIP_ENCODE = [
     "+faststart",
     "-an",
 ]
+# The clock each concat entry is read on (its image2 "framerate"). A JPEG's own is 1/25 s, and
+# the concat demuxer puts every frame on the first file's clock: frames 16.7 ms apart then
+# collapsed onto the same tick and a 60 fps screencast played at about 25 (2026-09-30).
+CONCAT_CLOCK_HZ = 60_000
 FRAME_RE = re.compile(r"^f(\d{6})\.jpg$")
+
+
+def clip_encode(fps: int) -> list[str]:
+    """The encoder arguments of a clip at `fps`: a keyframe every second (-g fps)."""
+    return [*_CLIP_ENCODE, "-g", str(fps)]
 
 
 def concat_script(timestamps: list[float], end_ts: float, fps: int) -> str:
@@ -80,6 +87,7 @@ def concat_script(timestamps: list[float], end_ts: float, fps: int) -> str:
     frame with the same timestamp as its predecessor is dropped. Each frame lasts until
     the next one; the last until `end_ts` (at least one output frame). The concat
     demuxer ignores the duration of the final entry, so the last file is listed twice.
+    Every entry is read on CONCAT_CLOCK_HZ, not on a JPEG's own 1/25 s.
     """
     if not timestamps:
         raise CaptureError("the screencast delivered no frames")
@@ -90,17 +98,18 @@ def concat_script(timestamps: list[float], end_ts: float, fps: int) -> str:
     if end_ts < ordered[-1][0]:
         raise CaptureError(f"take end {end_ts} lies before the last frame {ordered[-1][0]}")
     lines = ["ffconcat version 1.0"]
+    clock = f"option framerate {CONCAT_CLOCK_HZ}"
     for k, (ts, i) in enumerate(ordered):
         nxt = ordered[k + 1][0] if k + 1 < len(ordered) else max(end_ts, ts + 1 / fps)
-        lines.append(f"file 'f{i:06d}.jpg'")
-        lines.append(f"duration {nxt - ts:.6f}")
-    lines.append(f"file 'f{ordered[-1][1]:06d}.jpg'")
+        lines += [f"file 'f{i:06d}.jpg'", clock, f"duration {nxt - ts:.6f}"]
+    lines += [f"file 'f{ordered[-1][1]:06d}.jpg'", clock]
     return "\n".join(lines) + "\n"
 
 
 def take_seconds(timestamps: list[float], end_ts: float, fps: int) -> float:
-    """Length of the take from the earliest frame to its end (at least one output frame)."""
-    return max(end_ts - min(timestamps), 1 / fps)
+    """Length of the take from the earliest frame to its end, as concat_script lists it: the
+    last frame lasts until `end_ts`, and at least one output frame."""
+    return max(end_ts, max(timestamps) + 1 / fps) - min(timestamps)
 
 
 def frames_to_cfr_mp4(
@@ -126,7 +135,7 @@ def frames_to_cfr_mp4(
             f"fps={fps},{CLIP_FILTER}",
             "-t",
             f"{seconds:.6f}",
-            *CLIP_ENCODE,
+            *clip_encode(fps),
         ],
         out,
     )
@@ -167,7 +176,7 @@ def sequence_to_mp4(frames_dir: Path, fps: int, out: Path) -> int:
             str(frames_dir / "f%06d.jpg"),
             "-vf",
             CLIP_FILTER,
-            *CLIP_ENCODE,
+            *clip_encode(fps),
         ],
         out,
     )

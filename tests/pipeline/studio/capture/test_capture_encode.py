@@ -5,8 +5,9 @@ import subprocess
 import pytest
 
 from pipeline.studio.capture.encode import (
-    CLIP_ENCODE,
     CLIP_FILTER,
+    CONCAT_CLOCK_HZ,
+    clip_encode,
     concat_script,
     frame_size,
     frames_to_cfr_mp4,
@@ -24,15 +25,21 @@ needs_nvenc = pytest.mark.skipif(NVENC_PROBLEM is not None, reason=str(NVENC_PRO
 
 def test_concat_script_gives_each_frame_its_real_duration():
     script = concat_script([10.0, 10.1, 10.25], end_ts=10.5, fps=60)
+    # an image file's own clock ticks in 1/25 s: each file gets a finer one
+    clock = f"option framerate {CONCAT_CLOCK_HZ}"
     assert script.splitlines() == [
         "ffconcat version 1.0",
         "file 'f000000.jpg'",
+        clock,
         "duration 0.100000",
         "file 'f000001.jpg'",
+        clock,
         "duration 0.150000",
         "file 'f000002.jpg'",
+        clock,
         "duration 0.250000",
         "file 'f000002.jpg'",
+        clock,
     ]
 
 
@@ -42,7 +49,7 @@ def test_last_frame_lasts_at_least_one_output_frame():
 
 def test_frames_play_in_timestamp_order_and_duplicates_are_dropped():
     script = concat_script([10.0, 10.2, 10.1, 10.1], end_ts=10.3, fps=60)
-    assert script.splitlines()[1:] == [
+    assert [line for line in script.splitlines()[1:] if not line.startswith("option")] == [
         "file 'f000000.jpg'",
         "duration 0.100000",
         "file 'f000002.jpg'",
@@ -68,9 +75,25 @@ def test_take_seconds_runs_from_the_first_frame_to_the_end():
     assert take_seconds([10.0], 10.0, 60) == pytest.approx(1 / 60)
 
 
+@pytest.mark.parametrize(
+    ("timestamps", "end"),
+    [([10.0, 10.5], 10.5), ([10.0, 10.25, 10.5], 10.5), ([10.0], 10.0), ([10.0, 10.5], 12.0)],
+)
+def test_the_cut_keeps_the_last_frame_the_concat_list_gives(timestamps, end):
+    # Review of Task 25: a take that ends on its last frame's timestamp was cut there, so
+    # `-t` dropped that frame although the concat list gives it one output frame
+    script = concat_script(timestamps, end, 60)
+    listed = sum(
+        float(line.split()[1]) for line in script.splitlines() if line.startswith("duration")
+    )
+    assert take_seconds(timestamps, end, 60) == pytest.approx(listed, abs=1e-6)
+
+
 def test_clips_are_hevc_on_nvenc_gpu_0_bt709_without_b_frames():
+    encode = clip_encode(60)
+
     def value(flag):
-        return CLIP_ENCODE[CLIP_ENCODE.index(flag) + 1]
+        return encode[encode.index(flag) + 1]
 
     assert (value("-c:v"), value("-gpu"), value("-bf"), value("-tag:v")) == (
         "hevc_nvenc",
@@ -79,7 +102,10 @@ def test_clips_are_hevc_on_nvenc_gpu_0_bt709_without_b_frames():
         "hvc1",
     )
     assert (value("-colorspace"), value("-color_range")) == ("bt709", "tv")
-    assert not any(arg in ("libx264", "libx265", "h264_nvenc") for arg in CLIP_ENCODE)
+    assert not any(arg in ("libx264", "libx265", "h264_nvenc") for arg in encode)
+    # a keyframe every second at the clip's own rate
+    assert value("-g") == "60"
+    assert clip_encode(30)[clip_encode(30).index("-g") + 1] == "30"
     assert "out_color_matrix=bt709" in CLIP_FILTER and "out_range=tv" in CLIP_FILTER
     assert CLIP_FILTER.startswith("sidedata=mode=delete:type=ICC_PROFILE,")
 
@@ -127,6 +153,64 @@ def test_screencast_frames_become_a_constant_60fps_clip(tmp_path):
     duration = frames_to_cfr_mp4(tmp_path, [0.0, 0.25, 0.5], end_ts=1.0, out=out, fps=60)
     assert duration == pytest.approx(1.0, abs=0.02)
     assert probe_frames(out) == 60
+
+
+def _rgb_frames(clip, width=256, height=144):
+    """The clip's frames as RGB bytes, one entry per frame."""
+    rgb = subprocess.run(
+        [
+            FFMPEG_BIN,
+            "-v",
+            "error",
+            "-i",
+            str(clip),
+            "-vf",
+            "scale=in_color_matrix=bt709:in_range=tv:out_range=pc,format=rgb24",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+        capture_output=True,
+        check=True,
+    ).stdout
+    size = width * height * 3
+    return [rgb[i : i + size] for i in range(0, len(rgb), size)]
+
+
+def _colour_at_centre(frame, width=256, height=144):
+    """'red', 'green' or 'blue': the primary at the frame's centre."""
+    centre = ((height // 2) * width + width // 2) * 3
+    r, g, b = frame[centre : centre + 3]
+    return ["red", "green", "blue"][max(range(3), key=lambda k: (r, g, b)[k])]
+
+
+@needs_nvenc
+def test_every_frame_of_a_60fps_screencast_shows_once_in_the_clip(tmp_path):
+    """The concat demuxer read each JPEG on its own 1/25 s clock, so frames 16.7 ms apart
+    collapsed onto the same tick and a 60 fps screencast played at about 25 (measured
+    2026-09-30: 12 of 30 frames reached the clip)."""
+    from PIL import Image
+
+    for i in range(30):
+        Image.new("RGB", (256, 144), (i * 8,) * 3).save(tmp_path / f"f{i:06d}.jpg")
+    out = tmp_path / "clip.mp4"
+    frames_to_cfr_mp4(tmp_path, [100.0 + i / 60 for i in range(30)], 100.0 + 29 / 60, out, 60)
+    centre = (72 * 256 + 128) * 3
+    levels = [f[centre] for f in _rgb_frames(out)]
+    # 30 frames, each brighter than the one before: every screencast frame once, in order
+    assert len(levels) == 30
+    assert all(b - a >= 4 for a, b in zip(levels, levels[1:], strict=False)), levels
+
+
+@needs_nvenc
+def test_screencast_frames_with_chromes_icc_profile_are_each_held_until_the_next(tmp_path):
+    # Chrome's screencast JPEGs carry its sRGB profile; each frame shows until the next
+    # one's timestamp, the last until the take's end (here its own timestamp: one frame)
+    _frames(tmp_path, 3, icc=True)
+    out = tmp_path / "clip.mp4"
+    frames_to_cfr_mp4(tmp_path, [0.0, 0.25, 0.5], end_ts=0.5, out=out, fps=60)
+    colours = [_colour_at_centre(f) for f in _rgb_frames(out)]
+    assert colours == ["red"] * 15 + ["green"] * 15 + ["blue"]
 
 
 @needs_nvenc
