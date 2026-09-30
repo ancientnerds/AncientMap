@@ -15821,10 +15821,22 @@ def test_titles_and_tags():
     assert package.check_titles(["The Baalbek Stones"]) == ["The Baalbek Stones"]
     with pytest.raises(StudioError, match="title_candidates is empty"):
         package.check_titles([])
-    with pytest.raises(StudioError, match="without < >"):
+    with pytest.raises(StudioError, match="without < or >"):
         package.check_titles(["a <b>"])
     with pytest.raises(StudioError, match="tags take"):
         package.check_tags(["x" * 250, "y" * 250])
+
+
+def test_one_title_is_measured_as_it_is_sent():
+    # register-youtube sends the title unchanged, so the rule measures it unchanged: a trailing
+    # space makes a 100-character title 101 characters on YouTube.
+    longest = "x" * package.TITLE_MAX_CHARS
+    assert package.check_title(longest) == longest
+    for bad in (longest + " ", "", "   ", "a <b>", "a > b"):
+        with pytest.raises(StudioError, match="without < or >"):
+            package.check_title(bad)
+    with pytest.raises(StudioError, match="without < or >"):
+        package.check_titles(["The Baalbek Stones", longest + " "])
 
 
 def test_failed_audit_marks_the_package_failed(tmp_path, monkeypatch):
@@ -16168,12 +16180,21 @@ def description(
     return text
 
 
+def check_title(title: str) -> str:
+    """One YouTube title, measured as it is sent: not blank, at most TITLE_MAX_CHARS
+    characters, no < or >. The package's candidates and register-youtube's --title share it."""
+    if not title.strip() or len(title) > TITLE_MAX_CHARS or "<" in title or ">" in title:
+        raise StudioError(
+            f"a title must be 1-{TITLE_MAX_CHARS} characters without < or >: {title!r}"
+        )
+    return title
+
+
 def check_titles(titles: list[str]) -> list[str]:
     if not titles:
         raise StudioError("episode.json title_candidates is empty")
-    bad = [t for t in titles if not t.strip() or len(t) > TITLE_MAX_CHARS or "<" in t or ">" in t]
-    if bad:
-        raise StudioError(f"titles must be 1-{TITLE_MAX_CHARS} chars without < >: {bad}")
+    for title in titles:
+        check_title(title)
     return titles
 
 
@@ -16318,7 +16339,7 @@ def build_package(ws: EpisodeWorkspace) -> dict[str, Any]:
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/test_package.py -m "not integration and not live_llm" -q`
-Expected: `14 passed`
+Expected: `15 passed`
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
@@ -16333,7 +16354,7 @@ git commit -m "Write the YouTube upload package: exact SRT, byte-limited descrip
 
 **Prerequisite:** Task 13 and stream D's `pipeline/studio/capture/gpu.py` (check D24).
 
-`episode markers-export` / `markers-import` run the crop check of Task 14b. `episode init --paper` takes the slug a successful publish returned (`papers/<id>/publish_outcome.json`, `published_slug`) and refuses a different `--paper-slug`; without a successful publish recorded there `--paper-slug` is required. `register-youtube` takes the uploaded `--title` and the required `--poster K` (owner decision 13 and question Q2: the thumbnail candidate set on YouTube, or the A/B winner; `package/thumbnail_<K>.jpg` becomes the paper page's video poster). The paper registration is proven before the ledger is written (not repeatable): a dry run without the poster (an evidence id the paper does not carry or a video it already has stops it before anything is written, and the upload that follows can never replace a live poster), the verified upload of the thumbnail as `video_<youtube_id>.jpg`, a dry run with the poster (`publish.prepare_video`); then the ledger, then the apply. When the apply fails after the ledger write, the error names the `paper register-video` command that finishes the registration. `episode thumbnail SLUG --candidate K --frame N` (owner decision 24) re-renders one thumbnail candidate from another frame (`render.render_thumbnail`); `doctor` also reports the repo-root site export the distribution dots resolve from and its age (owner decision 15, Q4). `doctor` probes the GPU rule of spec 4.11 (nvidia-smi names the RTX 3080, NVENC, CUDA for faster-whisper, Remotion's browser and its high-performance preference, the renderer of a Chrome launched as the captures launch it), `node` and Playwright; `doctor --fix-gpu` pins Remotion's browser to the NVIDIA first.
+`episode markers-export` / `markers-import` run the crop check of Task 14b. `episode init --paper` takes the slug a successful publish returned (`papers/<id>/publish_outcome.json`, `published_slug`) and refuses a different `--paper-slug`; without a successful publish recorded there `--paper-slug` is required. `register-youtube` takes the uploaded `--title` (checked, as it is sent, by Task 25's `package.check_title`, the one rule the package's title candidates obey too) and the required `--poster K` (owner decision 13 and question Q2: the thumbnail candidate set on YouTube, or the A/B winner; `package/thumbnail_<K>.jpg` becomes the paper page's video poster). The paper registration is proven before the ledger is written (not repeatable): a dry run without the poster (an evidence id the paper does not carry or a video it already has stops it before anything is written, and the upload that follows can never replace a live poster), the verified upload of the thumbnail as `video_<youtube_id>.jpg`, a dry run with the poster (`publish.prepare_video`); then the ledger, then the apply. When the apply fails after the ledger write, the error names the `paper register-video` command that finishes the registration. `episode thumbnail SLUG --candidate K --frame N` (owner decision 24) re-renders one thumbnail candidate from another frame (`render.render_thumbnail`); `doctor` also reports the repo-root site export the distribution dots resolve from and its age (owner decision 15, Q4). `doctor` probes the GPU rule of spec 4.11 (nvidia-smi names the RTX 3080, NVENC, CUDA for faster-whisper, Remotion's browser and its high-performance preference, the renderer of a Chrome launched as the captures launch it), `node` and Playwright; `doctor --fix-gpu` pins Remotion's browser to the NVIDIA first.
 
 **Files:**
 - Create: `pipeline/studio/cli_episode.py`, `pipeline/studio/doctor.py`
@@ -16356,7 +16377,7 @@ from PIL import Image
 
 from pipeline.lyra.theo_publishing import poster_web_path
 from pipeline.studio import __main__ as cli
-from pipeline.studio import cli_episode, config, doctor, remote
+from pipeline.studio import cli_episode, config, doctor, package, remote
 from pipeline.studio.errors import StudioError
 from tests.pipeline.studio import episode_fixtures as ef
 from tests.pipeline.studio import script_fixtures as sf
@@ -16542,10 +16563,25 @@ def test_a_refused_paper_dry_run_leaves_the_ledger_untouched(monkeypatch, tmp_pa
             "baalbek-c5", "dQw4w9WgXcQ", "Baalbek", "2026-10-01T18:00:00+00:00", 1
         )
     assert [e[0] for e in events] == ["pipeline.lyra.theo_publish"]  # no upload, no ledger
-    with pytest.raises(StudioError, match="1 to 100 characters without < or >"):
+    with pytest.raises(StudioError, match="1-100 characters without < or >"):
         cli_episode.register_youtube(
             "baalbek-c5", "dQw4w9WgXcQ", "<b>", "2026-10-01T18:00:00+00:00", 1
         )
+
+
+def test_register_youtube_refuses_the_title_episode_package_refuses(monkeypatch, tmp_path):
+    # One title rule (package.check_title): a 100-character title with a trailing space is 101
+    # characters in theo_publish and on YouTube, so it stops before any remote step.
+    _published_package(tmp_path, monkeypatch)
+    events = _recording_remote(monkeypatch, lambda module, args: pytest.fail("no remote step"))
+    title = "x" * package.TITLE_MAX_CHARS + " "
+    with pytest.raises(StudioError, match="1-100 characters without < or >"):
+        cli_episode.register_youtube(
+            "baalbek-c5", "dQw4w9WgXcQ", title, "2026-10-01T18:00:00+00:00", 1
+        )
+    assert events == []
+    with pytest.raises(StudioError, match="1-100 characters without < or >"):
+        package.check_titles([title])
 
 
 def test_a_failed_apply_after_the_ledger_names_the_way_to_finish(monkeypatch, tmp_path):
@@ -16608,6 +16644,17 @@ def test_doctor_reports_the_site_export_and_its_age(monkeypatch, tmp_path):
     (tmp_path / "index.json").write_text('{"sites": []}', encoding="utf-8")
     probe = doctor._site_export()
     assert probe.ok and re.search(r"from \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC", probe.detail)
+
+
+def test_doctor_names_the_node_modules_or_the_install_command(monkeypatch, tmp_path):
+    monkeypatch.setattr(doctor, "VIDEO_DIR", tmp_path)
+    assert doctor._node_modules() == doctor.Probe(
+        "video/node_modules", False, "missing: run `npm ci` in video/"
+    )
+    (tmp_path / "node_modules").mkdir()
+    assert doctor._node_modules() == doctor.Probe(
+        "video/node_modules", True, str(tmp_path / "node_modules")
+    )
 
 
 def test_doctor_reports_each_probe_and_fails_on_any(monkeypatch, capsys):
@@ -16708,7 +16755,7 @@ from pipeline.studio.episode import (
 )
 from pipeline.studio.errors import StudioError
 from pipeline.studio.ledger_client import publish_remote
-from pipeline.studio.package import build_package, package_thumbnail
+from pipeline.studio.package import build_package, check_title, package_thumbnail
 from pipeline.studio.paper.publish import prepare_video, register_video
 from pipeline.studio.paper.workspace import published_slug
 from pipeline.studio.render import CANDIDATES, render_episode, render_thumbnail
@@ -16834,13 +16881,6 @@ def cmd_thumbnail(args: argparse.Namespace) -> int:
 def cmd_package(args: argparse.Namespace) -> int:
     _print(build_package(episode_workspace(args.slug)))
     return 0
-
-
-def check_title(title: str) -> str:
-    """The title the owner uploaded with (1-100 characters, no < or >, YouTube's rules)."""
-    if not 1 <= len(title.strip()) <= 100 or "<" in title or ">" in title:
-        raise StudioError("--title must be 1 to 100 characters without < or >")
-    return title
 
 
 def register_youtube(
@@ -17051,6 +17091,13 @@ def _ssh() -> Probe:
     )
 
 
+def _node_modules() -> Probe:
+    path = VIDEO_DIR / "node_modules"
+    if not path.is_dir():
+        return Probe("video/node_modules", False, "missing: run `npm ci` in video/")
+    return Probe("video/node_modules", True, str(path))
+
+
 def _site_export() -> Probe:
     """The repo-root site export the distribution dots resolve from (owner decision 15) and
     its age: I13 downloads the current one read-only from production (Q4) with
@@ -17154,9 +17201,7 @@ def probes() -> list[Probe]:
             shutil.which("node") is not None,
             shutil.which("node") or "Node 22 is not on PATH",
         ),
-        Probe(
-            "video/node_modules", (VIDEO_DIR / "node_modules").is_dir(), "run `npm ci` in video/"
-        ),
+        _node_modules(),
         _registry(),
         Probe("site fonts", bool(fonts), f"{len(fonts)} woff2 in {FONTS_DIR}"),
         _module("faster_whisper"),
@@ -17272,7 +17317,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run the test to verify it passes**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/pipeline/studio/test_cli_episode.py -m "not integration and not live_llm" -q`
-Expected: `16 passed`
+Expected: `18 passed`
 
 - [ ] **Step 5: Lint gate.** Expected: clean.
 
