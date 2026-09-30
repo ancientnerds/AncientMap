@@ -9,8 +9,9 @@ the count, encodes the sequence (encode.sequence_to_mp4) and builds the manifest
 scene writes the page's WebGL renderer to renderer.json before its first frame, which must
 name the NVIDIA (spec 4.11; the recorder launches Chrome with the NVIDIA flags) and becomes
 the "gpu" event; the take reads it while the recorder runs (wait_recorder), so a take drawn
-on another GPU stops at its first frame. The recorder gets RECORD_FRAME_S per frame. The places scene, and a fly-to with a place, also write where the page drew each
-place in every grabbed frame (points.json: {place id: [[x, y] | null, ...]}, one entry
+on another GPU stops at its first frame. The recorder gets RECORD_FRAME_S per frame. The
+places scene, and a fly-to with a place, also write where the page drew each place in every
+grabbed frame (points.json: {place id: [[x, y] | null, ...]}, one entry
 per frame, from window.__DEMO.screenPoint): the owner's rule for globe markers is to
 project them per frame from their coordinates, so the renderer's pins follow the globe
 when the camera moves. The display is held awake for the take.

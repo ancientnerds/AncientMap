@@ -528,12 +528,11 @@ class _Driver:
         await self.click_locator(row, "empire")
         await self.switched(row, True, f"empire {name!r}")
 
-    async def toggle_layer(self, action: dict[str, Any]) -> None:
-        """Click the Layers panel toggle `action["label"]` and wait until the page shows it:
-        its checkbox flips, or for Empire Borders the named empire is drawn (show_empire)
-        and the panel's checkbox is on."""
+    async def toggle_layer(self, action: dict[str, Any], what: str) -> None:
+        """Click the Layers panel toggle `action["label"]` (the action `what`) and wait until
+        the page shows it: its checkbox flips, or for Empire Borders the named empire is
+        drawn (show_empire) and the panel's checkbox is on."""
         page = self.page
-        what = f"toggle_layer {action['label']!r}"
         expand = page.locator('.layer-toggle-panel .panel-minimize-btn[title="Maximize"]')
         if await expand.count():
             await self.click_locator(expand.first, "expand_layers")
@@ -650,7 +649,7 @@ class _Driver:
             # (registered) and once the page shows the layer.
             self.toggling = what
             try:
-                await self.toggle_layer(action)
+                await self.toggle_layer(action, what)
                 await self.on_the_globe(what)
             finally:
                 self.toggling = None
