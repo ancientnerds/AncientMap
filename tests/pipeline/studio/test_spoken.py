@@ -30,6 +30,10 @@ from pipeline.studio import spoken
         ("the fortieth day", "the 40th day"),
         ("the ninetieth year", "the 90th year"),
         ("twenty, first", "20, 1st"),
+        # "second" is a time unit too: a duration compound keeps its tens word
+        ("a thirty-second exposure", "a 30-second exposure"),
+        ("a twenty-second pause", "a 20-second pause"),
+        ("a sixty-second clip", "a 60-second clip"),
         ("an eight hundred-tonne block", "an 800-tonne block"),
         ("nineteen oh five", "1905"),
         ("twenty-four blocks", "24 blocks"),
@@ -258,6 +262,17 @@ def test_equivalent_spellings(said, shown):
             "the twenty-first dynasty",
             "the 22nd dynasty",
             "token 1: spoken '21st' vs display '22nd'",
+        ),
+        # a duration compound is the tens word and "second", never another number
+        (
+            "a thirty-second exposure",
+            "a 32-second exposure",
+            "token 1: spoken '32nd' vs display '32'",
+        ),
+        (
+            "a thirty-second exposure",
+            "a 40-second exposure",
+            "token 1: spoken '32nd' vs display '40'",
         ),
         # "per cent" is one unit in any case, and a caption that drops it is caught
         (

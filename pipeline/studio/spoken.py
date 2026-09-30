@@ -264,7 +264,8 @@ def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, in
         if i - 1 in stops:
             break
     # a run that ends on a tens word may end on a unit ordinal: "twenty-first" is 21st and
-    # "one hundred thirty-second" 132nd, never 20 and 1st
+    # "one hundred thirty-second" 132nd, never 20 and 1st. "second" is a time unit as well,
+    # so "a thirty-second exposure" may be a 30-second one: that end is a second reading
     if (
         prev == "small"
         and words[i - 1] in TENS
@@ -272,6 +273,8 @@ def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, in
         and i < len(words)
         and words[i] in UNIT_ORDINALS
     ):
+        if words[i] == "second":
+            ends.append((_format(total + current), i))
         ordinal = f"{total + current + UNIT_ORDINALS[words[i]]}{ORDINALS[words[i]][-2:]}"
         return [(ordinal, i + 1), *ends]
     # a decimal needs a digit word after "point": "one point ten thousand" is 1, "point" and
