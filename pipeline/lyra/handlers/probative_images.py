@@ -407,7 +407,7 @@ async def embed_probative_images(
     settings = settings or _get_settings()
     emit = emit or (lambda _e: None)
 
-    if not getattr(settings, "probative_images_enabled", True):
+    if not settings.probative_images_enabled:
         print("[probative] disabled by config, skipping", flush=True)
         return (paper_text, [], {}, {}, {})
 

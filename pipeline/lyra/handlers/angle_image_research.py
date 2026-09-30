@@ -35,7 +35,7 @@ class AngleImageResearchHandler(BaseHandler):
 
     async def _on_angle_created(self, event: AngleCreated):
         settings = _get_settings()
-        if not getattr(settings, "probative_images_enabled", True):
+        if not settings.probative_images_enabled:
             return
 
         angle = next((a for a in self.state.angles if a.id == event.angle_id), None)
