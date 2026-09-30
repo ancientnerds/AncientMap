@@ -6,7 +6,8 @@ become digits (years such as "nineteen sixty-six" and "twenty fourteen" included
 half" is 4.5, "6 million" and "one point five million" are numbers too), ordinal words become
 digit ordinals ("twenty-first", "one hundred and first" and "the two hundredth" are 21st, 101st
 and 200th, "the thousandth" is 1000th), decades and centuries become their digits ("the
-nineteen-sixties" is the 1960s, "the fifteen hundreds" the 1500s), thousands separators go
+nineteen-sixties" is the 1960s, "the twenty-tens" the 2010s, "the fifteen hundreds" the 1500s,
+"the two thousands" the 2000s), thousands separators go
 ("1,000th" is 1000th), unit words and symbols become one unit token ("square metres" is m²),
 edge punctuation and case are ignored, a possessive "'s" is a word of its own.
 Clause punctuation after a number word (, ; : . ! ? … or a dash) still ends that number:
@@ -54,8 +55,9 @@ ANY_MAGNITUDE = {**MAGNITUDES, **ORDINAL_MAGNITUDES}
 # "hundredth" and the ordinal magnitudes end a run as the ordinal of all they multiply: "the two
 # hundredth" is 200th, "the one thousand two hundredth" 1200th, a bare "thousandth" 1000th
 SCALE_ORDINALS = {"hundredth": 100, **ORDINAL_MAGNITUDES}
-# the plural tens words name a decade: "the sixties" is the 60s, "the nineteen-sixties" the 1960s
-DECADES = {f"{w[:-1]}ies": v for w, v in TENS.items()}
+# the plural tens words name a decade: "the sixties" is the 60s, "the nineteen-sixties" the 1960s,
+# "the twenty-tens" the 2010s
+DECADES = {"tens": 10, **{f"{w[:-1]}ies": v for w, v in TENS.items()}}
 ORDINALS = {
     "first": "1st", "second": "2nd", "third": "3rd", "fourth": "4th", "fifth": "5th",
     "sixth": "6th", "seventh": "7th", "eighth": "8th", "ninth": "9th", "tenth": "10th",
@@ -273,13 +275,15 @@ def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, in
     if first is None:
         return None
     a, j = first
-    # a decade or a century spoken as a plural: "nineteen-sixties" is the 1960s and "fifteen
-    # hundreds" the 1500s
+    # a decade or a century spoken as a plural: "nineteen-sixties" is the 1960s, "twenty tens"
+    # the 2010s, "fifteen hundreds" the 1500s and "two thousands" the 2000s
     if j - 1 not in stops and j < len(words):
         if 10 <= a <= 99 and words[j] in DECADES:
             return [(f"{a * 100 + DECADES[words[j]]}s", j + 1)]
         if a >= 1 and words[j] == "hundreds":
             return [(f"{a * 100}s", j + 1)]
+        if 1 <= a <= 9 and words[j] == "thousands":
+            return [(f"{a * 1000}s", j + 1)]
     # year pattern: "nineteen sixty six", "twenty fourteen", "nineteen oh five"; never when a
     # hundred or a magnitude multiplies the second group ("eighteen twelve thousand" is 18 and
     # 12000, not 1812 and a stray "thousand")
