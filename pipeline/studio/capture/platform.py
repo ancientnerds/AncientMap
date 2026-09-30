@@ -26,7 +26,8 @@ Spec (kind "platform")::
                  {"do": "zoom", "to": 90},
                  {"do": "open_details", "title": "Baalbek Stones"},
                  {"do": "measure", "a": {"lat": .., "lng": ..}, "b": {"lat": .., "lng": ..}},
-                 {"do": "toggle_layer", "label": "Empire Borders"},
+                 {"do": "toggle_layer", "label": "Coastlines"},
+                 {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"},
                  {"do": "proximity", "at": {"lat": .., "lng": ..}},
                  {"do": "filter", "mode": "country" | "category" | "source", "label": ".."},
                  {"do": "wait", "s": 1.0}]}
@@ -46,9 +47,18 @@ time replaces the first), so each measure point must show in the Measure tab bef
 cursor moves on, and point b must add exactly one measurement.
 "open_details" returns to the Search tab first (the result list shows only there).
 "filter" clicks the Filter panel's mode button, then the legend entry named "label" (a
-click toggles it). "toggle_layer" never takes the Satellite base map, in any case (owner
-correction 2026-09-26: no satellite toggle in globe sections; satellite shows in the
-details page or a Mapbox take): validate_actions refuses it before anything starts.
+click toggles it). "toggle_layer" clicks a Layers panel toggle, and the take fails unless
+its checkbox flips (a toggle disabled in Mapbox mode switches nothing). It never takes the
+Satellite base map, in any case (owner correction 2026-09-26: no satellite toggle in globe
+sections; satellite shows in the details page or a Mapbox take). The Historical Layers
+toggles only open a picker window; their checkbox is on once something in it is drawn
+(HistoricalLayersSection.tsx). So "Empire Borders" needs the "empire" to show (an id of
+pipeline/historical_boundaries/empire_metadata.py): the take picks it in that window at
+its peak extent, the window's "By Period" timeline off first (on, at the 500 BC it loads
+with, Rome draws Latium only), and fails unless the empire's checkbox and then the Layers
+panel's are on. "Geological Layers" and "Historical Routes" have no picker action.
+validate_actions refuses a satellite toggle, a picker without its pick and an empire on
+any other toggle before anything starts.
 Playwright is a local-only dependency (in no requirements file); it is imported inside
 the take, after the spec is validated, and a venv without it is a CaptureError.
 """
@@ -69,6 +79,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
+from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
 from pipeline.studio.capture.encode import frames_to_cfr_mp4
 from pipeline.studio.capture.gpu import CHROMIUM_GPU_ARGS, RENDERER_JS, gpu_event, require_nvidia
 from pipeline.studio.capture.manifest import (
@@ -150,6 +161,14 @@ FILTER_BUTTONS = {"country": "Country", "category": "Category", "source": "Sourc
 # The Layers panel's base-map toggle (MapLayersPanel.tsx) a take must never click: owner
 # correction 2026-09-26, no satellite toggle in globe sections.
 SATELLITE_LAYER = "satellite"
+# The Historical Layers toggles (HistoricalLayersSection.tsx) only open a picker window;
+# their checkbox is on once something in it is drawn (Empire Borders: visibleEmpires.size >
+# 0). A take picks an empire (EmpireBordersPanel.tsx), nothing picks a geological layer or
+# a route. Compared case-folded, like SATELLITE_LAYER.
+EMPIRE_LAYER = "empire borders"
+PICKER_LAYERS = frozenset({"geological layers", "historical routes"})
+EMPIRE_WINDOW = ".empire-borders-window"
+CHECKBOX = 'input[type="checkbox"]'
 
 # action -> required keys (besides "do")
 ACTIONS: dict[str, frozenset[str]] = {
@@ -165,6 +184,46 @@ ACTIONS: dict[str, frozenset[str]] = {
     "filter": frozenset({"mode", "label"}),
     "wait": frozenset({"s"}),
 }
+# action -> keys it may carry besides the required ones
+OPTIONAL: dict[str, frozenset[str]] = {"toggle_layer": frozenset({"empire"})}
+
+
+def exact_text(text: str) -> re.Pattern[str]:
+    """Matches an element whose whole text is `text` (surrounding whitespace aside)."""
+    return re.compile(rf"^\s*{re.escape(text)}\s*$")
+
+
+def _toggle_layer(action: dict[str, Any], where: str) -> dict[str, Any]:
+    """The toggle_layer rules: no satellite, no picker window without its pick."""
+    layer = action["label"].strip().casefold()
+    if layer == SATELLITE_LAYER:
+        raise CaptureError(
+            f"{where}: no satellite toggle in globe sections (owner 2026-09-26): "
+            "satellite shows in the details page or a Mapbox take"
+        )
+    if layer in PICKER_LAYERS:
+        raise CaptureError(
+            f"{where}: {action['label']!r} only opens its picker window and no action picks "
+            "from it, so its checkbox would switch nothing on"
+        )
+    if layer != EMPIRE_LAYER:
+        if "empire" in action:
+            raise CaptureError(
+                f"{where}: only 'Empire Borders' takes an empire, not {action['label']!r}"
+            )
+        return {}
+    if "empire" not in action:
+        raise CaptureError(
+            f"{where}: 'Empire Borders' only opens its window; name the empire to show "
+            '("empire": an id of pipeline/historical_boundaries/empire_metadata.py)'
+        )
+    empire = action["empire"]
+    if not isinstance(empire, str) or empire not in EMPIRE_METADATA:
+        raise CaptureError(
+            f"{where}.empire must be an empire id of "
+            f"pipeline/historical_boundaries/empire_metadata.py, got {empire!r}"
+        )
+    return {"empire": empire}
 
 
 def _point(value: Any, where: str) -> dict[str, float]:
@@ -188,9 +247,11 @@ def validate_actions(actions: Any) -> list[dict[str, Any]]:
             raise CaptureError(f"{where}: unknown action {action!r} (known: {sorted(ACTIONS)})")
         do = action["do"]
         keys = set(action) - {"do"}
-        if keys != ACTIONS[do]:
+        optional = OPTIONAL.get(do, frozenset())
+        if not ACTIONS[do] <= keys <= ACTIONS[do] | optional:
+            may = f" (optional {sorted(optional)})" if optional else ""
             raise CaptureError(
-                f"{where} ({do}) needs exactly {sorted(ACTIONS[do])}, got {sorted(keys)}"
+                f"{where} ({do}) needs exactly {sorted(ACTIONS[do])}{may}, got {sorted(keys)}"
             )
         clean: dict[str, Any] = {"do": do}
         for key in ("q", "title", "label"):
@@ -198,11 +259,8 @@ def validate_actions(actions: Any) -> list[dict[str, Any]]:
                 if not isinstance(action[key], str) or not action[key].strip():
                     raise CaptureError(f"{where}.{key} must be a non-empty string")
                 clean[key] = action[key]
-        if do == "toggle_layer" and action["label"].strip().casefold() == SATELLITE_LAYER:
-            raise CaptureError(
-                f"{where}: no satellite toggle in globe sections (owner 2026-09-26): "
-                "satellite shows in the details page or a Mapbox take"
-            )
+        if do == "toggle_layer":
+            clean.update(_toggle_layer(action, where))
         if "s" in keys:
             s = as_number(action["s"], f"{where}.s")
             if not 0 < s <= 10:
@@ -391,17 +449,56 @@ class _Driver:
             return 0
         return parse_measurement_count(await label.inner_text())
 
-    async def registered(self, state: Any, what: str, shows: str) -> None:
-        """Wait until the page shows `state` (a locator) after the click `what`, or fail."""
+    async def registered(self, state: Any, what: str, missing: str) -> None:
+        """Wait until the page shows `state` (a locator) after the click `what`, or fail
+        with `missing` (what the page does not show)."""
         from playwright.async_api import TimeoutError as PlaywrightTimeout  # local-only dependency
 
         try:
             await state.wait_for(state="visible", timeout=REGISTER_TIMEOUT_MS)
         except PlaywrightTimeout as exc:
             raise CaptureError(
-                f"{what}: the Measure tab does not show {shows!r} within "
-                f"{REGISTER_TIMEOUT_MS / 1000:g} s, so the page did not take the click"
+                f"{what}: {missing} within {REGISTER_TIMEOUT_MS / 1000:g} s, "
+                "so the page did not take the click"
             ) from exc
+
+    async def switched(self, toggle: Any, on: bool, what: str) -> None:
+        """Wait until the checkbox in `toggle` (a label locator) is `on` after the click
+        `what`, or fail: a click that switches nothing films a moment that never happened."""
+        box = toggle.locator(f"{CHECKBOX}{':checked' if on else ':not(:checked)'}")
+        await self.registered(box, what, f"its checkbox does not turn {'on' if on else 'off'}")
+
+    async def show_empire(self, empire: str) -> None:
+        """Pick `empire` in the open Empire Borders window (EmpireBordersPanel.tsx) at its peak
+        extent: its "By Period" timeline goes off first (on, at the 500 BC it loads with, the
+        empire takes that year's borders, Rome Latium only, or none), and the empire's region
+        opens if it is closed."""
+        page = self.page
+        name, region_name = EMPIRE_METADATA[empire]["name"], EMPIRE_METADATA[empire]["region"]
+        window = page.locator(EMPIRE_WINDOW)
+        await self.registered(
+            window,
+            "toggle_layer 'Empire Borders'",
+            "the page does not show the Empire Borders window",
+        )
+        period = window.locator(
+            "label.layer-toggle", has=page.locator(".layer-label", has_text=exact_text("By Period"))
+        )
+        if await period.locator(CHECKBOX).is_checked(timeout=10_000):
+            await self.click_locator(period, "empire_timeline")
+            await self.switched(period, False, "the Empire Borders window's 'By Period'")
+        header = page.locator(
+            ".region-header-compact > span:not(.region-chevron)", has_text=exact_text(region_name)
+        )
+        region = window.locator(".empire-region-compact", has=header)
+        row = region.locator(
+            "label.empire-row-inline",
+            has=page.locator(".empire-name-truncated", has_text=exact_text(name)),
+        )
+        if not await row.count():
+            await self.click_locator(region.locator(".region-header-compact"), "empire_region")
+        await self.click_locator(row, "empire")
+        await self.switched(row, True, f"empire {name!r}")
 
     async def screen_point(self, name: str, where: dict[str, float]) -> tuple[float, float]:
         point = await self.page.evaluate(
@@ -416,14 +513,14 @@ class _Driver:
             await self.click_locator(tab, "search_tab", event=False)
 
     def result_item(self, title: str) -> Any:
-        title_re = re.compile(rf"^\s*{re.escape(title)}\s*$")
         return self.page.locator(
-            ".search-result-item", has=self.page.locator(".search-result-title", has_text=title_re)
+            ".search-result-item",
+            has=self.page.locator(".search-result-title", has_text=exact_text(title)),
         ).first
 
     def legend_item(self, mode: str, label: str) -> Any:
         """The Filter panel's legend entry named `label` in `mode` (FilterPanel.tsx)."""
-        label_re = re.compile(rf"^\s*{re.escape(label)}\s*$")
+        label_re = exact_text(label)
         if mode == "country":
             # text badges and flag buttons both carry the country as their title
             return self.page.locator(".country-legend-list").get_by_title(label, exact=True).first
@@ -484,21 +581,33 @@ class _Driver:
             before = await self.measurement_count()
             await self.click_at(*a, "measure_a", page.locator(MAP_CANVAS))
             hint = page.locator(MEASURE_HINT, has_text=MEASURE_HINT_TEXT)
-            await self.registered(hint, "measure point a", MEASURE_HINT_TEXT)
+            await self.registered(
+                hint, "measure point a", f"the Measure tab does not show {MEASURE_HINT_TEXT!r}"
+            )
             await self.click_at(*b, "measure_b", page.locator(MAP_CANVAS))
             label = measurement_label(before + 1)
-            count = page.locator(MEASURE_COUNT, has_text=re.compile(rf"^\s*{re.escape(label)}\s*$"))
-            await self.registered(count, "measure point b", label)
+            count = page.locator(MEASURE_COUNT, has_text=exact_text(label))
+            await self.registered(
+                count, "measure point b", f"the Measure tab does not show {label!r}"
+            )
         elif do == "toggle_layer":
             expand = page.locator('.layer-toggle-panel .panel-minimize-btn[title="Maximize"]')
             if await expand.count():
                 await self.click_locator(expand.first, "expand_layers")
-            label_re = re.compile(rf"^\s*{re.escape(action['label'])}\s*$")
             toggle = page.locator(
                 ".layer-toggle-panel label.layer-toggle",
-                has=page.locator(".layer-label", has_text=label_re),
+                has=page.locator(".layer-label", has_text=exact_text(action["label"])),
             ).first
-            await self.click_locator(toggle, do)
+            what = f"toggle_layer {action['label']!r}"
+            if "empire" in action:
+                # the click opens the window; the checkbox turns on with the empire drawn
+                await self.click_locator(toggle, do)
+                await self.show_empire(action["empire"])
+                await self.switched(toggle, True, f"{what} in the Layers panel")
+            else:
+                on = await toggle.locator(CHECKBOX).is_checked(timeout=10_000)
+                await self.click_locator(toggle, do)
+                await self.switched(toggle, not on, what)
         elif do == "proximity":
             await self.click_locator(page.locator(".tab-btn", has_text="Proximity"), do)
             await self.click_locator(

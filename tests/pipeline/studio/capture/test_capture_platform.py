@@ -5,6 +5,7 @@ import asyncio
 import base64
 import importlib.util
 import itertools
+import json
 import math
 import time
 import types
@@ -12,6 +13,7 @@ from contextlib import nullcontext
 
 import pytest
 
+from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
 from pipeline.studio.capture import platform as platform_take
 from pipeline.studio.capture.encode import concat_script
 from pipeline.studio.capture.manifest import CaptureError
@@ -51,16 +53,19 @@ def test_validate_accepts_the_declarative_vocabulary():
         {"do": "zoom", "to": 90},
         {"do": "open_details", "title": "Baalbek Stones"},
         {"do": "measure", "a": {"lat": 34.0, "lng": 36.2}, "b": {"lat": 34.01, "lng": 36.21}},
-        {"do": "toggle_layer", "label": "Empire Borders"},
+        {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"},
         {"do": "proximity", "at": {"lat": 34.0067, "lng": 36.2033}},
         {"do": "filter", "mode": "category", "label": "Pyramid"},
         {"do": "wait", "s": 1.5},
+        {"do": "toggle_layer", "label": "Coastlines"},
     ]
     out = validate_actions(actions)
     assert [a["do"] for a in out] == [a["do"] for a in actions]
     assert out[3]["s"] == 3.0 and out[4]["to"] == 90
+    assert out[7] == {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"}
     assert out[8]["at"] == {"lat": 34.0067, "lng": 36.2033}
     assert out[9] == {"do": "filter", "mode": "category", "label": "Pyramid"}
+    assert out[11] == {"do": "toggle_layer", "label": "Coastlines"}
 
 
 @pytest.mark.parametrize(
@@ -87,6 +92,40 @@ def test_validate_accepts_the_declarative_vocabulary():
         (
             [{"do": "toggle_layer", "label": " satellite "}],
             r"actions\[0\]: no satellite toggle in globe sections",
+        ),
+        # the Empire Borders toggle only opens its window: without an empire it draws nothing
+        (
+            [{"do": "toggle_layer", "label": "Empire Borders"}],
+            r"actions\[0\]: 'Empire Borders' only opens its window; name the empire to show",
+        ),
+        (
+            [{"do": "toggle_layer", "label": "Empire Borders", "empire": "atlantis"}],
+            r"actions\[0\]\.empire must be an empire id of "
+            r"pipeline/historical_boundaries/empire_metadata\.py, got 'atlantis'",
+        ),
+        (
+            [{"do": "toggle_layer", "label": "Empire Borders", "empire": ["roman"]}],
+            r"actions\[0\]\.empire must be an empire id",
+        ),
+        (
+            [{"do": "toggle_layer", "label": "Coastlines", "empire": "roman"}],
+            r"actions\[0\]: only 'Empire Borders' takes an empire, not 'Coastlines'",
+        ),
+        (
+            [{"do": "toggle_layer", "label": "Historical Routes"}],
+            r"actions\[0\]: 'Historical Routes' only opens its picker window",
+        ),
+        (
+            [{"do": "toggle_layer", "label": "geological layers"}],
+            r"actions\[0\]: 'geological layers' only opens its picker window",
+        ),
+        (
+            [{"do": "search", "q": "x", "empire": "roman"}],
+            r"actions\[0\] \(search\) needs exactly \['q'\], got \['empire', 'q'\]",
+        ),
+        (
+            [{"do": "toggle_layer", "empire": "roman"}],
+            r"\(toggle_layer\) needs exactly \['label'\] \(optional \['empire'\]\)",
         ),
     ],
 )
@@ -542,3 +581,162 @@ def test_each_measure_point_shows_on_the_page_before_the_cursor_moves_on(monkeyp
                 await driver.run(measure)
 
     _drive(MEASURE_PAGE, steps)
+
+
+def _layers_page(regions):
+    """The Layers panel and the Empire Borders window as the app renders and wires them
+    (MapLayersPanel.tsx, HistoricalLayersSection.tsx, EmpireBordersPanel.tsx; controlled
+    checkboxes, as React keeps them): "Coastlines" flips on a click; "Labels" is disabled, as
+    in Mapbox mode; "Empire Borders" opens its window and is checked while an empire is
+    shown. The window's "By Period" is on, its list shows the empires of the open regions
+    (Mediterranean at first), and window.shown records each empire shown with the
+    timeline's state at that moment. `regions`: region -> [(id, name), ...]."""
+    return (
+        "<style>body{margin:0} .layer-toggle-panel{position:fixed;right:20px;top:300px;width:220px}"
+        " .layer-toggle{display:flex;align-items:center;height:24px}"
+        " .empire-borders-window{position:fixed;left:600px;top:100px;width:280px}"
+        " .region-header-compact{height:22px} .empire-row-inline{display:flex;height:24px}</style>"
+        "<div class='layer-toggle-panel'>"
+        "<label class='layer-toggle'><input type='checkbox'><span class='layer-label'>Coastlines"
+        "</span></label><label class='layer-toggle mapbox-unavailable'><input type='checkbox'"
+        " checked disabled><span class='layer-label'>Labels</span></label>"
+        "<label class='layer-toggle'><input type='checkbox' id='empires'>"
+        "<span class='layer-label'>Empire Borders</span></label></div>"
+        "<div class='empire-borders-window' style='display:none'><div class='empire-options-row'>"
+        "<label class='layer-toggle'><input type='checkbox' id='period' checked>"
+        "<span class='layer-label'>By Period</span></label></div>"
+        "<div class='empire-borders-list'></div></div>"
+        "<script>(() => {\n"
+        f"const regions = {json.dumps(regions)}\n"
+        """const open = new Set(['Mediterranean']), visible = new Set()
+let period = true
+window.shown = []
+const win = document.querySelector('.empire-borders-window')
+const render = () => {
+  document.getElementById('empires').checked = visible.size > 0
+  document.getElementById('period').checked = period
+  document.querySelector('.empire-borders-list').innerHTML = Object.entries(regions).map(
+    ([region, empires]) => '<div class="empire-region-compact">'
+      + `<div class="region-header-compact" data-region="${region}">`
+      + `<span class="region-chevron">${open.has(region) ? '−' : '+'}</span>`
+      + `<span>${region}</span></div>`
+      + (open.has(region) ? empires.map(([id, name]) => '<label class="empire-row-inline">'
+        + `<input type="checkbox" data-id="${id}" ${visible.has(id) ? 'checked' : ''}>`
+        + `<span class="empire-name-truncated" title="${name}">${name}</span></label>`).join('') : '')
+      + '</div>').join('')
+}
+document.getElementById('empires').addEventListener('change', () => {
+  win.style.display = win.style.display === 'none' ? 'block' : 'none'
+  render()
+})
+document.getElementById('period').addEventListener('change', (e) => { period = e.target.checked; render() })
+win.addEventListener('click', (e) => {
+  const header = e.target.closest('.region-header-compact')
+  if (!header) return
+  const region = header.dataset.region
+  open.has(region) ? open.delete(region) : open.add(region)
+  render()
+})
+win.addEventListener('change', (e) => {
+  const id = e.target.dataset.id
+  if (!id) return
+  if (visible.has(id)) visible.delete(id)
+  else { visible.add(id); window.shown.push([id, period]) }
+  render()
+})
+render()
+})()</script>"""
+    )
+
+
+def _regions(*ids):
+    """region -> [(id, name)] of `ids` as pipeline/historical_boundaries/empire_metadata.py has them."""
+    out = {}
+    for empire_id in ids:
+        meta = EMPIRE_METADATA[empire_id]
+        out.setdefault(meta["region"], []).append((empire_id, meta["name"]))
+    return out
+
+
+LAYERS_PAGE = _layers_page(_regions("greek", "roman", "achaemenid", "parthian"))
+LAYERS_CHECKED_JS = (
+    "[...document.querySelectorAll('.layer-toggle-panel input')].map((b) => b.checked)"
+)
+
+
+def test_a_layer_toggle_fails_the_take_unless_its_checkbox_flips(monkeypatch):
+    """Review of Task 36: the Empire Borders label only opens its window, and the old
+    driver clicked it and went on, a toggle_layer event for a layer that never came on."""
+    monkeypatch.setattr(platform_take, "REGISTER_TIMEOUT_MS", 1_000)
+
+    async def steps(driver, page):
+        await driver.run({"do": "toggle_layer", "label": "Coastlines"})
+        on = await page.evaluate(LAYERS_CHECKED_JS)
+        await driver.run({"do": "toggle_layer", "label": "Coastlines"})
+        off = await page.evaluate(LAYERS_CHECKED_JS)
+        for label, turn in [("Labels", "off"), ("Empire Borders", "on")]:
+            # validate_actions refuses the second without an empire; the driver fails it too
+            with pytest.raises(
+                CaptureError,
+                match=rf"^toggle_layer '{label}': its checkbox does not turn {turn} within 1 s, "
+                r"so the page did not take the click$",
+            ):
+                await driver.run({"do": "toggle_layer", "label": label})
+        return on, off, [name for _, name, _ in driver.take.marks]
+
+    on, off, marks = _drive(LAYERS_PAGE, steps)
+    assert on == [True, True, False] and off == [False, True, False]
+    assert marks == ["toggle_layer"] * 4
+
+
+def test_empire_borders_draws_the_named_empire_at_its_peak_extent(monkeypatch):
+    """The Empire Borders moment picks its empire with the window's "By Period" timeline off:
+    on, at the 500 BC the page loads with, Rome draws Latium only (take g1e, 2026-09-30)."""
+    monkeypatch.setattr(platform_take, "REGISTER_TIMEOUT_MS", 1_000)
+    roman = {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"}
+    # Persian/Central Asia is closed when the window opens: its region opens first
+    parthian = {**roman, "empire": "parthian"}
+
+    async def steps(driver, page):
+        results = []
+        for action in (roman, parthian):
+            await page.set_content(LAYERS_PAGE)
+            driver.take.marks.clear()
+            await driver.run(validate_actions([action])[0])
+            results.append(
+                (
+                    await page.evaluate("window.shown"),
+                    await page.evaluate("document.getElementById('empires').checked"),
+                    await page.evaluate("document.getElementById('period').checked"),
+                    [name for _, name, _ in driver.take.marks],
+                )
+            )
+        return results
+
+    assert _drive(LAYERS_PAGE, steps) == [
+        ([["roman", False]], True, False, ["toggle_layer", "empire_timeline", "empire"]),
+        (
+            [["parthian", False]],
+            True,
+            False,
+            ["toggle_layer", "empire_timeline", "empire_region", "empire"],
+        ),
+    ]
+
+
+def test_an_empire_the_window_does_not_show_fails_the_take(monkeypatch):
+    """An empire whose row does not switch on is a failed take, never a Layers panel event
+    for borders that were not drawn."""
+    monkeypatch.setattr(platform_take, "REGISTER_TIMEOUT_MS", 1_000)
+    # every empire row's checkbox is disabled: a click on the row switches nothing
+    page_html = LAYERS_PAGE.replace("${visible.has(id) ? 'checked' : ''}", "disabled")
+
+    async def steps(driver, page):
+        with pytest.raises(
+            CaptureError,
+            match=r"^empire 'Roman Empire': its checkbox does not turn on within 1 s",
+        ):
+            await driver.run({"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"})
+        return await page.evaluate("[window.shown, document.getElementById('empires').checked]")
+
+    assert _drive(page_html, steps) == [[], False]
