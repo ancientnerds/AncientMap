@@ -224,7 +224,7 @@ def test_verdict_frame_uses_the_scripts_answer_rule(monkeypatch):
 
 def test_a_beats_own_lead_moves_its_narration_and_its_cues():
     """The narration and the cue frames start after the beat's lead (script.narration_start and
-    script.cue_frame, the arithmetic `episode check` uses for a clip's still picture)."""
+    script.cue_frame, the one definition of that arithmetic)."""
     from pipeline.studio import script
 
     assert timeline.cue_frame is script.cue_frame

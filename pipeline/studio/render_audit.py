@@ -13,8 +13,12 @@ an fps): stills, cards and infographics hold still by design once their entrance
 clip scene that holds one picture for more than FROZEN_MAX_S (frozen_max_frames) is dead air, a
 stalled take or a still the script planned (cut to a card instead). `episode check` refuses the
 planned ones with this same limit before the render (script.py, owner Q16: a fly-to's hold after
-its arrival, a fixed pose before, between and after its places light up, a Mapbox orbit that
-does not turn); this check catches the rest, after it. A frame counts as unchanged when its mean
+its arrival, a fixed pose, a Mapbox orbit that does not turn); this check catches the rest,
+after it. A GlobeShot pin lighting up does not end a planned hold there: estimated off-render on
+2026-09-30 (its dot, glow and ring drawn at 1080p and scaled as _frame_diffs scales, not
+measured through render.ts), a pin reads 0.03 over a grey Y 80 and 0.07 over the NERV
+background, and its label's boot-in 0.03 or less per frame, so this check sees a pin on a dark
+globe and misses it on a lighter one. A frame counts as unchanged when its mean
 luma difference to the next (shorts_audit._frame_diffs) is below the shorts' FROZEN_DIFF, 0.05,
 measured on studio takes on 2026-09-29 (recorded on the NVIDIA by capture.globe.record_globe,
 encoded as render.ts encodes: h264_nvenc, 16M, no B-frames;

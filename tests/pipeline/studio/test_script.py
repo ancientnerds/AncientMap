@@ -888,8 +888,9 @@ GLOBE_REGISTRY = {**sf.REGISTRY, "GlobeShot": load_registry()["GlobeShot"]}
 QUARRY = {"lat": 33.99917, "lng": 36.20028}
 TEMPLE = {"lat": 34.00694, "lng": 36.20389}
 HOLD_ADVICE = (
-    "the render audit refuses a clip scene that holds one picture for more than 4 s (shorten "
-    "the beat, record a take that moves at least every 4 s, or cut to a card)"
+    "the render audit refuses a clip scene that holds one picture for more than 4 s, and a pin "
+    "lighting up does not change the picture for it (shorten the beat, record a take whose "
+    "camera moves through the scene, or cut to a card)"
 )
 
 
@@ -1020,41 +1021,59 @@ def test_a_flyto_may_not_hold_still_after_arrival_for_more_than_4_s():
         "b04: capture g1 holds one picture for 6.98 s, from the scene's start to the scene's "
         f"end; {HOLD_ADVICE}"
     ]
+    # a show cue that delays the pin past the arrival ("was", 4.10 s into the scene) does not
+    # break the hold: the render audit does not reliably see a pin light up
+    late = [{"at_word": "was", "do": "show", "target": "p1"}]
+    assert _held(FLYTO, FLYTO_TAKE, min_s=9.0, cues=late) == _held(FLYTO, FLYTO_TAKE, min_s=9.0)
 
 
-def test_a_fixed_pose_may_not_hold_still_after_or_before_its_places_light_up():
-    # pins at 0.8 s and 1.4 s (frames 48, 84); a 6 s scene holds 4.58 s after the last one
-    assert _held(_places_spec(), _places_take(), min_s=6.0) == (
-        [
-            "b04: capture g2 holds one picture for 4.58 s, from 1.40 s into the scene (place "
-            f"p2 appears) to the scene's end; {HOLD_ADVICE}"
-        ],
-        [],
-    )
-    # a show cue delays its pin (GlobeShot): "where" starts 2.5 s into the narration
+#: b04 (5.95 s, 357 frames) showing a fixed pose: one picture from its first frame to its last
+FIXED_POSE_HELD = (
+    [
+        "b04: capture g2 holds one picture for 5.93 s, from the scene's start to the scene's "
+        f"end; {HOLD_ADVICE}"
+    ],
+    [],
+)
+
+
+def test_a_fixed_pose_holds_one_picture_whatever_its_pins_do():
+    # a pin lighting up reads 0.03-0.07 against the audit's FROZEN_DIFF of 0.05 (render_audit's
+    # docstring), so the audit may miss it: neither its event (0.8 s, 1.4 s; with a lead of
+    # 5 s, 5.0 s and 5.6 s) nor a show cue that delays it ends the fixed pose's one picture
+    assert _held(_places_spec(), _places_take(), min_s=5.0) == FIXED_POSE_HELD
     shown = [{"at_word": "where", "do": "show", "target": "p2"}]
-    assert _held(_places_spec(), _places_take(), min_s=6.0, cues=shown) == ([], [])
-    # a lead of 5 s holds the pose from the scene's start until the first place lights up
-    assert _held(_places_spec(5.0), _places_take(5.0), min_s=7.0) == (
+    assert _held(_places_spec(), _places_take(), min_s=5.0, cues=shown) == FIXED_POSE_HELD
+    assert _held(_places_spec(5.0), _places_take(5.0), min_s=5.0) == FIXED_POSE_HELD
+    # the audit's limit: a scene of 241 frames holds 240 unchanged frames and passes, 242 fail
+    short = sf.words_for(sf.script(), 3.0)  # b04's scene: max(min_s, 0.35 + 3.0 + 0.6) s
+    assert _held(_places_spec(), _places_take(), min_s=241 / 60, words=short) == ([], [])
+    assert len(_held(_places_spec(), _places_take(), min_s=242 / 60, words=short)[0]) == 1
+
+
+def test_pins_every_3_s_do_not_break_a_fixed_poses_hold():
+    """The review's case: pins lighting up at 3 s and 6 s of a 9 s fixed-pose scene once left
+    no run over 4 s, so `episode check` passed a take whose render the audit reads as one
+    picture of 9 s and refuses after the whole render."""
+    spec = {**_places_spec(3.0), "interval_s": 3.0}
+    pins = [_pin("p1", "Baalbek quarry", 3.0), _pin("p2", "Temple of Jupiter", 6.0)]
+    assert _held(spec, _take("g2", pins, duration_s=10.0), min_s=9.0) == (
         [
-            "b04: capture g2 holds one picture for 4.98 s, from the scene's start to 5.00 s "
-            f"into the scene (place p1 appears); {HOLD_ADVICE}"
+            "b04: capture g2 holds one picture for 8.98 s, from the scene's start to the "
+            f"scene's end; {HOLD_ADVICE}"
         ],
         [],
     )
 
 
-def test_a_show_cue_on_stale_word_timings_defers_the_hold():
+def test_the_hold_does_not_wait_for_the_show_cues_word_timings():
+    # the hold ignores every pin, so a show cue on stale word timings defers nothing
     shown = [{"at_word": "where", "do": "show", "target": "p2"}]
     data = sf.script()
     words = sf.words_for(data)
     words["b04"]["words"][0]["w"] = "A"
-    assert _held(_places_spec(), _places_take(), min_s=6.0, cues=shown, words=words) == (
-        [],
-        [
-            "b04: the clip's still picture is checked once words.json holds this beat's "
-            "display words (run `episode voice`)"
-        ],
+    assert (
+        _held(_places_spec(), _places_take(), min_s=5.0, cues=shown, words=words) == FIXED_POSE_HELD
     )
 
 

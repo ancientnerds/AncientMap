@@ -19,8 +19,8 @@ ceil(max(min_s, lead + speech + tail) * fps), the count `episode script` checks 
 its narration starts after the lead (script.narration_start); cues and captions are placed on
 the word timings of the display text (script.word_start; a cue on the word
 `script.cue_word_index` finds, script.cue_frame: whole display words, never a match inside a
-longer word), the frames `episode check` also takes a GlobeShot pin's show cue from. A cue is
-exactly {frame, do, target} plus `value` for status and meter, and lies inside its scene.
+longer word). A cue is exactly {frame, do, target} plus `value` for status and meter, and lies
+inside its scene.
 Captions exist only for hook beats. Every path is relative to the per-render public dir.
 The word timings must belong to the current display text and voice/<beat>.mp3 to the current
 spoken text, voice and speed (voice.stale_beats); anything else is `episode voice` again.

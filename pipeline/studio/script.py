@@ -31,10 +31,11 @@ With the clip length comes its still picture (owner Q16): a clip scene may hold 
 at most the render audit's FROZEN_MAX_S (render_audit.frozen_max_frames), and a still the take
 plans is refused here instead of after the hours-long render. A take's spec and manifest say when
 its camera stops (a fly-to at its arrival; a fixed-pose places take and a Mapbox orbit that does
-not turn never move; a sweep, a distribution's turn and a fly-in move to their end), and a
-GlobeShot pin changes the picture where it lights up (its event, or later at its first show
-cue, the renderer's rule). A platform take is the live page, whose motion no spec plans (the
-globe's own rotation, flights, panels, tiles): only the render audit judges it. Every
+not turn never move; a sweep, a distribution's turn and a fly-in move to their end), and from
+there the picture holds to the scene's end. A GlobeShot pin lighting up does not end the hold,
+whenever its event or show cue puts it: the audit does not reliably see a pin (render_audit's
+docstring). A platform take is the live page, whose motion no spec
+plans (the globe's own rotation, flights, panels, tiles): only the render audit judges it. Every
 string the renderer will draw (the props at the block's registry `drawn` paths, a capture's
 credits and its place and pin labels, hook captions, credit lines, chapter titles, thumbnail
 teasers) must lie in the brand fonts' glyphs (glyphs.py, the renderer's checkBlocks rule; owner
@@ -149,18 +150,12 @@ def _pins(props: dict[str, Any]) -> list[str]:
     return [e["target"] for e in props["map"]["events"] if e["name"] == "pin" and "target" in e]
 
 
-def _globe_pins(props: dict[str, Any]) -> list[tuple[str, float]]:
-    """(place id, event second) of every labelled place of a globe take: the pins GlobeShot
-    lights up at their event (a show cue can only delay one)."""
+def _globe_places(props: dict[str, Any]) -> list[str]:
     return [
-        (e["target"], e["t"])
+        e["target"]
         for e in props["clip"]["events"]
         if e["name"] == "place" and {"target", "x", "y", "label"} <= set(e)
     ]
-
-
-def _globe_places(props: dict[str, Any]) -> list[str]:
-    return [pid for pid, _t in _globe_pins(props)]
 
 
 def _evidence_id(props: dict[str, Any]) -> list[str]:
@@ -941,7 +936,6 @@ def validate_script(
             _glyph_problems(bid, beat, entry["drawn"], props, entities, kinds, captures)
         )
         # cues
-        shows: list[dict[str, Any]] = []
         for n, cue in enumerate(beat["cues"], start=1):
             where = f"{bid} cue {n}"
             problems = _cue_problems(cue, beat["display"], claim_ids)
@@ -969,20 +963,9 @@ def validate_script(
                     report.errors.append(
                         f"{where}: {verb} {target}: not a target of this block ({shown})"
                     )
-                elif verb == "show":
-                    shows.append(cue)
         # a clip's $capture that is not declared was reported above
         if clip_frames is not None and props is not None and props["clip"]["id"] in specs:
-            _clip_hold(
-                bid,
-                beat,
-                props,
-                specs[props["clip"]["id"]],
-                shows,
-                None if words is None else words.get(bid),
-                clip_frames,
-                report,
-            )
+            _clip_hold(bid, props, specs[props["clip"]["id"]], clip_frames, report)
 
     if hook_s > HOOK_MAX_S:
         how = "measured" if words is not None else "estimated"
@@ -1184,65 +1167,33 @@ def _camera_stops(spec: dict[str, Any], clip: dict[str, Any]) -> float | None:
 
 
 def _clip_hold(
-    bid: str,
-    beat: dict[str, Any],
-    props: dict[str, Any],
-    spec: dict[str, Any],
-    shows: list[dict[str, Any]],
-    timing: dict[str, Any] | None,
-    frames: int,
-    report: ScriptReport,
+    bid: str, props: dict[str, Any], spec: dict[str, Any], frames: int, report: ScriptReport
 ) -> None:
     """Owner Q16: the longest still picture a clip scene plans may not exceed the render audit's
     limit (render_audit.frozen_max_frames), refused before the render instead of after it.
 
-    The picture changes while the take's camera moves (_camera_stops) and where a GlobeShot pin
-    lights up: at its event, or at its first show cue when that comes later (the renderer's
-    rule; `shows` are the beat's checked show cues, `timing` its words.json entry). Between two
-    changes every frame repeats the one before it: the run of unchanged frames the audit
-    counts. `frames` is the scene's scene_frames, the clip already long enough for it."""
+    The picture changes while the take's camera moves (_camera_stops). From the frame the
+    camera stops at, or from the scene's start when it does not move inside the scene, every
+    frame repeats the one before it to the scene's end: the run of unchanged frames the audit
+    counts. A GlobeShot pin lighting up, its label and its ring do not end that run: the audit
+    does not reliably see them (render_audit's docstring). `frames` is the scene's scene_frames,
+    the clip already long enough for it."""
     clip = props["clip"]
     stops = _camera_stops(spec, clip)
     if stops is None:
         return
-    cued: dict[str, int] = {}
-    if shows:
-        if timing is None or not word_timings_match(beat, timing):
-            report.deferred.append(
-                f"{bid}: the clip's still picture is checked once words.json holds this beat's "
-                "display words (run `episode voice`)"
-            )
-            return
-        for cue in shows:
-            at = cue_frame(beat, timing, cue["at_word"])
-            cued[cue["target"]] = min(at, cued.get(cue["target"], at))
-    trim = round(props.get("start_s", 0) * FPS)
-    last = frames - 1
-    stop = min(round(stops * FPS) - trim, last)
-    # (scene frame, how the message names it) of every change of the picture, in order: the
-    # camera moves until `stop` (or the scene starts still), then the pins light up
-    if stop > 0:
-        changes = [(stop, f"{stop / FPS:.2f} s into the scene (the camera stops)")]
-    else:
-        changes = [(0, "the scene's start")]
-    lit = []
-    for pid, t in _globe_pins(props):
-        event = round(t * FPS) - trim
-        at = max(event, cued.get(pid, event))
-        if changes[0][0] < at <= last:
-            lit.append((at, f"{at / FPS:.2f} s into the scene (place {pid} appears)"))
-    changes += sorted(lit)
-    ends = [*changes[1:], (last + 1, "the scene's end")]
-    held, since, until = max(
-        ((b - a - 1, start, end) for (a, start), (b, end) in zip(changes, ends, strict=True)),
-        key=lambda run: run[0],
-    )
+    stop = round(stops * FPS) - round(props.get("start_s", 0) * FPS)
+    held = frames - 1 - max(stop, 0)
     if held > frozen_max_frames(FPS):
+        since = "the scene's start"
+        if stop > 0:
+            since = f"{stop / FPS:.2f} s into the scene (the camera stops)"
         report.errors.append(
             f"{bid}: capture {clip['id']} holds one picture for {held / FPS:.2f} s, from {since} "
-            f"to {until}; the render audit refuses a clip scene that holds one picture for "
-            f"more than {FROZEN_MAX_S:g} s (shorten the beat, record a take that moves at least "
-            f"every {FROZEN_MAX_S:g} s, or cut to a card)"
+            "to the scene's end; the render audit refuses a clip scene that holds one picture "
+            f"for more than {FROZEN_MAX_S:g} s, and a pin lighting up does not change the "
+            "picture for it (shorten the beat, record a take whose camera moves through the "
+            "scene, or cut to a card)"
         )
 
 
