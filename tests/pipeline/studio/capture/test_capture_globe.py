@@ -546,6 +546,20 @@ def test_the_recorder_has_time_for_every_frame_at_the_measured_mapbox_rate():
         assert globe.record_timeout_s(frames) > frames * 3.4 * 1.5
 
 
+def test_the_runbook_states_the_recorders_limit_as_record_timeout_s_computes_it():
+    """Review of the capture item: STUDIO.md 9.4 still named a fixed 90-minute
+    RECORD_TIMEOUT_S after the limit became a start time plus a time per frame."""
+    runbook = Path(__file__).resolve().parents[4] / "docs" / "procedures" / "STUDIO.md"
+    text = runbook.read_text(encoding="utf-8")
+    section = " ".join(text.split("### 9.4 ", 1)[1].split("\n## ", 1)[0].split())
+    assert "RECORD_TIMEOUT_S" not in text
+    per_frame = f"{globe.RECORD_START_S // 60} minutes plus {globe.RECORD_FRAME_S:g} s per frame"
+    assert f"may run {per_frame} (`record_timeout_s` in `capture/globe.py`)" in section
+    for seconds, take in ((5, "fly-in"), (globe.MAX_TAKE_S, "take")):
+        minutes = globe.record_timeout_s(globe.expected_frames(seconds)) / 60
+        assert f"{minutes:g} minutes for a {seconds:g}-second {take}" in section
+
+
 def test_a_recorder_that_never_ends_is_stopped_at_its_timeout(tmp_path, monkeypatch, workstation):
     killed = []
 

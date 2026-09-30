@@ -496,8 +496,9 @@ The rendered episode itself is H.264 (`h264_nvenc`).
 ### 9.4 How long a Mapbox fly-in takes
 
 A Mapbox fly-in waits for its tiles on every frame: a 5-second take took 17 minutes on 2026-09-26.
-Budget up to about 20 minutes per fly-in and do not interrupt it. The recorder's limit per take is
-90 minutes (`RECORD_TIMEOUT_S`, plan D Task 31).
+Budget up to about 20 minutes per fly-in and do not interrupt it. The recorder may run 10 minutes
+plus 6 s per frame (`record_timeout_s` in `capture/globe.py`): 40 minutes for a 5-second fly-in,
+190 minutes for a 30-second take. A scene whose renderer is not the NVIDIA stops at its first frame.
 
 ## 10. The glyph rule
 
