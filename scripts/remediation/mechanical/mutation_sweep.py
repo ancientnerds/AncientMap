@@ -7473,6 +7473,182 @@ CHIAPA_CASES: list[Case] = [
 CASES += CHIAPA_CASES
 
 
+# ---------------------------------------------- lane WB: a site no card can be written for
+#: The decline of a site whose every name form holds a glyph the shorts font cannot draw
+#: (`Jabal al-ʿHayn`, run wb-ws-2026-09-27-02, batch write-014): the answer's shape, the contract's
+#: proof, the clear it flows to and the option's place in the brief - never in a prompt, whose
+#: sha256 an export pins. Every label starts with "teaser: undrawable", so the group runs on its
+#: own (and with the rest of lane WB under "teaser:"): `mutation_sweep.py "teaser: undrawable"`.
+TEASER_PROMPTS = REPO / "scripts/remediation/teaser/prompts.py"
+_DECLINE_SHAPE = "test_the_decline_is_exactly_its_shape"
+_DECLINE_FLOWS = "test_a_declined_site_is_cleared_and_no_later_stage_asks_it"
+_DECLINE_CHECKED = "test_the_decline_is_accepted_for_the_site_and_refused_for_another"
+_DECLINE_BRIEF = "test_the_question_does_not_offer_the_decline_only_the_brief_does"
+_DECLINE_IMPORT = (
+    "test_the_import_records_the_proof_and_refuses_a_decline_the_contract_does_not_prove"
+)
+_DECLINE_STORED = "test_the_stored_name_is_drawn_with_every_card_so_its_glyphs_count_in_every_form"
+_DECLINE_STAGES = "test_the_rewrite_after_a_failed_verification_never_declines"
+_DECLINE_SHAPE_IF = (
+    '    if data["card"] is not None or data["basis"] != [] or data["undrawable"] is not True:'
+)
+_DECLINE_STAGES_NEEDLE = "DECLINING_STAGES = tuple(writer for writer, _ in CHECK_ROUNDS)"
+_DECLINE_BRIEF_NEEDLE = ' if stage in DECLINING_STAGES else ""'
+UNDRAWABLE_CASES: list[Case] = [
+    *(
+        Case(f"teaser: undrawable: {label}", path, old, new, test, TEASER_TESTS)
+        for label, path, old, new, test in (
+            (
+                "a decline carries no card",
+                TEASER_ANSWERS,
+                _DECLINE_SHAPE_IF,
+                '    if data["basis"] != [] or data["undrawable"] is not True:',
+                _DECLINE_SHAPE,
+            ),
+            (
+                "a decline names no sentence",
+                TEASER_ANSWERS,
+                _DECLINE_SHAPE_IF,
+                '    if data["card"] is not None or data["undrawable"] is not True:',
+                _DECLINE_SHAPE,
+            ),
+            (
+                "a decline says true, not something truthy",
+                TEASER_ANSWERS,
+                _DECLINE_SHAPE_IF,
+                '    if data["card"] is not None or data["basis"] != [] or not data["undrawable"]:',
+                _DECLINE_SHAPE,
+            ),
+            (
+                "a decline says true at all",
+                TEASER_ANSWERS,
+                _DECLINE_SHAPE_IF,
+                '    if data["card"] is not None or data["basis"] != []:',
+                _DECLINE_SHAPE,
+            ),
+            (
+                "a decline is one of the writer's shapes",
+                TEASER_ANSWERS,
+                "    if not isinstance(data, dict) or set(data) not in shapes:",
+                "    if not isinstance(data, dict) or set(data) not in shapes[:1]:",
+                "test_a_site_no_card_can_be_written_for_is_declined",
+            ),
+            (
+                "the stored name is drawn with every form",
+                TEASER_CONTRACT,
+                "    glyphs = {form: tuple(fit(site.name, form).missing) for form in site.forms}",
+                "    glyphs = {form: tuple(fit(form, form).missing) for form in site.forms}",
+                _DECLINE_STORED,
+            ),
+            (
+                "a form the font draws is a drawable form",
+                TEASER_CONTRACT,
+                "    drawable = [form for form, missing in glyphs.items() if not missing]",
+                "    drawable = [form for form, missing in glyphs.items() if missing]",
+                "test_a_site_whose_every_name_form_holds_an_undrawable_glyph_is_proved",
+            ),
+            (
+                "a declined site is cleared",
+                TEASER_RUN,
+                '        if written["card"] is None:  # declined: the contract proved no card can be '
+                "written",
+                "        if False:  # declined: the contract proved no card can be written",
+                _DECLINE_FLOWS,
+            ),
+            (
+                "the decline is proved by the contract",
+                TEASER_RUN,
+                "                    proof = C.undrawable_proof(shown, fit=fit)",
+                "                    proof = {}",
+                _DECLINE_CHECKED,
+            ),
+            (
+                "check-answer shows a proved decline",
+                TEASER_RUN,
+                '        if parsed["card"] is None:  # declined, and the contract proved it',
+                "        if False:  # declined, and the contract proved it",
+                _DECLINE_CHECKED,
+            ),
+            (
+                "the import counts the declines",
+                TEASER_RUN,
+                '            "undrawable": sum(1 for row in rows if row["card"] is None),',
+                '            "undrawable": 0,',
+                _DECLINE_IMPORT,
+            ),
+            (
+                "the proof is the finding of the clear",
+                TEASER_RUN,
+                "        if state.reason == NAME_UNDRAWABLE:  # no card was tried: the proof is the "
+                "finding",
+                "        if False:  # no card was tried: the proof is the finding",
+                _DECLINE_FLOWS,
+            ),
+            (
+                "the brief offers the decline to a writer of a card",
+                TEASER_RUN,
+                _DECLINE_BRIEF_NEEDLE,
+                ' if False else ""',
+                _DECLINE_BRIEF,
+            ),
+            (
+                "the brief offers it to no checker",
+                TEASER_RUN,
+                _DECLINE_BRIEF_NEEDLE,
+                ' if True else ""',
+                _DECLINE_BRIEF,
+            ),
+            (
+                "the rewrite after a verification never declines",
+                TEASER_RUN,
+                _DECLINE_STAGES_NEEDLE,
+                "DECLINING_STAGES = WRITER_STAGES",
+                _DECLINE_STAGES,
+            ),
+            (
+                "every writer of a card may decline",
+                TEASER_RUN,
+                _DECLINE_STAGES_NEEDLE,
+                'DECLINING_STAGES = ("write",)',
+                _DECLINE_STAGES,
+            ),
+            (
+                "the question does not offer the decline",
+                TEASER_PROMPTS,
+                "sentences your card\\'s facts come from.'",
+                "sentences your card\\'s facts come from. Or undrawable.'",
+                _DECLINE_BRIEF,
+            ),
+        )
+    ),
+    *(
+        guard(f"teaser: undrawable: {label}", path, needle, test, TEASER_TESTS)
+        for label, path, needle, test in (
+            ("the decline's shape is checked", TEASER_ANSWERS, _DECLINE_SHAPE_IF, _DECLINE_SHAPE),
+            (
+                "a card is still parsed as a card",
+                TEASER_ANSWERS,
+                "    if set(data) == WRITER_KEYS:",
+                "test_a_card_and_its_basis",
+            ),
+            (
+                "a site with a drawable form is never declined",
+                TEASER_CONTRACT,
+                "    if drawable:",
+                "test_a_site_with_a_name_form_the_font_can_draw_is_refused",
+            ),
+            (
+                "the decline is recognised in an answer",
+                TEASER_RUN,
+                "            if isinstance(written, A.Declined):",
+                _DECLINE_CHECKED,
+            ),
+        )
+    ),
+]
+CASES += UNDRAWABLE_CASES
+
+
 # ------------------------------------------------------------------------------ the mutation
 class NeedleCount(ValueError):
     """The needle does not occur exactly once: the case cannot say which guard it removes."""
