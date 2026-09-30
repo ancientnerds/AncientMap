@@ -11,7 +11,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { type GlobeDemoRefs, registerGlobeDemoApi } from '../demoApi'
 
-type DemoWindow = { location: { search: string }; __DEMO?: { enterMapbox?: () => Promise<void>; isReady?: () => boolean } }
+type DemoWindow = {
+  location: { search: string }
+  __DEMO?: { enterMapbox?: () => Promise<void>; isReady?: () => boolean; setEmpireTimeline?: (enabled: boolean) => void }
+}
 
 let win: DemoWindow
 
@@ -100,5 +103,14 @@ describe('__DEMO.isReady', () => {
       dotsAnimationCompleteRef: { current: true },
     } as unknown as GlobeDemoRefs)
     expect(win.__DEMO!.isReady!()).toBe(true)
+  })
+})
+
+describe('__DEMO.setEmpireTimeline', () => {
+  it("switches the Empire Borders window's By Period timeline", () => {
+    const setGlobalTimelineEnabled = vi.fn()
+    registerGlobeDemoApi({ setGlobalTimelineEnabled } as unknown as GlobeDemoRefs)
+    win.__DEMO!.setEmpireTimeline!(false)
+    expect(setGlobalTimelineEnabled).toHaveBeenCalledExactlyOnceWith(false)
   })
 })

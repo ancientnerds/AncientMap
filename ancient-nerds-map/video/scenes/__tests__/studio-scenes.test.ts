@@ -13,7 +13,8 @@ import type { Page } from 'puppeteer'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { FrameGrabber, NO_FRAME_MS, PointTracker, frameCount, frameName } from '../studio-frames'
-import { type PlacesInput, START_LNG_OFFSET, flytoStart, readStudioInput, sweepLng } from '../studio-globe'
+import type { DemoAPI } from '../../../src/utils/demoApi'
+import { type PlacesInput, START_LNG_OFFSET, flytoStart, readStudioInput, showEmpireAtPeak, sweepLng } from '../studio-globe'
 import { ORBIT_BEARING_TO, ROTATE_S, SPACE_ZOOM, ZOOM_S, checkCountry, flyinPath, orbitPath } from '../studio-mapbox'
 
 const saved = process.env.STUDIO_SCENE_INPUT
@@ -52,6 +53,16 @@ describe('studio-globe-flyto', () => {
   it('starts west and north of the target, away from the poles', () => {
     expect(flytoStart({ lat: 34, lng: 36.2 })).toEqual({ lng: 36.2 + START_LNG_OFFSET, lat: 49 })
     expect(flytoStart({ lat: 68, lng: 0 }).lat).toBe(70)
+  })
+  it('switches the By Period timeline off and lets the page draw before it shows the empire', async () => {
+    const calls: string[] = []
+    const demo = {
+      setEmpireTimeline: async (enabled: boolean) => { calls.push(`timeline ${enabled}`) },
+      showEmpire: async (id: string) => { calls.push(`show ${id}`) },
+    } as unknown as DemoAPI
+    const page = { evaluate: async (code: string) => { calls.push(code.includes('requestAnimationFrame') ? 'frames' : code) } } as unknown as Page
+    await showEmpireAtPeak(page, demo, 'roman')
+    expect(calls).toEqual(['timeline false', 'frames', 'show roman'])
   })
 })
 

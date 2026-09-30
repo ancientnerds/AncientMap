@@ -573,8 +573,10 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       setTileLayers,
       setVectorLayers,
       setGeoLabelsVisible: labels.setGeoLabelsVisible,
-      toggleEmpire,
+      // registered once: the latest toggleEmpire reads the current timeline and visible empires
+      toggleEmpire: (id) => toggleEmpireRef.current(id),
       getVisibleEmpires: () => empires.visibleEmpiresRef.current,
+      setGlobalTimelineEnabled,
       setPaleoshorelineVisible: paleo.setPaleoshorelineVisible,
       setSeaLevelWithSlider: paleo.setSeaLevelWithSlider,
       // Site tooltip control
@@ -1851,6 +1853,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       return next
     })
   }
+  const toggleEmpireRef = useRef(toggleEmpire)
+  toggleEmpireRef.current = toggleEmpire
 
   // Change empire year (for temporal slider)
   const changeEmpireYear = useCallback(async (empireId: string, year: number) => {

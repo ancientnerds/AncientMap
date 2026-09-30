@@ -11,7 +11,8 @@
  * and points_path receives one pixel or null per frame and place.
  *
  *   studio-globe-flyto   space pose, rotate onto lat/lng (rotate_s), zoom to
- *                        `distance` (zoom_s), hold; optional empire layer; with
+ *                        `distance` (zoom_s), hold; optional empire layer at
+ *                        its peak extent (showEmpireAtPeak); with
  *                        `places` (the target) it tracks the target in every frame
  *   studio-globe-places  a pose that frames the places, fixed (sweep_lng_deg 0:
  *                        computed in Python by projection.fit_globe_distance) or
@@ -24,6 +25,8 @@
  */
 
 import { readFileSync } from 'fs'
+import type { Page } from 'puppeteer'
+import type { DemoAPI } from '../../src/utils/demoApi'
 import type { SceneContext, SceneDefinition } from '../record'
 import { FrameGrabber, GLOBE_CANVAS, PointTracker, type TrackedPlace, nextFrames, writeRenderer } from './studio-frames.js'
 
@@ -84,6 +87,19 @@ export function flytoStart(input: Pick<FlytoInput, 'lat' | 'lng'>): { lng: numbe
   return { lng: input.lng + START_LNG_OFFSET, lat: Math.max(-70, Math.min(70, input.lat + START_LAT_OFFSET)) }
 }
 
+/**
+ * Show an empire's borders at its peak extent. The Empire Borders window's "By Period"
+ * timeline is on at 500 BC when the page loads, so the empire would otherwise take that
+ * year's borders (Rome: 419 BC, Latium only, nothing near Baalbek; take g1e of
+ * 2026-09-30) or none at all if it did not exist then. The page draws once in between,
+ * so the toggle reads the switched timeline.
+ */
+export async function showEmpireAtPeak(page: Page, demo: DemoAPI, id: string): Promise<void> {
+  await demo.setEmpireTimeline(false)
+  await nextFrames(page)
+  await demo.showEmpire(id)
+}
+
 /** Camera longitude of frame `index` of a sweep: linear from `from` by `sweep` degrees over the take, in -180..180. */
 export function sweepLng(from: number, sweep: number, index: number, fps: number, durationS: number): number {
   const lng = from + (sweep * index) / (fps * durationS)
@@ -101,7 +117,7 @@ async function runFlyto(ctx: SceneContext): Promise<void> {
   const start = flytoStart(input)
   await demo.setAutoRotate(false)
   await demo.setCameraPose(start.lng, start.lat, SPACE_DISTANCE)
-  if (input.empire) await demo.showEmpire(input.empire)
+  if (input.empire) await showEmpireAtPeak(page, demo, input.empire)
   await demo.setFlyToDuration(input.rotate_s * 1000)
   await nextFrames(page)
   // The app's fly-to keeps the distance it starts with, so rotate first, then zoom.

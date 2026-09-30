@@ -258,6 +258,7 @@ function createDemoProxy(page: Page): DemoAPI {
     setGeoLabels: (vis) => evalDemo(`window.__DEMO.setGeoLabels(${vis})`),
     showEmpire: (id) => evalDemo(`window.__DEMO.showEmpire("${id}")`),
     hideAllEmpires: () => evalDemo(`window.__DEMO.hideAllEmpires()`),
+    setEmpireTimeline: (on) => evalDemo(`window.__DEMO.setEmpireTimeline(${on})`),
     setPaleoshoreline: (vis, sl) => evalDemo(`window.__DEMO.setPaleoshoreline(${vis}${sl !== undefined ? ', ' + sl : ''})`),
     // Site interaction
     selectSite: (name) => evalDemo(`window.__DEMO.selectSite("${name}")`),

@@ -46,6 +46,12 @@ export interface DemoAPI {
   // Empires
   showEmpire(id: string): Promise<void>
   hideAllEmpires(): void
+  /**
+   * The Empire Borders window's "By Period" switch (on at 500 BC when the page loads).
+   * On, an empire shown next takes the timeline year's borders (or none if it did not
+   * exist then); off, its peak extent.
+   */
+  setEmpireTimeline(enabled: boolean): void
 
   // Paleoshoreline
   setPaleoshoreline(visible: boolean, seaLevel?: number): void
@@ -203,6 +209,7 @@ export interface GlobeDemoRefs {
   setGeoLabelsVisible: (visible: boolean) => void
   toggleEmpire: (id: string) => void
   getVisibleEmpires: () => Set<string>
+  setGlobalTimelineEnabled: (enabled: boolean) => void
   setPaleoshorelineVisible: (visible: boolean) => void
   setSeaLevelWithSlider: (level: number) => void
   // Site tooltip control
@@ -325,6 +332,9 @@ export function registerGlobeDemoApi(refs: GlobeDemoRefs): void {
       // Toggle off each visible empire so it properly unloads 3D geometry
       const visible = refs.getVisibleEmpires()
       visible.forEach(id => refs.toggleEmpire(id))
+    },
+    setEmpireTimeline: (enabled) => {
+      refs.setGlobalTimelineEnabled(enabled)
     },
     setPaleoshoreline: (visible, seaLevel) => {
       refs.setPaleoshorelineVisible(visible)
