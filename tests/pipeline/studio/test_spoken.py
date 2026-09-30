@@ -201,6 +201,20 @@ from pipeline.studio import spoken
         ("December thirty-first", "December 31"),
         ("on the fifth of June", "on the 5th of June"),
         ("June the twenty-first", "June the 21st"),
+        # and so is "the" and a day ordinal in a date, in the British order too
+        ("June the twenty-first", "June 21"),
+        ("June the twenty-first", "June 21st"),
+        ("on the twenty-first of December", "on 21 December"),
+        ("on the twenty-first of June.", "on 21st June."),
+        (
+            "twice a year, on the twenty-second of February and the twenty-second of October",
+            "twice a year, on 22 February and 22 October",
+        ),
+        ("the first of May", "1 May"),
+        (
+            "from the twenty-first of June to the twenty-first of December",
+            "from 21 June to 21 December",
+        ),
         # British "nought", areas and volumes
         ("nought point five metres", "0.5 m"),
         ("four thousand square metres", "4,000 m²"),
@@ -462,8 +476,15 @@ def test_equivalent_spellings(said, shown):
             "token 1: spoken '101st' vs display '101'",
         ),
         ("June 21st", "June twenty-one", "token 1: spoken '21st' vs display '21'"),
-        # known limit: the bare day needs the ordinal right after the month name
-        ("June the twenty-first", "June 21", "token 1: spoken 'the' vs display '21'"),
+        # and so is "the" and a day ordinal in a date, which needs its month
+        ("June the twenty-first", "June 22", "token 1: spoken 'the' vs display '22'"),
+        ("the twenty-first of June", "22 June", "token 0: spoken 'the' vs display '22'"),
+        ("the twenty-first of June", "21 July", "token 1: spoken 'june' vs display 'july'"),
+        ("the twenty-first of June", "21 of June", "token 1: spoken 'june' vs display 'of'"),
+        ("the twenty-first, of June", "21 June", "token 0: spoken 'the' vs display '21'"),
+        ("the fortieth of June", "40 June", "token 0: spoken 'the' vs display '40'"),
+        ("the first of many", "1 many", "token 0: spoken 'the' vs display '1'"),
+        ("in June, the first", "in June, 1", "token 2: spoken 'the' vs display '1'"),
         # an area is never a length: "four metres square" is 16 m²
         ("four thousand square metres", "4,000 m", "token 1: spoken 'm²' vs display 'm'"),
         ("four metres square", "4 m²", "token 1: spoken 'm' vs display 'm²'"),

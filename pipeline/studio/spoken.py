@@ -18,16 +18,16 @@ and one thousand" is 500 and 1,000; "one point five" is 1.5, but in "at one poin
 hundred men" it is 1, "point" and 500; "a thirty-second exposure" may be a 30-second one;
 "the Second" is 2nd or the regnal numeral II ("Ramesses the Second" is "Ramesses II"); a day
 ordinal right after its month name is the ordinal or the bare day ("June twenty-first" is
-"June 21st" or "June 21"). `normalize_tokens` gives the primary reading, every number run read
-as far as it goes (but "6 million" is 6 and "million" there, as the spoken "two thousand
-million" is 2000 and "million").
+"June 21st" or "June 21"), and so is "the" and a day ordinal in a date, the "the" dropped
+("June the twenty-first" is "June 21" too, "the twenty-first of December" "21 December" or
+"21st December"). `normalize_tokens` gives the primary reading, every number run read as far as
+it goes (but "6 million" is 6 and "million" there, as the spoken "two thousand million" is 2000
+and "million").
 
 Known limits: two numbers spoken back to back with no punctuation between them, the second a
 British "hundred and" group, read like the plan's "one thousand five hundred and one thousand
 six hundred fifty" (1,500 and 1,650), so "a hundred thousand two hundred and fifty thousand" is
-100,200 and 50,000; a comma after the first number makes it 100,000 and 250,000. The bare day
-needs the ordinal right after the month name: "June the twenty-first" shows as "June the 21st",
-never as "June 21".
+100,200 and 50,000; a comma after the first number makes it 100,000 and 250,000.
 """
 
 from __future__ import annotations
@@ -416,19 +416,49 @@ def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, in
     return [(_format(total + current, digits), i), *ends]
 
 
+def _is_day(token: str) -> bool:
+    """Whether `token` is a digit ordinal a day of the month can have, 1st-31st."""
+    return bool(_ORDINAL_DIGITS_RE.match(token)) and 1 <= int(token[:-2]) <= 31
+
+
+def _after_month(words: list[str], stops: set[int], i: int) -> bool:
+    """Whether a month name comes right before words[i]. A month name that closes a clause
+    starts no date ("in June, twenty-first")."""
+    return i > 0 and i - 1 not in stops and words[i - 1] in MONTHS
+
+
 def _days(
     words: list[str], stops: set[int], i: int, readings: list[tuple[str, int]]
 ) -> list[tuple[str, int]]:
     """The bare day of each spoken ordinal 1st-31st among the `readings` of words[i] when a month
     name comes right before it, as a second reading: "June twenty-first" may be "June 21" as
-    well as "June 21st". A month name that closes a clause is no date ("in June, twenty-first")."""
-    if i == 0 or i - 1 in stops or words[i - 1] not in MONTHS:
+    well as "June 21st"."""
+    if not _after_month(words, stops, i):
         return []
-    return [
-        (token[:-2], nxt)
-        for token, nxt in readings
-        if _ORDINAL_DIGITS_RE.match(token) and 1 <= int(token[:-2]) <= 31
-    ]
+    return [(token[:-2], nxt) for token, nxt in readings if _is_day(token)]
+
+
+def _dates(
+    words: list[str], stops: set[int], i: int, ordinals: list[tuple[str, int]]
+) -> list[tuple[str, int]]:
+    """The day that "the" at words[i] and one of its `ordinals` 1st-31st name in a date, the
+    "the" dropped, as the ordinal or the bare day: after a month name ("June the twenty-first"
+    is "June 21st" or "June 21") and before "of" and a month name, whose "of" the reading takes
+    as well ("the twenty-first of December" is "21st December" or "21 December"; the month is a
+    token of its own). An ordinal that closes a clause is no day of a month after it ("the
+    first, of June")."""
+    days = [(token, nxt) for token, nxt in ordinals if _is_day(token)]
+    out = [*days, *_days(words, stops, i, days)] if _after_month(words, stops, i) else []
+    for token, nxt in days:
+        if (
+            nxt - 1 not in stops
+            and nxt not in stops
+            and nxt + 1 < len(words)
+            and words[nxt] == "of"
+            and words[nxt + 1] in MONTHS
+        ):
+            out += [(token, nxt + 1), (token[:-2], nxt + 1)]
+    return out
 
 
 def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]]:
@@ -437,13 +467,14 @@ def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]
     than one."""
     w = words[i]
     if w == "the" and i not in stops and i + 1 < len(words) and words[i + 1] != "the":
-        # a regnal number: "Ramesses the Second" is "Ramesses II"
-        regnal = [
-            (_roman(int(token[:-2])), nxt)
+        ordinals = [
+            (token, nxt)
             for token, nxt in _readings(words, stops, i + 1)
-            if _ORDINAL_DIGITS_RE.match(token) and 0 < int(token[:-2]) < 4000
+            if _ORDINAL_DIGITS_RE.match(token)
         ]
-        return [(w, i + 1), *regnal]
+        # a regnal number: "Ramesses the Second" is "Ramesses II"
+        regnal = [(_roman(int(t[:-2])), nxt) for t, nxt in ordinals if 0 < int(t[:-2]) < 4000]
+        return [(w, i + 1), *regnal, *_dates(words, stops, i, ordinals)]
     if w in ONES or w in TENS or w in ("a", "an"):
         run = _number_run(words, stops, i)
         if run is not None:
