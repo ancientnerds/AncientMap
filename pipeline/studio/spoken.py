@@ -9,7 +9,8 @@ and 200th, "the thousandth" is 1000th), decades and centuries become their digit
 nineteen-sixties" is the 1960s, "the twenty-tens" the 2010s, "the fifteen hundreds" the 1500s,
 "the two thousands" the 2000s), thousands separators go
 ("1,000th" is 1000th), unit words and symbols become one unit token ("square metres" is m²),
-edge punctuation and case are ignored, a possessive "'s" is a word of its own.
+a range written with a dash is its two numbers and "to" ("12–15 m" is "twelve to fifteen
+metres"), edge punctuation and case are ignored, a possessive "'s" is a word of its own.
 Clause punctuation after a number word (, ; : . ! ? … or a dash) still ends that number:
 "forty, six" is 40 and 6, never 46. Any other difference is a script error.
 
@@ -95,7 +96,9 @@ UNITS = {
 POWERS = {"square": "²", "cubic": "³"}
 EDGE = ".,;:!?\"'()[]…—–“”‘’"
 STOPS = ",;:.!?…—–"  # trailing punctuation that closes a clause, and with it a spoken number
-_DIGITS_RE = re.compile(r"^\d{1,3}(?:,\d{3})+(?:\.\d+)?$|^\d+(?:\.\d+)?$")
+_NUMBER = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"  # "1,000.5", "1000", "2.5"
+_DIGITS_RE = re.compile(rf"^{_NUMBER}$")
+_RANGE_RE = re.compile(rf"^({_NUMBER})[-–]({_NUMBER})$")  # "12–15", "800–1,000", "10-20"
 # "21st", "1000th", "1,000th"
 _ORDINAL_DIGITS_RE = re.compile(r"^(?:\d{1,3}(?:,\d{3})+|\d+)(?:st|nd|rd|th)$")
 _DECADE_DIGITS_RE = re.compile(r"^(\d*0)['’]?s$")  # "1960s", "1960's", "60s" ("'60s" unquoted)
@@ -138,7 +141,8 @@ def _words(text: str) -> tuple[list[str], set[int]]:
     parser never reads past such a word. A split token ("sixty-six," or "15%,") hands the
     stop to its last part; a free-standing dash or comma ("forty — six") to the word before.
     A possessive "'s" is a word of its own, so "the Second's" and "II's" differ only in the
-    number."""
+    number. A range written with a dash is its two numbers with "to" between them: "12–15" and
+    "12-15" are the spoken "twelve to fifteen"."""
     out: list[str] = []
     stops: set[int] = set()
     for raw in _PER_CENT_RE.sub("percent", text).split():
@@ -147,10 +151,16 @@ def _words(text: str) -> tuple[list[str], set[int]]:
         possessive = _POSSESSIVE_RE.match(token)
         if possessive:
             token = possessive[1]
+        sign = ""
         if token.endswith("%") and token[:-1]:
-            out.extend([token[:-1], "%"])
+            token, sign = token[:-1], "%"
+        span = _RANGE_RE.match(token)
+        if span:
+            out.extend([span[1], "to", span[2]])
         else:
             out.extend(part for part in token.split("-") if part)
+        if sign:
+            out.append(sign)
         if possessive:
             out.append(possessive[2])
         if closes and out:

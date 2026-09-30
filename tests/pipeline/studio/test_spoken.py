@@ -222,6 +222,14 @@ from pipeline.studio import spoken
             "from the twenty-first of June to the twenty-first of December",
             "from 21 June to 21 December",
         ),
+        # a range written with a dash is its two numbers and "to"
+        ("some twelve to fifteen metres", "some 12–15 m"),
+        ("some twelve to fifteen metres", "some 12-15 m"),
+        ("eight hundred to a thousand tonnes", "800–1,000 tonnes"),
+        ("ten to twenty metres", "10-20 m"),
+        ("fifteen to twenty percent", "15–20%"),
+        ("two point five to three metres,", "2.5–3 m,"),
+        ("from nineteen sixty-six to nineteen seventy", "from 1966–1970"),
         # British "nought", areas and volumes
         ("nought point five metres", "0.5 m"),
         ("four thousand square metres", "4,000 m²"),
@@ -497,6 +505,17 @@ def test_equivalent_spellings(said, shown):
         ("the fortieth of June", "40 June", "token 0: spoken 'the' vs display '40'"),
         ("the first of many", "1 many", "token 0: spoken 'the' vs display '1'"),
         ("in June, the first", "in June, 1", "token 2: spoken 'the' vs display '1'"),
+        # a dash range must show both numbers, its unit, and a "between ... and" as it is said
+        ("some twelve to fifteen metres", "some 12–16 m", "token 3: spoken '15' vs display '16'"),
+        ("some twelve to fifteen metres", "some 12–15 km", "token 4: spoken 'm' vs display 'km'"),
+        ("twelve to fifteen metres", "12-16 m", "token 2: spoken '15' vs display '16'"),
+        ("twelve to fifteen metres", "1215 m", "token 0: spoken '12' vs display '1215'"),
+        (
+            "between twelve and fifteen metres",
+            "between 12–15 m",
+            "token 2: spoken 'and' vs display 'to'",
+        ),
+        ("fifteen to twenty percent", "15–20 m", "token 3: spoken 'percent' vs display 'm'"),
         # an area is never a length: "four metres square" is 16 m²
         ("four thousand square metres", "4,000 m", "token 1: spoken 'm²' vs display 'm'"),
         ("four metres square", "4 m²", "token 1: spoken 'm' vs display 'm²'"),
