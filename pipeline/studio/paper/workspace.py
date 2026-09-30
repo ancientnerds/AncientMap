@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import zlib
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -52,7 +53,6 @@ DOSSIER_KEYS = frozenset(
         "images",
     }
 )
-TEXT_STATUSES = ("full_text", "abstract_only", "tdm_reserved", "missing")
 
 
 @dataclass(frozen=True)
@@ -167,7 +167,7 @@ class Dossier:
         return [sid for sid in cited if sid in self.sources]
 
     def text_status(self, source_id: str) -> str:
-        """full_text | abstract_only | tdm_reserved | missing (TEXT_STATUSES).
+        """full_text | abstract_only | tdm_reserved | missing.
 
         Stream A's one classifier (`training_corpus.classify_archive_row`) reads the archive
         row the export ships in `sources[].archive`, the same function A's manifest counts
@@ -213,7 +213,9 @@ def parse_dossier(raw: bytes) -> Dossier:
     """Decompress and check the exported bundle; refuse anything that is not version 1."""
     try:
         data = json.loads(gzip.decompress(raw).decode("utf-8"))
-    except (OSError, ValueError) as exc:
+    # OSError: no gzip header or a bad CRC; EOFError: a truncated stream (an interrupted
+    # ssh pipe); zlib.error: damaged deflate data; ValueError: not UTF-8 or not JSON.
+    except (OSError, EOFError, zlib.error, ValueError) as exc:
         raise StudioError(f"the dossier export is not gzip'd JSON: {exc}") from exc
     if not isinstance(data, dict):
         raise StudioError("the dossier export is not a JSON object")
@@ -254,8 +256,27 @@ def read_json(path: Path, hint: str) -> Any:
         raise StudioError(f"{path} does not exist: {hint}")
     try:
         return json.loads(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as exc:
+        raise StudioError(f"{path.name} is not UTF-8 JSON: {exc}") from exc
     except json.JSONDecodeError as exc:
         raise StudioError(f"{path.name} is not valid JSON: {exc}") from exc
+
+
+def read_meta(ws: PaperWorkspace) -> dict[str, str]:
+    """Claude's paper_meta.json, exactly {title, card_description}, both strings.
+
+    Every step that reads it (numbering, the claim check, the check, the bundle, a
+    correction) reads it here, so a malformed file is one StudioError, never a KeyError."""
+    meta = read_json(ws.meta, "write paper_meta.json {title, card_description} from brief.md")
+    if (
+        not isinstance(meta, dict)
+        or set(meta) != {"title", "card_description"}
+        or not all(isinstance(value, str) for value in meta.values())
+    ):
+        raise StudioError(
+            'paper_meta.json must be exactly {"title": "...", "card_description": "..."}'
+        )
+    return meta
 
 
 def write_json(path: Path, value: Any) -> None:

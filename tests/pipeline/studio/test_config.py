@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,34 @@ def test_studio_assets_env_var_wins(monkeypatch, tmp_path):
     assert config.studio_assets() == tmp_path
     assert config.paper_dir(REQ) == tmp_path / "papers" / REQ
     assert config.episode_dir("baalbek-c5") == tmp_path / "episodes" / "baalbek-c5"
+
+
+def test_a_relative_studio_assets_is_made_absolute(monkeypatch, tmp_path):
+    """ffmpeg's concat lists and the node renderer (cwd video/) read workspace paths from
+    elsewhere: a relative override would resolve against the wrong directory there."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("STUDIO_ASSETS", "assets")
+    assert config.studio_assets() == tmp_path / "assets"
+    assert config.studio_assets().is_absolute()
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        FileNotFoundError("git"),
+        subprocess.TimeoutExpired(cmd="git", timeout=30),
+        subprocess.CompletedProcess(["git"], 128, "", "fatal: not a git repository"),
+    ],
+)
+def test_a_failing_git_is_a_studio_error(monkeypatch, failure):
+    def fake_run(*_a, **_k):
+        if isinstance(failure, BaseException):
+            raise failure
+        return failure
+
+    monkeypatch.setattr(config.subprocess, "run", fake_run)
+    with pytest.raises(StudioError, match="cannot locate the main checkout"):
+        config.main_checkout()
 
 
 def test_default_studio_assets_live_in_the_main_checkout(monkeypatch):

@@ -43,7 +43,13 @@ from pipeline.studio.errors import StudioError
 from pipeline.studio.paper.anchors import paragraphs, resolve_evidence_anchors
 from pipeline.studio.paper.evidence import evidence_problems, quote_in_text
 from pipeline.studio.paper.numbering import BuiltPaper, build_paper
-from pipeline.studio.paper.workspace import Dossier, PaperWorkspace, load_dossier, read_json
+from pipeline.studio.paper.workspace import (
+    Dossier,
+    PaperWorkspace,
+    load_dossier,
+    read_json,
+    read_meta,
+)
 
 INSTRUCTIONS_VERSION = "claim-check-3"
 LIVE_DIR = "live"
@@ -207,7 +213,7 @@ def build_tasks(
 def _load_inputs(ws: PaperWorkspace) -> tuple[BuiltPaper, Dossier, list[dict[str, Any]]]:
     built = build_paper(ws)
     dossier = load_dossier(ws)
-    meta = read_json(ws.meta, "write paper_meta.json from brief.md")
+    meta = read_meta(ws)
     evidence = read_json(ws.evidence, "write evidence.json from brief.md")
     # Before the claim check: a TDM-reserved quote source waits for its live read.
     problems = evidence_problems(

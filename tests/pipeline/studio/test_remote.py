@@ -90,3 +90,44 @@ def test_upload_passes_when_the_hashes_match(monkeypatch, tmp_path):
 
     monkeypatch.setattr(remote.subprocess, "run", fake_run)
     remote.upload_research_images("95fa3798-1c2d-4e5f-8a9b-0c1d2e3f4a5b", [f])
+
+
+@pytest.mark.parametrize("bad", ["../../etc", "/var/www", "95FA3798-1C2D-4E5F-8A9B-0C1D2E3F4A5B"])
+def test_upload_refuses_a_request_id_that_is_not_a_uuid_before_any_remote_call(
+    monkeypatch, tmp_path, bad
+):
+    f = tmp_path / "s1a2b3c4_stone.jpg"
+    f.write_bytes(b"jpeg")
+    calls = []
+    monkeypatch.setattr(remote.subprocess, "run", lambda cmd, **_k: calls.append(cmd))
+    with pytest.raises(StudioError, match="is not a research request id"):
+        remote.upload_research_images(bad, [f])
+    assert calls == []
+
+
+@pytest.mark.parametrize("stalls", ["ssh", "scp"])
+def test_a_stalled_upload_step_is_a_studio_error(monkeypatch, tmp_path, stalls):
+    f = tmp_path / "s1a2b3c4_stone.jpg"
+    f.write_bytes(b"jpeg")
+
+    def fake_run(cmd, **kwargs):
+        if cmd[0] == stalls:
+            raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs["timeout"])
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(remote.subprocess, "run", fake_run)
+    with pytest.raises(remote.RemoteError, match="no answer within .*run the upload again"):
+        remote.upload_research_images("95fa3798-1c2d-4e5f-8a9b-0c1d2e3f4a5b", [f])
+
+
+def test_a_failed_scp_names_its_exit(monkeypatch, tmp_path):
+    f = tmp_path / "s1a2b3c4_stone.jpg"
+    f.write_bytes(b"jpeg")
+
+    def fake_run(cmd, **_k):
+        code = 1 if cmd[0] == "scp" else 0
+        return subprocess.CompletedProcess(cmd, code, "", "lost connection")
+
+    monkeypatch.setattr(remote.subprocess, "run", fake_run)
+    with pytest.raises(remote.RemoteError, match="exited 1: lost connection"):
+        remote.upload_research_images("95fa3798-1c2d-4e5f-8a9b-0c1d2e3f4a5b", [f])

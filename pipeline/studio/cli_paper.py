@@ -88,10 +88,27 @@ def cmd_publish(args: argparse.Namespace) -> int:
     return 0
 
 
+def _day(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise StudioError(f"--date {value!r} is not a calendar day (YYYY-MM-DD)") from exc
+
+
+def _report_file(value: str) -> str:
+    path = Path(value)
+    if not path.is_file():
+        raise StudioError(f"--report-file {value} does not exist")
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise StudioError(f"--report-file {value} is not UTF-8: {exc}") from exc
+
+
 def cmd_correct(args: argparse.Namespace) -> int:
     """Prints the apply outcome, whose `side_effects` carry the `paper_published` notice of a
     republish and of a `--report-file --rewrite` (owner decisions 18 and 21)."""
-    on = date.fromisoformat(args.date) if args.date else None
+    on = _day(args.date) if args.date else None
     if args.entries and args.evidence_id:
         raise StudioError("--evidence-id goes with --text; an --entries file names its own")
     if args.entries:
@@ -100,7 +117,7 @@ def cmd_correct(args: argparse.Namespace) -> int:
         items = [{"text": args.text}]
         if args.evidence_id:
             items[0]["evidence_id"] = args.evidence_id
-    report = Path(args.report_file).read_text(encoding="utf-8") if args.report_file else None
+    report = _report_file(args.report_file) if args.report_file else None
     record = publish.correct(
         workspace(args.request_id),
         publish.correction_entries(items, on),
@@ -187,6 +204,7 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--timestamps", required=True, help="JSON file {ev-NN: seconds}")
     p.add_argument(
         "--poster",
-        help="JPEG shown as the video's poster on the paper page (e.g. package/thumbnail_1.jpg)",
+        help="JPEG shown as the video's poster on the paper page: the thumbnail used on "
+        "YouTube, <STUDIO_ASSETS>/episodes/<slug>/package/thumbnail_<K>.jpg",
     )
     p.set_defaults(func=cmd_register_video)

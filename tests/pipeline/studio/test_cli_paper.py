@@ -92,6 +92,49 @@ def test_rewrite_needs_a_report_file(monkeypatch, tmp_path, capsys):
     assert "--rewrite goes with --report-file" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(
+    ("extra", "message"),
+    [
+        (["--date", "2026-13-01"], "--date '2026-13-01' is not a calendar day"),
+        (["--report-file", "missing.md"], "missing.md does not exist"),
+        (["--report-file", "cp1252.md"], "cp1252.md is not UTF-8"),
+    ],
+)
+def test_bad_correct_arguments_exit_2_with_the_reason(
+    monkeypatch, tmp_path, capsys, extra, message
+):
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "cp1252.md").write_bytes("# Café\n".encode("cp1252"))
+    monkeypatch.setattr(publish, "correct", lambda *a, **k: pytest.fail("reached correct"))
+    assert cli.main(["paper", "correct", fx.REQ, "--text", "x", *extra]) == 2
+    assert message in capsys.readouterr().err
+
+
+def test_register_video_checks_the_request_id_before_production(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(remote, "run_module", lambda *a, **k: pytest.fail("reached production"))
+    stamps = tmp_path / "ts.json"
+    stamps.write_text('{"ev-01": 42}', encoding="utf-8")
+    args = ["paper", "register-video", "../../x", "--youtube-id", "dQw4w9WgXcQ", "--title", "t"]
+    args += ["--published-at", "2026-10-01T18:00:00+00:00", "--timestamps", str(stamps)]
+    assert cli.main(args) == 2
+    assert "is not a research request id" in capsys.readouterr().err
+
+
+def test_the_poster_help_names_the_episode_package():
+    """`Path(--poster)` resolves against the current directory, so the example is the full
+    workspace path, not the episode-relative package/thumbnail_1.jpg."""
+    import argparse
+
+    def sub(parser: argparse.ArgumentParser, name: str) -> argparse.ArgumentParser:
+        action = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
+        return action.choices[name]
+
+    register = sub(sub(cli.build_parser(), "paper"), "register-video")
+    poster = next(a for a in register._actions if a.dest == "poster")
+    assert "<STUDIO_ASSETS>/episodes/<slug>/package/thumbnail_<K>.jpg" in poster.help
+
+
 def test_number_then_check_through_the_cli(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
     fx.make_workspace(tmp_path)

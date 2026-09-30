@@ -8,6 +8,8 @@ from pipeline.studio.paper import pull, workspace
 from pipeline.studio.paper.workspace import parse_dossier
 from tests.pipeline.studio import fixtures as fx
 
+RUN_ID = "22222222-3333-4444-5555-666666666666"  # a fresh Theo run a rewrite pulls
+
 
 def test_template_carries_the_house_format_rules():
     text = pull.TEMPLATE_PATH.read_text(encoding="utf-8")
@@ -106,6 +108,45 @@ def test_a_legacy_export_renders_a_brief():
     brief = pull.render_brief(parse_dossier(fx.dossier_gz_bytes(fx.legacy_dossier_dict())))
     assert "{{" not in brief
     assert "4 cited: full text 2, abstract only 1, missing 0, TDM-reserved 1" in brief
+
+
+def test_dossier_text_that_looks_like_a_placeholder_stays_text():
+    """Placeholders are filled in one pass over the template: a claim quoting wiki markup
+    ({{sfn}}) is not an unfilled placeholder, and a question naming one is not filled."""
+    data = fx.dossier_dict()
+    data["request"]["question"] = "Why does {{moderated}} appear here?"
+    data["moderated"]["final_claims"][0]["claim"] = "A wiki page cites it {{sfn}}."
+    brief = pull.render_brief(parse_dossier(fx.dossier_gz_bytes(data)))
+    assert "# Writer brief: Why does {{moderated}} appear here?" in brief
+    assert "A wiki page cites it {{sfn}}." in brief
+
+
+def test_a_rewrite_brief_names_the_paper_it_rewrites():
+    """`pull TARGET --dossier-from RUN`: every command takes TARGET's workspace."""
+    data = fx.dossier_dict()
+    data["request"]["id"] = RUN_ID
+    dossier = parse_dossier(fx.dossier_gz_bytes(data))
+    brief = pull.render_brief(dossier, target=TARGET)
+    assert f"Request `{TARGET}`" in brief
+    assert (
+        f"rewrite of the public paper `{TARGET}` from the dossier of the fresh Theo run `{RUN_ID}`"
+        in brief
+    )
+    assert f"`paper correct {TARGET} --republish`" in brief
+    own = pull.render_brief(parse_dossier(fx.dossier_gz_bytes()))
+    assert f"Request `{fx.REQ}`" in own and "rewrite of the public paper" not in own
+
+
+def test_a_brief_that_cannot_be_rendered_leaves_the_workspace_untouched(monkeypatch, tmp_path):
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    monkeypatch.setattr(remote, "check_module", lambda *a, **k: fx.dossier_gz_bytes())
+    broken = tmp_path / "template.md"
+    broken.write_text("{{question}} {{nope}}", encoding="utf-8")
+    monkeypatch.setattr(pull, "TEMPLATE_PATH", broken)
+    with pytest.raises(StudioError, match="unfilled placeholders"):
+        pull.pull(fx.REQ)
+    ws = workspace.workspace(fx.REQ)
+    assert not ws.dossier_gz.exists() and not ws.texts_dir.exists()
 
 
 def test_unfilled_placeholders_are_refused():

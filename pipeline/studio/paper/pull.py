@@ -76,6 +76,9 @@ def pull(request_id: str, dossier_from: str | None = None) -> PaperWorkspace:
             f"{source} is {status}, not researched: --dossier-from takes an unwritten Theo run "
             "from `paper list` (stream A's dossier_source gate)"
         )
+    # Rendered before anything is written: a brief that cannot be rendered leaves the
+    # workspace as it was, never a new dossier beside an old brief.
+    brief = render_brief(dossier, target=request_id if dossier_from is not None else None)
     ws.root.mkdir(parents=True, exist_ok=True)
     if dossier_from is None:
         ws.dossier_from.unlink(missing_ok=True)
@@ -83,7 +86,7 @@ def pull(request_id: str, dossier_from: str | None = None) -> PaperWorkspace:
         write_json(ws.dossier_from, {"request_id": source})
     ws.dossier_gz.write_bytes(raw)
     write_texts(ws, dossier)
-    ws.brief.write_text(render_brief(dossier), encoding="utf-8")
+    ws.brief.write_text(brief, encoding="utf-8")
     return ws
 
 
@@ -292,11 +295,29 @@ def _sources(dossier: Dossier) -> str:
     return "\n".join(lines)
 
 
-def render_brief(dossier: Dossier, template: str | None = None) -> str:
+def _rewrite_note(dossier: Dossier, target: str | None) -> str:
+    if target is None:
+        return ""
+    return (
+        f"\n\nThis is the rewrite of the public paper `{target}` from the dossier of the fresh "
+        f"Theo run `{dossier.request_id}`: every `paper` command takes `{target}`, and the "
+        f"paper goes out with `paper correct {target} --republish`, never `paper publish`."
+    )
+
+
+def render_brief(
+    dossier: Dossier, template: str | None = None, *, target: str | None = None
+) -> str:
+    """The writer brief. `target`: the public paper a `--dossier-from` pull rewrites, whose
+    workspace every command takes (the dossier is the fresh run's).
+
+    The placeholders are filled in one pass over the template, so dossier text that looks
+    like a placeholder (a claim quoting wiki markup such as {{sfn}}) stays text."""
     text = template if template is not None else TEMPLATE_PATH.read_text(encoding="utf-8")
     values = {
         "{{question}}": dossier.question,
-        "{{request_id}}": dossier.request_id,
+        "{{request_id}}": target if target is not None else dossier.request_id,
+        "{{rewrite}}": _rewrite_note(dossier, target),
         "{{counts}}": _counts(dossier),
         "{{archive}}": _archive(dossier),
         "{{moderated}}": _moderated(dossier),
@@ -306,9 +327,7 @@ def render_brief(dossier: Dossier, template: str | None = None) -> str:
         "{{angles}}": _angles(dossier),
         "{{sources}}": _sources(dossier),
     }
-    for key, value in values.items():
-        text = text.replace(key, value)
-    left = _PLACEHOLDER_RE.findall(text)
-    if left:
-        raise StudioError(f"brief template has unfilled placeholders {sorted(set(left))}")
-    return text
+    unknown = sorted(set(_PLACEHOLDER_RE.findall(text)) - set(values))
+    if unknown:
+        raise StudioError(f"brief template has unfilled placeholders {unknown}")
+    return _PLACEHOLDER_RE.sub(lambda m: values[m.group(0)], text)

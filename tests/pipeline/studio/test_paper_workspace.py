@@ -32,6 +32,22 @@ def test_parse_dossier_refuses_other_versions_and_missing_keys():
         workspace.parse_dossier(gzip.compress(b"[1, 2]"))
 
 
+def test_a_truncated_or_corrupt_export_is_refused_not_a_traceback():
+    """An interrupted ssh pipe leaves half a gzip stream (EOFError), a damaged one bad deflate
+    data (zlib.error): neither is an OSError or a ValueError."""
+    raw = fx.dossier_gz_bytes()
+    for broken in (raw[: len(raw) // 2], raw[:10] + b"\xff" * 10 + raw[20:]):
+        with pytest.raises(StudioError, match="not gzip'd JSON"):
+            workspace.parse_dossier(broken)
+
+
+def test_read_json_refuses_a_file_that_is_not_utf8(tmp_path):
+    path = tmp_path / "paper_meta.json"
+    path.write_bytes('{"title": "Café"}'.encode("cp1252"))
+    with pytest.raises(StudioError, match="paper_meta.json is not UTF-8 JSON"):
+        workspace.read_json(path, "")
+
+
 def test_text_status_distinguishes_the_four_archive_states():
     d = workspace.parse_dossier(fx.dossier_gz_bytes())
     assert [d.text_status(s) for s in (fx.S1, fx.S3, fx.S4, fx.S6)] == [

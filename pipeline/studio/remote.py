@@ -18,6 +18,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from pipeline.studio.config import check_request_id
 from pipeline.studio.errors import StudioError
 from pipeline.video.shorts_ledger import sha256_file as sha256_of
 
@@ -99,13 +100,27 @@ def check_module(
     return result.stdout
 
 
-def _ssh(command: str, *, timeout: int) -> str:
-    proc = subprocess.run(
-        ["ssh", *SSH_OPTIONS, SSH_HOST, command], capture_output=True, text=True, timeout=timeout
-    )
+def _upload_step(cmd: list[str], what: str, *, timeout: int) -> str:
+    """One step of an image upload; a non-zero exit or a stall is a RemoteError.
+
+    An upload is safe to repeat (every file is named after its content and verified by
+    sha256 afterwards), so a stalled step says so instead of an unknown outcome."""
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise RemoteError(
+            f"{what} gave no answer within {timeout}s; the files are named after their content "
+            "and verified afterwards: run the upload again"
+        ) from exc
     if proc.returncode != 0:
-        raise RemoteError(f"ssh {command!r} exited {proc.returncode}: {proc.stderr[-800:]}")
+        raise RemoteError(f"{what} exited {proc.returncode}: {proc.stderr[-800:]}")
     return proc.stdout
+
+
+def _ssh(command: str, *, timeout: int) -> str:
+    return _upload_step(
+        ["ssh", *SSH_OPTIONS, SSH_HOST, command], f"ssh {command!r}", timeout=timeout
+    )
 
 
 def parse_sha256sum(output: str) -> dict[str, str]:
@@ -124,19 +139,18 @@ def upload_research_images(request_id: str, files: list[Path], *, timeout: int =
 
     The studio names every selected image after its content hash, so a changed image always
     arrives under a new name and nginx's one-hour cache never serves a stale picture.
+    The request id is checked first: it names the remote directory (a uuid holds nothing a
+    remote shell or scp would read as a path or an operator).
     """
+    remote_dir = RESEARCH_IMAGES_ROOT / check_request_id(request_id)
     if not files:
         raise StudioError("no images to upload")
-    remote_dir = RESEARCH_IMAGES_ROOT / request_id
     _ssh(f"mkdir -p {shlex.quote(str(remote_dir))}", timeout=60)
-    proc = subprocess.run(
+    _upload_step(
         ["scp", "-q", *SSH_OPTIONS, *[str(p) for p in files], f"{SSH_HOST}:{remote_dir}/"],
-        capture_output=True,
-        text=True,
+        f"scp to {remote_dir}",
         timeout=timeout,
     )
-    if proc.returncode != 0:
-        raise RemoteError(f"scp to {remote_dir} exited {proc.returncode}: {proc.stderr[-800:]}")
     listed = " ".join(shlex.quote(str(remote_dir / p.name)) for p in files)
     remote = parse_sha256sum(_ssh(f"sha256sum {listed}", timeout=120))
     for p in files:

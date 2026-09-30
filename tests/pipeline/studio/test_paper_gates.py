@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from pipeline.lyra import theo_publishing
 from pipeline.lyra.quality_gate import recompute_quality_passed
+from pipeline.studio.errors import StudioError
 from pipeline.studio.paper import gates, numbering
 from pipeline.studio.paper.workspace import parse_dossier, write_json
 from tests.pipeline.studio import fixtures as fx
@@ -65,6 +68,25 @@ def test_structure_gate_names_every_problem():
     swapped = fx.build_draft().replace("## The Other Side", "## Other Views")
     problems = gates.gate_structure(_report(swapped)).details["problems"]
     assert problems[0].startswith("the last three sections must be")
+
+
+def test_structure_gate_refuses_a_heading_glued_to_the_paragraph_above():
+    """Markdown still renders the heading, but the anchor and word counts would read it as
+    part of the paragraph above: report_paragraphs splits on blank lines only."""
+    draft = fx.build_draft().replace("\n\n## The Other Side\n\n", "\n## The Other Side\n\n")
+    gate = gates.gate_structure(_report(draft))
+    assert not gate.passed
+    assert "heading '## The Other Side' is not preceded by a blank line" in gate.details["problems"]
+
+
+def test_run_check_refuses_paper_meta_without_a_title(tmp_path):
+    ws = fx.make_workspace(tmp_path)
+    write_json(ws.meta, {"headline": "x", "card_description": "y"})
+    with pytest.raises(StudioError, match='paper_meta.json must be exactly {"title"'):
+        gates.run_check(ws)
+    write_json(ws.meta, {"title": 7, "card_description": "y"})
+    with pytest.raises(StudioError, match="paper_meta.json must be exactly"):
+        numbering.number(ws)
 
 
 def test_structure_gate_counts_investigation_sections():

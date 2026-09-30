@@ -5,8 +5,8 @@ and writes check_report.json. A paper is publishable only when every gate passes
 
  1 artifact    validate_paper_artifact(report) passes (theo_citations)
  2 structure   1-2 hook paragraphs under the title (no heading), 2-4 investigation sections,
-               the three fixed sections, References, in order; every heading followed by
-               a blank line; 5,000-7,500 prose words
+               the three fixed sections, References, in order; every heading preceded and
+               followed by a blank line; 5,000-7,500 prose words
    meta        title and card description follow the house rules
  3 references  every [N] resolves in sources.json and every source id is in the dossier
  4 specifics   every person/date/measurement/quote/title/institution of a cited paragraph is
@@ -54,6 +54,7 @@ from pipeline.studio.paper.workspace import (
     PaperWorkspace,
     load_dossier,
     read_json,
+    read_meta,
     write_json,
 )
 from pipeline.utils.card_provenance import text_sha256 as sha256_text
@@ -70,6 +71,7 @@ QUESTION_STEMS = ("what if", "could they", "are there", "is it possible")
 BADGE = "Claim-checked"
 _CITATION_RE = re.compile(r"\[(\d+)\]")
 _H2_LINE_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
+_HEADING_LINE_RE = re.compile(r"#{1,6}\s")
 
 
 @dataclass
@@ -120,6 +122,13 @@ def gate_structure(report: str) -> Gate:
         lines = block.strip().splitlines()
         if lines and lines[0].startswith("#") and len(lines) > 1:
             problems.append(f"heading {lines[0]!r} is not followed by a blank line")
+        # A heading under a prose line in the same block: markdown still renders it, but
+        # report_paragraphs (blank-line blocks) reads it as part of the paragraph above.
+        problems.extend(
+            f"heading {line!r} is not preceded by a blank line"
+            for line in lines[1:]
+            if _HEADING_LINE_RE.match(line)
+        )
     words = prose_word_count(report)
     if not WORD_MIN <= words <= WORD_MAX:
         problems.append(f"{words} prose words; the house range is {WORD_MIN}-{WORD_MAX}")
@@ -374,7 +383,7 @@ def quality_score(
 def run_check(ws: PaperWorkspace) -> dict[str, Any]:
     built = number(ws)
     dossier = load_dossier(ws)
-    meta = read_json(ws.meta, "write paper_meta.json")
+    meta = read_meta(ws)
     evidence = read_json(ws.evidence, "write evidence.json")
     report = built.markdown
     artifact = gate_artifact(report)

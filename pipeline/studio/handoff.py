@@ -209,7 +209,13 @@ def import_answers(
     Without verdicts.jsonl the import succeeds only when no current task is pending.
     """
     verdicts = out_dir / VERDICTS_FILE
-    rows = read_jsonl(out_dir / TASKS_FILE)
+    tasks_file = out_dir / TASKS_FILE
+    if not tasks_file.exists():
+        raise HandoffError(
+            f"{tasks_file} does not exist: export the tasks first (the matching `-export` "
+            "command), then answer pending.jsonl with its workflow"
+        )
+    rows = read_jsonl(tasks_file)
     tasks = {r["task_id"]: r for r in rows}
     accepted = {k: v for k, v in load_accepted(out_dir).items() if k in tasks}
     has_round = verdicts.exists()

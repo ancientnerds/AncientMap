@@ -25,7 +25,7 @@ from typing import Any
 from pipeline.studio.errors import StudioError
 from pipeline.studio.paper.gates import sha256_text
 from pipeline.studio.paper.numbering import BuiltPaper, build_paper
-from pipeline.studio.paper.workspace import PaperWorkspace, read_json
+from pipeline.studio.paper.workspace import PaperWorkspace, read_json, read_meta
 
 WRITER = {
     "model": "claude-opus-5-5",
@@ -65,7 +65,8 @@ def require_fresh_check(ws: PaperWorkspace) -> tuple[dict[str, Any], BuiltPaper]
     built = build_paper(ws)
     if sha256_text(built.markdown) != report["paper_sha256"]:
         raise StudioError("the paper changed after the last check; run `paper check` again")
-    if sha256_text(ws.evidence.read_text(encoding="utf-8")) != report["evidence_sha256"]:
+    evidence = ws.require(ws.evidence, "restore it and run `paper check` again")
+    if sha256_text(evidence.read_text(encoding="utf-8")) != report["evidence_sha256"]:
         raise StudioError("evidence.json changed after the last check; run `paper check` again")
     if sha256_text(ws.meta.read_text(encoding="utf-8")) != report["meta_sha256"]:
         raise StudioError("paper_meta.json changed after the last check; run `paper check` again")
@@ -83,7 +84,7 @@ def upload_names(result: dict[str, Any]) -> list[str]:
 
 def build_bundle(ws: PaperWorkspace) -> dict[str, Any]:
     report, built = require_fresh_check(ws)
-    meta = read_json(ws.meta, "")
+    meta = read_meta(ws)
     evidence = read_json(ws.evidence, "")
     hero = report["hero_image"]
     result = {

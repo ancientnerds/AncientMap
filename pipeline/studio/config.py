@@ -43,22 +43,28 @@ def main_checkout_from(common_dir: str) -> Path:
 
 def main_checkout() -> Path:
     """The main checkout this code's repository belongs to (worktree-safe)."""
-    out = subprocess.run(
-        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
-        cwd=REPO,
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=30,
-    ).stdout
-    return main_checkout_from(out)
+    command = ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]
+    where = f"cannot locate the main checkout: `{' '.join(command)}` in {REPO}"
+    try:
+        proc = subprocess.run(command, cwd=REPO, capture_output=True, text=True, timeout=30)
+    except FileNotFoundError as exc:
+        raise StudioError(f"{where}: git is not on PATH") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise StudioError(f"{where} gave no answer within 30 s") from exc
+    if proc.returncode != 0:
+        raise StudioError(f"{where} exited {proc.returncode}: {proc.stderr.strip()[-400:]}")
+    return main_checkout_from(proc.stdout)
 
 
 def studio_assets() -> Path:
-    """Root of the studio workspaces: $STUDIO_ASSETS, else <main>/video-assets/studio."""
+    """Root of the studio workspaces: $STUDIO_ASSETS, else <main>/video-assets/studio.
+
+    Always absolute: a relative override is taken against the current directory here, once,
+    because ffmpeg's concat lists and the node renderer (cwd video/) read workspace paths
+    from other directories."""
     override = os.environ.get("STUDIO_ASSETS", "").strip()
     if override:
-        return Path(override)
+        return Path(override).absolute()
     return main_checkout() / "video-assets" / "studio"
 
 

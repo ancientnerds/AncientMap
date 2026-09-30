@@ -22,6 +22,7 @@ from pipeline.studio.paper.workspace import (
     PaperWorkspace,
     load_dossier,
     read_json,
+    read_meta,
     write_json,
 )
 
@@ -172,7 +173,7 @@ def build_paper(ws: PaperWorkspace, *, with_images: bool = True) -> BuiltPaper:
     """
     dossier = load_dossier(ws)
     draft = ws.require(ws.draft, "write draft.md from brief.md").read_text(encoding="utf-8")
-    meta = read_json(ws.meta, "write paper_meta.json {title, card_description}")
+    meta = read_meta(ws)
     body, registry = number_draft(draft, dossier)
     images = selected_images(ws) if with_images else []
     markdown, placed = compose(meta["title"], body, registry, images)

@@ -201,6 +201,15 @@ def test_import_leaves_only_the_unanswered_tasks_pending(tmp_path):
     assert handoff.read_jsonl(tmp_path / "pending.jsonl") == [rows[1]]
 
 
+def test_import_before_any_export_says_to_export_first(tmp_path):
+    for verdicts in (False, True):
+        if verdicts:
+            (tmp_path / "verdicts.jsonl").write_text("{}\n", encoding="utf-8")
+        with pytest.raises(handoff.HandoffError, match="tasks.jsonl does not exist: export"):
+            handoff.import_answers(tmp_path, SPEC)
+    assert not (tmp_path / "accepted.json").exists()
+
+
 def test_import_without_verdicts_file_says_what_to_do(tmp_path):
     handoff.export_tasks(tmp_path, _tasks())
     with pytest.raises(

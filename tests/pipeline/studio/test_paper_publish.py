@@ -124,6 +124,12 @@ def test_bundle_refuses_evidence_or_meta_changed_after_the_check(checked):
         bundle.write_bundle(checked)
 
 
+def test_bundle_refuses_evidence_deleted_after_the_check(checked):
+    checked.evidence.unlink()
+    with pytest.raises(StudioError, match="evidence.json does not exist"):
+        bundle.write_bundle(checked)
+
+
 def test_publish_uploads_then_dry_runs_then_applies(monkeypatch, checked):
     bundle.write_bundle(checked)
     fake = FakeRemote([(0, DRY_OK), (0, APPLIED)])
@@ -234,6 +240,34 @@ def test_exit_codes_say_what_happened(monkeypatch, checked, code, error, message
     stored = json.loads(checked.publish_outcome.read_text(encoding="utf-8"))
     assert stored["apply_exit_code"] == code
     assert not checked.published_bundle.exists()
+
+
+def test_an_unknown_correct_or_video_write_is_not_told_to_avoid_apply():
+    for step in ("theo_publish --correct", "theo_publish --register-video"):
+        with pytest.raises(remote.RemoteOutcomeUnknown) as raised:
+            publish.require_ok(step, 4, {"ok": False, "error": "re-read"})
+        message = str(raised.value)
+        assert message.startswith(f"{step}: committed but the re-read differs")
+        assert "--apply" not in message and "do not run it again" in message
+
+
+def test_a_retry_after_an_unknown_apply_keeps_its_record(monkeypatch, checked):
+    """publish_outcome.json of an apply whose outcome is unknown carries the bundle_sha256 the
+    adoption procedure compares with the journal: a re-run that finds the paper public (the
+    apply did commit) is sent to the procedure and leaves that record as it was."""
+    bundle.write_bundle(checked)
+    _patch(monkeypatch, FakeRemote([(0, DRY_OK), (4, {"ok": False, "error": "re-read"})]))
+    with pytest.raises(remote.RemoteOutcomeUnknown):
+        publish.publish(checked, dry_run=False)
+    record = checked.publish_outcome.read_bytes()
+    public = {"passed": True, "is_public": True, "apply_allowed": False}
+    for dry_run in (True, False):
+        fake = FakeRemote([(0, {"ok": True, "gates": {"status": public}})])
+        _patch(monkeypatch, fake)
+        with pytest.raises(StudioError, match="already public: change it with `paper correct`"):
+            publish.publish(checked, dry_run=dry_run)
+        assert [c[1] for c in fake.calls] == [["--dry-run"]]
+    assert checked.publish_outcome.read_bytes() == record
 
 
 def test_a_write_without_json_is_an_unknown_outcome(monkeypatch, checked):
@@ -504,6 +538,14 @@ def test_video_payload_validation():
         publish.video_payload(fx.REQ, YT, "t", "2026-10-01T18:00:00+00:00", {"ev-1": 3})
     with pytest.raises(StudioError, match="whole seconds"):
         publish.video_payload(fx.REQ, YT, "t", "2026-10-01T18:00:00+00:00", {"ev-01": True})
+    with pytest.raises(StudioError, match="a JSON object"):
+        publish.video_payload(fx.REQ, YT, "t", "2026-10-01T18:00:00+00:00", [["ev-01", 3]])
+    with pytest.raises(StudioError, match="is not a research request id"):
+        publish.video_payload("../x", YT, "t", "2026-10-01T18:00:00+00:00", {})
+    # the title the paper page shows is the YouTube title: at most 100 characters, no < or >
+    for title in ("x" * 101, "Baalbek <b>", " "):
+        with pytest.raises(StudioError, match="a title must be 1-100 characters"):
+            publish.video_payload(fx.REQ, YT, title, "2026-10-01T18:00:00+00:00", {})
 
 
 def test_register_video_dry_run_and_apply(monkeypatch):
@@ -568,3 +610,14 @@ def test_a_poster_must_be_a_jpeg_file(monkeypatch, tmp_path):
     with pytest.raises(StudioError, match="does not exist"):
         publish.upload_poster(fx.REQ, YT, tmp_path / "missing.jpg")
     assert fake.uploads == []
+
+
+def test_a_bad_poster_is_refused_before_any_production_call(monkeypatch, tmp_path):
+    fake = FakeRemote([])
+    _patch(monkeypatch, fake)
+    png = tmp_path / "thumb.png"
+    Image.new("RGB", (64, 36)).save(png, format="PNG")
+    for poster in (png, tmp_path / "missing.jpg"):
+        with pytest.raises(StudioError, match="poster"):
+            publish.prepare_video(fx.REQ, YT, "t", "2026-10-01T18:00:00+00:00", {}, poster)
+    assert fake.calls == [] and fake.uploads == []

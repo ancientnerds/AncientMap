@@ -47,7 +47,7 @@ from typing import Any
 
 from pipeline.lyra.theo_citations import validate_paper_artifact
 from pipeline.lyra.theo_publishing import EVIDENCE_ID_RE, YOUTUBE_ID_RE, poster_web_path
-from pipeline.studio import remote
+from pipeline.studio import config, remote
 from pipeline.studio.errors import StudioError
 from pipeline.studio.paper.bundle import WRITER, require_fresh_check, upload_names
 from pipeline.studio.paper.numbering import build_paper
@@ -56,6 +56,7 @@ from pipeline.studio.paper.workspace import (
     dossier_request_id,
     published_slug,
     read_json,
+    read_meta,
     write_json,
 )
 
@@ -94,13 +95,14 @@ def _run(args: list[str], payload: bytes, timeout: int) -> tuple[int, dict[str, 
 
 
 def require_ok(step: str, code: int, outcome: dict[str, Any]) -> None:
-    """Map theo_publish's exit codes to what the operator has to do next."""
+    """Map theo_publish's exit codes to what the operator has to do next.
+
+    Exit 2-4 print {ok: false, error}; exit 0 and 1 print the PublishOutcome with its gates
+    (stream A's C8)."""
     if code == 0 and outcome["ok"]:
         return
     if code == 2:
-        raise StudioError(
-            f"{step}: theo_publish refused the input: {outcome.get('error', outcome)}"
-        )
+        raise StudioError(f"{step}: theo_publish refused the input: {outcome['error']}")
     if code == 3:
         raise StudioError(
             f"{step}: the row changed underneath; nothing was committed; re-run after `paper check`"
@@ -108,11 +110,11 @@ def require_ok(step: str, code: int, outcome: dict[str, Any]) -> None:
     if code == 4:
         raise remote.RemoteOutcomeUnknown(
             f"{step}: committed but the re-read differs: inspect research_requests and "
-            "theo_paper_publications; IndexNow/Qdrant did not run; do not re-run --apply"
+            "theo_paper_publications; its side effects (IndexNow, Qdrant, the owner notice) did "
+            "not run; do not run it again"
         )
     if code in (0, 1):
-        gates = outcome.get("gates") or {}
-        failing = sorted(name for name, gate in gates.items() if not gate["passed"])
+        failing = sorted(name for name, gate in outcome["gates"].items() if not gate["passed"])
         raise StudioError(f"{step} refused: failing gates {failing}: {outcome}")
     raise remote.RemoteOutcomeUnknown(f"{step}: theo_publish exited {code}: {outcome}")
 
@@ -216,8 +218,9 @@ def publish(ws: PaperWorkspace, *, dry_run: bool) -> dict[str, Any]:
 
     A dry run that finds the row public (exit 0 or 1: A's status gate always carries
     `is_public`) stops with `paper correct` before its gate failures are reported, because a
-    public paper changes only through a correction. When publish_outcome.json already records
-    a successful apply, that stop names the recorded slug and leaves the record untouched; a
+    public paper changes only through a correction; that stop leaves publish_outcome.json
+    untouched (the slug of a successful apply, or the bundle_sha256 of an apply whose outcome
+    was unknown, which its adoption needs) and names the recorded slug when there is one; a
     row the founder route unpublished since (not public: slug and published_at are NULL again)
     is published again, and the earlier record is kept as publish_outcome.<at>.json (stream A
     keeps its corrections, videos and evidence ids through the `retention` gate). A rewrite
@@ -241,17 +244,23 @@ def publish(ws: PaperWorkspace, *, dry_run: bool) -> dict[str, Any]:
     record["dry_run"], record["dry_run_exit_code"] = checked, code
     status_known = code in (0, 1)  # A's status gate reports is_public in every gate outcome
     public = status_known and checked["gates"]["status"]["is_public"] is True
-    if earlier is not None:
-        if public:
+    if public:
+        # publish_outcome.json stays as it is: a successful apply's record names the slug,
+        # and the record of an apply whose outcome was unknown keeps the bundle_sha256 the
+        # adoption procedure (unknown_outcome_steps) matches with the journal.
+        if earlier is not None:
             raise StudioError(
                 f"already published as /research/{earlier}: change it with `paper correct`"
             )
+        raise StudioError(
+            "the paper is already public: change it with `paper correct` (after an apply "
+            "whose outcome was unknown, adopt it as that error said)"
+        )
+    if earlier is not None:
         if not status_known:
             require_ok("theo_publish --dry-run", code, checked)  # exit 2-4: always raises
         _archive_outcome(ws)
     write_json(ws.publish_outcome, record)
-    if public:
-        raise StudioError("the paper is already public: change it with `paper correct`")
     require_ok("theo_publish --dry-run", code, checked)
     if dry_run:
         return record
@@ -353,7 +362,7 @@ def correct(
                 "a correction cannot change the images; the image set differs from the "
                 "published bundle"
             )
-        meta = read_json(ws.meta, "")
+        meta = read_meta(ws)
         if (
             meta["title"].strip() != published["result"]["title"]
             or meta["card_description"].strip() != published["result"]["card_description"]
@@ -410,8 +419,12 @@ def video_payload(
     """The --register-video input (stream A's C6), validated as theo_publish validates it.
 
     `with_poster` adds `poster`, our own studio thumbnail at the one web path
-    theo_publishing.poster_web_path gives it (owner decision 13); upload it first.
+    theo_publishing.poster_web_path gives it (owner decision 13); upload it first. The title
+    is the one the video was uploaded with, so it obeys YouTube's rule (package.check_title).
     """
+    from pipeline.studio.package import check_title
+
+    config.check_request_id(request_id)
     if not YOUTUBE_ID_RE.fullmatch(youtube_id):
         raise StudioError(f"{youtube_id!r} is not a YouTube video id")
     try:
@@ -420,6 +433,8 @@ def video_payload(
         raise StudioError("published_at must be ISO 8601 with a timezone") from exc
     if stamp.tzinfo is None:
         raise StudioError("published_at must carry a timezone (e.g. 2026-10-01T18:00:00+00:00)")
+    if not isinstance(evidence_timestamps, dict):
+        raise StudioError("evidence timestamps must be a JSON object {ev-NN: seconds}")
     bad = {
         k: v
         for k, v in evidence_timestamps.items()
@@ -427,8 +442,7 @@ def video_payload(
     }
     if bad:
         raise StudioError(f"evidence timestamps must map ev-NN to whole seconds >= 0: {bad}")
-    if not title.strip():
-        raise StudioError("the video needs its title")
+    check_title(title)
     payload: dict[str, Any] = {
         "version": 1,
         "request_id": request_id,
@@ -452,9 +466,8 @@ def register_video(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
     return outcome
 
 
-def upload_poster(request_id: str, youtube_id: str, jpeg: Path) -> None:
-    """Upload `jpeg` under the name poster_web_path gives it (research-images/<request_id>/
-    video_<youtube_id>.jpg), verified byte for byte by remote.upload_research_images."""
+def check_poster(jpeg: Path) -> None:
+    """A poster is an existing JPEG file."""
     from PIL import Image, UnidentifiedImageError
 
     if not jpeg.is_file():
@@ -466,6 +479,12 @@ def upload_poster(request_id: str, youtube_id: str, jpeg: Path) -> None:
         raise StudioError(f"poster {jpeg} is not an image") from exc
     if kind != "JPEG":
         raise StudioError(f"poster {jpeg} is {kind}, not a JPEG")
+
+
+def upload_poster(request_id: str, youtube_id: str, jpeg: Path) -> None:
+    """Upload `jpeg` under the name poster_web_path gives it (research-images/<request_id>/
+    video_<youtube_id>.jpg), verified byte for byte by remote.upload_research_images."""
+    check_poster(jpeg)
     name = PurePosixPath(poster_web_path(request_id, youtube_id)).name
     with tempfile.TemporaryDirectory() as tmp:
         copy = Path(tmp) / name
@@ -488,9 +507,12 @@ def prepare_video(
     2. with a poster: the JPEG, uploaded as video_<youtube_id>.jpg and verified;
     3. a dry run with the poster (theo_publish's `images` gate finds the file).
     The caller applies the returned payload with `register_video(payload, dry_run=False)`;
-    `episode register-youtube` writes the ledger in between.
+    `episode register-youtube` writes the ledger in between. The payload and the poster file
+    are checked before the first production call.
     """
     bare = video_payload(request_id, youtube_id, title, published_at, evidence_timestamps)
+    if poster is not None:
+        check_poster(poster)
     register_video(bare, dry_run=True)
     if poster is None:
         return bare
