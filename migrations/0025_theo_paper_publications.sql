@@ -15,7 +15,7 @@
 -- request_id is ON DELETE SET NULL: a journal row outlives its paper (DELETE
 -- /api/theo/research/{id} archives and deletes the row).
 --
--- The second statement indexes research_artifacts for the dossier reads
+-- The third statement indexes research_artifacts for the dossier reads
 -- (latest row per request and kind).
 --
 -- LOCKING: a new, empty table; the FK takes a brief SHARE ROW EXCLUSIVE lock on

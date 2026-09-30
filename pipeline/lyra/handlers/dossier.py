@@ -29,6 +29,9 @@ from pipeline.lyra.training_corpus import registry_payload, save_artifact
 
 logger = logging.getLogger(__name__)
 
+#: The stage's subtasks for the live view: the artifacts, the archive completion, the manifest.
+_SUBTASKS = 3
+
 
 class DossierHandler(BaseHandler):
     """Persists the research dossier and ends the run."""
@@ -39,6 +42,9 @@ class DossierHandler(BaseHandler):
         # asks this handler to be idempotent on its own: a second
         # ModeratorComplete waits for the first and then finds dossier_ref set.
         self._lock = asyncio.Lock()
+        # Read when the run builds its handlers: a misconfigured THEO_ARCHIVE_COMPLETION_*
+        # fails the run at its start, not after hours of research and the dossier writes.
+        self._archive_limits = archive_completion_limits()
 
     def register(self):
         self.bus.on(ModeratorComplete, self._on_moderator_complete)
@@ -71,10 +77,10 @@ class DossierHandler(BaseHandler):
                 "type": "pipeline",
                 "stage": "dossier",
                 "status": "start",
-                "meta": {"subtask_total": 3},
+                "meta": {"subtask_total": _SUBTASKS},
             }
         )
-        self.emit_sse({"type": "status", "content": "Persisting the research dossier..."})
+        self._progress("Persisting the research dossier...", 0)
         await self._save("moderated", state.moderated_result)
         await self._save(
             "synthesis",
@@ -96,10 +102,8 @@ class DossierHandler(BaseHandler):
         await self._save("citation_registry", registry_payload(state.registry))
         await self._save("image_candidate_pool", state.image_candidate_pool)
 
-        self.emit_sse(
-            {"type": "status", "content": "Archiving the full texts of every cited source..."}
-        )
-        max_seconds, concurrency = archive_completion_limits()
+        self._progress("Archiving the full texts of every cited source...", 1)
+        max_seconds, concurrency = self._archive_limits
         archive = await complete_archive(
             state.request_id,
             state.registry,
@@ -116,6 +120,7 @@ class DossierHandler(BaseHandler):
             f"in {archive.duration_s}s",
         )
 
+        self._progress("Writing the dossier manifest...", 2)
         manifest = build_manifest(state, archive.to_dict(), created_at=datetime.now(UTC))
         artifact_id = await self._save("dossier", manifest)
         state.dossier_ref = artifact_id
@@ -138,6 +143,12 @@ class DossierHandler(BaseHandler):
             }
         )
         await self.bus.emit(DossierReady(request_id=state.request_id))
+
+    def _progress(self, content: str, done: int) -> None:
+        """A status line that also moves the stage's subtask LEDs (TheoResearchLive)."""
+        self.emit_sse(
+            {"type": "status", "content": content, "subtask_done": done, "subtask_total": _SUBTASKS}
+        )
 
     async def _save(self, kind: str, payload: Any, ref: str = "") -> int:
         return await asyncio.to_thread(

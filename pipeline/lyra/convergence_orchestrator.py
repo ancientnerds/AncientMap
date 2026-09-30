@@ -409,12 +409,17 @@ async def _drive_cascade(
                 )
             finally:
                 done_wait.cancel()
+            # The done signal first: a cascade that raised in the same wait as the signal
+            # unwinds like one that raised later (_settle_cascade logs it); the dossier is
+            # complete either way.
+            if done_event.is_set():
+                break
             if cascade.done():
                 cascade.result()
-                if not done_event.is_set() and not state.error:
+                if not state.error:
                     state.error = _NO_DOSSIER_ERROR
                 break
-            if done_event.is_set() or state.error:
+            if state.error:
                 break
             _tick(state, request_id, emit, t0)
     finally:
@@ -465,11 +470,16 @@ def _tick(state: ResearchState, request_id: str, emit: Callable[[dict], None], t
 async def _settle_cascade(
     state: ResearchState, cascade: asyncio.Task, done_event: asyncio.Event, request_id: str
 ) -> None:
-    """Let a finished run's cascade unwind for a grace period, cancel everything else."""
-    if not cascade.done() and done_event.is_set() and not state.error:
-        await asyncio.wait({cascade}, timeout=_UNWIND_GRACE_S)
-    if not cascade.done():
-        cascade.cancel()
+    """Let a finished run's cascade unwind for a grace period, cancel everything else.
+
+    A cancellation of the caller during the grace wait (the worker's stall guard or hard
+    timeout) cancels the cascade too before it propagates."""
+    try:
+        if not cascade.done() and done_event.is_set() and not state.error:
+            await asyncio.wait({cascade}, timeout=_UNWIND_GRACE_S)
+    finally:
+        if not cascade.done():
+            cascade.cancel()
     (outcome,) = await asyncio.gather(cascade, return_exceptions=True)
     if (
         done_event.is_set()

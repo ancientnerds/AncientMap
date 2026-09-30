@@ -383,6 +383,8 @@ async def _process_request(
         return
 
     pipeline_trace: list[dict] = []
+    # (ctx, duration_ms, status written) once the research-only result is committed.
+    researched: tuple[Any, int, bool] | None = None
     start = time.monotonic()
     plan_start = await asyncio.to_thread(_plan_balance_snapshot)
     if plan_start:
@@ -537,41 +539,7 @@ async def _process_request(
                     },
                 )
                 session.commit()
-            # Snippet documents + run links (the dossier itself is already written).
-            await _persist_training_corpus(ctx, request_id, None)
-            if affected_rows(written) == 0:
-                logger.warning(
-                    "[THEO] Request %s was no longer 'running' at research end (cancelled "
-                    "mid-run?): the dossier stays in research_artifacts, the status was not written.",
-                    request_id,
-                )
-            else:
-                logger.info(
-                    "[THEO] Request %s researched in %dms (%d tokens), dossier artifact %s",
-                    request_id,
-                    duration_ms,
-                    ctx.total_tokens,
-                    summary["artifact_id"],
-                )
-                if is_batch:
-                    # The frontier topic is researched; its paper follows in a
-                    # Claude session.
-                    from pipeline.lyra.research_graph import mark_node_explored
-
-                    mark_node_explored(request_id)
-
-                    from pipeline.lyra.thinking_log import log_thinking
-
-                    log_thinking(
-                        "run_event",
-                        f"Dossier ready: {question[:200]}",
-                        {
-                            "request_id": request_id,
-                            "event": "dossier_ready",
-                            "final_claims": summary["counts"]["final_claims"],
-                        },
-                    )
-                _notify_dossier_ready(request_id, question, summary)
+            researched = (ctx, duration_ms, affected_rows(written) > 0)
 
     except Exception as exc:
         from pipeline.lyra.minimax_limiter import (
@@ -652,6 +620,56 @@ async def _process_request(
             loop.call_later(10, _drop_live_events, request_id)
         except RuntimeError:
             _drop_live_events(request_id)
+
+    if researched is not None:
+        await _close_out_researched(request_id, question, is_batch, *researched)
+
+
+async def _close_out_researched(
+    request_id: str, question: str, is_batch: bool, ctx: Any, duration_ms: int, written: bool
+) -> None:
+    """What follows a committed research-only run: the corpus snippets, the graph node, the
+    thinking-log event and the owner notice.
+
+    Outside the run's failure handling on purpose: the dossier and the 'researched' status
+    are committed, so a failure here is raised (the supervisor logs it with its traceback)
+    and never rewrites the row to 'failed' or hands its graph node back to the frontier.
+    """
+    summary = ctx.dossier_summary
+    # Snippet documents + run links (the dossier itself is already written).
+    await _persist_training_corpus(ctx, request_id, None)
+    if not written:
+        logger.warning(
+            "[THEO] Request %s was no longer 'running' at research end (cancelled "
+            "mid-run?): the dossier stays in research_artifacts, the status was not written.",
+            request_id,
+        )
+        return
+    logger.info(
+        "[THEO] Request %s researched in %dms (%d tokens), dossier artifact %s",
+        request_id,
+        duration_ms,
+        ctx.total_tokens,
+        summary["artifact_id"],
+    )
+    if is_batch:
+        # The frontier topic is researched; its paper follows in a Claude session.
+        from pipeline.lyra.research_graph import mark_node_explored
+
+        mark_node_explored(request_id)
+
+        from pipeline.lyra.thinking_log import log_thinking
+
+        log_thinking(
+            "run_event",
+            f"Dossier ready: {question[:200]}",
+            {
+                "request_id": request_id,
+                "event": "dossier_ready",
+                "final_claims": summary["counts"]["final_claims"],
+            },
+        )
+    _notify_dossier_ready(request_id, question, summary)
 
 
 # Hard ceiling on a single research run. The user's explicit guidance is that

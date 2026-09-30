@@ -30,6 +30,7 @@ from pipeline.lyra.dossier_manifest import (
 from pipeline.lyra.training_corpus import best_archive_rows_in, classify_archive_row
 
 EXPORT_VERSION = 1
+TEXTS_MODES = ("cited", "all")
 
 _LIST_SQL = text("""
     SELECT id::text AS id, question, status, is_batch, created_at, completed_at, result_json
@@ -166,6 +167,8 @@ def _legacy_manifest(
 
 def build_export(session: Any, request_id: str, *, texts: str) -> dict:
     """The export bundle of one request (contract C3). texts: 'cited' or 'all'."""
+    if texts not in TEXTS_MODES:
+        raise ValueError(f"texts must be 'cited' or 'all', got {texts!r}")
     row = session.execute(_REQUEST_SQL, {"id": request_id}).fetchone()
     if row is None:
         raise DossierExportError(f"research request {request_id} does not exist")
@@ -254,7 +257,7 @@ def main(
     commands.add_parser("list", help="researched rows with their dossier summary (JSON)")
     export = commands.add_parser("export", help="gzip'd JSON export bundle on stdout")
     export.add_argument("request_id")
-    export.add_argument("--texts", choices=("cited", "all"), default="cited")
+    export.add_argument("--texts", choices=TEXTS_MODES, default="cited")
     args = parser.parse_args(argv)
 
     if args.command == "list":

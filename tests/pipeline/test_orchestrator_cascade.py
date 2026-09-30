@@ -147,3 +147,43 @@ async def test_the_cascade_may_unwind_after_the_done_signal(flushes):
 
     await _drive(state, cascade(), done)
     assert unwound == [True]
+
+
+async def test_a_cascade_that_raises_right_after_the_done_signal_is_still_done(flushes):
+    """Whether the cascade's exception arrives in the same wait as the done signal or later
+    must not decide the run: the dossier is complete either way, the error is logged."""
+    state, done = _state(), asyncio.Event()
+
+    async def cascade():
+        done.set()
+        raise RuntimeError("unwinding failed")
+
+    await _drive(state, cascade(), done)
+    assert state.error == ""
+    assert any("Cascade raised after the run was done" in entry["msg"] for entry in state.debug_log)
+
+
+async def test_a_cancelled_watch_never_leaves_the_cascade_running(flushes):
+    """The worker's stall guard and hard timeout cancel the run from outside, also while a
+    finished run's cascade is still unwinding."""
+    state, done = _state(), asyncio.Event()
+    unwinding = asyncio.Event()
+    cancelled: list[bool] = []
+
+    async def cascade():
+        done.set()
+        unwinding.set()
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            cancelled.append(True)
+            raise
+
+    watch = asyncio.create_task(_drive(state, cascade(), done))
+    await unwinding.wait()
+    await asyncio.sleep(0.05)  # the watch is inside the unwind grace wait now
+    watch.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await watch
+    await asyncio.sleep(0)
+    assert cancelled == [True]

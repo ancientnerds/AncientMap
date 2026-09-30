@@ -188,6 +188,13 @@ def test_an_incomplete_dossier_is_refused():
         td.build_export(_session(broken), REQ, texts="cited")
 
 
+def test_an_unknown_texts_mode_is_refused_not_read_as_all():
+    session = RecordingSession({})
+    with pytest.raises(ValueError, match="texts must be 'cited' or 'all', got 'everything'"):
+        td.build_export(session, REQ, texts="everything")
+    assert session.log == []
+
+
 def test_an_unknown_request_is_refused():
     session = RecordingSession({})
     with pytest.raises(td.DossierExportError, match="does not exist"):

@@ -1198,7 +1198,9 @@ def correct_paper(
         paper_text=served,
         author_username=row.published_by,
         author_discord_id=row.user_id,
-        published_at=row.published_at.isoformat(),
+        # `timestamp without time zone`, written as NOW() by the UTC database: the same
+        # '+00:00' form a first publish indexes.
+        published_at=row.published_at.replace(tzinfo=UTC).isoformat(),
         reindex=True,
     )
     if claude_rewrite:

@@ -108,7 +108,8 @@ def _check_envelope(payload: object, action: str) -> dict:
         raise PublishInputError(f"missing keys: {missing}")
     if unknown:
         raise PublishInputError(f"unknown keys: {unknown}")
-    if payload["version"] != 1:
+    # type() too: True == 1 and 1.0 == 1 in Python.
+    if type(payload["version"]) is not int or payload["version"] != 1:
         raise PublishInputError(f"unsupported version {payload['version']!r} (expected 1)")
     # One spelling only (C4): the image paths, the slug suffix and the journal use
     # the id as given, and theo_dossier exports under the canonical lowercase form.
@@ -140,6 +141,14 @@ def _check_envelope(payload: object, action: str) -> dict:
     return payload
 
 
+def _refuse_constant(name: str) -> None:
+    """json.loads' parse_constant: NaN and Infinity are not JSON and Postgres jsonb refuses
+    them, so they would fail only after the commit (exit 4) or as an uncaught DataError."""
+    raise PublishInputError(
+        f"the input carries {name}, which is not JSON (Postgres jsonb refuses it)"
+    )
+
+
 def _error(out: TextIO, message: str, code: int) -> int:
     out.write(json.dumps({"ok": False, "error": message}) + "\n")
     return code
@@ -152,7 +161,9 @@ def main(
     out = stdout or sys.stdout
     raw = (stdin or sys.stdin.buffer).read()
     try:
-        payload = _check_envelope(json.loads(raw.decode("utf-8")), args.action)
+        payload = _check_envelope(
+            json.loads(raw.decode("utf-8"), parse_constant=_refuse_constant), args.action
+        )
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         return _error(out, f"the input is not UTF-8 JSON: {exc}", EXIT_INPUT)
     except PublishInputError as exc:

@@ -121,6 +121,29 @@ def test_unusable_input_exits_2(seen, raw):
     assert seen == []
 
 
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_non_json_numbers_are_refused_before_any_write(seen, constant):
+    """Python's json.loads reads NaN and Infinity, Postgres jsonb does not: such an input
+    would fail after the commit (exit 4) or as a raw DataError."""
+    raw = _raw(_bundle()).replace(b'"score": ', f'"score": {constant}, "was": '.encode(), 1)
+    assert constant.encode() in raw
+    code, outcome = _run(["--apply"], raw)
+    assert code == 2
+    assert outcome == {
+        "ok": False,
+        "error": f"the input carries {constant}, which is not JSON (Postgres jsonb refuses it)",
+    }
+    assert seen == []
+
+
+@pytest.mark.parametrize("version", [True, 1.0, "1"])
+def test_the_version_is_the_integer_1(seen, version):
+    code, outcome = _run(["--apply"], _raw(_bundle(version=version)))
+    assert code == 2
+    assert "unsupported version" in outcome["error"]
+    assert seen == []
+
+
 def test_a_conflict_exits_3(seen, monkeypatch):
     def conflict(session, request_id, result, **kw):
         raise PublishConflictError("row changed")

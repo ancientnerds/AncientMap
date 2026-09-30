@@ -168,6 +168,18 @@ def test_a_correction_replaces_both_texts_and_logs_itself(images, effects, notic
     assert notices == {"thinking": [], "discord": []}
 
 
+def test_a_correction_indexes_the_naive_utc_publication_time_with_its_offset(images, effects):
+    """research_requests.published_at is `timestamp without time zone` (NOW() in the UTC
+    database), so production hands correct_paper a naive datetime; Qdrant gets the same
+    '+00:00' form a first publish sends."""
+    row = _live_row()
+    row.published_at = datetime(2026, 9, 20, 10, 0)
+    session = PublishSession(row)
+    assert _correct(session, images, _correction()).ok is True
+    (call,) = effects
+    assert call["published_at"] == "2026-09-20T10:00:00+00:00"
+
+
 def test_a_log_entry_keeps_both_texts_and_is_gated_on_the_served_one(images, effects):
     # The founder block workflow stores a published_report assembled from the
     # approved blocks, so report can differ from it: here a draft with a

@@ -135,6 +135,40 @@ async def test_a_run_cancelled_mid_flight_is_not_announced(monkeypatch):
     assert calls["webhook"] == []
 
 
+@pytest.mark.parametrize("breaks", ["webhook", "explored", "corpus"])
+async def test_a_failing_close_out_never_turns_a_researched_run_into_a_failure(monkeypatch, breaks):
+    """The dossier and the researched status are committed: a failure in what follows (the
+    corpus snippets, the graph node, the owner notice) is raised loudly, but it must not
+    rewrite the row to 'failed' or hand the node back to the frontier."""
+    session = RecordingSession(
+        {"SET status = 'running'": [object()], "SET status = 'researched'": [object()]}
+    )
+    calls = _run(monkeypatch, session)
+    resets: list[str] = []
+    monkeypatch.setattr("pipeline.lyra.research_graph.reset_node_for_failed_request", resets.append)
+
+    def broken(*_args, **_kwargs):
+        raise RuntimeError(f"{breaks} is down")
+
+    async def broken_corpus(*_args, **_kwargs):
+        broken()
+
+    target = {
+        "webhook": ("api.services.notify.send_discord_webhook", broken),
+        "explored": ("pipeline.lyra.research_graph.mark_node_explored", broken),
+        "corpus": (tw, "_persist_training_corpus", broken_corpus),
+    }[breaks]
+    monkeypatch.setattr(*target)
+
+    with pytest.raises(RuntimeError, match=f"{breaks} is down"):
+        await tw._process_request(REQ, "Who cut the Baalbek monoliths?", None, is_batch=True)
+
+    assert not [sql for sql in session.statements() if "error_message" in sql]
+    assert resets == []
+    assert calls["credits"] == [REQ]
+    assert tw._live_events[REQ][-1] == {"type": "done", "status": "researched"}
+
+
 def test_the_auto_publish_path_is_gone():
     assert not hasattr(tw, "_auto_publish")
     assert not hasattr(tw, "_paper_artifact")

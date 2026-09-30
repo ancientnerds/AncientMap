@@ -151,3 +151,32 @@ async def test_a_dossier_write_failure_fails_the_run_loudly(saved, monkeypatch):
     assert state.error == "Handler failed on ModeratorComplete: RuntimeError('disk full')"
     assert ready == []
     assert state.dossier_ref is None
+
+
+def test_a_misconfigured_archive_completion_fails_at_the_start_of_the_run(monkeypatch):
+    """A bad THEO_ARCHIVE_COMPLETION_* value is refused when the run builds its handlers,
+    not after 7-15 h of research and the seven dossier writes."""
+    monkeypatch.setenv("THEO_ARCHIVE_COMPLETION_MAX_S", "99999")
+    state = _state()
+    with pytest.raises(ValueError, match="THEO_ARCHIVE_COMPLETION_MAX_S must be between"):
+        DossierHandler(state, EventBus(state=state), asyncio.Semaphore(1))
+
+
+async def test_the_dossier_stage_reports_its_three_subtasks(saved):
+    """The live view resets the stage LEDs to 0/subtask_total on start and fills them from
+    status events that carry subtask_done."""
+    state = _state()
+    events: list[dict] = []
+    state.emit = events.append
+    bus, _ready = _wire(state)
+
+    await bus.emit(ModeratorComplete())
+
+    start = next(e for e in events if e.get("stage") == "dossier" and e["status"] == "start")
+    progress = [
+        (e["subtask_done"], e["subtask_total"])
+        for e in events
+        if e["type"] == "status" and "subtask_done" in e
+    ]
+    assert start["meta"]["subtask_total"] == 3
+    assert progress == [(0, 3), (1, 3), (2, 3)]
