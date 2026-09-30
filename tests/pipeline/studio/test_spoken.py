@@ -237,6 +237,15 @@ from pipeline.studio import spoken
         ("twelve hectares", "12 ha"),
         ("one hectare", "1 ha"),
         ("thirty cubic metres of stone", "30 m³ of stone"),
+        # millimetres and degrees, a glued degree sign included
+        ("joints no wider than two millimetres", "joints no wider than 2 mm"),
+        ("five millimeters", "5 mm"),
+        ("four hundred square millimetres", "400 mm²"),
+        ("aligned at twenty-three degrees", "aligned at 23°"),
+        ("aligned at twenty-three degrees", "aligned at 23 degrees"),
+        ("one degree", "1°"),
+        ("twenty-three point five degrees, then", "23.5°, then"),
+        ("between twenty and thirty degrees", "between 20 and 30°"),
     ],
 )
 def test_equivalent_spellings(said, shown):
@@ -521,6 +530,17 @@ def test_equivalent_spellings(said, shown):
         ("four metres square", "4 m²", "token 1: spoken 'm' vs display 'm²'"),
         ("two square kilometres", "2 m²", "token 1: spoken 'km²' vs display 'm²'"),
         ("thirty cubic metres", "30 m²", "token 1: spoken 'm³' vs display 'm²'"),
+        # a millimetre is no centimetre, and a degree keeps its number and its sign
+        ("two millimetres", "2 cm", "token 1: spoken 'mm' vs display 'cm'"),
+        ("two square millimetres", "2 mm", "token 1: spoken 'mm²' vs display 'mm'"),
+        ("twenty-three degrees", "24°", "token 0: spoken '23' vs display '24'"),
+        ("twenty-three degrees", "23", "spoken has 2 tokens, display 1"),
+        ("twenty-three percent", "23°", "token 1: spoken 'percent' vs display '°'"),
+        (
+            "between twenty and thirty degrees",
+            "between 20° and 30°",
+            "token 2: spoken 'and' vs display '°'",
+        ),
         # "per cent" is one unit in any case, and a caption that drops it is caught
         (
             "Fifteen Per cent of the stone",

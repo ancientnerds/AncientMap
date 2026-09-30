@@ -7,10 +7,11 @@ half" is 4.5, "6 million" and "one point five million" are numbers too), ordinal
 digit ordinals ("twenty-first", "one hundred and first" and "the two hundredth" are 21st, 101st
 and 200th, "the thousandth" is 1000th), decades and centuries become their digits ("the
 nineteen-sixties" is the 1960s, "the twenty-tens" the 2010s, "the fifteen hundreds" the 1500s,
-"the two thousands" the 2000s), thousands separators go
-("1,000th" is 1000th), unit words and symbols become one unit token ("square metres" is m²),
-a range written with a dash is its two numbers and "to" ("12–15 m" is "twelve to fifteen
-metres"), edge punctuation and case are ignored, a possessive "'s" is a word of its own.
+"the two thousands" the 2000s), thousands separators go ("1,000th" is 1000th), unit words and
+symbols become one unit token ("square metres" is m², "two millimetres" 2 mm, "twenty-three
+degrees" 23°), a range written with a dash is its two numbers and "to" ("12–15 m" is "twelve
+to fifteen metres"), edge punctuation and case are ignored, a possessive "'s" is a word of its
+own.
 Clause punctuation after a number word (, ; : . ! ? … or a dash) still ends that number:
 "forty, six" is 40 and 6, never 46. Any other difference is a script error.
 
@@ -82,18 +83,23 @@ UNITS = {
     "m": "m", "metre": "m", "metres": "m", "meter": "m", "meters": "m",
     "km": "km", "kilometre": "km", "kilometres": "km", "kilometer": "km", "kilometers": "km",
     "cm": "cm", "centimetre": "cm", "centimetres": "cm", "centimeter": "cm", "centimeters": "cm",
+    "mm": "mm", "millimetre": "mm", "millimetres": "mm", "millimeter": "mm", "millimeters": "mm",
     "kg": "kg", "kilogram": "kg", "kilograms": "kg",
     "ft": "ft", "foot": "ft", "feet": "ft",
     "ha": "ha", "hectare": "ha", "hectares": "ha",
-    "m²": "m²", "km²": "km²", "cm²": "cm²", "ft²": "ft²",
-    "m³": "m³", "km³": "km³", "cm³": "cm³", "ft³": "ft³",
+    "m²": "m²", "km²": "km²", "cm²": "cm²", "mm²": "mm²", "ft²": "ft²",
+    "m³": "m³", "km³": "km³", "cm³": "cm³", "mm³": "mm³", "ft³": "ft³",
     "%": "percent", "percent": "percent",
+    "°": "°", "degree": "°", "degrees": "°",
     # dotted forms without their last full stop: _words strips it as edge punctuation
     "bc": "bc", "bce": "bc", "b.c": "bc", "b.c.e": "bc",
     "ad": "ad", "ce": "ad", "a.d": "ad", "c.e": "ad",
 }  # fmt: skip
 # "square metres" is "m²", "cubic metres" "m³": the word before a length unit
 POWERS = {"square": "²", "cubic": "³"}
+LENGTHS = ("m", "km", "cm", "mm", "ft")  # the units a POWERS word raises
+# the unit symbols written glued to their number: "15%" is "15" and "%", "23°" "23" and "°"
+GLUED = ("%", "°")
 EDGE = ".,;:!?\"'()[]…—–“”‘’"
 STOPS = ",;:.!?…—–"  # trailing punctuation that closes a clause, and with it a spoken number
 _NUMBER = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"  # "1,000.5", "1000", "2.5"
@@ -138,7 +144,7 @@ def _roman(n: int) -> str:
 def _words(text: str) -> tuple[list[str], set[int]]:
     """The lower-cased words without edge punctuation, and the indices of the words that close
     a clause. That punctuation is the only sign that "forty, six" is two numbers, so the number
-    parser never reads past such a word. A split token ("sixty-six," or "15%,") hands the
+    parser never reads past such a word. A split token ("sixty-six," "15%," or "23°,") hands the
     stop to its last part; a free-standing dash or comma ("forty — six") to the word before.
     A possessive "'s" is a word of its own, so "the Second's" and "II's" differ only in the
     number. A range written with a dash is its two numbers with "to" between them: "12–15" and
@@ -152,8 +158,8 @@ def _words(text: str) -> tuple[list[str], set[int]]:
         if possessive:
             token = possessive[1]
         sign = ""
-        if token.endswith("%") and token[:-1]:
-            token, sign = token[:-1], "%"
+        if token.endswith(GLUED) and token[:-1]:
+            token, sign = token[:-1], token[-1]
         span = _RANGE_RE.match(token)
         if span:
             out.extend([span[1], "to", span[2]])
@@ -514,12 +520,7 @@ def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]
         return [*ordinal, *_days(words, stops, i, ordinal)]
     if w in SCALE_ORDINALS:
         return [(f"{SCALE_ORDINALS[w]}th", i + 1)]
-    if (
-        w in POWERS
-        and i not in stops
-        and i + 1 < len(words)
-        and UNITS.get(words[i + 1]) in ("m", "km", "cm", "ft")
-    ):
+    if w in POWERS and i not in stops and i + 1 < len(words) and UNITS.get(words[i + 1]) in LENGTHS:
         return [(UNITS[words[i + 1]] + POWERS[w], i + 2)]
     if w in UNITS:
         return [(UNITS[w], i + 1)]
