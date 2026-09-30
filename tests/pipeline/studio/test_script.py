@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from pipeline.studio import casefile, glyphs, script
+from pipeline.studio import casefile, glyphs, render_audit, script
+from pipeline.studio.blocks import load_registry
 from tests.pipeline.studio import episode_fixtures as ef
 from tests.pipeline.studio import script_fixtures as sf
 
@@ -19,7 +20,7 @@ def test_fixture_script_passes_before_voice_with_deferred_checks():
     report = _validate(sf.script())
     assert report.errors == []
     assert "chapter lengths are checked after the voice step" in report.deferred
-    assert "clip lengths are checked after the voice step" in report.deferred
+    assert "clip lengths and holds are checked after the voice step" in report.deferred
     assert any("props not checked yet" in d for d in report.deferred)
 
 
@@ -743,3 +744,368 @@ def test_episode_slug_and_shape():
         "episode 'other' is not this episode ('baalbek-c5')"
     ]
     assert _validate({"version": 1}).errors[0].startswith("script keys: missing")
+
+
+def test_version_speed_and_captures_are_typed():
+    """True == 1 in Python, so a bool passed the version and speed checks; a captures dict or
+    string was walked key by key or character by character."""
+    assert _errors(lambda d: d.update(version=True)) == ["version must be 1"]
+    assert _errors(lambda d: d["voice"].update(speed=True)) == [
+        "voice.speed must be between 0.5 and 2.0"
+    ]
+    for captures in ({"platform-01": {}}, "platform-01"):
+        errors = _errors(lambda d, c=captures: d.update(captures=c))
+        assert "captures must be a list" in errors
+        assert not [e for e in errors if "needs a string id" in e]
+
+
+def test_list_values_where_strings_belong_are_errors_not_crashes():
+    """A malformed script is an error, never a crash ('unhashable type: list')."""
+    data = sf.script()
+    full = {"words": sf.words_for(data), "captures": sf.manifests()}
+
+    def errors(mutate):
+        return _validate(sf.mutated_script(mutate), **full).errors
+
+    # the recorder refuses the action at capture; the script check must not crash on it
+    assert errors(lambda d: d["captures"][0]["actions"].append({"do": ["measure"]})) == []
+    assert "b01 cue 1: do must be one of" in " ".join(
+        errors(lambda d: d["beats"][0]["cues"][0].update(do=["show"]))
+    )
+    assert errors(lambda d: d["beats"][5]["cues"][0].update(target=["c1"])) == [
+        "b06 cue 1: target must be a non-empty string",
+        "claim c1: no status beat after its evidence",
+    ]
+    # a malformed visual skips the rest of its beat, as before (so b03 is no platform moment)
+    assert "b03: a $capture names a capture id (a string), got ['x']" in errors(
+        lambda d: d["beats"][2]["visual"]["props"].update(clip={"$capture": ["x"]})
+    )
+    assert "b06: a $ref names a case-file id (a string), got ['e1']" in errors(
+        lambda d: d["beats"][5]["visual"]["props"].update(evidence={"$ref": ["e1"]})
+    )
+    assert "b07: visual must be {block, props (object), credit?}" in errors(
+        lambda d: d["beats"][6]["visual"].update(block=["Meter"])
+    )
+    assert "thumbnails[0]: beat ['b01'] is not a beat of the script" in errors(
+        lambda d: d["thumbnails"][0].update(beat=["b01"])
+    )
+
+    def list_ids(d):
+        d["beats"][2]["id"] = ["b03"]
+        d["beats"][3]["id"] = ["b03"]
+
+    listed = errors(list_ids)
+    assert "#3: id must be a string" in listed and "#4: id must be a string" in listed
+
+
+def test_a_beat_that_is_not_an_object_stops_the_timed_checks():
+    """_chapters slices the beats by the positions of the object beats; with a word timing
+    it measured the string 'oops' as a beat (TypeError)."""
+    words = sf.words_for(sf.script())
+    data = sf.mutated_script(lambda d: d["beats"].insert(2, "oops"))
+    report = _validate(data, words=words, captures=sf.manifests())
+    assert "beat 3: not an object" in report.errors
+    assert "chapter lengths are checked after the voice step" in report.deferred
+
+
+def test_a_flyto_with_a_null_place_is_a_regional_view():
+    """capture/globe.py reads "place": null as no place (a regional view), and so does the
+    script check."""
+    take = {"id": "g9", "kind": "globe", "scene": "flyto", "lat": 1, "lng": 2, "place": None}
+    assert not [e for e in _errors(lambda d: d["captures"].append(take)) if "g9" in e]
+
+
+def test_capture_spec_labels_are_glyph_checked_before_the_take():
+    """A place label the renderer draws (flyto, places, distribution and top-down pins) is
+    refused before the take is recorded, not only on its manifest afterwards."""
+    cf = casefile.from_dict(ef.mutated(places__0__name="Ḫattuša"))
+    quarry = {"lat": 33.99917, "lng": 36.20028}
+    specs = [
+        {"id": "g1", "kind": "globe", "scene": "flyto", **quarry, "place": {"id": "p1"}},
+        {"id": "g2", "kind": "globe", "scene": "places", "places": [{"id": "p1", **quarry}]},
+        {"id": "td1", "kind": "mapbox_topdown", "pins": [{"id": "p1", **quarry}]},
+    ]
+    specs[0]["place"]["label"] = "Ḫattuša"
+    specs[1]["places"][0]["label"] = "Ḫattuša"
+    specs[2]["pins"][0]["label"] = "Ḫattuša"
+    errors = _validate(sf.mutated_script(lambda d: d["captures"].extend(specs)), cf=cf).errors
+    assert [e for e in errors if GLYPH_ERROR in e] == [
+        f'capture {cid}: place p1 label: "Ḫ" (U+1E2A) {GLYPH_ERROR}' for cid in ("g1", "g2", "td1")
+    ]
+
+
+def test_an_unknown_ref_is_reported_before_the_capture():
+    """resolve_refs stops at a capture not yet recorded, so an unknown $ref beside it was
+    only reported once the page existed."""
+
+    def viewer(d):
+        d["captures"].append(
+            {
+                "id": "page",
+                "kind": "source",
+                "url": "https://www.dainst.org/baalbek-report",
+                "quote": "weighs about 1000 tons",
+            }
+        )
+        d["beats"][5]["visual"] = {
+            "block": "SourceViewer",
+            "props": {"page": {"$capture": "page"}, "evidence": {"$ref": "e99"}},
+        }
+
+    report = _validate(sf.mutated_script(viewer))
+    assert "b06: $ref 'e99' is not in the case file" in report.errors
+    assert not [d for d in report.deferred if d.startswith("b06: props")]
+
+
+def test_one_rule_says_which_cue_shows_the_answer(monkeypatch):
+    """The thumbnail rule of the script check and timeline.verdict_frame share one predicate."""
+    assert script.is_verdict_cue({"do": "meter", "target": "meter", "value": [70, 30]})
+    assert script.is_verdict_cue({"do": "status", "target": "c1", "value": "weakened"})
+    assert not script.is_verdict_cue({"do": "status", "target": "c1", "value": "pending"})
+    assert not script.is_verdict_cue({"do": "show", "target": "mk1"})
+    monkeypatch.setattr(script, "is_verdict_cue", lambda cue: cue["do"] == "introduce")
+    errors = _validate(sf.script()).errors
+    assert (
+        "thumbnails[2]: beat b06 comes after the first verdict cue (beat b02): a thumbnail "
+        "never shows the answer" in errors
+    )
+
+
+def test_a_beats_lead_is_read_in_one_place():
+    assert script.lead_seconds({"lead_s": 0.5}) == 0.5
+    assert script.lead_seconds({}) == script.LEAD_S
+    assert script.scene_seconds({"min_s": 1.0, "lead_s": 1.0}, 2.0) == 1.0 + 2.0 + script.TAIL_S
+    # frames from the scene start: the lead, then the word's start in the narration
+    timing = {"words": [{"w": "a", "s": 0.0, "e": 0.4}, {"w": "b", "s": 0.5, "e": 0.9}]}
+    assert script.narration_start({"lead_s": 0.5}) == 30
+    assert script.word_start({"lead_s": 0.5}, timing, 1) == 60
+    assert script.word_start({}, timing, 1) == 21 + 30
+
+
+# Owner Q16 (2026-09-30): `episode check` refuses a planned still picture longer than the
+# render audit's FROZEN_MAX_S inside a clip scene, before the hours-long render.
+GLOBE_REGISTRY = {**sf.REGISTRY, "GlobeShot": load_registry()["GlobeShot"]}
+QUARRY = {"lat": 33.99917, "lng": 36.20028}
+TEMPLE = {"lat": 34.00694, "lng": 36.20389}
+HOLD_ADVICE = (
+    "the render audit refuses a clip scene that holds one picture for more than 4 s (shorten "
+    "the beat, record a take that moves at least every 4 s, or cut to a card)"
+)
+
+
+def _take(cid, events, *, duration_s=12.0, credits=()):
+    return {
+        "id": cid,
+        "kind": "globe",
+        "path": f"captures/{cid}.mp4",
+        "fps": 60,
+        "duration_s": duration_s,
+        "width": 1920,
+        "height": 1080,
+        "events": events,
+        "credits": list(credits),
+    }
+
+
+def _pin(pid, label, t):
+    return {
+        "t": t,
+        "name": "place",
+        "target": pid,
+        "x": 960.0,
+        "y": 540.0,
+        "label": label,
+        "track": [[960.0, 540.0]],
+    }
+
+
+FLYTO = {
+    "id": "g1",
+    "kind": "globe",
+    "scene": "flyto",
+    **QUARRY,
+    "distance": 1.35,
+    "rotate_s": 1.5,
+    "zoom_s": 2.0,
+    "duration_s": 12,
+    "place": {"id": "p1", "label": "Baalbek quarry"},
+}
+FLYTO_TAKE = _take(
+    "g1",
+    [
+        {"t": 0.0, "name": "rotate"},
+        {"t": 1.5, "name": "zoom"},
+        {"t": 3.5, "name": "arrive", "x": 960.0, "y": 540.0},
+        _pin("p1", "Baalbek quarry", 3.5),
+    ],
+)
+
+
+def _places_spec(lead_s=0.8):
+    return {
+        "id": "g2",
+        "kind": "globe",
+        "scene": "places",
+        "places": [
+            {"id": "p1", "label": "Baalbek quarry", **QUARRY},
+            {"id": "p2", "label": "Temple of Jupiter", **TEMPLE},
+        ],
+        "lead_s": lead_s,
+        "interval_s": 0.6,
+        "duration_s": 10,
+    }
+
+
+def _places_take(lead_s=0.8):
+    pins = [_pin("p1", "Baalbek quarry", lead_s), _pin("p2", "Temple of Jupiter", lead_s + 0.6)]
+    return _take("g2", pins, duration_s=10.0)
+
+
+def _two_places():
+    data = ef.casefile()
+    data["places"].append({**data["places"][0], "id": "p2", "name": "Temple of Jupiter", **TEMPLE})
+    return casefile.from_dict(data)
+
+
+def _held(spec, take, *, min_s, block="GlobeShot", props=None, cues=(), words=None, cf=None):
+    """The errors and deferred checks of beat b04 showing `take` (a slice: b04 is no longer a
+    platform moment)."""
+
+    def mutate(d):
+        d["captures"].append(spec)
+        d["beats"][3]["visual"] = {
+            "block": block,
+            "props": {"clip": {"$capture": spec["id"]}, **(props or {})},
+        }
+        d["beats"][3].update(min_s=min_s, cues=list(cues))
+
+    data = sf.mutated_script(mutate)
+    report = script.validate_script(
+        data,
+        cf or _two_places(),
+        GLOBE_REGISTRY,
+        slug="baalbek-c5",
+        fmt="slice",
+        words=words or sf.words_for(data),
+        captures={**sf.manifests(), spec["id"]: take},
+    )
+    return (
+        [e for e in report.errors if e.startswith("b04")],
+        [d for d in report.deferred if d.startswith("b04")],
+    )
+
+
+def test_the_hold_uses_the_render_audits_limit():
+    assert script.FROZEN_MAX_S is render_audit.FROZEN_MAX_S
+    assert script.frozen_max_frames is render_audit.frozen_max_frames
+    assert render_audit.frozen_max_frames(60) == 240
+
+
+def test_a_flyto_may_not_hold_still_after_arrival_for_more_than_4_s():
+    # arrival and pin at 3.5 s (frame 210); a 9 s scene (540 frames) repeats frame 210 329 times
+    assert _held(FLYTO, FLYTO_TAKE, min_s=9.0) == (
+        [
+            "b04: capture g1 holds one picture for 5.48 s, from 3.50 s into the scene (the "
+            f"camera stops) to the scene's end; {HOLD_ADVICE}"
+        ],
+        [],
+    )
+    assert _held(FLYTO, FLYTO_TAKE, min_s=7.0) == ([], [])
+    # the audit's limit: a run of 240 unchanged frames passes, 241 fail
+    assert _held(FLYTO, FLYTO_TAKE, min_s=451 / 60) == ([], [])
+    assert len(_held(FLYTO, FLYTO_TAKE, min_s=452 / 60)[0]) == 1
+    # starting the clip after the arrival leaves no motion in the scene
+    errors, _ = _held(FLYTO, FLYTO_TAKE, min_s=7.0, props={"start_s": 4.0})
+    assert errors == [
+        "b04: capture g1 holds one picture for 6.98 s, from the scene's start to the scene's "
+        f"end; {HOLD_ADVICE}"
+    ]
+
+
+def test_a_fixed_pose_may_not_hold_still_after_or_before_its_places_light_up():
+    # pins at 0.8 s and 1.4 s (frames 48, 84); a 6 s scene holds 4.58 s after the last one
+    assert _held(_places_spec(), _places_take(), min_s=6.0) == (
+        [
+            "b04: capture g2 holds one picture for 4.58 s, from 1.40 s into the scene (place "
+            f"p2 appears) to the scene's end; {HOLD_ADVICE}"
+        ],
+        [],
+    )
+    # a show cue delays its pin (GlobeShot): "where" starts 2.5 s into the narration
+    shown = [{"at_word": "where", "do": "show", "target": "p2"}]
+    assert _held(_places_spec(), _places_take(), min_s=6.0, cues=shown) == ([], [])
+    # a lead of 5 s holds the pose from the scene's start until the first place lights up
+    assert _held(_places_spec(5.0), _places_take(5.0), min_s=7.0) == (
+        [
+            "b04: capture g2 holds one picture for 4.98 s, from the scene's start to 5.00 s "
+            f"into the scene (place p1 appears); {HOLD_ADVICE}"
+        ],
+        [],
+    )
+
+
+def test_a_show_cue_on_stale_word_timings_defers_the_hold():
+    shown = [{"at_word": "where", "do": "show", "target": "p2"}]
+    data = sf.script()
+    words = sf.words_for(data)
+    words["b04"]["words"][0]["w"] = "A"
+    assert _held(_places_spec(), _places_take(), min_s=6.0, cues=shown, words=words) == (
+        [],
+        [
+            "b04: the clip's still picture is checked once words.json holds this beat's "
+            "display words (run `episode voice`)"
+        ],
+    )
+
+
+def test_takes_that_move_to_their_end_pass():
+    distribution = {
+        "id": "g3",
+        "kind": "globe",
+        "scene": "distribution",
+        "duration_s": 12,
+        "places": [{"id": "p1", "label": "Baalbek quarry", **QUARRY}],
+    }
+    turn = _take("g3", [_pin("p1", "Baalbek quarry", 2.0)])
+    assert _held(distribution, turn, min_s=11.0) == ([], [])
+    sweep = {**_places_spec(), "sweep_lng_deg": 60, "cam_lat": 30, "cam_lng_from": 0}
+    assert _held({**sweep, "distance": 2.2}, _places_take(), min_s=9.0) == ([], [])
+    credit = ["© Mapbox © OpenStreetMap © Maxar"]
+    flyin = {"id": "m1", "kind": "globe", "scene": "mapbox_flyin", **QUARRY, "name": "Baalbek"}
+    events = [{"t": 0.0, "name": "space"}, {"t": 1.2, "name": "zoom"}, {"t": 3.6, "name": "orbit"}]
+    take = _take("m1", events, credits=credit)
+    assert _held(flyin, take, min_s=11.0, block="MapboxFlyover") == ([], [])
+
+
+def test_an_orbit_that_does_not_turn_holds_one_picture():
+    orbit = {
+        "id": "m2",
+        "kind": "globe",
+        "scene": "mapbox_orbit",
+        **QUARRY,
+        "name": "Baalbek",
+        "zoom": 16.5,
+        "pitch": 60,
+        "bearing_from": 20,
+        "bearing_to": 110,
+        "duration_s": 12,
+    }
+    credit = ["© Mapbox © OpenStreetMap © Maxar"]
+    take = _take("m2", [{"t": 0.0, "name": "orbit"}], credits=credit)
+    assert _held(orbit, take, min_s=6.0, block="MapboxFlyover") == ([], [])
+    still = {**orbit, "bearing_to": 20}
+    assert _held(still, take, min_s=6.0, block="MapboxFlyover") == (
+        [
+            "b04: capture m2 holds one picture for 5.98 s, from the scene's start to the "
+            f"scene's end; {HOLD_ADVICE}"
+        ],
+        [],
+    )
+
+
+def test_a_platform_take_is_left_to_the_render_audit():
+    """The live page moves on its own (the globe's rotation, flights, panels, tiles): its spec
+    plans no still picture, so only the render audit can see one."""
+    data = sf.mutated_script(lambda d: d["beats"][2].update(min_s=7.9))
+    report = _validate(data, fmt="slice", words=sf.words_for(data), captures=sf.manifests())
+    assert report.errors == []

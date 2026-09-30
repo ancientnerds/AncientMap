@@ -26,7 +26,15 @@ which verbs a block takes and which ids of its resolved props they may target. i
 a ClaimBoard of the episode listing the claim; a meter cue needs a Meter beat. Timing rules use
 the voice's word timings when words.json exists and an estimate of WORDS_PER_S otherwise;
 chapter and clip lengths are checked once the voice exists. A cue's `at_word` names whole
-display words (`cue_word_index`, the index timeline.py takes the cue's frame from). Every
+display words (`cue_word_index`); `cue_frame` is the frame timeline.py puts the cue on.
+With the clip length comes its still picture (owner Q16): a clip scene may hold one picture for
+at most the render audit's FROZEN_MAX_S (render_audit.frozen_max_frames), and a still the take
+plans is refused here instead of after the hours-long render. A take's spec and manifest say when
+its camera stops (a fly-to at its arrival; a fixed-pose places take and a Mapbox orbit that does
+not turn never move; a sweep, a distribution's turn and a fly-in move to their end), and a
+GlobeShot pin changes the picture where it lights up (its event, or later at its first show
+cue, the renderer's rule). A platform take is the live page, whose motion no spec plans (the
+globe's own rotation, flights, panels, tiles): only the render audit judges it. Every
 string the renderer will draw (the props at the block's registry `drawn` paths, a capture's
 credits and its place and pin labels, hook captions, credit lines, chapter titles, thumbnail
 teasers) must lie in the brand fonts' glyphs (glyphs.py, the renderer's checkBlocks rule; owner
@@ -35,7 +43,8 @@ decision 32: only drawn strings, so an original quote inside a captured page and
 last beat may be the ShareCard end card, the one place the link appears in the picture. A
 `site_ids` key belongs to a globe distribution take only. Checks that need a
 capture not yet recorded are reported as deferred (never skipped) and run after
-`episode capture`.
+`episode capture`; a `$ref` the case file lacks is an error at once. A malformed script is an
+error, never a crash: ids, verbs and block names are strings before they are looked up.
 """
 
 from __future__ import annotations
@@ -51,7 +60,6 @@ from pipeline.studio.casefile import (
     CLAIM_STATUSES,
     CaptureNotRecorded,
     CaseFile,
-    CaseFileError,
     Evidence,
     Place,
     Quantity,
@@ -61,7 +69,9 @@ from pipeline.studio.casefile import (
     resolved,
 )
 from pipeline.studio.config import CAPTURE_ID_RE, CAPTURE_KINDS
+from pipeline.studio.errors import StudioError
 from pipeline.studio.glyphs import capture_strings, drawn_strings, glyph_problem
+from pipeline.studio.render_audit import FROZEN_MAX_S, frozen_max_frames
 from pipeline.studio.spoken import spelling_mismatch
 from pipeline.video.shorts_captions import display_text
 
@@ -139,12 +149,18 @@ def _pins(props: dict[str, Any]) -> list[str]:
     return [e["target"] for e in props["map"]["events"] if e["name"] == "pin" and "target" in e]
 
 
-def _globe_places(props: dict[str, Any]) -> list[str]:
+def _globe_pins(props: dict[str, Any]) -> list[tuple[str, float]]:
+    """(place id, event second) of every labelled place of a globe take: the pins GlobeShot
+    lights up at their event (a show cue can only delay one)."""
     return [
-        e["target"]
+        (e["target"], e["t"])
         for e in props["clip"]["events"]
         if e["name"] == "place" and {"target", "x", "y", "label"} <= set(e)
     ]
+
+
+def _globe_places(props: dict[str, Any]) -> list[str]:
+    return [pid for pid, _t in _globe_pins(props)]
 
 
 def _evidence_id(props: dict[str, Any]) -> list[str]:
@@ -195,11 +211,46 @@ def speech_seconds(beat: dict[str, Any], words: dict[str, Any] | None) -> float:
     return len(beat["spoken"].split()) / WORDS_PER_S
 
 
+def lead_seconds(beat: dict[str, Any]) -> float:
+    """The silence before a beat's narration (lead_s, default LEAD_S)."""
+    return float(beat.get("lead_s", LEAD_S))
+
+
 def scene_seconds(beat: dict[str, Any], speech_s: float) -> float:
     """max(min_s, lead + speech + tail): how long a beat's scene stays on screen."""
-    lead = float(beat.get("lead_s", LEAD_S))
     tail = float(beat.get("tail_s", TAIL_S))
-    return max(float(beat["min_s"]), lead + speech_s + tail)
+    return max(float(beat["min_s"]), lead_seconds(beat) + speech_s + tail)
+
+
+def narration_start(beat: dict[str, Any]) -> int:
+    """Frames from a beat's first frame to the start of its narration: the lead."""
+    return round(lead_seconds(beat) * FPS)
+
+
+def word_start(beat: dict[str, Any], timing: dict[str, Any], index: int) -> int:
+    """Frames from a beat's first frame to display word `index` of its narration (timing: the
+    beat's words.json entry, voiced for this display)."""
+    return narration_start(beat) + round(float(timing["words"][index]["s"]) * FPS)
+
+
+def cue_frame(beat: dict[str, Any], timing: dict[str, Any], at_word: str) -> int:
+    """Frames from a beat's first frame to the cue on `at_word`: the start of the display word
+    cue_word_index finds, the frame timeline.py puts the cue on. A word that is no display
+    word is a StudioError (the script check refuses such a cue before)."""
+    index = cue_word_index(beat["display"], at_word)
+    if index is None:
+        raise StudioError(f"{beat['id']}: cue word {at_word!r} is not a display word")
+    return word_start(beat, timing, index)
+
+
+def word_timings_match(beat: dict[str, Any], timing: dict[str, Any]) -> bool:
+    """The beat's words.json words are its display tokens (voiced for this display text)."""
+    return [w["w"] for w in timing["words"]] == beat["display"].split()
+
+
+def is_verdict_cue(cue: dict[str, Any]) -> bool:
+    """A cue that shows the answer: a meter move, or a claim status other than pending."""
+    return cue["do"] == "meter" or (cue["do"] == "status" and cue["value"] != "pending")
 
 
 def scene_frames(beat: dict[str, Any], speech_s: float) -> int:
@@ -228,7 +279,8 @@ def _top_level(script: Any, slug: str, report: ScriptReport) -> bool:
     if missing or unknown:
         report.errors.append(f"script keys: missing {missing}, unknown {unknown}")
         return False
-    if script["version"] != 1:
+    # is_number: True == 1 would pass a bare comparison
+    if not is_number(script["version"]) or script["version"] != 1:
         report.errors.append("version must be 1")
     if script["episode"] != slug:
         report.errors.append(f"episode {script['episode']!r} is not this episode ({slug!r})")
@@ -237,7 +289,7 @@ def _top_level(script: Any, slug: str, report: ScriptReport) -> bool:
     voice = script["voice"]
     if not isinstance(voice, dict) or set(voice) != {"id", "speed"}:
         report.errors.append("voice must be {id, speed}")
-    elif not isinstance(voice["speed"], (int, float)) or not 0.5 <= voice["speed"] <= 2.0:
+    elif not is_number(voice["speed"]) or not 0.5 <= voice["speed"] <= 2.0:
         report.errors.append("voice.speed must be between 0.5 and 2.0")
     if not isinstance(script["beats"], list) or not script["beats"]:
         report.errors.append("beats must be a non-empty list")
@@ -249,7 +301,11 @@ def _captures(script: dict[str, Any], report: ScriptReport) -> dict[str, dict[st
     """The declared capture specs by id."""
     specs: dict[str, dict[str, Any]] = {}
     ids: list[str] = []
-    for n, cap in enumerate(script.get("captures", []), start=1):
+    captures = script.get("captures", [])
+    if not isinstance(captures, list):
+        report.errors.append("captures must be a list")
+        return specs
+    for n, cap in enumerate(captures, start=1):
         if not isinstance(cap, dict) or not isinstance(cap.get("id"), str):
             report.errors.append(f"capture {n}: needs a string id")
             continue
@@ -267,7 +323,8 @@ def _captures(script: dict[str, Any], report: ScriptReport) -> dict[str, dict[st
 
 def _same_place(cf: CaseFile, cid: str, point: Any, report: ScriptReport) -> None:
     """A place a capture spec shows must be a case-file place at the case file's coordinates,
-    and the label the video draws for it, when it has one, the case file's name."""
+    and the label the video draws for it, when it has one, the case file's name in the brand
+    fonts' glyphs (checked here, before the take, not only on its manifest afterwards)."""
     places = {p.id: p for p in cf.places}
     pid = point.get("id") if isinstance(point, dict) else None
     place = places.get(pid) if isinstance(pid, str) else None
@@ -282,11 +339,17 @@ def _same_place(cf: CaseFile, cid: str, point: Any, report: ScriptReport) -> Non
         and abs(lng - place.lng) <= COORD_TOLERANCE
     ):
         report.errors.append(f"capture {cid}: place {pid} lat/lng differ from the case file")
-    if "label" in point and point["label"] != place.name:
+    if "label" not in point:
+        return
+    if point["label"] != place.name:
         report.errors.append(
             f"capture {cid}: place {pid} label {point['label']!r} is not the case file's name "
             f"{place.name!r}"
         )
+        return
+    problem = glyph_problem(f"capture {cid}: place {pid} label", place.name)
+    if problem is not None:
+        report.errors.append(problem)
 
 
 def place_at(cf: CaseFile, point: Any) -> Place | None:
@@ -379,9 +442,11 @@ def _capture_bindings(specs: dict[str, dict[str, Any]], cf: CaseFile, report: Sc
     file's names, a Mapbox fly-in or orbit centred on a case-file place (its optional
     `country` bound to that place's site, `_mapbox_take`), platform measure and
     proximity points on case-file places, verified quotes, verified paper anchors. A flyto
-    without `place` (a regional view) names no place and stays unbound; a distribution's dots
-    are site ids (owner decision 15), and no other take carries `site_ids` (sites.py would
-    resolve them into places the other scenes refuse only at capture)."""
+    without `place`, or with "place": null as capture/globe.py reads it (a regional view),
+    names no place and stays unbound; a distribution's dots are site ids (owner decision 15),
+    and no other take carries `site_ids` (sites.py would resolve them into places the other
+    scenes refuse only at capture). Platform actions are the recorder's to validate
+    (platform.validate_actions, before the take): here only their points are bound."""
     verified = [e for e in cf.evidence if e.verification.status == "verified"]
     for cid, spec in specs.items():
         kind = spec.get("kind")
@@ -390,7 +455,7 @@ def _capture_bindings(specs: dict[str, dict[str, Any]], cf: CaseFile, report: Sc
                 f"capture {cid}: site_ids belong only to a globe distribution take "
                 "(owner decision 15)"
             )
-        if kind == "globe" and spec.get("scene") == "flyto" and "place" in spec:
+        if kind == "globe" and spec.get("scene") == "flyto" and spec.get("place") is not None:
             place = spec["place"]
             if isinstance(place, dict):
                 point = {**place, "lat": spec.get("lat"), "lng": spec.get("lng")}
@@ -410,7 +475,7 @@ def _capture_bindings(specs: dict[str, dict[str, Any]], cf: CaseFile, report: Sc
         elif kind == "platform":
             for i, action in enumerate(_listed(cid, spec, "actions", report)):
                 verb = action.get("do") if isinstance(action, dict) else None
-                for key in PLATFORM_POINTS.get(verb, ()):
+                for key in PLATFORM_POINTS.get(verb, ()) if isinstance(verb, str) else ():
                     if not _at_a_place(cf, action.get(key)):
                         report.errors.append(
                             f"capture {cid}: actions[{i}].{key} is not the coordinates of a "
@@ -450,6 +515,8 @@ def _dicts_with_id(value: Any) -> list[dict[str, Any]]:
 
 def _beat_field_problems(beat: dict[str, Any]) -> list[str]:
     problems: list[str] = []
+    if not isinstance(beat["id"], str):
+        problems.append("id must be a string")
     for key in ("spoken", "display"):
         if not isinstance(beat[key], str) or not beat[key].strip():
             problems.append(f"{key} must be a non-empty string")
@@ -647,7 +714,7 @@ def _cue_problems(cue: Any, display: str, claim_ids: set[str]) -> list[str]:
     if unknown:
         return [f"unknown cue keys {unknown}"]
     verb = cue.get("do")
-    if verb not in CUE_VERBS:
+    if not isinstance(verb, str) or verb not in CUE_VERBS:
         return [f"do must be one of {sorted(CUE_VERBS)}"]
     problems: list[str] = []
     at_word, target = cue.get("at_word"), cue.get("target")
@@ -657,6 +724,7 @@ def _cue_problems(cue: Any, display: str, claim_ids: set[str]) -> list[str]:
         problems.append(f"at_word {at_word!r} is not in display")
     if not isinstance(target, str) or not target.strip():
         problems.append("target must be a non-empty string")
+        return problems
     if ("value" in cue) != (verb in VALUE_VERBS):
         problems.append(
             f"a {verb} cue takes no value" if "value" in cue else f"a {verb} cue needs a value"
@@ -710,7 +778,7 @@ def validate_script(
     claim_status = {c.id: c.status for c in cf.claims}
     claim_ids = set(claim_status)
     beats: list[dict[str, Any]] = script["beats"]
-    ids = [b.get("id") for b in beats if isinstance(b, dict)]
+    ids = [b["id"] for b in beats if isinstance(b, dict) and isinstance(b.get("id"), str)]
     dupes = sorted({i for i in ids if ids.count(i) > 1})
     if dupes:
         report.errors.append(f"duplicate beat ids {dupes}")
@@ -732,15 +800,16 @@ def validate_script(
     for idx, beat in enumerate(beats):
         if not isinstance(beat, dict):
             report.errors.append(f"beat {idx + 1}: not an object")
+            malformed = True
             continue
         missing = sorted(BEAT_REQUIRED - set(beat))
         unknown = sorted(set(beat) - BEAT_REQUIRED - BEAT_OPTIONAL)
-        bid = str(beat.get("id", f"#{idx + 1}"))
+        bid = beat["id"] if isinstance(beat.get("id"), str) else f"#{idx + 1}"
         if missing or unknown:
             report.errors.append(f"{bid}: missing {missing}, unknown {unknown}")
             malformed = True
             continue
-        if not _BEAT_ID_RE.fullmatch(bid):
+        if isinstance(beat["id"], str) and not _BEAT_ID_RE.fullmatch(bid):
             report.errors.append(f"{bid}: id must be lowercase letters, digits, hyphens")
         fields = _beat_field_problems(beat)
         if fields:
@@ -785,6 +854,7 @@ def validate_script(
             not isinstance(visual, dict)
             or not {"block", "props"} <= set(visual)
             or not set(visual) <= {"block", "props", "credit"}
+            or not isinstance(visual["block"], str)
             or not isinstance(visual["props"], dict)
         ):
             report.errors.append(f"{bid}: visual must be {{block, props (object), credit?}}")
@@ -793,6 +863,19 @@ def validate_script(
             not isinstance(visual["credit"], str) or not visual["credit"].strip()
         ):
             report.errors.append(f"{bid}: visual.credit must be a non-empty string")
+            continue
+        raw = visual["props"]
+        odd = [
+            f"a {marker} names a {what} (a string), got {value!r}"
+            for marker, what, values in (
+                ("$ref", "case-file id", refs_in(raw)),
+                ("$capture", "capture id", capture_ids_in(raw)),
+            )
+            for value in values
+            if not isinstance(value, str)
+        ]
+        if odd:
+            report.errors.extend(f"{bid}: {p}" for p in odd)
             continue
         block = visual["block"]
         if block in FORBIDDEN_BLOCKS:
@@ -809,8 +892,10 @@ def validate_script(
             # the end card is the one place the link appears in the picture (platform
             # moments are never an advert): full episodes and slices alike
             report.errors.append(f"{bid}: ShareCard is the end card; only the last beat may use it")
-        raw = visual["props"]
         report.errors.extend(f"{bid}: {p}" for p in _reference_problems(block, raw, kinds, specs))
+        # at once, not first when resolve_refs reaches them after every capture is recorded
+        unknown_refs = sorted({ref for ref in refs_in(raw) if ref not in entities})
+        report.errors.extend(f"{bid}: $ref {ref!r} is not in the case file" for ref in unknown_refs)
         for ref in refs_in(raw):
             item = evidence.get(ref)
             if item is not None and item.verification.status != "verified":
@@ -833,27 +918,30 @@ def validate_script(
             _source_viewer(bid, raw, specs, cf, report)
         props: dict[str, Any] | None = None
         deferred = False
-        try:
-            candidate = resolve_refs(raw, entities, captures)
-        except CaptureNotRecorded as exc:
-            report.deferred.append(f"{bid}: props not checked yet ({exc})")
-            deferred = True
-        except CaseFileError as exc:
-            report.errors.append(f"{bid}: {exc}")
-        else:
-            schema = props_errors(entry["props"], candidate)
-            report.errors.extend(f"{bid}: {p}" for p in schema)
-            props = None if schema else candidate
+        if not unknown_refs:
+            try:
+                candidate = resolve_refs(raw, entities, captures)
+            except CaptureNotRecorded as exc:
+                report.deferred.append(f"{bid}: props not checked yet ({exc})")
+                deferred = True
+            else:
+                schema = props_errors(entry["props"], candidate)
+                report.errors.extend(f"{bid}: {p}" for p in schema)
+                props = None if schema else candidate
         if entry["map"]:
             _map_credit(bid, visual, captures, report)
         if entry["platform"]:
             platform.append((bid, seconds))
+        clip_frames: int | None = None
         if props is not None and block in CLIP_BLOCKS and words is not None:
-            _clip_length(bid, props, scene_frames(beat, speech), report)
+            frames = scene_frames(beat, speech)
+            if _clip_length(bid, props, frames, report):
+                clip_frames = frames
         report.errors.extend(
             _glyph_problems(bid, beat, entry["drawn"], props, entities, kinds, captures)
         )
         # cues
+        shows: list[dict[str, Any]] = []
         for n, cue in enumerate(beat["cues"], start=1):
             where = f"{bid} cue {n}"
             problems = _cue_problems(cue, beat["display"], claim_ids)
@@ -861,9 +949,7 @@ def validate_script(
                 report.errors.extend(f"{where}: {p}" for p in problems)
                 continue
             verb, target = cue["do"], cue["target"]
-            if verdict_at is None and (
-                verb == "meter" or (verb == "status" and cue["value"] != "pending")
-            ):
+            if verdict_at is None and is_verdict_cue(cue):
                 verdict_at = idx
             if verb == "introduce":
                 intro_at.setdefault(target, idx)
@@ -883,6 +969,20 @@ def validate_script(
                     report.errors.append(
                         f"{where}: {verb} {target}: not a target of this block ({shown})"
                     )
+                elif verb == "show":
+                    shows.append(cue)
+        # a clip's $capture that is not declared was reported above
+        if clip_frames is not None and props is not None and props["clip"]["id"] in specs:
+            _clip_hold(
+                bid,
+                beat,
+                props,
+                specs[props["clip"]["id"]],
+                shows,
+                None if words is None else words.get(bid),
+                clip_frames,
+                report,
+            )
 
     if hook_s > HOOK_MAX_S:
         how = "measured" if words is not None else "estimated"
@@ -928,7 +1028,7 @@ def validate_script(
     if fmt == "full":
         _spine(beats, blocks_used, hook_beats, roles, report)
     if words is None and any(b in CLIP_BLOCKS for b in blocks_used):
-        report.deferred.append("clip lengths are checked after the voice step")
+        report.deferred.append("clip lengths and holds are checked after the voice step")
     _chapters(script, beats, None if malformed else words, fmt, report)
     _thumbnails(script["thumbnails"], beats, verdict_at, report)
     return report
@@ -945,7 +1045,11 @@ def _thumbnails(
     if not isinstance(items, list) or len(items) != THUMBNAILS:
         report.errors.append(f"thumbnails must be a list of exactly {THUMBNAILS} candidates")
         return
-    index = {b["id"]: i for i, b in enumerate(beats) if isinstance(b, dict) and "id" in b}
+    index = {
+        b["id"]: i
+        for i, b in enumerate(beats)
+        if isinstance(b, dict) and isinstance(b.get("id"), str)
+    }
     seen: list[Any] = []
     for i, item in enumerate(items):
         where = f"thumbnails[{i}]"
@@ -954,7 +1058,7 @@ def _thumbnails(
             seen.append(None)
             continue
         beat, at, text = item["beat"], item["at"], item["text"]
-        if beat not in index:
+        if not isinstance(beat, str) or beat not in index:
             report.errors.append(f"{where}: beat {beat!r} is not a beat of the script")
         elif beats[index[beat]].get("role") in ROLES:
             role = beats[index[beat]]["role"]
@@ -999,7 +1103,12 @@ def _source_viewer(
 ) -> None:
     """The captured page must be the evidence's own source quote or its paper paragraph."""
     page, shown = raw.get("page"), raw.get("evidence")
-    if not (isinstance(page, dict) and page.get("$capture") in specs and _is_ref(shown)):
+    if not (
+        isinstance(page, dict)
+        and set(page) == {"$capture"}
+        and page["$capture"] in specs
+        and _is_ref(shown)
+    ):
         return
     cid, eid = page["$capture"], shown["$ref"]
     item = next((e for e in cf.evidence if e.id == eid), None)
@@ -1041,9 +1150,9 @@ def _map_credit(
     report.errors.append(f"{bid}: a map scene carries the in-frame credit {list(MAP_CREDITS)}")
 
 
-def _clip_length(bid: str, props: dict[str, Any], frames: int, report: ScriptReport) -> None:
+def _clip_length(bid: str, props: dict[str, Any], frames: int, report: ScriptReport) -> bool:
     """The renderer refuses a clip that ends before its scene (video/src/blocks/clips.ts);
-    `frames` is the scene's scene_frames."""
+    `frames` is the scene's scene_frames. False when it is refused."""
     clip = props["clip"]
     start = props.get("start_s", 0)
     need = start + frames / FPS
@@ -1051,6 +1160,89 @@ def _clip_length(bid: str, props: dict[str, Any], frames: int, report: ScriptRep
         report.errors.append(
             f"{bid}: capture {clip['id']} is {clip['duration_s']} s long; the scene needs "
             f"{need:.3f} s from {start} s (record a longer take or shorten the beat)"
+        )
+        return False
+    return True
+
+
+def _camera_stops(spec: dict[str, Any], clip: dict[str, Any]) -> float | None:
+    """The second of a globe or Mapbox take at which its camera stops, from its spec and
+    manifest (capture/globe.py and the recorder's scenes); None for a platform take, the live
+    page, whose motion no spec plans. A fly-to holds from its arrival; a fixed pose
+    (sweep_lng_deg 0) and an orbit from one bearing to the same never move; a sweep, a
+    distribution's turn, a fly-in and a turning orbit move until the take ends."""
+    if spec["kind"] == "platform":
+        return None
+    scene = spec["scene"]
+    if scene == "flyto":
+        return next(e["t"] for e in clip["events"] if e["name"] == "arrive")
+    if scene == "places" and spec.get("sweep_lng_deg", 0) == 0:
+        return 0.0
+    if scene == "mapbox_orbit" and spec["bearing_from"] == spec["bearing_to"]:
+        return 0.0
+    return clip["duration_s"]
+
+
+def _clip_hold(
+    bid: str,
+    beat: dict[str, Any],
+    props: dict[str, Any],
+    spec: dict[str, Any],
+    shows: list[dict[str, Any]],
+    timing: dict[str, Any] | None,
+    frames: int,
+    report: ScriptReport,
+) -> None:
+    """Owner Q16: the longest still picture a clip scene plans may not exceed the render audit's
+    limit (render_audit.frozen_max_frames), refused before the render instead of after it.
+
+    The picture changes while the take's camera moves (_camera_stops) and where a GlobeShot pin
+    lights up: at its event, or at its first show cue when that comes later (the renderer's
+    rule; `shows` are the beat's checked show cues, `timing` its words.json entry). Between two
+    changes every frame repeats the one before it: the run of unchanged frames the audit
+    counts. `frames` is the scene's scene_frames, the clip already long enough for it."""
+    clip = props["clip"]
+    stops = _camera_stops(spec, clip)
+    if stops is None:
+        return
+    cued: dict[str, int] = {}
+    if shows:
+        if timing is None or not word_timings_match(beat, timing):
+            report.deferred.append(
+                f"{bid}: the clip's still picture is checked once words.json holds this beat's "
+                "display words (run `episode voice`)"
+            )
+            return
+        for cue in shows:
+            at = cue_frame(beat, timing, cue["at_word"])
+            cued[cue["target"]] = min(at, cued.get(cue["target"], at))
+    trim = round(props.get("start_s", 0) * FPS)
+    last = frames - 1
+    stop = min(round(stops * FPS) - trim, last)
+    # (scene frame, how the message names it) of every change of the picture, in order: the
+    # camera moves until `stop` (or the scene starts still), then the pins light up
+    if stop > 0:
+        changes = [(stop, f"{stop / FPS:.2f} s into the scene (the camera stops)")]
+    else:
+        changes = [(0, "the scene's start")]
+    lit = []
+    for pid, t in _globe_pins(props):
+        event = round(t * FPS) - trim
+        at = max(event, cued.get(pid, event))
+        if changes[0][0] < at <= last:
+            lit.append((at, f"{at / FPS:.2f} s into the scene (place {pid} appears)"))
+    changes += sorted(lit)
+    ends = [*changes[1:], (last + 1, "the scene's end")]
+    held, since, until = max(
+        ((b - a - 1, start, end) for (a, start), (b, end) in zip(changes, ends, strict=True)),
+        key=lambda run: run[0],
+    )
+    if held > frozen_max_frames(FPS):
+        report.errors.append(
+            f"{bid}: capture {clip['id']} holds one picture for {held / FPS:.2f} s, from {since} "
+            f"to {until}; the render audit refuses a clip scene that holds one picture for "
+            f"more than {FROZEN_MAX_S:g} s (shorten the beat, record a take that moves at least "
+            f"every {FROZEN_MAX_S:g} s, or cut to a card)"
         )
 
 

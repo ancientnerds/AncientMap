@@ -170,6 +170,8 @@ def test_build_timeline_refuses_before_voice(tmp_path, monkeypatch):
     with pytest.raises(StudioError, match="not ready"):
         timeline.build_timeline(ws)
     ws.words.write_text(json.dumps(sf.words_for(sf.script())), encoding="utf-8")
+    for beat in sf.script()["beats"]:  # as `episode voice` leaves them (voice.stale_beats)
+        (ws.voice_dir / f"{beat['id']}.mp3").write_bytes(b"mp3")
     for cid, manifest in sf.stored_manifests().items():
         (ws.captures_dir / f"{cid}.json").write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(StudioError, match="voice/manifest.json does not exist"):
@@ -207,6 +209,32 @@ def test_thumbnail_candidates_compile_to_frames_before_any_verdict():
     assert timeline.thumbnail_problem(t, roles, 9 * 357) == (
         "frame 3213 is not a frame of the episode (0 to 3212)"
     )
+
+
+def test_verdict_frame_uses_the_scripts_answer_rule(monkeypatch):
+    """`episode script` and `episode timeline` agree on which cue shows the answer: both ask
+    script.is_verdict_cue, neither writes the rule out again."""
+    from pipeline.studio import script
+
+    assert timeline.is_verdict_cue is script.is_verdict_cue
+    t = _compile()
+    monkeypatch.setattr(timeline, "is_verdict_cue", lambda cue: cue["do"] == "show")
+    assert timeline.verdict_frame(t) == t["scenes"][0]["cues"][0]["frame"]
+
+
+def test_a_beats_own_lead_moves_its_narration_and_its_cues():
+    """The narration and the cue frames start after the beat's lead (script.narration_start and
+    script.cue_frame, the arithmetic `episode check` uses for a clip's still picture)."""
+    from pipeline.studio import script
+
+    assert timeline.cue_frame is script.cue_frame
+    assert timeline.word_start is script.word_start
+    data = sf.mutated_script(lambda d: d["beats"][0].update(lead_s=0.5))
+    t = timeline.compile_timeline(
+        data, sf.words_for(data), casefile.from_dict(ef.casefile()), sf.manifests(), EPISODE
+    )
+    assert t["audio"]["narration"][0] == {"src": "voice/b01.mp3", "from": 30}
+    assert t["scenes"][0]["cues"] == [{"frame": 30 + 191, "do": "show", "target": "mk1"}]
 
 
 def test_a_thumbnail_after_the_verdict_cue_in_its_beat_is_refused():

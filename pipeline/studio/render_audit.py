@@ -10,19 +10,27 @@ black space, about Y 22-27 in video mode; the NERV background #0a0e14, Y 28).
 
 Frozen runs are measured inside clip scenes only (a scene whose props carry a captured clip with
 an fps): stills, cards and infographics hold still by design once their entrance ends, but a
-clip that holds one picture for more than FROZEN_MAX_S is a stalled take (cut to a card
-instead). A frame counts as unchanged when its mean luma difference to the next
-(shorts_audit._frame_diffs) is below the shorts' FROZEN_DIFF, 0.05, measured on studio takes
-on 2026-09-29 (recorded on the NVIDIA by capture.globe.record_globe, encoded as render.ts
-encodes: h264_nvenc, 16M, no B-frames; tests/pipeline/studio/frozen_reference_diffs.json).
-The slowest legitimate motion, a distribution's turn of 360 degrees in 30 s with the whole
-globe in frame, reads 0.049-0.29 per frame (camera at 12 N; 0.052-0.19 at 37 S, a view of
-mostly ocean), so it stays below 0.05 for one frame at most; a places sweep of 3 degrees/s at
-distance 1.8 reads 0.33 or more. A held picture reads 0 between keyframes, but keyframes of the
-two encodes (hevc_nvenc every 60 frames for the capture, h264_nvenc every 250 for the render)
-add single-frame spikes of 0.005-0.066. A threshold low enough to sit under those spikes would
-cut a stall into short runs: the recorder's held pose of 4.67 s reads 280 frames at 0.05 but
-109 at 0.005, which the check would pass.
+clip scene that holds one picture for more than FROZEN_MAX_S (frozen_max_frames) is dead air, a
+stalled take or a still the script planned (cut to a card instead). `episode check` refuses the
+planned ones with this same limit before the render (script.py, owner Q16: a fly-to's hold after
+its arrival, a fixed pose before, between and after its places light up, a Mapbox orbit that
+does not turn); this check catches the rest, after it. A frame counts as unchanged when its mean
+luma difference to the next (shorts_audit._frame_diffs) is below the shorts' FROZEN_DIFF, 0.05,
+measured on studio takes on 2026-09-29 (recorded on the NVIDIA by capture.globe.record_globe,
+encoded as render.ts encodes: h264_nvenc, 16M, no B-frames;
+tests/pipeline/studio/frozen_reference_diffs.json). A distribution's turn of 360 degrees in 30 s
+with the whole globe in frame (the slowest turn a distribution makes) reads 0.049-0.29 per frame
+(camera at 12 N; 0.052-0.19 at 37 S, a view of mostly ocean), so it stays below 0.05 for one
+frame at most; a places sweep of 3 degrees/s at distance 1.8 reads 0.33 or more. Slower motion
+was not measured, and the capture validators accept it (a places sweep of any non-zero
+sweep_lng_deg, a Mapbox orbit of any bearing range): it can read as frozen. A held picture reads
+0 between keyframes, but keyframes of the two encodes (hevc_nvenc every 60 frames for the
+capture, h264_nvenc every 250 for the render) add single-frame spikes of 0.005-0.066. A
+threshold low enough to sit under those spikes would cut a stall into short runs: the
+reference's held pose (a fixed-pose places take of 6 s, standing in for a stall) reads 280
+frames at 0.05 but 109 at 0.005, which the check would pass. A spike above 0.05 still ends a
+run, so an unplanned stall of about 4-8 s that crosses a render keyframe can read as two runs
+within the limit.
 """
 
 from __future__ import annotations
@@ -54,6 +62,12 @@ FROZEN_MAX_S = 4.0
 BLACK_YAVG_TV = 18.0
 
 
+def frozen_max_frames(fps: int) -> int:
+    """The longest run of unchanged frames a clip scene may hold: FROZEN_MAX_S at `fps` (the
+    audit's limit, and `episode check`'s for a still the script plans)."""
+    return int(FROZEN_MAX_S * fps)
+
+
 def longest_black_s(samples: list[tuple[float, float]], step_s: float = LUMA_STEP_S) -> float:
     """The longest run of luma samples below BLACK_YAVG_TV, in seconds."""
     return longest_frozen_run([yavg for _t, yavg in samples], BLACK_YAVG_TV) * step_s
@@ -80,7 +94,7 @@ def longest_frozen_in_clips(diffs: list[float], timeline: dict[str, Any]) -> int
 
 def evaluate(m: dict[str, Any], timeline: dict[str, Any]) -> list[Check]:
     fps = timeline["fps"]
-    frozen_max = int(FROZEN_MAX_S * fps)
+    frozen_max = frozen_max_frames(fps)
     return [
         Check(
             "format",

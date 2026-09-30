@@ -16,10 +16,11 @@
 
 Every frame is counted at script.FPS. A scene lasts `script.scene_frames` frames,
 ceil(max(min_s, lead + speech + tail) * fps), the count `episode script` checks a clip against;
-its narration starts after the lead; cues and captions are placed on the word timings of the
-display text (a cue on the word `script.cue_word_index` finds: whole display words, never a
-match inside a longer word). A cue is exactly {frame, do, target} plus `value` for status and
-meter, and lies inside its scene.
+its narration starts after the lead (script.narration_start); cues and captions are placed on
+the word timings of the display text (script.word_start; a cue on the word
+`script.cue_word_index` finds, script.cue_frame: whole display words, never a match inside a
+longer word), the frames `episode check` also takes a GlobeShot pin's show cue from. A cue is
+exactly {frame, do, target} plus `value` for status and meter, and lies inside its scene.
 Captions exist only for hook beats. Every path is relative to the per-render public dir.
 The word timings must belong to the current display text and voice/<beat>.mp3 to the current
 spoken text, voice and speed (voice.stale_beats); anything else is `episode voice` again.
@@ -37,7 +38,17 @@ from typing import Any
 from pipeline.studio.casefile import CaseFile, capture_ids_in, refs_in, resolve_refs, resolved
 from pipeline.studio.episode import EpisodeWorkspace, load_all, require_valid
 from pipeline.studio.errors import StudioError
-from pipeline.studio.script import FPS, LEAD_S, ROLES, VALUE_VERBS, cue_word_index, scene_frames
+from pipeline.studio.script import (
+    FPS,
+    ROLES,
+    VALUE_VERBS,
+    cue_frame,
+    is_verdict_cue,
+    narration_start,
+    scene_frames,
+    word_start,
+    word_timings_match,
+)
 from pipeline.studio.voice import stale_beats
 
 WIDTH = 1920
@@ -45,12 +56,10 @@ HEIGHT = 1080
 
 
 def verdict_frame(timeline: dict[str, Any]) -> int | None:
-    """The first frame that shows an answer: a claim status other than pending, a meter move."""
+    """The first frame that shows an answer (script.is_verdict_cue: a claim status other than
+    pending, a meter move)."""
     frames = [
-        cue["frame"]
-        for scene in timeline["scenes"]
-        for cue in scene["cues"]
-        if cue["do"] == "meter" or (cue["do"] == "status" and cue["value"] != "pending")
+        cue["frame"] for scene in timeline["scenes"] for cue in scene["cues"] if is_verdict_cue(cue)
     ]
     return min(frames) if frames else None
 
@@ -102,21 +111,18 @@ def compile_timeline(
         if bid not in words:
             raise StudioError(f"{bid}: no word timings; run `episode voice` first")
         timing = words[bid]
-        if [w["w"] for w in timing["words"]] != beat["display"].split():
+        if not word_timings_match(beat, timing):
             raise StudioError(
                 f"{bid}: words.json was aligned to another display text; run `episode voice`"
             )
         duration = scene_frames(beat, float(timing["duration_s"]))
-        voice_from = cursor + round(float(beat.get("lead_s", LEAD_S)) * FPS)
+        voice_from = cursor + narration_start(beat)
         starts[bid] = cursor
         narration.append({"src": f"voice/{bid}.mp3", "from": voice_from})
         aligned = [Word(w["w"], float(w["s"]), float(w["e"])) for w in timing["words"]]
         cues = []
         for n, cue in enumerate(beat["cues"], start=1):
-            index = cue_word_index(beat["display"], cue["at_word"])
-            if index is None:
-                raise StudioError(f"{bid}: cue word {cue['at_word']!r} is not a display word")
-            frame = voice_from + round(aligned[index].start * FPS)
+            frame = cursor + cue_frame(beat, timing, cue["at_word"])
             if not cursor <= frame < cursor + duration:
                 raise StudioError(
                     f"{bid} cue {n}: frame {frame} outside the scene [{cursor}, {cursor + duration})"
@@ -137,9 +143,9 @@ def compile_timeline(
             }
         )
         if beat.get("hook", False):
-            for w in aligned:
+            for index, w in enumerate(aligned):
                 if display_text(w.text):
-                    start = voice_from + round(w.start * FPS)
+                    start = cursor + word_start(beat, timing, index)
                     captions.append(
                         {
                             "text": w.text.upper(),
