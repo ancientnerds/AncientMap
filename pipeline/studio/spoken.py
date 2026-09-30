@@ -2,21 +2,28 @@
 
 The narrator reads `spoken` ("about a thousand tonnes"), the captions and SRT show `display`
 ("about 1,000 tonnes"). `normalize_tokens` maps both to one canonical token list: number words
-become digits (years such as "nineteen sixty-six" and "twenty fourteen" included), ordinal
-words become digit ordinals ("twenty-first" is 21st), thousands separators go, unit words and
-symbols become one unit token, edge punctuation and case are ignored. Clause punctuation after a
-number word (, ; : . ! ? … or a dash) still ends that number: "forty, six" is 40 and 6,
-never 46. Any other difference is a script error.
+become digits (years such as "nineteen sixty-six" and "twenty fourteen" included, "four and a
+half" is 4.5, "6 million" and "one point five million" are numbers too), ordinal words become
+digit ordinals ("twenty-first" and "one hundred and first" are 21st and 101st), decades and
+centuries become their digits ("the nineteen-sixties" is the 1960s, "the fifteen hundreds" the
+1500s), thousands separators go, unit words and symbols become one unit token ("square
+metres" is m²), edge punctuation and case are ignored, a possessive "'s" is a word of its own.
+Clause punctuation after a number word (, ; : . ! ? … or a dash) still ends that number:
+"forty, six" is 40 and 6, never 46. Any other difference is a script error.
 
 Where the words allow two readings, both stand and `spelling_mismatch` accepts a display that
 shows either: the British "two hundred and fifty thousand" is 250,000, "between five hundred
 and one thousand" is 500 and 1,000; "one point five" is 1.5, but in "at one point five
-hundred men" it is 1, "point" and 500. `normalize_tokens` gives the primary reading, every
-number run read as far as it goes. Known limit: two numbers spoken back to back with no
-punctuation between them, the second a British "hundred and" group, read like the plan's
-"one thousand five hundred and one thousand six hundred fifty" (1,500 and 1,650), so "a
-hundred thousand two hundred and fifty thousand" is 100,200 and 50,000; a comma after the
-first number makes it 100,000 and 250,000.
+hundred men" it is 1, "point" and 500; "a thirty-second exposure" may be a 30-second one;
+"the Second" is 2nd or the regnal numeral II ("Ramesses the Second" is "Ramesses II").
+`normalize_tokens` gives the primary reading, every number run read as far as it goes (but
+"6 million" is 6 and "million" there, as the spoken "two thousand million" is 2000 and
+"million").
+
+Known limit: two numbers spoken back to back with no punctuation between them, the second a
+British "hundred and" group, read like the plan's "one thousand five hundred and one thousand
+six hundred fifty" (1,500 and 1,650), so "a hundred thousand two hundred and fifty thousand" is
+100,200 and 50,000; a comma after the first number makes it 100,000 and 250,000.
 """
 
 from __future__ import annotations
@@ -25,8 +32,8 @@ import math
 import re
 
 ONES = {
-    "zero": 0, "nought": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
-    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+    "zero": 0, "nought": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
     "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18,
     "nineteen": 19,
 }  # fmt: skip
@@ -441,8 +448,9 @@ def spelling_mismatch(spoken: str, display: str) -> str | None:
     """None when some reading of `spoken` has the tokens of some reading of `display`, so the
     two differ only in number/unit spelling; else where they diverge. Nearly every text has one
     reading; where the words allow two (a British "hundred and", a "point" that may be a word),
-    the display shows which one the narrator meant. The report follows the readings that agree longest, each continued in
-    its primary reading, so for a text with one reading it names the first differing token."""
+    the display shows which one the narrator meant. The report follows the readings that agree
+    longest, each continued in its primary reading, so for a text with one reading it names the
+    first differing token."""
     a_words, a_stops = _words(spoken)
     b_words, b_stops = _words(display)
     # both token streams in step: every (spoken index, display index) pair that k equal tokens
