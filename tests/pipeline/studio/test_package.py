@@ -8,7 +8,7 @@ from PIL import Image
 
 from pipeline import research_html_renderer
 from pipeline.research_html_renderer import video_clock
-from pipeline.studio import casefile, package, render, timeline
+from pipeline.studio import casefile, package, render, script, timeline
 from pipeline.studio.episode import load_all
 from pipeline.studio.errors import StudioError
 from pipeline.video.shorts_ledger import sha256_file
@@ -244,6 +244,19 @@ def test_package_refuses_a_script_revoiced_after_the_render(tmp_path, monkeypatc
     with pytest.raises(StudioError, match=r"script\.json changed since the render"):
         package.build_package(ws)
     assert list(ws.package_dir.iterdir()) == []
+
+
+def test_a_file_missing_since_the_render_is_named_missing(tmp_path, monkeypatch):
+    ws = _rendered(tmp_path, monkeypatch)
+    ws.words.unlink()
+    with pytest.raises(StudioError, match=r"voice/words\.json is missing since the render"):
+        package.build_package(ws)
+
+
+def test_the_chapter_rule_is_the_scripts_one():
+    """`episode check` (script._chapters) and the package apply one chapter rule."""
+    assert package.CHAPTER_MIN_S is script.CHAPTER_MIN_S
+    assert package.CHAPTERS_MIN is script.CHAPTERS_MIN_FULL
 
 
 def test_package_refuses_words_retimed_after_the_render(tmp_path, monkeypatch):

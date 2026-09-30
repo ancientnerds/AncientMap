@@ -25,6 +25,7 @@ timeline.py share).
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -342,6 +343,11 @@ def from_dict(data: Any) -> CaseFile:
     )
 
 
+def _finite(value: int | float) -> bool:
+    """json.loads accepts NaN and Infinity; neither is a quantity."""
+    return not isinstance(value, bool) and math.isfinite(value)
+
+
 def _box_ok(box: list[Any]) -> bool:
     return (
         len(box) == 4
@@ -405,7 +411,10 @@ def validate(cf: CaseFile, *, icons: Sequence[str], allow_ai_imagery: bool = Fal
         if not p.coord_source.strip():
             problems.append(f"{p.id}: coord_source is required")
     for q in cf.quantities:
-        if isinstance(q.value, list):
+        values = q.value if isinstance(q.value, list) else [q.value]
+        if not all(_finite(v) for v in values if isinstance(v, _NUM)):
+            problems.append(f"{q.id}: value must be a finite number or a range [low, high]")
+        elif isinstance(q.value, list):
             if not (
                 len(q.value) == 2
                 and all(isinstance(v, _NUM) and not isinstance(v, bool) for v in q.value)
@@ -414,6 +423,9 @@ def validate(cf: CaseFile, *, icons: Sequence[str], allow_ai_imagery: bool = Fal
                 problems.append(f"{q.id}: a range is [low, high] with low < high")
             elif not q.basis.strip():
                 problems.append(f"{q.id}: a range must state its basis (sources differ)")
+        if not all(isinstance(x, str) for x in q.evidence):
+            problems.append(f"{q.id}: evidence must list evidence ids (strings)")
+            continue
         missing = [x for x in q.evidence if x not in evidence_ids]
         if missing or not q.evidence:
             problems.append(f"{q.id}: evidence must list existing evidence ids (missing {missing})")

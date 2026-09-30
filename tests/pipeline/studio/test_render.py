@@ -135,16 +135,23 @@ def test_a_file_edited_during_the_render_is_not_ledgered(tmp_path, monkeypatch, 
 
 @pytest.mark.parametrize(
     ("gpu", "message"),
-    [(AMD, "not the NVIDIA GPU"), (None, "render.ts reported no single renderer")],
+    [
+        (AMD, "not the NVIDIA GPU"),
+        (None, "render.ts printed no `gpu:` line"),
+        ("two", r"render.ts reported no single renderer"),
+    ],
 )
 def test_the_render_must_prove_the_nvidia(tmp_path, monkeypatch, gpu, message):
     ws = ef.ready_episode(tmp_path, monkeypatch)
-    inner = _runner(ws, [], gpu or NVIDIA)
+    inner = _runner(ws, [], NVIDIA if gpu in (None, "two") else gpu)
 
     def runner(script, args, timeout):
         out = inner(script, args, timeout)
         if gpu is None and script == "render.ts":
             return subprocess.CompletedProcess([script], 0, "ok", "")
+        if gpu == "two" and script == "render.ts":
+            other = NVIDIA.replace("Laptop GPU", "GPU")
+            return subprocess.CompletedProcess([script], 0, f"gpu: {NVIDIA}\ngpu: {other}", "")
         return out
 
     with pytest.raises(StudioError, match=message):
@@ -355,3 +362,83 @@ def test_timeout_kills_the_tree_and_removes_the_bundle(tmp_path, monkeypatch):
     with pytest.raises(StudioError, match="within 5s; its process tree was killed"):
         render.run_node("render.ts", [], 5)
     assert killed == [["taskkill", "/PID", "4242", "/T", "/F"]]
+
+
+@pytest.mark.parametrize("silent", ["lint.ts", "still.ts"])
+def test_every_node_script_must_prove_its_browser(tmp_path, monkeypatch, silent):
+    """lint.ts and still.ts open a Remotion browser too: each must print its `gpu:` line."""
+    ws = ef.ready_episode(tmp_path, monkeypatch)
+    inner = _runner(ws, [])
+
+    def runner(script, args, timeout):
+        out = inner(script, args, timeout)
+        if script == silent:
+            return subprocess.CompletedProcess([script], 0, "ok", "")
+        return out
+
+    with pytest.raises(StudioError, match=f"{silent} printed no `gpu:` line"):
+        render.render_episode(
+            ws,
+            runner=runner,
+            loudness=_final,
+            auditor=lambda *a: (True, []),
+            record=lambda row: {"ok": True},
+        )
+    assert not (ws.render_dir / "ledger.json").exists()
+
+
+@pytest.mark.parametrize(
+    ("taskkill_code", "message"),
+    [
+        (128, "within 5s; its process tree was killed"),
+        (1, "taskkill /PID 4242 exited 1: Access is denied"),
+    ],
+)
+def test_a_timeout_whose_kill_races_the_exit_stays_a_studio_error(
+    monkeypatch, taskkill_code, message
+):
+    """taskkill exits 128 when node ended on its own between the timeout and the kill."""
+
+    class Hanging:
+        pid = 4242
+        args = ["node"]
+        timed_out = False
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def communicate(self, timeout=None):
+            if not self.timed_out:
+                self.timed_out = True
+                raise subprocess.TimeoutExpired("node", timeout)
+            return "", ""
+
+    def taskkill(cmd, check=False, **_k):
+        done = subprocess.CompletedProcess(cmd, taskkill_code, "", "Access is denied")
+        if check:
+            done.check_returncode()  # what subprocess.run(check=True) does
+        return done
+
+    monkeypatch.setattr(render.shutil, "which", lambda name: "C:/node/node.exe")
+    monkeypatch.setattr(render.subprocess, "Popen", Hanging)
+    monkeypatch.setattr(render.subprocess, "run", taskkill)
+    with pytest.raises(StudioError, match=message):
+        render.run_node("render.ts", [], 5)
+
+
+def test_a_thumbnail_needs_the_script_the_render_was_made_from(tmp_path, monkeypatch):
+    """The beat roles decide which frames may carry a thumbnail: they must be the rendered
+    script's, as `episode package` requires."""
+    ws = ef.ready_episode(tmp_path, monkeypatch)
+    monkeypatch.setattr("pipeline.video.shorts_ledger.current_commit", lambda: "f" * 40)
+    runner = _runner(ws, [])
+    render.render_episode(
+        ws,
+        runner=runner,
+        loudness=_final,
+        auditor=lambda *a: (True, []),
+        record=lambda row: {"ok": True},
+    )
+    ws.script.write_text(ws.script.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    with pytest.raises(StudioError, match="script.json changed since the render"):
+        render.render_thumbnail(ws, 1, 10, runner=runner)

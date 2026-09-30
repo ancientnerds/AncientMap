@@ -140,3 +140,35 @@ def test_stale_beats_name_every_mp3_the_script_moved_past(tmp_path):
     assert voice.stale_beats(ws, changed) == ["b01: voice/b01.mp3 is stale; run `episode voice`"]
     faster = sf.mutated_script(lambda d: d["voice"].update(speed=1.06))
     assert len(voice.stale_beats(ws, faster)) == len(data["beats"])
+
+
+def test_a_deleted_mp3_is_stale(tmp_path):
+    ws, fakes = _ws(tmp_path), Fakes()
+    data = sf.script()
+    voice.voice_episode(ws, data, quota=fakes.quota, synth=fakes.synth, transcribe=fakes.transcribe)
+    (ws.voice_dir / "b02.mp3").unlink()
+    assert voice.stale_beats(ws, data) == ["b02: voice/b02.mp3 is missing; run `episode voice`"]
+
+
+def test_a_failed_transcription_never_pays_for_the_narration_again(tmp_path):
+    """The narration is on disk and in the manifest before whisper runs: a run that fails in
+    the transcription narrates nothing again (the MiniMax quota is shared with Theo)."""
+    ws, fakes = _ws(tmp_path), Fakes()
+    data = sf.script()
+
+    def deaf(audio):
+        raise RuntimeError("CUDA out of memory")
+
+    with pytest.raises(RuntimeError, match="CUDA out of memory"):
+        voice.voice_episode(ws, data, quota=fakes.quota, synth=fakes.synth, transcribe=deaf)
+    assert len(fakes.synth_calls) == 1
+    voice.voice_episode(ws, data, quota=fakes.quota, synth=fakes.synth, transcribe=fakes.transcribe)
+    assert [c[0] for c in fakes.synth_calls].count("b01") == 1
+
+
+def test_a_beat_whisper_heard_nothing_in_is_named(tmp_path):
+    ws, fakes = _ws(tmp_path), Fakes()
+    with pytest.raises(StudioError, match="b01: the display words cannot be timed"):
+        voice.voice_episode(
+            ws, sf.script(), quota=fakes.quota, synth=fakes.synth, transcribe=lambda audio: []
+        )

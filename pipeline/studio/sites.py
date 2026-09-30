@@ -23,13 +23,13 @@ the country a Mapbox fly-in or orbit may highlight (C7, `episode.country_problem
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from pipeline.studio.config import REPO
 from pipeline.studio.errors import StudioError
+from pipeline.studio.paper.workspace import read_json
 from pipeline.utils.slugs import BASE_URL
 
 SITES_INDEX = REPO / "public" / "data" / "sites" / "index.json"
@@ -68,7 +68,8 @@ def site_export() -> SiteExport:
                 "public/data/sites/index.json is missing: download it from the repo root with "
                 f"{DOWNLOAD}"
             )
-        rows = json.loads(path.read_text(encoding="utf-8"))["sites"]
+        # An interrupted download leaves a truncated file: read_json names it.
+        rows = read_json(path, "")["sites"]
         _LOADED[path] = SiteExport(
             curated={
                 r["i"]: Site(r["la"], r["lo"], r.get("c"))  # the exporter writes c only when known

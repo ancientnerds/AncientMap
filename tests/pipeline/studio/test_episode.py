@@ -160,6 +160,19 @@ def test_the_paper_link_is_checked(tmp_path):
     assert "casefile.json paper differs from episode.json paper" in errors
 
 
+@pytest.mark.parametrize("content", [{"ev-01": "x"}, ["ev-01"], [{"claim": "no id"}]])
+def test_a_malformed_paper_evidence_file_is_a_problem_not_a_crash(tmp_path, content):
+    """The paper workspace's evidence.json is Claude's working file: mid-edit it can be
+    anything, and `episode check` reports it instead of raising."""
+    ws = _init(tmp_path)
+    (ws.paper_dir(ef.REQ) / "evidence.json").write_text(json.dumps(content), encoding="utf-8")
+    errors = episode.load_all(ws, sf.REGISTRY).report.errors
+    assert (
+        f"e1: paper_anchor cannot be verified: papers/{ef.REQ}/evidence.json is not a list "
+        "of evidence entries {id, ...}" in errors
+    )
+
+
 def test_the_paper_link_is_checked_both_ways(tmp_path):
     ws = _init(tmp_path)
     ef.write_casefile(ws.root, ef.mutated(paper=None))
@@ -262,6 +275,15 @@ def test_a_missing_export_names_its_download(tmp_path, monkeypatch):
         match="curl -sfR --create-dirs -o public/data/sites/index.json "
         "https://ancientnerds.com/data/sites/",
     ):
+        sites.resolve_capture_spec(DISTRIBUTION)
+
+
+def test_a_truncated_export_is_a_studio_error(tmp_path, monkeypatch):
+    """An interrupted `curl -o` leaves half a file."""
+    path = tmp_path / "index.json"
+    path.write_text('{"sites": [{"i": "a", "la": 1', encoding="utf-8")
+    monkeypatch.setattr(sites, "SITES_INDEX", path)
+    with pytest.raises(StudioError, match="index.json is not valid JSON"):
         sites.resolve_capture_spec(DISTRIBUTION)
 
 

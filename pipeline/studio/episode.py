@@ -327,7 +327,18 @@ def paper_problems(ws: EpisodeWorkspace, episode: dict[str, Any], cf: CaseFile) 
             f"{e.id}: paper_anchor cannot be verified (no paper workspace)" for e in anchored
         )
         return problems
-    ids = {x["id"] for x in load_json(evidence_file, "")}
+    entries = load_json(evidence_file, "")
+    # Claude's working file in the paper workspace: mid-edit it can have any shape.
+    if not isinstance(entries, list) or not all(
+        isinstance(x, dict) and isinstance(x.get("id"), str) for x in entries
+    ):
+        problems.extend(
+            f"{e.id}: paper_anchor cannot be verified: papers/{paper['request_id']}/evidence.json "
+            "is not a list of evidence entries {id, ...}"
+            for e in anchored
+        )
+        return problems
+    ids = {x["id"] for x in entries}
     problems.extend(
         f"{e.id}: paper_anchor {e.paper_anchor} is not an evidence id of paper "
         f"{paper['request_id']}"

@@ -100,3 +100,11 @@ def test_props_errors_walk_the_whole_value():
 def test_booleans_are_not_numbers():
     assert blocks.props_errors({"type": "integer"}, True) == ["props: expected integer"]
     assert blocks.props_errors({"type": ["string", "null"]}, None) == []
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_numbers_are_not_numbers(value):
+    """json.loads reads NaN and Infinity, but the timeline's JSON.parse in the renderer does
+    not, and NaN is neither below a minimum nor above a maximum."""
+    schema = {"type": "number", "minimum": 0, "maximum": 1}
+    assert blocks.props_errors(schema, value) == ["props: expected number"]

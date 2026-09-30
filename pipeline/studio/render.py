@@ -17,7 +17,8 @@ lint.ts prints one JSON line {"type":"layout-violation","frame":N,"a":id,"b":id|
 "reason":str} per violation to stderr; this module keeps stdout+stderr in
 render/lint_report.txt and does not parse them. Every script prints `gpu: <WebGL renderer>`
 for each browser it opens (spec 4.11): each must name the NVIDIA (capture.gpu.require_nvidia),
-render.ts must report exactly one, and that string goes into the ledger row as `renderer`.
+a script that prints none is refused, render.ts must report exactly one renderer, and that
+string goes into the ledger row as `renderer`.
 
 The per-render public dir (render/public/) holds hardlinks (copies across drives) of every
 file the timeline references by `src` (voice/, captures/, media/, music/) plus every site
@@ -69,6 +70,7 @@ STILL_TIMEOUT_S = 900
 CANDIDATES = (1, 2, 3)
 AUDIO_BITRATE = "320k"  # render.ts's AAC bitrate (video/scripts/render.ts AUDIO_BITRATE)
 GPU_PREFIX = "gpu: "
+TASKKILL_NOT_FOUND = 128
 #: What a failed or killed node script leaves in render/: the bundle (a copy of every asset,
 #: because Remotion's bundle() copies the public dir on Windows) and render.ts's chunk parts.
 TRANSIENT_DIRS = ("bundle", "raw.mp4.parts")
@@ -153,9 +155,15 @@ def run_node(script: str, args: list[str], timeout: int) -> subprocess.Completed
     try:
         out, err = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired as exc:
-        subprocess.run(
-            ["taskkill", "/PID", str(proc.pid), "/T", "/F"], check=True, capture_output=True
-        )
+        kill = ["taskkill", "/PID", str(proc.pid), "/T", "/F"]
+        killed = subprocess.run(kill, capture_output=True, text=True)
+        # 128: no such process, node ended on its own between the timeout and the kill.
+        if killed.returncode not in (0, TASKKILL_NOT_FOUND):
+            raise StudioError(
+                f"{script} did not finish within {timeout}s and {' '.join(kill[:3])} "
+                f"exited {killed.returncode}: {killed.stderr.strip()[-400:]}; end node, its "
+                "Chrome headless shells and the Remotion compositor by hand"
+            ) from exc
         proc.communicate()
         raise StudioError(
             f"{script} did not finish within {timeout}s; its process tree was killed"
@@ -244,11 +252,17 @@ def _node_step(
     if proc.returncode != 0:
         _remove_transients(report.parent)
         raise StudioError(f"{script} exited {proc.returncode}; see {report}")
-    return [
+    renderers = [
         require_nvidia(line[len(GPU_PREFIX) :].strip(), script)
         for line in proc.stdout.splitlines()
         if line.startswith(GPU_PREFIX)
     ]
+    if not renderers:
+        # Every script opens its browsers through cli.ts onNvidia, which prints the line.
+        raise StudioError(
+            f"{script} printed no `gpu:` line: its browser's renderer is unproven; see {report}"
+        )
+    return renderers
 
 
 def ledger_row(
@@ -316,8 +330,14 @@ def render_thumbnail(
     if candidate not in CANDIDATES:
         raise StudioError(f"--candidate must be one of {list(CANDIDATES)}")
     ledger = load_json(ws.render_dir / "ledger.json", "run `episode render` first")
-    if not ws.timeline.exists() or sha256_file(ws.timeline) != ledger["timeline_sha256"]:
-        raise StudioError("timeline.json changed since the render; run `episode render` again")
+    rendered_from = (
+        ("timeline.json", ws.timeline, ledger["timeline_sha256"]),
+        # the beat roles below decide which frames may carry a thumbnail
+        ("script.json", ws.script, ledger["row"]["script_sha256"]),
+    )
+    for name, path, recorded in rendered_from:
+        if not path.exists() or sha256_file(path) != recorded:
+            raise StudioError(f"{name} changed since the render; run `episode render` again")
     timeline = load_json(ws.timeline, "")
     script = load_json(ws.script, "write script.json")
     roles = {b["id"]: b["role"] for b in script["beats"] if "role" in b}

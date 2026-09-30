@@ -6,10 +6,10 @@ Nothing is repaired or skipped here, with one exception the owner asked for (spe
 per-app preference, pipeline.studio.capture.gpu.set_gpu_preference) before probing.
 
 The GPU probes (spec 4.11: every GPU workload on the NVIDIA RTX 3080, never the integrated
-AMD): nvidia-smi names the RTX 3080; NVENC can encode on GPU 0 in the system ffmpeg; CUDA
-loads for faster-whisper; the renderer of a headless Chrome launched as the captures launch
-it names the NVIDIA; Remotion's headless shell exists and carries the high-performance per-app
-preference. That preference does not prove the renderer Remotion's own browser gets (it draws
+AMD): nvidia-smi names the RTX 3080; the system ffmpeg encodes a test frame with h264_nvenc
+and hevc_nvenc on GPU 0; CUDA loads for faster-whisper; the renderer of a headless Chrome
+launched as the captures launch it names the NVIDIA; Remotion's headless shell exists and
+carries the high-performance per-app preference. That preference does not prove the renderer Remotion's own browser gets (it draws
 on the NVIDIA only with `gl: 'angle'`, SwiftShader by default, stream D's Task 19), so the
 Remotion browser's renderer string is proven where it renders: every lint.ts, render.ts and
 still.ts prints its `gpu:` lines and render.py refuses any that does not name the NVIDIA
@@ -124,6 +124,38 @@ def _nvidia_smi() -> Probe:
     return Probe("nvidia-smi", GPU_NAME in names, names or "no GPU listed")
 
 
+NVENC_ENCODERS = ("h264_nvenc", "hevc_nvenc")
+NVENC_PROBE_TIMEOUT_S = 60
+
+
+def _nvenc() -> Probe:
+    """Both NVENC encoders really encode on GPU 0 (spec 4.11: `-gpu 0`, as the captures'
+    capture/encode.py): one black frame each, discarded. The encoder list alone
+    (gpu.nvenc_problem, checked first) proves nothing about the GPU index."""
+    from pipeline.studio.capture import gpu
+    from pipeline.video.media import FFMPEG_BIN
+
+    problem = gpu.nvenc_problem()
+    if problem is not None:
+        return Probe("NVENC", False, problem)
+    for codec in NVENC_ENCODERS:
+        cmd = [FFMPEG_BIN, "-hide_banner", "-v", "error", "-f", "lavfi", "-i"]
+        cmd += ["color=c=black:s=256x256", "-frames:v", "1", "-c:v", codec, "-gpu", "0"]
+        cmd += ["-f", "null", "-"]
+        try:
+            proc = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=NVENC_PROBE_TIMEOUT_S
+            )
+        except subprocess.TimeoutExpired:
+            return Probe(
+                "NVENC", False, f"{codec} -gpu 0: no answer within {NVENC_PROBE_TIMEOUT_S} s"
+            )
+        if proc.returncode != 0:
+            first = (proc.stderr.strip().splitlines() or [f"exit {proc.returncode}"])[0]
+            return Probe("NVENC", False, f"{codec} -gpu 0 failed: {first}")
+    return Probe("NVENC", True, " and ".join(NVENC_ENCODERS) + " encoded a test frame on GPU 0")
+
+
 def _cuda() -> Probe:
     if importlib.util.find_spec("ctranslate2") is None:
         return Probe("CUDA for faster-whisper", False, "ctranslate2 is not installed")
@@ -151,12 +183,7 @@ def _chrome_renderer() -> Probe:
 def gpu_probes() -> list[Probe]:
     from pipeline.studio.capture import gpu
 
-    problem = gpu.nvenc_problem()
-    found = [
-        _nvidia_smi(),
-        Probe("NVENC", problem is None, problem or "h264_nvenc / hevc_nvenc on GPU 0"),
-        _cuda(),
-    ]
+    found = [_nvidia_smi(), _nvenc(), _cuda()]
     try:
         exe = gpu.remotion_browser(VIDEO_DIR)
     except StudioError as exc:

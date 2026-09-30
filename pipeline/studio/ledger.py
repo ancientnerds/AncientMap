@@ -60,7 +60,10 @@ class LedgerRow:
 def _aware(value: Any, what: str) -> datetime:
     if not isinstance(value, str):
         raise LedgerError(f"{what} must be an ISO 8601 string")
-    stamp = datetime.fromisoformat(value)
+    try:
+        stamp = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise LedgerError(f"{what} is not ISO 8601: {value!r}") from exc
     if stamp.tzinfo is None:
         raise LedgerError(f"{what} must carry a timezone")
     return stamp

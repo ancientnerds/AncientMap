@@ -54,6 +54,22 @@ def test_rules(tmp_path, changes, message):
         casefile.load_casefile(path, icons=ef.ICONS)
 
 
+@pytest.mark.parametrize("value", [True, float("nan"), float("inf"), [1500, float("inf")]])
+def test_a_quantity_value_is_a_finite_number(tmp_path, value):
+    """A bool or a non-finite number would reach the renderer's JSON.parse (Python writes NaN)
+    or be drawn as 'True'."""
+    path = ef.write_casefile(tmp_path, ef.mutated(quantities__0__value=value))
+    with pytest.raises(casefile.CaseFileError, match="q1: value must be a finite number"):
+        casefile.load_casefile(path, icons=ef.ICONS)
+
+
+@pytest.mark.parametrize("ids", [[{"x": 1}], [["e1"]], [3]])
+def test_quantity_evidence_ids_are_strings_not_a_crash(tmp_path, ids):
+    path = ef.write_casefile(tmp_path, ef.mutated(quantities__0__evidence=ids))
+    with pytest.raises(casefile.CaseFileError, match="q1: evidence must list evidence ids"):
+        casefile.load_casefile(path, icons=ef.ICONS)
+
+
 def test_asset_paths_follow_the_renderers_rule():
     assert casefile.asset_path_problem("media/stone_person.jpg") is None
     assert casefile.asset_path_problem("captures/pf1.mp4") is None

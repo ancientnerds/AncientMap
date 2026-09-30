@@ -40,6 +40,8 @@ from pipeline.studio.casefile import CaseFile, refs_in
 from pipeline.studio.episode import EpisodeWorkspace, load_all, load_json, require_valid
 from pipeline.studio.errors import StudioError
 from pipeline.studio.render import CANDIDATES, link_or_copy, thumbnail_files
+from pipeline.studio.script import CHAPTER_MIN_S as SCRIPT_CHAPTER_MIN_S
+from pipeline.studio.script import CHAPTERS_MIN_FULL
 from pipeline.utils.slugs import BASE_URL
 
 UTM = "utm_source=youtube&utm_medium=longform"
@@ -52,8 +54,9 @@ TITLE_MAX_CHARS = 100
 TAGS_MAX_CHARS = 500
 THUMB_JPEG_MAX_BYTES = 2 * 1024 * 1024
 CATEGORY_ID = 27
-CHAPTER_MIN_S = 10
-CHAPTERS_MIN = 3
+#: YouTube's chapter rule, the one `episode check` applies (script._chapters).
+CHAPTER_MIN_S = SCRIPT_CHAPTER_MIN_S
+CHAPTERS_MIN = CHAPTERS_MIN_FULL
 
 
 def global_words(
@@ -98,7 +101,7 @@ def chapters(timeline: dict[str, Any], fmt: str) -> list[dict[str, Any]]:
     ends = [m["frame"] for m in marks[1:]] + [timeline["durationInFrames"]]
     for mark, end in zip(marks, ends, strict=True):
         if (end - mark["frame"]) / fps < CHAPTER_MIN_S:
-            raise StudioError(f"chapter {mark['title']!r} is shorter than {CHAPTER_MIN_S} s")
+            raise StudioError(f"chapter {mark['title']!r} is shorter than {CHAPTER_MIN_S:g} s")
     return [{"title": m["title"], "start_s": m["frame"] // fps} for m in marks]
 
 
@@ -256,7 +259,9 @@ def _require_audited_render(ws: EpisodeWorkspace) -> None:
         ("voice/words.json", ws.words, ledger["words_sha256"]),
     )
     for name, path, recorded in inputs:
-        if not path.exists() or sha256_file(path) != recorded:
+        if not path.exists():
+            raise StudioError(f"{name} is missing since the render; run `episode render` again")
+        if sha256_file(path) != recorded:
             raise StudioError(f"{name} changed since the render; run `episode render` again")
     video = ws.render_dir / f"{ws.slug}.mp4"
     if not video.exists() or sha256_file(video) != row["video_sha256"]:
@@ -281,11 +286,10 @@ def _require_rendered_music(episode: dict[str, Any], timeline: dict[str, Any]) -
 def build_package(ws: EpisodeWorkspace) -> dict[str, Any]:
     _require_audit(ws)
     _require_audited_render(ws)
+    # _require_audited_render refused a missing timeline.json or voice/words.json.
     loaded = load_all(ws)
     require_valid(loaded, final=True)
-    if loaded.words is None:
-        raise StudioError("voice/words.json is missing: run `episode voice` first")
-    timeline = load_json(ws.timeline, "run `episode render` (it writes timeline.json)")
+    timeline = load_json(ws.timeline, "")
     episode, script, cf = loaded.episode, loaded.script, loaded.casefile
     _require_rendered_music(episode, timeline)
     _check_thumbnails(ws)

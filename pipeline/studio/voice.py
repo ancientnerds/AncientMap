@@ -119,6 +119,8 @@ def stale_beats(ws: EpisodeWorkspace, script: dict[str, Any]) -> list[str]:
             or entry["speed"] != speed
         ):
             stale.append(f"{beat['id']}: voice/{beat['id']}.mp3 is stale; run `episode voice`")
+        elif not (ws.voice_dir / f"{beat['id']}.mp3").exists():
+            stale.append(f"{beat['id']}: voice/{beat['id']}.mp3 is missing; run `episode voice`")
     return stale
 
 
@@ -147,6 +149,11 @@ def voice_episode(
         audio = ws.voice_dir / f"{beat['id']}.mp3"
         return entry is None or not audio.exists() or {k: entry[k] for k in key(beat)} != key(beat)
 
+    def save() -> None:
+        manifest_path.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
     todo = [b for b in script["beats"] if needs_audio(b)]
     if todo:
         check_quota(*quota())
@@ -156,14 +163,19 @@ def voice_episode(
         if beat in todo:
             duration = synth(beat["spoken"], audio, voice_id, speed)
             manifest[bid] = {**key(beat), "duration_s": round(duration, 3), "display_sha256": None}
+            # Saved before whisper runs: a failed transcription never pays for this again.
+            save()
         entry = manifest[bid]
         if entry["display_sha256"] != text_sha256(beat["display"]):
-            aligned = align_words(beat["display"].split(), transcribe(audio))
+            try:
+                aligned = align_words(beat["display"].split(), transcribe(audio))
+            except ValueError as exc:  # align_words: whisper recognised no word
+                raise StudioError(
+                    f"{bid}: the display words cannot be timed against voice/{bid}.mp3: {exc}"
+                ) from exc
             entry["words"] = [{"w": w.text, "s": w.start, "e": w.end} for w in aligned]
             entry["display_sha256"] = text_sha256(beat["display"])
-        manifest_path.write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+            save()
     beat_ids = {b["id"] for b in script["beats"]}
     for stale in ws.voice_dir.glob("*.mp3"):
         if stale.stem not in beat_ids:

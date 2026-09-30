@@ -122,6 +122,20 @@ def test_cli_refuses_when_the_write_is_not_visible(monkeypatch, capsys):
     }
 
 
+def test_cli_refuses_a_malformed_timestamp_with_json(monkeypatch, capsys):
+    """`--published-at "2026-10-01 6pm"` reaches the VPS unchecked for an episode without a
+    paper: the refusal must be the CLI's JSON outcome, never a traceback."""
+    factory, sessions = _factory({})
+    payload = {"video_sha256": "c" * 64, "youtube_id": "dQw4w9WgXcQ", "published_at": "6pm"}
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload)))
+    assert ledger_cli.main(["--publish"], factory) == 1
+    assert json.loads(capsys.readouterr().out) == {
+        "ok": False,
+        "error": "published_at is not ISO 8601: '6pm'",
+    }
+    assert sessions == []
+
+
 def test_client_raises_on_refusal(monkeypatch):
     def fake(module, args, *, stdin, timeout):
         assert module == "pipeline.studio.ledger_cli" and args == ["--publish"]

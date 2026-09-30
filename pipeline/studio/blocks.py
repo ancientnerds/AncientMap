@@ -26,6 +26,7 @@ against what the block will actually receive.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -160,7 +161,10 @@ def _type_ok(value: Any, t: str) -> bool:
     if t == "integer":
         return isinstance(value, int) and not isinstance(value, bool)
     if t == "number":
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
+        # json.loads reads NaN and Infinity; the renderer's JSON.parse of the timeline does not.
+        return (
+            isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+        )
     if t == "string":
         return isinstance(value, str)
     if t == "array":
