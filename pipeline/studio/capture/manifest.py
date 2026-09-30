@@ -29,6 +29,7 @@ from typing import Any
 
 from pipeline.studio.config import CAPTURE_ID_RE, CAPTURE_KINDS
 from pipeline.studio.errors import StudioError
+from pipeline.utils.geo import is_valid_coordinates
 from pipeline.video.shorts_render import MAPBOX_CREDIT
 
 CAPTURES_DIR = "captures"
@@ -50,6 +51,17 @@ def as_number(value: Any, where: str) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value):
         raise CaptureError(f"{where} must be a number, got {value!r}")
     return float(value)
+
+
+def as_coordinates(point: dict[str, Any], where: str, sep: str = ".") -> tuple[float, float]:
+    """(lat, lng) of a spec point's "lat" and "lng": numbers that the shared
+    pipeline.utils.geo.is_valid_coordinates accepts. `where` names the point; `sep` joins it
+    to a key in the message ("actions[3].at" + "." + "lat", or "g1" + ": " + "lat")."""
+    lat = as_number(point["lat"], f"{where}{sep}lat")
+    lng = as_number(point["lng"], f"{where}{sep}lng")
+    if not is_valid_coordinates(lat, lng):
+        raise CaptureError(f"{where}: ({lat}, {lng}) is not a coordinate")
+    return lat, lng
 
 
 def as_int(value: Any, where: str) -> int:

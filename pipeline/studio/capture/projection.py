@@ -17,6 +17,8 @@ import math
 
 TILE_SIZE = 512
 EARTH_CIRCUMFERENCE_M = 40_075_016.686
+# Web Mercator's latitude limit (atan(sinh(pi))): the square world Mapbox draws ends here.
+MERCATOR_MAX_LAT = 85.05112878
 # CAMERA.MIN_DISTANCE / MAX_DISTANCE of ancient-nerds-map/src/config/globeConstants.ts
 CAMERA_MIN_DISTANCE = 1.02
 CAMERA_MAX_DISTANCE = 2.44
@@ -46,7 +48,7 @@ Vec3 = tuple[float, float, float]
 
 def mercator_world_px(lat: float, lng: float, zoom: float) -> tuple[float, float]:
     """World pixel of a point at `zoom` (world width TILE_SIZE * 2**zoom)."""
-    if not -85.05112878 <= lat <= 85.05112878:
+    if not -MERCATOR_MAX_LAT <= lat <= MERCATOR_MAX_LAT:
         raise ValueError(f"latitude {lat} outside the Web Mercator range")
     world = TILE_SIZE * 2**zoom
     x = (lng + 180.0) / 360.0 * world

@@ -4,8 +4,10 @@ import subprocess
 
 import pytest
 
+from pipeline.studio.capture import manifest
 from pipeline.studio.capture.manifest import (
     CaptureError,
+    as_coordinates,
     as_int,
     as_number,
     build_manifest,
@@ -15,6 +17,7 @@ from pipeline.studio.capture.manifest import (
     tool_failure,
 )
 from pipeline.studio.errors import StudioError
+from pipeline.utils import geo
 
 KEYS = {"id", "kind", "path", "fps", "duration_s", "width", "height", "events", "credits"}
 
@@ -123,6 +126,18 @@ def test_spec_values_must_be_numbers():
             as_number(bad, "zoom")
     with pytest.raises(CaptureError, match="width must be an integer"):
         as_int(1280.5, "width")
+
+
+def test_spec_points_are_checked_by_the_shared_geo_utility():
+    # repo rule: import a utility, never duplicate it; every capture kind reads points here
+    assert manifest.is_valid_coordinates is geo.is_valid_coordinates
+    assert as_coordinates({"lat": -90, "lng": 180}, "actions[0].at") == (-90.0, 180.0)
+    with pytest.raises(CaptureError, match=r"^actions\[0\]\.at\.lng must be a number, got '3'$"):
+        as_coordinates({"lat": 1, "lng": "3"}, "actions[0].at")
+    with pytest.raises(CaptureError, match=r"^g1: lat must be a number, got None$"):
+        as_coordinates({"lat": None, "lng": 3}, "g1", sep=": ")
+    with pytest.raises(CaptureError, match=r"^g1: \(0\.0, 180\.5\) is not a coordinate$"):
+        as_coordinates({"lat": 0, "lng": 180.5}, "g1", sep=": ")
 
 
 def test_a_failed_tool_names_itself_its_exit_code_and_its_stderr():

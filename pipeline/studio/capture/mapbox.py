@@ -1,8 +1,9 @@
 """Exact top-down satellite frames from the Mapbox Static Images API with pins at their
 projected pixels (spec 2026-09-26 section 4.5).
 
-The image is requested at @2x (2 * width x 2 * height pixels); pins are placed with
-projection.mercator_to_pixel for the same centre, zoom and bearing, so they sit on the
+The image is requested at @2x (2 * width x 2 * height pixels, 16:9 like the frame the
+renderer fills with it); pins are placed with projection.mercator_to_pixel for the same
+centre, zoom and bearing, rounded as the URL carries them, so they sit on the
 object whatever the renderer's camera does (the owner verified such pins to within
 metres, 2026-09-26). The token is the frontend's public VITE_MAPBOX_ACCESS_TOKEN (the
 Static API answers without a Referer, checked 2026-09-26). Pin ids are case-file place
@@ -30,6 +31,7 @@ from pipeline.studio.capture.manifest import (
     CREDIT_MAPBOX_SATELLITE,
     CREDIT_MAPBOX_STREETS,
     CaptureError,
+    as_coordinates,
     as_int,
     as_number,
     build_manifest,
@@ -37,14 +39,15 @@ from pipeline.studio.capture.manifest import (
     media_path,
     require_kind,
 )
-from pipeline.studio.capture.projection import mercator_to_pixel
+from pipeline.studio.capture.projection import MERCATOR_MAX_LAT, mercator_to_pixel
 from pipeline.studio.capture.vite import require_mapbox_token
-from pipeline.utils.geo import is_valid_coordinates
 
 STATIC_BASE = "https://api.mapbox.com/styles/v1/mapbox"
 STYLES = {"satellite-v9": CREDIT_MAPBOX_SATELLITE, "satellite-streets-v12": CREDIT_MAPBOX_STREETS}
 MAX_SIDE = 1280
 RETINA = 2
+# The renderer's frame (1920x1080) the image is cover-fitted into.
+FRAME_ASPECT = (16, 9)
 # Where a pin may sit, as fractions of the frame: the renderer cover-fits the frame to
 # 1920x1080, pushes in 8 % and puts each pin's label above or below it, so a pin outside
 # this band sends its label out of the title-safe area or under the YouTube controls
@@ -57,7 +60,18 @@ SPEC_KEYS = frozenset(
 )
 
 
+def _mercator(cid: Any, what: str, lat: float) -> None:
+    """Refuse a latitude past the square world the Static API draws (projection.py)."""
+    if abs(lat) > MERCATOR_MAX_LAT:
+        raise CaptureError(
+            f"{cid}: {what} latitude {lat} outside the Web Mercator range +-{MERCATOR_MAX_LAT}"
+        )
+
+
 def _view(spec: dict[str, Any]) -> dict[str, Any]:
+    """The checked view, its centre, zoom and bearing rounded as the URL carries them
+    (static_url; Mapbox rounds a fractional zoom to 2 places itself), so pin_events
+    projects the pins for exactly the image the API draws."""
     cid = spec.get("id")
     unknown = set(spec) - SPEC_KEYS
     if unknown:
@@ -65,10 +79,8 @@ def _view(spec: dict[str, Any]) -> dict[str, Any]:
     center = spec.get("center")
     if not isinstance(center, dict) or set(center) != {"lat", "lng"}:
         raise CaptureError(f"{cid}: center must be {{'lat': .., 'lng': ..}}, got {center!r}")
-    lat = as_number(center["lat"], f"{cid}: center.lat")
-    lng = as_number(center["lng"], f"{cid}: center.lng")
-    if not is_valid_coordinates(lat, lng):
-        raise CaptureError(f"{cid}: center {center!r} is not a coordinate")
+    lat, lng = as_coordinates(center, f"{cid}: center")
+    _mercator(cid, "center", lat)
     zoom = as_number(spec.get("zoom"), f"{cid}: zoom")
     bearing = as_number(spec.get("bearing", 0), f"{cid}: bearing")
     width = as_int(spec.get("width"), f"{cid}: width")
@@ -80,13 +92,18 @@ def _view(spec: dict[str, Any]) -> dict[str, Any]:
         raise CaptureError(f"{cid}: bearing {bearing} outside 0..360")
     if not (1 <= width <= MAX_SIDE and 1 <= height <= MAX_SIDE):
         raise CaptureError(f"{cid}: {width}x{height} exceeds the Static API limit of {MAX_SIDE} px")
+    if width * FRAME_ASPECT[1] != height * FRAME_ASPECT[0]:
+        raise CaptureError(
+            f"{cid}: {width}x{height} is not 16:9: the renderer fills its 16:9 frame with the "
+            "image (cover), so another aspect is cropped and the pin band no longer holds"
+        )
     if style not in STYLES:
         raise CaptureError(f"{cid}: style {style!r} not in {sorted(STYLES)}")
     return {
-        "lat": lat,
-        "lng": lng,
-        "zoom": zoom,
-        "bearing": bearing,
+        "lat": round(lat, 6),
+        "lng": round(lng, 6),
+        "zoom": round(zoom, 2),
+        "bearing": round(bearing, 1) % 360,
         "width": width,
         "height": height,
         "style": style,
@@ -107,12 +124,16 @@ def pin_events(spec: dict[str, Any]) -> list[dict[str, Any]]:
     pins = spec.get("pins")
     if not isinstance(pins, list) or not pins:
         raise CaptureError(f"{spec['id']}: a top-down frame needs at least one pin")
+    ids = [pin.get("id") if isinstance(pin, dict) else None for pin in pins]
+    twice = next((pid for pid in ids if ids.count(pid) > 1), None)
+    if twice is not None:
+        raise CaptureError(f"{spec['id']}: pin ids must be unique, {twice} is there twice")
     events = []
     for i, pin in enumerate(pins):
         if not isinstance(pin, dict) or set(pin) != {"id", "label", "lat", "lng"}:
             raise CaptureError(f"{spec['id']}: pins[{i}] must be {{id, label, lat, lng}}")
-        lat = as_number(pin["lat"], f"{spec['id']}: pins[{i}].lat")
-        lng = as_number(pin["lng"], f"{spec['id']}: pins[{i}].lng")
+        lat, lng = as_coordinates(pin, f"{spec['id']}: pins[{i}]")
+        _mercator(spec["id"], f"pins[{i}]", lat)
         x, y = mercator_to_pixel(
             lat,
             lng,
