@@ -113,3 +113,8 @@ async def test_moderator_runs_once_per_run(monkeypatch):
     assert state.moderated_result["final_claims"] == [{"claim": "c", "source_ids": ["s"]}]
     assert state.phase is ResearchPhase.MODERATING
     assert state.error == ""
+    # The first moderation may still wait on its LLM call or have failed: the log says
+    # only what is known.
+    assert [e["msg"] for e in state.debug_log if e["stage"] == "moderator"][-1] == (
+        "DebateComplete fired again: moderation already started in this run, ignored"
+    )

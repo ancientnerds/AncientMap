@@ -33,8 +33,10 @@ class ModeratorHandler(BaseHandler):
 
     async def _on_debate_complete(self, event: DebateComplete):
         if self._started:
+            # The first moderation may still wait on its LLM call, or have failed.
             self.state.log(
-                "moderator", "DebateComplete fired again: the claims are already moderated, ignored"
+                "moderator",
+                "DebateComplete fired again: moderation already started in this run, ignored",
             )
             return
         self._started = True
