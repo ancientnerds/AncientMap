@@ -13084,3 +13084,7 @@ village), Runestones of Sweden (a class of objects). Gates: check-primitive, ver
 rehearse, probe-guards (all refused), apply (read-back row for row), verify, rollback rehearsal -
 clean; retired curated rows 79 -> 99. Wave b: "nothing to write - the review is done". Sites answered
 not_a_site but uncounted stay visible and are listed in NONSITE_R*.jsonl. The served-image run follows.
+
+## 2026-09-30 - Lane WB card sitting 4 (chunk 01, steps 12-16): **31ada02 live**; the weekly usage limit stops all model work
+
+Drill `VERDICT: dump is restorable and matches production row-for-row`; steps 12-16 (443 cards, 6 clears... chunk 01: 443 accepted, 7 cleared) each accepted 0 deviations; `card-file --steps 12-16` changed 443 / removed 6; the first push attempt was blocked by two flaky frontend tests (MapSection.lazyError, geoLabelLazy) under load, the same SHA passed on retry; CI green, API containers restarted 09:07Z, 0 `Card description overwritten`, `card_json.py --check` and `accept --step 12..16` again 0 deviations, `commit` field 31ada025. Chunk 06's stage chain finished (448 outcomes: 441 accepted, 7 cleared: 3 contradicted-after-verify, 3 unproven-after-verify, 1 failed-after-verify-rewrite; 41 description defects). At ~10:40Z the weekly usage limit (resets 2026-10-06 14:00 Berlin) failed ~450 agents in flight (WB 02 verify, WC chunks 03-05, image check); no write was under way. State and order of resumption: FINISH_PLAN section 6.
