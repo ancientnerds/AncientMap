@@ -13047,3 +13047,18 @@ write group WC over `WC4.jsonl` `799c408a...` (batch p4wc-4003, 40 rows): dry, r
   Archaeological Zone" -> "Chiapa de Corzo" with its match key (`chiapa de corzo`), the rename refused until the hide
   had landed. Gates as above, apply read-back clean, rollback rehearsal clean. Read back: the hidden row is retired,
   the kept row is visible under the name. Undo: the name lane's ROLLBACK.sql first, then the hide's.
+
+## 2026-09-30 - Lane WD1 part 1 (`wd1`) written: wave 2026-09-26b
+
+- Rounds r0 1,243 sites, r1 202, r2 38; all answered and imported, 0 waiting. Decisions: coordinates
+  keep 482 / replace 236 / unresolved 252 (+16 exhausted); period_start keep 582 / replace 264 /
+  clear 357 / held 2; site_type keep 347 / replace 546 / clear 28+1; source_url keep 212 / replace
+  349 / clear 18+2.
+- Wave 2026-09-26b: 1,056 sites (270 held: unresolved coordinates), 11 steps, **11/11 accepted**.
+  Journal: lat/lon/geom 224 each, period_start 617 (353 cleared), period_name 620 (353 cleared),
+  site_type 575 (29 cleared), source_url 369 (20 cleared).
+- Lane WB chunk 04 finished its stage chain: 450 outcomes, 441 accepted cards, 9 cleared (6
+  unproven-after-verify, 2 contradicted-after-verify, 1 failed-after-verify-rewrite), 23 description
+  defects. Gap found in chunk 02: a site whose only name form contains a glyph the shorts font cannot
+  draw (Jabal al-ʿHayn) can neither name itself nor pass the font check; `wip/wb4` lets the writer
+  state "no card" only when the contract proves every name form undrawable.
