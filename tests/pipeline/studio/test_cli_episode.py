@@ -311,9 +311,6 @@ def test_gpu_probes(monkeypatch):
 
     exe = Path("C:/video/node_modules/.remotion/chrome-headless-shell.exe")
     monkeypatch.setattr(gpu, "nvenc_problem", lambda: None)
-    monkeypatch.setattr(
-        doctor.subprocess, "run", lambda cmd, **k: subprocess.CompletedProcess(cmd, 0, "", "")
-    )
     monkeypatch.setattr(gpu, "remotion_browser", lambda video_dir: exe)
     monkeypatch.setattr(gpu, "gpu_preference", lambda path: gpu.HIGH_PERFORMANCE)
     for name in ("_nvidia_smi", "_cuda", "_chrome_renderer"):
@@ -334,41 +331,29 @@ def test_gpu_probes(monkeypatch):
     assert [p.name for p in doctor.gpu_probes() if not p.ok] == ["NVENC", "remotion browser"]
 
 
-def test_the_nvenc_probe_encodes_a_frame_on_gpu_0(monkeypatch):
-    """Listing the encoders proves nothing about GPU 0: the probe encodes one frame with each
-    NVENC encoder on it, as the captures do (`-gpu 0`)."""
+def test_the_nvenc_probe_is_the_capture_gpu_encode_proof(monkeypatch):
+    """gpu.nvenc_problem already encodes one frame per NVENC encoder on GPU 0 (its own test in
+    test_capture_gpu.py): the doctor reports its answer and starts no encode of its own."""
     from pipeline.studio.capture import gpu
 
-    monkeypatch.setattr(gpu, "nvenc_problem", lambda: None)
-    runs = []
+    def own_encode(cmd, **_k):
+        raise AssertionError(f"the doctor ran its own encode: {cmd}")
 
-    def encode(cmd, **_k):
-        runs.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, "", "")
+    monkeypatch.setattr(doctor.subprocess, "run", own_encode)
+    calls = []
 
-    monkeypatch.setattr(doctor.subprocess, "run", encode)
-    probe = doctor._nvenc()
-    assert probe == doctor.Probe(
+    def encodes():
+        calls.append(1)
+        return None
+
+    monkeypatch.setattr(gpu, "nvenc_problem", encodes)
+    assert doctor._nvenc() == doctor.Probe(
         "NVENC", True, "h264_nvenc and hevc_nvenc encoded a test frame on GPU 0"
     )
-    assert [cmd[cmd.index("-c:v") + 1] for cmd in runs] == ["h264_nvenc", "hevc_nvenc"]
-    assert all(cmd[cmd.index("-gpu") + 1] == "0" for cmd in runs)
-
-    def no_device(cmd, **_k):
-        return subprocess.CompletedProcess(cmd, 1, "", "[hevc_nvenc] No capable devices found\n")
-
-    monkeypatch.setattr(doctor.subprocess, "run", no_device)
-    assert doctor._nvenc() == doctor.Probe(
-        "NVENC", False, "h264_nvenc -gpu 0 failed: [hevc_nvenc] No capable devices found"
-    )
-
-    def hung(cmd, **k):
-        raise subprocess.TimeoutExpired(cmd, k["timeout"])
-
-    monkeypatch.setattr(doctor.subprocess, "run", hung)
-    assert doctor._nvenc() == doctor.Probe(
-        "NVENC", False, "h264_nvenc -gpu 0: no answer within 60 s"
-    )
+    assert calls == [1]
+    problem = "hevc_nvenc cannot encode on GPU 0 (exit 1): No capable devices found"
+    monkeypatch.setattr(gpu, "nvenc_problem", lambda: problem)
+    assert doctor._nvenc() == doctor.Probe("NVENC", False, problem)
 
 
 def test_nvidia_smi_must_name_the_rtx_3080(monkeypatch):

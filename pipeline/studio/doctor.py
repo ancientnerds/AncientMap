@@ -124,36 +124,15 @@ def _nvidia_smi() -> Probe:
     return Probe("nvidia-smi", GPU_NAME in names, names or "no GPU listed")
 
 
-NVENC_ENCODERS = ("h264_nvenc", "hevc_nvenc")
-NVENC_PROBE_TIMEOUT_S = 60
-
-
 def _nvenc() -> Probe:
     """Both NVENC encoders really encode on GPU 0 (spec 4.11: `-gpu 0`, as the captures'
-    capture/encode.py): one black frame each, discarded. The encoder list alone
-    (gpu.nvenc_problem, checked first) proves nothing about the GPU index."""
+    capture/encode.py): gpu.nvenc_problem encodes one black frame with each."""
     from pipeline.studio.capture import gpu
-    from pipeline.video.media import FFMPEG_BIN
 
     problem = gpu.nvenc_problem()
     if problem is not None:
         return Probe("NVENC", False, problem)
-    for codec in NVENC_ENCODERS:
-        cmd = [FFMPEG_BIN, "-hide_banner", "-v", "error", "-f", "lavfi", "-i"]
-        cmd += ["color=c=black:s=256x256", "-frames:v", "1", "-c:v", codec, "-gpu", "0"]
-        cmd += ["-f", "null", "-"]
-        try:
-            proc = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=NVENC_PROBE_TIMEOUT_S
-            )
-        except subprocess.TimeoutExpired:
-            return Probe(
-                "NVENC", False, f"{codec} -gpu 0: no answer within {NVENC_PROBE_TIMEOUT_S} s"
-            )
-        if proc.returncode != 0:
-            first = (proc.stderr.strip().splitlines() or [f"exit {proc.returncode}"])[0]
-            return Probe("NVENC", False, f"{codec} -gpu 0 failed: {first}")
-    return Probe("NVENC", True, " and ".join(NVENC_ENCODERS) + " encoded a test frame on GPU 0")
+    return Probe("NVENC", True, " and ".join(gpu.NVENC_ENCODERS) + " encoded a test frame on GPU 0")
 
 
 def _cuda() -> Probe:
