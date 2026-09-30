@@ -123,7 +123,9 @@ def refuse_port_in_use(port: int) -> None:
 
     A server already there answers before npm has even started Vite, which only then fails
     on --strictPort. Vite binds just the first address of localhost (::1 here), so a
-    server on the other one does not trip --strictPort at all.
+    server on the other one does not trip --strictPort at all. A probe that neither
+    connects nor is refused (a timeout, an address the machine lacks) leaves the port's
+    state unknown and fails the check, naming the port.
     """
     for family, kind, proto, _, address in socket.getaddrinfo(
         "localhost", port, type=socket.SOCK_STREAM
@@ -135,6 +137,12 @@ def refuse_port_in_use(port: int) -> None:
                 probe.connect(address)
             except ConnectionRefusedError:
                 continue
+            except OSError as exc:
+                raise CaptureError(
+                    f"the local site's port check: probing port {port} on {address[0]} failed "
+                    f"({type(exc).__name__}: {exc}); netstat -ano | findstr :{port} shows what "
+                    "holds it"
+                ) from exc
         raise CaptureError(
             f"port {port} is in use on {address[0]} (a dev server left by an interrupted take, "
             f"or another session's capture?); stop it first: netstat -ano | findstr :{port}"

@@ -150,6 +150,37 @@ def test_the_site_is_ready_when_its_own_vite_announces_the_port_and_serves(tmp_p
         assert url == f"http://localhost:{port}"
 
 
+def test_a_port_probe_that_fails_otherwise_names_the_port(monkeypatch):
+    """Review of Task 27: a probe that timed out (a filtered port) or failed another way
+    (no IPv6 loopback) raised a bare socket error naming neither the port nor the check."""
+
+    class Probe:
+        def __init__(self, *args):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def settimeout(self, seconds):
+            pass
+
+        def connect(self, address):
+            raise TimeoutError("timed out")
+
+    monkeypatch.setattr(vite.socket, "socket", Probe)
+    host = FIRST_LOCALHOST[1]
+    with pytest.raises(
+        CaptureError,
+        match=rf"^the local site's port check: probing port 5198 on {re.escape(host)} failed "
+        r"\(TimeoutError: timed out\); netstat -ano \| findstr :5198 shows what holds it$",
+    ) as err:
+        vite.refuse_port_in_use(5198)
+    assert isinstance(err.value.__cause__, TimeoutError)
+
+
 def test_the_port_announcement_is_read_through_the_log_colours():
     assert vite.announces_port(VITE_READY_BYTES % 5198, 5198)
     assert not vite.announces_port(VITE_READY_BYTES % 5199, 5198)
