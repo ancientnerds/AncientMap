@@ -316,6 +316,18 @@ def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, in
             ends.append((_format(total + current), i))
         ordinal = f"{total + current + UNIT_ORDINALS[words[i]]}{ORDINALS[words[i]][-2:]}"
         return [(ordinal, i + 1), *ends]
+    # a British "and" after a hundred or a magnitude joins a final ordinal as well: "one
+    # hundred and first" is 101st
+    if (
+        prev in ("hundred", "magnitude")
+        and i - 1 not in stops
+        and i not in stops
+        and i + 1 < len(words)
+        and words[i] == "and"
+        and words[i + 1] in ORDINALS
+    ):
+        ordinal = ORDINALS[words[i + 1]]
+        return [(f"{total + current + int(ordinal[:-2])}{ordinal[-2:]}", i + 2), *ends]
     # a fraction: "four and a half" is 4.5, and the whole number before a word "and" is a
     # second reading. A decimal needs a digit word after "point": "one point ten thousand" is
     # 1, "point" and 10,000, never 1 with "point" swallowed. Before a digit word the "point"

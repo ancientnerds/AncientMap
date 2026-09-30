@@ -160,6 +160,11 @@ from pipeline.studio import spoken
         ("two and a half thousand years ago", "2,500 years ago"),
         ("four and a half billion years", "4.5 billion years"),
         ("between two and a half and three metres", "between 2.5 and 3 m"),
+        # a British "hundred and" before an ordinal is one ordinal
+        ("the one hundred and first day", "the 101st day"),
+        ("the one hundred and twentieth year", "the 120th year"),
+        ("the one hundred and twenty-first year", "the 121st year"),
+        ("the two thousand and fifth year", "the 2005th year"),
     ],
 )
 def test_equivalent_spellings(said, shown):
@@ -355,6 +360,18 @@ def test_equivalent_spellings(said, shown):
             "token 0: spoken '2500' vs display '2000'",
         ),
         ("four, and a half", "4.5", "token 0: spoken '4' vs display '4.5'"),
+        # and that ordinal is never the hundred and another ordinal
+        (
+            "the one hundred and first day",
+            "the 100 and 1st day",
+            "token 1: spoken '101st' vs display '100'",
+        ),
+        (
+            "the one hundred and first day",
+            "the 102nd day",
+            "token 1: spoken '101st' vs display '102nd'",
+        ),
+        ("one hundred, and first", "101st", "token 0: spoken '100' vs display '101st'"),
         # "per cent" is one unit in any case, and a caption that drops it is caught
         (
             "Fifteen Per cent of the stone",
