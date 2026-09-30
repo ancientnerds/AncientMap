@@ -60,10 +60,10 @@ jobs:
               - 'requirements*.txt'
               - 'ancient-nerds-map/package.json'
               - 'ancient-nerds-map/package-lock.json'
-              # security-scan has no npm audit step for video/ yet:
-              # `npm audit --audit-level=critical` there fails (2026-09-29)
-              # on the pinned vitest 4.0.18 (GHSA-5xrq-8626-4rwp, critical,
-              # fixed in 4.1.0).
+              # security-scan runs a blocking `npm audit
+              # --audit-level=critical` in video/ (since 2026-09-30, when
+              # vitest went from 4.0.18 to 4.1.11: GHSA-5xrq-8626-4rwp,
+              # critical, and GHSA-82fw-gwwq-j7x9; clean on that day).
               - 'video/package.json'
               - 'video/package-lock.json'
             docker:
@@ -224,6 +224,13 @@ jobs:
       - name: Scan npm dependencies
         working-directory: ancient-nerds-map
         continue-on-error: true  # Pre-existing workbox/serialize-javascript chain — can't fix until vite-plugin-pwa updates
+        run: npm audit --audit-level=critical
+
+      # The studio renderer (video/). Blocking: a critical advisory in its
+      # lockfile fails the deploy. npm audit reads only package-lock.json,
+      # so no npm ci is needed.
+      - name: Scan npm dependencies (video/)
+        working-directory: video
         run: npm audit --audit-level=critical
 
   tests:
