@@ -25,7 +25,7 @@ import math
 import re
 
 ONES = {
-    "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "zero": 0, "nought": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
     "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
     "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18,
     "nineteen": 19,
@@ -55,11 +55,16 @@ UNITS = {
     "cm": "cm", "centimetre": "cm", "centimetres": "cm", "centimeter": "cm", "centimeters": "cm",
     "kg": "kg", "kilogram": "kg", "kilograms": "kg",
     "ft": "ft", "foot": "ft", "feet": "ft",
+    "ha": "ha", "hectare": "ha", "hectares": "ha",
+    "m²": "m²", "km²": "km²", "cm²": "cm²", "ft²": "ft²",
+    "m³": "m³", "km³": "km³", "cm³": "cm³", "ft³": "ft³",
     "%": "percent", "percent": "percent",
     # dotted forms without their last full stop: _words strips it as edge punctuation
     "bc": "bc", "bce": "bc", "b.c": "bc", "b.c.e": "bc",
     "ad": "ad", "ce": "ad", "a.d": "ad", "c.e": "ad",
 }  # fmt: skip
+# "square metres" is "m²", "cubic metres" "m³": the word before a length unit
+POWERS = {"square": "²", "cubic": "³"}
 EDGE = ".,;:!?\"'()[]…—–“”‘’"
 STOPS = ",;:.!?…—–"  # trailing punctuation that closes a clause, and with it a spoken number
 _DIGITS_RE = re.compile(r"^\d{1,3}(?:,\d{3})+(?:\.\d+)?$|^\d+(?:\.\d+)?$")
@@ -405,6 +410,13 @@ def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]
         return [(w, i + 1)]
     if w in ORDINALS:
         return [(ORDINALS[w], i + 1)]
+    if (
+        w in POWERS
+        and i not in stops
+        and i + 1 < len(words)
+        and UNITS.get(words[i + 1]) in ("m", "km", "cm", "ft")
+    ):
+        return [(UNITS[words[i + 1]] + POWERS[w], i + 2)]
     if w in UNITS:
         return [(UNITS[w], i + 1)]
     return [(w, i + 1)]

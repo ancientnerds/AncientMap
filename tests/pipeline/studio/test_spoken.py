@@ -165,6 +165,13 @@ from pipeline.studio import spoken
         ("the one hundred and twentieth year", "the 120th year"),
         ("the one hundred and twenty-first year", "the 121st year"),
         ("the two thousand and fifth year", "the 2005th year"),
+        # British "nought", areas and volumes
+        ("nought point five metres", "0.5 m"),
+        ("four thousand square metres", "4,000 m²"),
+        ("two square kilometres", "2 km²"),
+        ("twelve hectares", "12 ha"),
+        ("one hectare", "1 ha"),
+        ("thirty cubic metres of stone", "30 m³ of stone"),
     ],
 )
 def test_equivalent_spellings(said, shown):
@@ -372,6 +379,11 @@ def test_equivalent_spellings(said, shown):
             "token 1: spoken '101st' vs display '102nd'",
         ),
         ("one hundred, and first", "101st", "token 0: spoken '100' vs display '101st'"),
+        # an area is never a length: "four metres square" is 16 m²
+        ("four thousand square metres", "4,000 m", "token 1: spoken 'm²' vs display 'm'"),
+        ("four metres square", "4 m²", "token 1: spoken 'm' vs display 'm²'"),
+        ("two square kilometres", "2 m²", "token 1: spoken 'km²' vs display 'm²'"),
+        ("thirty cubic metres", "30 m²", "token 1: spoken 'm³' vs display 'm²'"),
         # "per cent" is one unit in any case, and a caption that drops it is caught
         (
             "Fifteen Per cent of the stone",
