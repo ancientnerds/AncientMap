@@ -4882,10 +4882,14 @@ TEASER = MECHANICAL / "teaser.py"
 TEASER_CONTRACT = REPO / "scripts/remediation/teaser/contract.py"
 TEASER_ANSWERS = REPO / "scripts/remediation/teaser/answers.py"
 TEASER_RUN = REPO / "scripts/remediation/teaser/run.py"
+SHORTS_RENDER = REPO / "pipeline/video/shorts_render.py"
+SHORTS_AUDIT = REPO / "pipeline/video/shorts_audit.py"
+PHASE4_VERIFY = REPO / "scripts/remediation/phase4/verify4.py"
 CARD_PROVENANCE = REPO / "pipeline/utils/card_provenance.py"
 PUBLIC_SITES = REPO / "pipeline/utils/public_sites.py"
 TEASER_WRITE_TESTS = "tests/remediation/test_mechanical_teaser.py"
 TEASER_TESTS = "tests/remediation/test_teaser.py"
+SHORTS_TESTS_VIDEO = "tests/pipeline/video/test_shorts.py"
 AI_ACT_TESTS = "tests/api/test_ai_act_marking.py"
 LASTMOD_TESTS = "tests/api/test_sitemap_lastmod.py"
 _TEASER_CHANGED = "test_a_site_that_changed_is_listed_not_written"
@@ -5165,7 +5169,7 @@ TEASER_CASES: list[Case] = [
             ("the shorts font", "    if measured.missing:", "test_the_shorts_font_and_frame"),
             (
                 "the caption frame",
-                "    if measured.px > V.MAX_CAPTION_PX:",
+                "    if measured.drawn_px > V.MAX_CAPTION_PX:",
                 "test_the_shorts_font_and_frame",
             ),
             (
@@ -5213,11 +5217,87 @@ TEASER_CASES: list[Case] = [
                 "test_brackets_markers_emojis_and_symbols_are_refused",
             ),
             (
+                "a long word is judged as the short draws it",
+                "    if measured.drawn_px > V.MAX_CAPTION_PX:",
+                "    if measured.px > V.MAX_CAPTION_PX:",
+                "test_a_word_too_wide_at_the_caption_size_is_drawn_smaller_and_passes",
+            ),
+            (
                 "an alias only where the description uses it",
                 "    derived += [alt for alt in sorted(set(alt_names)) if names_in(description, "
                 "[alt])]",
                 "    derived += sorted(set(alt_names))",
                 "test_an_alias_counts_only_where_the_description_uses_it",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the long caption words: drawn smaller
+    guard(
+        "teaser: the render keeps a word that fits at the caption size",
+        SHORTS_RENDER,
+        "        if caption_px(shown, sized) <= CAPTION_MAX_PX:",
+        "test_a_caption_word_too_wide_gets_the_largest_size_at_which_it_fits",
+        SHORTS_TESTS_VIDEO,
+    ),
+    *(
+        Case(f"teaser: {label}", path, old, new, test, testfile)
+        for label, path, old, new, test, testfile in (
+            (
+                "the render never draws a word below the floor",
+                SHORTS_RENDER,
+                "    for size in range(CAPTION_SIZE, CAPTION_MIN_SIZE, -1):",
+                "    for size in range(CAPTION_SIZE, 0, -1):",
+                "test_a_caption_word_is_never_drawn_below_the_floor",
+                SHORTS_TESTS_VIDEO,
+            ),
+            (
+                "the render takes the largest size that fits",
+                SHORTS_RENDER,
+                "    for size in range(CAPTION_SIZE, CAPTION_MIN_SIZE, -1):",
+                "    for size in range(CAPTION_MIN_SIZE + 1, CAPTION_SIZE + 1):",
+                "test_a_caption_word_too_wide_gets_the_largest_size_at_which_it_fits",
+                SHORTS_TESTS_VIDEO,
+            ),
+            (
+                "the render draws each word at its own size",
+                SHORTS_RENDER,
+                "fontsize={word_face(shown, face).size}:",
+                "fontsize={CAPTION_SIZE}:",
+                "test_captions_filter_draws_a_long_word_at_its_own_size",
+                SHORTS_TESTS_VIDEO,
+            ),
+            (
+                "the audit measures each word at its drawn size",
+                SHORTS_AUDIT,
+                "        w = caption_px(shown, word_face(shown, font) if drawn else font) "
+                "if shown else 0",
+                "        w = caption_px(shown, font) if shown else 0",
+                "test_the_audit_measures_each_word_at_the_size_it_is_drawn",
+                SHORTS_TESTS_VIDEO,
+            ),
+            (
+                "the short's audit measures the captions as drawn",
+                SHORTS_AUDIT,
+                "    return widest_word_px(words, caption_font(font_path), drawn=True)",
+                "    return widest_word_px(words, caption_font(font_path))",
+                "test_the_caption_audit_measures_through_the_public_helper",
+                SHORTS_TESTS_VIDEO,
+            ),
+            (
+                "card_fit measures the card as the short draws it",
+                PHASE4_VERIFY,
+                "    drawn, drawn_px = shorts_audit.widest_word_px(card.split(), face, drawn=True)",
+                "    drawn, drawn_px = shorts_audit.widest_word_px(card.split(), face)",
+                "test_card_fit_measures_each_word_as_the_short_draws_it",
+                TEASER_TESTS,
+            ),
+            (
+                "the contract refuses a word past the render's floor",
+                SHORTS_RENDER,
+                "CAPTION_MIN_SIZE = NAME_LAYOUTS[-1][1]",
+                "CAPTION_MIN_SIZE = 1",
+                "test_a_word_wider_than_the_frame_at_the_floor_is_refused",
+                TEASER_TESTS,
             ),
         )
     ),
@@ -5318,13 +5398,13 @@ TEASER_CASES: list[Case] = [
                 "test_all_accepted_in_the_first_round",
             ),
             (
-                "a judge did not work on the card",
-                "            if answer.answered_by in writers[site_id]:",
-                "test_a_judge_who_worked_on_the_card_is_refused",
+                "a judge answered nothing else in the run",
+                "            if answer.answered_by in workers:",
+                "test_the_pilot_s_judge_is_no_verifier_of_the_run",
             ),
             (
                 "an unproven contradiction is counted",
-                '                if judged.verdict == "CONTRADICTED":',
+                '                if result["verdict"] == CONTRADICTED:',
                 "test_an_unproven_contradiction_fails_the_pilot",
             ),
         )
@@ -5376,9 +5456,305 @@ TEASER_CASES: list[Case] = [
             ),
             (
                 "a quote proves only when the page holds it",
-                "            proven = outcome == Q.FOUND",
-                "            proven = judged.url is not None",
+                "        proven = outcome == Q.FOUND",
+                "        proven = judged.url is not None",
                 "test_a_quote_the_page_does_not_hold_proves_nothing",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the web verification of every card (wip/wb2)
+    *(
+        guard(f"teaser: {label}", TEASER_RUN, needle, test, TEASER_TESTS)
+        for label, needle, test in (
+            (
+                "verify: a contradiction is never VERIFIED",
+                '    if any(claim["verdict"] == CONTRADICTED for claim in claims):',
+                "test_a_contradiction_proven_or_not_is_contradicted",
+            ),
+            (
+                "verify: a VERIFIED card is accepted",
+                '    if first["verdict"] == VERIFIED:',
+                "test_all_accepted_in_the_first_round",
+            ),
+            (
+                "verify: a rewrite VERIFIED again is accepted",
+                '    if second["verdict"] == VERIFIED:',
+                "test_a_correction_rests_on_its_web_fact_and_the_fact_basis_records_it",
+            ),
+            (
+                "verify: a rewrite that fails the mechanical checks clears",
+                '    if rewritten["problems"]:',
+                "test_a_rewrite_that_fails_the_mechanical_checks_clears_the_site",
+            ),
+            (
+                "verify: a rewrite the checker fails clears",
+                '    if rechecked["verdict"] != A.PASSED:',
+                "test_a_rewrite_the_checker_fails_clears_the_site",
+            ),
+            (
+                "verify: a sentence repeated by no claim is no defect",
+                "            if repeat is None:",
+                "test_each_mapped_contradiction_is_a_description_defect_for_its_lane",
+            ),
+            (
+                "verify: the rewrite sees the web facts",
+                "    if stage == VERIFY_REWRITE:\n"
+                "        return site.with_web(web_facts(state.verified[0]))",
+                "test_a_contradicted_card_is_rewritten_with_the_pages_and_quotes",
+            ),
+            (
+                "verify: the rewrite's check sees its web facts",
+                "    if stage == VERIFY_CHECK:\n        assert state.writer is not None",
+                "test_a_correction_rests_on_its_web_fact_and_the_fact_basis_records_it",
+            ),
+            (
+                "verify: recorded web facts are still the offered ones",
+                "    if recorded != web_facts(state.verified[0]):",
+                "test_the_rewrite_and_its_check_keep_the_web_facts_they_were_asked_with",
+            ),
+            (
+                "verify: a judgement counts only for its card",
+                '    if judged is not None and judged["card"] != written["card"]:',
+                "test_a_judgement_of_another_card_is_refused",
+            ),
+            (
+                "verify: a re-import cannot swap a judged card",
+                '    if judged is not None and judged["card"] != written["card"]:',
+                "test_a_stage_imported_again_with_another_card_is_refused",
+            ),
+            (
+                "verify: a second verifier's contradiction is a defect",
+                "        if len(state.verified) == 2:",
+                "test_still_contradicted_after_the_rewrite_the_site_gets_no_card",
+            ),
+            (
+                "verify: web facts alone make no defect",
+                "            if not candidates:",
+                "test_a_second_contradiction_of_a_card_on_web_facts_alone_is_no_defect",
+            ),
+            (
+                "verify: a verifier lists the checker's claims",
+                "    if listed < floor:",
+                "test_a_verifier_who_lists_fewer_claims_than_the_checker_is_refused",
+            ),
+            (
+                "verify: the verify import holds the claim floor",
+                "                if short is not None:\n"
+                "                    raise A.AnswerError(short)\n"
+                "                parsed: dict[str, Any] = {}",
+                "test_a_verifier_who_lists_fewer_claims_than_the_checker_is_refused",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser: {label}", TEASER_RUN, old, new, test, TEASER_TESTS)
+        for label, old, new, test in (
+            (
+                "verify: at most one claim without a proving quote",
+                "    if len(unproven) > CP.MAX_UNPROVEN_CLAIMS or not proves(claims[0]):",
+                "    if not proves(claims[0]):",
+                "test_two_unproven_claims_are_too_many",
+            ),
+            (
+                "verify: never the central claim without one",
+                "    if len(unproven) > CP.MAX_UNPROVEN_CLAIMS or not proves(claims[0]):",
+                "    if len(unproven) > CP.MAX_UNPROVEN_CLAIMS:",
+                "test_the_central_claim_is_never_unproven",
+            ),
+            (
+                "verify: a claim is proven only by a found quote",
+                '    return claim["verdict"] == "SUPPORTED" and claim["proven"]',
+                '    return claim["verdict"] == "SUPPORTED"',
+                "test_a_quote_the_page_does_not_hold_proves_nothing",
+            ),
+            (
+                "verify: a web fact is a proven contradiction",
+                '        if claim["verdict"] == CONTRADICTED and claim["proven"]',
+                '        if claim["verdict"] == CONTRADICTED',
+                "test_the_web_facts_are_the_proven_contradictions_beyond_the_central_claim",
+            ),
+            (
+                "verify: the central claim is never a web fact",
+                '        for claim in verified["claims"][1:]',
+                '        for claim in verified["claims"]',
+                "test_the_web_facts_are_the_proven_contradictions_beyond_the_central_claim",
+            ),
+            (
+                "verify: a proof's page passes lane WC's source rule",
+                "        elif (refused := url_problem(judged.url)) is not None:",
+                "        elif False:",
+                "test_a_quote_on_a_page_the_source_rule_refuses_proves_nothing",
+            ),
+            (
+                "verify: a refused page is never fetched",
+                "    return sorted({j.url for j in claims if j.url is not None and url_problem(j.url) "
+                "is None})",
+                "    return sorted({j.url for j in claims if j.url is not None})",
+                "test_a_quote_on_a_page_the_source_rule_refuses_proves_nothing",
+            ),
+            (
+                "verify: the provenance's web facts are the recorded ones",
+                '    offered = recorded_web_facts(check, state) if check["stage"] == VERIFY_CHECK '
+                "else ()",
+                '    offered = web_facts(state.verified[0]) if check["stage"] == VERIFY_CHECK '
+                "else ()",
+                "test_the_rewrite_and_its_check_keep_the_web_facts_they_were_asked_with",
+            ),
+            (
+                "verify: an import that would swap a judged card is refused",
+                "        progress(site_id, settled)",
+                "        del site_id",
+                "test_a_stage_imported_again_with_another_card_is_refused",
+            ),
+            (
+                "verify: check-answer holds the claim floor",
+                "claims_floor(len(claims), judge_floor(run, stage, label))",
+                "claims_floor(len(claims), 0)",
+                "test_a_verifier_who_lists_fewer_claims_than_the_checker_is_refused",
+            ),
+            (
+                "verify: the pilot judge holds the claim floor",
+                "                short = claims_floor(len(parsed[site_id][1]), floor)\n"
+                "                if short is not None:",
+                "                short = claims_floor(len(parsed[site_id][1]), floor)\n"
+                "                if False:",
+                "test_a_judge_who_lists_fewer_claims_than_the_checker_is_refused",
+            ),
+            (
+                "verify: a failed fetch that may pass is tried again",
+                "    return status is None or status == TOO_MANY_REQUESTS or status >= 500",
+                "    return False",
+                "test_a_fetch_that_failed_for_a_passing_reason_is_tried_again",
+            ),
+            (
+                "verify: no answer at all may pass",
+                "    return status is None or status == TOO_MANY_REQUESTS or status >= 500",
+                "    return status == TOO_MANY_REQUESTS or status >= 500",
+                "test_a_fetch_that_failed_for_a_passing_reason_is_tried_again",
+            ),
+            (
+                "verify: a 429 may pass",
+                "    return status is None or status == TOO_MANY_REQUESTS or status >= 500",
+                "    return status is None or status >= 500",
+                "test_a_fetch_that_failed_for_a_passing_reason_is_tried_again",
+            ),
+            (
+                "verify: a 5xx may pass",
+                "    return status is None or status == TOO_MANY_REQUESTS or status >= 500",
+                "    return status is None or status == TOO_MANY_REQUESTS",
+                "test_a_fetch_that_failed_for_a_passing_reason_is_tried_again",
+            ),
+            (
+                "verify: a verifier never wrote or checked the card",
+                "        if stage in CHECKER_STAGES or stage in VERIFY_STAGES:",
+                "        if stage in CHECKER_STAGES:",
+                "test_a_verifier_who_wrote_or_checked_the_card_is_refused",
+            ),
+            (
+                "verify: the second verifier is a new one",
+                "        if stage in CHECKER_STAGES or stage in VERIFY_STAGES:",
+                "        if stage in CHECKER_STAGES:",
+                "test_the_second_verifier_is_a_new_one",
+            ),
+            (
+                "verify: still contradicted is its own reason",
+                '        CONTRADICTED_AFTER_VERIFY if second["verdict"] == CONTRADICTED else '
+                "UNPROVEN_AFTER_VERIFY",
+                "        UNPROVEN_AFTER_VERIFY",
+                "test_still_contradicted_after_the_rewrite_the_site_gets_no_card",
+            ),
+            (
+                "verify: five cards per verifier batch",
+                "        size = JUDGE_BATCH_SIZE if stage in VERIFY_STAGES else BATCH_SIZE",
+                "        size = BATCH_SIZE",
+                "test_every_accepted_card_is_asked_five_to_a_batch",
+            ),
+            (
+                "verify: check-answer takes a verifier's shape",
+                "    if stage == JUDGE_STAGE or stage in VERIFY_STAGES:",
+                "    if stage == JUDGE_STAGE:",
+                "test_check_answer_takes_a_verifier_s_shape_only",
+            ),
+        )
+    ),
+    *(
+        guard(f"teaser: {label}", TEASER_ANSWERS, needle, test, TEASER_TESTS)
+        for label, needle, test in (
+            (
+                "verify: one repeats entry per contradicted claim",
+                "    if not isinstance(repeats, list) or len(repeats) != contradicted:",
+                "test_the_rewrite_names_the_sentence_each_contradicted_claim_repeats",
+            ),
+            (
+                "verify: a repeats entry is a description sentence",
+                "        if entry is not None and entry not in site.described_ids:",
+                "test_the_rewrite_names_the_sentence_each_contradicted_claim_repeats",
+            ),
+        )
+    ),
+    guard(
+        "teaser: verify: only a VERIFIED card is written",
+        TEASER,
+        '    if outcome["status"] == ACCEPTED and outcome.get("verification") != CP.VERIFIED:',
+        "test_an_accepted_card_that_is_not_verified_is_never_written",
+        TEASER_WRITE_TESTS,
+    ),
+    *(
+        Case(f"teaser: {label}", CARD_PROVENANCE, old, new, test, AI_ACT_TESTS)
+        for label, old, new, test in (
+            (
+                "verify: only VERIFIED is a teaser provenance",
+                '    _need(verify["verdict"] == VERIFIED,',
+                "    _need(True,",
+                "test_only_a_verified_card_within_the_limit_is_a_teaser_provenance",
+            ),
+            (
+                "verify: the verification follows the check's stage",
+                '        verify["stage"] == (SECOND_VERIFY if after_rewrite else FIRST_VERIFY),',
+                "        True,",
+                "test_only_a_verified_card_within_the_limit_is_a_teaser_provenance",
+            ),
+            (
+                "verify: the verifier is not the checker",
+                '    _need(verify["by"] != check["by"],',
+                "    _need(True,",
+                "test_only_a_verified_card_within_the_limit_is_a_teaser_provenance",
+            ),
+            (
+                "verify: at most one unproven claim in the provenance",
+                "0 <= unproven <= min(MAX_UNPROVEN_CLAIMS, claims - 1),",
+                "0 <= unproven <= claims - 1,",
+                "test_only_a_verified_card_within_the_limit_is_a_teaser_provenance",
+            ),
+            (
+                "verify: never every claim unproven in the provenance",
+                "0 <= unproven <= min(MAX_UNPROVEN_CLAIMS, claims - 1),",
+                "0 <= unproven <= MAX_UNPROVEN_CLAIMS,",
+                "test_only_a_verified_card_within_the_limit_is_a_teaser_provenance",
+            ),
+            (
+                "verify: the web facts are exactly the cited ones",
+                "        cited == set(ids),",
+                "        True,",
+                "test_a_web_fact_is_recorded_exactly_where_a_claim_of_a_rewrite_cites_it",
+            ),
+            (
+                "verify: web facts only after a failed verification",
+                "        not ids or stage == VERIFY_REWRITE_CHECK,",
+                "        True,",
+                "test_a_web_fact_is_recorded_exactly_where_a_claim_of_a_rewrite_cites_it",
+            ),
+            (
+                "verify: a web fact id once",
+                "    _need(len(set(ids)) == len(ids),",
+                "    _need(True,",
+                "test_a_web_fact_is_recorded_exactly_where_a_claim_of_a_rewrite_cites_it",
+            ),
+            (
+                "verify: the verified text is the card",
+                '        verify["text_sha256"] == card_sha256,',
+                "        True,",
+                "test_only_a_verified_card_within_the_limit_is_a_teaser_provenance",
             ),
         )
     ),
@@ -6864,6 +7240,237 @@ WD1_CASES: list[Case] = [
     ),
 ]
 CASES += WD1_CASES
+
+
+# ---------------------------------------------- HUMAN_ONLY Nr. 7: the Chiapa lanes (2026-09-29)
+#: Every guard the two Chiapa lanes added (`mechanical/chiapa.py`, `lane.CHIAPA_HIDE`,
+#: `lane.CHIAPA_NAME`): the plan-side checks, the SQL of the empty-row premise, the three survivor
+#: checks and the rename's premise that waits for the hide (evaluated in SQLite by the tests), and
+#: the probe names that keep three probes of one column apart. Every label starts with "chiapa:",
+#: so the group runs on its own: `mutation_sweep.py chiapa:`.
+CHIAPA = MECHANICAL / "chiapa.py"
+CHIAPA_TESTS = "tests/remediation/test_mechanical_chiapa.py"
+_CHIAPA_REFUSES = "test_each_check_refuses_on_its_own"
+_CHIAPA_SURVIVOR = "test_each_survivor_check_fires_for_its_kind_alone"
+_CHIAPA_WAITS = "test_the_rename_premise_is_the_hide_it_waits_for"
+CHIAPA_CASES: list[Case] = [
+    *(
+        guard(f"chiapa: {label}", CHIAPA, needle, test, CHIAPA_TESTS)
+        for label, needle, test in (
+            ("a row that is gone is planned", "    if row is None:", _CHIAPA_REFUSES),
+            (
+                "a row of another source is planned",
+                '    if row["source_id"] != P.CURATED_SOURCE:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a renamed row is hidden",
+                '    if hidden["name"] != RENAME.new:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a decided row is hidden again",
+                '    if hidden["scope_status"] is not None or hidden["scope_reason"] is not None:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a row with links or images is hidden",
+                '    if hidden["hide_premise"] != EMPTY_ROW_PREMISE:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a journal that disagrees is planned on",
+                "    if broken is not None:",
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a retired survivor is kept",
+                '    if kept["scope_status"] == RETIRED:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a pair past 100 m is one site",
+                "    if read.metres > DUPLICATE_METRES:",
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "the survivor rule is not asked",
+                '    if sorted((hidden, kept), key=survivor_rank)[0]["id"] != KEPT:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a moved name is renamed",
+                '    if kept["name"] != RENAME.old or kept["name_normalized"] is None:',
+                _CHIAPA_REFUSES,
+            ),
+            (
+                "a row already retired onto the kept row",
+                '    if kept["name_premise"] != duplicates_retired_onto([]):',
+                _CHIAPA_REFUSES,
+            ),
+            ("another visible row keeps the name", "    if others:", _CHIAPA_REFUSES),
+            ("a lane that wrote is re-planned", "    if written:", _CHIAPA_REFUSES),
+            (
+                "a read with two pairs is parsed",
+                '    if len(rows["pair"]) != 1 or len(rows["key"]) != 1:',
+                "test_the_tagged_lines_become_the_read",
+            ),
+        )
+    ),
+    *(
+        Case(f"chiapa: {label}", path, old, new, test, CHIAPA_TESTS)
+        for label, path, old, new, test in (
+            (
+                "a retired holder of the name blocks",
+                CHIAPA,
+                'for h in read.holders if h["scope_status"] != RETIRED)',
+                "for h in read.holders)",
+                "test_a_retired_holder_of_the_name_is_no_obstacle",
+            ),
+            (
+                "the survivor may be of any source",
+                LANE,
+                "    \"AND s.source_id = 'ancient_nerds'\"\n)",
+                '    "AND true"\n)',
+                _CHIAPA_SURVIVOR,
+            ),
+            (
+                "a survivor nobody curates passes",
+                LANE,
+                'predicate=f"NOT EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR})",',
+                'predicate=f"1 = 0 AND EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR})",',
+                _CHIAPA_SURVIVOR,
+            ),
+            (
+                "a retired survivor passes",
+                LANE,
+                "{_NAMES_SURVIVOR} AND {is_retired('s')})\"",
+                '{_NAMES_SURVIVOR} AND 1 = 0)"',
+                _CHIAPA_SURVIVOR,
+            ),
+            (
+                "a far survivor passes",
+                LANE,
+                "_SURVIVOR_FAR = f\"{sphere_metres('s', 'u')} > {DUPLICATE_METRES}\"",
+                "_SURVIVOR_FAR = f\"{sphere_metres('s', 'u')} < {DUPLICATE_METRES}\"",
+                _CHIAPA_SURVIVOR,
+            ),
+            (
+                "one site reaches 1 km",
+                LANE,
+                "DUPLICATE_METRES = 100\n",
+                "DUPLICATE_METRES = 1000\n",
+                _CHIAPA_SURVIVOR,
+            ),
+            (
+                "the empty row may hold images",
+                LANE,
+                'FROM wiki_images w WHERE w.site_id = u.id) "',
+                'FROM wiki_images w WHERE 1 = 0) "',
+                "test_the_empty_row_premise_counts_links_and_images",
+            ),
+            (
+                "the empty row may hold links",
+                LANE,
+                'FROM site_content_links c WHERE c.site_id = u.id) "',
+                'FROM site_content_links c WHERE 1 = 0) "',
+                "test_the_empty_row_premise_counts_links_and_images",
+            ),
+            (
+                "the rename counts a visible duplicate",
+                LANE,
+                "d.source_id = 'ancient_nerds' AND {is_retired('d')} \"",
+                "d.source_id = 'ancient_nerds' \"",
+                _CHIAPA_WAITS,
+            ),
+            (
+                "the rename counts any source",
+                LANE,
+                "f\"FROM unified_sites d WHERE d.source_id = 'ancient_nerds' AND ",
+                'f"FROM unified_sites d WHERE ',
+                _CHIAPA_WAITS,
+            ),
+            (
+                "the rename counts any duplicate reason",
+                LANE,
+                'f"AND d.scope_reason = {sql_literal(DUPLICATE_PREFIX)} || CAST(u.id AS text)"',
+                "f\"AND d.scope_reason LIKE {sql_literal(DUPLICATE_PREFIX + '%')}\"",
+                _CHIAPA_WAITS,
+            ),
+            (
+                "the planned premise names the lowest id",
+                LANE,
+                "highest id {max(ids) if ids else 'none'}\"",
+                "highest id {min(ids) if ids else 'none'}\"",
+                _CHIAPA_WAITS,
+            ),
+            (
+                "the rename does not wait for the hide",
+                LANE,
+                "    premise_sql=DUPLICATES_RETIRED_ONTO_SQL,",
+                "    premise_sql=None,",
+                "test_the_rename_waits_for_the_hide_both_ways",
+            ),
+            (
+                "the rename writes a key of any name",
+                LANE,
+                "    cells=NAME_CELLS,\n    write_invariant=_NAME_KEY_DIFFERS,\n)\n\n_RETIRED",
+                "    cells=NAME_CELLS,\n)\n\n_RETIRED",
+                "test_the_rename_waits_for_the_hide_both_ways",
+            ),
+            (
+                "the hide does not ask for an empty row",
+                LANE,
+                "    premise_sql=EMPTY_ROW_PREMISE_SQL,",
+                "    premise_sql=None,",
+                "test_the_survivor_checks_run_after_the_write_and_only_on_it",
+            ),
+            (
+                "the hide checks no survivor",
+                LANE,
+                "    site_invariants=DUPLICATE_SURVIVOR_INVARIANTS,",
+                "    site_invariants=(),",
+                "test_the_survivor_checks_run_after_the_write_and_only_on_it",
+            ),
+            (
+                "the hide may write any status",
+                LANE,
+                'Column("scope_status", "text", allowed_new_values=(RETIRED,), fills_null=True),',
+                'Column("scope_status", "text", allowed_new_values=SCOPE_STATUSES, fills_null=True),',
+                "test_the_hide_writes_retired_and_nothing_else",
+            ),
+            (
+                "the probes of one column share a name",
+                APPLY,
+                "                invariant.probe_suffix,",
+                '                f"invariant-{invariant.probe_column}",',
+                "test_every_guard_of_the_hide_has_its_probe",
+            ),
+            (
+                "the rename's cells carry no premise",
+                L5_DIR / "plan.py",
+                "            premise=premise,\n",
+                "",
+                "test_the_hide_and_the_rename_as_decided",
+            ),
+        )
+    ),
+    guard(
+        "chiapa: two invariants share a probe name",
+        LANE,
+        "    if len(set(probes)) != len(probes):",
+        "test_two_invariants_probing_one_column_are_named_apart",
+        CHIAPA_TESTS,
+    ),
+    guard(
+        "chiapa: a probe name is not checked",
+        LANE,
+        "        if self.probe_name and not _KEY_PREFIX.match(self.probe_name):",
+        "test_two_invariants_probing_one_column_are_named_apart",
+        CHIAPA_TESTS,
+    ),
+]
+CASES += CHIAPA_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

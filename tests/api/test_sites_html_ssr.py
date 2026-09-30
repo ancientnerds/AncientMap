@@ -340,6 +340,16 @@ def test_site_detail_marks_a_teaser_card_as_ai_generated():
         checker="teaser-check-b001",
         checked_at="2026-09-26T12:00:00+00:00",
         claims=[{"claim": "an Iron Age bog fortress", "support": ["S1"]}],
+        verify={
+            "verdict": "VERIFIED",
+            "stage": "verify",
+            "by": "teaser-verify-001",
+            "at": "2026-09-26T13:00:00+00:00",
+            "claims": 2,
+            "unproven": 0,
+            "text_sha256": CP.text_sha256(row.card_description),
+        },
+        web_facts=[],
     )
     assert _teaser_route(row)["card_ai"] == "generated"
     row.card_description = "Another card, written by another path."

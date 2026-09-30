@@ -1,0 +1,42 @@
+joint rehearsal: the pinned hide/APPLY.sql and name/APPLY.sql, hide first, in ONE transaction that ends in ROLLBACK (2026-09-29T19:48:05Z)
+BEGIN
+SET
+SET
+CREATE TABLE
+INSERT 0 2
+DO
+SET
+SET
+CREATE TABLE
+INSERT 0 2
+DO
+                  id                  |      name       | name_normalized | scope_status |                   scope_reason                    
+--------------------------------------+-----------------+-----------------+--------------+---------------------------------------------------
+ 24aa135d-4714-47f5-96c0-d58f0bc04b6f | Chiapa de Corzo | chiapa de corzo | retired      | duplicate_of:ed186ea9-9ed1-415d-828b-97d9f21401d2
+ ed186ea9-9ed1-415d-828b-97d9f21401d2 | Chiapa de Corzo | chiapa de corzo | NULL         | NULL
+(2 rows)
+
+             run_stamp             |   column_name   |             old_value             |                     new_value                     
+-----------------------------------+-----------------+-----------------------------------+---------------------------------------------------
+ 2026-09-29_mechanical-chiapa-hide | scope_reason    |                                   | duplicate_of:ed186ea9-9ed1-415d-828b-97d9f21401d2
+ 2026-09-29_mechanical-chiapa-hide | scope_status    |                                   | retired
+ 2026-09-29_mechanical-chiapa-name | name            | Zoque Culture Archaeological Zone | Chiapa de Corzo
+ 2026-09-29_mechanical-chiapa-name | name_normalized | zoque culture archaeological zone | chiapa de corzo
+(4 rows)
+
+ROLLBACK
+                  id                  |               name                |          name_normalized          | scope_status | scope_reason 
+--------------------------------------+-----------------------------------+-----------------------------------+--------------+--------------
+ 24aa135d-4714-47f5-96c0-d58f0bc04b6f | Chiapa de Corzo                   | chiapa de corzo                   | NULL         | NULL
+ ed186ea9-9ed1-415d-828b-97d9f21401d2 | Zoque Culture Archaeological Zone | zoque culture archaeological zone | NULL         | NULL
+(2 rows)
+
+ run_stamp | column_name | old_value | new_value 
+-----------+-------------+-----------+-----------
+(0 rows)
+
+
+NOTICE:  Nr 7 duplicate hide: 2 of 2 planned cell(s) changed and journalled over 1 curated site(s)
+NOTICE:  Nr 7 rename: 2 of 2 planned cell(s) changed and journalled over 1 curated site(s)
+
+EXIT= 0

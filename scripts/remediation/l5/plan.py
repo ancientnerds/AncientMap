@@ -215,7 +215,7 @@ def _change(
     )
 
 
-def _name_verdicts(
+def name_verdicts(
     sid: str,
     name: str,
     old_key: str | None,
@@ -223,7 +223,12 @@ def _name_verdicts(
     new_key: str,
     evidence: Sequence[dict[str, Any]],
     note: str,
+    *,
+    premise: str | None = None,
 ) -> list[MP.Verdict]:
+    """A rename's cells: the name and, where it moves, its key. `premise` is the state the rename
+    rests on, for a name lane that conditions on one (`chiapa-name`: the hide of HUMAN_ONLY Nr. 7);
+    `name-l5` checks none."""
     return [
         MP.Verdict(
             site_id=sid,
@@ -237,6 +242,7 @@ def _name_verdicts(
             phase3=False,
             finding_test_id="B1/name-l5",
             evidence=tuple(evidence),
+            premise=premise,
             column=column,
         )
         for column, old, new in (("name", name, new_name), ("name_normalized", old_key, new_key))
@@ -323,7 +329,7 @@ def build(
                 {"source": q["source"], "url": q["source"], "quote": q["quote"]}
                 for q in name["quotes"]
             ]
-            plan.names += _name_verdicts(
+            plan.names += name_verdicts(
                 sid,
                 str(now["name"]),
                 now["name_normalized"],
@@ -358,7 +364,7 @@ def build(
                 }
             )
             continue
-        plan.names += _name_verdicts(
+        plan.names += name_verdicts(
             sid,
             rename.old,
             now["name_normalized"],

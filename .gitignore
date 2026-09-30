@@ -498,3 +498,8 @@ output/remediation/qid_repair/l5/step-*/probes/
 output/remediation/l5/handoff*/
 output/remediation/l5/pages/
 output/remediation/l5/export/
+# HUMAN_ONLY Nr. 7 (2026-09-29): the duplicate hide and the rename of Chiapa de Corzo, two lanes
+# (`chiapa-hide`, `chiapa-name`) versioned like the other mechanical lanes - plan, undo, statement
+# and the read they rest on (two rows, no description), never the rehearsal.
+!output/remediation/mechanical_chiapa/
+output/remediation/mechanical_chiapa/*/REHEARSAL.sql

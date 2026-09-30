@@ -1,0 +1,24 @@
+$ apply.py --lane chiapa-name --probe-guards   (2026-09-29T19:47:15Z) - before the hide has landed
+[guard 3 - a planned old value the row does not hold] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 rename: 1 planned row(s) no longer hold the planned old value
+   journal rows left by this probe: 0
+[guard 2 - a planned cell that is not a change] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 rename: 1 planned row(s) are not writable changes
+   journal rows left by this probe: 0
+[guard 2 - a cell in a column the lane does not own] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 rename: 1 planned row(s) are not writable changes
+   journal rows left by this probe: 0
+[guard 2 - a value longer than its column] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 rename: 1 planned row(s) are not writable changes
+   journal rows left by this probe: 0
+[guard 1 - a unified_sites row outside source_id = 'ancient_nerds'] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 rename: 1 planned row(s) are not ancient_nerds sites
+   journal rows left by this probe: 0
+[guard 5 - a site whose premise has changed since the plan] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 rename: 2 planned row(s) no longer hold the premise the plan derived its value from
+   journal rows left by this probe: 0
+[invariant 3 - a written value that breaks the lane's own invariant] psql exit=3 refused by its own guard=False
+   ERROR:  Nr 7 rename: 1 planned row(s) no longer hold the premise the plan derived its value from
+   journal rows left by this probe: 0
+   !! invariant 3 - a written value that breaks the lane's own invariant: expected psql exit 3 with an ERROR saying 'Nr 7 rename: <n> planned site(s) break the lane invariant after the write' - the guard did not refuse this probe itself
+EXIT=7

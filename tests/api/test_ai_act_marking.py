@@ -217,7 +217,21 @@ def _teaser(card: str = TEASER, description: str = DESCRIPTION) -> dict[str, Any
         checker="teaser-check1-k1-001",
         checked_at="2026-09-26T12:00:00+00:00",
         claims=[{"claim": "megalithic temples on Malta", "support": ["S1"]}],
+        verify={**VERIFIED, "text_sha256": CP.text_sha256(card)},
+        web_facts=[],
     )
+
+
+#: The web verification of a card the checker accepted (lane WB's stage `verify`); its
+#: `text_sha256` is the card's the verifier judged (the builders add it).
+VERIFIED = {
+    "verdict": "VERIFIED",
+    "stage": "verify",
+    "by": "teaser-verify-001",
+    "at": "2026-09-26T13:00:00+00:00",
+    "claims": 3,
+    "unproven": 1,
+}
 
 
 def test_a_teaser_card_is_ai_generated_while_its_provenance_hashes_it():
@@ -262,6 +276,76 @@ def test_a_claim_without_a_sentence_id_is_refused():
     data = copy.deepcopy(_teaser())
     data["check"]["claims"][0]["support"] = []
     with pytest.raises(ValueError, match="names no sentence id"):
+        CP.validate(data)
+
+
+@pytest.mark.parametrize(
+    ("verify", "why"),
+    [
+        ({"verdict": "CONTRADICTED"}, "is not VERIFIED"),
+        ({"verdict": "UNPROVEN"}, "is not VERIFIED"),
+        ({"stage": "verify2"}, "does not follow check.stage"),
+        ({"by": "teaser-check1-k1-001"}, "the verifier is the checker"),
+        ({"unproven": 2}, "beyond the limit"),
+        ({"claims": 1, "unproven": 1}, "beyond the limit"),
+        ({"claims": 0, "unproven": 0}, "not a positive count"),
+        ({"text_sha256": CP.text_sha256(TEASER + " Another.")}, "not the card the provenance"),
+        ({"text_sha256": None}, "not the card the provenance"),
+    ],
+)
+def test_only_a_verified_card_within_the_limit_is_a_teaser_provenance(verify, why):
+    """The web verification (lane WB, owner O2): only VERIFIED is written - no claim contradicted,
+    at most one without a proving quote and never the central one (so never every claim), by an
+    agent other than the checker, at the verification stage that follows the check, of the very
+    card the provenance hashes (a verification of another text proves nothing about this one)."""
+    data = copy.deepcopy(_teaser())
+    data["verify"] = {**data["verify"], **verify}
+    with pytest.raises(ValueError, match=why):
+        CP.validate(data)
+
+
+def _rewritten(web_facts: list[dict[str, Any]], support: list[str]) -> dict[str, Any]:
+    """A card rewritten after a failed verification, checked at `check-v`, verified at `verify2`."""
+    return CP.build(
+        run="wb-2026-09-26",
+        ai_system=AI_SYSTEM,
+        card=TEASER,
+        description=DESCRIPTION,
+        stage="check-v",
+        checker="teaser-check-v-001",
+        checked_at="2026-09-26T14:00:00+00:00",
+        claims=[{"claim": "restored in 1956", "support": support}],
+        verify={
+            **VERIFIED,
+            "stage": "verify2",
+            "by": "teaser-verify2-001",
+            "text_sha256": CP.text_sha256(TEASER),
+        },
+        web_facts=web_facts,
+    )
+
+
+WEB_FACT = {
+    "id": "W1",
+    "url": "https://en.wikipedia.org/wiki/X",
+    "quote": "It was restored in 1956.",
+}
+
+
+def test_a_web_fact_is_recorded_exactly_where_a_claim_of_a_rewrite_cites_it():
+    """A correction from the first verifier's quote: the fact basis records the quote a claim
+    cites - never an uncited one, never a cited one missing, never on a card of the first rounds."""
+    assert _rewritten([WEB_FACT], ["S1", "W1"])["web_facts"] == [WEB_FACT]
+    with pytest.raises(ValueError, match="not exactly the web facts the claims cite"):
+        _rewritten([WEB_FACT], ["S1"])
+    with pytest.raises(ValueError, match="not exactly the web facts the claims cite"):
+        _rewritten([], ["W1"])
+    with pytest.raises(ValueError, match="names an id twice"):
+        _rewritten([WEB_FACT, WEB_FACT], ["W1"])
+    data = copy.deepcopy(_teaser())
+    data["web_facts"] = [WEB_FACT]
+    data["check"]["claims"][0]["support"] = ["W1"]
+    with pytest.raises(ValueError, match="only a rewrite after a failed verification"):
         CP.validate(data)
 
 

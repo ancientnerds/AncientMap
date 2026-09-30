@@ -1,0 +1,57 @@
+{
+ "asked_field_sets": {
+  "coordinates+period_start": 6,
+  "coordinates+period_start+site_type": 11,
+  "coordinates+period_start+site_type+source_url": 2,
+  "period_start": 49,
+  "period_start+site_type": 12
+ },
+ "fields_asked": 126,
+ "flagged": {
+  "coordinates": 0,
+  "period_start": 0,
+  "site_type": 0,
+  "source_url": 0
+ },
+ "flagged_only": {
+  "coordinates": 0,
+  "period_start": 0,
+  "site_type": 0,
+  "source_url": 0
+ },
+ "identity_doubt": 0,
+ "part": "rest",
+ "per_field": {
+  "coordinates": {
+   "CONFIRMED": 61,
+   "MISSING": 19
+  },
+  "period_start": {
+   "MISSING": 80
+  },
+  "site_type": {
+   "CONFIRMED": 55,
+   "MISSING": 25
+  },
+  "source_url": {
+   "CONFIRMED": 78,
+   "MISSING": 2
+  }
+ },
+ "period_name_not_bucket_of_start": 1,
+ "pilot": {
+  "seed": 20260928,
+  "size": 80
+ },
+ "retired_not_classified": 78,
+ "seeds": {
+  "cells": 54,
+  "sites": 46,
+  "sites_not_classified": []
+ },
+ "sites": 80,
+ "sites_asked": 80,
+ "stacked_points": 0,
+ "table_sha256": "7be7543dbf10817ad9ca51a58f65e3618e321149c86e3325997c00a5636abcde",
+ "without": null
+}

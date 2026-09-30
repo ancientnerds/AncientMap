@@ -71,7 +71,7 @@ from mechanical.reversal_3_list import JOURNAL_IDS as REVERSAL_3_JOURNAL_IDS
 from mechanical.wrong_both_list import JOURNAL_IDS as WRONG_BOTH_JOURNAL_IDS
 from pipeline.lyra.site_key import site_key_sql
 from pipeline.normalizers.site_type import CANONICAL_TYPES
-from pipeline.utils.public_sites import SCOPE_STATUSES
+from pipeline.utils.public_sites import RETIRED, SCOPE_STATUSES, is_retired, not_retired
 from pipeline.utils.text import PERIOD_BUCKETS
 
 _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*\Z")
@@ -193,13 +193,16 @@ class SiteInvariant:
     state before the write, which the invariant may never have held (one curated site carried a NULL
     `geom` on 2026-09-26). `probe_column` and `probe_values` let `--probe-guards` prove it: the probe
     writes the first probe value that is neither the cell's old nor its new value into the first
-    planned cell of that column.
+    planned cell of that column. The probe is called `invariant-<probe_name>` - its run stamp's
+    suffix - and `probe_name` is the probe column unless set: two invariants that probe one column
+    (the duplicate hide's three survivor checks, 2026-09-29) name their probes apart.
     """
 
     says: str
     predicate: str
     probe_column: str
     probe_values: tuple[str, ...]
+    probe_name: str = ""
 
     def __post_init__(self) -> None:
         if not _SAYS.match(self.says):
@@ -211,6 +214,13 @@ class SiteInvariant:
                 f"{self.says}: a probe needs its column and three values (one differs from any "
                 "old and new value)"
             )
+        if self.probe_name and not _KEY_PREFIX.match(self.probe_name):
+            raise ValueError(f"{self.says}: {self.probe_name!r} is not a probe name like a-b")
+
+    @property
+    def probe_suffix(self) -> str:
+        """The probe's name, which ends its run stamp: `invariant-<probe_name or column>`."""
+        return f"invariant-{self.probe_name or self.probe_column}"
 
 
 def typed_case(
@@ -270,6 +280,12 @@ def _check_cell_lane(lane: Lane) -> None:
                 f"{lane.name}: a site invariant reads a unified_sites row and probes one of the "
                 f"lane's cells, not {invariant.probe_column!r}"
             )
+    probes = [invariant.probe_suffix for invariant in lane.site_invariants]
+    if len(set(probes)) != len(probes):
+        raise ValueError(
+            f"{lane.name}: two site invariants share one probe name ({', '.join(probes)}) - a "
+            "probe's run stamp would read as the other's; set each one's probe_name"
+        )
 
 
 @dataclass(frozen=True)
@@ -768,6 +784,44 @@ _UNDECIDED_OUT_OF_WINDOW = Residual(
     f"{outside_e3_window(before_o7=True)} AND scope_status IS NULL",
 )
 
+#: A duplicate is retired with the reason `duplicate_of:<survivor id>` (`scope.py`, rule c), and two
+#: curated rows are one site only within 100 m (the scope lane's rule; the owner-case list's 2 km is
+#: `bcases.classify.DUP_MAX_M`). Here, not in `scope.py`: the duplicate hide of HUMAN_ONLY Nr. 7
+#: (below) renders both into its guards, and this module imports no planner.
+DUPLICATE_PREFIX = "duplicate_of:"
+DUPLICATE_METRES = 100
+
+
+def scope_status_counts() -> list[tuple[str, str]]:
+    """The read-back rows every scope lane prints: the curated rows per `scope_status`, NULL too."""
+    return [
+        (
+            f"curated rows with scope_status {status}",
+            "FROM unified_sites WHERE source_id = 'ancient_nerds' AND "
+            + (
+                "scope_status IS NULL"
+                if status == "NULL"
+                else f"scope_status = {sql_literal(status)}"
+            ),
+        )
+        for status in ("NULL", *SCOPE_STATUSES)
+    ]
+
+
+#: The retired duplicates, and those whose survivor is gone from view - read back by every lane
+#: that retires a duplicate.
+RETIRED_DUPLICATES = Residual(
+    "curated rows retired as a duplicate",
+    f"{is_retired()} AND scope_reason LIKE {sql_literal(DUPLICATE_PREFIX + '%')}",
+)
+_DUPLICATE_SURVIVOR_GONE = (
+    "retired duplicates whose survivor is retired or not curated",
+    "FROM unified_sites d WHERE d.source_id = 'ancient_nerds' AND d.scope_status = "
+    "'retired' AND d.scope_reason LIKE 'duplicate_of:%' AND NOT EXISTS (SELECT 1 FROM "
+    "unified_sites s WHERE s.id::text = substring(d.scope_reason from 14 for 36) AND "
+    "s.source_id = 'ancient_nerds' AND s.scope_status IS DISTINCT FROM 'retired')",
+)
+
 #: E4 (owner decision 2026-09-19, migration 0020): flag an out-of-scope site AND hide it
 #: platform-wide - never DELETE it. The lane fills `scope_status` and `scope_reason`, both NULL on
 #: every curated row until now (read on production 2026-09-23), in one transaction, so no site is
@@ -799,21 +853,16 @@ SCOPE = Lane(
     ),
 )
 
+#: A scope decision without its reason - 0 on every read since scope-e4.
+_STATUS_WITHOUT_REASON = (
+    "curated rows with a scope_status but no scope_reason",
+    "FROM unified_sites WHERE source_id = 'ancient_nerds' AND scope_status IS NOT NULL "
+    "AND (scope_reason IS NULL OR scope_reason = '')",
+)
 SCOPE_READBACK = journal_readback(
     SCOPE,
     [
-        *(
-            (
-                f"curated rows with scope_status {status}",
-                "FROM unified_sites WHERE source_id = 'ancient_nerds' AND "
-                + (
-                    "scope_status IS NULL"
-                    if status == "NULL"
-                    else f"scope_status = {sql_literal(status)}"
-                ),
-            )
-            for status in ("NULL", *SCOPE_STATUSES)
-        ),
+        *scope_status_counts(),
         (
             _UNDECIDED_OUT_OF_WINDOW.metric,
             "FROM unified_sites WHERE source_id = 'ancient_nerds' AND "
@@ -825,22 +874,12 @@ SCOPE_READBACK = journal_readback(
             "AND period_end IS NULL AND scope_status IS NULL",
         ),
         (
-            "curated rows retired as a duplicate",
-            "FROM unified_sites WHERE source_id = 'ancient_nerds' AND scope_status = 'retired' "
-            "AND scope_reason LIKE 'duplicate_of:%'",
+            RETIRED_DUPLICATES.metric,
+            "FROM unified_sites WHERE source_id = 'ancient_nerds' AND "
+            + RETIRED_DUPLICATES.predicate,
         ),
-        (
-            "curated rows with a scope_status but no scope_reason",
-            "FROM unified_sites WHERE source_id = 'ancient_nerds' AND scope_status IS NOT NULL "
-            "AND (scope_reason IS NULL OR scope_reason = '')",
-        ),
-        (
-            "retired duplicates whose survivor is retired or not curated",
-            "FROM unified_sites d WHERE d.source_id = 'ancient_nerds' AND d.scope_status = "
-            "'retired' AND d.scope_reason LIKE 'duplicate_of:%' AND NOT EXISTS (SELECT 1 FROM "
-            "unified_sites s WHERE s.id::text = substring(d.scope_reason from 14 for 36) AND "
-            "s.source_id = 'ancient_nerds' AND s.scope_status IS DISTINCT FROM 'retired')",
-        ),
+        _STATUS_WITHOUT_REASON,
+        _DUPLICATE_SURVIVOR_GONE,
     ],
 )
 
@@ -1390,6 +1429,11 @@ _NAME_KEY_DIFFERS = Residual(
     "curated rows whose name_normalized is not the key of their name",
     f"name_normalized IS DISTINCT FROM {site_key_sql('name')}",
 )
+#: A rename's two cells - the name and its match key - as every name lane writes them.
+NAME_CELLS = (
+    Column("name", "character varying", max_chars=500),
+    Column("name_normalized", "character varying", max_chars=500),
+)
 
 #: HUMAN_ONLY B1-N and Nr. 7, decided 2026-09-26 under O9: L5's name pass renames a curated site
 #: only to a sourced name of that very site - an Opus reading whose quote the machine found
@@ -1412,34 +1456,37 @@ NAME_L5 = Lane(
     rehearsal_residual=_NAME_KEY_DIFFERS,
     lock_timeout=LOCK_TIMEOUT,
     statement_timeout=STATEMENT_TIMEOUT,
-    cells=(
-        Column("name", "character varying", max_chars=500),
-        Column("name_normalized", "character varying", max_chars=500),
-    ),
+    cells=NAME_CELLS,
     write_invariant=_NAME_KEY_DIFFERS,
 )
-_NAME_STAMP = sql_literal(NAME_L5.run_stamp)
-#: The name lane's journal checks. A site journals one row (a rename that changes only case or
-#: accents keeps its key, and a cell that does not change is not written) or two (the name and its
-#: key): a key row always has the name row whose key it is, and a name row whose key moved always
-#: has its key row.
-NAME_L5_JOURNAL_METRICS: tuple[tuple[str, str], ...] = (
-    (
-        "journal rows for this run whose key is not the key of the name it wrote",
-        f"FROM remediation_change_log l WHERE l.run_stamp = {_NAME_STAMP} AND "
-        "l.column_name = 'name_normalized' AND NOT EXISTS (SELECT 1 FROM "
-        f"remediation_change_log n WHERE n.run_stamp = {_NAME_STAMP} AND n.row_pk = l.row_pk "
-        f"AND n.column_name = 'name' AND {site_key_sql('n.new_value')} = l.new_value)",
-    ),
-    (
-        "journal rows for this run renaming a site whose key moved without its key row",
-        f"FROM remediation_change_log l WHERE l.run_stamp = {_NAME_STAMP} AND "
-        f"l.column_name = 'name' AND {site_key_sql('l.old_value')} <> "
-        f"{site_key_sql('l.new_value')} AND NOT EXISTS (SELECT 1 FROM remediation_change_log k "
-        f"WHERE k.run_stamp = {_NAME_STAMP} AND k.row_pk = l.row_pk "
-        "AND k.column_name = 'name_normalized')",
-    ),
-)
+
+
+def name_journal_metrics(lane: Lane) -> tuple[tuple[str, str], ...]:
+    """A name lane's journal checks. A site journals one row (a rename that changes only case or
+    accents keeps its key, and a cell that does not change is not written) or two (the name and
+    its key): a key row always has the name row whose key it is, and a name row whose key moved
+    always has its key row."""
+    stamp = sql_literal(lane.run_stamp)
+    return (
+        (
+            "journal rows for this run whose key is not the key of the name it wrote",
+            f"FROM remediation_change_log l WHERE l.run_stamp = {stamp} AND "
+            "l.column_name = 'name_normalized' AND NOT EXISTS (SELECT 1 FROM "
+            f"remediation_change_log n WHERE n.run_stamp = {stamp} AND n.row_pk = l.row_pk "
+            f"AND n.column_name = 'name' AND {site_key_sql('n.new_value')} = l.new_value)",
+        ),
+        (
+            "journal rows for this run renaming a site whose key moved without its key row",
+            f"FROM remediation_change_log l WHERE l.run_stamp = {stamp} AND "
+            f"l.column_name = 'name' AND {site_key_sql('l.old_value')} <> "
+            f"{site_key_sql('l.new_value')} AND NOT EXISTS (SELECT 1 FROM remediation_change_log k "
+            f"WHERE k.run_stamp = {stamp} AND k.row_pk = l.row_pk "
+            "AND k.column_name = 'name_normalized')",
+        ),
+    )
+
+
+NAME_L5_JOURNAL_METRICS = name_journal_metrics(NAME_L5)
 NAME_L5_READBACK = journal_readback(
     NAME_L5,
     [
@@ -1515,18 +1562,7 @@ def scope_review_readback(lane: Lane) -> str:
     return journal_readback(
         lane,
         [
-            *(
-                (
-                    f"curated rows with scope_status {status}",
-                    _CURATED_ROWS
-                    + (
-                        "scope_status IS NULL"
-                        if status == "NULL"
-                        else f"scope_status = {sql_literal(status)}"
-                    ),
-                )
-                for status in ("NULL", *SCOPE_STATUSES)
-            ),
+            *scope_status_counts(),
             (
                 _UNDECIDED_OUT_OF_WINDOW_O7.metric,
                 _CURATED_ROWS + _UNDECIDED_OUT_OF_WINDOW_O7.predicate,
@@ -1543,11 +1579,7 @@ def scope_review_readback(lane: Lane) -> str:
                 + "scope_status = 'retired' AND scope_reason LIKE 'E3: period_start%' AND "
                 + in_oceania_sql(),
             ),
-            (
-                "curated rows with a scope_status but no scope_reason",
-                _CURATED_ROWS
-                + "scope_status IS NOT NULL AND (scope_reason IS NULL OR scope_reason = '')",
-            ),
+            _STATUS_WITHOUT_REASON,
         ],
     )
 
@@ -1672,6 +1704,190 @@ def fields_readback(lane: Lane) -> str:
             ),
         ],
     )
+
+
+# ----------------------------------------------- HUMAN_ONLY Nr. 7: Chiapa de Corzo (2026-09-29)
+#: HUMAN_ONLY Nr. 7, decided 2026-09-26 under O9 (`output/remediation/HUMAN_ONLY_DECISIONS_2026-09-26.md`):
+#: "Chiapa de Corzo" (24aa135d, no content link, no image, no item) and "Zoque Culture
+#: Archaeological Zone" (ed186ea9, Q4384315) are one site, 7.4 m apart. The empty row is hidden as
+#: `duplicate_of:<the kept row>`, then the kept row takes the name - two lanes, in that order,
+#: both planned by `mechanical/chiapa.py`. L5's `plan` ran before the hide existed and skipped the
+#: rename (`duplicate-not-hidden-yet`), and `name-l5`'s stamp is applied: the rename needs a stamp
+#: of its own. Two lanes and not one: each is the shape an applied lane already is - the hide
+#: scope-e4's two scope cells, the rename name-l5's two name cells and invariant - with its
+#: probes and read-backs, and the order is a guard (the rename's premise, below), not a sort order.
+
+
+def sphere_metres(a: str, b: str) -> str:
+    """SQL: the metres between the points of the rows `a` and `b` (`lat`/`lon`, NOT NULL) on
+    PostGIS's sphere - within centimetres of the scope lane's spheroid at 100 m (read 2026-09-29
+    for the Chiapa pair: 7.4347 m on the sphere, 7.4375 m on the spheroid). Plain calls and no
+    `::geography`, so the guards that read it run in SQLite too, where the tests evaluate them."""
+    return f"ST_DistanceSphere(ST_MakePoint({a}.lon, {a}.lat), ST_MakePoint({b}.lon, {b}.lat))"
+
+
+#: The written site `u` names the curated row `s` as its survivor (`duplicate_of:<s.id>`).
+_NAMES_SURVIVOR = (
+    f"u.scope_reason = {sql_literal(DUPLICATE_PREFIX)} || CAST(s.id AS text) "
+    "AND s.source_id = 'ancient_nerds'"
+)
+_SURVIVOR_FAR = f"{sphere_metres('s', 'u')} > {DUPLICATE_METRES}"
+
+#: A retired duplicate's survivor is a visible curated row within 100 m - three checks after the
+#: write, one per way it can fail, disjoint, so each probe is refused by its own. Each probe writes
+#: `duplicate_of:<a row of that kind>` (read 2026-09-29): an id no row has and a GeoNames row; three
+#: duplicates scope-e4 retired; three visible curated sites 364 km to 11,400 km away.
+DUPLICATE_SURVIVOR_INVARIANTS = (
+    SiteInvariant(
+        says="planned site(s) name no curated site as their survivor",
+        predicate=f"NOT EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR})",
+        probe_column="scope_reason",
+        probe_values=(
+            f"{DUPLICATE_PREFIX}00000000-0000-0000-0000-000000000000",
+            f"{DUPLICATE_PREFIX}8db5555a-a9a3-417b-944c-6ec0c04de0db",  # GeoNames "Chiapa de Corzo"
+            "a reason that names no survivor",
+        ),
+        probe_name="survivor-not-curated",
+    ),
+    SiteInvariant(
+        says="planned site(s) name a retired site as their survivor",
+        predicate=(
+            f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} AND {is_retired('s')})"
+        ),
+        probe_column="scope_reason",
+        probe_values=(
+            f"{DUPLICATE_PREFIX}04d8ce82-4fa3-4e48-88b7-bb41b354260c",  # Olympos Ruins
+            f"{DUPLICATE_PREFIX}07fb4e2f-26e5-4720-a949-9c28d4712e11",  # Templo Romano Évora
+            f"{DUPLICATE_PREFIX}13c3f25f-3887-49c1-9492-cf7e512e5782",  # Alba Fucens
+        ),
+        probe_name="survivor-retired",
+    ),
+    SiteInvariant(
+        says=f"planned site(s) name a survivor further than {DUPLICATE_METRES} m",
+        predicate=(
+            f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} AND "
+            f"{not_retired('s')} AND {_SURVIVOR_FAR})"
+        ),
+        probe_column="scope_reason",
+        probe_values=(
+            f"{DUPLICATE_PREFIX}30d3fb78-6b80-42f9-87f8-7616e63bec4f",  # Tikal
+            f"{DUPLICATE_PREFIX}74145e9b-76a6-48de-a902-08ecb2f1f7bb",  # Achladia
+            f"{DUPLICATE_PREFIX}6aa4c8de-3794-42fe-b68e-6b6ab77bd8ed",  # Delphinion
+        ),
+        probe_name="survivor-far",
+    ),
+)
+
+#: What the hide rests on: the row is empty - no content link, no image - so hiding it takes
+#: nothing out of view. Read per site as the database prints it; guard 5 refuses a row that gained
+#: either since the plan read it.
+EMPTY_ROW_PREMISE_SQL = (
+    "'content links ' || CAST((SELECT count(*) FROM site_content_links c WHERE c.site_id = u.id) "
+    "AS text) || ', images ' || CAST((SELECT count(*) FROM wiki_images w WHERE w.site_id = u.id) "
+    "AS text)"
+)
+EMPTY_ROW_PREMISE = "content links 0, images 0"
+
+#: The hide: the empty row's `scope_status` and `scope_reason`, filled from NULL in one transaction
+#: like scope-e4's, and the only status it writes is `retired` (guard 4).
+CHIAPA_HIDE = Lane(
+    name="chiapa-hide",
+    key_prefix="chiapa-hide",
+    run_stamp="2026-09-29_mechanical-chiapa-hide",
+    test_id="Nr7/duplicate-hide",
+    confidence="authoritative",
+    label="Nr 7 duplicate hide",
+    plan_table="_chiapa_hide_plan",
+    out_dir_name="mechanical_chiapa/hide",
+    post_commit_residual=RETIRED_DUPLICATES,
+    rehearsal_residual=RETIRED_DUPLICATES,
+    premise_sql=EMPTY_ROW_PREMISE_SQL,
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+    cells=(
+        Column("scope_status", "text", allowed_new_values=(RETIRED,), fills_null=True),
+        Column("scope_reason", "text", fills_null=True),
+    ),
+    site_invariants=DUPLICATE_SURVIVOR_INVARIANTS,
+)
+
+#: The curated rows retired as a duplicate of the row `u`.
+_RETIRED_ONTO = (
+    f"FROM unified_sites d WHERE d.source_id = 'ancient_nerds' AND {is_retired('d')} "
+    f"AND d.scope_reason = {sql_literal(DUPLICATE_PREFIX)} || CAST(u.id AS text)"
+)
+#: What the rename rests on: the duplicates retired onto the renamed row, counted and named by the
+#: highest id - one, the hidden row, once the hide has landed with exactly its reason. The rename's
+#: plan carries that state (`duplicates_retired_onto`), so guard 5 refuses the rename, and its
+#: reversal, while the hide has not landed (or was undone), and refuses it too if another row was
+#: retired onto the kept one since.
+DUPLICATES_RETIRED_ONTO_SQL = (
+    f"'duplicates retired onto it: ' || CAST((SELECT count(*) {_RETIRED_ONTO}) AS text) "
+    f"|| ', highest id ' || coalesce((SELECT max(CAST(d.id AS text)) {_RETIRED_ONTO}), 'none')"
+)
+
+
+def duplicates_retired_onto(ids: Sequence[str]) -> str:
+    """`DUPLICATES_RETIRED_ONTO_SQL` as the database prints it for a row onto which exactly `ids`
+    are retired - the premise a rename planned before its hide carries. The tests evaluate the SQL
+    in SQLite and hold the two to each other."""
+    return f"duplicates retired onto it: {len(ids)}, highest id {max(ids) if ids else 'none'}"
+
+
+#: The rename: the kept row's name and its match key, as name-l5 writes them (`NAME_CELLS`, the key
+#: computed by Postgres, `write_invariant`), under a stamp of its own and conditioned on the hide.
+CHIAPA_NAME = Lane(
+    name="chiapa-name",
+    key_prefix="chiapa-name",
+    run_stamp="2026-09-29_mechanical-chiapa-name",
+    test_id="Nr7/rename",
+    confidence="authoritative",
+    label="Nr 7 rename",
+    plan_table="_chiapa_name_plan",
+    out_dir_name="mechanical_chiapa/name",
+    post_commit_residual=_NAME_KEY_DIFFERS,
+    rehearsal_residual=_NAME_KEY_DIFFERS,
+    premise_sql=DUPLICATES_RETIRED_ONTO_SQL,
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+    cells=NAME_CELLS,
+    write_invariant=_NAME_KEY_DIFFERS,
+)
+
+_RETIRED_DUPLICATE_ROWS = (RETIRED_DUPLICATES.metric, _CURATED_ROWS + RETIRED_DUPLICATES.predicate)
+CHIAPA_HIDE_READBACK = journal_readback(
+    CHIAPA_HIDE,
+    [
+        *scope_status_counts(),
+        _RETIRED_DUPLICATE_ROWS,
+        _STATUS_WITHOUT_REASON,
+        _DUPLICATE_SURVIVOR_GONE,
+        (
+            f"retired duplicates whose survivor lies further than {DUPLICATE_METRES} m",
+            f"FROM unified_sites u WHERE u.source_id = 'ancient_nerds' AND {is_retired('u')} "
+            f"AND EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} AND "
+            f"{_SURVIVOR_FAR})",
+        ),
+    ],
+)
+CHIAPA_NAME_READBACK = journal_readback(
+    CHIAPA_NAME,
+    [
+        (_NAME_KEY_DIFFERS.metric, _CURATED_ROWS + _NAME_KEY_DIFFERS.predicate),
+        *name_journal_metrics(CHIAPA_NAME),
+        (
+            "visible curated rows sharing their name key with another visible curated row",
+            f"FROM unified_sites a WHERE a.source_id = 'ancient_nerds' AND {not_retired('a')} "
+            "AND EXISTS (SELECT 1 FROM unified_sites b WHERE b.source_id = 'ancient_nerds' AND "
+            f"{not_retired('b')} AND b.id <> a.id AND b.name_normalized = a.name_normalized)",
+        ),
+        _RETIRED_DUPLICATE_ROWS,
+    ],
+)
+LANES[CHIAPA_HIDE.name] = CHIAPA_HIDE
+LANES[CHIAPA_NAME.name] = CHIAPA_NAME
+LANE_READBACKS[CHIAPA_HIDE.name] = CHIAPA_HIDE_READBACK
+LANE_READBACKS[CHIAPA_NAME.name] = CHIAPA_NAME_READBACK
 
 
 def resolve_lane(name: str) -> Lane:

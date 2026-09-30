@@ -1,0 +1,3 @@
+$ apply.py --lane chiapa-name --emit   (2026-09-29T19:47:10Z) - before the hide has landed
+INFO mechanical.apply: wrote C:\PythonProjects\AncientMap\.claude\worktrees\chiapa\output\remediation\mechanical_chiapa\name\APPLY.sql (2 rows); ROLLBACK.sql is older than APPLY.sql: 1790696983.4363952 vs 1790711231.9881103
+EXIT=0

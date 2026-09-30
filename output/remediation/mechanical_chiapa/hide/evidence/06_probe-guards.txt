@@ -1,0 +1,29 @@
+$ apply.py --lane chiapa-hide --probe-guards   (2026-09-29T19:46:37Z)
+[guard 3 - a planned old value the row does not hold] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 duplicate hide: 1 planned row(s) no longer hold the planned old value
+   journal rows left by this probe: 0
+[guard 2 - a planned cell that is not a change] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 duplicate hide: 1 planned row(s) are not writable changes
+   journal rows left by this probe: 0
+[guard 2 - a cell in a column the lane does not own] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 duplicate hide: 1 planned row(s) are not writable changes
+   journal rows left by this probe: 0
+[guard 1 - a unified_sites row outside source_id = 'ancient_nerds'] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 duplicate hide: 1 planned row(s) are not ancient_nerds sites
+   journal rows left by this probe: 0
+[guard 4 - a planned value the lane does not own] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 duplicate hide: 1 planned row(s) write a value this lane does not own
+   journal rows left by this probe: 0
+[guard 5 - a site whose premise has changed since the plan] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 duplicate hide: 1 planned row(s) no longer hold the premise the plan derived its value from
+   journal rows left by this probe: 0
+[site invariant - planned site(s) name no curated site as their survivor] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 duplicate hide: 1 planned site(s) name no curated site as their survivor
+   journal rows left by this probe: 0
+[site invariant - planned site(s) name a retired site as their survivor] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 duplicate hide: 1 planned site(s) name a retired site as their survivor
+   journal rows left by this probe: 0
+[site invariant - planned site(s) name a survivor further than 100 m] psql exit=3 refused by its own guard=True
+   ERROR:  Nr 7 duplicate hide: 1 planned site(s) name a survivor further than 100 m
+   journal rows left by this probe: 0
+EXIT=0

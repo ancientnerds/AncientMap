@@ -1,0 +1,7 @@
+$ apply.py --lane chiapa-name --interests   (2026-09-29T19:47:08Z) - before the hide has landed
+column          rows  value
+name               1  Chiapa de Corzo
+name               1  Zoque Culture Archaeological Zone
+name_normalized    1  chiapa de corzo
+name_normalized    1  zoque culture archaeological zone
+EXIT=0

@@ -1,0 +1,21 @@
+$ apply.py --lane chiapa-hide --rehearse   (2026-09-29T19:46:28Z)
+INFO mechanical.apply: wrote C:\PythonProjects\AncientMap\.claude\worktrees\chiapa\output\remediation\mechanical_chiapa\hide\REHEARSAL.sql (COMMIT -> ROLLBACK)
+NOTICE:  Nr 7 duplicate hide: 2 of 2 planned cell(s) changed and journalled over 1 curated site(s)
+
+BEGIN
+SET
+SET
+CREATE TABLE
+INSERT 0 2
+DO
+ROLLBACK
+                  metric                  | value 
+------------------------------------------+-------
+ journal rows for this run stamp          | 0
+ curated rows retired as a duplicate      | 19
+ curated sites                            | 5004
+ temp table _chiapa_hide_plan left behind | 0
+(4 rows)
+
+
+EXIT=0

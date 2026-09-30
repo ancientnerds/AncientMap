@@ -3,8 +3,10 @@
 `card_stats.card_description` is the up-to-200-character text on a site's card: the SiteCard, the
 Forgotten Worlds game, search previews and the voice-over of the site's short video. Since the owner's
 decisions of 2026-09-26 (`output/remediation/FINISH_PLAN_2026-09-26.md`, binding) every curated card
-is a **teaser**, written by one Opus agent from the site's sourced description and checked claim by
-claim by another:
+is a **teaser**, written by one Opus agent from the site's sourced description, checked claim by
+claim against that description by another, and **verified claim by claim against pages on the web**
+by a third (section 2.1) - a card faithful to a description sentence the web contradicts is still
+wrong when it is read aloud:
 
 - O2: "die kartentexte für das game waren eigentlich schön. sie sollten die site teasern und mystisch
   sein. diesen text wollte ich auch für die Shorts. sie müssen alle ungefähr gleich lang sein aber
@@ -14,8 +16,9 @@ claim by another:
 - O10: "ja wie bisher" - the AI disclosure: `data-card-ai` on the SiteCard, the AI footnote on the
   site page, the AI note in the shorts description.
 
-This file is the contract (sections 1-3), the measured population (4), the runbook (5), the reasons
-behind the write path (6) and what the merge of the parallel lanes has to do (7). It supersedes the
+This file is the contract (sections 1-3; the web verification 2.1, the description defects it finds
+2.2), the measured population and costs (4), the runbook (5), the reasons behind the write path (6)
+and what the merge of the parallel lanes has to do (7). It supersedes the
 extractive contract of 2026-09-23 (section 8). Code: `scripts/remediation/teaser/` (contract,
 prompts, answers, the run CLI), `scripts/remediation/mechanical/teaser.py` (the write plan),
 `pipeline/utils/card_provenance.py` (the provenance and its readers). Tests:
@@ -40,7 +43,21 @@ Every factual claim of a card comes from the site's **fact basis** and from noth
     `desc_sha256` is the sha256 of the live description (lanes WA and Phase 4);
   - a sentence-checked March text: `raw_data._description_check.desc_sha256` is the sha256 of the
     live description (lane WC, owner decision O5; such a text keeps lane L's provenance or none);
-- the site's **name** and **country**.
+- the site's **name** and **country**;
+- in the one rewrite after a failed web verification (2.1) only: the **web facts** (`W1`, `W2`, ...,
+  `contract.WebFact`) - each quote of a claim the first verifier found CONTRADICTED that the machine
+  found on its page (proven), from a page lane WC's source rule admits by code
+  (`wc.answers.url_problem`: not ancientnerds.com, no AI aggregator, no Wikipedia mirror, no blocked
+  domain, no `utm_` tracking; a refused page is never proven, 2.1), and **never of the central
+  claim** (the verifier's first - what the site is, and where: a page that says the site is
+  something else may describe a namesake, so the identity is never corrected from the web;
+  `run.web_facts`). The rewrite and its check record the web facts they were shown, and the
+  provenance takes them from those records (`run.recorded_web_facts`, which refuses a set the
+  first verification no longer offers as it was). A web fact counts only where its page is a reputable
+  source - Wikipedia in any language, UNESCO, a national heritage register, a museum, a university,
+  an excavation report, a scholarly publication or an established reference work
+  (`prompts.REPUTABLE`, lane WC's rule 2) - which the checker of that rewrite decides; the provenance
+  records every web fact the card rests on (3.1).
 
 Lane L alone (the unverified March text) and a text without provenance are no basis: those sites
 are listed `not-final` and wait for lane WC. **A site without a published description gets no card:
@@ -78,9 +95,9 @@ the Phase-4 assembler's one spoken edit (`phase4.assemble.spoken`: `c.`/`ca.` be
 | sentences | one or two (`split_sentences`); at most one `?`, and the question's sentence at most 60 characters |
 | characters | no bracket `()[]{}<>` (citation markers included), no `!`, `#` or `*`; no Unicode `So` (emoji, pictographs, (c), degree), `Sm` (math symbols and most arrows: `+ = \| ~ × ± →`), `No` (superscripts, fractions), `Cs`, `Co`, `Cn`, no zero-width joiner or variation selector |
 | circa | no bare `c.`/`ca.` left over |
-| numerals | every numeral of the card is a numeral of the fact basis (name + description without markers), read by `phase4.scope4.numerals` - the numeral reading of `scope4.ungrounded_card` (digits with comma thousands and a decimal part, compared as values: `3,701` = `3701`). `ungrounded_card` itself is not called because it reads only the first 500 characters of its input (the March generator's); the basis here is the whole description |
+| numerals | every numeral of the card is a numeral of the fact basis (name + description without markers; in the rewrite after a failed verification also the web facts' quotes), read by `phase4.scope4.numerals` - the numeral reading of `scope4.ungrounded_card` (digits with comma thousands and a decimal part, compared as values: `3,701` = `3701`). `ungrounded_card` itself is not called because it reads only the first 500 characters of its input (the March generator's); the basis here is the whole description |
 | name | the card contains one of the site's **name forms** (1.4) |
-| shorts | every glyph is in the brand font and every caption word fits the frame (`phase4.verify4.card_fit`, `MAX_CAPTION_PX`: V10's own measurement) |
+| shorts | every glyph is in the brand font, and every caption word fits the frame (1,000 px, `MAX_CAPTION_PX`) **as the short draws it** (`phase4.verify4.card_fit`'s `drawn_px`: `shorts_render.caption_px` at the size the word is drawn, as the short's own audit S3 measures it; Phase 4's V10, unchanged, applies the same measurement at 92 px and is therefore stricter). The short draws a word at 92 px (`CAPTION_SIZE`); a word wider than the frame there - a one-word or hyphenated name: `Saint-Pierre-aux-Nonnains` is 1,407 px in Orbitron 700 - is drawn at the largest integer size at which it fits (`shorts_render.word_face`: `Saint-Pierre-aux-Nonnains` at 65 px), never below 52 px (`CAPTION_MIN_SIZE`, the size of the site's name in its smallest layout). Only a word wider than the frame even at 52 px (about 1,760 px at 92) is refused, with its width and that floor. Since 2026-09-29; until then every word wider than the frame at 92 px was refused, and a site whose name is such a word could get no card (7 writer questions of runs wb-ws-2026-09-27-01, -02 and -04 stalled on it). No prompt states this rule (`check-answer` shows the problem), so the change moved no prompt's sha256: all 4,212 questions exported by runs wb-ws-2026-09-27-01 to -06 rebuild with their exported sha256 (measured 2026-09-29) |
 
 What the code cannot see - a claim the description does not make, a number in words, a superlative,
 "no one knows", the tone, whether the card is about this site - is the checker's (2).
@@ -134,26 +151,164 @@ with a reason is refused, and so is a FAIL without a reason.
 A card that fails (mechanically or at the checker) is **rewritten** by a new writer whose prompt
 carries every earlier card and why it failed, and checked by a **new** checker - up to two rewrites
 (stages `write`/`check`, `rewrite1`/`check1`, `rewrite2`/`check2`). **After the second failed rewrite
-the site gets no card: it is cleared.**
+the site gets no card: it is cleared** (`failed-after-two-rewrites`).
+
+### 2.1 The web verification (every accepted card)
+
+The checker proves a card faithful to its description; it cannot see a description that is wrong.
+The two pilots showed the gap: every card was faithful, and 3 of 40 repeated a description sentence
+the web contradicts (Concangis: an aqueduct and latrines where RIB 1049 names a water supply and a
+bath-building; Diocletian's Palace: the sphinxes' pharaoh; Syberg: the failed siege in 776, not two
+years after 775 - AUDIT_LOG, WB pilots 1 and 2). A card read aloud in a short must not repeat a
+contradicted claim (O2: "natürlich müssen sie inhaltlich stimmen"), so **every card a checker
+accepted is verified on the web before it can be written**:
+
+- **`verify`** - a **new** Opus agent, the pilot's web judge applied to every card: the same prompt
+  (`prompts.judge_prompt`: only name, country and card, never the description; the central claim
+  listed first; told which hosts refuse automated readers; never ancientnerds.com), the same answer
+  shape (`answers.parse_judge`: every claim SUPPORTED / CONTRADICTED / UNVERIFIABLE with a URL and a
+  verbatim quote of at least 20 characters) and the same machine quote check on pages the import
+  fetches itself (`opus_audit/quotes.py`, `run.prove_claims`, the lanes' User-Agent, no personal
+  data). 5 cards per batch (`JUDGE_BATCH_SIZE`).
+- **Every claim, not only the central one**: a verifier's answer lists at least as many claims as
+  the check that accepted the card (`run.claims_floor`; `check-answer` tells the verifier the number
+  and nothing else, the import refuses a shorter answer). A verifier that listed only the central
+  claim, SUPPORTED, would otherwise VERIFY a card whose other claims nobody researched - and the
+  mass run has no judge of its own (5.3). The pilot judge is held to the same floor.
+- **A proof comes only from a page lane WC's source rule admits** (`wc.answers.url_problem`, the rule
+  of the web facts, 1.1): a quote on this project's site, an AI aggregator (`aroundus.com`,
+  `grokipedia.com`, ...), a Wikipedia mirror (`wikiwand`, `dbpedia`, ...), a blocked domain or a URL
+  with `utm_` tracking is never fetched and never proves anything (`quote_outcome`
+  `source refused: <why>`), because such a page may repeat the very text under test - this project's
+  card or Wikipedia's wrong sentence - which would make the proof circular. The judge prompt says
+  so. A CONTRADICTED claim cited from such a page still counts as a contradiction (never proven).
+- **The verdict of a card** (`run.card_verification`), from its judged claims - a claim is
+  *proven* when it is SUPPORTED and the machine found its quote on an admitted page:
+  - **CONTRADICTED** - at least one claim CONTRADICTED, with a proving quote or without one (a page
+    that refused the machine, a PDF, a mis-copied quote): a contradiction is never waved through as
+    merely unproven;
+  - **VERIFIED** - no contradiction, **at most one claim without a proving quote**
+    (`card_provenance.MAX_UNPROVEN_CLAIMS = 1`), and **never the central claim** - the verifier's
+    first, which the judge prompt asks to be what kind of place the site is and where (the claim
+    without which the card would be about another place);
+  - **UNPROVEN** - anything else (two or more claims without a proving quote, or the central one).
+
+  Why this limit: an unproven claim is not a wrong one (the checker proved the description says
+  it), but it is a claim no page settled. After the User-Agent fix pilot 2 measured 0 unproven of 122
+  claims (pilot 1's 99 were the 403 bug), so the allowance exists for the one page that refuses the
+  machine (a heritage register's 403, an unreadable PDF) on a card whose other claims are proven:
+  at ~6 claims a card, one is at most a sixth of it. The central claim is never allowed to go
+  unproven, because a card whose identity no page confirms may be about a namesake - a class the
+  stage-1 measurement of 2026-09-25 found again and again (points on the nearest village or a
+  namesake, images of another site; FINISH_PLAN section 2). The aggregate stays measured: every
+  `OUTCOMES.md` prints the share of unproven claims of its accepted cards, and the pilot gate holds
+  it to 10 % (5.2).
+- **`rewrite-v`** - a card not VERIFIED gets **one** rewrite by a new writer
+  (`prompts.verify_rewrite_prompt`): the card, every CONTRADICTED claim with its page, quote and
+  whether the machine found the quote, every claim the verifier could not prove, and the web facts
+  (1.1). The writer drops every contradicted claim or corrects it - **a correction only with a fact
+  a sentence of the description or a web fact states** (when in doubt, drop); **what the site is,
+  and where, is never corrected from the web** (no web fact is ever offered for it): a contradicted
+  central claim is said only as the description says it - `verify2` decides, and the site clears if
+  the web contradicts it again - or dropped; the writer keeps at most one unproven claim and never
+  the central one, and names for each contradicted claim the description
+  sentence that states it (`repeats`: `S3`, or `null` when none does - the input of 2.2). The
+  answer is `{"card", "basis", "repeats"}` (`answers.parse_verify_writer`: one entry per
+  contradicted claim, each a sentence id of the description or `null`; the basis may name `W1`).
+  The card passes the mechanical checks (1.3) against the description plus its web facts.
+- **`check-v`** - the ordinary checker (a new agent), on the description plus the web facts: a claim
+  may rest on a web fact only if its page is reputable (1.1), else its support is `[]`; a card that
+  follows a web fact saying the site is something else, or somewhere else, than the description
+  says is `this_site: false` (the page may be about a namesake).
+- **`verify2`** - a **new** verifier, as `verify`.
+- A card VERIFIED at `verify2` is accepted; the provenance records the web facts its check cites. A
+  card still not VERIFIED clears the site: **`contradicted-after-verify`** (still contradicted) or
+  **`unproven-after-verify`**; a rewrite that fails the mechanical checks or `check-v` never reaches
+  `verify2` and clears the site as **`failed-after-verify-rewrite`**. There is no second rewrite.
+
+Only a VERIFIED card is ever written (5.4). The stage order of a run is **`write`, `check`,
+`rewrite1`, `check1`, `rewrite2`, `check2`, `verify`, `rewrite-v`, `check-v`, `verify2`**: the
+verification follows every check round, so `verify` is exported once for every card any checker
+accepted.
+
+**The data ties every judgement to its card**, not the order the stages are run in: every check and
+verification records the card it judged, and a site's state counts it only for the card of the
+writer record it follows (`run.judging`: else `RunError`, "STAGE-X judged another card than STAGE-Y
+holds"). An import that would record another card under a later stage's judgement - a stage
+imported again with other answers after a later stage was imported, for example after deleting a
+valid answer and having it answered again - is refused before it writes anything
+(`run.import_stage`); the earlier record's `written` is the answer the later stages judged. The
+provenance repeats the tie: `verify.text_sha256` is the sha256 of the text the verifier judged, and
+`card_provenance.validate` refuses it unless it is the card's `text_sha256` (3.1).
+
+### 2.2 The description defects (`DESCRIPTION_DEFECTS.jsonl`)
+
+`run.py outcomes` writes, per run, one line per contradicted claim (proven or not) that repeats the
+site's description (`run.description_defects`): site id and name, the description's basis and
+sha256, the verifier's `stage`, the claim, the verifier's contradicting `url` and `quote`, whether
+the machine found the quote (`proven`, `quote_outcome`), the `verifier`, and where in the
+description the claim sits:
+
+- **the first verifier's** (`stage: "verify"`): each claim the rewrite's writer mapped to a sentence
+  (`repeats`) - `sentence` n and `sentence_text`, `candidates` that one id, `mapped_by` the writer. A
+  claim mapped to no sentence (`null`) is the card's own departure - a lane-WB fault, visible in
+  `OUTCOMES.jsonl` - and no description defect;
+- **the second verifier's** (`stage: "verify2"`): each contradicted claim of a card `check-v`
+  accepted. No writer sees these (the site is cleared), so `sentence`, `sentence_text` and
+  `mapped_by` are `null`, and `candidates` lists every description sentence the accepting `check-v`
+  cited (the claims of checker and verifier are worded apart, so the machine cannot pair them): the
+  repair reads those sentences and finds the one the web contradicts. A card whose `check-v` claims
+  rest on web facts alone says nothing of the description, and its contradiction is no defect.
+
+Every contradiction also stays in `OUTCOMES.jsonl` (`verifications`) and in `OUTCOMES.md`'s section
+"Every contradiction the verifiers found".
+
+**Who repairs them**: the lane whose text it is - `owner_lane` `WA` for a Phase-4 text (basis
+W/S/T/R, lane WA's scope-v3 descriptions and the Phase-4 texts before it), `WC` for a
+sentence-checked March text (basis `WC`) - by lane WC's method (the sentence checked against a
+quoted source and kept, trimmed or dropped, `docs/procedures/SENTENCE_CHECK.md`). Until that lane
+runs a repair step for them, the files are the list - both kinds of line, a `verify2` line with its
+candidate sentences instead of one: each run's count goes into AUDIT_LOG with the run. A repaired
+description changes its sha256, so the site's card turns stale (3.1) and the next `select` asks the
+site again.
 
 **Independence is a process rule, kept by whoever runs the batches**: every batch of every stage -
 and of the pilot judge - gets a **new** agent, and the brief (`run.py brief`) tells an agent that
 answered any other batch of lane WB to stop. The import cannot see an agent: `answered_by` is the
 batch's name (`teaser-<batch_id>`, and every batch id carries its stage), so its refusal of a checker
-or judge whose name wrote or checked the site before catches only a reused or mistyped name - one
-agent reused under two batch names goes undetected by code.
+or verifier whose name wrote, checked or verified the site before (a verifier never wrote or checked
+its card; `verify2` is never `verify`'s agent), and of a pilot judge whose name answered any question
+of the run, catches only a reused or mistyped name - one agent reused under two batch names goes
+undetected by code. The provenance repeats the one check it can make itself: its verifier is not its
+checker.
 
 ## 3. Storage and display
 
 ### 3.1 The provenance: `unified_sites.raw_data._card_provenance`
 
 ```json
-{"v": 1, "kind": "teaser", "lane": "WB", "ai": "generated",
+{"v": 2, "kind": "teaser", "lane": "WB", "ai": "generated",
  "ai_system": "Claude Opus (Anthropic): ..., an-sites-remediation-2026-09", "run": "<run>",
  "text_sha256": "<sha256 of the card>", "desc_sha256": "<sha256 of the description it was written from>",
- "check": {"verdict": "PASS", "stage": "check|check1|check2", "by": "teaser-check-007",
-           "at": "<answered_at>", "claims": [{"claim": "...", "support": ["S2"]}]}}
+ "check": {"verdict": "PASS", "stage": "check|check1|check2|check-v", "by": "teaser-check-007",
+           "at": "<answered_at>", "claims": [{"claim": "...", "support": ["S2", "W1"]}]},
+ "verify": {"verdict": "VERIFIED", "stage": "verify|verify2", "by": "teaser-verify-031",
+            "at": "<answered_at>", "claims": 6, "unproven": 0,
+            "text_sha256": "<sha256 of the text the verifier judged: the card's>"},
+ "web_facts": [{"id": "W1", "url": "https://...", "quote": "..."}]}
 ```
+
+Version 2 since the web verification (2026-09-26; no version 1 was ever written - read-only count
+that evening: 0 teaser provenances in production). `verify` is the verifier (stage, agent, time),
+its verdict - `VERIFIED` is the only one written - the counts of its claims and of those without a
+proving quote (at most 1, and never all: the central claim is proven) and the sha256 of the text it
+judged, which must be the card's `text_sha256` (a verification of another text proves nothing about
+this card, 2.1); `verify2` belongs to a `check-v` check and `verify` to every other, and the
+verifier is never the checker.
+`web_facts` is `[]` except on a card rewritten after a failed verification, and then holds exactly
+the web facts its check's claims cite (`W1` in a claim's support) - the card's fact basis beyond the
+description. The journal evidence of the write carries the rest: each judged claim with its page
+(5.4).
 
 Its own key, because `_description_provenance` is replaced whole whenever a description is rewritten
 and a card outlives that; the leading underscore keeps it out of the popup's raw-data panel. Shape,
@@ -208,16 +363,20 @@ sentence checks, 0 teaser provenances.
 | sentence checks (`_description_check`) / teaser provenances | 0 / 0 |
 
 **Batches** (15 sites per writer batch, `BATCH_SIZE`; a checker batch is the passing cards of one
-writer batch; 5 cards per judge batch):
+writer batch; **one verifier batch per 5 cards**, `JUDGE_BATCH_SIZE`, as the pilot judge's):
 
-| run | sites | write | check | rewrites |
-| --- | --- | --- | --- | --- |
-| pilot | 20 | 2 | 2 | as needed |
-| the 989 candidates of today | 989 | 66 | <= 66 | ~13 per round at 20 % failing |
-| every non-retired curated site (upper bound after WA/WC) | 4,926 | 329 | <= 329 | ~66 per round at 20 % failing |
+| run | sites | write | check | rewrites | verify | rewrite-v / check-v | verify2 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| pilot | 20 | 2 | 2 | as needed | 4 | 1 / 1 | 1 |
+| the 989 candidates of today | 989 | 66 | <= 66 | ~13 per round at 20 % failing | <= 198 | ~5 / ~5 | ~15 |
+| every non-retired curated site (upper bound after WA/WC) | 4,926 | 329 | <= 329 | ~66 per round at 20 % failing | <= 986 | ~25 / ~25 | ~74 |
 
-At 16 agents at a time (O11) a stage of 329 batches is 21 waves. The pilot measures the failure rate
-that sizes the rewrite rounds.
+The verify column is every accepted card at 5 a batch - the largest stage of a run, three verifier
+batches for each writer batch, each card researched and quoted on the web. The verify-rewrite
+columns assume the pilots' rate of cards not VERIFIED, 3 of 40 (7.5 %): ~74 of 989, ~370 of 4,926
+cards, at 15 per rewrite batch and 5 per `verify2` batch. At 16 agents at a time (O11) a stage of
+329 batches is 21 waves and the `verify` stage of the full population 62. The pilot measures the
+failure rates that size the rewrite rounds.
 
 ## 5. The runbook
 
@@ -239,11 +398,13 @@ H=output/remediation/handoff/teaser-wb-pilot-2026-09-27     # $H-<stage>: one di
 ### 5.1 One stage (the same for every stage and every run)
 
 1. `$PY $T export --run $RUN --stage <stage> --handoff $H-<stage>` - the stage's questions, batches of
-   15 (`<stage>-001`, ...). It refuses while an earlier stage waits for its import, a second export of
-   the stage, and a non-empty directory. `"questions": 0` means nobody is due: go to the next stage.
+   15 (`<stage>-001`, ...; a verify stage 5 per batch). It refuses while an earlier stage waits for
+   its import, a second export of the stage, and a non-empty directory. `"questions": 0` means nobody
+   is due: go to the next stage.
 2. For each batch `B`, a **new** Opus agent - never one that answered another batch of lane WB (the
-   independence rule, section 2; the code cannot check it); its whole instruction is the output of
-   `$PY $T brief --run $RUN --handoff $H-<stage> --batch-id B`. At most 16 agents at a time; each
+   independence rule, section 2.2's last paragraph; the code cannot check it); its whole instruction
+   is the output of `$PY $T brief --run $RUN --handoff $H-<stage> --batch-id B` (a writer, a checker
+   or - at `verify` and `verify2` - a verifier with web access). At most 16 agents at a time; each
    answers its own batch into its own scratch directory (`$H-<stage>-scratch/B/`), checks every answer
    with `run.py check-answer` (a writer until it prints `"ok": true`; nothing is recorded by it) and
    records it with `opus_handoff.py answer --answered-by teaser-B` (write-once). An agent that stopped
@@ -251,18 +412,41 @@ H=output/remediation/handoff/teaser-wb-pilot-2026-09-27     # $H-<stage>: one di
 3. `$PY $OH validate --dir $H-<stage>` - every question answered, for its exact prompt, by Opus, in
    shape. Gate: no missing, stale, malformed or orphan answer.
 4. `$PY $T import --run $RUN --stage <stage>` - rebuilds every prompt from the run's pinned files and
-   refuses an answer to any other, a checker answer recorded under a name that wrote or checked the
-   site before (a reused name, section 2) and a malformed answer (delete that answer file, re-brief
-   the batch). Writes `STAGE-<stage>.jsonl`; prints the mechanical failures (writer stages) or the
-   verdicts (checker stages).
+   refuses an answer to any other, a checker or verifier answer recorded under a name that wrote,
+   checked or verified the site before (a reused name) and a malformed answer (delete that answer
+   file, re-brief the batch) - a verifier's answer that lists fewer claims than the accepting check
+   is one (2.1). It also refuses, writing nothing, an import that would record another card under a
+   later stage's check or verification (2.1, "The data ties every judgement to its card"): once a
+   later stage is imported, a stage is imported again only with the answers it had. The import of
+   `verify` and `verify2` fetches every cited page the source rule admits into `$RUN/pages/`
+   (User-Agent `AncientMapRemediation/1.0 (research; https://ancientnerds.com)`,
+   `research_web.USER_AGENT`, no personal data, 1 s between two requests to one host) and checks
+   every quote by machine. A page is fetched once, except a fetch that failed for a reason that may
+   pass - no answer at all, 429, a 5xx (`run.may_pass`) - which every import tries again; any
+   other status (a 404, a register's 403) is the page's answer and is kept. The import prints those
+   still failing as `transient_failures`: while the list is not empty, wait and **run the same
+   import again before exporting the next stage** (it replaces the stage's records; a claim whose
+   page keeps failing stays unproven). Duration: pilot 2 cited 32 pages for 20 cards (22 on
+   en.wikipedia.org) and fetched them in 29 s; the per-host pace makes the Wikipedia share the
+   bound - about 1,600 pages and at least ~18 min for the 989 candidates of today, about 8,000 pages
+   and ~1.5 h for the whole population (projected, not measured). Writes `STAGE-<stage>.jsonl`;
+   prints the mechanical failures (writer stages) or the verdicts (checker stages: PASS/FAIL; verify
+   stages: VERIFIED/CONTRADICTED/UNPROVEN, and `transient_failures`).
 5. `$PY $T status --run $RUN` - who is due where, accepted, cleared.
 
-The stages in order: `write`, `check`, `rewrite1`, `check1`, `rewrite2`, `check2`. Then
-`$PY $T outcomes --run $RUN` (refused while a site is still due) writes `OUTCOMES.jsonl` (each
-accepted card with its provenance; each cleared site with its reason: `failed-after-two-rewrites`,
-or `no-description` for a site without a description that still has a card) and `OUTCOMES.md`.
+**The stages in order: `write`, `check`, `rewrite1`, `check1`, `rewrite2`, `check2`, `verify`,
+`rewrite-v`, `check-v`, `verify2`** (2, 2.1). Then `$PY $T outcomes --run $RUN` (refused while a
+site is still due) writes `OUTCOMES.jsonl` - each accepted (checked and VERIFIED) card with its
+provenance; each cleared site with its reason: `failed-after-two-rewrites`,
+`failed-after-verify-rewrite`, `contradicted-after-verify`, `unproven-after-verify`, or
+`no-description` for a site without a description that still has a card; every row with its
+verification state (`verification`: the last verdict, `null` for a card never verified) and every
+verification in full (`verifications`: the verifier, the card, each claim with its page, quote and
+whether the machine found it) - `OUTCOMES.md` (counts, the unproven share of the accepted cards,
+"Every contradiction the verifiers found", a verification column) and `DESCRIPTION_DEFECTS.jsonl`
+(2.2).
 
-### 5.2 The pilots: 20 sites each and an independent web judge
+### 5.2 The pilots: 20 sites each and a fresh independent web judge
 
 There are two pilots, one per kind of fact basis, because the two kinds of text differ: the
 **first** draws from the Phase-4 texts (lanes W/S/T/R: assembled from or restated after a pinned
@@ -276,33 +460,39 @@ sentence-checked March texts (basis `WC`: shorter, trimmed, the bulk of the fina
    seed (every other candidate is listed `other-basis` or `not-drawn`); `RUN.json` pins `SITES.jsonl`
    and `LISTED.jsonl` by sha256, records `basis_asked` and prints the counts per listing reason and
    per basis. Once per run.
-2. The six stages and `outcomes` (5.1).
-3. `$PY $T judge-export --run $RUN --handoff $H-judge` - every accepted card, 5 per batch, to a new
-   Opus agent with web access (the brief from `$PY $T brief --run $RUN --handoff $H-judge --batch-id
-   judge-NNN`) that has worked on no card of the run. The judge sees only the site's name, country and
-   card (`prompts.judge_prompt`) and decides every claim SUPPORTED / CONTRADICTED / UNVERIFIABLE
-   against pages it opens and quotes; it is told which hosts refuse automated readers (Historic
-   England and the Heritage Gateway answer 403, UNESCO often refuses, PDFs may be unreadable) and
-   never to cite ancientnerds.com.
+2. The ten stages and `outcomes` (5.1) - the per-card web verification included: the pilot's
+   final cards are the ones its verifiers found VERIFIED.
+3. `$PY $T judge-export --run $RUN --handoff $H-judge` - every accepted card (the final, VERIFIED
+   card, the one to be written), 5 per batch, to a **fresh** Opus agent with web access (the brief
+   from `$PY $T brief --run $RUN --handoff $H-judge --batch-id judge-NNN`) that answered nothing in
+   the run - no card written, checked or **verified**. The judge sees only the site's name, country
+   and card (`prompts.judge_prompt`, the verifiers' own question) and decides every claim SUPPORTED /
+   CONTRADICTED / UNVERIFIABLE against pages it opens and quotes; it is told which hosts refuse
+   automated readers (Historic England and the Heritage Gateway answer 403, UNESCO often refuses,
+   PDFs may be unreadable) and never to cite ancientnerds.com.
 4. `$PY $OH validate --dir $H-judge`, then `$PY $T judge-import --run $RUN` - refuses a judge answer
-   recorded under a name that wrote or checked the card (section 2); fetches every cited page once
-   (User-Agent `AncientMapRemediation/1.0 (research)`, no personal data) into `$RUN/pages/` and
-   checks every quote by machine (`scripts/remediation/opus_audit/quotes.py`); writes `JUDGE.jsonl`
-   and `JUDGE.md`. **Gate (exit 0): no claim CONTRADICTED - with a proving quote or without one -
-   and at most 10 % of all claims without a proving quote** (UNVERIFIABLE, or a quote the machine did
-   not find on the page). A contradiction whose page refused the machine (403, a PDF, a JS page) or
-   whose quote was mis-copied is still a contradiction: it is counted apart
-   (`contradicted_unproven`, `disputed_cards`), shown in the summary line and in `JUDGE.md`'s header,
-   and fails the pilot like a proven one.
+   recorded under a name that answered any question of the run (a writer, checker or verifier of any
+   card) and one that lists fewer claims than the card's accepting check (2.1); fetches every cited
+   page the source rule admits into `$RUN/pages/` (the lanes' User-Agent and the retry of a failure
+   that may pass, 5.1: while `transient_failures` is not empty, run `judge-import` again) and checks
+   every quote by machine (`scripts/remediation/opus_audit/quotes.py`); writes `JUDGE.jsonl` and
+   `JUDGE.md`. **Gate (exit 0): on the pilot's final written cards, the fresh judge finds no claim
+   CONTRADICTED - with a proving quote or without one - and at most 10 % of all claims without a
+   proving quote** (UNVERIFIABLE, or a quote the machine did not find on the page). A contradiction
+   whose page refused the machine (403, a PDF, a JS page) or whose quote was mis-copied is still a
+   contradiction: it is counted apart (`contradicted_unproven`, `disputed_cards`), shown in the
+   summary line and in `JUDGE.md`'s header, and fails the pilot like a proven one.
 5. Read `JUDGE.md`: first its section **"Every contradiction"** - each line, proven or not, with the
    page it cites: is the card wrong, or is its description (the card says what a sentence says)? -
-   then `OUTCOMES.md` for the tone (evocative, a little mysterious, about the same length). A card
-   that departs from its description is a lane-WB failure (prompts or contract); a card faithful to a
-   sentence the web contradicts is a description defect - record it in AUDIT_LOG for the lane that
-   owns the text (WA/WC). Either way the pilot FAILED: change the prompts or the contract (code,
-   tests, commit) where the card was at fault, and draw a **new** pilot run with a new seed; a failed
+   then `OUTCOMES.md`: "Every contradiction the verifiers found" (did the rewrites drop or correct
+   them properly?), the unproven share, and the tone (evocative, a little mysterious, about the same
+   length); and `DESCRIPTION_DEFECTS.jsonl` (2.2, its count into AUDIT_LOG). A contradiction the
+   fresh judge still finds means the per-card verification let a wrong card through - a lane-WB
+   failure (prompts, the VERIFIED rule or the contract), whatever the description says. The pilot
+   FAILED: change the code (tests, commit) and draw a **new** pilot run with a new seed; a failed
    pilot's outcomes are never written. A PASS: write the pilot's outcomes (5.4) - they are the first
-   step of their kind - and start the mass run over that basis.
+   step of their kind - and start the mass run over that basis. **The mass run relies on the per-card
+   verification**: it has no judge of its own.
 
 ### 5.3 The mass run
 
@@ -311,19 +501,33 @@ accepted for the sites to be asked - and the pilot of their basis passed (5.2). 
 not final yet are listed `not-final` and are asked by a later run.
 
 1. `$PY $T select --run $RUN2 --exclude-run $RUN --basis W --basis S --basis T --basis R` (every
-   earlier run of lane WB with its own `--exclude-run`): a site asked before is asked again only if
-   its description changed since. The `--basis` list keeps the sentence-checked texts out until their
-   own pilot passed; after that, a run over them names `--basis WC` (or no `--basis` at all).
-2. The six stages and `outcomes` (5.1), 16 agents at a time.
-3. The write (5.4), step by step.
-4. After WC finishes, the same again for the sites WC made final (`--exclude-run` for every earlier
-   run), until `select` lists no `not-final` site.
+   earlier run of lane WB **whose outcomes were written** (5.4), each with its own `--exclude-run`):
+   a site asked before is asked again only if its description changed since. **Never exclude a run
+   that was not written**: the two pilots from before the web verification
+   (`wb-pilot-2026-09-26`, `wb-pilot-2026-09-26b`: never written, their outcomes carry no
+   verification and cannot be) and any failed pilot (5.2) - their sites would be listed
+   `asked-before` and get no teaser while they keep their old card (O3: "Alle Karten neu"); `stale`
+   does not list them either, because they have no teaser provenance. The `--basis` list keeps the
+   sentence-checked texts out until their own pilot passed; after that, a run over them names
+   `--basis WC` (or no `--basis` at all).
+2. The ten stages and `outcomes` (5.1), 16 agents at a time - every accepted card verified on the
+   web (2.1), the only guard against a description the web contradicts.
+3. Record the run in AUDIT_LOG: its counts per reason, the unproven share, the number of
+   `DESCRIPTION_DEFECTS.jsonl` lines, handed to the lane whose text it is (2.2).
+4. The write (5.4), step by step.
+5. After WC finishes, the same again for the sites WC made final (`--exclude-run` for every earlier
+   run whose outcomes were written, step 1), until `select` lists no `not-final` site.
 
 ### 5.4 The write: steps of at most 100 sites, each accepted with 0 deviations
 
 Each step is **two journalled lanes** (6): `teaser-prov-sNNN` (`unified_sites.raw_data`: the teaser
 provenance, the Phase-5 card key nulled) and `teaser-card-sNNN` (`card_stats.card_description`: the
-card, or `NULL`). Provenance first, card second; undo the other way round.
+card, or `NULL`). Provenance first, card second; undo the other way round. **Only a VERIFIED card
+is written**: an accepted outcome carries `verification: "VERIFIED"` and a provenance whose `verify`
+says so; every site the run cleared - `contradicted-after-verify` and the other verify reasons
+included - loses the card it has (rule `card-clear-<reason>`). The journal evidence of each card
+cell names the writer, the checker with its claims, the verifier with every judged claim and its
+page, and each web fact the card rests on.
 
 Once per sitting, before the first apply:
 
@@ -347,7 +551,8 @@ $PY $MW plan --run $RUN --step N
 #   Refused while step N-1 is not closed (accept, or close-reverted after an undo). A site that
 #   changed since its check is listed, not written: stale-description, retired, no-card-row,
 #   journal-chain-broken, journal-disagrees, raw-data-not-an-object, raw-data-not-reprinted,
-#   nothing-to-change (PLAN.md explains each).
+#   nothing-to-change; and an accepted card without a VERIFIED verification: not-verified (an
+#   OUTCOMES.jsonl from before the verify stage - PLAN.md explains each).
 for L in prov card; do          # SKIP a lane whose plan has 0 cells (PLAN.md): nothing to write
   $PY $AP --lane teaser-$L-sNNN --emit             # APPLY.sql, pinned to the plan
   $PY $AP --lane teaser-$L-sNNN --rehearse         # the statement with COMMIT -> ROLLBACK
@@ -363,7 +568,10 @@ $PY $MW accept --step N          # read-only; ACCEPT_EXIT=0 and "RESULT: 0 devia
 
 What the gates check:
 
-- the plan (`mechanical/teaser.py classify`): the live description is the one the card was checked
+- the plan (`mechanical/teaser.py classify`): an accepted card is VERIFIED (else `not-verified`), and
+  its provenance validates (`verify` VERIFIED within the unproven limit, by another agent than the
+  checker, of the card itself - `verify.text_sha256` is the card's; `web_facts` exactly the cited
+  ones); the live description is the one the card was checked
   against (its sha256 is the outcome's `desc_sha256`); the site is curated, not retired, has a
   `card_stats` row; `raw_data` is a JSON object spelled the way the planner prints it; each cell's
   journal is continuous and ends at the live value;
@@ -501,13 +709,15 @@ After the deploy: the checks of 5.5 (both `StartedAt` moved, 0 overwrite lines, 
   shorts-eligible) and cards no longer the one their provenance hashes. A description rewritten later
   (any lane) makes its card stale; the next `select` asks the site again.
 - A run is a directory of its own; `select --exclude-run` keeps a site from being asked twice for the
-  same description.
+  same description - named only for runs whose outcomes were written (5.3, step 1).
 
 ### 5.8 Files
 
 `output/remediation/teaser/runs/<run>/` (gitignored): `EXPORT.jsonl`, `RUN.json`, `SITES.jsonl`,
-`LISTED.jsonl`, `ROUNDS.jsonl`, `STAGE-<stage>.jsonl`, `OUTCOMES.jsonl`, `OUTCOMES.md`; for the pilot
-`JUDGE.jsonl`, `JUDGE.md`, `pages/`. `output/remediation/handoff/teaser-<run>-<stage>/` (and
+`LISTED.jsonl`, `ROUNDS.jsonl`, `STAGE-<stage>.jsonl` (for `verify`/`verify2` each claim with its
+quote outcome and the card's verdict), `pages/` (every page a verifier or judge cited, fetched once),
+`OUTCOMES.jsonl`, `OUTCOMES.md`, `DESCRIPTION_DEFECTS.jsonl` (2.2); for the pilot `JUDGE.jsonl`,
+`JUDGE.md`. `output/remediation/handoff/teaser-<run>-<stage>/` (and
 `-scratch/`): the handoff. `output/remediation/mechanical_teaser/`: `STEPS.jsonl`, `sNNN/...`,
 `ACCEPTED/step-NNN.json`, `REVERTED/step-NNN.json` - force-added to git with the card-file commit
 (the proof trail; never reverted).

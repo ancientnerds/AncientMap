@@ -12904,3 +12904,161 @@ With Concangis (pilot 1) that is 3 contradicted description sentences in 40 W si
 lane WB (owner O2: "natürlich müssen sie inhaltlich stimmen"): a card faithful to a wrong sentence is
 still wrong when read aloud, so every card gets the independent web check before it is written
 (built in `wip/wb2`), and each contradicted description sentence is listed for the description repair.
+
+## 2026-09-26 - WA v3 writes: two write loops raced once; nothing was written twice
+
+The orchestrator started the WA write loop a second time while an earlier instance (detached from its
+shell, still running) was writing - an orchestration error. At 22:07 local both instances took batch
+p4-2085: one wrote it (`APPLIED.json`: 20/20 rows read back, 20 journal rows, inverse proven) and it
+was accepted in step 23 (`ACCEPTED/step-0023.json`, 11 batches, 99 sites, 0 deviations); the other's
+read-only preflight refused every row ("no longer holds the planned old value"; the stamp already
+journalled 20 rows) and left `STOPPED.json`, so nothing was written twice. The stop record was read
+and kept as `p4-2085/STOPPED.read-2026-09-26-duplicate-loop.json`; a fresh read-only acceptance over
+pilot 4, mass, D9 and v3 then reported 1,753 written sites re-verified with V1-V15, **0 deviations**.
+From here the loop runs only as a tracked background task, one instance.
+
+## 2026-09-26 - WA v3 mid-run audits 1 and 2 (after 572 and 1,147 written sites)
+
+Each: `audit4.py written` over the v3 run's own written batches, `audit4.py draw --count 10` (seeds
+20260928 and 20260929; audit 2 excludes audit 1's sample), `audit4.py sheet`, and one independent
+Opus auditor (no agent of the run) judging every published sentence against its pinned passage and
+the site's identity. Audit 1: 65 of 65 sentences SUPPORTED (verdicts `logs/p4_v3/AUDIT_1_VERDICTS.json`
+in the p4-pilot worktree). Audit 2: 56 of 56 SUPPORTED (`AUDIT_2_VERDICTS.json`). No UNSUPPORTED, no
+WRONG_SITE, no hold. Informational `gold_error` notes (the Wikipedia passage itself looks wrong - the
+selection is faithful; listed for the description repair): Idomenae n4 (springs of the Vardar),
+Castell Henllys n2 (digging began 1981), Tarragona n2 (colony under Caesar/Augustus), El Brujo n1
+(Ascope Province), Marcahuamachuco n2 (AD 400 is not the Middle Horizon) and n3 (Inca conquest in the
+15th century). Two records whose scope is in question go to WD2's scope review: Richat Structure
+(a natural formation) and Hadrian's Wall Path (a footpath opened 2003).
+
+## 2026-09-27 - Lane WA complete: 1,769 sites with a new sourced description (v3 1,750, v3d 19)
+
+- **v3** (`PLAN4.v3.jsonl` `779021ad...`, 3,124 sites, 209 batches, the L5 population excluded):
+  40 write steps (P4 apply root steps up to 44), each accepted with 0 deviations; **1,750 sites
+  written**, 1,374 held (HOLDS4 of `runs/v3-2026-09-26`: abstained, search-stopped (no source),
+  V10, V14, V9, V6, no-source, card-scope holds, revision-too-fresh 48 - re-queued, due from
+  2026-09-28T07:57Z). Mid-run audits after 572, 1,147 and 1,729 written sites: 10 sites each,
+  186 of 186 sentences SUPPORTED by an independent Opus auditor (`logs/p4_v3/AUDIT_{1,2,3}_*`);
+  informational Wikipedia errors listed for the description repair (audit 3 adds Tumulus of
+  Bougon n7).
+- **v3d** (`PLAN4.v3d.jsonl` `7a147b7f...`, built after the 48 h window and after L5 landed: the
+  mass run's 19 deferred sites plus the L5 population's March sites, 133 sites in 9 batches):
+  19 written in one accepted step, 114 held (search-stopped 68, no-source 15, abstained 13, ...);
+  2 re-queued (due 2026-09-28T21:42Z).
+- **Lane L after v3** (read-only, `accept-p4l-after-v3.log`): 4,003 planned L rows, 2,187 carried,
+  1,774 superseded by `phase4:%`, **0 deviations**.
+- One incident (recorded above): a duplicate loop instance's preflight refused p4-2085 after the
+  other instance wrote it; nothing was written twice. One acceptance run failed on a truncated psql
+  read-back line (line 4462 not JSON); the re-run over the same data read 0 deviations and was
+  accepted - a transport hiccup, not data.
+The held sites (final ones) go to lane WC; the 50 re-queued ones return through v3/v3d's re-queue.
+
+## 2026-09-27 - Lane WB: pilot 3 PASS, the first card sitting (step 1) live
+
+- Pilot `wb-pilot-2026-09-26c` (20 W sites, with the per-card web verification of `wip/wb2`):
+  18 VERIFIED at once, 2 CONTRADICTED -> one rewrite each -> 1 VERIFIED, 1 cleared
+  (`contradicted-after-verify`); the pilot judge (a fresh agent) on the 19 final cards: **122 of 122
+  claims supported with a machine-found quote, 0 contradicted, 0 unproven - PASS**; 4 description
+  defects listed (`DESCRIPTION_DEFECTS.jsonl`).
+- The sitting: backup drill on the VPS (`VERDICT: dump is restorable and matches production
+  row-for-row`, dump `backups/2026-09-27_remediation/`); API StartedAt noted (22:51:47Z / 22:51:54Z);
+  step 1 = lanes `teaser-prov-s001` (19 provenances) and `teaser-card-s001` (19 cards, 1 clear):
+  emit, rehearse, probe-guards, apply, verify, rollback rehearsals card then prov, `accept` 0
+  deviations; `card-file --steps 1-1`, `card_json.py --check` 0 deviations; commit 5c7d52f, pushed by
+  fixed SHA. The first push attempt stopped at a flaky frontend test (MapSection lazy-error, passes
+  alone); CI of 5c7d52f failed on gitleaks (38 sha256 premises in the step's SQL read as API keys) -
+  no deploy, no API restart, verified; the step SQL paths were allowlisted with their reason
+  (.gitleaks.toml) and **14ef1f9** deployed: both API containers restarted after the push
+  (01:14:50Z / 01:14:57Z), 0 `Card description overwritten` lines, `card_json.py --check` and
+  `teaser.py accept --step 1` again 0 deviations.
+
+## 2026-09-27 - Lane WC pilots 1 and 2 FAILED the sealed judge gate; WC gets a per-site verification
+
+- Pilot `pilot-2026-09-27` (20 sites, 76 sentences): 59 kept (39 whole, 20 trimmed), 17 dropped
+  (11 unsupported, 6 contradicted), 2 sites cleared; judge: 1 kept sentence WRONG with a found quote
+  (Cloghanmore court tomb: "passage tomb-style" carvings and "the only court tomb with carvings",
+  disputed by G. Robin's thesis and a 2026 article), 0 unsupported, 0 incoherent. Fix: rule 1 of the
+  check question names superlative, uniqueness and style claims and asks for disputing sources
+  (re-pinned, eae4f88).
+- Pilot `pilot-2026-09-27b` (20 sites, 73 sentences, the fixed prompt): 51 kept, 22 dropped (10
+  contradicted, 10 unsupported, 2 dependent), 2 cleared; judge: 1 kept sentence WRONG, 1 site
+  incoherent (Nyons: trimming sentence 1 left sentence 2's "the ancient name" pointing at another
+  referent), unsupported 1.96 % (under 5 %), 2 wrong drops (reported, not gating).
+- Neither pilot's outcomes are written (the gate plans nothing without a passed pilot). A single
+  checking pass lets about one error per 50-60 kept sentences through; the gate allows none. As in
+  lane WB, every site's kept text now gets an independent verifier before build (`wip/wc2`, being
+  built): WRONG/UNSUPPORTED sentences dropped, incoherence repaired by dropping the named sentence or
+  the site cleared; then a new pilot with a fresh judge.
+
+## 2026-09-27 - Lane WC pilot 3 PASS (with the per-site verification) and written
+
+Pilot `pilot-2026-09-27c` (20 sites, 78 sentences, seed 20260929): check round KEEP 43 /
+KEEP_TRIMMED 20 / DROP 15; verification round 1 over the 63 kept sentences: 58 SUPPORTED, 3
+UNSUPPORTED, 2 WRONG (dropped), 0 incoherent; verification round 2 over the 4 changed texts: 9
+SUPPORTED, 1 WRONG (that site cleared). Result: 55 sentences kept (36 whole, 19 trimmed), 19 sites
+keep a verified text, 1 cleared. The fresh judge (no checker or verifier of the run): **JUDGE_EXIT=0,
+passed** (RESULT.json `dc0d1f65...`; 3 wrong drops reported, not gating). Written in its own step:
+write group WC over `WC4.jsonl` `799c408a...` (batch p4wc-4003, 40 rows): dry, rehearsal, apply,
+`verify_writes4 --lane p4wc` 0 deviations, accepted. The mass run follows in chunks of 500
+(`mass-2026-09-27-NN`), each through check, re-ask, verification and build before its writes.
+
+## 2026-09-29 - New session: re-queues written, the WB caption fix merged, the served-image sign-off
+
+- Lane WA re-queues (PHASE4_V3_RUNBOOK 9.1): v3's 48 due sites exported as p4-2210..p4-2213
+  (handoff `p4-v3-select-rq`), answered by fresh Opus agents, reviewed; **25 sites written** (50
+  journal rows, stamps `phase4:p4-2210..2213:chunk-0001`, 14:49Z) and accepted with 0 deviations
+  (`accept-step-42b`: 2,318 written sites re-verified with V1-V15). 3 sites wait again (until
+  2026-10-01T14:31Z), the rest are held final (to lane WC). v3d's 2 (p4-2510): nothing written;
+  Nea Paphos waits until 2026-10-01T14:31:53Z.
+- The p4 acceptance first read 501 deviations: the loop scripts did not name run `v3d` and did not
+  allow the later WB provenance stamps (`wb-teaser-prov-%`) and WC stamps (`phase4wc:%`) - the
+  rows were superseded by accepted later lanes, not wrong. Both loops now name every run and allow
+  those stamps (ac995b6); the re-run read 0 deviations.
+- `wip/wb3` merged (438257d): a caption word too wide for the frame is drawn smaller (floor 52 px)
+  and the contract refuses a card only when a word overflows at the floor; this unblocks the WB
+  labels stuck on long names (Sammallahdenmäki, Hohlenstein-Stadel, ...).
+- **Sign-off (orchestrator, under O6/O8): WD2's served-image check runs over `--population all`**
+  (WD2_SERVED_IMAGE_AND_SCOPE.md 3.2): the pre-check CONFIRMED 8 of the 10 served images the
+  acceptance judged WRONG, so a CONFIRMED is no reason to skip the vision check.
+- WD1 part 2 (`wd1-rest`): the import was refused because round r2 still missed 2 answers (the
+  continue workflow imports only after every round is complete); those two are being answered.
+
+## 2026-09-29 - Lane WD1 part 2 (`wd1-rest`) written: wave 2026-09-26d
+
+- Rounds: r0 3,359 sites (420 batches), r1 161, r2 11; every answer recorded and imported, 0
+  waiting. Decisions: period_start keep 1,205 / replace 269 / clear 1,852 / held 3; site_type keep
+  583 / replace 219 / clear 384 / held 1; source_url keep 50 / replace 97 / clear 48; coordinates
+  keep 89 / replace 4 / unresolved 672. Not counted at import: 146 quote fetch failed, 15 quote not
+  found, 9 unreadable, 1 redirect. Most clears: no two independent dated sources, or dates given only
+  as years before present (the checker reads BC/AD years) - O6 "belegt ersetzen, sonst leeren".
+- Wave 2026-09-26d: 2,296 sites (676 held: unresolved coordinates), 23 steps
+  (`fields-wd1-2026-09-26d-s001..s023`), each emit, verify, rehearse, probe-guards (guard 4 and the
+  period-bucket invariant refused their probes), apply (read-back row for row), verify, rollback
+  rehearsal, `plan.py accept`: **23/23 accepted**. Journal: period_start 2,113 (1,844 cleared),
+  period_name 2,116 (1,844 cleared), site_type 603 (384 cleared), source_url 111 (14 cleared),
+  lat/lon/geom 4 each.
+
+## 2026-09-29 - Nr. 7 Chiapa de Corzo / Zoque written (lanes `chiapa-hide`, `chiapa-name`, wip/chiapa c901d67, merged e1e53b3)
+
+- `chiapa-hide` (stamp `2026-09-29_mechanical-chiapa-hide`): the empty row `24aa135d` retired as
+  `duplicate_of:ed186ea9-...` (2 cells). Gates: check-primitive, verify, interests, emit, rehearse, probe-guards
+  (9/9 refused), apply (read-back row for row), verify, rollback rehearsal - all clean.
+- `chiapa-name` (stamp `2026-09-29_mechanical-chiapa-name`): the kept row `ed186ea9` renamed "Zoque Culture
+  Archaeological Zone" -> "Chiapa de Corzo" with its match key (`chiapa de corzo`), the rename refused until the hide
+  had landed. Gates as above, apply read-back clean, rollback rehearsal clean. Read back: the hidden row is retired,
+  the kept row is visible under the name. Undo: the name lane's ROLLBACK.sql first, then the hide's.
+
+## 2026-09-30 - Lane WD1 part 1 (`wd1`) written: wave 2026-09-26b
+
+- Rounds r0 1,243 sites, r1 202, r2 38; all answered and imported, 0 waiting. Decisions: coordinates
+  keep 482 / replace 236 / unresolved 252 (+16 exhausted); period_start keep 582 / replace 264 /
+  clear 357 / held 2; site_type keep 347 / replace 546 / clear 28+1; source_url keep 212 / replace
+  349 / clear 18+2.
+- Wave 2026-09-26b: 1,056 sites (270 held: unresolved coordinates), 11 steps, **11/11 accepted**.
+  Journal: lat/lon/geom 224 each, period_start 617 (353 cleared), period_name 620 (353 cleared),
+  site_type 575 (29 cleared), source_url 369 (20 cleared).
+- Lane WB chunk 04 finished its stage chain: 450 outcomes, 441 accepted cards, 9 cleared (6
+  unproven-after-verify, 2 contradicted-after-verify, 1 failed-after-verify-rewrite), 23 description
+  defects. Gap found in chunk 02: a site whose only name form contains a glyph the shorts font cannot
+  draw (Jabal al-ʿHayn) can neither name itself nor pass the font check; `wip/wb4` lets the writer
+  state "no card" only when the contract proves every name form undrawable.

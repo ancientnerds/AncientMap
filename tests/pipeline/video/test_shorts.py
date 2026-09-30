@@ -27,13 +27,20 @@ from pipeline.video.shorts_export import (
 )
 from pipeline.video.shorts_images import local_image_name
 from pipeline.video.shorts_render import (
+    CAPTION_BORDER,
+    CAPTION_MAX_PX,
+    CAPTION_MIN_SIZE,
+    CAPTION_SIZE,
     NAME_AUDIO_DELAY_S,
+    NAME_LAYOUTS,
     NARRATION_TAIL_S,
     TEASER_NOTE,
     Segment,
     StillPick,
     build_comment,
     build_description,
+    caption_font,
+    caption_px,
     captions_filter,
     clip_filter,
     cut_stills,
@@ -51,6 +58,7 @@ from pipeline.video.shorts_render import (
     segment_starts,
     stills_graph,
     stills_window,
+    word_face,
     wrap_lines,
 )
 from pipeline.video.shorts_select import (
@@ -772,6 +780,16 @@ def _teaser_row(**over):
         checker="teaser-check-b001",
         checked_at="2026-09-26T12:00:00+00:00",
         claims=[{"claim": "a 15th-century Inca citadel", "support": ["S1"]}],
+        verify={
+            "verdict": "VERIFIED",
+            "stage": "verify",
+            "by": "teaser-verify-001",
+            "at": "2026-09-26T13:00:00+00:00",
+            "claims": 2,
+            "unproven": 0,
+            "text_sha256": CP.text_sha256(CARD),
+        },
+        web_facts=[],
     )
     return {**row, **over}
 
@@ -803,7 +821,11 @@ def test_s13_a_card_the_teaser_provenance_does_not_hash_fails_and_is_not_marked(
 
 
 #: A real FreeType face (Pillow's own) at the caption size, for the width tests.
-CAPTION_FACE = ImageFont.load_default(size=shorts_audit.CAPTION_SIZE)
+CAPTION_FACE = ImageFont.load_default(size=CAPTION_SIZE)
+#: One word too wide for the frame at CAPTION_SIZE in that face (1,137 px), one too wide even at
+#: CAPTION_MIN_SIZE (1,280 px there).
+LONG_WORD = "Mecklenburg-Vorpommern"
+OVERLONG_WORD = "Mecklenburg-Vorpommern-Sainte-Colombe-sur-Seine"
 
 
 # S3 and the Phase-4 card check (V10) measure a caption word with one function.
@@ -812,7 +834,7 @@ CAPTION_FACE = ImageFont.load_default(size=shorts_audit.CAPTION_SIZE)
 def test_the_widest_word_is_measured_as_shown_with_its_outline():
     word, px = widest_word_px(["An", "Intihuatana,", "stone"], CAPTION_FACE)
     assert word == "Intihuatana"  # the trailing comma is not drawn
-    expected = int(CAPTION_FACE.getlength("Intihuatana")) + 2 * shorts_audit.CAPTION_BORDER
+    expected = int(CAPTION_FACE.getlength("Intihuatana")) + 2 * CAPTION_BORDER
     assert px == expected
 
 
@@ -823,15 +845,68 @@ def test_a_punctuation_only_token_has_no_width():
 def test_the_caption_audit_measures_through_the_public_helper(monkeypatch):
     seen = []
 
-    def spy(words, font):
-        seen.append((list(words), font))
+    def spy(words, font, *, drawn=False):
+        seen.append((list(words), font, drawn))
         return "x", 7
 
     monkeypatch.setattr(shorts_audit, "widest_word_px", spy)
     monkeypatch.setattr(shorts_audit, "caption_font", lambda path: CAPTION_FACE)
     got = shorts_audit._widest_caption([{"text": "Inca"}, {"text": "citadel."}], Path("f"))
     assert got == ("x", 7)
-    assert seen == [(["Inca", "citadel."], CAPTION_FACE)]
+    assert seen == [(["Inca", "citadel."], CAPTION_FACE, True)]  # as the render draws each word
+
+
+# A caption word too wide for the frame at CAPTION_SIZE gets its own smaller size (lane WB, the
+# long names: "Saint-Pierre-aux-Nonnains" is 1,407 px in Orbitron 700 at 92).
+
+
+def test_the_caption_floor_is_the_name_s_smallest_size():
+    assert CAPTION_MIN_SIZE == NAME_LAYOUTS[-1][1] == 52
+    assert CAPTION_MAX_PX == 1080 - 2 * 40
+
+
+def test_a_caption_word_that_fits_keeps_the_caption_size():
+    assert word_face("Inca", CAPTION_FACE) is CAPTION_FACE
+
+
+def test_a_caption_word_too_wide_gets_the_largest_size_at_which_it_fits():
+    assert caption_px(LONG_WORD, CAPTION_FACE) > CAPTION_MAX_PX
+    face = word_face(LONG_WORD, CAPTION_FACE)
+    assert CAPTION_MIN_SIZE < face.size < CAPTION_SIZE
+    assert caption_px(LONG_WORD, face) <= CAPTION_MAX_PX
+    assert caption_px(LONG_WORD, CAPTION_FACE.font_variant(size=face.size + 1)) > CAPTION_MAX_PX
+
+
+def test_a_caption_word_is_never_drawn_below_the_floor():
+    face = word_face(OVERLONG_WORD, CAPTION_FACE)
+    assert face.size == CAPTION_MIN_SIZE
+    assert caption_px(OVERLONG_WORD, face) > CAPTION_MAX_PX  # it overflows: captions_fit fails it
+
+
+def test_the_audit_measures_each_word_at_the_size_it_is_drawn():
+    words = ["Inca", LONG_WORD]
+    assert widest_word_px(words, CAPTION_FACE)[1] > CAPTION_MAX_PX  # V10: at the caption size
+    drawn = widest_word_px(words, CAPTION_FACE, drawn=True)
+    assert drawn == (LONG_WORD, caption_px(LONG_WORD, word_face(LONG_WORD, CAPTION_FACE)))
+    assert drawn[1] <= CAPTION_MAX_PX
+    assert widest_word_px([OVERLONG_WORD], CAPTION_FACE, drawn=True)[1] > CAPTION_MAX_PX
+
+
+def test_captions_filter_draws_a_long_word_at_its_own_size(tmp_path):
+    font = tmp_path / "face.ttf"  # Pillow's own face as a file: the brand fonts are gitignored
+    font.write_bytes(CAPTION_FACE.font_bytes)
+    words = [Word("Inca", 0.0, 0.4), Word(LONG_WORD, 0.4, 1.2), Word(OVERLONG_WORD, 1.2, 2.4)]
+    f = captions_filter(words, tmp_path / "captions", font)
+    fitted = word_face(LONG_WORD, caption_font(font)).size
+    assert CAPTION_MIN_SIZE < fitted < CAPTION_SIZE
+    parts = f.split(",drawtext=")
+    sizes = [part.split("fontsize=")[1].split(":")[0] for part in parts]
+    assert sizes == [str(CAPTION_SIZE), str(fitted), str(CAPTION_MIN_SIZE)]
+    # everything else stays: one shared baseline, the outline, the timing
+    baselines = {part.split("y_align=baseline:y=")[1].split(":")[0] for part in parts}
+    assert len(baselines) == 1
+    assert f.count(f"borderw={CAPTION_BORDER}:bordercolor=black") == 3
+    assert "enable='gte(t\\,0.400)*lt(t\\,1.200)'" in f
 
 
 class TestSpokenName:

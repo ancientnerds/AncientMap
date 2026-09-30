@@ -11,6 +11,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,7 @@ from teaser import run as R  # noqa: E402
 
 from pipeline.utils import card_provenance as CP  # noqa: E402
 from tests.remediation import teaser_cases as T  # noqa: E402
+from tests.remediation.phase4_cases import CAPTION_FACE  # noqa: E402
 
 
 def basis(site_id: str = T.SKARA, alt_names: list[str] | None = None) -> C.Basis:
@@ -101,6 +103,38 @@ def padded(card: str) -> str:
     while len(card) < C.MIN_CHARS:
         card = card[:-1] + ", and more stone walls."
     return card
+
+
+#: The one-word and hyphenated names whose caption word is wider than the frame at the caption
+#: size, measured on the live WB mass run (Orbitron 700 at 92 px: 1,001 to 1,409 px); the first
+#: two are one name, as stored and transliterated. `La Chapelle-aux-Saints` (its word
+#: `Chapelle-aux-Saints`, 1,075 px) stalled run wb-ws-2026-09-27-02 the same way.
+LONG_NAMES = (
+    "Sammallahdenmäki",
+    "Sammallahdenmaeki",
+    "Hohlenstein-Stadel",
+    "Saint-Pierre-aux-Nonnains",
+    "Sainte-Colombe-sur-Seine",
+    "Mecklenburg-Vorpommern",
+    "Strubben-Kniphorstbos",
+    "La Chapelle-aux-Saints",
+)
+#: Wider than the frame at the caption size in the tests' face (Pillow's own), fits smaller.
+LONG_NAME = "Mecklenburg-Vorpommern"
+#: Wider than the frame even at the smallest caption size, in any of the faces.
+OVERLONG_NAME = "Mecklenburg-Vorpommern-Sainte-Colombe-sur-Seine"
+
+
+def long_name_card(name: str) -> tuple[C.Basis, str]:
+    """A site called `name` and a card that passes every other check and names it."""
+    site = C.basis(
+        site_id=T.SKARA,
+        name=name,
+        country="X",
+        description=f"{name} is an ancient site of earth and stone.",
+        alt_names=[],
+    )
+    return site, padded(f"{name} rises from the fields, a place of earth and stone.")
 
 
 class TestTheMechanicalChecks:
@@ -178,10 +212,56 @@ class TestTheMechanicalChecks:
             return dataclasses.replace(T.fit(name, card), missing=("ʿ",))
 
         def wide(name: str, card: str) -> Any:
-            return dataclasses.replace(T.fit(name, card), px=C.V.MAX_CAPTION_PX + 1, widest="X")
+            return dataclasses.replace(
+                T.fit(name, card), drawn_px=C.V.MAX_CAPTION_PX + 1, drawn="X"
+            )
 
         assert any(p.startswith("font") for p in problems(T.GOOD[T.SKARA], fit=missing))
         assert any(p.startswith("caption") for p in problems(T.GOOD[T.SKARA], fit=wide))
+
+    def test_a_word_too_wide_at_the_caption_size_is_drawn_smaller_and_passes(self) -> None:
+        site, card = long_name_card(LONG_NAME)
+        assert T.fit(site.name, card).px > C.V.MAX_CAPTION_PX  # the check refused it at 92 px
+        assert C.problems(card, site, fit=T.fit) == []
+
+    def test_a_word_wider_than_the_frame_at_the_floor_is_refused(self) -> None:
+        site, card = long_name_card(OVERLONG_NAME)
+        drawn_px = T.fit(site.name, card).drawn_px
+        assert drawn_px > C.V.MAX_CAPTION_PX
+        assert C.problems(card, site, fit=T.fit) == [
+            f"caption: the word {OVERLONG_NAME!r} is {drawn_px} px wide even at the smallest "
+            f"caption size ({C.CAPTION_MIN_SIZE} px font), wider than the frame "
+            f"({C.V.MAX_CAPTION_PX} px)"
+        ]
+
+    def test_card_fit_measures_each_word_as_the_short_draws_it(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`verify4.card_fit` itself, with Pillow's own face as the heading font (the brand fonts
+        are gitignored): the width at the caption size for V10, the drawn width for the contract."""
+        font = tmp_path / "face.ttf"
+        font.write_bytes(CAPTION_FACE.font_bytes)
+        monkeypatch.setattr(C.V.shorts_brand, "heading_font", lambda text: font)
+        monkeypatch.setattr(C.V.shorts_brand, "font_cmap", lambda path: set(range(0x180)))
+        site, card = long_name_card(LONG_NAME)
+        fit = C.V.card_fit(site.name, card)
+        assert (fit.widest, fit.drawn) == (LONG_NAME, LONG_NAME)
+        assert fit.drawn_px <= C.V.MAX_CAPTION_PX < fit.px
+
+    def test_the_long_names_of_the_mass_run_pass_with_the_brand_fonts(self) -> None:
+        """The names that stalled the writer batches of runs wb-ws-2026-09-27-01, -02 and -04
+        (1,001-1,409 px at 92 px in Orbitron 700), measured with the real brand fonts by
+        `verify4.card_fit`. One test for all of them, so a machine without the fonts (CI) reports
+        one skip, not one per name."""
+        fonts = [C.V.shorts_brand.FONT_DIR / file for file in C.V.shorts_brand.FONTS]
+        if not all(path.exists() for path in fonts):
+            pytest.skip("the brand fonts (video-assets/fonts, gitignored) are not on this machine")
+        pytest.importorskip("fontTools", reason="fontTools reads the brand fonts' cmap")
+        for name in LONG_NAMES:
+            site, card = long_name_card(name)
+            fit = C.V.card_fit(site.name, card)
+            assert fit.px > C.V.MAX_CAPTION_PX >= fit.drawn_px, (name, fit)
+            assert C.problems(card, site, fit=C.V.card_fit) == [], name
 
 
 class TestTheExamples:
@@ -325,6 +405,7 @@ class TestThePrompts:
         prompt = P.judge_prompt("Skara Brae", "Scotland", T.GOOD[T.SKARA])
         assert T.GOOD[T.SKARA] in prompt and "Bay of Skaill" not in prompt
         assert "ancientnerds.com" in prompt and "403" in prompt
+        assert "nor an AI aggregator or a copy of Wikipedia" in prompt
 
     def test_the_findings_of_a_check_name_every_unsupported_claim(self) -> None:
         record = {
@@ -467,12 +548,16 @@ def step(run: Path, tmp_path: Path, stage: str, answers: dict[str, str], by: str
     exported = R.export_stage(run, stage, handoff)
     if exported["questions"]:
         answer_all(run, stage, handoff, answers, by)
+        if stage in R.VERIFY_STAGES:
+            return R.import_stage(run, stage, fit=T.fit, client=judge_client(), pace=0)
         return R.import_stage(run, stage, fit=T.fit)
     return exported
 
 
 GOOD_WRITES = {site: T.writer_answer(card) for site, card in T.GOOD.items()}
 PASSES = dict.fromkeys(T.GOOD, T.checker_answer())
+#: A verifier's answer that proves the card: its one claim SUPPORTED by a quote the page holds.
+VERIFIES = dict.fromkeys(T.GOOD, T.judge_answer())
 
 
 class TestTheRun:
@@ -496,6 +581,8 @@ class TestTheRun:
         assert step(run, tmp_path, "write", GOOD_WRITES)["mechanical_failures"] == 0
         assert step(run, tmp_path, "check", PASSES)["verdicts"] == {"PASS": 4}
         assert step(run, tmp_path, "rewrite1", {})["questions"] == 0
+        assert step(run, tmp_path, "verify", VERIFIES)["verdicts"] == {"VERIFIED": 4}
+        assert step(run, tmp_path, "rewrite-v", {})["questions"] == 0
         R.outcomes(run)
         rows = R.read_outcomes(run)
         accepted = [r for r in rows if r["status"] == R.ACCEPTED]
@@ -505,8 +592,20 @@ class TestTheRun:
             assert CP.describes(provenance, T.GOOD[row["site_id"]])
             assert provenance["desc_sha256"] == T.sha(T.DESCRIPTIONS[row["site_id"]])
             assert provenance["check"]["by"].startswith("teaser-check-")
+            assert provenance["verify"] == {
+                "verdict": "VERIFIED",
+                "stage": "verify",
+                "by": "teaser-verify-001",
+                "at": row["verifications"][0]["answered_at"],
+                "claims": 1,
+                "unproven": 0,
+                "text_sha256": T.sha(T.GOOD[row["site_id"]]),
+            }
+            assert provenance["web_facts"] == []
+            assert row["verification"] == R.VERIFIED
         cleared = [r for r in rows if r["status"] == R.CLEARED]
         assert [(r["site_id"], r["reason"]) for r in cleared] == [(T.EMPTY, R.NO_DESCRIPTION)]
+        assert cleared[0]["verification"] is None
 
     def test_a_blank_description_clears_the_card_on_the_text_as_it_was_read(
         self, tmp_path: Path
@@ -520,6 +619,7 @@ class TestTheRun:
         run = make_run(tmp_path, rows)
         step(run, tmp_path, "write", GOOD_WRITES)
         step(run, tmp_path, "check", PASSES)
+        step(run, tmp_path, "verify", VERIFIES)
         R.outcomes(run)
         empty = next(r for r in R.read_outcomes(run) if r["site_id"] == T.EMPTY)
         assert (empty["status"], empty["reason"]) == (R.CLEARED, R.NO_DESCRIPTION)
@@ -547,7 +647,8 @@ class TestTheRun:
             "No sentence of the description supports the claim: the oldest tomb"
             in prompts[T.NEWGRANGE]
         )
-        assert R.status(run)["states"] == {"accepted": 2, "due rewrite1": 2}
+        # the two accepted cards wait for their web verification, which follows every check round
+        assert R.status(run)["states"] == {"due rewrite1": 2, "due verify": 2}
 
     def test_two_failed_rewrites_clear_the_card(self, tmp_path: Path) -> None:
         run = make_run(tmp_path)
@@ -559,6 +660,7 @@ class TestTheRun:
         step(run, tmp_path, "rewrite2", {T.SKARA: T.writer_answer(T.GOOD[T.SKARA])})
         fail = T.checker_answer("FAIL", [("x", [])], ["Unsupported."])
         step(run, tmp_path, "check2", {T.SKARA: fail})
+        step(run, tmp_path, "verify", VERIFIES)
         R.outcomes(run)
         skara = next(r for r in R.read_outcomes(run) if r["site_id"] == T.SKARA)
         assert skara["status"] == R.CLEARED and skara["reason"] == "failed-after-two-rewrites"
@@ -654,22 +756,610 @@ class TestTheRun:
             R.brief(run, handoff, "write-009")
 
 
-# ------------------------------------------------------------------------------ the pilot judge
+# ------------------------------------------------------------------------------ the web (a mock)
 PAGE = "https://example.org/skara-brae"
 PAGE_TEXT = b"<html><body><p>The site was occupied from roughly 3180 BC to around 2500 BC.</p></body></html>"
 #: A register that refuses automated readers (as Historic England does): its quote cannot be proven.
 REFUSING = "https://register.example/skara-brae"
+#: A page that contradicts the card's storm claim, and a Wikipedia mirror serving the same text.
+CONTRA = "https://en.wikipedia.org/wiki/Skara_Brae"
+MIRROR = "https://www.wikiwand.com/en/Skara_Brae"
+CONTRA_QUOTE = "A storm in the winter of 1850 stripped the grass from a large mound."
+CONTRA_TEXT = f"<html><body><p>{CONTRA_QUOTE}</p></body></html>".encode()
+#: An AI aggregator (lane WC's source rule refuses it) serving the very text of PAGE.
+AGGREGATOR = "https://aroundus.com/p/skara-brae"
 
 
 def judge_client() -> httpx.Client:
     def handler(request: httpx.Request) -> httpx.Response:
-        if str(request.url) == PAGE:
-            return httpx.Response(200, headers={"Content-Type": "text/html"}, content=PAGE_TEXT)
+        html = {"Content-Type": "text/html"}
+        if str(request.url) in (PAGE, AGGREGATOR):
+            return httpx.Response(200, headers=html, content=PAGE_TEXT)
+        if str(request.url) in (CONTRA, MIRROR):
+            return httpx.Response(200, headers=html, content=CONTRA_TEXT)
         if str(request.url) == REFUSING:
             return httpx.Response(403, content=b"forbidden")
         return httpx.Response(404, content=b"no")
 
     return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+# ------------------------------------------------------------------------------ the verification
+def proven(verdict: str = "SUPPORTED") -> dict[str, Any]:
+    return {"claim": "c", "verdict": verdict, "url": PAGE, "quote": "q", "proven": True}
+
+
+def unproven(verdict: str = "UNVERIFIABLE") -> dict[str, Any]:
+    return {"claim": "u", "verdict": verdict, "url": None, "quote": None, "proven": False}
+
+
+class TestTheVerifiedRule:
+    """CARD_DESCRIPTIONS.md 2.1: VERIFIED only without a contradiction, with at most one claim
+    without a proving quote, and never the central (first) claim."""
+
+    def test_a_card_whose_every_claim_is_proven_is_verified(self) -> None:
+        assert R.card_verification([proven(), proven(), proven()]) == R.VERIFIED
+
+    def test_one_unproven_claim_beside_a_proven_central_one_is_allowed(self) -> None:
+        assert R.card_verification([proven(), unproven(), proven()]) == R.VERIFIED
+        not_found = {**proven(), "proven": False}  # SUPPORTED, but the page lacks the quote
+        assert R.card_verification([proven(), not_found]) == R.VERIFIED
+
+    def test_the_central_claim_is_never_unproven(self) -> None:
+        assert R.card_verification([unproven(), proven(), proven()]) == R.UNPROVEN
+
+    def test_two_unproven_claims_are_too_many(self) -> None:
+        assert CP.MAX_UNPROVEN_CLAIMS == 1
+        claims = [proven(), unproven(), unproven(), proven(), proven(), proven()]
+        assert R.card_verification(claims) == R.UNPROVEN
+
+    def test_a_quote_the_page_does_not_hold_proves_nothing(self) -> None:
+        not_found = {**proven(), "proven": False}  # SUPPORTED, but the machine found no quote
+        assert R.card_verification([proven(), not_found, not_found]) == R.UNPROVEN
+        assert R.card_verification([not_found, proven()]) == R.UNPROVEN
+
+    def test_a_contradiction_proven_or_not_is_contradicted(self) -> None:
+        assert R.card_verification([proven(), proven("CONTRADICTED")]) == R.CONTRADICTED
+        refused = {**proven("CONTRADICTED"), "proven": False}  # a 403 page, a mis-copied quote
+        assert R.card_verification([proven(), proven(), refused]) == R.CONTRADICTED
+
+    def test_the_findings_of_a_verification_name_what_failed(self) -> None:
+        record = {
+            "kind": "verify",
+            "claims": [
+                {**proven("CONTRADICTED"), "claim": "found in 1850", "quote": "in 1851"},
+                proven(),
+                unproven(),
+            ],
+        }
+        assert P.findings_of(record) == (
+            f'The web check contradicts: found in 1850 ({PAGE}: "in 1851")',
+            "The web check could not prove: u",
+        )
+
+
+STORM = "a storm laid bare stone structures in the sand dunes"
+#: The rewrite after the storm claim was contradicted: the correction rests on web fact W1.
+REWRITTEN = (
+    "In the winter of 1850 a storm stripped the grass from a large mound on Orkney: beneath lay "
+    "Skara Brae, a Neolithic village of hearths, beds and dressers, lived in from roughly 3180 BC."
+)
+
+
+def contradicted_answer() -> str:
+    """The first verifier: the storm claim contradicted on Wikipedia (proven), on a mirror (never a
+    source: not fetched, not proven) and on a register that refused the machine (not proven)."""
+    return T.judge_answer(
+        T.judged_claim(),
+        T.judged_claim("CONTRADICTED", CONTRA_QUOTE, CONTRA, STORM),
+        T.judged_claim("CONTRADICTED", CONTRA_QUOTE, MIRROR, "the storm claim, on a mirror"),
+        T.judged_claim(
+            "CONTRADICTED", "Skara Brae was dug out of the dunes by hand.", REFUSING, "the dunes"
+        ),
+    )
+
+
+def rewrite_answer(
+    card: str = REWRITTEN,
+    repeats: list[str | None] | None = None,
+    basis_ids: tuple[str, ...] = ("S1", "S3", "S6", "W1"),
+) -> str:
+    return json.dumps(
+        {
+            "card": card,
+            "basis": list(basis_ids),
+            "repeats": ["S2", None, "S2"] if repeats is None else repeats,
+        }
+    )
+
+
+W1_PASS = T.checker_answer(claims=[("a storm in 1850 revealed it", ["W1"]), ("Neolithic", ["S1"])])
+#: The second verifier of the rewrite: both claims W1_PASS's checker listed, proven.
+VERIFIES_REWRITTEN = T.judge_answer(T.judged_claim(), T.judged_claim(claim="a Neolithic village"))
+#: The one site of `chain`, the records of a card verified, contradicted, rewritten, verified again.
+CHAINED = "site-1"
+
+
+def chain(other: dict[str, str] | None = None) -> dict[str, dict[str, dict[str, Any]]]:
+    """Every stage's record of CHAINED: each judgement of the card its writer's record holds, except
+    the stages `other` gives another card."""
+    first, second = "the first card", "the rewritten card"
+    supported = {**proven(), "quote_outcome": "found"}
+    rows = {
+        "write": {"card": first, "problems": []},
+        "check": {"card": first, "verdict": "PASS"},
+        "verify": {
+            "kind": "verify",
+            "card": first,
+            "verdict": R.CONTRADICTED,
+            "claims": [supported, {**supported, "verdict": "CONTRADICTED"}],
+        },
+        "rewrite-v": {"card": second, "problems": []},
+        "check-v": {"card": second, "verdict": "PASS"},
+        "verify2": {"kind": "verify", "card": second, "verdict": R.VERIFIED, "claims": [supported]},
+    }
+    records: dict[str, dict[str, dict[str, Any]]] = {stage: {} for stage in R.STAGES}
+    for stage, row in rows.items():
+        card = (other or {}).get(stage, row["card"])
+        records[stage][CHAINED] = {"site_id": CHAINED, "stage": stage, **row, "card": card}
+    return records
+
+
+class TestTheVerification:
+    def _checked(self, tmp_path: Path) -> Path:
+        run = make_run(tmp_path, [T.row(T.SKARA), T.row(T.NEWGRANGE)])
+        step(run, tmp_path, "write", GOOD_WRITES)
+        step(run, tmp_path, "check", PASSES)
+        return run
+
+    def _contradicted(self, tmp_path: Path) -> Path:
+        run = self._checked(tmp_path)
+        verdicts = step(run, tmp_path, "verify", {**VERIFIES, T.SKARA: contradicted_answer()})
+        assert verdicts["verdicts"] == {"CONTRADICTED": 1, "VERIFIED": 1}
+        return run
+
+    def _prompt(self, tmp_path: Path, stage: str) -> str:
+        handoff = tmp_path / f"handoff-{stage}"
+        line = next(line for line in OH.manifest(handoff) if line["label"] == T.SKARA)
+        return (handoff / line["prompt_path"]).read_text(encoding="utf-8")
+
+    def test_every_accepted_card_is_asked_five_to_a_batch(self) -> None:
+        due = {f"site-{n:02d}": R.Progress(R.DUE, "verify") for n in range(7)}
+        groups = R._batches("verify", due)
+        assert [(batch, len(members)) for batch, members in groups] == [
+            ("verify-001", 5),
+            ("verify-002", 2),
+        ]
+
+    def test_the_verifier_sees_only_the_card_and_every_quote_is_checked(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._contradicted(tmp_path)
+        prompt = self._prompt(tmp_path, "verify")
+        assert prompt == P.judge_prompt("Skara Brae", "Scotland", T.GOOD[T.SKARA])
+        record = {r["site_id"]: r for r in R.read_jsonl(run / "STAGE-verify.jsonl")}[T.SKARA]
+        outcomes = [(c["verdict"], c["quote_outcome"], c["proven"]) for c in record["claims"]]
+        assert outcomes == [
+            ("SUPPORTED", "found", True),
+            ("CONTRADICTED", "found", True),
+            ("CONTRADICTED", f"source refused: {R.url_problem(MIRROR)}", False),
+            ("CONTRADICTED", "fetch failed", False),
+        ]
+        assert record["verdict"] == R.CONTRADICTED and record["unproven"] == 3
+        assert R.status(run)["states"] == {"accepted": 1, "due rewrite-v": 1}
+
+    def test_a_contradicted_card_is_rewritten_with_the_pages_and_quotes(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._contradicted(tmp_path)
+        R.export_stage(run, "rewrite-v", tmp_path / "handoff-rewrite-v")
+        prompt = self._prompt(tmp_path, "rewrite-v")
+        assert (
+            f"THE CARD THE WEB CHECK DID NOT VERIFY ({len(T.GOOD[T.SKARA])} characters)" in prompt
+        )
+        assert f'1. {STORM}\n   page: {CONTRA}\n   quote: "{CONTRA_QUOTE}"' in prompt
+        assert "(the machine found this quote on the page)" in prompt
+        assert "could not confirm this quote on the page: fetch failed" in prompt
+        assert "could not confirm this quote on the page: source refused: " in prompt
+        # a web fact: only a proven contradiction - its page admitted by lane WC's source rule
+        assert f'W1 "{CONTRA_QUOTE}" - {CONTRA}' in prompt and "W2" not in prompt
+        assert '"repeats": ["S3"]' in prompt and "When in doubt, drop the claim" in prompt
+        # the identity is never corrected from the web: a page may describe a namesake
+        assert "is never corrected from a web fact" in prompt
+
+    def test_the_web_facts_are_the_proven_contradictions_beyond_the_central_claim(self) -> None:
+        """A proven contradiction is a web fact - but never one of the central claim (what the site
+        is, and where): a page that says the site is something else may describe a namesake."""
+        claims = [
+            {**proven("CONTRADICTED"), "url": CONTRA, "quote": "zero"},
+            {**proven("CONTRADICTED"), "url": CONTRA, "quote": "one"},
+            {**proven("CONTRADICTED"), "url": REFUSING, "quote": "three", "proven": False},
+            {**proven(), "url": PAGE, "quote": "five"},
+            {**proven("CONTRADICTED"), "url": PAGE, "quote": "six"},
+        ]
+        facts = R.web_facts({"claims": claims})
+        assert facts == (
+            R.C.WebFact("W1", CONTRA, "one"),
+            R.C.WebFact("W2", PAGE, "six"),
+        )
+
+    def test_a_quote_on_a_page_the_source_rule_refuses_proves_nothing(self, tmp_path: Path) -> None:
+        """An AI aggregator or a Wikipedia mirror may repeat the very text under test (this
+        project's, or Wikipedia's wrong sentence): lane WC's source rule refuses it, so its quote
+        proves nothing - found on the page or not - and the page is never fetched."""
+        run = self._checked(tmp_path)
+        answer = T.judge_answer(
+            T.judged_claim(url=AGGREGATOR), T.judged_claim(url=MIRROR, claim="from 3180 BC")
+        )
+        verdicts = step(run, tmp_path, "verify", {**VERIFIES, T.SKARA: answer})["verdicts"]
+        assert verdicts == {"UNPROVEN": 1, "VERIFIED": 1}
+        record = {r["site_id"]: r for r in R.read_jsonl(run / "STAGE-verify.jsonl")}[T.SKARA]
+        assert [(c["quote_outcome"], c["proven"]) for c in record["claims"]] == [
+            (f"source refused: {R.url_problem(AGGREGATOR)}", False),
+            (f"source refused: {R.url_problem(MIRROR)}", False),
+        ]
+        kept = {json.loads(p.read_text("utf-8"))["url"] for p in (run / "pages").glob("*.json")}
+        assert kept == {PAGE}
+
+    def test_the_rewrite_names_the_sentence_each_contradicted_claim_repeats(
+        self, tmp_path: Path
+    ) -> None:
+        site = basis().with_web([R.C.WebFact("W1", CONTRA, CONTRA_QUOTE)])
+        written = A.parse_verify_writer(rewrite_answer(repeats=["S2"]), site, 1)
+        assert written.repeats == ("S2",) and "W1" in written.basis
+        for repeats, why in (
+            (["S2", None], "one per contradicted claim"),
+            (["W1"], "neither null nor the id of a sentence"),
+            (["S99"], "neither null nor the id of a sentence"),
+        ):
+            with pytest.raises(A.AnswerError, match=why):
+                A.parse_verify_writer(rewrite_answer(repeats=repeats), site, 1)
+        with pytest.raises(A.AnswerError, match="exactly"):
+            A.parse_verify_writer(T.writer_answer(REWRITTEN), site, 1)
+
+    def test_a_correction_rests_on_its_web_fact_and_the_fact_basis_records_it(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._contradicted(tmp_path)
+        written = step(run, tmp_path, "rewrite-v", {T.SKARA: rewrite_answer()})
+        assert written["mechanical_failures"] == 0  # 1850 is grounded by W1 alone
+        assert "1850" not in T.DESCRIPTIONS[T.SKARA]
+        R.export_stage(run, "check-v", tmp_path / "handoff-check-v")
+        prompt = self._prompt(tmp_path, "check-v")
+        assert REWRITTEN in prompt and f'W1 "{CONTRA_QUOTE}" - {CONTRA}' in prompt
+        assert "only if that fact's page is a reputable source" in prompt
+        assert "makes this_site false" in prompt
+        answer_all(run, "check-v", tmp_path / "handoff-check-v", {T.SKARA: W1_PASS})
+        assert R.import_stage(run, "check-v", fit=T.fit)["verdicts"] == {"PASS": 1}
+        verified = step(run, tmp_path, "verify2", {T.SKARA: VERIFIES_REWRITTEN})
+        assert verified["verdicts"] == {"VERIFIED": 1}
+        result = R.outcomes(run)
+        assert result["counts"] == {"accepted": 2} and result["description_defects"] == 2
+        skara = next(r for r in R.read_outcomes(run) if r["site_id"] == T.SKARA)
+        provenance = CP.validate(skara["provenance"])
+        assert (skara["card"], skara["attempts"]) == (REWRITTEN, 2)
+        assert (provenance["check"]["stage"], provenance["verify"]["stage"]) == (
+            "check-v",
+            "verify2",
+        )
+        assert provenance["verify"]["by"] == "teaser-verify2-001"
+        assert provenance["verify"]["text_sha256"] == T.sha(REWRITTEN)
+        assert provenance["web_facts"] == [{"id": "W1", "url": CONTRA, "quote": CONTRA_QUOTE}]
+        assert [v["stage"] for v in skara["verifications"]] == ["verify", "verify2"]
+        assert skara["findings"][0]["reasons"][0].startswith("The web check contradicts: ")
+
+    def test_each_mapped_contradiction_is_a_description_defect_for_its_lane(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._contradicted(tmp_path)
+        step(run, tmp_path, "rewrite-v", {T.SKARA: rewrite_answer()})
+        step(run, tmp_path, "check-v", {T.SKARA: W1_PASS})
+        step(run, tmp_path, "verify2", {T.SKARA: VERIFIES_REWRITTEN})
+        R.outcomes(run)
+        defects = R.read_jsonl(run / "DESCRIPTION_DEFECTS.jsonl")
+        # three contradicted claims: two repeat S2, one repeats no sentence (not the text's fault)
+        assert [(d["sentence"], d["url"], d["proven"]) for d in defects] == [
+            (2, CONTRA, True),
+            (2, REFUSING, False),
+        ]
+        first = defects[0]
+        assert (first["stage"], first["candidates"]) == ("verify", ["S2"])
+        assert first["sentence_text"] == basis().sentences[1].text
+        assert (first["basis"], first["owner_lane"]) == ("W", "WA")
+        assert (first["claim"], first["quote"]) == (STORM, CONTRA_QUOTE)
+        assert (first["verifier"], first["mapped_by"]) == (
+            "teaser-verify-001",
+            "teaser-rewrite-v-001",
+        )
+        assert first["desc_sha256"] == T.sha(T.DESCRIPTIONS[T.SKARA])
+        report = (run / "OUTCOMES.md").read_text(encoding="utf-8")
+        assert "description sentences the web contradicts: 2" in report
+        assert f"CONTRADICTED: {STORM} - {CONTRA} (found)" in report
+        assert "| site | status | verification | card |" in report
+
+    def test_a_sentence_checked_text_s_defect_is_lane_wc_s(self) -> None:
+        assert R.OWNER_LANE == {"R": "WA", "S": "WA", "T": "WA", "W": "WA", "WC": "WC"}
+
+    def test_still_contradicted_after_the_rewrite_the_site_gets_no_card(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._contradicted(tmp_path)
+        step(run, tmp_path, "rewrite-v", {T.SKARA: rewrite_answer()})
+        step(run, tmp_path, "check-v", {T.SKARA: W1_PASS})
+        again = T.judge_answer(T.judged_claim(), T.judged_claim("CONTRADICTED", claim="1850"))
+        step(run, tmp_path, "verify2", {T.SKARA: again})
+        R.outcomes(run)
+        skara = next(r for r in R.read_outcomes(run) if r["site_id"] == T.SKARA)
+        assert (skara["status"], skara["reason"]) == (R.CLEARED, R.CONTRADICTED_AFTER_VERIFY)
+        assert (skara["card"], skara["provenance"]) == (None, None)
+        assert skara["verification"] == R.CONTRADICTED and len(skara["verifications"]) == 2
+        # the second verifier's contradiction rests on the sentences check-v found (S1 here): a
+        # description defect whose sentence no writer named - the repair gets the candidates
+        defects = R.read_jsonl(run / "DESCRIPTION_DEFECTS.jsonl")
+        assert [(d["stage"], d["sentence"], d["candidates"], d["mapped_by"]) for d in defects] == [
+            ("verify", 2, ["S2"], "teaser-rewrite-v-001"),
+            ("verify", 2, ["S2"], "teaser-rewrite-v-001"),
+            ("verify2", None, ["S1"], None),
+        ]
+        last = defects[-1]
+        assert (last["claim"], last["url"], last["proven"]) == ("1850", PAGE, True)
+        assert (last["verifier"], last["sentence_text"]) == ("teaser-verify2-001", None)
+
+    def test_a_second_contradiction_of_a_card_on_web_facts_alone_is_no_defect(
+        self, tmp_path: Path
+    ) -> None:
+        """A rewrite whose every claim rests on a web fact says nothing of the description: the
+        second verifier's contradiction of it is a dispute between pages, not a defect."""
+        run = self._contradicted(tmp_path)
+        step(run, tmp_path, "rewrite-v", {T.SKARA: rewrite_answer()})
+        web_only = T.checker_answer(claims=[("a storm in 1850 revealed it", ["W1"])])
+        step(run, tmp_path, "check-v", {T.SKARA: web_only})
+        again = T.judge_answer(T.judged_claim(), T.judged_claim("CONTRADICTED", claim="1850"))
+        step(run, tmp_path, "verify2", {T.SKARA: again})
+        R.outcomes(run)
+        defects = R.read_jsonl(run / "DESCRIPTION_DEFECTS.jsonl")
+        assert [d["stage"] for d in defects] == ["verify", "verify"]
+
+    def test_the_rewrite_and_its_check_keep_the_web_facts_they_were_asked_with(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The web facts a rewrite and its check were shown are recorded with them; the provenance
+        records those, and a code change between the imports that would offer others (renumbered W
+        ids, a fact the checker never saw under its id) is refused, not written."""
+        run = self._contradicted(tmp_path)
+        step(run, tmp_path, "rewrite-v", {T.SKARA: rewrite_answer()})
+        step(run, tmp_path, "check-v", {T.SKARA: W1_PASS})
+        step(run, tmp_path, "verify2", {T.SKARA: VERIFIES_REWRITTEN})
+        fact = {"id": "W1", "url": CONTRA, "quote": CONTRA_QUOTE}
+        for stage in ("rewrite-v", "check-v"):
+            record = {r["site_id"]: r for r in R.read_jsonl(run / f"STAGE-{stage}.jsonl")}
+            assert record[T.SKARA]["web_facts"] == [fact]
+        monkeypatch.setattr(R, "web_facts", lambda verified: ())
+        with pytest.raises(R.RunError, match="STAGE-check-v was asked with web facts"):
+            R.outcomes(run)
+
+    def test_the_state_is_the_one_card_every_judgement_judged(self) -> None:
+        state = R.progress(CHAINED, chain())
+        assert (state.status, state.card) == (R.ACCEPTED, "the rewritten card")
+
+    @pytest.mark.parametrize(
+        ("stage", "writer"),
+        [
+            ("check", "write"),
+            ("verify", "write"),
+            ("check-v", "rewrite-v"),
+            ("verify2", "rewrite-v"),
+        ],
+    )
+    def test_a_judgement_of_another_card_is_refused(self, stage: str, writer: str) -> None:
+        """A check or verification of another text than its writer's record holds (a stage
+        imported again with other answers, a file edited by hand) never counts for the card."""
+        with pytest.raises(
+            R.RunError, match=f"STAGE-{stage} judged another card than STAGE-{writer}"
+        ):
+            R.progress(CHAINED, chain({stage: "another card"}))
+
+    def test_a_stage_imported_again_with_another_card_is_refused(self, tmp_path: Path) -> None:
+        """The runbook's recovery for a malformed answer - delete it, have it answered again - must
+        not swap a rewrite after its check and its verification: the import refuses a card the later
+        stages did not judge, and writes nothing."""
+        run = self._contradicted(tmp_path)
+        step(run, tmp_path, "rewrite-v", {T.SKARA: rewrite_answer()})
+        step(run, tmp_path, "check-v", {T.SKARA: W1_PASS})
+        step(run, tmp_path, "verify2", {T.SKARA: VERIFIES_REWRITTEN})
+        before = (run / "STAGE-rewrite-v.jsonl").read_bytes()
+        handoff = tmp_path / "handoff-rewrite-v"
+        line = next(line for line in OH.manifest(handoff) if line["label"] == T.SKARA)
+        (handoff / line["answer_path"]).unlink()
+        OH.write_answer(
+            handoff, batch_id=line["batch_id"], stage="rewrite-v", label=T.SKARA,
+            text=rewrite_answer(T.GOOD[T.SKARA], basis_ids=("S1", "S2", "S3", "S6")),
+            answered_by=R.agent_name(line["batch_id"]),
+        )  # fmt: skip
+        with pytest.raises(R.RunError, match="STAGE-check-v judged another card"):
+            R.import_stage(run, "rewrite-v", fit=T.fit)
+        assert (run / "STAGE-rewrite-v.jsonl").read_bytes() == before
+        R.outcomes(run)
+        skara = next(r for r in R.read_outcomes(run) if r["site_id"] == T.SKARA)
+        assert skara["card"] == REWRITTEN
+
+    def test_unproven_twice_the_site_gets_no_card(self, tmp_path: Path) -> None:
+        run = self._checked(tmp_path)
+        vague = T.judge_answer(
+            T.judged_claim(),
+            T.judged_claim("UNVERIFIABLE", None, None, "hearths"),
+            T.judged_claim("UNVERIFIABLE", None, None, "dressers"),
+        )
+        assert step(run, tmp_path, "verify", {**VERIFIES, T.SKARA: vague})["verdicts"] == {
+            "UNPROVEN": 1,
+            "VERIFIED": 1,
+        }
+        R.export_stage(run, "rewrite-v", tmp_path / "handoff-rewrite-v")
+        prompt = self._prompt(tmp_path, "rewrite-v")
+        assert "CONTRADICTED - a page says otherwise:\n(none)" in prompt
+        assert "- hearths\n- dressers" in prompt and "WEB FACTS" not in prompt
+        with_web_fact = rewrite_answer(T.GOOD[T.SKARA], [])  # there is no web fact to rest on
+        assert (
+            "not sentence ids"
+            in R.check_answer(
+                run,
+                tmp_path / "handoff-rewrite-v",
+                "rewrite-v-001",
+                T.SKARA,
+                with_web_fact,
+                fit=T.fit,
+            )["problems"][0]
+        )
+        answer_all(
+            run, "rewrite-v", tmp_path / "handoff-rewrite-v",
+            {T.SKARA: rewrite_answer(T.GOOD[T.SKARA], [], ("S2", "S3"))},
+        )  # fmt: skip
+        R.import_stage(run, "rewrite-v", fit=T.fit)
+        step(run, tmp_path, "check-v", {T.SKARA: PASSES[T.SKARA]})
+        step(run, tmp_path, "verify2", {T.SKARA: vague})
+        R.outcomes(run)
+        skara = next(r for r in R.read_outcomes(run) if r["site_id"] == T.SKARA)
+        assert (skara["status"], skara["reason"]) == (R.CLEARED, R.UNPROVEN_AFTER_VERIFY)
+        assert R.read_jsonl(run / "DESCRIPTION_DEFECTS.jsonl") == []
+
+    def test_a_rewrite_the_checker_fails_clears_the_site(self, tmp_path: Path) -> None:
+        run = self._contradicted(tmp_path)
+        step(run, tmp_path, "rewrite-v", {T.SKARA: rewrite_answer()})
+        fail = T.checker_answer("FAIL", [("1850", [])], ["W1 is not on a reputable page."])
+        step(run, tmp_path, "check-v", {T.SKARA: fail})
+        assert step(run, tmp_path, "verify2", {})["questions"] == 0
+        R.outcomes(run)
+        skara = next(r for r in R.read_outcomes(run) if r["site_id"] == T.SKARA)
+        assert (skara["status"], skara["reason"]) == (R.CLEARED, R.FAILED_VERIFY_REWRITE)
+
+    def test_a_rewrite_that_fails_the_mechanical_checks_clears_the_site(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._contradicted(tmp_path)
+        written = step(run, tmp_path, "rewrite-v", {T.SKARA: rewrite_answer("Skara Brae.")})
+        assert written["mechanical_failures"] == 1
+        assert step(run, tmp_path, "check-v", {})["questions"] == 0
+        assert R.status(run)["states"] == {"accepted": 1, "cleared": 1}
+        R.outcomes(run)
+        skara = next(r for r in R.read_outcomes(run) if r["site_id"] == T.SKARA)
+        assert skara["reason"] == R.FAILED_VERIFY_REWRITE and skara["attempts"] == 2
+
+    def test_a_number_only_a_web_fact_gives_is_refused_without_it(self) -> None:
+        assert any(
+            p.startswith("numbers not in the description: 1850") for p in problems(REWRITTEN)
+        )
+        with_fact = basis().with_web([R.C.WebFact("W1", CONTRA, CONTRA_QUOTE)])
+        assert C.problems(REWRITTEN, with_fact, fit=T.fit) == []
+
+    def test_a_verifier_who_wrote_or_checked_the_card_is_refused(self, tmp_path: Path) -> None:
+        run = self._checked(tmp_path)
+        with pytest.raises(R.RunError, match="wrote or checked this site before"):
+            step(run, tmp_path, "verify", VERIFIES, by="teaser-check-001")
+
+    def test_the_second_verifier_is_a_new_one(self, tmp_path: Path) -> None:
+        run = self._contradicted(tmp_path)
+        step(run, tmp_path, "rewrite-v", {T.SKARA: rewrite_answer()})
+        step(run, tmp_path, "check-v", {T.SKARA: W1_PASS})
+        with pytest.raises(R.RunError, match="wrote or checked this site before"):
+            step(run, tmp_path, "verify2", {T.SKARA: VERIFIES_REWRITTEN}, by="teaser-verify-001")
+
+    def test_a_verifier_who_lists_fewer_claims_than_the_checker_is_refused(
+        self, tmp_path: Path
+    ) -> None:
+        """A verifier that lists only the central claim would VERIFY a card whose other claims
+        nobody researched: it lists at least as many claims as the check that accepted the card
+        (another agent's count - the verifier learns only the number, from `check-answer`)."""
+        run = make_run(tmp_path, [T.row(T.SKARA)])
+        step(run, tmp_path, "write", {T.SKARA: GOOD_WRITES[T.SKARA]})
+        three = T.checker_answer(
+            claims=[("on Orkney", ["S1"]), ("a Neolithic village", ["S1"]), ("3180 BC", ["S3"])]
+        )
+        step(run, tmp_path, "check", {T.SKARA: three})
+        handoff = tmp_path / "handoff-verify"
+        R.export_stage(run, "verify", handoff)
+        shown = R.check_answer(run, handoff, "verify-001", T.SKARA, T.judge_answer(), fit=T.fit)
+        assert not shown["ok"]
+        assert shown["problems"] == [
+            "the answer lists 1 claim(s); the card makes at least 3 (another agent's count): list "
+            "every claim of the text, each fact on its own"
+        ]
+        all_three = T.judge_answer(*(T.judged_claim(claim=f"claim {n}") for n in range(3)))
+        assert R.check_answer(run, handoff, "verify-001", T.SKARA, all_three, fit=T.fit)["ok"]
+        answer_all(run, "verify", handoff, {T.SKARA: T.judge_answer()})
+        with pytest.raises(R.RunError, match="lists 1 claim"):
+            R.import_stage(run, "verify", fit=T.fit, client=judge_client(), pace=0)
+
+    def test_a_fetch_that_failed_for_a_passing_reason_is_tried_again(self, tmp_path: Path) -> None:
+        """No answer, a 429 or a 5xx may pass: such a page is fetched again at the next import (a
+        404 is the page's answer and is kept), and the import names every page still failing so it
+        can be run again before the next stage is exported."""
+        calls: Counter[str] = Counter()
+        down = "https://down.example/skara-brae"
+        gone = "https://gone.example/newgrange"
+        unreachable = "https://unreachable.example/newgrange"
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            calls[url] += 1
+            if url == unreachable:
+                raise httpx.ConnectError("no route to host", request=request)
+            if url == PAGE and calls[url] == 1:
+                return httpx.Response(429, content=b"slow down")
+            if url == PAGE:
+                return httpx.Response(200, headers={"Content-Type": "text/html"}, content=PAGE_TEXT)
+            if url == down:
+                return httpx.Response(503, content=b"down")
+            return httpx.Response(404, content=b"no")
+
+        run = self._checked(tmp_path)
+        handoff = tmp_path / "handoff-verify"
+        R.export_stage(run, "verify", handoff)
+        answers = {
+            T.SKARA: T.judge_answer(T.judged_claim(), T.judged_claim(url=down, claim="x")),
+            T.NEWGRANGE: T.judge_answer(
+                T.judged_claim(url=gone), T.judged_claim(url=unreachable, claim="y")
+            ),
+        }
+        answer_all(run, "verify", handoff, answers)
+        client = httpx.Client(transport=httpx.MockTransport(handler))
+        first = R.import_stage(run, "verify", fit=T.fit, client=client, pace=0)
+        assert first["verdicts"] == {"UNPROVEN": 2}
+        assert first["transient_failures"] == [down, PAGE, unreachable]
+        again = R.import_stage(run, "verify", fit=T.fit, client=client, pace=0)
+        assert again["verdicts"] == {"UNPROVEN": 1, "VERIFIED": 1}
+        assert again["transient_failures"] == [down, unreachable]
+        assert calls == {PAGE: 2, down: 2, unreachable: 2, gone: 1}
+
+    def test_the_verify_stages_wait_for_every_check(self, tmp_path: Path) -> None:
+        run = make_run(tmp_path, [T.row(T.SKARA), T.row(T.NEWGRANGE)])
+        step(run, tmp_path, "write", {**GOOD_WRITES, T.SKARA: T.writer_answer("Skara Brae.")})
+        step(run, tmp_path, "check", PASSES)
+        with pytest.raises(R.RunError, match="wait for their import"):
+            R.export_stage(run, "verify", tmp_path / "h-verify")
+
+    def test_check_answer_takes_a_verifier_s_shape_only(self, tmp_path: Path) -> None:
+        run = self._checked(tmp_path)
+        handoff = tmp_path / "handoff-verify"
+        R.export_stage(run, "verify", handoff)
+        good = R.check_answer(run, handoff, "verify-001", T.SKARA, T.judge_answer(), fit=T.fit)
+        assert good == {"ok": True, "problems": []}
+        bad = R.check_answer(run, handoff, "verify-001", T.SKARA, '{"claims": []}', fit=T.fit)
+        assert not bad["ok"]
+
+    def test_the_brief_of_a_verifier(self, tmp_path: Path) -> None:
+        run = self._checked(tmp_path)
+        handoff = tmp_path / "handoff-verify"
+        R.export_stage(run, "verify", handoff)
+        text = R.brief(run, handoff, "verify-001")
+        assert "Opus verifier verify-001" in text and "sources on the web" in text
+        assert "--answered-by teaser-verify-001" in text and "verified or judged" in text
+
+    def test_the_judge_lists_the_central_claim_first(self) -> None:
+        prompt = P.judge_prompt("Skara Brae", "Scotland", T.GOOD[T.SKARA])
+        assert "List every claim of the text, the central claim first" in prompt
+
+
+# ------------------------------------------------------------------------------ the pilot judge
 
 
 def claim(
@@ -692,10 +1382,13 @@ def judged(
 
 
 class TestThePilotJudge:
-    def _accepted_run(self, tmp_path: Path) -> Path:
+    def _accepted_run(self, tmp_path: Path, check: str = PASSES[T.SKARA]) -> Path:
         run = make_run(tmp_path, [T.row(T.SKARA)])
         step(run, tmp_path, "write", {T.SKARA: GOOD_WRITES[T.SKARA]})
-        step(run, tmp_path, "check", {T.SKARA: PASSES[T.SKARA]})
+        step(run, tmp_path, "check", {T.SKARA: check})
+        claims = len(json.loads(check)["claims"])
+        verifies = T.judge_answer(*(T.judged_claim(claim=f"claim {n}") for n in range(claims)))
+        step(run, tmp_path, "verify", {T.SKARA: verifies})
         R.outcomes(run)
         return run
 
@@ -739,9 +1432,46 @@ class TestThePilotJudge:
         result = self._judge(self._accepted_run(tmp_path), tmp_path, text)
         assert result["unproven"] == 1 and result["pilot"] == "FAIL"
 
+    def test_a_judge_who_lists_fewer_claims_than_the_checker_is_refused(
+        self, tmp_path: Path
+    ) -> None:
+        """The pilot's judge, like every verifier, covers at least the accepting check's claims."""
+        two = T.checker_answer(claims=[("on Orkney", ["S1"]), ("3180 BC", ["S3"])])
+        run = self._accepted_run(tmp_path, two)
+        handoff = tmp_path / "handoff-judge"
+        with pytest.raises(R.RunError, match="lists 1 claim"):
+            self._judge(run, tmp_path, judged())
+        shown = R.check_answer(run, handoff, "judge-001", T.SKARA, judged(), fit=T.fit)
+        assert not shown["ok"] and "the card makes at least 2" in shown["problems"][0]
+
     def test_a_judge_who_worked_on_the_card_is_refused(self, tmp_path: Path) -> None:
-        with pytest.raises(R.RunError, match="worked on this card"):
+        with pytest.raises(R.RunError, match="answered a question of this run"):
             self._judge(self._accepted_run(tmp_path), tmp_path, judged(), by="teaser-check-001")
+
+    def test_the_pilot_s_judge_is_no_verifier_of_the_run(self, tmp_path: Path) -> None:
+        """The gate is a fresh judge's: not the verifier of this card, nor of any other - the
+        judge of Skara Brae is refused for having verified Newgrange."""
+        run = make_run(tmp_path, [T.row(T.SKARA), T.row(T.NEWGRANGE)])
+        step(run, tmp_path, "write", GOOD_WRITES)
+        step(run, tmp_path, "check", PASSES)
+        handoff = tmp_path / "handoff-verify"
+        R.export_stage(run, "verify", handoff)
+        for site_id, name in ((T.SKARA, "teaser-verify-a"), (T.NEWGRANGE, "teaser-verify-b")):
+            OH.write_answer(
+                handoff, batch_id="verify-001", stage="verify", label=site_id,
+                text=T.judge_answer(), answered_by=name,
+            )  # fmt: skip
+        R.import_stage(run, "verify", fit=T.fit, client=judge_client(), pace=0)
+        R.outcomes(run)
+        judge = tmp_path / "handoff-judge"
+        R.export_judge(run, judge)
+        for site_id in (T.SKARA, T.NEWGRANGE):
+            OH.write_answer(
+                judge, batch_id="judge-001", stage=R.JUDGE_STAGE, label=site_id, text=judged(),
+                answered_by="teaser-verify-b",
+            )  # fmt: skip
+        with pytest.raises(R.RunError, match=f"{T.SKARA}: the judge teaser-verify-b"):
+            R.import_judge(run, client=judge_client(), pace=0)
 
     def test_the_import_asks_the_web_without_personal_data(self) -> None:
         with R.judge_client() as client:

@@ -13,7 +13,6 @@ of any gate.
 
 from __future__ import annotations
 
-import ast
 import re
 import sys
 from pathlib import Path
@@ -117,10 +116,11 @@ class TestTheRealCases:
     """Static checks of every case the sweep would run, cheap enough for every test run."""
 
     def test_every_needle_occurs_exactly_once_and_every_mutant_compiles(self) -> None:
+        # one parse per mutant: `compiles` is `ast.parse`. A second parse doubled the time - 87 s
+        # of the gate's 90 s timeout at 1,030 cases (measured 2026-09-26, wip/wb2)
         for case in S.CASES:
             mutant = S.mutate(S.read(case.path), case.old, case.new)
             assert S.compiles(mutant, case.path), case.label
-            ast.parse(mutant)
 
     def test_every_named_test_exists_in_its_file(self) -> None:
         for case in S.CASES:

@@ -1,10 +1,11 @@
-"""Lane WC's frozen texts: the check question, its re-ask, the judge's question and both briefs.
+"""Lane WC's frozen texts: the check question, its re-ask, the verifier's question, the judge's
+question and their briefs.
 
 Every text is pinned by a byte hash in `tests/remediation/test_wc.py`: a changed question makes
 every exported answer stale (`opus_handoff.validate`), so a change is a new pin and a new export,
 never an edit under a running round. The prompts are built only from these templates and the site's
-own values (`cli.check_prompt`, `cli.judge_prompt`), so the import can rebuild each exported prompt
-byte for byte and refuse an answer to anything else.
+own values (`cli.check_prompt`, `cli.verify_prompt`, `cli.judge_prompt`), so the import can rebuild
+each exported prompt byte for byte and refuse an answer to anything else.
 """
 
 from __future__ import annotations
@@ -38,7 +39,11 @@ RULES
 relation ("near", "part of", "the largest", "the oldest") and every stated fact. A number or date \
 that no source gives is unsupported. An approximate figure is supported only by a source that \
 gives the same figure or range. A sentence that states as fact what the sources call uncertain is \
-not supported; a hedge the sources share ("probably", "is thought to") is fine.
+not supported; a hedge the sources share ("probably", "is thought to") is fine. A \
+superlative or uniqueness claim ("the only", "the first", "the largest", "unique") and a \
+style or cultural attribution ("passage tomb-style", "Roman-style", "Phoenician") stays only \
+when a source states exactly that; search for a source that disputes or qualifies it too, and \
+if you find one, remove that piece (KEEP_TRIMMED) or DROP the sentence as contradicted.
 2. A source is reputable and independent: Wikipedia (the article itself, any language), \
 UNESCO, national heritage registers, museums, universities, excavation reports, scholarly \
 publications, established reference works. Never: ancientnerds.com; AI-generated aggregators \
@@ -141,6 +146,91 @@ When every question of the batch is recorded, report how many answers you record
 sentences you kept, trimmed and dropped.
 """
 
+#: The independent verifier's question about one checked site, before its text is published (the
+#: stages `verify` and `verify2`, every site whose check kept a sentence): the judge's question
+#: below applied to the kept text - its kept sentences, verdicts, quote shape and coherence - with
+#: the dropped sentences as context only, and `broken`, the sentences whose reference or meaning
+#: broke (`cli.verify_prompt`, `answers.parse_verify`).
+VERIFY_QUESTION = """\
+You verify, independently, one site description of the Ancient Nerds archaeology database before \
+it is published. Another agent checked the old description sentence by sentence against sources; \
+the sentences below marked KEPT are what the site page will show, in this order, each with the \
+quotes that agent gave. A sentence you do not confirm is removed; nothing is ever added or \
+rewritten. You decide, from your own research on the web, whether each kept sentence is true of \
+this site, and whether the kept text reads as a coherent description.
+
+THE SITE (identify it by these values; a namesake elsewhere is another site)
+{site}
+
+KEPT SENTENCES (the text to publish, in order; below each, the old sentence a piece was cut from, \
+and the checker's quotes)
+{kept}
+
+DROPPED SENTENCES (removed from the old description; shown only so that you see what a kept \
+sentence may have referred to - do not judge them)
+{dropped}
+
+DECIDE
+- For each kept sentence K<k>: SUPPORTED (a reputable, independent source supports every claim in \
+it - the checker's quotes or your own), UNSUPPORTED (some claim is supported by no such source you \
+found) or WRONG (a source contradicts a claim; give that quote). A claim is every name, number, \
+date, measurement, attribution, relation and stated fact - also a single word that says how, by \
+whom or from what something was made ("carved" where the sources say "built"). A superlative or \
+uniqueness claim ("the only", "the first", "the largest") and a style or cultural attribution \
+("passage tomb-style", "Roman-style") is SUPPORTED only when a source states exactly that; search \
+for a source that disputes or qualifies it too, and if you find one, it is WRONG. Read what the \
+checker's pages say around its quotes: a quote torn from its context supports nothing.
+- coherent: false when the kept text does not read as a description of this site - a pronoun or \
+a phrase ("it", "the complex", "the ancient name") whose referent was dropped or cut, or that now \
+points at something else; a trimmed sentence that is no longer grammatical; a sentence that now \
+says something else than it did; else true.
+- broken: when coherent is false, the numbers k of every kept sentence whose reference or meaning \
+broke (they are removed; what remains is published only if a verifier confirms it, else the whole \
+description is cleared); when coherent is true, an empty list. If you cannot name them, give an \
+empty list with coherent false: the whole description is cleared.
+Sources follow the same rules as the check: Wikipedia, UNESCO, registers, museums, universities, \
+scholarly publications; never ancientnerds.com, AI aggregators, Wikipedia mirrors or a copy of this \
+description. A quote is verbatim from the page at its URL (code fetches it and searches for it) and \
+20 to 500 characters long.
+
+ANSWER with exactly one JSON object and nothing around it (no code fence):
+{{"site_id": "{site_id}", "kept": [{{"k": 1, "verdict": "SUPPORTED", "quotes": [], "note": \
+"..."}}], "coherent": true, "broken": [], "note": "..."}}
+One object per kept sentence, in order ({kept_count} kept); each quote is {{"url": "...", \
+"quote": "..."}}; WRONG needs at least one quote; "broken" lists k numbers in ascending order; \
+every "note" is a short plain sentence, at most 600 characters.
+"""
+
+#: The instruction of the Opus agent that verifies one batch (stage `verify` or `verify2`).
+VERIFY_BRIEF = """You are Opus verifier {batch} of the Ancient Nerds sentence check (lane WC, \
+verification round {round}, stage {stage}). You verify {count} site(s), each on its own, before \
+its text is published. You are an agent of your own: you answered no other batch of lane WC - no \
+check, no other verification, no judge question. If you did, stop here and report it; the import \
+refuses a verifier whose name checked or verified the site before.
+
+Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per \
+question with its "label" (the site id) and its "prompt_path" (relative to {handoff}). Open no \
+other file of the repository - no other batch, nothing else under output/ or docs/, no database, \
+no git history. Your evidence is your own web research (WebSearch, WebFetch). Run every command \
+below from the repository root, {repo}.
+
+For each question:
+1. Read {handoff}/<prompt_path>.
+2. Research every kept sentence on the web and decide, exactly as the prompt asks.
+3. Write your answer - only the JSON object the prompt specifies - to a new UTF-8 file of your own:
+   {scratch}/<label>.json
+4. Check its shape (nothing is fetched and your verdict is not judged):
+   {python} scripts/remediation/wc/cli.py verify-check-answer --run-dir {run} --handoff \
+{handoff} --batch-id {batch} --label <label> --text-file {scratch}/<label>.json
+   It prints the problem, if any: fix the shape, never the finding.
+5. Record it - an answer is written once:
+   {python} scripts/remediation/opus_handoff.py answer --dir {handoff} --batch-id {batch} \
+--stage {stage} --label <label> --answered-by {batch_agent} --text-file {scratch}/<label>.json
+
+When every question of the batch is recorded, report how many answers you recorded, how many kept \
+sentences you found SUPPORTED, UNSUPPORTED and WRONG, and how many texts incoherent.
+"""
+
 #: The independent judge's question about one checked site (the pilot's measurement).
 JUDGE_QUESTION = """\
 You judge, independently, the result of a sentence check of one site description of the Ancient \
@@ -185,8 +275,9 @@ need at least one quote; every "note" is a short plain sentence, at most 600 cha
 
 #: The instruction of the Opus agent that judges one batch of the pilot.
 JUDGE_BRIEF = """You are Opus judge {batch} of the pilot of the Ancient Nerds sentence check (lane \
-WC). You judge {count} site(s), each on its own. You are not the agent that checked them: judge \
-from your own research.
+WC). You judge {count} site(s), each on its own. You are a fresh agent: you checked and verified \
+none of this run's sites and answered no other batch of lane WC - if you did, stop here and report \
+it. Judge from your own research.
 
 Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per \
 question with its "label" (the site id) and its "prompt_path" (relative to {handoff}). Open no \
