@@ -11,7 +11,7 @@ from PIL import Image
 
 from pipeline.lyra.theo_publishing import poster_web_path
 from pipeline.studio import __main__ as cli
-from pipeline.studio import cli_episode, config, doctor, remote
+from pipeline.studio import cli_episode, config, doctor, package, remote
 from pipeline.studio.errors import StudioError
 from tests.pipeline.studio import episode_fixtures as ef
 from tests.pipeline.studio import script_fixtures as sf
@@ -197,10 +197,25 @@ def test_a_refused_paper_dry_run_leaves_the_ledger_untouched(monkeypatch, tmp_pa
             "baalbek-c5", "dQw4w9WgXcQ", "Baalbek", "2026-10-01T18:00:00+00:00", 1
         )
     assert [e[0] for e in events] == ["pipeline.lyra.theo_publish"]  # no upload, no ledger
-    with pytest.raises(StudioError, match="1 to 100 characters without < or >"):
+    with pytest.raises(StudioError, match="1-100 characters without < or >"):
         cli_episode.register_youtube(
             "baalbek-c5", "dQw4w9WgXcQ", "<b>", "2026-10-01T18:00:00+00:00", 1
         )
+
+
+def test_register_youtube_refuses_the_title_episode_package_refuses(monkeypatch, tmp_path):
+    # One title rule (package.check_title): a 100-character title with a trailing space is 101
+    # characters in theo_publish and on YouTube, so it stops before any remote step.
+    _published_package(tmp_path, monkeypatch)
+    events = _recording_remote(monkeypatch, lambda module, args: pytest.fail("no remote step"))
+    title = "x" * package.TITLE_MAX_CHARS + " "
+    with pytest.raises(StudioError, match="1-100 characters without < or >"):
+        cli_episode.register_youtube(
+            "baalbek-c5", "dQw4w9WgXcQ", title, "2026-10-01T18:00:00+00:00", 1
+        )
+    assert events == []
+    with pytest.raises(StudioError, match="1-100 characters without < or >"):
+        package.check_titles([title])
 
 
 def test_a_failed_apply_after_the_ledger_names_the_way_to_finish(monkeypatch, tmp_path):

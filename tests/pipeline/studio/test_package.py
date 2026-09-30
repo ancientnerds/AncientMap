@@ -109,10 +109,22 @@ def test_titles_and_tags():
     assert package.check_titles(["The Baalbek Stones"]) == ["The Baalbek Stones"]
     with pytest.raises(StudioError, match="title_candidates is empty"):
         package.check_titles([])
-    with pytest.raises(StudioError, match="without < >"):
+    with pytest.raises(StudioError, match="without < or >"):
         package.check_titles(["a <b>"])
     with pytest.raises(StudioError, match="tags take"):
         package.check_tags(["x" * 250, "y" * 250])
+
+
+def test_one_title_is_measured_as_it_is_sent():
+    # register-youtube sends the title unchanged, so the rule measures it unchanged: a trailing
+    # space makes a 100-character title 101 characters on YouTube.
+    longest = "x" * package.TITLE_MAX_CHARS
+    assert package.check_title(longest) == longest
+    for bad in (longest + " ", "", "   ", "a <b>", "a > b"):
+        with pytest.raises(StudioError, match="without < or >"):
+            package.check_title(bad)
+    with pytest.raises(StudioError, match="without < or >"):
+        package.check_titles(["The Baalbek Stones", longest + " "])
 
 
 def test_failed_audit_marks_the_package_failed(tmp_path, monkeypatch):

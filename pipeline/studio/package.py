@@ -168,12 +168,21 @@ def description(
     return text
 
 
+def check_title(title: str) -> str:
+    """One YouTube title, measured as it is sent: not blank, at most TITLE_MAX_CHARS
+    characters, no < or >. The package's candidates and register-youtube's --title share it."""
+    if not title.strip() or len(title) > TITLE_MAX_CHARS or "<" in title or ">" in title:
+        raise StudioError(
+            f"a title must be 1-{TITLE_MAX_CHARS} characters without < or >: {title!r}"
+        )
+    return title
+
+
 def check_titles(titles: list[str]) -> list[str]:
     if not titles:
         raise StudioError("episode.json title_candidates is empty")
-    bad = [t for t in titles if not t.strip() or len(t) > TITLE_MAX_CHARS or "<" in t or ">" in t]
-    if bad:
-        raise StudioError(f"titles must be 1-{TITLE_MAX_CHARS} chars without < >: {bad}")
+    for title in titles:
+        check_title(title)
     return titles
 
 

@@ -22,7 +22,7 @@ from pipeline.studio.episode import (
 )
 from pipeline.studio.errors import StudioError
 from pipeline.studio.ledger_client import publish_remote
-from pipeline.studio.package import build_package, package_thumbnail
+from pipeline.studio.package import build_package, check_title, package_thumbnail
 from pipeline.studio.paper.publish import prepare_video, register_video
 from pipeline.studio.paper.workspace import published_slug
 from pipeline.studio.render import CANDIDATES, render_episode, render_thumbnail
@@ -148,13 +148,6 @@ def cmd_thumbnail(args: argparse.Namespace) -> int:
 def cmd_package(args: argparse.Namespace) -> int:
     _print(build_package(episode_workspace(args.slug)))
     return 0
-
-
-def check_title(title: str) -> str:
-    """The title the owner uploaded with (1-100 characters, no < or >, YouTube's rules)."""
-    if not 1 <= len(title.strip()) <= 100 or "<" in title or ">" in title:
-        raise StudioError("--title must be 1 to 100 characters without < or >")
-    return title
 
 
 def register_youtube(
