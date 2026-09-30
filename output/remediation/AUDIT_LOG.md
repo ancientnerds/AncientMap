@@ -13072,3 +13072,15 @@ lanes emit/rehearse/probe/apply/verify, both undo rehearsals, `accept` 0 deviati
 pre-push gates; CI green, API containers restarted 06:50Z, **0** `Card description overwritten`
 lines in both, `card_json.py --check` and `accept --step 7..11` again 0 deviations, `commit` field
 28b0befd. `wip/wb4` merged afterwards (2b6f0c6): writer may decline an undrawable-name site.
+
+## 2026-09-30 - Lane WD2 scope review written (wave 2026-09-30)
+
+Funnel 567 questions (r0, after WD1's field writes), rounds r1 (3) and r2 (2) for the uncounted; r3 asks
+nothing. r0: 546 `site`, 18 `not_a_site` counted, 3 uncounted; r1: 1 counted, 2 uncounted; r2: 1
+counted, 1 uncounted (two sources' quotes needed to count). **20 sites retired** (40 cells: scope_status,
+scope_reason 'E3: not an archaeological site (<kind>): ...'), among them Yonaguni Monument, the Bosnian
+pyramids of the Moon and the Sun, Singing Stones of Brittany, Balanced Rock (North Salem), Prebreza (a
+village), Runestones of Sweden (a class of objects). Gates: check-primitive, verify, interests, emit,
+rehearse, probe-guards (all refused), apply (read-back row for row), verify, rollback rehearsal -
+clean; retired curated rows 79 -> 99. Wave b: "nothing to write - the review is done". Sites answered
+not_a_site but uncounted stay visible and are listed in NONSITE_R*.jsonl. The served-image run follows.
