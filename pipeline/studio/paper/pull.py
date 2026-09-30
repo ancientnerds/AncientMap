@@ -3,8 +3,8 @@
 The dossier parts are rendered in the shapes production writes (stream A's C3): cross-angle
 connections and convergent findings carry `{angle_id, finding, source_ids}` objects, contested
 claims `for`/`against` objects `{evidence, specialists}`. Keys the Theo schemas do not require
-are read with `.get`, so a sparse LLM answer never crashes the pull, and every source id in
-them becomes an `[S:<id>]` marker the writer can cite.
+are read with `.get`, so a sparse LLM answer never crashes the pull, and every citable source
+id in them (Dossier.citable_ids, the brief's source list) becomes an `[S:<id>]` marker.
 """
 
 from __future__ import annotations
@@ -100,13 +100,14 @@ def write_texts(ws: PaperWorkspace, dossier: Dossier) -> None:
         ws.text_path(source_id).write_text(text, encoding="utf-8")
 
 
-def _markers(source_ids: list[str]) -> str:
-    return " ".join(f"[S:{sid}]" for sid in source_ids)
+def _cite(text: str, source_ids: list[str] | None, citable: set[str]) -> str:
+    """`text` followed by the markers of its citable sources (none: no trailing space).
 
-
-def _cite(text: str, source_ids: list[str] | None) -> str:
-    """`text` followed by its source markers (none: no trailing space)."""
-    return " ".join(part for part in (text, _markers(source_ids or [])) if part)
+    Synthesis, contested claims and the debate draw on every specialist finding: a marker
+    for a source outside the citable set (Dossier.citable_ids, the brief's source list)
+    would invite a citation `paper number` refuses."""
+    markers = " ".join(f"[S:{sid}]" for sid in source_ids or [] if sid in citable)
+    return " ".join(part for part in (text, markers) if part)
 
 
 def _counts(dossier: Dossier) -> str:
@@ -128,9 +129,11 @@ def _archive(dossier: Dossier) -> str:
 
 def _moderated(dossier: Dossier) -> str:
     m = dossier.data["moderated"]
+    citable = set(dossier.citable_ids)
     lines = ["Final claims:"]
     for c in m.get("final_claims") or []:
-        lines.append(_cite(f"- ({c.get('confidence') or '?'}) {c['claim']}", c["source_ids"]))
+        text = f"- ({c.get('confidence') or '?'}) {c['claim']}"
+        lines.append(_cite(text, c["source_ids"], citable))
         if c.get("notes"):
             lines.append(f"  notes: {c['notes']}")
     lines.append("")
@@ -140,11 +143,12 @@ def _moderated(dossier: Dossier) -> str:
         text = f"- {original} -> {c['revised']}" if original else f"- {c['revised']}"
         if c.get("reason"):
             text += f" ({c['reason']})"
-        lines.append(_cite(text, c["source_ids"]))
+        lines.append(_cite(text, c["source_ids"], citable))
     lines.append("")
     lines.append("Speculative claims (label them as speculation):")
     for c in m.get("speculative_claims") or []:
-        lines.append(_cite(f"- ({c.get('confidence') or '?'}) {c['claim']}", c["source_ids"]))
+        text = f"- ({c.get('confidence') or '?'}) {c['claim']}"
+        lines.append(_cite(text, c["source_ids"], citable))
         if c.get("what_would_strengthen"):
             lines.append(f"  would strengthen: {c['what_would_strengthen']}")
     return "\n".join(lines)
@@ -152,23 +156,26 @@ def _moderated(dossier: Dossier) -> str:
 
 def _synthesis(dossier: Dossier) -> str:
     s = dossier.data["synthesis"]["synthesis"]
+    citable = set(dossier.citable_ids)
     lines = ["Consensus:"]
     for c in s.get("consensus_claims") or []:
-        lines.append(_cite(f"- ({c.get('confidence') or '?'}) {c['claim']}", c["source_ids"]))
+        text = f"- ({c.get('confidence') or '?'}) {c['claim']}"
+        lines.append(_cite(text, c["source_ids"], citable))
     lines.append("")
     lines.append("Convergent findings across angles:")
     for f in s.get("convergent_findings") or []:
         lines.append(f"- {f.get('pattern', '')}")
         for involved in f.get("angles_involved") or []:
-            lines.append(_cite(f"  - {involved.get('finding', '')}", involved.get("source_ids")))
+            text = f"  - {involved.get('finding', '')}"
+            lines.append(_cite(text, involved.get("source_ids"), citable))
     lines.append("")
     lines.append("Cross-angle connections:")
     for c in dossier.data["synthesis"].get("cross_angle_connections") or []:
         start = c.get("from_angle") or {}
         end = c.get("to_angle") or {}
         lines.append(f"- {c.get('description', '')}")
-        lines.append(_cite(f"  from: {start.get('finding', '')}", start.get("source_ids")))
-        lines.append(_cite(f"  to: {end.get('finding', '')}", end.get("source_ids")))
+        lines.append(_cite(f"  from: {start.get('finding', '')}", start.get("source_ids"), citable))
+        lines.append(_cite(f"  to: {end.get('finding', '')}", end.get("source_ids"), citable))
     lines.append("")
     lines.append("Open questions:")
     lines.extend(f"- {q}" for q in s.get("open_questions") or [])
@@ -177,6 +184,7 @@ def _synthesis(dossier: Dossier) -> str:
 
 def _contested(dossier: Dossier) -> str:
     s = dossier.data["synthesis"]["synthesis"]
+    citable = set(dossier.citable_ids)
     lines = []
     for c in s.get("contested_claims") or []:
         pro = c.get("for") or {}
@@ -184,7 +192,7 @@ def _contested(dossier: Dossier) -> str:
         text = (
             f"- {c['claim']} | for: {pro.get('evidence', '')} | against: {con.get('evidence', '')}"
         )
-        lines.append(_cite(text, c.get("source_ids")))
+        lines.append(_cite(text, c.get("source_ids"), citable))
     for c in s.get("contradictions") or []:
         side_a = c.get("side_a") or {}
         side_b = c.get("side_b") or {}
@@ -210,6 +218,7 @@ def _debate(dossier: Dossier) -> str:
     the stored debate records no round, so defenses are never paired with challenges here.
     """
     d = dossier.data["debate"]
+    citable = set(dossier.citable_ids)
     challenges: list[dict[str, Any]] = d.get("challenges") or []
     defenses: list[dict[str, Any]] = d.get("defenses") or []
     rounds = d.get("rounds", 0)
@@ -225,13 +234,13 @@ def _debate(dossier: Dossier) -> str:
         text = f"- {x.get('defender_id', '')} accepted: {x.get('argument', '')}"
         if x.get("additional_evidence"):
             text += f" (evidence: {x['additional_evidence']})"
-        lines.append(_cite(text, x.get("source_ids")))
+        lines.append(_cite(text, x.get("source_ids"), citable))
     lines.extend(_overflow(DEBATE_LIMIT, len(accepted), "accepted defenses"))
     lines.append("")
     lines.append("Challenges:")
     for c in challenges[:DEBATE_LIMIT]:
         text = f'- on "{c.get("target_claim", "")}": {c.get("suggestion", "")}'
-        lines.append(_cite(text, c.get("source_ids")))
+        lines.append(_cite(text, c.get("source_ids"), citable))
     lines.extend(_overflow(DEBATE_LIMIT, len(challenges), "challenges"))
     return "\n".join(lines)
 
@@ -239,6 +248,7 @@ def _debate(dossier: Dossier) -> str:
 def _angles(dossier: Dossier) -> str:
     """Each angle with the findings that share a source with the moderated claims."""
     core = set(moderated_source_ids(dossier.data["moderated"]))
+    citable = set(dossier.citable_ids)
     blocks = []
     for angle in dossier.data["angles"]:
         lines = [f"#### {angle.get('topic', '')}"]
@@ -252,7 +262,7 @@ def _angles(dossier: Dossier) -> str:
             lines.append("(no finding of this angle shares a source with the moderated claims)")
         for f in findings[:ANGLE_FINDINGS_LIMIT]:
             text = f"- ({f.get('confidence') or '?'}) {f.get('claim', '')}"
-            lines.append(_cite(text, f.get("source_ids")))
+            lines.append(_cite(text, f.get("source_ids"), citable))
         if len(findings) > ANGLE_FINDINGS_LIMIT:
             lines.append(
                 f"(first {ANGLE_FINDINGS_LIMIT} of {len(findings)}; the rest are in "

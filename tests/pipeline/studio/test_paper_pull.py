@@ -96,6 +96,20 @@ def test_citable_ids_are_the_exported_cited_set():
     assert f"[S:{fx.S6}]" not in brief
 
 
+def test_the_brief_marks_only_sources_the_writer_may_cite():
+    """Synthesis, contested claims and the debate draw on every specialist finding; a marker
+    for a source outside the citable set would invite a citation `paper number` refuses."""
+    data = fx.dossier_dict()
+    synthesis = data["synthesis"]["synthesis"]
+    synthesis["consensus_claims"][0]["source_ids"] = [fx.S1, fx.S6]
+    synthesis["contested_claims"][0]["source_ids"] = [fx.S6]
+    data["debate"]["challenges"][0]["source_ids"] = [fx.S6, fx.S2]
+    brief = pull.render_brief(parse_dossier(fx.dossier_gz_bytes(data)))
+    assert f"[S:{fx.S6}]" not in brief
+    assert f"- (high) The quarry blocks are Roman. [S:{fx.S1}]" in brief
+    assert f"Give the range of estimates. [S:{fx.S2}]" in brief
+
+
 def test_sources_list_tiers_first_and_names_unknown_ids():
     data = fx.dossier_dict()
     data["moderated"]["final_claims"][0]["source_ids"].append("eeeeeeeeeee5")
