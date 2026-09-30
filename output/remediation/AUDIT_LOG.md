@@ -13062,3 +13062,13 @@ write group WC over `WC4.jsonl` `799c408a...` (batch p4wc-4003, 40 rows): dry, r
   defects. Gap found in chunk 02: a site whose only name form contains a glyph the shorts font cannot
   draw (Jabal al-ʿHayn) can neither name itself nor pass the font check; `wip/wb4` lets the writer
   state "no card" only when the contract proves every name form undrawable.
+
+## 2026-09-30 - Lane WB card sitting 3 (chunk 04, steps 7-11): **28b0bef live**
+
+Backup drill (`VERDICT: dump is restorable and matches production row-for-row`), API StartedAt
+noted (2026-09-27T10:51:58Z / 10:52:07Z); steps 7-11 (441 cards, 9 clears) each plan, prov + card
+lanes emit/rehearse/probe/apply/verify, both undo rehearsals, `accept` 0 deviations; `card-file
+--steps 7-11` (changed 441, removed 9), `card_json.py --check` 0; pushed by fixed SHA after the
+pre-push gates; CI green, API containers restarted 06:50Z, **0** `Card description overwritten`
+lines in both, `card_json.py --check` and `accept --step 7..11` again 0 deviations, `commit` field
+28b0befd. `wip/wb4` merged afterwards (2b6f0c6): writer may decline an undrawable-name site.
