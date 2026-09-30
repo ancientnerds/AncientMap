@@ -160,6 +160,23 @@ from pipeline.studio import spoken
         ("Ramesses the Second's temple", "Ramesses II's temple"),
         ("Ramesses II's temple", "Ramesses the Second's temple"),
         ("the second pylon", "the 2nd pylon"),
+        # an upper-case Roman numeral is its number, cardinal or ordinal
+        (
+            "during World War Two, the site was bombed",
+            "during World War II, the site was bombed",
+        ),
+        ("after World War One", "after World War I"),
+        ("WORLD WAR TWO", "WORLD WAR II"),
+        ("Troy Six", "Troy VI"),
+        ("Troy Six's walls", "Troy VI's walls"),
+        ("TROY SIX'S WALLS", "TROY VI'S WALLS"),
+        ("Dynasty Nineteen", "Dynasty XIX"),
+        ("the Nineteenth Dynasty", "the XIX Dynasty"),
+        ("the Twenty-First Dynasty", "the XXI Dynasty"),
+        ("Legio Twenty", "Legio XX"),
+        ("Troy VI", "Troy VI"),
+        # known limit: the pronoun "I" is an upper-case Roman numeral too
+        ("one said", "I said"),
         # "and a half" is a decimal .5, and takes a magnitude after it
         ("four and a half metres", "4.5 m"),
         ("twenty-one and a half metres", "21.5 m"),
@@ -437,6 +454,14 @@ def test_equivalent_spellings(said, shown):
             "Ramesses II temple",
             "token 2: spoken \"'s\" vs display 'temple'",
         ),
+        # an upper-case Roman numeral is exactly its number, and in lower case a word
+        ("World War Two", "World War III", "token 2: spoken '2' vs display 'iii'"),
+        ("Troy Six", "Troy VII", "token 1: spoken '6' vs display 'vii'"),
+        ("World War Two", "World War ii", "token 2: spoken '2' vs display 'ii'"),
+        ("the Nineteenth Dynasty", "the XX Dynasty", "token 1: spoken '19th' vs display 'xx'"),
+        ("the Nineteenth Dynasty", "the xix Dynasty", "token 1: spoken '19th' vs display 'xix'"),
+        ("forty metres", "XL metres", "token 0: spoken '40' vs display 'xl'"),
+        ("Troy Six", "Troy 6th", "token 1: spoken '6' vs display '6th'"),
         # "and a half" is exactly .5, and a caption that drops it is caught
         ("four and a half metres", "4.6 m", "token 0: spoken '4.5' vs display '4.6'"),
         ("four and a half metres", "4 m", "token 1: spoken 'and' vs display 'm'"),

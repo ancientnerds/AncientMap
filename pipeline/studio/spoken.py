@@ -19,7 +19,9 @@ Where the words allow two readings, both stand and `spelling_mismatch` accepts a
 shows either: the British "two hundred and fifty thousand" is 250,000, "between five hundred
 and one thousand" is 500 and 1,000; "one point five" is 1.5, but in "at one point five
 hundred men" it is 1, "point" and 500; "a thirty-second exposure" may be a 30-second one;
-"the Second" is 2nd or the regnal numeral II ("Ramesses the Second" is "Ramesses II"); a day
+"the Second" is 2nd or the regnal numeral II ("Ramesses the Second" is "Ramesses II"); an
+upper-case Roman numeral I-XXXIX is itself or its number, cardinal or ordinal ("World War II"
+is "World War Two", "Troy VI" "Troy Six", "the XIX Dynasty" "the Nineteenth Dynasty"); a day
 ordinal right after its month name is the ordinal or the bare day ("June twenty-first" is
 "June 21st" or "June 21"), and so is "the" and a day ordinal in a date, the "the" dropped
 ("June the twenty-first" is "June 21" too, "the twenty-first of December" "21 December" or
@@ -30,7 +32,8 @@ and "million").
 Known limits: two numbers spoken back to back with no punctuation between them, the second a
 British "hundred and" group, read like the plan's "one thousand five hundred and one thousand
 six hundred fifty" (1,500 and 1,650), so "a hundred thousand two hundred and fifty thousand" is
-100,200 and 50,000; a comma after the first number makes it 100,000 and 250,000.
+100,200 and 50,000; a comma after the first number makes it 100,000 and 250,000. The pronoun
+"I" is an upper-case Roman numeral too, so "one said" against "I said" goes unnoticed.
 """
 
 from __future__ import annotations
@@ -108,7 +111,8 @@ _RANGE_RE = re.compile(rf"^({_NUMBER})[-–]({_NUMBER})$")  # "12–15", "800–
 # "21st", "1000th", "1,000th"
 _ORDINAL_DIGITS_RE = re.compile(r"^(?:\d{1,3}(?:,\d{3})+|\d+)(?:st|nd|rd|th)$")
 _DECADE_DIGITS_RE = re.compile(r"^(\d*0)['’]?s$")  # "1960s", "1960's", "60s" ("'60s" unquoted)
-_POSSESSIVE_RE = re.compile(r"^(.*\D)(['’]s)$")  # "II's" is "ii" and "'s"; "1960's" is a decade
+# "II's" is "II" and "'s", "IT'S" "it" and "'s"; "1960's" is a decade
+_POSSESSIVE_RE = re.compile(r"^(.*\D)(['’]s)$", re.IGNORECASE)
 _ROMAN = (
     (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"), (50, "l"),
     (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
@@ -141,19 +145,34 @@ def _roman(n: int) -> str:
     return out
 
 
+_ORDINAL_OF = {int(o[:-2]): o for o in ORDINALS.values()}  # 2: "2nd", 30: "30th"
+
+
+def _ordinal(n: int) -> str:
+    """`n` (1-99) as a digit ordinal: 21 is "21st", 12 "12th", 30 "30th"."""
+    return _ORDINAL_OF.get(n) or f"{n}{_ORDINAL_OF[n % 10][-2:]}"
+
+
+# an upper-case Roman numeral I-XXXIX is a number as well, cardinal or ordinal: "World War II"
+# is "World War Two", "the XIX Dynasty" "the Nineteenth Dynasty". In lower case it stays a
+# word, and from XL on the letters are units and abbreviations as well (L, C, CM, MM)
+ROMAN_NUMERALS = {_roman(n).upper(): n for n in range(1, 40)}
+
+
 def _words(text: str) -> tuple[list[str], set[int]]:
-    """The lower-cased words without edge punctuation, and the indices of the words that close
-    a clause. That punctuation is the only sign that "forty, six" is two numbers, so the number
-    parser never reads past such a word. A split token ("sixty-six," "15%," or "23°,") hands the
-    stop to its last part; a free-standing dash or comma ("forty — six") to the word before.
-    A possessive "'s" is a word of its own, so "the Second's" and "II's" differ only in the
-    number. A range written with a dash is its two numbers with "to" between them: "12–15" and
-    "12-15" are the spoken "twelve to fifteen"."""
+    """The words without edge punctuation, lower-cased but for an upper-case Roman numeral of
+    ROMAN_NUMERALS, and the indices of the words that close a clause. That punctuation is the
+    only sign that "forty, six" is two numbers, so the number parser never reads past such a
+    word. A split token ("sixty-six," "15%," or "23°,") hands the stop to its last part; a
+    free-standing dash or comma ("forty — six") to the word before. A possessive "'s" is a word
+    of its own, so "the Second's" and "II's" differ only in the number. A range written with a
+    dash is its two numbers with "to" between them: "12–15" and "12-15" are the spoken "twelve
+    to fifteen"."""
     out: list[str] = []
     stops: set[int] = set()
     for raw in _PER_CENT_RE.sub("percent", text).split():
         closes = raw.strip("-") == "" or any(ch in STOPS for ch in raw[len(raw.rstrip(EDGE)) :])
-        token = raw.strip(EDGE).lower()
+        token = raw.strip(EDGE)
         possessive = _POSSESSIVE_RE.match(token)
         if possessive:
             token = possessive[1]
@@ -161,14 +180,13 @@ def _words(text: str) -> tuple[list[str], set[int]]:
         if token.endswith(GLUED) and token[:-1]:
             token, sign = token[:-1], token[-1]
         span = _RANGE_RE.match(token)
-        if span:
-            out.extend([span[1], "to", span[2]])
-        else:
-            out.extend(part for part in token.split("-") if part)
+        parts = [span[1], "to", span[2]] if span else [p for p in token.split("-") if p]
+        # only its case tells the numeral "II" from a word: the one word kept as written
+        out.extend(p if p in ROMAN_NUMERALS else p.lower() for p in parts)
         if sign:
             out.append(sign)
         if possessive:
-            out.append(possessive[2])
+            out.append(possessive[2].lower())
         if closes and out:
             stops.add(len(out) - 1)
     return out, stops
@@ -483,8 +501,8 @@ def _dates(
 
 def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]]:
     """The tokens that words[i] can start, each with the index after it, the primary reading
-    first. Only a number, "the" before an ordinal and a day after its month can have more
-    than one."""
+    first. Only a number, "the" before an ordinal, a day after its month and an upper-case
+    Roman numeral can have more than one."""
     w = words[i]
     if w == "the" and i not in stops and i + 1 < len(words) and words[i + 1] != "the":
         ordinals = [
@@ -495,6 +513,9 @@ def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]
         # a regnal number: "Ramesses the Second" is "Ramesses II"
         regnal = [(_roman(int(t[:-2])), nxt) for t, nxt in ordinals if 0 < int(t[:-2]) < 4000]
         return [(w, i + 1), *regnal, *_dates(words, stops, i, ordinals)]
+    if w in ROMAN_NUMERALS:
+        n = ROMAN_NUMERALS[w]
+        return [(w.lower(), i + 1), (str(n), i + 1), (_ordinal(n), i + 1)]
     if w in ONES or w in TENS or w in ("a", "an"):
         run = _number_run(words, stops, i)
         if run is not None:
