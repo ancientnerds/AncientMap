@@ -23,11 +23,11 @@ Spec (kind "platform")::
                  {"do": "search", "q": "baalbek"},
                  {"do": "click_result", "title": "Baalbek Stones"},
                  {"do": "fly_wait", "s": 3.0},
+                 {"do": "toggle_layer", "label": "Coastlines"},
+                 {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"},
                  {"do": "zoom", "to": 90},
                  {"do": "open_details", "title": "Baalbek Stones"},
                  {"do": "measure", "a": {"lat": .., "lng": ..}, "b": {"lat": .., "lng": ..}},
-                 {"do": "toggle_layer", "label": "Coastlines"},
-                 {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"},
                  {"do": "proximity", "at": {"lat": .., "lng": ..}},
                  {"do": "filter", "mode": "country" | "category" | "source", "label": ".."},
                  {"do": "wait", "s": 1.0}]}
@@ -48,19 +48,23 @@ cursor moves on, and point b must add exactly one measurement.
 "open_details" returns to the Search tab first (the result list shows only there).
 "filter" clicks the Filter panel's mode button, then the legend entry named "label" (a
 click toggles it). "toggle_layer" clicks a Layers panel toggle, and the take fails unless
-its checkbox flips (a toggle disabled in Mapbox mode switches nothing). It never takes the
-Satellite base map, in any case (owner correction 2026-09-26: no satellite toggle in globe
-sections; satellite shows in the details page or a Mapbox take). The Historical Layers
-toggles only open a picker window; their checkbox is on once something in it is drawn
-(HistoricalLayersSection.tsx). So "Empire Borders" needs the "empire" to show (an id of
-pipeline/historical_boundaries/empire_metadata.py): the take picks it in that window at
-its peak extent, the window's "By Period" timeline off first (on, at the 500 BC it loads
-with, Rome draws Latium only), and fails unless the empire's checkbox and then the Layers
-panel's are on. A take shows at most one empire: the window stays open, and a second click
-on "Empire Borders" closes it (Globe.tsx). "Geological Layers" and "Historical Routes" have
-no picker action. validate_actions refuses a satellite toggle, a picker without its pick,
-an empire on any other toggle and a second Empire Borders toggle before anything starts.
-Plan D's cross-stream request 9 hands this contract to the studio-video skill.
+its checkbox flips (a toggle the page disables switches nothing). Every toggle_layer
+belongs before the zoom into the Mapbox view: there the Layers panel disables its vector
+layers and Labels, and an empire only tints the map, its border far off-screen, so a
+toggle_layer in the Mapbox view (MAPBOX_VIEW) fails the take before its click. It never
+takes the Satellite base map, in any case (owner correction 2026-09-26: no satellite
+toggle in globe sections; satellite shows in the details page or a Mapbox take). The
+Historical Layers toggles only open a picker window; their checkbox is on once something
+in it is drawn (HistoricalLayersSection.tsx). So "Empire Borders" needs the "empire" to
+show (an id of pipeline/historical_boundaries/empire_metadata.py): the take picks it in
+that window at its peak extent, the window's "By Period" timeline off first (on, at the
+500 BC it loads with, Rome draws Latium only), and fails unless the empire's checkbox and
+then the Layers panel's are on. A take shows at most one empire: the window stays open,
+and a second click on "Empire Borders" closes it (Globe.tsx). "Geological Layers" and
+"Historical Routes" have no picker action. validate_actions refuses a satellite toggle, a
+picker without its pick, an empire on any other toggle and a second Empire Borders toggle
+before anything starts. Plan D's cross-stream requests 3 and 9 hand this contract to
+STUDIO.md and the studio-video skill.
 Playwright is a local-only dependency (in no requirements file); it is imported inside
 the take, after the spec is validated, and a venv without it is a CaptureError.
 """
@@ -171,6 +175,11 @@ EMPIRE_LAYER = "empire borders"
 PICKER_LAYERS = frozenset({"geological layers", "historical routes"})
 EMPIRE_WINDOW = ".empire-borders-window"
 CHECKBOX = 'input[type="checkbox"]'
+# The page's mark of the Mapbox view (MapboxGlobeService.enablePrimaryMode, once the zoom
+# slider passes the switch point). There no toggle_layer films anything: the Layers panel
+# disables its vector layers and Labels (MapLayersPanel.tsx), and an empire's fill only tints
+# the map while its border lies hundreds of km off-screen (take platform-02p, 2026-09-30).
+MAPBOX_VIEW = "body.mapbox-primary-mode"
 
 # action -> required keys (besides "do")
 ACTIONS: dict[str, frozenset[str]] = {
@@ -478,6 +487,14 @@ class _Driver:
         box = toggle.locator(f"{CHECKBOX}{':checked' if on else ':not(:checked)'}")
         await self.registered(box, what, f"its checkbox does not turn {'on' if on else 'off'}")
 
+    async def on_the_globe(self, what: str) -> None:
+        """Fail the toggle `what` when the page shows the Mapbox view (MAPBOX_VIEW)."""
+        if await self.page.locator(MAPBOX_VIEW).count():
+            raise CaptureError(
+                f"{what} in the Mapbox view: the Layers panel's toggles are disabled there and "
+                "an empire only tints the map; put toggle_layer before the zoom"
+            )
+
     async def show_empire(self, empire: str) -> None:
         """Pick `empire` in the open Empire Borders window (EmpireBordersPanel.tsx) at its peak
         extent: its "By Period" timeline goes off first (on, at the 500 BC it loads with, the
@@ -601,6 +618,8 @@ class _Driver:
                 count, "measure point b", f"the Measure tab does not show {label!r}"
             )
         elif do == "toggle_layer":
+            what = f"toggle_layer {action['label']!r}"
+            await self.on_the_globe(what)  # before any click
             expand = page.locator('.layer-toggle-panel .panel-minimize-btn[title="Maximize"]')
             if await expand.count():
                 await self.click_locator(expand.first, "expand_layers")
@@ -608,15 +627,18 @@ class _Driver:
                 ".layer-toggle-panel label.layer-toggle",
                 has=page.locator(".layer-label", has_text=exact_text(action["label"])),
             ).first
-            what = f"toggle_layer {action['label']!r}"
+            # Again after the click: the view switches a render or two after the zoom slider
+            # passes the switch point, so right after such a zoom it can arrive during the move.
             if "empire" in action:
                 # the click opens the window; the checkbox turns on with the empire drawn
                 await self.click_locator(toggle, do)
+                await self.on_the_globe(what)
                 await self.show_empire(action["empire"])
                 await self.switched(toggle, True, f"{what} in the Layers panel")
             else:
                 on = await toggle.locator(CHECKBOX).is_checked(timeout=10_000)
                 await self.click_locator(toggle, do)
+                await self.on_the_globe(what)
                 await self.switched(toggle, not on, what)
         elif do == "proximity":
             await self.click_locator(page.locator(".tab-btn", has_text="Proximity"), do)

@@ -776,6 +776,91 @@ def test_an_empire_the_window_does_not_show_fails_the_take(monkeypatch):
     assert _drive(page_html, steps) == [[], False]
 
 
+# The Layers panel in the Mapbox view as the app renders it: MapboxGlobeService.enablePrimaryMode
+# marks the body, and MapLayersPanel.tsx disables the vector layers (Coastlines) and Labels. The
+# panel's Maximize button stands for the first click a take makes when the panel is minimized.
+MAPBOX_LAYERS_PAGE = (
+    LAYERS_PAGE.replace(
+        "<input type='checkbox'><span class='layer-label'>Coastlines",
+        "<input type='checkbox' disabled><span class='layer-label'>Coastlines",
+    ).replace(
+        "<div class='layer-toggle-panel'>",
+        "<div class='layer-toggle-panel'><button class='panel-minimize-btn' title='Maximize'>+"
+        "</button>",
+    )
+    + "<script>document.body.classList.add('mapbox-primary-mode')</script>"
+    + RECORD_CLICKS_JS
+)
+MAPBOX_VIEW_MESSAGE = (
+    r"^toggle_layer '{label}' in the Mapbox view: the Layers panel's toggles are disabled "
+    r"there and an empire only tints the map; put toggle_layer before the zoom$"
+)
+EMPIRE_STATE_JS = (
+    "[window.shown, document.getElementById('empires').checked,"
+    " document.querySelector('.empire-borders-window').style.display]"
+)
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        {"do": "toggle_layer", "label": "Coastlines"},
+        {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"},
+    ],
+)
+def test_a_layer_toggle_in_the_mapbox_view_fails_before_its_click(monkeypatch, action):
+    """Review of Task 36: after a zoom into Mapbox, Coastlines failed with a message that blamed
+    the page, and Empire Borders passed while the empire only tinted the map (take
+    platform-02p). No toggle films anything there, so the take fails before any click."""
+    monkeypatch.setattr(platform_take, "REGISTER_TIMEOUT_MS", 1_000)
+
+    async def steps(driver, page):
+        with pytest.raises(CaptureError, match=MAPBOX_VIEW_MESSAGE.format(label=action["label"])):
+            await driver.run(validate_actions([action])[0])
+        return (
+            await page.evaluate("window.clicks"),
+            driver.take.marks,
+            driver.pos,
+            await page.evaluate(EMPIRE_STATE_JS),
+        )
+
+    assert _drive(MAPBOX_LAYERS_PAGE, steps) == ([], [], START_POS, [[], False, "none"])
+
+
+@pytest.mark.parametrize(
+    "action",
+    [
+        {"do": "toggle_layer", "label": "Coastlines"},
+        {"do": "toggle_layer", "label": "Empire Borders", "empire": "roman"},
+    ],
+)
+def test_a_switch_to_the_mapbox_view_while_the_cursor_moves_fails_the_take(monkeypatch, action):
+    """The page switches views a render or two after the zoom slider passes the switch point,
+    so a toggle right after such a zoom can meet the globe before its move and the Mapbox view
+    at its click. The take fails on the view there too, never on the checkbox the view disabled
+    or with an empire picked for a tint."""
+    monkeypatch.setattr(platform_take, "REGISTER_TIMEOUT_MS", 1_000)
+
+    async def steps(driver, page):
+        # the view switches with the cursor's first step towards the toggle
+        await page.evaluate(
+            "document.addEventListener('mousemove', () => {"
+            " document.body.classList.add('mapbox-primary-mode');"
+            " document.querySelector('.layer-toggle-panel input').disabled = true"
+            "}, {once: true})"
+        )
+        with pytest.raises(CaptureError, match=MAPBOX_VIEW_MESSAGE.format(label=action["label"])):
+            await driver.run(validate_actions([action])[0])
+        return (
+            await page.evaluate(LAYERS_CHECKED_JS),
+            [name for _, name, _ in driver.take.marks],
+            await page.evaluate("window.shown"),
+        )
+
+    checked, marks, shown = _drive(LAYERS_PAGE, steps)
+    assert checked[0] is False and marks == ["toggle_layer"] and shown == []
+
+
 def test_a_second_empire_borders_click_closes_the_window(monkeypatch):
     """Why validate_actions allows one Empire Borders toggle per take: the window stays open
     after the first, and the label toggles it (Globe.tsx `prev => !prev`), so a second one
