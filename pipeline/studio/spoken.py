@@ -73,6 +73,14 @@ def _format(integer: int, fraction: str = "") -> str:
     return f"{integer}.{fraction}" if fraction else str(integer)
 
 
+def _scaled(integer: int, fraction: str, magnitude: int) -> str:
+    """The canonical digits of `integer`.`fraction` times `magnitude`, exact like `_format`:
+    1.5 million is "1500000"."""
+    scale = 10 ** len(fraction)
+    product = (integer * scale + int(fraction or "0")) * magnitude
+    return _format(product // scale, str(product % scale).zfill(len(fraction)))
+
+
 def _words(text: str) -> tuple[list[str], set[int]]:
     """The lower-cased words without edge punctuation, and the indices of the words that close
     a clause. That punctuation is the only sign that "forty, six" is two numbers, so the number
@@ -297,6 +305,16 @@ def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, in
             i += 1
             if i - 1 in stops:
                 break
+    # a decimal takes a magnitude after it like a whole number does: "one point five
+    # million" is 1,500,000
+    if (
+        digits
+        and i - 1 not in stops
+        and i < len(words)
+        and words[i] in MAGNITUDES
+        and MAGNITUDES[words[i]] < last_magnitude
+    ):
+        return [(_scaled(total + current, digits, MAGNITUDES[words[i]]), i + 1), *ends]
     return [(_format(total + current, digits), i), *ends]
 
 
@@ -310,7 +328,13 @@ def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]
             return run
     if _DIGITS_RE.match(w):
         whole, _, fraction = w.replace(",", "").partition(".")
-        return [(_format(int(whole), fraction), i + 1)]
+        plain = (_format(int(whole), fraction), i + 1)
+        # digits before a magnitude word are the digits and a word, as where a spoken run
+        # cannot take that magnitude ("two thousand million" is 2000 and "million"), or one
+        # number: "6 million" is 6,000,000 too
+        if i not in stops and i + 1 < len(words) and words[i + 1] in MAGNITUDES:
+            return [plain, (_scaled(int(whole), fraction, MAGNITUDES[words[i + 1]]), i + 2)]
+        return [plain]
     if _ORDINAL_DIGITS_RE.match(w):
         return [(w, i + 1)]
     if w in ORDINALS:

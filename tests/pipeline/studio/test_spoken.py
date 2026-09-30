@@ -123,6 +123,18 @@ from pipeline.studio import spoken
         ("At one point five hundred men marched", "At one point 500 men marched"),
         ("At one point five thousand people lived here", "At one point 5,000 people lived here"),
         ("one point five hundred", "1.5 hundred"),
+        # digits before a magnitude word are one number, and so is a spoken decimal
+        ("about six million tonnes", "about 6 million tonnes"),
+        ("two million years ago", "2 million years ago"),
+        ("2 million years ago", "two million years ago"),
+        ("twelve thousand years", "12 thousand years"),
+        ("about six million tonnes", "about 6,000,000 tonnes"),
+        ("three point three million years ago", "3.3 million years ago"),
+        ("one point five million years", "1,500,000 years"),
+        ("two point five thousand", "2,500"),
+        ("At one point five million people lived here", "At one point 5 million people lived here"),
+        # a magnitude the run cannot take stays a word on both sides
+        ("By two thousand million people lived there", "By 2000 million people lived there"),
     ],
 )
 def test_equivalent_spellings(said, shown):
@@ -273,6 +285,27 @@ def test_equivalent_spellings(said, shown):
             "a thirty-second exposure",
             "a 40-second exposure",
             "token 1: spoken '32nd' vs display '40'",
+        ),
+        # digits before a magnitude word must still show the spoken number
+        (
+            "about six million tonnes",
+            "about 7 million tonnes",
+            "token 1: spoken '6000000' vs display '7'",
+        ),
+        (
+            "two million years ago",
+            "2 thousand years ago",
+            "token 0: spoken '2000000' vs display '2'",
+        ),
+        (
+            "one point five million years",
+            "1.6 million years",
+            "token 0: spoken '1500000' vs display '1.6'",
+        ),
+        (
+            "6 million years ago",
+            "six thousand years ago",
+            "token 0: spoken '6' vs display '6000'",
         ),
         # "per cent" is one unit in any case, and a caption that drops it is caught
         (
