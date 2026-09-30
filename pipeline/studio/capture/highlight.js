@@ -126,6 +126,9 @@
     }
     return { text, map }
   }
+  // mark -> [head, tail]: the text node markText split (it keeps the text before the mark)
+  // and the node it split off after the mark, so unmark can join exactly those again.
+  const splits = new WeakMap()
   // Wraps the page characters behind text[at, at + length) in <mark class="__studio-hl">
   // pieces, one per covered text node the search read (a hidden node inside the range is
   // not quoted).
@@ -146,21 +149,27 @@
       const e = node === endNode ? endOffset : node.textContent.length
       if (e <= s) continue
       const middle = node.splitText(s)
-      middle.splitText(e - s)
+      const tail = middle.splitText(e - s)
       const mark = document.createElement('mark')
       mark.className = '__studio-hl'
       middle.parentNode.insertBefore(mark, middle)
       mark.appendChild(middle)
+      splits.set(mark, [node, tail])
       marks.push(mark)
     }
     return marks
   }
-  // Undoes markText: the marked text goes back into its parent, and the text nodes it was
-  // split from are merged again.
+  // Undoes markText: each split text node gets its whole text back and the mark and the
+  // split-off tail leave, so the page keeps the very nodes it made. Never normalize(): it
+  // also merges the page's own adjacent text nodes (React writes `text {value}` as two) and
+  // drops an empty one, and the page would then update or remove nodes no longer there.
   const unmark = (marks) => {
-    const parents = new Set(marks.map((m) => m.parentNode))
-    for (const mark of marks) mark.replaceWith(...mark.childNodes)
-    for (const parent of parents) parent.normalize()
+    for (const mark of marks) {
+      const [head, tail] = splits.get(mark)
+      head.appendData(mark.textContent + tail.data)
+      mark.remove()
+      tail.remove()
+    }
   }
   // True when the rect covers an area (font-size:0 and transform:scale(0) draw text at none).
   const drawn = (r) => r.width > 0 && r.height > 0
@@ -229,7 +238,7 @@
           return unionBox(marks.flatMap((m) => [...m.getClientRects()]))
         }
         unmark(marks)
-        // unmark merged the split text nodes back: the same text, mapped to new nodes
+        // unmark joined the split text nodes again: the old map points into the removed pieces
         page = readText()
       }
       return null

@@ -222,7 +222,13 @@ def _run_highlight(tmp_path, mode, needle, html=PAGE, fragment=""):
                 " scrollHeight: document.documentElement.scrollHeight,"
                 " unseen: document.getElementById('unseen') && {"
                 "html: document.getElementById('unseen').innerHTML,"
-                " nodes: document.getElementById('unseen').childNodes.length}})"
+                " nodes: document.getElementById('unseen').childNodes.length},"
+                # the text nodes the page made (window.pageNodes) are still its nodes
+                " same: window.pageNodes ? (() => {"
+                " const now = [...document.getElementById('unseen').childNodes];"
+                " return now.length === window.pageNodes.length && now.every("
+                "(n, i) => n === window.pageNodes[i] && n.data === window.pageData[i]) })()"
+                " : null})"
             )
             await browser.close()
             return box, state
@@ -302,7 +308,7 @@ def test_a_second_evidence_id_outlines_its_whole_paragraph(tmp_path):
         f'<p style="font-size:0">{WEIGHT}</p>',
         f'<p style="transform:scale(0)">{WEIGHT}</p>',
         # a screen-reader-only copy split across inline elements: its three marks are
-        # unmarked, the split text nodes merged, and the search maps the page again
+        # unmarked, the split text nodes joined again, and the search maps the page again
         SR_ONLY_SPLIT,
     ],
     ids=[
@@ -330,11 +336,33 @@ def test_a_copy_the_reader_does_not_see_is_passed_over(tmp_path, unseen):
 
 
 def test_a_passed_over_copy_gets_its_text_nodes_back(tmp_path):
-    # unmark put the three marked pieces back and merged the text nodes markText split:
+    # unmark put the three marked pieces back and joined the text nodes markText split:
     # the span holds its text, the <em> and its text again, as the page wrote them
     _, state = _run_highlight(tmp_path, "quote", WEIGHT, html=_page(SR_ONLY_SPLIT + SHOWN))
     assert state["marks"] == WEIGHT
     assert state["unseen"] == {"html": SPLIT_WEIGHT, "nodes": 3}
+
+
+# A screen-reader-only copy whose text is two adjacent text nodes the page made itself, as
+# a client-rendered React page writes `text {value}`; the quote starts at offset 0 of the
+# first, so its split leaves an empty text node there.
+REACT_TEXT_NODES = (
+    '<span id="unseen" style="position:absolute;width:1px;height:1px;overflow:hidden;'
+    'clip:rect(0,0,0,0)"></span><script>(() => {'
+    " const span = document.getElementById('unseen');"
+    " span.append('The block is estimated ', 'to weigh 1,650 tonnes.');"
+    " window.pageNodes = [...span.childNodes];"
+    " window.pageData = window.pageNodes.map((n) => n.data) })()</script>"
+)
+
+
+def test_a_passed_over_copy_keeps_the_text_nodes_its_page_made(tmp_path):
+    """Review of Task 29: unmark normalized the parent, which merges every adjacent text
+    node under it (the page's own too) and drops the empty one a split at offset 0 leaves,
+    so React would update or remove a text node that is no longer in the page."""
+    _, state = _run_highlight(tmp_path, "quote", WEIGHT, html=_page(REACT_TEXT_NODES + SHOWN))
+    assert state["marks"] == WEIGHT
+    assert state["unseen"]["nodes"] == 2 and state["same"] is True
 
 
 def test_of_two_copies_the_reader_sees_the_first_is_highlighted(tmp_path):
