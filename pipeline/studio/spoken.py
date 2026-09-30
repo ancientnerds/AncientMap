@@ -4,10 +4,11 @@ The narrator reads `spoken` ("about a thousand tonnes"), the captions and SRT sh
 ("about 1,000 tonnes"). `normalize_tokens` maps both to one canonical token list: number words
 become digits (years such as "nineteen sixty-six" and "twenty fourteen" included, "four and a
 half" is 4.5, "6 million" and "one point five million" are numbers too), ordinal words become
-digit ordinals ("twenty-first" and "one hundred and first" are 21st and 101st), decades and
-centuries become their digits ("the nineteen-sixties" is the 1960s, "the fifteen hundreds" the
-1500s), thousands separators go, unit words and symbols become one unit token ("square
-metres" is m²), edge punctuation and case are ignored, a possessive "'s" is a word of its own.
+digit ordinals ("twenty-first", "one hundred and first" and "the two hundredth" are 21st, 101st
+and 200th, "the thousandth" is 1000th), decades and centuries become their digits ("the
+nineteen-sixties" is the 1960s, "the fifteen hundreds" the 1500s), thousands separators go
+("1,000th" is 1000th), unit words and symbols become one unit token ("square metres" is m²),
+edge punctuation and case are ignored, a possessive "'s" is a word of its own.
 Clause punctuation after a number word (, ; : . ! ? … or a dash) still ends that number:
 "forty, six" is 40 and 6, never 46. Any other difference is a script error.
 
@@ -42,6 +43,14 @@ TENS = {
     "eighty": 80, "ninety": 90,
 }  # fmt: skip
 MAGNITUDES = {"thousand": 1_000, "million": 1_000_000, "billion": 1_000_000_000}
+ORDINAL_MAGNITUDES = {f"{w}th": v for w, v in MAGNITUDES.items()}  # "thousandth": 1000
+# a magnitude spelled as a number word or as its ordinal: the ordinal multiplies the group
+# before it just as the number word does ("five hundred thousandth" is 500,000th), so the
+# look-ahead that decides whether a group is multiplied reads both
+ANY_MAGNITUDE = {**MAGNITUDES, **ORDINAL_MAGNITUDES}
+# "hundredth" and the ordinal magnitudes end a run as the ordinal of all they multiply: "the two
+# hundredth" is 200th, "the one thousand two hundredth" 1200th, a bare "thousandth" 1000th
+SCALE_ORDINALS = {"hundredth": 100, **ORDINAL_MAGNITUDES}
 # the plural tens words name a decade: "the sixties" is the 60s, "the nineteen-sixties" the 1960s
 DECADES = {f"{w[:-1]}ies": v for w, v in TENS.items()}
 ORDINALS = {
@@ -75,7 +84,8 @@ POWERS = {"square": "²", "cubic": "³"}
 EDGE = ".,;:!?\"'()[]…—–“”‘’"
 STOPS = ",;:.!?…—–"  # trailing punctuation that closes a clause, and with it a spoken number
 _DIGITS_RE = re.compile(r"^\d{1,3}(?:,\d{3})+(?:\.\d+)?$|^\d+(?:\.\d+)?$")
-_ORDINAL_DIGITS_RE = re.compile(r"^\d+(?:st|nd|rd|th)$")
+# "21st", "1000th", "1,000th"
+_ORDINAL_DIGITS_RE = re.compile(r"^(?:\d{1,3}(?:,\d{3})+|\d+)(?:st|nd|rd|th)$")
 _DECADE_DIGITS_RE = re.compile(r"^(\d*0)['’]?s$")  # "1960s", "1960's", "60s" ("'60s" unquoted)
 _POSSESSIVE_RE = re.compile(r"^(.*\D)(['’]s)$")  # "II's" is "ii" and "'s"; "1960's" is a decade
 _ROMAN = (
@@ -157,11 +167,12 @@ def _small(words: list[str], stops: set[int], i: int) -> tuple[int, int] | None:
 
 def _multiplied(words: list[str], stops: set[int], nxt: int) -> bool:
     """Whether the group ending before words[nxt] is multiplied by a "hundred" or a magnitude
-    that follows it. A group that closes a clause is final whatever follows it."""
+    that follows it, the ordinal forms ("hundredth", "thousandth") included. A group that
+    closes a clause is final whatever follows it."""
     return (
         nxt < len(words)
         and nxt - 1 not in stops
-        and (words[nxt] == "hundred" or words[nxt] in MAGNITUDES)
+        and (words[nxt] in ("hundred", "hundredth") or words[nxt] in ANY_MAGNITUDE)
     )
 
 
@@ -188,15 +199,16 @@ def _british_and(words: list[str], stops: set[int], i: int, last_magnitude: floa
     if small is None or not _multiplied(words, stops, small[1]):
         return False
     after = words[small[1]]
-    return after in MAGNITUDES and MAGNITUDES[after] < last_magnitude
+    return after in ANY_MAGNITUDE and ANY_MAGNITUDE[after] < last_magnitude
 
 
 def _group_magnitude(words: list[str], stops: set[int], h: int) -> int:
     """The magnitude that multiplies the hundred-group whose "hundred" is words[h], or 0 when
     none does. The group runs on through its 0-99: "two hundred fifty thousand" is multiplied
-    by a thousand, just as "two hundred thousand" is. A word that closes a clause ends the
-    group, and so does any word that is neither a 0-99 nor a magnitude."""
-    if h in stops:
+    by a thousand, just as "two hundred thousand" and "two hundred thousandth" are. A word
+    that closes a clause ends the group, and so does a "hundredth" and any word that is
+    neither a 0-99 nor a magnitude."""
+    if h in stops or words[h] == "hundredth":
         return 0
     j = h + 1
     small = _small(words, stops, j) if j < len(words) else None
@@ -204,7 +216,7 @@ def _group_magnitude(words: list[str], stops: set[int], h: int) -> int:
         if small[1] - 1 in stops:
             return 0
         j = small[1]
-    return MAGNITUDES[words[j]] if j < len(words) and words[j] in MAGNITUDES else 0
+    return ANY_MAGNITUDE[words[j]] if j < len(words) and words[j] in ANY_MAGNITUDE else 0
 
 
 def _small_continues(
@@ -219,17 +231,19 @@ def _small_continues(
     past a whole hundred-group, its 0-99 included: "one million two hundred fifty thousand"
     goes on, "a hundred thousand two hundred thousand" and "a hundred thousand two hundred
     fifty thousand" are two numbers each. A 0-99 or a hundred that closes a clause is the
-    run's last group, so the word after it decides nothing."""
+    run's last group, so the word after it decides nothing. An ordinal "hundredth" or
+    magnitude after the 0-99 counts as its number word: "two thousand three thousandth" is two
+    numbers as well."""
     if prev == "":
         return True
     if prev == "small":
         return False
     if nxt - 1 in stops:
         return True
-    if nxt < len(words) and words[nxt] == "hundred":
+    if nxt < len(words) and words[nxt] in ("hundred", "hundredth"):
         return prev == "magnitude" and _group_magnitude(words, stops, nxt) < last_magnitude
-    if nxt < len(words) and words[nxt] in MAGNITUDES:
-        return MAGNITUDES[words[nxt]] < last_magnitude
+    if nxt < len(words) and words[nxt] in ANY_MAGNITUDE:
+        return ANY_MAGNITUDE[words[nxt]] < last_magnitude
     return True
 
 
@@ -314,6 +328,15 @@ def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, in
             break
         if i - 1 in stops:
             break
+    # a run may end on an ordinal "hundredth" or magnitude, which multiplies what it would as a
+    # number word: "two hundredth" is 200th, "one thousand two hundredth" 1200th, "five hundred
+    # thousandth" 500,000th
+    if i - 1 not in stops and i < len(words) and words[i] in SCALE_ORDINALS:
+        scale = SCALE_ORDINALS[words[i]]
+        if (words[i] == "hundredth" and prev == "small") or (
+            words[i] != "hundredth" and prev in ("small", "hundred") and scale < last_magnitude
+        ):
+            return [(f"{total + current * scale}th", i + 1), *ends]
     # a run that ends on a tens word may end on a unit ordinal: "twenty-first" is 21st and
     # "one hundred thirty-second" 132nd, never 20 and 1st. "second" is a time unit as well,
     # so "a thirty-second exposure" may be a 30-second one: that end is a second reading
@@ -414,9 +437,11 @@ def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]
     if w in DECADES:
         return [(f"{DECADES[w]}s", i + 1)]
     if _ORDINAL_DIGITS_RE.match(w):
-        return [(w, i + 1)]
+        return [(w.replace(",", ""), i + 1)]
     if w in ORDINALS:
         return [(ORDINALS[w], i + 1)]
+    if w in SCALE_ORDINALS:
+        return [(f"{SCALE_ORDINALS[w]}th", i + 1)]
     if (
         w in POWERS
         and i not in stops

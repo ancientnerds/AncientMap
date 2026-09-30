@@ -165,6 +165,31 @@ from pipeline.studio import spoken
         ("the one hundred and twentieth year", "the 120th year"),
         ("the one hundred and twenty-first year", "the 121st year"),
         ("the two thousand and fifth year", "the 2005th year"),
+        # "hundredth" and an ordinal magnitude end a run as the ordinal of all they multiply
+        ("the hundredth anniversary", "the 100th anniversary"),
+        (
+            "the hundredth anniversary of the tomb's discovery",
+            "the 100th anniversary of the tomb's discovery",
+        ),
+        ("the one hundredth day", "the 100th day"),
+        ("the two hundredth year", "the 200th year"),
+        ("the fifteen hundredth anniversary", "the 1500th anniversary"),
+        ("the one thousand two hundredth year", "the 1,200th year"),
+        ("the one hundred and fiftieth year", "the 150th year"),
+        ("the thousandth visitor", "the 1000th visitor"),
+        ("the thousandth visitor", "the 1,000th visitor"),
+        ("the ten thousandth visitor", "the 10,000th visitor"),
+        ("the five hundred thousandth visitor", "the 500,000th visitor"),
+        ("the two hundred fifty thousandth visitor", "the 250,000th visitor"),
+        ("the two hundred and fifty thousandth visitor", "the 250,000th visitor"),
+        ("the one million two hundred thousandth", "the 1,200,000th"),
+        ("the millionth visitor", "the 1,000,000th visitor"),
+        ("the two millionth visitor", "the 2000000th visitor"),
+        ("the billionth", "the 1,000,000,000th"),
+        # an ordinal magnitude never grows a run past an equal or larger magnitude
+        ("two thousand three thousandth", "2,000 3,000th"),
+        ("a hundred thousand two hundred thousandth", "100,000 200,000th"),
+        ("eighteen twelve thousandth", "18 12,000th"),
         # British "nought", areas and volumes
         ("nought point five metres", "0.5 m"),
         ("four thousand square metres", "4,000 m²"),
@@ -379,6 +404,35 @@ def test_equivalent_spellings(said, shown):
             "token 1: spoken '101st' vs display '102nd'",
         ),
         ("one hundred, and first", "101st", "token 0: spoken '100' vs display '101st'"),
+        # an ordinal hundred or magnitude is exactly the ordinal of all it multiplies
+        (
+            "the hundredth anniversary",
+            "the 101st anniversary",
+            "token 1: spoken '100th' vs display '101st'",
+        ),
+        (
+            "the hundredth anniversary",
+            "the 1000th anniversary",
+            "token 1: spoken '100th' vs display '1000th'",
+        ),
+        (
+            "the two hundredth year",
+            "the 200 th year",
+            "token 1: spoken '200th' vs display '200'",
+        ),
+        ("the two hundredth year", "the 2 100th year", "token 1: spoken '200th' vs display '2'"),
+        (
+            "the thousandth visitor",
+            "the 1,001st visitor",
+            "token 1: spoken '1000th' vs display '1001st'",
+        ),
+        (
+            "the five hundred thousandth visitor",
+            "the 500 1000th visitor",
+            "token 1: spoken '500000th' vs display '500'",
+        ),
+        ("hundredth, year", "100", "token 0: spoken '100th' vs display '100'"),
+        ("two, hundredth", "200th", "token 0: spoken '2' vs display '200th'"),
         # an area is never a length: "four metres square" is 16 m²
         ("four thousand square metres", "4,000 m", "token 1: spoken 'm²' vs display 'm'"),
         ("four metres square", "4 m²", "token 1: spoken 'm' vs display 'm²'"),
