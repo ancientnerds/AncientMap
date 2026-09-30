@@ -8,6 +8,7 @@ from pipeline.studio.capture.encode import (
     CLIP_ENCODE,
     CLIP_FILTER,
     concat_script,
+    frame_size,
     frames_to_cfr_mp4,
     sequence_length,
     sequence_to_mp4,
@@ -81,6 +82,14 @@ def test_clips_are_hevc_on_nvenc_gpu_0_bt709_without_b_frames():
     assert not any(arg in ("libx264", "libx265", "h264_nvenc") for arg in CLIP_ENCODE)
     assert "out_color_matrix=bt709" in CLIP_FILTER and "out_range=tv" in CLIP_FILTER
     assert CLIP_FILTER.startswith("sidedata=mode=delete:type=ICC_PROFILE,")
+
+
+def test_frame_size_is_read_from_the_first_frame(tmp_path):
+    from PIL import Image
+
+    # Chrome caps the screencast at the display's pixel size: read, never assumed
+    Image.new("RGB", (2880, 1620), "black").save(tmp_path / "f000000.jpg")
+    assert frame_size(tmp_path) == (2880, 1620)
 
 
 def test_sequence_length_refuses_gaps_and_strays(tmp_path):

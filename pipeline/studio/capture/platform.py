@@ -89,11 +89,12 @@ from typing import Any
 from urllib.parse import urlencode
 
 from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
-from pipeline.studio.capture.encode import frames_to_cfr_mp4
+from pipeline.studio.capture.encode import frame_size, frames_to_cfr_mp4
 from pipeline.studio.capture.gpu import CHROMIUM_GPU_ARGS, RENDERER_JS, gpu_event, require_nvidia
 from pipeline.studio.capture.manifest import (
     CREDIT_MAPBOX_STREETS,
     CaptureError,
+    as_coordinates,
     as_int,
     as_number,
     build_manifest,
@@ -108,7 +109,6 @@ from pipeline.studio.capture.vite import (
     display_awake,
     local_site,
 )
-from pipeline.utils.geo import is_valid_coordinates
 
 VIEWPORT = (1920, 1080)
 DEVICE_SCALE = 2
@@ -243,9 +243,7 @@ def _toggle_layer(action: dict[str, Any], where: str) -> dict[str, Any]:
 def _point(value: Any, where: str) -> dict[str, float]:
     if not isinstance(value, dict) or set(value) != {"lat", "lng"}:
         raise CaptureError(f"{where} must be {{'lat': .., 'lng': ..}}, got {value!r}")
-    lat, lng = as_number(value["lat"], f"{where}.lat"), as_number(value["lng"], f"{where}.lng")
-    if not is_valid_coordinates(lat, lng):
-        raise CaptureError(f"{where}: ({lat}, {lng}) is not a coordinate")
+    lat, lng = as_coordinates(value, where)
     return {"lat": lat, "lng": lng}
 
 
@@ -329,15 +327,6 @@ def eased_path(
         e = 1 - (1 - i / steps) ** 3
         out.append((x0 + (x1 - x0) * e, y0 + (y1 - y0) * e))
     return out
-
-
-def frame_size(frames_dir: Path) -> tuple[int, int]:
-    """Pixel size of the screencast frames. Chrome caps it at the display's pixel size
-    (2880x1620 on the workstation, measured 2026-09-26), so it is read, never assumed."""
-    from PIL import Image
-
-    with Image.open(frames_dir / "f000000.jpg") as first:
-        return first.size
 
 
 def events_from_marks(

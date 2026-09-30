@@ -14,6 +14,7 @@ from contextlib import nullcontext
 import pytest
 
 from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
+from pipeline.studio.capture import encode, manifest
 from pipeline.studio.capture import platform as platform_take
 from pipeline.studio.capture.encode import concat_script
 from pipeline.studio.capture.manifest import CaptureError
@@ -29,7 +30,6 @@ from pipeline.studio.capture.platform import (
     _Screencast,
     eased_path,
     events_from_marks,
-    frame_size,
     measure_gap_ok,
     measurement_label,
     motion_fps,
@@ -173,8 +173,11 @@ def test_the_action_contract_is_the_one_plan_d_hands_to_the_skill():
 
 
 def test_coordinates_are_checked_by_the_shared_geo_utility():
-    # repo rule: import a utility, never duplicate it (capture/mapbox.py does the same)
-    assert platform_take.is_valid_coordinates is geo.is_valid_coordinates
+    # repo rule: import a utility, never duplicate it: every capture kind reads its points
+    # through manifest.as_coordinates (pipeline.utils.geo.is_valid_coordinates)
+    assert platform_take.as_coordinates is manifest.as_coordinates
+    assert manifest.is_valid_coordinates is geo.is_valid_coordinates
+    assert not hasattr(platform_take, "is_valid_coordinates")
     assert validate_actions([{"do": "proximity", "at": {"lat": -90, "lng": 180}}])[0]["at"] == {
         "lat": -90.0,
         "lng": 180.0,
@@ -183,6 +186,11 @@ def test_coordinates_are_checked_by_the_shared_geo_utility():
         CaptureError, match=r"actions\[0\]\.at: \(0\.0, 180\.5\) is not a coordinate"
     ):
         validate_actions([{"do": "proximity", "at": {"lat": 0, "lng": 180.5}}])
+
+
+def test_the_take_reads_its_frame_size_with_the_shared_reader():
+    # one frame-size reader for every frame sequence (encode.py), no copy of it here
+    assert platform_take.frame_size is encode.frame_size
 
 
 def test_take_url_turns_on_demo_and_video_mode():
@@ -274,13 +282,6 @@ def test_record_platform_validates_before_starting_anything(tmp_path):
     with pytest.raises(CaptureError, match="satellite shows in the details page or a Mapbox take"):
         record_platform(tmp_path, {**base, "target": "local", "actions": satellite})
     assert not (tmp_path / "captures").exists()
-
-
-def test_frame_size_is_read_from_the_first_frame(tmp_path):
-    from PIL import Image
-
-    Image.new("RGB", (2880, 1620), "black").save(tmp_path / "f000000.jpg")
-    assert frame_size(tmp_path) == (2880, 1620)
 
 
 def test_a_page_that_never_gets_ready_names_the_likely_cause():

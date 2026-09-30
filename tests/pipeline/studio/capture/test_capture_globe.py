@@ -7,8 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from pipeline.studio.capture import globe
-from pipeline.studio.capture import platform as platform_take
+from pipeline.studio.capture import encode, globe, manifest
 from pipeline.studio.capture.gpu import nvenc_problem
 from pipeline.studio.capture.manifest import CREDIT_MAPBOX_STREETS, CaptureError
 
@@ -153,6 +152,9 @@ def test_flyto_input_and_events():
         ({"empire": "atlantis"}, "empire must be null or an empire id"),
         ({"emprie": "roman"}, r"unknown keys \['emprie'\] for scene flyto"),
         ({"place": {"id": "p1"}}, "place must be"),
+        # the place id keys points.json and the renderer's cues: a case-file id, a string
+        ({"place": {"id": 5, "label": "Baalbek"}}, r"g1: place needs a place id, got 5"),
+        ({"place": {"id": "", "label": "Baalbek"}}, r"g1: place needs a place id, got ''"),
         ({"scene": "street-view"}, "scene must be one of"),
     ],
 )
@@ -325,6 +327,14 @@ def test_mapbox_inputs():
         globe.scene_input({**FLYIN, "duration_s": 4}, WORK)
     with pytest.raises(CaptureError, match=r"unknown keys \['pitch'\] for scene mapbox_flyin"):
         globe.scene_input({**FLYIN, "pitch": 60}, WORK)
+    # the country the take highlights is a name of the site's country table, never coerced
+    with pytest.raises(CaptureError, match=r"m1: country must be a country name, got 5"):
+        globe.scene_input({**FLYIN, "country": 5}, WORK)
+
+
+def test_points_are_read_with_the_shared_coordinate_check():
+    assert globe.as_coordinates is manifest.as_coordinates
+    assert not hasattr(globe, "is_valid_coordinates")
 
 
 def test_recorder_command_records_landscape_at_60fps():
@@ -388,6 +398,9 @@ class FakeRecorder:
     def wait(self, timeout):
         return self.returncode
 
+    def poll(self):
+        return self.returncode
+
 
 @pytest.fixture
 def workstation(monkeypatch):
@@ -447,9 +460,11 @@ def test_a_take_of_the_wrong_size_fails_before_the_encode(tmp_path, monkeypatch,
         CaptureError, match=r"g1: frames are \(1280, 720\), expected \(1920, 1080\)"
     ):
         globe.record_globe(tmp_path, FLYTO)
-    # One frame-size reader for every take: the globe reuses the platform's, no copy of it.
-    assert globe.frame_size is platform_take.frame_size
+    # One frame-size reader for every frame sequence (encode.py), no copy of it here, and
+    # the globe take does not reach into the platform take's module for it.
+    assert globe.frame_size is encode.frame_size
     assert not hasattr(globe, "_frame_size")
+    assert "capture.platform" not in Path(globe.__file__).read_text(encoding="utf-8")
 
 
 def test_an_encoder_failure_names_the_tool_and_its_stderr(tmp_path, monkeypatch, workstation):
@@ -477,3 +492,75 @@ def test_a_failed_recorder_points_at_its_log(tmp_path, monkeypatch, workstation)
     monkeypatch.setattr(globe, "start_recorder", Failed)
     with pytest.raises(CaptureError, match=r"recorder failed \(exit 1\); see .*recorder.log"):
         globe.record_globe(tmp_path, FLYTO)
+
+
+AMD = "ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001681) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+
+
+def test_a_take_on_another_gpu_is_stopped_once_the_scene_names_it(
+    tmp_path, monkeypatch, workstation
+):
+    """Review of Task 31: the renderer was read only after the recorder exited, so a take
+    drawn on the AMD ran its whole length (a Mapbox take: tens of minutes) before failing.
+    The scenes write renderer.json before their first frame; the take reads it then."""
+    killed = []
+
+    class RunningOnAmd(FakeRecorder):
+        frames = 1
+        renderer = AMD
+
+        def poll(self):
+            return 1 if killed else None  # runs until it is stopped
+
+        def wait(self, timeout):
+            raise subprocess.TimeoutExpired("npm", timeout)
+
+    monkeypatch.setattr(globe, "start_recorder", RunningOnAmd)
+    monkeypatch.setattr(globe, "kill_tree", killed.append)
+    monkeypatch.setattr(globe, "RECORDER_POLL_S", 0.01)
+    with pytest.raises(CaptureError, match="g1: recorder: Chrome draws on .*AMD.*not the NVIDIA"):
+        globe.record_globe(tmp_path, FLYTO)
+    assert len(killed) == 1
+
+
+def test_a_scene_without_its_renderer_fails_the_take(tmp_path, monkeypatch, workstation):
+    class NoRenderer(FakeRecorder):
+        frames = 1
+
+        def __init__(self, cmd, log):
+            super().__init__(cmd, log)
+            inp = json.loads(Path(cmd[cmd.index("--input") + 1]).read_text(encoding="utf-8"))
+            Path(inp["renderer_path"]).unlink()
+
+    monkeypatch.setattr(globe, "start_recorder", NoRenderer)
+    with pytest.raises(CaptureError, match="g1: the recorder scene wrote no renderer.json"):
+        globe.record_globe(tmp_path, FLYTO)
+
+
+def test_the_recorder_has_time_for_every_frame_at_the_measured_mapbox_rate():
+    """Review of Task 31: a fixed 90 minutes let no Mapbox take longer than ~26 s finish at
+    the rate measured on 2026-09-26 (5 s, 300 frames, took 17 min: ~3.4 s a frame), while
+    MAX_TAKE_S allows 30 s."""
+    for seconds in (5, 26, globe.MAX_TAKE_S):
+        frames = globe.expected_frames(seconds)
+        assert globe.record_timeout_s(frames) > frames * 3.4 * 1.5
+
+
+def test_a_recorder_that_never_ends_is_stopped_at_its_timeout(tmp_path, monkeypatch, workstation):
+    killed = []
+
+    class Hanging(FakeRecorder):
+        frames = 1
+
+        def poll(self):
+            return 1 if killed else None
+
+    monkeypatch.setattr(globe, "start_recorder", Hanging)
+    monkeypatch.setattr(globe, "kill_tree", killed.append)
+    monkeypatch.setattr(globe, "record_timeout_s", lambda frames: 0.05)
+    monkeypatch.setattr(globe, "RECORDER_POLL_S", 0.01)
+    with pytest.raises(
+        CaptureError, match=r"g1: recorder did not finish in 0\.05 s; see .*recorder\.log"
+    ):
+        globe.record_globe(tmp_path, FLYTO)
+    assert len(killed) == 1

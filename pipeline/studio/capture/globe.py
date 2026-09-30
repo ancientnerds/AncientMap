@@ -6,9 +6,10 @@ The scene input goes to ``captures/<id>.rec/input.json`` (``--input``; record.ts
 it as STUDIO_SCENE_INPUT). The scenes grab every frame exactly
 (video/scenes/studio-frames.ts) into ``captures/<id>.rec/frames``; this module checks
 the count, encodes the sequence (encode.sequence_to_mp4) and builds the manifest. Every
-scene writes the page's WebGL renderer to renderer.json, which must name the NVIDIA
-(spec 4.11; the recorder launches Chrome with the NVIDIA flags) and becomes the "gpu"
-event. The places scene, and a fly-to with a place, also write where the page drew each
+scene writes the page's WebGL renderer to renderer.json before its first frame, which must
+name the NVIDIA (spec 4.11; the recorder launches Chrome with the NVIDIA flags) and becomes
+the "gpu" event; the take reads it while the recorder runs (wait_recorder), so a take drawn
+on another GPU stops at its first frame. The recorder gets RECORD_FRAME_S per frame. The places scene, and a fly-to with a place, also write where the page drew each
 place in every grabbed frame (points.json: {place id: [[x, y] | null, ...]}, one entry
 per frame, from window.__DEMO.screenPoint): the owner's rule for globe markers is to
 project them per frame from their coordinates, so the renderer's pins follow the globe
@@ -59,16 +60,18 @@ import math
 import os
 import shutil
 import subprocess
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from pipeline.historical_boundaries.empire_metadata import EMPIRE_METADATA
-from pipeline.studio.capture.encode import sequence_length, sequence_to_mp4
+from pipeline.studio.capture.encode import frame_size, sequence_length, sequence_to_mp4
 from pipeline.studio.capture.gpu import gpu_event, require_nvidia
 from pipeline.studio.capture.manifest import (
     CREDIT_MAPBOX_STREETS,
     CaptureError,
+    as_coordinates,
     as_number,
     build_manifest,
     event,
@@ -76,7 +79,6 @@ from pipeline.studio.capture.manifest import (
     require_kind,
     tool_failure,
 )
-from pipeline.studio.capture.platform import frame_size
 from pipeline.studio.capture.projection import (
     GLOBE_MAX_DISTANCE,
     GLOBE_MIN_DISTANCE,
@@ -92,13 +94,17 @@ from pipeline.studio.capture.vite import (
     require_mapbox_token,
     require_tool,
 )
-from pipeline.utils.geo import is_valid_coordinates
 
 FPS = 60
 WIDTH, HEIGHT = 1920, 1080
 MAX_TAKE_S = 30.0
-# A Mapbox fly-in waits for its tiles on every frame: 5 s took 17 min (2026-09-26).
-RECORD_TIMEOUT_S = 90 * 60
+# How long the recorder may run: its start plus a time per frame. A Mapbox fly-in waits for
+# its tiles on every frame: 5 s (300 frames) took 17 min on 2026-09-26, ~3.4 s a frame, so
+# RECORD_FRAME_S leaves ~1.8x of that (record_timeout_s).
+RECORD_START_S = 10 * 60
+RECORD_FRAME_S = 6.0
+# How often the take looks at the running recorder (its renderer, its exit, its timeout).
+RECORDER_POLL_S = 1.0
 RECORDER_SCENES = {
     "flyto": "studio-globe-flyto",
     "places": "studio-globe-places",
@@ -163,10 +169,7 @@ def _coords(spec: dict[str, Any], where: str) -> tuple[float, float]:
     for key in ("lat", "lng"):
         if key not in spec:
             raise CaptureError(f"{where}: missing {key!r}")
-    lat, lng = as_number(spec["lat"], f"{where}: lat"), as_number(spec["lng"], f"{where}: lng")
-    if not is_valid_coordinates(lat, lng):
-        raise CaptureError(f"{where}: ({lat}, {lng}) is not a coordinate")
-    return lat, lng
+    return as_coordinates(spec, where, sep=": ")
 
 
 def _label(value: Any, where: str) -> str:
@@ -284,6 +287,8 @@ def scene_input(spec: dict[str, Any], work: Path) -> dict[str, Any]:
         place = spec.get("place")
         if place is not None and (not isinstance(place, dict) or set(place) != {"id", "label"}):
             raise CaptureError(f"{cid}: place must be {{'id': <place id>, 'label': ...}}")
+        if place is not None and (not isinstance(place["id"], str) or not place["id"]):
+            raise CaptureError(f"{cid}: place needs a place id, got {place['id']!r}")
         out = {
             **base,
             "lat": lat,
@@ -347,8 +352,11 @@ def scene_input(spec: dict[str, Any], work: Path) -> dict[str, Any]:
         }
     lat, lng = _coords(spec, str(cid))
     out = {**base, "name": _label(spec.get("name"), str(cid)), "lat": lat, "lng": lng}
-    if spec.get("country") is not None:
-        out["country"] = str(spec["country"])
+    country = spec.get("country")
+    if country is not None:
+        if not isinstance(country, str) or not country.strip():
+            raise CaptureError(f"{cid}: country must be a country name, got {country!r}")
+        out["country"] = country
     if scene == "mapbox_flyin":
         if duration < FLYIN_ROTATE_S + FLYIN_ZOOM_S + 1:
             raise CaptureError(
@@ -499,6 +507,45 @@ def start_recorder(cmd: list[str], log: Any) -> subprocess.Popen[bytes]:
     return subprocess.Popen(cmd, cwd=FRONTEND_DIR, env=env, stdout=log, stderr=subprocess.STDOUT)
 
 
+def record_timeout_s(frames: int) -> float:
+    """How long the recorder may take for a take of `frames` frames (RECORD_FRAME_S)."""
+    return RECORD_START_S + frames * RECORD_FRAME_S
+
+
+def scene_renderer(cid: str, work: Path) -> str:
+    """The WebGL renderer the scene wrote to renderer.json; anything but the NVIDIA fails."""
+    path = work / "renderer.json"
+    if not path.is_file():
+        raise CaptureError(f"{cid}: the recorder scene wrote no {path.name}")
+    renderer = json.loads(path.read_text(encoding="utf-8"))["renderer"]
+    return require_nvidia(renderer, f"{cid}: recorder")
+
+
+def wait_recorder(
+    proc: subprocess.Popen[bytes], cid: str, work: Path, timeout_s: float, log_path: Path
+) -> None:
+    """Wait until the recorder exits, stopping it on the first failure.
+
+    Every scene writes renderer.json before it grabs its first frame (studio-frames.ts
+    writeRenderer), so once f000000.jpg exists the renderer is proven: a take drawn on
+    another GPU stops then, not after its whole length. A recorder still running after
+    `timeout_s` is stopped too."""
+    deadline = time.monotonic() + timeout_s
+    proven = False
+    while proc.poll() is None:
+        if not proven and (work / "frames" / "f000000.jpg").exists():
+            try:
+                scene_renderer(cid, work)
+            except CaptureError:
+                kill_tree(proc)
+                raise
+            proven = True
+        if time.monotonic() > deadline:
+            kill_tree(proc)
+            raise CaptureError(f"{cid}: recorder did not finish in {timeout_s:g} s; see {log_path}")
+        time.sleep(RECORDER_POLL_S)
+
+
 def record_globe(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
     """Record one globe or Mapbox take into captures/<id>.mp4 and return its manifest."""
     cid = require_kind(spec, "globe")
@@ -514,26 +561,18 @@ def record_globe(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
     input_path = work / "input.json"
     input_path.write_text(json.dumps(inp, indent=2), encoding="utf-8")
     log_path = work / "recorder.log"
+    frames = expected_frames(inp["duration_s"])
     with display_awake(), log_path.open("wb") as log:
         proc = start_recorder(
             recorder_command(npm, RECORDER_SCENES[spec["scene"]], input_path, work), log
         )
-        try:
-            proc.wait(timeout=RECORD_TIMEOUT_S)
-        except subprocess.TimeoutExpired as err:
-            kill_tree(proc)
-            raise CaptureError(
-                f"{cid}: recorder did not finish in {RECORD_TIMEOUT_S} s; see {log_path}"
-            ) from err
+        wait_recorder(proc, cid, work, record_timeout_s(frames), log_path)
     if proc.returncode != 0:
         raise CaptureError(f"{cid}: recorder failed (exit {proc.returncode}); see {log_path}")
-    renderer = json.loads((work / "renderer.json").read_text(encoding="utf-8"))["renderer"]
-    require_nvidia(renderer, f"{cid}: recorder")
+    renderer = scene_renderer(cid, work)
     count = sequence_length(frames_dir)
-    if count != expected_frames(inp["duration_s"]):
-        raise CaptureError(
-            f"{cid}: the take has {count} frames, expected {expected_frames(inp['duration_s'])}"
-        )
+    if count != frames:
+        raise CaptureError(f"{cid}: the take has {count} frames, expected {frames}")
     size = frame_size(frames_dir)
     if size != (WIDTH, HEIGHT):
         raise CaptureError(f"{cid}: frames are {size}, expected {(WIDTH, HEIGHT)}")
