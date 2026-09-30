@@ -16,15 +16,18 @@ Where the words allow two readings, both stand and `spelling_mismatch` accepts a
 shows either: the British "two hundred and fifty thousand" is 250,000, "between five hundred
 and one thousand" is 500 and 1,000; "one point five" is 1.5, but in "at one point five
 hundred men" it is 1, "point" and 500; "a thirty-second exposure" may be a 30-second one;
-"the Second" is 2nd or the regnal numeral II ("Ramesses the Second" is "Ramesses II").
-`normalize_tokens` gives the primary reading, every number run read as far as it goes (but
-"6 million" is 6 and "million" there, as the spoken "two thousand million" is 2000 and
-"million").
+"the Second" is 2nd or the regnal numeral II ("Ramesses the Second" is "Ramesses II"); a day
+ordinal right after its month name is the ordinal or the bare day ("June twenty-first" is
+"June 21st" or "June 21"). `normalize_tokens` gives the primary reading, every number run read
+as far as it goes (but "6 million" is 6 and "million" there, as the spoken "two thousand
+million" is 2000 and "million").
 
-Known limit: two numbers spoken back to back with no punctuation between them, the second a
+Known limits: two numbers spoken back to back with no punctuation between them, the second a
 British "hundred and" group, read like the plan's "one thousand five hundred and one thousand
 six hundred fifty" (1,500 and 1,650), so "a hundred thousand two hundred and fifty thousand" is
-100,200 and 50,000; a comma after the first number makes it 100,000 and 250,000.
+100,200 and 50,000; a comma after the first number makes it 100,000 and 250,000. The bare day
+needs the ordinal right after the month name: "June the twenty-first" shows as "June the 21st",
+never as "June 21".
 """
 
 from __future__ import annotations
@@ -64,6 +67,13 @@ ORDINALS = {
 }  # fmt: skip
 # the ordinals that end a compound one after a tens word: "twenty-first" is "21st"
 UNIT_ORDINALS = {w: int(o[:-2]) for w, o in ORDINALS.items() if int(o[:-2]) < 10}
+# a spoken day ordinal right after one of these may show as the bare day: "June 21"
+MONTHS = frozenset(
+    (
+        "january", "february", "march", "april", "may", "june", "july", "august", "september",
+        "october", "november", "december",
+    )
+)  # fmt: skip
 UNITS = {
     "t": "t", "tonne": "t", "tonnes": "t", "ton": "t", "tons": "t",
     "m": "m", "metre": "m", "metres": "m", "meter": "m", "meters": "m",
@@ -406,9 +416,25 @@ def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, in
     return [(_format(total + current, digits), i), *ends]
 
 
+def _days(
+    words: list[str], stops: set[int], i: int, readings: list[tuple[str, int]]
+) -> list[tuple[str, int]]:
+    """The bare day of each spoken ordinal 1st-31st among the `readings` of words[i] when a month
+    name comes right before it, as a second reading: "June twenty-first" may be "June 21" as
+    well as "June 21st". A month name that closes a clause is no date ("in June, twenty-first")."""
+    if i == 0 or i - 1 in stops or words[i - 1] not in MONTHS:
+        return []
+    return [
+        (token[:-2], nxt)
+        for token, nxt in readings
+        if _ORDINAL_DIGITS_RE.match(token) and 1 <= int(token[:-2]) <= 31
+    ]
+
+
 def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]]:
     """The tokens that words[i] can start, each with the index after it, the primary reading
-    first. Only a number, and "the" before an ordinal, can have more than one."""
+    first. Only a number, "the" before an ordinal and a day after its month can have more
+    than one."""
     w = words[i]
     if w == "the" and i not in stops and i + 1 < len(words) and words[i + 1] != "the":
         # a regnal number: "Ramesses the Second" is "Ramesses II"
@@ -421,7 +447,7 @@ def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]
     if w in ONES or w in TENS or w in ("a", "an"):
         run = _number_run(words, stops, i)
         if run is not None:
-            return run
+            return [*run, *_days(words, stops, i, run)]
     if _DIGITS_RE.match(w):
         whole, _, fraction = w.replace(",", "").partition(".")
         plain = (_format(int(whole), fraction), i + 1)
@@ -439,7 +465,8 @@ def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]
     if _ORDINAL_DIGITS_RE.match(w):
         return [(w.replace(",", ""), i + 1)]
     if w in ORDINALS:
-        return [(ORDINALS[w], i + 1)]
+        ordinal = [(ORDINALS[w], i + 1)]
+        return [*ordinal, *_days(words, stops, i, ordinal)]
     if w in SCALE_ORDINALS:
         return [(f"{SCALE_ORDINALS[w]}th", i + 1)]
     if (

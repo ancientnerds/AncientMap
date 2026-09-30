@@ -190,6 +190,17 @@ from pipeline.studio import spoken
         ("two thousand three thousandth", "2,000 3,000th"),
         ("a hundred thousand two hundred thousandth", "100,000 200,000th"),
         ("eighteen twelve thousandth", "18 12,000th"),
+        # a day ordinal right after its month name may show as the bare day
+        (
+            "on February twenty-second and October twenty-second",
+            "on February 22 and October 22",
+        ),
+        ("at the summer solstice, June twenty-first", "at the summer solstice, June 21"),
+        ("June twenty-first", "June 21st"),
+        ("on March first", "on March 1"),
+        ("December thirty-first", "December 31"),
+        ("on the fifth of June", "on the 5th of June"),
+        ("June the twenty-first", "June the 21st"),
         # British "nought", areas and volumes
         ("nought point five metres", "0.5 m"),
         ("four thousand square metres", "4,000 m²"),
@@ -433,6 +444,26 @@ def test_equivalent_spellings(said, shown):
         ),
         ("hundredth, year", "100", "token 0: spoken '100th' vs display '100'"),
         ("two, hundredth", "200th", "token 0: spoken '2' vs display '200th'"),
+        # a day after its month name is exactly its day, and only a day is ever bare
+        ("June twenty-first", "June 22", "token 1: spoken '21st' vs display '22'"),
+        ("June twenty-first", "June 20 1", "token 1: spoken '21st' vs display '20'"),
+        (
+            "on February twenty-second",
+            "on February 23",
+            "token 2: spoken '22nd' vs display '23'",
+        ),
+        ("on February twenty-second", "on February 20", "spoken has 4 tokens, display 3"),
+        ("in June, twenty-first", "in June, 21", "token 2: spoken '21st' vs display '21'"),
+        ("the twenty-first dynasty", "the 21 dynasty", "token 1: spoken '21st' vs display '21'"),
+        ("June fortieth", "June 40", "token 1: spoken '40th' vs display '40'"),
+        (
+            "June one hundred and first",
+            "June 101",
+            "token 1: spoken '101st' vs display '101'",
+        ),
+        ("June 21st", "June twenty-one", "token 1: spoken '21st' vs display '21'"),
+        # known limit: the bare day needs the ordinal right after the month name
+        ("June the twenty-first", "June 21", "token 1: spoken 'the' vs display '21'"),
         # an area is never a length: "four metres square" is 16 m²
         ("four thousand square metres", "4,000 m", "token 1: spoken 'm²' vs display 'm'"),
         ("four metres square", "4 m²", "token 1: spoken 'm' vs display 'm²'"),
