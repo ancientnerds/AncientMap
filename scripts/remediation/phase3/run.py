@@ -591,7 +591,7 @@ def cmd_judge(args: argparse.Namespace) -> int:
         )
         return 0
 
-    runner = MS.HandoffRunner(directory=Path(args.handoff_import))
+    runner = MS.HandoffRunner(directory=Path(args.handoff_import), models=MS.OPUS_ONLY)
     answers = F.EvidenceStore(run_dir / batch_id / "answers")
     try:
         report = MS.judge_batch(
@@ -735,7 +735,7 @@ def _judge_discover_reviewer(
         )
         return 0
 
-    runner = MS.HandoffRunner(directory=Path(args.handoff_import))
+    runner = MS.HandoffRunner(directory=Path(args.handoff_import), models=MS.OPUS_ONLY)
     try:
         report = RS.judge_review_batch(
             batch=batch,
@@ -896,7 +896,7 @@ def _judge_discover(
         )
         return 0
 
-    runner = MS.HandoffRunner(directory=Path(args.handoff_import))
+    runner = MS.HandoffRunner(directory=Path(args.handoff_import), models=MS.OPUS_ONLY)
     answers = F.EvidenceStore(run_dir / batch_id / "answers")
     try:
         report = DS.judge_discover_batch(

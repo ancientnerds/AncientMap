@@ -16184,7 +16184,7 @@ OPUS_HANDOFF_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "opus handoff: the judge's import answers itself",
         OH_RUN,
-        "    runner = MS.HandoffRunner(directory=Path(args.handoff_import))\n",
+        "    runner = MS.HandoffRunner(directory=Path(args.handoff_import), models=MS.OPUS_ONLY)\n",
         "    runner = MS.RecordingRunner()  # mutant\n",
         OH_MODEL_TEST,
         "test_an_export_hands_off_exactly_the_calls_the_import_asks_and_writes_nothing_else",
@@ -16289,7 +16289,7 @@ OPUS_HANDOFF_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "opus handoff: run4's import answers itself",
         OH_RUN4,
-        "    runner = MS.HandoffRunner(directory=directory)\n",
+        "    runner = MS.HandoffRunner(directory=directory, models=MS.ANSWERING_MODELS)\n",
         "    runner = MS.RecordingRunner()  # mutant\n",
         OH_P4_TEST,
         "test_select_and_translate_are_two_handoff_rounds_and_only_the_import_writes",
@@ -16297,7 +16297,7 @@ OPUS_HANDOFF_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "opus handoff: the review import answers itself",
         OH_RUN4,
-        "        MS.HandoffRunner(directory=Path(args.handoff_import)),\n",
+        "        MS.HandoffRunner(directory=Path(args.handoff_import), models=MS.ANSWERING_MODELS),\n",
         "        MS.RecordingRunner(),  # mutant\n",
         OH_P4_TEST,
         "test_a_review_that_could_not_call_names_the_error_for_the_spawn_retry",
@@ -16514,6 +16514,38 @@ MODEL_STAMP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    if False:  # mutant\n",
         OH_VISION_TEST,
         "test_this_closed_lane_refuses_an_answer_of_any_other_model",
+    ),
+    (
+        "model stamp: the closed Phase-3 import takes a Sonnet answer and reports it as Opus",
+        MODEL_STAGE,
+        "        if answer.model not in self.models:\n",
+        "        if False:  # mutant\n",
+        "tests/remediation/test_phase3_model.py",
+        "test_the_closed_phase_3_import_refuses_an_answer_by_another_model",
+    ),
+    (
+        "model stamp: the scope review labels every judge Opus",
+        "scripts/remediation/mechanical/scope_review.py",
+        '    stamp = row["model"] if "model" in row else OH.OPUS_MODEL\n',
+        "    stamp = OH.OPUS_MODEL  # mutant\n",
+        "tests/remediation/test_scope_review.py",
+        "test_the_evidence_label_names_the_model_that_judged",
+    ),
+    (
+        "model stamp: the scope review stores no model of the answer it imported",
+        "scripts/remediation/mechanical/scope_review.py",
+        '                "model": raw.model,\n',
+        '                "model": OH.OPUS_MODEL,  # mutant\n',
+        "tests/remediation/test_scope_review.py",
+        "test_the_evidence_label_names_the_model_that_judged",
+    ),
+    (
+        "model stamp: a teaser write takes any disclosure string",
+        "scripts/remediation/mechanical/teaser.py",
+        '        if provenance["ai_system"] not in M.AI_SYSTEMS:\n',
+        "        if False:  # mutant\n",
+        "tests/remediation/test_mechanical_teaser.py",
+        "test_a_provenance_names_one_of_the_two_disclosure_strings_and_no_third",
     ),
 ]
 MUTATIONS += MODEL_STAMP_MUTATIONS

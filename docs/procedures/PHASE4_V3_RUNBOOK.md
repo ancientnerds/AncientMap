@@ -60,6 +60,11 @@ section 9).
    `audit4.py written`, P5 closed) change `phase4/` too: merge them between import rounds, then
    hand out new briefs (a brief printed before still names `opus_handoff.py answer`) and run the
    new `ready` before every import - it names what an old brief let through.
+   **Since 2026-10-01 (model stamp) this holds for every lane's brief, not only Phase 4**: both
+   `opus_handoff.py answer` and `handoff4.py record` require `--model`, so an agent holding a brief
+   printed earlier (WB, WC, WD2, P4 batches being answered) exits 2 at its first recording. After the
+   merge re-run `brief` for every batch still being answered and restart those agents; nothing already
+   recorded or exported changes (no prompt text changed, answers recorded before stay valid).
 2. Nobody drives `runs/mass-2026-09-25` live again: every live `mass4` round of a run re-queues
    that run's ready deferred sites, and the mass run's 19 are v3d's (section 8). Code holds this
    too: a plan without a pass (the mass run's) re-queues no site a descriptions-only list names

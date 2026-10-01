@@ -18,6 +18,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
+from phase4 import model4 as M  # noqa: E402
 from teaser import prompts as P  # noqa: E402
 
 from pipeline.utils import card_provenance as CP  # noqa: E402
@@ -234,7 +235,7 @@ def teaser(site_id: str, card: str | None = None, description: str | None = None
     text = GOOD[site_id] if card is None else card
     return CP.build(
         run="wb-test",
-        ai_system="Claude Opus (Anthropic): test",
+        ai_system=M.AI_SYSTEM,
         card=text,
         description=DESCRIPTIONS[site_id] if description is None else description,
         stage="check",

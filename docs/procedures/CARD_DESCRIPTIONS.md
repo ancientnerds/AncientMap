@@ -450,7 +450,7 @@ H=output/remediation/handoff/teaser-wb-pilot-2026-09-27     # $H-<stage>: one di
    or - at `verify` and `verify2` - a verifier with web access). At most 16 agents at a time; each
    answers its own batch into its own scratch directory (`$H-<stage>-scratch/B/`), checks every answer
    with `run.py check-answer` (a writer until it prints `"ok": true`; nothing is recorded by it) and
-   records it with `opus_handoff.py answer --answered-by teaser-B` (write-once). An agent that stopped
+   records it with `opus_handoff.py answer --model <the model id it runs as> --answered-by teaser-B` (write-once). An agent that stopped
    (the API limit) is replaced by a new one with the same brief; recorded answers stay.
 3. `$PY $OH validate --dir $H-<stage>` - every question answered, for its exact prompt, by Opus, in
    shape. Gate: no missing, stale, malformed or orphan answer.

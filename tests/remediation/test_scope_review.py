@@ -222,11 +222,13 @@ def review(tmp_path: Path) -> dict[str, Path]:
     return {"out": out, "harvest": harvest, "handoff": handoff}
 
 
-def answer_round(handoff: Path, out: Path, round_no: int, texts: dict[str, str]) -> None:
+def answer_round(
+    handoff: Path, out: Path, round_no: int, texts: dict[str, str], model: str = OH.OPUS_MODEL
+) -> None:
     for q in read_jsonl(R.round_files(out, round_no).questions):
         OH.write_answer(
             handoff,
-            model=OH.OPUS_MODEL,
+            model=model,
             batch_id=q["batch_id"],
             stage=R.STAGE,
             label=q["site_id"],
@@ -236,13 +238,17 @@ def answer_round(handoff: Path, out: Path, round_no: int, texts: dict[str, str])
 
 
 def run_round(
-    review: dict[str, Path], round_no: int, texts: dict[str, str], bodies: dict[str, str]
+    review: dict[str, Path],
+    round_no: int,
+    texts: dict[str, str],
+    bodies: dict[str, str],
+    model: str = OH.OPUS_MODEL,
 ) -> dict:
     """One round end to end: exported into its own handoff, answered, imported."""
     out = review["out"]
     handoff = out.parent / f"handoff-r{round_no}"
     R.export_round(out, handoff, round_no, load_harvest(review["harvest"]))
-    answer_round(handoff, out, round_no, texts)
+    answer_round(handoff, out, round_no, texts, model)
     pages = out / "pages"
     return R.import_round(out, round_no, Q.Library(REPO, pages), pages_for(pages, bodies))
 
@@ -598,15 +604,39 @@ class TestTheRounds:
 
 
 # ------------------------------------------------------------------------------ the plan
-def counted_baltic(review: dict[str, Path]) -> None:
-    run_round0(
+def counted_baltic(review: dict[str, Path], model: str = OH.OPUS_MODEL) -> None:
+    run_round(
         review,
+        0,
         {BALTIC: not_a_site([(WIKI, WIKI_TEXT), (NEWS, NEWS_TEXT), (NEWS, "not there")])},
         {WIKI: WIKI_TEXT, NEWS: NEWS_TEXT},
+        model,
     )
 
 
 WAVE = "2026-09-26"
+
+
+def test_the_evidence_label_names_the_model_that_judged(review) -> None:
+    counted_baltic(review, OH.SONNET_MODEL)
+    rows = R.read_jsonl(R.round_files(review["out"], 0).answers)
+    assert {r["model"] for r in rows} == {OH.SONNET_MODEL}
+    export = R.read_export(R.export_path(review["out"]))
+    plan = R.build_plan(
+        export, R.decisions(review["out"]), built_at="x", lane=L.scope_review_lane(WAVE)
+    )
+    cells = {(c.site_id, c.column): c for c in plan.changes}
+    sources = [e["source"] for e in cells[(BALTIC, "scope_reason")].evidence]
+    assert sources[-1] == "sonnet:r0-001"
+
+
+def test_a_row_imported_before_the_stamp_keeps_its_opus_label() -> None:
+    old = {"answered_by": "r0-001"}  # written before 2026-10-01: no "model"
+    assert R.judged_by(old) == "opus:r0-001"
+    assert R.judged_by({**old, "model": OH.OPUS_MODEL}) == "opus:r0-001"
+    assert R.judged_by({**old, "model": OH.SONNET_MODEL}) == "sonnet:r0-001"
+    with pytest.raises(KeyError):
+        R.judged_by({**old, "model": "anthropic/claude-haiku (Claude Code agent)"})
 
 
 class TestThePlan:

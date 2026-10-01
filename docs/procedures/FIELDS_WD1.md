@@ -154,7 +154,7 @@ part 2 (`RUN=$R2 HO=$H-rest`).** A part's bulk starts only after its pilot's gat
    and each agent's scratch is `$HO-r0-scratch/B/`): start one fresh Opus agent with the text of
    `$PY $F/handoff.py brief --run $RUN --handoff $HO-r0 --batch-id B`. The agent researches each
    site, checks its answer with `handoff.py check-answer` (the shape and every page-free rule, per
-   field; exit 1 with the problems) and records it with `opus_handoff.py answer` (write-once).
+   field; exit 1 with the problems) and records it with `opus_handoff.py answer --model <the model id it runs as>` (write-once).
 9. `$PY scripts/remediation/opus_handoff.py validate --dir $HO-r0` - clean: every question answered,
    in shape, by Opus, nothing stale or orphaned.
 10. `$PY $F/handoff.py import --run $RUN` - every round's answers: each round validated again, the
