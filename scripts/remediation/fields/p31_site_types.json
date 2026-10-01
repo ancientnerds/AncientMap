@@ -1,5 +1,5 @@
 {
- "about": "WD1's reviewed map from Wikidata P31 classes to the canonical site types (pipeline/normalizers/site_type.py). kind: site = a kind of site, consistent with the listed types; generic = an archaeological or heritage class that confirms only the generic types it lists; container = the item is a settlement, administrative unit, natural feature, park or museum - the site is in doubt unless the stored type is one listed; other = the item is no place at all (an object, a person, a deity, a concept, a Wikimedia page). Built 2026-09-26 from the P31 classes of every item in the full harvest (766 classes; 769 since the production harvest of 2026-09-26 17:00 UTC added Delphinion, hammam and flatiron); pinned by fields/classify.py TABLE_SHA256.",
+ "about": "WD1's reviewed map from Wikidata P31 classes to the canonical site types (pipeline/normalizers/site_type.py). kind: site = a kind of site, consistent with the listed types; generic = an archaeological or heritage class that confirms only the generic types it lists; container = the item is a settlement, administrative unit, natural feature, park or museum - the site is in doubt unless the stored type is one listed; other = the item is no place at all (an object, a person, a deity, a concept, a Wikimedia page). Built 2026-09-26 from the P31 classes of every item in the full harvest (766 classes; 769 since the production harvest of 2026-09-26 17:00 UTC added Delphinion, hammam and flatiron; 773 since lane WD3's refreshed harvest of 2026-10-01 added Luoyang, Ingapirca and Aramu Muru: former capital, tourist attraction, prefecture-level city of China, portal); pinned by fields/classify.py TABLE_SHA256.",
  "classes": {
   "Q5": {
    "label": "human",
@@ -2308,6 +2308,17 @@
     "Unknown"
    ]
   },
+  "Q570116": {
+   "label": "tourist attraction",
+   "kind": "generic",
+   "types": [
+    "Heritage site",
+    "Scheduled monument",
+    "Monument",
+    "Archaeological site",
+    "Site"
+   ]
+  },
   "Q575759": {
    "label": "war memorial",
    "kind": "site",
@@ -2631,6 +2642,18 @@
     "City/town/settlement"
    ]
   },
+  "Q748149": {
+   "label": "prefecture-level city of China",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
+  },
   "Q751876": {
    "label": "château",
    "kind": "site",
@@ -2828,6 +2851,16 @@
     "Temple",
     "Temple complex",
     "Religious"
+   ]
+  },
+  "Q854429": {
+   "label": "portal",
+   "kind": "site",
+   "types": [
+    "Gate",
+    "Gate/archway/bridge",
+    "Fortification",
+    "Monument"
    ]
   },
   "Q854550": {
@@ -6747,6 +6780,18 @@
    "label": "magic item",
    "kind": "other",
    "types": []
+  },
+  "Q27554677": {
+   "label": "former capital",
+   "kind": "container",
+   "types": [
+    "City",
+    "Town",
+    "Village",
+    "Settlement",
+    "Urban",
+    "City/town/settlement"
+   ]
   },
   "Q27608973": {
    "label": "natural monument of Russia",

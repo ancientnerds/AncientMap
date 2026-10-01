@@ -384,6 +384,24 @@ output/remediation/fields/wd1-pilot/*
 output/remediation/fields/wd1-rest-pilot/*
 !output/remediation/fields/wd1-rest-pilot/COUNTS.json
 !output/remediation/fields/wd1-rest-pilot/PILOT.json
+# The WD3 structured-field fill (2026-10-01, runbook docs/procedures/FIELDS_WD3.md): versioned like WD1's -
+# every write step (plan, refusals, statement, undo, rollback rehearsal, acceptance) with its wave, the
+# runs' RUN.json (the rule, pinned) and COUNTS.json, the pilot's gate report and the owner list. The
+# harvest copy (wd3/harvest), the stored and links exports, the classification, the decisions (quotes and
+# reasoning of every answer, bulk: archived with the handoff answers) and the fetched pages stay local.
+!output/remediation/fields/wd3/
+output/remediation/fields/wd3/*
+!output/remediation/fields/wd3/RUN.json
+!output/remediation/fields/wd3/COUNTS.json
+!output/remediation/fields/wd3/OWNER_LIST.md
+!output/remediation/fields/wd3/OWNER_LIST.jsonl
+!output/remediation/fields/wd3/write/
+output/remediation/fields/wd3/write/*/*/REHEARSAL.sql
+!output/remediation/fields/wd3-pilot/
+output/remediation/fields/wd3-pilot/*
+!output/remediation/fields/wd3-pilot/RUN.json
+!output/remediation/fields/wd3-pilot/COUNTS.json
+!output/remediation/fields/wd3-pilot/PILOT.json
 # The read-only measurements behind the runbook's section 5 (counts and coverage only).
 !output/remediation/fields/measurements/
 # The site_external_ids repair (2026-09-22): hand-researched, not regenerable from any run, and not yet
