@@ -315,6 +315,31 @@ def test_normalize_loudness_corrects_the_limiter_residual(tmp_path, monkeypatch)
     assert not (tmp_path / "loudness.wav").exists()
 
 
+@pytest.mark.parametrize("failing_step", ["the WAV encode", "the WAV measurement"])
+def test_a_failed_loudness_step_leaves_no_lossless_wav(tmp_path, monkeypatch, failing_step):
+    # The probe is a float WAV of the whole episode (hundreds of MB for 20 minutes): it must
+    # not outlive the step that failed on it.
+    raw = tmp_path / "raw.mp4"
+    raw.write_bytes(b"raw")
+
+    def run_ffmpeg(args, out):
+        out.write_bytes(b"partial wav")
+        if failing_step == "the WAV encode":
+            raise RuntimeError("ffmpeg died")
+        return out
+
+    def measure_lufs(path):
+        if path.name == "loudness.wav":
+            raise RuntimeError("measurement died")
+        return -20.0
+
+    monkeypatch.setattr("pipeline.video.media.run_ffmpeg", run_ffmpeg)
+    monkeypatch.setattr("pipeline.video.shorts_render.measure_lufs", measure_lufs)
+    with pytest.raises(RuntimeError, match="died"):
+        render.normalize_loudness(raw, tmp_path / "final.mp4")
+    assert not (tmp_path / "loudness.wav").exists()
+
+
 def test_timeout_kills_the_tree_and_removes_the_bundle(tmp_path, monkeypatch):
     ws = ef.ready_episode(tmp_path, monkeypatch)
 

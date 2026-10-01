@@ -191,23 +191,27 @@ def normalize_loudness(raw: Path, out: Path) -> float:
 
     first = gain_db(measure_lufs(raw))
     probe = out.parent / "loudness.wav"
-    run_ffmpeg(
-        [
-            "-i",
-            str(raw),
-            "-map",
-            "0:a:0",
-            "-af",
-            f"volume={first:.2f}dB,alimiter=limit={PEAK_LIMIT}:level=false",
-            "-c:a",
-            "pcm_f32le",
-            "-ar",
-            "48000",
-        ],
-        probe,
-    )
-    gain = first + (TARGET_LUFS - measure_lufs(probe))
-    probe.unlink()
+    # A lossless float WAV of the whole episode (hundreds of MB): gone whether the step that
+    # needs it succeeds or fails.
+    try:
+        run_ffmpeg(
+            [
+                "-i",
+                str(raw),
+                "-map",
+                "0:a:0",
+                "-af",
+                f"volume={first:.2f}dB,alimiter=limit={PEAK_LIMIT}:level=false",
+                "-c:a",
+                "pcm_f32le",
+                "-ar",
+                "48000",
+            ],
+            probe,
+        )
+        gain = first + (TARGET_LUFS - measure_lufs(probe))
+    finally:
+        probe.unlink(missing_ok=True)
     run_ffmpeg(
         [
             "-i",
