@@ -37,8 +37,8 @@ and its reversal, once those ids moved, because the new name is derived from one
 
 `--write` reads production read-only in one snapshot (kept as `mechanical_name_fix/READ.jsonl`) and
 writes `PLAN.jsonl`, `PLAN.md`, `ROLLBACK.sql`; `apply.py --lane name-fix` emits, rehearses, probes,
-applies and verifies (docs/procedures/CARD_DESCRIPTIONS.md is not involved; the runbook is
-docs/procedures/SITES_DB_REMEDIATION_2026-09.md, "Two renames of 2026-10-01").
+applies and verifies (runbook: docs/procedures/SITES_DB_REMEDIATION_2026-09.md, "Two renames of
+2026-10-01"; `apply.py --emit` also writes `APPLY.sql`, committed beside the plan).
 """
 
 from __future__ import annotations
