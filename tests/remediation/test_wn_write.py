@@ -11,6 +11,7 @@ p4wc` and `revert4.py`. The fake psql parses what it is sent (`phase4_write_fixt
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ for _path in (REPO / "output" / "remediation" / "tools", REPO / "scripts" / "rem
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+import lanes  # noqa: E402
 import verify_writes4 as A  # noqa: E402
 import write_gate4 as G  # noqa: E402
 from phase4 import revert4 as R  # noqa: E402
@@ -38,6 +40,52 @@ from tests.remediation.test_phase4_wc_write import (  # noqa: E402
 )
 from tests.remediation.test_phase4_write import _keep_reversal, _revert_set  # noqa: E402
 from tests.remediation.wc_fixtures import WC4  # noqa: E402
+
+
+def _git(repo: Path, *argv: str) -> str:
+    done = subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com", *argv],
+        capture_output=True, text=True, check=True,
+    )  # fmt: skip
+    return done.stdout.strip()
+
+
+@pytest.fixture(scope="module")
+def lane_n_history(tmp_path_factory) -> dict[str, str]:
+    """A throwaway repository with the three commits the gate reasons about: one before the change
+    that puts lane N into the API's disclosure, the change, and one after. (The checkout the suite
+    runs in may be shallow: CI clones with depth 1.)"""
+    repo = tmp_path_factory.mktemp("history")
+    _git(repo, "init", "-q")
+    target = repo / G.LANE_N_FILE
+    target.parent.mkdir(parents=True)
+    commits = {}
+    for name, text in (
+        ("before", "LICENCE_LESS = frozenset({'L'})"),
+        ("change", f"{G.LANE_N_MARK} = frozenset({{'L', 'N'}})"),
+        ("after", f"{G.LANE_N_MARK} = frozenset({{'L', 'N'}})  # later edit"),
+    ):
+        target.write_text(text + chr(10), encoding="utf-8")
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", name)
+        commits[name] = _git(repo, "rev-parse", "HEAD")
+    return {"repo": str(repo), **commits}
+
+
+@pytest.fixture(autouse=True)
+def _history_of_the_gate(lane_n_history, monkeypatch) -> None:
+    monkeypatch.setattr(G, "LANE_N_REPO", Path(lane_n_history["repo"]))
+
+
+def _api_runs_the_lane_n_change(host: str) -> str:
+    """The live API reports (`/` -> commit) a commit after the lane-N change."""
+    return _git(Path(G.LANE_N_REPO), "rev-parse", "HEAD")
+
+
+def _gate(argv, *, runner):
+    """The gate with the API check answered as a deployed API would answer it: the real read is an
+    ssh to the VPS."""
+    return G.main(argv, runner=runner, api_commit=_api_runs_the_lane_n_change)
 
 
 def _rows() -> list[dict[str, Any]]:
@@ -255,13 +303,13 @@ def test_a_wn_plan_is_planned_written_in_a_step_accepted_and_taken_back(
     plan_path: Path, tmp_path, capsys, monkeypatch
 ) -> None:
     db = _db()
-    assert G.main(_args(tmp_path, plan_path), runner=db) == 0
+    assert _gate(_args(tmp_path, plan_path), runner=db) == 0
     out = capsys.readouterr().out
     assert "live description and raw_data: 3 of 3" in out and "pilot passed: " in out
     assert "rows planned: 6 | refused by rule: {}" in out
-    assert G.main(_args(tmp_path, plan_path, "--rehearse"), runner=db) == 0
+    assert _gate(_args(tmp_path, plan_path, "--rehearse"), runner=db) == 0
     assert not db.journal and db.sites[WX.SITE_N].description is None
-    assert G.main(_args(tmp_path, plan_path, "--apply", "--step", "100"), runner=db) == 0
+    assert _gate(_args(tmp_path, plan_path, "--apply", "--step", "100"), runner=db) == 0
     assert "STEP COMPLETE: 3 site(s) written in 1 batch(es)" in capsys.readouterr().out
     written = {sid: db.sites[sid] for sid in (WX.SITE_N, WX.SITE_BLANK, WX.SITE_BAD)}
     assert all(site.description for site in written.values())
@@ -343,3 +391,272 @@ def test_the_acceptance_markings_come_from_the_last_wc_evidence_of_each_site() -
 
 def test_the_production_double_is_the_one_the_existing_wc_tests_use() -> None:
     assert FakeProduction is not None  # the acceptance's read-only production seam
+
+
+# ------------------------------------------------------------- one cell, two plans of the lane
+def _cleared_then_written(tmp_path: Path, capsys, monkeypatch):
+    """The WC pilot clears site C (its old text was dropped); the WN pilot, read afterwards, writes a
+    text for it: the description and raw_data cells of C are written by two plans of lane WC."""
+    from tests.remediation.test_phase4_wc_write import _answers as wc_answers
+    from tests.remediation.test_phase4_wc_write import _db as wc_db
+    from tests.remediation.test_phase4_wc_write import _rows as wc_rows
+
+    wc_plan = FX.build_run(tmp_path / "wc", wc_rows(), wc_answers(), name="wc-pilot")[1]
+    db = wc_db()
+    base = ["--group", "WC", "--apply-root", str(tmp_path / "apply")]
+    assert _gate([*base, "--wc-plan", str(wc_plan), "--apply", "--step", "100"], runner=db) == 0
+    assert db.sites[FX.SITE_C].description is None and db.sites[FX.SITE_C].raw_data is None
+    capsys.readouterr()
+    accepted = _accept_output(
+        tmp_path, capsys, monkeypatch, _production(db, tmp_path / "apply" / G.LANE_PLAN_FILE)
+    )
+    assert "RESULT: 0 deviation(s)" in accepted
+    log = tmp_path / "accept-wc.log"
+    log.write_text(accepted, encoding="utf-8")
+    assert _gate([*base, "--accept", str(log)], runner=db) == 0
+    after = [
+        FX.row(sid, site.description, raw_data=site.raw_data, name=sid[:4])
+        for sid, site in db.sites.items()
+    ]
+    wn_plan = WX.build_wn_run(
+        tmp_path / "wn",
+        after,
+        {FX.SITE_C: WX.good(FX.SITE_C)},
+        name="wn-pilot",
+        first_batch=WC4.FIRST_BATCH + 1,
+    )[1]
+    return db, [*base, "--wc-plan", str(wc_plan), "--wc-plan", str(wn_plan)]
+
+
+def test_a_wn_text_is_written_over_a_site_an_earlier_wc_plan_cleared(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """The first WN writes hit this: the gate must plan the earlier clear (re-planned from what it
+    was written from) and the new text as two chained rows per cell, write only the new one, and the
+    lane's acceptance must chain them: a clear, then a text, 0 deviations - and still 0 once the
+    new text is taken back."""
+    db, args = _cleared_then_written(tmp_path, capsys, monkeypatch)
+    capsys.readouterr()
+    assert _gate(args, runner=db) == 0
+    assert "pilot passed: " in capsys.readouterr().out
+    assert _gate([*args, "--apply", "--step", "100"], runner=db) == 0
+    out = capsys.readouterr().out
+    assert "STEP COMPLETE: 1 site(s) written in 1 batch(es)" in out
+    site = db.sites[FX.SITE_C]
+    assert site.description and site.raw_data[M.PROVENANCE_KEY]["lane"] == "N"
+    stamps = {(e["run_stamp"], e["column_name"]) for e in db.journal if e["row_pk"] == FX.SITE_C}
+    assert len({stamp for stamp, _ in stamps}) == 2  # the clear's chunk and the WN chunk
+
+    lane_plan = tmp_path / "apply" / G.LANE_PLAN_FILE
+    rows = [r for r in lanes.read_jsonl(lane_plan) if r["site_id"] == FX.SITE_C]
+    assert [r["column"] for r in rows].count("description") == 2  # two planned rows, one cell
+    production = _production(db, lane_plan)
+    output = _accept_output(tmp_path, capsys, monkeypatch, production, "--complete")
+    assert "RESULT: 0 deviation(s)" in output
+    assert "re-checked 4 written site(s) against their journal evidence" in output
+
+
+def test_the_acceptance_of_a_chained_cell_still_counts_every_deviation(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """A chain is no licence: a third write, a write between the two, a text another stamp changed
+    after the lane, a reverted second write and two chunks claiming one text each stay what they
+    were."""
+    db, args = _cleared_then_written(tmp_path, capsys, monkeypatch)
+    assert _gate([*args, "--apply", "--step", "100"], runner=db) == 0
+    capsys.readouterr()
+    lane_plan = tmp_path / "apply" / G.LANE_PLAN_FILE
+    cell = ("unified_sites", "description", FX.SITE_C)
+
+    def result(production, **extra):
+        plan = lanes.read_jsonl(lane_plan)
+        read = A.read_production(
+            sorted({r["pk"] for r in plan}),
+            stamp_like="phase4wc:%",
+            columns=A.LANE_COLUMNS["p4wc"],
+            run=production,
+        )
+        return A.accept4(
+            planned=plan, lane_links=read.lane_links, chains=read.chains, live=read.live,
+            present=read.present, columns=A.LANE_COLUMNS["p4wc"], complete=False,
+            change_keys=read.change_keys, allowed=extra.get("allowed", ()),
+        )  # fmt: skip
+
+    base = _production(db, lane_plan)
+    clean = result(base)
+    assert clean.deviations == [] and cell in clean.carried
+    assert len(clean.open_ids) == 9  # the WC pilot's 7 rows and the WN chunk's 2
+
+    # another stamp wrote the text after the lane
+    later = _production(db, lane_plan)
+    last = max(
+        (e for e in later.journal if e["column_name"] == "description"), key=lambda e: e["id"]
+    )
+    later.journal.append(
+        {**last, "id": last["id"] + 1, "run_stamp": "other:1", "old_value": last["new_value"],
+         "new_value": "Edited.", "change_key": "x"}
+    )  # fmt: skip
+    later.sites[FX.SITE_C]["description"] = "Edited."
+    assert any(d.startswith("CHANGED LATER") for d in result(later).deviations)
+
+    # a foreign write between the clear and the text: the chain is broken, not the lane's own
+    between = _production(db, lane_plan)
+    wn = [
+        e for e in between.journal if e["row_pk"] == FX.SITE_C and ":p4wc-4002:" in e["run_stamp"]
+    ]
+    desc = next(e for e in wn if e["column_name"] == "description")
+    at = desc["id"]
+    for entry in between.journal:
+        if entry["id"] >= at:
+            entry["id"] += 1
+    between.journal.append(
+        {**desc, "id": at, "run_stamp": "other:2", "old_value": None, "new_value": "x",
+         "change_key": "y"},
+    )  # fmt: skip
+    deviations = result(between).deviations
+    assert any(d.startswith("CHANGED LATER") and "wrote between" in d for d in deviations)
+    assert any(d.startswith("BROKEN CHAIN") for d in deviations)
+
+    # the WN chunk not written (yet): the clear stands, the text is a later step - and a deviation
+    # once the acceptance is --complete
+    waiting = _production(db, lane_plan)
+    waiting.journal = [e for e in waiting.journal if ":p4wc-4002:" not in e["run_stamp"]]
+    waiting.sites[FX.SITE_C].update(description=None, raw_data=None)
+    partial = result(waiting)
+    assert partial.deviations == [] and partial.untouched == 2
+    plan = lanes.read_jsonl(lane_plan)
+    read = A.read_production(
+        sorted({r["pk"] for r in plan}), stamp_like="phase4wc:%",
+        columns=A.LANE_COLUMNS["p4wc"], run=waiting,
+    )  # fmt: skip
+    complete = A.accept4(
+        planned=plan, lane_links=read.lane_links, chains=read.chains, live=read.live,
+        present=read.present, columns=A.LANE_COLUMNS["p4wc"], complete=True,
+        change_keys=read.change_keys, allowed=(),
+    )  # fmt: skip
+    assert sum(d.startswith("NOT WRITTEN") for d in complete.deviations) == 2
+
+    # two chunks claiming one text (rows that do not chain) are still PLANNED TWICE
+    twice = [dict(r) for r in plan]
+    clear = next(r for r in plan if r["site_id"] == FX.SITE_C and r["column"] == "description")
+    twice.append(dict(clear, change_key="z"))
+    read = A.read_production(
+        sorted({r["pk"] for r in twice}), stamp_like="phase4wc:%",
+        columns=A.LANE_COLUMNS["p4wc"], run=base,
+    )  # fmt: skip
+    again = A.accept4(
+        planned=twice, lane_links=read.lane_links, chains=read.chains, live=read.live,
+        present=read.present, columns=A.LANE_COLUMNS["p4wc"], complete=False,
+        change_keys=read.change_keys, allowed=(),
+    )  # fmt: skip
+    assert any(d.startswith("PLANNED TWICE") for d in again.deviations)
+
+
+def test_taking_the_wn_text_back_leaves_the_clear_standing_and_the_acceptance_clean(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """The way back of the second write of a cell: the reversal restores the cleared state, the
+    clear's evidence is what the site is checked against, and the reverted chunk's rows are a plan
+    not yet written - not a deviation, and a deviation once the acceptance is --complete."""
+    db, args = _cleared_then_written(tmp_path, capsys, monkeypatch)
+    assert _gate([*args, "--apply", "--step", "100"], runner=db) == 0
+    capsys.readouterr()
+    paths = [Path(args[i + 1]) for i, arg in enumerate(args) if arg == "--wc-plan"]
+    batches, outcomes = W4.load_wc_plan(paths)
+    later = batches[1]
+    plan = W4.plan_wc(later, outcomes=outcomes, live=_live(db))
+    chunk = W4.chunk_for(plan)
+    assert chunk is not None and chunk.stamp == "phase4wc:p4wc-4002:chunk-0001"
+    _keep_reversal(db, chunk)
+    assert db.sites[FX.SITE_C].description is None and db.sites[FX.SITE_C].raw_data is None
+    lane_plan = tmp_path / "apply" / G.LANE_PLAN_FILE
+    output = _accept_output(tmp_path, capsys, monkeypatch, _production(db, lane_plan))
+    assert "RESULT: 0 deviation(s)" in output
+    assert "not yet written 2" in output  # the reverted chunk's two rows
+    assert "re-checked 4 written site(s) against their journal evidence" in output
+
+
+def _plan_of(batch_id: str, *rows: tuple[str, str, str | None, str | None]) -> W4.WritePlan4:
+    plan = W4.WritePlan4(group=W4.Group.WC, batch_id=batch_id)
+    for site_id, column, old, new in rows:
+        plan.rows.append(
+            W4.Row4(
+                group=W4.Group.WC, site_id=site_id, site_name="s", table="unified_sites",
+                pk_column="id", pk=site_id, column=column, old_value=old, new_value=new,
+                test_id="t", evidence={}, change_key=f"{batch_id}:{column}:{old}:{new}",
+            )
+        )  # fmt: skip
+    return plan
+
+
+def test_two_plans_may_write_one_cell_only_as_a_chain() -> None:
+    """A text written, then written again (a clear and the WN text; a list run over a written
+    text): each row's old value is the one before it's new value. Two plans claiming the same old
+    text - two identical clears, or two different rewrites of it - are not a chain."""
+    s = "site-1"
+    chained = [
+        _plan_of("p4wc-4001", (s, "description", "old", None)),
+        _plan_of("p4wc-4002", (s, "description", None, "new"), (s, "raw_data", None, "{}")),
+        _plan_of("p4wc-4003", (s, "description", "new", "newer")),
+    ]
+    assert W4.wc_sites_planned_twice(chained) == {}
+    identical = [
+        _plan_of("p4wc-4001", (s, "description", "old", None)),
+        _plan_of("p4wc-4002", (s, "description", "old", None)),
+    ]
+    assert W4.wc_sites_planned_twice(identical) == {s: ["p4wc-4001", "p4wc-4002"]}
+    rewrites = [
+        _plan_of("p4wc-4001", (s, "description", "old", "a")),
+        _plan_of("p4wc-4002", (s, "description", "old", "b")),
+    ]
+    assert W4.wc_sites_planned_twice(rewrites) == {s: ["p4wc-4001", "p4wc-4002"]}
+    broken_later = [
+        _plan_of("p4wc-4001", (s, "description", "old", "a")),
+        _plan_of("p4wc-4002", (s, "description", "a", "b")),
+        _plan_of("p4wc-4003", (s, "description", "a", "c")),
+    ]
+    assert list(W4.wc_sites_planned_twice(broken_later)) == [s]
+
+
+# ----------------------------------------------------------- the API must know lane N first
+def test_the_gate_refuses_a_lane_n_write_until_the_live_api_carries_the_lane_n_change(
+    plan_path: Path, tmp_path, capsys, lane_n_history
+) -> None:
+    """Without `NO_LICENCE_LANES` naming N, `description_disclosure` raises KeyError('licence') on
+    every page of a written WN site. Order of the work: deploy, check the commit, then write - the
+    gate holds it, in a dry run, a rehearsal and an apply alike, and nothing is rendered."""
+    intro, before, after = (lane_n_history[k] for k in ("change", "before", "after"))
+    assert G.lane_n_commit() == intro  # found in the history, not typed
+    db = _db()
+    for mode in ((), ("--rehearse",), ("--apply", "--step", "100")):
+        capsys.readouterr()
+        assert (
+            G.main(_args(tmp_path, plan_path, *mode), runner=db, api_commit=lambda host: before)
+            == 1
+        )
+        err = capsys.readouterr().err
+        assert "does not contain" in err and "NO_LICENCE_LANES" in err and "Deploy first" in err
+        assert not db.journal and db.sites[WX.SITE_N].description is None
+    assert not (tmp_path / "apply").exists() or not list((tmp_path / "apply").glob("p4wc-*"))
+    capsys.readouterr()
+    assert G.main(_args(tmp_path, plan_path), runner=db, api_commit=lambda host: after) == 0
+    out = capsys.readouterr().out
+    assert f"lane N: the live API runs {after[:12]}, which contains {intro[:12]}" in out
+    # a commit git cannot place is refused too, never read as "fine"
+    assert G.main(_args(tmp_path, plan_path), runner=db, api_commit=lambda host: "0" * 40) == 1
+    assert "cannot relate the live API's commit" in capsys.readouterr().err
+
+
+def test_a_plan_without_lane_n_text_never_asks_the_api(tmp_path, capsys, monkeypatch) -> None:
+    """A WC plan (a March text) is lane L's: the check is not asked, so no ssh is made for it."""
+    from tests.remediation.test_phase4_wc_write import _answers as wc_answers
+    from tests.remediation.test_phase4_wc_write import _db as wc_db
+    from tests.remediation.test_phase4_wc_write import _rows as wc_rows
+
+    wc_plan = FX.build_run(tmp_path / "wc", wc_rows(), wc_answers(), name="wc-pilot")[1]
+
+    def never(host: str) -> str:
+        raise AssertionError("the API was asked for a plan that writes no lane-N text")
+
+    args = ["--group", "WC", "--wc-plan", str(wc_plan), "--apply-root", str(tmp_path / "apply")]
+    assert G.main(args, runner=wc_db(), api_commit=never) == 0

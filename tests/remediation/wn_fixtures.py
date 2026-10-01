@@ -159,6 +159,7 @@ def build_list_run(
     judged: bool = True,
     first_batch: int = WC4.FIRST_BATCH,
     after: Sequence[Path] = (),
+    defect_lines: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[Path, Path]:
     """A site-list run end to end (`export --sites`): read, export the listed sites (a pilot that
     draws every one of them, or a chunk), answer the check (`wc_fixtures.record_answers`), import,
@@ -170,7 +171,17 @@ def build_list_run(
     run.mkdir(parents=True)
     cli.cmd_read(run, runner=FX.ReadRunner(rows))
     listing = root / f"{name}.sites.txt"
-    listing.write_text("".join(f"{site}\n" for site in sites), encoding="utf-8", newline="\n")
+    defects = None
+    if defect_lines:  # the list is the one `defect-sites` builds, and its report goes to the export
+        found = root / f"{name}.defects.jsonl"
+        found.write_text(
+            "".join(json.dumps(line) + "\n" for line in defect_lines), encoding="utf-8"
+        )
+        cli.cmd_defect_sites(run, [found], listing)
+        defects = listing.with_name(listing.name + ".report.json")
+        assert listing.read_text(encoding="utf-8").split() == sorted(sites)
+    else:
+        listing.write_text("".join(f"{site}\n" for site in sites), encoding="utf-8", newline="\n")
     from phase3.run import read_jsonl
 
     asked, _ = cli.population(
@@ -179,8 +190,9 @@ def build_list_run(
     )  # fmt: skip
     draw = {"pilot": len(asked), "seed": 1} if pilot else {"pilot": None, "seed": None}
     cli.cmd_export(
-        run, handoff, batch_size=5, exclude=None, after=list(after), sites=listing, **draw
-    )
+        run, handoff, batch_size=5, exclude=None, after=list(after), sites=listing,
+        defects=defects, **draw,
+    )  # fmt: skip
     FX.record_answers(handoff, answers, by="sonnet-check")
     cli.cmd_import(run, handoff, client=FX.FakeClient(), pace=0.0)
     FX.verify_all(run, root / "handoff" / f"{name}-verify")

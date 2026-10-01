@@ -9,22 +9,24 @@ secret. It is the first real execution of invariant 6's `CASE` (lane N for a lan
 lane for a Phase-4 text), of guard 4 with a NULL and a blank old description, and of the reversal that
 writes NULL back.
 
-    docker run -d --name wn-sqltest -e POSTGRES_PASSWORD=x postgres:16-alpine
     PYTHONPATH="<repo>;<repo>/scripts/remediation" <repo>/.venv/Scripts/python.exe \\
-        tests/remediation/pg_throwaway_check.py wn-sqltest
-    docker rm -f wn-sqltest
+        tests/remediation/pg_throwaway_check.py
 
-Never point it at the project's own database container (`ancient_nerds_db`): it truncates the tables
-it creates. Measured 2026-10-01 on postgres:16-alpine: every step ran, the edited lane stopped at
-invariant 6.
+The script **creates its own container** (`docker run --rm`, a random `wn-sqltest-<hex>` name, no
+published port, no volume, no environment but a throwaway password), runs everything in it and
+removes it - it takes no container name, so it can never be pointed at the project's database
+(`ancient_nerds_db`), whose tables it would drop and truncate. Measured 2026-10-01 on
+postgres:16-alpine: every step ran, the edited lane stopped at invariant 6.
 """
 
 from __future__ import annotations
 
 import json
+import secrets
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -55,9 +57,37 @@ STATE = (
 )
 
 
+IMAGE = "postgres:16-alpine"
+
+
 class Container:
-    def __init__(self, name: str) -> None:
-        self.name = name
+    """A Postgres container this script started, and removes: nothing else is ever addressed."""
+
+    def __init__(self) -> None:
+        self.name = f"wn-sqltest-{secrets.token_hex(4)}"
+
+    def __enter__(self) -> Container:
+        subprocess.run(
+            ["docker", "run", "-d", "--rm", "--name", self.name, "-e", "POSTGRES_PASSWORD=x", IMAGE],
+            check=True, capture_output=True, text=True,
+        )  # fmt: skip
+        for _ in range(60):
+            ready = subprocess.run(
+                ["docker", "exec", self.name, "pg_isready", "-U", "postgres"], capture_output=True
+            )
+            if ready.returncode == 0:
+                # the init scripts restart the server once: wait until it answers a query
+                probe = subprocess.run(
+                    ["docker", "exec", self.name, "psql", "-U", "postgres", "-Atc", "SELECT 1"],
+                    capture_output=True, text=True,
+                )  # fmt: skip
+                if probe.stdout.strip() == "1":
+                    return self
+            time.sleep(1)
+        raise SystemExit(f"{self.name} did not come up")
+
+    def __exit__(self, *exc: object) -> None:
+        subprocess.run(["docker", "rm", "-f", self.name], capture_output=True)
 
     def psql(self, sql: str, *, check: bool = True) -> str:
         proc = subprocess.run(
@@ -114,8 +144,12 @@ def run_chunk(db: Container, plan_path: Path, rows: list[dict], label: str) -> W
     return chunk
 
 
-def main(container: str) -> None:
-    db = Container(container)
+def main() -> None:
+    with Container() as db:
+        check(db)
+
+
+def check(db: Container) -> None:
     db.migrate()
     tmp = Path(tempfile.mkdtemp())
     wn_plan = WX.build_wn_run(tmp / "wn", TW._rows(), TW._answers(), name="wn-pilot")[1]
@@ -143,4 +177,6 @@ def main(container: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "wn-sqltest")
+    if len(sys.argv) > 1:
+        raise SystemExit("no argument: the script starts and removes its own container")
+    main()

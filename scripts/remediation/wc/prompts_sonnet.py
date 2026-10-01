@@ -49,9 +49,34 @@ NO_TRIM = (
     "no reputable source supports is a DROP.\n\n"
 )
 
+#: What a later web check reported against the text (`wc/cli.py export --sites F --defects R`, the
+#: report of `defect-sites`): the claim, the sentence it is about and the page that contradicts it.
+#: Without it the agent would find the sentence's own Wikipedia article, the text the sentence was
+#: copied from, and KEEP it - the defect would be "not reproduced" by construction. The agent must
+#: settle the claim; where reputable pages disagree, the sentence is not supported.
+DEFECTS_HEAD = (
+    "A LATER WEB CHECK REPORTED A CLAIM OF THIS DESCRIPTION CONTRADICTED. Another agent read the "
+    "web and gave, for each claim below, a page whose words it took to contradict it (the report "
+    "may be mistaken; it is no verdict):\n"
+)
+DEFECTS_TAIL = (
+    "SETTLE EACH ONE YOURSELF. Open the page named and look for other reputable pages. A sentence "
+    "stays only if reputable, independent sources support every claim in it AND what that page says "
+    "does not contradict it; the article this sentence was copied from does not settle it, because "
+    "that is where the claim came from. Where reputable sources disagree on a claim, the sentence is "
+    "not supported: DROP it as contradicted, with the quote that contradicts it. If you KEEP a "
+    "sentence that is named here, your note says why the page above does not contradict it. A claim "
+    "that is not tied to one sentence is checked against every sentence.\n\n"
+)
+#: One reported claim: `{where}` is "S<n>" or "No single sentence".
+DEFECT_LINE = (
+    '{where}: claim "{claim}" - page {url} says: "{quote}" (code {found} this quote on that page)\n'
+)
+
 #: The check question of a site-list run (`wc/cli.py export --sites`): `CHECK_QUESTION` with the
-#: origin of the text said as it is (`{origin}`, `ORIGINS`) and, for a Phase-4 text, the no-trim
-#: rule (`{trims}`, `NO_TRIM`; empty otherwise).
+#: origin of the text said as it is (`{origin}`, `ORIGINS`), what a later web check reported against
+#: it (`{defects}`, `DEFECTS_HEAD`; empty for a site without a report) and, for a Phase-4 text, the
+#: no-trim rule (`{trims}`, `NO_TRIM`; empty otherwise).
 CHECK_QUESTION_LISTED = _derive(
     P.CHECK_QUESTION,
     (
@@ -61,7 +86,7 @@ CHECK_QUESTION_LISTED = _derive(
     ),
     (
         "DECIDE, for each of the sentences {asked}, exactly one of:",
-        "{trims}DECIDE, for each of the sentences {asked}, exactly one of:",
+        "{defects}{trims}DECIDE, for each of the sentences {asked}, exactly one of:",
     ),
 )
 

@@ -7286,15 +7286,15 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify_writes4: another value than the plan passes",
         P4_ACCEPT,
-        "                if (link.old, link.new) != want:\n",
-        "                if False:  # mutant\n",
+        "            if candidates and not any(\n",
+        "            if False and candidates and not any(  # mutant\n",
         P4_ACCEPT_TEST,
         "test_a_lane_row_with_another_value_than_the_plan_is_a_deviation",
     ),
     (
         "p4 verify_writes4: a row written twice passes",
         P4_ACCEPT,
-        "        if len(open_links) > 1:\n",
+        "        if len(open_links) > max(1, len(rows)):\n",
         "        if False:  # mutant\n",
         P4_ACCEPT_TEST,
         "test_a_row_written_twice_or_changed_later_is_a_deviation",
@@ -8254,10 +8254,13 @@ PHASE4_VERIFY_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify_writes4: a reverted lane row is changed later",
         P4_ACCEPT,
+        # re-pointed 2026-10-01: with chained writes of one cell the round-2 test no longer reaches
+        # this line (the lane's own reversals are netted out of `later`); a foreign write after a
+        # reversal still does
         "            if link.id in closed:\n",
         "            if False:  # mutant\n",
         P4_ACCEPT_TEST,
-        "test_a_reverted_step_written_again_as_round_2_is_accepted",
+        "test_a_reverted_row_an_allowed_later_lane_moved_is_superseded",
     ),
     (
         "p4 verify_writes4: a reverted lane row counts as a write",
@@ -8270,8 +8273,8 @@ PHASE4_VERIFY_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify_writes4: a row whose lane rows are all reverted is written",
         P4_ACCEPT,
-        "        if open_links:\n            written.add(key)\n",
-        "        if True:  # mutant\n            written.add(key)\n",
+        "        for link in open_links:\n            rest = unwritten.get(key, [])\n",
+        "        for link in links:  # mutant\n            rest = unwritten.get(key, [])\n",
         P4_ACCEPT_TEST,
         "test_a_reverted_step_counts_as_not_yet_written",
     ),
@@ -19990,10 +19993,12 @@ P4_ALLOW_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 verify_writes4: a reverted row an allowed lane moved stays MOVED",
         P4_ACCEPT,
-        "            if pattern is not None:\n                result.superseded[pattern] += 1\n"
-        "            else:\n",
-        "            if False:  # mutant\n                result.superseded[pattern] += 1\n"
-        "            else:\n",
+        "                if pattern is not None:\n                    result.superseded[pattern] += 1\n"
+        "                else:\n                    result.deviations.append(\n"
+        '                        f"MOVED',
+        "                if False:  # mutant\n                    result.superseded[pattern] += 1\n"
+        "                else:\n                    result.deviations.append(\n"
+        '                        f"MOVED',
         P4_ACCEPT_TEST,
         "test_a_reverted_row_an_allowed_later_lane_moved_is_superseded",
     ),
@@ -22315,8 +22320,8 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "audit-fix: E5 a reverted row is judged against the current plan",
         P4_ACCEPT,
-        "            judged = archived.get((link.stamp, key), row)\n",
-        "            judged = row  # mutant\n",
+        "            judged = archived.get((link.stamp, key))\n",
+        "            judged = None  # mutant\n",
         P4_ACCEPT_TEST,
         "test_a_round_2_whose_plan_changed_is_accepted_against_each_rounds_own_plan",
     ),
@@ -23626,7 +23631,7 @@ WN_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "wc wn cli: a WN plan rests on a WC pilot",
         "scripts/remediation/wc/cli.py",
-        '        which = "WN" if population.get("kind", KIND_WC) == KIND_WN else "WC"\n',
+        '        which = "WN" if kind == KIND_WN else "WC"\n',
         '        which = "WC"  # mutant\n',
         "tests/remediation/test_wn.py",
         "test_each_kind_of_text_has_its_own_pilot_and_a_mass_plan_never_rests_on_the_others",
@@ -23878,6 +23883,94 @@ WN_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         'NO_LICENCE_LANES = frozenset({"L"})  # mutant\n',
         "tests/api/test_wn_disclosure.py",
         "test_a_lane_n_text_is_served_with_the_ai_footnote_and_claims_no_licence_or_attribution",
+    ),
+    (
+        "wc wn cli: a WN pilot that judged too few texts passes",
+        "scripts/remediation/wc/cli.py",
+        "        if len(counted) < need:\n",
+        "        if False:  # mutant\n",
+        "tests/remediation/test_wn.py",
+        "test_a_wn_pilot_in_which_most_sites_ended_empty_measured_too_little_and_approves_nothing",
+    ),
+    (
+        "wc wn cli: the gate does not hold a WN pilot to its minimum",
+        "scripts/remediation/wc/cli.py",
+        '            if measured["independent"] < need or measured["kept_sentences"] < need:\n',
+        "            if False:  # mutant\n",
+        "tests/remediation/test_wn.py",
+        "test_a_wn_pilot_in_which_most_sites_ended_empty_measured_too_little_and_approves_nothing",
+    ),
+    (
+        "wc wn cli: a WN pilot may draw fewer than 20 sites",
+        "scripts/remediation/wc/cli.py",
+        "        if kind == KIND_WN and pilot != wn_pilot_size(len(asked)):\n",
+        "        if False:  # mutant\n",
+        "tests/remediation/test_wn.py",
+        "test_a_wn_pilot_draws_twenty_sites_or_the_whole_smaller_population",
+    ),
+    (
+        "wc wn cli: a list run is the WC pilot for plain chunks",
+        "scripts/remediation/wc/cli.py",
+        "            if kind == KIND_LIST:\n                raise WcRunError(\n",
+        "            if False:  # mutant\n                raise WcRunError(\n",
+        "tests/remediation/test_wc_list.py",
+        "test_a_list_run_is_in_the_wc_class_and_needs_the_wc_pilot",
+    ),
+    (
+        "wc wn cli: a defect report is not put before the checking agent",
+        "scripts/remediation/wc/cli.py",
+        '            defects=defects_block(entry.get("defects")),\n',
+        '            defects="",  # mutant\n',
+        "tests/remediation/test_wc_list.py",
+        "test_a_list_run_over_defects_tells_the_agent_which_claim_a_later_check_contradicted",
+    ),
+    (
+        "wc wn cli: a kept text under a reported claim reads as not reproduced",
+        "scripts/remediation/wc/cli.py",
+        '        return "defect-kept" if entry.get("defects") else "unchanged"\n',
+        '        return "unchanged"  # mutant\n',
+        "tests/remediation/test_wc_list.py",
+        "test_a_reported_claim_the_check_left_standing_is_the_owners_list_not_a_failure_to_reproduce",
+    ),
+    (
+        "wc wn write4: two plans claiming one old text are a chain",
+        "scripts/remediation/phase4/write4.py",
+        "            if len(ids) > 1 and not (chained and len(ids) == len(rows)):\n",
+        "            if False:  # mutant\n",
+        "tests/remediation/test_wn_write.py",
+        "test_two_plans_may_write_one_cell_only_as_a_chain",
+    ),
+    (
+        "wc wn verify_writes4: a chained second write of a cell is a deviation",
+        "output/remediation/tools/verify_writes4.py",
+        "        if len(open_links) > max(1, len(rows)):\n",
+        "        if len(open_links) > 1:  # mutant\n",
+        "tests/remediation/test_wn_write.py",
+        "test_a_wn_text_is_written_over_a_site_an_earlier_wc_plan_cleared",
+    ),
+    (
+        "wc wn verify_writes4: a foreign write between two own writes passes",
+        "output/remediation/tools/verify_writes4.py",
+        "            if later:\n                sound = False\n                if following:\n",
+        "            if later:\n                sound = False\n                if False:  # mutant\n",
+        "tests/remediation/test_wn_write.py",
+        "test_the_acceptance_of_a_chained_cell_still_counts_every_deviation",
+    ),
+    (
+        "wc wn write_gate4: the gate writes lane N before the API carries it",
+        "output/remediation/tools/write_gate4.py",
+        '    if done.returncode == 1:\n        raise SystemExit(\n            f"lane N: the live API runs',
+        '    if False:  # mutant\n        raise SystemExit(\n            f"lane N: the live API runs',
+        "tests/remediation/test_wn_write.py",
+        "test_the_gate_refuses_a_lane_n_write_until_the_live_api_carries_the_lane_n_change",
+    ),
+    (
+        "wc wn write_gate4: the gate never asks the API about a lane-N plan",
+        "output/remediation/tools/write_gate4.py",
+        "        print(require_lane_n_api(args.host, api_commit=api_commit or read_api_commit))\n",
+        '        print("lane N: not asked")\n',
+        "tests/remediation/test_wn_write.py",
+        "test_the_gate_refuses_a_lane_n_write_until_the_live_api_carries_the_lane_n_change",
     ),
 ]
 MUTATIONS += WN_MUTATIONS

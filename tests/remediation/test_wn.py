@@ -41,14 +41,18 @@ def _sha(text: str) -> str:
 
 
 # ------------------------------------------------------------------------------ the frozen texts
-#: Pinned 2026-10-01. A changed text makes every answer exported under it stale: a change is a new
+#: Pinned 2026-10-01 (CHECK_QUESTION_LISTED re-pinned the same day, before any list run was exported:
+#: it gained the `{defects}` slot, and the three DEFECT texts are new). A changed text makes every answer exported under it stale: a change is a new
 #: pin and a new export, never an edit under a running round.
 PINS = {
     "WRITE_QUESTION": "69c6d6a71dbe5c414b64a2421b2d4bb3eac499c5a050e16266409df7ffc88a44",
     "WRITE_BRIEF": "f1dbef439b05efc46220b522bcd05141986cd8e08d2ffd6dc677e1ec806f4aae",
     "VERIFY_QUESTION_WN": "6a1e020d54c09377dcfba34a70b5c317bb9b7ebe2839e09ed716e227e06b5537",
     "JUDGE_QUESTION_WN": "75c58553ed4a650834f9052672b3a93225c2dda73f1d5914870aefb64b4df2e4",
-    "CHECK_QUESTION_LISTED": "2d7bc90ca4908ce9f2bdcd5e8d09bef04631200e7273d2559100c730b76719f3",
+    "CHECK_QUESTION_LISTED": "2bcf9adf92932f5538e8a02ebe85403efb56670d8f852b7f5fef97706cb16fdf",
+    "DEFECTS_HEAD": "b77770cfe817644be5fd3461a2e95a9a4d490662fd6daf2b9dc60453fe7e3ae1",
+    "DEFECTS_TAIL": "abeb2651235a2fc721231a033ca0f180aefb83b0ce52077129be72460614e3a3",
+    "DEFECT_LINE": "b02547a1450c20f6f607365700a1c389b2b8a4d3460af27add1d7608e6a7c7ff",
     "NO_TRIM": "fd0ac89cf5cd7e0cb56da9e52e34f240990d5a2deffadff61021672d4ca39203",
     "CHECK_BRIEF_SONNET": "835f1199223c1f733c689d45f6b28afecebfa9b16b18a6f11987a8c7a7f000eb",
     "VERIFY_BRIEF_SONNET": "29af52e0cf0216f2dd00aa69a567f4e0ace48c405e6cc19ea3ed71147a710866",
@@ -573,3 +577,84 @@ def test_the_pilot_of_a_wn_run_is_judged_on_the_unchanged_thresholds(run_dirs) -
     """J_THRESHOLDS is WC's, unchanged for WN (stated in the runbook, section 12): no WRONG kept
     sentence with a found quote, at most 5 % UNSUPPORTED, no incoherent text."""
     assert cli.J_THRESHOLDS == {"wrong": 0, "unsupported_share": 0.05, "incoherent": 0}
+
+
+# ------------------------------------------------------------------------------ the pilot's sample
+def _sites(count: int) -> list[str]:
+    return [f"2{n:07x}-0000-4000-8000-{n:012x}" for n in range(1, count + 1)]
+
+
+def _pilot(tmp_path: Path, count: int, with_text: int):
+    """A WN pilot over `count` sites without a description, of which the agents wrote a text for the
+    first `with_text`; the rest found no page. Judged by a judge that finds nothing to fault."""
+    ids = _sites(count)
+    rows = [WX.wn_row(site_id) for site_id in ids]
+    answers = {
+        site_id: WX.good(site_id) if n < with_text else WX.nothing(site_id)
+        for n, site_id in enumerate(ids)
+    }
+    return WX.build_wn_run(tmp_path, rows, answers, name="wn-pilot")
+
+
+def test_a_wn_pilot_in_which_most_sites_ended_empty_measured_too_little_and_approves_nothing(
+    tmp_path: Path,
+) -> None:
+    """19 of the 20 drawn sites end empty: the one judged text is clean, yet the pilot did not
+    measure the write round - the judge's verdict is a failure and so is the gate's, even with the
+    verdict forged to `passed`."""
+    run, plan = _pilot(tmp_path, 20, with_text=1)
+    result_path = run / "judge" / "RESULT.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert result["passed"] is False
+    assert (result["measured"]["drawn"], result["measured"]["minimum"]) == (20, 10)
+    assert result["measured"]["independent"] == 1
+    assert any("1 of the 20 drawn site(s)" in failure for failure in result["failures"])
+    with pytest.raises(cli.WcRunError, match="did not pass"):
+        cli.pilot_approval([plan])
+    result_path.write_text(json.dumps({**result, "passed": True, "failures": []}), encoding="utf-8")
+    with pytest.raises(cli.WcRunError, match="the WN pilot measured too little"):
+        cli.pilot_approval([plan])
+
+
+def test_a_wn_pilot_passes_from_half_of_its_drawn_sites_with_a_judged_text(tmp_path: Path) -> None:
+    short, _ = _pilot(tmp_path / "short", 20, with_text=9)
+    assert (
+        json.loads((short / "judge" / "RESULT.json").read_text(encoding="utf-8"))["passed"] is False
+    )
+    enough, plan = _pilot(tmp_path / "enough", 20, with_text=10)
+    result = json.loads((enough / "judge" / "RESULT.json").read_text(encoding="utf-8"))
+    assert result["passed"] is True and result["measured"]["kept_sentences"] == 30
+    assert len(cli.pilot_approval([plan])) == 1
+
+
+def test_a_wn_pilot_draws_twenty_sites_or_the_whole_smaller_population(tmp_path: Path) -> None:
+    assert [cli.wn_pilot_size(n) for n in (1, 19, 20, 21, 175)] == [1, 19, 20, 20, 20]
+    run = tmp_path / "runs" / "wn"
+    run.mkdir(parents=True)
+    cli.cmd_read(run, runner=FX.ReadRunner([WX.wn_row(site_id) for site_id in _sites(25)]))
+    with pytest.raises(cli.WcRunError, match="a WN pilot draws 20 sites"):
+        cli.cmd_export(
+            run, tmp_path / "h", batch_size=5, exclude=None, after=[], wn=True, pilot=5, seed=1
+        )
+    assert not (run / cli.SITES_FILE).exists()
+    # a plan whose population record names a smaller pilot than the one the gate requires
+    pilot_run, plan = _pilot(tmp_path / "ok", 20, with_text=20)
+    record_path = pilot_run / cli.POPULATION_FILE
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    record["population"] = 40  # a population of 40 asks for a pilot of 20: this one drew 20, fine
+    record_path.write_text(json.dumps(record), encoding="utf-8")
+    assert len(cli.pilot_approval([plan])) == 1
+    record["pilot"] = {"sites": 5, "seed": 1}
+    record_path.write_text(json.dumps(record), encoding="utf-8")
+    with pytest.raises(cli.WcRunError, match="a WN pilot of 5 sites from a population of 40"):
+        cli.pilot_approval([plan])
+
+
+def test_judge_result_holds_a_wn_pilot_to_its_minimum_and_a_wc_pilot_to_none() -> None:
+    kept = {"kind": "kept", "verdict": "SUPPORTED", "quotes_found": True}
+    row = {"independent": True, "coherent": True, "items": [kept, kept]}
+    assert cli.judge_result([row, row])["passed"] is True  # WC: the thresholds alone, as before
+    assert cli.judge_result([row, row], drawn=4)["passed"] is True  # 2 of 4 texts, 4 sentences
+    failed = cli.judge_result([row], drawn=4)
+    assert failed["passed"] is False and len(failed["failures"]) == 1
+    assert cli.judge_result([], drawn=1)["passed"] is False  # nothing judged is not a pass

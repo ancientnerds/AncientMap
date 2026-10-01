@@ -997,15 +997,32 @@ def load_wc_plan(
 
 
 def wc_sites_planned_twice(plans: Sequence[WritePlan4]) -> dict[str, list[str]]:
-    """Site id -> the WC write batches that plan rows for it, for every site more than one plans.
-    `plan_wc` gives a site to one batch (`RULE_TAKEN_OVER`); two chunks read before either was
-    written can still both claim it - two identical clears each read as its own write - and the
-    gate then stops before anything is rendered."""
-    by_site: dict[str, list[str]] = {}
+    """Site id -> the WC write batches that plan rows for it, for every site whose rows in more than
+    one batch do not chain. `plan_wc` gives a site to one batch (`RULE_TAKEN_OVER`); two chunks read
+    before either was written can still both claim it - two identical clears each read as its own
+    write - and the gate then stops before anything is rendered.
+
+    Rows that chain are no claim twice: a site whose text an earlier plan wrote (a clear) and a later
+    plan writes again (lane WN's text, a site-list run over a written text) has, per column, one row
+    per plan, each one's old value the new value of the row before it, in plan order. The earlier
+    batch re-plans the rows it was written from, the later one plans its own."""
+    by_site: dict[str, dict[str, list[tuple[str, Row4]]]] = {}
     for plan in plans:
-        for site_id in dict.fromkeys(row.site_id for row in plan.rows):
-            by_site.setdefault(site_id, []).append(plan.batch_id)
-    return {site_id: ids for site_id, ids in by_site.items() if len(ids) > 1}
+        for row in plan.rows:
+            by_site.setdefault(row.site_id, {}).setdefault(row.column, []).append(
+                (plan.batch_id, row)
+            )
+    twice: dict[str, list[str]] = {}
+    for site_id, columns in by_site.items():
+        for rows in columns.values():
+            ids = list(dict.fromkeys(batch_id for batch_id, _ in rows))
+            chained = all(
+                before.new_value == after.old_value
+                for (_, before), (_, after) in zip(rows, rows[1:], strict=False)
+            )
+            if len(ids) > 1 and not (chained and len(ids) == len(rows)):
+                twice[site_id] = list(dict.fromkeys([*twice.get(site_id, []), *ids]))
+    return twice
 
 
 def source_files(

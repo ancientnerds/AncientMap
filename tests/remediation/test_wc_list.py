@@ -495,11 +495,28 @@ def _remake(row: W4.Row4, new_value: str) -> W4.Row4:
 
 
 def test_a_list_plan_is_written_accepted_and_every_site_holds_the_invariants(
-    built, tmp_path, capsys, monkeypatch
+    tmp_path, capsys, monkeypatch
 ) -> None:
-    _, _, plan = built
-    db = _db()
-    args = ["--group", "WC", "--wc-plan", str(plan), "--apply-root", str(tmp_path / "apply")]
+    # the plain WC pilot comes first (a list run cannot approve itself), and writes its own site
+    wc_pilot = FX.build_run(
+        tmp_path / "c",
+        [FX.row(FX.SITE_A, FX.TEXT_A, raw_data=FX.legacy_raw(FX.TEXT_A))],
+        {FX.SITE_A: FX.answer(FX.SITE_A, [FX.keep(1, FX.Q_COMPLEX), FX.drop(2), FX.drop(3)])},
+        name="wc-pilot",
+    )[1]
+    ids = [SITE_P4, SITE_ALL, SITE_NONE, SITE_MIS, SITE_RET]
+    _, plan = WX.build_list_run(
+        tmp_path / "l",
+        _p4_rows(),
+        ids,
+        _p4_answers(),
+        pilot=True,
+        name="wcl-pilot",
+        first_batch=4002,
+    )
+    db = _db([*_p4_rows(), FX.row(FX.SITE_A, FX.TEXT_A, raw_data=FX.legacy_raw(FX.TEXT_A))])
+    args = ["--group", "WC", "--wc-plan", str(wc_pilot), "--wc-plan", str(plan),
+            "--apply-root", str(tmp_path / "apply")]  # fmt: skip
     assert G.main(args, runner=db) == 0
     assert G.main([*args, "--rehearse"], runner=db) == 0
     assert not db.journal
@@ -587,8 +604,25 @@ def test_a_list_run_is_in_the_wc_class_and_needs_the_wc_pilot(built, tmp_path: P
     assert len(cli.pilot_approval([wc_pilot, chunk])) == 1  # the WC pilot approves a list chunk
     with pytest.raises(cli.WcRunError, match="the first WC plan named is the pilot's"):
         cli.pilot_approval([chunk])
-    # a list run that is itself a pilot (`--pilot`) and passed its judge approves later chunks
-    assert len(cli.pilot_approval([plan, chunk])) == 1
+    # a list run that is itself a pilot (`--pilot`) is judged like any pilot, after the WC one: it
+    # approves nothing by itself - a pilot of Phase-4 texts measured no March text
+    assert [a["run"].rsplit("/", 1)[-1] for a in cli.pilot_approval([wc_pilot, plan, chunk])] == [
+        "wc-pilot",
+        "wcl-pilot",
+    ]
+    for plans in ([plan, chunk], [plan]):
+        with pytest.raises(cli.WcRunError, match="a plain WC run's pilot, not a site-list run's"):
+            cli.pilot_approval(plans)
+    # ... and never a plain chunk of March texts
+    plain_chunk = FX.build_run(
+        tmp_path / "e",
+        [FX.row(FX.SITE_B, "The Tarxien Temples are an archaeological complex in Tarxien, Malta.", raw_data=None)],
+        {FX.SITE_B: FX.answer(FX.SITE_B, [FX.keep(1, FX.Q_COMPLEX)])},
+        name="wc-chunk", pilot=False, first_batch=4004,
+    )[1]  # fmt: skip
+    with pytest.raises(cli.WcRunError, match="a plain WC run's pilot, not a site-list run's"):
+        cli.pilot_approval([plan, plain_chunk])
+    assert len(cli.pilot_approval([wc_pilot, plan, plain_chunk])) == 2
 
 
 # ------------------------------------------------------------------------------ the defects
@@ -671,3 +705,126 @@ def test_the_command_line_has_the_new_options() -> None:
     assert defects.defects == [Path("a"), Path("b")] and defects.proven_only
     plain = parser.parse_args(["export", "--run-dir", "r", "--handoff", "h"])
     assert plain.sites is None and plain.wn is False
+
+
+# ------------------------------------------------------------------------------ the defects reach the agent
+def _defect_lines(sha: str) -> list[dict[str, Any]]:
+    return [
+        _defect(SITE_P4, sha),  # sentence 2 of SITE_P4: the check drops it
+        _defect(SITE_ALL, sha, sentence=None, sentence_text=None, claim="They are not Maltese"),
+        _defect(
+            SITE_NONE, sha, sentence=1, sentence_text=WX.P4_SENTENCES[0], claim="Not in Tarxien"
+        ),
+    ]
+
+
+def _defect_answers() -> dict[str, str]:
+    """SITE_P4 drops the reported sentence; SITE_ALL keeps every sentence (the claim is tied to
+    none); SITE_NONE keeps sentence 1, the reported one, and drops the rest."""
+    answers = _p4_answers()
+    answers[SITE_NONE] = FX.answer(SITE_NONE, [FX.keep(1, FX.Q_COMPLEX), FX.drop(2), FX.drop(3)])
+    return answers
+
+
+@pytest.fixture(scope="module")
+def defect_run(tmp_path_factory):
+    root = tmp_path_factory.mktemp("wcd")
+    sha = M.text_sha256(WX.P4_TEXT)
+    ids = [SITE_P4, SITE_ALL, SITE_NONE]
+    run, plan = WX.build_list_run(
+        root,
+        _p4_rows(),
+        ids,
+        _defect_answers(),
+        name="wcl-defects",
+        defect_lines=_defect_lines(sha),
+    )
+    return root, run, plan
+
+
+def test_a_list_run_over_defects_tells_the_agent_which_claim_a_later_check_contradicted(
+    defect_run,
+) -> None:
+    """The question carries each site's reported claims - the sentence, the claim, the contradicting
+    page and quote - or the agent would find the sentence's own Wikipedia article, KEEP it, and the
+    defect would 'not reproduce' by construction."""
+    _, run, _ = defect_run
+    entries = {e["site_id"]: e for e in read_jsonl(run / cli.SITES_FILE)}
+    p4 = cli.check_prompt(entries[SITE_P4], [1, 2, 3], {}, cli.KIND_LIST)
+    assert "A LATER WEB CHECK REPORTED A CLAIM OF THIS DESCRIPTION CONTRADICTED" in p4
+    assert (
+        f'S2: claim "They date to 3150 BC" - page {FX.WIKI} says: "The temples date from 2500 BC."'
+        in p4
+    )
+    assert "(code found this quote on that page)" in p4 and "SETTLE EACH ONE YOURSELF" in p4
+    assert "Where reputable sources disagree on a claim, the sentence is not supported" in p4
+    assert p4.index("SETTLE EACH ONE") < p4.index("DECIDE, for each of the sentences")
+    unmapped = cli.check_prompt(entries[SITE_ALL], [1, 2, 3], {}, cli.KIND_LIST)
+    assert 'No single sentence: claim "They are not Maltese"' in unmapped
+    assert "THIS TEXT IS NOT TRIMMED" in unmapped  # the Phase-4 rule is still there
+    # the question that was exported is the one rebuilt (import rebuilds every prompt byte for byte)
+    population = json.loads((run / cli.POPULATION_FILE).read_text(encoding="utf-8"))
+    assert population["defects"]["sites"] == 3
+    # a site with no report gets no block, and the text without a block is the old template's
+    plain = {**entries[SITE_P4], "defects": None}
+    assert "LATER WEB CHECK" not in cli.check_prompt(plain, [1, 2, 3], {}, cli.KIND_LIST)
+
+
+def test_the_export_refuses_a_report_for_another_list_another_read_or_another_sentence(
+    tmp_path: Path,
+) -> None:
+    rows = _p4_rows()
+    run = _read(tmp_path, rows)
+    sha = M.text_sha256(WX.P4_TEXT)
+    found = tmp_path / "d.jsonl"
+    found.write_text(json.dumps(_defect(SITE_P4, sha)) + chr(10), encoding="utf-8")
+    listing = tmp_path / "list.txt"
+    cli.cmd_defect_sites(run, [found], listing)
+    report = listing.with_name("list.txt.report.json")
+
+    def export(**kw):
+        return cli.cmd_export(
+            run, tmp_path / "h", batch_size=5, exclude=None, after=[], pilot=None, seed=None, **kw
+        )
+
+    with pytest.raises(cli.WcRunError, match="goes with --sites"):
+        export(defects=report)
+    other = tmp_path / "other.txt"
+    other.write_text(f"{SITE_P4}{chr(10)}{SITE_ALL}{chr(10)}", encoding="utf-8")
+    with pytest.raises(cli.WcRunError, match="another site list"):
+        export(sites=other, defects=report)
+    saved = json.loads(report.read_text(encoding="utf-8"))
+    saved["read"]["sha256"] = "0" * 64
+    report.write_text(json.dumps(saved), encoding="utf-8")
+    with pytest.raises(cli.WcRunError, match="another read"):
+        export(sites=listing, defects=report)
+    saved["read"]["sha256"] = json.loads((run / cli.READ_FILE).read_text(encoding="utf-8"))[
+        "sha256"
+    ]
+    saved["claims"][SITE_P4][0]["sentence"] = 3  # a number that points at another sentence
+    report.write_text(json.dumps(saved), encoding="utf-8")
+    with pytest.raises(cli.WcRunError, match="the defect names sentence 3"):
+        export(sites=listing, defects=report)
+    assert not (run / cli.SITES_FILE).exists()
+
+
+def test_a_reported_claim_the_check_left_standing_is_the_owners_list_not_a_failure_to_reproduce(
+    defect_run,
+) -> None:
+    _, run, plan = defect_run
+    summary = json.loads((run / cli.SUMMARY_FILE).read_text(encoding="utf-8"))
+    # SITE_P4 dropped its reported sentence: planned, nothing left standing
+    assert SITE_P4 not in summary["defects_kept"] and SITE_P4 not in {
+        site for ids in summary["not_planned"].values() for site in ids
+    }
+    # SITE_ALL kept every sentence under a claim tied to none: nothing is written, the owner is told
+    assert summary["not_planned"] == {"defect-kept": [SITE_ALL]}
+    assert summary["defects_kept"][SITE_ALL] == [
+        {"sentence": None, "claim": "They are not Maltese", "url": FX.WIKI}
+    ]
+    # SITE_NONE kept the reported sentence 1 and dropped the others: written, and listed
+    assert summary["defects_kept"][SITE_NONE] == [
+        {"sentence": 1, "claim": "Not in Tarxien", "url": FX.WIKI}
+    ]
+    planned = {o["site_id"] for batch in read_jsonl(plan) for o in batch["outcomes"]}
+    assert planned == {SITE_P4, SITE_NONE}

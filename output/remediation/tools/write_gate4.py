@@ -107,8 +107,11 @@ owner decision O5 of 2026-09-26, runbook `docs/procedures/SENTENCE_CHECK.md`). L
 write elsewhere never blocks a whole batch at the preflight. A written site stays its batch's while
 its description and WC's own `raw_data` keys are the outcome's (lane WB stamps others later), and a
 site a later WC plan asks again is that plan's (`asked-again-later`); should two batches still both
-plan one site, nothing is rendered (`write4.wc_sites_planned_twice`). The apply root holds these
-plans' write batches or none (`wc_batches`). The step's acceptance is `verify_writes4.py --lane
+plan one site, nothing is rendered (`write4.wc_sites_planned_twice`) - unless their rows chain (a
+clear, then a text for the same cell: lane WN's population). The apply root holds these
+plans' write batches or none (`wc_batches`). A plan with a text of lane N (recorded marking `none` or
+`web`) is refused unless the live API's commit contains the change that lets its pages render
+(`require_lane_n_api`). The step's acceptance is `verify_writes4.py --lane
 p4wc --plan <apply root>/LANE_PLAN.jsonl --allow-stamp 'wb-teaser-prov-%'`, which reads no run.
 
 Every run prints its own `WRITE_EXIT=` line; that line is what is read.
@@ -121,9 +124,10 @@ import hashlib
 import json
 import pathlib
 import re
+import subprocess
 import sys
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -137,6 +141,7 @@ from phase3.run import InputError, read_jsonl  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import revert4 as R  # noqa: E402 - the reversal read: what "reverted" means
 from phase4 import scope4 as S  # noqa: E402 - the owner's defect scope
+from phase4 import wc4 as WC4  # noqa: E402 - the markings: which texts are lane N's
 from phase4 import write4 as W4  # noqa: E402
 
 APPLIED_FILE = W4.APPLIED_FILE
@@ -424,6 +429,74 @@ def wc_batches(
     if missing:
         raise SystemExit(f"no WC plan batch {missing}")
     return [by_name[name] for name in wanted], outcomes
+
+
+#: Lane N (a description written from web sources, `model4.WebProvenance`) has no licence key: the
+#: API's disclosure reads `provenance["licence"]` for every other lane but L, and raises on a lane-N
+#: page - the site, its SSR page and the public v1 API - until `NO_LICENCE_LANES` names N.
+LANE_N_FILE = "api/services/description_provenance.py"
+LANE_N_MARK = "NO_LICENCE_LANES"
+#: A planned text is lane N's when its recorded old marking is one of these: a site that had none
+#: (`Marking.NONE`) or whose text lane WN wrote (`Marking.WEB`; the text it is asked again stays N's).
+LANE_N_MARKINGS = frozenset({WC4.Marking.NONE.value, WC4.Marking.WEB.value})
+API_ROOT_URL = "http://localhost:8000/"
+#: The repository whose history says which commit carries the lane-N change (the checkout the gate
+#: runs from; a test points it at a throwaway one).
+LANE_N_REPO = lanes.REPO
+
+
+def _git(*argv: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", "-C", str(LANE_N_REPO), *argv], capture_output=True, text=True, encoding="utf-8"
+    )
+
+
+def lane_n_commit() -> str:
+    """The commit that put lane N into the API's disclosure (the oldest one that added
+    `NO_LICENCE_LANES`): found in the history, never typed. An uncommitted change is refused - the
+    deploy ships commits."""
+    done = _git("log", "--reverse", "--format=%H", f"-S{LANE_N_MARK}", "--", LANE_N_FILE)
+    commits = done.stdout.split()
+    if done.returncode or not commits:
+        raise SystemExit(
+            f"lane N: no commit of {LANE_N_FILE} adds {LANE_N_MARK} (git exit {done.returncode}): "
+            "the API change that lets the pages of a lane-N text render is not committed"
+        )
+    return commits[0]
+
+
+def read_api_commit(host: str) -> str:
+    """The `commit` the live API reports at `/` (the deploy's drift guard reads the same field)."""
+    done = subprocess.run(
+        ["ssh", host, "curl", "-sf", API_ROOT_URL], capture_output=True, text=True, encoding="utf-8"
+    )
+    if done.returncode:
+        raise SystemExit(
+            f"lane N: {API_ROOT_URL} on {host} did not answer (exit {done.returncode})"
+        )
+    return str(json.loads(done.stdout)["commit"])
+
+
+def require_lane_n_api(host: str, *, api_commit: Any) -> str:
+    """Refuse unless the live API's commit contains the lane-N change (`lane_n_commit`): a lane-N
+    description reaches production only after the deploy that lets its pages render - the order of
+    the work in docs/procedures/SENTENCE_CHECK.md, section 12.6, made a check. Returns the line the
+    gate prints."""
+    needed = lane_n_commit()
+    live = api_commit(host)
+    done = _git("merge-base", "--is-ancestor", needed, live)
+    if done.returncode == 1:
+        raise SystemExit(
+            f"lane N: the live API runs {live[:12]}, which does not contain {needed[:12]} "
+            f"({LANE_N_MARK} in {LANE_N_FILE}): a lane-N text would break the pages of its site. "
+            "Deploy first and check the commit at / (docs/procedures/SENTENCE_CHECK.md, 12.6)."
+        )
+    if done.returncode:
+        raise SystemExit(
+            f"lane N: git cannot relate the live API's commit {live!r} to {needed[:12]}: "
+            f"{done.stderr.strip()} (git fetch, then run again)"
+        )
+    return f"lane N: the live API runs {live[:12]}, which contains {needed[:12]} ({LANE_N_MARK})"
 
 
 #: The first line of `wc_live_sql`: how the tests' fake psql recognises the read.
@@ -1019,7 +1092,11 @@ def unclaimed_by_reason(planned: Sequence[Planned]) -> dict[str, int]:
     return dict(sorted(counts.items()))
 
 
-def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
+def _run(
+    argv: list[str] | None,
+    runner: W.SqlRunner | None,
+    api_commit: Callable[[str], str] | None = None,
+) -> int:
     args = build_parser().parse_args(argv)
     group = W4.Group(args.group)
     lane = lanes.lane(W4.GROUP_PREFIX[group])
@@ -1058,6 +1135,12 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
         source = f"run {run_dir}"
     site_ids = [site.site_id for batch in batches for site in batch.sites]
     print(f"group {group.value} | {source} | apply root {apply_root} | {len(batches)} batches")
+    if group is W4.Group.WC and any(
+        outcome.evidence["marking"]["old"] in LANE_N_MARKINGS
+        for batch in batches
+        for outcome in wc_outcomes[batch.batch_id].values()
+    ):
+        print(require_lane_n_api(args.host, api_commit=api_commit or read_api_commit))
     options: dict[str, Any]
     if group is W4.Group.L:
         print(LEGACY_UNSCOPED)
@@ -1159,8 +1242,13 @@ def _run(argv: list[str] | None, runner: W.SqlRunner | None) -> int:
     )
 
 
-def main(argv: list[str] | None = None, *, runner: W.SqlRunner | None = None) -> int:
-    return W4.exit_line("WRITE", lambda: _run(argv, runner))
+def main(
+    argv: list[str] | None = None,
+    *,
+    runner: W.SqlRunner | None = None,
+    api_commit: Callable[[str], str] | None = None,
+) -> int:
+    return W4.exit_line("WRITE", lambda: _run(argv, runner, api_commit))
 
 
 if __name__ == "__main__":
