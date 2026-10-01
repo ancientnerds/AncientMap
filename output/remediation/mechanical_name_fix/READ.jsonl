@@ -1,0 +1,9 @@
+{"kind" : "site", "row" : {"id":"4a07cc38-1b55-4254-b0ad-fe875310caf7","name":"Temple of Augustus, Split","name_hex":"54656d706c65206f662041756775737475732c2053706c6974","name_normalized":"temple of augustus, split","source_id":"ancient_nerds","scope_status":null,"premise":"enwiki_title=Temple of Augustus, Pula, wikidata_qid=Q770030"}}
+{"kind" : "site", "row" : {"id":"f9cfc5f7-a6c8-4c6f-9d82-f30151a36d6c","name":"Gate of All Nations‌ Persepolis","name_hex":"47617465206f6620416c6c204e6174696f6e73e2808c205065727365706f6c6973","name_normalized":"gate of all nations‌ persepolis","source_id":"ancient_nerds","scope_status":null,"premise":"enwiki_title=Gate of All Nations, wikidata_qid=Q5527015"}}
+{"kind" : "ext", "row" : {"id":"4a07cc38-1b55-4254-b0ad-fe875310caf7","kind":"enwiki_title","value":"Temple of Augustus, Pula"}}
+{"kind" : "ext", "row" : {"id":"4a07cc38-1b55-4254-b0ad-fe875310caf7","kind":"wikidata_qid","value":"Q770030"}}
+{"kind" : "ext", "row" : {"id":"f9cfc5f7-a6c8-4c6f-9d82-f30151a36d6c","kind":"enwiki_title","value":"Gate of All Nations"}}
+{"kind" : "ext", "row" : {"id":"f9cfc5f7-a6c8-4c6f-9d82-f30151a36d6c","kind":"wikidata_qid","value":"Q5527015"}}
+{"kind" : "key", "row" : {"name":"Gate of All Nations","key":"gate of all nations"}}
+{"kind" : "key", "row" : {"name":"Temple of Augustus, Pula","key":"temple of augustus, pula"}}
+{"kind" : "snapshot", "row" : {"exported_at" : "2026-10-01 09:53:10.200573+00"}}

@@ -64,6 +64,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 from prod_write import SSH_HOST, OutcomeUnknown, send  # noqa: E402
 
 from mechanical.lane import (  # noqa: E402
+    CARD_DISCLOSURE_LANE,
     FIELDS_LANE,
     LANE_READBACKS,
     LANES,
@@ -1802,7 +1803,7 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
 
 def readback_for(lane: Lane) -> str:
     """The lane's read-only verification: `READBACKS`, a scope-review wave's, a WD1 fields
-    step's, or a card_stats wave's own."""
+    step's, a lane-WB teaser or disclosure step's, or a card_stats wave's own."""
     if lane.name in READBACKS:
         return READBACKS[lane.name]
     if SCOPE_REVIEW_LANE.match(lane.name) is not None:
@@ -1813,6 +1814,10 @@ def readback_for(lane: Lane) -> str:
         from mechanical.teaser import teaser_readback
 
         return teaser_readback(lane)
+    if CARD_DISCLOSURE_LANE.match(lane.name):
+        from mechanical.card_disclosure import disclosure_readback
+
+        return disclosure_readback(lane)
     from mechanical.card_stats import card_stats_readback
 
     return card_stats_readback(lane)
@@ -1828,7 +1833,7 @@ def _lane_argument(name: str) -> str:
         raise argparse.ArgumentTypeError(
             f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, "
             "scope-review-<wave>, fields-wd1-<wave>-sNNN, card-stats-<wave>, teaser-prov-sNNN, "
-            "teaser-card-sNNN)"
+            "teaser-card-sNNN, card-disclosure-sNNN)"
         ) from exc
     return name
 

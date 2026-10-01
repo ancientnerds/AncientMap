@@ -933,6 +933,53 @@ Afterwards the hidden row's page answers 410 and the renamed one 301 (the slug r
 id, `sites_html.site_detail`); Lyra's next boot adds "Chiapa de Corzo" to the kept row's
 `unified_site_names` as a label, and the old name stays there.
 
+#### Two renames of 2026-10-01 (lane `name-fix`)
+
+Owner order of 2026-10-01 ("Wikipedia/Wikidata reicht"): a curated site is renamed only to the sourced
+name of that very site. `scripts/remediation/mechanical/name_fix.py --write` plans both from one
+read-only snapshot (kept as `output/remediation/mechanical_name_fix/READ.jsonl`); the plan, `APPLY.sql`
+and `ROLLBACK.sql` are delivered and committed beside it.
+
+| site | old name | new name | why |
+|---|---|---|---|
+| `4a07cc38-1b55-4254-b0ad-fe875310caf7` | `Temple of Augustus, Split` | `Temple of Augustus, Pula` | the row's own `enwiki_title` is "Temple of Augustus, Pula" and its `wikidata_qid` Q770030 ("Roman temple in Pula, Croatia"); its description is the Pula temple's; its stored point (44.87026, 13.84220) is 28 m from Q770030's coordinate (44.8702, 13.84185) and on the Pula forum; no Temple of Augustus is known in Split (a Wikipedia and a Wikidata search find none); siblings: `Temple of Augustus, Pozzuoli`, `..., Barcelona` |
+| `f9cfc5f7-a6c8-4c6f-9d82-f30151a36d6c` | `Gate of All Nations` + U+200C + ` Persepolis` | `Gate of All Nations` | the only curated name with a zero-width character (1 of 5,004); the row's own `enwiki_title` is "Gate of All Nations", `wikidata_qid` Q5527015 (English label "Gate of All Nations"); the curated siblings at Persepolis carry the monument's own name without the place ("Apadana Palace", "Persepolis"); the place is the row's `country` and the `Persepolis` row beside it |
+
+It is one lane, `name-fix` (run stamp `2026-10-01_mechanical-name-fix`, test id `B1/name-fix`, directory
+`mechanical_name_fix/`), in the shape of `name-l5` and `chiapa-name`: `name` and `name_normalized` in one
+transaction, the key computed by Postgres from the new name in the plan's read (never in Python), and the
+lane invariant refusing a key that is not the new name's key. The plan refuses unless: each site is
+curated and not retired, holds exactly the old name (compared as UTF-8 hex, so the U+200C is read, not
+assumed) and a key, its `name` and `name_normalized` journals end at the live values, the new name is its
+`enwiki_title` and holds no zero-width character, no visible curated row but the site carries the new
+key, and the stamp has no journal row yet. Guard 5 (the premise) is the site's external ids as Postgres
+prints them (`enwiki_title=..., wikidata_qid=...`): the write, and its reversal, are refused once those ids
+moved, because the new name is read from one of them. Measured read-only on 2026-10-01 (`--verify`
+before): 1 curated name holds a zero-width character, 0 curated rows with a key that is not their name's,
+2 visible curated rows sharing a key with another (not these, and not touched).
+
+```bash
+PY=./.venv/Scripts/python.exe; AP="$PY scripts/remediation/mechanical/apply.py --lane name-fix"
+$PY scripts/remediation/mechanical/name_fix.py --write   # read-only; only to re-plan, refused once the stamp wrote
+$AP --check-primitive
+$AP --verify                      # before: zero-width names 1, journal rows 0
+$AP --interests
+$AP --emit                        # offline, byte-identical to the committed APPLY.sql
+$AP --rehearse
+$AP --probe-guards                # 7 probes, each refused by its own guard (exit 0)
+$AP --apply                       # exit 0 = committed and read back
+$AP --verify                      # after: zero-width names 0, 4 journal rows, key invariants 0
+$AP --rehearse-rollback
+```
+
+After the apply: Lyra's next boot adds each new name to `unified_site_names` as a `label` row (the old name
+stays there, so an exact search finds both); the site pages move to the new slug and the old URL answers
+301 (the slug resolves by the 8-hex id, `sites_html.site_detail`); `name` is a page column, so both
+pages' sitemap `lastmod` moves. Run
+the static exporter on the VPS if `public/data/sites/` is to carry the new names before the next scheduled
+export. Undo only as a decision: `output/remediation/mechanical_name_fix/ROLLBACK.sql` (guarded by the same
+premise and key invariant). The trail: `git add -f output/remediation/mechanical_name_fix/{PLAN.jsonl,PLAN.md,READ.jsonl,APPLY.sql,ROLLBACK.sql}`.
+
 #### B2-L — the two country cells (lane `country-b2`)
 
 Decided: Achladia (`74145e9b…`) `Germany -> Greece`, Delphinion (`6aa4c8de…`) `Greece -> Türkiye`
