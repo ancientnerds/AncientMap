@@ -181,3 +181,11 @@ Memory: keep at most ~14 agents at once (free RAM fell to 4.6 GB at 22); the har
 10. WF: static export, Qdrant resync, IndexNow, the final measurement of error rates per field (reporting only, O1), docs (HANDOVER, CLAUDE.md top paragraph, AUDIT_LOG, memory), and one owner list of everything that stays empty or unsourced.
 
 A heartbeat (session cron, every 30 min) re-invokes the orchestrator: if a workflow died on a usage limit it is resumed from its run id; if nothing runs, the next item above starts. Nothing is ever half-written: a write step is either accepted or rolled back before the next starts.
+
+**Progress 2026-10-01 (newest last):**
+- ~12:30Z usage-limit reset; workflows stopped and resumed with explicit Sonnet models.
+- WB complete: chunk 05 (steps 22-26, 5611042/46ea685) and chunk 02 (steps 27-31, 90708d4) live, re-accepted, 0 overwrites. A parallel session's deploy (4b8c1a5) nearly re-imported the old card file; averted (AUDIT_LOG). Peer sessions ancientmap-aa/-5b announce pushes to main first.
+- Builds merged: wip/model-stamp, wip/fixes, wip/wd3, wip/wn (suite 9,041 passed); pushed bfa5b5e (WN disclosure in the API). Regression fixed: wc4.check_record takes the written checker (dc80687; p4wc and p4 acceptances 0 deviations).
+- Live: name-fix (2 renames), card-disclosure s001/s002 (185 cells), P4 v3 re-queue p4-2214 (2 sites). House of Dionysus and Paphos Archaeological Park due again 2026-10-03T14:33Z (one-shot cron set).
+- Inventory of unwritten lanes (agent report): country-b2, name-key-lyra (Nr. 9), VPS Nr. 8 -> workflow apply-delivered; 5 shared-item duplicate pairs -> workflow duplicates-lane (research + build); Hadrian's Wall Path -> next scope wave; WD1 follow-ups after WD3; WF last.
+- Running: WC chunks (wc-continue wf_dca4b49f-f99), WD2 replace re-export (partial dir moved to handoff/_partial-2026-10-01_...), WD3 (wd3-run wf_760ce4cd-297: pilot 80 sites, wave labels 2026-10-01a/b).
