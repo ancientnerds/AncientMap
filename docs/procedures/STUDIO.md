@@ -239,9 +239,11 @@ attribution and source URL and is not already in the paper, re-encodes it as
 
 - **Case file** (studio-casefile-verify workflow): it works on `episodes/<slug>/casefile.json` directly,
   without the CLI. For every evidence item not yet `verified` it checks the statement against its
-  source (the verbatim `source.quote` at `source.url`, or `papers/<request_id>/evidence.json` when
-  `paper_anchor` is set) and writes `verification = {status: verified|refuted|unverified, by, at,
-  method}`, leaving every other key untouched. `episode check` then lets a script use only `verified`
+  source and writes `verification = {status: verified|refuted|unverified, by, at, method}` (`method` is
+  the route), leaving every other key untouched. The routes: `papers/<request_id>/evidence.json` when
+  `paper_anchor` is set; the archived or saved live text of `source.source_id` in that paper workspace
+  (`texts/<id>.txt`, `claims_check/live/<id>.txt`); otherwise the verbatim `source.quote` at
+  `source.url`, read live. `episode check` then lets a script use only `verified`
   evidence.
 - **Markers** (`episode markers-export`, the studio-marker-check workflow, `episode markers-import`):
   every marker is checked on a crop of its image (`markers_check/crops/<mk>.png`, the box plus a 10 %
@@ -418,8 +420,8 @@ Rules the checks enforce (script, case file, captures):
      covers Qdrant; report the missing notice to the owner.
   5. Another hash: nothing committed; run the step again from its dry run.
 - **`register-youtube` failed after the ledger write:** the error prints the `paper register-video`
-  command that finishes the registration. Run it; its first dry run refuses a registration that did
-  commit (`duplicate` gate).
+  command that finishes the registration. Run it, with `./.venv/Scripts/python.exe` for the printed
+  `python`; its first dry run refuses a registration that did commit (`duplicate` gate).
 - **A ledger write without an answer** is `RemoteOutcomeUnknown` too (`episode render`: `--record`;
   `episode register-youtube`: `--publish`). Read the row of the video's sha256 before running the step
   again; the hash is `row.video_sha256` of `render/ledger.json`, or `sha256sum render/<slug>.mp4` when
@@ -505,9 +507,9 @@ A run that would land on the AMD or on software rendering fails loudly instead.
 `doctor` probes: the studio assets root, `ffmpeg`, `ffprobe`, `node`, `video/node_modules`, the block
 registry, the site fonts, the Python modules (faster_whisper, mutagen, PIL, playwright, the capture
 package), `nvidia-smi` naming the RTX 3080, NVENC (both encoders encode a test frame on GPU 0), CUDA
-for faster-whisper, Remotion's
-browser and its GPU preference, the renderer of a headless Chrome launched as the captures launch it,
-`LYRA_MINIMAX_API_KEY`, the music bed, the site export and its age, and `ssh ancientnerds`. A green
+for faster-whisper, Remotion's browser and its GPU preference, the renderer of a headless Chrome
+launched as the captures launch it, `LYRA_MINIMAX_API_KEY`, the music bed, the site export and its
+age, and `ssh ancientnerds`. A green
 `doctor` says the machine is set up; the first `lint.ts` of an `episode render` says Remotion's browser
 really uses the NVIDIA.
 
