@@ -151,3 +151,33 @@ All Opus work (answers, verifications) is blocked until then; the operators' det
 5. Re-queue on 2026-10-01T14:31Z: v3 (3 sites) and v3d (Nea Paphos) - PHASE4_V3_RUNBOOK 9.1 from the p4-pilot worktree, then `orchestration/p4v3_write_loop.sh` / `p4v3d_write_loop.sh`.
 
 Memory: keep at most ~14 agents at once (free RAM fell to 4.6 GB at 22); the harness kills background commands below ~3.6 GB. Owner-only, unchanged: A4 (Discord webhook URL), A5 (third backup location). Also for the owner: 672 + 252 sites keep their old coordinates (no sourced point; coordinates cannot be emptied), and ~2,200 sites lost their period start for lack of two dated sources (O6).
+
+## 7. RESUME POINT 2026-10-01 (newer than section 6) - the owner is away ~48 h; finish autonomously
+
+**Owner decisions of 2026-10-01** (asked once; verbatim answers):
+
+| # | question | answer |
+|---|---|---|
+| O12 | Models | "opus 5.5 für orchestrierung hier in der sitzung und sonnet 5.5 für alle subagenten mit sinnvollen efforts" - every workflow `agent()` sets `model: 'sonnet'` explicitly (never inherited); efforts: operators `low`, state operators `medium`, answering/judging agents and code builders `high`. |
+| O13 | Evidence for a researched field value | "Wikipedia/Wikidata reicht" - one source suffices (other reputable sources where Wikipedia/Wikidata say nothing); the verbatim quote is still machine-checked on its page; no second agent. |
+| O14 | Nothing sourced | "Feld bleibt leer (Recommended)" - the owner gets a list. |
+| O15 | Coordinates without a sourced point (672 + 252) | "Recherchieren, sonst behalten (Recommended)" - research; else the stored point stays and is listed. |
+| O16 | A site left without a description | "Neu aus Webquellen (Recommended)" - a Sonnet agent writes it from quoted reputable web sources, checker + verification as for the cards, AI-marked, then a teaser card. |
+
+**Found 2026-10-01: the answer stamp was not the answering model.** `opus_handoff.answer` stamped the constant `OPUS_MODEL` on every answer. The transcripts' `model` field shows 11,456 answers by Opus and 8,471 by Sonnet 5.5 (sessions of 2026-09-27..10-01; e.g. WB check/verify/rewrite stages of chunks 01/02/04/05/06, WD1 r0-r2 parts, the scope review, WC r1 of chunks 01-03, 2,170 image checks), 1 ambiguous (Opus). Census: `output/remediation/model_census/ANSWERS_TRUE_MODEL.jsonl` (+ its script). Nothing is re-answered (O12 makes Sonnet the answering model); the stamp and disclosure are made truthful: branch `wip/model-stamp` (`answer --model`, `ANSWER_MODELS`, `model4.AI_SYSTEM` = "Claude Opus and Claude Sonnet (Anthropic): ...", `AI_SYSTEM_OPUS` kept and accepted). 185 live cards whose final text a Sonnet rewrite wrote get the new disclosure through a journalled correction lane (`wip/fixes`).
+
+**Done today:** WB chunk 06 steps 17-21 written and live (df03b5d: 441 cards, 7 cleared, 0 overwrites, re-accepted); records c984be6. The three lane workflows started this morning on Sonnet with Opus stamps were stopped (WC wf_626cfd97-03a, WD2 wf_e0298c06-b9f, WB wf_2bcd6924-5eb); their recorded answers stand (1 import: chunk 05 check2, Temple of Augustus cleared). Do not resume those runs - relaunch with the patched scripts.
+
+**Order to the end** (one step after the other where they depend; RAM: at most ~14 agents at once):
+1. Merge `wip/model-stamp` (after its review/fix, workflow wf_f0f46ee0-632) into `integrate/wave1`, gates; commit the patched scripts `orchestration/wb-continue.js`, `wd2-image.js` and the new state-aware `wc-continue.js` (the old wc-mass scripts re-import imported rounds and are refused).
+2. Relaunch: `wb-continue.js` `{"runs":["wb-ws-2026-09-27-05","wb-ws-2026-09-27-02"],"width":4}`; `wc-continue.js` `{"runs":["mass-2026-09-27-01","mass-2026-09-27-02","mass-2026-09-27-03","mass-2026-09-27-04","mass-2026-09-27-05"],"firstBatchBase":4100,"width":6}`; `wd2-image.js` `{"width":4,"run":"output/remediation/served_image/served-image-2026-09-30","handoff":"output/remediation/handoff/served-image-2026-09-30"}`.
+3. From 2026-10-01T14:32Z: the re-queue of v3 (3 sites) and v3d (Nea Paphos), PHASE4_V3_RUNBOOK 9.1, from the p4-pilot worktree fast-forwarded to `integrate/wave1` (between rounds), answers by Sonnet with `--model claude-sonnet-5-5`; then `orchestration/p4v3_write_loop.sh` / `p4v3d_write_loop.sh`.
+4. Merge `wip/fixes`, `wip/wd3`, `wip/wn` as their build workflow (wf_3c71f215-985) delivers them; gates each.
+5. Card sittings for WB 05/02 once their outcomes exist (steps 22 on; CARD_DESCRIPTIONS 5.4/5.5). **Before every push: merge `origin/main`** (another session pushes to main: 6c31821), push a fixed SHA, after-deploy checks.
+6. WC writes per built chunk (`orchestration/wc_write.sh`), WD2 replace/plan/chunk writes (runbook 3.5), the card disclosure correction lane, the two renames (Temple of Augustus, Split -> Pula; the U+200C name at Persepolis).
+7. WD3 (fields, O13-O15): population, rounds, waves; owner list. WN (O16): 20-site pilot with judge, then mass. A WC site-list run over every WB run's DESCRIPTION_DEFECTS.jsonl.
+8. WB over the WC/WN texts (`select --basis WC`, CARD_DESCRIPTIONS 5.2) incl. the renamed site, then sittings.
+9. The card_stats wave (after WD1/WD2/WD3), the site_external_ids follow-up of each WD1/WD3 wave.
+10. WF: static export, Qdrant resync, IndexNow, the final measurement of error rates per field (reporting only, O1), docs (HANDOVER, CLAUDE.md top paragraph, AUDIT_LOG, memory), and one owner list of everything that stays empty or unsourced.
+
+A heartbeat (session cron, every 30 min) re-invokes the orchestrator: if a workflow died on a usage limit it is resumed from its run id; if nothing runs, the next item above starts. Nothing is ever half-written: a write step is either accepted or rolled back before the next starts.
