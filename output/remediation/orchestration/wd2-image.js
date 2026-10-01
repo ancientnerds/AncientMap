@@ -31,6 +31,7 @@ for (const stage of ['check', 'replace']) {
   const H = `${handoff}-${stage}`
   const st = await agent(opText(`State of stage ${stage}:
 - If ${run}/${stage === 'check' ? 'CHECK.jsonl' : 'REPLACE.jsonl'} exists, the stage is imported: nothing=true, batches=[].
+- Else if the directory ${H} exists but ${run}/${stage === 'check' ? 'EXPORT_CHECK.json' : 'EXPORT_REPLACE.json'} does not: the export was interrupted (that file is written last) - ok=false, summary "export incomplete: move ${H} aside and export again"; answer nothing.
 - Else if the directory ${H} exists: $PY $OH validate --dir ${H}; batches = the distinct batch_id values of its "missing" list (empty if all answered; malformed or stale answers: ok=false). nothing=false.
 - Else export: ${stage === 'check' ? '$PY $S export-check --run-dir $R --handoff ' + H : '$PY $S export-replace --run-dir $R --handoff ' + H + ' (it prints "questions": N; with N = 0 no handoff exists: nothing=true, batches=[])'}. batches = the folders of ${H} that contain a MANIFEST.jsonl. nothing=false.`), { label: `state:${stage}`, phase: 'Operate', schema: ST, model: 'sonnet', effort: 'medium' })
   out[stage] = { st }
