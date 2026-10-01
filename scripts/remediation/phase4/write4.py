@@ -701,10 +701,11 @@ def _validate_wc_sites(rows: Sequence[Row4]) -> None:
         # disclosure that marking requires (the review of 2026-09-26: required, not only checked)
         marking = evidence["marking"]
         problems = (
-            wc4.wc_problems(left, new)
+            wc4.wc_problems(left, new, marking=marking["old"])
             + wc4.old_marking_problems(marking, evidence["checked"], old)
             + wc4.disclosure_problems(marking, left, new)
             + wc4.verification_problems(evidence, left)
+            + _phase4_problems(marking["old"], evidence, left, old, new)
         )
         if problems:
             raise W.WriteRefused(f"{site_id}: " + "; ".join(problems))
@@ -716,9 +717,39 @@ def _validate_wc_sites(rows: Sequence[Row4]) -> None:
             )
 
 
+def _phase4_problems(
+    marking: str,
+    evidence: Mapping[str, Any],
+    left: str | None,
+    old: Mapping[str, Any] | None,
+    new: Mapping[str, Any] | None,
+) -> list[str]:
+    """A Phase-4 text (a site-list run, `wc4.Marking.PHASE4`) is only kept or dropped by sentence, and
+    the provenance it leaves is exactly the old one filtered to the kept sentences
+    (`wc4.filtered_provenance`) - the attribution, the AI mark and the pinned sources of what stays."""
+    if marking != wc4.Marking.PHASE4.value or left is None:
+        return []
+    decisions, _ = wc4.decisions_of(evidence)
+    if any(d.verdict is wc4.Verdict.KEEP_TRIMMED for d in decisions):
+        return ["a Phase-4 text is only kept or dropped by sentence, never trimmed"]
+    try:
+        expected = wc4.filtered_provenance(
+            M.Provenance.from_dict((old or {})[M.PROVENANCE_KEY]),
+            wc4.kept_numbers(decisions),
+            of=len(decisions),
+            description=left,
+        ).to_dict()
+    except (KeyError, ValueError) as exc:
+        return [f"the Phase-4 provenance cannot be filtered to the kept sentences: {exc}"]
+    if (new or {}).get(M.PROVENANCE_KEY) != expected:
+        return ["the provenance is not the old Phase-4 one filtered to the kept sentences"]
+    return []
+
+
 def _validate_raw_data(row: Row4) -> None:
-    """A raw_data row writes a JSON object whose provenance is the group's kind (WC: lane L's or
-    none, and NULL for a cleared site that has nothing left - `_validate_wc_sites` checks the rest)."""
+    """A raw_data row writes a JSON object whose provenance is the group's kind (WC: lane L's, the
+    filtered Phase-4 one, lane N's or none, and NULL for a cleared site that has nothing left -
+    `_validate_wc_sites` checks the rest)."""
     if row.group is Group.WC:
         _validate_wc_raw_data(row)
         return
@@ -932,6 +963,12 @@ def load_wc_plan(
             if [o.site_id for o in own] != [s.site_id for s in sites]:
                 raise PlanInputError(f"{where}: the outcomes are not the batch's sites, in order")
             for outcome in own:
+                if outcome.description is None and outcome.evidence["marking"]["old"] == "none":
+                    raise PlanInputError(
+                        f"{where}: {outcome.site_id} had no description and has none: lane WN "
+                        "plans only the sites that got a text (the rest stay empty, nothing is "
+                        "written)"
+                    )
                 unverified = wc4.verification_problems(outcome.evidence, outcome.description)
                 if unverified:
                     raise PlanInputError(
@@ -960,15 +997,32 @@ def load_wc_plan(
 
 
 def wc_sites_planned_twice(plans: Sequence[WritePlan4]) -> dict[str, list[str]]:
-    """Site id -> the WC write batches that plan rows for it, for every site more than one plans.
-    `plan_wc` gives a site to one batch (`RULE_TAKEN_OVER`); two chunks read before either was
-    written can still both claim it - two identical clears each read as its own write - and the
-    gate then stops before anything is rendered."""
-    by_site: dict[str, list[str]] = {}
+    """Site id -> the WC write batches that plan rows for it, for every site whose rows in more than
+    one batch do not chain. `plan_wc` gives a site to one batch (`RULE_TAKEN_OVER`); two chunks read
+    before either was written can still both claim it - two identical clears each read as its own
+    write - and the gate then stops before anything is rendered.
+
+    Rows that chain are no claim twice: a site whose text an earlier plan wrote (a clear) and a later
+    plan writes again (lane WN's text, a site-list run over a written text) has, per column, one row
+    per plan, each one's old value the new value of the row before it, in plan order. The earlier
+    batch re-plans the rows it was written from, the later one plans its own."""
+    by_site: dict[str, dict[str, list[tuple[str, Row4]]]] = {}
     for plan in plans:
-        for site_id in dict.fromkeys(row.site_id for row in plan.rows):
-            by_site.setdefault(site_id, []).append(plan.batch_id)
-    return {site_id: ids for site_id, ids in by_site.items() if len(ids) > 1}
+        for row in plan.rows:
+            by_site.setdefault(row.site_id, {}).setdefault(row.column, []).append(
+                (plan.batch_id, row)
+            )
+    twice: dict[str, list[str]] = {}
+    for site_id, columns in by_site.items():
+        for rows in columns.values():
+            ids = list(dict.fromkeys(batch_id for batch_id, _ in rows))
+            chained = all(
+                before.new_value == after.old_value
+                for (_, before), (_, after) in zip(rows, rows[1:], strict=False)
+            )
+            if len(ids) > 1 and not (chained and len(ids) == len(rows)):
+                twice[site_id] = list(dict.fromkeys([*twice.get(site_id, []), *ids]))
+    return twice
 
 
 def source_files(
@@ -1235,7 +1289,8 @@ def plan_wc(
     production's description and raw_data of each planned site (`write_gate4`, read-only, at the
     gate). Per site, in this order:
 
-    * a live full Phase-4 provenance: refused (`written-by-p4`);
+    * a live full Phase-4 provenance: refused (`written-by-p4`) - unless the site was asked as a
+      Phase-4 text (a site-list run, `wc4.Marking.PHASE4`), where the pair held whole is the rule;
     * written by this batch - the live description is the outcome's and so are WC's own three
       `raw_data` keys (`wc4.WC_KEYS`; a later lane may have stamped others: lane WB's
       `_card_provenance`, the review of 2026-09-26): its rows, so a written batch re-plans to the
@@ -1251,6 +1306,12 @@ def plan_wc(
     the outcome's pair: the description (NULL for a clear) and raw_data - raw_data alone when the
     kept text is the stored one byte for byte, the description alone for the clear of a NULL
     raw_data.
+
+    **A site without a description** (lane WN, `wc4.Marking.NONE`): the premise is an empty old
+    value - NULL or blank, exactly as the read found it (`site.description`, kept in the evidence as
+    `checked`) - and the live row must still hold exactly that description and raw_data (a text
+    that arrived since is `moved-since-check`: lane WN never overwrites one). The description row's
+    old value is that NULL (or blank) and the transaction's guard 4 (`IS DISTINCT FROM`) holds it.
     """
     plan = WritePlan4(group=Group.WC, batch_id=group_batch_id(batch.batch_id, Group.WC))
     full = {lane.value for lane in M.LANE_CHANGES}
@@ -1268,7 +1329,7 @@ def plan_wc(
             )
         now = live.get(site.site_id)
         lane = ((now or {}).get("raw_data") or {}).get(M.PROVENANCE_KEY, {}).get("lane")
-        if lane in full:
+        if lane in full and outcome.evidence["marking"]["old"] != wc4.Marking.PHASE4.value:
             plan.refusals.append(
                 W.Refusal(site.site_id, "description", RULE_WRITTEN, "Phase 4 wrote this text")
             )
@@ -1708,9 +1769,10 @@ def _wc_invariants(label: str) -> list[str]:
     """WC's in-database invariants, in place of invariant 3 (a checked text that was unmarked
     carries no provenance, so invariant 3's premise does not hold for it): the check record hashes
     the description it describes and names it as the text its verifier confirmed
-    (`verified_sha256`), and lane L's provenance, where present, is lane L's and hashes it too; a
-    cleared description (NULL) leaves none of the three WC keys in raw_data. NULL on both sides of
-    `IS DISTINCT FROM` is a cleared site's, and not distinct."""
+    (`verified_sha256`), and the provenance, where present, hashes it too and is the lane the
+    recorded marking calls for (lane L's, lane N's for a lane-WN text, the old lane for a Phase-4
+    text of a site-list run); a cleared description (NULL) leaves none of the three WC keys in
+    raw_data. NULL on both sides of `IS DISTINCT FROM` is a cleared site's, and not distinct."""
     keys = ", ".join(W._sql_text(key) for key in sorted(wc4.WC_KEYS))
     digest = "encode(sha256(convert_to(u.description, 'UTF8')), 'hex')"
     check = W._sql_text(wc4.CHECK_KEY)
@@ -1724,13 +1786,20 @@ def _wc_invariants(label: str) -> list[str]:
         f"            OR (u.raw_data -> {check} ->> 'verified_sha256') IS DISTINCT FROM {digest});",
         *_raise_if(f"{label}: % site(s) break the check record sha256 invariant"),
         "",
-        "    -- invariant 6 (WC): a provenance beside a checked text is lane L's and hashes it; a",
-        "    -- cleared description leaves none of the WC keys in raw_data.",
+        "    -- invariant 6 (WC): a provenance beside a checked text hashes it and is the lane the",
+        "    -- recorded marking calls for (L for a March text, N for a lane-WN text, the old lane for",
+        "    -- a Phase-4 text); a cleared description leaves none of the WC keys in raw_data.",
         "    SELECT count(*) INTO bad",
         f"      FROM {PLAN_TABLE} p JOIN unified_sites u ON u.id = p.site_id",
         "     WHERE p.column_name = 'raw_data' AND (",
         "           (u.raw_data ? '_description_provenance' AND (",
-        "               (u.raw_data -> '_description_provenance' ->> 'lane') IS DISTINCT FROM 'L'",
+        "               (u.raw_data -> '_description_provenance' ->> 'lane') IS DISTINCT FROM",
+        "                   CASE p.evidence -> 'marking' ->> 'old'",
+        "                       WHEN 'none' THEN 'N' WHEN 'web' THEN 'N'",
+        "                       WHEN 'phase4' THEN CASE WHEN p.column_name = 'raw_data'",
+        "                           THEN (p.old_value::jsonb",
+        "                               -> '_description_provenance' ->> 'lane') END",
+        "                       ELSE 'L' END",
         "               OR (u.raw_data -> '_description_provenance' ->> 'desc_sha256')",
         f"                  IS DISTINCT FROM {digest}))",
         f"        OR (u.description IS NULL AND u.raw_data ?| ARRAY[{keys}]));",
@@ -2093,7 +2162,11 @@ def invariant_problems(stored: Mapping[str, Any], rows: Sequence[Row4]) -> list[
     provenance = raw.get(M.PROVENANCE_KEY) if isinstance(raw, dict) else None
     site = stored.get("id")
     if rows and rows[0].group is Group.WC:
-        return [f"{site}: {problem}" for problem in wc4.wc_problems(stored.get("description"), raw)]
+        marking = rows[0].evidence["marking"]["old"]
+        return [
+            f"{site}: {problem}"
+            for problem in wc4.wc_problems(stored.get("description"), raw, marking=marking)
+        ]
     if "raw_data" in columns:
         description = stored.get("description")
         if (

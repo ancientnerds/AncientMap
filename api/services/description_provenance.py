@@ -8,9 +8,10 @@ render key of the EU-AI-Act disclosure, graded by provenance:
 
 * ``ai: 'selected'`` (lanes W and S): verbatim Wikipedia sentences an AI system only chose and
   shortened. Shown as the attribution line under the description; no IPTC type is claimed.
-* ``ai: 'generated'`` (lanes T and R, and the legacy lane L for held March-LLM text): the AI wrote
-  the words. Shown with the existing AI footnote; lane T, a translated adaptation, also carries the
-  attribution line.
+* ``ai: 'generated'`` (lanes T and R, the legacy lane L for held March-LLM text, and lane N for a
+  description an AI agent wrote from web pages for a site that had none): the AI wrote the words.
+  Shown with the existing AI footnote; lane T, a translated adaptation, also carries the
+  attribution line. Lanes L and N claim no licence and have no attribution line.
 
 Per-site attribution meets CC BY-SA 4.0 section 3(a) - the article title and its revision
 permalink, the licence and its link, and the change note - and is surfaced only for the lanes
@@ -47,6 +48,10 @@ ATTRIBUTION_LANES = frozenset({"W", "S", "T"})
 
 #: The AI marks the writer uses; anything else is not a provenance this module reads.
 AI_MARKS = frozenset({"selected", "generated"})
+
+#: The lanes that claim no licence, name no source of their own and have no card key: L (the March
+#: LLM text) and N (a description written from web pages, lane WN).
+NO_LICENCE_LANES = frozenset({"L", "N"})
 
 
 def _sha256(text: str) -> str:
@@ -110,7 +115,7 @@ def description_disclosure(
         "ai": ai,
         "lane": lane,
         "aiSystem": provenance["ai_system"],
-        "licence": None if lane == "L" else provenance["licence"],
+        "licence": None if lane in NO_LICENCE_LANES else provenance["licence"],
         "attribution": attribution,
     }
 
@@ -130,7 +135,7 @@ def card_ai(
     """
     if card_provenance is not None:
         return teaser_card_ai(card_provenance, card)
-    if provenance is None or card is None or provenance["lane"] == "L":
+    if provenance is None or card is None or provenance["lane"] in NO_LICENCE_LANES:
         return None
     recorded = provenance["card"]
     if recorded is None or recorded["text_sha256"] != _sha256(card):

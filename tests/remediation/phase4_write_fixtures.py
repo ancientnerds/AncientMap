@@ -542,6 +542,7 @@ class FakeDb:
                 "new": _literal(m["new"]),
                 "key": m["key"],
                 "test_id": m["test_id"],
+                "evidence": json.loads(m["evidence"].replace("''", "'")),
             }
             for m in _ROW.finditer(sql)
         ]
@@ -624,8 +625,8 @@ class FakeDb:
     def _wc_invariants(self, sql: str, rows: list[dict[str, Any]]) -> None:
         """Invariants 5 and 6 of a WC chunk, with Postgres' NULL semantics: the check record hashes
         the description and names it as the verified text (NULL on both sides is not distinct), a
-        provenance beside it is lane L's and hashes it, and a cleared description leaves none of
-        the WC keys."""
+        provenance beside it hashes it and is the lane the recorded marking calls for, and a
+        cleared description leaves none of the WC keys."""
         for row in rows:
             if row["column"] != "raw_data":
                 continue
@@ -636,8 +637,17 @@ class FakeDb:
             if check.get("desc_sha256") != digest or check.get("verified_sha256") != digest:
                 raise PsqlError("invariant 5 (WC): the check record's desc_sha256")
             provenance = raw.get(M.PROVENANCE_KEY)
+            # the lane the recorded marking calls for (write4._wc_invariants' CASE): N for a lane-WN
+            # text, the old provenance's lane for a Phase-4 text, else L
+            marking = row["evidence"]["marking"]["old"]
+            if marking in ("none", "web"):
+                lane = "N"
+            elif marking == "phase4":
+                lane = json.loads(row["old"])[M.PROVENANCE_KEY]["lane"]
+            else:
+                lane = "L"
             if provenance is not None and (
-                provenance.get("lane") != "L" or provenance.get("desc_sha256") != digest
+                provenance.get("lane") != lane or provenance.get("desc_sha256") != digest
             ):
                 raise PsqlError("invariant 6 (WC): the provenance")
             if site.description is None and WC4.WC_KEYS & raw.keys():
