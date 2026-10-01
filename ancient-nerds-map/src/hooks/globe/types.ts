@@ -256,6 +256,7 @@ export interface GlobeRefs {
   wheelCursorLatLng: React.MutableRefObject<{ lat: number; lng: number } | null>
   justEnteredMapbox: React.MutableRefObject<boolean>
   mapboxBaseZoom: React.MutableRefObject<number>
+  touchGestureActive: React.MutableRefObject<boolean>
 
   // ========== Mapbox Refs ==========
   mapboxService: React.MutableRefObject<MapboxGlobeService | null>

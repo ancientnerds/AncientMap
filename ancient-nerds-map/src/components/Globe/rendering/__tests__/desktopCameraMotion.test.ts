@@ -12,7 +12,13 @@
  * Node/V8 does not flake them; the move was additionally compared unrounded.
  */
 import { describe, it, expect, vi } from 'vitest'
-import { createArcballSystem, createMouseDownHandler, createMouseMoveHandler, createWheelHandler } from '../eventHandlers'
+import {
+  createArcballSystem,
+  createDoubleClickHandler,
+  createMouseDownHandler,
+  createMouseMoveHandler,
+  createWheelHandler,
+} from '../eventHandlers'
 import { MIN_DIST, MAX_DIST, MAPBOX_SWITCH, mouseDrag as drag, position, round, scene, type Pose } from './cameraFixtures'
 
 function wheel(pose: Pose, deltaY: number, x: number, y: number, controlsMin?: number) {
@@ -186,5 +192,35 @@ describe('mouse drag rotation (createMouseDownHandler + createMouseMoveHandler)'
     onMouseDown({ button: 0, clientX: 206, clientY: 457 } as MouseEvent)
     onMouseMove({ clientX: 250, clientY: 470 } as MouseEvent)
     expect(round(s.camera.position)).toEqual(before)
+  })
+})
+
+describe('double-click zoom (createDoubleClickHandler)', () => {
+  it('flies toward the clicked point, three steps closer, in 400 ms', () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+    const s = scene(POSE)
+    const onDblClick = createDoubleClickHandler(
+      s.camera, s.controls, s.globe, s.renderer, MIN_DIST, MAX_DIST,
+      { current: null }, { clickTimeout: null, pendingClickEvent: null },
+    )
+    onDblClick({ clientX: 300, clientY: 400 } as MouseEvent)
+    vi.advanceTimersByTime(200)
+    const midway = round(s.camera.position)
+    vi.advanceTimersByTime(400)
+    vi.useRealTimers()
+    expect(midway).toMatchInlineSnapshot(`
+      [
+        1.3044728019,
+        0.8965596978,
+        -0.3956257587,
+      ]
+    `)
+    expect(round(s.camera.position)).toMatchInlineSnapshot(`
+      [
+        1.2388206136,
+        0.8796354839,
+        -0.4111458412,
+      ]
+    `)
   })
 })

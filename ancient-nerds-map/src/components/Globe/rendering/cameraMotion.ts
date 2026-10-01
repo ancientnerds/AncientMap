@@ -28,6 +28,57 @@ export interface ScreenPoint {
   y: number
 }
 
+/** Where a point of the scene appears on the canvas, in viewport pixels. The camera's matrices must be current. */
+export function screenOf(point: THREE.Vector3, camera: THREE.PerspectiveCamera, canvas: HTMLCanvasElement): ScreenPoint {
+  const ndc = point.clone().project(camera)
+  const rect = canvas.getBoundingClientRect()
+  return {
+    x: rect.left + ((ndc.x + 1) / 2) * rect.width,
+    y: rect.top + ((1 - ndc.y) / 2) * rect.height,
+  }
+}
+
+/**
+ * Fly the camera to `endPos` in 400 ms, easing out, always looking at the
+ * globe's centre. The double click (zoom in) and the two-finger tap (zoom out)
+ * use it; a new flight cancels the one under way.
+ */
+export function animateCameraTo(
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  endPos: THREE.Vector3,
+  cameraAnimationRef: React.MutableRefObject<number | null>
+): void {
+  const startPos = camera.position.clone()
+
+  // Cancel any existing camera animation
+  if (cameraAnimationRef.current) {
+    cancelAnimationFrame(cameraAnimationRef.current)
+    cameraAnimationRef.current = null
+  }
+
+  // Animate to new position
+  const duration = 400
+  const startTime = performance.now()
+
+  const animateZoom = () => {
+    const elapsed = performance.now() - startTime
+    const progress = Math.min(1, elapsed / duration)
+    const eased = 1 - Math.pow(1 - progress, 3) // Ease out cubic
+
+    camera.position.lerpVectors(startPos, endPos, eased)
+    camera.lookAt(0, 0, 0)
+    controls.update()
+
+    if (progress < 1) {
+      cameraAnimationRef.current = requestAnimationFrame(animateZoom)
+    } else {
+      cameraAnimationRef.current = null
+    }
+  }
+  cameraAnimationRef.current = requestAnimationFrame(animateZoom)
+}
+
 /**
  * Creates the drag rotation: arcball on the globe, screen-space outside it,
  * never across a pole. `rotate(from, to)` turns the camera as dragging a
