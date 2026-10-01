@@ -26,7 +26,8 @@ REPO = Path(__file__).resolve().parents[2]
 REQUEST_ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 #: A sha256 hex digest (case file, script, video, paper).
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-#: A capture id (contract C7): it names the capture's media file under captures/.
+#: A capture id (contract C7): it names the capture's media file under captures/. A case-file
+#: marker id has the same shape, because it names its crop files (casefile.validate).
 CAPTURE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,47}$")
 #: The capture kinds of contract C7, one recorder each.
 CAPTURE_KINDS = ("platform", "globe", "source", "mapbox_topdown")

@@ -2,7 +2,9 @@
 
 Claude authors episodes/<slug>/casefile.json; `load_casefile` parses it strictly (unknown or
 missing keys, wrong types) and validates the rules:
-- every id is unique across claims, evidence, places, quantities, media and markers;
+- every id is unique across claims, evidence, places, quantities, media and markers; a marker
+  id names its crop files (markers_check/crops/<id>.png), so it is a lowercase file stem
+  (config.CAPTURE_ID_RE, the pattern of a capture id);
 - a quantity given as a range [lo, hi] states the basis ("sources differ: ...");
 - a marker is `verified: "crop-check"` (its box was checked on a crop of the image; the
   accepted check itself is markers.py's, per image and box);
@@ -32,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.lyra.theo_publishing import EVIDENCE_ID_RE
-from pipeline.studio.config import REQUEST_ID_RE, SHA256_RE
+from pipeline.studio.config import CAPTURE_ID_RE, REQUEST_ID_RE, SHA256_RE
 from pipeline.studio.errors import StudioError
 
 TOPIC_TYPES = ("A", "B", "C", "D")
@@ -441,6 +443,11 @@ def validate(cf: CaseFile, *, icons: Sequence[str], allow_ai_imagery: bool = Fal
         if m.ai_generated and not allow_ai_imagery:
             problems.append(f"{m.id}: AI-generated imagery is not allowed in this episode")
         for mk in m.markers:
+            if not CAPTURE_ID_RE.fullmatch(mk.id):
+                problems.append(
+                    f"{mk.id}: a marker id names its crop files: lowercase letters, digits and "
+                    "hyphens, 1-48 characters"
+                )
             if mk.verified != MARKER_CHECK:
                 problems.append(f"{mk.id}: a marker must be verified by {MARKER_CHECK!r}")
             if not _box_ok(mk.box):

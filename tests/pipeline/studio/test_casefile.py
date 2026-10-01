@@ -70,6 +70,16 @@ def test_quantity_evidence_ids_are_strings_not_a_crash(tmp_path, ids):
         casefile.load_casefile(path, icons=ef.ICONS)
 
 
+@pytest.mark.parametrize("marker_id", ["MK1", "mk/1", "../mk1", "mk 1", "mk1.png", "x" * 49])
+def test_a_marker_id_is_a_file_stem(tmp_path, marker_id):
+    """markers-export writes crops/<id>.png and context/<id>.png: an id with a path part
+    would write outside markers_check/, and 'MK1' beside 'mk1' would share one file on a
+    case-insensitive filesystem, so the crop a verifier judges would be the other marker's."""
+    path = ef.write_casefile(tmp_path, ef.mutated(media__0__markers__0__id=marker_id))
+    with pytest.raises(casefile.CaseFileError, match=f"{re.escape(marker_id)}: a marker id names"):
+        casefile.load_casefile(path, icons=ef.ICONS)
+
+
 def test_asset_paths_follow_the_renderers_rule():
     assert casefile.asset_path_problem("media/stone_person.jpg") is None
     assert casefile.asset_path_problem("captures/pf1.mp4") is None
