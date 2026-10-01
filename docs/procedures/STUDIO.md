@@ -450,6 +450,11 @@ Rules the checks enforce (script, case file, captures):
 - **Stale voice:** `episode timeline` and `render` refuse `voice/<beat>.mp3 is stale; run episode
   voice` (or `is missing`) when a beat's spoken text, the voice or the speed changed. `episode voice`
   narrates only those beats again (and pays only for them); a changed display text is only re-timed.
+  A beat edited since its voice counts as estimated (not measured by the old `voice/words.json`)
+  until it is voiced again: `episode check` lists it under `deferred` (`voice/<beat>.mp3 is stale`),
+  so a hook, platform moment, chapter or clip scene that the old durations had broken never stops
+  `episode voice` from measuring the new text. Its estimate still counts for the hook length and the
+  platform moments, as before the first voice.
   A transcription that fails (`the display words cannot be timed against voice/<beat>.mp3`) keeps the
   narration already paid for: run `episode voice` again.
 - **A capture on a sleeping display:** headed Chrome stops drawing, and the take waits for a frame
