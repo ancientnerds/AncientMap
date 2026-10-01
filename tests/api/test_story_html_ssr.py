@@ -319,12 +319,37 @@ def test_withdrawn_story_is_410_not_404():
     assert resp.status_code == 410
     assert b"withdrawn" in resp.body
     assert b"410" in resp.body
-    # Zwei Abfragen: die gefilterte Story-Query und danach die Existenzprobe.
+    # Drei Abfragen: die gefilterte Story-Query, die Existenzprobe, und die
+    # neuesten Stories für den Ausweg auf der Seite (siehe der nächste Test).
     # Ohne diese Zusicherung würde auch ein 410-Zweig durchgehen, der gar nicht
     # erst nachsieht, ob es die Zeile gibt.
-    assert db.query.call_count == 2
+    assert db.query.call_count == 3
     render_mock.assert_not_called()
     shell_mock.assert_not_called()
+
+
+def test_withdrawn_story_page_offers_a_way_out():
+    """Wer aus einer Suche auf einer zurückgezogenen Story landet (2026-10-01:
+    12 % aller Story-Aufrufe, 24 % der Google-Klicks auf Story-Seiten), findet
+    die Archivsuche, die neuesten Stories und den Globus — der Status bleibt 410."""
+    newest = _item(id=4600, headline="Trundholm bog survey planned")
+    db = _orm_db(rows=[newest])
+    db.query.return_value.first.side_effect = [None, (8270,)]
+
+    render, shell = _patched()
+    with render, shell:
+        resp = asyncio.run(story_page("bayeux-tapestry-8270", db=db))
+
+    assert resp.status_code == 410
+    body = resp.body.decode()
+    assert 'action="/news-archive/"' in body
+    assert (
+        '<a href="/news-archive/trundholm-bog-survey-planned-4600">Trundholm bog survey planned</a>'
+        in body
+    )
+    assert 'href="/globe.html"' in body
+    # Die Zeile selbst wird nicht gezeigt: sie wurde absichtlich zurückgezogen.
+    assert "Bayeux" not in body
 
 
 def test_unknown_id_stays_404_not_410():

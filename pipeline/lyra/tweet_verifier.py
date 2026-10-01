@@ -14,6 +14,7 @@ from pipeline.lyra.config import (
     _get_settings,
     call_api,
 )
+from pipeline.lyra.story_language import story_script_bleed
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
@@ -284,6 +285,17 @@ def verify_video_posts(
             elif level == "MODIFY":
                 mod = result.get("suggested_modification", {})
                 modified = mod.get("modified_text", "") if mod else ""
+                bleed = story_script_bleed(texts=[modified])
+                if bleed:
+                    # A rewrite that brings foreign script in is an unusable
+                    # verifier answer: not applied, item stays unverified and
+                    # is verified again next cycle (same as an unparsable one).
+                    logger.warning(
+                        f"Verifier rewrite with foreign script for item {item.id}: "
+                        f"{bleed[:3]!r}, not applied"
+                    )
+                    skipped += 1
+                    continue
                 if modified:
                     # Extract name corrections by comparing old and new text
                     # Apply them to headline, facts, and summary too
@@ -519,8 +531,15 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
         verdict = result.get("verdict", "")
 
         if verdict == "CORRECTED" and result.get("corrected_text"):
-            logger.info(f"Web verify corrected item {item.id}: {result.get('reason', '')}")
-            item.post_text = result["corrected_text"]
+            bleed = story_script_bleed(texts=[result["corrected_text"]])
+            if bleed:
+                logger.warning(
+                    f"Web verify correction with foreign script for item {item.id}: "
+                    f"{bleed[:3]!r}, not applied"
+                )
+            else:
+                logger.info(f"Web verify corrected item {item.id}: {result.get('reason', '')}")
+                item.post_text = result["corrected_text"]
         elif verdict == "REJECT":
             logger.info(f"Web verify unverified item {item.id}: {result.get('reason', '')}")
             item.news_category = "unverified"

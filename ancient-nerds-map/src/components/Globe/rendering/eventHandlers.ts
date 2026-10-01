@@ -9,16 +9,8 @@ import {
   getHoverCursorStyle,
   type EmpireHoverRefs
 } from './empireHoverUtils'
-
-/** Convert viewport mouse coordinates to normalized device coordinates (-1 to 1).
- *  Uses canvas bounding rect to account for CSS transforms (e.g. news feed shift). */
-function canvasNDC(clientX: number, clientY: number, canvas: HTMLCanvasElement): { x: number; y: number } {
-  const rect = canvas.getBoundingClientRect()
-  return {
-    x: ((clientX - rect.left) / rect.width) * 2 - 1,
-    y: -((clientY - rect.top) / rect.height) * 2 + 1,
-  }
-}
+import { canvasNDC, createArcballRotator, zoomCameraBy, WHEEL_ZOOM_STEP } from './cameraMotion'
+import { createTouchGestures } from './touchGestures'
 
 /** Refs and state setters needed by event handlers. */
 export interface EventHandlerRefs {
@@ -141,62 +133,18 @@ export function createWheelHandler(
 
     e.preventDefault()
 
-    const zoomSpeed = 0.03
     const delta = e.deltaY > 0 ? 1 : -1
 
     // Reset zoom session after 500ms of no scrolling
     if (zoomTimeoutObj.current) clearTimeout(zoomTimeoutObj.current)
     zoomTimeoutObj.current = window.setTimeout(() => {}, 500)
 
-    const currentDist = camera.position.length()
-
-    const scaleFactor = 1 + delta * zoomSpeed
-    // Clamp with the controls' bound: the Mapbox switch distance until Mapbox
-    // is ready (orbitMinDistance). minDist stays the zoom formulas' range end.
-    const newDist = Math.max(controls.minDistance, Math.min(maxDist, currentDist * scaleFactor))
-
-    // At the clamp, do nothing: steering toward the cursor before
-    // controls.update() snaps the distance back would slide the globe.
-    // Epsilon, because length() after a clamp is only ~minDistance.
-    if (Math.abs(newDist - currentDist) < 1e-6) return
-
     // Get cursor position on globe (accounts for CSS transform offset)
     const canvas = e.currentTarget as HTMLCanvasElement
     const ndc = canvasNDC(e.clientX, e.clientY, canvas)
 
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), camera)
-    const intersects = raycaster.intersectObject(globe, false)
-
-    if (intersects.length > 0) {
-      const cursorDir = intersects[0].point.clone().normalize()
-      const cameraDir = camera.position.clone().normalize()
-
-      // Calculate blend factor based on zoom direction and level
-      // Zoom in: move toward cursor. Zoom out: stay on current direction
-      const zoomingIn = delta < 0
-      const zoomLevel = 1 - (currentDist - minDist) / (maxDist - minDist) // 0 = far, 1 = close
-
-      if (zoomingIn) {
-        // Blend camera direction toward cursor direction
-        // More aggressive blend when zoomed out, gentler when zoomed in
-        const blendFactor = 0.15 * (1 - zoomLevel * 0.5)
-        const newDir = cameraDir.lerp(cursorDir, blendFactor).normalize()
-        camera.position.copy(newDir.multiplyScalar(newDist))
-      } else {
-        // Zooming out - just change distance, keep direction
-        camera.position.copy(cameraDir.multiplyScalar(newDist))
-      }
-
-      controls.target.set(0, 0, 0)
-      camera.lookAt(0, 0, 0)
-    } else {
-      // Cursor not on globe - just zoom without panning
-      const direction = camera.position.clone().normalize()
-      camera.position.copy(direction.multiplyScalar(newDist))
-    }
-
-    controls.update()
+    // One notch = one lean step; the maths is shared with pinch (cameraMotion.ts)
+    zoomCameraBy(camera, controls, globe, minDist, maxDist, 1 + delta * WHEEL_ZOOM_STEP, ndc, 1)
   }
 
   return { handleWheel, zoomTimeout: zoomTimeoutObj }
@@ -304,60 +252,16 @@ export function createMouseMoveHandler(
   globe?: THREE.Mesh,
   empireHoverRefs?: EmpireHoverRefs
 ): (e: MouseEvent) => void {
+  // Arcball on the globe, screen-space outside; shared with the touch gestures
+  const rotate = createArcballRotator(camera, controls, getArcballPoint)
+
   return (e: MouseEvent) => {
     // In Mapbox primary mode, let Mapbox handle mouse interactions
     if (showMapboxRef.current) return
 
     // Rotation - arcball on globe, screen-space outside
     if (mouseState.isMouseDown) {
-      const prevPoint = getArcballPoint(mouseState.lastMousePos.x, mouseState.lastMousePos.y)
-      const currPoint = getArcballPoint(e.clientX, e.clientY)
-
-      let quat: THREE.Quaternion | null = null
-
-      if (prevPoint && currPoint) {
-        // Both on globe - use arcball rotation
-        const axis = new THREE.Vector3().crossVectors(prevPoint, currPoint)
-        const axisLen = axis.length()
-
-        if (axisLen > 1e-10) {
-          axis.divideScalar(axisLen)
-          const dot = THREE.MathUtils.clamp(prevPoint.dot(currPoint), -1, 1)
-          const angle = Math.acos(dot)
-          if (angle > 1e-10) {
-            quat = new THREE.Quaternion().setFromAxisAngle(axis, -angle)
-          }
-        }
-      } else {
-        // At least one point outside globe - use screen-space rotation
-        const dx = e.clientX - mouseState.lastMousePos.x
-        const dy = e.clientY - mouseState.lastMousePos.y
-        const sensitivity = 0.005
-
-        // Rotate around world Y for horizontal, camera right for vertical
-        const yRot = new THREE.Quaternion().setFromAxisAngle(
-          new THREE.Vector3(0, 1, 0),
-          -dx * sensitivity
-        )
-        const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion)
-        const xRot = new THREE.Quaternion().setFromAxisAngle(
-          cameraRight,
-          -dy * sensitivity
-        )
-        quat = yRot.multiply(xRot)
-      }
-
-      if (quat) {
-        // Test where we'd end up - prevent crossing poles
-        const testPos = camera.position.clone().applyQuaternion(quat)
-        const testDir = testPos.clone().normalize()
-
-        if (Math.abs(testDir.y) < 0.996) {
-          camera.position.copy(testPos)
-          camera.lookAt(0, 0, 0)
-          controls.update()
-        }
-      }
+      rotate(mouseState.lastMousePos, { x: e.clientX, y: e.clientY })
 
       // Update properties in-place to preserve reference
       mouseState.lastMousePos.x = e.clientX
@@ -932,7 +836,30 @@ export function setupEventHandlers(
     }
   )
 
+  // ----- 3.4: Touch gestures -----
+  // OrbitControls takes touch by itself: one finger rotates, two fingers zoom
+  // and pan. Here rotation and zoom are off (they are the arcball and the
+  // wheel zoom above) but pan is not, so on a phone one finger did nothing and
+  // two fingers dragged the globe out of the middle (measured 2026-10-01).
+  // Touch is left to touchGestures, built on the same arcball and zoom maths;
+  // the mouse buttons keep OrbitControls' defaults.
+  controls.touches = { ONE: null, TWO: null }
+  const touch = createTouchGestures({
+    canvas: renderer.domElement,
+    camera,
+    controls,
+    globe,
+    minDist,
+    maxDist,
+    showMapboxRef: refs.showMapboxRef,
+    rotate: createArcballRotator(camera, controls, getArcballPoint),
+  })
+
   // ----- Attach listeners -----
+  renderer.domElement.addEventListener('pointerdown', touch.onPointerDown)
+  renderer.domElement.addEventListener('pointermove', touch.onPointerMove)
+  renderer.domElement.addEventListener('pointerup', touch.onPointerEnd)
+  renderer.domElement.addEventListener('pointercancel', touch.onPointerEnd)
   renderer.domElement.addEventListener('mousedown', onMouseDown)
   renderer.domElement.addEventListener('mousemove', onMouseMove)
   renderer.domElement.addEventListener('mouseleave', onMouseLeave)
@@ -946,6 +873,11 @@ export function setupEventHandlers(
       window.removeEventListener('resize', onResize)
       window.removeEventListener('wheel', preventBrowserZoom)
       renderer.domElement.removeEventListener('wheel', handleWheel)
+      renderer.domElement.removeEventListener('pointerdown', touch.onPointerDown)
+      renderer.domElement.removeEventListener('pointermove', touch.onPointerMove)
+      renderer.domElement.removeEventListener('pointerup', touch.onPointerEnd)
+      renderer.domElement.removeEventListener('pointercancel', touch.onPointerEnd)
+      touch.dispose()
       renderer.domElement.removeEventListener('mousedown', onMouseDown)
       renderer.domElement.removeEventListener('mousemove', onMouseMove)
       renderer.domElement.removeEventListener('mouseleave', onMouseLeave)

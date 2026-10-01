@@ -12,6 +12,7 @@ from pipeline.lyra.config import (
     LyraSettings,
     call_api,
 )
+from pipeline.lyra.story_language import story_script_bleed
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +188,17 @@ def generate_posts_for_video(
             ts_range = post_data.get("timestamp_range")
 
             if not post_text:
+                continue
+
+            # Script check (2026-10-01): a post with foreign script gets no item.
+            # The item stays without text (no public page); while other items of
+            # the video got theirs, the video stays 'summarized' and the missing
+            # post is generated again next cycle.
+            bleed = story_script_bleed(texts=[post_text])
+            if bleed:
+                logger.warning(
+                    f"Post with foreign script for video {video.id}: {bleed[:3]!r}, skipping"
+                )
                 continue
 
             # Primary: exact headline match

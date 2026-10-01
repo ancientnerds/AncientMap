@@ -2,8 +2,18 @@
 
 Runs after the verify step. Each item gets an independent significance score
 based on full video context (title, channel, facts, post text), not just
-the tweet the LLM wrote. Items scored 1 (not archaeology) have their
-post_text set to NULL, removing them from the feed.
+the tweet the LLM wrote.
+
+Items scored 1 (not archaeology) keep their post_text: only `significance`
+changes. What removes them is the visibility gate, public_story_criteria
+(pipeline/news_visibility.py) — below significance 2 an item leaves the feed,
+the archive and the sitemap, and its page answers 410.
+
+The scorer is not the only writer of 1: the verifier sets significance 1 and
+category "unverified" when a post's claims are not supported
+(tweet_verifier.py), and those items skip this scorer (they are no longer
+NULL), so they carry no score_reason. 573 of the 876 items below 2 (2026-10-01)
+are such cases; the page, the feed and the 410 treat both alike.
 """
 
 from __future__ import annotations

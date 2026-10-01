@@ -338,6 +338,10 @@ output/remediation/mechanical_card_stats/*/export/
 output/remediation/mechanical_card_stats/*/PLAN.jsonl
 output/remediation/mechanical_card_stats/*/APPLY.sql
 output/remediation/mechanical_card_stats/*/REHEARSAL.sql
+# The story-text correction of 2026-10-01 (six news_items with foreign script): before/after,
+# the guarded APPLY and its ROLLBACK, the read-only checks and the journal. Small, and the
+# APPLY is the exact statement set that wrote production, so all of it is versioned.
+!output/remediation/story_script_bleed_2026-10-01/
 !output/remediation/mechanical_scope/
 output/remediation/mechanical_scope/export/
 output/remediation/mechanical_scope/REHEARSAL.sql

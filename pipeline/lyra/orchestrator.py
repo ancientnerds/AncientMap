@@ -1136,47 +1136,67 @@ def _run_migrations(engine) -> None:
         """)
         )
 
-        # v14: Fix garbled site names in news_items text fields.
-        # Replace site_name_extracted with canonical unified_sites.name
-        # in headline, post_text, and summary for already-matched items.
-        # IMPORTANT: skip when extracted name is a substring of canonical name,
-        # otherwise REPLACE expands on every restart (e.g. "Calico" inside
-        # "Calico Early Man Site" causes exponential growth).
-        conn.execute(
+        # v14: Fix garbled site names in news_items text fields: replace
+        # site_name_extracted with the linked unified_sites.name in headline,
+        # post_text, summary and facts. Skipped when the extracted name is a
+        # substring of the site name, otherwise the replacement grows on every
+        # restart ("Calico" inside "Calico Early Man Site"; see v14b).
+        #
+        # Gated since 2026-10-01 by the matcher's own rule: the rewrite goes
+        # through site_matcher._correct_text_fields, which only replaces two
+        # spellings of the SAME name. Until then this ran as two bare SQL
+        # REPLACEs on every Lyra start, so the 2026-09-14 gate in the matcher
+        # never reached it: a story linked to another place got that place's
+        # name in its headline (86 stories, e.g. Qin Shi Huang's mausoleum as
+        # "Mausoleum of the Atilii"), and an OSM site's native-script name went
+        # into English text (8351 "Belovode" became "Локалитет Беловоде код
+        # Петровца на Млави", 8359 "Dawenkou" became "大汶口遗址公园"). The link
+        # (site_id) carries the identification; the text keeps what the source said.
+        from types import SimpleNamespace
+
+        from pipeline.lyra.site_matcher import _correct_text_fields
+
+        candidates = conn.execute(
             text("""
-            UPDATE news_items ni
-            SET headline = REPLACE(ni.headline, ni.site_name_extracted, us.name),
-                post_text = REPLACE(ni.post_text, ni.site_name_extracted, us.name),
-                summary = REPLACE(ni.summary, ni.site_name_extracted, us.name)
-            FROM unified_sites us
-            WHERE ni.site_id = us.id
-              AND ni.site_name_extracted IS NOT NULL
+            -- v14: site-name rewrite candidates
+            SELECT ni.id, ni.site_name_extracted, us.name AS canonical,
+                   ni.headline, ni.post_text, ni.summary, ni.facts
+            FROM news_items ni
+            JOIN unified_sites us ON us.id = ni.site_id
+            WHERE ni.site_name_extracted IS NOT NULL
               AND ni.site_name_extracted != us.name
               AND us.name NOT LIKE '%' || ni.site_name_extracted || '%'
               AND (ni.headline LIKE '%' || ni.site_name_extracted || '%'
                    OR ni.post_text LIKE '%' || ni.site_name_extracted || '%'
-                   OR ni.summary LIKE '%' || ni.site_name_extracted || '%')
+                   OR ni.summary LIKE '%' || ni.site_name_extracted || '%'
+                   OR ni.facts::text LIKE '%' || ni.site_name_extracted || '%')
         """)
-        )
-        # Also fix facts (JSONB array of strings): replace garbled name in each element
-        conn.execute(
-            text("""
-            UPDATE news_items ni
-            SET facts = (
-                SELECT jsonb_agg(
-                    to_jsonb(REPLACE(elem #>> '{}', ni.site_name_extracted, us.name))
-                )
-                FROM jsonb_array_elements(ni.facts) AS elem
+        ).fetchall()
+        for row in candidates:
+            item = SimpleNamespace(
+                id=row.id,
+                site_name_extracted=row.site_name_extracted,
+                headline=row.headline,
+                post_text=row.post_text,
+                summary=row.summary,
+                facts=list(row.facts) if row.facts is not None else None,
             )
-            FROM unified_sites us
-            WHERE ni.site_id = us.id
-              AND ni.site_name_extracted IS NOT NULL
-              AND ni.site_name_extracted != us.name
-              AND us.name NOT LIKE '%' || ni.site_name_extracted || '%'
-              AND ni.facts IS NOT NULL
-              AND ni.facts::text LIKE '%' || ni.site_name_extracted || '%'
-        """)
-        )
+            _correct_text_fields(item, row.canonical)
+            renamed = {
+                col: getattr(item, col)
+                for col in ("headline", "post_text", "summary")
+                if getattr(item, col) != getattr(row, col)
+            }
+            if item.facts is not None and item.facts != list(row.facts):
+                renamed["facts"] = json.dumps(item.facts, ensure_ascii=False)
+            if renamed:
+                sets = ", ".join(
+                    f"{col} = CAST(:{col} AS jsonb)" if col == "facts" else f"{col} = :{col}"
+                    for col in renamed
+                )
+                conn.execute(
+                    text(f"UPDATE news_items SET {sets} WHERE id = :id"), {**renamed, "id": row.id}
+                )
 
         # v14b: Repair items corrupted by v14's substring expansion bug.
         # The v14 REPLACE(text, extracted, canonical) runs on every restart.

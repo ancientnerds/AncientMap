@@ -21,7 +21,6 @@ export type { MeasurePoint, Measurement, MeasureUnit } from './useMeasurementToo
 
 // Medium complexity hooks (Group 3)
 export { useMapboxSync } from './useMapboxSync'
-export { useGlobeEvents } from './useGlobeEvents'
 export { useGlobeZoom } from './useGlobeZoom'
 export { useSiteTooltips } from './useSiteTooltips'
 export { useHighlightedSites } from './useHighlightedSites'
