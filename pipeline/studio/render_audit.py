@@ -44,6 +44,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from pipeline.studio.errors import StudioError
 from pipeline.video.shorts_audit import (
     FROZEN_DIFF,
     LOUDNESS_TOL,
@@ -128,10 +129,18 @@ def evaluate(m: dict[str, Any], timeline: dict[str, Any]) -> list[Check]:
 def measure(video: Path, timeline: dict[str, Any]) -> dict[str, Any]:
     stream = _ffprobe_stream(video)
     lufs, peak = _loudness(video)
+    samples = _luma_samples(video, LUMA_STEP_S)
+    diffs = _frame_diffs(video)
+    if not samples or not diffs:
+        # The shorts' probes return [] when ffmpeg fails: nothing measured would read as a
+        # video without black frames or frozen runs.
+        raise StudioError(
+            f"ffmpeg decoded no frames of {video.name} for the black and frozen checks"
+        )
     return {
         **stream,
-        "longest_black_s": longest_black_s(_luma_samples(video, LUMA_STEP_S)),
-        "longest_frozen_frames": longest_frozen_in_clips(_frame_diffs(video), timeline),
+        "longest_black_s": longest_black_s(samples),
+        "longest_frozen_frames": longest_frozen_in_clips(diffs, timeline),
         "lufs": lufs,
         "peak_dbfs": peak,
     }

@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from pipeline.studio import render_audit
+from pipeline.studio.errors import StudioError
 from pipeline.video.shorts_audit import longest_frozen_run
 
 #: shorts_audit._frame_diffs of three real takes as render.ts encodes them (provenance inside)
@@ -105,3 +108,17 @@ def test_each_check_fails_on_its_own_measurement():
     }
     failed = {c.name for c in render_audit.evaluate(bad, TIMELINE) if not c.ok}
     assert failed == {"format", "duration", "black_frames", "frozen", "loudness", "true_peak"}
+
+
+@pytest.mark.parametrize("probe", ["_luma_samples", "_frame_diffs"])
+def test_a_probe_that_decoded_nothing_fails_the_audit_instead_of_passing_it(monkeypatch, probe):
+    # shorts_audit's probes return [] when ffmpeg fails: no black frame and no frozen run
+    # would be measured, and the audit would pass a video it never looked at.
+    stream = {k: GOOD[k] for k in ("width", "height", "fps", "frames")}
+    monkeypatch.setattr(render_audit, "_ffprobe_stream", lambda video: stream)
+    monkeypatch.setattr(render_audit, "_loudness", lambda video: (-14.3, -1.6))
+    monkeypatch.setattr(render_audit, "_luma_samples", lambda video, step: [(0.0, 80.0)])
+    monkeypatch.setattr(render_audit, "_frame_diffs", lambda video: [0.4, 0.5])
+    monkeypatch.setattr(render_audit, probe, lambda *args: [])
+    with pytest.raises(StudioError, match="decoded no frames"):
+        render_audit.measure(Path("episode.mp4"), {**TIMELINE, "scenes": []})
