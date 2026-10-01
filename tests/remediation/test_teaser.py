@@ -264,6 +264,76 @@ class TestTheMechanicalChecks:
             assert C.problems(card, site, fit=C.V.card_fit) == [], name
 
 
+class TestTheUndrawableProof:
+    """A site every name form of which holds a glyph the shorts font cannot draw gets no card - and
+    only the font check itself, the `fit` the contract measures every card with, says so."""
+
+    def test_a_site_whose_every_name_form_holds_an_undrawable_glyph_is_proved(self) -> None:
+        site = basis(T.JABAL)
+        assert site.forms == ("Jabal al-ʿHayn",)
+        assert C.undrawable_proof(site, fit=T.fit) == {"Jabal al-ʿHayn": ("ʿ",)}
+        assert C.undrawable_reason({"Jabal al-ʿHayn": ("ʿ",)}) == (
+            "no card can be written: every name form contains a glyph the shorts font cannot "
+            "draw - 'Jabal al-ʿHayn' ('ʿ')"
+        )
+
+    def test_no_card_can_pass_the_contract_for_such_a_site(self) -> None:
+        """The premise: a card with the name fails the font check, one without it the name check."""
+        site = basis(T.JABAL)
+        named = padded("Jabal al-ʿHayn is an outcrop of red sandstone, a place of petroglyphs.")
+        assert any(p.startswith("font") for p in C.problems(named, site, fit=T.fit))
+        unnamed = padded("A red sandstone outcrop in Saudi Arabia carries petroglyphs.")
+        assert any(p.startswith("name") for p in C.problems(unnamed, site, fit=T.fit))
+
+    def test_a_site_with_a_name_form_the_font_can_draw_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="a card can be written: .*'Skara Brae'"):
+            C.undrawable_proof(basis(T.SKARA), fit=T.fit)
+
+    def test_one_drawable_form_among_undrawable_ones_is_enough_to_refuse(self) -> None:
+        site = C.basis(
+            site_id=T.SKARA,
+            name="Qasr al-Farafra",
+            country="Egypt",
+            description="Qasr al-Farafra, also Qasr ʿFarafra, is a fortress.",
+            alt_names=["Qasr ʿFarafra"],
+        )
+        assert site.forms == ("Qasr al-Farafra", "Qasr ʿFarafra")
+        with pytest.raises(ValueError, match="'Qasr al-Farafra'") as refused:
+            C.undrawable_proof(site, fit=T.fit)
+        assert "ʿ" not in str(refused.value)
+
+    def test_the_stored_name_is_drawn_with_every_card_so_its_glyphs_count_in_every_form(
+        self,
+    ) -> None:
+        """A plain alias cannot save a card: the short draws the stored name with it (`fit(name,
+        card)`), so the font check refuses the alias-only card for the stored name's glyph."""
+        site = C.basis(
+            site_id=T.JABAL,
+            name="Jabal al-ʿHayn",
+            country="Saudi Arabia",
+            description="Jabal al-Hayn, also called Jabal al-ʿHayn, is a hill of red sandstone.",
+            alt_names=["Jabal al-Hayn"],
+        )
+        assert site.forms == ("Jabal al-ʿHayn", "Jabal al-Hayn")
+        assert C.undrawable_proof(site, fit=T.fit) == {
+            "Jabal al-ʿHayn": ("ʿ",),
+            "Jabal al-Hayn": ("ʿ",),
+        }
+        alias_card = padded("Jabal al-Hayn is a hill of red sandstone, a place of petroglyphs.")
+        assert any(p.startswith("font") for p in C.problems(alias_card, site, fit=T.fit))
+
+    def test_it_is_the_fit_the_contract_is_given_that_decides(self) -> None:
+        def draws_everything(name: str, card: str) -> Any:
+            return dataclasses.replace(T.fit(name, card), missing=())
+
+        def draws_nothing(name: str, card: str) -> Any:
+            return dataclasses.replace(T.fit(name, card), missing=("S",))
+
+        with pytest.raises(ValueError, match="a card can be written"):
+            C.undrawable_proof(basis(T.JABAL), fit=draws_everything)
+        assert C.undrawable_proof(basis(T.SKARA), fit=draws_nothing) == {"Skara Brae": ("S",)}
+
+
 class TestTheExamples:
     @pytest.mark.parametrize("example", P.EXAMPLES, ids=lambda e: e.site)
     def test_every_example_passes_the_contract_on_its_site_s_description(self, example) -> None:
@@ -303,6 +373,31 @@ class TestTheWriterAnswer:
     def test_anything_else_is_refused(self, text: str, why: str) -> None:
         with pytest.raises(A.AnswerError, match=why):
             A.parse_writer(text, basis())
+
+    def test_a_site_no_card_can_be_written_for_is_declined(self) -> None:
+        assert A.parse_writer(T.DECLINE, basis(T.JABAL)) == A.Declined()
+
+    @pytest.mark.parametrize(
+        ("text", "why"),
+        [
+            ('{"card": "x", "basis": [], "undrawable": true}', "cannot be written is exactly"),
+            ('{"card": null, "basis": ["S1"], "undrawable": true}', "cannot be written is exactly"),
+            ('{"card": null, "basis": [], "undrawable": false}', "cannot be written is exactly"),
+            ('{"card": null, "basis": [], "undrawable": 1}', "cannot be written is exactly"),
+            ('{"card": null, "basis": []}', "card is not"),
+            ('{"card": null, "undrawable": true}', "exactly"),
+        ],
+    )
+    def test_the_decline_is_exactly_its_shape(self, text: str, why: str) -> None:
+        with pytest.raises(A.AnswerError, match=why):
+            A.parse_writer(text, basis(T.JABAL))
+
+    def test_the_rewrite_after_a_failed_verification_never_declines(self) -> None:
+        """Its card passed the name and font checks already: a name form can be drawn."""
+        with pytest.raises(A.AnswerError, match="exactly"):
+            A.parse_verify_writer(T.DECLINE, basis(T.JABAL), 0)
+        assert R.VERIFY_REWRITE not in R.DECLINING_STAGES
+        assert R.DECLINING_STAGES == ("write", "rewrite1", "rewrite2")
 
 
 class TestTheCheckerAnswer:
@@ -754,6 +849,120 @@ class TestTheRun:
         assert "answered no other batch of lane WB" in text and "stop now and say so" in text
         with pytest.raises(R.RunError, match="no batch"):
             R.brief(run, handoff, "write-009")
+
+
+# ------------------------------------------------------------------------------ an undrawable name
+PROOF = {"Jabal al-ʿHayn": ["ʿ"]}
+#: A writer's card for Jabal al-ʿHayn: it names the site, so only the font check refuses it.
+JABAL_CARD = padded("Jabal al-ʿHayn is an outcrop of red sandstone, a place of petroglyphs.")
+
+
+def undrawable_run(tmp_path: Path) -> Path:
+    """A run of Skara Brae (a card can be written) and Jabal al-ʿHayn (none can)."""
+    return make_run(tmp_path, [T.row(T.SKARA), T.row(T.JABAL)])
+
+
+class TestAnUndrawableName:
+    def test_the_decline_is_accepted_for_the_site_and_refused_for_another(
+        self, tmp_path: Path
+    ) -> None:
+        run = undrawable_run(tmp_path)
+        handoff = tmp_path / "handoff-write"
+        R.export_stage(run, "write", handoff)
+        batch = next(iter(R._round(run, "write")["batches"]))
+        accepted = R.check_answer(run, handoff, batch, T.JABAL, T.DECLINE, fit=T.fit)
+        assert accepted == {"ok": True, "problems": [], "card": None, "undrawable": PROOF}
+        refused = R.check_answer(run, handoff, batch, T.SKARA, T.DECLINE, fit=T.fit)
+        assert refused["ok"] is False
+        assert "a card can be written: these name forms can be drawn" in refused["problems"][0]
+        assert "'Skara Brae'" in refused["problems"][0]
+        card = R.check_answer(run, handoff, batch, T.JABAL, T.writer_answer(JABAL_CARD), fit=T.fit)
+        assert card["ok"] is False and any(p.startswith("font") for p in card["problems"])
+
+    def test_the_import_records_the_proof_and_refuses_a_decline_the_contract_does_not_prove(
+        self, tmp_path: Path
+    ) -> None:
+        run = undrawable_run(tmp_path)
+        imported = step(run, tmp_path, "write", {T.SKARA: GOOD_WRITES[T.SKARA], T.JABAL: T.DECLINE})
+        assert imported == {
+            "stage": "write",
+            "answers": 2,
+            "mechanical_failures": 0,
+            "undrawable": 1,
+        }
+        record = R.stage_records(run)["write"][T.JABAL]
+        assert (record["kind"], record["card"], record["written"], record["basis"]) == (
+            "write",
+            None,
+            None,
+            [],
+        )
+        assert (record["problems"], record["undrawable"]) == ([], PROOF)
+        other = tmp_path / "second"
+        second = undrawable_run(other)
+        with pytest.raises(R.RunError, match="malformed answer .*a card can be written"):
+            step(second, other, "write", {T.SKARA: T.DECLINE, T.JABAL: T.DECLINE})
+
+    def test_a_declined_site_is_cleared_and_no_later_stage_asks_it(self, tmp_path: Path) -> None:
+        run = undrawable_run(tmp_path)
+        step(run, tmp_path, "write", {T.SKARA: GOOD_WRITES[T.SKARA], T.JABAL: T.DECLINE})
+        assert R.status(run)["states"] == {"cleared": 1, "due check": 1}
+        step(run, tmp_path, "check", PASSES)
+        assert step(run, tmp_path, "rewrite1", {})["questions"] == 0
+        step(run, tmp_path, "verify", VERIFIES)
+        assert step(run, tmp_path, "rewrite-v", {})["questions"] == 0
+        rounds = R.read_rounds(run)
+        assert [r["stage"] for r in rounds] == ["write", "check", "verify"]
+        assert [T.JABAL in m for r in rounds for m in r["batches"].values()] == [True, False, False]
+        assert R.outcomes(run)["counts"] == {"accepted": 1, "cleared name-undrawable": 1}
+        rows = {r["site_id"]: r for r in R.read_outcomes(run)}
+        jabal = rows[T.JABAL]
+        assert (jabal["status"], jabal["reason"]) == (R.CLEARED, R.NAME_UNDRAWABLE)
+        assert (jabal["card"], jabal["writer"], jabal["provenance"]) == (None, None, None)
+        assert (jabal["attempts"], jabal["verification"], jabal["verifications"]) == (0, None, [])
+        assert jabal["findings"] == [
+            {"card": None, "reasons": [C.undrawable_reason({"Jabal al-ʿHayn": ("ʿ",)})]}
+        ]
+        assert rows[T.SKARA]["status"] == R.ACCEPTED
+
+    def test_a_site_that_failed_a_card_may_still_be_declined_in_its_rewrite(
+        self, tmp_path: Path
+    ) -> None:
+        run = undrawable_run(tmp_path)
+        written = step(
+            run, tmp_path, "write", {**GOOD_WRITES, T.JABAL: T.writer_answer(JABAL_CARD)}
+        )
+        assert written["mechanical_failures"] == 1
+        step(run, tmp_path, "check", PASSES)
+        assert step(run, tmp_path, "rewrite1", {T.JABAL: T.DECLINE})["undrawable"] == 1
+        assert step(run, tmp_path, "check1", {})["questions"] == 0
+        step(run, tmp_path, "verify", VERIFIES)
+        R.outcomes(run)
+        jabal = next(r for r in R.read_outcomes(run) if r["site_id"] == T.JABAL)
+        assert (jabal["status"], jabal["reason"]) == (R.CLEARED, R.NAME_UNDRAWABLE)
+        assert jabal["attempts"] == 1
+        assert [f["card"] for f in jabal["findings"]] == [JABAL_CARD, None]
+        assert jabal["findings"][0]["reasons"][0].startswith("font")
+
+    def test_the_question_does_not_offer_the_decline_only_the_brief_does(
+        self, tmp_path: Path
+    ) -> None:
+        """An export's prompts are pinned by sha256: offering the option in them would make every
+        answer to an already exported question stale. The brief is the agent's instruction."""
+        site = basis(T.JABAL)
+        assert "undrawable" not in P.writer_prompt(site)
+        assert "undrawable" not in P.rewrite_prompt(site, [P.Finding("A card.", ("No.",))])
+        run = undrawable_run(tmp_path)
+        handoff = tmp_path / "handoff-write"
+        R.export_stage(run, "write", handoff)
+        text = R.brief(run, handoff, "write-001")
+        assert '{"card": null, "basis": [], "undrawable": true}' in text
+        assert "never for a site with a name form the font can draw" in text
+        check_handoff = tmp_path / "handoff-check"
+        answer_all(run, "write", handoff, {T.SKARA: GOOD_WRITES[T.SKARA], T.JABAL: T.DECLINE})
+        R.import_stage(run, "write", fit=T.fit)
+        R.export_stage(run, "check", check_handoff)
+        assert "undrawable" not in R.brief(run, check_handoff, "check-001")
 
 
 # ------------------------------------------------------------------------------ the web (a mock)

@@ -33,6 +33,13 @@ mechanical checks (`contract.problems`), one checker per writer batch; a card th
 to `rewrite1` with its findings and is checked by a new checker in `check1`; once more in `rewrite2`
 and `check2`; after that the site gets no card (cleared, `failed-after-two-rewrites`).
 
+A writer of `write`, `rewrite1` or `rewrite2` may instead answer that no card can be written:
+`{"card": null, "basis": [], "undrawable": true}` (`answers.Declined`). The parse accepts it only
+where the contract proves it (`contract.undrawable_proof`): every name form of the site contains a
+glyph the shorts font cannot draw, so no card can pass both the name and the font check. The site is
+then cleared at once (`name-undrawable`) and no later stage asks it; `import` and `check-answer`
+refuse the decline for a site with a drawable name form.
+
 Every card a checker accepted is then **verified** on the web (`verify`, owner O2: "natuerlich
 muessen sie inhaltlich stimmen"): an independent web judge - the pilot judge's prompt, answer shape
 and machine quote check - decides each claim SUPPORTED / CONTRADICTED / UNVERIFIABLE against a page
@@ -162,6 +169,10 @@ FAILED_REWRITES = "failed-after-two-rewrites"
 FAILED_VERIFY_REWRITE = "failed-after-verify-rewrite"
 CONTRADICTED_AFTER_VERIFY = "contradicted-after-verify"
 UNPROVEN_AFTER_VERIFY = "unproven-after-verify"
+NAME_UNDRAWABLE = "name-undrawable"
+#: The writer stages whose writer may decline a site that no card can be written for: all but the
+#: rewrite after a web verification, whose card passed the name and font checks already.
+DECLINING_STAGES = tuple(writer for writer, _ in CHECK_ROUNDS)
 #: Whose text a contradicted description sentence is (DESCRIPTION_DEFECTS.jsonl "owner_lane"): a
 #: Phase-4 text is lane WA's (Phase 4, scope v3), a sentence-checked March text lane WC's.
 OWNER_LANE = {**dict.fromkeys(sorted(BASIS_LANES), "WA"), SENTENCE_CHECKED: "WC"}
@@ -537,6 +548,8 @@ def progress(site_id: str, records: Mapping[str, Mapping[str, Mapping[str, Any]]
         written = records[writer_stage].get(site_id)
         if written is None:
             return Progress(DUE, writer_stage, tuple(findings))
+        if written["card"] is None:  # declined: the contract proved no card can be written
+            return Progress(CLEARED, None, tuple(findings), writer=written, reason=NAME_UNDRAWABLE)
         if written["problems"]:
             findings.append(P.Finding(written["card"], P.findings_of(written)))
             continue
@@ -802,6 +815,19 @@ def parse_answer(
             written = A.parse_verify_writer(text, shown, contradicted)
         else:
             written = A.parse_writer(text, shown)
+            if isinstance(written, A.Declined):
+                try:
+                    proof = C.undrawable_proof(shown, fit=fit)
+                except ValueError as exc:
+                    raise A.AnswerError(str(exc)) from exc
+                return {
+                    "kind": "write",
+                    "written": None,
+                    "card": None,
+                    "basis": [],
+                    "problems": [],
+                    "undrawable": {form: list(glyphs) for form, glyphs in proof.items()},
+                }
         record: dict[str, Any] = {
             "kind": "write",
             "written": written.text,
@@ -1019,8 +1045,12 @@ def import_stage(
         progress(site_id, settled)
     write_jsonl(run / f"STAGE-{stage}.jsonl", rows)
     if stage in WRITER_STAGES:
-        failed = sum(1 for row in rows if row["problems"])
-        return {"stage": stage, "answers": len(rows), "mechanical_failures": failed}
+        return {
+            "stage": stage,
+            "answers": len(rows),
+            "mechanical_failures": sum(1 for row in rows if row["problems"]),
+            "undrawable": sum(1 for row in rows if row["card"] is None),
+        }
     verdicts = Counter(row["verdict"] for row in rows)
     result: dict[str, Any] = {
         "stage": stage,
@@ -1067,6 +1097,8 @@ def check_answer(
     except A.AnswerError as exc:
         return {"ok": False, "problems": [str(exc)]}
     if parsed["kind"] == "write":
+        if parsed["card"] is None:  # declined, and the contract proved it
+            return {"ok": True, "problems": [], "card": None, "undrawable": parsed["undrawable"]}
         return {
             "ok": not parsed["problems"],
             "problems": parsed["problems"],
@@ -1154,6 +1186,21 @@ _BRIEF_FIX = {
 }
 
 
+#: What the writer of a `DECLINING_STAGES` batch is also told (appended to its fix): the one answer
+#: that is not a card, and when it applies. The question's own prompt is unchanged - an export's
+#: prompts are pinned by sha256 - so the option lives here, in the agent's instruction.
+_BRIEF_UNDRAWABLE = (
+    "\n   ONE EXCEPTION, for a site that can have no card: when every one of its NAME FORMS "
+    "contains a character the shorts font cannot draw (for example U+02BF ʿ in 'Jabal al-ʿHayn'), "
+    "no card can be written: a card with the site's name is refused for that character (a font "
+    "problem), a card without the name is refused for the name (a name problem). "
+    'Answer that site with exactly {"card": null, "basis": [], "undrawable": true} instead of '
+    "the object the prompt specifies, and check it: check-answer accepts it only when it is "
+    "true of every name form, and never for a site with a name form the font can draw - it then "
+    "lists the forms that can be drawn: write the card with one of them."
+)
+
+
 def _kind(stage: str) -> str:
     """Which agent a stage's batch needs: its brief's head, task and fix."""
     if stage == JUDGE_STAGE:
@@ -1174,7 +1221,7 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
     return BRIEF.format(
         head=_BRIEF_HEAD[kind].format(batch=batch_id, count=len(record["batches"][batch_id])),
         task=_BRIEF_TASK[kind],
-        fix=_BRIEF_FIX[kind],
+        fix=_BRIEF_FIX[kind] + (_BRIEF_UNDRAWABLE if stage in DECLINING_STAGES else ""),
         batch=batch_id,
         stage=stage,
         agent=agent_name(batch_id),
@@ -1253,12 +1300,17 @@ def outcome_rows(run: Path, *, ai_system: str = M.AI_SYSTEM) -> list[dict[str, A
     rows: list[dict[str, Any]] = []
     for site_id in sorted(sites):
         site, state = sites[site_id], current[site_id]
+        findings = [{"card": f.card, "reasons": list(f.reasons)} for f in state.findings]
+        if state.reason == NAME_UNDRAWABLE:  # no card was tried: the proof is the finding
+            assert state.writer is not None
+            proof = C.undrawable_reason(state.writer["undrawable"])
+            findings.append({"card": None, "reasons": [proof]})
         common = {
             "site_id": site_id,
             "name": site.name,
             "desc_sha256": site.desc_sha256,
             "attempts": len(state.findings) + (1 if state.status == ACCEPTED else 0),
-            "findings": [{"card": f.card, "reasons": list(f.reasons)} for f in state.findings],
+            "findings": findings,
             "verification": None if state.verify is None else state.verify["verdict"],
             "verifications": [
                 {key: verified[key] for key in _VERIFICATION_KEYS} for verified in state.verified

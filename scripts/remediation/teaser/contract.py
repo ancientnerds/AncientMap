@@ -70,6 +70,17 @@ On the **final** card - the writer's text after the assembler's one spoken edit
 
 What the checks cannot see - a claim the description does not make, a number written in words, a
 superlative, "no one knows", the tone, whether the card is about this site - is the checker's.
+
+## A site no card can be written for (`undrawable_proof`)
+
+The name check wants a name form on the card and the font check wants every glyph drawable, the
+site's name included (`fit(site.name, card)` draws both). A site whose every name form contains a
+glyph the shorts font cannot draw (`Jabal al-ʿHayn`: U+02BF is in neither Orbitron 700 nor JetBrains
+Mono 700) can pass neither with a card that has its name nor without one, and a card without its name
+is refused. Owner rule O6 ("belegt ersetzen, sonst leeren"): such a site gets no card. The writer says
+so - `answers.Declined` - and `undrawable_proof` accepts that only when the font check itself
+refuses every form, by the same `fit` call that measures a card; never for a site with a form the
+short can draw.
 """
 
 from __future__ import annotations
@@ -77,7 +88,7 @@ from __future__ import annotations
 import re
 import sys
 import unicodedata
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -299,6 +310,32 @@ def problems(card: str, site: Basis, *, fit: Fit) -> list[str]:
             f"({V.MAX_CAPTION_PX} px)"
         )
     return found
+
+
+def undrawable_proof(site: Basis, *, fit: Fit) -> dict[str, tuple[str, ...]]:
+    """Each name form of the site with the glyphs the shorts font cannot draw of a card that is that
+    form and nothing else - measured as `problems` measures every card, `fit(site.name, card)`, the
+    font check (the site's name is drawn with the card, so the stored name's glyphs count in every
+    form). Only when every form has one can no card pass both the name and the font check; refused
+    (ValueError) for a site with a form the short can draw, naming those forms."""
+    glyphs = {form: tuple(fit(site.name, form).missing) for form in site.forms}
+    drawable = [form for form, missing in glyphs.items() if not missing]
+    if drawable:
+        raise ValueError(
+            "a card can be written: these name forms can be drawn by the shorts font: "
+            + "; ".join(repr(form) for form in drawable)
+            + " - write the card with one of them. Declining is only for a site whose every name "
+            "form contains a glyph the font cannot draw"
+        )
+    return glyphs
+
+
+def undrawable_reason(glyphs: Mapping[str, Sequence[str]]) -> str:
+    """The proof of `undrawable_proof` as the sentence a clear is journalled with."""
+    return (
+        "no card can be written: every name form contains a glyph the shorts font cannot draw - "
+        + "; ".join(f"{form!r} ({''.join(missing)!r})" for form, missing in glyphs.items())
+    )
 
 
 def sentence_ids(ids: Sequence[str], site: Basis, what: str) -> tuple[str, ...]:
