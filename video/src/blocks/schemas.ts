@@ -69,8 +69,9 @@ const TONE = oneOf(TONES)
  * draw fails only at `episode render`, after the voice and the captures. Each limit
  * below is the measured capacity of its box (1920x1080, the brand fonts), proven by
  * test/gpu/capacity.gpu.ts, which lints every block with every drawn string at its
- * maxLength and a filler about 5 % wider per character than ordinary prose
- * (test/capacity.ts). Change a limit, and that test must stay green.
+ * maxLength and a filler wider per character than ordinary text (test/capacity.ts):
+ * for the mixed-case boxes about 5 % wider than prose, for the heading() boxes the
+ * widest real site names (see CAPS below). Change a limit, and that test must stay green.
  * Free-standing labels (a scale object, a diagram element, a timeline event, a map
  * pin) have no box: how many characters they take depends on where the script puts
  * them, and the layout lint at render time judges that.
@@ -84,18 +85,36 @@ const TONE = oneOf(TONES)
  * a `by` line, six do not, and so on. test/gpu/capacity.gpu.ts proves every one on
  * the stage it is for, test/fixtures/capacity-hook-limits.json pins them.
  */
-/** One line of a heading(48) title across the stage (1728 px of Orbitron, upper case). */
-const TITLE = str(1, 44)
-/** One line of a heading(44) title across a card panel (ListCard, 1496 px). */
-const LIST_TITLE = str(1, 42)
+/*
+ * CAPS: heading() text is upper-case Orbitron 700 with 0.06 em of tracking, the widest text
+ * of the studio: a capital is 0.82 em wide (W 1.18), a space 0.27, and a real site name of
+ * 19 to 24 characters takes up to 0.89 em per character ("Veldwezelt-Hezerwater", 0.887, is
+ * the widest of the 4,449 ASCII names of the database at 19 or more). The first limits of
+ * these boxes were measured with lower-case prose, 0.76 em per character, and let real names
+ * of 23-24 characters (717 to 781 px) through a 716 px box. They are now proved with the
+ * widest real names as the filler (test/capacity.ts CAPS_NAMES), and a limit is the most
+ * characters of it that fit the box without leaning on the lint's 1 px tolerance.
+ */
+
+/** One line of a heading(48) title across the stage, 1728 px: 41 characters of the filler take 1686 px, 43 take 1788. */
+const TITLE = str(1, 41)
+
+/** One line of a heading(44) title across a card panel (ListCard, 1496 px): 39 characters of the filler take 1468 px, 40 take 1507. */
+const LIST_TITLE = str(1, 39)
+
 /** The basis line is one 24 px line of 120 characters, its prefix included; the longest prefix, ScaleZoom's "To scale, linear. Basis: ", takes 25. */
 const BASIS: Schema = { ...str(3, 95), description: 'What the comparison is based on, always shown on screen (owner rule)' }
 
 /** The UnitGrid basis line is "1 square = <unitLabel>. Basis: <basis>" on one 120-character line: 20 + 36 + 60 fit. */
 const UNIT_GRID_BASIS: Schema = { ...str(3, 60), description: BASIS.description }
 
-/** The lower third: a 716 px box, the title in Orbitron 38 px upper case, the subtitle in 24 px mono. */
-export const LABEL = obj({ title: str(1, 24), subtitle: str(1, 49) }, ['title'], 'Lower third over footage')
+/**
+ * The lower third: a 716 px box, the title in heading(38), the subtitle in 24 px mono. The title
+ * holds 21 characters of the widest real names: "Veldwezelt-Hezerwater" is the widest of the 139
+ * names of that length (708 px) and none of them overflows, while "Normanton Down Barrows" (22
+ * characters, 729 px) does.
+ */
+export const LABEL = obj({ title: str(1, 21), subtitle: str(1, 49) }, ['title'], 'Lower third over footage')
 
 /** A case-file marker: box = [x, y, w, h] as fractions of the image, checked on a crop. */
 export const MARKER = obj({ id: ID, box: arr(num(0, 1), 4, 4), label: str(1, 24) })
@@ -475,8 +494,12 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     platform: false,
     drawn: ['headline', 'url', 'lines[]'],
     props: obj(
-      // headline: two Orbitron 54 px lines; url: one 44 px mono line of 1200 px; lines: one 30 px mono line each
-      { headline: str(1, 50), url: str(1, 43), lines: arr(str(1, 66), 0, 3) },
+      // headline: two heading(54) lines of 1200 px, a wrapped box: the filler wraps to two lines up to 48 characters, but where
+      // a text breaks its lines decides. A model of the wrap (equal to the lint on the filler at 48 and 49, measured 2026-10-01)
+      // gives a third line at 44 characters for 3 of 15 starts of the filler and for 1.1 % of 3,000 random strings of real site
+      // names, at 40 for none: 40 is that margin, which the lint proves for the filler. url: one 44 px mono line of 1200 px;
+      // lines: one 30 px mono line each
+      { headline: str(1, 40), url: str(1, 43), lines: arr(str(1, 66), 0, 3) },
       ['headline', 'url', 'lines'],
       'The end card: the one place the link appears in the picture',
     ),

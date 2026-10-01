@@ -112,7 +112,7 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 24
+                "maxLength": 21
               },
               "subtitle": {
                 "type": "string",
@@ -311,7 +311,7 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 24
+                "maxLength": 21
               },
               "subtitle": {
                 "type": "string",
@@ -526,7 +526,7 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 24
+                "maxLength": 21
               },
               "subtitle": {
                 "type": "string",
@@ -701,7 +701,7 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 24
+                "maxLength": 21
               },
               "subtitle": {
                 "type": "string",
@@ -876,7 +876,7 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 24
+                "maxLength": 21
               },
               "subtitle": {
                 "type": "string",
@@ -1498,7 +1498,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 44
+            "maxLength": 41
           }
         },
         "description": "The claims under test; introduce/status cues (any scene) drive it; cue highlight <claim id>"
@@ -1544,7 +1544,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 44
+            "maxLength": 41
           },
           "note": {
             "type": "string",
@@ -1577,7 +1577,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 44
+            "maxLength": 41
           },
           "unit": {
             "type": "string",
@@ -1671,7 +1671,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 44
+            "maxLength": 41
           },
           "basis": {
             "type": "string",
@@ -1758,7 +1758,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 44
+            "maxLength": 41
           },
           "unit": {
             "type": "string",
@@ -1847,7 +1847,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 44
+            "maxLength": 41
           },
           "from": {
             "type": "integer"
@@ -1927,7 +1927,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 44
+            "maxLength": 41
           },
           "width": {
             "type": "number",
@@ -2073,7 +2073,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 42
+            "maxLength": 39
           },
           "items": {
             "type": "array",
@@ -2130,7 +2130,7 @@
           "headline": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 50
+            "maxLength": 40
           },
           "url": {
             "type": "string",
@@ -2175,7 +2175,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 44
+            "maxLength": 41
           },
           "unit": {
             "type": "string",

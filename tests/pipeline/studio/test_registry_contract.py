@@ -5,6 +5,7 @@ entries, the icons, the code points the brand font files map, HOOK_LINE_MAX_CHAR
 
 from __future__ import annotations
 
+import json
 import re
 
 import pytest
@@ -81,10 +82,12 @@ def test_a_dossier_source_title_the_card_cannot_draw_on_one_line_is_refused_by_e
 
 #: (block, drawn pattern, characters): strings the render lint refused although `episode check`
 #: accepted them (render-R2, measured 2026-10-01 on the RTX 3080): a place label on every clip
-#: block's lower third, a photo caption, a card statement, the end card's link, the basis line of
-#: a UnitGrid, a fifth list item.
+#: block's lower third (and a real 24-character site name in it), a photo caption, a card
+#: statement, the end card's headline and link, the basis line of a UnitGrid, a fifth list item.
 _REFUSED_BY_THE_LINT = [
     ("PhotoPlate", "label.title", len("Temple of Jupiter, Baalbek")),
+    ("PhotoPlate", "label.title", len("Sacsayhuaman Walls Cusco")),
+    ("ShareCard", "headline", 49),
     ("PlatformClip", "label.subtitle", 50),
     ("PhotoPlate", "caption", 63),
     ("EvidenceCard", "evidence.statement", 146),
@@ -110,6 +113,40 @@ def test_a_string_longer_than_its_box_is_refused_by_episode_check_not_first_by_t
     registry = blocks.load_registry()
     leaf = _drawn_leaf(registry[block]["props"], pattern)
     assert blocks.props_errors(leaf, "x" * length) == [f"props: longer than {leaf['maxLength']}"]
+
+
+_LOWER_THIRD_NAMES = json.loads(
+    (config.REPO / "video" / "test" / "fixtures" / "lower-third-names.json").read_text(
+        encoding="utf-8"
+    )
+)
+_LOWER_THIRD_BLOCKS = ["PhotoPlate", "MapboxTopdown", "PlatformClip", "GlobeShot", "MapboxFlyover"]
+
+
+def test_every_block_with_a_lower_third_is_checked_against_the_real_names():
+    registry = blocks.load_registry()
+    assert [b for b, entry in registry.items() if "label.title" in entry["drawn"]] == (
+        _LOWER_THIRD_BLOCKS
+    )
+
+
+@pytest.mark.parametrize("block", _LOWER_THIRD_BLOCKS)
+def test_real_site_names_the_lint_refused_are_refused_by_episode_check_and_the_widest_that_fit_pass(
+    block,
+):
+    """Render-R2 on realistic text (measured 2026-10-01 on the RTX 3080): the lower third's title
+    held 24 characters, proved with one lower-case filler, and 7 of 50 real site names of 19-24
+    characters (717 to 781 px in the 716 px box) overflowed although `episode check` accepted them.
+    Now `overflow` is the real names the lint reported as overflowing, `fit` the widest real
+    names of 14-21 characters, which test/gpu/capacity.gpu.ts lints clean: the limit lies between."""
+    leaf = _drawn_leaf(blocks.load_registry()[block]["props"], "label.title")
+    assert leaf["maxLength"] == 21
+    for name in _LOWER_THIRD_NAMES["fit"]:
+        assert blocks.props_errors(leaf, name) == [], name
+    for name in _LOWER_THIRD_NAMES["overflow"]:
+        assert blocks.props_errors(leaf, name) == ["props: longer than 21"], name
+    assert max(len(n) for n in _LOWER_THIRD_NAMES["fit"]) == leaf["maxLength"]
+    assert min(len(n) for n in _LOWER_THIRD_NAMES["overflow"]) == leaf["maxLength"] + 1
 
 
 #: Real prose inside the full stage's registry limits (statement 100, quote 220), 99 and 204

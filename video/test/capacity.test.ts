@@ -5,8 +5,9 @@ import { describe, expect, it } from 'vitest'
 
 import { checkBlocks, drawnStrings } from '../src/blocks'
 import { REGISTRY_BLOCKS } from '../src/blocks/schemas'
+import { validate } from '../src/schema'
 import { type Timeline, parseTimeline, sceneHasCaptions } from '../src/timeline'
-import { capacityTimeline, drawnLimits, fill, hookLimits, solidPng } from './capacity'
+import { CAPS_NAMES, CAPS_PATTERNS, capacityTimeline, drawnLimits, fill, hookLimits, sceneVariants, solidPng } from './capacity'
 import { schemaAt, schemaNodes } from './registryHelpers'
 
 /** Built on first use: an unbounded drawn string makes it throw, and the test that names it must still run. */
@@ -59,6 +60,27 @@ describe('the capacity episode (the lint input of test/gpu/capacity.gpu.ts)', ()
         expect(schema?.enum !== undefined || schema?.maxLength !== undefined, `${block}: ${pattern}`).toBe(true)
       }
     }
+  })
+  it('sets the heading() strings (titles, lower thirds, the end card headline) in the widest real site names and every other string in prose', () => {
+    const { timeline } = episode()
+    let caps = 0
+    for (const [block, entry] of Object.entries(REGISTRY_BLOCKS)) {
+      for (const scene of timeline.scenes.filter((s) => s.block === block)) {
+        for (const pattern of entry.drawn) {
+          const schema = schemaAt(entry.props, pattern)
+          if (schema?.enum) continue
+          const limit = (sceneHasCaptions(timeline, scene) ? schema?.hookMaxLength : undefined) ?? schema?.maxLength
+          for (const [path, text] of drawnStrings(scene.props, [pattern], `${scene.id}.props`)) {
+            expect(text, path).toBe(fill(limit as number, CAPS_PATTERNS.includes(pattern)))
+            if (CAPS_PATTERNS.includes(pattern)) caps++
+          }
+        }
+      }
+    }
+    // five lower thirds and the titles of nine blocks in 13 layouts on both stages, the end card's headline on one
+    expect(caps).toBe((5 + 13) * 2 + 1)
+    expect(fill(21, true)).toBe('Veldwezelt-Hezerwater')
+    expect(CAPS_NAMES.join(' ')).toMatch(/^[A-Za-z -]+$/)
   })
   it('widens the layouts that change with their content: the most claims, the most list items, the card with its image', () => {
     const { timeline } = episode()
@@ -145,13 +167,56 @@ describe('the hook stage of the capacity episode', () => {
   })
 })
 
+describe('the real site names of test/fixtures/lower-third-names.json (the lower third)', () => {
+  /**
+   * `episode check` and the renderer accepted exactly what the schema accepts, and real names of
+   * 23-24 characters (717 to 781 px) overflowed the 716 px box (render-R2, measured 2026-10-01 on
+   * the RTX 3080 with the reviewer's seven and five more of the database). `fit` holds the widest
+   * real names of 14 to 21 characters: test/gpu/capacity.gpu.ts lints every one of them clean;
+   * `overflow` the real names of 22-24 characters the lint reported as `overflow` (measured
+   * against a limit of 30). The limit sits between the two lists, where the database has it: of
+   * all 139 names of 21 characters none overflows, of the 152 of 22 two do.
+   */
+  const names = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/lower-third-names.json', import.meta.url)), 'utf-8')) as { fit: string[]; overflow: string[] }
+  const blocksWithLowerThird = Object.entries(REGISTRY_BLOCKS).filter(([, entry]) => entry.drawn.includes('label.title'))
+  const title = (block: string, name: string) => validate(schemaAt(REGISTRY_BLOCKS[block].props, 'label.title') as never, name, 'props.label.title')
+
+  it('are accepted when they fit and refused when they overflow, on every block with a lower third', () => {
+    expect(blocksWithLowerThird.map(([block]) => block)).toEqual(['PhotoPlate', 'MapboxTopdown', 'PlatformClip', 'GlobeShot', 'MapboxFlyover'])
+    for (const [block] of blocksWithLowerThird) {
+      for (const name of names.fit) expect(title(block, name), `${block}: ${name}`).toEqual([])
+      for (const name of names.overflow) expect(title(block, name), `${block}: ${name}`).toEqual(['props.label.title: longer than 21'])
+    }
+  })
+  it('bound the limit from both sides: the widest fitting name is as long as the limit, the shortest overflowing one a character longer', () => {
+    const limit = schemaAt(REGISTRY_BLOCKS.PhotoPlate.props, 'label.title')?.maxLength
+    expect(Math.max(...names.fit.map((n) => n.length))).toBe(limit)
+    expect(Math.min(...names.overflow.map((n) => n.length))).toBe((limit as number) + 1)
+  })
+  it('make an episode of lower thirds that is valid, retimed scene by scene, with the thumbnails inside it', () => {
+    const { timeline: json } = sceneVariants(
+      'PhotoPlate.full',
+      names.fit.map((name, i) => ({ id: `name${i}`, edit: (props) => ((props.label as { title: string }).title = name) })),
+    )
+    const timeline = parseTimeline(json)
+    expect(() => checkBlocks(timeline)).not.toThrow()
+    expect(timeline.scenes.map((s) => (s.props.label as { title: string }).title)).toEqual(names.fit)
+    for (const [i, scene] of timeline.scenes.entries()) {
+      expect(scene.from).toBe(i * timeline.scenes[0].durationInFrames)
+      for (const cue of scene.cues) expect(cue.frame).toBeGreaterThanOrEqual(scene.from)
+    }
+    expect(timeline.durationInFrames).toBe(timeline.scenes.length * timeline.scenes[0].durationInFrames)
+  })
+})
+
 describe('fill', () => {
   it('is exactly n characters of words, never ending in a space', () => {
     for (const n of [1, 2, 24, 49, 50, 51, 60, 160, 260, 320]) {
-      const text = fill(n)
-      expect(text).toHaveLength(n)
-      expect(text.endsWith(' ')).toBe(false)
-      expect(text).not.toMatch(/ {2}/)
+      for (const text of [fill(n), fill(n, true), fill(n, true, 3)]) {
+        expect(text).toHaveLength(n)
+        expect(text.endsWith(' ')).toBe(false)
+        expect(text).not.toMatch(/ {2}/)
+      }
     }
   })
 })

@@ -13,6 +13,11 @@
  * overflows, overlaps or leaves the safe area. When it fails, lower the limit in
  * schemas.ts (or give the text more room), run `npm run registry`, and mirror the
  * registry in tests/pipeline/studio/script_fixtures.py.
+ *
+ * The filler is a proxy for real text, so a second test lints the real thing where a limit
+ * was once wrong: the widest real site names in every lower third (test/fixtures/
+ * lower-third-names.json). The names above the limit cannot be linted: `episode check` and
+ * parseTimeline refuse them before any browser starts, which is the point.
  */
 import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -25,7 +30,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { SITE_PUBLIC_DIR } from '../../scripts/fontCoverage'
 import type { LintViolation } from '../../scripts/args'
 import { FONT_FILES } from '../../src/theme/fonts'
-import { capacityTimeline, solidPng } from '../capacity'
+import { type CapacityTimeline, capacityTimeline, sceneVariants, solidPng } from '../capacity'
 
 const VIDEO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const SLOW = 900_000
@@ -40,10 +45,9 @@ afterAll(() => {
   rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
 })
 
-/** The violations of scripts/lint.ts on the capacity episode, grouped by the scene they were found in. */
-function lintCapacity(): { status: number | null; output: string; byScene: Map<string, string[]> } {
+/** The violations of scripts/lint.ts on a capacity timeline (the whole episode, or variants of one scene of it), grouped by the scene they were found in. */
+function lintEpisode({ timeline, assets }: CapacityTimeline): { status: number | null; output: string; byScene: Map<string, string[]> } {
   const publicDir = path.join(work, 'public')
-  const { timeline, assets } = capacityTimeline()
   for (const file of FONT_FILES) {
     mkdirSync(path.dirname(path.join(publicDir, file)), { recursive: true })
     cpSync(path.join(SITE_PUBLIC_DIR, file), path.join(publicDir, file))
@@ -76,7 +80,19 @@ function lintCapacity(): { status: number | null; output: string; byScene: Map<s
 
 describe('the capacity episode in a real browser', () => {
   it('draws every block, on the full and on the hook stage, with every drawn string at its maxLength (hook capacity on the hook stage), without one layout violation', () => {
-    const { status, output, byScene } = lintCapacity()
+    const { status, output, byScene } = lintEpisode(capacityTimeline())
+    expect(output).toMatch(/^gpu: ANGLE \(NVIDIA, NVIDIA GeForce RTX 3080/m)
+    expect(Object.fromEntries(byScene)).toEqual({})
+    expect(status, output).toBe(0)
+  }, SLOW)
+
+  it('draws the widest real site names of every length up to the limit in a lower third without one layout violation', () => {
+    const { fit } = JSON.parse(readFileSync(path.join(VIDEO_ROOT, 'test/fixtures/lower-third-names.json'), 'utf-8')) as { fit: string[] }
+    const names = sceneVariants(
+      'PhotoPlate.full',
+      fit.map((name, i) => ({ id: `name${i}`, edit: (props) => ((props.label as { title: string }).title = name) })),
+    )
+    const { status, output, byScene } = lintEpisode(names)
     expect(output).toMatch(/^gpu: ANGLE \(NVIDIA, NVIDIA GeForce RTX 3080/m)
     expect(Object.fromEntries(byScene)).toEqual({})
     expect(status, output).toBe(0)

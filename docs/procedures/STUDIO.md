@@ -378,19 +378,28 @@ Rules the checks enforce (script, case file, captures):
 - Hook beats total at most 32 s; burned-in captions only in the hook; one hook word has at most 24
   characters in upper case, punctuation included (`HOOK_LINE_MAX_CHARS`).
 - Every string a block draws has a `maxLength` in the registry, the measured capacity of its box (a
-  lower third's title 24 characters, a card's `statement` 100 and `quote` 220, an evidence source's
-  `title` 66 and `locator` 24, ...), so that `episode check` refuses text the render lint would
-  refuse. A hook beat is drawn under the captions on a stage 140 px shorter, where some boxes hold
-  less: the registry also records `hookMaxLength` / `hookMaxItems` (an EvidenceCard `statement` 68 and
-  `quote` 134, a QuoteCard `quote` 230, at most 5 claims, 4 list items, 6 bars, 2 unit groups, no Meter
-  `note`; each the strictest layout of its block) and `episode check` applies them to a beat flagged
-  `hook` (the renderer's block checks, to a scene a hook caption is on screen in).
-  `video/test/gpu/capacity.gpu.ts` proves it on the workstation by linting every block on
-  both stages with every drawn string at its limit (the hook stage at its hook capacity);
-  `video/test/fixtures/capacity-limits.json` and `capacity-hook-limits.json` pin the limits it held
-  for, and CI fails when the registry differs. Not covered by a static limit: free-standing labels
-  (a scale object, a diagram element, a timeline event, a map pin), which take the room the script
-  gives them; the render lint judges a crowded scene.
+  lower third's title 21 characters, a block's `title` 41 (a ListCard's 39), the end card's `headline`
+  40, a card's `statement` 100 and `quote` 220, an evidence source's `title` 66 and `locator` 24,
+  ...), so that `episode check` refuses text the render lint would refuse. Text set in upper-case
+  Orbitron (those titles and the headline) is the widest the studio draws, about 0.89 em per character
+  for a real site name where prose takes 0.76, so these boxes are proved with the widest real site
+  names, not with prose: with prose the lower third held 24 characters and 7 of 50 real names of 19-24
+  characters overflowed it (`Sacsayhuaman Walls Cusco`, 781 px of 716), while of the 139 real names of
+  21 characters none does and `Normanton Down Barrows` (22) does. A hook beat is drawn under the
+  captions on a stage 140 px shorter, where some boxes hold less: the registry also records
+  `hookMaxLength` / `hookMaxItems` (an EvidenceCard `statement` 68 and `quote` 134, a QuoteCard
+  `quote` 230, at most 5 claims, 4 list items, 6 bars, 2 unit groups, no Meter `note`; each the
+  strictest layout of its block) and `episode check` applies them to a beat flagged `hook` (the
+  renderer's block checks, to a scene a hook caption is on screen in).
+  `video/test/gpu/capacity.gpu.ts` proves it on the workstation by linting every block on both stages
+  with every drawn string at its limit (the hook stage at its hook capacity) and the widest real site
+  names in every lower third; `video/test/fixtures/capacity-limits.json` and
+  `capacity-hook-limits.json` pin the limits it held for, and CI fails when the registry differs;
+  `lower-third-names.json` holds the real names a lower third was measured with (the widest that fit,
+  which the same test lints clean, and the ones that overflow, which `episode check` now refuses). Not
+  covered by a static limit: free-standing labels (a scale object, a diagram element, a timeline
+  event, a map pin), which take the room the script gives them; the render lint judges a crowded
+  scene.
 - No title card and no agent block. The ShareCard is the end card: the last beat only.
 - A full episode has 3-5 platform moments (a slice any number); every platform moment, in either
   format, lasts 5-15 s.

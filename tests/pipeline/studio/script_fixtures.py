@@ -68,9 +68,9 @@ def _obj(properties: dict, required: list[str] | None = None, description: str |
 
 ID = _str(1, 64)
 ASSET = _str(1, 240)
-TITLE = _str(1, 44)
-LIST_TITLE = _str(1, 42)
-LABEL = _obj({"title": _str(1, 24), "subtitle": _str(1, 49)}, ["title"], "Lower third over footage")
+TITLE = _str(1, 41)
+LIST_TITLE = _str(1, 39)
+LABEL = _obj({"title": _str(1, 21), "subtitle": _str(1, 49)}, ["title"], "Lower third over footage")
 MEDIA = _obj(
     {
         "id": ID,
@@ -345,7 +345,7 @@ REGISTRY = {
     ),
     "ShareCard": _entry(
         _obj(
-            {"headline": _str(1, 50), "url": _str(1, 43), "lines": _arr(_str(1, 66), 0, 3)},
+            {"headline": _str(1, 40), "url": _str(1, 43), "lines": _arr(_str(1, 66), 0, 3)},
             None,
             "The end card: the one place the link appears in the picture",
         ),

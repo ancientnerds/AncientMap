@@ -12,11 +12,19 @@
  * timeline for the graphics blocks, the smoke timeline for the footage blocks):
  * valid props, with the geometry the block needs. Only the drawn strings are
  * replaced. Proportional fonts make the width of a string depend on its letters,
- * so the strings are not ordinary prose but a deliberately wide filler (FILLER:
- * per character 4-5 % wider than an English sample in Orbitron 700, upper case
- * 0.727 em against 0.697 and lower case 0.595 against 0.567, and in Cormorant
- * Garamond, 0.420 against 0.400; the monospace fonts do not care): a limit that
- * fits the filler leaves room for real text.
+ * so the strings are not ordinary prose but a deliberately wide filler: a limit that
+ * fits the filler leaves room for real text. There are two, by how the box sets its text:
+ * - FILLER, for the boxes that set mixed-case text (a card's statement and quote, the
+ *   serif of a QuoteCard; the monospace boxes do not care which letters): per
+ *   character 4-5 % wider than an English sample in Orbitron 700 lower case (0.595 em
+ *   against 0.567) and in Cormorant Garamond (0.420 against 0.400);
+ * - the widest real site names (CAPS_NAMES), for the boxes that set heading() text,
+ *   upper-case Orbitron 700 (a title, a lower third's title, the end card's headline;
+ *   CAPS_PATTERNS): there a capital is 0.82 em wide (W 1.18), a space 0.27, plus 0.06 em
+ *   of tracking, and a real site name of 19-24 characters takes up to 0.89 em per
+ *   character where the lower-case filler took 0.76, so seven real names of 23-24
+ *   characters passed `episode check` and overflowed the lower third (render-R2 again,
+ *   measured 2026-10-01).
  *
  * Under hook captions the stage is 140 px shorter (540 px) and some boxes hold less:
  * the registry records that capacity (hookMaxLength, hookMaxItems; src/schema.ts), and
@@ -42,9 +50,25 @@ const HOST = 'researchgate.net'
 
 const FILLER = 'limestone tool evidence mammoth excavation Roman weight quarrying report tonnes'
 
-/** Exactly `n` characters of filler, never ending in a space. */
-export function fill(n: number): string {
-  const text = FILLER.repeat(Math.ceil(n / FILLER.length) + 1).slice(0, n)
+/**
+ * The widest real site names of the database (the 4,449 ancient_nerds names in plain ASCII,
+ * public/data/sites/index.json of 2026-10-01) in Orbitron 700 upper case with the tracking of heading(): the widest
+ * 21-character name (708 px of the lower third's 716), the two 22-character names that
+ * overflow it (729 and 721 px), then the widest of 23 and 21 characters and a plainer one.
+ * Of all 139 names of 21 characters none overflows the lower third, two of the 152 of 22 do.
+ */
+export const CAPS_NAMES = ['Veldwezelt-Hezerwater', 'Normanton Down Barrows', 'Al-Musawwarat as-Sufra', 'Featherwood Roman Camps', 'Roman Nymphaeum Amman', 'Cawthorne Roman Camp']
+
+/** The drawn strings the blocks set with heading(): upper-case Orbitron 700 (every block's `title`, the lower third's, the end card's `headline`). */
+export const CAPS_PATTERNS: readonly string[] = ['label.title', 'title', 'headline']
+
+/** The names of CAPS_NAMES, started at the `rotation`-th, joined by single spaces. */
+const capsFiller = (rotation: number): string => [...CAPS_NAMES.slice(rotation), ...CAPS_NAMES.slice(0, rotation)].join(' ')
+
+/** Exactly `n` characters of filler (`caps`: of the real site names, started at the `rotation`-th of them), never ending in a space. */
+export function fill(n: number, caps = false, rotation = 0): string {
+  const source = caps ? capsFiller(rotation) : FILLER
+  const text = source.repeat(Math.ceil(n / source.length) + 1).slice(0, n)
   return text.endsWith(' ') ? `${text.slice(0, -1)}m` : text
 }
 
@@ -122,21 +146,24 @@ function removeAt(root: Json, path: string): void {
 /**
  * Every drawn string of `props` set to its schema maxLength of filler (on the hook stage to
  * its hookMaxLength, and a string with a hookMaxLength of 0 removed: it cannot be shown
- * there), an enum string to its longest value. A drawn string with none of these is an
- * error: its text cannot be proved to fit.
+ * there; the heading() strings of CAPS_PATTERNS of real site names), an enum string to its
+ * longest value. A drawn string with none of these is an error: its text cannot be proved
+ * to fit.
  */
 export function fillDrawn(block: string, props: Json, hook: boolean): void {
   const entry = REGISTRY_BLOCKS[block]
   for (const pattern of entry.drawn) ensurePath(props, pattern)
   const absent: string[] = []
   for (const [path] of drawnStrings(props, entry.drawn, 'props')) {
-    const schema = schemaAt(entry.props, patternOf(path))
+    const pattern = patternOf(path)
+    const schema = schemaAt(entry.props, pattern)
     if (!schema) throw new Error(`${block}: no schema for ${path}`)
+    const caps = CAPS_PATTERNS.includes(pattern)
     const limit = hook ? schema.hookMaxLength : undefined
     if (limit === 0) absent.push(path)
-    else if (limit !== undefined) setAt(props, path, fill(limit))
+    else if (limit !== undefined) setAt(props, path, fill(limit, caps))
     else if (schema.enum) setAt(props, path, [...schema.enum].map(String).sort((a, b) => b.length - a.length)[0])
-    else if (schema.maxLength !== undefined) setAt(props, path, fill(schema.maxLength))
+    else if (schema.maxLength !== undefined) setAt(props, path, fill(schema.maxLength, caps))
     else throw new Error(`${block}: ${path} is drawn but has no maxLength: its text cannot be proved to fit`)
   }
   for (const path of absent) removeAt(props, path)
@@ -301,28 +328,57 @@ export function capacityTimeline(): CapacityTimeline {
       }
     }
   }
+  return episode(scenes, cases, captions, from)
+}
+
+const THUMBNAILS = [
+  { frame: 30, text: 'Who moved it?' },
+  { frame: 330, text: 'Where is Baalbek?' },
+  { frame: 630, text: 'How far apart?' },
+]
+
+/** The timeline around `scenes`, its images as PNG files (whatever the fixtures call them) and the files the lint run must provide. */
+function episode(scenes: Json[], cases: CapacityCase[], captions: { text: string; from: number; to: number }[], durationInFrames: number): CapacityTimeline {
   const timeline = {
     version: 1,
     fps: 60,
     width: 1920,
     height: 1080,
-    durationInFrames: from,
+    durationInFrames,
     audio: { narration: [], music: null },
     scenes,
     captions,
     ticker: { evidence: [] },
     chapters: [{ title: 'Capacity', frame: 0 }],
     credits: [],
-    thumbnails: [
-      { frame: 30, text: 'Who moved it?' },
-      { frame: 330, text: 'Where is Baalbek?' },
-      { frame: 630, text: 'How far apart?' },
-    ],
+    thumbnails: THUMBNAILS.map((t) => ({ ...t, frame: Math.min(t.frame, durationInFrames - 1) })),
   }
   // every image of the episode is a generated PNG, whatever the fixtures call it
   const json = JSON.stringify(timeline).replace(/\.jpg"/g, '.png"')
   const assets = [...new Set((json.match(/"(?:media|captures)\/[^"]+"/g) ?? []).map((s) => s.slice(1, -1)))]
   return { timeline: JSON.parse(json), cases, assets }
+}
+
+/**
+ * An episode of copies of the scene `sceneId` of the capacity episode, each with its own id and
+ * its props edited: what the real-text checks lint (real site names in a lower third). A text
+ * above a limit is refused before any lint (`episode check`, parseTimeline), so a variant is
+ * always a text inside the limits. Not for the end card: a second one is refused too.
+ */
+export function sceneVariants(sceneId: string, variants: { id: string; edit: (props: Json) => void }[]): CapacityTimeline {
+  const { timeline, cases } = capacityTimeline()
+  const scene = (timeline.scenes as SceneJson[]).find((s) => s.id === sceneId)
+  const base = cases.find((c) => c.id === sceneId)
+  if (!scene || !base) throw new Error(`the capacity episode has no scene ${sceneId}`)
+  let from = 0
+  const scenes = variants.map(({ id, edit }) => {
+    const copy = clone(scene)
+    edit(copy.props)
+    const placed = { ...copy, id, from, cues: copy.cues.map((c) => ({ ...c, frame: c.frame - scene.from + from })) }
+    from += scene.durationInFrames
+    return placed
+  })
+  return episode(scenes, variants.map(({ id }) => ({ ...base, id })), [], from)
 }
 
 /** A solid-colour PNG of w x h pixels (stands in for every image of the capacity episode). */
