@@ -29,8 +29,10 @@ or image moves, and nothing is deleted. A retired row keeps its content links an
 Per pair: both rows exist and are curated; the retired row holds the pinned name and no scope decision,
 its scope journal ends at the live values, and no row is retired onto it (retiring a survivor would
 leave its duplicates pointing at a hidden row); the survivor holds the pinned name and is not retired;
-both rows carry the pinned Wikidata item and Wikipedia title as external ids (the premise of the
-retirement, guard 5); the points lie within 2,000 m (`lane.DUP_RETIRE_METRES`, the owner-case
+both rows carry the pinned Wikidata item and Wikipedia title as external ids; the premise the
+database printed for the retired row is what the read's own rows give - its name, its content links
+and images, its external ids, then its survivor's name and external ids (guard 5 holds the write to
+all of it); the points lie within 2,000 m (`lane.DUP_RETIRE_METRES`, the owner-case
 list's `DUP_MAX_M`; the scope lane's 100 m is for pairs it finds itself - two of these are 290 m and
 470 m apart); the scope lane's survivor rule keeps the pinned survivor; and each row's description
 holds the pinned opening sentence verbatim (whitespace folded). Across pairs: no id appears twice, so
@@ -38,7 +40,8 @@ no survivor is another pair's loser. Neither stamp journals a row yet: a lane th
 never re-planned.
 
 The transaction repeats what it can: guards 1-4 (curated, two real changes in the two cells, planned
-old values NULL, status `retired` only), guard 5 (name and external ids as read), and after the write
+old values NULL, status `retired` only), guard 5 (the premise above, as read: the retired row's
+name, links, images and ids, and the survivor's name and ids), and after the write
 the three survivor checks (the survivor is a curated row, not retired - also not by this very write -
 within 2,000 m), each probed with a row of its kind.
 
@@ -472,8 +475,19 @@ def _shares_item(read: Read, pair: Pair, row: Mapping[str, Any], role: str) -> N
         values = [value for k, value in held if k == kind]
         if values != [wanted]:
             raise _refuse(pair, f"the {role}'s {kind} is {values!r}, the pair is one by {wanted!r}")
-    if f"{QID}={pair.qid}" not in row["premise"] or f"{ENWIKI}={pair.title}" not in row["premise"]:
-        raise _refuse(pair, f"the {role}'s premise {row['premise']!r} does not carry the ids")
+
+
+def _premise(read: Read, loser: Mapping[str, Any], survivor: Mapping[str, Any]) -> str:
+    """What `lane.DUP_RETIRE_PREMISE_SQL` prints for the row to retire, from the read's own rows:
+    its name, content links, images and external ids, then its survivor's name and external ids."""
+
+    def ids(site: Mapping[str, Any]) -> str:
+        return ", ".join(f"{kind}={value}" for kind, value in read.ext.get(str(site["id"]), ()))
+
+    return (
+        f"{loser['name']} | content links {loser['links']}, images {loser['images']} | "
+        f"{ids(loser)} | survivor {survivor['name']} | {ids(survivor)}"
+    )
 
 
 def _opens_with(pair: Pair, row: Mapping[str, Any], quote: str, role: str) -> None:
@@ -516,6 +530,13 @@ def check_pair(read: Read, pair: Pair) -> tuple[Mapping[str, Any], Mapping[str, 
         raise _refuse(pair, "the scope lane's survivor rule keeps the row to retire")
     _opens_with(pair, loser, pair.loser_quote, "row to retire")
     _opens_with(pair, survivor, pair.survivor_quote, "survivor")
+    premise = _premise(read, loser, survivor)
+    if loser["premise"] != premise:
+        raise _refuse(
+            pair,
+            f"the premise the database printed, {loser['premise']!r}, is not the one the read's "
+            f"rows give, {premise!r}",
+        )
     return loser, survivor
 
 
@@ -602,7 +623,8 @@ _GUARDS = (
     "guard 2: two real changes per row, only in `scope_status` and `scope_reason`",
     "guard 3: the row still holds the planned old values (both NULL)",
     "guard 4: the status written is `retired` and nothing else",
-    "guard 5: the row's name and external ids (Wikidata item, Wikipedia title) are still as read",
+    "guard 5: the row's name, content links, images and external ids, and its survivor's name and "
+    "external ids, are still as read",
     f"after the write, the survivor its reason names is a curated site, not retired (this write "
     f"included), and within {DUP_RETIRE_METRES} m (three checks, each probed with a row of its "
     "kind)",

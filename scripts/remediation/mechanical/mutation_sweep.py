@@ -7697,7 +7697,7 @@ _DUPS_REFUSES = "test_each_check_refuses_on_its_own"
 _DUPS_SURVIVOR = "test_each_survivor_check_fires_for_its_kind_alone_at_2000_m"
 _DUPS_RUNS = "test_the_survivor_checks_run_after_the_write_and_only_on_it"
 _DUPS_LIMIT = "test_two_thousand_metres_is_the_limit_and_the_two_far_pairs_pass_it"
-_DUPS_PREMISE = "test_the_premise_is_the_name_and_the_external_ids"
+_DUPS_PREMISE = "test_the_premise_is_the_name_the_counts_the_ids_and_the_survivors_name_and_ids"
 _DUPS_STATUS = "test_the_lane_writes_retired_and_nothing_else"
 _DUPS_INVARIANTS = "    site_invariants=duplicate_survivor_invariants(DUP_RETIRE_METRES),"
 DUPS_CASES: list[Case] = [
@@ -7729,9 +7729,8 @@ DUPS_CASES: list[Case] = [
             ("a row retired onto the loser is ignored", "    if onto:", _DUPS_REFUSES),
             ("a pair of other items is planned", "        if values != [wanted]:", _DUPS_REFUSES),
             (
-                "a premise without the ids is planned",
-                '    if f"{QID}={pair.qid}" not in row["premise"] or f"{ENWIKI}={pair.title}" '
-                'not in row["premise"]:',
+                "a premise other than the read's rows give is planned",
+                '    if loser["premise"] != premise:',
                 _DUPS_REFUSES,
             ),
             ("a pair without a distance is planned", "    if metres is None:", _DUPS_REFUSES),
@@ -7788,8 +7787,24 @@ DUPS_CASES: list[Case] = [
             (
                 "the premise forgets the name",
                 LANE,
-                "DUP_RETIRE_PREMISE_SQL = f\"u.name || ' | ' || {NAME_FIX_PREMISE_SQL}\"",
-                "DUP_RETIRE_PREMISE_SQL = NAME_FIX_PREMISE_SQL",
+                "    f\"u.name || ' | ' || {EMPTY_ROW_PREMISE_SQL} || ' | ' || {NAME_FIX_PREMISE_SQL} \"",
+                "    f\"{EMPTY_ROW_PREMISE_SQL} || ' | ' || {NAME_FIX_PREMISE_SQL} \"",
+                _DUPS_PREMISE,
+            ),
+            (
+                "the premise forgets the counts",
+                LANE,
+                "    f\"u.name || ' | ' || {EMPTY_ROW_PREMISE_SQL} || ' | ' || {NAME_FIX_PREMISE_SQL} \"",
+                "    f\"u.name || ' | ' || {NAME_FIX_PREMISE_SQL} \"",
+                _DUPS_PREMISE,
+            ),
+            (
+                "the premise forgets the survivor",
+                LANE,
+                "    \"|| ' | survivor ' || coalesce((SELECT s.name || ' | ' || \"\n"
+                "    f\"{external_ids_sql('s')} FROM unified_sites s WHERE CAST(s.id AS text) = "
+                "{_SURVIVOR_OF}), '')\"",
+                "    \"|| ''\"",
                 _DUPS_PREMISE,
             ),
             (

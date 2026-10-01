@@ -1,6 +1,6 @@
 # Owner decision O9: five duplicates retired (`dup-retire`): plan
 
-Built 2026-10-01T14:58:18+00:00 by `scripts/remediation/mechanical/dups.py` from the read-only production read of 2026-10-01 14:58:15.479222+00 (`READ.jsonl`). Lane `dup-retire`: run stamp `2026-10-01_mechanical-dup-retire`, journal test id `O9/duplicate-retire`, change keys `dup-retire:<site_id>:<column>`, premise `u.name || ' | ' || coalesce((SELECT string_agg(e.kind || '=' || e.value, ', ' ORDER BY e.kind, e.value) FROM site_external_ids e WHERE e.site_id = u.id), '')`. Decision: `output/remediation/HUMAN_ONLY_DECISIONS_2026-09-26.md`, B1-D and B6 (O9, 2026-09-26).
+Built 2026-10-01T17:48:50+00:00 by `scripts/remediation/mechanical/dups.py` from the read-only production read of 2026-10-01 17:48:37.993399+00 (`READ.jsonl`). Lane `dup-retire`: run stamp `2026-10-01_mechanical-dup-retire`, journal test id `O9/duplicate-retire`, change keys `dup-retire:<site_id>:<column>`, premise `u.name || ' | ' || 'content links ' || CAST((SELECT count(*) FROM site_content_links c WHERE c.site_id = u.id) AS text) || ', images ' || CAST((SELECT count(*) FROM wiki_images w WHERE w.site_id = u.id) AS text) || ' | ' || coalesce((SELECT string_agg(e.kind || '=' || e.value, ', ' ORDER BY e.kind, e.value) FROM site_external_ids e WHERE e.site_id = u.id), '') || ' | survivor ' || coalesce((SELECT s.name || ' | ' || coalesce((SELECT string_agg(e.kind || '=' || e.value, ', ' ORDER BY e.kind, e.value) FROM site_external_ids e WHERE e.site_id = s.id), '') FROM unified_sites s WHERE CAST(s.id AS text) = CASE CAST(u.id AS text) WHEN 'ae2ca7b1-89da-46cb-8924-f9d04dd5da2e' THEN 'ce7db300-8777-425d-917a-2f6d9f325b58' WHEN '3ebb514f-ac4a-4913-b54b-409bcc29eff4' THEN '51daf6c9-25d3-4818-8857-0543f1203c57' WHEN 'dafc7527-c6c8-45c3-8c7d-4813d20a4dcf' THEN 'd41368ba-6aa2-4b75-adf4-8f2cd3cc7e4d' WHEN 'f23a31c3-6833-4df6-8583-3b3930b5a74f' THEN '21ac323f-7214-4891-9499-74e55c3d7d56' WHEN 'f967e3c4-fc5b-4cd0-91d1-06030d51e31c' THEN '0d8af59c-71cb-4ff6-9620-3eb1faf2ebd3' END), '')`. Decision: `output/remediation/HUMAN_ONLY_DECISIONS_2026-09-26.md`, B1-D and B6 (O9, 2026-09-26).
 
 **5 sites, 10 cells.** Nothing is deleted and no country is written (B10).
 
@@ -23,7 +23,7 @@ Built 2026-10-01T14:58:18+00:00 by `scripts/remediation/mechanical/dups.py` from
 * guard 2: two real changes per row, only in `scope_status` and `scope_reason`
 * guard 3: the row still holds the planned old values (both NULL)
 * guard 4: the status written is `retired` and nothing else
-* guard 5: the row's name and external ids (Wikidata item, Wikipedia title) are still as read
+* guard 5: the row's name, content links, images and external ids, and its survivor's name and external ids, are still as read
 * after the write, the survivor its reason names is a curated site, not retired (this write included), and within 2000 m (three checks, each probed with a row of its kind)
 * one journal row per cell, and exactly the planned cells moved
 

@@ -1920,14 +1920,21 @@ LANES[CHIAPA_NAME.name] = CHIAPA_NAME
 LANE_READBACKS[CHIAPA_HIDE.name] = CHIAPA_HIDE_READBACK
 LANE_READBACKS[CHIAPA_NAME.name] = CHIAPA_NAME_READBACK
 
+
 # ------------------------------------------------------------ the name-fix lane (2026-10-01)
 #: What a Wikipedia-sourced rename rests on: the external ids the site carries - above all the
 #: `enwiki_title` its new name is. Read per site as the database prints it; guard 5 refuses the
 #: rename, and its reversal, once the site's ids moved (an item merged away, a title replaced).
-NAME_FIX_PREMISE_SQL = (
-    "coalesce((SELECT string_agg(e.kind || '=' || e.value, ', ' ORDER BY e.kind, e.value) "
-    "FROM site_external_ids e WHERE e.site_id = u.id), '')"
-)
+def external_ids_sql(row: str) -> str:
+    """SQL: the external ids of the site `row` (a `unified_sites` alias) as the database prints them,
+    `kind=value` joined in `kind, value` order - '' for a site without any."""
+    return (
+        "coalesce((SELECT string_agg(e.kind || '=' || e.value, ', ' ORDER BY e.kind, e.value) "
+        f"FROM site_external_ids e WHERE e.site_id = {row}.id), '')"
+    )
+
+
+NAME_FIX_PREMISE_SQL = external_ids_sql("u")
 #: Curated names that hold a zero-width character (U+200B-U+200F, U+2060, U+FEFF): the second
 #: rename's defect, read as a count before and after (`\u` is the regex's own escape).
 ZERO_WIDTH_NAME = r"name ~ '[\u200b-\u200f\u2060\ufeff]'"
@@ -1977,10 +1984,31 @@ LANE_READBACKS[NAME_FIX.name] = NAME_FIX_READBACK
 #: hide and scope-e4. The pairs are owner-decided, not found by the 100 m rule: two lie 290 m and
 #: 470 m apart, so the survivor may be as far as the owner-case list's 2 km
 #: (`bcases.classify.DUP_MAX_M`). And a loser is not empty - Banias holds 4 content links and 20
-#: images - so its premise is not the empty-row count but what the decision read it on: its name and
-#: the external ids (the shared Wikidata item and Wikipedia title) the pair is one site by.
+#: images - so its premise is not the empty-row count that must be zero but what the decision read
+#: it on: its name, how many content links and images it holds (a loser that gained content since
+#: the read would be hidden unnoticed), the external ids (the shared Wikidata item and Wikipedia
+#: title) the pair is one site by - and the same for its survivor, named per loser in
+#: `DUP_SURVIVORS`: a survivor renamed or re-keyed since the read refuses the plan, in the same
+#: transaction as the write (guard 5), not only the survivor checks after it.
 DUP_RETIRE_METRES = 2000
-DUP_RETIRE_PREMISE_SQL = f"u.name || ' | ' || {NAME_FIX_PREMISE_SQL}"
+#: loser id -> survivor id; `dups.PAIRS` holds the same five pairs (a test holds the two together).
+DUP_SURVIVORS = {
+    "ae2ca7b1-89da-46cb-8924-f9d04dd5da2e": "ce7db300-8777-425d-917a-2f6d9f325b58",
+    "3ebb514f-ac4a-4913-b54b-409bcc29eff4": "51daf6c9-25d3-4818-8857-0543f1203c57",
+    "dafc7527-c6c8-45c3-8c7d-4813d20a4dcf": "d41368ba-6aa2-4b75-adf4-8f2cd3cc7e4d",
+    "f23a31c3-6833-4df6-8583-3b3930b5a74f": "21ac323f-7214-4891-9499-74e55c3d7d56",
+    "f967e3c4-fc5b-4cd0-91d1-06030d51e31c": "0d8af59c-71cb-4ff6-9620-3eb1faf2ebd3",
+}
+_SURVIVOR_OF = (
+    "CASE CAST(u.id AS text) "
+    + " ".join(f"WHEN {sql_literal(k)} THEN {sql_literal(v)}" for k, v in DUP_SURVIVORS.items())
+    + " END"
+)
+DUP_RETIRE_PREMISE_SQL = (
+    f"u.name || ' | ' || {EMPTY_ROW_PREMISE_SQL} || ' | ' || {NAME_FIX_PREMISE_SQL} "
+    "|| ' | survivor ' || coalesce((SELECT s.name || ' | ' || "
+    f"{external_ids_sql('s')} FROM unified_sites s WHERE CAST(s.id AS text) = {_SURVIVOR_OF}), '')"
+)
 DUP_RETIRE = Lane(
     name="dup-retire",
     key_prefix="dup-retire",

@@ -997,7 +997,8 @@ live row by the plan):
 
 `dups.py` refuses the plan unless, per pair: both rows are curated and hold the pinned names; the row to retire
 has no scope decision, its scope journal ends at the live values and no row is retired onto it; the survivor is
-not retired; both rows carry exactly the pinned `wikidata_qid` and `enwiki_title`; the pair lies within
+not retired; both rows carry exactly the pinned `wikidata_qid` and `enwiki_title`; the premise printed for
+the retired row is the one the read's rows give (see guard 5 below); the pair lies within
 **2,000 m** (`lane.DUP_RETIRE_METRES`, the owner-case list's `DUP_MAX_M` — the scope lane's 100 m is for pairs it
 finds itself, and Banias and Ñusta Hispana are 290 m and 470 m apart); `survivor_rank` keeps the pinned survivor;
 and each row's description holds the pinned sentence. No id may appear in two pairs, and neither stamp may have
@@ -1005,9 +1006,15 @@ journalled a row.
 
 Lane `dup-retire` (`mechanical_dups/`, run stamp `2026-10-01_mechanical-dup-retire`, test id
 `O9/duplicate-retire`): guard 1 curated; guard 2 two real changes, only `scope_status` and `scope_reason`; guard 3
-both cells still NULL; guard 4 the only status written is `retired`; guard 5 the premise `<name> | <external ids>`
-(`lane.DUP_RETIRE_PREMISE_SQL`, e.g. `Banias | enwiki_title=Banias, wikidata_qid=Q606295`): the write and its
-reversal are refused once the row's name or ids moved. After the write, the three disjoint survivor checks of
+both cells still NULL; guard 4 the only status written is `retired`; guard 5 the premise
+`<name> | content links N, images M | <external ids> | survivor <survivor name> | <survivor external ids>`
+(`lane.DUP_RETIRE_PREMISE_SQL`; the survivor of each loser is `lane.DUP_SURVIVORS`, held to `dups.PAIRS` by a
+test; e.g. `Banias | content links 4, images 20 | enwiki_title=Banias, wikidata_qid=Q606295 | survivor Caesarea
+Philippi | enwiki_title=Banias, wikidata_qid=Q606295`): the write and its reversal are refused once the row's
+name, content links, images or ids moved, or its survivor was renamed or re-keyed (review 2026-10-01: the loser
+is not empty, so content added after the read must not be hidden unnoticed, and the survivor is pinned in the
+same transaction, not only checked afterwards). The plan holds the premise as the database printed it and
+`dups.py` compares it with what the read's own rows give. After the write, the three disjoint survivor checks of
 Chiapa's hide (`lane.duplicate_survivor_invariants`, now parameterised by the distance: curated, not retired —
 this very write included — within 2,000 m), each probed with a row of its kind: 9 probes. Measured read-only on
 2026-10-01 (`--verify` before): 20 curated rows retired as a duplicate (scope-e4's 19 and Chiapa's), 4,883 with
@@ -1028,7 +1035,7 @@ $PY scripts/remediation/mechanical/apply.py --lane dup-retire --verify      # af
 $PY scripts/remediation/mechanical/apply.py --lane dup-retire --rehearse-rollback
 ```
 
-The guards are held by `tests/remediation/test_mechanical_dups.py` and 21 mutation cases (`mutation_sweep.py dups:`,
+The guards are held by `tests/remediation/test_mechanical_dups.py` and 23 mutation cases (`mutation_sweep.py dups:`,
 all fired on 2026-10-01; the 35 `chiapa:` cases still fire after `duplicate_survivor_invariants` and
 `DUPLICATE_HIDE_CELLS` became shared).
 

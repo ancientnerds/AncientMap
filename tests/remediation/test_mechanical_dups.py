@@ -64,6 +64,17 @@ METRES = {pair.loser: m for pair, m in zip(D.PAIRS, (289.5, 11.3, 468.1, 14.0, 2
 BANIAS, AMATHUNTA, NUSTA, BRIDGE, SHADUPPUM = D.PAIRS
 
 
+def premise(pair: D.Pair, site_id: str) -> str:
+    """What the lane's premise SQL prints for the row (`L.DUP_RETIRE_PREMISE_SQL`): the name, the
+    content links and images, the external ids, then the survivor's name and ids - empty for a row
+    that is no loser."""
+    links, images, _ = FACTS[site_id]
+    ids = f"{D.ENWIKI}={pair.title}, {D.QID}={pair.qid}"
+    name = pair.loser_name if site_id == pair.loser else pair.survivor_name
+    kept = f"{pair.survivor_name} | {ids}" if site_id == pair.loser else ""
+    return f"{name} | content links {links}, images {images} | {ids} | survivor {kept}"
+
+
 def site_row(pair: D.Pair, site_id: str) -> dict[str, Any]:
     loser = site_id == pair.loser
     name = pair.loser_name if loser else pair.survivor_name
@@ -73,7 +84,7 @@ def site_row(pair: D.Pair, site_id: str) -> dict[str, Any]:
         "scope_reason": None, "lat": 1.0, "lon": 2.0, "created_at": CREATED, "links": links,
         "images": images, "citations": citations,
         "description": f"{pair.loser_quote if loser else pair.survivor_quote}. More text.",
-        "premise": f"{name} | {D.ENWIKI}={pair.title}, {D.QID}={pair.qid}",
+        "premise": premise(pair, site_id),
     }  # fmt: skip
 
 
@@ -225,7 +236,29 @@ class TestThePlan:
             ),
             (
                 lambda: with_row(BANIAS.loser, premise="Banias | "),
-                "does not carry the ids",
+                "is not the one the read's rows give",
+            ),
+            (
+                lambda: with_row(BANIAS.loser, links=5),
+                "is not the one the read's rows give",
+            ),
+            (
+                lambda: with_row(BANIAS.loser, images=21),
+                "is not the one the read's rows give",
+            ),
+            (
+                lambda: with_row(
+                    BANIAS.loser,
+                    premise=premise(BANIAS, BANIAS.loser).replace("Caesarea Philippi", "Other"),
+                ),
+                "is not the one the read's rows give",
+            ),
+            (
+                lambda: with_row(
+                    BANIAS.loser,
+                    premise=premise(BANIAS, BANIAS.loser).replace(BANIAS.qid, "Q1"),
+                ),
+                "is not the one the read's rows give",
             ),
             (lambda: a_read(metres={}), "no distance"),
             (lambda: a_read(metres={**METRES, BANIAS.loser: 2000.5}), "the lane allows 2000 m"),
@@ -258,7 +291,8 @@ class TestThePlan:
             "loser-gone", "loser-not-curated", "loser-renamed", "loser-decided",
             "loser-reason-only", "loser-journal", "survivor-gone", "survivor-not-curated",
             "survivor-renamed", "survivor-retired", "retired-onto-loser", "loser-other-item",
-            "survivor-no-title", "survivor-two-titles", "premise-without-ids", "no-distance",
+            "survivor-no-title", "survivor-two-titles", "premise-without-ids", "loser-gained-links",
+            "loser-gained-images", "premise-other-survivor", "premise-other-item", "no-distance",
             "too-far", "survivor-rule-age", "survivor-rule-links", "loser-description",
             "survivor-description", "stamp-written", "rollback-stamp-written",
         ],
@@ -383,24 +417,68 @@ def survivor_checks(db: sqlite3.Connection, lane: L.Lane) -> list[str]:
 
 class TestTheGuardsInSQL:
     @needs_ordered_string_agg
-    def test_the_premise_is_the_name_and_the_external_ids(self) -> None:
+    def test_the_premise_is_the_name_the_counts_the_ids_and_the_survivors_name_and_ids(
+        self,
+    ) -> None:
         db = sqlite3.connect(":memory:")
         db.execute("CREATE TABLE unified_sites (id TEXT, name TEXT)")
         db.execute("CREATE TABLE site_external_ids (site_id TEXT, kind TEXT, value TEXT)")
+        db.execute("CREATE TABLE site_content_links (site_id TEXT)")
+        db.execute("CREATE TABLE wiki_images (site_id TEXT)")
         db.executemany(
-            "INSERT INTO unified_sites VALUES (?, ?)", [("a", "Banias"), ("b", "Nothing")]
+            "INSERT INTO unified_sites VALUES (?, ?)",
+            [
+                (BANIAS.loser, "Banias"),
+                (BANIAS.survivor, "Caesarea Philippi"),
+                ("b", "Nothing"),
+            ],
         )
+        ids = [("wikidata_qid", "Q606295"), ("enwiki_title", "Banias")]
         db.executemany(
             "INSERT INTO site_external_ids VALUES (?, ?, ?)",
-            [("a", "wikidata_qid", "Q606295"), ("a", "enwiki_title", "Banias"), ("x", "k", "v")],
+            [(site, k, v) for site in (BANIAS.loser, BANIAS.survivor) for k, v in ids]
+            + [("x", "k", "v")],
         )
-        got = {
-            site: db.execute(
-                f"SELECT {L.DUP_RETIRE_PREMISE_SQL} FROM unified_sites u WHERE u.id = ?", (site,)
-            ).fetchone()[0]
-            for site in "ab"
+        db.executemany("INSERT INTO site_content_links VALUES (?)", [(BANIAS.loser,)] * 4)
+        db.executemany("INSERT INTO wiki_images VALUES (?)", [(BANIAS.loser,)] * 20)
+
+        def printed() -> dict[str, str]:
+            return {
+                site: db.execute(
+                    f"SELECT {L.DUP_RETIRE_PREMISE_SQL} FROM unified_sites u WHERE u.id = ?",
+                    (site,),
+                ).fetchone()[0]
+                for site in (BANIAS.loser, "b")
+            }
+
+        got = printed()
+        assert got == {
+            BANIAS.loser: premise(BANIAS, BANIAS.loser),
+            "b": "Nothing | content links 0, images 0 |  | survivor ",
         }
-        assert got == {"a": "Banias | enwiki_title=Banias, wikidata_qid=Q606295", "b": "Nothing | "}
+        assert got[BANIAS.loser] == (
+            "Banias | content links 4, images 20 | enwiki_title=Banias, wikidata_qid=Q606295 | "
+            "survivor Caesarea Philippi | enwiki_title=Banias, wikidata_qid=Q606295"
+        )
+        # each thing the premise holds moves it: the loser's counts, the survivor's name and ids
+        db.execute("INSERT INTO wiki_images VALUES (?)", (BANIAS.loser,))
+        assert printed()[BANIAS.loser] != got[BANIAS.loser]
+        db.execute("DELETE FROM wiki_images WHERE rowid = (SELECT max(rowid) FROM wiki_images)")
+        assert printed() == got
+        db.execute("UPDATE unified_sites SET name = 'Elsewhere' WHERE id = ?", (BANIAS.survivor,))
+        assert printed()[BANIAS.loser] != got[BANIAS.loser]
+        db.execute(
+            "UPDATE unified_sites SET name = 'Caesarea Philippi' WHERE id = ?", (BANIAS.survivor,)
+        )
+        assert printed() == got
+        db.execute(
+            "UPDATE site_external_ids SET value = 'Q1' WHERE site_id = ? AND kind = 'wikidata_qid'",
+            (BANIAS.survivor,),
+        )
+        assert printed()[BANIAS.loser] != got[BANIAS.loser]
+
+    def test_the_lane_names_the_survivor_of_each_loser_as_the_pairs_do(self) -> None:
+        assert L.DUP_SURVIVORS == {pair.loser: pair.survivor for pair in D.PAIRS}
 
     @pytest.mark.parametrize(
         ("survivor", "fires"),
