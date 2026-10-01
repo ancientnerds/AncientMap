@@ -414,6 +414,7 @@ def _outcome(site_row: dict, decisions=None, quotes=None):
             run="wc-test",
             checked=site.description,
             verification=verification,
+            checker=M.AI_SYSTEM,
         )
     )
     return site, composed, check, WC4.written_raw_data(site, composed, check)

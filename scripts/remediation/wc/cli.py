@@ -1159,6 +1159,7 @@ def outcome_of(
             run=run_name,
             checked=site.description,
             verification=verification,
+            checker=M.AI_SYSTEM,
         )
     )
     raw = wc4.written_raw_data(site, composed, check, listed=listed)

@@ -28,7 +28,7 @@ from wc import answers as A  # noqa: E402
 from wc import cli as C  # noqa: E402
 
 from tests.remediation import wc_fixtures as FX  # noqa: E402
-from tests.remediation.wc_fixtures import OH, WC4  # noqa: E402
+from tests.remediation.wc_fixtures import OH, WC4, M  # noqa: E402
 
 #: Site B: its second sentence leans on its first ("It was carved ...").
 TEXT_B = "The Hypogeum lies in Paola. It was carved about 4000 BC."
@@ -792,7 +792,13 @@ def test_a_check_record_is_made_only_for_a_verified_text() -> None:
     composed = WC4.compose(_decisions(), _quotes())
     with pytest.raises(WC4.WcError, match="published only verified, not 'cleared'"):
         WC4.check_record(
-            _decisions(), composed, _quotes(), run="r", checked="old", verification=cleared
+            _decisions(),
+            composed,
+            _quotes(),
+            run="r",
+            checked="old",
+            verification=cleared,
+            checker=M.AI_SYSTEM,
         )
 
 
@@ -811,6 +817,30 @@ def test_the_evidence_recheck_asks_the_verification_too(tmp_path: Path) -> None:
     )
     problems = WC4.evidence_problems(dependent, outcome.description, outcome.raw_data)
     assert any("opus-check-wc-0001 checked this site" in problem for problem in problems)
+
+
+def test_the_evidence_recheck_takes_the_written_disclosure_of_its_time(tmp_path: Path) -> None:
+    """A text written before 2026-10-01 names `AI_SYSTEM_OPUS` as its checker, truthfully: the
+    acceptance re-derives the check record with the written record's own checker (one of
+    `AI_SYSTEMS`), so such a site re-checks clean (the 19 deviations of 2026-10-01 were this), and a
+    checker outside `AI_SYSTEMS` is still refused."""
+    _built(tmp_path)
+    plan = tmp_path / "runs" / "wc-v" / C.PLAN_FILE
+    outcome = WC4.WcOutcome.from_dict(
+        json.loads(plan.read_text("utf-8").splitlines()[0])["outcomes"][0]
+    )
+    assert outcome.raw_data[WC4.CHECK_KEY]["checker"] == M.AI_SYSTEM
+
+    def with_checker(name: str) -> dict:
+        raw = json.loads(json.dumps(outcome.raw_data))
+        raw[WC4.CHECK_KEY]["checker"] = name
+        return raw
+
+    written_before = with_checker(M.AI_SYSTEM_OPUS)
+    assert WC4.evidence_problems(outcome.evidence, outcome.description, written_before) == []
+    foreign = with_checker("opencode-go/deepseek-v4.1-flash")
+    problems = WC4.evidence_problems(outcome.evidence, outcome.description, foreign)
+    assert any("the check record does not read" in problem for problem in problems)
 
 
 def test_the_judge_sees_the_text_after_the_verification_and_no_verifier_judges(

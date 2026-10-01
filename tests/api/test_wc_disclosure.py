@@ -69,7 +69,13 @@ def _checked(
     composed = WC4.compose(decisions, quotes if keep else {})
     check = (
         WC4.check_record(
-            decisions, composed, quotes, run="wc-api", checked=MARCH, verification=verification
+            decisions,
+            composed,
+            quotes,
+            run="wc-api",
+            checked=MARCH,
+            verification=verification,
+            checker=M.AI_SYSTEM,
         )
         if keep
         else None

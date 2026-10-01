@@ -943,6 +943,7 @@ def check_record(
     run: str,
     checked: str | None,
     verification: Mapping[str, Any],
+    checker: str,
 ) -> DescriptionCheck:
     """The public record of a kept text: every sentence's verdict, the numbers its markers carry
     and the sha256 of each verified quote; `checked` is the stored text that was asked, and
@@ -950,7 +951,9 @@ def check_record(
     recorded sha256 of the text the last one was shown (its round's `text_sha256`) the record
     names - a kept text is published only verified. A site that had no description (lane WN) was
     asked about no stored text: `checked` is `None` and `checked_sha256` the sha256 of the empty
-    text."""
+    text. `checker` is the disclosure the record names (one of `model4.AI_SYSTEMS`): a new write
+    passes `model4.AI_SYSTEM`; the acceptance passes the written record's own, because a text written
+    before 2026-10-01 truthfully names `AI_SYSTEM_OPUS` and must re-check as written."""
     if composed.description is None:
         raise WcError("a cleared site has no check record")
     if verification["status"] != VerifyStatus.VERIFIED.value:
@@ -958,7 +961,7 @@ def check_record(
     rounds = verification["rounds"]
     return DescriptionCheck(
         run=run,
-        checker=M.AI_SYSTEM,
+        checker=checker,
         checked_sha256=M.text_sha256(checked or ""),
         kept=sum(d.kept for d in decisions),
         of=len(decisions),
@@ -1538,6 +1541,7 @@ def evidence_problems(
             run=evidence["run"],
             checked=evidence["checked"],
             verification=evidence[VERIFICATION_KEY],
+            checker=check.checker,
         )
     except (KeyError, TypeError, ValueError) as exc:
         return [*problems, f"the check record does not read: {exc}"]
