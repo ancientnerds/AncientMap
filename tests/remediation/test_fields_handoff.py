@@ -116,7 +116,7 @@ KEEP = {
 
 
 def record(handoff: Path, batch: str, label: str, text: str) -> None:
-    OH.write_answer(handoff, batch_id=batch, stage=HO.STAGE, label=label, text=text,
+    OH.write_answer(handoff, model=OH.OPUS_MODEL, batch_id=batch, stage=HO.STAGE, label=label, text=text,
                     answered_by=batch)  # fmt: skip
 
 
@@ -173,6 +173,9 @@ class TestTheExport:
         text = HO.brief(run, tmp_path / "h-r0", "wd1-r0-b0001")
         assert "h-r0-scratch/wd1-r0-b0001/<label>.json" in text
         assert "--answered-by wd1-r0-b0001" in text and "check-answer" in text
+        assert (
+            "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in text
+        )  # an agent names the model it runs as (owner decision 2026-10-01)
         with pytest.raises(HO.HandoffStepError, match="is no batch"):
             HO.brief(run, tmp_path / "h-r0", "wd1-r0-b0009")
 

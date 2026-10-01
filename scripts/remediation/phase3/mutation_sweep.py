@@ -4663,18 +4663,34 @@ PHASE4_MODEL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 model: any ai_system is disclosed",
         P4_MODEL,
-        "        if self.ai_system != AI_SYSTEM:\n",
+        "        if self.ai_system not in AI_SYSTEMS:\n",
         "        if False:  # mutant\n",
         P4_MODEL_TEST,
-        "test_the_disclosed_ai_system_is_the_model_that_is_called",
+        "test_a_provenance_refuses_any_other_ai_system",
     ),
     (
         "p4 model: the disclosure names a model that is not called",
         P4_MODEL,
-        'AI_SYSTEM = f"Claude Opus (Anthropic): {MODEL}, an-sites-remediation-2026-09"\n',
-        'AI_SYSTEM = "opencode-go/deepseek-v4.1-flash via Pi (an-sites-remediation-2026-09)"  # mutant\n',
+        '    "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "\n',
+        '    "opencode-go/deepseek-v4.1-flash via Pi and "  # mutant\n',
         P4_MODEL_TEST,
-        "test_the_disclosed_ai_system_is_the_model_that_is_called",
+        "test_the_disclosed_ai_systems_are_the_old_opus_one_and_the_new_opus_and_sonnet_one",
+    ),
+    (
+        "p4 model: the Opus-only disclosure of the provenances in production is rewritten",
+        P4_MODEL,
+        '    "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "\n',
+        '    "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent) , "  # mutant\n',
+        P4_MODEL_TEST,
+        "test_the_disclosed_ai_systems_are_the_old_opus_one_and_the_new_opus_and_sonnet_one",
+    ),
+    (
+        "p4 model: a provenance already in production is refused",
+        P4_MODEL,
+        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM})\n",
+        "AI_SYSTEMS = frozenset({AI_SYSTEM})  # mutant\n",
+        P4_MODEL_TEST,
+        "test_a_provenance_accepts_each_disclosed_ai_system",
     ),
     (
         "p4 model: published text under another licence",
@@ -15966,7 +15982,7 @@ OPUS_HANDOFF_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "opus handoff: an answer by another model is read",
         OPUS_HANDOFF,
-        '    if data["model"] != OPUS_MODEL:\n',
+        '    if data["model"] not in ANSWER_MODELS.values():\n',
         "    if False:  # mutant\n",
         OPUS_HANDOFF_TEST,
         "test_an_answer_by_another_model_is_refused",
@@ -16095,8 +16111,8 @@ OPUS_HANDOFF_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "opus handoff: the ledger line names DeepSeek again",
         OH_MODEL_STAGE,
-        "MODEL = OH.OPUS_MODEL\n",
-        'MODEL = "opencode-go/deepseek-v4.1-flash"  # mutant\n',
+        "            model=answer.model,\n",
+        '            model="opencode-go/deepseek-v4.1-flash",  # mutant\n',
         OH_MODEL_TEST,
         "test_exactly_one_ledger_line_per_call_names_opus_and_is_unmetered",
     ),
@@ -16168,7 +16184,7 @@ OPUS_HANDOFF_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "opus handoff: the judge's import answers itself",
         OH_RUN,
-        "    runner = MS.HandoffRunner(directory=Path(args.handoff_import))\n",
+        "    runner = MS.HandoffRunner(directory=Path(args.handoff_import), models=MS.OPUS_ONLY)\n",
         "    runner = MS.RecordingRunner()  # mutant\n",
         OH_MODEL_TEST,
         "test_an_export_hands_off_exactly_the_calls_the_import_asks_and_writes_nothing_else",
@@ -16273,7 +16289,7 @@ OPUS_HANDOFF_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "opus handoff: run4's import answers itself",
         OH_RUN4,
-        "    runner = MS.HandoffRunner(directory=directory)\n",
+        "    runner = MS.HandoffRunner(directory=directory, models=MS.ANSWERING_MODELS)\n",
         "    runner = MS.RecordingRunner()  # mutant\n",
         OH_P4_TEST,
         "test_select_and_translate_are_two_handoff_rounds_and_only_the_import_writes",
@@ -16281,7 +16297,7 @@ OPUS_HANDOFF_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "opus handoff: the review import answers itself",
         OH_RUN4,
-        "        MS.HandoffRunner(directory=Path(args.handoff_import)),\n",
+        "        MS.HandoffRunner(directory=Path(args.handoff_import), models=MS.ANSWERING_MODELS),\n",
         "        MS.RecordingRunner(),  # mutant\n",
         OH_P4_TEST,
         "test_a_review_that_could_not_call_names_the_error_for_the_spawn_retry",
@@ -16401,6 +16417,138 @@ OPUS_HANDOFF_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     ),
 ]
 MUTATIONS += OPUS_HANDOFF_MUTATIONS
+
+# ── owner decision 2026-10-01: the orchestrator runs Opus 5.5, every answering subagent Sonnet 5.5 ──
+#: An answer names the model that really wrote it (`opus_handoff.ANSWER_MODELS`); every record of who
+#: judged stores that stamp, and the `answer` / `record` commands take it as a required `--model`.
+MS_HANDOFF4 = "scripts/remediation/phase4/handoff4.py"
+MS_HANDOFF4_TEST = "tests/remediation/test_phase4_v3.py"
+MS_SERVED = "scripts/remediation/served_image/vision.py"
+MS_SERVED_TEST = "tests/remediation/test_served_image.py"
+
+MODEL_STAMP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "model stamp: the helper stamps every answer Opus whoever wrote it",
+        OPUS_HANDOFF,
+        '        "model": model,\n',
+        '        "model": OPUS_MODEL,  # mutant\n',
+        OPUS_HANDOFF_TEST,
+        "test_each_answer_model_stamp_is_written_read_and_validated",
+    ),
+    (
+        "model stamp: the reader hands on the Opus constant instead of the answer's stamp",
+        OPUS_HANDOFF,
+        '        model=data["model"],\n',
+        "        model=OPUS_MODEL,  # mutant\n",
+        OPUS_HANDOFF_TEST,
+        "test_each_answer_model_stamp_is_written_read_and_validated",
+    ),
+    (
+        "model stamp: the answer command has a default model",
+        OPUS_HANDOFF,
+        '        "--model",\n        required=True,\n',
+        '        "--model",\n        default="claude-opus-5-5",  # mutant\n',
+        OPUS_HANDOFF_TEST,
+        "test_the_cli_validates_and_answers",
+    ),
+    (
+        "model stamp: the answer command takes any model id",
+        OPUS_HANDOFF,
+        "        choices=sorted(ANSWER_MODELS),\n",
+        "        choices=None,  # mutant\n",
+        OPUS_HANDOFF_TEST,
+        "test_the_cli_validates_and_answers",
+    ),
+    (
+        "model stamp: the Sonnet stamp is not one of the accepted models",
+        OPUS_HANDOFF,
+        '    {"claude-opus-5-5": OPUS_MODEL, "claude-sonnet-5-5": SONNET_MODEL}\n',
+        '    {"claude-opus-5-5": OPUS_MODEL}  # mutant\n',
+        OPUS_HANDOFF_TEST,
+        "test_the_answer_models_are_exactly_opus_and_sonnet",
+    ),
+    (
+        "model stamp: the Phase-4 record stamps every answer Opus",
+        MS_HANDOFF4,
+        "        model=model,\n",
+        "        model=OH.OPUS_MODEL,  # mutant\n",
+        MS_HANDOFF4_TEST,
+        "test_record_writes_an_answer_only_through_its_shape_check",
+    ),
+    (
+        "model stamp: the Phase-4 record has a default model",
+        MS_HANDOFF4,
+        '        "--model",\n        required=True,\n',
+        '        "--model",\n        default="claude-opus-5-5",  # mutant\n',
+        MS_HANDOFF4_TEST,
+        "test_record_needs_the_model_the_agent_runs_as",
+    ),
+    (
+        "model stamp: the handoff runner hands on the Opus constant",
+        OH_MODEL_STAGE,
+        "        return ModelAnswer(text=answer.text, usage=Usage.unmetered(), model=answer.model)\n",
+        "        return ModelAnswer(text=answer.text, usage=Usage.unmetered(), model=MODEL)  # mutant\n",
+        OH_MODEL_TEST,
+        "test_the_handoff_runner_hands_on_the_answers_own_stamp",
+    ),
+    (
+        "model stamp: the ledger line names the Opus constant whoever answered",
+        OH_MODEL_STAGE,
+        "            model=answer.model,\n",
+        "            model=MODEL,  # mutant\n",
+        OH_MODEL_TEST,
+        "test_the_ledger_line_names_the_model_that_answered",
+    ),
+    (
+        "model stamp: the served-image record stamps every answer Opus",
+        MS_SERVED,
+        '            "model": answer.model,\n',
+        '            "model": OH.OPUS_MODEL,  # mutant\n',
+        MS_SERVED_TEST,
+        "test_the_import_stores_the_stamp_of_the_model_that_answered",
+    ),
+    (
+        "model stamp: the closed gallery audit stamps a Sonnet answer Opus",
+        OH_VISION,
+        "    if answer.model != MODEL:\n",
+        "    if False:  # mutant\n",
+        OH_VISION_TEST,
+        "test_this_closed_lane_refuses_an_answer_of_any_other_model",
+    ),
+    (
+        "model stamp: the closed Phase-3 import takes a Sonnet answer and reports it as Opus",
+        MODEL_STAGE,
+        "        if answer.model not in self.models:\n",
+        "        if False:  # mutant\n",
+        "tests/remediation/test_phase3_model.py",
+        "test_the_closed_phase_3_import_refuses_an_answer_by_another_model",
+    ),
+    (
+        "model stamp: the scope review labels every judge Opus",
+        "scripts/remediation/mechanical/scope_review.py",
+        '    stamp = row["model"] if "model" in row else OH.OPUS_MODEL\n',
+        "    stamp = OH.OPUS_MODEL  # mutant\n",
+        "tests/remediation/test_scope_review.py",
+        "test_the_evidence_label_names_the_model_that_judged",
+    ),
+    (
+        "model stamp: the scope review stores no model of the answer it imported",
+        "scripts/remediation/mechanical/scope_review.py",
+        '                "model": raw.model,\n',
+        '                "model": OH.OPUS_MODEL,  # mutant\n',
+        "tests/remediation/test_scope_review.py",
+        "test_the_evidence_label_names_the_model_that_judged",
+    ),
+    (
+        "model stamp: a teaser write takes any disclosure string",
+        "scripts/remediation/mechanical/teaser.py",
+        '        if provenance["ai_system"] not in M.AI_SYSTEMS:\n',
+        "        if False:  # mutant\n",
+        "tests/remediation/test_mechanical_teaser.py",
+        "test_a_provenance_names_one_of_the_two_disclosure_strings_and_no_third",
+    ),
+]
+MUTATIONS += MODEL_STAMP_MUTATIONS
 
 
 # ── the Phase-4 pilot of 2026-09-24: searches off, the pilot's own batches, the draw ──────────────
@@ -22455,10 +22603,10 @@ WC_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "wc wc4: the record takes any checker",
         WC4_FILE,
-        "        if self.checker != M.AI_SYSTEM:\n",
+        "        if self.checker not in M.AI_SYSTEMS:\n",
         "        if False:  # mutant\n",
         WC_TEST,
-        "test_the_check_record_reads_back_strictly_and_counts_what_its_sentences_say",
+        "test_the_check_record_accepts_each_disclosed_ai_system_and_refuses_a_third",
     ),
     (
         "wc wc4: the record miscounts its kept sentences",

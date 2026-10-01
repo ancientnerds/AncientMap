@@ -39,7 +39,7 @@ from phase3 import run as R  # noqa: E402
 
 def _answer() -> MS.ModelAnswer:
     """The answer every scripted call replays: what the handoff returns, unmetered."""
-    return MS.ModelAnswer(text="OK", usage=MS.Usage.unmetered())
+    return MS.ModelAnswer(text="OK", usage=MS.Usage.unmetered(), model=MS.MODEL)
 
 
 def _call(site_id: str = "site-1", stage: M.Stage = M.Stage.FINDER) -> MS.ModelCall:
@@ -107,6 +107,7 @@ def _handoff_answers(directory: Path, text: str = "OK") -> int:
     for line in lines:
         OH.write_answer(
             directory,
+            model=OH.OPUS_MODEL,
             batch_id=line["batch_id"],
             stage=line["stage"],
             label=line["label"],
@@ -128,7 +129,7 @@ def test_the_runner_reads_the_opus_answer_to_exactly_this_prompt(tmp_path: Path)
     assert MS.export_calls([call], directory=tmp_path) == {"exported": 0, "already": 1}
     _handoff_answers(tmp_path, text="VERDICT: CORRECT")
 
-    answer = MS.HandoffRunner(directory=tmp_path).run(call)
+    answer = MS.HandoffRunner(directory=tmp_path, models=MS.OPUS_ONLY).run(call)
 
     assert answer.text == "VERDICT: CORRECT"
     assert answer.usage == MS.Usage.unmetered()
@@ -142,7 +143,7 @@ def test_every_handoff_refusal_stops_the_batch_and_is_never_a_named_hole(tmp_pat
     append a hold); a plain `ModelCallFailed` stops the batch, so the question is asked again.
     """
     call = MS.ModelCall(stage=M.Stage.FINDER, batch_id="batch-0001", site_id="site-1", prompt="Q")
-    runner = MS.HandoffRunner(directory=tmp_path)
+    runner = MS.HandoffRunner(directory=tmp_path, models=MS.OPUS_ONLY)
     MS.export_calls([call], directory=tmp_path)
 
     with pytest.raises(MS.ModelCallFailed, match="no answer at") as missing:
@@ -253,6 +254,78 @@ def test_exactly_one_ledger_line_per_call_names_opus_and_is_unmetered(tmp_path: 
     assert summary.by_stage["finder"].model_calls == 2
     assert summary.by_stage["finder"].unmetered_calls == 2
     assert summary.total.unmetered_calls == 2
+
+
+@pytest.mark.parametrize("stamp", [OH.OPUS_MODEL, OH.SONNET_MODEL])
+def test_the_ledger_line_names_the_model_that_answered(tmp_path: Path, stamp: str) -> None:
+    """Owner decision 2026-10-01: answering subagents run Sonnet. The line names the answer's own
+    stamp (`ModelAnswer.model`, from the handoff answer), never the Opus constant."""
+    ledger = L.Ledger(tmp_path / "LEDGER.jsonl", clock=lambda: "2026-10-01T06:00:00+00:00")
+    answer = MS.ModelAnswer(text="OK", usage=MS.Usage.unmetered(), model=stamp)
+    MS.judge_batch(
+        batch=_batch(1),
+        runner=ScriptedRunner(answer),
+        store=_evidence_store(tmp_path, 1),
+        answers=F.EvidenceStore(tmp_path / "answers"),
+        ledger=ledger,
+        stage=M.Stage.FINDER,
+    )
+    rows = [json.loads(x) for x in (tmp_path / "LEDGER.jsonl").read_text("utf-8").splitlines()]
+    assert [row["model"] for row in rows] == [stamp]
+
+
+def test_the_handoff_runner_hands_on_the_answers_own_stamp(tmp_path: Path) -> None:
+    call = MS.ModelCall(stage=M.Stage.FINDER, batch_id="batch-0001", site_id="site-1", prompt="Q?")
+    MS.export_calls([call], directory=tmp_path)
+    OH.write_answer(
+        tmp_path,
+        model=OH.SONNET_MODEL,
+        batch_id="batch-0001",
+        stage="finder",
+        label=call.label,
+        text="VERDICT: CORRECT",
+        answered_by="test-agent",
+    )
+    live = MS.HandoffRunner(directory=tmp_path, models=MS.ANSWERING_MODELS)
+    assert live.run(call).model == OH.SONNET_MODEL
+
+
+def test_the_closed_phase_3_import_refuses_an_answer_by_another_model(tmp_path: Path) -> None:
+    """The closed lane reports `MS.MODEL` in its payloads, so it takes Opus answers only."""
+    call = MS.ModelCall(stage=M.Stage.FINDER, batch_id="batch-0001", site_id="site-1", prompt="Q?")
+    dirs = {OH.SONNET_MODEL: tmp_path / "sonnet", OH.OPUS_MODEL: tmp_path / "opus"}
+    for model, directory in dirs.items():
+        MS.export_calls([call], directory=directory)
+        OH.write_answer(
+            directory,
+            model=model,
+            batch_id="batch-0001",
+            stage="finder",
+            label=call.label,
+            text="VERDICT: CORRECT",
+            answered_by="test-agent",
+        )
+    assert MS.OPUS_ONLY == {OH.OPUS_MODEL}
+    with pytest.raises(MS.ModelCallFailed, match="answered by"):
+        MS.HandoffRunner(directory=dirs[OH.SONNET_MODEL], models=MS.OPUS_ONLY).run(call)
+    opus = MS.HandoffRunner(directory=dirs[OH.OPUS_MODEL], models=MS.OPUS_ONLY).run(call)
+    assert opus.model == OH.OPUS_MODEL
+
+
+def test_an_answer_without_a_model_is_not_ledgered(tmp_path: Path) -> None:
+    """No default model: a runner that names none is refused by the ledger, nothing is stored."""
+    ledger = L.Ledger(tmp_path / "LEDGER.jsonl")
+    answers = F.EvidenceStore(tmp_path / "answers")
+    with pytest.raises(L.LedgerError, match="needs the model it called"):
+        MS.judge_batch(
+            batch=_batch(1),
+            runner=ScriptedRunner(MS.ModelAnswer(text="OK", usage=MS.Usage.unmetered())),
+            store=_evidence_store(tmp_path, 1),
+            answers=answers,
+            ledger=ledger,
+            stage=M.Stage.FINDER,
+        )
+    assert not answers.exists("site-1", "finder")
 
 
 def test_a_question_whose_answer_is_already_on_disk_is_not_asked_again(tmp_path: Path) -> None:

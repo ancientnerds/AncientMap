@@ -733,10 +733,13 @@ GATE_INFO = {
 }
 
 
-def _answer_all(handoff: Path, stage: str, answers: dict[str, str]) -> None:
+def _answer_all(
+    handoff: Path, stage: str, answers: dict[str, str], model: str = OH.OPUS_MODEL
+) -> None:
     for line in OH.manifest(handoff):
         OH.write_answer(
             handoff,
+            model=model,
             batch_id=line["batch_id"],
             stage=stage,
             label=line["label"],
@@ -748,6 +751,18 @@ def _answer_all(handoff: Path, stage: str, answers: dict[str, str]) -> None:
 
 def _check(verdict: str) -> str:
     return json.dumps({"verdict": verdict, "shows": "something", "basis": "the picture"})
+
+
+@pytest.mark.parametrize("stamp", [OH.OPUS_MODEL, OH.SONNET_MODEL])
+def test_the_import_stores_the_stamp_of_the_model_that_answered(tmp_path: Path, stamp: str) -> None:
+    """A record of who judged names the answer's own model (owner decision 2026-10-01: the
+    answering subagents run Sonnet), never a constant; a mechanical line names none."""
+    run, _ = TestTheStages()._full(
+        tmp_path, {HABU: V.DEPICTS, THASOS: V.REGION_OR_TYPE, BARE: V.REGION_OR_TYPE}, stamp
+    )
+    got = {r["site_id"]: r for r in V.read_jsonl(run / V.CHECK)}
+    assert {got[s]["model"] for s in (HABU, THASOS, BARE)} == {stamp}
+    assert got[HOTLINK]["model"] is None
 
 
 class TestTheStages:
@@ -782,14 +797,16 @@ class TestTheStages:
         batches = sorted({line["batch_id"] for line in OH.manifest(handoff)})
         assert batches == ["check-001", "check-002"]
 
-    def _full(self, tmp_path: Path, verdicts: dict[str, str], **setup: Any) -> tuple[Path, Any]:
+    def _full(
+        self, tmp_path: Path, verdicts: dict[str, str], model: str = OH.OPUS_MODEL, **setup: Any
+    ) -> tuple[Path, Any]:
         run, handoff, pictures = _setup(
             tmp_path, gone={"https://example.org/relief.jpg": "404"}, **setup
         )
         state = ST.load_read(run / "READ.json")
         pre = PC.load_prechecks(run / "PRECHECK.jsonl")
         V.export_check(run, handoff, state, pre, pictures)
-        _answer_all(handoff, V.STAGE_CHECK, {sid: _check(v) for sid, v in verdicts.items()})
+        _answer_all(handoff, V.STAGE_CHECK, {sid: _check(v) for sid, v in verdicts.items()}, model)
         V.import_stage(run, V.STAGE_CHECK)
         return run, pictures
 
@@ -905,6 +922,9 @@ class TestTheStages:
             V.check_answer(run, handoff, "check-009", THASOS, _check(V.DEPICTS))
         text = V.brief(run, handoff, "check-001")
         assert "--stage served-check" in text and "Read tool" in text and "4 question(s)" in text
+        assert (
+            "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in text
+        )  # an agent names the model it runs as (owner decision 2026-10-01)
 
     def test_the_candidates_of_a_failed_image(self, tmp_path: Path) -> None:
         """G: the other live rows in page order; W: P18 and P373 files the gallery lacks, each once,

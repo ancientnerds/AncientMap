@@ -131,7 +131,7 @@ class ScriptedRunner:
 
     def run(self, call: MS.ModelCall) -> MS.ModelAnswer:
         self.calls.append(call)
-        return MS.ModelAnswer(text=self.text, usage=self.usage)
+        return MS.ModelAnswer(text=self.text, usage=self.usage, model=MS.MODEL)
 
 
 class ExplodingRunner:

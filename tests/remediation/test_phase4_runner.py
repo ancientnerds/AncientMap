@@ -360,6 +360,7 @@ def _answer_all(handoff: Path, answers: dict[tuple[str, str, str], str] = ANSWER
         site_id, field = line["label"].split("/")
         OH.write_answer(
             handoff,
+            model=OH.OPUS_MODEL,
             batch_id=line["batch_id"],
             stage=line["stage"],
             label=line["label"],
@@ -491,7 +492,9 @@ def test_review_re_verifies_through_verify_site_with_the_contracts_arguments(
     _fake(monkeypatch, R4.WRITE4, new_raw_data=new_raw_data)
     answer = "R1: KEEP\nR2: KEEP\nR3: KEEP\nR4: KEEP\nCARD: KEEP"
     monkeypatch.setattr(
-        MS, "HandoffRunner", lambda directory: X.ScriptedRunner({("site-1", "review"): answer})
+        MS,
+        "HandoffRunner",
+        lambda directory, models: X.ScriptedRunner({("site-1", "review"): answer}),
     )
     argv = ["review", "--run-dir", str(batch_dir.parent), "--batch-id", "p4-0001"]
     code, _, _ = _run(capsys, [*argv, "--handoff-import", str(tmp_path / "h")])

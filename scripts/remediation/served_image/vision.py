@@ -704,6 +704,7 @@ For each question:
 5. Record it - an answer is written once:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
 --batch-id {batch} --stage {stage} --label <label> --answered-by {batch} \
+--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5> \
 --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.
@@ -790,7 +791,7 @@ def import_stage(run: Path, stage: str) -> dict[str, Any]:
             "prompt_sha256": line["prompt_sha256"],
             "answered_by": answer.answered_by,
             "answered_at": answer.answered_at,
-            "model": OH.OPUS_MODEL,
+            "model": answer.model,
             "served": dict(question.served),
         }
         if stage == STAGE_CHECK:

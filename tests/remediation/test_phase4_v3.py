@@ -1031,7 +1031,8 @@ def test_the_brief_names_the_batch_its_files_its_scratch_and_its_agent(
     assert f"{scratch}/<site id>.txt" in text
     record = f"{H.HANDOFF4.as_posix()} record --run-dir {batch_dir.parent.resolve().as_posix()}"
     assert record in text and f"under your name {agent}" in text
-    assert "--label <label> --text-file" in text and "no web page" in text
+    model = "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>"
+    assert f"--label <label> {model} --text-file" in text and "no web page" in text
     # The one way an answer is recorded is through its check: the brief never names the unchecked
     # writer as a command to run.
     assert f"{Path(OH.__file__).resolve().as_posix()} answer" not in text
@@ -1106,6 +1107,7 @@ def test_check_answer_reads_the_review_whole(tmp_path: Path) -> None:
 def _answer_select(handoff: Path) -> None:
     OH.write_answer(
         handoff,
+        model=OH.OPUS_MODEL,
         batch_id="p4-2001",
         stage="finder",
         label="site-1/select",
@@ -1158,12 +1160,19 @@ def test_a_named_batch_that_asked_nothing_is_ready_and_a_stray_name_is_refused(
     assert H.main([*ready, "--batch", "p4-2009"]) == 2
 
 
-def _record(run: Path, handoff: Path, label: str, text: str, tmp_path: Path) -> int:
+def _record(
+    run: Path,
+    handoff: Path,
+    label: str,
+    text: str,
+    tmp_path: Path,
+    model: str = "claude-sonnet-5-5",
+) -> int:
     draft = tmp_path / "draft.txt"
     draft.write_bytes(text.encode("utf-8"))
     return H.main(
         ["record", "--run-dir", str(run), "--handoff", str(handoff), "--batch-id", "p4-2001",
-         "--label", label, "--text-file", str(draft)]
+         "--label", label, "--model", model, "--text-file", str(draft)]
     )  # fmt: skip
 
 
@@ -1178,18 +1187,21 @@ def test_record_writes_an_answer_only_through_its_shape_check(
     run = batch_dir.parent
     answer = handoff / OH.answer_relpath("p4-2001", "finder", "site-1/select")
 
-    result = H.record(run, handoff, "p4-2001", "site-1/select", "DESC: W99\n")
+    result = H.record(
+        run, handoff, "p4-2001", "site-1/select", "DESC: W99\n", model=OH.SONNET_MODEL
+    )
     assert result["ok"] is False and result["wrote"] is False
     assert result["problem"].startswith("selection-refused") and not answer.exists()
     assert _record(run, handoff, "site-1/select", "DESC: W99\n", tmp_path) == 1
     assert not answer.exists()
     assert '"ok": false' in capsys.readouterr().out
 
-    result = H.record(run, handoff, "p4-2001", "site-1/select", SELECT)
+    result = H.record(run, handoff, "p4-2001", "site-1/select", SELECT, model=OH.SONNET_MODEL)
     assert (result["ok"], result["wrote"], result["problem"]) == (True, True, None)
     assert result["answer_path"] == OH.answer_relpath("p4-2001", "finder", "site-1/select")
     stored = json.loads(answer.read_text(encoding="utf-8"))
     assert (stored["text"], stored["answered_by"]) == (SELECT, H.agent_name(handoff, "p4-2001"))
+    assert stored["model"] == OH.SONNET_MODEL  # the model the agent says it runs as
     assert OH.validate(handoff).ok
     # The identical answer again writes nothing; another one is refused (an answer is written once).
     assert _record(run, handoff, "site-1/select", SELECT, tmp_path) == 0
@@ -1200,6 +1212,39 @@ def test_record_writes_an_answer_only_through_its_shape_check(
     assert json.loads(answer.read_text(encoding="utf-8"))["text"] == SELECT
 
 
+def test_record_needs_the_model_the_agent_runs_as(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`record` takes `--model` (required, no default; one of `opus_handoff.ANSWER_MODELS`) and
+    stamps the answer with it: Opus and Sonnet both validate, a third model or none is refused."""
+    batch_dir, handoff = _select_export(tmp_path)
+    run = batch_dir.parent
+    answer = handoff / OH.answer_relpath("p4-2001", "finder", "site-1/select")
+    draft = tmp_path / "draft.txt"
+    draft.write_bytes(SELECT.encode("utf-8"))
+    base = ["record", "--run-dir", str(run), "--handoff", str(handoff), "--batch-id", "p4-2001",
+            "--label", "site-1/select", "--text-file", str(draft)]  # fmt: skip
+
+    with pytest.raises(SystemExit) as missing:
+        H.main(base)
+    assert missing.value.code == 2 and not answer.exists()
+    with pytest.raises(SystemExit) as third:
+        H.main([*base, "--model", "claude-haiku-5-5"])
+    assert third.value.code == 2 and not answer.exists()
+    capsys.readouterr()
+
+    assert H.main([*base, "--model", "claude-opus-5-5"]) == 0
+    assert json.loads(answer.read_text(encoding="utf-8"))["model"] == OH.OPUS_MODEL
+    assert OH.validate(handoff).ok
+    # the stamp is part of nothing the import reads back but `read_answer`: Sonnet reads as well
+    answer.unlink()
+    assert _record(run, handoff, "site-1/select", SELECT, tmp_path) == 0
+    assert json.loads(answer.read_text(encoding="utf-8"))["model"] == OH.SONNET_MODEL
+    assert OH.validate(handoff).ok
+    with pytest.raises(OH.HandoffError, match="wrong model"):
+        H.record(run, handoff, "p4-2001", "site-1/select", SELECT, model="no such model")
+
+
 def test_ready_fails_on_a_recorded_answer_the_import_would_refuse(tmp_path: Path) -> None:
     """An answer recorded by any other path (`opus_handoff.py answer`, a hand-written file) is read
     through the stage's parser too: `opus_handoff.validate` checks only the digest, so the import
@@ -1208,7 +1253,7 @@ def test_ready_fails_on_a_recorded_answer_the_import_would_refuse(tmp_path: Path
     batch_dir, handoff = _select_export(tmp_path)
     run = batch_dir.parent
     OH.write_answer(
-        handoff, batch_id="p4-2001", stage="finder", label="site-1/select",
+        handoff, model=OH.OPUS_MODEL, batch_id="p4-2001", stage="finder", label="site-1/select",
         text="DESC: W99\n", answered_by="opus-elsewhere",
     )  # fmt: skip
     assert OH.validate(handoff).ok
@@ -1242,7 +1287,7 @@ def test_ready_reads_a_recorded_review_whole(tmp_path: Path) -> None:
     """A review answer without its R4 line: the import would read R4 as a DROP and say nothing."""
     batch_dir, handoff = _review_export(tmp_path)
     OH.write_answer(
-        handoff, batch_id="p4-0001", stage="reviewer", label="site-1/review",
+        handoff, model=OH.OPUS_MODEL, batch_id="p4-0001", stage="reviewer", label="site-1/review",
         text="R1: KEEP\nR2: KEEP\nR3: KEEP\nCARD: KEEP\n", answered_by="opus-elsewhere",
     )  # fmt: skip
     result = H.ready(handoff, batch_dir.parent, ["p4-0001"])

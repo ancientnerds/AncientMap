@@ -26,6 +26,7 @@ from mechanical import lane as L  # noqa: E402
 from mechanical import plan as MP  # noqa: E402
 from mechanical import teaser as W  # noqa: E402
 from phase4 import card_json as CJ  # noqa: E402
+from phase4 import model4 as M  # noqa: E402
 
 from pipeline.utils import card_provenance as CP  # noqa: E402
 from tests.remediation import teaser_cases as T  # noqa: E402
@@ -206,7 +207,7 @@ class TestTheDecision:
         fact = {"id": "W1", "url": "https://en.wikipedia.org/wiki/X", "quote": "In 1850 a storm."}
         provenance = CP.build(
             run="wb-test",
-            ai_system="Claude Opus (Anthropic): test",
+            ai_system=M.AI_SYSTEM,
             card=T.GOOD[T.SKARA],
             description=T.DESCRIPTIONS[T.SKARA],
             stage="check-v",
@@ -325,6 +326,16 @@ class TestTheDecision:
         many = [outcome(site_id=T.SKARA)] * 101
         with pytest.raises(MP.PlanError, match="at most 100"):
             W.build_step(1, "r", many, {}, {}, built_at="t")
+
+
+def test_a_provenance_names_one_of_the_two_disclosure_strings_and_no_third() -> None:
+    for system in sorted(M.AI_SYSTEMS):
+        provenance = {**T.teaser(T.SKARA), "ai_system": system}
+        prov, _card = W.classify(outcome(provenance=provenance), live(), {}, "wb-test")
+        assert json.loads(prov.new_value)["_card_provenance"]["ai_system"] == system
+    third = {**T.teaser(T.SKARA), "ai_system": "Claude Opus (Anthropic): test"}
+    with pytest.raises(ValueError, match="is not one of"):
+        W.classify(outcome(provenance=third), live(), {}, "wb-test")
 
 
 # ------------------------------------------------------------------------------ plan and accept

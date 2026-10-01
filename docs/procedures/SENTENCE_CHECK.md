@@ -333,7 +333,7 @@ never widen `--allow-stamp` to pass it.
     $C judge-import --run-dir $RUNS/$P --handoff $H/wc-$P-judge     # RESULT.json, JUDGE_EXIT=
 
 A verifier checks each answer's shape with `verify-check-answer` (the brief gives the command;
-nothing is fetched, no verdict judged) and records it with `opus_handoff.py answer`. `verify-export`
+nothing is fetched, no verdict judged) and records it with `opus_handoff.py answer --model <the model id it runs as>`. `verify-export`
 decides the round by itself: `verify` first, `verify2` only after `verify` is imported and only for
 the sites a drop changed; it refuses with "nothing to verify" when no site is due (then build).
 `verify-import` imports a round once and refuses a verifier whose name checked or verified the site;
