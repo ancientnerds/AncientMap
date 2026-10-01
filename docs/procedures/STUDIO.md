@@ -213,13 +213,19 @@ adversarial skeptic whose id goes into `skeptic_by`. An answer is `{task_id, pro
 supported|partly|unsupported|source_missing, quote, quote_source_id, explanation, fix_suggestion,
 answered_by, skeptic_by}`. The import checks by machine, never trusting the answer:
 
-- a `supported` answer names its skeptic and quotes verbatim from the text of `quote_source_id`;
-- a statement counts as supported only by the source its own marker `[n]` names;
+- a `supported` answer has a `skeptic_by` that is not empty, names a `quote_source_id` that is one of
+  the task's cited sources, and quotes verbatim from the text of that source;
 - a TDM-reserved source (`text_status: tdm_reserved`, `text_path` null) is cited like any source and
   read live (owner decision 16): the verifier fetches its `url` and saves the exact text it read to
   `claims_check/live/<source_id>.txt` (`URL: <url>`, `Fetched: <ISO-8601 UTC>`, an empty line, the
   text). Every verdict except `source_missing` needs that file for every cited TDM-reserved source.
   The file stays local: it is never uploaded or archived. An evidence quote may come from it (Q9).
+
+No machine checks which statement a quote proves, or whether the marker `[n]` that follows that
+statement names the source quoted: a `supported` answer whose quote is verbatim from a cited source
+that is not the statement's own passes the import. That a statement counts as supported only by the
+source its own marker names is the rule of the verifier's prompt (`CLAIM_CHECK_INSTRUCTIONS`) and the
+judgement of the verifier and the skeptic alone. Nor does the import check who `skeptic_by` names.
 
 `partly` and `unsupported` block the publish until the paper is fixed and checked again.
 `source_missing` (an unfetchable source, or a TDM-reserved page that is unreachable or lacks the
