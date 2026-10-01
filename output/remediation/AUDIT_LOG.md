@@ -13132,3 +13132,41 @@ kept); the API restarted at 13:56:39Z and imported a file equal to production: *
 lines in both containers, `card_json.py --check` 0, `accept --step 22..26` 0 deviations. Then
 origin/main merged (46ea685, which carries the same blob) and pushed through the gates. Both
 parallel AncientMap sessions now announce a push to main first (cross-session messages).
+
+## 2026-10-01 afternoon/evening - small lanes, delivered owner items, duplicates, WD3 pilot, two operational incidents
+
+- **wc4.check_record regression (own, from the stamp change)**: the cumulative p4wc acceptance read 19
+  deviations ("the check record is not the one the evidence's decisions give") on the WC pilot sites of
+  2026-09-27 - production held exactly what was written; check_record re-derived with the new AI_SYSTEM.
+  Fixed (dc80687: checker is a required keyword, the acceptance passes the written record's own, validated
+  against AI_SYSTEMS); p4wc 0 deviations, cumulative p4 (5 runs, later lanes named) 0 deviations.
+- **Card disclosure lane** `wb-card-disclosure-s001/s002`: 185 cells (`_card_provenance.ai_system` ->
+  AI_SYSTEM on the cards whose final text a Sonnet rewrite wrote; census refreshed first: 22,725 answers,
+  11,457 Opus / 11,268 Sonnet), both steps accepted 0 deviations, `teaser.py accept` 7..21 0 deviations,
+  0 rows changed anything but the key.
+- **name-fix**: "Temple of Augustus, Split" -> "Temple of Augustus, Pula", "Gate of All Nations<U+200C>
+  Persepolis" -> "Gate of All Nations" (4 journal rows, 7 probes refused).
+- **Inventory of unwritten lanes** (agent report): applied now - `country-b2` (Achladia -> Greece,
+  Delphinion -> Türkiye, 2 rows), Nr. 9 `name-key-lyra` (11 alias keys, plan = journal = data), Nr. 8 the six
+  Commons-deleted files removed from the VPS (all four pre-checks held; post-check 404, control 200).
+- **Duplicates (B1-D/B6)**: one Sonnet research agent per pair confirmed all five shared-item pairs as one
+  site each (Banias/Caesarea Philippi, Amathus/Ancient Amathunta, the Ñusta Hispana pair, the 39 Bridge Street
+  pair, Shaduppum/Tel Hermal Fort); lane `dup-retire` (wip/dups, reviewed: survivor and the loser's content
+  now pinned in guard 5) retired the five losers as `duplicate_of:<survivor>` - 10 journal rows, 9 probes
+  refused, rollback rehearsed; retired curated rows 99 -> 104. Nothing deleted.
+- **WD3 pilot 1 (seed 20261002) STOPPED** at its laziness gate (44/73 hinted fields unresolved, 0.603 > 0.6);
+  the agents' reasons and an independent spot-check showed research, not laziness (England's hillforts and
+  barrows carry only period words or class-wide ranges), but two fixable patterns: hedged site-specific
+  centuries rejected, Peru's MINCETUR record missed for a mirror. Brief changed for WD3 only (7cf7f5c);
+  pilot 1 moved aside, its PILOT/COUNTS committed. **Pilot 2 (seed 20261003) PASSED** (hinted unresolved
+  0.522; spot-check 1 clear miss of 10) and its wave `2026-10-01a` is written: 41 sites, 79 cells, accepted
+  0 deviations. Main run (2,613 sites, 3,563 fields, 327 batches) answering; the pool now builds batch ids
+  from a count (a 327-id list had come back as one string, f8829d4).
+- **Incident: machine memory**: WD2 state operators ran `find / ... | head` and `find output ... | head`
+  (34x); on Windows find keeps running after head exits; with shells/conhosts free memory fell to 0.1 GB.
+  All workflows stopped (answers are write-once), leftovers killed, operator prompts forbid file-system
+  search (c10545c), a watchdog kills find/head older than 5 min; resumed with width 3 each.
+- **Incident: interrupted WD2 export**: that stop interrupted the replace export (EXPORT_REPLACE.json is
+  written last); the resumed state operator answered the partial folder: 841 agents, each refused by the
+  brief (no export recorded) - nothing written, quota spent. wd2-image now treats a handoff without its
+  export file as interrupted (ab2731c); partial folders kept under handoff/_partial-* and _interrupted-*.
