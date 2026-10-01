@@ -150,23 +150,25 @@ TDM-reserved source is recorded without its body) and writes the `dossier` manif
 presence means the dossier is complete. The worker ends the row as `status = 'researched'` with
 `result_json = {"dossier": <summary>, "title": null}`. There is no M3 paper and no auto-publish;
 every public reader filters `is_public AND status = 'completed'`, so a `researched` row stays
-invisible. `THEO_WORKER_DISABLED=1` in the VPS `.env` idles the worker container (set by the owner
-on 2026-09-26).
+invisible. `THEO_WORKER_DISABLED=1` in the VPS `.env` idles the worker container (set on the owner's
+behalf by another session on 2026-09-26, about 18:20 UTC; owner question Q1 keeps it off).
 
 A local Claude session writes, checks and publishes the paper ("Studio" below) through two CLIs in
 the API image, run over ssh so production credentials stay on the VPS:
 
 ```bash
 ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_dossier list
-ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_dossier export <id> [--texts cited|all] > dossier.json.gz
-ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_publish --dry-run|--apply < bundle.json
+ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_dossier export <id> [--texts all] > dossier.json.gz
+ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_publish --dry-run < bundle.json
+ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_publish --apply < bundle.json
 ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_publish --correct [--dry-run] < correction.json
 ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_publish --register-video [--dry-run] < video.json
 ```
 
 - **`theo_dossier`** exits 0 ok, 1 no or incomplete dossier, 2 bad request id. `list` prints one
-  JSON array, oldest first; a run without a `dossier` manifest exports from its per-stage artifacts
-  with `"legacy": true`.
+  JSON array, oldest first; `export` carries the texts of the sources the moderated claims cite
+  (`--texts cited`, the default) or of every source (`--texts all`); a run without a `dossier`
+  manifest exports from its per-stage artifacts with `"legacy": true`.
 - **`theo_publish`** prints one `PublishOutcome` JSON (`{"ok": false, "error": …}` on errors) and
   exits 0 ok (side-effect failures are reported, not fatal), 1 a gate failed, 2 unusable input,
   3 the row changed between read and write (nothing committed), 4 committed but the re-read row
@@ -174,11 +176,12 @@ ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_p
   a public paper answers `apply_allowed: false`: a public paper changes only through `--correct`.
 - **Correction kinds** (`--correct`; each re-runs the gates and keeps every published evidence id
   that no `corrections_append` entry names): a log entry only (`corrections_append`); a text
-  correction (`report`, optionally `evidence`), where `rewrite: true` marks a full Claude rewrite
-  (the writer is stored, the page shows the AI disclosure line, the owner is notified) and a small
-  fix goes without it; a full republish (`result`, the complete publish result), which keeps slug,
-  `published_at` and `published_by`, optionally with `dossier_request_id`: the fresh `researched`
-  run it was written from, closed as `cancelled` in the same transaction.
+  correction (`report`, optionally `evidence`); a full Claude rewrite of a stored text (`report`
+  with `rewrite: true`, which excludes `evidence` and `result`: the writer is stored, the page shows
+  the AI disclosure line, the owner is notified), where a small fix goes without `rewrite`; a full
+  republish (`result`, the complete publish result, which excludes `report` and `evidence`), which
+  keeps slug, `published_at` and `published_by`, optionally with `dossier_request_id`: the fresh
+  `researched` run it was written from, closed as `cancelled` in the same transaction.
 - **Journal** `theo_paper_publications` (migration 0025): one row per committed write, in the
   write's transaction, none for a dry run. `bundle_sha256` is the sha256 of the exact stdin bytes:
   after a timeout or exit 4, a row of the paper with the hash you sent means the write committed
@@ -207,10 +210,11 @@ ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_p
 ## Studio: papers and YouTube episodes, on the workstation
 
 `pipeline/studio/` and `video/` run only on the owner's workstation, inside a Claude Code session.
-No studio code calls a model API: Claude makes every judgement (writing, claim check, image check,
-case file, script) and hands it over as files; the code validates, compiles and transports. Nothing
-in `api/` or `pipeline/lyra` imports the package; only `pipeline.studio.ledger_cli` runs in the API
-container.
+No studio code calls an LLM: Claude makes every judgement (writing, claim check, image check,
+case file, script) and hands it over as files; the code validates, compiles and transports. The one
+paid call is the narration: `episode voice` sends each beat's text to MiniMax's speech model after a
+quota check. Nothing in `api/` or `pipeline/lyra` imports the package; only
+`pipeline.studio.ledger_cli` runs in the API container.
 
 ```
 ./.venv/Scripts/python.exe -m pipeline.studio paper   {list,pull,number,check,claims-export,claims-import,images-export,images-import,bundle,publish,correct,register-video}
@@ -232,7 +236,8 @@ voice` and `doctor` exit 1 when a gate or probe fails.
   `studio-marker-check.js`), all on Opus.
 - **Paper**: `paper pull` → Claude writes `draft.md`, `paper_meta.json`, `evidence.json` →
   `number` → `claims-export`, claim-check workflow, `claims-import` → the same for images → `check`
-  → `bundle` → `publish` (images uploaded by verified scp, dry run, apply once every gate passes).
+  → `bundle` → `publish` (images uploaded by verified scp, dry run, apply once every gate passes;
+  `publish --dry-run` uploads the images too).
   A public paper changes through `paper correct ID --text …|--entries FILE`: a log entry alone, or
   with `--with-report`, `--republish`, or `--report-file FILE [--rewrite]` (the full markdown of a
   legacy paper without a studio check, starting from the `content` of `GET /api/v1/research/{slug}`;
@@ -246,9 +251,20 @@ voice` and `doctor` exit 1 when a gate or probe fails.
   description, three thumbnail candidates). The final package is the owner's only release gate. The
   upload is manual; then `episode register-youtube SLUG --youtube-id ID --title T --published-at TS
   --poster K` records it in the ledger and attaches the video to its paper, with thumbnail K as the
-  page's poster.
-- **Renderer** `video/`: Remotion 4.0.529, every `@remotion/*` pinned to exactly that version. Once
-  per machine: `cd video && npm ci && npx remotion browser ensure`, then `doctor --fix-gpu`.
+  page's poster (`paper register-video` is that paper step on its own, for a failed apply).
+  `episode check` refuses a script whose `display` differs from its `spoken` text beyond number
+  spelling (`spoken.py` accepts a digit with a magnitude word, duration compounds, decades, regnal
+  and Roman numerals, ranges, dates, mm and degrees) and, once the voice and the takes exist, a clip
+  scene (GlobeShot, MapboxFlyover) that plans one still picture for more than the render audit's 4 s
+  (owner Q16; a GlobeShot pin lighting up does not count as a change of picture).
+- **Renderer** `video/`: Remotion 4.0.529, every `@remotion/*` pinned to exactly that version (every
+  dependency of `video/package.json` is pinned). Once per machine: `cd video && npm ci && npx remotion
+  browser ensure`, then `./.venv/Scripts/python.exe -m playwright install chrome` (Playwright is in no
+  requirements file: `pip install playwright` into the venv first when `doctor` names it missing),
+  then `doctor --fix-gpu`. CI gates `video/` with `lint-video` (tsc, vitest) and, in `security-scan`,
+  a blocking `npm audit --audit-level=critical`: vitest went from 4.0.18 to 4.1.11 on 2026-09-30 to
+  clear GHSA-5xrq-8626-4rwp and GHSA-82fw-gwwq-j7x9, and a critical advisory in the lockfile fails
+  the deploy (bump the package, never ignore the advisory).
   `npm run studio` previews the demo timeline (`--public-dir ../ancient-nerds-map/public`).
   `episode render` runs `video/scripts/{lint,render,still}.ts` as `node --import tsx
   scripts/<name>.ts`; they bundle into the episode's transient `render/bundle/`.
@@ -259,7 +275,9 @@ voice` and `doctor` exit 1 when a gate or probe fails.
   index 0, Task Manager "GPU 1"), never on the integrated AMD or in software; a run that would land
   there fails. The proofs: every lint/render/still browser prints `gpu: <WebGL renderer>`, and
   `episode render` refuses one that does not name the NVIDIA and stores it in the ledger; every
-  browser capture's manifest records it as a `gpu` event; encodes use `h264_nvenc`/`hevc_nvenc`
+  browser capture's manifest records it as a `gpu` event (a `mapbox_topdown` still is an API
+  picture without a browser, so it has none); a page of the proved render browser that is closed
+  from outside or crashes cancels the run at once (owner Q17); encodes use `h264_nvenc`/`hevc_nvenc`
   with `-gpu 0`; word timings run faster-whisper on CUDA 0 (float16). `doctor` probes nvidia-smi,
   NVENC, CUDA, the Remotion browser's per-app GPU preference and a capture Chrome's renderer;
   `doctor --fix-gpu` sets that preference (`HKCU\Software\Microsoft\DirectX\UserGpuPreferences`),
@@ -286,7 +304,7 @@ voice` and `doctor` exit 1 when a gate or probe fails.
   marks it published (`--publish`).
 - **Local only**: the NVENC and Playwright tests skip in CI, so CI never proves the capture and
   render path. On the workstation, `npm run test:gpu` in `video/` (the layout lint in a real Chrome
-  on the NVIDIA), the smoke render and the real captures (Tasks 22 and 36 of
+  on the NVIDIA, and a crashed and a closed render tab that must cancel the run at once), the smoke render and the real captures (Tasks 22 and 36 of
   `docs/superpowers/plans/2026-09-26-D-renderer-capture-video-mode.md`) prove it before a release.
 
 Runbook (setup, both sessions, gates, recovery): `docs/procedures/STUDIO.md`.
@@ -314,8 +332,9 @@ The studio renderer (`video/`, CI job `lint-video`) and the frontend's video rec
 includes only `src`) are TypeScript projects of their own:
 
 ```bash
-cd video && npx tsc --noEmit && npx vitest run
-cd ancient-nerds-map && npx tsc -p video/tsconfig.json --noEmit
+(cd video && npx tsc --noEmit && npx vitest run)
+(cd video && npm audit --audit-level=critical)   # CI's security-scan runs it too (blocking)
+(cd ancient-nerds-map && npx tsc -p video/tsconfig.json --noEmit)
 ```
 
 Single tests. Always pass the gate's marker filter: `pyproject.toml` deselects only `live_llm`, so

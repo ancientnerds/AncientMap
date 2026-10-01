@@ -7,33 +7,31 @@ workstation up, how the two sessions run, what every gate checks, how to correct
 and how to recover when a step fails.
 
 Binding sources: the spec `docs/superpowers/specs/2026-09-26-studio-and-claude-write-design.md`, the
-owner decisions in `docs/superpowers/plans/2026-09-26-owner-questions.md` (#1-#32, Q1-Q14), the build
+owner decisions in `docs/superpowers/plans/2026-09-26-owner-questions.md` (#1-#32, Q1-Q17), the build
 index `docs/superpowers/plans/2026-09-26-00-index.md` and the four stream plans beside it. Where this
 file and the code disagree, the code is right and this file is stale: fix it.
 
-## 0. State on 2026-09-29
+## 0. State on 2026-10-01
 
 - **Built on `feat/studio`, not released.** Production runs `main`: it has neither migrations 0025
   (`theo_paper_publications`) and 0026 (`studio_episodes`) nor the modules `pipeline.lyra.theo_publish`,
   `pipeline.lyra.theo_dossier` and `pipeline.studio.ledger_cli`. Until the release (index item I8),
   every step that reaches production cannot run: `paper list`, `pull`, `publish`, `correct`,
   `register-video`, the ledger write at the end of `episode render`, and `episode register-youtube`.
-- **Theo is stopped by the owner.** The VPS `.env` has `THEO_WORKER_DISABLED=1` since about
-  18:20 UTC on 2026-09-26; the worker idles (`scripts/run_theo_worker.py`) and 24 batch rows are
-  `paused`. No new `researched` row arrives until the owner restarts Theo (owner question Q1).
-- **Not committed yet:** plan D Tasks 30-32, i.e. `pipeline/studio/capture/platform.py`,
-  `pipeline/studio/capture/globe.py` and the four entry points of `pipeline/studio/capture/__init__.py`.
-  Until they land, `episode capture` cannot record anything. Sections 6 and 9 describe platform and
-  globe takes from plan D's definitions. Source-page captures (`capture/sources.py`) and Mapbox
-  top-down frames (`capture/mapbox.py`) are committed.
-- **Skills and workflows:** the skills `.claude/skills/theo-write`, `studio-video` and
-  `studio-casefile` are committed (integration item I2). The workflows
-  `.claude/workflows/theo-claim-check.js`, `theo-image-check.js`, `studio-casefile-verify.js` and
-  `studio-marker-check.js` are item I3. The skills hold the step-by-step session; this runbook holds
-  the background, the gates and the recovery.
-- **Workstation proofs outstanding:** the smoke render (plan D Task 22) and the real captures (plan D
-  Task 36) are re-run on the finished code before the release, and one real CUDA float16 transcription
-  (section 1.3) has not run yet.
+- **Theo is stopped.** The VPS `.env` has `THEO_WORKER_DISABLED=1` since about 18:20 UTC on
+  2026-09-26, set on the owner's behalf by another session (owner-questions #2 is moot, and Q1 keeps
+  the worker off); the worker idles (`scripts/run_theo_worker.py`) and 24 batch rows are `paused`. No
+  new `researched` row arrives until the owner restarts Theo.
+- **Committed:** both studios, the renderer `video/`, all four capture recorders
+  (`pipeline/studio/capture/`: `sources.py`, `mapbox.py`, `platform.py` and `globe.py`, with the four
+  entry points of `capture/__init__.py`), the skills `.claude/skills/theo-write`, `studio-video` and
+  `studio-casefile` (integration item I2) and the workflows `.claude/workflows/theo-claim-check.js`,
+  `theo-image-check.js`, `studio-casefile-verify.js` and `studio-marker-check.js` (I3). The skills hold
+  the step-by-step session; this runbook holds the background, the gates and the recovery.
+- **Workstation proofs:** on 2026-10-01 `doctor` reported every probe ok, `npm run test:gpu` passed
+  (5 tests in 2 files, about 50 s) and one real CUDA float16 transcription ran (section 1.3). The
+  smoke render (plan D Task 22) and the real captures (plan D Task 36) have run on this workstation;
+  they run again on the finished code before the release (index I8, step 1).
 
 ## 1. Setup (once per workstation)
 
@@ -62,6 +60,7 @@ From the root of the checkout the studio runs in:
 
 ```bash
 (cd video && npm ci && npx remotion browser ensure)
+./.venv/Scripts/python.exe -m pip install playwright         # only when doctor names it missing
 ./.venv/Scripts/python.exe -m playwright install chrome      # the Chrome channel the captures drive
 ./.venv/Scripts/python.exe -m pipeline.studio doctor --fix-gpu   # once per machine, after `browser ensure`
 curl -sfR --create-dirs -o public/data/sites/index.json https://ancientnerds.com/data/sites/index.json   # section 11
@@ -83,7 +82,8 @@ one); it does not load cuBLAS or cuDNN. Before the first real episode, prove one
 ./.venv/Scripts/python.exe -c "from pathlib import Path; from pipeline.studio.voice import whisper_words; print(len(whisper_words(Path('<an mp3 with speech>'))))"
 ```
 
-It prints a word count. If a CUDA library fails to load, install the missing NVIDIA library, pinned
+It prints a word count (measured 2026-10-01 on this workstation: a 24-word Shorts narration came back
+as 24 words in 7 s). If a CUDA library fails to load, install the missing NVIDIA library, pinned
 (spec 4.11), and run the probe again. Never switch the studio to the CPU: the site Shorts keep their
 CPU defaults, the studio passes its device explicitly.
 
@@ -104,7 +104,8 @@ export of section 11.
 ```
 
 - Run from the checkout root with the repo venv. `--help` on any command lists its flags.
-- Output is JSON on stdout, UTF-8 whatever the console code page.
+- Output is JSON on stdout, UTF-8 whatever the console code page; `doctor` prints one `ok` or `FAIL`
+  line per probe instead.
 - Exit codes: 0 success; 1 a check or gate failed (`paper check`, `episode check`, `episode voice`,
   `doctor`); 2 a `StudioError`, whose message (`error: ...` on stderr) says what to fix. A traceback
   is a bug, not an operating state.
@@ -113,7 +114,9 @@ export of section 11.
   through scp into `/var/www/ancientnerds/public/data/research-images/<request_id>/`, verified byte for
   byte with `sha256sum`. Production credentials never leave the VPS. Nothing retries automatically.
 - Every model judgement is Claude's, made in the session or by a workflow, and handed to the code as
-  files. No studio code calls a model API.
+  files. No studio code calls an LLM. The one paid call is the narration: `episode voice` sends each
+  beat's `spoken` text to MiniMax's speech model (`speech-2.8-hd`, the Shorts narrator) after a quota
+  check.
 
 ## 3. The paper session (`/theo-write`)
 
@@ -136,10 +139,14 @@ The skill `.claude/skills/theo-write/SKILL.md` runs these steps. Workspace:
 - Fix a failing check in `draft.md`, `evidence.json` or `paper_meta.json`, then repeat from step 4.
   A claim-check task is keyed by the hash of its prompt, so only the changed paragraphs get new tasks;
   an old answer never vouches for a changed paragraph.
-- `paper bundle` and `paper publish` refuse when the paper, `evidence.json` or `paper_meta.json`
-  changed since the check, or when `bundle.json` no longer matches the paper.
-- Publishing is automatic: the skill applies when every gate passes (spec 0). `paper publish ID
-  --dry-run` stops after the dry run.
+- `paper bundle` refuses unless `check_report.json` passed and the paper, `evidence.json` and
+  `paper_meta.json` are what that check hashed. `paper publish` sends `bundle.json` as it is and refuses
+  one older than the paper (`bundle.json is stale`: run `paper bundle` again).
+- Publishing is automatic: the skill applies when every gate passes (spec 0). Every `paper publish`,
+  the `--dry-run` too, first uploads the bundle's selected images to production's
+  `research-images/<request_id>/` (verified byte for byte with `sha256sum`; the files are named after
+  their content, so repeating is safe) and then dry-runs. `--dry-run` stops there and records the dry
+  run in `publish_outcome.json`.
 - The owner notice goes out on the apply: a `thinking_log` `run_event` `paper_published`. The Discord
   embed is sent only while `DISCORD_WEBHOOK_URL` is set, and it is unset (owner decision 5), so the
   outcome's `side_effects.notify` reads `{"discord": false}` normally.
@@ -214,8 +221,9 @@ passage) means: re-source the claim or remove it.
 
 Claude names 4-10 image opportunities in `images/opportunities.json` (`{id, anchor_text, subject,
 queries}`, the anchor inside a `##` section, never the hook). The export gathers candidates (the
-dossier's image pool plus fresh searches in Commons, Europeana, Smithsonian, Met and NARA), filters
-them with `image_gates.metadata_gate_passes`, deduplicates, keeps at most 8 per opportunity, downloads
+dossier's image pool plus fresh searches through `image_fetcher.fetch_candidates`, which asks Wikimedia
+Commons, Wikidata, the Met and Europeana; its Library of Congress, Getty, Louvre and PAS connectors are
+flagged `available = False` and answer nothing), filters them with `image_gates.metadata_gate_passes`, deduplicates, keeps at most 8 per opportunity, downloads
 them into `images/candidates/` and exports one task per candidate. `export_report.json` records what
 became of every candidate.
 
@@ -285,10 +293,12 @@ exact bytes sent.
   leaves `theo_dossier list` and the unwritten-dossier cap.
 
 A video joins a paper through `paper register-video ID --youtube-id X --title T --published-at ISO
---timestamps FILE [--poster FILE]` (`episode register-youtube` calls the same steps, section 6): a dry
-run without the poster, the verified upload of the poster JPEG as
-`research-images/<ID>/video_<youtube_id>.jpg`, a dry run with it, then the apply. Without `--poster`
-the page keeps the posterless player.
+--timestamps FILE [--poster FILE]` (`episode register-youtube` calls the same steps, section 6; FILE is
+`episodes/<slug>/package/evidence_timestamps.json`, the poster `package/thumbnail_<K>.jpg`): a dry run
+without the poster, the verified upload of the poster JPEG as `research-images/<ID>/video_<youtube_id>.jpg`,
+a dry run with it, then the apply. Without `--poster` the page keeps the posterless player. The first
+dry run refuses a video the paper already shows (gate `duplicate`), so repeating a registration whose
+outcome is unknown is safe.
 
 ## 6. The video session (`studio-video`, `studio-casefile`)
 
@@ -317,7 +327,9 @@ episodes (owner decision 11); acceptance (c) renders the Baalbek claim-5 slice o
    again itself.
 10. `episode render SLUG`: the per-render public dir, the layout lint, the Remotion render on the
     NVIDIA, -14 LUFS, the three thumbnail candidates, the audit, and the ledger row in
-    `studio_episodes` (over ssh).
+    `studio_episodes` (over ssh). The package's description is built right after the timeline is
+    compiled, so one over YouTube's 5,000 bytes stops the episode there, before the hours of
+    rendering, not at `episode package`.
 11. `episode package SLUG` writes `package/`: `<slug>.mp4`, `<slug>.srt`, `description.txt`
     (at most 5,000 bytes, no `<` or `>`), `titles.txt`, `thumbnail_<K>.jpg` (1280x720, under 2 MB)
     with its `thumbnail_<K>_3840.png` master for K = 1, 2, 3, `youtube.json` and
@@ -334,14 +346,38 @@ episodes (owner decision 11); acceptance (c) renders the Baalbek claim-5 slice o
 
 Rules the checks enforce (script, case file, captures):
 
-- A script uses only `verified` evidence, and `display` differs from `spoken` only in how numbers and
-  units are spelled.
+- A script uses only `verified` evidence. `display` differs from `spoken` only in how numbers and units
+  are spelled (`pipeline/studio/spoken.py`; case is ignored, but only an upper-case Roman numeral is a
+  number). The check accepts, spoken then display: a digit with a magnitude word (`six million` /
+  `6 million`, `one point five million` / `1.5 million`, `four and a half metres` / `4.5 m`), the British
+  `hundred and` (`two hundred and fifty thousand` / `250,000`; where the words allow two readings the
+  display may show either), years (`nineteen sixty-six` / `1966`), ordinals and duration compounds
+  (`twenty-first` / `21st`, `a thirty-second exposure` / `a 30-second exposure`), decades and centuries
+  (`the nineteen-sixties` / `the 1960s`, `the twenty-tens` / `the 2010s`, `the fifteen hundreds` /
+  `the 1500s`, `the two thousands` / `the 2000s`), regnal and Roman numerals I-XXXIX in either direction
+  (`Ramesses the Second` / `Ramesses II`, `World War Two` / `World War II`), ranges (`twelve to fifteen
+  metres` / `12–15 m`), dates (`June the twenty-first` / `June 21`, `the twenty-first of December` /
+  `21 December`) and units (`square metres` / `m²`, `two millimetres` / `2 mm`, `twenty-three degrees` /
+  `23°`, `fifteen per cent` / `15%`). Anything else is an error that names the first differing token.
 - Hook beats total at most 32 s; burned-in captions only in the hook; one hook word has at most 24
   characters in upper case, punctuation included (`HOOK_LINE_MAX_CHARS`).
 - No title card and no agent block. The ShareCard is the end card: the last beat only.
-- A full episode has 3-5 platform moments of 5-15 s each (slices are exempt), at least 3 chapters,
-  the first at 0:00, each at least 10 s.
-- Every scene showing map content carries its in-frame credit (`© Mapbox © Maxar`, `© OpenStreetMap`).
+- A full episode has 3-5 platform moments (a slice any number); every platform moment, in either
+  format, lasts 5-15 s.
+- Chapters, in every format: the first starts at 0:00, they start at distinct beats in order, and each
+  lasts at least 10 s; a full episode has at least 3.
+- Every scene showing map content (MapboxTopdown, MapboxFlyover, PlatformClip) carries an in-frame credit
+  that holds `© Mapbox` or `© OpenStreetMap`: the beat's own `visual.credit`, or the credits its capture
+  recorded (`© Mapbox © Maxar`, `© Mapbox © OpenStreetMap © Maxar`).
+- Clip stills (owner Q16): a GlobeShot or MapboxFlyover scene holds one still picture for at most 4 s,
+  the render audit's limit, and `episode check` refuses a longer planned hold before the render (once
+  the voice and the take exist). The picture changes while the take's camera moves: a fly-to until its
+  arrival; a fixed-pose places take (no `sweep_lng_deg`) and an orbit whose start and end bearing are
+  equal never move; a sweep, a distribution's turn, a fly-in and a turning orbit move until the take
+  ends. From the stop the picture holds to the scene's end. A GlobeShot pin lighting up does not count
+  as a change of picture (estimated at 0.03-0.07 against the audit's 0.05 threshold, so the audit sees
+  it on a dark globe and misses it on a lighter one), and a platform take, the live page, is judged only
+  by the render audit (section 7, "Audit failed").
 - Exactly 3 thumbnail candidates, each a teaser of 2-4 words with no verdict word, at a frame that
   cannot show the answer (never inside a twist, verdict or "what would change our mind" beat, never at
   or after the first verdict cue or meter move).
@@ -361,8 +397,9 @@ Rules the checks enforce (script, case file, captures):
 
 - **Exit 1 of `theo_publish`:** the error names the failing gates; fix the paper and run the step
   again from `paper check`.
-- **Exit 2:** theo_publish refused the input (the message names the key). The studio built a payload
-  the VPS does not accept: a bug in the studio or in theo_publish, never an operator fix.
+- **Exit 2:** theo_publish refused the input (the message names the cause). Usually the studio built a
+  payload the VPS does not accept: a bug in the studio or in theo_publish, not an operator fix. The
+  exception is `research request <id> does not exist`: the id given is wrong, fix it.
 - **Exit 3:** the row changed between read and write; nothing was committed. Run `paper check`, then
   the step again.
 - **Exit 4, a timeout, no JSON or an unexpected exit (`RemoteOutcomeUnknown`):** the write may have
@@ -383,11 +420,22 @@ Rules the checks enforce (script, case file, captures):
 - **`register-youtube` failed after the ledger write:** the error prints the `paper register-video`
   command that finishes the registration. Run it; its first dry run refuses a registration that did
   commit (`duplicate` gate).
-- **A ledger write without an answer** is `RemoteOutcomeUnknown` too: read `studio_episodes` for the
-  video's sha256 before running `episode render` again.
+- **A ledger write without an answer** is `RemoteOutcomeUnknown` too (`episode render`: `--record`;
+  `episode register-youtube`: `--publish`). Read the row of the video's sha256 before running the step
+  again; the hash is `row.video_sha256` of `render/ledger.json`, or `sha256sum render/<slug>.mp4` when
+  the render stopped before it wrote that file:
+  ```bash
+  ssh ancientnerds "docker exec ancient_nerds_db psql -U ancient_map -d ancient_map -c \"SELECT slug, status, youtube_id, published_at FROM studio_episodes WHERE video_sha256 = '<sha256>'\""
+  ```
+  After a `--publish`, `status = published` with the `youtube_id` means it committed: finish the
+  registration on the paper with the `paper register-video` command of section 5 (`episode
+  register-youtube` finds no `rendered` row any more); `rendered` means nothing committed, run
+  `episode register-youtube` again.
 - **Stale voice:** `episode timeline` and `render` refuse `voice/<beat>.mp3 is stale; run episode
-  voice` when a beat's spoken text, the voice or the speed changed. `episode voice` narrates only
-  those beats again (and pays only for them); a changed display text is only re-timed.
+  voice` (or `is missing`) when a beat's spoken text, the voice or the speed changed. `episode voice`
+  narrates only those beats again (and pays only for them); a changed display text is only re-timed.
+  A transcription that fails (`the display words cannot be timed against voice/<beat>.mp3`) keeps the
+  narration already paid for: run `episode voice` again.
 - **A capture on a sleeping display:** headed Chrome stops drawing, and the take waits for a frame
   that never comes. The captures hold the display awake while they run, but cannot wake one that is
   already off or locked, and the recorder scenes fail within 30 s without a frame. Unlock the display
@@ -406,12 +454,26 @@ Rules the checks enforce (script, case file, captures):
 - **Audit failed:** `episode render` stops with `render audit failed [...]; see render/audit.json`
   (format, exact duration, black frames, frozen clip runs over 4 s, loudness, true peak). `episode
   package` then writes `package/FAILED.json` with the reasons and stops. Fix the cause (a frozen take:
-  cut to a card or record again) and render again.
+  cut to a card or record again) and render again. A still picture the script plans (a fly-to's hold
+  after its arrival, a fixed pose, an orbit that does not turn) never gets this far: `episode check`
+  refuses it first (owner Q16, section 6). What reaches the audit is a live platform take that stalls.
+  An audit whose black-frame or frozen-run probe decoded no frames fails too (`ffmpeg decoded no frames
+  of ...`) instead of passing unmeasured.
 - **"timeline.json changed since the render"** or **"render/<slug>.mp4 is not the audited render":**
   run `episode render` again; `episode package` builds only from the audited render of the current
-  timeline.
+  timeline, and refuses a script, case file, word timings or music file edited after the render
+  (`<file> changed since the render`; `episode thumbnail` checks timeline.json and script.json): the
+  SRT, the hook sentence, the evidence lines and the credits would describe another video. Titles,
+  tags and the wording of the music credit may change after it.
 - **A killed or failed node step** removes `render/bundle/` and `render/raw.mp4.parts/` itself; a
   node script that times out is killed with its whole process tree.
+- **A render page closed or crashed (owner Q17):** `lint.ts`, `render.ts` and `still.ts` watch the pages
+  of the browser they proved on the NVIDIA. When one is closed from outside (someone closes the render
+  tab) or crashes, the run is cancelled at once and fails with `render.ts exited 1; see
+  render/render_log.txt`, whose stderr says `a render page of the proved browser was closed from
+  outside mid-render` or `... crashed mid-render; the render was cancelled at once (owner decision
+  Q17)`. Before Q17 such a render could hang until Remotion's 123 s ready timeout, or Remotion could
+  replace the browser with one that was never proved. Nothing is wrong with the script: render again.
 - **MiniMax below 10 % of the 5-hour window:** `episode voice` refuses; wait for the window to refill.
 - **A refused handoff import:** the verdicts file stays in place and the error lists every problem;
   correct or replace it, then import again.
@@ -430,9 +492,11 @@ A run that would land on the AMD or on software rendering fails loudly instead.
 - **Proof, not assumption:** every capture, and every `lint.ts`, `render.ts` and `still.ts` run, reads
   WebGL's `UNMASKED_RENDERER_WEBGL` in the page it drives and stops unless it names the NVIDIA. The
   node scripts print one `gpu: <renderer>` line per browser (see `render/lint_report.txt`,
-  `render_log.txt`, `still_<K>_log.txt`), and `render.py` refuses any other. A capture manifest's first
-  event is `{"t": 0, "name": "gpu", "label": <renderer>}`, and the render ledger's `renderer` column
-  holds the render browser's string. The expected string is `ANGLE (NVIDIA, NVIDIA GeForce RTX 3080
+  `render_log.txt`, `still_<K>_log.txt`), and `render.py` refuses any other. The manifest of every
+  browser capture (source page, platform, globe, Mapbox fly-in and orbit) starts with the event
+  `{"t": 0, "name": "gpu", "label": <renderer>}`; a `mapbox_topdown` still comes from the Static Images
+  API without a browser, so its manifest holds only its `pin` events. The render ledger's `renderer`
+  column holds the render browser's string. The expected string is `ANGLE (NVIDIA, NVIDIA GeForce RTX 3080
   Laptop GPU (0x0000249C) Direct3D11 vs_5_0 ps_5_0, D3D11)`.
 - **Encoding** runs on NVENC with `-gpu 0`: `hevc_nvenc` for capture clips, `h264_nvenc` for the
   render. There is no software encode path.
@@ -440,15 +504,18 @@ A run that would land on the AMD or on software rendering fails loudly instead.
 
 `doctor` probes: the studio assets root, `ffmpeg`, `ffprobe`, `node`, `video/node_modules`, the block
 registry, the site fonts, the Python modules (faster_whisper, mutagen, PIL, playwright, the capture
-package), `nvidia-smi` naming the RTX 3080, NVENC on GPU 0, CUDA for faster-whisper, Remotion's
+package), `nvidia-smi` naming the RTX 3080, NVENC (both encoders encode a test frame on GPU 0), CUDA
+for faster-whisper, Remotion's
 browser and its GPU preference, the renderer of a headless Chrome launched as the captures launch it,
 `LYRA_MINIMAX_API_KEY`, the music bed, the site export and its age, and `ssh ancientnerds`. A green
 `doctor` says the machine is set up; the first `lint.ts` of an `episode render` says Remotion's browser
 really uses the NVIDIA.
 
 Checks only the workstation can run (CI never proves the capture and render path): `npm run test:gpu`
-in `video/` (the layout lint in a real browser on the NVIDIA, about 70 s), the smoke render (plan D
-Task 22), real captures (plan D Task 36), `doctor`, and the CUDA transcription.
+in `video/` (2 files, 5 tests: the layout lint in a real browser on the NVIDIA, and a crashed and a
+closed render tab that each cancel the run at once, owner Q17; about 50 s, measured 2026-10-01), the
+smoke render (plan D Task 22), real captures (plan D Task 36), `doctor`, and the CUDA transcription.
+What CI does prove of `video/` is section 13.
 
 ## 9. Captures
 
@@ -460,8 +527,8 @@ since counts as not recorded.
 |---|---|---|
 | `source` | `capture/sources.py`: Playwright on the NVIDIA, the quote found in the text readers see and highlighted, banners hidden; also our paper page scrolled to `#ev-NN` | a still; credit `Source page: <ASCII host>` (our paper page: none) |
 | `mapbox_topdown` | `capture/mapbox.py`: an exact Mapbox Static frame with pins projected onto their objects | a still; `© Mapbox © Maxar` (`satellite-v9`) or `© Mapbox © OpenStreetMap © Maxar` (`satellite-streets-v12`) |
-| `platform` | `capture/platform.py` (plan D Task 30, not committed): the real site in headed Chrome, CDP screencast, fast NERV cursor | an HEVC clip; `© Mapbox © OpenStreetMap © Maxar` |
-| `globe` | `capture/globe.py` (plan D Task 31, not committed) through the recorder `npm run video:record` (`studio-globe-flyto`, `studio-globe-places`, `studio-mapbox-flyin`, `studio-mapbox-orbit`) | an HEVC clip; our vector globe has no credit, a Mapbox take has the Mapbox credit |
+| `platform` | `capture/platform.py`: the real site in headed Chrome, CDP screencast, fast NERV cursor | an HEVC clip; `© Mapbox © OpenStreetMap © Maxar` |
+| `globe` | `capture/globe.py` through the recorder `npm run video:record` (`studio-globe-flyto`, `studio-globe-places`, `studio-mapbox-flyin`, `studio-mapbox-orbit`) | an HEVC clip; our vector globe has no credit, a Mapbox take has the Mapbox credit |
 
 ### 9.1 The local site and the recorder
 
@@ -500,6 +567,30 @@ Budget up to about 20 minutes per fly-in and do not interrupt it. The recorder m
 plus 6 s per frame (`record_timeout_s` in `capture/globe.py`): 40 minutes for a 5-second fly-in,
 190 minutes for a 30-second take. A scene whose renderer is not the NVIDIA stops at its first frame.
 
+### 9.5 Platform takes: the action vocabulary
+
+The `actions` of a platform take are `pause_rotation`, `search {q}`, `click_result {title}`,
+`fly_wait {s}`, `zoom {to}`, `open_details {title}`, `measure {a, b}`, `toggle_layer {label, empire?}`,
+`proximity {at}`, `filter {mode, label}` and `wait {s}` (`ACTIONS` and `OPTIONAL` of
+`capture/platform.py`, pinned by a test). A platform or globe take lasts at most 30 s. The points of
+`measure` and `proximity` are case-file places, clicked where the page itself draws them; every click
+scrolls its target into view and fails the take when anything but the target (or, for a point, the map
+canvas) would take it. `toggle_layer` clicks one toggle of the Layers panel and fails the take unless its
+checkbox flips:
+
+- never `Satellite` (owner correction 2026-09-26; satellite shows in the details page or a Mapbox take);
+- `Empire Borders` only opens its window, so it needs `empire`, an id of
+  `pipeline/historical_boundaries/empire_metadata.py`; the take draws it at its peak extent with the
+  window's By Period timeline off. At most one per take (a second click closes the window); `empire` on
+  any other toggle is refused;
+- every `toggle_layer` belongs before the `zoom` into the Mapbox view: there the Layers panel disables
+  its vector layers and `Labels` and an empire only tints the map, so a `toggle_layer` in that view fails
+  the take before its click;
+- `Geological Layers` and `Historical Routes` are refused: no action picks from their windows.
+
+A Mapbox take's `country` must be the site export's country of its place and a name the site's country
+table knows (the recorder refuses an unknown name and the take fails).
+
 ## 10. The glyph rule
 
 Every string the video draws must lie in the code points the loaded brand font files map (`DRAWABLE`
@@ -524,7 +615,8 @@ verbatim copy that the tests compare). A character outside it would render in a 
 The distribution dots (owner decision 15), a Mapbox take's `country` and every local platform or globe
 take read the repo-root export `public/data/sites/index.json` of the checkout the studio runs in. It is
 gitignored and more than 360 MB. The main checkout's copy dates from 2026-03-26, before the 2026-09 sites
-remediation corrected coordinates and retired 78 sites; the worktree has none. Before the first
+remediation corrected coordinates and retired 78 sites; this worktree's copy was downloaded on 2026-09-25
+(`doctor` reports the age of the copy in the checkout it runs in). Before the first
 capture that needs it, download the current export read-only from production, from the root of that
 checkout (owner question Q4):
 
@@ -555,7 +647,7 @@ four Theo host scripts are retired (owner decision 22).
 
 ```bash
 ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_dossier list
-ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_dossier export <id> [--texts cited|all] > dossier.json.gz
+ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_dossier export <id> [--texts all] > dossier.json.gz
 ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_publish --dry-run < bundle.json
 ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_publish --apply < bundle.json
 ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_publish --correct [--dry-run] < correction.json
@@ -566,7 +658,8 @@ The studio runs them for you (`paper list`, `pull`, `publish`, `correct`, `regis
 by hand only to inspect.
 
 - `theo_dossier list` prints the `researched` rows with their dossier summary (JSON, oldest first).
-  `export` writes gzip'd JSON to stdout; a run without a `dossier` manifest (e.g. 95fa3798) exports
+  `export` writes gzip'd JSON to stdout (`--texts cited`, the default, carries the texts of the sources
+  the moderated claims cite, `--texts all` those of every source); a run without a `dossier` manifest (e.g. 95fa3798) exports
   from its per-stage artifacts with `"legacy": true`. Exit codes: 0 ok, 1 no or incomplete dossier,
   2 bad request id.
 - `theo_publish` reads one JSON object on stdin: `publish` `{version, request_id, writer, result}`;
@@ -612,5 +705,37 @@ HTTP 500 on `/research/{slug}`.
 | `THEO_MAX_UNWRITTEN_DOSSIERS` | 6 | the feeder stops enqueueing while this many rows are `researched` |
 | `THEO_ARCHIVE_COMPLETION_MAX_S` | 1800 | time budget of archive completion; at most 2400 (below the worker's 2700 s stall guard) |
 | `THEO_ARCHIVE_COMPLETION_CONCURRENCY` | 4 | parallel fetches of archive completion |
-| `THEO_WORKER_DISABLED` | unset | `1` makes the worker idle (set by the owner since 2026-09-26) |
+| `THEO_WORKER_DISABLED` | unset | `1` makes the worker idle (set on the owner's behalf since 2026-09-26) |
 | `DISCORD_WEBHOOK_URL` | unset | the Discord copy of the owner notices; unset by owner decision 5 |
+
+## 13. The renderer (`video/`) and its CI gates
+
+`video/` is the Remotion 4.0.529 project; every `@remotion/*` package and every other dependency in
+`video/package.json` is pinned to an exact version. `npm run studio` previews the demo timeline
+(`remotion studio src/index.ts --public-dir ../ancient-nerds-map/public`). `episode render` and
+`episode thumbnail` run `scripts/lint.ts`, `render.ts` and `still.ts` as `node --import tsx
+scripts/<name>.ts` with `video/` as the working directory; they bundle into the episode's transient
+`render/bundle/`. `video/src/blocks/registry.json` is generated (`npm run registry`) and read by
+`pipeline/studio/blocks.py`; `tests/pipeline/studio/test_registry_contract.py` checks the studio's
+mirrors of the renderer.
+
+CI proves the part that needs no GPU:
+
+- **`lint-video`** runs `npm ci`, `npx tsc --noEmit` and `npx vitest run` in `video/` on Linux whenever
+  the `video` path filter of `.github/workflows/ci.yml` matches: `video/**`,
+  `tests/pipeline/studio/golden_timeline.json`, the site's `tokens.css` and `colors.ts` and
+  `ancient-nerds-map/public/fonts/**`. A red `lint-video` blocks the deploy, a skipped one does not. The
+  pre-push hook runs the same two commands for a push to `main` that changes such a path.
+- **`security-scan`** runs a blocking `npm audit --audit-level=critical` in `video/` (a change of
+  `video/package.json` or `video/package-lock.json` starts the job). It is clean since vitest went from
+  4.0.18 to 4.1.11 on 2026-09-30: 4.0.18 carried GHSA-5xrq-8626-4rwp (critical: with the Vitest UI
+  server listening, an arbitrary file can be read and executed) and GHSA-82fw-gwwq-j7x9 (moderate, in
+  `@vitest/mocker`). A critical advisory in the lockfile fails the deploy: bump that package, pinned
+  exactly like the rest, and do not ignore the advisory.
+- The `backend` filter also matches `video/src/blocks/registry.json`, `video/src/theme/glyphs.ts` and
+  `video/src/captions.ts`, which the studio's Python contract tests read.
+- `tests/pipeline/studio/test_workflows.py` runs the four workflows under `node` against canned agent
+  answers (`workflow_harness.mjs`), so the backend tests need Node as the studio does.
+
+What only the workstation proves is `npm run test:gpu` (section 8), the smoke render and the real
+captures.

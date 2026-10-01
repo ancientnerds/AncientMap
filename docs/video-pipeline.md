@@ -91,7 +91,7 @@ Automated "This Week in Archaeology" — transforms weekly articles into ~10-15 
  ┌───────────────────────────────────────────────────────────────────────────┐
  │  PHASE 4: TIMELINE BUILDER                pipeline/video/timeline_builder.py
  │                                                                          │
- │  Merges audio timing + assets into Remotion inputProps                   │
+ │  Merges audio timing + assets into the weekly timeline.json (no renderer)│
  │                                                                          │
  │  Per story segment, allocates frame budget:                              │
  │  ┌──────────┬──────────────────┬───────────────┬──────────────┐          │
@@ -223,10 +223,12 @@ it.
 |------|---------|
 | ElevenLabs Creator plan | $22 |
 | MiniMax-M2.5 for script adaptation | ~$1 |
-| Remotion Lambda (4 renders) | ~$0.40 |
 | YouTube Data API | Free |
 | yt-dlp + FFmpeg | Free |
-| **Total** | **~$24/month** |
+| **Total** | **~$23/month** |
+
+The weekly pipeline has no renderer any more, so there is no render cost to estimate. The studio renders
+locally on the owner's RTX 3080 (`docs/procedures/STUDIO.md`); its only paid call is the narration.
 
 ## Legal Compliance (Per Video)
 

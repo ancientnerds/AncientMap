@@ -19,7 +19,7 @@ and reviewed rarely, while their legal consequences surface years later.
 
 | Store | Content | Written by |
 | --- | --- | --- |
-| `theo_source_archive` | Full text and gzipped original HTML of every source a research run reads, plus adapter abstracts for sources never fetched. Archive completion adds the full text of each source a moderated claim cites that has none yet: Wikipedia articles, the pages `doi.org` redirects to, PDFs (extracted text) and YouTube transcripts copied from `news_videos` | `handlers/content_fetch.py`, `training_corpus.persist_run_corpus`, `archive_completion.py` |
+| `theo_source_archive` | Full text and gzipped original HTML of every source a research run reads, plus adapter abstracts for sources never fetched. Archive completion adds the full text of each source a moderated claim cites that has none yet: the page its URL serves (HTML or PDF, extracted to text), Wikipedia articles through their REST HTML, the pages `doi.org` redirects to, and for a YouTube video the transcript copied from `news_videos` | `handlers/content_fetch.py`, `training_corpus.persist_run_corpus`, `archive_completion.py` |
 | `theo_source_archive_runs` | Which run saw which source, under which search query, and whether a moderated claim cited it (`cited`, see below) | `training_corpus.persist_run_corpus`, `archive_completion.py` |
 | `research_artifacts` | Intermediate reasoning: angle findings, specialist analyses, synthesis, debate, moderator verdicts, citation registry, the research dossier (manifest and image candidate pool), failure snapshots, curator input/output, miner candidates. Runs from before Theo became research-only also left final paper metrics | `handlers/state_persist.py`, `handlers/dossier.py`, `theo_worker`, `curator`, `graph_miner` |
 | `thinking_log_archive` | Activity-feed rows moved here by the 90/365-day prune instead of being deleted | `thinking_log.prune_thinking_log` |
@@ -39,8 +39,12 @@ texts in the local paper workspace (`texts/<source_id>.txt`), where the Claude
 writer and the claim check read them. Archive completion reads which of the
 cited sources already have a full text. Both take the best archive row per
 source: a fetched full text before a TDM reservation before an adapter
-abstract, the newest row within each class. The export ships a text only from
-a row that has a body and no reservation.
+abstract, the newest row within each class. The export ships the text of that
+best row when it has a body and no reservation: a fetched full text or, where
+nothing better exists, the adapter abstract. The reservation row of a reserved
+source wins over an abstract, so the export ships nothing for it. Archive
+completion counts only a fetched full text or a reservation as done: a source
+with only an abstract is fetched again.
 
 The pre-existing content stores (`news_videos.transcript_text`,
 `news_articles.content`, `unified_sites`, `source_records`) are already
@@ -71,16 +75,30 @@ If a host cannot be reached for the check, the resulting rows carry
 `tdm_signal = 'check_failed'`. Those rows are unchecked, not cleared, and must
 be re-verified before any export that includes them.
 
-**TDM-reserved sources (owner decision 16, 2026-09-26).** The text of a
+**TDM-reserved sources (owner decision 16, 2026-09-26; recorded with the
+owner's other decisions of the studio build in
+`docs/superpowers/plans/2026-09-26-owner-questions.md`).** The page body of a
 TDM-reserved source is never archived: `training_corpus.archive_documents`
 stores a reserved document without its body, whichever tool fetched it, and
 archive completion counts the source as `tdm_reserved` in the run's dossier
-manifest. A paper may still cite it like any source. The local claim check of
-the paper studio (`python -m pipeline.studio paper claims-export` and
-`claims-import`) reads such a source live from its URL and keeps the text it
-read only in the local paper workspace, as `claims_check/live/<source_id>.txt`;
-that file is never uploaded or archived. An evidence quote on the published
-paper may come from that text (owner, 2026-09-27).
+manifest. A paper may still cite it like any source. The claim check of the
+paper studio reads such a source live from its URL: the `theo-claim-check`
+workflow, which runs between `python -m pipeline.studio paper claims-export`
+and `claims-import` (neither command fetches anything), fetches the page with
+the archive's own reader and keeps the text it read only in the local paper
+workspace, as `claims_check/live/<source_id>.txt`. `claims-import` and `paper
+check` read that file; it is never uploaded or archived. An evidence quote on
+the published paper may come from that text (owner question Q9, 2026-09-27,
+same file).
+
+A reservation covers what was fetched from the host. A source whose page is
+reserved can still have an adapter-abstract row (written from the search
+adapter's snippet, not from the page, with `tdm_opt_out = FALSE`), and a
+YouTube transcript is copied from `news_videos` with no host to ask. Both kinds
+of row carry `tdm_signal = ''` and no `tdm_checked_at`: nothing was fetched
+from a host, so nothing was checked. The export rules below keep them out of
+a training set unless their licence is established and the source has no
+reservation.
 
 **Retention.** Corpus data is retained as long as it is necessary for the
 purpose above (§ 44b(2) sentence 2). Review annually; delete the corpus if the
@@ -104,9 +122,14 @@ narrowing it later is possible, widening it retroactively is not.
 
 1. **Unresolved licence is excluded by default.** `license = ''` means nobody
    established what the licence is. Such rows may only enter a training set
-   with a documented § 44b assessment recorded in this file.
+   with a documented § 44b assessment recorded in this file. YouTube
+   transcripts copied from `news_videos` and adapter abstracts have an empty
+   licence unless the source's adapter reported one, so this rule keeps them
+   out by default.
 2. **TDM reservations are excluded.** `tdm_opt_out = TRUE` rows carry no body
-   anyway; `tdm_signal = 'check_failed'` rows require a fresh check.
+   anyway; `tdm_signal = 'check_failed'` rows require a fresh check. A source
+   with any reservation row is excluded as a whole: an older abstract row of
+   the same source is not exported either.
 3. **Non-commercial site sources are excluded from any commercial training.**
    The site database mixes licences; these `source_id` values are
    non-commercial or unclear and must be filtered:
@@ -132,7 +155,8 @@ FROM theo_source_archive
 WHERE license <> ''
   AND tdm_opt_out = FALSE
   AND tdm_signal <> 'check_failed'
-  AND full_text IS NOT NULL;
+  AND full_text IS NOT NULL
+  AND source_id NOT IN (SELECT source_id FROM theo_source_archive WHERE tdm_opt_out);
 ```
 
 ## Operating notes
