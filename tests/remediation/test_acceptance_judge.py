@@ -175,7 +175,7 @@ def answer_all(
     for line in OH.manifest(handoff):
         text = text_for(line)
         if text is not None:
-            OH.write_answer(handoff, batch_id=line["batch_id"], stage=line["stage"],
+            OH.write_answer(handoff, model=OH.OPUS_MODEL, batch_id=line["batch_id"], stage=line["stage"],
                             label=line["label"], text=text, answered_by=who(line),
                             now=lambda: NOW)  # fmt: skip
 
@@ -483,4 +483,7 @@ def test_the_brief_names_the_batch_its_directory_and_both_commands(tmp_path: Pat
     assert batch in brief and (tmp_path / "s1").as_posix() in brief
     assert f"--answered-by {batch}" in brief and "--stage s1" in brief
     assert "opus_handoff.py answer" in brief and "judge.py check-answer" in brief
+    assert (
+        "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in brief
+    )  # an agent names the model it runs as (owner decision 2026-10-01)
     assert "CANARIES" not in brief and "canary" not in brief.lower()

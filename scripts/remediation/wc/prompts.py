@@ -140,7 +140,7 @@ does not carry, a piece to remove that is not exact - and check again. If no pag
 ("unsupported"). Never change a finding to make the check pass.
 5. Record it - an answer is written once:
    {python} scripts/remediation/opus_handoff.py answer --dir {handoff} --batch-id {batch} \
---stage {stage} --label <label> --answered-by {batch_agent} --text-file {scratch}/<label>.json
+--stage {stage} --label <label> --answered-by {batch_agent} --model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5> --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded and how many \
 sentences you kept, trimmed and dropped.
@@ -225,7 +225,7 @@ For each question:
    It prints the problem, if any: fix the shape, never the finding.
 5. Record it - an answer is written once:
    {python} scripts/remediation/opus_handoff.py answer --dir {handoff} --batch-id {batch} \
---stage {stage} --label <label> --answered-by {batch_agent} --text-file {scratch}/<label>.json
+--stage {stage} --label <label> --answered-by {batch_agent} --model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5> --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded, how many kept \
 sentences you found SUPPORTED, UNSUPPORTED and WRONG, and how many texts incoherent.
@@ -295,7 +295,7 @@ For each question:
    It prints the problem, if any: fix the shape, never the finding.
 5. Record it - an answer is written once:
    {python} scripts/remediation/opus_handoff.py answer --dir {handoff} --batch-id {batch} \
---stage {stage} --label <label> --answered-by {batch_agent} --text-file {scratch}/<label>.json
+--stage {stage} --label <label> --answered-by {batch_agent} --model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5> --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.
 """

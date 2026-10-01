@@ -95,7 +95,9 @@ from phase3 import search_evidence as SE  # noqa: E402  - the search lane's stor
 from phase3.model import Stage  # noqa: E402
 from phase3.run import InputError  # noqa: E402  - one spelling per concept, not a second
 
-#: The model every call's ledger line names: the Opus agents of the orchestrating session.
+#: The stamp of the Opus agents of the orchestrating session. The ledger line of a call names the
+#: model that answered it (`ModelAnswer.model`); this constant is what the closed Phase-3 runs
+#: (`phase3/run.py`, `mass_run.py`), which replay Opus answers only, record in their run files.
 MODEL = OH.OPUS_MODEL
 
 #: How much evidence text may be inlined into one prompt, in characters. **An interpretation, not a
@@ -313,10 +315,14 @@ class Usage:
 
 @dataclass(frozen=True)
 class ModelAnswer:
-    """One answer: the text, and its usage - a provider's report, or declared unmetered."""
+    """One answer: the text, its usage - a provider's report, or declared unmetered - and the stamp
+    of the model that wrote it (`opus_handoff.ANSWER_MODELS`). `model` is `None` only for a stored
+    answer `judge_site` reuses: nothing was asked, so no ledger line names a model. A runner's
+    answer without one is refused by the ledger (a model call needs the model it called)."""
 
     text: str
     usage: Usage
+    model: str | None = None
 
     @property
     def cost_usd(self) -> float:
@@ -395,12 +401,14 @@ class HandoffRunner:
             )
         except OH.HandoffError as exc:
             raise ModelCallFailed(f"{call.label}: {exc}") from exc
-        return ModelAnswer(text=answer.text, usage=Usage.unmetered())
+        return ModelAnswer(text=answer.text, usage=Usage.unmetered(), model=answer.model)
 
 
 #: What `RecordingRunner` answers every call with. It is no stage's answer shape, so each stage's
 #: parser refuses it and the stage goes on to its next call - in the scratch copy an export runs in.
 NOT_AN_ANSWER = "(recorded for the Opus handoff export; not an answer)"
+#: The "model" of that answer's scratch ledger line: no model was called.
+NOT_A_MODEL = "(none: recorded for the Opus handoff export)"
 
 
 class RecordingRunner:
@@ -417,7 +425,7 @@ class RecordingRunner:
 
     def run(self, call: ModelCall) -> ModelAnswer:
         self.calls.append(call)
-        return ModelAnswer(text=NOT_AN_ANSWER, usage=Usage.unmetered())
+        return ModelAnswer(text=NOT_AN_ANSWER, usage=Usage.unmetered(), model=NOT_A_MODEL)
 
 
 def export_calls(calls: Iterable[ModelCall], *, directory: Path) -> dict[str, int]:
@@ -1053,7 +1061,7 @@ def judge_site(
             stage=call.stage,
             batch_id=call.batch_id,
             label=call.label,
-            model=MODEL,
+            model=answer.model,
             input_tokens=answer.usage.input_tokens,
             output_tokens=answer.usage.output_tokens,
             cache_read_tokens=answer.usage.cache_read_tokens,

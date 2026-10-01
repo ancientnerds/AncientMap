@@ -226,6 +226,7 @@ def answer_round(handoff: Path, out: Path, round_no: int, texts: dict[str, str])
     for q in read_jsonl(R.round_files(out, round_no).questions):
         OH.write_answer(
             handoff,
+            model=OH.OPUS_MODEL,
             batch_id=q["batch_id"],
             stage=R.STAGE,
             label=q["site_id"],
@@ -476,6 +477,9 @@ class TestTheRounds:
         assert "4 question(s)" in text
         assert f"{review['handoff'].resolve().as_posix()}-scratch/r0-001" in text
         assert "scope_review.py check-answer" in text and "opus_handoff.py answer" in text
+        assert (
+            "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in text
+        )  # an agent names the model it runs as (owner decision 2026-10-01)
         with pytest.raises(R.ScopeReviewError, match="no batch"):
             R.brief(review["out"], 0, "r0-009")
 

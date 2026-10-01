@@ -12,7 +12,7 @@ one `mass4.py --only <ready batches> --handoff-import` round at a time.
 
     handoff4.py brief        --run-dir R --handoff H --batch-id B
     handoff4.py check-answer --run-dir R --handoff H --batch-id B --label L --text-file F
-    handoff4.py record       --run-dir R --handoff H --batch-id B --label L --text-file F
+    handoff4.py record       --run-dir R --handoff H --batch-id B --label L --model M --text-file F
     handoff4.py ready        --run-dir R --handoff H [--batch B ...]
 
 * `brief` prints the whole instruction of the agent that answers batch B: which files it may read,
@@ -29,7 +29,8 @@ one `mass4.py --only <ready batches> --handoff-import` round at a time.
   agent's.
 * `record` is the one way an agent records an answer: `check-answer` first, and only an answer
   without a problem goes to `opus_handoff.write_answer` (write-once, the prompt's sha256, the
-  model, the batch agent's name). A problem is printed and nothing is written, so the corrected
+  model the agent says it runs as - `--model`, required, one of `opus_handoff.ANSWER_MODELS` - and
+  the batch agent's name). A problem is printed and nothing is written, so the corrected
   draft can still be recorded (review finding 2026-09-26: the live v3 run recorded two selections
   the import refuses through `opus_handoff.py answer`, which checks no shape, one second after
   writing them; the corrected drafts could no longer be recorded).
@@ -160,7 +161,7 @@ For each line of the manifest:
    the label's part before "/" (create the directory).
 4. Record it through its shape check (the stage's own parser; nothing is judged). An answer is
    written once, under your name {agent}:
-   {python} {handoff4} record --run-dir {run_dir} --handoff {handoff} --batch-id {batch} --label <label> --text-file {scratch}/<site id>.txt
+   {python} {handoff4} record --run-dir {run_dir} --handoff {handoff} --batch-id {batch} --label <label> --model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5> --text-file {scratch}/<site id>.txt
    It prints {{"ok": true, "wrote": true, ...}} when the answer is recorded. It prints
    {{"ok": false, "problem": ...}} and records nothing when the shape is wrong: fix the shape in
    your file, never the finding, and run the same command again. If it says REFUSED, stop and
@@ -294,8 +295,11 @@ def check_answer(run_dir: Path, handoff: Path, batch_id: str, label: str, text: 
 # ------------------------------------------------------------------------------------ the record
 
 
-def record(run_dir: Path, handoff: Path, batch_id: str, label: str, text: str) -> dict[str, Any]:
-    """Record one answer through its shape check. A shape problem (`check_answer`) is returned and
+def record(
+    run_dir: Path, handoff: Path, batch_id: str, label: str, text: str, *, model: str
+) -> dict[str, Any]:
+    """Record one answer through its shape check. `model` is the stamp of the model that answered
+    (a value of `opus_handoff.ANSWER_MODELS`; the CLI's `--model` names its key). A shape problem (`check_answer`) is returned and
     nothing is written: the agent fixes its draft and records it again. Without one, the answer
     goes to `opus_handoff.write_answer` under the batch agent's name (`agent_name`) - write-once,
     so the identical answer again writes nothing (`wrote: false`) and another one is refused
@@ -311,6 +315,7 @@ def record(run_dir: Path, handoff: Path, batch_id: str, label: str, text: str) -
         label=label,
         text=text,
         answered_by=agent_name(handoff, batch_id),
+        model=model,
     )
     return {"ok": True, "problem": None, "wrote": wrote, "answer_path": line["answer_path"]}
 
@@ -424,6 +429,12 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("check-answer", "record"):
         sub.choices[name].add_argument("--label", required=True)
         sub.choices[name].add_argument("--text-file", required=True, type=Path)
+    sub.choices["record"].add_argument(
+        "--model",
+        required=True,
+        choices=sorted(OH.ANSWER_MODELS),
+        help="the model id you run as, exactly as your own system prompt names it",
+    )
     batches = sub.add_parser("ready", help="the batches whose every question is answered in shape")
     batches.add_argument("--run-dir", required=True, type=Path)
     batches.add_argument("--handoff", required=True, type=Path)
@@ -451,7 +462,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if problem is None else 1
         if args.command == "record":
             text = args.text_file.read_bytes().decode("utf-8")
-            outcome = record(args.run_dir, args.handoff, args.batch_id, args.label, text)
+            outcome = record(
+                args.run_dir,
+                args.handoff,
+                args.batch_id,
+                args.label,
+                text,
+                model=OH.ANSWER_MODELS[args.model],
+            )
             _print(outcome)
             return 0 if outcome["ok"] else 1
         payload = ready(args.handoff, args.run_dir, args.batch)

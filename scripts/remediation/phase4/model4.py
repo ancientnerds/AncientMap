@@ -47,7 +47,6 @@ from types import MappingProxyType
 from typing import Any, Self, TypeVar
 
 from phase3.model import _coerce  # one enum coercion for both phases, not a second spelling
-from phase3.model_stage import MODEL  # the model the disclosure names is the model that is called
 from phase3.run import read_jsonl
 
 # --------------------------------------------------------------------------------------------
@@ -123,9 +122,22 @@ PUBLISHED_LICENCE_URL = "https://creativecommons.org/licenses/by-sa/4.0/"
 
 #: `_description_provenance.ai_system` for lanes W/S/T/R (production_write): the AI-system disclosure
 #: published with every Phase-4 text (EU AI Act Art. 50). Since the owner order of 2026-09-23 ("no
-#: DeepSeek any more - everything with Opus") every call is answered by Claude Opus (Anthropic)
-#: through the Opus handoff, and the disclosure names it, built from the model the ledger records.
-AI_SYSTEM = f"Claude Opus (Anthropic): {MODEL}, an-sites-remediation-2026-09"
+#: DeepSeek any more - everything with Opus") every call was answered by Claude Opus (Anthropic)
+#: through the Opus handoff, and the disclosure named it. The string below is what every provenance
+#: written until 2026-09-30 carries (production holds them): it stays byte-identical and valid.
+AI_SYSTEM_OPUS = (
+    "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+    "an-sites-remediation-2026-09"
+)
+#: Owner decision 2026-10-01: the orchestrating session runs Opus 5.5, every answering subagent runs
+#: Sonnet 5.5, so the disclosure of every NEW write names both. Used by every writer.
+AI_SYSTEM = (
+    "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
+    "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09"
+)
+#: Every disclosure a validator accepts: the old one (provenances already in production, re-read by
+#: audits, accepts and plans) and the new one. A validator accepts exactly these two.
+AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM})
 #: Lane L's `ai_system` and `basis`, verbatim from production_write.
 LEGACY_AI_SYSTEM = "2026-03 enrichment chain (LLM; model per site not recorded)"
 LEGACY_BASIS = "description differs from pre-March snapshot d4526691 (plan section 15.3)"
@@ -1447,8 +1459,10 @@ class Provenance(_JsonRecord):
         _need_member(self.ai, AiMark, "provenance.ai")
         if self.ai is not LANE_AI[self.lane]:
             raise ValueError(f"provenance.ai: lane {self.lane.value} is {LANE_AI[self.lane]}")
-        if self.ai_system != AI_SYSTEM:
-            raise ValueError(f"provenance.ai_system: {self.ai_system!r} is not {AI_SYSTEM!r}")
+        if self.ai_system not in AI_SYSTEMS:
+            raise ValueError(
+                f"provenance.ai_system: {self.ai_system!r} is not one of {sorted(AI_SYSTEMS)!r}"
+            )
         _need_member(self.licence, Licence, "provenance.licence")
         if self.licence is not PUBLISHED_LICENCE:
             raise ValueError(f"provenance.licence: published text is {PUBLISHED_LICENCE}")

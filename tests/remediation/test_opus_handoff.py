@@ -45,6 +45,7 @@ def _answer(root: Path, text: str = "VERDICT: CORRECT\n", **overrides: object) -
         "label": LABEL,
         "text": text,
         "answered_by": "opus-agent-1",
+        "model": OH.OPUS_MODEL,
         "now": lambda: NOW,
     }
     kwargs.update(overrides)
@@ -72,6 +73,64 @@ def _read(root: Path, prompt: str = PROMPT) -> OH.Answer:
 def test_every_answer_names_the_one_pinned_opus_model() -> None:
     assert OH.OPUS_MODEL == "anthropic/claude-opus-5-5 (Claude Code agent)"
     assert "deepseek" not in OH.OPUS_MODEL.lower()
+
+
+def test_the_answer_models_are_exactly_opus_and_sonnet() -> None:
+    """Owner decision 2026-10-01: the orchestrator runs Opus 5.5, every answering subagent Sonnet
+    5.5. The two stamps are pinned; an Opus answer recorded before stays valid."""
+    assert OH.SONNET_MODEL == "anthropic/claude-sonnet-5-5 (Claude Code agent)"
+    assert dict(OH.ANSWER_MODELS) == {
+        "claude-opus-5-5": OH.OPUS_MODEL,
+        "claude-sonnet-5-5": OH.SONNET_MODEL,
+    }
+
+
+@pytest.mark.parametrize("stamp", [OH.OPUS_MODEL, OH.SONNET_MODEL])
+def test_each_answer_model_stamp_is_written_read_and_validated(tmp_path: Path, stamp: str) -> None:
+    _export(tmp_path)
+    assert _answer(tmp_path, model=stamp) is True
+
+    assert _read(tmp_path).model == stamp
+    assert json.loads(_answer_file(tmp_path).read_text(encoding="utf-8"))["model"] == stamp
+    result = OH.validate(tmp_path)
+    assert result.ok and len(result.answered) == 1
+
+
+@pytest.mark.parametrize(
+    "stamp",
+    [
+        "opencode-go/deepseek-v4.1-flash",
+        "anthropic/claude-haiku-5-5 (Claude Code agent)",
+        "claude-sonnet-5-5",  # the model id, not the stamp: the CLI maps one to the other
+        "anthropic/claude-sonnet-5-5",
+        "",
+    ],
+)
+def test_a_third_model_is_refused_on_write_read_and_validate(tmp_path: Path, stamp: str) -> None:
+    _export(tmp_path)
+    with pytest.raises(OH.HandoffError, match="wrong model"):
+        _answer(tmp_path, model=stamp)
+    assert not _answer_file(tmp_path).exists()
+
+    _answer(tmp_path)
+    _rewrite(tmp_path, model=stamp)
+    with pytest.raises(OH.HandoffError, match="wrong model"):
+        _read(tmp_path)
+    result = OH.validate(tmp_path)
+    assert [e["why"][:11] for e in result.malformed] == ["wrong model"]
+
+
+def test_write_answer_has_no_default_model(tmp_path: Path) -> None:
+    _export(tmp_path)
+    with pytest.raises(TypeError, match="model"):
+        OH.write_answer(  # type: ignore[call-arg]
+            tmp_path,
+            batch_id="batch-0001",
+            stage="finder",
+            label=LABEL,
+            text="VERDICT: CORRECT\n",
+            answered_by="opus-agent-1",
+        )
 
 
 # ------------------------------------------------------------------------------------ the export
@@ -158,7 +217,10 @@ def test_an_answer_is_read_for_exactly_its_prompt(tmp_path: Path) -> None:
 
     answer = _read(tmp_path)
     assert answer == OH.Answer(
-        text="VERDICT: CORRECT\n", answered_by="opus-agent-1", answered_at=NOW
+        text="VERDICT: CORRECT\n",
+        answered_by="opus-agent-1",
+        answered_at=NOW,
+        model=OH.OPUS_MODEL,
     )
     stored = json.loads(_answer_file(tmp_path).read_text(encoding="utf-8"))
     assert set(stored) == OH.ANSWER_KEYS
@@ -311,9 +373,17 @@ def test_the_cli_validates_and_answers(tmp_path: Path) -> None:
         "--text-file",
         str(text),
     ]
-    wrote = subprocess.run(argv, **env_run)
+    without = subprocess.run(argv, **env_run)  # no --model: refused, nothing is written
+    assert without.returncode == 2 and "--model" in without.stderr
+    assert not _answer_file(tmp_path).exists()
+    third = subprocess.run([*argv, "--model", "claude-haiku-5-5"], **env_run)
+    assert third.returncode == 2 and "invalid choice" in third.stderr
+    assert not _answer_file(tmp_path).exists()
+
+    wrote = subprocess.run([*argv, "--model", "claude-sonnet-5-5"], **env_run)
     assert wrote.returncode == 0, wrote.stderr
     assert _read(tmp_path).text == "VERDICT: CORRECT - Ötzi\n"
+    assert _read(tmp_path).model == OH.SONNET_MODEL
 
     second = subprocess.run([sys.executable, script, "validate", "--dir", str(tmp_path)], **env_run)
     assert second.returncode == 0 and json.loads(second.stdout)["ok"] is True

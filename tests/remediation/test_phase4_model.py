@@ -31,6 +31,7 @@ PHASE4_PARENT = REPO / "scripts" / "remediation"
 if str(PHASE4_PARENT) not in sys.path:
     sys.path.insert(0, str(PHASE4_PARENT))
 
+import opus_handoff as OH  # noqa: E402
 from phase3 import model_stage as MS  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 
@@ -437,15 +438,58 @@ def test_the_change_note_follows_the_lane() -> None:
     _refused(M.Provenance.from_dict, data, "attribution.changes: lane T")
 
 
-def test_the_disclosed_ai_system_is_the_model_that_is_called() -> None:
-    """EU AI Act Art. 50: the disclosure names Claude Opus (Anthropic), the model every call's ledger
-    line names (owner order 2026-09-23); the March texts keep their own disclosure."""
-    assert M.AI_SYSTEM == f"Claude Opus (Anthropic): {MS.MODEL}, an-sites-remediation-2026-09"
+def test_the_disclosed_ai_systems_are_the_old_opus_one_and_the_new_opus_and_sonnet_one() -> None:
+    """EU AI Act Art. 50. Owner decision 2026-10-01: the orchestrating session runs Opus 5.5 and
+    every answering subagent Sonnet 5.5, so every NEW write discloses both (`AI_SYSTEM`); the
+    provenances in production carry the Opus-only string (`AI_SYSTEM_OPUS`, byte-identical to what
+    was written until 2026-09-30) and keep validating; the March texts keep their own disclosure."""
+    assert M.AI_SYSTEM_OPUS == (
+        "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+        "an-sites-remediation-2026-09"
+    )
+    assert M.AI_SYSTEM == (
+        "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
+        "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09"
+    )
+    assert M.AI_SYSTEMS == frozenset({M.AI_SYSTEM_OPUS, M.AI_SYSTEM})
+    assert M.AI_SYSTEM_OPUS == f"Claude Opus (Anthropic): {MS.MODEL}, an-sites-remediation-2026-09"
     assert MS.MODEL == "anthropic/claude-opus-5-5 (Claude Code agent)"
-    assert "deepseek" not in M.AI_SYSTEM.lower() and " via Pi " not in M.AI_SYSTEM
+    assert OH.SONNET_MODEL.split(" (")[0] in M.AI_SYSTEM and "claude-opus-5-5" in M.AI_SYSTEM
+    for system in M.AI_SYSTEMS:
+        assert "deepseek" not in system.lower() and " via Pi " not in system
     assert M.LEGACY_AI_SYSTEM == "2026-03 enrichment chain (LLM; model per site not recorded)"
+
+
+@pytest.mark.parametrize(
+    "system",
+    [
+        # copied, not read from `model4`: the old string must keep validating (it is in production)
+        "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+        "an-sites-remediation-2026-09",
+        "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
+        "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09",
+    ],
+)
+def test_a_provenance_accepts_each_disclosed_ai_system(system: str) -> None:
     data = _provenance_dict()
-    data["ai_system"] = "some other model"
+    data["ai_system"] = system
+    assert M.Provenance.from_dict(data).to_dict()["ai_system"] == system
+
+
+@pytest.mark.parametrize(
+    "system",
+    [
+        "some other model",
+        "",
+        "Claude Sonnet (Anthropic): anthropic/claude-sonnet-5-5 (Claude Code agent), "
+        "an-sites-remediation-2026-09",
+        "opencode-go/deepseek-v4.1-flash via Pi (an-sites-remediation-2026-09)",
+        M.AI_SYSTEM + " ",
+    ],
+)
+def test_a_provenance_refuses_any_other_ai_system(system: str) -> None:
+    data = _provenance_dict()
+    data["ai_system"] = system
     _refused(M.Provenance.from_dict, data, "provenance.ai_system")
 
 

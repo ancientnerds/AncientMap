@@ -858,8 +858,10 @@ class DescriptionCheck:
         if self.v != CHECK_VERSION or isinstance(self.v, bool):
             raise ValueError(f"check.v: {self.v!r} is not version {CHECK_VERSION}")
         M._need_text(self.run, "check.run")
-        if self.checker != M.AI_SYSTEM:
-            raise ValueError(f"check.checker: {self.checker!r} is not {M.AI_SYSTEM!r}")
+        if self.checker not in M.AI_SYSTEMS:
+            raise ValueError(
+                f"check.checker: {self.checker!r} is not one of {sorted(M.AI_SYSTEMS)!r}"
+            )
         M._need_hex(self.checked_sha256, "check.checked_sha256")
         M._need_hex(self.desc_sha256, "check.desc_sha256")
         M._need_hex(self.verified_sha256, "check.verified_sha256")

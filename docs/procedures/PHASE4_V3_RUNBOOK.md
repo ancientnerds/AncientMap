@@ -182,10 +182,11 @@ gets exactly this instruction (the orchestrator substitutes the batch, absolute 
 `brief` prints the whole instruction: read only the batch's manifest and prompt files, no web (each
 prompt holds its evidence), one draft per question in `$H-select-scratch/<B>/<site id>.txt` (its own
 folder: no two agents share a file), and record it with `handoff4.py record --run-dir $RUN --handoff
-$H-select --batch-id <B> --label <label> --text-file <draft>`. `record` runs `check-answer` first -
+$H-select --batch-id <B> --label <label> --model <model id> --text-file <draft>`. `record` runs `check-answer` first -
 the selector's own parser `select_stage.parse_selection` over the batch's own candidate pool, after
 proving the batch still builds the exported prompt - and only an answer without a problem goes to
-`opus_handoff.write_answer` (write-once, the prompt's sha256, the model, the agent's name
+`opus_handoff.write_answer` (write-once, the prompt's sha256, the model the agent runs as - the
+required `--model claude-sonnet-5-5|claude-opus-5-5` of `record` - and the agent's name
 `opus-p4-v3-select-<B>`). A problem is printed (`"ok": false`, exit 1) and nothing is recorded, so
 the agent fixes its draft and records it again; an answer recorded already is refused (`REFUSED`,
 exit 2). No agent records with `opus_handoff.py answer`: it checks no shape, and the live run's

@@ -360,6 +360,7 @@ def _answer_all(handoff: Path, answers: dict[tuple[str, str, str], str] = ANSWER
         site_id, field = line["label"].split("/")
         OH.write_answer(
             handoff,
+            model=OH.OPUS_MODEL,
             batch_id=line["batch_id"],
             stage=line["stage"],
             label=line["label"],

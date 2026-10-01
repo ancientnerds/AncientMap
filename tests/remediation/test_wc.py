@@ -426,6 +426,11 @@ def test_the_check_record_reads_back_strictly_and_counts_what_its_sentences_say(
     assert WC4.DescriptionCheck.from_dict(check.to_dict()) == check
     assert (check.kept, check.of, check.trimmed) == (3, 3, 1)
     assert check.checker == M.AI_SYSTEM and check.v == 2
+    # a NEW check names the orchestrator and the answering subagents (owner decision 2026-10-01)
+    assert check.checker == (
+        "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
+        "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09"
+    )
     assert check.desc_sha256 == M.text_sha256(composed.description)
     assert check.verified_sha256 == check.desc_sha256
     assert check.verifiers == ("opus-wc-verify-0001",)
@@ -448,6 +453,27 @@ def test_the_check_record_reads_back_strictly_and_counts_what_its_sentences_say(
     ):
         with pytest.raises(ValueError, match=message):
             WC4.DescriptionCheck.from_dict(broken)
+
+
+def test_the_check_record_accepts_each_disclosed_ai_system_and_refuses_a_third() -> None:
+    """Records in production carry the Opus-only disclosure and keep reading back; a new one names
+    Opus and Sonnet; no other string is a checker."""
+    _, _, check, _ = _outcome(FX.row(FX.SITE_A, FX.TEXT_A, raw_data=FX.legacy_raw(FX.TEXT_A)))
+    old = (
+        "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+        "an-sites-remediation-2026-09"
+    )
+    for system in (old, M.AI_SYSTEM):
+        data = {**check.to_dict(), "checker": system}
+        assert WC4.DescriptionCheck.from_dict(data).checker == system
+    for third in (
+        "someone",
+        "",
+        old + " ",
+        "Claude Sonnet (Anthropic): an-sites-remediation-2026-09",
+    ):
+        with pytest.raises(ValueError, match="check.checker"):
+            WC4.DescriptionCheck.from_dict({**check.to_dict(), "checker": third})
 
 
 def test_a_record_never_describes_a_cleared_text() -> None:
@@ -770,14 +796,18 @@ def test_a_failed_fetch_is_recorded_and_its_quote_does_not_count(tmp_path: Path)
 #: is verified again", untrue of verify2, which clears the site on any non-pass; it now says what
 #: both rounds do - the broken sentences go, what remains is published only once a verifier
 #: confirms it, else the description is cleared.
+#: The three BRIEFs re-pinned 2026-10-01 (owner decision: answering subagents run Sonnet 5.5): the
+#: printed `opus_handoff.py answer` command carries `--model <the model id you run as: ...>`. A
+#: brief is printed for the agent and is no part of an exported prompt, so the four QUESTION/REASK
+#: pins above are untouched and no exported question goes stale.
 PINS = {
     "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
     "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
-    "CHECK_BRIEF": "5844ec9957fc97e651c2d1aead3edc08204e7a2eda981c0f02cfb1098d5291e5",
+    "CHECK_BRIEF": "d47531379af16d0fcbdaa14f4f9f8f12431c81d4172d12d57cccf1b77326995d",
     "VERIFY_QUESTION": "f2f88204af84597a7ce792bfb364b8d67c696a6c83c0d47814c050a024dc5a82",
-    "VERIFY_BRIEF": "142bac74c54bdad6632c7d6876c5aba59312897172b8e517b4b11aa892979290",
+    "VERIFY_BRIEF": "35669c7d587256a8b9a71fc06744d9ad472e49dec6f7549928927897288e8c8c",
     "JUDGE_QUESTION": "6aba7d0af909bcfeb5a25766696404ecc0043ff1858bec231d247f00924d495d",
-    "JUDGE_BRIEF": "853b93c107c3721c2298b88ea85fef9bbc361b9c945380a1a2039f091b703060",
+    "JUDGE_BRIEF": "b06554b4fdf864ac14b7c66077a919731df403a0d429604b452c8f80785802aa",
 }
 
 
@@ -930,6 +960,9 @@ def test_the_brief_names_the_batchs_own_scratch_and_the_commands(tmp_path: Path)
     text = C.brief(run, handoff, "wc-0002")
     assert "1 question(s)" in text and "wc-test-r1-scratch/wc-0002/<label>.json" in text
     assert "wc/cli.py check-answer" in text and "--answered-by opus-check-r1-wc-0002" in text
+    assert (
+        "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in text
+    )  # an agent names the model it runs as (owner decision 2026-10-01)
     with pytest.raises(C.WcRunError, match="no batch"):
         C.brief(run, handoff, "wc-0009")
 
@@ -1169,7 +1202,11 @@ def test_the_pilot_judge_sees_the_kept_text_with_its_quotes_and_the_drops(tmp_pa
     assert "(3 kept, 0 dropped)" in prompt
     prompt_c = (handoff / lines[FX.SITE_C]["prompt_path"]).read_text(encoding="utf-8")
     assert "(none - the description is cleared)" in prompt_c
-    assert "--answered-by opus-wc-judge-judge-0001" in C.judge_brief(run, handoff, "judge-0001")
+    judge = C.judge_brief(run, handoff, "judge-0001")
+    assert (
+        "--answered-by opus-wc-judge-judge-0001" in judge
+        and "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in judge
+    )
 
 
 def test_the_pilot_passes_only_below_every_threshold(tmp_path: Path) -> None:

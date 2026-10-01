@@ -87,6 +87,9 @@ from phase3.ledger import UNMETERED  # noqa: E402  (the one spelling of "no mete
 from pipeline.video.shorts_select import vlm_bytes  # noqa: E402
 
 #: The model every answer is by, and every ledger line names (`verdicts_by_image` refuses another).
+#: This lane is closed (its verdicts were sealed before the owner's decision of 2026-10-01 that
+#: answering subagents run Sonnet): it replays Opus answers only and `read_opus_answer` refuses an
+#: answer of any other model, so the stamp it records is always the answer's own.
 MODEL = OH.OPUS_MODEL
 KINDS: tuple[str, ...] = pilot.EXPECTED_KINDS
 #: The stage every vision question is handed off under: a path component of the handoff directory.
@@ -323,6 +326,19 @@ def validate(
     return {k: parsed[k] for k in ("shows_archaeology", "structure", "generic_landscape")}, None
 
 
+def read_opus_answer(root: Path, *, batch_id: str, label: str, prompt: str) -> OH.Answer:
+    """`OH.read_answer` for this closed lane: an answer by any model but `MODEL` is refused."""
+    answer = OH.read_answer(
+        root, batch_id=batch_id, stage=HANDOFF_STAGE, label=label, prompt=prompt
+    )
+    if answer.model != MODEL:
+        raise OH.HandoffError(
+            f"{batch_id}/{label}: answered by {answer.model!r}; the gallery audit is closed and "
+            f"replays answers of {MODEL!r} only"
+        )
+    return answer
+
+
 @dataclass
 class Judge:
     """Everything one judgement needs besides the job: the images and the Opus answers."""
@@ -386,12 +402,8 @@ class Judge:
                 f"{line['image_file']} - export the job again"
             )
             return line
-        answer = OH.read_answer(
-            self.handoff,
-            batch_id=job.stage,
-            stage=HANDOFF_STAGE,
-            label=job_label(job),
-            prompt=prompt,
+        answer = read_opus_answer(
+            self.handoff, batch_id=job.stage, label=job_label(job), prompt=prompt
         )
         parsed = pilot.extract_json(answer.text)
         verdict, problem = validate(job.pass_, parsed)
@@ -639,12 +651,8 @@ def unanswered(jobs: Sequence[Job], ledger: Ledger, handoff: Path) -> list[str]:
         if job.key() in done:
             continue
         try:
-            OH.read_answer(
-                handoff,
-                batch_id=job.stage,
-                stage=HANDOFF_STAGE,
-                label=job_label(job),
-                prompt=prompt_for(job),
+            read_opus_answer(
+                handoff, batch_id=job.stage, label=job_label(job), prompt=prompt_for(job)
             )
         except OH.HandoffError as exc:
             problems.append(str(exc))

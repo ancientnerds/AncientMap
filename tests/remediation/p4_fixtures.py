@@ -270,7 +270,7 @@ class ScriptedRunner:
         answer = self.script[(call.site_id, call.answer_key)]
         if isinstance(answer, Exception):
             raise answer
-        return MS.ModelAnswer(text=answer, usage=USAGE)
+        return MS.ModelAnswer(text=answer, usage=USAGE, model=MS.MODEL)
 
 
 def ledger_lines(path: Path) -> list[dict]:

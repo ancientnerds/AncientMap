@@ -630,6 +630,7 @@ def answer_all(run: Path, stage: str, handoff: Path, answers: dict[str, str], by
         for site_id in members:
             OH.write_answer(
                 handoff,
+                model=OH.OPUS_MODEL,
                 batch_id=batch_id,
                 stage=stage,
                 label=site_id,
@@ -687,6 +688,11 @@ class TestTheRun:
             assert CP.describes(provenance, T.GOOD[row["site_id"]])
             assert provenance["desc_sha256"] == T.sha(T.DESCRIPTIONS[row["site_id"]])
             assert provenance["check"]["by"].startswith("teaser-check-")
+            # `outcome_rows` writes the new disclosure (owner decision 2026-10-01: Opus + Sonnet)
+            assert provenance["ai_system"] == (
+                "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
+                "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09"
+            )
             assert provenance["verify"] == {
                 "verdict": "VERIFIED",
                 "stage": "verify",
@@ -842,6 +848,9 @@ class TestTheRun:
         R.export_stage(run, "write", handoff)
         text = R.brief(run, handoff, "write-001")
         assert "Opus writer write-001" in text and "--answered-by teaser-write-001" in text
+        assert (
+            "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in text
+        )  # an agent names the model it runs as (owner decision 2026-10-01)
         assert "handoff-write-scratch/write-001/<label>.json" in text
         assert "no web research" in text
         assert 'Skip every question whose "answer_path"' in text
@@ -1381,7 +1390,7 @@ class TestTheVerification:
         line = next(line for line in OH.manifest(handoff) if line["label"] == T.SKARA)
         (handoff / line["answer_path"]).unlink()
         OH.write_answer(
-            handoff, batch_id=line["batch_id"], stage="rewrite-v", label=T.SKARA,
+            handoff, model=OH.OPUS_MODEL, batch_id=line["batch_id"], stage="rewrite-v", label=T.SKARA,
             text=rewrite_answer(T.GOOD[T.SKARA], basis_ids=("S1", "S2", "S3", "S6")),
             answered_by=R.agent_name(line["batch_id"]),
         )  # fmt: skip
@@ -1562,6 +1571,7 @@ class TestTheVerification:
         text = R.brief(run, handoff, "verify-001")
         assert "Opus verifier verify-001" in text and "sources on the web" in text
         assert "--answered-by teaser-verify-001" in text and "verified or judged" in text
+        assert "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in text
 
     def test_the_judge_lists_the_central_claim_first(self) -> None:
         prompt = P.judge_prompt("Skara Brae", "Scotland", T.GOOD[T.SKARA])
@@ -1605,7 +1615,7 @@ class TestThePilotJudge:
         handoff = tmp_path / "handoff-judge"
         R.export_judge(run, handoff)
         OH.write_answer(
-            handoff, batch_id="judge-001", stage=R.JUDGE_STAGE, label=T.SKARA, text=text,
+            handoff, model=OH.OPUS_MODEL, batch_id="judge-001", stage=R.JUDGE_STAGE, label=T.SKARA, text=text,
             answered_by=by or "teaser-judge-001",
         )  # fmt: skip
         return R.import_judge(run, client=judge_client(), pace=0)
@@ -1667,7 +1677,7 @@ class TestThePilotJudge:
         R.export_stage(run, "verify", handoff)
         for site_id, name in ((T.SKARA, "teaser-verify-a"), (T.NEWGRANGE, "teaser-verify-b")):
             OH.write_answer(
-                handoff, batch_id="verify-001", stage="verify", label=site_id,
+                handoff, model=OH.OPUS_MODEL, batch_id="verify-001", stage="verify", label=site_id,
                 text=T.judge_answer(), answered_by=name,
             )  # fmt: skip
         R.import_stage(run, "verify", fit=T.fit, client=judge_client(), pace=0)
@@ -1676,7 +1686,7 @@ class TestThePilotJudge:
         R.export_judge(run, judge)
         for site_id in (T.SKARA, T.NEWGRANGE):
             OH.write_answer(
-                judge, batch_id="judge-001", stage=R.JUDGE_STAGE, label=site_id, text=judged(),
+                judge, model=OH.OPUS_MODEL, batch_id="judge-001", stage=R.JUDGE_STAGE, label=site_id, text=judged(),
                 answered_by="teaser-verify-b",
             )  # fmt: skip
         with pytest.raises(R.RunError, match=f"{T.SKARA}: the judge teaser-verify-b"):

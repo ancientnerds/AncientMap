@@ -801,6 +801,7 @@ def test_the_c1_questions_go_through_the_handoff_and_are_measured_by_the_sealed_
     for line in lines:
         OH.write_answer(
             handoff,
+            model=OH.OPUS_MODEL,
             batch_id=line["batch_id"],
             stage=line["stage"],
             label=line["label"],

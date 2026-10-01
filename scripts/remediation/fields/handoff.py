@@ -507,6 +507,7 @@ source is "clear" (or "unresolved" for coordinates).
 5. Record it - an answer is written once:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
 --batch-id {batch} --stage {stage} --label <label> --answered-by {batch} \
+--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5> \
 --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.

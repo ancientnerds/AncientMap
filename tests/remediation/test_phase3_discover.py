@@ -91,7 +91,7 @@ def _truth_ids() -> list[str]:
 
 def _answer() -> MS.ModelAnswer:
     """The answer every scripted call replays: what the Opus handoff returns, unmetered."""
-    return MS.ModelAnswer(text="OK", usage=MS.Usage.unmetered())
+    return MS.ModelAnswer(text="OK", usage=MS.Usage.unmetered(), model=MS.MODEL)
 
 
 def _site_record(
@@ -145,7 +145,9 @@ class ScriptedRunner:
 
     def run(self, call: MS.ModelCall) -> MS.ModelAnswer:
         self.calls.append(call)
-        return MS.ModelAnswer(text=f"VERDICT: CORRECT - {call.label}", usage=self.answer.usage)
+        return MS.ModelAnswer(
+            text=f"VERDICT: CORRECT - {call.label}", usage=self.answer.usage, model=MS.MODEL
+        )
 
 
 class ReviewingRunner(ScriptedRunner):
@@ -156,6 +158,7 @@ class ReviewingRunner(ScriptedRunner):
         return MS.ModelAnswer(
             text="REFUTED: NO\nWHY: the page says exactly what the record says\n",
             usage=self.answer.usage,
+            model=MS.MODEL,
         )
 
 
@@ -1399,7 +1402,9 @@ class OneHoleRunner(ScriptedRunner):
                 f"{call.label} stdout:9 assistant message_end: the assistant message carries no "
                 "text - an empty answer is not a result"
             )
-        return MS.ModelAnswer(text=f"VERDICT: CORRECT - {call.label}", usage=self.answer.usage)
+        return MS.ModelAnswer(
+            text=f"VERDICT: CORRECT - {call.label}", usage=self.answer.usage, model=MS.MODEL
+        )
 
 
 def test_an_unreadable_stream_for_one_field_is_a_hole_and_the_other_calls_are_bought(
