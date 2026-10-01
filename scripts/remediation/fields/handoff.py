@@ -110,9 +110,14 @@ PILOT_MIN_FIELDS = 10
 #: WD3 clears nothing, so its pilot guards the other way a run can go wrong - a checker that cannot
 #: read what the agents cite (every such field ends `held`): a chosen line, not a measured one. An
 #: unsourced field (`unresolved`) is a finding, not a defect: the population is what WD1 could not
-#: source, and its rate is reported, not gated.
+#: source, and its rate (every `unresolved` decision, answered outright or on exhaustion) is
+#: reported. The other way a run goes wrong is an agent that answers `unresolved` without
+#: researching: a field of a site whose question showed a Wikidata item or an English Wikipedia
+#: article usually has a source, so the share of those fields answered `unresolved` outright is
+#: gated, overall and when at least `PILOT_MIN_FIELDS` of them were asked (a chosen line).
 PILOT_MAX_HELD_RATE = 0.20
 PILOT_MAX_COUNTRY_HELD_RATE = 0.30
+PILOT_MAX_HINTED_UNRESOLVED_RATE = 0.60
 PILOT_FILE = "PILOT.json"
 
 
@@ -363,8 +368,12 @@ ANSWER_FORMAT_WD3 = (
 OPEN_TEXT = {
     "empty": "the field is empty",
     "unresolved": "the stored point has no sourced witness: an earlier pass found none",
-    "held": "the stored value has no source: an earlier pass could not read the pages it cited",
-    "unsourced": "the stored value has no source: an earlier pass found none (its clear was refused)",
+    "held": "the stored value has no source: an earlier pass could not read the pages it cited. "
+    "A source that confirms it is a keep; a source for another value is a replace, which is "
+    "listed for the owner and not written - only an empty field is filled",
+    "unsourced": "the stored value has no source: an earlier pass found none (its clear was "
+    "refused). A source that confirms it is a keep; a source for another value is a replace, "
+    "which is listed for the owner and not written - only an empty field is filled",
 }
 WD1_SHOWN_CHARS = 600
 #: How many of a site's own links a WD3 question lists (best first).
@@ -1105,7 +1114,10 @@ def pilot_report(run: Path) -> dict[str, Any]:
     exhaustion (`PILOT_MAX_RATE`, `PILOT_MAX_COUNTRY_RATE` for a country with at least
     `PILOT_MIN_FIELDS` fields); under WD3's, which clears nothing, the share held because the
     checker could not read the cited pages (`PILOT_MAX_HELD_RATE`, `PILOT_MAX_COUNTRY_HELD_RATE`),
-    and the share nobody could source is reported beside it (`unresolved_rate`), not gated."""
+    and the share of every `unresolved` decision, whatever its `via`, is reported beside it
+    (`unresolved_rate`), and the share of the fields of sites with a Wikidata item or an English
+    Wikipedia article that an agent answered `unresolved` outright (`hinted_unresolved_rate`) is
+    gated (`PILOT_MAX_HINTED_UNRESOLVED_RATE`): a lazy pilot cannot pass as a thin population."""
     rule = R.read_rule(run)
     reask = json.loads((run / REASK_FILE).read_text(encoding="utf-8"))
     if reask["fields"]:
@@ -1119,6 +1131,12 @@ def pilot_report(run: Path) -> dict[str, Any]:
     for d in _read_jsonl(run / DECISIONS_FILE):
         tally = tallies.setdefault(str(classified[d["site_id"]]["country"]), Counter())
         tally["fields"] += 1
+        hinted = bool(classified[d["site_id"]]["qid"] or classified[d["site_id"]]["enwiki"])
+        tally["hinted"] += hinted
+        if d["decision"] == A.UNRESOLVED:
+            tally["unresolved"] += 1
+            if d["via"] == COUNTED:
+                tally["hinted_unresolved"] += hinted
         if d["via"] == EXHAUSTED:
             tally[
                 "exhausted_"
@@ -1136,8 +1154,14 @@ def pilot_report(run: Path) -> dict[str, Any]:
         return {
             **figures,
             "exhausted_unresolved": tally["exhausted_unresolved"],
+            "unresolved": tally["unresolved"],
+            "hinted": tally["hinted"],
+            "hinted_unresolved": tally["hinted_unresolved"],
             "held_rate": round(tally["exhausted_held"] / tally["fields"], 3),
-            "unresolved_rate": round(tally["exhausted_unresolved"] / tally["fields"], 3),
+            "unresolved_rate": round(tally["unresolved"] / tally["fields"], 3),
+            "hinted_unresolved_rate": (
+                round(tally["hinted_unresolved"] / tally["hinted"], 3) if tally["hinted"] else 0.0
+            ),
         }
 
     # the gated share, what it is called in a message, and its two lines
@@ -1153,6 +1177,16 @@ def pilot_report(run: Path) -> dict[str, Any]:
         stopped_by.append(
             f"overall: {overall[count_key]} of {overall['fields']} fields {said} on "
             f"exhaustion ({overall[gated]})"
+        )
+    if (
+        not rule.clearable
+        and overall["hinted"] >= PILOT_MIN_FIELDS
+        and overall["hinted_unresolved_rate"] > PILOT_MAX_HINTED_UNRESOLVED_RATE
+    ):
+        stopped_by.append(
+            f"overall: {overall['hinted_unresolved']} of {overall['hinted']} fields of sites with "
+            "a Wikidata item or an English Wikipedia article answered `unresolved` outright "
+            f"({overall['hinted_unresolved_rate']}) - spot-check the agents' research"
         )
     countries = {country: row(tally) for country, tally in sorted(tallies.items())}
     for country, figures in countries.items():
@@ -1171,6 +1205,9 @@ def pilot_report(run: Path) -> dict[str, Any]:
             "measure": gated,
             "max_rate": max_rate,
             "max_country_rate": max_country,
+            "max_hinted_unresolved_rate": None
+            if rule.clearable
+            else PILOT_MAX_HINTED_UNRESOLVED_RATE,
             "min_country_fields": PILOT_MIN_FIELDS,
         },
         "reported_at": H.now(),

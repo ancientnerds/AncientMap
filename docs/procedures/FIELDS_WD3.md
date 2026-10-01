@@ -21,7 +21,7 @@ list); (5) the orchestrator is Opus 5.5, every answering agent is Sonnet 5.5, an
 |---|---|---|
 | asked | every field a machine source contradicts or cannot confirm | **only open fields** (section 2) |
 | evidence | at least two quotes from two source families | **one verbatim quote from one source**, found by machine in the page as fetched (`opus_audit/quotes.py`); one Wikipedia article in any language + its Wikidata item + Commons = one family, else the registrable domain |
-| refused sources | - | `ancientnerds.com`, known Wikipedia mirrors (`rule.FORBIDDEN_FAMILIES`: Wikiwand, DBpedia, ...), also behind a web.archive.org copy; the brief forbids AI content farms (no list can be machine-checked) |
+| refused sources | - | `ancientnerds.com`, known Wikipedia mirrors (`rule.FORBIDDEN_FAMILIES`: Wikiwand, DBpedia, ...), also behind a web.archive.org copy with or without the scheme of the archived URL (`answers.family_of` unwraps it); archive and cache proxies whose original cannot be attributed (archive.org itself when it cannot be unwrapped, archive.ph/today/is/md/vn/li/fo, `googleusercontent.com` cache, `translate.goog`, `translate.google.com`); the brief forbids AI content farms (no list can be machine-checked) |
 | field checks | `answers.py` | **the same, unchanged**: a coordinate quote within 1 km of the value and written at least to whole arcminutes; a period quote carries a date and one states the value's year / century / millennium; a type quote holds a word of the type; a source_url quote is from the value's own page and one names the site; the value page is served 2xx, not redirected, on Wikipedia an article of its own |
 | answers | keep / replace / clear (coordinates: unresolved) | keep / replace / **unresolved** (every field) |
 | nothing sourced after 3 rounds | cleared (a point is held) | **stays**: `unresolved`, or `held` when the last answer failed only on pages the checker could not read; both go to the owner list |
@@ -29,10 +29,13 @@ list); (5) the orchestrator is Opus 5.5, every answering agent is Sonnet 5.5, an
 | model | Opus agents | **Sonnet 5.5 agents** (`--model claude-sonnet-5-5`), orchestrated by Opus 5.5 |
 
 **Fill only** (`plan.py`, rule `one-family`): an answer is written only when it is a `replace` of a field the
-question named open (`CLASSIFIED.jsonl` `open`): an empty column, or the stored point of a site without a
-sourced point (replaced only when the sourced point is more than 1 km away; within 1 km it is a `keep`:
-recorded as sourced, no write), or a held / unsourced stored value. A field that holds a sourced value is
-never in a WD3 question. A `clear` decision cannot exist (the parser refuses it, `plan.py wave` refuses a
+question named open (`CLASSIFIED.jsonl` `open`) **and that is empty** now (NULL or blank), or of the stored
+point of a site without a sourced point (replaced only when the sourced point is more than 1 km away; within
+1 km it is a `keep`: recorded as sourced, no write). A stored scalar value is never replaced, even one WD1 held
+or could not source: the `replace` is refused as `not-empty` and goes to the owner list with the value found (a
+`keep` on such a value records its source and writes nothing). Replacing an unsourced non-empty value would be a
+widening of the owner's rule ("fill") that only the owner can decide. A field that holds a sourced value is
+never in a WD3 question; neither is a point a journalled lane wrote with sourced evidence (section 2). A `clear` decision cannot exist (the parser refuses it, `plan.py wave` refuses a
 DECISIONS file that holds one, `site_cells` refuses it per cell). A `period_name` is written only beside the
 `period_start` written in the same step (derived as in WD1); a label that merely disagrees with its start
 is not repaired by WD3. The point is still written whole (`lat`, `lon`, `geom`) and never across a country
@@ -49,7 +52,8 @@ wave` copies the rule into the pinned `WAVE.json`; `step` / `accept` / `handoff`
 the column is free text), plan table `_fields_wd3_plan`, directory `output/remediation/fields/wd3/write/<wave>/sNNN`,
 NOTICE `WD3 field correction: <n> of <n> planned cell(s) changed and journalled over <m> curated site(s)`.
 The cells, guards and invariants are WD1's. Every journalled cell carries its quote(s), their outcomes and the
-model that answered (`evidence[].model`).
+model that answered (`evidence[].model`): the derived `period_name` cell carries the start's decision entry (and
+so its model) beside its derivation.
 
 ## 2. The population (measured read-only, 2026-10-01)
 
@@ -58,9 +62,14 @@ A curated, not retired (`scope_status`) site is asked when at least one field is
 * `empty` - `period_start` NULL, `site_type` or `source_url` NULL or `''` (read from production now, after
   WD1's clears landed; `lat`/`lon` are NOT NULL);
 * `unresolved` - the stored point: WD1's decision for it is `unresolved` (a counted answer, or exhausted),
-  or - for a site WD1 never classified - the machine status is not CONFIRMED;
+  or - for a site WD1 never classified - the machine status is not CONFIRMED. **Not open**, whatever WD1
+  decided: a point whose newest `lat`/`lon` journal row (`remediation_change_log`, `POINTS.jsonl`, one SELECT)
+  carries `two_source`, `authoritative` or `one_source` confidence and the value the row holds now - another
+  lane's sourced write. Measured 2026-10-01: Kephala (Kea, `294968f3-036b-44ff-b704-91593648927d`), written by
+  `2026-09-23_owner-case-coordinates-wave2` from Wikidata P625 and topostext.org, the only one of WD1's 969
+  unresolved/held coordinates. COUNTS.json of the build lists them (`journal_sourced_points`);
 * `held` - WD1 held the field (pages its agents cited were unreadable): the stored value neither got a source nor
-  was cleared;
+  was cleared. It is asked (a `keep` records a source) but a different value is never written (`not-empty`);
 * `unsourced` - WD1 decided `clear`, the value is still stored (its write was refused).
 
 A field WD1 decided `keep` or `replace` is never asked (an empty one is listed as a contradiction, not asked).
@@ -85,7 +94,9 @@ Field sets per site: period_start alone 1,556; coordinates alone 385; coordinate
 Turkey 111, France 102, Spain 96, Mexico 96, Italy 92. 211 sites carry an item in identity doubt (shown in the
 question), 2,376 have a Wikidata item, 1,912 have links on their site page. WD1: 9,524 decisions in four runs
 (`wd1-pilot`, `wd1`, `wd1-rest-pilot`, `wd1-rest`), 975 unresolved/held, waves `2026-09-26a`-`d` all accepted.
-Counts are versioned in `output/remediation/fields/measurements/2026-10-01/wd3-population.COUNTS.json`.
+Counts are versioned in `output/remediation/fields/measurements/2026-10-01/wd3-population.COUNTS.json` (measured
+before the journal witness: the build of a run leaves out Kephala's point, so 955 coordinates and 2,693 sites - the
+COUNTS.json of that build is the record).
 
 **The harvest refresh found four P31 classes the table lacked** (25 new items since 2026-09-26): former capital
 (container), tourist attraction (generic), prefecture-level city of China (container), portal (site: gate types).
@@ -107,9 +118,9 @@ never evaded.
 | module | does |
 |---|---|
 | `rule.py` | the two rules, `RUN.json` (`read_rule`, `write_run`), the forbidden families |
-| `population.py` | `export` (STORED.jsonl via `classify.export_stored`, LINKS.jsonl, an empty SEEDS.jsonl), `build` (WD1's records read and gated, the open fields, RUN.json, CLASSIFIED.jsonl through `classify.classify_all(refine=...)`, COUNTS.json with the population per field); `--pilot N --seed S` / `--without RUN` as WD1 |
+| `population.py` | `export` (STORED.jsonl via `classify.export_stored`, LINKS.jsonl, POINTS.jsonl, an empty SEEDS.jsonl), `build` (WD1's records read and gated, the open fields, RUN.json, CLASSIFIED.jsonl through `classify.classify_all(refine=...)`, COUNTS.json with the population per field); `--pilot N --seed S` / `--without RUN` as WD1 |
 | `answers.py`, `handoff.py` | the rule parameter: quotes needed, forbidden families, decisions, the WD3 question / brief / exhaustion / pilot gate; each answer and decision records the model |
-| `plan.py` | `--stage`, fill-only cells, `never-clears`, `not-an-open-field`, `field-unresolved` |
+| `plan.py` | `--stage`, fill-only cells, `never-clears`, `not-an-open-field`, `not-empty`, `field-unresolved` |
 | `owner_list.py` | `build`: OWNER_LIST.md / OWNER_LIST.jsonl from the runs and their waves |
 | `mechanical/lane.py` | `fields_lane(wave, step, stage)`, `FIELDS_ROOTS`, the lane regexp over `wd1|wd3` |
 | `output/remediation/orchestration/wd3_wave.sh`, `wd3-handoff-pool.js` | the write loop; the answer pool (Sonnet 5.5 agents, an Opus operator) |
@@ -136,8 +147,8 @@ Argument positions: `population.py --out DIR <command>` (before the command); `c
 1. `mkdir -p $W3 && cp -r output/remediation/fields/harvest $W3/harvest` - a copy: the shared harvest stays as
    WD2 reads it.
 2. `$PY $F/harvest.py --root $W3/harvest export` - one SELECT (the sites, their items, their URLs now).
-3. `$PY $F/population.py --out $W3 export` - **straight after step 2**: STORED.jsonl, LINKS.jsonl, an empty
-   SEEDS.jsonl (two SELECTs). Classification refuses a harvest and a stored export of different states.
+3. `$PY $F/population.py --out $W3 export` - **straight after step 2**: STORED.jsonl, LINKS.jsonl, POINTS.jsonl, an
+   empty SEEDS.jsonl (three SELECTs). Classification refuses a harvest and a stored export of different states.
 4. `$PY $F/harvest.py --root $W3/harvest fetch` - only what changed (measured 2026-10-01: 25 items, 4 classes, 503
    source URLs, about 25 minutes); re-run until nothing is fetched.
 5. `$PY $F/classify.py --root $W3/harvest unmapped` - must print `[]`; else add each class to `p31_site_types.json`
@@ -146,14 +157,15 @@ Argument positions: `population.py --out DIR <command>` (before the command); `c
 ### 4.2 Build the pilot and the run (files only)
 
 ```bash
-mkdir -p $W3P && cp $W3/STORED.jsonl $W3/LINKS.jsonl $W3/SEEDS.jsonl $W3P/
+mkdir -p $W3P && cp $W3/STORED.jsonl $W3/LINKS.jsonl $W3/POINTS.jsonl $W3/SEEDS.jsonl $W3P/
 $PY $F/population.py --out $W3P build --root $W3/harvest --pilot 80 --seed 20261002
 $PY $F/population.py --out $W3 build --root $W3/harvest --without $W3P
 ```
 
 Gate: the build refuses an unfinished WD1, a run asked already (`ROUNDS.jsonl`), a run pinned to another rule, a
-missing LINKS file, an unmapped class. Read `COUNTS.json` (`population.fields`, `population.why`,
-`wd1_sourced_but_empty` must be `{}`, `wd1_unseen_sites` should be `[]`) and commit it with `RUN.json`.
+missing LINKS or POINTS file, an unmapped class. Read `COUNTS.json` (`population.fields`, `population.why`,
+`wd1_sourced_but_empty` must be `{}`, `wd1_unseen_sites` should be `[]`, `journal_sourced_points` lists the points
+left out) and commit it with `RUN.json`.
 
 ### 4.3 Ask the Sonnet agents (no code calls a model)
 
@@ -181,8 +193,12 @@ only after the pilot's gate (4.4).
 
 11. `$PY $F/handoff.py pilot-report --run $W3P` - PILOT.json. **Exit 0 (PASS)**: at most 20 % of the pilot's fields
     ended `held` (the checker cannot read what the agents cite), and at most 30 % in a country with at least 10
-    fields (chosen lines, not measured). The share nobody could source (`unresolved_rate`) is reported, not gated:
-    the population is what WD1 could not source. **Exit 1 (STOP)**: read `stopped_by` and the reasons in
+    fields (chosen lines, not measured). Every `unresolved` decision, whether the agent answered it outright or it
+    came from exhaustion, is reported (`unresolved_rate`) and not gated by itself: the population is what WD1 could not
+    source. What is gated against laziness: of the fields of sites whose question showed a Wikidata item or an
+    English Wikipedia article (`hinted`), at most 60 % may be answered `unresolved` outright
+    (`hinted_unresolved_rate`, once at least 10 such fields were asked; chosen line). **Spot-check** a PASS anyway:
+    read 10 `unresolved` answers of sites with an article and look whether the article states the value. **Exit 1 (STOP)**: read `stopped_by` and the reasons in
     ATTEMPTS.jsonl, fix the cause (the brief's `KNOWN_FETCH_TROUBLE`, the sources the agents choose), move
     `$W3P` aside, build a new pilot with a new `--seed` and the run again `--without` it. Nothing of a stopped
     pilot is written. Commit COUNTS.json and PILOT.json either way.
@@ -211,7 +227,7 @@ Each run with a wave label of its own (a date and at most one letter), pilot fir
     **A refusal at `--rehearse` or `--probe-guards`**: nothing was written. `mv $D $D.refused-$(date -u
     +%Y%m%dT%H%M%SZ)`, find the cause, plan the step again from 2, commit the refused directory with the next step.
     What each write refuses besides WD1's table (FIELDS_WD1.md section 4): `never-clears`, `not-an-open-field`
-    (the field was not open in the question), `field-unresolved` (an unresolved period, type or URL: listed, not
+    (the field was not open in the question), `not-empty` (a replace of a stored scalar value: listed for the owner), `field-unresolved` (an unresolved period, type or URL: listed, not
     written), `coordinates-unresolved`, `held-unreadable`, `country-changes`, `period-end-precedes-start`,
     `moved-since-classification`, the journal refusals.
 
@@ -253,7 +269,7 @@ card_stats wave recomputes the cards (14), and HANDOFF.json no longer describes 
 ## 5. Gates built and tested (`tests/remediation/test_fields_wd3.py`, WD1's tests unchanged beside it)
 
 The rule file and its refusals; one quote suffices but each field check still applies; WD1 still wants two families;
-no clear under WD3; the project's own pages and mirrors (also archived) refused; the WD3 question's content and WD1's
+no clear under WD3; the project's own pages, mirrors, archive and cache proxies (also behind a scheme-less Wayback URL) refused; the WD3 question's content and WD1's
 byte-identical prompt (the sha256 of 300 real WD1 prompts compared before and after, equal); the brief names the
 Sonnet model and `--stage wd3`; export batches `wd3-r<N>-b<NNNN>`; the answer's model recorded in attempts and
 decisions; exhaustion is `unresolved` / `held`, never `clear`; the pilot gate; the open fields of every kind and

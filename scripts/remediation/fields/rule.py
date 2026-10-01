@@ -26,10 +26,12 @@ from typing import Any
 
 RUN_FILE = "RUN.json"
 
-#: Never a source of WD3 (the rule's brief says so too): the project's own site, and the mirrors and
-#: re-publishers of Wikipedia the agents are known to reach through a search engine. The list is
-#: what a machine can refuse; an AI content farm has no list - the brief forbids those, and the
-#: owner list shows every written value's quotes.
+#: Never a source of WD3 (the rule's brief says so too): the project's own site, the mirrors and
+#: re-publishers of Wikipedia the agents are known to reach through a search engine, and the archive,
+#: cache and translation proxies - a quote read through one cannot be attributed to a family
+#: (`answers.family_of` unwraps a Wayback copy to its original first; what is left is refused). The
+#: list is what a machine can refuse; an AI content farm has no list - the brief forbids those, and
+#: the owner list shows every written value's quotes.
 FORBIDDEN_FAMILIES = frozenset(
     {
         "ancientnerds.com",
@@ -42,6 +44,17 @@ FORBIDDEN_FAMILIES = frozenset(
         "wiki2.org",
         "infogalactic.com",
         "wikibrief.org",
+        "archive.org",
+        "archive.ph",
+        "archive.today",
+        "archive.is",
+        "archive.md",
+        "archive.vn",
+        "archive.li",
+        "archive.fo",
+        "googleusercontent.com",
+        "translate.goog",
+        "translate.google.com",
     }
 )
 

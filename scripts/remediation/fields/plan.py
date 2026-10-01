@@ -50,8 +50,8 @@ whether or not its site has a cell to write.
 **Lane WD3** (`rule.py`, the `one-family` rule; its run's RUN.json names it and `wave` pins it in
 WAVE.json) goes through the same code as `fields-wd3-<wave>-s<NNN>` under
 `output/remediation/fields/wd3/write/` - every command but `wave` takes `--stage wd3`. It **fills and
-nothing else**: a `replace` is written only for a field its question named open (`line["open"]`: empty,
-or a point/value no source stands behind), a `clear` is refused, a site with no `replace` has no cell,
+nothing else**: a `replace` is written only for a field its question named open (`line["open"]`) that is empty -
+or the stored point of a site without a sourced point; a stored value is never replaced (`not-empty`), a `clear` is refused, a site with no `replace` has no cell,
 and a period label is written only beside a start written in the same step.
 
     $P handoff --wave W                 after the last step is accepted: HANDOFF.json - the sites
@@ -454,6 +454,11 @@ def site_cells(
         new = None if decision["decision"] == A.CLEAR else str(decision["value"])
         if new == current_text:
             continue
+        if under.fill_only and current_text is not None and current_text.strip():
+            refuse(field, "not-empty", f"the {under.name} rule fills an empty field: a stored "
+                   f"value is never replaced (it stays {current_text!r}; the owner list names the "
+                   f"value found: {new!r})", current_text, new)  # fmt: skip
+            continue
         if field == "period_start":
             end = live["period_end"]
             if new is not None and end is not None and int(end) != 0 and int(new) > int(end):
@@ -487,6 +492,13 @@ def site_cells(
             "period_name", "implementations-disagree", f"categorize_period({final_start})"
         )
     elif label != live["period_name"]:
+        # the label is derived, so the model that answered sits on the start's decision: carried
+        # here too, a reader of this journal row alone must see who answered
+        answered = (
+            [_decision_evidence(decisions["period_start"], under)[-1]]
+            if under.fill_only and started
+            else []
+        )
         evidence = [
             {
                 "source": "pipeline/utils/text.py:categorize_period",
@@ -498,6 +510,7 @@ def site_cells(
                 "url": "output/remediation/gold_standard/GOLD_STANDARD.md",
                 "quote": "| `period_name` | equals `categorize_period(period_start)` |",
             },
+            *answered,
         ]
         named = cell(
             "period_name",

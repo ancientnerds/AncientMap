@@ -7424,6 +7424,34 @@ WD3_CASES: list[Case] = [
         "test_a_replace_that_a_settled_wave_neither_wrote_nor_refused_is_listed",
         WD3_TESTS,
     ),
+    guard(
+        "wd3: a stored value is never replaced",
+        FIELDS / "plan.py",
+        "        if under.fill_only and current_text is not None and current_text.strip():",
+        "test_a_stored_value_is_never_replaced_only_an_empty_field_is_filled",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: another lane's sourced point is not open",
+        FIELDS / "population.py",
+        "            if journal_sourced_point(stored, last_point_write):",
+        "test_a_point_a_journalled_lane_sourced_is_not_open_whatever_wd1_decided",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a scheme-less Wayback copy is unwrapped",
+        FIELDS / "answers.py",
+        '    if host == "web.archive.org":',
+        "test_a_wayback_copy_counts_as_its_original_with_or_without_a_scheme",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: an unresolved answered outright is tallied",
+        FIELDS / "handoff.py",
+        '            if d["via"] == COUNTED:',
+        "test_a_pilot_of_lazy_unresolved_answers_where_a_source_exists_stops",
+        WD3_TESTS,
+    ),
 ]
 CASES += WD3_CASES
 

@@ -7,7 +7,10 @@ Lane WD3 (`rule.py`, the `one-family` rule) is WD1 again for the fields WD1 left
   empty (read from production now, after WD1's clears landed). `lat`/`lon` are NOT NULL;
 * `unresolved` - the stored point: WD1 found no two independent sources for it (a counted
   `unresolved` answer, or exhausted after three rounds). A site WD1 never saw is read by the
-  machine's own status: a point no witness confirms is open;
+  machine's own status: a point no witness confirms is open. A point a journalled lane wrote with
+  sourced evidence is **not** open, whatever WD1 decided before: the site's newest lat/lon journal
+  row carries `two_source`, `authoritative` or `one_source` confidence and the value the row holds
+  now (`POINTS.jsonl`, one SELECT) - another lane's sourced write is never asked again;
 * `held` - WD1 held the field because the pages its agents cited could not be read (`HELD.jsonl` of
   its waves), so the stored value neither got a source nor was cleared;
 * `unsourced` - WD1 decided `clear`, the value is still stored: the clear was refused at write
@@ -66,6 +69,11 @@ FIELDS_DIR = REPO / "output" / "remediation" / "fields"
 WD1_RUN_NAMES = ("wd1-pilot", "wd1", "wd1-rest-pilot", "wd1-rest")
 DEFAULT_OUT = FIELDS_DIR / "wd3"
 LINKS_FILE = "LINKS.jsonl"
+POINTS_FILE = "POINTS.jsonl"
+#: The journal confidences that stand for a sourced value (`remediation_change_log.confidence`):
+#: two quotes (`two_source`, WD1 and the owner-case lanes), a register (`authoritative`), one quote
+#: (`one_source`, WD3). `opus-checked` is a judgement without a quoted source: not one of them.
+SOURCED_CONFIDENCE = frozenset({"two_source", "authoritative", "one_source"})
 #: How a question describes WD1's decision of a field: the first characters of its reasoning.
 WD1_SHOWN_CHARS = 600
 
@@ -81,6 +89,17 @@ SELECT u.id::text AS site_id,
  WHERE u.source_id = 'ancient_nerds'
  ORDER BY u.id"""
 LINK_KEYS = ("title", "url", "type", "domain", "score")
+#: The newest journal row of each curated site's `lat` or `lon` (the point is written whole, but
+#: only a coordinate that changed is journalled: the newest row of the two is the last write).
+POINTS_SQL = """\
+SELECT DISTINCT ON (c.row_pk) c.row_pk AS site_id, c.column_name, c.run_stamp,
+       c.confidence, c.new_value
+  FROM remediation_change_log c
+  JOIN unified_sites u ON u.id::text = c.row_pk
+ WHERE c.table_name = 'unified_sites' AND c.column_name IN ('lat', 'lon')
+   AND u.source_id = 'ancient_nerds'
+ ORDER BY c.row_pk, c.id DESC"""
+POINT_KEYS = ("site_id", "column_name", "run_stamp", "confidence", "new_value")
 
 
 class PopulationError(RuntimeError):
@@ -217,11 +236,24 @@ def _wd1_summary(decision: Mapping[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
+def journal_sourced_point(stored: Mapping[str, Any], last: Mapping[str, Any] | None) -> bool:
+    """Whether the stored point is the one a journalled lane wrote with sourced evidence: the site's
+    newest lat/lon journal row (`POINTS_SQL`) carries a sourced confidence and the value the row
+    holds now (compared as numbers: the journal keeps the text a writer gave)."""
+    if last is None or last["confidence"] not in SOURCED_CONFIDENCE or last["new_value"] is None:
+        return False
+    return float(last["new_value"]) == float(stored[last["column_name"] + "_text"])
+
+
 def open_fields(
-    line: Mapping[str, Any], stored: Mapping[str, Any], wd1: Wd1
+    line: Mapping[str, Any],
+    stored: Mapping[str, Any],
+    wd1: Wd1,
+    last_point_write: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, dict[str, Any]], list[str]]:
     """The open fields of one classified site: `{field: {"why", "wd1"}}`, and the fields WD1 decided
-    with sources that are empty now (a state nothing explains - listed, never asked)."""
+    with sources that are empty now (a state nothing explains - listed, never asked). A point whose
+    newest journal row is a sourced write (`last_point_write`) is not open."""
     site = str(line["site_id"])
     seen = site in wd1.classified
     opened: dict[str, dict[str, Any]] = {}
@@ -237,6 +269,8 @@ def open_fields(
         if empty:
             why = WHY_EMPTY
         elif field == "coordinates":
+            if journal_sourced_point(stored, last_point_write):
+                continue
             if verdict in (A.UNRESOLVED, HELD):
                 why = WHY_UNRESOLVED
             elif not seen and line["fields"][field]["status"] != C.CONFIRMED:
@@ -282,12 +316,44 @@ def read_links(out: Path) -> dict[str, list[dict[str, Any]]]:
     return links
 
 
+def export_points(out: Path, *, reader: Callable[[str], list[dict[str, Any]]]) -> int:
+    """POINTS.jsonl: each curated site's newest lat/lon journal row, from one read-only SELECT. A
+    site no lane ever moved has none."""
+    rows = reader(POINTS_SQL)
+    for row in rows:
+        if set(row) != set(POINT_KEYS):
+            raise PopulationError(f"a point journal row carries {sorted(row)}, not {POINT_KEYS}")
+    out.mkdir(parents=True, exist_ok=True)
+    text = "".join(
+        json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+        for row in sorted(rows, key=lambda r: r["site_id"])
+    )
+    tmp = out / (POINTS_FILE + ".tmp")
+    tmp.write_text(text, encoding="utf-8", newline="\n")
+    tmp.replace(out / POINTS_FILE)
+    return len(rows)
+
+
+def read_points(out: Path) -> dict[str, dict[str, Any]]:
+    path = out / POINTS_FILE
+    if not path.exists():
+        raise PopulationError(f"{path} is missing - run `population.py export` first")
+    points: dict[str, dict[str, Any]] = {}
+    for row in _read_jsonl(path):
+        if set(row) != set(POINT_KEYS):
+            raise PopulationError(f"{path}: a row carries {sorted(row)}, not {sorted(POINT_KEYS)}")
+        points[str(row["site_id"])] = row
+    return points
+
+
 def export(out: Path, *, reader: Callable[[str], list[dict[str, Any]]]) -> dict[str, Any]:
-    """STORED.jsonl (`classify.export_stored`), LINKS.jsonl, and the empty SEEDS.jsonl a run needs."""
+    """STORED.jsonl (`classify.export_stored`), LINKS.jsonl, POINTS.jsonl and the empty SEEDS.jsonl
+    a run needs."""
     stored = C.export_stored(out, reader=reader)
     links = export_links(out, reader=reader)
+    points = export_points(out, reader=reader)
     (out / C.SEEDS_FILE).write_text("", encoding="utf-8", newline="\n")
-    return {"stored": stored, "links": links}
+    return {"stored": stored, "links": links, "points": points}
 
 
 # ------------------------------------------------------------------------------ the run
@@ -306,12 +372,16 @@ def build(
         raise PopulationError(f"{out} was asked already (ROUNDS.jsonl): a run is built once")
     C.read_stored(out)  # refused here, before anything is pinned, when the export is missing
     links = read_links(out)
+    points = read_points(out)
     unseen: set[str] = set()
+    journal_sourced: set[str] = set()
     contradictions: dict[str, list[str]] = {}
 
     def refine(line: Mapping[str, Any], stored: Mapping[str, Any]) -> dict[str, Any] | None:
-        opened, wrong = open_fields(line, stored, wd1)
         site = str(line["site_id"])
+        opened, wrong = open_fields(line, stored, wd1, points.get(site))
+        if "coordinates" in open_fields(line, stored, wd1)[0] and "coordinates" not in opened:
+            journal_sourced.add(site)  # open but for the journal's sourced write
         if site not in wd1.classified:
             unseen.add(site)
         if wrong:
@@ -343,6 +413,9 @@ def build(
         "sites": counts["sites"],
         **_tally(out),
         "wd1_unseen_sites": sorted(unseen & mine),
+        "journal_sourced_points": {
+            site: points[site]["run_stamp"] for site in sorted(journal_sourced)
+        },
         "wd1_sourced_but_empty": {
             site: fields for site, fields in sorted(contradictions.items()) if site in mine
         },

@@ -133,6 +133,13 @@ class TestOneFamilyAnswers:
             "https://www.wikiwand.com/en/articles/Temple_of_Hephaestus",
             "https://dbpedia.org/page/Temple_of_Hephaestus",
             "https://web.archive.org/web/2024/https://ancientnerds.com/sites/x",
+            "https://web.archive.org/web/2020/ancientnerds.com/sites/greece/temple-of-hephaestus",
+            "https://web.archive.org/web/20200101000000id_/www.wikiwand.com/en/Temple",
+            "https://archive.ph/AbCd1",
+            "https://archive.today/20200101/https://pleiades.stoa.org/places/579885",
+            "https://webcache.googleusercontent.com/search?q=cache:pleiades.stoa.org/places/1",
+            "https://en-wikipedia-org.translate.goog/wiki/Temple_of_Hephaestus",
+            "https://translate.google.com/translate?u=https://pleiades.stoa.org/places/1",
         ],
     )
     def test_the_project_s_own_pages_and_wikipedia_mirrors_are_no_source(self, url: str) -> None:
@@ -143,6 +150,16 @@ class TestOneFamilyAnswers:
         assert not isinstance(
             checked("period_start", TA.block("keep", "-449", [(WIKI, quotes[0][1])])), str
         )
+
+    def test_a_wayback_copy_counts_as_its_original_with_or_without_a_scheme(self) -> None:
+        quotes = [("https://web.archive.org/web/2020/pleiades.stoa.org/places/579885",
+                   "The Temple of Hephaestus was built in 449 BC.")]  # fmt: skip
+        assert not isinstance(checked("period_start", TA.block("keep", "-449", quotes)), str)
+        assert A.family_of(quotes[0][0], ONE) == "stoa.org"
+        assert A.family_of(quotes[0][0].replace("pleiades.stoa.org", "https://pleiades.stoa.org"),
+                           ONE) == "stoa.org"  # fmt: skip
+        # WD1's rule is the acceptance's own reading: a scheme-less copy stays one `archive.org`
+        assert A.family_of(quotes[0][0], R.TWO_FAMILIES) == "archive.org"
 
     def test_a_malformed_text_is_still_not_an_answer(self) -> None:
         with pytest.raises(AnswerError, match="not one JSON object"):
@@ -369,6 +386,32 @@ class TestThePilot:
         assert report["overall"]["unresolved_rate"] == round(8 / 19, 3)
         assert report["gate"]["measure"] == "held_rate"
 
+    def test_an_unresolved_the_agent_answered_outright_is_counted_too(self, tmp_path: Path) -> None:
+        rows = [(f"u{i}", "England", A.UNRESOLVED, HO.COUNTED) for i in range(8)]
+        rows += [(f"a{i}", "England", "replace", HO.COUNTED) for i in range(2)]
+        self.write(tmp_path / "p", rows)
+        overall = HO.pilot_report(tmp_path / "p")["overall"]
+        assert overall["unresolved"] == 8 and overall["unresolved_rate"] == 0.8
+        assert overall["exhausted_unresolved"] == 0
+
+    def test_a_pilot_of_lazy_unresolved_answers_where_a_source_exists_stops(
+        self, tmp_path: Path
+    ) -> None:
+        # every site of `wd3_line` shows a Wikidata item and an English article
+        rows = [(f"u{i}", "England", A.UNRESOLVED, HO.COUNTED) for i in range(8)]
+        rows += [(f"a{i}", "England", "replace", HO.COUNTED) for i in range(4)]
+        self.write(tmp_path / "p", rows)
+        report = HO.pilot_report(tmp_path / "p")
+        assert report["verdict"] == "STOP"
+        assert report["overall"]["hinted_unresolved_rate"] == round(8 / 12, 3)
+        assert "answered `unresolved` outright" in report["stopped_by"][0]
+        # the same answers on sites without an item or an article are the population, not laziness
+        bare = {"country": "England", "qid": None, "enwiki": None}
+        HO._write_jsonl(
+            tmp_path / "p" / C.CLASSIFIED_FILE, [wd3_line(sid) | bare for sid, *_ in rows]
+        )
+        assert HO.pilot_report(tmp_path / "p")["verdict"] == "PASS"
+
     def test_a_checker_that_cannot_read_what_the_agents_cite_stops_the_run(
         self, tmp_path: Path
     ) -> None:
@@ -416,6 +459,11 @@ def d(field: str, decision: str) -> dict[str, Any]:
     return {"site_id": SITE, "field": field, "decision": decision}
 
 
+def point_write(column: str, value: str, confidence: str = "two_source") -> dict[str, Any]:
+    return {"site_id": SITE, "column_name": column, "run_stamp": "2026-09-23_owner-case",
+            "confidence": confidence, "new_value": value}  # fmt: skip
+
+
 class TestTheOpenFields:
     def test_a_field_with_a_sourced_value_is_never_open(self) -> None:
         sourced = [d("coordinates", "keep"), d("period_start", "replace"), d("site_type", "keep")]
@@ -434,6 +482,23 @@ class TestTheOpenFields:
             "coordinates": "unresolved"
         }
         assert asked([d("coordinates", "held")], stored_row()) == {"coordinates": "unresolved"}
+
+    def test_a_point_a_journalled_lane_sourced_is_not_open_whatever_wd1_decided(self) -> None:
+        unresolved = wd1([d("coordinates", "unresolved")])
+        for column, written in (("lat", "37.9755"), ("lon", "23.72150")):
+            for confidence in ("two_source", "authoritative", "one_source"):
+                opened, _ = POP.open_fields(
+                    line_of(), stored_row(), unresolved, point_write(column, written, confidence)
+                )
+                assert opened == {}
+        # a write nobody sourced, a point moved since, and a site no lane moved stay open
+        for last in (
+            point_write("lat", "37.9755", "opus-checked"),
+            point_write("lat", "38.1"),
+            None,
+        ):
+            opened, _ = POP.open_fields(line_of(), stored_row(), unresolved, last)
+            assert list(opened) == ["coordinates"]
 
     def test_a_site_wd1_never_saw_is_read_by_the_machine_status(self) -> None:
         opened, _ = POP.open_fields(line_of(coordinates=C.MISSING), stored_row(), wd1([], ()))
@@ -530,6 +595,7 @@ class TestTheRun:
         links = [{"title": "Pleiades", "url": "https://pleiades.stoa.org/places/1",
                   "type": "database", "domain": "pleiades.stoa.org", "score": 0.7}]  # fmt: skip
         HO._write_jsonl(out / POP.LINKS_FILE, [{"site_id": SITE, "links": links}])
+        HO._write_jsonl(out / POP.POINTS_FILE, [])
         return root, out
 
     def test_a_site_with_an_open_field_gets_exactly_those_fields(self, tmp_path: Path) -> None:
@@ -583,22 +649,42 @@ class TestTheRun:
             "seed": 7,
         }
         rest = tmp_path / "rest"
-        for name in (C.STORED_FILE, C.SEEDS_FILE, POP.LINKS_FILE):
+        for name in (C.STORED_FILE, C.SEEDS_FILE, POP.LINKS_FILE, POP.POINTS_FILE):
             (rest / name).parent.mkdir(exist_ok=True)
             (rest / name).write_bytes((pilot / name).read_bytes())
         counts = POP.build(root, rest, table=TABLE, wd1=wd1([]), without=pilot)
         assert counts["sites"] == 0
 
-    def test_the_export_writes_the_three_files(self, tmp_path: Path) -> None:
+    def test_the_export_writes_the_four_files(self, tmp_path: Path) -> None:
         def reader(sql: str) -> list[dict[str, Any]]:
             if "site_content_links" in sql:
                 return [{"site_id": SITE, "links": []}]
+            if "remediation_change_log" in sql:
+                return [point_write("lat", "37.9755")]
             return [stored_row()]
 
         result = POP.export(tmp_path / "o", reader=reader)
-        assert result == {"stored": 1, "links": 1}
+        assert result == {"stored": 1, "links": 1, "points": 1}
         assert (tmp_path / "o" / C.SEEDS_FILE).read_text(encoding="utf-8") == ""
         assert POP.read_links(tmp_path / "o") == {SITE: []}
+        assert POP.read_points(tmp_path / "o")[SITE]["new_value"] == "37.9755"
+
+    def test_the_points_are_refused_when_malformed_or_missing(self, tmp_path: Path) -> None:
+        root, out = self.prepare(tmp_path, period_start=None)
+        HO._write_jsonl(out / POP.POINTS_FILE, [{"site_id": SITE}])
+        with pytest.raises(POP.PopulationError, match="a row carries"):
+            POP.build(root, out, table=TABLE, wd1=wd1([]))
+        (out / POP.POINTS_FILE).unlink()
+        with pytest.raises(POP.PopulationError, match="run `population.py export` first"):
+            POP.build(root, out, table=TABLE, wd1=wd1([]))
+
+    def test_a_point_a_journalled_lane_sourced_is_left_out_and_listed(self, tmp_path: Path) -> None:
+        root, out = self.prepare(tmp_path)
+        HO._write_jsonl(out / POP.POINTS_FILE, [point_write("lon", "23.7215")])
+        held = wd1([d("coordinates", "unresolved")])
+        counts = POP.build(root, out, table=TABLE, wd1=held)
+        assert counts["sites"] == 0
+        assert counts["population"]["journal_sourced_points"] == {SITE: "2026-09-23_owner-case"}
 
 
 # ------------------------------------------------------------------------------ the write plan
@@ -625,7 +711,9 @@ class TestFillOnly:
         }
         assert {v.rule for v in out if v.ok} == {"wd3-replace", "wd3-derive-period-name"}
         assert out[0].finding_test_id == "WD3/period_start"
-        assert [e["model"] for v in out for e in v.evidence if "model" in e] == [OH.SONNET_MODEL]
+        # every written cell shows who answered - the derived label too, beside its derivation
+        for v in out:
+            assert [e["model"] for e in v.evidence if "model" in e] == [OH.SONNET_MODEL]
 
     def test_a_field_the_question_did_not_name_open_is_never_replaced(self) -> None:
         out = under_wd3([wd3_decision("site_type", "replace", "Temple", "City")], open_={})
@@ -634,6 +722,22 @@ class TestFillOnly:
             [wd3_decision("coordinates", "replace", "36.5, 34.1", "35.1, 33.4")], open_={}
         )
         assert TP.written(point) == {} and point[0].reason == "not-an-open-field"
+
+    def test_a_stored_value_is_never_replaced_only_an_empty_field_is_filled(self) -> None:
+        for field, value, stored in (
+            ("period_start", "-2500", -700), ("site_type", "Temple", "City"),
+            ("source_url", "https://en.wikipedia.org/wiki/Other", "https://x.org/a"),
+        ):  # fmt: skip
+            row = TP.live(**{field: stored})
+            out = under_wd3([wd3_decision(field, "replace", value, stored)], row)
+            assert TP.written(out) == {} and [v.reason for v in out] == ["not-empty"]
+            assert value in out[0].note and out[0].new_value == value
+        # an empty string is empty: filled
+        row = TP.live(site_type="")
+        out = under_wd3([wd3_decision("site_type", "replace", "Temple", "")], row)
+        assert TP.written(out) == {"site_type": ("", "Temple")}
+        # a keep on a held value writes nothing and is no refusal
+        assert under_wd3([wd3_decision("site_type", "keep", "City", "City")]) == []
 
     def test_a_clear_is_refused(self) -> None:
         out = under_wd3([wd3_decision("period_start", "clear", None, -700)])

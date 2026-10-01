@@ -144,6 +144,29 @@ class FieldAnswer:
 
 
 # ------------------------------------------------------------------------------ the shape
+#: A Wayback Machine copy `/web/<timestamp>/<original>`, the original with or without its scheme
+#: (Wayback serves both; `acceptance.answers.source_family` unwraps only the one with a scheme).
+_WAYBACK = re.compile(r"/web/[^/]+/(?:https?://)?(.+)", re.DOTALL)
+
+
+def family_of(url: str, rule: R.Rule) -> str:
+    """The source family of a quote's URL under `rule`. WD1's rule keeps the acceptance's own
+    `source_family`; a rule with forbidden families (WD3) also unwraps a scheme-less Wayback copy
+    to its original - `archive.org` is what stays of a copy whose original cannot be read - and
+    names a refused host as itself."""
+    if not rule.forbidden_families:
+        return source_family(url)
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower().rstrip(".")
+    if host == "web.archive.org":
+        archived = _WAYBACK.fullmatch(parts.path)
+        if archived:
+            return family_of("https://" + archived.group(1), rule)
+    if host in rule.forbidden_families:
+        return host  # a refused host that shares its registrable domain (translate.google.com)
+    return source_family(url)
+
+
 def decisions_of(field: str, rule: R.Rule) -> tuple[str, ...]:
     """The decisions an answer to `field` may take under `rule`."""
     return DECISIONS[field] if rule.clearable else FILL_DECISIONS
@@ -169,7 +192,7 @@ def _block(field: str, data: Any, rule: R.Rule) -> FieldAnswer:
         return FieldAnswer(field, decision, None, (), reasoning)
     if not isinstance(value, str) or not value.strip() or value != value.strip():
         raise AnswerError(f"{field}: {decision} needs its value as a trimmed, non-empty string")
-    families = {source_family(q.url) for q in quotes}
+    families = {family_of(q.url, rule) for q in quotes}
     if len(quotes) < rule.min_quotes or len(families) < rule.min_families:
         raise AnswerError(f"{field}: {decision} rests on {rule.rests_on}")
     if families & rule.forbidden_families:
