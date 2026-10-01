@@ -9,12 +9,16 @@ import {
   getHoverCursorStyle,
   type EmpireHoverRefs
 } from './empireHoverUtils'
-import { canvasNDC, createArcballRotator, zoomCameraBy, WHEEL_ZOOM_STEP } from './cameraMotion'
+import { animateCameraTo, canvasNDC, createArcballRotator, zoomCameraBy, WHEEL_ZOOM_STEP } from './cameraMotion'
 import { createTouchGestures } from './touchGestures'
 
 /** Refs and state setters needed by event handlers. */
 export interface EventHandlerRefs {
   containerRef: React.RefObject<HTMLDivElement | null>
+  /** The Mapbox layer, sibling of containerRef: touch gestures span both. */
+  mapboxContainerRef: React.RefObject<HTMLDivElement | null>
+  /** Raised by the touch gestures while fingers are down (see mapboxEffects' hand-off). */
+  touchGestureActive: React.MutableRefObject<boolean>
   mapboxServiceRef: React.MutableRefObject<MapboxGlobeService | null>
   showMapboxRef: React.MutableRefObject<boolean>
   sitesRef: React.MutableRefObject<SiteData[]>
@@ -667,37 +671,10 @@ export function createDoubleClickHandler(
       const zoomStep = (maxDist - minDist) / 10 // Each step is 10% of total range
       const newDist = Math.max(controls.minDistance, currentDist - zoomStep * 3)
 
-      const startPos = camera.position.clone()
       // Position camera so clicked point is centered on screen after zoom
       // Camera at clickedPoint * distance, looking at origin = clicked point at center
       const endPos = clickedPoint.clone().multiplyScalar(newDist)
-
-      // Cancel any existing camera animation
-      if (cameraAnimationRef.current) {
-        cancelAnimationFrame(cameraAnimationRef.current)
-        cameraAnimationRef.current = null
-      }
-
-      // Animate to new position
-      const duration = 400
-      const startTime = performance.now()
-
-      const animateZoom = () => {
-        const elapsed = performance.now() - startTime
-        const progress = Math.min(1, elapsed / duration)
-        const eased = 1 - Math.pow(1 - progress, 3) // Ease out cubic
-
-        camera.position.lerpVectors(startPos, endPos, eased)
-        camera.lookAt(0, 0, 0)
-        controls.update()
-
-        if (progress < 1) {
-          cameraAnimationRef.current = requestAnimationFrame(animateZoom)
-        } else {
-          cameraAnimationRef.current = null
-        }
-      }
-      cameraAnimationRef.current = requestAnimationFrame(animateZoom)
+      animateCameraTo(camera, controls, endPos, cameraAnimationRef)
     }
   }
 }
@@ -844,7 +821,14 @@ export function setupEventHandlers(
   // Touch is left to touchGestures, built on the same arcball and zoom maths;
   // the mouse buttons keep OrbitControls' defaults.
   controls.touches = { ONE: null, TWO: null }
+  // Touch is read on the element both map layers sit in (Globe.tsx: the
+  // Mapbox and the Three.js container are siblings), in the capture phase:
+  // a pinch then lives on when the slider switches between globe and map
+  // mid-gesture, and no handler on the map can swallow it.
+  const mapLayers = [refs.containerRef.current!, refs.mapboxContainerRef.current!]
+  const touchSurface = mapLayers[0].parentElement!
   const touch = createTouchGestures({
+    mapLayers,
     canvas: renderer.domElement,
     camera,
     controls,
@@ -853,13 +837,17 @@ export function setupEventHandlers(
     maxDist,
     showMapboxRef: refs.showMapboxRef,
     rotate: createArcballRotator(camera, controls, getArcballPoint),
+    getArcballPoint,
+    mapbox: () => refs.mapboxServiceRef.current,
+    touchGestureActive: refs.touchGestureActive,
+    cameraAnimationRef: refs.cameraAnimationRef,
   })
 
   // ----- Attach listeners -----
-  renderer.domElement.addEventListener('pointerdown', touch.onPointerDown)
-  renderer.domElement.addEventListener('pointermove', touch.onPointerMove)
-  renderer.domElement.addEventListener('pointerup', touch.onPointerEnd)
-  renderer.domElement.addEventListener('pointercancel', touch.onPointerEnd)
+  touchSurface.addEventListener('pointerdown', touch.onPointerDown, { capture: true })
+  touchSurface.addEventListener('pointermove', touch.onPointerMove, { capture: true })
+  touchSurface.addEventListener('pointerup', touch.onPointerEnd, { capture: true })
+  touchSurface.addEventListener('pointercancel', touch.onPointerEnd, { capture: true })
   renderer.domElement.addEventListener('mousedown', onMouseDown)
   renderer.domElement.addEventListener('mousemove', onMouseMove)
   renderer.domElement.addEventListener('mouseleave', onMouseLeave)
@@ -873,10 +861,10 @@ export function setupEventHandlers(
       window.removeEventListener('resize', onResize)
       window.removeEventListener('wheel', preventBrowserZoom)
       renderer.domElement.removeEventListener('wheel', handleWheel)
-      renderer.domElement.removeEventListener('pointerdown', touch.onPointerDown)
-      renderer.domElement.removeEventListener('pointermove', touch.onPointerMove)
-      renderer.domElement.removeEventListener('pointerup', touch.onPointerEnd)
-      renderer.domElement.removeEventListener('pointercancel', touch.onPointerEnd)
+      touchSurface.removeEventListener('pointerdown', touch.onPointerDown, { capture: true })
+      touchSurface.removeEventListener('pointermove', touch.onPointerMove, { capture: true })
+      touchSurface.removeEventListener('pointerup', touch.onPointerEnd, { capture: true })
+      touchSurface.removeEventListener('pointercancel', touch.onPointerEnd, { capture: true })
       touch.dispose()
       renderer.domElement.removeEventListener('mousedown', onMouseDown)
       renderer.domElement.removeEventListener('mousemove', onMouseMove)

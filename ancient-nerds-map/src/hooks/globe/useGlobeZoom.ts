@@ -12,10 +12,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { GlobeRefs } from './types'
 import { CAMERA, THREEJS_CAMERA_MAX, type DetailLevel } from '../../config/globeConstants'
+import { MAPBOX_SWITCH_PERCENT, mapboxPercentForSlider } from '../../utils/unifiedZoom'
 
 // Zoom slider constants
 const THREEJS_MAX_ZOOM = 66    // Three.js controls 0-66% of slider (matches transition point)
-const MAPBOX_MIN_ZOOM = 66     // Mapbox controls 66-100% of slider
+const MAPBOX_MIN_ZOOM = MAPBOX_SWITCH_PERCENT     // Mapbox controls 66-100% of slider
 
 interface UseGlobeZoomOptions {
   refs: GlobeRefs
@@ -104,10 +105,8 @@ export function useGlobeZoom({ refs, showMapbox }: UseGlobeZoomOptions): UseGlob
     // Scale 66-100 to Mapbox zoom INCREASE from base position
     // At 66%: stay at base zoom (where camera sync put us)
     // At 100%: maximum zoom (100%)
-    const baseZoom = refs.mapboxBaseZoom.current  // Actual zoom level after camera sync
-    const remainingZoomRange = 100 - baseZoom  // How much more zoom is available
-    const sliderProgress = (zoom - MAPBOX_MIN_ZOOM) / (100 - MAPBOX_MIN_ZOOM)  // 0 to 1
-    const targetZoom = Math.min(100, baseZoom + sliderProgress * remainingZoomRange)
+    // The same mapping a finger pinch reads back (utils/unifiedZoom.ts)
+    const targetZoom = mapboxPercentForSlider(zoom, refs.mapboxBaseZoom.current)
 
     // Set flag to prevent callback from updating slider
     refs.isSliderZoom.current = true

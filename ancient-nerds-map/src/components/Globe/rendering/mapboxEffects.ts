@@ -7,11 +7,12 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { SiteData, SOURCE_COLORS, getCategoryColor } from '../../../data/sites'
 import { FilterMode } from '../../../App'
-import { getThreeJsView, viewToMapbox, latLngToCartesian } from '../../../utils/geoMath'
+import { getThreeJsView, viewToMapbox, latLngToCartesian, latLngAtScreen } from '../../../utils/geoMath'
 import type { MapboxGlobeService, MapboxMarkerData } from '../../../services/MapboxGlobeService'
 import type { MapboxLoadState } from '../../../services/mapboxLoader'
 import { EMPIRES } from '../../../config/empireData'
 import { CAMERA, THREEJS_CAMERA_MAX } from '../../../config/globeConstants'
+import { MAPBOX_SWITCH_PERCENT, mapboxZoomToPercent, sliderAfterTouchZoom } from '../../../utils/unifiedZoom'
 
 // =============================================================================
 // SHARED INTERFACES
@@ -63,6 +64,10 @@ export interface ModeSwitchEffectDeps {
   isManualZoom: React.MutableRefObject<boolean>
   isWheelZoom: React.MutableRefObject<boolean>
   wheelCursorLatLng: React.MutableRefObject<{ lat: number; lng: number } | null>
+  /** Set while a finger zoom moves the slider, so useGlobeZoom leaves the map where the finger put it. */
+  isMapboxZoom: React.MutableRefObject<boolean>
+  /** Fingers are on the globe or the map (touchGestures.ts). */
+  touchGestureActive: React.MutableRefObject<boolean>
   containerRef: React.RefObject<HTMLDivElement | null>
   measureModeRef: React.MutableRefObject<boolean | undefined>
   measureSnapEnabledRef: React.MutableRefObject<boolean | undefined>
@@ -161,7 +166,7 @@ export interface EmpireBordersSyncEffectDeps {
  * Auto-switch threshold: 0-65% = Three.js, 66-100% = Mapbox.
  * Single threshold at 66% - no hysteresis for smooth slider behavior.
  */
-export const TRANSITION_POINT = 66
+export const TRANSITION_POINT = MAPBOX_SWITCH_PERCENT
 
 // =============================================================================
 // EFFECT FUNCTIONS
@@ -245,11 +250,25 @@ export function createModeSwitchEffect(
 
     mapboxService.setCamera(mapboxCamera.lat, mapboxCamera.lng, mapboxCamera.zoom)
 
+    // A finger pinch hands over at the scale the globe showed: two globe points
+    // half a screen apart stay half a screen apart on the map. viewToMapbox maps
+    // the camera distance linearly and lands about five times closer, which a
+    // wheel step hides but a continuous pinch shows as a jump (Europe became
+    // Milan on a phone, 2026-10-01). Mouse and slider keep the old entry.
+    let entryZoom = mapboxCamera.zoom
+    if (deps.touchGestureActive.current) {
+      camera.updateMatrixWorld()
+      const left = latLngAtScreen(camera, -0.5, 0)
+      const right = latLngAtScreen(camera, 0.5, 0)
+      if (left && right) {
+        mapboxService.zoomToSpan(left, right, deps.sceneRef.current.renderer.domElement.getBoundingClientRect().width / 2)
+        entryZoom = mapboxService.getCamera()!.zoom
+      }
+    }
+
     // Store the base zoom percent for the Mapbox zoom effect to use
-    // Must use same scale as MapboxGlobeService (0.7-18 range for full street-level zoom)
-    const MAPBOX_FULL_ZOOM_MIN = 0.7
-    const MAPBOX_FULL_ZOOM_MAX = 18
-    deps.mapboxBaseZoomRef.current = ((mapboxCamera.zoom - MAPBOX_FULL_ZOOM_MIN) / (MAPBOX_FULL_ZOOM_MAX - MAPBOX_FULL_ZOOM_MIN)) * 100
+    // Same scale as MapboxGlobeService (0.7-18 range for full street-level zoom)
+    deps.mapboxBaseZoomRef.current = mapboxZoomToPercent(entryZoom)
 
     // Slider position is already correct since user dragged it to trigger mode switch
     // No need to update it here (would cause feedback loop)
@@ -462,6 +481,18 @@ export function createModeSwitchEffect(
       })
     })
 
+    // A finger zoom on the map moves the slider too, so pinching out below
+    // the entry zoom brings the 3D globe back (createAutoSwitchEffect). The map
+    // is already where the finger put it: isMapboxZoom keeps useGlobeZoom from
+    // moving it again. Below 66 % that effect does not run and would leave the
+    // flag set, so it is only raised inside the Mapbox range.
+    mapboxService.onTouchZoom((mapboxZoom: number) => {
+      const slider = sliderAfterTouchZoom(mapboxZoom, deps.mapboxBaseZoomRef.current)
+      if (slider === deps.zoomRef.current) return
+      if (slider >= MAPBOX_SWITCH_PERCENT) deps.isMapboxZoom.current = true
+      deps.setZoom(() => slider)
+    })
+
     // Now enable primary mode (callbacks are ready)
     deps.mapboxTransitioningRef.current = true
     mapboxService.enablePrimaryMode()
@@ -530,6 +561,7 @@ export function createModeSwitchEffect(
     mapboxService.onCameraMove(null)
     mapboxService.onMapClick(null)
     mapboxService.onWheelZoom(null)
+    mapboxService.onTouchZoom(null)
 
     // Clear any Mapbox-related tooltip state
     deps.setHoveredSite(null)

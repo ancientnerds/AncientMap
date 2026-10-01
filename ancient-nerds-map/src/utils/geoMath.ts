@@ -200,6 +200,21 @@ export function getThreeJsView(camera: THREE.PerspectiveCamera): GlobeView {
   return { lat: latLng.lat, lng: latLng.lng, distance: Math.max(0, Math.min(1, distance)) }
 }
 
+/**
+ * The point of the globe the camera shows at a screen position (NDC, -1..1), or
+ * null where it shows space. The camera's matrices must be current.
+ */
+export function latLngAtScreen(
+  camera: THREE.PerspectiveCamera,
+  ndcX: number,
+  ndcY: number
+): { lat: number; lng: number } | null {
+  const raycaster = new THREE.Raycaster()
+  raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
+  const hits = raySphereIntersect(raycaster.ray.origin, raycaster.ray.direction, new THREE.Vector3(0, 0, 0), 1.0)
+  return hits.length > 0 ? cartesianToLatLng(hits[0]) : null
+}
+
 /** Apply view to Three.js camera */
 export function setThreeJsView(
   camera: THREE.PerspectiveCamera,

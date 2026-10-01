@@ -509,6 +509,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const [isLoadingLayers, setIsLoadingLayers] = useState<Record<string, boolean>>({})
   const {
     stars: starsRef, isManualZoom, isWheelZoom, wheelCursorLatLng, justEnteredMapbox,
+    isMapboxZoom, touchGestureActive,
     mapboxBaseZoom: mapboxBaseZoomRef, isAutoRotating: isAutoRotatingRef, manualRotation: manualRotationRef,
     shaderMaterials: shaderMaterialsRef, ledDotMaterial: ledDotMaterialRef,
     layersReadyCalled: layersReadyCalledRef, cameraAnimation: cameraAnimationRef, animationId: animationIdRef,
@@ -822,7 +823,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
     }
 
     const handlerRefs: EventHandlerRefs = {
-      containerRef, mapboxServiceRef, showMapboxRef, sitesRef,
+      containerRef, mapboxContainerRef, touchGestureActive, mapboxServiceRef, showMapboxRef, sitesRef,
       lastMousePosRef, lastMoveTimeRef, lastCoordsUpdateRef,
       currentHoveredSiteRef, isFrozenRef, frozenSiteRef, hoveredSiteRef,
       highlightFrozenRef, cameraAnimationRef, onSiteSelectRef, onEmpireClickRef,
@@ -2413,6 +2414,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       isManualZoom,
       isWheelZoom,
       wheelCursorLatLng,
+      isMapboxZoom,
+      touchGestureActive,
       containerRef,
       measureModeRef,
       measureSnapEnabledRef,
