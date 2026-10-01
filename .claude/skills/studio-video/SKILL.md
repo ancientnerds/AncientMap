@@ -91,7 +91,12 @@ written `studio …` below. Exit 0 = ok, 1 = a check failed (`episode check`, `e
   the count differs: a full episode has at least 3.
 - **ShareCard is the end card**: only the last beat, the one place the link appears in the picture.
 - **Hook**: at most 32 s; burned-in captions exist only there. A hook word, upper-cased with its
-  punctuation, has at most 24 characters (`HOOK_LINE_MAX_CHARS`).
+  punctuation, has at most 24 characters (`HOOK_LINE_MAX_CHARS`). Under hook captions the stage is
+  140 px shorter, and the length limits `episode check` enforces are those of the full stage: the
+  render lint also refuses what a hook beat cannot host, whatever the text: an EvidenceCard whose
+  `statement` is over 88 characters (68 with an image) or whose `quote` is over 165 (134), a
+  QuoteCard `quote` over 230, six claims with a `by` line, five list items with a note, more than
+  six bars, three unit groups, a Meter with a note. Put such a block after the hook, or cut it down.
 - **Glyph rule** (#32): only drawn strings are checked (the registry's `drawn` props, capture
   credits and place and pin labels, hook captions, chapter titles, credit lines, thumbnail
   teasers), and each character also in upper case: `ƒ` draws as `Ƒ`, which has no glyph, so it

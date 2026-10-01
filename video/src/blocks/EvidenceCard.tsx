@@ -78,9 +78,10 @@ export const EvidenceCard: React.FC<BlockProps<EvidenceCardProps>> = ({ props: p
             {`“${typed}${typed.length === quote.length ? '”' : ''}`}
           </LayoutBox>
         ) : null}
+        {/* The two lines never clip themselves: the box clips, and the lint measures the box, so a line that does not fit is an overflow, never a silently cut title. */}
         <LayoutBox id={`${sceneId}:source`} kind="text" style={{ position: 'absolute', left: PAD, top: layout.source.y, width: textW, height: SOURCE_H, overflow: 'hidden', ...bootIn(frame, 16) }}>
-          <div style={{ ...body(24, colors.text), whiteSpace: 'nowrap', overflow: 'hidden' }}>{e.source.title}</div>
-          <div style={{ ...hud(18, colors.crt400), whiteSpace: 'nowrap', overflow: 'hidden' }}>{source}</div>
+          <div style={{ ...body(24, colors.text), whiteSpace: 'nowrap' }}>{e.source.title}</div>
+          <div style={{ ...hud(18, colors.crt400), whiteSpace: 'nowrap' }}>{source}</div>
         </LayoutBox>
         {p.image ? (
           <div style={{ position: 'absolute', left: panel.w - PAD - IMAGE_W, top: PAD, width: IMAGE_W, height: panel.h - 2 * PAD - 110, overflow: 'hidden', border: `1px solid ${colors.greenDim}`, ...bootIn(frame, 12) }}>

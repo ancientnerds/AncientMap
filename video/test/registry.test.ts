@@ -4,20 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { CAPTURE_PROPS, REGISTRY_BLOCKS, registryJson } from '../src/blocks/schemas'
-import { type Schema, unsupportedKeywords } from '../src/schema'
+import { type Schema, unsupportedKeywords, validate } from '../src/schema'
+import { schemaAt } from './registryHelpers'
 
 const REGISTRY_FILE = fileURLToPath(new URL('../src/blocks/registry.json', import.meta.url))
-
-/** The schema a `drawn` pattern points at ('claims[].label': the label of every claim), or null. */
-function schemaAt(schema: Schema, pattern: string): Schema | null {
-  let at: Schema | undefined = schema
-  for (const part of pattern.split('.')) {
-    const key = part.endsWith('[]') ? part.slice(0, -2) : part
-    at = at?.properties?.[key]
-    if (at && part.endsWith('[]')) at = at.type === 'array' ? at.items : undefined
-  }
-  return at ?? null
-}
 
 /** Every property name anywhere in a schema. */
 function propertyNames(schema: Schema): string[] {
@@ -77,6 +67,27 @@ describe('blocks/registry.json (plan C contract C5)', () => {
   })
   it('uses only the JSON-schema keywords pipeline/studio/blocks.py supports', () => {
     for (const [name, entry] of Object.entries(REGISTRY_BLOCKS)) expect(unsupportedKeywords(entry.props), name).toEqual([])
+  })
+  it('bounds the source title and the locator of an evidence card: a real dossier title does not fit one line (render-R1)', () => {
+    // 111 characters, as a dossier source is titled: the card's title line holds 80 (66 beside the image), the quote card's 77 with its attribution
+    const title = 'The Megalithic Quarry of Baalbek: A Reassessment of Roman Stone-Working Technology and Logistics - ResearchGate'
+    expect(title).toHaveLength(111)
+    const evidence = (t: string, locator: string) => ({
+      id: 'e1',
+      claim_id: 'c1',
+      kind: 'quantity',
+      statement: 'The block weighs about 1,000 tonnes.',
+      source: { url: 'https://www.researchgate.net/publication/1', title: t, tier: 1, license: '', quote: 'estimated to weigh 1,650 tonnes', locator },
+      paper_anchor: null,
+    })
+    for (const block of ['EvidenceCard', 'QuoteCard']) {
+      const props = REGISTRY_BLOCKS[block].props
+      expect(validate(props, { evidence: evidence(title, 'section 2') }), `${block}: title`).toEqual([expect.stringMatching(/\.source\.title: longer than \d+$/)])
+      expect(validate(props, { evidence: evidence('Baalbek: the largest blocks', 'p. 112, section 2, the long third footnote') }), `${block}: locator`).toEqual([
+        expect.stringMatching(/\.source\.locator: longer than \d+$/),
+      ])
+      expect(validate(props, { evidence: evidence('Baalbek: the largest blocks', 'section 2') }), `${block}: fits`).toEqual([])
+    }
   })
   it('makes every comparison block state its basis (owner rule)', () => {
     for (const name of ['ScaleDrawing', 'UnitGrid', 'BarChart', 'ScaleZoom']) expect(REGISTRY_BLOCKS[name].props.required, name).toContain('basis')

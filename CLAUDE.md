@@ -304,7 +304,7 @@ voice` and `doctor` exit 1 when a gate or probe fails.
   marks it published (`--publish`).
 - **Local only**: the NVENC and Playwright tests skip in CI, so CI never proves the capture and
   render path. On the workstation, `npm run test:gpu` in `video/` (the layout lint in a real Chrome
-  on the NVIDIA, and a crashed and a closed render tab that must cancel the run at once), the smoke render and the real captures (Tasks 22 and 36 of
+  on the NVIDIA, every block at its length limits, and a crashed and a closed render tab that must cancel the run at once), the smoke render and the real captures (Tasks 22 and 36 of
   `docs/superpowers/plans/2026-09-26-D-renderer-capture-video-mode.md`) prove it before a release.
 
 Runbook (setup, both sessions, gates, recovery): `docs/procedures/STUDIO.md`.

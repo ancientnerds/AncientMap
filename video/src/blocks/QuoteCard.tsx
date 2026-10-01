@@ -44,9 +44,10 @@ export const QuoteCard: React.FC<BlockProps<QuoteCardProps>> = ({ props: p, cues
         >
           <div>{`“${typed}${typed.length === quote.length ? '”' : ''}`}</div>
         </LayoutBox>
+        {/* The two lines never clip themselves: the box clips, and the lint measures the box, so a line that does not fit is an overflow, never a silently cut work title. */}
         <LayoutBox id={`${sceneId}:source`} kind="text" style={{ position: 'absolute', left: PAD, top: panel.h - PAD - SOURCE_H, width: panel.w - 2 * PAD, height: SOURCE_H, overflow: 'hidden', ...bootIn(frame, at + 10) }}>
-          <div style={{ ...body(30, colors.white), whiteSpace: 'nowrap', overflow: 'hidden' }}>{work}</div>
-          <div style={{ ...hud(20, colors.crt400), whiteSpace: 'nowrap', overflow: 'hidden' }}>{meta}</div>
+          <div style={{ ...body(30, colors.white), whiteSpace: 'nowrap' }}>{work}</div>
+          <div style={{ ...hud(20, colors.crt400), whiteSpace: 'nowrap' }}>{meta}</div>
         </LayoutBox>
       </Panel>
     </AbsoluteFill>

@@ -57,8 +57,9 @@ def _obj(properties: dict, required: list[str] | None = None, description: str |
 
 ID = _str(1, 64)
 ASSET = _str(1, 240)
-TITLE = _str(1, 48)
-LABEL = _obj({"title": _str(1, 40), "subtitle": _str(1, 56)}, ["title"], "Lower third over footage")
+TITLE = _str(1, 44)
+LIST_TITLE = _str(1, 42)
+LABEL = _obj({"title": _str(1, 24), "subtitle": _str(1, 49)}, ["title"], "Lower third over footage")
 MEDIA = _obj(
     {
         "id": ID,
@@ -75,7 +76,7 @@ MEDIA = _obj(
 CLAIM = _obj(
     {
         "id": ID,
-        "label": _str(1, 80),
+        "label": _str(1, 66),
         "by": _str(0, 40),
         "icon": {
             **_one_of(ICONS),
@@ -114,19 +115,24 @@ EVENT = {
 }
 CLIP_START = {**_num(0), "description": "Seconds into the clip where the scene starts (default 0)"}
 BASIS = {
-    **_str(3, 140),
+    **_str(3, 95),
     "description": "What the comparison is based on, always shown on screen (owner rule)",
 }
 
 
-def evidence_schema(statement: int | None = None, quote: int | None = None) -> dict:
+def evidence_schema(
+    statement: int | None = None,
+    quote: int | None = None,
+    title: int | None = None,
+    locator: int | None = None,
+) -> dict:
     source = {
         "url": _str(1),
-        "title": _str(1),
+        "title": _str(1, title),
         "tier": _num(0, kind="integer"),
         "license": _str(0),
         "quote": _str(0, quote),
-        "locator": _str(0),
+        "locator": _str(0, locator),
     }
     return _obj(
         {
@@ -179,7 +185,7 @@ REGISTRY = {
                     "description": "Camera over the whole scene (default in)",
                 },
                 "label": LABEL,
-                "caption": _str(1, 90),
+                "caption": _str(1, 51),
             },
             ["image"],
             "A checked photo with its markers in the same moving layer; cues show/hide/highlight <marker id>",
@@ -221,7 +227,7 @@ REGISTRY = {
     ),
     "EvidenceCard": _entry(
         _obj(
-            {"evidence": evidence_schema(160, 260), "image": MEDIA},
+            {"evidence": evidence_schema(100, 220, 66, 24), "image": MEDIA},
             ["evidence"],
             "One verified evidence item; cues highlight <evidence id> (quote types on), stamp <evidence id>",
         ),
@@ -269,7 +275,7 @@ REGISTRY = {
         _obj(
             {
                 "title": TITLE,
-                "unit": _str(1, 16),
+                "unit": _str(1, 6),
                 "basis": BASIS,
                 "bars": _arr(
                     _obj(
@@ -314,8 +320,8 @@ REGISTRY = {
     "ListCard": _entry(
         _obj(
             {
-                "title": TITLE,
-                "items": _arr(_obj({"id": ID, "text": _str(1, 90)}), 1, 5),
+                "title": LIST_TITLE,
+                "items": _arr(_obj({"id": ID, "text": _str(1, 72)}), 1, 5),
                 "note": _str(1, 110),
             },
             ["title", "items"],
@@ -325,7 +331,7 @@ REGISTRY = {
     ),
     "ShareCard": _entry(
         _obj(
-            {"headline": _str(1, 60), "url": _str(1, 60), "lines": _arr(_str(1, 80), 0, 3)},
+            {"headline": _str(1, 50), "url": _str(1, 43), "lines": _arr(_str(1, 66), 0, 3)},
             None,
             "The end card: the one place the link appears in the picture",
         ),

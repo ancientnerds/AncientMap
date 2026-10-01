@@ -55,10 +55,31 @@ const obj = (properties: Record<string, Schema>, required: string[] = Object.key
 const ID = str(1, 64)
 const ASSET = str(1, 240)
 const TONE = oneOf(TONES)
-const TITLE = str(1, 48)
-const BASIS: Schema = { ...str(3, 140), description: 'What the comparison is based on, always shown on screen (owner rule)' }
 
-export const LABEL = obj({ title: str(1, 40), subtitle: str(1, 56) }, ['title'], 'Lower third over footage')
+/*
+ * Length limits: the text must fit where the block draws it, because `episode check`
+ * accepts exactly what these schemas accept, and a limit above what the layout can
+ * draw fails only at `episode render`, after the voice and the captures. Each limit
+ * below is the measured capacity of its box (1920x1080, the brand fonts), proven by
+ * test/gpu/capacity.gpu.ts, which lints every block with every drawn string at its
+ * maxLength and a filler about 5 % wider per character than ordinary prose
+ * (test/capacity.ts). Change a limit, and that test must stay green.
+ * Free-standing labels (a scale object, a diagram element, a timeline event, a map
+ * pin) have no box: how many characters they take depends on where the script puts
+ * them, and the layout lint at render time judges that.
+ */
+/** One line of a heading(48) title across the stage (1728 px of Orbitron, upper case). */
+const TITLE = str(1, 44)
+/** One line of a heading(44) title across a card panel (ListCard, 1496 px). */
+const LIST_TITLE = str(1, 42)
+/** The basis line is one 24 px line of 120 characters, its prefix included; the longest prefix, ScaleZoom's "To scale, linear. Basis: ", takes 25. */
+const BASIS: Schema = { ...str(3, 95), description: 'What the comparison is based on, always shown on screen (owner rule)' }
+
+/** The UnitGrid basis line is "1 square = <unitLabel>. Basis: <basis>" on one 120-character line: 20 + 36 + 60 fit. */
+const UNIT_GRID_BASIS: Schema = { ...str(3, 60), description: BASIS.description }
+
+/** The lower third: a 716 px box, the title in Orbitron 38 px upper case, the subtitle in 24 px mono. */
+export const LABEL = obj({ title: str(1, 24), subtitle: str(1, 49) }, ['title'], 'Lower third over footage')
 
 /** A case-file marker: box = [x, y, w, h] as fractions of the image, checked on a crop. */
 export const MARKER = obj({ id: ID, box: arr(num(0, 1), 4, 4), label: str(1, 24) })
@@ -75,7 +96,7 @@ export const MEDIA = obj({
 })
 
 /** Case-file evidence, resolved (C6); length limits are per block, where the text must fit. */
-export function evidenceSchema(limits: { statement?: number; quote?: number } = {}): Schema {
+export function evidenceSchema(limits: { statement?: number; quote?: number; title?: number; locator?: number } = {}): Schema {
   return obj({
     id: ID,
     claim_id: ID,
@@ -83,20 +104,20 @@ export function evidenceSchema(limits: { statement?: number; quote?: number } = 
     statement: str(1, limits.statement),
     source: obj({
       url: str(1),
-      title: str(1),
+      title: str(1, limits.title),
       tier: int(0),
       license: str(0),
       quote: str(0, limits.quote),
-      locator: str(0),
+      locator: str(0, limits.locator),
     }),
     paper_anchor: { type: ['string', 'null'] },
   })
 }
 
-/** Case-file claim, resolved (C6). */
+/** Case-file claim, resolved (C6). The label is one 30 px mono line of the 1188 px box of a six-claim board (a board of up to four claims gives the label a second line). */
 export const CLAIM = obj({
   id: ID,
-  label: str(1, 80),
+  label: str(1, 66),
   by: str(0, 40),
   icon: { ...oneOf(ICONS), description: 'ClaimBoard icon; the case file must use one of these names' },
   status: oneOf(CLAIM_STATUSES),
@@ -160,7 +181,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
         image: MEDIA,
         kenBurns: { ...oneOf(['in', 'out', 'none']), description: 'Camera over the whole scene (default in)' },
         label: LABEL,
-        caption: str(1, 90),
+        caption: str(1, 51), // one 26 px mono line in 800 px
       },
       ['image'],
       'A checked photo with its markers in the same moving layer; cues show/hide/highlight <marker id>',
@@ -229,8 +250,13 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     map: false,
     platform: false,
     drawn: ['evidence.kind', 'evidence.statement', 'evidence.source.quote', 'evidence.source.title', 'evidence.source.locator'],
+    // Beside the image the text column is 964 px: the statement is three lines of Orbitron 40 px,
+    // the quote five lines of mono 32 px, the title one mono 24 px line (80 characters without
+    // the image), and the source line, 72 characters of 18 px caps, holds a 16-character
+    // hostname, "tier 1", "paper #ev-01" and three separators beside a locator of 26. Under
+    // hook captions the stage is 140 px shorter and less fits: test/capacity.ts HOOK_LIMITS.
     props: obj(
-      { evidence: evidenceSchema({ statement: 160, quote: 260 }), image: MEDIA },
+      { evidence: evidenceSchema({ statement: 100, quote: 220, title: 66, locator: 24 }), image: MEDIA },
       ['evidence'],
       'One verified evidence item; cues highlight <evidence id> (quote types on), stamp <evidence id>',
     ),
@@ -239,8 +265,11 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     map: false,
     platform: false,
     drawn: ['evidence.source.quote', 'evidence.source.title', 'evidence.source.locator', 'attribution'],
+    // The quote is six lines of Cormorant Garamond 52 px (four under hook captions: 230). The
+    // work line, "<attribution>, <title>", is one 30 px mono line of 77 characters: 32 + 2 + 43.
+    // The meta line (locator, hostname, tier) holds 94 characters of 20 px caps.
     props: obj(
-      { evidence: evidenceSchema({ statement: 160, quote: 320 }), attribution: str(1, 60) },
+      { evidence: evidenceSchema({ statement: 160, quote: 320, title: 43, locator: 24 }), attribution: str(1, 32) },
       ['evidence'],
       'A verbatim passage (texts and traditions, or a page that cannot be captured); cue highlight <evidence id>',
     ),
@@ -303,10 +332,11 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     props: obj(
       {
         title: TITLE,
-        basis: BASIS,
-        unitLabel: str(1, 40),
+        basis: UNIT_GRID_BASIS,
+        unitLabel: str(1, 36),
+        // the legend column is 480 px: one 30 px mono label line (26 characters), and three entries end above the basis line
         columns: int(5, 40),
-        groups: arr(obj({ id: ID, count: int(1, 400), label: str(1, 40), tone: TONE }), 1, 4),
+        groups: arr(obj({ id: ID, count: int(1, 400), label: str(1, 26), tone: TONE }), 1, 3),
       },
       ['title', 'basis', 'unitLabel', 'groups'],
       'Counts as lit unit squares (one block = 80 buses); cue show <group id>',
@@ -319,7 +349,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     props: obj(
       {
         title: TITLE,
-        unit: str(1, 16),
+        unit: str(1, 6), // the value box holds 14 characters (a range 16): a 6-character unit leaves room for a 4-digit value or a 3-digit range
         basis: BASIS,
         bars: arr(
           obj(
@@ -410,7 +440,8 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     platform: false,
     drawn: ['title', 'items[].text', 'note'],
     props: obj(
-      { title: TITLE, items: arr(obj({ id: ID, text: str(1, 90) }), 1, 5), note: str(1, 110) },
+      // an item is one 32 px mono line of 1386 px when five rows share the card (fewer rows take two lines)
+      { title: LIST_TITLE, items: arr(obj({ id: ID, text: str(1, 72) }), 1, 5), note: str(1, 110) },
       ['title', 'items'],
       'A short list, e.g. what would change our mind; cue show <item id>',
     ),
@@ -420,7 +451,8 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     platform: false,
     drawn: ['headline', 'url', 'lines[]'],
     props: obj(
-      { headline: str(1, 60), url: str(1, 60), lines: arr(str(1, 80), 0, 3) },
+      // headline: two Orbitron 54 px lines; url: one 44 px mono line of 1200 px; lines: one 30 px mono line each
+      { headline: str(1, 50), url: str(1, 43), lines: arr(str(1, 66), 0, 3) },
       ['headline', 'url', 'lines'],
       'The end card: the one place the link appears in the picture',
     ),

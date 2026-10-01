@@ -112,12 +112,12 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 40
+                "maxLength": 24
               },
               "subtitle": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 56
+                "maxLength": 49
               }
             },
             "description": "Lower third over footage"
@@ -125,7 +125,7 @@
           "caption": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 90
+            "maxLength": 51
           }
         },
         "description": "A checked photo with its markers in the same moving layer; cues show/hide/highlight <marker id>"
@@ -311,12 +311,12 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 40
+                "maxLength": 24
               },
               "subtitle": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 56
+                "maxLength": 49
               }
             },
             "description": "Lower third over footage"
@@ -526,12 +526,12 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 40
+                "maxLength": 24
               },
               "subtitle": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 56
+                "maxLength": 49
               }
             },
             "description": "Lower third over footage"
@@ -701,12 +701,12 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 40
+                "maxLength": 24
               },
               "subtitle": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 56
+                "maxLength": 49
               }
             },
             "description": "Lower third over footage"
@@ -876,12 +876,12 @@
               "title": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 40
+                "maxLength": 24
               },
               "subtitle": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 56
+                "maxLength": 49
               }
             },
             "description": "Lower third over footage"
@@ -1173,7 +1173,7 @@
               "statement": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 160
+                "maxLength": 100
               },
               "source": {
                 "type": "object",
@@ -1193,7 +1193,8 @@
                   },
                   "title": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 66
                   },
                   "tier": {
                     "type": "integer",
@@ -1206,11 +1207,12 @@
                   "quote": {
                     "type": "string",
                     "minLength": 0,
-                    "maxLength": 260
+                    "maxLength": 220
                   },
                   "locator": {
                     "type": "string",
-                    "minLength": 0
+                    "minLength": 0,
+                    "maxLength": 24
                   }
                 }
               },
@@ -1375,7 +1377,8 @@
                   },
                   "title": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "maxLength": 43
                   },
                   "tier": {
                     "type": "integer",
@@ -1392,7 +1395,8 @@
                   },
                   "locator": {
                     "type": "string",
-                    "minLength": 0
+                    "minLength": 0,
+                    "maxLength": 24
                   }
                 }
               },
@@ -1407,7 +1411,7 @@
           "attribution": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 60
+            "maxLength": 32
           }
         },
         "description": "A verbatim passage (texts and traditions, or a page that cannot be captured); cue highlight <evidence id>"
@@ -1449,7 +1453,7 @@
                 "label": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 80
+                  "maxLength": 66
                 },
                 "by": {
                   "type": "string",
@@ -1490,7 +1494,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 48
+            "maxLength": 44
           }
         },
         "description": "The claims under test; introduce/status cues (any scene) drive it; cue highlight <claim id>"
@@ -1536,7 +1540,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 48
+            "maxLength": 44
           },
           "note": {
             "type": "string",
@@ -1568,7 +1572,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 48
+            "maxLength": 44
           },
           "unit": {
             "type": "string",
@@ -1581,7 +1585,7 @@
           "basis": {
             "type": "string",
             "minLength": 3,
-            "maxLength": 140,
+            "maxLength": 95,
             "description": "What the comparison is based on, always shown on screen (owner rule)"
           },
           "objects": {
@@ -1662,18 +1666,18 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 48
+            "maxLength": 44
           },
           "basis": {
             "type": "string",
             "minLength": 3,
-            "maxLength": 140,
+            "maxLength": 60,
             "description": "What the comparison is based on, always shown on screen (owner rule)"
           },
           "unitLabel": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 40
+            "maxLength": 36
           },
           "columns": {
             "type": "integer",
@@ -1705,7 +1709,7 @@
                 "label": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 40
+                  "maxLength": 26
                 },
                 "tone": {
                   "type": "string",
@@ -1720,7 +1724,7 @@
               }
             },
             "minItems": 1,
-            "maxItems": 4
+            "maxItems": 3
           }
         },
         "description": "Counts as lit unit squares (one block = 80 buses); cue show <group id>"
@@ -1748,17 +1752,17 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 48
+            "maxLength": 44
           },
           "unit": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 16
+            "maxLength": 6
           },
           "basis": {
             "type": "string",
             "minLength": 3,
-            "maxLength": 140,
+            "maxLength": 95,
             "description": "What the comparison is based on, always shown on screen (owner rule)"
           },
           "bars": {
@@ -1836,7 +1840,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 48
+            "maxLength": 44
           },
           "from": {
             "type": "integer"
@@ -1847,7 +1851,7 @@
           "basis": {
             "type": "string",
             "minLength": 3,
-            "maxLength": 140,
+            "maxLength": 95,
             "description": "What the comparison is based on, always shown on screen (owner rule)"
           },
           "events": {
@@ -1916,7 +1920,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 48
+            "maxLength": 44
           },
           "width": {
             "type": "number",
@@ -1929,7 +1933,7 @@
           "basis": {
             "type": "string",
             "minLength": 3,
-            "maxLength": 140,
+            "maxLength": 95,
             "description": "What the comparison is based on, always shown on screen (owner rule)"
           },
           "elements": {
@@ -2062,7 +2066,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 48
+            "maxLength": 42
           },
           "items": {
             "type": "array",
@@ -2082,7 +2086,7 @@
                 "text": {
                   "type": "string",
                   "minLength": 1,
-                  "maxLength": 90
+                  "maxLength": 72
                 }
               }
             },
@@ -2118,19 +2122,19 @@
           "headline": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 60
+            "maxLength": 50
           },
           "url": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 60
+            "maxLength": 43
           },
           "lines": {
             "type": "array",
             "items": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 80
+              "maxLength": 66
             },
             "minItems": 0,
             "maxItems": 3
@@ -2163,7 +2167,7 @@
           "title": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 48
+            "maxLength": 44
           },
           "unit": {
             "type": "string",
@@ -2173,7 +2177,7 @@
           "basis": {
             "type": "string",
             "minLength": 3,
-            "maxLength": 140,
+            "maxLength": 95,
             "description": "What the comparison is based on, always shown on screen (owner rule)"
           },
           "small": {

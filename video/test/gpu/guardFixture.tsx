@@ -13,8 +13,11 @@
  */
 import React, { useMemo } from 'react'
 import type { CSSProperties } from 'react'
-import { AbsoluteFill, type CalculateMetadataFunction, Composition, registerRoot, useCurrentFrame } from 'remotion'
+import { AbsoluteFill, Composition, registerRoot, useCurrentFrame } from 'remotion'
 
+import { EvidenceCard } from '../../src/blocks/EvidenceCard'
+import { QuoteCard } from '../../src/blocks/QuoteCard'
+import type { Evidence } from '../../src/blocks/types'
 import { webglRenderer } from '../../src/gpu'
 import type { Rect } from '../../src/layout/geometry'
 import { LayoutBox, LayoutProvider, Registry } from '../../src/layout/LayoutBox'
@@ -107,8 +110,42 @@ const TeaserOnly: React.FC<LintProps & { candidate: number }> = ({ lint, candida
   )
 }
 
-const withGpu: CalculateMetadataFunction<LintProps> = async ({ props }) => ({ props: { ...props, gpu: webglRenderer() } })
-const withGpuTeaser: CalculateMetadataFunction<LintProps & { candidate: number }> = async ({ props }) => ({ props: { ...props, gpu: webglRenderer() } })
+/**
+ * The source line of an evidence card, drawn by the real EvidenceCard and
+ * QuoteCard (bypassing the schema, which refuses a title this long) with the
+ * title of a real dossier source. The line must be measured, not clipped: the
+ * inner title div once had its own overflow: hidden, so the outer LayoutBox never
+ * saw the text that did not fit and the lint reported "clean" on a cut-off title.
+ */
+const evidenceOf = (title: string): Evidence => ({
+  id: 'e1',
+  claim_id: 'c1',
+  kind: 'quantity',
+  statement: 'The Stone of the Pregnant Woman weighs about 1,000 tonnes.',
+  source: { url: 'https://www.researchgate.net/publication/1', title, tier: 1, license: '', quote: 'estimated to weigh 1,650 tonnes', locator: 'section 2' },
+  paper_anchor: 'ev-01',
+})
+
+type SourceLineProps = LintProps & { title: string }
+
+const sourceLine =
+  (Card: typeof EvidenceCard | typeof QuoteCard): React.FC<SourceLineProps> =>
+  ({ lint, title }) => {
+    const registry = useMemo(() => new Registry(lint), [lint])
+    return (
+      <AbsoluteFill style={{ backgroundColor: '#000' }}>
+        <LayoutProvider registry={registry}>
+          <Card props={{ evidence: evidenceOf(title) }} cues={[]} durationInFrames={1} sceneId="b02" sceneFrom={0} stage={ZONES.stage} />
+          {lint ? <LayoutGuard /> : null}
+        </LayoutProvider>
+      </AbsoluteFill>
+    )
+  }
+
+const EvidenceSource = sourceLine(EvidenceCard)
+const QuoteSource = sourceLine(QuoteCard)
+
+const withGpu = async <P extends LintProps>({ props }: { props: P }) => ({ props: { ...props, gpu: webglRenderer() } })
 
 const Root: React.FC = () => (
   <>
@@ -117,12 +154,14 @@ const Root: React.FC = () => (
       id="TeaserOnly"
       component={TeaserOnly}
       defaultProps={{ lint: false, gpu: '', candidate: 1 }}
-      calculateMetadata={withGpuTeaser}
+      calculateMetadata={withGpu}
       durationInFrames={1}
       fps={60}
       width={1920}
       height={1080}
     />
+    <Composition id="EvidenceSource" component={EvidenceSource} defaultProps={{ lint: false, gpu: '', title: 'x' }} calculateMetadata={withGpu} durationInFrames={1} fps={60} width={1920} height={1080} />
+    <Composition id="QuoteSource" component={QuoteSource} defaultProps={{ lint: false, gpu: '', title: 'x' }} calculateMetadata={withGpu} durationInFrames={1} fps={60} width={1920} height={1080} />
   </>
 )
 

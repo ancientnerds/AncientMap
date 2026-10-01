@@ -60,7 +60,7 @@ names its crop files, and the workflows pass every id through shell commands).
    `curl -s https://ancientnerds.com/api/v1/research/<slug> | ./.venv/Scripts/python.exe -X utf8 -c "import json,sys; from pipeline.utils.card_provenance import text_sha256; print(text_sha256(json.load(sys.stdin)['content']))"`.
    Without a paper, `paper` is `null` and no item has a `paper_anchor`.
 2. **Claims.** `icon` is one of the names in the `icon` enum of the ClaimBoard's `claims` items
-   in `video/src/blocks/registry.json`; `label` ≤ 80 characters, `by` ≤ 40. `status` stays
+   in `video/src/blocks/registry.json`; `label` ≤ 66 characters, `by` ≤ 40. `status` stays
    `pending`: verdicts come only from the script's `status` cues.
 3. **Evidence.** `source` always carries url, title, tier, license, quote and locator. Two
    origins, one verbatim sentence of quote each:
@@ -69,6 +69,12 @@ names its crop files, and the workflows pass every id through shell commands).
      that source's in the dossier.
    - *From the web* (no paper, or a paper run without archived texts): open the page and copy
      one sentence verbatim into `source.quote`; `locator` says where it stands.
+   - The cards draw these in fixed boxes, and `episode check` refuses text that does not fit
+     (`registry.json`, proved by `video/test/gpu/capacity.gpu.ts`). EvidenceCard: `statement` ≤
+     100 characters, `quote` ≤ 220, `source.title` ≤ 66, `locator` ≤ 24. QuoteCard: `quote` ≤ 320,
+     `source.title` ≤ 43, `locator` ≤ 24. Shorten the case file's text: the title without its
+     site suffix (` - ResearchGate`), a shorter verbatim sentence or fragment for the quote. The
+     source line also draws the site's hostname, so these fit up to a hostname of 16 characters.
    - Every new item, and every item whose `statement` or `source` you edit, gets
      `"verification": {"status": "unverified", "by": "", "at": "", "method": ""}`. Never set
      `verified` yourself.

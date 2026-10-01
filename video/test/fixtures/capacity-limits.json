@@ -1,0 +1,93 @@
+{
+  "PhotoPlate": {
+    "label.title": 24,
+    "label.subtitle": 49,
+    "caption": 51,
+    "image.markers[].label": 24
+  },
+  "MapboxTopdown": {
+    "label.title": 24,
+    "label.subtitle": 49
+  },
+  "PlatformClip": {
+    "label.title": 24,
+    "label.subtitle": 49
+  },
+  "GlobeShot": {
+    "label.title": 24,
+    "label.subtitle": 49
+  },
+  "MapboxFlyover": {
+    "label.title": 24,
+    "label.subtitle": 49
+  },
+  "SourceViewer": {},
+  "EvidenceCard": {
+    "evidence.kind": "enum",
+    "evidence.statement": 100,
+    "evidence.source.quote": 220,
+    "evidence.source.title": 66,
+    "evidence.source.locator": 24
+  },
+  "QuoteCard": {
+    "evidence.source.quote": 320,
+    "evidence.source.title": 43,
+    "evidence.source.locator": 24,
+    "attribution": 32
+  },
+  "ClaimBoard": {
+    "title": 44,
+    "claims[].label": 66,
+    "claims[].by": 40
+  },
+  "Meter": {
+    "title": 44,
+    "hypotheses[]": 40,
+    "note": 110
+  },
+  "ScaleDrawing": {
+    "title": 44,
+    "basis": 95,
+    "objects[].label": 24
+  },
+  "UnitGrid": {
+    "title": 44,
+    "unitLabel": 36,
+    "basis": 60,
+    "groups[].label": 26
+  },
+  "BarChart": {
+    "title": 44,
+    "unit": 6,
+    "basis": 95,
+    "bars[].label": 32
+  },
+  "Timeline": {
+    "title": 44,
+    "basis": 95,
+    "events[].label": 32
+  },
+  "Diagram": {
+    "title": 44,
+    "basis": 95,
+    "elements[].label": 32,
+    "elements[].text": 40
+  },
+  "ListCard": {
+    "title": 42,
+    "items[].text": 72,
+    "note": 110
+  },
+  "ShareCard": {
+    "headline": 50,
+    "url": 43,
+    "lines[]": 66
+  },
+  "ScaleZoom": {
+    "title": 44,
+    "unit": 16,
+    "basis": 95,
+    "small.label": 32,
+    "large.label": 32
+  }
+}

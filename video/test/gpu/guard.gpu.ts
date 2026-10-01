@@ -79,6 +79,28 @@ async function lint(id: string, props: Record<string, unknown>, concurrency: num
 
 const expected = (entries: [number, Violation][]) => entries.map(([frame, v]) => violationLine(frame, v)).sort()
 
+/**
+ * The title of a real dossier source (casefile.py puts no limit on source.title), 111 characters:
+ * on an EvidenceCard (room for 80 characters, 66 beside an image) and a QuoteCard (77 with the
+ * attribution) it does not fit its line.
+ */
+const DOSSIER_TITLE = 'The Megalithic Quarry of Baalbek: A Reassessment of Roman Stone-Working Technology and Logistics - ResearchGate'
+
+describe('the source line of an evidence card is measured, not clipped', () => {
+  it.each(['EvidenceSource', 'QuoteSource'])('%s: a title that does not fit its line is an overflow of the source box', async (id) => {
+    expect(DOSSIER_TITLE).toHaveLength(111)
+    const { gpu, lines } = await lint(id, { lint: true, title: DOSSIER_TITLE }, 1)
+    expect(gpu).toMatch(NVIDIA)
+    expect(lines).toEqual(expected([[0, { a: 'b02:source', b: null, reason: 'overflow' }]]))
+  }, SLOW)
+
+  it.each(['EvidenceSource', 'QuoteSource'])('%s: a title that fits its line is no violation', async (id) => {
+    const { gpu, lines } = await lint(id, { lint: true, title: 'Baalbek: the largest stone blocks' }, 1)
+    expect(gpu).toMatch(NVIDIA)
+    expect(lines).toEqual([])
+  }, SLOW)
+})
+
 describe('LayoutGuard in a real browser (fonts arriving after the first frame)', () => {
   it('reports exactly the planted violations of every frame, each tab`s first frame included', async () => {
     const { gpu, lines } = await lint('Planted', { lint: true }, 2)

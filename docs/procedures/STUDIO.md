@@ -37,7 +37,7 @@ file and the code disagree, the code is right and this file is stale: fix it.
   `theo-image-check.js`, `studio-casefile-verify.js` and `studio-marker-check.js` (I3). The skills hold
   the step-by-step session; this runbook holds the background, the gates and the recovery.
 - **Workstation proofs:** on 2026-10-01 `doctor` reported every probe ok, `npm run test:gpu` passed
-  (5 tests in 2 files, about 50 s) and one real CUDA float16 transcription ran (section 1.3). The
+  (10 tests in 3 files, about 95 s) and one real CUDA float16 transcription ran (section 1.3). The
   smoke render (plan D Task 22) and the real captures (plan D Task 36) have run on this workstation;
   they run again after any change to `video/` or `pipeline/studio/capture/` (index I8, step 1).
 
@@ -377,6 +377,15 @@ Rules the checks enforce (script, case file, captures):
   `23°`, `fifteen per cent` / `15%`). Anything else is an error that names the first differing token.
 - Hook beats total at most 32 s; burned-in captions only in the hook; one hook word has at most 24
   characters in upper case, punctuation included (`HOOK_LINE_MAX_CHARS`).
+- Every string a block draws has a `maxLength` in the registry, the measured capacity of its box (a
+  lower third's title 24 characters, a card's `statement` 100 and `quote` 220, an evidence source's
+  `title` 66 and `locator` 24, ...), so that `episode check` refuses text the render lint would
+  refuse. `video/test/gpu/capacity.gpu.ts` proves it on the workstation by linting every block on
+  both stages with every drawn string at its limit; `video/test/fixtures/capacity-limits.json` pins
+  the limits it held for, and CI fails when the registry differs. Not covered by a static limit:
+  free-standing labels (a scale object, a diagram element, a timeline event, a map pin), which take
+  the room the script gives them, and the hook stage (140 px shorter), where the lint also refuses
+  what does not fit (the numbers are in the studio-video skill).
 - No title card and no agent block. The ShareCard is the end card: the last beat only.
 - A full episode has 3-5 platform moments (a slice any number); every platform moment, in either
   format, lasts 5-15 s.
@@ -535,8 +544,9 @@ age, and `ssh ancientnerds`. A green
 really uses the NVIDIA.
 
 Checks only the workstation can run (CI never proves the capture and render path): `npm run test:gpu`
-in `video/` (2 files, 5 tests: the layout lint in a real browser on the NVIDIA, and a crashed and a
-closed render tab that each cancel the run at once, owner Q17; about 50 s, measured 2026-10-01), the
+in `video/` (3 files, 10 tests: the layout lint in a real browser on the NVIDIA, every block at its
+length limits, and a crashed and a closed render tab that each cancel the run at once, owner Q17;
+about 95 s, measured 2026-10-01), the
 smoke render (plan D Task 22), real captures (plan D Task 36), `doctor`, and the CUDA transcription.
 What CI does prove of `video/` is section 13.
 
