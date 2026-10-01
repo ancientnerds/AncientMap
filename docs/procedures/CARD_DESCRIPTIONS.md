@@ -357,6 +357,9 @@ Its own key, because `_description_provenance` is replaced whole whenever a desc
 and a card outlives that; the leading underscore keeps it out of the popup's raw-data panel. Shape,
 builder and readers: `pipeline/utils/card_provenance.py` (stdlib only - the Lyra image ships
 `pipeline/` without `api/`). Nothing is defaulted: a malformed provenance raises on every reader.
+`ai_system` is `model4.AI_SYSTEM_OPUS` in every provenance written until 2026-09-30 and
+`model4.AI_SYSTEM` (Opus and Sonnet) in every one written after the owner decision of 2026-10-01; the 185
+provenances whose card a Sonnet rewrite agent wrote are corrected to the latter (5.9).
 When lane WB writes a teaser it also sets a Phase-5 extractive `_description_provenance.card` key to
 `null`, so two provenances never describe one card.
 
@@ -375,7 +378,9 @@ When lane WB writes a teaser it also sets a Phase-5 extractive `_description_pro
   only a card proven against the text the site shows. `mechanical/teaser.py stale` lists stale cards
   (read-only); `teaser/run.py select` takes them as candidates again.
 - **Shorts**: `pipeline/video/shorts_export.py` pins a fresh teaser by its own hash and passes
-  `card_ai`; `shorts_render.build_description` adds the AI note (`TEASER_NOTE`) for it. A `site.json`
+  `card_ai`; `shorts_render.build_description` adds the AI note (`TEASER_NOTE`) for it - "AI-generated
+  (Claude, Anthropic)": the maker and family, not a tier, because the cards were written by Opus and Sonnet
+  agents (owner decision 2026-10-01) and which one wrote a card is stated per card in `ai_system`. A `site.json`
   exported before lane WB lacks `card_ai` and carries the old card: re-export before rendering.
 
 Retired sites (E4, 78) are not touched: their page answers 410 and their card is never drawn (63 of
@@ -763,7 +768,140 @@ quote outcome and the card's verdict), `pages/` (every page a verifier or judge 
 `JUDGE.md`. `output/remediation/handoff/teaser-<run>-<stage>/` (and
 `-scratch/`): the handoff. `output/remediation/mechanical_teaser/`: `STEPS.jsonl`, `sNNN/...`,
 `ACCEPTED/step-NNN.json`, `REVERTED/step-NNN.json` - force-added to git with the card-file commit
-(the proof trail; never reverted).
+(the proof trail; never reverted). `output/remediation/mechanical_card_disclosure/`: `LIST.jsonl` (the 185
+sites with their census proof), `sNNN/...`, `ACCEPTED/step-NNN.json` (5.9).
+
+### 5.9 The disclosure correction (`card-disclosure-sNNN`, 2026-10-01)
+
+**What it fixes.** Until 2026-09-30 every card provenance named Claude Opus only
+(`model4.AI_SYSTEM_OPUS`). The model census of 2026-10-01
+(`output/remediation/model_census/ANSWERS_TRUE_MODEL.jsonl`: per handoff answer the agent that recorded
+it, its time and the model that really ran, read from the Claude Code transcripts) shows that the
+rewrite stages (`rewrite1`, `rewrite2`, `rewrite-v`) of runs `wb-ws-2026-09-27-01`, `-04` and `-06` were
+answered by Sonnet 5.5 agents. Where such a rewrite produced a card's final text, the live provenance
+names a model that did not write it: **185 cards** (01: 54, 04: 52, 06: 79; read-only, 2026-10-01). The
+owner decision of the same day - the orchestrator is Opus 5.5, every answering agent Sonnet 5.5 - makes
+`model4.AI_SYSTEM` ("Claude Opus and Claude Sonnet (Anthropic) ...") the disclosure of every new write;
+this lane writes it into those 185 provenances and **changes nothing else**.
+
+**Do later runs need it? No.** Runs 02 and 05 have no `OUTCOMES.jsonl` yet; their outcomes are built
+after the stamp change (`teaser/run.py outcome_rows(ai_system=model4.AI_SYSTEM)`) and carry
+`AI_SYSTEM` from the start. Run 03 was answered by Opus throughout, and the cards of runs 01/04/06 that
+an Opus writer wrote keep the Opus-only string, which is true of their text. (The checkers and verifiers
+of runs 01/04/06 were Sonnet agents for every card; the provenance names them per card in `check.by` /
+`verify.by`, and `ai_system` discloses the system that wrote the text.)
+
+**The list** (`card_disclosure.py list`, offline). Each site a closed lane-WB step left a teaser
+provenance on is joined to its run's outcome (its provenance must be the step's) and the outcome's
+writer record to the census; it is listed when the model that really wrote the final text is not named
+by the provenance's `ai_system`. A writer the census cannot name exactly (no row, two models, a model
+other than Opus 5.5 / Sonnet 5.5) is a refusal, never a guess. The list is pinned: `card_disclosure_list.py`
+holds the 185 ids and their sha256 (`af59f0ff...13c1`); `list --check` re-derives it, and every `plan` does
+so first. Steps of at most 100 sites: **s001 = 100, s002 = 85.**
+
+**What a step writes.** One cell lane per step, `unified_sites.raw_data` (stamp
+`wb-card-disclosure-sNNN`, test id `WB/card-disclosure`): `_card_provenance.ai_system`, from `AI_SYSTEM_OPUS`
+to `AI_SYSTEM`, every other key as it was. The plan lists, and does not write, a site whose live provenance
+is not exactly the run outcome's provenance (`teaser-provenance-moved`), that already names `AI_SYSTEM`
+(`already-corrected`), that has none, or whose raw_data is not printed the way the planner prints JSON.
+In the transaction: guard 3 holds the whole old `raw_data` (no other key can have moved), guard 5 the
+provenance's identity (`run|text_sha256|desc_sha256`: a card replaced since is refused), and the lane
+invariant refuses a provenance that names neither disclosure, write and reversal alike. The read-back counts
+the journal rows that changed anything but this key (**must be 0**) and the sites still naming the Opus-only
+disclosure. Measured read-only on production on 2026-10-01: both steps plan with 0 skipped
+(`--verify`: 1,790 provenances name the Opus-only disclosure, 0 the new one, 0 name neither, 0 teaser
+provenances do not hash their card).
+
+**Preconditions.** The sitting's usual ones (5.4: backup and drill once, no deploy in between). No lane that
+writes `raw_data` of these sites may sit between its `plan` and its `apply`: a lane-WB step, a WC or P4
+write step, a P4 v3 batch - their guard 3 would refuse the stale plan, so re-plan them after this lane.
+The write changes the page columns of 185 sites (`raw_data` counts as a page write): their sitemap
+`lastmod` moves and the hourly IndexNow cycle announces them; no page byte changes (the page shows the AI
+mark, not the system string).
+
+```bash
+PY=./.venv/Scripts/python.exe; CD=scripts/remediation/mechanical/card_disclosure.py
+AP=scripts/remediation/mechanical/apply.py; MW=scripts/remediation/mechanical/teaser.py
+$PY $CD list --check                 # offline; LIST_EXIT=0 and "the pinned list holds: 185 sites, sha256 af59f0ff..."
+for N in 1 2; do                     # step 2 only after step 1 is accepted
+  S=$(printf 's%03d' $N)
+  $PY $CD plan --step $N             # read-only; output/remediation/mechanical_card_disclosure/$S/ (PLAN.md,
+                                     # SKIPPED.jsonl, PLAN.jsonl, ROLLBACK.sql); WRITE_EXIT=0
+  $PY $AP --lane card-disclosure-$S --check-primitive
+  $PY $AP --lane card-disclosure-$S --verify      # before: the lane's "listed sites of this step still naming ..." = the step's sites
+  $PY $AP --lane card-disclosure-$S --emit        # APPLY.sql, pinned to the plan
+  $PY $AP --lane card-disclosure-$S --rehearse    # COMMIT -> ROLLBACK
+  $PY $AP --lane card-disclosure-$S --probe-guards     # 6 probes, each refused by its own guard (exit 0)
+  $PY $AP --lane card-disclosure-$S --apply       # exit 0 = committed and read back
+  $PY $AP --lane card-disclosure-$S --verify      # after: 0 still naming; 0 rows changed anything but the key
+  $PY $AP --lane card-disclosure-$S --rehearse-rollback
+  $PY $CD accept --step $N           # read-only; ACCEPT_EXIT=0 and "RESULT: 0 deviation(s)" only
+done
+```
+
+**Gate: 0 deviations - never a blanket allowance.** The later acceptances take this lane by its own stamp,
+for its one key, and nothing else:
+
+```bash
+# lane WB's own acceptance of every step that wrote one of the 185 sites - the steps 7 to 21 (the
+# `step` column of output/remediation/mechanical_card_disclosure/LIST.jsonl): the correction's journal
+# row is read as the one-key transition from exactly what the step wrote (teaser.corrected_cell)
+for N in $(seq 7 21); do $PY $MW accept --step $N; done   # each ACCEPT_EXIT=0 and "RESULT: 0 deviation(s)"
+# verify_writes4 for lane p4 AND p4wc (all 185 sites carry a P4 description - 180 lane W, 5 lane S,
+# read-only 2026-10-01 - and every p4 acceptance is cumulative): the stamp pattern of THIS lane beside
+# lane WB's, never `%`. As a direct command the quotes are right; inside a variable that is expanded
+# unquoted ($V, $ALLOW) leave them out.
+$PY output/remediation/tools/verify_writes4.py --lane p4wc --plan <PLAN.jsonl> \
+  --allow-stamp 'wb-teaser-prov-%' --allow-stamp 'wb-card-disclosure-s%'
+$PY output/remediation/tools/verify_writes4.py --lane p4 <the run arguments of PHASE4_V3_RUNBOOK.md 10> \
+  $ALLOW --allow-stamp 'wb-teaser-prov-%' --allow-stamp 'wb-card-disclosure-s%'
+```
+
+`teaser.py accept` takes the correction only as ONE journal row of the correction lane's own stamp
+(`wb-card-disclosure-sNNN`, regex `^wb-card-disclosure-s\d{3}$`), on `unified_sites.raw_data` of that
+site, written once and not reversed, from exactly the `raw_data` the step planned to exactly that value
+with `_card_provenance.ai_system` set to `AI_SYSTEM` and nothing else; a journal row of another stamp, an
+other column or site, one that started from another value, one whose value is not what production holds,
+or one that moved a second key leaves the cell a deviation of the step. `verify_writes4`'s `--allow-stamp`
+takes a pattern of stamps, and reads this lane's links by key as well (`superseding`): a link of a
+`wb-card-disclosure-sNNN` stamp supersedes only as the one-key transition `AI_SYSTEM_OPUS` ->
+`AI_SYSTEM` of `_card_provenance.ai_system`, whichever pattern allows it (even `%`); one that moved a
+second key, or did not start from the Opus-only value, stays CHANGED LATER. The pattern still names this
+lane only. Besides that, the lane's own read-back (0 journal rows that changed anything but the key) and
+`card_disclosure.py accept` (journal old -> new is the one-key transition, plan and journal alike) prove it.
+
+**A re-plan never puts the old string back.** The outcomes of runs 01/04/06 still hold the Opus-only
+provenance (the list requires it to equal the step's). `teaser.classify` therefore refuses an accepted
+outcome of one of the 185 listed sites whose `ai_system` is `AI_SYSTEM_OPUS` (reason
+`disclosure-corrected-since`, a SKIPPED row, nothing written): after undoing a WB step that holds corrected
+sites (this lane's ROLLBACK first, see below) the outcomes of those sites have to be rebuilt with the
+current `ai_system` before the step can be planned again, or this correction re-run under a new lane.
+
+**Open owner decision: the checkers and verifiers.** The lane keeps to the 185 cards a Sonnet agent
+*wrote*. Cards an Opus agent wrote but a Sonnet agent checked and verified keep the Opus-only string:
+**1,140** live cards (measured 2026-10-01, census joined to the accepted outcomes: run 01 238 checked and
+verified by Sonnet plus 151 verified by Sonnet, run 04 389, run 06 362; run 03 and the pilots were Opus
+throughout). New writes disclose both models whoever wrote the text (`AI_SYSTEM`), so the two groups now
+read differently. Whether a provenance should name every model that checked or verified it is the owner's
+call (HUMAN_ONLY); if yes, extend `build_list` to "any Sonnet agent wrote, rewrote, checked or verified"
+(a new pinned list and a new lane: this one's list is pinned at 185).
+
+**Undo** (only as a decision; the lane's stamp is single-use, so a second attempt needs a new lane):
+
+```bash
+# 1. this lane's ROLLBACK.sql first - before any undo of the WB step that wrote the provenance
+ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1" \
+  < output/remediation/mechanical_card_disclosure/sNNN/ROLLBACK.sql
+# 2. the proof, read-only: the rollback rows are the only deviation card_disclosure.py accept names
+#    (it is the record of the undo); teaser.py accept --step N is 0 deviations again, since every
+#    provenance cell holds the value its step planned
+$PY $MW accept --step N
+```
+
+Record the sitting (counts, `StartedAt` not needed: no API restart) in AUDIT_LOG, then
+`git add -f output/remediation/mechanical_card_disclosure/LIST.jsonl output/remediation/mechanical_card_disclosure/ACCEPTED
+output/remediation/mechanical_card_disclosure/s001 output/remediation/mechanical_card_disclosure/s002` (the
+whole trail, never reverted).
 
 ## 6. Why a mechanical lane and not `write_gate4.py --group P5`
 

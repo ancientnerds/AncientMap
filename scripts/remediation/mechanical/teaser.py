@@ -75,6 +75,7 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+import re
 import sys
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -92,10 +93,11 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 from phase3 import write_stage as WS  # noqa: E402 - the psql seam card_json reads through
 from phase3.run import read_jsonl  # noqa: E402 - the strict JSON-lines reader (no line skipped)
 from phase4 import card_json as CJ  # noqa: E402 - the card file's one renderer
-from phase4 import model4 as M  # noqa: E402 - AI_SYSTEMS, the disclosure strings a write may carry
+from phase4 import model4 as M  # noqa: E402 - AI_SYSTEMS (AI_SYSTEM_OPUS, AI_SYSTEM): the disclosures a write may carry
 from phase4 import write4 as W4  # noqa: E402 - the exit line
 from prod_write import send  # noqa: E402
 
+from mechanical import card_disclosure_list as CORRECTED  # noqa: E402 - the 185 sites' pinned ids
 from mechanical.citations import canonical, premise_of, reprint  # noqa: E402
 from mechanical.lane import (  # noqa: E402
     CARD_STATS,
@@ -172,6 +174,84 @@ _P5_KEY_NOT_LIVE = (
     "unified_sites.raw_data -> '_description_provenance' -> 'card' ->> 'text_sha256')"
 )
 _CURATED = "FROM unified_sites WHERE source_id = 'ancient_nerds' AND "
+
+
+# ------------------------------------------------------------------------------ the correction
+#: Lane WB's disclosure correction (`mechanical/card_disclosure.py`, owner decision 2026-10-01): 185
+#: live cards were written by a Sonnet 5.5 rewrite agent while their provenance names Opus only
+#: (`M.AI_SYSTEM_OPUS`). It rewrites exactly one key of exactly those sites' `raw_data` -
+#: `_card_provenance.ai_system`, to `M.AI_SYSTEM` - under the stamps `wb-card-disclosure-sNNN`, and
+#: this module's acceptance reads a step's provenance cell as that lane left it, by that name and
+#: for that one key only (`corrected_cell`): a later lane that moved anything else is a deviation.
+CORRECTION_STAMP_PREFIX = "wb-card-disclosure-s"
+CORRECTION_STAMP = re.compile(r"^wb-card-disclosure-s\d{3}\Z")
+ROLLBACK_SUFFIX = "-rollback"
+
+
+def names_opus_only(raw: Mapping[str, Any] | None) -> bool:
+    """Whether `raw` carries a teaser provenance that names `M.AI_SYSTEM_OPUS` - the one value the
+    correction lane replaces."""
+    teaser = None if raw is None else raw.get(CP.CARD_PROVENANCE_KEY)
+    return isinstance(teaser, dict) and teaser.get("ai_system") == M.AI_SYSTEM_OPUS
+
+
+def correct_disclosure(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """`raw` with `_card_provenance.ai_system` set to `M.AI_SYSTEM` and nothing else changed; the
+    value it replaces must be `M.AI_SYSTEM_OPUS`, the one string the correction lane owns."""
+    if not names_opus_only(raw):
+        raise PlanError(f"{CP.CARD_PROVENANCE_KEY}.ai_system is not {M.AI_SYSTEM_OPUS!r}")
+    return {
+        **raw,
+        CP.CARD_PROVENANCE_KEY: {**raw[CP.CARD_PROVENANCE_KEY], "ai_system": M.AI_SYSTEM},
+    }
+
+
+def moves_one_key(old: str | None, new: str | None) -> bool:
+    """Whether `old` -> `new` (two `raw_data` texts) is exactly the disclosure correction: the
+    provenance names `M.AI_SYSTEM_OPUS` before and, with that one key set to `M.AI_SYSTEM`, every
+    other key at every depth as it was, after."""
+    if old is None or new is None:
+        return False
+    before = json.loads(old)
+    # canonical text, not dict equality: Python reads 1 == True == 1.0, the journal does not
+    return names_opus_only(before) and canonical(reprint(correct_disclosure(before))) == canonical(
+        new
+    )
+
+
+def corrected_cell(
+    site_id: str, planned_raw: str | None, journal: Sequence[Mapping[str, Any]]
+) -> str | None:
+    """The `raw_data` a site holds after the disclosure correction lane wrote it, as a step's
+    acceptance may expect it - or `None` when no such write stands.
+
+    Only the correction lane's own stamp (`CORRECTION_STAMP`) counts. The journal row must be a
+    transition from exactly the raw_data this step planned to exactly that value with the one key
+    corrected (`correct_disclosure`), written once and not reversed; any other later value of the
+    cell stays what it is - a deviation of the step."""
+    writes = [
+        j
+        for j in journal
+        if j["row_pk"] == site_id
+        and j["column_name"] == "raw_data"
+        and CORRECTION_STAMP.match(j["run_stamp"])
+    ]
+    undone = {
+        j["run_stamp"]
+        for j in journal
+        if j["row_pk"] == site_id and j["run_stamp"].endswith(ROLLBACK_SUFFIX)
+    }
+    standing = [j for j in writes if j["run_stamp"] + ROLLBACK_SUFFIX not in undone]
+    if planned_raw is None or len(standing) != 1 or not names_opus_only(json.loads(planned_raw)):
+        return None
+    entry = standing[0]
+    wanted = canonical(reprint(correct_disclosure(json.loads(planned_raw))))
+    if (
+        canonical(entry["old_value"]) != canonical(planned_raw)
+        or canonical(entry["new_value"]) != wanted
+    ):
+        return None
+    return wanted
 
 
 # ------------------------------------------------------------------------------ the lanes
@@ -345,6 +425,7 @@ NOT_CURATED = "not-a-curated-site"
 RAW_DATA_NOT_OBJECT = "raw-data-not-an-object"
 NOT_REPRINTED = "raw-data-not-reprinted"
 NOTHING_TO_CHANGE = "nothing-to-change"
+DISCLOSURE_CORRECTED = "disclosure-corrected-since"
 REFUSAL_MEANING = {
     NOT_VERIFIED: "the accepted card carries no VERIFIED web verification (an outcome written "
     "before the verify stage existed): never written - ask the site again in a new run",
@@ -357,6 +438,9 @@ REFUSAL_MEANING = {
     "journal-chain-broken": "a cell's journal is not continuous",
     "journal-disagrees": "a cell's journal does not end at the live value",
     NOTHING_TO_CHANGE: "the site already holds exactly this card and provenance",
+    DISCLOSURE_CORRECTED: "the outcome names the Opus-only disclosure of a card a Sonnet agent "
+    "wrote (lane WB's disclosure correction, CARD_DESCRIPTIONS.md 5.9): writing it again would "
+    "undo the correction - rebuild the outcome with the current ai_system first",
 }
 
 
@@ -458,6 +542,12 @@ def classify(
     # only a VERIFIED card is written; an OUTCOMES.jsonl from before the verify stage has no key
     if outcome["status"] == ACCEPTED and outcome.get("verification") != CP.VERIFIED:
         return _refused(site_id, name, NOT_VERIFIED, "no VERIFIED web verification")
+    if (
+        outcome["status"] == ACCEPTED
+        and site_id in CORRECTED.SITE_IDS
+        and outcome["provenance"]["ai_system"] == M.AI_SYSTEM_OPUS
+    ):
+        return _refused(site_id, name, DISCLOSURE_CORRECTED, "the outcome names the Opus-only text")
     if live is None:
         return _refused(site_id, name, NOT_CURATED, "the export did not return the site")
     if live.scope_status == RETIRED:
@@ -756,9 +846,13 @@ def plan_step(
 
 
 # ------------------------------------------------------------------------------ the acceptance
+#: The journal rows of a step's four stamps, and the disclosure correction's rows on the step's
+#: sites (`corrected_cell`): the one later lane an acceptance names.
 ACCEPT_JOURNAL_SQL = (
     "SELECT l.row_pk, l.column_name, l.run_stamp, l.old_value, l.new_value "
-    "FROM remediation_change_log l WHERE l.run_stamp IN ({stamps}) ORDER BY l.id"
+    "FROM remediation_change_log l WHERE l.run_stamp IN ({stamps}) OR (l.run_stamp LIKE "
+    "'" + CORRECTION_STAMP_PREFIX + "%' AND l.table_name = 'unified_sites' AND l.column_name = "
+    "'raw_data' AND l.row_pk IN ({sites})) ORDER BY l.id"
 )
 
 
@@ -785,7 +879,10 @@ def deviations(
             site = live[row["site_id"]]
             entry = by_site.get(row["site_id"])
             if kind == PROV:
-                held = canonical(site.raw_data) == canonical(row["new_value"])
+                expected = corrected_cell(row["site_id"], row["new_value"], journal)
+                held = canonical(site.raw_data) == canonical(
+                    row["new_value"] if expected is None else expected
+                )
                 same = entry is not None and canonical(entry["new_value"]) == canonical(
                     row["new_value"]
                 )
@@ -836,7 +933,10 @@ def _step_read(
         tagged_export_script(
             [
                 ("site", site_sql(record["sites"])),
-                ("journal", ACCEPT_JOURNAL_SQL.format(stamps=listed)),
+                (
+                    "journal",
+                    ACCEPT_JOURNAL_SQL.format(stamps=listed, sites=sql_ids(record["sites"])),
+                ),
             ]
         )
     )
