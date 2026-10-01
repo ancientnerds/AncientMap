@@ -1742,52 +1742,67 @@ _NAMES_SURVIVOR = (
     f"u.scope_reason = {sql_literal(DUPLICATE_PREFIX)} || CAST(s.id AS text) "
     "AND s.source_id = 'ancient_nerds'"
 )
-_SURVIVOR_FAR = f"{sphere_metres('s', 'u')} > {DUPLICATE_METRES}"
 
-#: A retired duplicate's survivor is a visible curated row within 100 m - three checks after the
-#: write, one per way it can fail, disjoint, so each probe is refused by its own. Each probe writes
-#: `duplicate_of:<a row of that kind>` (read 2026-09-29): an id no row has and a GeoNames row; three
-#: duplicates scope-e4 retired; three visible curated sites 364 km to 11,400 km away.
-DUPLICATE_SURVIVOR_INVARIANTS = (
-    SiteInvariant(
-        says="planned site(s) name no curated site as their survivor",
-        predicate=f"NOT EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR})",
-        probe_column="scope_reason",
-        probe_values=(
-            f"{DUPLICATE_PREFIX}00000000-0000-0000-0000-000000000000",
-            f"{DUPLICATE_PREFIX}8db5555a-a9a3-417b-944c-6ec0c04de0db",  # GeoNames "Chiapa de Corzo"
-            "a reason that names no survivor",
+
+def _survivor_far(metres: int) -> str:
+    """SQL: the survivor `s` lies further than `metres` from the written site `u`."""
+    return f"{sphere_metres('s', 'u')} > {metres}"
+
+
+_SURVIVOR_FAR = _survivor_far(DUPLICATE_METRES)
+
+
+def duplicate_survivor_invariants(metres: int) -> tuple[SiteInvariant, ...]:
+    """A retired duplicate's survivor is a visible curated row within `metres` - three checks after
+    the write, one per way it can fail, disjoint, so each probe is refused by its own. Each probe
+    writes `duplicate_of:<a row of that kind>` (read 2026-09-29): an id no row has and a GeoNames
+    row; three duplicates scope-e4 retired; three visible curated sites 364 km to 11,400 km away
+    (so beyond any `metres` a lane allows). The scope lane's rule and the Chiapa hide use 100 m
+    (`DUPLICATE_METRES`); the owner-decided retirements of `dup-retire` 2,000 m."""
+    return (
+        SiteInvariant(
+            says="planned site(s) name no curated site as their survivor",
+            predicate=f"NOT EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR})",
+            probe_column="scope_reason",
+            probe_values=(
+                f"{DUPLICATE_PREFIX}00000000-0000-0000-0000-000000000000",
+                f"{DUPLICATE_PREFIX}8db5555a-a9a3-417b-944c-6ec0c04de0db",  # GeoNames Chiapa
+                "a reason that names no survivor",
+            ),
+            probe_name="survivor-not-curated",
         ),
-        probe_name="survivor-not-curated",
-    ),
-    SiteInvariant(
-        says="planned site(s) name a retired site as their survivor",
-        predicate=(
-            f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} AND {is_retired('s')})"
+        SiteInvariant(
+            says="planned site(s) name a retired site as their survivor",
+            predicate=(
+                f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} "
+                f"AND {is_retired('s')})"
+            ),
+            probe_column="scope_reason",
+            probe_values=(
+                f"{DUPLICATE_PREFIX}04d8ce82-4fa3-4e48-88b7-bb41b354260c",  # Olympos Ruins
+                f"{DUPLICATE_PREFIX}07fb4e2f-26e5-4720-a949-9c28d4712e11",  # Templo Romano Évora
+                f"{DUPLICATE_PREFIX}13c3f25f-3887-49c1-9492-cf7e512e5782",  # Alba Fucens
+            ),
+            probe_name="survivor-retired",
         ),
-        probe_column="scope_reason",
-        probe_values=(
-            f"{DUPLICATE_PREFIX}04d8ce82-4fa3-4e48-88b7-bb41b354260c",  # Olympos Ruins
-            f"{DUPLICATE_PREFIX}07fb4e2f-26e5-4720-a949-9c28d4712e11",  # Templo Romano Évora
-            f"{DUPLICATE_PREFIX}13c3f25f-3887-49c1-9492-cf7e512e5782",  # Alba Fucens
+        SiteInvariant(
+            says=f"planned site(s) name a survivor further than {metres} m",
+            predicate=(
+                f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} AND "
+                f"{not_retired('s')} AND {_survivor_far(metres)})"
+            ),
+            probe_column="scope_reason",
+            probe_values=(
+                f"{DUPLICATE_PREFIX}30d3fb78-6b80-42f9-87f8-7616e63bec4f",  # Tikal
+                f"{DUPLICATE_PREFIX}74145e9b-76a6-48de-a902-08ecb2f1f7bb",  # Achladia
+                f"{DUPLICATE_PREFIX}6aa4c8de-3794-42fe-b68e-6b6ab77bd8ed",  # Delphinion
+            ),
+            probe_name="survivor-far",
         ),
-        probe_name="survivor-retired",
-    ),
-    SiteInvariant(
-        says=f"planned site(s) name a survivor further than {DUPLICATE_METRES} m",
-        predicate=(
-            f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} AND "
-            f"{not_retired('s')} AND {_SURVIVOR_FAR})"
-        ),
-        probe_column="scope_reason",
-        probe_values=(
-            f"{DUPLICATE_PREFIX}30d3fb78-6b80-42f9-87f8-7616e63bec4f",  # Tikal
-            f"{DUPLICATE_PREFIX}74145e9b-76a6-48de-a902-08ecb2f1f7bb",  # Achladia
-            f"{DUPLICATE_PREFIX}6aa4c8de-3794-42fe-b68e-6b6ab77bd8ed",  # Delphinion
-        ),
-        probe_name="survivor-far",
-    ),
-)
+    )
+
+
+DUPLICATE_SURVIVOR_INVARIANTS = duplicate_survivor_invariants(DUPLICATE_METRES)
 
 #: What the hide rests on: the row is empty - no content link, no image - so hiding it takes
 #: nothing out of view. Read per site as the database prints it; guard 5 refuses a row that gained
@@ -1798,6 +1813,14 @@ EMPTY_ROW_PREMISE_SQL = (
     "AS text)"
 )
 EMPTY_ROW_PREMISE = "content links 0, images 0"
+
+#: What a duplicate's retirement writes: `scope_status` and `scope_reason`, filled from NULL in one
+#: transaction like scope-e4's, and the only status it writes is `retired` (guard 4) - the Chiapa
+#: hide's cells and the cells of `dup-retire`.
+DUPLICATE_HIDE_CELLS = (
+    Column("scope_status", "text", allowed_new_values=(RETIRED,), fills_null=True),
+    Column("scope_reason", "text", fills_null=True),
+)
 
 #: The hide: the empty row's `scope_status` and `scope_reason`, filled from NULL in one transaction
 #: like scope-e4's, and the only status it writes is `retired` (guard 4).
@@ -1815,10 +1838,7 @@ CHIAPA_HIDE = Lane(
     premise_sql=EMPTY_ROW_PREMISE_SQL,
     lock_timeout=LOCK_TIMEOUT,
     statement_timeout=STATEMENT_TIMEOUT,
-    cells=(
-        Column("scope_status", "text", allowed_new_values=(RETIRED,), fills_null=True),
-        Column("scope_reason", "text", fills_null=True),
-    ),
+    cells=DUPLICATE_HIDE_CELLS,
     site_invariants=DUPLICATE_SURVIVOR_INVARIANTS,
 )
 
@@ -1949,6 +1969,52 @@ NAME_FIX_READBACK = journal_readback(
 )
 LANES[NAME_FIX.name] = NAME_FIX
 LANE_READBACKS[NAME_FIX.name] = NAME_FIX_READBACK
+
+# --------------------------------------------- the duplicate retirement (owner decision O9, 2026-10-01)
+#: Five confirmed duplicate pairs (HUMAN_ONLY_DECISIONS_2026-09-26.md B1-D and B6, `dups.py`): the
+#: loser of each is retired as `duplicate_of:<survivor id>`, deleting nothing - scope-e4's two cells
+#: and its three survivor checks (`duplicate_survivor_invariants`). Two things differ from the Chiapa
+#: hide and scope-e4. The pairs are owner-decided, not found by the 100 m rule: two lie 290 m and
+#: 470 m apart, so the survivor may be as far as the owner-case list's 2 km
+#: (`bcases.classify.DUP_MAX_M`). And a loser is not empty - Banias holds 4 content links and 20
+#: images - so its premise is not the empty-row count but what the decision read it on: its name and
+#: the external ids (the shared Wikidata item and Wikipedia title) the pair is one site by.
+DUP_RETIRE_METRES = 2000
+DUP_RETIRE_PREMISE_SQL = f"u.name || ' | ' || {NAME_FIX_PREMISE_SQL}"
+DUP_RETIRE = Lane(
+    name="dup-retire",
+    key_prefix="dup-retire",
+    run_stamp="2026-10-01_mechanical-dup-retire",
+    test_id="O9/duplicate-retire",
+    confidence="authoritative",
+    label="O9 duplicate retirement",
+    plan_table="_dup_retire_plan",
+    out_dir_name="mechanical_dups",
+    post_commit_residual=RETIRED_DUPLICATES,
+    rehearsal_residual=RETIRED_DUPLICATES,
+    premise_sql=DUP_RETIRE_PREMISE_SQL,
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+    cells=DUPLICATE_HIDE_CELLS,
+    site_invariants=duplicate_survivor_invariants(DUP_RETIRE_METRES),
+)
+DUP_RETIRE_READBACK = journal_readback(
+    DUP_RETIRE,
+    [
+        *scope_status_counts(),
+        _RETIRED_DUPLICATE_ROWS,
+        _STATUS_WITHOUT_REASON,
+        _DUPLICATE_SURVIVOR_GONE,
+        (
+            f"retired duplicates whose survivor lies further than {DUP_RETIRE_METRES} m",
+            f"FROM unified_sites u WHERE u.source_id = 'ancient_nerds' AND {is_retired('u')} "
+            f"AND EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} AND "
+            f"{_survivor_far(DUP_RETIRE_METRES)})",
+        ),
+    ],
+)
+LANES[DUP_RETIRE.name] = DUP_RETIRE
+LANE_READBACKS[DUP_RETIRE.name] = DUP_RETIRE_READBACK
 
 # ------------------------------------------- the card disclosure correction (lane WB, 2026-10-01)
 #: Lane WB's disclosure correction (`card_disclosure.py`): one step of at most 100 sites per lane,
