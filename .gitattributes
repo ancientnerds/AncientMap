@@ -50,3 +50,4 @@ output/remediation/acceptance/draw-*/* text eol=lf
 public/data/layers/globe/*.json -text
 # The acceptance draw's sitelink-pilot exclusion source: EXCLUSIONS.sha256.json pins its LF bytes.
 output/remediation/sitelink/pilot/questions.json text eol=lf
+output/remediation/orchestration/*.js text eol=lf
