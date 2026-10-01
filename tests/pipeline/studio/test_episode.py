@@ -102,6 +102,7 @@ def test_load_all_validates_with_words_and_captures(tmp_path):
     with pytest.raises(StudioError, match="not ready"):
         episode.require_valid(loaded, final=True)
     ws.words.write_text(json.dumps(sf.words_for(sf.script())), encoding="utf-8")
+    (ws.voice_dir / "manifest.json").write_text(json.dumps(sf.voice_manifest()), encoding="utf-8")
     for cid, manifest in sf.stored_manifests().items():
         (ws.captures_dir / f"{cid}.json").write_text(json.dumps(manifest), encoding="utf-8")
     loaded = episode.load_all(ws, sf.REGISTRY)
@@ -139,6 +140,67 @@ def test_a_partial_capture_defers_the_rest(tmp_path):
     assert report.errors == []
     assert any(d.startswith("b04: props not checked yet") for d in report.deferred)
     assert any(d.startswith("b05: props not checked yet") for d in report.deferred)
+
+
+def _voiced(ws, data, hook_s=20.0):
+    """voice/ as `episode voice` leaves it for `data`, the two hook beats `hook_s` long."""
+    words, manifest = sf.words_for(data), sf.voice_manifest(data)
+    for bid in ("b01", "b02"):
+        words[bid]["duration_s"] = manifest[bid]["duration_s"] = hook_s
+    ws.words.write_text(json.dumps(words), encoding="utf-8")
+    (ws.voice_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def _edit_b01(ws, spoken, display=None):
+    def mutate(d):
+        d["beats"][0].update(spoken=spoken, display=display or spoken)
+
+    ws.script.write_text(json.dumps(sf.mutated_script(mutate)), encoding="utf-8")
+
+
+def test_a_beat_edited_after_its_voice_is_estimated_not_measured(tmp_path):
+    ws = _init(tmp_path)
+    _voiced(ws, sf.script())
+    report = episode.load_all(ws, sf.REGISTRY).report
+    assert "hook is 41.9 s of screen time (measured); max 32 s" in report.errors
+    # The author shortens the hook beat: its old 20 s are the length of the old text, so the
+    # step that measures the new text (`episode voice`) must not be refused by them.
+    _edit_b01(ws, "One person gives the scale.")
+    report = episode.load_all(ws, sf.REGISTRY).report
+    assert report.errors == []
+    assert "b01: voice/b01.mp3 is stale; run `episode voice`" in report.deferred
+    assert "chapter 'The stone': length is checked after the voice step" in report.deferred
+    assert not [d for d in report.deferred if d.startswith("b02")]
+    episode.require_valid(episode.load_all(ws, sf.REGISTRY), final=False)
+    with pytest.raises(StudioError, match="not ready: b01: voice/b01.mp3 is stale"):
+        episode.require_valid(episode.load_all(ws, sf.REGISTRY), final=True)
+
+
+def test_an_estimated_hook_is_reported_as_estimated(tmp_path):
+    ws = _init(tmp_path)
+    _voiced(ws, sf.script())
+    _edit_b01(ws, "One person gives the scale. " + "This block was cut in the quarry. " * 12)
+    errors = episode.load_all(ws, sf.REGISTRY).report.errors
+    # 5 + 7 * 12 = 89 words at 2.6 per second and 0.95 s of lead and tail, then b02's 20.95 s
+    assert errors == ["hook is 56.1 s of screen time (estimated); max 32 s"]
+
+
+def test_a_beat_the_voice_never_timed_is_estimated(tmp_path):
+    ws = _init(tmp_path)
+    _voiced(ws, sf.script(), hook_s=10.0)
+    words = json.loads(ws.words.read_text(encoding="utf-8"))
+    del words["b05"]
+    ws.words.write_text(json.dumps(words), encoding="utf-8")
+    report = episode.load_all(ws, sf.REGISTRY).report
+    assert report.errors == []
+    assert "b05: no word timings; run `episode voice`" in report.deferred
+
+
+def test_a_voice_that_still_describes_the_script_is_measured(tmp_path):
+    ws = _init(tmp_path)
+    _voiced(ws, sf.script(), hook_s=10.0)
+    report = episode.load_all(ws, sf.REGISTRY).report
+    assert [d for d in report.deferred if "voice" in d or "chapter" in d] == []
 
 
 def test_the_paper_link_is_checked(tmp_path):

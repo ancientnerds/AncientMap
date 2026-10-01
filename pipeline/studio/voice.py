@@ -22,7 +22,12 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.lyra.text_sentences import split_sentences
-from pipeline.studio.episode import EpisodeWorkspace
+from pipeline.studio.episode import (
+    EpisodeWorkspace,
+    load_voice_manifest,
+    voice_key,
+    voiced_for,
+)
 from pipeline.studio.errors import StudioError
 from pipeline.utils.card_provenance import text_sha256
 
@@ -104,20 +109,13 @@ def whisper_words(audio: Path) -> list[tuple[str, float, float]]:
 def stale_beats(ws: EpisodeWorkspace, script: dict[str, Any]) -> list[str]:
     """Beats whose voice/<beat>.mp3 was not narrated from the current spoken text, voice
     and speed (voice/manifest.json); [] when every mp3 belongs to the script."""
-    path = ws.voice_dir / "manifest.json"
-    if not path.exists():
+    if not ws.voice_manifest.exists():
         return ["voice/manifest.json does not exist: run `episode voice`"]
-    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest = load_voice_manifest(ws)
     voice_id, speed = script["voice"]["id"], float(script["voice"]["speed"])
     stale = []
     for beat in script["beats"]:
-        entry = manifest.get(beat["id"])
-        if (
-            entry is None
-            or entry["spoken_sha256"] != text_sha256(beat["spoken"])
-            or entry["voice_id"] != voice_id
-            or entry["speed"] != speed
-        ):
+        if not voiced_for(manifest, beat, voice_id, speed):
             stale.append(f"{beat['id']}: voice/{beat['id']}.mp3 is stale; run `episode voice`")
         elif not (ws.voice_dir / f"{beat['id']}.mp3").exists():
             stale.append(f"{beat['id']}: voice/{beat['id']}.mp3 is missing; run `episode voice`")
@@ -135,22 +133,15 @@ def voice_episode(
     from pipeline.video.shorts_captions import align_words
 
     ws.voice_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = ws.voice_dir / "manifest.json"
-    manifest: dict[str, Any] = (
-        json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.exists() else {}
-    )
+    manifest = load_voice_manifest(ws)
     voice_id, speed = script["voice"]["id"], float(script["voice"]["speed"])
 
-    def key(beat: dict[str, Any]) -> dict[str, Any]:
-        return {"spoken_sha256": text_sha256(beat["spoken"]), "voice_id": voice_id, "speed": speed}
-
     def needs_audio(beat: dict[str, Any]) -> bool:
-        entry = manifest.get(beat["id"])
         audio = ws.voice_dir / f"{beat['id']}.mp3"
-        return entry is None or not audio.exists() or {k: entry[k] for k in key(beat)} != key(beat)
+        return not audio.exists() or not voiced_for(manifest, beat, voice_id, speed)
 
     def save() -> None:
-        manifest_path.write_text(
+        ws.voice_manifest.write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
@@ -162,7 +153,11 @@ def voice_episode(
         audio = ws.voice_dir / f"{bid}.mp3"
         if beat in todo:
             duration = synth(beat["spoken"], audio, voice_id, speed)
-            manifest[bid] = {**key(beat), "duration_s": round(duration, 3), "display_sha256": None}
+            manifest[bid] = {
+                **voice_key(beat, voice_id, speed),
+                "duration_s": round(duration, 3),
+                "display_sha256": None,
+            }
             # Saved before whisper runs: a failed transcription never pays for this again.
             save()
         entry = manifest[bid]

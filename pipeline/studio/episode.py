@@ -20,6 +20,11 @@ and the paper link: casefile.paper equals episode.json's paper (both null, or th
 {request_id, slug}), every paper_anchor is an evidence id of that paper's workspace
 (<STUDIO_ASSETS>/papers/<id>/), and episode.json's paper slug is the slug the publish returned.
 
+voice/words.json counts only for the beats it still describes: a beat the author edited since
+`episode voice` (its spoken text, voice or speed against voice/manifest.json, its display against
+the words' tokens) is estimated like an unvoiced one and named in `deferred`, so the measurements
+of the old text never refuse the step that makes the new ones (`voiced_for`, script.validate_script).
+
 Every JSON file is read with the paper workspace's `read_json` (a missing file names its hint,
 a syntax error is a StudioError naming the file), imported here as `load_json`, the name
 render, package and cli_episode import from this module.
@@ -97,6 +102,10 @@ class EpisodeWorkspace:
     @property
     def words(self) -> Path:
         return self.voice_dir / "words.json"
+
+    @property
+    def voice_manifest(self) -> Path:
+        return self.voice_dir / "manifest.json"
 
     @property
     def captures_dir(self) -> Path:
@@ -240,6 +249,25 @@ def load_words(ws: EpisodeWorkspace) -> dict[str, Any] | None:
     return load_json(ws.words, "") if ws.words.exists() else None
 
 
+def load_voice_manifest(ws: EpisodeWorkspace) -> dict[str, Any]:
+    """voice/manifest.json ({beat_id: entry}, voice.py), {} before the first `episode voice`."""
+    return load_json(ws.voice_manifest, "") if ws.voice_manifest.exists() else {}
+
+
+def voice_key(beat: dict[str, Any], voice_id: Any, speed: Any) -> dict[str, Any]:
+    """The manifest fields that name what a beat's mp3 was narrated from: spoken text, voice
+    and speed."""
+    return {"spoken_sha256": text_sha256(beat["spoken"]), "voice_id": voice_id, "speed": speed}
+
+
+def voiced_for(manifest: dict[str, Any], beat: dict[str, Any], voice_id: Any, speed: Any) -> bool:
+    """The manifest holds an entry for the beat made from its current spoken text, voice and
+    speed (speeds compare as numbers: 1 is 1.0)."""
+    entry = manifest.get(beat["id"])
+    key = voice_key(beat, voice_id, speed)
+    return entry is not None and {k: entry[k] for k in key} == key
+
+
 def capture_spec_sha256(spec: dict[str, Any]) -> str:
     """The hash `episode capture` stores with a manifest: which spec recorded it (the
     resolved spec: sites.resolve_capture_spec)."""
@@ -373,6 +401,8 @@ def load_all(ws: EpisodeWorkspace, registry: dict[str, dict[str, Any]] | None = 
     cf = load_case(ws, episode, registry)
     script = load_json(ws.script, "write script.json")
     words = load_words(ws)
+    manifest = load_voice_manifest(ws) if words is not None else {}
+    voice = episode["voice"]
     captures = load_captures(ws, script)
     report = validate_script(
         script,
@@ -381,6 +411,7 @@ def load_all(ws: EpisodeWorkspace, registry: dict[str, dict[str, Any]] | None = 
         slug=ws.slug,
         fmt=episode["format"],
         words=words,
+        voiced=lambda beat: voiced_for(manifest, beat, voice["id"], voice["speed"]),
         captures=captures,
     )
     if isinstance(script, dict) and script.get("voice") != episode["voice"]:

@@ -24,8 +24,10 @@ integers 0-100 summing to 100, target "meter"). The local verbs show/hide/highli
 follow LOCAL_CUES, the mirror of the renderer's cue table (video/src/blocks/index.ts BLOCKS):
 which verbs a block takes and which ids of its resolved props they may target. introduce needs
 a ClaimBoard of the episode listing the claim; a meter cue needs a Meter beat. Timing rules use
-the voice's word timings when words.json exists and an estimate of WORDS_PER_S otherwise;
-chapter and clip lengths are checked once the voice exists. A cue's `at_word` names whole
+the voice's word timings when words.json has them for the beat (and `voiced` says they belong
+to its current text, voice and speed) and an estimate of WORDS_PER_S otherwise; chapter and
+clip lengths are checked once every beat they cover has such timings, and a beat that has
+none is named in `deferred`. A cue's `at_word` names whole
 display words (`cue_word_index`); `cue_frame` is the frame timeline.py puts the cue on.
 With the clip length comes its still picture (owner Q16): a clip scene may hold one picture for
 at most the render audit's FROZEN_MAX_S (render_audit.frozen_max_frames), and a still the take
@@ -743,6 +745,24 @@ def _cue_problems(cue: Any, display: str, claim_ids: set[str]) -> list[str]:
     return problems
 
 
+def _unusable_timing(
+    beat: dict[str, Any], words: dict[str, Any], voiced: Callable[[dict[str, Any]], bool] | None
+) -> str | None:
+    """Why words.json holds no measurement of this beat's narration, or None when it does.
+
+    `voiced(beat)` says voice/<beat>.mp3 was narrated from the beat's current spoken text, voice
+    and speed (episode.voiced_for). A display text edited since only moves the word timings
+    (`episode voice` re-times it without narrating again): the duration stays a measurement, and
+    timeline.compile_timeline refuses the stale alignment. The messages are the ones
+    `episode timeline` gives for the same causes (voice.stale_beats, compile_timeline)."""
+    bid = beat["id"]
+    if bid not in words:
+        return f"{bid}: no word timings; run `episode voice`"
+    if voiced is not None and not voiced(beat):
+        return f"{bid}: voice/{bid}.mp3 is stale; run `episode voice`"
+    return None
+
+
 def validate_script(
     script: Any,
     cf: CaseFile,
@@ -751,8 +771,12 @@ def validate_script(
     slug: str,
     fmt: str,
     words: dict[str, Any] | None = None,
+    voiced: Callable[[dict[str, Any]], bool] | None = None,
     captures: dict[str, dict[str, Any]] | None = None,
 ) -> ScriptReport:
+    """Validate the script. `words` is voice/words.json; only the entries that still describe
+    their beat are measurements (_unusable_timing), every other beat counts as estimated and is
+    named in `deferred`, so the old text's durations never refuse the step that measures the new."""
     report = ScriptReport()
     if fmt not in FORMATS:
         report.errors.append(f"episode format must be one of {list(FORMATS)}")
@@ -778,8 +802,10 @@ def validate_script(
     if dupes:
         report.errors.append(f"duplicate beat ids {dupes}")
 
+    measured: dict[str, Any] | None = None if words is None else {}
     hook_s = 0.0
     hook_beats = 0
+    hook_estimated = False
     hook_done = False
     platform: list[tuple[str, float]] = []
     blocks_used: list[str] = []
@@ -811,7 +837,15 @@ def validate_script(
             report.errors.extend(f"{bid}: {p}" for p in fields)
             malformed = True
             continue
-        speech = speech_seconds(beat, words)
+        timed = False
+        if words is not None and measured is not None:
+            unusable = _unusable_timing(beat, words, voiced)
+            if unusable is None:
+                measured[bid] = words[bid]
+                timed = True
+            else:
+                report.deferred.append(unusable)
+        speech = speech_seconds(beat, measured)
         seconds = scene_seconds(beat, speech)
         # hook: a leading run of beats, at most HOOK_MAX_S of screen time
         if beat.get("hook", False):
@@ -819,6 +853,7 @@ def validate_script(
                 report.errors.append(f"{bid}: hook beats must all come first")
             hook_s += seconds
             hook_beats += 1
+            hook_estimated = hook_estimated or not timed
             report.errors.extend(f"{bid}: {p}" for p in _hook_word_problems(beat["display"]))
         else:
             hook_done = True
@@ -928,7 +963,7 @@ def validate_script(
         if entry["platform"]:
             platform.append((bid, seconds))
         clip_frames: int | None = None
-        if props is not None and block in CLIP_BLOCKS and words is not None:
+        if props is not None and block in CLIP_BLOCKS and timed:
             frames = scene_frames(beat, speech)
             if _clip_length(bid, props, frames, report):
                 clip_frames = frames
@@ -968,7 +1003,7 @@ def validate_script(
             _clip_hold(bid, props, specs[props["clip"]["id"]], clip_frames, report)
 
     if hook_s > HOOK_MAX_S:
-        how = "measured" if words is not None else "estimated"
+        how = "estimated" if hook_estimated else "measured"
         report.errors.append(
             f"hook is {hook_s:.1f} s of screen time ({how}); max {HOOK_MAX_S:.0f} s"
         )
@@ -1012,7 +1047,7 @@ def validate_script(
         _spine(beats, blocks_used, hook_beats, roles, report)
     if words is None and any(b in CLIP_BLOCKS for b in blocks_used):
         report.deferred.append("clip lengths and holds are checked after the voice step")
-    _chapters(script, beats, None if malformed else words, fmt, report)
+    _chapters(script, beats, None if malformed else measured, fmt, report)
     _thumbnails(script["thumbnails"], beats, verdict_at, report)
     return report
 
@@ -1261,6 +1296,11 @@ def _chapters(
         return
     bounds = [*starts, len(beats)]
     for ch, a, b in zip(chapters, bounds, bounds[1:], strict=False):
+        if any(beat["id"] not in words for beat in beats[a:b]):
+            report.deferred.append(
+                f"chapter {ch['title']!r}: length is checked after the voice step"
+            )
+            continue
         seconds = sum(scene_seconds(beat, speech_seconds(beat, words)) for beat in beats[a:b])
         if seconds < CHAPTER_MIN_S:
             report.errors.append(

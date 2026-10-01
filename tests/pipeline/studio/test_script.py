@@ -9,10 +9,17 @@ GLYPH_ERROR = "has no glyph in the brand fonts (latin and latin-ext only)"
 CREDIT_ERROR = "a map scene carries the in-frame credit ['© Mapbox', '© OpenStreetMap']"
 
 
-def _validate(data, *, fmt="full", words=None, captures=None, cf=None):
+def _validate(data, *, fmt="full", words=None, captures=None, cf=None, voiced=None):
     cf = cf or casefile.from_dict(ef.casefile())
     return script.validate_script(
-        data, cf, sf.REGISTRY, slug="baalbek-c5", fmt=fmt, words=words, captures=captures
+        data,
+        cf,
+        sf.REGISTRY,
+        slug="baalbek-c5",
+        fmt=fmt,
+        words=words,
+        captures=captures,
+        voiced=voiced,
     )
 
 
@@ -434,6 +441,54 @@ def test_a_clip_must_cover_its_scene():
         "b03: capture platform-01 is 4.0 s long; the scene needs 5.950 s from 0 s "
         "(record a longer take or shorten the beat)" in errors
     )
+
+
+def test_a_beat_whose_narration_is_stale_defers_its_clip_and_chapter_checks():
+    data = sf.script()
+    short = sf.manifests()
+    short["platform-01"]["duration_s"] = 4.0  # shorter than b03's measured 5.95 s scene
+    words = sf.words_for(data)
+    errors = _validate(data, words=words, captures=short).errors
+    assert any(e.startswith("b03: capture platform-01 is 4.0 s long") for e in errors)
+    # the 5 s b03 words describe an older text: they say nothing about the clip
+    report = _validate(data, words=words, captures=short, voiced=lambda beat: beat["id"] != "b03")
+    assert report.errors == []
+    assert report.deferred == [
+        "b03: voice/b03.mp3 is stale; run `episode voice`",
+        "chapter 'On the globe': length is checked after the voice step",
+    ]
+
+
+def test_a_beat_with_no_word_timings_waits_for_the_voice_step():
+    data = sf.script()
+    words = sf.words_for(data)
+    del words["b05"]
+    report = _validate(data, words=words, captures=sf.manifests())
+    assert report.errors == []
+    assert report.deferred == [
+        "b05: no word timings; run `episode voice`",
+        "chapter 'On the globe': length is checked after the voice step",
+    ]
+
+
+def test_a_display_edit_alone_leaves_the_measured_duration_in_force():
+    data = sf.script()
+    words = sf.words_for(data)
+    words["b02"]["words"][0]["w"] = "Many"  # aligned to another display text: only the timings
+    report = _validate(data, words=words, captures=sf.manifests(), voiced=lambda beat: True)
+    assert report.errors == [] and report.deferred == []
+
+
+def test_a_hook_with_an_unmeasured_beat_is_labelled_estimated():
+    data = sf.script()
+    words = sf.words_for(data, seconds_per_beat=40.0)
+    both = [e for e in _validate(data, words=words).errors if e.startswith("hook is")]
+    assert both == ["hook is 81.9 s of screen time (measured); max 32 s"]
+    stale = _validate(data, words=words, voiced=lambda beat: beat["id"] != "b01")
+    # b01's 12 spoken words at 2.6 per second and 0.95 s of lead and tail, then b02's 40.95 s
+    assert [e for e in stale.errors if e.startswith("hook is")] == [
+        "hook is 46.5 s of screen time (estimated); max 32 s"
+    ]
 
 
 def test_scene_frames_round_up_to_a_whole_frame_without_float_noise():

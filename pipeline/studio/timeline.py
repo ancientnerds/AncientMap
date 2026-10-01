@@ -212,12 +212,16 @@ def compile_timeline(
 
 def build_timeline(ws: EpisodeWorkspace) -> dict[str, Any]:
     loaded = load_all(ws)
+    require_valid(loaded, final=False)
+    # Before the deferred checks: load_all defers a beat whose voice is stale one by one, and
+    # stale_beats says the same once (a manifest that does not exist, an mp3 that is missing).
+    if loaded.words is not None:
+        stale = stale_beats(ws, loaded.script)
+        if stale:
+            raise StudioError("; ".join(stale))
     require_valid(loaded, final=True)
     if loaded.words is None:
         raise StudioError("voice/words.json is missing: run `episode voice` first")
-    stale = stale_beats(ws, loaded.script)
-    if stale:
-        raise StudioError("; ".join(stale))
     captures = loaded.captures if loaded.captures is not None else {}
     timeline = compile_timeline(
         loaded.script, loaded.words, loaded.casefile, captures, loaded.episode

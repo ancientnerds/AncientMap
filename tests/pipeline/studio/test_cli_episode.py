@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import re
 import subprocess
@@ -11,7 +12,7 @@ from PIL import Image
 
 from pipeline.lyra.theo_publishing import poster_web_path
 from pipeline.studio import __main__ as cli
-from pipeline.studio import cli_episode, config, doctor, package, remote
+from pipeline.studio import cli_episode, config, doctor, episode, package, remote, voice
 from pipeline.studio.errors import StudioError
 from tests.pipeline.studio import episode_fixtures as ef
 from tests.pipeline.studio import script_fixtures as sf
@@ -125,6 +126,97 @@ def test_an_outcome_that_did_not_publish_names_no_slug(monkeypatch, tmp_path):
         (root / "publish_outcome.json").write_text(json.dumps(record), encoding="utf-8")
         with pytest.raises(StudioError, match="--paper needs --paper-slug"):
             cli_episode.paper_ref(ef.REQ, None)
+
+
+class Narrator:
+    """MiniMax and whisper replaced: `seconds` is how long each beat's narration comes out."""
+
+    def __init__(self, script_path):
+        self.script_path = script_path
+        self.seconds = {"b01": 20.0, "b02": 20.0}
+        self.narrated = []
+
+    def quota(self):
+        return 99, 40
+
+    def synth(self, text, out, voice_id, speed):
+        out.write_bytes(b"mp3")
+        self.narrated.append(out.stem)
+        return self.seconds.get(out.stem, 5.0)
+
+    def transcribe(self, audio):
+        beats = json.loads(self.script_path.read_text(encoding="utf-8"))["beats"]
+        spoken = next(b["spoken"] for b in beats if b["id"] == audio.stem)
+        return [(w, i * 0.2, i * 0.2 + 0.15) for i, w in enumerate(spoken.split())]
+
+
+def test_voice_measures_the_beats_the_author_fixed_after_the_first_voice(
+    monkeypatch, tmp_path, capsys
+):
+    """The loop the studio-video skill prescribes: `episode voice` exits 1 with what the real
+    timings broke (a hook over 32 s), the author shortens the beat, `episode voice` runs again."""
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    monkeypatch.setattr("pipeline.studio.episode.load_registry", lambda: sf.REGISTRY)
+    ws = episode.EpisodeWorkspace(tmp_path / "episodes" / "baalbek-c5", "baalbek-c5")
+    episode.init_episode(ws, paper=ef.PAPER, topic_type="A", fmt="full", music=None)
+    ef.ready_workspace(ws.root)
+    ws.script.write_text(json.dumps(sf.script()), encoding="utf-8")
+    narrator = Narrator(ws.script)
+    monkeypatch.setattr(
+        cli_episode,
+        "voice_episode",
+        functools.partial(
+            voice.voice_episode,
+            quota=narrator.quota,
+            synth=narrator.synth,
+            transcribe=narrator.transcribe,
+        ),
+    )
+    assert cli.main(["episode", "voice", "baalbek-c5"]) == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["errors"] == ["hook is 41.9 s of screen time (measured); max 32 s"]
+    assert len(narrator.narrated) == 9
+
+    def shorter(d):
+        d["beats"][0].update(
+            spoken="One person gives the scale.", display="One person gives the scale."
+        )
+
+    ws.script.write_text(json.dumps(sf.mutated_script(shorter)), encoding="utf-8")
+    narrator.seconds["b01"] = 2.0
+    assert cli.main(["episode", "voice", "baalbek-c5"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["errors"] == []
+    assert narrator.narrated[9:] == ["b01"]
+    assert json.loads(ws.words.read_text(encoding="utf-8"))["b01"]["duration_s"] == 2.0
+
+
+def test_check_reports_the_beat_whose_voice_is_stale_as_waiting_not_as_broken(
+    monkeypatch, tmp_path, capsys
+):
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    monkeypatch.setattr("pipeline.studio.episode.load_registry", lambda: sf.REGISTRY)
+    ws = ef.ready_episode(tmp_path, monkeypatch)
+    words, manifest = sf.words_for(sf.script()), sf.voice_manifest()
+    for bid in ("b01", "b02"):
+        words[bid]["duration_s"] = manifest[bid]["duration_s"] = 20.0
+    ws.words.write_text(json.dumps(words), encoding="utf-8")
+    (ws.voice_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    assert cli.main(["episode", "check", "baalbek-c5"]) == 1
+    assert json.loads(capsys.readouterr().out)["errors"] == [
+        "hook is 41.9 s of screen time (measured); max 32 s"
+    ]
+
+    def shorter(d):
+        d["beats"][0].update(
+            spoken="One person gives the scale.", display="One person gives the scale."
+        )
+
+    ws.script.write_text(json.dumps(sf.mutated_script(shorter)), encoding="utf-8")
+    assert cli.main(["episode", "check", "baalbek-c5"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["errors"] == []
+    assert "b01: voice/b01.mp3 is stale; run `episode voice`" in out["deferred"]
 
 
 def _published_package(tmp_path, monkeypatch):

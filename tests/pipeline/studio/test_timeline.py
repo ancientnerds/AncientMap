@@ -187,6 +187,41 @@ def test_build_timeline_refuses_before_voice(tmp_path, monkeypatch):
     assert t["audio"]["music"] is None
 
 
+def _hook_voiced_long_then_shortened(tmp_path, monkeypatch):
+    """A voiced episode whose hook beats measured 20 s each (a hook over 32 s), and a script in
+    which the author has shortened b01 since: the voice is stale for that beat only."""
+    ws = ef.ready_episode(tmp_path, monkeypatch)
+    words, manifest = sf.words_for(sf.script()), sf.voice_manifest()
+    for bid in ("b01", "b02"):
+        words[bid]["duration_s"] = manifest[bid]["duration_s"] = 20.0
+    ws.words.write_text(json.dumps(words), encoding="utf-8")
+    (ws.voice_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    def shorter(d):
+        d["beats"][0].update(
+            spoken="One person gives the scale.", display="One person gives the scale."
+        )
+
+    ws.script.write_text(json.dumps(sf.mutated_script(shorter)), encoding="utf-8")
+    return ws
+
+
+def test_timeline_names_the_stale_voice_not_the_hook_the_old_voice_measured(tmp_path, monkeypatch):
+    ws = _hook_voiced_long_then_shortened(tmp_path, monkeypatch)
+    with pytest.raises(StudioError, match="b01: voice/b01.mp3 is stale; run `episode voice`") as e:
+        timeline.build_timeline(ws)
+    assert "hook is" not in str(e.value)
+
+
+def test_render_names_the_stale_voice_not_the_hook_the_old_voice_measured(tmp_path, monkeypatch):
+    from pipeline.studio import render
+
+    ws = _hook_voiced_long_then_shortened(tmp_path, monkeypatch)
+    with pytest.raises(StudioError, match="not ready: b01: voice/b01.mp3 is stale") as e:
+        render.render_episode(ws)
+    assert "hook is" not in str(e.value)
+
+
 def test_thumbnail_candidates_compile_to_frames_before_any_verdict():
     t = _compile()
     # b01 60 % of 357, b04 from 3 * 357 plus 50 %, b06 from 5 * 357 plus 10 %
