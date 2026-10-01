@@ -16,6 +16,11 @@ empties the field (owner decision O6, "replace only with a sourced value, else e
 **unresolved** is the coordinates' answer when no two sources can be quoted - the point is NOT NULL
 and cannot be emptied (FIELD_CONTRACT section 3): both carry no value and no quote.
 
+That is the `two-families` rule of lane WD1. Under the `one-family` rule of lane WD3 (`rule.py`) one
+quote from one source suffices - never from the project's own site or a Wikipedia mirror
+(`Rule.forbidden_families`) - and **unresolved** is every field's answer when nothing can be quoted:
+WD3 never clears, a field nobody could source stays as it is. Every check below applies under both.
+
 Per field, beyond the shape (every rule here needs no page - `check_shape`):
 
 * **coordinates** - the value is `"lat, lon"` in decimal degrees. keep: within `KEEP_KM` of the stored
@@ -58,6 +63,7 @@ from opus_audit import quotes as Q
 
 from fields import classify as C
 from fields import harvest as H
+from fields import rule as R
 from pipeline.normalizers.site_type import CANONICAL_TYPES, normalize_site_type
 from pipeline.utils.geo import haversine_distance
 
@@ -68,6 +74,8 @@ DECISIONS = {
     "site_type": (KEEP, REPLACE, CLEAR),
     "source_url": (KEEP, REPLACE, CLEAR),
 }
+#: WD3 never clears: an exhausted field stays, so every field may be answered `unresolved`.
+FILL_DECISIONS = (KEEP, REPLACE, UNRESOLVED)
 ANSWER_KEYS = frozenset({"fields"})
 FIELD_KEYS = frozenset({"decision", "value", "quotes", "reasoning"})
 QUOTE_KEYS = frozenset({"url", "quote"})
@@ -136,13 +144,43 @@ class FieldAnswer:
 
 
 # ------------------------------------------------------------------------------ the shape
-def _block(field: str, data: Any) -> FieldAnswer:
+#: A Wayback Machine copy `/web/<timestamp>/<original>`, the original with or without its scheme
+#: (Wayback serves both; `acceptance.answers.source_family` unwraps only the one with a scheme).
+_WAYBACK = re.compile(r"/web/[^/]+/(?:https?://)?(.+)", re.DOTALL)
+
+
+def family_of(url: str, rule: R.Rule) -> str:
+    """The source family of a quote's URL under `rule`. WD1's rule keeps the acceptance's own
+    `source_family`; a rule with forbidden families (WD3) also unwraps a scheme-less Wayback copy
+    to its original - `archive.org` is what stays of a copy whose original cannot be read - and
+    names a refused host as itself."""
+    if not rule.forbidden_families:
+        return source_family(url)
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower().rstrip(".")
+    if host == "web.archive.org":
+        archived = _WAYBACK.fullmatch(parts.path)
+        if archived:
+            return family_of("https://" + archived.group(1), rule)
+    if host in rule.forbidden_families:
+        return host  # a refused host that shares its registrable domain (translate.google.com)
+    return source_family(url)
+
+
+def decisions_of(field: str, rule: R.Rule) -> tuple[str, ...]:
+    """The decisions an answer to `field` may take under `rule`."""
+    return DECISIONS[field] if rule.clearable else FILL_DECISIONS
+
+
+def _block(field: str, data: Any, rule: R.Rule) -> FieldAnswer:
     if not isinstance(data, dict) or set(data) != FIELD_KEYS:
         shown = sorted(data) if isinstance(data, dict) else type(data).__name__
         raise AnswerError(f"{field}: carries {shown}, not {sorted(FIELD_KEYS)}")
     decision = data["decision"]
-    if decision not in DECISIONS[field]:
-        raise AnswerError(f"{field}: decision {decision!r} is not one of {DECISIONS[field]}")
+    if decision not in decisions_of(field, rule):
+        raise AnswerError(
+            f"{field}: decision {decision!r} is not one of {decisions_of(field, rule)}"
+        )
     reasoning = data["reasoning"]
     if not isinstance(reasoning, str) or not reasoning.strip():
         raise AnswerError(f"{field}: the reasoning is not a non-empty string")
@@ -154,15 +192,20 @@ def _block(field: str, data: Any) -> FieldAnswer:
         return FieldAnswer(field, decision, None, (), reasoning)
     if not isinstance(value, str) or not value.strip() or value != value.strip():
         raise AnswerError(f"{field}: {decision} needs its value as a trimmed, non-empty string")
-    if len(quotes) < 2 or len({source_family(q.url) for q in quotes}) < 2:
+    families = {family_of(q.url, rule) for q in quotes}
+    if len(quotes) < rule.min_quotes or len(families) < rule.min_families:
+        raise AnswerError(f"{field}: {decision} rests on {rule.rests_on}")
+    if families & rule.forbidden_families:
         raise AnswerError(
-            f"{field}: {decision} rests on at least two quotes from two independent source "
-            "families (one Wikipedia article, its Wikidata item and Commons are one family)"
+            f"{field}: a quote from {sorted(families & rule.forbidden_families)} is no source - "
+            "never the project's own site or a Wikipedia mirror"
         )
     return FieldAnswer(field, decision, value, tuple((q.url, q.quote) for q in quotes), reasoning)
 
 
-def parse(text: str, fields: Sequence[str]) -> dict[str, FieldAnswer | str]:
+def parse(
+    text: str, fields: Sequence[str], rule: R.Rule = R.DEFAULT
+) -> dict[str, FieldAnswer | str]:
     """Each asked field's answer, or the problem that makes it not one. A text that is not the
     answer object at all raises `AnswerError`."""
     data = load_object(text, ANSWER_KEYS)["fields"]
@@ -172,7 +215,7 @@ def parse(text: str, fields: Sequence[str]) -> dict[str, FieldAnswer | str]:
     out: dict[str, FieldAnswer | str] = {}
     for field in fields:
         try:
-            out[field] = _block(field, data[field])
+            out[field] = _block(field, data[field], rule)
         except AnswerError as exc:
             out[field] = str(exc)
     return out
@@ -365,11 +408,13 @@ CHECKS = {
 }
 
 
-def check_shape(text: str, fields: Sequence[str], line: Mapping[str, Any]) -> dict[str, Any]:
+def check_shape(
+    text: str, fields: Sequence[str], line: Mapping[str, Any], rule: R.Rule = R.DEFAULT
+) -> dict[str, Any]:
     """Every field's answer after every check that needs no page: `{field: FieldAnswer | problem}`.
     A text that is not the answer object raises `AnswerError`."""
     out: dict[str, Any] = {}
-    for field, answer in parse(text, fields).items():
+    for field, answer in parse(text, fields, rule).items():
         if isinstance(answer, str) or answer.decision in (CLEAR, UNRESOLVED):
             out[field] = answer
             continue

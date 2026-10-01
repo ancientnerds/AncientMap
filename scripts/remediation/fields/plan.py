@@ -1,4 +1,5 @@
-"""WD1 step 4: the decisions, written - journalled, in steps of at most 100 sites, each accepted.
+"""WD1 step 4 (and WD3's): the decisions, written - journalled, in steps of at most 100 sites, each
+accepted.
 
 The writer is the mechanical one (`mechanical/apply.py`): each step is a cell lane of its own,
 `fields-wd1-<wave>-s<NNN>` (`mechanical/lane.py`, `fields_lane`), with its own run stamp, plan
@@ -46,6 +47,13 @@ SKIPPED.jsonl; other fields of the site go on):
 Every held decision - `unresolved` and `held` - is listed in the wave's versioned HELD.jsonl,
 whether or not its site has a cell to write.
 
+**Lane WD3** (`rule.py`, the `one-family` rule; its run's RUN.json names it and `wave` pins it in
+WAVE.json) goes through the same code as `fields-wd3-<wave>-s<NNN>` under
+`output/remediation/fields/wd3/write/` - every command but `wave` takes `--stage wd3`. It **fills and
+nothing else**: a `replace` is written only for a field its question named open (`line["open"]`) that is empty -
+or the stored point of a site without a sourced point; a stored value is never replaced (`not-empty`), a `clear` is refused, a site with no `replace` has no cell,
+and a period label is written only beside a start written in the same step.
+
     $P handoff --wave W                 after the last step is accepted: HANDOFF.json - the sites
                                         written (a card_stats wave recomputes their cards), every
                                         written source_url with the item its article names (a
@@ -76,7 +84,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
         sys.path.insert(0, _root)
 
 from mechanical import apply as MA  # noqa: E402
-from mechanical.lane import FIELDS_ROOT, Lane, fields_lane, sql_literal  # noqa: E402
+from mechanical.lane import FIELDS_ROOTS, Lane, fields_lane, sql_literal  # noqa: E402
 from mechanical.period_name import SITES_TS, frontend_rule  # noqa: E402
 from mechanical.plan import (  # noqa: E402
     CURATED_SOURCE,
@@ -96,6 +104,7 @@ from mechanical.plan import (  # noqa: E402
 from fields import answers as A  # noqa: E402
 from fields import classify as C  # noqa: E402
 from fields import handoff as HO  # noqa: E402
+from fields import rule as R  # noqa: E402
 from pipeline.utils.text import categorize_period  # noqa: E402
 
 #: At most this many sites per step (PIECE6 section 7, the 100-step write rule).
@@ -119,12 +128,21 @@ SELECT u.id::text AS site_id, u.name, u.source_id, u.scope_status, u.country,
  ORDER BY u.id"""
 
 
-def wave_dir(wave: str) -> Path:
-    return REPO / "output" / "remediation" / FIELDS_ROOT / wave
+def wave_dir(wave: str, stage: str = R.DEFAULT.stage) -> Path:
+    return REPO / "output" / "remediation" / FIELDS_ROOTS[stage] / wave
 
 
-def step_dir(wave: str, step: int) -> Path:
-    return MA.lane_dir(fields_lane(wave, step))
+def step_dir(wave: str, step: int, stage: str = R.DEFAULT.stage) -> Path:
+    return MA.lane_dir(fields_lane(wave, step, stage))
+
+
+def wave_rule(record: Mapping[str, Any], stage: str) -> R.Rule:
+    """The rule a wave was planned under: its WAVE.json's, or WD1's for a wave planned before the
+    file named one. A wave of another stage than the command's is refused."""
+    rule = R.RULES[record["rule"]] if "rule" in record else R.DEFAULT
+    if rule.stage != stage:
+        raise PlanError(f"the wave was planned under {rule.name} (stage {rule.stage}), not {stage}")
+    return rule
 
 
 def _sha256_text(path: Path) -> str:
@@ -132,17 +150,22 @@ def _sha256_text(path: Path) -> str:
 
 
 # ------------------------------------------------------------------------------ the wave
-def wants_write(decisions: Sequence[Mapping[str, Any]], line: Mapping[str, Any]) -> bool:
+def wants_write(
+    decisions: Sequence[Mapping[str, Any]], line: Mapping[str, Any], rule: R.Rule = R.DEFAULT
+) -> bool:
     """Whether a site may get a cell: a replace or clear decision, or a period label that is not
-    the bucket of its start (as classified)."""
+    the bucket of its start (as classified). Under a fill-only rule only a replace."""
     if any(d["decision"] in (A.REPLACE, A.CLEAR) for d in decisions):
         return True
+    if rule.fill_only:
+        return False
     return line["period_name"]["stored"] != line["period_name"]["bucket_of_stored_start"]
 
 
 def build_wave(run: Path, wave: str) -> dict[str, Any]:
     """WAVE.json: the sites of this wave and their steps, from the decision files only."""
-    target = wave_dir(wave)
+    rule = R.read_rule(run)
+    target = wave_dir(wave, rule.stage)
     if (target / WAVE_FILE).exists():
         raise PlanError(f"{target / WAVE_FILE} exists: a wave is planned once")
     fields_fn = run / HO.DECISIONS_FILE
@@ -155,12 +178,14 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
             f"{sum(len(v) for v in reask['fields'].values())} field(s) still wait for a re-ask: "
             "the wave is planned when every asked field is decided"
         )
+    if not rule.clearable and any(d["decision"] == A.CLEAR for d in decisions):
+        raise PlanError(f"{fields_fn} holds a clear decision: the {rule.name} rule never clears")
     classified = HO.read_classified(run)
     by_site: dict[str, list[dict[str, Any]]] = {}
     for d in decisions:
         by_site.setdefault(d["site_id"], []).append(d)
     sites = sorted(
-        sid for sid, line in classified.items() if wants_write(by_site.get(sid, []), line)
+        sid for sid, line in classified.items() if wants_write(by_site.get(sid, []), line, rule)
     )
     steps = [sites[i : i + STEP_SITES] for i in range(0, len(sites), STEP_SITES)]
     held = [
@@ -173,6 +198,8 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
     ]
     record = {
         "wave": wave,
+        "rule": rule.name,
+        "stage": rule.stage,
         "built_at": C.H.now(),
         "decisions_sha256": _sha256_text(fields_fn),
         "classified_sha256": _sha256_text(run / C.CLASSIFIED_FILE),
@@ -183,28 +210,36 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
     }
     target.mkdir(parents=True, exist_ok=True)
     HO._write_jsonl(target / HELD_FILE, held)
-    write_wave(wave, record)
+    write_wave(wave, record, rule.stage)
     return {"wave": wave, "sites": len(sites), "steps": len(steps), "held": len(held)}
 
 
-def write_wave(wave: str, record: Mapping[str, Any]) -> None:
+def write_wave(wave: str, record: Mapping[str, Any], stage: str = R.DEFAULT.stage) -> None:
     """WAVE.json and its pin (WAVE.sha256), written together."""
-    target = wave_dir(wave)
+    target = wave_dir(wave, stage)
     HO._write_json(target / WAVE_FILE, record)
     (target / WAVE_PIN_FILE).write_text(
         _sha256_text(target / WAVE_FILE) + "\n", encoding="utf-8", newline="\n"
     )
 
 
-def read_wave(wave: str) -> dict[str, Any]:
-    """WAVE.json - refused when it is not the file its pin names (an edit after `plan.py wave`)."""
-    path = wave_dir(wave) / WAVE_FILE
+def read_wave_at(directory: Path) -> dict[str, Any]:
+    """The WAVE.json of a wave directory - refused when it is not the file its pin names (an edit
+    after `plan.py wave`)."""
+    path = directory / WAVE_FILE
     if not path.exists():
         raise PlanError(f"{path} is missing - run `plan.py wave` first")
-    pin = (wave_dir(wave) / WAVE_PIN_FILE).read_text(encoding="utf-8").strip()
+    pin = (directory / WAVE_PIN_FILE).read_text(encoding="utf-8").strip()
     if _sha256_text(path) != pin:
         raise PlanError(f"{path} is not the pinned wave ({WAVE_PIN_FILE}): it was edited")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def read_wave(wave: str, stage: str = R.DEFAULT.stage) -> dict[str, Any]:
+    """A stage's wave: its WAVE.json, refused when edited or planned under another stage's rule."""
+    record = read_wave_at(wave_dir(wave, stage))
+    wave_rule(record, stage)
+    return record
 
 
 def _step_size(sites: Sequence[str]) -> None:
@@ -233,6 +268,7 @@ def _verdict(
     rule: str,
     reason: str,
     note: str,
+    stage: str,
     evidence: Sequence[Mapping[str, Any]] = (),
 ) -> Verdict:
     return Verdict(
@@ -245,30 +281,30 @@ def _verdict(
         reason=reason,
         note=note,
         phase3=False,
-        finding_test_id=f"WD1/{column}",
+        finding_test_id=f"{stage.upper()}/{column}",
         evidence=tuple(evidence),
         column=column,
     )
 
 
-def _decision_evidence(decision: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _decision_evidence(decision: Mapping[str, Any], rule: R.Rule) -> list[dict[str, Any]]:
     """The journal's evidence of a decided cell: each quote with its URL and its check's outcome,
-    and the decision itself."""
+    and the decision itself (under WD3's rule with the model that answered)."""
     quoted = [
         {"source": q["source"], "url": q["source"], "quote": q["quote"], "outcome": q["outcome"]}
         for q in decision["quotes"]
     ]
-    return [
-        *quoted,
-        {
-            "source": f"WD1 decision ({decision['via']}, round {decision['round']}, "
-            f"{decision['answered_by']})",
-            "decision": decision["decision"],
-            "status": decision["status"],
-            "reasoning": decision["reasoning"],
-            "value_page": decision["value_page"],
-        },
-    ]
+    entry = {
+        "source": f"{rule.stage.upper()} decision ({decision['via']}, round {decision['round']}, "
+        f"{decision['answered_by']})",
+        "decision": decision["decision"],
+        "status": decision["status"],
+        "reasoning": decision["reasoning"],
+        "value_page": decision["value_page"],
+    }
+    if rule.fill_only:
+        entry["model"] = decision["model"]
+    return [*quoted, entry]
 
 
 def _journal_ok(
@@ -296,12 +332,17 @@ def site_cells(
     country_check: Callable[[str, float, float], Mapping[str, Any]],
     derive: Callable[[int | None], str | None] = categorize_period,
     frontend: Callable[[int], str] | None = None,
+    under: R.Rule = R.DEFAULT,
 ) -> list[Verdict]:
-    """Every cell of one site - writes (`ok`) and refusals. Pure: every input is given."""
+    """Every cell of one site - writes (`ok`) and refusals. Pure: every input is given. Under a
+    fill-only rule (WD3) a replace is written only for a field the question named open
+    (`line["open"]`), a clear is refused, and a period label is written only beside a start."""
     out: list[Verdict] = []
+    tag = under.stage
 
     def refusal(column: str, reason: str, note: str, old: Any = None, new: Any = None) -> Verdict:
-        return _verdict(live, column, ok=False, old=old, new=new, rule="", reason=reason, note=note)
+        return _verdict(live, column, ok=False, old=old, new=new, rule="", reason=reason,
+                        note=note, stage=tag)  # fmt: skip
 
     def refuse(column: str, reason: str, note: str, old: Any = None, new: Any = None) -> None:
         out.append(refusal(column, reason, note, old, new))
@@ -319,7 +360,7 @@ def site_cells(
         if broken is not None:
             return refusal(column, broken[0], broken[1], old, new)
         return _verdict(live, column, ok=True, old=old, new=new, rule=rule, reason="",
-                        note=note, evidence=evidence)  # fmt: skip
+                        note=note, stage=tag, evidence=evidence)  # fmt: skip
 
     def write(column: str, old: str | None, new: str | None, rule: str, note: str,
               evidence: Sequence[Mapping[str, Any]]) -> None:  # fmt: skip
@@ -337,7 +378,22 @@ def site_cells(
             refuse(column, "held-unreadable", decision["reasoning"], None if stored is None
                    else str(stored))  # fmt: skip
             continue
-        evidence = _decision_evidence(decision)
+        if decision["decision"] == A.UNRESOLVED and field != "coordinates":
+            refuse(field, "field-unresolved", decision["reasoning"],
+                   None if stored is None else str(stored))  # fmt: skip
+            continue
+        if under.fill_only:
+            column = "lat" if field == "coordinates" else field
+            if decision["decision"] == A.CLEAR:
+                refuse(column, "never-clears", f"the {under.name} rule fills fields, it never "
+                       "empties one", None if stored is None else str(stored))  # fmt: skip
+                continue
+            if field not in line["open"]:
+                refuse(column, "not-an-open-field", "the question named this field open: a field "
+                       "that holds a sourced value is never replaced",
+                       None if stored is None else str(stored))  # fmt: skip
+                continue
+        evidence = _decision_evidence(decision, under)
         if field == "coordinates":
             live_point = f"{float(live['lat_text'])}, {float(live['lon_text'])}"
             if stored != live_point:
@@ -367,12 +423,12 @@ def site_cells(
             note = f"{live_point} -> {_point_text(lat)}, {_point_text(lon)}"
             group = []
             if float(live["lat_text"]) != lat:
-                group.append(cell("lat", live["lat_text"], _point_text(lat), "wd1-replace", note,
+                group.append(cell("lat", live["lat_text"], _point_text(lat), f"{tag}-replace", note,
                                   evidence))  # fmt: skip
             if float(live["lon_text"]) != lon:
-                group.append(cell("lon", live["lon_text"], _point_text(lon), "wd1-replace", note,
+                group.append(cell("lon", live["lon_text"], _point_text(lon), f"{tag}-replace", note,
                                   evidence))  # fmt: skip
-            group.append(cell("geom", live["geom_text"], ewkt(lat, lon), "wd1-point", note,
+            group.append(cell("geom", live["geom_text"], ewkt(lat, lon), f"{tag}-point", note,
                               evidence))  # fmt: skip
             broken = [v for v in group if not v.ok]
             if not broken:
@@ -398,6 +454,11 @@ def site_cells(
         new = None if decision["decision"] == A.CLEAR else str(decision["value"])
         if new == current_text:
             continue
+        if under.fill_only and current_text is not None and current_text.strip():
+            refuse(field, "not-empty", f"the {under.name} rule fills an empty field: a stored "
+                   f"value is never replaced (it stays {current_text!r}; the owner list names the "
+                   f"value found: {new!r})", current_text, new)  # fmt: skip
+            continue
         if field == "period_start":
             end = live["period_end"]
             if new is not None and end is not None and int(end) != 0 and int(new) > int(end):
@@ -409,7 +470,7 @@ def site_cells(
                     new,
                 )
                 continue
-        rule = "wd1-clear" if new is None else "wd1-replace"
+        rule = f"{tag}-clear" if new is None else f"{tag}-replace"
         write(field, current_text, new, rule, f"{current_text!r} -> {new!r}", evidence)
         if field == "period_start" and out[-1].ok:
             final_start = None if new is None else int(new)
@@ -421,14 +482,23 @@ def site_cells(
             "the label follows a start written around the journal",
         )
         return out
-    label = None if final_start is None else derive(final_start)
     started = [v for v in out if v.ok and v.column == "period_start"]
+    if under.fill_only and not started:
+        return out  # WD3 fills: a label is written only beside a start it writes
+    label = None if final_start is None else derive(final_start)
     named: Verdict | None = None
     if final_start is not None and frontend is not None and frontend(final_start) != label:
         named = refusal(
             "period_name", "implementations-disagree", f"categorize_period({final_start})"
         )
     elif label != live["period_name"]:
+        # the label is derived, so the model that answered sits on the start's decision: carried
+        # here too, a reader of this journal row alone must see who answered
+        answered = (
+            [_decision_evidence(decisions["period_start"], under)[-1]]
+            if under.fill_only and started
+            else []
+        )
         evidence = [
             {
                 "source": "pipeline/utils/text.py:categorize_period",
@@ -440,12 +510,13 @@ def site_cells(
                 "url": "output/remediation/gold_standard/GOLD_STANDARD.md",
                 "quote": "| `period_name` | equals `categorize_period(period_start)` |",
             },
+            *answered,
         ]
         named = cell(
             "period_name",
             live["period_name"],
             label,
-            "wd1-derive-period-name",
+            f"{tag}-derive-period-name",
             f"period_start {final_start}{' (written in this step)' if started else ''}",
             evidence,
         )
@@ -463,10 +534,10 @@ def site_cells(
 
 
 # ------------------------------------------------------------------------------ one step
-def _previous_accepted(wave: str, step: int) -> None:
+def _previous_accepted(wave: str, step: int, stage: str) -> None:
     if step == 1:
         return
-    before = step_dir(wave, step - 1)
+    before = step_dir(wave, step - 1, stage)
     accepted = before / ACCEPTED_FILE
     if not accepted.exists():
         raise PlanError(f"step {step - 1} is not accepted ({accepted} is missing)")
@@ -481,14 +552,16 @@ def build_step(
     reader: Callable[[str], list[dict[str, Any]]],
     country_check: Callable[[str, float, float], Mapping[str, Any]],
     frontend: Callable[[int], str],
+    stage: str = R.DEFAULT.stage,
 ) -> dict[str, Any]:
     """The plan of one step, from a read-only read of its sites - never a step before the one
     before it is accepted."""
-    record = read_wave(wave)
+    record = read_wave(wave, stage)
+    rule = wave_rule(record, stage)
     if not 1 <= step <= len(record["steps"]):
         raise PlanError(f"wave {wave} has steps 1..{len(record['steps'])}, not {step}")
-    _previous_accepted(wave, step)
-    lane = fields_lane(wave, step)
+    _previous_accepted(wave, step, stage)
+    lane = fields_lane(wave, step, stage)
     out = MA.lane_dir(lane)
     if (out / "APPLY.sql").exists() or (out / ACCEPTED_FILE).exists():
         raise PlanError(f"{out} holds an emitted or accepted step: it is not planned again")
@@ -516,6 +589,7 @@ def build_step(
                 {column: journals[column].get(sid, ()) for column in WRITTEN_FIELDS},
                 country_check=country_check,
                 frontend=frontend,
+                under=rule,
             )
         )
     changes = tuple(v for v in verdicts if v.ok)
@@ -548,7 +622,7 @@ def _plan_file(plan: Plan, out: Path) -> Path:
 def write_plan_md(plan: Plan, path: Path) -> None:
     lane = plan.lane
     lines = [
-        f"# WD1 {lane.name}: plan",
+        f"# {lane.test_id.split('/')[0]} {lane.name}: plan",
         "",
         f"Built {plan.built_at} by `scripts/remediation/fields/plan.py`. Run stamp "
         f"`{lane.run_stamp}`, test id `{lane.test_id}`, change keys `{lane.key_prefix}:<site>:<column>`.",
@@ -644,10 +718,14 @@ def deviations(counts: Mapping[str, int], planned: int) -> list[str]:
 
 
 def accept(
-    wave: str, step: int, *, read_rows: Callable[[str], list[list[str]]] = MA.read_rows
+    wave: str,
+    step: int,
+    *,
+    read_rows: Callable[[str], list[list[str]]] = MA.read_rows,
+    stage: str = R.DEFAULT.stage,
 ) -> dict[str, Any]:
     """The step's independent acceptance, read-only: ACCEPTED.json, or refused."""
-    lane = fields_lane(wave, step)
+    lane = fields_lane(wave, step, stage)
     out = MA.lane_dir(lane)
     if (out / ACCEPTED_FILE).exists():
         raise PlanError(f"{out / ACCEPTED_FILE} exists: a step is accepted once")
@@ -679,15 +757,16 @@ def accept(
 
 
 # ------------------------------------------------------------------------------ the hand-off
-def _value_page_of(record: MA.ChangeRecord) -> Mapping[str, Any] | None:
+def _value_page_of(record: MA.ChangeRecord, rule: R.Rule) -> Mapping[str, Any] | None:
     """The value page the source_url cell's decision recorded (its evidence's decision entry)."""
-    entries = [e for e in record.evidence if str(e.get("source", "")).startswith("WD1 decision")]
+    prefix = f"{rule.stage.upper()} decision"
+    entries = [e for e in record.evidence if str(e.get("source", "")).startswith(prefix)]
     if len(entries) != 1:
-        raise PlanError(f"{record.site_id}/{record.column}: not one WD1 decision in its evidence")
+        raise PlanError(f"{record.site_id}/{record.column}: not one {prefix} in its evidence")
     return entries[0]["value_page"]
 
 
-def handoff(wave: str) -> dict[str, Any]:
+def handoff(wave: str, stage: str = R.DEFAULT.stage) -> dict[str, Any]:
     """HANDOFF.json, once every step is accepted with 0 deviations: what the wave wrote that
     derived stores must follow. `sites_written` - their cards (`card_stats`: category group,
     antiquity, mystery, rarity, empires) are recomputed by a card_stats wave; `source_urls` - each
@@ -695,10 +774,11 @@ def handoff(wave: str) -> dict[str, Any]:
     site_external_ids pass (the qid_repair / L5 tool) re-derives the site's `wikidata_qid` and
     `enwiki_title` (a cleared URL: the ids derived from the old one are stale); `starts` - each
     written or cleared period_start, which the scope check (WD2) reads against the E3 window."""
-    record = read_wave(wave)
+    record = read_wave(wave, stage)
+    rule = wave_rule(record, stage)
     written: list[MA.ChangeRecord] = []
     for number in range(1, len(record["steps"]) + 1):
-        out = step_dir(wave, number)
+        out = step_dir(wave, number, stage)
         accepted = out / ACCEPTED_FILE
         if not accepted.exists():
             raise PlanError(f"step {number} is not accepted ({accepted} is missing)")
@@ -709,7 +789,7 @@ def handoff(wave: str) -> dict[str, Any]:
         written.extend(MA.load_records(out / "PLAN.jsonl"))
     source_urls = []
     for r in sorted((r for r in written if r.column == "source_url"), key=lambda r: r.site_id):
-        page = _value_page_of(r) or {}
+        page = _value_page_of(r, rule) or {}
         source_urls.append(
             {
                 "site_id": r.site_id,
@@ -732,7 +812,7 @@ def handoff(wave: str) -> dict[str, Any]:
             if r.column == "period_start"
         ],
     }
-    HO._write_json(wave_dir(wave) / HANDOFF_FILE, result)
+    HO._write_json(wave_dir(wave, stage) / HANDOFF_FILE, result)
     return result
 
 
@@ -764,14 +844,22 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument(
             "--wave", required=True, help="a date label: 2026-09-27 or 2026-09-27b"
         )
+    for name in ("step", "accept", "handoff", "status"):
+        commands[name].add_argument(
+            "--stage",
+            choices=sorted(R.BY_STAGE),
+            default=R.DEFAULT.stage,
+            help="the lane the wave belongs to (wave: the run's RUN.json names it)",
+        )
     commands["wave"].add_argument("--run", type=Path, default=C.DEFAULT_OUT)
     for name in ("step", "accept"):
         commands[name].add_argument("--step", type=int, required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "wave":
-            fields_lane(args.wave, 1)
-            result: Any = build_wave(HO._resolve(args.run), args.wave)
+            run = HO._resolve(args.run)
+            fields_lane(args.wave, 1, R.read_rule(run).stage)
+            result: Any = build_wave(run, args.wave)
         elif args.command == "step":
             result = build_step(
                 args.wave,
@@ -779,21 +867,22 @@ def main(argv: list[str] | None = None) -> int:
                 reader=psql_json_reader(),
                 country_check=_country_check(),
                 frontend=frontend_rule(SITES_TS.read_text(encoding="utf-8")),
+                stage=args.stage,
             )
         elif args.command == "accept":
-            result = accept(args.wave, args.step)
+            result = accept(args.wave, args.step, stage=args.stage)
         elif args.command == "handoff":
-            result = handoff(args.wave)
+            result = handoff(args.wave, args.stage)
         else:
-            record = read_wave(args.wave)
+            record = read_wave(args.wave, args.stage)
             result = {
                 "sites": record["sites"],
                 "steps": [
                     {
                         "step": n,
-                        "planned": (step_dir(args.wave, n) / "PLAN.jsonl").exists(),
-                        "applied": (step_dir(args.wave, n) / "APPLY.sql").exists(),
-                        "accepted": (step_dir(args.wave, n) / ACCEPTED_FILE).exists(),
+                        "planned": (step_dir(args.wave, n, args.stage) / "PLAN.jsonl").exists(),
+                        "applied": (step_dir(args.wave, n, args.stage) / "APPLY.sql").exists(),
+                        "accepted": (step_dir(args.wave, n, args.stage) / ACCEPTED_FILE).exists(),
                     }
                     for n in range(1, len(record["steps"]) + 1)
                 ],

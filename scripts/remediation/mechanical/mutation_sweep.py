@@ -6779,7 +6779,7 @@ WD1_CASES: list[Case] = [
     guard(
         "wd1: answers rest on two families",
         FIELDS / "answers.py",
-        "    if len(quotes) < 2 or len({source_family(q.url) for q in quotes}) < 2:",
+        "    if len(quotes) < rule.min_quotes or len(families) < rule.min_families:",
         "test_keep_and_replace_rest_on_two_families",
         FIELDS_ANSWER_TESTS,
     ),
@@ -6864,8 +6864,8 @@ WD1_CASES: list[Case] = [
     Case(
         "wd1: an exhausted point is held, not cleared",
         FIELDS / "handoff.py",
-        '            if field == "coordinates":\n                outcome = A.UNRESOLVED',
-        "            if False:\n                outcome = A.UNRESOLVED",
+        '            elif field == "coordinates" or not rule.clearable:\n                outcome = A.UNRESOLVED',
+        "            elif False:\n                outcome = A.UNRESOLVED",
         "test_after_the_last_round_a_field_is_cleared_and_a_point_held",
         FIELDS_HANDOFF_TESTS,
     ),
@@ -7120,11 +7120,10 @@ WD1_CASES: list[Case] = [
         "test_a_transient_failure_is_fetched_again_before_the_next_import",
         FIELDS_HANDOFF_TESTS,
     ),
-    Case(
+    guard(
         "wd1: an unreadable-only exhaustion is held",
         FIELDS / "handoff.py",
-        '            elif tries[-1]["unreadable"]:',
-        "            elif False:",
+        '            if tries[-1]["unreadable"] and (not rule.clearable or field != "coordinates"):',
         "test_a_field_whose_pages_cannot_be_read_is_held_not_cleared",
         FIELDS_HANDOFF_TESTS,
     ),
@@ -7175,7 +7174,7 @@ WD1_CASES: list[Case] = [
     guard(
         "wd1: a country above its rate stops the pilot",
         FIELDS / "handoff.py",
-        '        if figures["fields"] >= PILOT_MIN_FIELDS and figures["clear_rate"] > PILOT_MAX_COUNTRY_RATE:',
+        '        if figures["fields"] >= PILOT_MIN_FIELDS and figures[gated] > max_country:',
         "test_a_country_above_its_rate_stops_the_part",
         FIELDS_HANDOFF_TESTS,
     ),
@@ -7240,6 +7239,221 @@ WD1_CASES: list[Case] = [
     ),
 ]
 CASES += WD1_CASES
+
+
+# ------------------------------------------------------ lane WD3 (2026-10-01): the one-family rule
+WD3_TESTS = "tests/remediation/test_fields_wd3.py"
+
+#: What lane WD3 added to WD1's package: the rule switch and its pin, the one-quote answer and the
+#: sources it refuses, the fill-only write plan, the population and WD1's records it reads, the lane's
+#: own identity, the owner list. Every label starts with "wd3:", so the list runs on its own:
+#: `mutation_sweep.py wd3:`.
+WD3_CASES: list[Case] = [
+    Case(
+        "wd3: one quote from one source suffices",
+        FIELDS / "rule.py",
+        'ONE_FAMILY = Rule("one-family", "wd3", 1, 1, FORBIDDEN_FAMILIES, False, True)',
+        'ONE_FAMILY = Rule("one-family", "wd3", 2, 2, FORBIDDEN_FAMILIES, False, True)',
+        "test_one_quote_from_one_source_suffices",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a run's rule is pinned",
+        FIELDS / "rule.py",
+        "    if existing.exists() and read_rule(run) != rule:",
+        "test_the_rule_is_pinned_in_the_run_s_file",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: the project's pages and mirrors are no source",
+        FIELDS / "answers.py",
+        "    if families & rule.forbidden_families:",
+        "test_the_project_s_own_pages_and_wikipedia_mirrors_are_no_source",
+        WD3_TESTS,
+    ),
+    Case(
+        "wd3: a clear is no answer",
+        FIELDS / "answers.py",
+        "    return DECISIONS[field] if rule.clearable else FILL_DECISIONS",
+        "    return DECISIONS[field]",
+        "test_a_field_nobody_can_source_is_unresolved_never_clear",
+        WD3_TESTS,
+    ),
+    Case(
+        "wd3: an exhausted field is unresolved, not cleared",
+        FIELDS / "handoff.py",
+        '            elif field == "coordinates" or not rule.clearable:',
+        '            elif field == "coordinates":',
+        "test_an_exhausted_field_is_unresolved_never_cleared",
+        WD3_TESTS,
+    ),
+    Case(
+        "wd3: an unreadable point is held",
+        FIELDS / "handoff.py",
+        '            if tries[-1]["unreadable"] and (not rule.clearable or field != "coordinates"):',
+        '            if tries[-1]["unreadable"] and field != "coordinates":',
+        "test_a_point_whose_pages_cannot_be_read_is_held_under_wd3_and_unresolved_under_wd1",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: the pilot stops on unreadable pages",
+        FIELDS / "handoff.py",
+        "    if overall[gated] > max_rate:",
+        "test_a_checker_that_cannot_read_what_the_agents_cite_stops_the_run",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a field not open is never replaced",
+        FIELDS / "plan.py",
+        '            if field not in line["open"]:',
+        "test_a_field_the_question_did_not_name_open_is_never_replaced",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a clear is refused per cell",
+        FIELDS / "plan.py",
+        '            if decision["decision"] == A.CLEAR:',
+        "test_a_clear_is_refused",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: an unresolved field is listed, not written",
+        FIELDS / "plan.py",
+        '        if decision["decision"] == A.UNRESOLVED and field != "coordinates":',
+        "test_an_unresolved_field_of_any_kind_is_listed_and_not_written",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a label only beside a written start",
+        FIELDS / "plan.py",
+        "    if under.fill_only and not started:",
+        "test_a_label_that_disagrees_with_its_start_is_not_rewritten",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: the wave refuses a clear",
+        FIELDS / "plan.py",
+        '    if not rule.clearable and any(d["decision"] == A.CLEAR for d in decisions):',
+        "test_a_clear_decision_refuses_the_wave",
+        WD3_TESTS,
+    ),
+    Case(
+        "wd3: a label alone is no wave site",
+        FIELDS / "plan.py",
+        "    if rule.fill_only:\n        return False",
+        "    if False:\n        return False",
+        "test_a_site_whose_only_flaw_is_its_label_is_no_wave_site",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a wave is read under its own stage",
+        FIELDS / "plan.py",
+        "    if rule.stage != stage:",
+        "test_a_wave_is_not_read_as_the_other_stage",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a sourced field is not asked",
+        FIELDS / "population.py",
+        "        if verdict in (A.KEEP, A.REPLACE):",
+        "test_a_value_with_a_sourced_decision_that_is_empty_is_listed_and_not_asked",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a cell WD1 decided twice is refused",
+        FIELDS / "population.py",
+        "            if cell in decisions:",
+        "test_a_cell_two_runs_decided_is_refused",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: WD1's steps are all accepted",
+        FIELDS / "population.py",
+        "        if not accepted.exists():",
+        "test_a_step_that_is_not_accepted_is_refused",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: WD1's held pairs are its waves'",
+        FIELDS / "population.py",
+        "        if listed.get(run) != wanted:",
+        "test_a_run_whose_held_fields_its_waves_do_not_list_is_refused",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a run is built once",
+        FIELDS / "population.py",
+        '    if (out / "ROUNDS.jsonl").exists():',
+        "test_a_run_that_was_asked_is_not_built_again",
+        WD3_TESTS,
+    ),
+    Case(
+        "wd3: the lane's stamp is its own",
+        LANE,
+        '        run_stamp=f"{wave}_fields-{stage}-s{step:03d}",',
+        '        run_stamp=f"{wave}_fields-wd1-s{step:03d}",',
+        "test_the_two_stages_never_share_a_stamp_a_table_or_a_directory",
+        WD3_TESTS,
+    ),
+    Case(
+        "wd3: the lane's directory is its own",
+        LANE,
+        '        out_dir_name=f"{FIELDS_ROOTS[stage]}/{wave}/s{step:03d}",',
+        "        out_dir_name=f\"{FIELDS_ROOTS['wd1']}/{wave}/s{step:03d}\",",
+        "test_the_two_stages_never_share_a_stamp_a_table_or_a_directory",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: the owner list is final without pending",
+        FIELDS / "owner_list.py",
+        "    if final and pending:",
+        "test_the_list_is_written_and_final_only_without_pending",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a refusal is listed with its reason",
+        FIELDS / "owner_list.py",
+        '    if cell.get("refused"):',
+        "test_what_stays_open_is_listed_with_its_reason",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a settled wave's silence is listed",
+        FIELDS / "owner_list.py",
+        "    if settled:",
+        "test_a_replace_that_a_settled_wave_neither_wrote_nor_refused_is_listed",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a stored value is never replaced",
+        FIELDS / "plan.py",
+        "        if under.fill_only and current_text is not None and current_text.strip():",
+        "test_a_stored_value_is_never_replaced_only_an_empty_field_is_filled",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: another lane's sourced point is not open",
+        FIELDS / "population.py",
+        "            if journal_sourced_point(stored, last_point_write):",
+        "test_a_point_a_journalled_lane_sourced_is_not_open_whatever_wd1_decided",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: a scheme-less Wayback copy is unwrapped",
+        FIELDS / "answers.py",
+        '    if host == "web.archive.org":',
+        "test_a_wayback_copy_counts_as_its_original_with_or_without_a_scheme",
+        WD3_TESTS,
+    ),
+    guard(
+        "wd3: an unresolved answered outright is tallied",
+        FIELDS / "handoff.py",
+        '            if d["via"] == COUNTED:',
+        "test_a_pilot_of_lazy_unresolved_answers_where_a_source_exists_stops",
+        WD3_TESTS,
+    ),
+]
+CASES += WD3_CASES
 
 
 # ---------------------------------------------- HUMAN_ONLY Nr. 7: the Chiapa lanes (2026-09-29)

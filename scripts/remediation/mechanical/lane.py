@@ -1592,14 +1592,22 @@ CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
 #: `teaser-prov-sNNN` (the card provenance in raw_data) and `teaser-card-sNNN` (the card).
 TEASER_LANE = re.compile(r"^teaser-(prov|card)-s(\d{3})\Z")
 
-# ------------------------------------------------------------ the WD1 structured-field lane
+# ------------------------------------------------------------ the WD1/WD3 structured-field lanes
 #: FINISH_PLAN_2026-09-26 lane WD1 (`scripts/remediation/fields/`): the decided coordinates,
 #: period_start with its period_name, site_type and source_url of a step of at most 100 sites, one
 #: transaction per step. Each step is a lane of its own - `fields-wd1-<wave>-s<NNN>`, its own run
 #: stamp and directory - so "never apply a stamp twice" holds per step and each step is accepted
-#: before the next is planned (`fields/plan.py`).
-FIELDS_LANE = re.compile(r"^fields-wd1-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
-FIELDS_ROOT = "fields/wd1/write"
+#: before the next is planned (`fields/plan.py`). Lane WD3 (owner decisions 2026-10-01: one source
+#: family suffices, an open field is filled and nothing else is touched) writes through the same
+#: cells and invariants as `fields-wd3-<wave>-s<NNN>`: a stamp, a test id, a table and a directory
+#: of its own, so no step of one lane can be mistaken for a step of the other.
+FIELDS_LANE = re.compile(r"^fields-(wd1|wd3)-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
+FIELDS_STAGES = ("wd1", "wd3")
+#: Where each stage's waves live: `output/remediation/<FIELDS_ROOTS[stage]>/<wave>/sNNN`.
+FIELDS_ROOTS = {stage: f"fields/{stage}/write" for stage in FIELDS_STAGES}
+#: The journal's `confidence` of a stage's writes: WD1 rests on two quotes of two source families,
+#: WD3 on one quote (the column's free text, `migrations/0017`).
+FIELDS_CONFIDENCE = {"wd1": "two_source", "wd3": "one_source"}
 _BUCKETS = tuple(label for label, _lo, _hi in PERIOD_BUCKETS)
 
 #: A site's point is three cells: `lat` and `lon` (NOT NULL, corrected and never cleared -
@@ -1662,20 +1670,23 @@ _GEOM_NOT_POINT = Residual(
 )
 
 
-def fields_lane(wave: str, step: int) -> Lane:
-    """Step `step` of WD1 wave `wave` (a date label, `2026-09-27` or `2026-09-27b`)."""
-    name = f"fields-wd1-{wave}-s{step:03d}"
+def fields_lane(wave: str, step: int, stage: str = "wd1") -> Lane:
+    """Step `step` of the `stage` (`wd1` or `wd3`) wave `wave` (a date label, `2026-09-27` or
+    `2026-09-27b`)."""
+    name = f"fields-{stage}-{wave}-s{step:03d}"
     if FIELDS_LANE.match(name) is None or step < 1:
-        raise ValueError(f"{wave!r} step {step} is not a WD1 wave label and step number")
+        raise ValueError(
+            f"{wave!r} step {step} is not a {stage.upper()} wave label and step number"
+        )
     return Lane(
         name=name,
         key_prefix=name,
-        run_stamp=f"{wave}_fields-wd1-s{step:03d}",
-        test_id="WD1/structured-fields",
-        confidence="two_source",
-        label="WD1 field correction",
-        plan_table="_fields_wd1_plan",
-        out_dir_name=f"{FIELDS_ROOT}/{wave}/s{step:03d}",
+        run_stamp=f"{wave}_fields-{stage}-s{step:03d}",
+        test_id=f"{stage.upper()}/structured-fields",
+        confidence=FIELDS_CONFIDENCE[stage],
+        label=f"{stage.upper()} field correction",
+        plan_table=f"_fields_{stage}_plan",
+        out_dir_name=f"{FIELDS_ROOTS[stage]}/{wave}/s{step:03d}",
         post_commit_residual=_PERIOD_MISMATCH,
         rehearsal_residual=_PERIOD_MISMATCH,
         lock_timeout=LOCK_TIMEOUT,
@@ -1946,8 +1957,8 @@ CARD_DISCLOSURE_LANE = re.compile(r"^card-disclosure-s(\d{3})\Z")
 
 
 def resolve_lane(name: str) -> Lane:
-    """The lane called `name`: a registered one, a scope-review wave, a WD1 fields step, a lane-WB
-    teaser step or disclosure-correction step, or a card_stats wave.
+    """The lane called `name`: a registered one, a scope-review wave, a WD1 or WD3 fields step, a
+    lane-WB teaser step or disclosure-correction step, or a card_stats wave.
     `KeyError` otherwise.
 
     The card_stats lanes are built by `card_stats.card_stats_lane`, imported here and only here:
@@ -1961,7 +1972,7 @@ def resolve_lane(name: str) -> Lane:
         return scope_review_lane(review.group(1))
     fields = FIELDS_LANE.match(name)
     if fields is not None:
-        return fields_lane(fields.group(1), int(fields.group(2)))
+        return fields_lane(fields.group(2), int(fields.group(3)), fields.group(1))
     if TEASER_LANE.match(name):
         from mechanical.teaser import lane_of
 
