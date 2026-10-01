@@ -1,7 +1,7 @@
 export const meta = {
   name: 'studio-casefile-verify',
   description: 'Verify every evidence item of an episode case file that is not yet verified, against its paper evidence entry, its archived text or its web page; writes each item\'s verification into casefile.json',
-  whenToUse: 'studio-casefile, after writing casefile.json and before python -m pipeline.studio episode check <slug>. args: {"workspace": "<absolute path of STUDIO_ASSETS/episodes/<slug>>"}',
+  whenToUse: 'studio-casefile, after writing casefile.json and before ./.venv/Scripts/python.exe -m pipeline.studio episode check <slug>. args: {"workspace": "<absolute path of STUDIO_ASSETS/episodes/<slug>>"}',
   phases: [
     { title: 'Inventory', detail: 'the evidence items whose verification.status is not verified' },
     { title: 'Verify', detail: 'one agent per item: read its source, judge the statement' },
@@ -35,6 +35,7 @@ export const meta = {
  */
 
 const PY = './.venv/Scripts/python.exe'
+const STUDIO = `${PY} -m pipeline.studio`
 const METHODS = ['paper evidence', 'archived text', 'web page']
 const OPUS_RE = /^claude-opus-/
 
@@ -161,7 +162,7 @@ function verifyPrompt(item) {
     [`Episode workspace: ${EP}`, `Evidence item: ${item.id} (now ${item.status})`].join('\n'),
     `1. ${RUN_ONCE} It reads the item from casefile.json and prints its statement, its verbatim source quote and the text the quote is checked against, by route:\n- "paper evidence" (the item has a paper_anchor): the entry of the paper's evidence.json with that id (null when there is none); found tells whether the item's quote occurs verbatim, whitespace aside, in the entry's quote.\n- "archived text" (the item names a source_id whose archived text, or saved live text, the paper workspace holds): found, and the context around the quote in that text (the start of the text when the quote is absent); path is the file.\n- "web page" (otherwise): the page at the item's source url read live; found, and the context around the quote (the start of the page when the quote is absent), or error.`,
     command(probeCmd(item.id)),
-    '2. Judge:\n- verified: found is true, and the quote read in its context states the statement: the statement says nothing the quote does not (names, dates, numbers, certainty). With route "paper evidence", the entry\'s verdict must also be "supported" and the statement must say no more than the entry\'s claim.\n- refuted: the text is readable and the quote, read in its context, says something else, or the source contradicts the statement.\n- unverified: the text cannot be checked: the command failed while reading the page (its last error line says why), the source is a YouTube video, the page is a paywall, login or cookie wall, or the quote does not occur verbatim in a readable text.\nWith route "archived text" you may read more of the file at path with Grep or fold -s -w 1000 "<file>" | sed -n "1,40p". Do not search the web. Do not create, edit or delete any file.',
+    '2. Judge:\n- verified: found is true, and the quote read in its context states the statement: the statement says nothing the quote does not (names, dates, numbers, certainty). With route "paper evidence", the statement must also say no more than the entry\'s claim (the entry\'s own verdict is Claude\'s and always "supported"; the paper\'s claim check is what proved it).\n- refuted: the text is readable and the quote, read in its context, says something else, or the source contradicts the statement.\n- unverified: the text cannot be checked: the command failed while reading the page (its last error line says why), the source is a YouTube video, the page is a paywall, login or cookie wall, or the quote does not occur verbatim in a readable text.\nWith route "archived text" you may read more of the file at path with Grep or fold -s -w 1000 "<file>" | sed -n "1,40p". Do not search the web. Do not create, edit or delete any file.',
     '3. Answer with status; method: the route the command printed ("web page" when it failed while reading the page); explanation: what you found, and for refuted or unverified exactly why; model.',
   ].join('\n\n')
 }
@@ -181,7 +182,7 @@ if (inv === null) throw new Error('the inventory agent did not finish')
 if (inv.error) throw new Error(`reading ${EP}/casefile.json failed: ${inv.error}`)
 log(`${inv.items.length} of ${inv.evidence} evidence items are not verified yet`)
 if (!inv.items.length) {
-  return { workspace: EP, checked: 0, statuses: {}, items: [], not_checked: [], next: `python -m pipeline.studio episode check ${SLUG}` }
+  return { workspace: EP, checked: 0, statuses: {}, items: [], not_checked: [], next: `${STUDIO} episode check ${SLUG}` }
 }
 
 // ---- Verify: one agent per item -------------------------------------------------------------
@@ -237,5 +238,5 @@ return {
   statuses,
   items: checked.map((r) => ({ id: r.item.id, status: r.v.status, method: r.v.method, explanation: r.v.explanation })),
   not_checked: notChecked,
-  next: `python -m pipeline.studio episode check ${SLUG}`,
+  next: `${STUDIO} episode check ${SLUG}`,
 }

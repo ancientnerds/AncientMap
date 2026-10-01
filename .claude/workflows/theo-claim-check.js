@@ -1,7 +1,7 @@
 export const meta = {
   name: 'theo-claim-check',
   description: 'Answer claims_check/pending.jsonl of a paper workspace: live read of TDM-reserved sources, one verifier per task, an adversarial skeptic for every supported verdict; appends claims_check/verdicts.jsonl',
-  whenToUse: 'theo-write, after python -m pipeline.studio paper claims-export <id> and before paper claims-import <id>. args: {"workspace": "<absolute path of STUDIO_ASSETS/papers/<request_id>>"}',
+  whenToUse: 'theo-write, after ./.venv/Scripts/python.exe -m pipeline.studio paper claims-export <id> and before paper claims-import <id>. args: {"workspace": "<absolute path of STUDIO_ASSETS/papers/<request_id>>"}',
   phases: [
     { title: 'Inventory', detail: 'pending.jsonl minus the tasks verdicts.jsonl already holds' },
     { title: 'Live read', detail: 'each TDM-reserved source once, into claims_check/live/<id>.txt' },
@@ -42,6 +42,7 @@ export const meta = {
  */
 
 const PY = './.venv/Scripts/python.exe'
+const STUDIO = `${PY} -m pipeline.studio`
 const PART = 'verdicts.part.jsonl'
 const LINES_PER_WRITE = 20
 const VERDICTS = ['supported', 'partly', 'unsupported', 'source_missing']
@@ -214,9 +215,11 @@ function taskHead(t) {
   ].join('\n')
 }
 
-function liveNote(t) {
-  if (!t.tdm.length) return ''
-  return `The prompt asks you to read TDM-reserved sources live and save their text. This workflow has done that already: the page text of ${t.tdm.join(', ')} is saved in ${DIR}/live/<source_id>.txt (lines 1-3 are the header "URL: ...", "Fetched: ..." and an empty line; the text starts on line 4). Read that file as the source's text and quote from it. Do not fetch the page again.`
+// `saved` are the TDM-reserved sources of the task whose live text is in live/<id>.txt. A source
+// whose live read failed is not one of them: its failure is the verifier's `unread` note.
+function liveNote(saved) {
+  if (!saved.length) return ''
+  return `The prompt asks you to read TDM-reserved sources live and save their text. This workflow has done that already: the page text of ${saved.join(', ')} is saved in ${DIR}/live/<source_id>.txt (lines 1-3 are the header "URL: ...", "Fetched: ..." and an empty line; the text starts on line 4). Read that file as the source's text and quote from it. Do not fetch the page again.`
 }
 
 function verifierPrompt(t, unread) {
@@ -228,7 +231,7 @@ function verifierPrompt(t, unread) {
     coherence
       ? '2. Kind coherence: judge the list of measurements in "claim". There are no source files; quote and quote_source_id are "".'
       : `2. Read the text of every cited source in full: ${WS}/<text_path> for each cited[].text_path. ${LONG_LINES}`,
-    liveNote(t),
+    liveNote(t.tdm.filter((sid) => !unread.some((u) => u.sid === sid))),
     unread.length
       ? `The live read of ${unread.map((u) => `${u.sid} failed (${u.read.detail})`).join('; ')}. The only verdict you may give is therefore source_missing: say in explanation which statements rest on that source, and in fix_suggestion which other cited source could carry them, or that they must go.`
       : '',
@@ -257,7 +260,8 @@ function skepticPrompt(t, v) {
     coherence
       ? 'Read the prompt file in full; the list of measurements is its "claim".'
       : `Read the prompt file in full, and the text of every cited source it names: ${WS}/<text_path>. ${LONG_LINES}`,
-    liveNote(t),
+    // a supported verdict is only possible when every live read of the task was saved
+    liveNote(t.tdm),
     'Check:',
     checks.join('\n'),
     'Judge only from these files: no web search, no outside knowledge. Do not create, edit or delete any file.',
@@ -291,13 +295,13 @@ const inv = await agent(
   { label: 'inventory', phase: 'Inventory', schema: INVENTORY_SCHEMA, effort: 'low' },
 )
 if (inv === null) throw new Error('the inventory agent did not finish')
-if (inv.error) throw new Error(`reading ${DIR}/pending.jsonl failed: ${inv.error} (run \`python -m pipeline.studio paper claims-export ${REQUEST_ID}\` first)`)
+if (inv.error) throw new Error(`reading ${DIR}/pending.jsonl failed: ${inv.error} (run \`${STUDIO} paper claims-export ${REQUEST_ID}\` first)`)
 if (inv.in_verdicts_file) {
   log(`${inv.in_verdicts_file} tasks already have a line in verdicts.jsonl and are not answered again (run claims-import; if it refused the file, delete the refused lines first)`)
 }
 log(`${inv.tasks.length} tasks to answer, ${inv.tdm_sources.length} TDM-reserved sources among their citations`)
 if (!inv.tasks.length) {
-  return { workspace: WS, answered: 0, verdicts: {}, overruled_by_skeptic: 0, live_reads: [], not_answered: [], next: `python -m pipeline.studio paper claims-import ${REQUEST_ID}` }
+  return { workspace: WS, answered: 0, verdicts: {}, overruled_by_skeptic: 0, live_reads: [], not_answered: [], next: `${STUDIO} paper claims-import ${REQUEST_ID}` }
 }
 
 // ---- Live read: every TDM-reserved source once, before the verifiers that cite it ----------
@@ -429,5 +433,5 @@ return {
   overruled_by_skeptic: answered.filter((r) => r.v.verdict === 'supported' && r.s.verdict !== 'supported').length,
   live_reads: liveReport,
   not_answered: notAnswered,
-  next: `python -m pipeline.studio paper claims-import ${REQUEST_ID}`,
+  next: `${STUDIO} paper claims-import ${REQUEST_ID}`,
 }

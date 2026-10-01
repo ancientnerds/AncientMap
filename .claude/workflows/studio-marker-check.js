@@ -1,7 +1,7 @@
 export const meta = {
   name: 'studio-marker-check',
   description: 'Answer markers_check/pending.jsonl of an episode workspace: one Opus agent opens the crop and the context picture of each case-file marker and says hits or misses; appends markers_check/verdicts.jsonl',
-  whenToUse: 'studio-casefile, after python -m pipeline.studio episode markers-export <slug> and before episode markers-import <slug>. args: {"workspace": "<absolute path of STUDIO_ASSETS/episodes/<slug>>"}',
+  whenToUse: 'studio-casefile, after ./.venv/Scripts/python.exe -m pipeline.studio episode markers-export <slug> and before episode markers-import <slug>. args: {"workspace": "<absolute path of STUDIO_ASSETS/episodes/<slug>>"}',
   phases: [
     { title: 'Inventory', detail: 'pending.jsonl minus the tasks verdicts.jsonl already holds' },
     { title: 'Look', detail: 'one agent per marker' },
@@ -31,6 +31,7 @@ export const meta = {
  */
 
 const PY = './.venv/Scripts/python.exe'
+const STUDIO = `${PY} -m pipeline.studio`
 const PART = 'verdicts.part.jsonl'
 const LINES_PER_WRITE = 20
 const OPUS_RE = /^claude-opus-/
@@ -150,13 +151,13 @@ const inv = await agent(
   { label: 'inventory', phase: 'Inventory', schema: INVENTORY_SCHEMA, effort: 'low' },
 )
 if (inv === null) throw new Error('the inventory agent did not finish')
-if (inv.error) throw new Error(`reading ${DIR}/pending.jsonl failed: ${inv.error} (run \`python -m pipeline.studio episode markers-export ${SLUG}\` first)`)
+if (inv.error) throw new Error(`reading ${DIR}/pending.jsonl failed: ${inv.error} (run \`${STUDIO} episode markers-export ${SLUG}\` first)`)
 if (inv.in_verdicts_file) {
   log(`${inv.in_verdicts_file} tasks already have a line in verdicts.jsonl and are not answered again (run markers-import; if it refused the file, delete the refused lines first)`)
 }
 log(`${inv.tasks.length} markers to check`)
 if (!inv.tasks.length) {
-  return { workspace: EP, answered: 0, verdicts: {}, not_answered: [], next: `python -m pipeline.studio episode markers-import ${SLUG}` }
+  return { workspace: EP, answered: 0, verdicts: {}, not_answered: [], next: `${STUDIO} episode markers-import ${SLUG}` }
 }
 
 // ---- Look: one agent per marker -------------------------------------------------------------
@@ -219,5 +220,5 @@ return {
   verdicts,
   misses: lines.filter((l) => l.verdict === 'misses').map((l) => ({ task_id: l.task_id, explanation: l.explanation })),
   not_answered: notAnswered,
-  next: `python -m pipeline.studio episode markers-import ${SLUG}`,
+  next: `${STUDIO} episode markers-import ${SLUG}`,
 }

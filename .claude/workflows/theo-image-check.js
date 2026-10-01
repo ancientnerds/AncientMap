@@ -1,7 +1,7 @@
 export const meta = {
   name: 'theo-image-check',
   description: 'Answer images/pending.jsonl of a paper workspace: one Opus agent looks at each candidate picture; appends images/verdicts.jsonl',
-  whenToUse: 'theo-write, after python -m pipeline.studio paper images-export <id> and before paper images-import <id>. args: {"workspace": "<absolute path of STUDIO_ASSETS/papers/<request_id>>"}',
+  whenToUse: 'theo-write, after ./.venv/Scripts/python.exe -m pipeline.studio paper images-export <id> and before paper images-import <id>. args: {"workspace": "<absolute path of STUDIO_ASSETS/papers/<request_id>>"}',
   phases: [
     { title: 'Inventory', detail: 'pending.jsonl minus the tasks verdicts.jsonl already holds' },
     { title: 'Look', detail: 'one agent per candidate picture' },
@@ -25,13 +25,18 @@ export const meta = {
  *   images-import refused stays in place: delete its bad lines, then run this workflow again.
  * - Only Opus judges (owner rule): an agent that reports another model ID gets no answer
  *   written; its task stays pending and is listed in the result.
- * - An answer the import would refuse (a box outside the picture, a missing caption) is not
- *   written either; its task is listed with the reason.
+ * - An answer with a box outside the picture or a meaningful or weak picture without a caption
+ *   is not written; its task is listed with the reason. The answer schema holds a caption to
+ *   120 characters without [ or *, and the prompt asks for Latin script. The one rule the
+ *   workflow cannot check is the script itself (images.answer_check's Latin-script test is
+ *   Python, theo_citations.contains_non_latin_script): a caption in another script is refused
+ *   by `paper images-import`, which names its answer and refuses the file whole.
  * - prompt_sha256 is copied by the append command from the pending.jsonl row of the same
  *   task_id (the agent read prompts/<task_id>.txt; a task id is derived from its prompt's hash).
  */
 
 const PY = './.venv/Scripts/python.exe'
+const STUDIO = `${PY} -m pipeline.studio`
 const PART = 'verdicts.part.jsonl'
 const LINES_PER_WRITE = 20
 const KEEP = ['meaningful', 'weak']
@@ -160,13 +165,13 @@ const inv = await agent(
   { label: 'inventory', phase: 'Inventory', schema: INVENTORY_SCHEMA, effort: 'low' },
 )
 if (inv === null) throw new Error('the inventory agent did not finish')
-if (inv.error) throw new Error(`reading ${DIR}/pending.jsonl failed: ${inv.error} (run \`python -m pipeline.studio paper images-export ${REQUEST_ID}\` first)`)
+if (inv.error) throw new Error(`reading ${DIR}/pending.jsonl failed: ${inv.error} (run \`${STUDIO} paper images-export ${REQUEST_ID}\` first)`)
 if (inv.in_verdicts_file) {
   log(`${inv.in_verdicts_file} tasks already have a line in verdicts.jsonl and are not answered again (run images-import; if it refused the file, delete the refused lines first)`)
 }
 log(`${inv.tasks.length} candidate pictures to check`)
 if (!inv.tasks.length) {
-  return { workspace: WS, answered: 0, verdicts: {}, not_answered: [], next: `python -m pipeline.studio paper images-import ${REQUEST_ID}` }
+  return { workspace: WS, answered: 0, verdicts: {}, not_answered: [], next: `${STUDIO} paper images-import ${REQUEST_ID}` }
 }
 
 // ---- Look: one agent per picture ------------------------------------------------------------
@@ -236,5 +241,5 @@ return {
   answered: lines.length,
   verdicts,
   not_answered: notAnswered,
-  next: `python -m pipeline.studio paper images-import ${REQUEST_ID}`,
+  next: `${STUDIO} paper images-import ${REQUEST_ID}`,
 }
