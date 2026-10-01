@@ -280,9 +280,9 @@ FIELD_RULES_WD3 = {
         "at least to whole arcminutes. A grid reference (OSGB, UTM) is not read."
     ),
     "period_start": (
-        "period_start is the year the site's securely attested history as a site begins - its "
-        "construction, foundation or first occupation - negative for BC. The map shows only its "
-        "bucket.\n"
+        "period_start is the year a source gives for the start of the site's history as a site - "
+        "its construction, foundation or first occupation - negative for BC. The map shows only "
+        "its bucket.\n"
         "- keep: only when the field holds a value: a source dates the start into the stored "
         "value's bucket. value = the attested start year.\n"
         "- replace: a source dates the start (the field is empty, or the start lies in another "
@@ -293,7 +293,14 @@ FIELD_RULES_WD3 = {
         "Each quote must carry the date as the page states it (a year, a century, a millennium), "
         'and at least one must state your value itself: its year ("c. 2500 BC" for -2500), or its '
         'century or millennium with that word ("the 26th century BC", "the 3rd millennium BC"). A '
-        'year worked out from "4,500 years ago" or a BP date is not read.'
+        'year worked out from "4,500 years ago" or a BP date is not read.\n'
+        "What dates this site (owner rule of 2026-10-01: one source suffices): a year, century or "
+        "millennium a source gives for the start of THIS site counts also when the source hedges "
+        'it ("c.", "around", "probably", "is thought to", "vers", "vraisemblablement") - give that '
+        'year - unless the same source rejects it ("its date cannot be traced"). What does not '
+        'date it: a period word alone ("Iron Age hillfort", "an Inca site", "Neolithic"), or a '
+        'range a source gives for a whole class of monuments ("slight univallate hillforts were '
+        'built from the 8th to the 5th century BC"): then answer unresolved.'
     ),
     "site_type": (
         "site_type is one canonical type: the most specific one that holds what the sources say "
@@ -340,6 +347,10 @@ RESEARCH_WD3 = (
     "museums, universities, journals and excavation reports, Pleiades, established "
     "encyclopedias.\n"
     "\n"
+    "- A national register's own record is often readable by a plain GET where a portal, a "
+    "search page or a site restating it is not: find the record itself (e.g. Peru's tourism "
+    "inventory at consultasenlinea.mincetur.gob.pe/fichaInventario/index.aspx?cod_Ficha=<n>, "
+    "France's Merimee at pop.culture.gouv.fr/notice/merimee/<id>) and quote it, not a mirror.\n"
     "- Never use ancientnerds.com (it is this database), AI-written content farms, travel "
     "blogs that restate Wikipedia, or Wikipedia mirrors (Wikiwand, DBpedia and the like): a "
     "quote from one of them is refused.\n"
