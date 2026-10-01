@@ -315,6 +315,27 @@ def test_normalize_loudness_corrects_the_limiter_residual(tmp_path, monkeypatch)
     assert not (tmp_path / "loudness.wav").exists()
 
 
+def test_a_description_over_the_limit_is_refused_before_the_render_starts(tmp_path, monkeypatch):
+    # The description is built from the case file, the script and the compiled timeline: the
+    # render is bound to them, so shortening a statement or a credit afterwards means a new
+    # render of hours. The package would refuse it only after this one.
+    ws = ef.ready_episode(tmp_path, monkeypatch)
+    episode = json.loads(ws.config.read_text(encoding="utf-8"))
+    episode["music"]["credit"] = "Music: " + "ä" * 2600  # 5,200 bytes
+    ws.config.write_text(json.dumps(episode, ensure_ascii=False), encoding="utf-8")
+    calls = []
+    with pytest.raises(StudioError, match="description is 5.* UTF-8 bytes"):
+        render.render_episode(
+            ws,
+            runner=_runner(ws, calls),
+            loudness=lambda raw, out: 0.0,
+            auditor=lambda *a: (True, []),
+            record=lambda row: {"ok": True},
+        )
+    assert calls == []
+    assert not ws.public_dir.exists()
+
+
 @pytest.mark.parametrize("failing_step", ["the WAV encode", "the WAV measurement"])
 def test_a_failed_loudness_step_leaves_no_lossless_wav(tmp_path, monkeypatch, failing_step):
     # The probe is a float WAV of the whole episode (hundreds of MB for 20 minutes): it must

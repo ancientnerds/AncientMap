@@ -32,12 +32,13 @@ music credit may change after it.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
 from pipeline.lyra.text_sentences import split_sentences
 from pipeline.research_html_renderer import video_clock
 from pipeline.studio.casefile import CaseFile, refs_in
-from pipeline.studio.episode import EpisodeWorkspace, load_all, load_json, require_valid
+from pipeline.studio.episode import EpisodeWorkspace, Loaded, load_all, load_json, require_valid
 from pipeline.studio.errors import StudioError
 from pipeline.studio.render import CANDIDATES, link_or_copy, thumbnail_files
 from pipeline.studio.script import CHAPTER_MIN_S as SCRIPT_CHAPTER_MIN_S
@@ -166,9 +167,32 @@ def description(
     size = len(text.encode("utf-8"))
     if size > DESCRIPTION_MAX_BYTES:
         raise StudioError(
-            f"description is {size} UTF-8 bytes (max {DESCRIPTION_MAX_BYTES}); shorten it"
+            f"description is {size} UTF-8 bytes (max {DESCRIPTION_MAX_BYTES}); shorten the "
+            "evidence statements, image attributions or the music credit it is built from"
         )
     return text
+
+
+@dataclass(frozen=True)
+class PackagePlan:
+    """What `episode package` derives from the compiled timeline and the episode files and
+    can refuse: chapters, evidence timestamps and the description.
+
+    `episode render` builds it right after compiling the timeline, so a description over
+    YouTube's limit stops the episode before hours of rendering; the render is bound to the
+    case file and the script, so shortening them afterwards would mean a new render."""
+
+    chapters: list[dict[str, Any]]
+    stamps: dict[str, int]
+    description: str
+
+
+def plan_package(loaded: Loaded, timeline: dict[str, Any]) -> PackagePlan:
+    episode, script, cf = loaded.episode, loaded.script, loaded.casefile
+    chapter_list = chapters(timeline, episode["format"])
+    stamps = evidence_timestamps(script, cf, timeline)
+    text = description(script, cf, timeline, episode, chapter_list, stamps)
+    return PackagePlan(chapter_list, stamps, text)
 
 
 def check_title(title: str) -> str:
@@ -293,9 +317,8 @@ def build_package(ws: EpisodeWorkspace) -> dict[str, Any]:
     episode, script, cf = loaded.episode, loaded.script, loaded.casefile
     _require_rendered_music(episode, timeline)
     _check_thumbnails(ws)
-    chapter_list = chapters(timeline, episode["format"])
-    stamps = evidence_timestamps(script, cf, timeline)
-    text = description(script, cf, timeline, episode, chapter_list, stamps)
+    plan = plan_package(loaded, timeline)
+    chapter_list, stamps, text = plan.chapters, plan.stamps, plan.description
     titles = check_titles(episode["title_candidates"])
     tags = check_tags(episode["tags"])
     pkg = ws.package_dir

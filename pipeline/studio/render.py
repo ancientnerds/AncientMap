@@ -27,7 +27,9 @@ reaches a prop. The node scripts bundle into render/bundle/ and remove it again 
 a node script that times out is killed with its whole process tree (taskkill /T /F), and a
 failed or killed step removes render/bundle/ and render.ts's render/raw.mp4.parts/.
 Before timeline.json is rewritten, the previous render's outputs are removed, so a failed
-render leaves nothing to package; ledger.json binds the audited render to its timeline
+render leaves nothing to package; the package's description is built, and YouTube's 5,000-byte
+limit checked, as soon as the timeline is compiled (package.plan_package), because fixing it
+means editing what the render is bound to. ledger.json binds the audited render to its timeline
 (`timeline_sha256`), which `episode package` and `episode thumbnail` check, and to its word
 timings (`words_sha256`, the SRT's source), which `episode package` checks with the row's
 script and case file hashes. Those four files are hashed when the timeline is compiled and
@@ -384,6 +386,12 @@ def render_episode(
     for name in ("raw.mp4", f"{ws.slug}.mp4", *THUMBNAILS, "audit.json", "ledger.json"):
         (ws.render_dir / name).unlink(missing_ok=True)
     timeline = build_timeline(ws)
+    # What `episode package` will refuse (a description over YouTube's limit) is refused now:
+    # the render is bound to the case file and script that the fix would have to edit.
+    # Imported here because package.py imports this module.
+    from pipeline.studio.package import plan_package
+
+    plan_package(loaded, timeline)
     compiled_from = _input_hashes(ws)
     music_dir = config.video_assets() / "music"
     populate_public_dir(ws, timeline, music_dir=music_dir, fonts_dir=FONTS_DIR)

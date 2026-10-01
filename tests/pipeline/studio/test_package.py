@@ -105,6 +105,18 @@ def test_description_byte_limit_counts_utf8_bytes():
         package.description(data, cf, t, episode, [], {})
 
 
+def test_the_plan_is_what_the_render_and_the_package_both_derive(tmp_path, monkeypatch):
+    ws = ef.ready_episode(tmp_path, monkeypatch)
+    loaded = load_all(ws)
+    t = timeline.build_timeline(ws)
+    plan = package.plan_package(loaded, t)
+    assert plan.chapters == package.chapters(t, "full")
+    assert plan.stamps == package.evidence_timestamps(loaded.script, loaded.casefile, t)
+    assert plan.description == package.description(
+        loaded.script, loaded.casefile, t, loaded.episode, plan.chapters, plan.stamps
+    )
+
+
 def test_titles_and_tags():
     assert package.check_titles(["The Baalbek Stones"]) == ["The Baalbek Stones"]
     with pytest.raises(StudioError, match="title_candidates is empty"):
