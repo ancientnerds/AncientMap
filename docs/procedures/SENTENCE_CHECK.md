@@ -972,5 +972,10 @@ lane was edited.
   the verification, and a `--pilot` inside the list is the optional extra.
 - The WN pilot cannot be drawn until lane WC has cleared enough sites (1 today).
 
-**Gates measured on the final commit** (main venv; the worktree's `output/remediation` data absent): see the
-commit message and the AUDIT_LOG line the orchestrator adds.
+**Gates measured on the final commit** (main venv; the worktree's `output/remediation` data absent, so the
+data-dependent tests skip): full suite `8634 passed, 120 skipped, 57 deselected`; `ruff check` and `ruff format
+--check` clean on every changed file; the 170 `wc ...` mutation cases (`mutation_sweep.py "wc "`, 40 of them new)
+all caught and the tree byte-identical afterwards; the 2,169 check prompts of `mass-2026-09-27-01..05` rebuild
+byte for byte from this code (`prompt_sha256`); a fresh read-only `read` + `defect-sites` + `export --sites` +
+`export --wn` against production (2026-10-01, read sha256 `bfcbb8ab...b8831`) gave 126 sites / 26 batches and
+1 site / 1 batch.
