@@ -105,7 +105,8 @@ Every command below runs from the p4-pilot worktree:
     H=$M/handoff/p4-v3                     # $H-select, $H-translate, $H-review: one per stage
     ROUNDS="--plan $R4/PLAN4.v3.jsonl --run-dir $RUN --log-dir $L --searches-off"
     RUNS="--run $R4/runs/pilot4-2026-09-24 --run $R4/runs/mass-2026-09-25 --run $R4/runs/d9-2026-09-25 --run $RUN"
-    ALLOW="--allow-stamp phase4l:%"        # + each later lane that wrote a P4 site (section 10)
+    ALLOW="--allow-stamp phase4l:%"        # + each later lane that wrote a P4 site (section 10); a pattern
+                                           # added to $ALLOW has NO quotes (it is expanded unquoted)
 
 Every tool prints its own exit line (`STAGE_EXIT=`, `WRITE_EXIT=`, `ACCEPT_EXIT=`): read that line,
 never a wrapper's status (HANDOVER section 7).
@@ -403,7 +404,11 @@ gone into its build directly (one plan of 3,257 sites, 218 batches). It was buil
   `--allow-stamp`, or its rows are deviations (CHANGED LATER / MOVED, and V12 would see a new
   `raw_data` key): lane L `phase4l:%` (already in `$ALLOW`), lane WB's provenance lane
   `wb-teaser-prov-%` (it adds `_card_provenance` and nulls `_description_provenance.card`), lane
-  WC `phase4wc:%`. A superseded row is not re-verified as P4's.
+  WC `phase4wc:%`, and lane WB's disclosure correction `wb-card-disclosure-s%` (2026-10-01,
+  CARD_DESCRIPTIONS.md 5.9: it sets the one key `_card_provenance.ai_system` on 185 sites, all
+  P4-written; `verify_writes4` takes it as that one-key transition only; once the lane has run:
+  `ALLOW="$ALLOW --allow-stamp wb-card-disclosure-s%"` - never `%` alone). A superseded row is not
+  re-verified as P4's.
 - **WC and WB take only final sites** (9.3): a site of a v3 or v3d batch not yet written, or held
   `revision-too-fresh`, is still WA's - a write of its description or `raw_data` by another lane
   would stop its P4 batch at the preflight (the old value moved).

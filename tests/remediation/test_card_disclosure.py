@@ -841,6 +841,29 @@ class TestTheAcceptance:
         assert not W.moves_one_key(None, new) and not W.moves_one_key(old, None)
         assert not W.moves_one_key(old, C.reprint({**raw_of(T.SKARA, NEW), "extra": 1}))
 
+    @pytest.mark.parametrize(("before", "after"), [(1, True), (0, False), (1, 1.0)])
+    def test_moves_one_key_reads_a_value_spelled_otherwise_as_another_key(
+        self, before: Any, after: Any
+    ) -> None:
+        """Python reads 1 == True == 1.0; the journal does not: the second key moved."""
+        old = C.reprint({**raw_of(T.SKARA), "flag": before})
+        assert W.moves_one_key(old, C.reprint({**raw_of(T.SKARA, NEW), "flag": before}))
+        assert not W.moves_one_key(old, C.reprint({**raw_of(T.SKARA, NEW), "flag": after}))
+
+    def test_a_replan_of_a_corrected_site_from_the_opus_only_outcome_is_refused(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The outcomes of runs 01/04/06 still name `AI_SYSTEM_OPUS`; writing one again would undo
+        the correction, so the planner lists the site instead."""
+        monkeypatch.setattr(W.CORRECTED, "SITE_IDS", (T.SKARA,))
+        refused = W.classify(outcome(), TT.live(), {}, RUN)
+        assert isinstance(refused, W.Verdict) and refused.reason == W.DISCLOSURE_CORRECTED
+        # the same outcome rebuilt with the current disclosure is planned, a site off the list is untouched
+        rebuilt = TT.outcome(T.SKARA, provenance={**OPUS_PROV, "ai_system": NEW})
+        assert not isinstance(W.classify(rebuilt, TT.live(), {}, RUN), W.Verdict)
+        monkeypatch.setattr(W.CORRECTED, "SITE_IDS", ())
+        assert not isinstance(W.classify(outcome(), TT.live(), {}, RUN), W.Verdict)
+
 
 # ------------------------------------------------------------------------------ lane WB's accept
 OPUS_PROV = {**T.teaser(T.SKARA), "ai_system": OLD}

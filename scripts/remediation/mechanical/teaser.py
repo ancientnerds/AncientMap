@@ -97,6 +97,7 @@ from phase4 import model4 as M  # noqa: E402 - the two disclosures (AI_SYSTEM_OP
 from phase4 import write4 as W4  # noqa: E402 - the exit line
 from prod_write import send  # noqa: E402
 
+from mechanical import card_disclosure_list as CORRECTED  # noqa: E402 - the 185 sites' pinned ids
 from mechanical.citations import canonical, premise_of, reprint  # noqa: E402
 from mechanical.lane import (  # noqa: E402
     CARD_STATS,
@@ -212,7 +213,10 @@ def moves_one_key(old: str | None, new: str | None) -> bool:
     if old is None or new is None:
         return False
     before = json.loads(old)
-    return names_opus_only(before) and correct_disclosure(before) == json.loads(new)
+    # canonical text, not dict equality: Python reads 1 == True == 1.0, the journal does not
+    return names_opus_only(before) and canonical(reprint(correct_disclosure(before))) == canonical(
+        new
+    )
 
 
 def corrected_cell(
@@ -421,6 +425,7 @@ NOT_CURATED = "not-a-curated-site"
 RAW_DATA_NOT_OBJECT = "raw-data-not-an-object"
 NOT_REPRINTED = "raw-data-not-reprinted"
 NOTHING_TO_CHANGE = "nothing-to-change"
+DISCLOSURE_CORRECTED = "disclosure-corrected-since"
 REFUSAL_MEANING = {
     NOT_VERIFIED: "the accepted card carries no VERIFIED web verification (an outcome written "
     "before the verify stage existed): never written - ask the site again in a new run",
@@ -433,6 +438,9 @@ REFUSAL_MEANING = {
     "journal-chain-broken": "a cell's journal is not continuous",
     "journal-disagrees": "a cell's journal does not end at the live value",
     NOTHING_TO_CHANGE: "the site already holds exactly this card and provenance",
+    DISCLOSURE_CORRECTED: "the outcome names the Opus-only disclosure of a card a Sonnet agent "
+    "wrote (lane WB's disclosure correction, CARD_DESCRIPTIONS.md 5.9): writing it again would "
+    "undo the correction - rebuild the outcome with the current ai_system first",
 }
 
 
@@ -525,6 +533,12 @@ def classify(
     # only a VERIFIED card is written; an OUTCOMES.jsonl from before the verify stage has no key
     if outcome["status"] == ACCEPTED and outcome.get("verification") != CP.VERIFIED:
         return _refused(site_id, name, NOT_VERIFIED, "no VERIFIED web verification")
+    if (
+        outcome["status"] == ACCEPTED
+        and site_id in CORRECTED.SITE_IDS
+        and outcome["provenance"]["ai_system"] == M.AI_SYSTEM_OPUS
+    ):
+        return _refused(site_id, name, DISCLOSURE_CORRECTED, "the outcome names the Opus-only text")
     if live is None:
         return _refused(site_id, name, NOT_CURATED, "the export did not return the site")
     if live.scope_status == RETIRED:

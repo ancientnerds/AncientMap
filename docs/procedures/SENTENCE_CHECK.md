@@ -294,7 +294,8 @@ handoffs are the names of this run; numbering continues past every earlier WC pl
     # raw_data._card_provenance into the sites WC made final, and without it that is CHANGED LATER
     V="$PY $M/tools/verify_writes4.py --lane p4wc --allow-stamp wb-teaser-prov-%"
     # once lane WB's disclosure correction has run (CARD_DESCRIPTIONS.md 5.9) add that lane's own stamp
-    # pattern - by name, never `%`: V="$V --allow-stamp 'wb-card-disclosure-s%'"
+    # pattern - by name, never `%`, and WITHOUT quotes (V is expanded unquoted, a quote would stay in
+    # the argument and match no stamp): V="$V --allow-stamp wb-card-disclosure-s%"
 
 **0. Preconditions.** WA's last P4 step is accepted (the read must see WA's texts). The gates of
 section 7 are green on the merged tree. No run built before 2026-09-27's verify stage is written:

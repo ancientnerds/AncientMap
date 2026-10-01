@@ -847,9 +847,14 @@ for its one key, and nothing else:
 # `step` column of output/remediation/mechanical_card_disclosure/LIST.jsonl): the correction's journal
 # row is read as the one-key transition from exactly what the step wrote (teaser.corrected_cell)
 for N in $(seq 7 21); do $PY $MW accept --step $N; done   # each ACCEPT_EXIT=0 and "RESULT: 0 deviation(s)"
-# verify_writes4 for lane p4 / p4wc: the stamp pattern of THIS lane beside lane WB's, never `%`
+# verify_writes4 for lane p4 AND p4wc (all 185 sites carry a P4 description - 180 lane W, 5 lane S,
+# read-only 2026-10-01 - and every p4 acceptance is cumulative): the stamp pattern of THIS lane beside
+# lane WB's, never `%`. As a direct command the quotes are right; inside a variable that is expanded
+# unquoted ($V, $ALLOW) leave them out.
 $PY output/remediation/tools/verify_writes4.py --lane p4wc --plan <PLAN.jsonl> \
   --allow-stamp 'wb-teaser-prov-%' --allow-stamp 'wb-card-disclosure-s%'
+$PY output/remediation/tools/verify_writes4.py --lane p4 <the run arguments of PHASE4_V3_RUNBOOK.md 10> \
+  $ALLOW --allow-stamp 'wb-teaser-prov-%' --allow-stamp 'wb-card-disclosure-s%'
 ```
 
 `teaser.py accept` takes the correction only as ONE journal row of the correction lane's own stamp
@@ -864,6 +869,22 @@ takes a pattern of stamps, and reads this lane's links by key as well (`supersed
 second key, or did not start from the Opus-only value, stays CHANGED LATER. The pattern still names this
 lane only. Besides that, the lane's own read-back (0 journal rows that changed anything but the key) and
 `card_disclosure.py accept` (journal old -> new is the one-key transition, plan and journal alike) prove it.
+
+**A re-plan never puts the old string back.** The outcomes of runs 01/04/06 still hold the Opus-only
+provenance (the list requires it to equal the step's). `teaser.classify` therefore refuses an accepted
+outcome of one of the 185 listed sites whose `ai_system` is `AI_SYSTEM_OPUS` (reason
+`disclosure-corrected-since`, a SKIPPED row, nothing written): after undoing a WB step that holds corrected
+sites (this lane's ROLLBACK first, see below) the outcomes of those sites have to be rebuilt with the
+current `ai_system` before the step can be planned again, or this correction re-run under a new lane.
+
+**Open owner decision: the checkers and verifiers.** The lane keeps to the 185 cards a Sonnet agent
+*wrote*. Cards an Opus agent wrote but a Sonnet agent checked and verified keep the Opus-only string:
+**1,140** live cards (measured 2026-10-01, census joined to the accepted outcomes: run 01 238 checked and
+verified by Sonnet plus 151 verified by Sonnet, run 04 389, run 06 362; run 03 and the pilots were Opus
+throughout). New writes disclose both models whoever wrote the text (`AI_SYSTEM`), so the two groups now
+read differently. Whether a provenance should name every model that checked or verified it is the owner's
+call (HUMAN_ONLY); if yes, extend `build_list` to "any Sonnet agent wrote, rewrote, checked or verified"
+(a new pinned list and a new lane: this one's list is pinned at 185).
 
 **Undo** (only as a decision; the lane's stamp is single-use, so a second attempt needs a new lane):
 
