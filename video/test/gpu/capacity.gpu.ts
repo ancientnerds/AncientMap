@@ -6,11 +6,13 @@
  * must fit", and `episode check` accepts exactly what the schemas accept. A limit
  * above what the layout can draw therefore fails only at `episode render`, after
  * the voice and the captures. test/capacity.ts builds an episode with every
- * block on both stages and every drawn string at its maxLength; this runs the
- * real scripts/lint.ts on it (the NVIDIA proved by the script, the brand fonts
- * in) and requires that nothing overflows, overlaps or leaves the safe area.
- * When it fails, lower the limit in schemas.ts (or give the text more room), run
- * `npm run registry`, and mirror the registry in tests/pipeline/studio/script_fixtures.py.
+ * block on both stages and every drawn string at its maxLength (on the hook stage,
+ * which is 140 px shorter, at the hookMaxLength / hookMaxItems the registry records
+ * and `episode check` applies to a hook beat); this runs the real scripts/lint.ts on
+ * it (the NVIDIA proved by the script, the brand fonts in) and requires that nothing
+ * overflows, overlaps or leaves the safe area. When it fails, lower the limit in
+ * schemas.ts (or give the text more room), run `npm run registry`, and mirror the
+ * registry in tests/pipeline/studio/script_fixtures.py.
  */
 import { spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -73,7 +75,7 @@ function lintCapacity(): { status: number | null; output: string; byScene: Map<s
 }
 
 describe('the capacity episode in a real browser', () => {
-  it('draws every block, on the full and on the hook stage, with every drawn string at its maxLength, without one layout violation', () => {
+  it('draws every block, on the full and on the hook stage, with every drawn string at its maxLength (hook capacity on the hook stage), without one layout violation', () => {
     const { status, output, byScene } = lintCapacity()
     expect(output).toMatch(/^gpu: ANGLE \(NVIDIA, NVIDIA GeForce RTX 3080/m)
     expect(Object.fromEntries(byScene)).toEqual({})

@@ -29,8 +29,13 @@ export type RegistryEntry = { map: boolean; platform: boolean; drawn: string[]; 
 /** The props that hold a resolved capture (C6: a script's {"$capture": id}). */
 export const CAPTURE_PROPS = ['clip', 'map', 'page'] as const
 
-const str = (minLength = 1, maxLength?: number): Schema =>
-  maxLength === undefined ? { type: 'string', minLength } : { type: 'string', minLength, maxLength }
+/** `hookMaxLength`: what the box holds under hook captions, where the stage is 140 px shorter (src/schema.ts). */
+const str = (minLength = 1, maxLength?: number, hookMaxLength?: number): Schema => ({
+  type: 'string',
+  minLength,
+  ...(maxLength === undefined ? {} : { maxLength }),
+  ...(hookMaxLength === undefined ? {} : { hookMaxLength }),
+})
 const num = (minimum?: number, maximum?: number): Schema => ({
   type: 'number',
   ...(minimum === undefined ? {} : { minimum }),
@@ -38,11 +43,13 @@ const num = (minimum?: number, maximum?: number): Schema => ({
 })
 const int = (minimum?: number, maximum?: number): Schema => ({ ...num(minimum, maximum), type: 'integer' })
 const oneOf = (values: readonly string[]): Schema => ({ type: 'string', enum: values })
-const arr = (items: Schema, minItems?: number, maxItems?: number): Schema => ({
+/** `hookMaxItems`: how many items the layout holds under hook captions (src/schema.ts). */
+const arr = (items: Schema, minItems?: number, maxItems?: number, hookMaxItems?: number): Schema => ({
   type: 'array',
   items,
   ...(minItems === undefined ? {} : { minItems }),
   ...(maxItems === undefined ? {} : { maxItems }),
+  ...(hookMaxItems === undefined ? {} : { hookMaxItems }),
 })
 const obj = (properties: Record<string, Schema>, required: string[] = Object.keys(properties), description?: string): Schema => ({
   type: 'object',
@@ -67,6 +74,15 @@ const TONE = oneOf(TONES)
  * Free-standing labels (a scale object, a diagram element, a timeline event, a map
  * pin) have no box: how many characters they take depends on where the script puts
  * them, and the layout lint at render time judges that.
+ *
+ * Under hook captions the stage is 140 px shorter (540 px, not 680) and some boxes
+ * hold less: hookMaxLength and hookMaxItems (src/schema.ts) are that capacity, and
+ * `episode check` applies them to a beat flagged hook (the renderer, to a scene a
+ * hook caption is on screen in). A block has one number per box, the strictest of
+ * its layouts: an EvidenceCard holds 88 / 165 characters of statement / quote beside
+ * no image and 68 / 134 beside one, so 68 / 134; a claim board of five claims holds
+ * a `by` line, six do not, and so on. test/gpu/capacity.gpu.ts proves every one on
+ * the stage it is for, test/fixtures/capacity-hook-limits.json pins them.
  */
 /** One line of a heading(48) title across the stage (1728 px of Orbitron, upper case). */
 const TITLE = str(1, 44)
@@ -96,18 +112,20 @@ export const MEDIA = obj({
 })
 
 /** Case-file evidence, resolved (C6); length limits are per block, where the text must fit. */
-export function evidenceSchema(limits: { statement?: number; quote?: number; title?: number; locator?: number } = {}): Schema {
+export function evidenceSchema(
+  limits: { statement?: number; quote?: number; title?: number; locator?: number; hookStatement?: number; hookQuote?: number } = {},
+): Schema {
   return obj({
     id: ID,
     claim_id: ID,
     kind: oneOf(['fact', 'quote', 'quantity', 'date', 'image', 'place']),
-    statement: str(1, limits.statement),
+    statement: str(1, limits.statement, limits.hookStatement),
     source: obj({
       url: str(1),
       title: str(1, limits.title),
       tier: int(0),
       license: str(0),
-      quote: str(0, limits.quote),
+      quote: str(0, limits.quote, limits.hookQuote),
       locator: str(0, limits.locator),
     }),
     paper_anchor: { type: ['string', 'null'] },
@@ -254,9 +272,10 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     // the quote five lines of mono 32 px, the title one mono 24 px line (80 characters without
     // the image), and the source line, 72 characters of 18 px caps, holds a 16-character
     // hostname, "tier 1", "paper #ev-01" and three separators beside a locator of 26. Under
-    // hook captions the stage is 140 px shorter and less fits: test/capacity.ts HOOK_LIMITS.
+    // hook captions the stage is 140 px shorter: the statement holds 88 characters beside no image
+    // and 68 beside one, the quote 165 and 134 (the hook limits are the smaller).
     props: obj(
-      { evidence: evidenceSchema({ statement: 100, quote: 220, title: 66, locator: 24 }), image: MEDIA },
+      { evidence: evidenceSchema({ statement: 100, quote: 220, title: 66, locator: 24, hookStatement: 68, hookQuote: 134 }), image: MEDIA },
       ['evidence'],
       'One verified evidence item; cues highlight <evidence id> (quote types on), stamp <evidence id>',
     ),
@@ -269,7 +288,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     // work line, "<attribution>, <title>", is one 30 px mono line of 77 characters: 32 + 2 + 43.
     // The meta line (locator, hostname, tier) holds 94 characters of 20 px caps.
     props: obj(
-      { evidence: evidenceSchema({ statement: 160, quote: 320, title: 43, locator: 24 }), attribution: str(1, 32) },
+      { evidence: evidenceSchema({ statement: 160, quote: 320, title: 43, locator: 24, hookQuote: 230 }), attribution: str(1, 32) },
       ['evidence'],
       'A verbatim passage (texts and traditions, or a page that cannot be captured); cue highlight <evidence id>',
     ),
@@ -279,7 +298,8 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     platform: false,
     drawn: ['title', 'claims[].label', 'claims[].by'],
     props: obj(
-      { claims: arr(CLAIM, 1, 6), title: TITLE },
+      // rows are floor(450 / n) px under hook captions: a `by` line and a label line fit five rows, not six
+      { claims: arr(CLAIM, 1, 6, 5), title: TITLE },
       ['claims'],
       'The claims under test; introduce/status cues (any scene) drive it; cue highlight <claim id>',
     ),
@@ -293,7 +313,8 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
         hypotheses: arr(str(1, 40), 2, 2),
         start: { ...arr(int(0, 100), 2, 2), description: 'Split before the first meter cue; sums to 100' },
         title: TITLE,
-        note: str(1, 110),
+        // under hook captions the stack of labels, numbers, words and bar leaves no room for a note
+        note: str(1, 110, 0),
       },
       ['hypotheses', 'start'],
       'The probability meter; meter cues (any scene) move it',
@@ -336,7 +357,8 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
         unitLabel: str(1, 36),
         // the legend column is 480 px: one 30 px mono label line (26 characters), and three entries end above the basis line
         columns: int(5, 40),
-        groups: arr(obj({ id: ID, count: int(1, 400), label: str(1, 26), tone: TONE }), 1, 3),
+        // under hook captions the legend ends 394 px below its top: two entries
+        groups: arr(obj({ id: ID, count: int(1, 400), label: str(1, 26), tone: TONE }), 1, 3, 2),
       },
       ['title', 'basis', 'unitLabel', 'groups'],
       'Counts as lit unit squares (one block = 80 buses); cue show <group id>',
@@ -370,6 +392,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
           ),
           2,
           8,
+          6, // under hook captions 354 px hold six rows of a 53 px pitch
         ),
       },
       ['title', 'unit', 'basis', 'bars'],
@@ -441,7 +464,8 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     drawn: ['title', 'items[].text', 'note'],
     props: obj(
       // an item is one 32 px mono line of 1386 px when five rows share the card (fewer rows take two lines)
-      { title: LIST_TITLE, items: arr(obj({ id: ID, text: str(1, 72) }), 1, 5), note: str(1, 110) },
+      // under hook captions a note leaves four rows (floor(242 / n) px) a 40 px line
+      { title: LIST_TITLE, items: arr(obj({ id: ID, text: str(1, 72) }), 1, 5, 4), note: str(1, 110) },
       ['title', 'items'],
       'A short list, e.g. what would change our mind; cue show <item id>',
     ),

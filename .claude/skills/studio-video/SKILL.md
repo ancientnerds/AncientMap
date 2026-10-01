@@ -92,11 +92,13 @@ written `studio …` below. Exit 0 = ok, 1 = a check failed (`episode check`, `e
 - **ShareCard is the end card**: only the last beat, the one place the link appears in the picture.
 - **Hook**: at most 32 s; burned-in captions exist only there. A hook word, upper-cased with its
   punctuation, has at most 24 characters (`HOOK_LINE_MAX_CHARS`). Under hook captions the stage is
-  140 px shorter, and the length limits `episode check` enforces are those of the full stage: the
-  render lint also refuses what a hook beat cannot host, whatever the text: an EvidenceCard whose
-  `statement` is over 88 characters (68 with an image) or whose `quote` is over 165 (134), a
-  QuoteCard `quote` over 230, six claims with a `by` line, five list items with a note, more than
-  six bars, three unit groups, a Meter with a note. Put such a block after the hook, or cut it down.
+  140 px shorter and some boxes hold less, so `episode check` holds a hook beat to the registry's
+  hook limits (`hookMaxLength`, `hookMaxItems`) and says "on a hook beat": an EvidenceCard
+  `statement` of at most 68 characters and `quote` of 134, a QuoteCard `quote` of 230, at most five
+  claims on a ClaimBoard, four items on a ListCard, six bars, two unit groups, and no Meter `note`.
+  Each is the strictest of the block's layouts (an EvidenceCard without an image holds 88 and 165,
+  a list without a note five items), so a card whose text does not fit goes after the hook, or its
+  text gets cut down; the case file's statement and quote stay as they are.
 - **Glyph rule** (#32): only drawn strings are checked (the registry's `drawn` props, capture
   credits and place and pin labels, hook captions, chapter titles, credit lines, thumbnail
   teasers), and each character also in upper case: `ƒ` draws as `Ƒ`, which has no glyph, so it

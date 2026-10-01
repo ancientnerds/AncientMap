@@ -42,7 +42,9 @@ string the renderer will draw (the props at the block's registry `drawn` paths, 
 credits and its place and pin labels, hook captions, credit lines, chapter titles, thumbnail
 teasers) must lie in the brand fonts' glyphs (glyphs.py, the renderer's checkBlocks rule; owner
 decision 32: only drawn strings, so an original quote inside a captured page and the page's own
-<title> are allowed), each hook word fits one caption line (HOOK_LINE_MAX_CHARS), and only the
+<title> are allowed), each hook word fits one caption line (HOOK_LINE_MAX_CHARS), a hook beat's
+props also keep the registry's hookMaxLength / hookMaxItems (the stage under the captions is 140 px
+shorter, so a card holds less there; the render lint refuses what exceeds them), and only the
 last beat may be the ShareCard end card, the one place the link appears in the picture. A
 `site_ids` key belongs to a globe distribution take only. Checks that need a
 capture not yet recorded are reported as deferred (never skipped) and run after
@@ -955,7 +957,9 @@ def validate_script(
                 report.deferred.append(f"{bid}: props not checked yet ({exc})")
                 deferred = True
             else:
-                schema = props_errors(entry["props"], candidate)
+                # a hook beat is drawn under the captions: the stage is 140 px shorter and the
+                # registry's hook limits (what the lint refuses) bind
+                schema = props_errors(entry["props"], candidate, hook=beat.get("hook", False))
                 report.errors.extend(f"{bid}: {p}" for p in schema)
                 props = None if schema else candidate
         if entry["map"]:

@@ -18,13 +18,15 @@
  * Garamond, 0.420 against 0.400; the monospace fonts do not care): a limit that
  * fits the filler leaves room for real text.
  *
- * Two kinds of layout limit are not string lengths and are not proved here:
- * - Free-standing labels (a scale object, a diagram element, a timeline event, a
- *   map pin) take the room the script gives them. The skeletons space them out
- *   (COMPLETE); a crowded scene is the layout lint's to refuse at render time.
- * - Under hook captions the stage is 140 px shorter (540 px). Some blocks cannot
- *   host their widest layout there at all (HOOK_LAYOUT), and the cards whose text
- *   wraps hold less than the schema limit that the full stage proves (HOOK_LIMITS).
+ * Under hook captions the stage is 140 px shorter (540 px) and some boxes hold less:
+ * the registry records that capacity (hookMaxLength, hookMaxItems; src/schema.ts), and
+ * `episode check` refuses a hook beat above it. The hook scenes of this episode are
+ * drawn at those numbers instead of the schema's, and the lint must still be clean.
+ *
+ * One kind of layout limit is not a string length and is not proved here: free-standing
+ * labels (a scale object, a diagram element, a timeline event, a map pin) take the room
+ * the script gives them. The skeletons space them out (COMPLETE); a crowded scene is
+ * the layout lint's to refuse at render time.
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -33,7 +35,7 @@ import { crc32, deflateSync } from 'node:zlib'
 import { drawnStrings } from '../src/blocks'
 import { REGISTRY_BLOCKS } from '../src/blocks/schemas'
 import { LOCAL_VERBS } from '../src/timeline'
-import { schemaAt } from './registryHelpers'
+import { schemaAt, schemaNodes } from './registryHelpers'
 
 /** The hostname of the evidence sources: longer than most (jstor.org, dainst.org), shorter than journals.sagepub.com. */
 const HOST = 'researchgate.net'
@@ -101,25 +103,43 @@ function resize(props: Json, key: string, n: number): void {
 /** The pattern of a drawn path with its array indexes as `[]`: "props.claims[2].label" -> "claims[].label". */
 const patternOf = (path: string): string => path.replace(/^props\./, '').replace(/\[\d+\]/g, '[]')
 
+/** How many items the array at `path` of `block`'s props holds: the schema's maxItems, on the hook stage its hookMaxItems. */
+function itemsOf(block: string, path: string, hook: boolean): number {
+  const schema = schemaAt(REGISTRY_BLOCKS[block].props, path)
+  const n = (hook ? schema?.hookMaxItems : undefined) ?? schema?.maxItems
+  if (n === undefined) throw new Error(`${block}: ${path} has no maxItems: its widest layout cannot be built`)
+  return n
+}
+
+/** Remove the optional string at `path` of `root`. */
+function removeAt(root: Json, path: string): void {
+  const keys = pathKeys(path)
+  let at = root as unknown as Record<string | number, unknown>
+  for (const key of keys.slice(0, -1)) at = at[key] as Record<string | number, unknown>
+  delete at[keys[keys.length - 1]]
+}
+
 /**
- * Every drawn string of `props` set to its schema maxLength of filler (or to the
- * length `limits` gives its pattern), an enum string to its longest value. A drawn
- * string with neither is an error: its text cannot be proved to fit.
+ * Every drawn string of `props` set to its schema maxLength of filler (on the hook stage to
+ * its hookMaxLength, and a string with a hookMaxLength of 0 removed: it cannot be shown
+ * there), an enum string to its longest value. A drawn string with none of these is an
+ * error: its text cannot be proved to fit.
  */
-export function fillDrawn(block: string, props: Json, limits: Record<string, number> = {}): void {
+export function fillDrawn(block: string, props: Json, hook: boolean): void {
   const entry = REGISTRY_BLOCKS[block]
   for (const pattern of entry.drawn) ensurePath(props, pattern)
+  const absent: string[] = []
   for (const [path] of drawnStrings(props, entry.drawn, 'props')) {
     const schema = schemaAt(entry.props, patternOf(path))
     if (!schema) throw new Error(`${block}: no schema for ${path}`)
-    const limit = limits[patternOf(path)]
-    if (limit !== undefined) {
-      if (schema.maxLength === undefined || limit > schema.maxLength) throw new Error(`${block}: ${path}: the stage limit ${limit} is not below the schema's ${schema.maxLength}`)
-      setAt(props, path, fill(limit))
-    } else if (schema.enum) setAt(props, path, [...schema.enum].map(String).sort((a, b) => b.length - a.length)[0])
+    const limit = hook ? schema.hookMaxLength : undefined
+    if (limit === 0) absent.push(path)
+    else if (limit !== undefined) setAt(props, path, fill(limit))
+    else if (schema.enum) setAt(props, path, [...schema.enum].map(String).sort((a, b) => b.length - a.length)[0])
     else if (schema.maxLength !== undefined) setAt(props, path, fill(schema.maxLength))
     else throw new Error(`${block}: ${path} is drawn but has no maxLength: its text cannot be proved to fit`)
   }
+  for (const path of absent) removeAt(props, path)
 }
 
 /** The hostname every evidence source of the capacity episode has. */
@@ -143,22 +163,22 @@ const VARIANTS: Record<string, Variant[]> = {
   // the most rows: the row height, so the label font and the lines of a label, shrink with every claim
   ClaimBoard: [
     { name: '1 claim', props: () => undefined },
-    { name: 'most claims', props: (p, hook) => resize(p, 'claims', hook ? 5 : 6) },
+    { name: 'most claims', props: (p, hook) => resize(p, 'claims', itemsOf('ClaimBoard', 'claims', hook)) },
   ],
   ListCard: [
     { name: '1 item', props: () => undefined },
-    { name: 'most items', props: (p, hook) => resize(p, 'items', hook ? 4 : 5) },
+    { name: 'most items', props: (p, hook) => resize(p, 'items', itemsOf('ListCard', 'items', hook)) },
   ],
   BarChart: [
     { name: '3 bars', props: () => undefined },
-    { name: 'most bars', props: (p, hook) => resize(p, 'bars', hook ? 6 : 8) },
+    { name: 'most bars', props: (p, hook) => resize(p, 'bars', itemsOf('BarChart', 'bars', hook)) },
   ],
   UnitGrid: [
     { name: '1 group', props: () => undefined },
     {
       name: 'most groups',
       props: (p, hook) => {
-        resize(p, 'groups', hook ? 2 : 3)
+        resize(p, 'groups', itemsOf('UnitGrid', 'groups', hook))
         for (const g of p.groups as Json[]) g.count = 20
       },
     },
@@ -188,37 +208,29 @@ const COMPLETE: Record<string, (p: Json) => void> = {
   },
 }
 
-/**
- * What the hook stage cannot host of the widest layout, whatever the text. Under hook captions
- * the stage is 540 px high (680 on the full stage):
+/*
+ * What the hook stage holds, as the lint measured it on the RTX 3080 (2026-10-01): under hook
+ * captions the stage is 540 px high (680 on the full stage), and blocks/schemas.ts records the
+ * result as hookMaxLength / hookMaxItems, which this episode draws (VARIANTS, fillDrawn):
  * - ClaimBoard rows are floor(450 / n) px: at 6 rows a claim's `by` line and one label line need
- *   62 px of the 49 the label box has, so five claims are the most (VARIANTS);
+ *   62 px of the 49 the label box has, so five claims are the most;
  * - ListCard rows are floor(242 / n) px with a note: five rows leave a 36 px box for a 40 px
- *   line, so four items are the most (VARIANTS);
+ *   line, so four items are the most;
  * - a BarChart row needs a 53 px pitch for its 37 px line (the content height of JetBrains Mono
- *   at 28 px): 354 px hold six bars, not seven or eight (VARIANTS);
+ *   at 28 px): 354 px hold six bars, not seven or eight;
  * - a UnitGrid legend entry is 127 px (a 72 px number, one 30 px label line) plus a 32 px gap, and
  *   the legend ends where the basis line starts, 394 px below its top under hook captions: two
- *   groups (VARIANTS), where the full stage holds three (the schema's maxItems);
+ *   groups, where the full stage holds three;
  * - the Meter's stack of labels, numbers, words, bar and note is 514 px, the stage under it 450:
- *   the note runs into the captions, so a Meter under hook captions has none.
+ *   the note runs into the captions, so a Meter under hook captions has none (hookMaxLength 0);
+ * - the cards whose text wraps hold less: an EvidenceCard 88 characters of statement and 165 of
+ *   quote beside no image and 68 and 134 beside one, a QuoteCard 230 of quote.
+ * A block has one number per box, the strictest of its layouts (68 and 134 for an EvidenceCard),
+ * so a hook card without an image, a board without `by` lines or a list without a note is held
+ * to the capacity of its widest layout: `episode check` cannot see which layout a scene gets.
  */
-const HOOK_LAYOUT: Record<string, (p: Json) => void> = {
-  Meter: (p) => delete p.note,
-}
 
-/**
- * The wrapping texts that hold less under hook captions than the schema limit, which the full
- * stage proves: pattern -> characters, measured by this test's own lint run (the lint refuses
- * more). The schema cannot say so: a limit is per block, not per stage.
- */
-export const HOOK_LIMITS: Record<string, Record<string, number>> = {
-  'EvidenceCard.noimage': { 'evidence.statement': 88, 'evidence.source.quote': 165 },
-  'EvidenceCard.withimage': { 'evidence.statement': 68, 'evidence.source.quote': 134 },
-  QuoteCard: { 'evidence.source.quote': 230 },
-}
-
-/** The key of a block's layout variant in HOOK_LIMITS and in the scene ids: "EvidenceCard.noimage". */
+/** The key of a block's layout variant in the scene ids: "EvidenceCard.noimage". */
 export const variantKey = (block: string, variant: string): string => [block, variant.replace(/\W/g, '')].filter(Boolean).join('.')
 
 /** Frames per scene: long enough for the typed quotes and the groups of a UnitGrid, short enough for the clips of the fixtures. */
@@ -241,6 +253,22 @@ export function drawnLimits(): Record<string, Record<string, number | 'enum'>> {
   )
 }
 
+/**
+ * The hook-stage capacity of every box that has one: block -> path -> characters (hookMaxLength)
+ * or, as `<path> (items)`, items (hookMaxItems). A path is a drawn pattern's ("evidence.statement")
+ * or, for an array, its property ("claims").
+ */
+export function hookLimits(): Record<string, Record<string, number>> {
+  const byBlock = Object.entries(REGISTRY_BLOCKS).map(([block, entry]): [string, Record<string, number>] => {
+    const limits: [string, number][] = schemaNodes(entry.props).flatMap(([path, schema]): [string, number][] => [
+      ...(schema.hookMaxLength === undefined ? [] : [[path, schema.hookMaxLength] as [string, number]]),
+      ...(schema.hookMaxItems === undefined ? [] : [[`${path} (items)`, schema.hookMaxItems] as [string, number]]),
+    ])
+    return [block, Object.fromEntries(limits)]
+  })
+  return Object.fromEntries(byBlock.filter(([, limits]) => Object.keys(limits).length > 0))
+}
+
 export type CapacityCase = { id: string; block: string; variant: string; hook: boolean }
 
 /** A scene id is "<block>[.<variant>].<full|hook>": the lint's violation ids name it ("PhotoPlate.hook:lt"). */
@@ -261,8 +289,7 @@ export function capacityTimeline(): CapacityTimeline {
         const props = clone(skeleton.props)
         COMPLETE[block]?.(props)
         variant.props(props, hook)
-        fillDrawn(block, props, hook ? HOOK_LIMITS[key] : undefined)
-        if (hook) HOOK_LAYOUT[block]?.(props)
+        fillDrawn(block, props, hook)
         if ('evidence' in props) evidenceWithHost(props)
         const durationInFrames = DURATION[block] ?? skeleton.durationInFrames
         const id = `${key}.${hook ? 'hook' : 'full'}`

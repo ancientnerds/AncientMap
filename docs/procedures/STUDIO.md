@@ -37,7 +37,7 @@ file and the code disagree, the code is right and this file is stale: fix it.
   `theo-image-check.js`, `studio-casefile-verify.js` and `studio-marker-check.js` (I3). The skills hold
   the step-by-step session; this runbook holds the background, the gates and the recovery.
 - **Workstation proofs:** on 2026-10-01 `doctor` reported every probe ok, `npm run test:gpu` passed
-  (10 tests in 3 files, about 95 s) and one real CUDA float16 transcription ran (section 1.3). The
+  (10 tests in 3 files, about 120 s) and one real CUDA float16 transcription ran (section 1.3). The
   smoke render (plan D Task 22) and the real captures (plan D Task 36) have run on this workstation;
   they run again after any change to `video/` or `pipeline/studio/capture/` (index I8, step 1).
 
@@ -380,12 +380,17 @@ Rules the checks enforce (script, case file, captures):
 - Every string a block draws has a `maxLength` in the registry, the measured capacity of its box (a
   lower third's title 24 characters, a card's `statement` 100 and `quote` 220, an evidence source's
   `title` 66 and `locator` 24, ...), so that `episode check` refuses text the render lint would
-  refuse. `video/test/gpu/capacity.gpu.ts` proves it on the workstation by linting every block on
-  both stages with every drawn string at its limit; `video/test/fixtures/capacity-limits.json` pins
-  the limits it held for, and CI fails when the registry differs. Not covered by a static limit:
-  free-standing labels (a scale object, a diagram element, a timeline event, a map pin), which take
-  the room the script gives them, and the hook stage (140 px shorter), where the lint also refuses
-  what does not fit (the numbers are in the studio-video skill).
+  refuse. A hook beat is drawn under the captions on a stage 140 px shorter, where some boxes hold
+  less: the registry also records `hookMaxLength` / `hookMaxItems` (an EvidenceCard `statement` 68 and
+  `quote` 134, a QuoteCard `quote` 230, at most 5 claims, 4 list items, 6 bars, 2 unit groups, no Meter
+  `note`; each the strictest layout of its block) and `episode check` applies them to a beat flagged
+  `hook` (the renderer's block checks, to a scene a hook caption is on screen in).
+  `video/test/gpu/capacity.gpu.ts` proves it on the workstation by linting every block on
+  both stages with every drawn string at its limit (the hook stage at its hook capacity);
+  `video/test/fixtures/capacity-limits.json` and `capacity-hook-limits.json` pin the limits it held
+  for, and CI fails when the registry differs. Not covered by a static limit: free-standing labels
+  (a scale object, a diagram element, a timeline event, a map pin), which take the room the script
+  gives them; the render lint judges a crowded scene.
 - No title card and no agent block. The ShareCard is the end card: the last beat only.
 - A full episode has 3-5 platform moments (a slice any number); every platform moment, in either
   format, lasts 5-15 s.
@@ -546,7 +551,7 @@ really uses the NVIDIA.
 Checks only the workstation can run (CI never proves the capture and render path): `npm run test:gpu`
 in `video/` (3 files, 10 tests: the layout lint in a real browser on the NVIDIA, every block at its
 length limits, and a crashed and a closed render tab that each cancel the run at once, owner Q17;
-about 95 s, measured 2026-10-01), the
+about 120 s, measured 2026-10-01), the
 smoke render (plan D Task 22), real captures (plan D Task 36), `doctor`, and the CUDA transcription.
 What CI does prove of `video/` is section 13.
 

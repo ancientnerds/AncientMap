@@ -17,7 +17,12 @@ The props schemas use this JSON Schema subset and nothing else (anything else is
 load, so a schema can never be silently half-checked): type (string or list of: string,
 number, integer, boolean, object, array, null), properties, required, additionalProperties
 (bool or schema), items, enum, minimum, maximum, minItems, maxItems, minLength, maxLength,
-and the annotations description, title, default, $comment.
+hookMaxLength, hookMaxItems, and the annotations description, title, default, $comment.
+
+hookMaxLength and hookMaxItems are not JSON Schema: the capacity of a box under hook captions,
+where the stage is 140 px shorter (the strictest of the block's layouts; 0 = the prop cannot be
+shown there at all). They bind only for a hook beat (`props_errors(..., hook=True)`), and never
+exceed maxLength / maxItems.
 
 Props are validated after {"$ref"}/{"$capture"} resolution (casefile.resolve_refs), i.e.
 against what the block will actually receive.
@@ -49,6 +54,8 @@ SUPPORTED_KEYWORDS = frozenset(
         "maxItems",
         "minLength",
         "maxLength",
+        "hookMaxLength",
+        "hookMaxItems",
         "description",
         "title",
         "default",
@@ -82,6 +89,19 @@ def _check_schema(schema: Any, path: str) -> list[str]:
         )
     if "items" in schema:
         problems.extend(_check_schema(schema["items"], f"{path}.items"))
+    for hook_key, plain_key, kind in (
+        ("hookMaxLength", "maxLength", "string"),
+        ("hookMaxItems", "maxItems", "array"),
+    ):
+        if hook_key not in schema:
+            continue
+        limit = schema[hook_key]
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 0:
+            problems.append(f"{path}: {hook_key} must be an integer of at least 0")
+        elif schema.get("type") != kind:
+            problems.append(f"{path}: {hook_key} belongs to a schema of type {kind!r}")
+        elif plain_key not in schema or limit > schema[plain_key]:
+            problems.append(f"{path}: {hook_key} {limit} must not exceed {plain_key}")
     return problems
 
 
@@ -172,8 +192,16 @@ def _type_ok(value: Any, t: str) -> bool:
     return isinstance(value, dict)
 
 
-def props_errors(schema: dict[str, Any], value: Any, path: str = "props") -> list[str]:
-    """Every way `value` breaks `schema` (the subset above)."""
+def _hook_limit(over: str, limit: int, unit: str = "") -> str:
+    """The error text of a hook-stage limit: 0 means the prop cannot be shown under hook captions."""
+    return "not allowed on a hook beat" if limit == 0 else f"{over} {limit}{unit} on a hook beat"
+
+
+def props_errors(
+    schema: dict[str, Any], value: Any, path: str = "props", hook: bool = False
+) -> list[str]:
+    """Every way `value` breaks `schema` (the subset above). `hook`: the props are a hook beat's,
+    so hookMaxLength and hookMaxItems bind."""
     types = schema.get("type")
     if types is not None:
         listed = types if isinstance(types, list) else [types]
@@ -187,6 +215,8 @@ def props_errors(schema: dict[str, Any], value: Any, path: str = "props") -> lis
             problems.append(f"{path}: shorter than {schema['minLength']}")
         if "maxLength" in schema and len(value) > schema["maxLength"]:
             problems.append(f"{path}: longer than {schema['maxLength']}")
+        elif hook and "hookMaxLength" in schema and len(value) > schema["hookMaxLength"]:
+            problems.append(f"{path}: {_hook_limit('longer than', schema['hookMaxLength'])}")
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         if "minimum" in schema and value < schema["minimum"]:
             problems.append(f"{path}: below {schema['minimum']}")
@@ -197,9 +227,11 @@ def props_errors(schema: dict[str, Any], value: Any, path: str = "props") -> lis
             problems.append(f"{path}: fewer than {schema['minItems']} items")
         if "maxItems" in schema and len(value) > schema["maxItems"]:
             problems.append(f"{path}: more than {schema['maxItems']} items")
+        elif hook and "hookMaxItems" in schema and len(value) > schema["hookMaxItems"]:
+            problems.append(f"{path}: {_hook_limit('more than', schema['hookMaxItems'], ' items')}")
         if "items" in schema:
             for i, item in enumerate(value):
-                problems.extend(props_errors(schema["items"], item, f"{path}[{i}]"))
+                problems.extend(props_errors(schema["items"], item, f"{path}[{i}]", hook))
     if isinstance(value, dict):
         props = schema.get("properties", {})
         for key in schema.get("required", []):
@@ -208,9 +240,9 @@ def props_errors(schema: dict[str, Any], value: Any, path: str = "props") -> lis
         extra = schema.get("additionalProperties", True)
         for key, sub in value.items():
             if key in props:
-                problems.extend(props_errors(props[key], sub, f"{path}.{key}"))
+                problems.extend(props_errors(props[key], sub, f"{path}.{key}", hook))
             elif extra is False:
                 problems.append(f"{path}.{key}: not allowed")
             elif isinstance(extra, dict):
-                problems.extend(props_errors(extra, sub, f"{path}.{key}"))
+                problems.extend(props_errors(extra, sub, f"{path}.{key}", hook))
     return problems

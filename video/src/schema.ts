@@ -4,6 +4,12 @@
  * script props against the same registry.json with its own implementation of
  * the same subset, and refuses any other keyword at load. test/schema.test.ts
  * and test/registry.test.ts keep every block schema inside SUPPORTED.
+ *
+ * Two keywords are not JSON Schema: hookMaxLength and hookMaxItems, the capacity of
+ * a box under hook captions, where the stage is 140 px shorter. They bind only when
+ * the value is validated for a hook scene (`validate(..., hook = true)`: a scene a
+ * hook caption is on screen in; the script check applies them to a beat flagged
+ * hook), and are never above maxLength / maxItems.
  */
 export type SchemaType = 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null'
 
@@ -20,6 +26,8 @@ export type Schema = {
   maxItems?: number
   minLength?: number
   maxLength?: number
+  hookMaxLength?: number
+  hookMaxItems?: number
   description?: string
   title?: string
   default?: unknown
@@ -39,6 +47,8 @@ export const SUPPORTED: ReadonlySet<string> = new Set([
   'maxItems',
   'minLength',
   'maxLength',
+  'hookMaxLength',
+  'hookMaxItems',
   'description',
   'title',
   'default',
@@ -57,8 +67,8 @@ function typeMatches(actual: SchemaType, wanted: SchemaType): boolean {
   return actual === wanted || (wanted === 'number' && actual === 'integer')
 }
 
-/** Errors as "<path>: <message>"; an empty list means valid. */
-export function validate(schema: Schema, value: unknown, path = '$'): string[] {
+/** Errors as "<path>: <message>"; an empty list means valid. `hook`: the value is a hook scene's, so hookMaxLength and hookMaxItems bind. */
+export function validate(schema: Schema, value: unknown, path = '$', hook = false): string[] {
   const errors: string[] = []
   const actual = typeOf(value)
   if (schema.type !== undefined) {
@@ -75,13 +85,17 @@ export function validate(schema: Schema, value: unknown, path = '$'): string[] {
   if (typeof value === 'string') {
     if (schema.minLength !== undefined && value.length < schema.minLength) errors.push(`${path}: shorter than ${schema.minLength}`)
     if (schema.maxLength !== undefined && value.length > schema.maxLength) errors.push(`${path}: longer than ${schema.maxLength}`)
+    else if (hook && schema.hookMaxLength !== undefined && value.length > schema.hookMaxLength) {
+      errors.push(`${path}: ${schema.hookMaxLength === 0 ? 'not allowed' : `longer than ${schema.hookMaxLength}`} on a hook beat`)
+    }
   }
   if (Array.isArray(value)) {
     if (schema.minItems !== undefined && value.length < schema.minItems) errors.push(`${path}: fewer than ${schema.minItems} items`)
     if (schema.maxItems !== undefined && value.length > schema.maxItems) errors.push(`${path}: more than ${schema.maxItems} items`)
+    else if (hook && schema.hookMaxItems !== undefined && value.length > schema.hookMaxItems) errors.push(`${path}: more than ${schema.hookMaxItems} items on a hook beat`)
     if (schema.items) {
       const items = schema.items
-      value.forEach((item, i) => errors.push(...validate(items, item, `${path}[${i}]`)))
+      value.forEach((item, i) => errors.push(...validate(items, item, `${path}[${i}]`, hook)))
     }
   }
   if (actual === 'object') {
@@ -91,9 +105,9 @@ export function validate(schema: Schema, value: unknown, path = '$'): string[] {
     }
     for (const [key, v] of Object.entries(obj)) {
       const sub = schema.properties?.[key]
-      if (sub) errors.push(...validate(sub, v, `${path}.${key}`))
+      if (sub) errors.push(...validate(sub, v, `${path}.${key}`, hook))
       else if (schema.additionalProperties === false) errors.push(`${path}.${key}: not allowed`)
-      else if (typeof schema.additionalProperties === 'object') errors.push(...validate(schema.additionalProperties, v, `${path}.${key}`))
+      else if (typeof schema.additionalProperties === 'object') errors.push(...validate(schema.additionalProperties, v, `${path}.${key}`, hook))
     }
   }
   return errors

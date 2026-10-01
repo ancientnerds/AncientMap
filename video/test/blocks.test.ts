@@ -136,6 +136,15 @@ describe('checkBlocks', () => {
     // the only error, so the last scene's ShareCard (b12) passes
     expect(() => checkBlocks(parseTimeline(t))).toThrow(/:\n {2}scene b10 \(ShareCard\): ShareCard is the end card; only the last scene may use it$/)
   })
+  it('keeps the registry hook limits on a scene a hook caption is on screen in (its stage is 140 px shorter) and on no other', () => {
+    const t: Json = JSON.parse(JSON.stringify(DEMO_TIMELINE))
+    // b01 is a ClaimBoard under the demo's hook captions: six claims fit the full stage, five the hook stage
+    const claims = t.scenes[0].props.claims
+    t.scenes[0].props.claims = [...claims, ...Array.from({ length: 6 - claims.length }, (_, i) => ({ ...claims[0], id: `c-extra-${i}` }))]
+    expect(() => checkBlocks(parseTimeline(t))).toThrow(/scene b01 \(ClaimBoard\): props\.claims: more than 5 items on a hook beat/)
+    t.captions = []
+    expect(() => checkBlocks(parseTimeline(t))).not.toThrow()
+  })
   it('checks only the strings the video draws: a page title, an original quote in a page image and a URL path pass (owner decision 32)', () => {
     expect(() => checkBlocks(withScene('SourceViewer', { page, evidence: greekQuote }))).not.toThrow()
   })

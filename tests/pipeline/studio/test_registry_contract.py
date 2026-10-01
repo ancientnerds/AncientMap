@@ -112,6 +112,127 @@ def test_a_string_longer_than_its_box_is_refused_by_episode_check_not_first_by_t
     assert blocks.props_errors(leaf, "x" * length) == [f"props: longer than {leaf['maxLength']}"]
 
 
+#: Real prose inside the full stage's registry limits (statement 100, quote 220), 99 and 204
+#: characters: the reviewer's measurement of 2026-10-01, a hook EvidenceCard the render lint
+#: refused (render-R2 on the hook stage) although `episode check` accepted it.
+_STATEMENT_99 = "The Stone of the Pregnant Woman, the largest block cut at Baalbek, weighs about 1000 tonnes in all."
+_QUOTE_204 = (
+    "The excavators of the German Archaeological Institute measured the Stone of the Pregnant Woman "
+    "in the Roman quarry at Baalbek and estimated that the block weighs about 1,000 tonnes. "
+    "It is the biggest one."
+)
+
+
+def _script_opening_with(block: str, props: dict, *, hook: bool) -> dict:
+    """The fixture script whose first two beats are `block` (b01) and the ClaimBoard, both hook or
+    both not (a slice may have no hook)."""
+
+    def mutate(data: dict) -> None:
+        data["beats"][0] = sf.beat(
+            "b01", "The excavators measured it in the quarry.", block, props, hook=hook
+        )
+        data["beats"][1]["hook"] = hook
+
+    return sf.mutated_script(mutate)
+
+
+def _validate_with_long_evidence(data: dict, *, fmt: str) -> list[str]:
+    case = ef.casefile()
+    case["evidence"][0]["statement"] = _STATEMENT_99
+    case["evidence"][0]["source"]["quote"] = _QUOTE_204
+    return script.validate_script(
+        data,
+        casefile.from_dict(case),
+        blocks.load_registry(),
+        slug="baalbek-c5",
+        fmt=fmt,
+    ).errors
+
+
+@pytest.mark.parametrize(
+    "props",
+    [{"evidence": {"$ref": "e1"}}, {"evidence": {"$ref": "e1"}, "image": {"$ref": "m1"}}],
+    ids=["no image", "with image"],
+)
+def test_a_hook_evidence_card_the_hook_stage_cannot_hold_is_refused_by_episode_check(props):
+    """Render-R2 on the hook stage: under the hook captions the stage is 140 px shorter, an
+    EvidenceCard holds a statement of 68 characters and a quote of 134 beside an image (88 and 165
+    beside none), and the registry's full-stage limits (100, 220) let `episode check` accept 99
+    and 204 characters of real prose that only `episode render` then refused, after the voice."""
+    assert (len(_STATEMENT_99), len(_QUOTE_204)) == (99, 204)
+    hook = _validate_with_long_evidence(
+        _script_opening_with("EvidenceCard", props, hook=True), fmt="full"
+    )
+    assert hook == [
+        "b01: props.evidence.statement: longer than 68 on a hook beat",
+        "b01: props.evidence.source.quote: longer than 134 on a hook beat",
+    ]
+    # the same beat after the hook has the whole stage
+    after = _script_opening_with("EvidenceCard", props, hook=False)
+    assert _validate_with_long_evidence(after, fmt="slice") == []
+
+
+def _claims(n: int) -> dict:
+    claim = {"id": "c", "label": "A claim", "by": "", "icon": "weight", "status": "pending"}
+    return {"title": "Claims", "claims": [{**claim, "id": f"c{i}"} for i in range(n)]}
+
+
+def _list(n: int) -> dict:
+    return {"title": "List", "items": [{"id": f"i{i}", "text": "An item"} for i in range(n)]}
+
+
+def _bars(n: int) -> dict:
+    bars = [{"id": f"b{i}", "label": "Bar", "value": 10 + i} for i in range(n)]
+    return {"title": "Bars", "unit": "t", "basis": "a basis line", "bars": bars}
+
+
+def _groups(n: int) -> dict:
+    groups = [{"id": f"g{i}", "count": 3, "label": "Group", "tone": "accent"} for i in range(n)]
+    return {"title": "Grid", "basis": "a basis line", "unitLabel": "a bus", "groups": groups}
+
+
+def _meter(note: bool) -> dict:
+    props = {"hypotheses": ["Roman engineers", "A lost civilization"], "start": [50, 50]}
+    return {**props, "note": "A note"} if note else props
+
+
+def _quote_card(length: int) -> dict:
+    evidence = ef.casefile()["evidence"][0]
+    evidence["source"]["quote"] = "x" * length
+    evidence = {k: v for k, v in evidence.items() if k != "verification"}
+    evidence["source"] = {k: v for k, v in evidence["source"].items() if k != "source_id"}
+    return {"evidence": evidence}
+
+
+#: (block, props that fit, props over the hook limit, the error): the layouts the hook stage
+#: cannot host whatever the text. The full stage holds every one of them (the schema limit).
+_HOOK_HOLDS_LESS = [
+    ("ClaimBoard", _claims(5), _claims(6), "props.claims: more than 5 items on a hook beat"),
+    ("ListCard", _list(4), _list(5), "props.items: more than 4 items on a hook beat"),
+    ("BarChart", _bars(6), _bars(7), "props.bars: more than 6 items on a hook beat"),
+    ("UnitGrid", _groups(2), _groups(3), "props.groups: more than 2 items on a hook beat"),
+    ("Meter", _meter(note=False), _meter(note=True), "props.note: not allowed on a hook beat"),
+    (
+        "QuoteCard",
+        _quote_card(230),
+        _quote_card(231),
+        "props.evidence.source.quote: longer than 230 on a hook beat",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("block", "fits", "over", "error"), _HOOK_HOLDS_LESS, ids=[c[0] for c in _HOOK_HOLDS_LESS]
+)
+def test_a_layout_the_hook_stage_cannot_host_is_refused_only_on_a_hook_beat(
+    block, fits, over, error
+):
+    schema = blocks.load_registry()[block]["props"]
+    assert blocks.props_errors(schema, fits, hook=True) == []
+    assert blocks.props_errors(schema, over) == [], "the full stage holds it"
+    assert blocks.props_errors(schema, over, hook=True) == [error]
+
+
 def test_the_brand_glyph_set_is_the_renderers():
     source = (config.REPO / "video" / "src" / "theme" / "glyphs.ts").read_text(encoding="utf-8")
     found = re.findall(r"export const DRAWABLE =\s*'([^']*)'", source)

@@ -14,10 +14,14 @@ CLAIM_STATUSES = ["pending", "supported", "weakened", "refuted", "open"]
 TONES = ["accent", "info", "warn", "alert", "muted"]
 
 
-def _str(min_length: int = 1, max_length: int | None = None) -> dict:
+def _str(
+    min_length: int = 1, max_length: int | None = None, hook_max_length: int | None = None
+) -> dict:
     schema = {"type": "string", "minLength": min_length}
     if max_length is not None:
         schema["maxLength"] = max_length
+    if hook_max_length is not None:
+        schema["hookMaxLength"] = hook_max_length
     return schema
 
 
@@ -34,12 +38,19 @@ def _one_of(values: list[str]) -> dict:
     return {"type": "string", "enum": values}
 
 
-def _arr(items: dict, min_items: int | None = None, max_items: int | None = None) -> dict:
+def _arr(
+    items: dict,
+    min_items: int | None = None,
+    max_items: int | None = None,
+    hook_max_items: int | None = None,
+) -> dict:
     schema: dict = {"type": "array", "items": items}
     if min_items is not None:
         schema["minItems"] = min_items
     if max_items is not None:
         schema["maxItems"] = max_items
+    if hook_max_items is not None:
+        schema["hookMaxItems"] = hook_max_items
     return schema
 
 
@@ -125,13 +136,15 @@ def evidence_schema(
     quote: int | None = None,
     title: int | None = None,
     locator: int | None = None,
+    hook_statement: int | None = None,
+    hook_quote: int | None = None,
 ) -> dict:
     source = {
         "url": _str(1),
         "title": _str(1, title),
         "tier": _num(0, kind="integer"),
         "license": _str(0),
-        "quote": _str(0, quote),
+        "quote": _str(0, quote, hook_quote),
         "locator": _str(0, locator),
     }
     return _obj(
@@ -139,7 +152,7 @@ def evidence_schema(
             "id": ID,
             "claim_id": ID,
             "kind": _one_of(["fact", "quote", "quantity", "date", "image", "place"]),
-            "statement": _str(1, statement),
+            "statement": _str(1, statement, hook_statement),
             "source": _obj(source),
             "paper_anchor": {"type": ["string", "null"]},
         }
@@ -227,7 +240,7 @@ REGISTRY = {
     ),
     "EvidenceCard": _entry(
         _obj(
-            {"evidence": evidence_schema(100, 220, 66, 24), "image": MEDIA},
+            {"evidence": evidence_schema(100, 220, 66, 24, 68, 134), "image": MEDIA},
             ["evidence"],
             "One verified evidence item; cues highlight <evidence id> (quote types on), stamp <evidence id>",
         ),
@@ -249,7 +262,7 @@ REGISTRY = {
     ),
     "ClaimBoard": _entry(
         _obj(
-            {"claims": _arr(CLAIM, 1, 6), "title": TITLE},
+            {"claims": _arr(CLAIM, 1, 6, 5), "title": TITLE},
             ["claims"],
             "The claims under test; introduce/status cues (any scene) drive it; cue highlight <claim id>",
         ),
@@ -264,7 +277,7 @@ REGISTRY = {
                     "description": "Split before the first meter cue; sums to 100",
                 },
                 "title": TITLE,
-                "note": _str(1, 110),
+                "note": _str(1, 110, 0),
             },
             ["hypotheses", "start"],
             "The probability meter; meter cues (any scene) move it",
@@ -296,6 +309,7 @@ REGISTRY = {
                     ),
                     2,
                     8,
+                    6,
                 ),
             },
             ["title", "unit", "basis", "bars"],
@@ -321,7 +335,7 @@ REGISTRY = {
         _obj(
             {
                 "title": LIST_TITLE,
-                "items": _arr(_obj({"id": ID, "text": _str(1, 72)}), 1, 5),
+                "items": _arr(_obj({"id": ID, "text": _str(1, 72)}), 1, 5, 4),
                 "note": _str(1, 110),
             },
             ["title", "items"],

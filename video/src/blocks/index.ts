@@ -14,12 +14,15 @@
  * drawable by the brand fonts, in upper case too (theme/glyphs.ts; owner
  * decision 32: only drawn strings are checked): the block's `drawn` prop paths
  * (schemas.ts), the drawn strings of its capture props (captureStrings), the
- * captions, credits, chapter titles and the thumbnail teasers.
+ * captions, credits, chapter titles and the thumbnail teasers. A scene that a
+ * hook caption is on screen in must keep the registry's hook limits (the stage
+ * under the captions is 140 px shorter; schemas.ts).
  */
 import type React from 'react'
 
+import { validate } from '../schema'
 import { glyphReason, unsupportedChar } from '../theme/glyphs'
-import type { LocalVerb, Timeline } from '../timeline'
+import { type LocalVerb, type Timeline, sceneHasCaptions } from '../timeline'
 import { BarChart, type BarChartProps, checkBarChart } from './BarChart'
 import { ClaimBoard, type ClaimBoardProps } from './ClaimBoard'
 import { Diagram, type DiagramProps, checkDiagram } from './Diagram'
@@ -164,6 +167,10 @@ export function checkBlocks(timeline: Timeline): void {
     // owner rule: the link appears only on the end card (and in the description)
     if (scene.block === 'ShareCard' && scene !== last) errors.push(`${where}: ShareCard is the end card; only the last scene may use it`)
     for (const e of def.check(scene.props, { fps: timeline.fps, durationInFrames: scene.durationInFrames })) errors.push(`${where}: ${e}`)
+    // a scene a hook caption is on screen in has a stage 140 px shorter: the registry's hook limits bind
+    if (sceneHasCaptions(timeline, scene)) {
+      for (const e of validate(REGISTRY_BLOCKS[scene.block].props, scene.props, 'props', true)) errors.push(`${where}: ${e}`)
+    }
     for (const [at, text] of sceneStrings(scene.block, scene.props)) {
       const problem = glyphProblem(where, at, text)
       if (problem) errors.push(problem)

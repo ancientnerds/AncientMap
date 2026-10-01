@@ -1173,7 +1173,8 @@
               "statement": {
                 "type": "string",
                 "minLength": 1,
-                "maxLength": 100
+                "maxLength": 100,
+                "hookMaxLength": 68
               },
               "source": {
                 "type": "object",
@@ -1207,7 +1208,8 @@
                   "quote": {
                     "type": "string",
                     "minLength": 0,
-                    "maxLength": 220
+                    "maxLength": 220,
+                    "hookMaxLength": 134
                   },
                   "locator": {
                     "type": "string",
@@ -1391,7 +1393,8 @@
                   "quote": {
                     "type": "string",
                     "minLength": 0,
-                    "maxLength": 320
+                    "maxLength": 320,
+                    "hookMaxLength": 230
                   },
                   "locator": {
                     "type": "string",
@@ -1489,7 +1492,8 @@
               }
             },
             "minItems": 1,
-            "maxItems": 6
+            "maxItems": 6,
+            "hookMaxItems": 5
           },
           "title": {
             "type": "string",
@@ -1545,7 +1549,8 @@
           "note": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 110
+            "maxLength": 110,
+            "hookMaxLength": 0
           }
         },
         "description": "The probability meter; meter cues (any scene) move it"
@@ -1724,7 +1729,8 @@
               }
             },
             "minItems": 1,
-            "maxItems": 3
+            "maxItems": 3,
+            "hookMaxItems": 2
           }
         },
         "description": "Counts as lit unit squares (one block = 80 buses); cue show <group id>"
@@ -1813,7 +1819,8 @@
               }
             },
             "minItems": 2,
-            "maxItems": 8
+            "maxItems": 8,
+            "hookMaxItems": 6
           }
         },
         "description": "Horizontal bars on a linear axis (frequencies, sizes); a [low, high] value is drawn as a range; cue show <bar id>"
@@ -2091,7 +2098,8 @@
               }
             },
             "minItems": 1,
-            "maxItems": 5
+            "maxItems": 5,
+            "hookMaxItems": 4
           },
           "note": {
             "type": "string",
