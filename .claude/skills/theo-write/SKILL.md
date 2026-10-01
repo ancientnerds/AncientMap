@@ -18,9 +18,10 @@ the paper, never in a derived file or a handoff answer.
 
 Run every command from the checkout root as `./.venv/Scripts/python.exe -m pipeline.studio …`;
 below it is written `studio …`. Exit 0 = ok, 1 = a check failed (`paper check`), 2 = a
-`StudioError` (message on stderr). The workspace is `<STUDIO_ASSETS>/papers/<request_id>/`
-(default `<main checkout>/video-assets/studio`, also from a worktree). `<id>` is always the
-research request id (a lowercase uuid), never the slug.
+`StudioError` (`error: …` on stderr). Every refusal below reaches you as that exit 2 of the
+studio, whichever `theo_publish` exit code (1-4) its message names. The workspace is
+`<STUDIO_ASSETS>/papers/<request_id>/` (default `<main checkout>/video-assets/studio`, also from
+a worktree). `<id>` is always the research request id (a lowercase uuid), never the slug.
 
 ## The session
 
@@ -34,10 +35,17 @@ research request id (a lowercase uuid), never the slug.
    `[S:<source_id>]`. Every evidence entry is `"verdict": "supported"`.
 3. **Claim check.** `studio paper number <id>`, `studio paper claims-export <id>`, then the
    workflow **theo-claim-check** (below), then `studio paper claims-import <id>`.
+   - The import prints only `{"accepted": N}`, and refuses while a current task has no accepted
+     answer (it names the first eight as `kind:ref`): run the workflow and the import again.
+   - Where the verdicts are: `studio paper check <id>` (step 5), gate `claims` of
+     `check_report.json`: `details.status.not_supported[]` holds `ref`, `verdict`, `explanation`
+     and `fix_suggestion` of every task whose answer is not `supported`, `missing` the tasks
+     without one. The accepted answers themselves are `claims_check/accepted.json`.
    - `partly` or `unsupported`: fix the paragraph (see `fix_suggestion`) or the evidence entry.
    - `source_missing`: re-source the claim or drop it.
-   - An evidence `quote` from a `tdm_reserved` source is copied verbatim from the live text
-     the claim check saved, `claims_check/live/<source_id>.txt`, after this import.
+   - An evidence `quote` from a `tdm_reserved` source cannot be checked before the workflow has
+     saved that source's live text, `claims_check/live/<source_id>.txt`: copy the quote verbatim
+     from that file, and `paper check` (gate `evidence`) holds it to the file.
 4. **Images.** Write `images/opportunities.json` (4-10 entries, `brief.md` item 4), then
    `studio paper images-export <id>`, the workflow **theo-image-check**, and
    `studio paper images-import <id>`.
@@ -46,8 +54,11 @@ research request id (a lowercase uuid), never the slug.
    step 3 (`number` → claims → images → `check`). Unchanged paragraphs keep their accepted
    answers; only changed ones become new tasks.
 6. **Publish.** `studio paper bundle <id>`, then `studio paper publish <id> --dry-run`, then
-   `studio paper publish <id>`. The apply uploads the selected images (verified), dry-runs
-   again, applies, and writes `publish_outcome.json` and `published_bundle.json`.
+   `studio paper publish <id>`. Every `paper publish` first uploads the bundle's selected images
+   to production's `research-images/<id>/` (verified byte for byte, safe to repeat) and dry-runs;
+   `--dry-run` stops there and records the dry run in `publish_outcome.json`. The apply then
+   applies and writes `publish_outcome.json` and `published_bundle.json`. A `bundle.json` older
+   than the paper is refused (`bundle.json is stale`): run `paper bundle` again.
 7. **Report** the printed `slug`, `url` and `side_effects` to the owner. The `paper_published`
    notice (`side_effects.notify`) goes to `thinking_log` automatically; Discord stays unset
    (owner #5). A failed side effect does not undo the publish: name it in the report.
@@ -57,8 +68,11 @@ research request id (a lowercase uuid), never the slug.
 Run each with the Workflow tool by name and
 `args: {"workspace": "<absolute path of <STUDIO_ASSETS>/papers/<id>>"}`; a bare path string is
 refused (`args.workspace must be the absolute path of ...`). They write answers only; the import
-step validates them by machine and refuses the whole file on any problem (listed). A refused `verdicts.jsonl` stays in place: remove it and run the workflow
-again. Never write or edit an answer by hand.
+step validates them by machine and refuses the whole file on any problem, listing each as
+`answer N (<task_id>): <problem>`. A refused `verdicts.jsonl` stays in place, and the workflows
+answer only the tasks it holds no line for: delete the lines the error names (deleting the whole
+file answers every pending task again), then run the workflow again. Never write or edit an
+answer by hand.
 
 | Workflow | Answers | Then |
 |---|---|---|
@@ -92,13 +106,16 @@ Slug, `published_at`, the publisher and the stored corrections log stay.
 
 ## When theo_publish refuses or the outcome is unknown
 
-| Signal | Meaning | Do |
+The studio prints each of these as `error: …` and exits 2; the `theo_publish` exit code (1-4) is
+the one the message names, not the studio's.
+
+| Message | Meaning | Do |
 |---|---|---|
-| exit 1, "refused: failing gates [...]" | a gate failed, nothing written | fix the paper, `paper check`, run again |
+| "refused: failing gates [...]" (theo_publish exit 1) | a gate failed, nothing written | fix the paper, `paper check`, run again |
 | "the paper is already public: change it with `paper correct`" | the row is public | this is a correction, not a publish |
-| exit 2, "refused the input" | the payload broke the contract | stop and report: a bug in the studio or theo_publish |
-| exit 3, "the row changed underneath" | nothing committed | read the journal row (below) to see what changed it, then `paper check` and run again |
-| exit 4, a timeout, no JSON: `RemoteOutcomeUnknown` | the write may have committed | the adoption procedure |
+| "theo_publish refused the input: …" (exit 2) | the payload broke the contract, or names a row that does not exist | `research request <id> does not exist` is a wrong id: fix it. Anything else is a bug in the studio or theo_publish: stop and report |
+| "the row changed underneath" (exit 3) | nothing committed | read the journal row (below) to see what changed it, then `paper check` and run again |
+| `RemoteOutcomeUnknown`: a timeout, no JSON, "committed but the re-read differs" (exit 4) | the write may have committed | the adoption procedure |
 
 **Adoption procedure** (printed with the error). Before every write the studio records the
 sha256 of the exact bytes it sends (`publish_outcome.json` `bundle_sha256`,
@@ -114,12 +131,30 @@ sha256 of the exact bytes it sends (`publish_outcome.json` `bundle_sha256`,
    covers Qdrant; report the missing notice to the owner.
 4. Another hash: nothing committed. Run the write again from its dry run.
 
+## Registering a video on its paper
+
+`episode register-youtube` (skill studio-video, step 12) registers a manual upload on its paper
+and calls the paper side itself. `paper register-video` is that paper side as a command of its
+own: run it when `register-youtube` failed after the ledger write and its error printed it (run
+the command with `./.venv/Scripts/python.exe` for the printed `python`):
+
+`studio paper register-video <id> --youtube-id <video id> --title '<uploaded title>'
+--published-at <ISO 8601 with timezone> --timestamps <STUDIO_ASSETS>/episodes/<slug>/package/evidence_timestamps.json
+[--poster <STUDIO_ASSETS>/episodes/<slug>/package/thumbnail_<K>.jpg]`
+
+It dry-runs without the poster, uploads the poster JPEG as `research-images/<id>/video_<video id>.jpg`
+(verified), dry-runs with it, then applies. `--poster` is the thumbnail set on YouTube (or the A/B
+winner); without it the page keeps the posterless player. The first dry run refuses a video the
+paper already shows (gate `duplicate`), so repeating a registration whose outcome is unknown is
+safe: if it committed, the repeat stops at that gate; if not, it goes through. Its only side effect
+is IndexNow.
+
 ## Stop conditions
 
 - **Stop and report to the owner:** the list is empty; the paper is published or the correction
   applied (report slug, url, side effects); a gate cannot pass without bending a rule (too few
-  supported claims for 5,000 words, no hero image among the checked images); exit 2; an
-  unknown outcome whose journal row cannot be read.
+  supported claims for 5,000 words, no hero image among the checked images); a `theo_publish`
+  "refused the input" that is not a wrong id; an unknown outcome whose journal row cannot be read.
 - **Do not stop** between `paper pull` and the publish to ask for approval.
 
 ## Never
