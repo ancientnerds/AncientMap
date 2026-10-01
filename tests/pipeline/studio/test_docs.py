@@ -17,6 +17,7 @@ import pytest
 
 from pipeline.studio import __main__ as studio_cli
 from pipeline.studio.capture import platform as platform_take
+from pipeline.studio.spoken import spelling_mismatch
 
 ROOT = Path(__file__).resolve().parents[3]
 STUDIO_MD = ROOT / "docs" / "procedures" / "STUDIO.md"
@@ -67,3 +68,55 @@ def test_the_skill_and_the_runbook_name_every_platform_action():
             assert written == wanted, (
                 f"{where}: {action} takes {sorted(wanted)}, it says {sorted(written)}"
             )
+
+
+def accepted_number_forms(text: str, start: str) -> list[tuple[str, str]]:
+    """Every `spoken` / `display` pair between `start` and the "Anything else" that ends the list.
+
+    Whitespace is collapsed first: STUDIO.md wraps its list mid-pair."""
+    flat = re.sub(r"\s+", " ", text)
+    region = flat[flat.index(start) + len(start) :]
+    region = region[: region.index("Anything else")]
+    return re.findall(r"`([^`]+)` / `([^`]+)`", region)
+
+
+NUMBER_FORMS = [
+    ("the studio-video skill", VIDEO_SKILL, "Spoken, then display, as the check accepts them:"),
+    ("STUDIO.md", STUDIO_MD, "The check accepts, spoken then display:"),
+]
+
+
+@pytest.mark.parametrize(("where", "doc", "start"), NUMBER_FORMS, ids=lambda v: str(v)[:24])
+def test_every_number_form_the_docs_accept_passes_the_caption_check(where, doc, start):
+    # the skill once listed `the hundredth` / `100th`: the check reads the article as a spoken
+    # word the display lacks and refuses it, so a script author copying it got an `episode check`
+    # error
+    pairs = accepted_number_forms(doc.read_text(encoding="utf-8"), start)
+    assert len(pairs) >= 20, f"{where}: only {len(pairs)} pairs found, the list moved"
+    refused = {
+        (spoken, display): mismatch
+        for spoken, display in pairs
+        if (mismatch := spelling_mismatch(spoken, display)) is not None
+    }
+    assert not refused, f"{where} lists pairs the caption check refuses: {refused}"
+
+
+# as the skill writes them after "Anything else": `about` against `around`, and so on
+REFUSED_NUMBER_FORMS = [
+    ("about", "around"),
+    ("12–16 m", "twelve to fifteen metres"),
+    ("2 cm", "2 mm"),
+    ("World War III", "World War Two"),
+]
+
+
+@pytest.mark.parametrize(("one", "other"), REFUSED_NUMBER_FORMS)
+def test_the_refused_number_forms_the_skill_names_are_refused(one, other):
+    skill = " ".join(VIDEO_SKILL.read_text(encoding="utf-8").split())
+    refusals = skill[skill.index("Anything else") :]
+    refusals = refusals[: refusals.index("Where the words allow")]
+    assert one in refusals
+    assert other in refusals
+    # either side may be the spoken one: the error names the first differing token either way
+    assert spelling_mismatch(one, other) is not None
+    assert spelling_mismatch(other, one) is not None

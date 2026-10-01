@@ -105,7 +105,7 @@ written `studio …` below. Exit 0 = ok, 1 = a check failed (`episode check`, `e
   - digits and a magnitude word: `six million` / `6 million`, `one point five million` /
     `1.5 million`, `four and a half metres` / `4.5 m`, `two hundred and fifty thousand` /
     `250,000`; years `nineteen sixty-six` / `1966`;
-  - ordinals and duration compounds: `twenty-first` / `21st`, `the hundredth` / `100th`,
+  - ordinals and duration compounds: `twenty-first` / `21st`, `the hundredth` / `the 100th`,
     `a thirty-second exposure` / `a 30-second exposure`;
   - decades and centuries: `the nineteen-sixties` / `the 1960s`, `the twenty-tens` / `the 2010s`,
     `the fifteen hundreds` / `the 1500s`, `the two thousands` / `the 2000s`;
