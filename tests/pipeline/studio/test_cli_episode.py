@@ -135,6 +135,7 @@ class Narrator:
         self.script_path = script_path
         self.seconds = {"b01": 20.0, "b02": 20.0}
         self.narrated = []
+        self.deaf = set()  # beats whose narration whisper recognises no word of
 
     def quota(self):
         return 99, 40
@@ -145,16 +146,15 @@ class Narrator:
         return self.seconds.get(out.stem, 5.0)
 
     def transcribe(self, audio):
+        if audio.stem in self.deaf:
+            return []
         beats = json.loads(self.script_path.read_text(encoding="utf-8"))["beats"]
         spoken = next(b["spoken"] for b in beats if b["id"] == audio.stem)
         return [(w, i * 0.2, i * 0.2 + 0.15) for i, w in enumerate(spoken.split())]
 
 
-def test_voice_measures_the_beats_the_author_fixed_after_the_first_voice(
-    monkeypatch, tmp_path, capsys
-):
-    """The loop the studio-video skill prescribes: `episode voice` exits 1 with what the real
-    timings broke (a hook over 32 s), the author shortens the beat, `episode voice` runs again."""
+def _narrated_workspace(monkeypatch, tmp_path):
+    """A script `episode voice` can be run on with Narrator standing in for MiniMax and whisper."""
     monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
     monkeypatch.setattr("pipeline.studio.episode.load_registry", lambda: sf.REGISTRY)
     ws = episode.EpisodeWorkspace(tmp_path / "episodes" / "baalbek-c5", "baalbek-c5")
@@ -172,23 +172,65 @@ def test_voice_measures_the_beats_the_author_fixed_after_the_first_voice(
             transcribe=narrator.transcribe,
         ),
     )
-    assert cli.main(["episode", "voice", "baalbek-c5"]) == 1
-    out = json.loads(capsys.readouterr().out)
-    assert out["errors"] == ["hook is 41.9 s of screen time (measured); max 32 s"]
-    assert len(narrator.narrated) == 9
+    return ws, narrator
 
+
+def _shorten_b01(ws):
     def shorter(d):
         d["beats"][0].update(
             spoken="One person gives the scale.", display="One person gives the scale."
         )
 
     ws.script.write_text(json.dumps(sf.mutated_script(shorter)), encoding="utf-8")
+
+
+def test_voice_measures_the_beats_the_author_fixed_after_the_first_voice(
+    monkeypatch, tmp_path, capsys
+):
+    """The loop the studio-video skill prescribes: `episode voice` exits 1 with what the real
+    timings broke (a hook over 32 s), the author shortens the beat, `episode voice` runs again."""
+    ws, narrator = _narrated_workspace(monkeypatch, tmp_path)
+    assert cli.main(["episode", "voice", "baalbek-c5"]) == 1
+    out = json.loads(capsys.readouterr().out)
+    assert out["errors"] == ["hook is 41.9 s of screen time (measured); max 32 s"]
+    assert len(narrator.narrated) == 9
+
+    _shorten_b01(ws)
     narrator.seconds["b01"] = 2.0
     assert cli.main(["episode", "voice", "baalbek-c5"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["errors"] == []
     assert narrator.narrated[9:] == ["b01"]
     assert json.loads(ws.words.read_text(encoding="utf-8"))["b01"]["duration_s"] == 2.0
+
+
+def test_voice_that_failed_to_time_the_fixed_beat_runs_again_without_narrating_it_twice(
+    monkeypatch, tmp_path, capsys
+):
+    """The retry the runbook prescribes after `the display words cannot be timed`: the manifest
+    already holds the new narration of b01 while words.json still holds the old 20 s, and those
+    20 s must not refuse the step that times the new text."""
+    ws, narrator = _narrated_workspace(monkeypatch, tmp_path)
+    assert cli.main(["episode", "voice", "baalbek-c5"]) == 1
+    capsys.readouterr()
+
+    _shorten_b01(ws)
+    narrator.seconds["b01"] = 2.0
+    narrator.deaf.add("b01")
+    assert cli.main(["episode", "voice", "baalbek-c5"]) == 2
+    err = capsys.readouterr().err
+    assert "b01: the display words cannot be timed against voice/b01.mp3" in err
+    assert narrator.narrated[9:] == ["b01"]
+    assert json.loads(ws.words.read_text(encoding="utf-8"))["b01"]["duration_s"] == 20.0
+
+    narrator.deaf.clear()
+    assert cli.main(["episode", "voice", "baalbek-c5"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["errors"] == []
+    assert narrator.narrated[9:] == ["b01"]  # b01 was timed, not narrated again
+    words = json.loads(ws.words.read_text(encoding="utf-8"))
+    assert words["b01"]["duration_s"] == 2.0
+    assert [w["w"] for w in words["b01"]["words"]] == "One person gives the scale.".split()
 
 
 def test_check_reports_the_beat_whose_voice_is_stale_as_waiting_not_as_broken(

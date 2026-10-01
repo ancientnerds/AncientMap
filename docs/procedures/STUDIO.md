@@ -456,7 +456,9 @@ Rules the checks enforce (script, case file, captures):
   `episode voice` from measuring the new text. Its estimate still counts for the hook length and the
   platform moments, as before the first voice.
   A transcription that fails (`the display words cannot be timed against voice/<beat>.mp3`) keeps the
-  narration already paid for: run `episode voice` again.
+  narration already paid for, and that beat counts as estimated too (`voice/words.json` is written
+  last, so it still holds the old duration): run `episode voice` again, it times the beat without
+  narrating it twice.
 - **A capture on a sleeping display:** headed Chrome stops drawing, and the take waits for a frame
   that never comes. The captures hold the display awake while they run, but cannot wake one that is
   already off or locked, and the recorder scenes fail within 30 s without a frame. Unlock the display

@@ -176,6 +176,33 @@ def test_a_beat_edited_after_its_voice_is_estimated_not_measured(tmp_path):
         episode.require_valid(episode.load_all(ws, sf.REGISTRY), final=True)
 
 
+def test_a_beat_narrated_but_not_timed_is_estimated(tmp_path):
+    """`episode voice` saved the new narration of b01 in the manifest and then failed in whisper:
+    words.json is written last, so it still holds the old text's duration."""
+    ws = _init(tmp_path)
+    _voiced(ws, sf.script(), hook_s=10.0)
+    path = ws.voice_dir / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["b01"]["duration_s"] = 2.0
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    report = episode.load_all(ws, sf.REGISTRY).report
+    assert report.errors == []
+    assert "b01: voice/b01.mp3 is stale; run `episode voice`" in report.deferred
+    assert not [d for d in report.deferred if d.startswith("b02")]
+
+
+def test_a_beat_whose_display_alone_was_edited_keeps_its_measured_duration(tmp_path):
+    ws = _init(tmp_path)
+    _voiced(ws, sf.script())
+    spoken = sf.script()["beats"][0]["spoken"]
+    _edit_b01(
+        ws, spoken, display="This stone weighs about 1000 tonnes. One person gives the scale."
+    )
+    report = episode.load_all(ws, sf.REGISTRY).report
+    assert report.errors == ["hook is 41.9 s of screen time (measured); max 32 s"]
+    assert not [d for d in report.deferred if d.startswith("b01")]
+
+
 def test_an_estimated_hook_is_reported_as_estimated(tmp_path):
     ws = _init(tmp_path)
     _voiced(ws, sf.script())

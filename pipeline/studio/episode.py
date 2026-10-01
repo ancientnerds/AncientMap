@@ -20,10 +20,13 @@ and the paper link: casefile.paper equals episode.json's paper (both null, or th
 {request_id, slug}), every paper_anchor is an evidence id of that paper's workspace
 (<STUDIO_ASSETS>/papers/<id>/), and episode.json's paper slug is the slug the publish returned.
 
-voice/words.json counts only for the beats it still describes: a beat the author edited since
-`episode voice` (its spoken text, voice or speed against voice/manifest.json, its display against
-the words' tokens) is estimated like an unvoiced one and named in `deferred`, so the measurements
-of the old text never refuse the step that makes the new ones (`voiced_for`, script.validate_script).
+voice/words.json counts only for the beats it still describes (`measured_for`): a beat the author
+edited since `episode voice` (its spoken text, voice or speed against voice/manifest.json), or
+whose narration `episode voice` made but did not finish timing (words.json is written last, so its
+duration differs from the manifest's), is estimated like an unvoiced one and named in `deferred`,
+so the measurements of the old text never refuse the step that makes the new ones
+(script.validate_script). A display edit alone keeps its duration; the word timings it moves are
+re-made by `episode voice` and refused by the timeline until then.
 
 Every JSON file is read with the paper workspace's `read_json` (a missing file names its hint,
 a syntax error is a StudioError naming the file), imported here as `load_json`, the name
@@ -268,6 +271,26 @@ def voiced_for(manifest: dict[str, Any], beat: dict[str, Any], voice_id: Any, sp
     return entry is not None and {k: entry[k] for k in key} == key
 
 
+def measured_for(
+    manifest: dict[str, Any],
+    words: dict[str, Any],
+    beat: dict[str, Any],
+    voice_id: Any,
+    speed: Any,
+) -> bool:
+    """voice/words.json holds a measurement of the beat's current narration: the manifest entry
+    was made from the beat's current spoken text, voice and speed (`voiced_for`), and words.json
+    was written from that entry. `voice_episode` saves the manifest entry before it times the
+    words and writes words.json last, so an entry whose duration_s differs from the manifest's is
+    one whose narration was made and whose timing did not finish (a failed transcription)."""
+    entry = words.get(beat["id"])
+    return (
+        voiced_for(manifest, beat, voice_id, speed)
+        and entry is not None
+        and entry["duration_s"] == manifest[beat["id"]]["duration_s"]
+    )
+
+
 def capture_spec_sha256(spec: dict[str, Any]) -> str:
     """The hash `episode capture` stores with a manifest: which spec recorded it (the
     resolved spec: sites.resolve_capture_spec)."""
@@ -411,7 +434,11 @@ def load_all(ws: EpisodeWorkspace, registry: dict[str, dict[str, Any]] | None = 
         slug=ws.slug,
         fmt=episode["format"],
         words=words,
-        voiced=lambda beat: voiced_for(manifest, beat, voice["id"], voice["speed"]),
+        voiced=(
+            None
+            if words is None
+            else lambda beat: measured_for(manifest, words, beat, voice["id"], voice["speed"])
+        ),
         captures=captures,
     )
     if isinstance(script, dict) and script.get("voice") != episode["voice"]:

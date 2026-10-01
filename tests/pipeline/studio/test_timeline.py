@@ -213,6 +213,18 @@ def test_timeline_names_the_stale_voice_not_the_hook_the_old_voice_measured(tmp_
     assert "hook is" not in str(e.value)
 
 
+def test_timeline_refuses_a_beat_narrated_again_but_not_timed(tmp_path, monkeypatch):
+    """The display text is unchanged, so words.json still lines up with it: only the manifest
+    (saved before whisper ran) says that voice/b01.mp3 is no longer what words.json measured."""
+    ws = ef.ready_episode(tmp_path, monkeypatch)
+    path = ws.voice_dir / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest["b01"]["duration_s"] = 2.0
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(StudioError, match="not ready: b01: voice/b01.mp3 is stale"):
+        timeline.build_timeline(ws)
+
+
 def test_render_names_the_stale_voice_not_the_hook_the_old_voice_measured(tmp_path, monkeypatch):
     from pipeline.studio import render
 
