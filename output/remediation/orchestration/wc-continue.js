@@ -11,6 +11,9 @@ export const meta = {
 const MAIN = 'C:/PythonProjects/AncientMap'
 const PY = `${MAIN}/.venv/Scripts/python.exe`
 const { runs, firstBatchBase, width } = args
+// A run whose name does not end in its chunk number (a site-list or WN run) needs its own first write batch:
+// args.firstBatchByRun = {"<run>": N}, N past every earlier WC plan (SENTENCE_CHECK 11.3 "LAST").
+const firstBatchFor = (run, k) => (args.firstBatchByRun && args.firstBatchByRun[run]) || firstBatchBase + 100 * k
 const RUNS = 'output/remediation/wc_runner/runs'
 const H = 'output/remediation/handoff'
 const PRE = `cd ${MAIN} && export PYTHONIOENCODING=utf-8 && PY=${PY} && M=output/remediation && mkdir -p $M/wc_runner/runs $M/logs/p4wc && C="$PY scripts/remediation/wc/cli.py" && OH="$PY scripts/remediation/opus_handoff.py"`
@@ -27,7 +30,7 @@ Chunk run: R=${RUNS}/${run}, handoffs ${H}/wc-${run}-r1, -r2, -verify, -verify2.
 3. Re-ask (round 2, once): read R/round-1/REASK.json. If it asks nothing (no sentence to re-ask), skip to 4. Else if R/round-2/ANSWERS.jsonl exists, skip to 4. Else if ${H}/wc-${run}-r2 does not exist: run $C export-reask --run-dir R --handoff ${H}/wc-${run}-r2 and return. Else validate it: missing -> answer={handoff, brief:"brief", batches}; clean -> $C import --run-dir R --handoff ${H}/wc-${run}-r2 and return.
 4. Verification round 1: if R/verify/round-1/ROUND.json does not exist: run $C verify-export --run-dir R --handoff ${H}/wc-${run}-verify and return (if it refuses with "nothing to verify", go to 6 in this same step). Else, if round 1 is not yet imported (R/VERIFIED.jsonl does not exist or holds no round-1 record - inspect its lines): validate ${H}/wc-${run}-verify: missing -> answer={handoff, brief:"verify-brief", batches}; clean -> $C verify-import --run-dir R --handoff ${H}/wc-${run}-verify and return (summary incl. to_verify2).
 5. Verification round 2 (once, only for texts a drop changed): if R/verify/round-2/ROUND.json does not exist: run $C verify-export --run-dir R --handoff ${H}/wc-${run}-verify2 and return; if it refuses with "nothing to verify", go to 6 in this same step. Else if round 2 is not imported (inspect R/VERIFIED.jsonl): validate ${H}/wc-${run}-verify2: missing -> answer={handoff, brief:"verify-brief", batches}; clean -> $C verify-import --run-dir R --handoff ${H}/wc-${run}-verify2 and return.
-6. Build: $C build --run-dir R --first-batch ${firstBatchBase + 100 * k} -> summary = the SUMMARY counts, the WC4.jsonl batch range and sha256; done=true.
+6. Build: $C build --run-dir R --first-batch ${firstBatchFor(run, k)} -> summary = the SUMMARY counts, the WC4.jsonl batch range and sha256; done=true.
 A command that refuses or exits non-zero for a reason these rules do not cover: ok=false, the last 30 lines in summary. A verify-import that lists transient fetch failures: run it once more before you return.`
 
 let active = 0
