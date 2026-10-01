@@ -45,6 +45,10 @@ Requirements:
   Bad: "Saqqara is a vast necropolis in Egypt" (that's a fact, not news)
 - Prioritize: discoveries, dates, site details, methodologies, context, artifact descriptions
 - Use exact timestamps [MM:SS] format
+- Write every headline, fact and name in English, in the Latin alphabet only. Give a site or place
+  by its common English name or a Latin transliteration, never in Cyrillic, Chinese, Arabic or any
+  other script, even when the transcript or your own knowledge offers the local form
+  (write "Belovode", not the Serbian-Cyrillic name of the locality). Never switch language inside a sentence.
 - Double fact check especially names, dates and numbers
 - Exclude: Personal anecdotes, off-topic, technical difficulties, channel promotions, audience interactions, medieval Old World subjects (see PERIOD SCOPE)
 - Extract only verifiable archaeological facts (names, dates, locations, findings, methodologies). Do NOT reproduce the speaker's distinctive phrasing, narrative structure, opinions, or creative expression

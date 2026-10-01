@@ -16,6 +16,7 @@ from pipeline.lyra.config import (
     call_api,
 )
 from pipeline.lyra.minimax_shared import _coerce_to_schema
+from pipeline.lyra.story_language import story_script_bleed
 from pipeline.lyra.transcript_fetcher import extract_transcript_segment, parse_timestamp_to_seconds
 
 logger = logging.getLogger(__name__)
@@ -335,6 +336,17 @@ def summarize_video(
             logger.warning(
                 f"Topic without usable facts in {video.id}: "
                 f"{str(topic.get('headline'))[:80]!r}, skipping"
+            )
+            continue
+        # Script check (2026-10-01): headline and facts become the headline,
+        # summary and facts of the story, the site name its label.
+        primary_site = topic.get("primary_site")
+        site_name = primary_site.get("name") if isinstance(primary_site, dict) else None
+        bleed = story_script_bleed(topic.get("headline"), [*facts, site_name or ""])
+        if bleed:
+            logger.warning(
+                f"Topic with foreign script in {video.id}: {bleed[:3]!r}, skipping "
+                f"({str(topic.get('headline'))[:80]!r})"
             )
             continue
         topic["facts"] = facts
