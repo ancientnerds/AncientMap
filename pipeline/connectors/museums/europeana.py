@@ -54,6 +54,12 @@ class EuropeanaConnector(BaseConnector):
         super().__init__(api_key=resolved_key, **kwargs)
         self.rest = RestProtocol(base_url=self.base_url, rate_limit=self.rate_limit)
 
+    def _without_key(self, exc: Exception) -> str:
+        """An error's text without the wskey: httpx names the request URL in a status error,
+        and the URL carries the key. Only called once an API key is set."""
+        assert self.api_key is not None
+        return str(exc).replace(self.api_key, "***")
+
     async def search(
         self,
         query: str,
@@ -104,7 +110,7 @@ class EuropeanaConnector(BaseConnector):
             return items
 
         except Exception as e:
-            logger.error(f"Europeana search failed: {e}")
+            logger.error(f"Europeana search failed: {self._without_key(e)}")
             return []
 
     def _parse_item(self, item: dict) -> ContentItem | None:
@@ -161,6 +167,6 @@ class EuropeanaConnector(BaseConnector):
                 return self._parse_item(response["object"])
 
         except Exception as e:
-            logger.error(f"Failed to get Europeana item {item_id}: {e}")
+            logger.error(f"Failed to get Europeana item {item_id}: {self._without_key(e)}")
 
         return None

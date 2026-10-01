@@ -24,6 +24,11 @@ def main(argv: list[str] | None = None) -> int:
     # tool on Windows gives Python a cp1252 pipe, where 'Şanlıurfa' would not encode.
     sys.stdout.reconfigure(encoding="utf-8")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    # httpx logs every request URL at INFO, and the Mapbox Static API (access_token=) and the
+    # Europeana connector (wskey=) carry their credential in it; stderr goes into the model's
+    # transcript (pipeline/lyra/orchestrator.py silences httpx for the same reason).
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     args = build_parser().parse_args(sys.argv[1:] if argv is None else argv)
     config.load_env()
     try:
