@@ -13,11 +13,19 @@ file and the code disagree, the code is right and this file is stale: fix it.
 
 ## 0. State on 2026-10-01
 
-- **Built on `feat/studio`, not released.** Production runs `main`: it has neither migrations 0025
-  (`theo_paper_publications`) and 0026 (`studio_episodes`) nor the modules `pipeline.lyra.theo_publish`,
-  `pipeline.lyra.theo_dossier` and `pipeline.studio.ledger_cli`. Until the release (index item I8),
-  every step that reaches production cannot run: `paper list`, `pull`, `publish`, `correct`,
+- **Read the release state from production, do not assume it.** The release deploy (index item I8)
+  applies migrations 0025 (`theo_paper_publications`) and 0026 (`studio_episodes`) and ships the modules
+  `pipeline.lyra.theo_publish`, `pipeline.lyra.theo_dossier` and `pipeline.studio.ledger_cli` in the API
+  image. Every step that reaches production needs them: `paper list`, `pull`, `publish`, `correct`,
   `register-video`, the ledger write at the end of `episode render`, and `episode register-youtube`.
+  Before the first such step of a session, read both from the VPS (read-only):
+  `ssh ancientnerds "docker exec ancient_nerds_db psql -U ancient_map -d ancient_map -c \"SELECT filename FROM applied_migrations WHERE filename LIKE '0025%' OR filename LIKE '0026%'\""`
+  must list both files, and
+  `ssh ancientnerds "docker exec ancient_nerds_api python -c 'import pipeline.lyra.theo_publish, pipeline.lyra.theo_dossier, pipeline.studio.ledger_cli'"`
+  must exit 0. The `commit` field of `ssh ancientnerds "curl -s http://localhost:8000/"` names the
+  commit the API image was built from. If a migration is missing or an import fails, the release deploy
+  has not run or not finished: stop and report it. Do not apply a migration or copy a module to the VPS
+  by hand.
 - **Theo is stopped.** The VPS `.env` has `THEO_WORKER_DISABLED=1` since about 18:20 UTC on
   2026-09-26, set on the owner's behalf by another session (owner-questions #2 is moot, and Q1 keeps
   the worker off); the worker idles (`scripts/run_theo_worker.py`) and 24 batch rows are `paused`. No
@@ -31,7 +39,7 @@ file and the code disagree, the code is right and this file is stale: fix it.
 - **Workstation proofs:** on 2026-10-01 `doctor` reported every probe ok, `npm run test:gpu` passed
   (5 tests in 2 files, about 50 s) and one real CUDA float16 transcription ran (section 1.3). The
   smoke render (plan D Task 22) and the real captures (plan D Task 36) have run on this workstation;
-  they run again on the finished code before the release (index I8, step 1).
+  they run again after any change to `video/` or `pipeline/studio/capture/` (index I8, step 1).
 
 ## 1. Setup (once per workstation)
 
@@ -628,8 +636,8 @@ curl -sfR --create-dirs -o public/data/sites/index.json https://ancientnerds.com
 
 `--create-dirs` makes the gitignored directory, and `-R` keeps the server's Last-Modified as the file's
 mtime, the age `doctor` reports (`sites.DOWNLOAD`). Never write into the main checkout from a worktree.
-Once `feat/studio` is merged and the studio runs in the main checkout, refresh that checkout's copy the
-same way before its first distribution capture (Q4 addendum). A changed export changes the resolved
+When the studio runs in the main checkout, refresh that checkout's copy the same way before its first
+distribution capture (Q4 addendum). A changed export changes the resolved
 spec, so the affected takes are recorded again.
 
 ## 12. Theo on the VPS

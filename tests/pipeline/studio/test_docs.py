@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from pipeline.studio import __main__ as studio_cli
+from pipeline.studio import remote
 from pipeline.studio.capture import platform as platform_take
 from pipeline.studio.spoken import spelling_mismatch
 
@@ -120,3 +121,40 @@ def test_the_refused_number_forms_the_skill_names_are_refused(one, other):
     # either side may be the spoken one: the error names the first differing token either way
     assert spelling_mismatch(one, other) is not None
     assert spelling_mismatch(other, one) is not None
+
+
+# Wording that is true only on the unmerged branch. The release deploy applies migrations 0025/0026
+# and ships the three production modules, so a runbook that says production lacks them is false from
+# the first green deploy: a session reading it would stop, or report the migrations as missing.
+BRANCH_ONLY_WORDING = [
+    "not released",
+    "feat/studio",
+    "until the release",
+    "before the release",
+    "neither migrations",
+    "cannot run",
+]
+
+
+def runbook_section(heading: str, next_heading: str) -> str:
+    text = STUDIO_MD.read_text(encoding="utf-8")
+    start = text.index(heading)
+    return text[start : text.index(next_heading, start)]
+
+
+@pytest.mark.parametrize("phrase", BRANCH_ONLY_WORDING)
+def test_the_runbook_does_not_state_the_unreleased_branch_as_the_present(phrase):
+    flat = " ".join(STUDIO_MD.read_text(encoding="utf-8").split()).lower()
+    assert phrase not in flat, f"STUDIO.md still says {phrase!r}: it must hold after the release"
+
+
+def test_the_runbook_tells_how_to_read_the_release_state_from_production():
+    section = " ".join(runbook_section("## 0. State on", "## 1. Setup").split())
+    # migrations 0025 and 0026 and the three modules are what the release ships; the session reads
+    # whether they are there, it does not assume
+    assert "applied_migrations" in section
+    assert "0025" in section
+    assert "0026" in section
+    assert "`commit`" in section
+    for module in sorted(remote.ALLOWED_MODULES):
+        assert f"`{module}`" in section, f"section 0 does not name {module}"
