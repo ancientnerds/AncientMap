@@ -58,6 +58,16 @@ research CLI, the writer and the acceptance so the three cannot read a checked t
   with the AI disclosure its recorded marking requires (`marking_record`, `disclosure_problems`;
   the writer re-derives the marking from the row's old value, `old_marking_problems`).
 
+**Two extensions of 2026-10-01** (owner decisions "Wikipedia/Wikidata reicht" and "Neu aus
+Webquellen"; runbook `docs/procedures/SENTENCE_CHECK.md` sections 11 and 12). A run may be given an
+explicit list of curated sites (`wc/cli.py export --sites`), and then also asks a Phase-4 text
+(`Marking.PHASE4`: lane W/S/T/R's full provenance - such a text is only kept or dropped sentence by
+sentence, never trimmed, and its provenance is the old one filtered to the kept sentences,
+`filtered_provenance`: the attribution and the AI mark stay true) or a text a WC check kept before
+(its check record is replaced). And lane WN writes a description for a site that has none
+(`Marking.NONE`, `Marking.WEB`): its sentences are written by an agent from verbatim quotes, verified
+exactly as a kept March sentence is, and carry `model4.WebProvenance` (lane N, `ai: generated`).
+
 The check record is public (`/api/sites/{id}` serves `raw_data` whole; the leading underscore keeps
 it out of the popup's field panel). It therefore carries each quote's sha256 and never its words:
 the verbatim quotes of restricted pages are kept in the journal only, as Phase 4 keeps lane R's
@@ -931,14 +941,16 @@ def check_record(
     quotes: Mapping[int, Sequence[Quote]],
     *,
     run: str,
-    checked: str,
+    checked: str | None,
     verification: Mapping[str, Any],
 ) -> DescriptionCheck:
     """The public record of a kept text: every sentence's verdict, the numbers its markers carry
     and the sha256 of each verified quote; `checked` is the stored text that was asked, and
     `verification` the site's verification record (`apply_verification`), whose verifiers and the
     recorded sha256 of the text the last one was shown (its round's `text_sha256`) the record
-    names - a kept text is published only verified."""
+    names - a kept text is published only verified. A site that had no description (lane WN) was
+    asked about no stored text: `checked` is `None` and `checked_sha256` the sha256 of the empty
+    text."""
     if composed.description is None:
         raise WcError("a cleared site has no check record")
     if verification["status"] != VerifyStatus.VERIFIED.value:
@@ -947,7 +959,7 @@ def check_record(
     return DescriptionCheck(
         run=run,
         checker=M.AI_SYSTEM,
-        checked_sha256=M.text_sha256(checked),
+        checked_sha256=M.text_sha256(checked or ""),
         kept=sum(d.kept for d in decisions),
         of=len(decisions),
         trimmed=sum(d.verdict is Verdict.KEEP_TRIMMED for d in decisions),
@@ -982,37 +994,60 @@ class Marking(StrEnum):
     #: HUMAN_ONLY D7: the text is the pre-March one, or the site is not in the snapshot - nothing
     #: proves where it came from, so nothing is claimed
     UNCLAIMED = "unclaimed"
+    #: a site-list run (2026-10-01): a Phase-4 text, lane W/S/T/R's full provenance. Its sentences
+    #: are only kept or dropped (a trim could not be written into the provenance's spans), and the
+    #: provenance it keeps is the old one filtered to the kept sentences (`filtered_provenance`)
+    PHASE4 = "phase4"
+    #: a site-list run: a text lane WN wrote (`model4.WebProvenance`); asked again, it stays lane N's
+    WEB = "web"
+    #: lane WN: the site has no description (NULL or blank); the text is written new, lane N's
+    NONE = "none"
 
 
-def old_marking(site: M.PlanSite) -> Marking:
-    """How the stored text is marked (`Marking`). A full Phase-4 provenance, a record that does not
-    parse, and a text lane WC checked before are not WC's to check (`WcError`, `ValueError`)."""
+def is_empty(text: str | None) -> bool:
+    """No description: NULL or blank - lane WN's population, and `Marking.NONE`."""
+    return text is None or not text.strip()
+
+
+def old_marking(site: M.PlanSite, *, listed: bool = False) -> Marking:
+    """How the stored text is marked (`Marking`). A site without a description is `NONE` (it carries
+    none of WC's three keys: they belong to a text). A full Phase-4 provenance, a lane-N one, a record
+    that does not parse, and a text lane WC checked before are not a normal run's to check (`WcError`,
+    `ValueError`); a site-list run (`listed`, 2026-10-01) asks them too - the marking is then what the
+    stored provenance says (a check record beside it is replaced by the new one)."""
     raw = site.raw_data or {}
-    if CHECK_KEY in raw:
+    if is_empty(site.description):
+        stale = sorted(WC_KEYS & raw.keys())
+        if stale:
+            raise WcError(f"no description beside {stale} in raw_data: a cleared site carries none")
+        return Marking.NONE
+    if CHECK_KEY in raw and not listed:
         raise WcError("the stored text was checked sentence by sentence before")
     if M.PROVENANCE_KEY in raw:
         provenance = M.provenance_from_dict(raw[M.PROVENANCE_KEY])
-        if not isinstance(provenance, M.LegacyProvenance):
+        if isinstance(provenance, M.LegacyProvenance):
+            return Marking.L
+        if not listed:
             raise WcError(f"lane {provenance.lane.value} wrote this text in Phase 4")
-        return Marking.L
+        return Marking.WEB if isinstance(provenance, M.WebProvenance) else Marking.PHASE4
     return Marking.UNCLAIMED if legacy4.legacy_provenance(site) is None else Marking.MARCH
 
 
-def marking_record(site: M.PlanSite) -> dict[str, Any]:
+def marking_record(site: M.PlanSite, *, listed: bool = False) -> dict[str, Any]:
     """The journal evidence's `marking`: how the checked text was marked (`old_marking`) and what
     lane L's claim rests on - whether the site is in the pre-March snapshot and the sha256 of its
     text there (`None` when it holds none) - so the disclosure a written text needs can be asked
     of the database alone (`disclosure_problems`)."""
     snapshot = site.snapshot_description
     return {
-        "old": old_marking(site).value,
+        "old": old_marking(site, listed=listed).value,
         "in_snapshot": site.in_snapshot,
         "snapshot_sha256": None if snapshot is None else M.text_sha256(snapshot),
     }
 
 
 def old_marking_problems(
-    marking: Mapping[str, Any], checked: str, old_raw: Mapping[str, Any] | None
+    marking: Mapping[str, Any], checked: str | None, old_raw: Mapping[str, Any] | None
 ) -> list[str]:
     """Is the recorded old marking the one the checked pair carries? Lane L's provenance in the
     old `raw_data` is `L`; without one, lane L's rule on the snapshot record decides - the checked
@@ -1024,9 +1059,14 @@ def old_marking_problems(
             provenance = M.provenance_from_dict(stored)
         except ValueError as exc:
             return [f"the checked text's provenance does not read: {exc}"]
-        if not isinstance(provenance, M.LegacyProvenance):
-            return ["the checked text carries a Phase-4 provenance: it is not WC's"]
-        derived = Marking.L
+        if isinstance(provenance, M.LegacyProvenance):
+            derived = Marking.L
+        elif isinstance(provenance, M.WebProvenance):
+            derived = Marking.WEB
+        else:
+            derived = Marking.PHASE4
+    elif is_empty(checked):
+        derived = Marking.NONE
     elif marking["in_snapshot"] and M.text_sha256(checked) != marking["snapshot_sha256"]:
         derived = Marking.MARCH
     else:
@@ -1036,6 +1076,15 @@ def old_marking_problems(
     return []
 
 
+#: The provenance a written text must carry, by the marking of the text that was asked (the others -
+#: lane L's marked and unmarked March texts and the unclaimed - are `disclosure_problems`' own).
+_WANTED_PROVENANCE: Mapping[str, type] = {
+    Marking.PHASE4.value: M.Provenance,
+    Marking.WEB.value: M.WebProvenance,
+    Marking.NONE.value: M.WebProvenance,
+}
+
+
 def disclosure_problems(
     marking: Mapping[str, Any], description: str | None, raw_data: Mapping[str, Any] | None
 ) -> list[str]:
@@ -1043,7 +1092,27 @@ def disclosure_problems(
     present (the review of 2026-09-26): a kept text of a March text (`L`, `march-unmarked`) carries
     lane L's provenance hashing it - unless the kept text is the pre-March one, which lane L's rule
     never claims (`legacy4.legacy_provenance`); every other pair - an unclaimed text (HUMAN_ONLY D7),
-    a cleared site - carries none."""
+    a cleared site - carries none. A Phase-4 text (`PHASE4`) keeps its full provenance, a text lane
+    WN wrote or wrote again (`NONE`, `WEB`) carries lane N's: required, hashing the written text."""
+    wanted = _WANTED_PROVENANCE.get(marking["old"])
+    if wanted is not None:
+        stored = (raw_data or {}).get(M.PROVENANCE_KEY)
+        if description is None:
+            return ["a provenance beside a cleared description"] if stored is not None else []
+        if stored is None:
+            return [f"the AI disclosure is missing: a {marking['old']} text carries its provenance"]
+        try:
+            provenance = M.provenance_from_dict(stored)
+        except ValueError as exc:
+            return [f"the AI disclosure does not read: {exc}"]
+        if not isinstance(provenance, wanted) or provenance.desc_sha256 != M.text_sha256(
+            description
+        ):
+            return [
+                f"the AI disclosure is not the {wanted.__name__} of the written text "
+                f"(a {marking['old']} text)"
+            ]
+        return []
     claims = (
         description is not None
         and marking["old"] in (Marking.L.value, Marking.MARCH.value)
@@ -1067,14 +1136,73 @@ def disclosure_problems(
     return []
 
 
-def provenance_after(site: M.PlanSite, description: str) -> M.LegacyProvenance | None:
+def filtered_provenance(
+    old: M.Provenance, kept: Sequence[int], *, of: int, description: str
+) -> M.Provenance:
+    """The Phase-4 provenance of a text whose sentences were checked: the old one filtered to the
+    kept sentences (`kept`, 1-based, of the `of` the checked text holds), `desc_sha256` the new
+    text's, the sources only the kept sentences still cite, the AI system the new write's
+    (`model4.AI_SYSTEM`: the same marks, the attribution and the licence stay true - what was
+    selected from the pinned source is still verbatim, only fewer sentences), and the card `None`
+    (its items name sentences that are no longer the text's; lane WB writes the new card).
+
+    Refused (`WcError`): a provenance whose published sentences are not the checked sentences one
+    for one (the shared splitter and a join of `JOIN_AFTER` disagree - 1 of 2,781 on 2026-10-01), a
+    text with no kept sentence, and one whose attribution source no kept sentence cites."""
+    if len(old.sentences) != of:
+        raise WcError(
+            f"the provenance lists {len(old.sentences)} published sentences, the checked text "
+            f"{of}: they cannot be matched one for one"
+        )
+    if not kept:
+        raise WcError("a provenance of nothing kept")
+    wanted = set(kept)
+    sentences = tuple(s for n, s in enumerate(old.sentences, start=1) if n in wanted)
+    cited = {sentence.src for sentence in sentences}
+    sources = tuple(source for source in old.sources if source.id in cited)
+    if old.attribution.url not in {source.url for source in sources}:
+        raise WcError(
+            "no kept sentence cites the source the attribution names: the text no longer adapts it"
+        )
+    return dataclasses.replace(
+        old,
+        ai_system=M.AI_SYSTEM,
+        sources=sources,
+        sentences=sentences,
+        card=None,
+        desc_sha256=M.text_sha256(description),
+    )
+
+
+def provenance_after(
+    site: M.PlanSite,
+    description: str,
+    *,
+    kept: Sequence[int] | None = None,
+    of: int | None = None,
+    trimmed: int = 0,
+    listed: bool = False,
+) -> M.LegacyProvenance | M.Provenance | M.WebProvenance | None:
     """The provenance the kept text carries: lane L's, hashing the kept text, for a March text -
     marked by lane L, or one lane L's rule claims and no marking carries yet (`Marking.MARCH`: the
     AI footnote must not be missing from a published March text); withdrawn by
     `legacy4.legacy_provenance` should the kept text be the pre-March one. None for an unclaimed
-    text (HUMAN_ONLY D7): a trimmed pre-March text is still not the March chain's."""
-    if old_marking(site) is Marking.UNCLAIMED:
+    text (HUMAN_ONLY D7): a trimmed pre-March text is still not the March chain's. Lane N's
+    (`model4.WebProvenance`) for a text lane WN wrote (`NONE`, `WEB`). For a Phase-4 text (`PHASE4`,
+    site-list runs) the old provenance filtered to the kept sentences (`filtered_provenance`: `kept`
+    and `of` name them; a Phase-4 text is never trimmed, `trimmed` must be 0)."""
+    marking = old_marking(site, listed=listed)
+    if marking is Marking.UNCLAIMED:
         return None
+    if marking in (Marking.NONE, Marking.WEB):
+        return M.WebProvenance(desc_sha256=M.text_sha256(description))
+    if marking is Marking.PHASE4:
+        if trimmed or kept is None or of is None:
+            raise WcError("a Phase-4 text is only kept or dropped by sentence, never trimmed")
+        old = M.provenance_from_dict((site.raw_data or {})[M.PROVENANCE_KEY])
+        if not isinstance(old, M.Provenance):
+            raise WcError("a Phase-4 text carries a full provenance")
+        return filtered_provenance(old, kept, of=of, description=description)
     return legacy4.legacy_provenance(
         dataclasses.replace(
             site, description=description, description_sha256=M.text_sha256(description)
@@ -1086,19 +1214,29 @@ def written_raw_data(
     site: M.PlanSite,
     composed: Composed,
     check: DescriptionCheck | None,
+    *,
+    listed: bool = False,
 ) -> dict[str, Any] | None:
     """The `raw_data` a WC write leaves: the old object less the three WC keys, plus - for a kept
-    text - its citations, its check record and lane L's moved provenance where the old text had
-    one. `None` when nothing remains (a cleared site whose `raw_data` held only WC's keys)."""
+    text - its citations, its check record and the provenance its marking calls for (lane L's moved
+    to the kept text, the filtered Phase-4 one, lane N's, or none: `provenance_after`). `None` when
+    nothing remains (a cleared site whose `raw_data` held only WC's keys)."""
     new = {key: value for key, value in (site.raw_data or {}).items() if key not in WC_KEYS}
     if composed.description is not None:
         if check is None:
             raise WcError("a kept text is written with its check record")
         new[M.CITATIONS_KEY] = [dict(citation) for citation in composed.citations]
         new[CHECK_KEY] = check.to_dict()
-        legacy = provenance_after(site, composed.description)
-        if legacy is not None:
-            new[M.PROVENANCE_KEY] = legacy.to_dict()
+        provenance = provenance_after(
+            site,
+            composed.description,
+            kept=[n for n, cites in enumerate(composed.cites, start=1) if cites],
+            of=len(composed.cites),
+            trimmed=check.trimmed,
+            listed=listed,
+        )
+        if provenance is not None:
+            new[M.PROVENANCE_KEY] = provenance.to_dict()
     elif check is not None:
         raise WcError("a cleared site carries no check record")
     return new or None
@@ -1108,13 +1246,20 @@ def written_raw_data(
 _CITATION_KEYS = frozenset({"n", "url", "title", "domain"})
 
 
-def wc_problems(description: str | None, raw_data: Mapping[str, Any] | None) -> list[str]:
+def wc_problems(
+    description: str | None,
+    raw_data: Mapping[str, Any] | None,
+    *,
+    marking: str | None = None,
+) -> list[str]:
     """What a WC-written site breaks; empty = nothing. The writer's plan, its read-back and the
     acceptance ask exactly this of the stored (or planned) pair:
 
     * a cleared site (description NULL) carries none of the three WC keys;
     * a kept text carries its check record, whose `desc_sha256` is the text's; lane L's provenance
-      where present, whose `desc_sha256` is the text's too (D4); citations of exactly the numbers
+      where present, whose `desc_sha256` is the text's too (D4) - or, when the recorded old
+      `marking` (`marking_record`'s `old`) is a Phase-4 text's, a full provenance, and a lane-N
+      text's (`none`, `web`), `model4.WebProvenance`; citations of exactly the numbers
       its markers use, numbered 1..N by first use, each `{n, url, title, domain}` with the URL's
       host as the domain (D1); and the check record's kept sentences cite those same numbers.
     """
@@ -1141,7 +1286,8 @@ def wc_problems(description: str | None, raw_data: Mapping[str, Any] | None) -> 
         except ValueError as exc:
             provenance = None
             problems.append(f"the provenance does not read: {exc}")
-        if provenance is not None and not isinstance(provenance, M.LegacyProvenance):
+        allowed = _WANTED_PROVENANCE.get(str(marking), M.LegacyProvenance)
+        if provenance is not None and not isinstance(provenance, allowed):
             problems.append(f"a lane-{provenance.lane.value} provenance beside a checked text")
         elif provenance is not None and provenance.desc_sha256 != digest:
             problems.append("the provenance's desc_sha256 is not the sha256 of the description")
@@ -1192,6 +1338,8 @@ EVIDENCE_KEYS = frozenset(
 )
 EVIDENCE_DESCRIPTION = "description"
 EVIDENCE_DECISION = "O5 2026-09-26: Satzweise pruefen und kuerzen"
+#: Lane WN's journal evidence names the owner decision it executes (2026-10-01).
+EVIDENCE_DECISION_WN = "2026-10-01: Neu aus Webquellen"
 
 
 @dataclass(frozen=True)
@@ -1334,6 +1482,28 @@ def verification_problems(evidence: Mapping[str, Any], description: str | None) 
     return problems
 
 
+def _phase4_provenance_problems(
+    evidence: Mapping[str, Any], raw_data: Mapping[str, Any] | None
+) -> list[str]:
+    """A Phase-4 text keeps its provenance filtered to the kept sentences: one published sentence
+    per kept sentence of the evidence, no card (`filtered_provenance`)."""
+    try:
+        provenance = M.provenance_from_dict((raw_data or {})[M.PROVENANCE_KEY])
+    except (KeyError, ValueError):
+        return []  # `disclosure_problems` names a missing or unreadable one
+    if not isinstance(provenance, M.Provenance):
+        return []
+    problems = []
+    if len(provenance.sentences) != evidence["kept"]:
+        problems.append(
+            f"the provenance lists {len(provenance.sentences)} published sentences, the evidence "
+            f"kept {evidence['kept']}"
+        )
+    if provenance.card is not None:
+        problems.append("the provenance still names a card of sentences that changed")
+    return problems
+
+
 def evidence_problems(
     evidence: Mapping[str, Any], description: str | None, raw_data: Mapping[str, Any] | None
 ) -> list[str]:
@@ -1351,6 +1521,8 @@ def evidence_problems(
     problems: list[str] = list(disclosure)
     if composed.description != description:
         problems.append("the description is not what the journal evidence composes")
+    if evidence["marking"]["old"] == Marking.PHASE4.value and description is not None:
+        problems.extend(_phase4_provenance_problems(evidence, raw_data))
     problems.extend(verification_problems(evidence, description))
     if description is None:
         return problems

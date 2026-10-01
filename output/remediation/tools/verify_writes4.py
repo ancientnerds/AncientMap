@@ -648,8 +648,17 @@ def reverify(
     return deviations
 
 
-def invariant_deviations(*, lane: str, carried: Iterable[Key], production: Production) -> list[str]:
-    """The design's in-database invariants, as Postgres computed them in `live_sql`."""
+def invariant_deviations(
+    *,
+    lane: str,
+    carried: Iterable[Key],
+    production: Production,
+    markings: Mapping[str, str] | None = None,
+) -> list[str]:
+    """The design's in-database invariants, as Postgres computed them in `live_sql`. `markings` (lane
+    p4wc): each site's recorded old marking (the journal evidence's `marking.old`), which says what
+    provenance its written text carries - a Phase-4 text's (site-list runs) and a lane-WN text's are
+    not lane L's; a site without one is asked as a March text."""
     deviations: list[str] = []
     sites = sorted({key[2] for key in carried})
     for site_id in sites:
@@ -676,7 +685,9 @@ def invariant_deviations(*, lane: str, carried: Iterable[Key], production: Produ
         if lane == "p4wc":
             deviations.extend(
                 f"INVARIANT {site_id}: {problem}"
-                for problem in wc4.wc_problems(row["description"], row["raw_data"])
+                for problem in wc4.wc_problems(
+                    row["description"], row["raw_data"], marking=(markings or {}).get(site_id)
+                )
             )
     return deviations
 
@@ -692,6 +703,15 @@ def wc_evidence_sql(pks: Sequence[str], stamp_like: str) -> str:
         f"AND run_stamp LIKE {lanes.sql_text(stamp_like)} "
         f"AND run_stamp NOT LIKE {lanes.sql_text('%' + ROLLBACK_SUFFIX)} ORDER BY id) t;\n"
     )
+
+
+def wc_markings(evidence_rows: Sequence[Mapping[str, Any]]) -> dict[str, str]:
+    """Each site's recorded old marking (`marking.old`) from the evidence of its last WC write: what
+    provenance the written text carries (`wc4.wc_problems`, `marking`)."""
+    return {
+        str(row["row_pk"]): str(row["evidence"]["marking"]["old"])
+        for row in sorted(evidence_rows, key=lambda row: row["id"])
+    }
 
 
 def wc_evidence_deviations(
@@ -837,8 +857,20 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
     for pattern, count in sorted(result.superseded.items()):
         print(f"superseded by {pattern}: {count}")
     deviations = list(result.deviations)
-    deviations += invariant_deviations(lane=lane, carried=result.carried, production=production)
     written = {key[2] for key in result.carried}
+    wc_rows: list[dict[str, Any]] = []
+    if lane == "p4wc":
+        ordered = sorted(written)
+        for start in range(0, len(ordered), WINDOW):
+            wc_rows += lanes.json_rows(
+                run(wc_evidence_sql(ordered[start : start + WINDOW], stamp_like))
+            )
+    deviations += invariant_deviations(
+        lane=lane,
+        carried=result.carried,
+        production=production,
+        markings=wc_markings(wc_rows),
+    )
     if lane == "p4":
         written = {
             site
@@ -854,12 +886,6 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
             if production.live.get(("card_stats", "card_description", site)) is not None
         }
     if lane == "p4wc":
-        wc_rows: list[dict[str, Any]] = []
-        ordered = sorted(written)
-        for start in range(0, len(ordered), WINDOW):
-            wc_rows += lanes.json_rows(
-                run(wc_evidence_sql(ordered[start : start + WINDOW], stamp_like))
-            )
         deviations += wc_evidence_deviations(written, production, wc_rows)
         deviations += t08_deviations(written, production)
         print(f"re-checked {len(written)} written site(s) against their journal evidence")

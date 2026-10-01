@@ -63,6 +63,7 @@ class Lane(StrEnum):
     R = "R"  #: only non-free pages (facts restated, wording never published)
     ZERO = "0"  #: nothing usable: held as `no-source`
     L = "L"  #: legacy disclosure of held March-LLM text; never an assignment
+    N = "N"  #: lane WN: a new description written from web pages (owner, 2026-10-01); never assigned
 
 
 #: The lanes S1b can assign. L is written only by `phase4/legacy4.py`.
@@ -141,6 +142,13 @@ AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM})
 #: Lane L's `ai_system` and `basis`, verbatim from production_write.
 LEGACY_AI_SYSTEM = "2026-03 enrichment chain (LLM; model per site not recorded)"
 LEGACY_BASIS = "description differs from pre-March snapshot d4526691 (plan section 15.3)"
+#: Lane WN's `basis`: what the disclosure says the text rests on (owner decision 2026-10-01, "Neu aus
+#: Webquellen": a site left without a description gets a short one an AI agent wrote only from
+#: sentences it supports with verbatim quotes from reputable web pages, verified by a second agent).
+WEB_BASIS = (
+    "written by an AI agent from reputable web pages: every sentence rests on a verbatim quote, "
+    "checked by code and verified by a second agent"
+)
 PROVENANCE_VERSION = 1
 
 #: The `raw_data` key. The leading underscore is what makes `sourceFields.ts` skip it.
@@ -1594,12 +1602,65 @@ class LegacyProvenance(_JsonRecord):
         )
 
 
-def provenance_from_dict(data: Any) -> Provenance | LegacyProvenance:
-    """Read `raw_data._description_provenance` of either shape; the lane decides which."""
+_WEB_KEYS = frozenset({"v", "lane", "ai", "ai_system", "basis", "desc_sha256"})
+
+
+@dataclass(frozen=True, kw_only=True)
+class WebProvenance(_JsonRecord):
+    """Lane WN: truthful 'generated' provenance for a description an AI agent wrote from web pages
+    for a site that had none. Like lane L it names no licence, attribution or sources of its own
+    (the page list is `description_citations`, from the verified quotes) and has no card."""
+
+    desc_sha256: str
+    v: int = PROVENANCE_VERSION
+    lane: Lane = Lane.N
+    ai: AiMark = AiMark.GENERATED
+    ai_system: str = AI_SYSTEM
+    basis: str = WEB_BASIS
+
+    def __post_init__(self) -> None:
+        _need_version(self.v, "web_provenance")
+        if self.lane is not Lane.N:
+            raise ValueError(f"web_provenance.lane: {self.lane!r} is not N")
+        if self.ai is not AiMark.GENERATED:
+            raise ValueError(f"web_provenance.ai: {self.ai!r} is not generated")
+        if self.ai_system != AI_SYSTEM:
+            raise ValueError(f"web_provenance.ai_system: {self.ai_system!r} is not {AI_SYSTEM!r}")
+        if self.basis != WEB_BASIS:
+            raise ValueError(f"web_provenance.basis: {self.basis!r}")
+        _need_hex(self.desc_sha256, "web_provenance.desc_sha256")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "v": self.v,
+            "lane": self.lane.value,
+            "ai": self.ai.value,
+            "ai_system": self.ai_system,
+            "basis": self.basis,
+            "desc_sha256": self.desc_sha256,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Any) -> Self:
+        d = _obj(data, "web_provenance", _WEB_KEYS)
+        return cls(
+            v=d["v"],
+            lane=_coerce(Lane, d["lane"], "web_provenance.lane"),
+            ai=_coerce(AiMark, d["ai"], "web_provenance.ai"),
+            ai_system=d["ai_system"],
+            basis=d["basis"],
+            desc_sha256=d["desc_sha256"],
+        )
+
+
+def provenance_from_dict(data: Any) -> Provenance | LegacyProvenance | WebProvenance:
+    """Read `raw_data._description_provenance` of any shape; the lane decides which."""
     if not isinstance(data, dict):
         raise ValueError(f"provenance: expected a JSON object, got {type(data).__name__}")
     if data.get("lane") == Lane.L.value:
         return LegacyProvenance.from_dict(data)
+    if data.get("lane") == Lane.N.value:
+        return WebProvenance.from_dict(data)
     return Provenance.from_dict(data)
 
 

@@ -628,3 +628,349 @@ run with a new seed, built and judged with this stage.
 | 3 | refusals of `verify-export` and `verify-import` without a test or mutation case: a reused, non-empty or unknown handoff, a check that moved between the export and the import, a manifest that is not the round's record | fixed: a test for each (`test_wc_verify.py`), and mutation cases that disable each guard |
 
 Thirteen mutation cases were added to `WC_VERIFY_MUTATIONS` (section 7).
+
+## 11. Site-list runs (`wc-list`, owner decisions of 2026-10-01; worktree `wip/wn`)
+
+Owner decisions (verbatim answers of 2026-10-01): (1) evidence for a researched field value:
+"Wikipedia/Wikidata reicht" - one source suffices, one verbatim quote the machine finds on the page
+it fetched itself, no second agent for the evidence; other reputable pages where Wikipedia and Wikidata
+say nothing. (2) A field the research cannot source: "Feld bleibt leer". (5) The orchestrator is Opus
+5.5, every answering agent Sonnet 5.5: the briefs below tell the agent to record with `--model
+claude-sonnet-5-5`, and every new write discloses `model4.AI_SYSTEM`. Lane WC already worked this way
+(one quote per kept sentence, found by code on its own fetch; a sentence no source supports is
+dropped, the field stays as the sources leave it); what this section adds is the **site list**.
+
+A site-list run is a WC run over exactly the curated sites a file names - **whatever their text is** -
+and so the same check, verification, build and write reach the sites WB's web verifiers found
+contradicting a sentence of their description (`DESCRIPTION_DEFECTS.jsonl`, CARD_DESCRIPTIONS.md 2.2;
+"lane WC's method"). The plain run's population and every guard are untouched (section 1, 5); a run
+exported before 2026-10-01 records no `kind` and is a plain run, with every prompt and brief of it
+byte for byte what it was (`tests/remediation/test_wc.py`'s pins; the new texts are
+`wc/prompts_sonnet.py`, pinned in `tests/remediation/test_wn.py`).
+
+### 11.1 What a list run asks, and how each text is written
+
+`export --sites FILE` (one site id per line; every id must be a curated row of the read) records
+`kind: wc-list` and the list's sha256 in `POPULATION.json`. A listed site is asked unless it is
+`retired`, `no-description`, `provenance-unreadable`, `provenance-hash-differs`, `provenance-misaligned`
+(below), `not-splittable`, `excluded` or `earlier-run`; the plain run's `phase4-text` and `checked-before`
+are **asked** here. Each text is asked under its marking (`wc4.Marking`):
+
+| marking | the stored text | the question says | the written text |
+| --- | --- | --- | --- |
+| `L`, `march-unmarked`, `unclaimed` | a March text (section 1) | its origin as it is (March chain, or "not recorded") | as in a plain run: kept, trimmed, dropped; lane L's provenance or none |
+| `phase4` | a Phase-4 text, lane W/S/T/R's full provenance | "assembled from a Wikipedia article ... a later web check found a claim contradicted"; **no trims** | kept or dropped by sentence only (`KEEP_TRIMMED` is refused by the parser, `answers.parse_sentence(trims=False)`); the provenance it keeps is the old one **filtered to the kept sentences** (`wc4.filtered_provenance`) |
+| `web` | a text lane WN wrote (lane N) | "written by an AI agent from web pages" | lane N's provenance over the new text |
+
+- **A Phase-4 text keeps its attribution.** W and S texts are verbatim Wikipedia sentences under CC BY-SA
+  4.0: dropping sentences must not drop the attribution line or the AI mark, and a trim could not be
+  written into the provenance's source spans (`PublishedSentence.drop`). So the new provenance is the old
+  one with `sentences` reduced to the kept ones (one published sentence per checked sentence, matched by
+  index - measured 2,780 of 2,781 on 2026-10-01; the one that differs, `ef1ee8c0`, is listed
+  `provenance-misaligned`, never asked), `sources` reduced to those still cited, `ai_system` the new
+  write's (`model4.AI_SYSTEM`), `desc_sha256` the new text's and `card` null (its items name sentences that
+  changed; lane WB writes the new card). A text no kept sentence of which cites the attribution's source
+  is refused (`WcError`), as is a trimmed one. The writer holds the provenance to exactly that
+  (`write4._phase4_problems`), the acceptance to one published sentence per kept sentence and no card
+  (`wc4._phase4_provenance_problems`).
+- **A Phase-4 text whose check keeps every sentence is not written** (`SUMMARY.json` `not_planned.unchanged`,
+  `FINAL.jsonl` `planned: false`): the claim a defect names did not reproduce, and a rewrite would only
+  swap the pinned citations for the check's. A text with nothing left is cleared as in a plain run
+  (description NULL, provenance and citations gone).
+- A text a WC check kept before (`CHECK_KEY` in `raw_data`) is asked again; its check record is replaced
+  and its provenance follows its marking (lane L's moves to the new text).
+- The briefs are `prompts_sonnet.CHECK_BRIEF_SONNET`, `VERIFY_BRIEF_SONNET`, `JUDGE_BRIEF_SONNET` (the
+  agents are named `sonnet-check-r<round>-wc-000N`, `sonnet-wc-verify-000N`, `sonnet-wc-judge-judge-000N`);
+  the verifier's and the judge's questions are WC's own.
+
+### 11.2 Measured (read-only, 2026-10-01 10:24 UTC; the fresh read's sha256 `bfcbb8ab...b8831`)
+
+| | |
+| --- | --- |
+| DESCRIPTION_DEFECTS lines, 5 WB runs (`wb-pilot-2026-09-26c`, `wb-ws-2026-09-27-01/03/04/06`) | 158 (140 proven: the quote found by the machine; 18 not) |
+| sites named | **126**, every line `owner_lane` WA (basis W in 156 lines, S in 2) - no WC-basis line yet |
+| of them still holding the defective text (`desc_sha256` = the live description's) | 126 (none changed since: `skipped: {}`) |
+| a list run over them | 126 asked, all `phase4`, none misaligned, **741 sentences** (an export of 26 batches of 5) |
+| `--proven-only` | 114 sites |
+| the plain run's population on the same read | 2,104 asked, 2,781 `phase4-text`, 99 `retired`, 19 `checked-before` (the written pilot), 1 `no-description` |
+
+WB's runs `-02` and `-05` have no `DESCRIPTION_DEFECTS.jsonl` yet: rebuild the list when they have
+(`defect-sites` takes every file, and a site named twice counts once).
+
+### 11.3 The runbook
+
+From the main checkout once `wip/wn` is merged, main venv; the variables of section 4 plus the run's:
+
+    PY=C:/PythonProjects/AncientMap/.venv/Scripts/python.exe
+    M=output/remediation; RUNS=$M/wc_runner/runs; H=$M/handoff; L=$M/logs/p4wc
+    mkdir -p "$RUNS" "$L"
+    C="$PY scripts/remediation/wc/cli.py"; OH="$PY scripts/remediation/opus_handoff.py"
+    G="$PY $M/tools/write_gate4.py --group WC"
+    V="$PY $M/tools/verify_writes4.py --lane p4wc --allow-stamp wb-teaser-prov-%"
+
+**0. Preconditions.** The passed WC pilot's plan is written and accepted (the gate names it first, below).
+No WB step is half-written for these sites. The deploy of this branch is live **before a text is
+written** only for lane N (section 12.7); a list run over Phase-4 texts needs no API change.
+
+**1. Read, build the list, export** (one fresh read per run; a run directory is written once):
+
+    R=defects-2026-10-DD
+    $C read --run-dir $RUNS/$R                                      # the one read-only SELECT
+    DEF=$(for f in $M/teaser/runs/*/DESCRIPTION_DEFECTS.jsonl; do printf -- '--defects %s ' "$f"; done)
+    $C defect-sites --run-dir $RUNS/$R $DEF --out $RUNS/$R/DEFECT_SITES.txt   # [--proven-only]
+    #   prints the counts; DEFECT_SITES.txt.report.json carries each site's claims, `skipped` the lines
+    #   not used (text-changed-since: WA or WC rewrote the text after WB's run; retired; unproven)
+    $C export --run-dir $RUNS/$R --handoff $H/wc-$R-r1 --sites $RUNS/$R/DEFECT_SITES.txt \
+        [--pilot 20 --seed <S> | --limit N] [--after $RUNS/<an unwritten WC or list run> ...]
+
+A list that asks nothing is refused ("nothing to ask"). `--after` works as in section 3: a site of an
+earlier run not yet written is left out (`earlier-run`).
+
+**2. Answer, verify, build** - section 4's commands with the run's names, one **Sonnet** agent per batch
+(`$C brief ...` prints its instruction; 14-16 in parallel; never one agent for two batches):
+
+    $C brief  --run-dir $RUNS/$R --handoff $H/wc-$R-r1 --batch-id wc-000N
+    $OH validate --dir $H/wc-$R-r1
+    $C import --run-dir $RUNS/$R --handoff $H/wc-$R-r1
+    #   to_reask > 0: $C export-reask --run-dir $RUNS/$R --handoff $H/wc-$R-r2 ... validate, import (once)
+    $C verify-export --run-dir $RUNS/$R --handoff $H/wc-$R-verify      # new agents: verify-brief, validate
+    $C verify-import --run-dir $RUNS/$R --handoff $H/wc-$R-verify
+    #   to_verify2 > 0: verify-export --handoff $H/wc-$R-verify2 ... verify-import (once)
+    LAST=$($PY -c "import glob,json;print(max(int(json.load(open(f))['plan']['last'][3:]) for f in glob.glob('$RUNS/*/SUMMARY.json') if json.load(open(f))['plan']['last']))")
+    $C build --run-dir $RUNS/$R --first-batch $((LAST + 1))             # FINAL, SUMMARY, WC4.jsonl
+
+`SUMMARY.json` `not_planned.unchanged` lists the Phase-4 sites the check kept whole (nothing to write).
+A run built with `--pilot` is judged (section 4, step 1: `judge-export`, `judge-brief`, one fresh Sonnet
+agent per judge batch, `judge-import`) before it is written; a list **chunk** needs no judge of its own
+- the verification is what stands between its check and its write - but it is approved only behind
+the WC pilot (below).
+
+**3. Write**, in steps of at most 100 sites, each accepted with 0 deviations (section 4, step 4): every
+named plan in run order, the passed WC pilot first, then every earlier chunk and list run whose batches
+are in the apply root, this run last:
+
+    PLANS="--wc-plan $RUNS/<wc pilot>/WC4.jsonl --wc-plan $RUNS/<mass chunk>/WC4.jsonl --wc-plan $RUNS/$R/WC4.jsonl"
+    $G $PLANS                                                       # dry: plan + render, read-only
+    $G $PLANS --rehearse
+    $G $PLANS --apply --step 100
+    $V --plan $M/logs/_write_apply_p4wc/LANE_PLAN.jsonl > $L/accept-step-NN.log
+    $G --accept $L/accept-step-NN.log
+    $V --plan $M/logs/_write_apply_p4wc/LANE_PLAN.jsonl --complete   # at the end
+
+The writer's guards hold for a list run exactly as for a plain one (`tests/remediation/
+test_wc_list.py`): a site whose description or `raw_data` is no longer the checked pair is
+`moved-since-check`; a site a later plan asks again is that plan's (`asked-again-later`) and two batches
+that both plan a site stop the gate before anything is rendered; `--after` leaves the earlier runs'
+sites out; a Phase-4 text is **not** refused as `written-by-p4` when it was asked as one (its marking
+is recorded in the evidence); a plain-run outcome over a live Phase-4 text still is. The transaction's
+invariant 6 holds the provenance to the lane the marking calls for (`phase4`: the old lane).
+
+**4. Undo.** The journal (section 6): `revert4.py --stamp-like 'phase4wc:p4wc-NNNN:%' --rehearse`, then
+`--apply`; `--site <id>` for one site. A reversal restores a Phase-4 text, its citations, its
+provenance with the card key and `raw_data` byte for byte.
+
+**5. Afterwards.** A repaired description changes its sha256, so the site's card turns stale and the
+next WB `select` asks it again (CARD_DESCRIPTIONS.md 2.2, 3.1); then WF.
+
+**The pilot class.** `cli.pilot_approval` approves per kind of text: a `wc` or `wc-list` plan rests on a
+passed **WC** pilot (the first such plan named is a pilot run's, judged, and its plan unchanged since),
+a `wn` plan on a passed **WN** pilot (section 12.5). A list run may itself be a pilot
+(`export --sites F --pilot 20 --seed S`, judged by section 4's judge) if a measurement of Phase-4 texts
+under this check is wanted before the rest is written.
+
+## 12. Lane WN: a description for a site that has none ("Neu aus Webquellen", 2026-10-01)
+
+Owner decision (4): a site left without a description gets a short one that an agent writes **only from
+sentences it supports with verbatim quotes from reputable web pages**; checker and verification as for
+the cards, AI-marked, then it gets a teaser card (lane WB). (2): a site the research cannot source stays
+without a description - the owner gets the list. (1): Wikipedia/Wikidata suffice as the one source of a
+sentence.
+
+### 12.1 The population (measured read-only, 2026-10-01 10:24 UTC)
+
+Curated, not retired, description NULL or blank (`wc4.is_empty`): **1 site** - Cave of Salemas
+(`474fa9e0-74cc-4a87-9cac-dd7dbe83ddd5`, Portugal, `raw_data` NULL), the one the WC pilot cleared
+(`phase4wc:p4wc-4003:chunk-0001`, `WC/description-clear`). 4,905 curated sites are not retired; 0
+hold a blank description; 99 are retired; 4,904 hold a description. The count grows as lane WC writes: the
+three WC pilots of 2026-09-27 cleared 5 of 60 sites (8.3 %, 2 + 2 + 1), the plain run's population is now
+2,104 sites, so **an estimate - not a measurement - is about 175 more (100-250)**. Measure again after
+the last WC step: `$C read ...`, then `cli.population(rows, excluded=set(), earlier=set(), kind="wn")`
+(or the export's `POPULATION.json`: `population`). A site with a description is `has-description`, one
+carrying a WC key without a description `stale-keys` (a broken state of another lane: never asked), a
+retired one `retired`.
+
+### 12.2 The write round
+
+`export --wn` records `kind: wn` and exports **round 1 as the write round** (stage `write`, batches
+`wn-NNNN`, `prompts_sonnet.WRITE_QUESTION`, 5 sites per batch): the site block (the stored values identify
+the site, they are no evidence) and the rules. A Sonnet agent answers one JSON object per site
+(`answers.parse_write`):
+
+- **2 to 6 sentences**, each `{text, quotes, note}`; or **no sentence** (`"sentences": []` and a note)
+  when no reputable page supports two - the site then stays empty;
+- each sentence is **one** sentence of 25 to 400 characters (`wc4.sentence_problems`: capital or digit
+  first, `. ! ?` last, not garbled, no double space), with **1 to 4 quotes** in the check answer's shape
+  (an http(s) URL not denied by `licences.deny_family` - ancientnerds.com, AI aggregators, Wikipedia
+  mirrors, blocked domains -, no `utm_`, a title, a quote of 20 to 500 characters);
+- no citation marker (code adds `[n]` from the quotes), no pronoun opening or "it/they" subject after the
+  first comma (`sentences.leans_on_predecessor`: the verifier may drop the sentence before it), no
+  sentence twice, and the sentences must split back into exactly themselves as one text
+  (`wc4.checked_sentences`);
+- **its own words**: a sentence that shares a run of **12 words** with one of its own quotes is refused
+  (`answers.MAX_SHARED_RUN`, a design number measured on no corpus: a pasted Wikipedia sentence would be an
+  uncredited CC BY-SA copy, since lane N shows no attribution line).
+
+`check-answer` (the agent's aid) runs the same parser, fetches every quoted page into the batch's own
+store and prints each sentence's outcome and the description the answer would leave; it records nothing.
+Verified live on 2026-10-01 against en.wikipedia.org (Cave of Salemas, an answer written by hand, nothing
+written anywhere): three sentences counted, and a quote not on the page was reported `DOES NOT COUNT ...
+(not found)`.
+
+`import` validates the round, rebuilds every prompt byte for byte, **fetches every quoted page itself**
+into `<run>/pages/` and checks every quote exactly as the check does (`answers.quote_outcomes`: found,
+title on the page, no mirror), then records each written sentence as a `KEEP` on its quotes in the check
+round's own format (`round-1/ANSWERS.jsonl`, `REASK.json` empty) and the sentences in `DRAFTS.jsonl`
+(`read_sites` merges them in). **No re-ask**: a written sentence whose quote the import did not find is
+dropped (`unverified`); a malformed answer **refuses the import** (the message names the file: delete it
+and have the batch agent answer again) - it is never read as "empty". The summary prints
+`sites_without_sentences`.
+
+### 12.3 Verification, build, the text
+
+Unchanged WC machinery over the written sentences: `verify-export` (stage `verify`, a **new** Sonnet agent
+per batch of 5 sites; the question `VERIFY_QUESTION_WN` says the text was written, not checked; SUPPORTED,
+UNSUPPORTED, WRONG per sentence and coherence), `verify2` for a text a drop changed, `build`. The import
+refuses a verifier whose name wrote or verified the site. The text is the verified sentences in order, each
+with one `[n]` per distinct page of its quotes, and `description_citations` the pages (`wc4.compose`).
+
+- **A site whose text ends empty is not planned**: `SUMMARY.json` `not_planned.empty` and `FINAL.jsonl`
+  `planned: false` list it; nothing is written for it. That is the owner's list; print it with names:
+  `$PY -c "import json;[print(f['site_id'],f['name']) for f in map(json.loads,open('$RUNS/$R/FINAL.jsonl')) if not f['planned']]"`.
+  The plan loader refuses a plan that carries such an outcome (`write4.load_wc_plan`).
+- `raw_data` after the write: the old object less WC's three keys, plus `description_citations`,
+  `_description_check` (v2; `checked_sha256` is the sha256 of the empty text - or of the blank string the
+  site held -, `verifiers`, `verified_sha256`) and **`_description_provenance`**
+  `{v:1, lane:"N", ai:"generated", ai_system: model4.AI_SYSTEM, basis, desc_sha256}`
+  (`model4.WebProvenance`; a site with a `raw_data` of its own keeps every other key). The journal
+  evidence records the marking `none` and `checked: null` (or the blank string).
+- **Disclosure** (EU AI Act): every reader derives it through `api/services/description_provenance`
+  (`/api/sites/{id}`, the SSR payload, the public v1 API): `descriptionAi: generated`, the existing AI
+  footnote, **no licence, no attribution line, no card key** (lane N is in `NO_LICENCE_LANES` beside L).
+  The page lists the quoted pages as the description's sources.
+
+### 12.4 The writer and what it holds for an empty old value
+
+Same writer group WC (`phase4wc`, `p4wc-NNNN`): `plan_wc` plans the description row with **old value
+NULL (or the blank string, exactly as the read found it)** and the raw_data row; the premise is the whole
+pair held - a text that arrived since, a `raw_data` that moved, a NULL read that is now blank (or the
+other way round), a vanished site: `moved-since-check`, refused before anything is rendered
+(`tests/remediation/test_wn_write.py`). The transaction's guard 4 (`IS DISTINCT FROM`) holds the NULL
+old value; invariant 5 holds the check record's hashes; **invariant 6 holds the provenance to the lane the
+evidence's marking calls for** (N for a lane-WN text, L for a March text, the old lane for a Phase-4 text),
+a `CASE` over the plan table's evidence, guarded so the cast of `old_value` is only evaluated for a
+raw_data row. The read-back and the acceptance hold each written site to `wc4.wc_problems(...,
+marking=<the recorded marking>)`; the acceptance reads the markings from the last WC journal evidence of
+each site (`verify_writes4.wc_markings`).
+
+**First execution on a real Postgres** (2026-10-01, a throwaway `postgres:16-alpine` container, no host
+port, synthetic rows of the test fixtures, migrations 0017/0018/0022; `tests/remediation/
+pg_throwaway_check.py`): the rendered apply and rehearsal, the reversal's proof and its committed
+reversal all ran - the WN chunk wrote lane N over a NULL and a blank old value and the reversal restored
+both, the list chunk kept lane W, and a statement edited to write lane S stopped at invariant 6 ("1
+site(s) break the provenance or clear invariant"). Production's own `--rehearse` (ends in ROLLBACK) is
+still the first run against its data.
+
+### 12.5 The pilot (20 sites) and its independent judge
+
+`export --wn --pilot 20 --seed <S>`; the answers, import, verification and build as above; then **WC's
+independent judge**, as in section 4 step 1: `judge-export` (a question per site that has at least one
+written sentence - `JUDGE_QUESTION_WN`, the same answer shape), `judge-brief` (a fresh Sonnet agent per
+batch: none that wrote or verified any site of the run), `judge-import`. **`J_THRESHOLDS` are unchanged
+for WN** (`{"wrong": 0, "unsupported_share": 0.05, "incoherent": 0}`: no kept sentence the judge shows
+WRONG with a found quote, at most 5 % UNSUPPORTED, no incoherent text; `DROP_WRONG` is reported, not
+gating). The pilot's sites that ended empty are in `SUMMARY.json` (`not_planned.empty`): they gate
+nothing - an empty site loses no truth - but a large share says the write question or the sites need
+a look before the mass run.
+
+**The gate** (`cli.pilot_approval`) refuses a WN mass plan until a WN pilot passed: per kind of text the
+first plan named is a pilot run's, its `judge/RESULT.json` says `passed: true` on exactly that plan
+(`plan_sha256`), and a WC pilot never approves a WN plan, nor the other way round; the gate prints each
+approving pilot with its RESULT.json sha256. If the population is smaller than 20 (it is 1 today), the
+pilot is the whole population and nothing is left for a mass run - run lane WN **after the last WC step**,
+and let the pilot be a draw of the then ~175.
+
+### 12.6 The runbook
+
+    R=wn-2026-10-DD                                                 # variables as in 11.3
+    $C read --run-dir $RUNS/$R
+    $C export --run-dir $RUNS/$R --handoff $H/wn-$R-w --wn --pilot 20 --seed <S>   # the pilot
+    #   per batch wn-0001.. one Sonnet agent, whose whole instruction is
+    $C brief  --run-dir $RUNS/$R --handoff $H/wn-$R-w --batch-id wn-000N
+    $OH validate --dir $H/wn-$R-w
+    $C import --run-dir $RUNS/$R --handoff $H/wn-$R-w               # fetches into $RUNS/$R/pages
+    $C verify-export --run-dir $RUNS/$R --handoff $H/wn-$R-verify   # new agents: verify-brief, validate
+    $C verify-import --run-dir $RUNS/$R --handoff $H/wn-$R-verify   # prints to_verify2
+    #   to_verify2 > 0 (once): verify-export --handoff $H/wn-$R-verify2 ... verify-import
+    $C build  --run-dir $RUNS/$R --first-batch $((LAST + 1))        # LAST as in 11.3
+    $C judge-export --run-dir $RUNS/$R --handoff $H/wn-$R-judge     # RESULT.json, JUDGE_EXIT=
+    #   per judge batch a fresh agent: judge-brief ..., validate, then
+    $C judge-import --run-dir $RUNS/$R --handoff $H/wn-$R-judge
+    PLANS="--wc-plan <every earlier WC plan, the WC pilot first> --wc-plan $RUNS/$R/WC4.jsonl"
+    $G $PLANS; $G $PLANS --rehearse; $G $PLANS --apply --step 100
+    $V --plan $M/logs/_write_apply_p4wc/LANE_PLAN.jsonl > $L/accept-wn-pilot.log; $G --accept $L/accept-wn-pilot.log
+
+The apply root is the lane's one: **every** plan whose batches are in it is named (the gate refuses a
+root holding a plan not named), in run order - the WC pilot first, the WN pilot first among the WN plans.
+The mass run is chunks of a few hundred sites exactly as section 3 (`export --wn --limit N [--after ...]`,
+no judge of its own), each chunk's `--first-batch` past every earlier plan, each written in steps of at
+most 100 sites and accepted with 0 deviations.
+
+**Order of the work.** (1) lane WC written and accepted; (2) **this branch deployed and live** - the API
+must know lane N (`NO_LICENCE_LANES`) *before* the first WN write, or `description_disclosure` raises on
+those sites' pages (`provenance["licence"]`): after the deploy check `commit` of
+`http://localhost:8000/` is the merged commit; (3) the WN pilot, judged, written, accepted; (4) the
+chunks; (5) lane WB writes each new text's teaser card (basis `WC`: the check record hashes the text),
+then WF.
+
+**Undo**: `revert4.py --stamp-like 'phase4wc:p4wc-NNNN:%' --rehearse` / `--apply`, `--site <id>` for one
+site: the reversal writes NULL (or the blank string) and the old `raw_data` back (`tests/remediation/
+test_wn_write.py`; the real-Postgres run above). If a written batch is reverted before its acceptance:
+`$G --close-reverted`. A WN text that turns out wrong later is a **site-list run** (section 11,
+marking `web`), not a hand edit.
+
+## 13. Gates of the code, what changed, known limits (2026-10-01, worktree `wip/wn`, base `wip/model-stamp`)
+
+**Code.** New: `scripts/remediation/wc/prompts_sonnet.py`; `tests/remediation/test_wn.py`,
+`test_wn_write.py`, `test_wc_list.py`, `test_wn_model.py`, `wn_fixtures.py`, `pg_throwaway_check.py`
+(not collected), `tests/api/test_wn_disclosure.py`. Changed: `wc/cli.py` (kinds, `--sites`, `--wn`,
+`defect-sites`, kind-aware `pilot_approval`), `wc/answers.py` (`parse_write`, `trims`),
+`output/remediation/tools/verify_writes4.py` (`wc_markings`, marking-aware invariants),
+`api/services/description_provenance.py` (lane N: no licence, no card key), the mutation sweep (8
+re-anchored cases, new `WN_MUTATIONS`), the fake psql of `tests/remediation/phase4_write_fixtures.py`
+(invariant 6 by marking) and one re-pinned SQL hash in `test_phase4_wc_write.py`.
+**`scripts/remediation/phase4/` (hashed by mass4) changes in three files - say so at the merge:**
+`model4.py` (`Lane.N`, `WEB_BASIS`, `WebProvenance`, `provenance_from_dict`; `LANE_AI`, `LANE_CHANGES`,
+`ASSIGNED_LANES` untouched), `wc4.py` (the markings `phase4`/`web`/`none`, `old_marking(listed=)`,
+`filtered_provenance`, `provenance_after`, `written_raw_data`, `wc_problems(marking=)`,
+`disclosure_problems`, `check_record(checked=None)`, `evidence_problems`), `write4.py` (`plan_wc`'s
+`written-by-p4` rule, `_phase4_problems`, `load_wc_plan`'s empty-WN refusal, invariant 6, the read-back).
+So: merge into a tree only when no mass4 run executes from it (as section 8 says of WC).
+
+**In-flight runs are not disturbed.** `prompts.py` is untouched (the exported prompts of
+`mass-2026-09-27-01..05` rebuild byte for byte, their verify prompts come from the same templates the
+sealed pilot judged); a run without `kind` is a plain run; no file under `output/remediation` of another
+lane was edited.
+
+**Known limits.**
+- The 12-word copy limit is a design number; the verifier, not code, judges that a sentence says what its
+  quote says.
+- A Phase-4 text keeps its attribution only through `filtered_provenance`; a text whose published
+  sentences cannot be matched to the checked ones one for one is not asked (1 of 2,781 today).
+- Independence of writers, verifiers and judges is procedural, as in section 8 (names compared, each batch a
+  new agent).
+- A list run over Phase-4 texts is approved by the WC pilot, which measured March texts; its own measure is
+  the verification, and a `--pilot` inside the list is the optional extra.
+- The WN pilot cannot be drawn until lane WC has cleared enough sites (1 today).
+
+**Gates measured on the final commit** (main venv; the worktree's `output/remediation` data absent): see the
+commit message and the AUDIT_LOG line the orchestrator adds.
