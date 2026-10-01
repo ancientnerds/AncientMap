@@ -518,3 +518,7 @@ output/remediation/l5/export/
 # and the read they rest on (two rows, no description), never the rehearsal.
 !output/remediation/mechanical_chiapa/
 output/remediation/mechanical_chiapa/*/REHEARSAL.sql
+# Owner decision O9 (2026-10-01): five duplicates retired (`dup-retire`) - plan, undo, statement
+# and the read they rest on (ten rows), versioned like the other mechanical lanes, never the rehearsal.
+!output/remediation/mechanical_dups/
+output/remediation/mechanical_dups/REHEARSAL.sql
