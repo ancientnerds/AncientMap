@@ -125,6 +125,9 @@ MAX_SITES = 100
 MIN_SITES = 2
 EXCERPT = 600
 TEST_ID = "E3/scope-review"
+#: The stamp of the model that judged, by the model id it runs as: the family (`opus`, `sonnet`) the
+#: evidence label of a retirement names.
+_FAMILY_OF_STAMP = {stamp: model_id.split("-")[1] for model_id, stamp in OH.ANSWER_MODELS.items()}
 
 #: Site types that do not by themselves say "human-made" (each a canonical type).
 NON_SITE_TYPES = frozenset(
@@ -662,6 +665,7 @@ def import_round(out: Path, round_no: int, library: Q.Library, collect: Any) -> 
                 "counted": counted,
                 "premise": by_id[q["site_id"]]["premise"],
                 "answered_by": raw.answered_by,
+                "model": raw.model,
                 "answered_at": raw.answered_at,
                 "prompt_sha256": q["prompt_sha256"],
             }
@@ -675,6 +679,15 @@ def import_round(out: Path, round_no: int, library: Q.Library, collect: Any) -> 
 
 
 # ------------------------------------------------------------------------------ the plan
+def judged_by(row: Mapping[str, Any]) -> str:
+    """The evidence label of who judged one answer row: `<family>:<agent>`, the family from the
+    answer's own stamp (`row["model"]`, written at import since 2026-10-01). A row imported before
+    that carries no `model`: every answer of that time was Opus's (owner decision 2026-10-01 is what
+    introduced Sonnet answers), so those rows keep their `opus:<agent>` label unchanged."""
+    stamp = row["model"] if "model" in row else OH.OPUS_MODEL
+    return f"{_FAMILY_OF_STAMP[stamp]}:{row['answered_by']}"
+
+
 def decisions(out: Path) -> dict[str, dict[str, Any]]:
     """The sites whose latest answer is a counted `not_a_site`, by site - a later round's answer
     about a moved entry replaces the earlier one. A round exported but not imported stops the
@@ -773,7 +786,7 @@ def build_plan(
             {"source": q["source"], "url": q["source"], "quote": q["quote"]}
             for q in row["quotes"]
             if q["outcome"] == Q.FOUND
-        ] + [{"source": f"opus:{row['answered_by']}", "url": "handoff", "quote": row["reason"]}]
+        ] + [{"source": judged_by(row), "url": "handoff", "quote": row["reason"]}]
         changes += _cells(site, RETIRED, reason, "e3-not-a-site", evidence)
     for site, entry in reinstatements(export):
         reason = (

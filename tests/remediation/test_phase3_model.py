@@ -129,7 +129,7 @@ def test_the_runner_reads_the_opus_answer_to_exactly_this_prompt(tmp_path: Path)
     assert MS.export_calls([call], directory=tmp_path) == {"exported": 0, "already": 1}
     _handoff_answers(tmp_path, text="VERDICT: CORRECT")
 
-    answer = MS.HandoffRunner(directory=tmp_path).run(call)
+    answer = MS.HandoffRunner(directory=tmp_path, models=MS.OPUS_ONLY).run(call)
 
     assert answer.text == "VERDICT: CORRECT"
     assert answer.usage == MS.Usage.unmetered()
@@ -143,7 +143,7 @@ def test_every_handoff_refusal_stops_the_batch_and_is_never_a_named_hole(tmp_pat
     append a hold); a plain `ModelCallFailed` stops the batch, so the question is asked again.
     """
     call = MS.ModelCall(stage=M.Stage.FINDER, batch_id="batch-0001", site_id="site-1", prompt="Q")
-    runner = MS.HandoffRunner(directory=tmp_path)
+    runner = MS.HandoffRunner(directory=tmp_path, models=MS.OPUS_ONLY)
     MS.export_calls([call], directory=tmp_path)
 
     with pytest.raises(MS.ModelCallFailed, match="no answer at") as missing:
@@ -286,7 +286,30 @@ def test_the_handoff_runner_hands_on_the_answers_own_stamp(tmp_path: Path) -> No
         text="VERDICT: CORRECT",
         answered_by="test-agent",
     )
-    assert MS.HandoffRunner(directory=tmp_path).run(call).model == OH.SONNET_MODEL
+    live = MS.HandoffRunner(directory=tmp_path, models=MS.ANSWERING_MODELS)
+    assert live.run(call).model == OH.SONNET_MODEL
+
+
+def test_the_closed_phase_3_import_refuses_an_answer_by_another_model(tmp_path: Path) -> None:
+    """The closed lane reports `MS.MODEL` in its payloads, so it takes Opus answers only."""
+    call = MS.ModelCall(stage=M.Stage.FINDER, batch_id="batch-0001", site_id="site-1", prompt="Q?")
+    dirs = {OH.SONNET_MODEL: tmp_path / "sonnet", OH.OPUS_MODEL: tmp_path / "opus"}
+    for model, directory in dirs.items():
+        MS.export_calls([call], directory=directory)
+        OH.write_answer(
+            directory,
+            model=model,
+            batch_id="batch-0001",
+            stage="finder",
+            label=call.label,
+            text="VERDICT: CORRECT",
+            answered_by="test-agent",
+        )
+    assert MS.OPUS_ONLY == {OH.OPUS_MODEL}
+    with pytest.raises(MS.ModelCallFailed, match="answered by"):
+        MS.HandoffRunner(directory=dirs[OH.SONNET_MODEL], models=MS.OPUS_ONLY).run(call)
+    opus = MS.HandoffRunner(directory=dirs[OH.OPUS_MODEL], models=MS.OPUS_ONLY).run(call)
+    assert opus.model == OH.OPUS_MODEL
 
 
 def test_an_answer_without_a_model_is_not_ledgered(tmp_path: Path) -> None:

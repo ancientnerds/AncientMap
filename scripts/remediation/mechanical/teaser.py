@@ -92,6 +92,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 from phase3 import write_stage as WS  # noqa: E402 - the psql seam card_json reads through
 from phase3.run import read_jsonl  # noqa: E402 - the strict JSON-lines reader (no line skipped)
 from phase4 import card_json as CJ  # noqa: E402 - the card file's one renderer
+from phase4 import model4 as M  # noqa: E402 - AI_SYSTEMS, the disclosure strings a write may carry
 from phase4 import write4 as W4  # noqa: E402 - the exit line
 from prod_write import send  # noqa: E402
 
@@ -372,7 +373,16 @@ def new_raw_data(
     if isinstance(described, dict) and described.get("card") is not None:
         out[DESCRIPTION_PROVENANCE_KEY] = {**described, "card": None}
     if outcome["status"] == ACCEPTED:
-        out[CP.CARD_PROVENANCE_KEY] = CP.validate(outcome["provenance"])
+        provenance = CP.validate(outcome["provenance"])
+        # `pipeline/` cannot import this lane's model strings, so its validator holds the shape
+        # only; the strings a card provenance may disclose are held here, at the one place a
+        # teaser provenance enters a write.
+        if provenance["ai_system"] not in M.AI_SYSTEMS:
+            raise ValueError(
+                f"{CP.CARD_PROVENANCE_KEY}: ai_system {provenance['ai_system']!r} is not one of "
+                f"{sorted(M.AI_SYSTEMS)!r}"
+            )
+        out[CP.CARD_PROVENANCE_KEY] = provenance
     return out
 
 

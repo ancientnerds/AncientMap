@@ -99,6 +99,11 @@ from phase3.run import InputError  # noqa: E402  - one spelling per concept, not
 #: model that answered it (`ModelAnswer.model`); this constant is what the closed Phase-3 runs
 #: (`phase3/run.py`, `mass_run.py`), which replay Opus answers only, record in their run files.
 MODEL = OH.OPUS_MODEL
+#: What the closed Phase-3 import (`run.py`, `mass_run.py`) accepts: Opus answers only, so the
+#: `"model": MODEL` it reports is true. A Sonnet answer is refused there, as in the gallery audit.
+OPUS_ONLY = frozenset({OH.OPUS_MODEL})
+#: What the live lanes (Phase 4) accept: every stamp `opus_handoff` validates.
+ANSWERING_MODELS = frozenset(OH.ANSWER_MODELS.values())
 
 #: How much evidence text may be inlined into one prompt, in characters. **An interpretation, not a
 #: source's figure** - but one bounded by a measurement now instead of by arithmetic on a phrase.
@@ -387,8 +392,12 @@ class HandoffRunner:
     instead of recording a permanent hole (Phase 3) or an append-only hold (Phase 4).
     """
 
-    def __init__(self, *, directory: Path) -> None:
+    def __init__(self, *, directory: Path, models: frozenset[str]) -> None:
         self.directory = directory
+        #: The stamps this run takes an answer from: the closed Phase-3 lane passes `OPUS_ONLY`
+        #: (it reports `MODEL` in its payloads, so an answer by another model must not enter it),
+        #: the live Phase-4 lane `ANSWERING_MODELS`. No default: the caller names its lane.
+        self.models = models
 
     def run(self, call: ModelCall) -> ModelAnswer:
         try:
@@ -401,6 +410,11 @@ class HandoffRunner:
             )
         except OH.HandoffError as exc:
             raise ModelCallFailed(f"{call.label}: {exc}") from exc
+        if answer.model not in self.models:
+            raise ModelCallFailed(
+                f"{call.label}: answered by {answer.model!r}; this run takes only "
+                f"{sorted(self.models)}"
+            )
         return ModelAnswer(text=answer.text, usage=Usage.unmetered(), model=answer.model)
 
 

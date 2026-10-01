@@ -155,7 +155,7 @@ def run_on_answers(
     batch_dir: Path, stages: Sequence[tuple[str, ModelStage, str]], *, ledger: Path, directory: Path
 ) -> tuple[int, Report]:
     """Import: `stages` on the Opus answers in `directory`; the first that cannot complete stops."""
-    runner = MS.HandoffRunner(directory=directory)
+    runner = MS.HandoffRunner(directory=directory, models=MS.ANSWERING_MODELS)
     for name, stage, report in stages:
         code = stage(batch_dir, ledger, runner)
         if code != 0:
@@ -394,7 +394,7 @@ def cmd_review(args: argparse.Namespace) -> tuple[int, Report]:
     code = _review(
         batch_dir,
         run_ledger(args),
-        MS.HandoffRunner(directory=Path(args.handoff_import)),
+        MS.HandoffRunner(directory=Path(args.handoff_import), models=MS.ANSWERING_MODELS),
     )
     report: Report = {"batch_id": args.batch_id, "handoff_import": args.handoff_import}
     if code != 0:
