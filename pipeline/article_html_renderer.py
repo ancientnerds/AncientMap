@@ -398,18 +398,9 @@ def render_medium_copy_html(
 </html>"""
 
 
-#: The 404 page's two signals, both through the tracker tag when it is present:
-#: a `not_found` event on every view (path + referrer host — the dashboard's
-#: "Toter Link" list, pipeline.umami_db.SQL_NOT_FOUND) and the micro-feedback
-#: `feedback` event of src/analytics (prompt not_found) when someone types.
-_NOT_FOUND_FEEDBACK = """<form class="nf-feedback" onsubmit="return anFeedback(this)">
-        <label for="nf-q">What were you looking for?</label>
-        <div class="nf-feedback-row">
-            <input id="nf-q" name="q" type="text" maxlength="100" autocomplete="off" placeholder="A site, a story, a place…">
-            <button type="submit">Send</button>
-        </div>
-    </form>
-    <style>
+#: Form styling shared by the 404 feedback box and the 410 archive search
+#: (story_recovery_html): one definition, so the two cannot drift apart.
+_NF_FORM_CSS = """
         .nf-feedback { margin: 32px auto 0; max-width: 420px; text-align: left; padding: 14px 16px 16px; border: 1px solid rgba(0,204,102,0.35); border-left: 3px solid #00cc66; background: rgba(0,0,0,0.55); }
         .nf-feedback label { display: block; margin-bottom: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: #00cc66; }
         .nf-feedback-row { display: flex; flex-direction: column; gap: 10px; }
@@ -419,6 +410,25 @@ _NOT_FOUND_FEEDBACK = """<form class="nf-feedback" onsubmit="return anFeedback(t
         .nf-feedback button:hover { background: #bb0a0a; color: #000; }
         .nf-feedback-thanks { margin-top: 32px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: #00cc66; }
         @media (min-width: 480px) { .nf-feedback-row { flex-direction: row; } .nf-feedback input { flex: 1; } }
+"""
+
+
+#: The 404 page's two signals, both through the tracker tag when it is present:
+#: a `not_found` event on every view (path + referrer host — the dashboard's
+#: "Toter Link" list, pipeline.umami_db.SQL_NOT_FOUND) and the micro-feedback
+#: `feedback` event of src/analytics (prompt not_found) when someone types.
+_NOT_FOUND_FEEDBACK = (
+    """<form class="nf-feedback" onsubmit="return anFeedback(this)">
+        <label for="nf-q">What were you looking for?</label>
+        <div class="nf-feedback-row">
+            <input id="nf-q" name="q" type="text" maxlength="100" autocomplete="off" placeholder="A site, a story, a place…">
+            <button type="submit">Send</button>
+        </div>
+    </form>
+    <style>
+"""
+    + _NF_FORM_CSS.strip("\n")
+    + """
     </style>
     <script>
         window.addEventListener('load', function () {
@@ -432,6 +442,7 @@ _NOT_FOUND_FEEDBACK = """<form class="nf-feedback" onsubmit="return anFeedback(t
             return false;
         }
     </script>"""
+)
 
 
 def analytics_tag() -> str:
@@ -448,12 +459,55 @@ def analytics_tag() -> str:
     )
 
 
-def render_error_html(what: str = "Page", code: int = 404, detail: str | None = None) -> str:
+def story_recovery_html(latest: list[tuple[str, str]]) -> str:
+    """Ways out of a withdrawn story's 410 page: the archive search, the
+    newest stories and the globe.
+
+    The 410 itself stays — it is what makes Google drop the URL. But 12 % of all
+    story views and 24 % of the Google clicks on story pages (measured
+    2026-10-01) ended on that page, and a visitor who followed a search result
+    got three generic links. The search is a plain GET form: /news-archive/?q=
+    is server-rendered and needs no JS. `latest` is (slug, headline) pairs; a
+    href needs no percent-encoding, the browser encodes it (see encode_path).
+    """
+    stories = "".join(
+        f'<li><a href="/news-archive/{escape(slug)}">{escape(headline)}</a></li>'
+        for slug, headline in latest
+    )
+    newest = (
+        f'<h2 class="nf-latest-title">Latest stories</h2><ul class="nf-latest">{stories}</ul>'
+        if latest
+        else ""
+    )
+    return f"""<form class="nf-feedback" action="/news-archive/" method="get" role="search">
+        <label for="nf-search">Search the story archive</label>
+        <div class="nf-feedback-row">
+            <input id="nf-search" name="q" type="search" maxlength="100" autocomplete="off" placeholder="A site, a story, a place…">
+            <button type="submit">Search</button>
+        </div>
+    </form>
+    {newest}
+    <p><a class="nf-globe" href="/globe.html">Explore the interactive globe</a></p>
+    <style>{_NF_FORM_CSS}
+        .nf-latest-title {{ margin: 32px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: #00cc66; }}
+        .nf-latest {{ list-style: none; margin: 0 auto; padding: 0; max-width: 420px; text-align: left; }}
+        .nf-latest li {{ padding: 8px 0; border-bottom: 1px solid rgba(0,204,102,0.2); }}
+        .nf-globe {{ display: inline-block; margin-top: 28px; }}
+    </style>"""
+
+
+def render_error_html(
+    what: str = "Page", code: int = 404, detail: str | None = None, recovery_html: str = ""
+) -> str:
     """Render a styled error page.
 
     404 means "we have no such thing". 410 means "we had it and withdrew it on
     purpose" — Google drops a 410 from the index far faster than a 404, which it
     re-checks for months on the assumption the page might come back.
+
+    `recovery_html` is finished, already-escaped markup shown under the links
+    (a 410 story page passes story_recovery_html); empty leaves the page as it
+    was.
     """
     what = escape(what)
     headline = "Not Found" if code == 404 else "No Longer Available"
@@ -480,7 +534,7 @@ def render_error_html(what: str = "Page", code: int = 404, detail: str | None = 
         <h1 style="font-size: 3em; color: #c02023;">{code}</h1>
         <p style="font-size: 1.2em; margin: 20px 0;">{body}</p>
         <p><a href="/articles/">Browse all articles</a> &middot; <a href="/news-archive/">News archive</a> &middot; <a href="/">Home</a></p>
-        {feedback}
+        {feedback}{recovery_html}
     </main>
     {_footer_html()}
 </body>

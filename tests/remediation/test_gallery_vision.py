@@ -209,7 +209,7 @@ def _images(tmp_path: Path) -> vision.Images:
     return vision.Images((main, collisions))
 
 
-def _answered(tmp_path: Path, job: vision.Job, text: str) -> Path:
+def _answered(tmp_path: Path, job: vision.Job, text: str, model: str = OH.OPUS_MODEL) -> Path:
     """Export the job through the stage's own export and answer it as an Opus agent would."""
     handoff = tmp_path / "handoff"
     ledger = vision.Ledger(tmp_path / "unused" / "VERDICTS.jsonl")
@@ -217,6 +217,7 @@ def _answered(tmp_path: Path, job: vision.Job, text: str) -> Path:
     assert missing == [] and counts["exported"] + counts["already"] == 1
     OH.write_answer(
         handoff,
+        model=model,
         batch_id=job.stage,
         stage=vision.HANDOFF_STAGE,
         label=vision.job_label(job),
@@ -249,6 +250,17 @@ def test_a_verdict_line_records_the_bytes_the_prompt_and_the_opus_answer(tmp_pat
     assert line["raw_response"] == GOOD and line["answered_by"] == "test-agent"
 
 
+def test_this_closed_lane_refuses_an_answer_of_any_other_model(tmp_path: Path) -> None:
+    """The gallery audit's verdicts were sealed before the owner's decision of 2026-10-01 (answering
+    subagents run Sonnet): it replays Opus answers only, so the `model` of a verdict line is always
+    true - a Sonnet answer is refused by the judge and named by `unanswered`, never stamped Opus."""
+    handoff = _answered(tmp_path, _job(), GOOD, model=OH.SONNET_MODEL)
+    with pytest.raises(OH.HandoffError, match="closed and replays answers of"):
+        _judge(tmp_path)(_job())
+    (problem,) = vision.unanswered([_job()], vision.Ledger(tmp_path / "L.jsonl"), handoff)
+    assert OH.SONNET_MODEL in problem
+
+
 def test_the_case_collision_tree_is_searched_by_exact_name(tmp_path: Path) -> None:
     _answered(tmp_path, _job(filename="Gate.webp"), GOOD)
     judge = _judge(tmp_path)
@@ -278,6 +290,7 @@ def test_an_answer_that_is_no_in_vocabulary_verdict_is_a_failed_line_never_other
         with pytest.raises(OH.HandoffError, match="the text is empty"):
             OH.write_answer(
                 handoff,
+                model=OH.OPUS_MODEL,
                 batch_id="G3",
                 stage=vision.HANDOFF_STAGE,
                 label=vision.job_label(_job()),
@@ -334,6 +347,7 @@ def test_the_export_hands_off_the_exact_jpeg_the_pilot_sent_and_the_import_write
     for line in lines:
         OH.write_answer(
             handoff,
+            model=OH.OPUS_MODEL,
             batch_id=line["batch_id"],
             stage=line["stage"],
             label=line["label"],

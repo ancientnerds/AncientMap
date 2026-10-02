@@ -17,6 +17,7 @@ from pipeline.article_html_renderer import (
     markdown_to_html,
     render_error_html,
     render_medium_copy_html,
+    story_recovery_html,
 )
 from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
 from pipeline.news_visibility import public_story_criteria
@@ -30,6 +31,9 @@ _HTML_HEADERS = {"Cache-Control": "public, max-age=3600"}
 _HTML_HEADERS_SHORT = {"Cache-Control": "public, max-age=1800"}
 
 STORIES_PER_PAGE = 50
+
+#: Newest stories offered on a withdrawn story's 410 page.
+GONE_PAGE_STORIES = 5
 
 
 def story_page_query(db: Session):
@@ -370,6 +374,15 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
             else None
         )
         if withdrawn:
+            # The 410 stays (it is what makes Google drop the URL), but a
+            # visitor who followed a search result gets a way on: the newest
+            # stories, in the archive's own order, next to the archive search.
+            newest = (
+                public_stories_query(db)
+                .order_by(NewsVideo.published_at.desc(), NewsItem.created_at.desc())
+                .limit(GONE_PAGE_STORIES)
+                .all()
+            )
             return Response(
                 content=render_error_html(
                     "Story",
@@ -378,6 +391,9 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
                     # editorial rejection, deduplication and period scope alike,
                     # and only a minority are the medieval withdrawals.
                     "This story has been withdrawn from the archive.",
+                    recovery_html=story_recovery_html(
+                        [(story_slug(item.headline, item.id), item.headline) for item in newest]
+                    ),
                 ),
                 media_type="text/html",
                 status_code=410,

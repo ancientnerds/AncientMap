@@ -1,0 +1,125 @@
+{
+ "asked_field_sets": {
+  "coordinates": 385,
+  "coordinates+period_start": 321,
+  "coordinates+period_start+site_type": 162,
+  "coordinates+period_start+site_type+source_url": 46,
+  "coordinates+period_start+source_url": 9,
+  "coordinates+site_type": 23,
+  "coordinates+source_url": 10,
+  "period_start": 1556,
+  "period_start+site_type": 145,
+  "period_start+source_url": 1,
+  "site_type": 35,
+  "source_url": 1
+ },
+ "fields_asked": 3674,
+ "flagged": {
+  "coordinates": 0,
+  "period_start": 0,
+  "site_type": 0,
+  "source_url": 0
+ },
+ "flagged_only": {
+  "coordinates": 0,
+  "period_start": 0,
+  "site_type": 0,
+  "source_url": 0
+ },
+ "identity_doubt": 211,
+ "measured": {
+  "date": "2026-10-01",
+  "how": "harvest copy refreshed (export + fetch), population.py export, population.py build --root <copy> --wd1-dir <main checkout>; production read-only (3 SELECTs)",
+  "production": {
+   "curated": 5004,
+   "live": 4905,
+   "retired": 99
+  }
+ },
+ "part": "all",
+ "per_field": {
+  "coordinates": {
+   "CONFIRMED": 1524,
+   "CONFLICT": 395,
+   "MISSING": 775
+  },
+  "period_start": {
+   "CONFIRMED": 19,
+   "CONFLICT": 15,
+   "MISSING": 2660
+  },
+  "site_type": {
+   "CONFIRMED": 1471,
+   "CONFLICT": 229,
+   "MISSING": 994
+  },
+  "source_url": {
+   "CONFIRMED": 2352,
+   "CONFLICT": 122,
+   "MISSING": 220
+  }
+ },
+ "period_name_not_bucket_of_start": 0,
+ "pilot": null,
+ "population": {
+  "field_sets": {
+   "coordinates": 385,
+   "coordinates+period_start": 321,
+   "coordinates+period_start+site_type": 162,
+   "coordinates+period_start+site_type+source_url": 46,
+   "coordinates+period_start+source_url": 9,
+   "coordinates+site_type": 23,
+   "coordinates+source_url": 10,
+   "period_start": 1556,
+   "period_start+site_type": 145,
+   "period_start+source_url": 1,
+   "site_type": 35,
+   "source_url": 1
+  },
+  "fields": {
+   "coordinates": 956,
+   "period_start": 2240,
+   "site_type": 411,
+   "source_url": 67
+  },
+  "sites": 2694,
+  "wd1_sourced_but_empty": {},
+  "wd1_unseen_sites": [],
+  "why": {
+   "coordinates:unresolved": 956,
+   "period_start:empty": 2235,
+   "period_start:held": 5,
+   "site_type:empty": 410,
+   "site_type:held": 1,
+   "source_url:empty": 67
+  }
+ },
+ "retired_not_classified": 99,
+ "seeds": {
+  "cells": 0,
+  "sites": 0,
+  "sites_not_classified": []
+ },
+ "sites": 2694,
+ "sites_asked": 2694,
+ "stacked_points": 11,
+ "table_sha256": "38140ab2415ce6d8352f96237d839ddab93131e0df3a9ac78e952d793bcba768",
+ "wd1": {
+  "decisions": 9524,
+  "runs": [
+   "wd1-pilot",
+   "wd1",
+   "wd1-rest-pilot",
+   "wd1-rest"
+  ],
+  "sites_classified": 4926,
+  "unresolved_or_held": 975,
+  "waves": [
+   "2026-09-26a",
+   "2026-09-26b",
+   "2026-09-26c",
+   "2026-09-26d"
+  ]
+ },
+ "without": null
+}

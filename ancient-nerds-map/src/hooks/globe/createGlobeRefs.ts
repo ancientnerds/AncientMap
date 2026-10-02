@@ -203,6 +203,9 @@ export function useGlobeRefs(): GlobeRefs {
   const wheelCursorLatLng = useRef<{ lat: number; lng: number } | null>(null)
   const justEnteredMapbox = useRef<boolean>(false)
   const mapboxBaseZoom = useRef<number>(50)
+  // Fingers are on the globe or the map (touchGestures.ts): a switch to Mapbox
+  // that happens now is a pinch and hands over at the globe's scale.
+  const touchGestureActive = useRef<boolean>(false)
 
   // ========== Mapbox Refs ==========
   const mapboxService = useRef<MapboxGlobeService | null>(null)
@@ -443,6 +446,7 @@ export function useGlobeRefs(): GlobeRefs {
     wheelCursorLatLng,
     justEnteredMapbox,
     mapboxBaseZoom,
+    touchGestureActive,
 
     // Mapbox Refs
     mapboxService,

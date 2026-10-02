@@ -103,3 +103,64 @@ def test_good_topic_kept_garbage_topic_dropped(monkeypatch) -> None:
     item = session.add.call_args[0][0]
     assert item.facts == GOOD_TOPIC["facts"]
     assert all(isinstance(f, str) for f in item.facts)
+
+
+# -- foreign script (2026-10-01) ---------------------------------------------
+# The summarizer writes headline and facts, and builds the summary from them.
+# Story 8351's headline carried a Serbian-Cyrillic site name through all four
+# text fields; 6342/8359/5733 carried Chinese characters inside English
+# sentences. A topic with foreign script is dropped like a topic without usable
+# facts: logged, not published.
+
+BLEED_HEADLINE_TOPIC = {
+    "headline": (
+        "Локалитет Беловоде код Петровца на Млави furnaces: earliest secure copper smelting evidence"
+    ),
+    "timestamp_range": "0:30",
+    "facts": ["Copper slag was found in Vinča-period layers."],
+    "primary_site": None,
+}
+
+BLEED_FACT_TOPIC = {
+    "headline": "Fourth Mallorca talayot found",
+    "timestamp_range": "0:40",
+    "facts": ["Researchers科尔 Chromemer and Regillo evidence suggest an earlier date."],
+    "primary_site": None,
+}
+
+BLEED_SITE_TOPIC = {
+    "headline": "Copper smelting at Belovode",
+    "timestamp_range": "0:50",
+    "facts": ["Copper slag was found."],
+    "primary_site": {"name": "Беловоде", "confidence": "high"},
+}
+
+
+def test_topic_with_foreign_script_in_the_headline_is_dropped(monkeypatch, caplog) -> None:
+    with caplog.at_level("WARNING"):
+        result, session = _run_summarize(monkeypatch, [GOOD_TOPIC, BLEED_HEADLINE_TOPIC])
+    assert result is True
+    assert session.add.call_count == 1
+    assert session.add.call_args[0][0].facts == GOOD_TOPIC["facts"]
+    assert "foreign script" in caplog.text
+
+
+def test_topic_with_foreign_script_in_a_fact_is_dropped(monkeypatch) -> None:
+    result, session = _run_summarize(monkeypatch, [GOOD_TOPIC, BLEED_FACT_TOPIC])
+    assert result is True
+    assert session.add.call_count == 1
+
+
+def test_topic_with_foreign_script_in_the_site_name_is_dropped(monkeypatch) -> None:
+    result, session = _run_summarize(monkeypatch, [GOOD_TOPIC, BLEED_SITE_TOPIC])
+    assert result is True
+    assert session.add.call_count == 1
+
+
+def test_video_whose_topics_all_carry_foreign_script_stays_retryable(monkeypatch) -> None:
+    # Same terminal rule as all-garbage topics: nothing usable -> False, nothing
+    # added, the video is not marked summarized and the next cycle asks the
+    # (stochastic) model again.
+    result, session = _run_summarize(monkeypatch, [BLEED_HEADLINE_TOPIC, BLEED_FACT_TOPIC])
+    assert result is False
+    session.add.assert_not_called()

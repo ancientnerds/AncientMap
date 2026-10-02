@@ -1,0 +1,71 @@
+{
+ "asked_field_sets": {
+  "coordinates": 16,
+  "coordinates+period_start": 211,
+  "coordinates+period_start+site_type": 200,
+  "coordinates+period_start+site_type+source_url": 527,
+  "coordinates+period_start+source_url": 27,
+  "coordinates+site_type": 3,
+  "coordinates+source_url": 2,
+  "period_start": 49,
+  "period_start+site_type": 168,
+  "period_start+site_type+source_url": 8,
+  "period_start+source_url": 15,
+  "site_type": 15,
+  "site_type+source_url": 1,
+  "source_url": 1
+ },
+ "fields_asked": 3694,
+ "flagged": {
+  "coordinates": 4,
+  "period_start": 27,
+  "site_type": 14,
+  "source_url": 3
+ },
+ "flagged_only": {
+  "coordinates": 0,
+  "period_start": 1,
+  "site_type": 1,
+  "source_url": 0
+ },
+ "identity_doubt": 440,
+ "part": "conflict",
+ "per_field": {
+  "coordinates": {
+   "CONFIRMED": 257,
+   "CONFLICT": 857,
+   "MISSING": 129
+  },
+  "period_start": {
+   "CONFIRMED": 39,
+   "CONFLICT": 59,
+   "MISSING": 1145
+  },
+  "site_type": {
+   "CONFIRMED": 322,
+   "CONFLICT": 686,
+   "MISSING": 235
+  },
+  "source_url": {
+   "CONFIRMED": 662,
+   "CONFLICT": 578,
+   "MISSING": 3
+  }
+ },
+ "period_name_not_bucket_of_start": 3,
+ "pilot": null,
+ "retired_not_classified": 78,
+ "seeds": {
+  "cells": 54,
+  "sites": 46,
+  "sites_not_classified": []
+ },
+ "sites": 1243,
+ "sites_asked": 1243,
+ "stacked_points": 31,
+ "table_sha256": "7be7543dbf10817ad9ca51a58f65e3618e321149c86e3325997c00a5636abcde",
+ "without": {
+  "run": "output/remediation/fields/wd1-pilot",
+  "sites": 80
+ }
+}

@@ -199,6 +199,7 @@ def record_answers(handoff: Path, answers: Mapping[str, str], *, by: str = "opus
         if line["label"] in answers:
             OH.write_answer(
                 handoff,
+                model=OH.OPUS_MODEL,
                 batch_id=line["batch_id"],
                 stage=line["stage"],
                 label=line["label"],

@@ -433,6 +433,16 @@ D1; rule 1 of section 1 otherwise holds):
   agent)`), so the disclosure published with every Phase-4 text (EU AI Act Art. 50) still names
   the model every ledger line of its calls names. `LEGACY_AI_SYSTEM` (the March texts) is
   unchanged. No Phase-4 text had been written when it changed, so no row carries the old one.
+  **Changed again 2026-10-01 on the owner's decision** (the orchestrating session runs Opus 5.5,
+  every answering subagent Sonnet 5.5): `AI_SYSTEM_OPUS` keeps the string above byte-identical (the
+  provenances written until 2026-09-30 carry it), `AI_SYSTEM` is now `Claude Opus and Claude Sonnet
+  (Anthropic): anthropic/claude-opus-5-5 and anthropic/claude-sonnet-5-5 (Claude Code agents),
+  an-sites-remediation-2026-09` and is what every NEW write discloses, and `AI_SYSTEMS` is the set of
+  both: `Provenance` and `wc4.DescriptionCheck` accept exactly those two. An answer in the handoff
+  directory names the model that wrote it (`opus_handoff.ANSWER_MODELS`: `claude-opus-5-5` or
+  `claude-sonnet-5-5`, passed as the required `--model` of `opus_handoff.py answer` and
+  `handoff4.py record`; answers recorded before carry the Opus stamp and stay valid), and the
+  ledger line of a call names its answer's stamp. The API renders the stored string verbatim.
   With it the transport changed: every Phase-4 call - selector, translator, restricted lane,
   reviewer - is answered by an Opus agent of the orchestrating session through the handoff
   directory (`scripts/remediation/opus_handoff.py`). `run4 select|translate|review

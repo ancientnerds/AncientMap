@@ -7,6 +7,7 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import { MAPBOX } from '../config/mapboxConstants'
 import { applyDarkTealTheme as applyTealTheme, setupDarkFog, hexToRgba } from '../utils/mapboxTheme'
 import { isDemoMode } from '../utils/demoApi'
+import { MAPBOX_PERCENT_ZOOM, zoomForSpan } from '../utils/unifiedZoom'
 
 export type MapboxTileType = 'dark' | 'satellite'
 export type ColorMode = 'category' | 'age' | 'source' | 'country'
@@ -68,6 +69,7 @@ export class MapboxGlobeService {
   private siteClickCallback: ((siteId: string) => void) | null = null
   private zoomChangeCallback: ((zoomPercent: number) => void) | null = null
   private wheelZoomCallback: ((delta: number, cursorLatLng?: { lat: number; lng: number }) => void) | null = null  // Unified wheel zoom with cursor position
+  private touchZoomCallback: ((mapboxZoom: number) => void) | null = null  // A finger zoomed the map (see onTouchZoom)
   private siteHoverCallback: ((siteId: string | null, x: number, y: number) => void) | null = null  // Unified hover for tooltips
   private mapClickCallback: ((lng: number, lat: number, screenX: number, screenY: number) => void) | null = null  // Unified click for measure/proximity
   private mouseMoveCallback: ((x: number, y: number) => void) | null = null  // Global mouse move for freeze timing
@@ -85,8 +87,8 @@ export class MapboxGlobeService {
 
   // Zoom range for Mapbox (full range for street-level zoom)
   // Note: geoMath.ts has separate constants for mode-switch entry point
-  private static readonly ZOOM_MIN = 0.7   // Mapbox zoom at 0% (matches geoMath entry point)
-  private static readonly ZOOM_MAX = 18    // Mapbox zoom at 100% (street level)
+  private static readonly ZOOM_MIN = MAPBOX_PERCENT_ZOOM.MIN   // Mapbox zoom at 0% (matches geoMath entry point)
+  private static readonly ZOOM_MAX = MAPBOX_PERCENT_ZOOM.MAX   // Mapbox zoom at 100% (street level)
 
   /**
    * Initialize the Mapbox map in the given container
@@ -188,6 +190,15 @@ export class MapboxGlobeService {
     this.map.on('mouseout', () => {
       if (this.isInteractive && this.mouseLeaveCallback) {
         this.mouseLeaveCallback()
+      }
+    })
+
+    // Mapbox's own pinch: zoom events of a user gesture carry their originalEvent;
+    // only a touch is reported, the wheel and programmatic zooms already went
+    // through the slider.
+    this.map.on('zoom', (e: { type: string; originalEvent?: Event }) => {
+      if (this.isInteractive && this.touchZoomCallback && e?.originalEvent?.type.startsWith('touch')) {
+        this.touchZoomCallback(this.map!.getZoom())
       }
     })
 
@@ -325,6 +336,50 @@ export class MapboxGlobeService {
    */
   onWheelZoom(callback: ((delta: number, cursorLatLng?: { lat: number; lng: number }) => void) | null): void {
     this.wheelZoomCallback = callback
+  }
+
+  /**
+   * A finger zoomed the map: Mapbox's own pinch, or zoomAround() from the touch
+   * gestures. The callback gets the new Mapbox zoom so the slider can follow -
+   * without it a pinch never brought the 3D globe back (2026-10-01).
+   */
+  onTouchZoom(callback: ((mapboxZoom: number) => void) | null): void {
+    this.touchZoomCallback = callback
+  }
+
+  /**
+   * Zoom by `deltaZoom` levels keeping the map point under the finger
+   * (`clientX`/`clientY`, viewport pixels) where it is: the touch gestures'
+   * pinch, double tap and two-finger tap. Reported like any finger zoom.
+   */
+  zoomAround(deltaZoom: number, clientX: number, clientY: number, animate: boolean): void {
+    if (!this.map || !this.isInitialized || !this.container) return
+    const rect = this.container.getBoundingClientRect()
+    const around = this.map.unproject([clientX - rect.left, clientY - rect.top])
+    const zoom = Math.max(this.map.getMinZoom(), Math.min(this.map.getMaxZoom(), this.map.getZoom() + deltaZoom))
+    if (animate) {
+      this.map.easeTo({ zoom, around, duration: 300 })
+    } else {
+      this.map.jumpTo({ zoom, around })
+    }
+    this.touchZoomCallback?.(zoom)
+  }
+
+  /**
+   * Set the zoom at which the map shows `a` and `b` `pixels` apart. The finger
+   * hand-off from the Three.js globe uses it so the map takes over at the scale
+   * the globe showed. Measured on the map itself, so it holds for the globe and
+   * the mercator projection alike; three passes settle the projection's
+   * non-linearity.
+   */
+  zoomToSpan(a: { lat: number; lng: number }, b: { lat: number; lng: number }, pixels: number): void {
+    if (!this.map || !this.isInitialized) return
+    for (let pass = 0; pass < 3; pass++) {
+      const pa = this.map.project([a.lng, a.lat])
+      const pb = this.map.project([b.lng, b.lat])
+      const measured = Math.hypot(pa.x - pb.x, pa.y - pb.y)
+      this.map.jumpTo({ zoom: zoomForSpan(this.map.getZoom(), measured, pixels) })
+    }
   }
 
   private percentToMapboxZoom(percent: number): number {
@@ -1700,6 +1755,7 @@ export class MapboxGlobeService {
     this.siteClickCallback = null
     this.zoomChangeCallback = null
     this.wheelZoomCallback = null
+    this.touchZoomCallback = null
     this.siteHoverCallback = null
     this.mapClickCallback = null
     this.mouseMoveCallback = null

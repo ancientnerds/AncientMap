@@ -293,6 +293,12 @@ class TestText:
         assert TEASER_NOTE in teaser
         assert teaser.index(TEASER_NOTE) < teaser.index("AI-generated voice")
 
+    def test_the_teaser_note_names_no_model_tier(self):
+        """The cards were written by Claude Opus and Claude Sonnet agents (owner decision
+        2026-10-01), so the note names the maker and family, never one tier."""
+        assert "(Claude, Anthropic)" in TEASER_NOTE
+        assert "Opus" not in TEASER_NOTE and "Sonnet" not in TEASER_NOTE
+
     def test_hashtags_use_the_specific_place_and_skip_duplicates(self):
         tags = hashtags({"name": "Rano Raraku", "country": "Chile, Easter Island"})
         assert tags[-2:] == ["#EasterIsland", "#RanoRaraku"]

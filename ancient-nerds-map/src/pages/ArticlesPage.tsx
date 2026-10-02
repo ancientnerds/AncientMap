@@ -41,6 +41,7 @@ import '../styles/story-page.css'
 import { discordCtaUrl } from '../constants/brand'
 import { slugify } from '../seo/meta'
 import { shareOrCopy } from '../utils/share'
+import { articleForHash } from '../utils/articleHash'
 
 interface QualityReport {
   assessment_score: number
@@ -646,13 +647,7 @@ function ArticlesStandalone() {
 
   // Resolve hash → article once articles are loaded
   const resolveHash = useCallback((articleList: Article[]) => {
-    const hash = window.location.hash.slice(1)
-    if (!hash) {
-      setView('listing')
-      setSelectedArticle(null)
-      return
-    }
-    const match = articleList.find(a => slugify(a.title) === hash)
+    const match = articleForHash(window.location.hash, articleList)
     if (match) {
       setSelectedArticle(match)
       setView('reading')

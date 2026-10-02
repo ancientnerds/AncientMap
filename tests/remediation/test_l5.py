@@ -571,7 +571,7 @@ def answer_all(root: Path, record: H.Round, texts: dict[str, dict[str, Any]]) ->
     for batch_id, sids in record.batches.items():
         for sid in sids:
             OH.write_answer(
-                root, batch_id=batch_id, stage=QN.STAGE, label=sid,
+                root, model=OH.OPUS_MODEL, batch_id=batch_id, stage=QN.STAGE, label=sid,
                 text=json.dumps(texts[sid]), answered_by=batch_id, now=lambda: NOW,
             )  # fmt: skip
 
@@ -588,6 +588,9 @@ class TestTheHandoff:
         assert record.handoff == "handoff-r1"
         text = H.brief(out, "r1", "r1-b01")
         assert "handoff-r1/r1-b01/MANIFEST.jsonl" in text and "check-answer --round r1" in text
+        assert (
+            "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in text
+        )  # an agent names the model it runs as (owner decision 2026-10-01)
         assert H.check_answer(out, "r1", "r1-b01", TIKAL, json.dumps(answer())) is None
         assert "carries" in str(
             H.check_answer(out, "r1", "r1-b02", OTHER, json.dumps(answer(OTHER)))

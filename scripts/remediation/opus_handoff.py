@@ -4,15 +4,18 @@ orchestrating Claude Code session, through files - never by a model API called f
 Owner order, 2026-09-23 (Martin): "no DeepSeek any more - everything with Opus". Until then the
 Phase-3 finder and reviewer, the Phase-4 selector, translator, restricted-lane and reviewer calls
 and the gallery vision questions were bought from `opencode-go/deepseek-v4.1-flash` (one Pi process
-per call) and `deepseek-v4-flash-vision-exp` (the opencode gateway). Both transports are gone. A
-stage now runs in two halves with the answering in between, done by the orchestrator:
+per call) and `deepseek-v4-flash-vision-exp` (the opencode gateway). Both transports are gone.
+Owner decision 2026-10-01: the orchestrating session runs Opus 5.5 and every answering subagent runs
+Sonnet 5.5; an answer names the model that really wrote it (`ANSWER_MODELS`), and answers recorded
+before carry the Opus stamp and stay valid. A stage now runs in two halves with the answering in
+between, done by the orchestrator:
 
     export   the stage computes the calls it would buy - the exact prompt text, unchanged, so the
              frozen questions stay frozen - and writes them here. No model is called.
     answer   Opus agents read `<batch>/<stage>/<label>.prompt.txt` (and the image, for vision) and
              write `<label>.answer.json`, normally through `answer` below.
     validate every exported question has an answer of the right shape, for the exact prompt, by
-             `OPUS_MODEL` - checked before anything is imported.
+             one of `ANSWER_MODELS`' stamps - checked before anything is imported.
     import   the stage runs again and reads each answer instead of buying it; every other rule of
              the stage (ledger line first, write-once answers, holds, gates) is unchanged.
 
@@ -34,7 +37,10 @@ Usage (the orchestrator's side):
 
     python scripts/remediation/opus_handoff.py validate --dir DIR
     python scripts/remediation/opus_handoff.py answer --dir DIR --batch-id B --stage S --label L \\
-        --answered-by AGENT --text-file ANSWER.txt
+        --answered-by AGENT --model MODEL_ID --text-file ANSWER.txt
+
+`--model` is required and has no default: it is the model id the answering agent runs as, as its own
+system prompt names it (`claude-opus-5-5` or `claude-sonnet-5-5`, the keys of `ANSWER_MODELS`).
 """
 
 from __future__ import annotations
@@ -48,6 +54,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 from urllib.parse import quote
 
@@ -57,9 +64,18 @@ if __package__ in (None, ""):
 from phase3.fetch_stage import write_once  # noqa: E402 - the evidence store's one write rule
 from phase3.ledger import utc_now  # noqa: E402 - the ledger's clock, at the ledger's precision
 
-#: The model every answer, ledger line and disclosure of the remediation names from 2026-09-23 on.
-#: One string, pinned by a test: the Opus agents of the orchestrating Claude Code session.
+#: The stamp of an answer by an Opus agent of the orchestrating Claude Code session: every answer
+#: recorded from 2026-09-23 to 2026-09-30 carries it, and it stays valid. One string, pinned by a test.
 OPUS_MODEL = "anthropic/claude-opus-5-5 (Claude Code agent)"
+#: The stamp of an answer by a Sonnet agent. Owner decision 2026-10-01: the orchestrating session
+#: runs Opus 5.5, every answering subagent runs Sonnet 5.5.
+SONNET_MODEL = "anthropic/claude-sonnet-5-5 (Claude Code agent)"
+#: The model id an agent runs as (as its own system prompt names it) -> the stamp its answer carries.
+#: The only models an answer may name: `answer` offers exactly these keys, `read_answer` and
+#: `validate` accept exactly these values. There is no default model anywhere.
+ANSWER_MODELS: Mapping[str, str] = MappingProxyType(
+    {"claude-opus-5-5": OPUS_MODEL, "claude-sonnet-5-5": SONNET_MODEL}
+)
 
 MANIFEST_FILE = "MANIFEST.jsonl"
 PROMPT_SUFFIX = ".prompt.txt"
@@ -243,11 +259,14 @@ def export(
 
 @dataclass(frozen=True)
 class Answer:
-    """One answer as the stage reads it: the text, verbatim, and who wrote it when."""
+    """One answer as the stage reads it: the text, verbatim, and who wrote it when. `model` is the
+    answer's own stamp (a value of `ANSWER_MODELS`): a record of who judged stores it, never a
+    constant."""
 
     text: str
     answered_by: str
     answered_at: str
+    model: str
 
 
 def _answer_problem(data: Any, digest: str) -> str | None:
@@ -268,8 +287,11 @@ def _answer_problem(data: Any, digest: str) -> str | None:
         return f"malformed: answered_at {data['answered_at']!r} is not an ISO 8601 time"
     if when.tzinfo is None:
         return f"malformed: answered_at {data['answered_at']!r} carries no time zone"
-    if data["model"] != OPUS_MODEL:
-        return f"wrong model: answered by {data['model']!r}, not {OPUS_MODEL!r}"
+    if data["model"] not in ANSWER_MODELS.values():
+        return (
+            f"wrong model: answered by {data['model']!r}, not one of "
+            f"{sorted(ANSWER_MODELS.values())!r}"
+        )
     if data["prompt_sha256"] != digest:
         return (
             f"stale: the answer names prompt {data['prompt_sha256'][:16]}, the question is "
@@ -289,8 +311,9 @@ def read_answer(root: Path, *, batch_id: str, stage: str, label: str, prompt: st
     """The answer to exactly `prompt`, or `HandoffError` naming why there is none.
 
     Refused: no answer file; a file that is not the answer shape (`ANSWER_KEYS`, strings, an ISO
-    time with a zone); an empty text; a model that is not `OPUS_MODEL`; an answer to another prompt
-    (its `prompt_sha256` is not the sha256 of `prompt`). Nothing is defaulted.
+    time with a zone); an empty text; a model whose stamp is not a value of `ANSWER_MODELS`; an
+    answer to another prompt (its `prompt_sha256` is not the sha256 of `prompt`). Nothing is
+    defaulted.
     """
     path = root / answer_relpath(batch_id, stage, label)
     if not path.exists():
@@ -303,7 +326,10 @@ def read_answer(root: Path, *, batch_id: str, stage: str, label: str, prompt: st
     if problem is not None:
         raise HandoffError(f"{path}: {problem}")
     return Answer(
-        text=data["text"], answered_by=data["answered_by"], answered_at=data["answered_at"]
+        text=data["text"],
+        answered_by=data["answered_by"],
+        answered_at=data["answered_at"],
+        model=data["model"],
     )
 
 
@@ -315,11 +341,15 @@ def write_answer(
     label: str,
     text: str,
     answered_by: str,
+    model: str,
     now: Callable[[], str] = utc_now,
 ) -> bool:
     """Write the answer to an exported question, naming the prompt file's own sha256.
 
-    The helper the Opus agents answer through, so no agent has to compute a digest: the question
+    `model` is the stamp of the model that really answered (a value of `ANSWER_MODELS`; any other
+    is refused as a wrong model) - required, never defaulted.
+
+    The helper the answering agents use, so no agent has to compute a digest: the question
     must be in the manifest, its prompt file must still hash to the manifest's digest, and the
     answer is write-once (`False` for the identical answer again; different bytes are refused -
     delete the file to answer again).
@@ -333,7 +363,7 @@ def write_answer(
     data = {
         "prompt_sha256": line["prompt_sha256"],
         "text": text,
-        "model": OPUS_MODEL,
+        "model": model,
         "answered_at": now(),
         "answered_by": answered_by,
     }
@@ -445,7 +475,9 @@ def main(argv: Iterable[str] | None = None) -> int:
         stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     parser = argparse.ArgumentParser(prog="opus-handoff", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    check = sub.add_parser("validate", help="every exported question answered, in shape, by Opus")
+    check = sub.add_parser(
+        "validate", help="every exported question answered, in shape, by an ANSWER_MODELS model"
+    )
     check.add_argument("--dir", required=True)
     answer = sub.add_parser("answer", help="write one answer to an exported question")
     answer.add_argument("--dir", required=True)
@@ -453,6 +485,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     answer.add_argument("--stage", required=True)
     answer.add_argument("--label", required=True)
     answer.add_argument("--answered-by", required=True, help="the answering agent's name")
+    answer.add_argument(
+        "--model",
+        required=True,
+        choices=sorted(ANSWER_MODELS),
+        help="the model id you run as, exactly as your own system prompt names it",
+    )
     answer.add_argument("--text-file", required=True, help="the answer text, UTF-8, verbatim")
     args = parser.parse_args(list(argv) if argv is not None else None)
     root = Path(args.dir)
@@ -467,6 +505,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         label=args.label,
         text=Path(args.text_file).read_bytes().decode("utf-8"),
         answered_by=args.answered_by,
+        model=ANSWER_MODELS[args.model],
     )
     _print({"answer_path": answer_relpath(args.batch_id, args.stage, args.label), "wrote": wrote})
     return 0

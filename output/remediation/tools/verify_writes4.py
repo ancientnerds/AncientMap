@@ -25,7 +25,10 @@ production directly, read-only, after every step of 100 sites and once more at t
    of CHANGED LATER, and not carried (production holds the later lane's value, so the site is not
    verified again as the lane's). The count is printed per allowed pattern. Anything else stays a
    deviation. Roman Bath, York and Altar of Athena Polias are the case: written by P4, taken back
-   with `revert4 --site`, held, then marked by lane L, whose raw_data is now L's.
+   with `revert4 --site`, held, then marked by lane L, whose raw_data is now L's. One lane is read by
+   key, not only by stamp: a link of lane WB's disclosure correction (`wb-card-disclosure-sNNN`)
+   supersedes only as the one-key transition `_card_provenance.ai_system` `AI_SYSTEM_OPUS` ->
+   `AI_SYSTEM`, whichever pattern allows it.
 2. **V1-V15 again** (`--run`, lanes `p4` and `p5`): every written site's description and
    `raw_data` read back from production, its card from production (`p5`) or from the run's
    `assembly.jsonl` (`p4`, before the cards are written; only where production's
@@ -84,6 +87,7 @@ import verify_writes as VW  # noqa: E402 - the Phase-3 journal-chain reader (Lin
 import write_gate4  # noqa: E402 - like_matches: SQL LIKE over one stamp, as the gate reads stamps
 from census.tests import t08_citation_markers as T08  # noqa: E402 - on sys.path via lanes
 from journal_chain import ROLLBACK_SUFFIX  # noqa: E402
+from mechanical import teaser as WB  # noqa: E402 - lane WB's disclosure correction, by stamp
 from phase3 import fetch_stage as F  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402 - utf8_streams, the writers' stream rule
 from phase4 import batch4 as B  # noqa: E402 - the stages' own holds reader
@@ -155,6 +159,9 @@ class Acceptance4:
     #: allowed the last of those links (`superseding`)
     superseded: dict[str, int] = field(default_factory=collections.Counter)
     deviations: list[str] = field(default_factory=list)
+    #: ids of the lane journal rows that stand: written and not reverted (a chain of two writes of
+    #: one cell keeps both; a reverted one is out)
+    open_ids: set[int] = field(default_factory=set)
 
 
 def reverses(other: VW.Link, link: VW.Link, change_keys: Mapping[int, str | None]) -> bool:
@@ -210,6 +217,13 @@ def superseding(
     problems, _ = VW.check_chain(key, list(run), live, missing=False)
     if problems:
         return None
+    # Lane WB's disclosure correction (2026-10-01) is allowed by its own stamp for its one key only:
+    # whatever pattern names it, a link of that lane that moved anything else is not superseding.
+    if any(
+        WB.CORRECTION_STAMP.match(link.stamp) and not WB.moves_one_key(link.old, link.new)
+        for link in run
+    ):
+        return None
     patterns = [
         None
         if link.stamp in own_stamps
@@ -240,7 +254,10 @@ def accept4(
     later stamps that may change a planned row after the lane (`--allow-stamp`, `superseding`).
     """
     result = Acceptance4()
-    plan: dict[Key, Mapping[str, Any]] = {}
+    #: The planned rows of each cell, in plan order. A cell the lane writes twice (lane WC: a clear,
+    #: then a text for the same site) is two rows that chain: each one's old value is the one before
+    #: its new value.
+    plan: dict[Key, list[Mapping[str, Any]]] = {}
     #: A reverted round's own plan rows (`write_gate4.ROUND_STAMP`), by (that round's stamp, key):
     #: they judge that round's reverted journal rows only - never a planned row still to write.
     archived: dict[tuple[str, Key], Mapping[str, Any]] = {}
@@ -255,8 +272,11 @@ def accept4(
             twice = (row[write_gate4.ROUND_STAMP], key) in archived
             archived[(row[write_gate4.ROUND_STAMP], key)] = row
         else:
-            twice = key in plan
-            plan[key] = row
+            rows_here = plan.setdefault(key, [])
+            twice = bool(rows_here) and canonical(
+                key[0], key[1], rows_here[-1]["new_value"]
+            ) != canonical(key[0], key[1], row["old_value"])
+            rows_here.append(row)
         if twice:  # never the last one silently (audit 2026-09-25 m15)
             result.deviations.append(
                 f"PLANNED TWICE {key[2]} {key[0]}.{key[1]}: the lane plan names the row twice"
@@ -273,7 +293,8 @@ def accept4(
     lane_stamps = {link.stamp for links in lane_by_key.values() for link in links}
     own_stamps = lane_stamps | {stamp + ROLLBACK_SUFFIX for stamp in lane_stamps}
 
-    written: set[Key] = set()  #: rows the lane wrote and did not revert
+    #: the planned rows of each cell no standing lane write accounts for, in plan order
+    unwritten: dict[Key, list[Mapping[str, Any]]] = {key: list(rows) for key, rows in plan.items()}
     for key, links in sorted(lane_by_key.items()):
         where = f"{key[2]} {key[0]}.{key[1]}"
         chain = chains.get(key, [])
@@ -281,32 +302,40 @@ def accept4(
             key, chain, live.get(key), missing=(key[0], key[2]) not in present
         )
         result.deviations.extend(problems)
-        row = plan.get(key)
+        rows = plan.get(key, [])
         closed = {link.id for link in links if reverted(link, chain, change_keys)}
         open_links = [link for link in links if link.id not in closed]
-        if row is None and not all(
+        result.open_ids.update(link.id for link in open_links)
+        net = {link.id for link in links if link.id in closed} | {
+            other.id for other in chain if any(reverses(other, link, change_keys) for link in links)
+        }
+        if not rows and not all(
             link.id in closed and (link.stamp, key) in archived for link in links
         ):
             result.deviations.append(f"OUTSIDE THE PLAN {where}: journalled, never planned")
-        if len(open_links) > 1:
+        if len(open_links) > max(1, len(rows)):
             ids = ", ".join(str(link.id) for link in open_links)
             result.deviations.append(f"WRITTEN TWICE {where}: journal rows {ids}")
         ids_in_chain = [link.id for link in chain]
-        sound = not problems and row is not None and len(open_links) == 1
+        sound = not problems and 1 <= len(open_links) <= len(rows)
         for link in links:
             # A reverted round's row is judged against the plan that round was written from.
-            judged = archived.get((link.stamp, key), row)
-            if judged is not None:
-                want = (
-                    canonical(key[0], key[1], judged["old_value"]),
-                    canonical(key[0], key[1], judged["new_value"]),
+            judged = archived.get((link.stamp, key))
+            candidates = rows if judged is None else [judged]
+            transition = (link.old, link.new)
+            if candidates and not any(
+                transition
+                == (
+                    canonical(key[0], key[1], r["old_value"]),
+                    canonical(key[0], key[1], r["new_value"]),
                 )
-                if (link.old, link.new) != want:
-                    sound = False
-                    result.deviations.append(
-                        f"OTHER VALUE {where}: journal row {link.id} wrote another transition "
-                        "than the plan names"
-                    )
+                for r in candidates
+            ):
+                sound = False
+                result.deviations.append(
+                    f"OTHER VALUE {where}: journal row {link.id} wrote another transition "
+                    "than the plan names"
+                )
             if link.id not in ids_in_chain:
                 sound = False
                 result.deviations.append(
@@ -316,8 +345,28 @@ def accept4(
             if link.id in closed:
                 continue  # its own reversal wrote after it: reverted, not changed later
             later = chain[ids_in_chain.index(link.id) + 1 :]
+            planned_writes = open_links[: len(rows)]  # the plan names these; more are later ones
+            following = [
+                other
+                for other in planned_writes
+                if ids_in_chain.index(other.id) > ids_in_chain.index(link.id)
+            ]
+            if following:
+                # a chain of the lane's own writes: only the link that ends it is judged against
+                # later writers, this one against whatever wrote between it and the next
+                nxt = ids_in_chain.index(following[0].id)
+                later = chain[ids_in_chain.index(link.id) + 1 : nxt]
+            # the lane's own reverted writes and their reversals net to nothing
+            later = [other for other in later if other.id not in net]
             if later:
                 sound = False
+                if following:
+                    stamps = list(dict.fromkeys(other.stamp for other in later))
+                    result.deviations.append(
+                        f"CHANGED LATER {where}: {stamps} wrote between {link.id} and "
+                        f"{following[0].id}"
+                    )
+                    continue
                 pattern = superseding(
                     key,
                     later,
@@ -333,37 +382,56 @@ def accept4(
                     result.deviations.append(
                         f"CHANGED LATER {where}: {stamps} wrote after {link.id}"
                     )
-        if open_links:
-            written.add(key)
+        # a standing write accounts for the planned row of its transition (else the first one: the
+        # mismatch is flagged above), the rest are still to write
+        for link in open_links:
+            rest = unwritten.get(key, [])
+            at = next(
+                (
+                    index
+                    for index, r in enumerate(rest)
+                    if (link.old, link.new)
+                    == (
+                        canonical(key[0], key[1], r["old_value"]),
+                        canonical(key[0], key[1], r["new_value"]),
+                    )
+                ),
+                0,
+            )
+            if rest:
+                del rest[at]
         if sound:
             result.carried.add(key)
 
-    for key, row in sorted(plan.items()):
-        if key in written:
-            continue
-        where = f"{key[2]} {key[0]}.{key[1]}"
-        if (key[0], key[2]) not in present:
-            result.deviations.append(f"MISSING {where}: the row is not in the database")
-        elif complete:
-            result.deviations.append(f"NOT WRITTEN {where}: the acceptance is --complete")
-        elif live.get(key) != canonical(key[0], key[1], row["old_value"]):
-            pattern = superseding(
-                key,
-                after_the_lane(chains.get(key, []), lane_by_key.get(key, []), change_keys),
-                start=canonical(key[0], key[1], row["old_value"]),
-                live=live.get(key),
-                allowed=allowed,
-                own_stamps=own_stamps,
-            )
-            if pattern is not None:
-                result.superseded[pattern] += 1
-            else:
-                result.deviations.append(
-                    f"MOVED {where}: not written by the lane, and it no longer holds its planned "
-                    "old value (a write elsewhere, or a chunk refused as matched_0)"
+    for key, rest in sorted(unwritten.items()):
+        for index, row in enumerate(rest):
+            where = f"{key[2]} {key[0]}.{key[1]}"
+            if (key[0], key[2]) not in present:
+                if index == 0:
+                    result.deviations.append(f"MISSING {where}: the row is not in the database")
+            elif complete:
+                result.deviations.append(f"NOT WRITTEN {where}: the acceptance is --complete")
+            elif index:
+                result.untouched += 1  # the next of a chain: waits for the one before it
+            elif live.get(key) != canonical(key[0], key[1], row["old_value"]):
+                pattern = superseding(
+                    key,
+                    after_the_lane(chains.get(key, []), lane_by_key.get(key, []), change_keys),
+                    start=canonical(key[0], key[1], row["old_value"]),
+                    live=live.get(key),
+                    allowed=allowed,
+                    own_stamps=own_stamps,
                 )
-        else:
-            result.untouched += 1
+                if pattern is not None:
+                    result.superseded[pattern] += 1
+                else:
+                    result.deviations.append(
+                        f"MOVED {where}: not written by the lane, and it no longer holds its "
+                        "planned old value (a write elsewhere, or a chunk refused as matched_0)"
+                    )
+                break  # the rest of the chain is judged by the first
+            else:
+                result.untouched += 1
     return result
 
 
@@ -648,8 +716,17 @@ def reverify(
     return deviations
 
 
-def invariant_deviations(*, lane: str, carried: Iterable[Key], production: Production) -> list[str]:
-    """The design's in-database invariants, as Postgres computed them in `live_sql`."""
+def invariant_deviations(
+    *,
+    lane: str,
+    carried: Iterable[Key],
+    production: Production,
+    markings: Mapping[str, str] | None = None,
+) -> list[str]:
+    """The design's in-database invariants, as Postgres computed them in `live_sql`. `markings` (lane
+    p4wc): each site's recorded old marking (the journal evidence's `marking.old`), which says what
+    provenance its written text carries - a Phase-4 text's (site-list runs) and a lane-WN text's are
+    not lane L's; a site without one is asked as a March text."""
     deviations: list[str] = []
     sites = sorted({key[2] for key in carried})
     for site_id in sites:
@@ -676,7 +753,9 @@ def invariant_deviations(*, lane: str, carried: Iterable[Key], production: Produ
         if lane == "p4wc":
             deviations.extend(
                 f"INVARIANT {site_id}: {problem}"
-                for problem in wc4.wc_problems(row["description"], row["raw_data"])
+                for problem in wc4.wc_problems(
+                    row["description"], row["raw_data"], marking=(markings or {}).get(site_id)
+                )
             )
     return deviations
 
@@ -692,6 +771,15 @@ def wc_evidence_sql(pks: Sequence[str], stamp_like: str) -> str:
         f"AND run_stamp LIKE {lanes.sql_text(stamp_like)} "
         f"AND run_stamp NOT LIKE {lanes.sql_text('%' + ROLLBACK_SUFFIX)} ORDER BY id) t;\n"
     )
+
+
+def wc_markings(evidence_rows: Sequence[Mapping[str, Any]]) -> dict[str, str]:
+    """Each site's recorded old marking (`marking.old`) from the evidence of its last WC write: what
+    provenance the written text carries (`wc4.wc_problems`, `marking`)."""
+    return {
+        str(row["row_pk"]): str(row["evidence"]["marking"]["old"])
+        for row in sorted(evidence_rows, key=lambda row: row["id"])
+    }
 
 
 def wc_evidence_deviations(
@@ -837,8 +925,22 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
     for pattern, count in sorted(result.superseded.items()):
         print(f"superseded by {pattern}: {count}")
     deviations = list(result.deviations)
-    deviations += invariant_deviations(lane=lane, carried=result.carried, production=production)
     written = {key[2] for key in result.carried}
+    wc_rows: list[dict[str, Any]] = []
+    if lane == "p4wc":
+        ordered = sorted(written)
+        for start in range(0, len(ordered), WINDOW):
+            wc_rows += lanes.json_rows(
+                run(wc_evidence_sql(ordered[start : start + WINDOW], stamp_like))
+            )
+        # a write that was reverted is not what the site carries: its evidence is out
+        wc_rows = [row for row in wc_rows if int(row["id"]) in result.open_ids]
+    deviations += invariant_deviations(
+        lane=lane,
+        carried=result.carried,
+        production=production,
+        markings=wc_markings(wc_rows),
+    )
     if lane == "p4":
         written = {
             site
@@ -854,12 +956,6 @@ def accept_lane(args: argparse.Namespace, run: Callable[[str], str]) -> list[str
             if production.live.get(("card_stats", "card_description", site)) is not None
         }
     if lane == "p4wc":
-        wc_rows: list[dict[str, Any]] = []
-        ordered = sorted(written)
-        for start in range(0, len(ordered), WINDOW):
-            wc_rows += lanes.json_rows(
-                run(wc_evidence_sql(ordered[start : start + WINDOW], stamp_like))
-            )
         deviations += wc_evidence_deviations(written, production, wc_rows)
         deviations += t08_deviations(written, production)
         print(f"re-checked {len(written)} written site(s) against their journal evidence")

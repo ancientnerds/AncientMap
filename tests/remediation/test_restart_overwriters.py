@@ -368,3 +368,87 @@ def test_restore_reverts_every_column_the_insert_branch_writes(monkeypatch):
             f"old_data->>'{column}'" in insert_columns or f"old_data->'{column}'" in insert_columns
         )
         assert f"{column} = EXCLUDED.{column}" in update_columns
+
+
+# --------------------------------------------------------------------------
+# news_items text — the boot rewrite of site names (v14)
+# --------------------------------------------------------------------------
+# v14 replaced `site_name_extracted` with the linked site's name in headline,
+# post, summary and facts on every Lyra start, without the gate the matcher
+# got on 2026-09-14 (site_matcher._correct_text_fields: only two spellings of
+# the SAME name). Measured 2026-10-01: 86 stories (69 public) carried another
+# site's name in their headline ("Mausoleum of Qin Shi Huang" as "Mausoleum of
+# the Atilii"), and 8351 / 8359 carried OSM's native-script names
+# ("Belovode" as "Локалитет Беловоде код Петровца на Млави", "Dawenkou" as
+# "大汶口遗址公园") — and both were queued to be re-broken by the next boot
+# right after their text had been repaired.
+
+V14_CANDIDATES = "v14: site-name rewrite candidates"
+
+
+def _v14_log(rows: list[SimpleNamespace]) -> list[tuple[str, dict[str, Any]]]:
+    import pipeline.lyra.orchestrator as orch
+
+    log: list[tuple[str, dict[str, Any]]] = []
+    rows_for = {
+        "FROM pg_catalog.": [(True,)],
+        "to_regclass(:relation_name)": [(True,)],
+        V14_CANDIDATES: rows,
+    }
+    orch._run_migrations(_Engine(log, rows_for))
+    return log
+
+
+def _candidate(item_id: int, extracted: str, canonical: str, headline: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=item_id,
+        site_name_extracted=extracted,
+        canonical=canonical,
+        headline=headline,
+        post_text=f"A post about {extracted}.",
+        summary=f"{headline}. More on {extracted}.",
+        facts=[f"Excavations at {extracted} continue"],
+    )
+
+
+def _news_item_updates(log: list[tuple[str, dict[str, Any]]]) -> dict[int, dict[str, Any]]:
+    return {
+        params["id"]: params
+        for sql, params in log
+        if sql.lstrip().startswith("UPDATE news_items SET") and "id" in params
+    }
+
+
+def test_the_boot_no_longer_rewrites_story_text_unconditionally():
+    log = _v14_log([])
+    for sql, _ in log:
+        assert "REPLACE(ni.headline, ni.site_name_extracted, us.name)" not in sql
+        assert "REPLACE(elem #>> '{}', ni.site_name_extracted, us.name)" not in sql
+
+
+def test_the_boot_corrects_a_spelling_of_the_same_name():
+    """What v14 was for: a garbled spelling of the linked site's own name."""
+    log = _v14_log(
+        [_candidate(1, "Gobeklitepe", "Göbekli Tepe", "New dating for Gobeklitepe enclosure D")]
+    )
+
+    update = _news_item_updates(log)[1]
+    assert update["headline"] == "New dating for Göbekli Tepe enclosure D"
+    assert update["post_text"] == "A post about Göbekli Tepe."
+    assert "Göbekli Tepe" in update["facts"]
+
+
+@pytest.mark.parametrize(
+    ("extracted", "canonical"),
+    [
+        ("Mausoleum of Qin Shi Huang", "Mausoleum of the Atilii"),  # a different site
+        ("Belovode", "Локалитет Беловоде код Петровца на Млави"),  # OSM's native-script name
+        ("Dawenkou", "大汶口遗址公园"),
+    ],
+)
+def test_the_boot_keeps_what_the_source_said_when_the_link_names_another_place(
+    extracted, canonical
+):
+    log = _v14_log([_candidate(8351, extracted, canonical, f"{extracted} furnaces: earliest")])
+
+    assert 8351 not in _news_item_updates(log)

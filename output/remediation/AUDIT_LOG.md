@@ -13084,3 +13084,51 @@ village), Runestones of Sweden (a class of objects). Gates: check-primitive, ver
 rehearse, probe-guards (all refused), apply (read-back row for row), verify, rollback rehearsal -
 clean; retired curated rows 79 -> 99. Wave b: "nothing to write - the review is done". Sites answered
 not_a_site but uncounted stay visible and are listed in NONSITE_R*.jsonl. The served-image run follows.
+
+## 2026-09-30 - Lane WB card sitting 4 (chunk 01, steps 12-16): **31ada02 live**; the weekly usage limit stops all model work
+
+Drill `VERDICT: dump is restorable and matches production row-for-row`; steps 12-16 (443 cards, 6 clears... chunk 01: 443 accepted, 7 cleared) each accepted 0 deviations; `card-file --steps 12-16` changed 443 / removed 6; the first push attempt was blocked by two flaky frontend tests (MapSection.lazyError, geoLabelLazy) under load, the same SHA passed on retry; CI green, API containers restarted 09:07Z, 0 `Card description overwritten`, `card_json.py --check` and `accept --step 12..16` again 0 deviations, `commit` field 31ada025. Chunk 06's stage chain finished (448 outcomes: 441 accepted, 7 cleared: 3 contradicted-after-verify, 3 unproven-after-verify, 1 failed-after-verify-rewrite; 41 description defects). At ~10:40Z the weekly usage limit (resets 2026-10-06 14:00 Berlin) failed ~450 agents in flight (WB 02 verify, WC chunks 03-05, image check); no write was under way. State and order of resumption: FINISH_PLAN section 6.
+
+## 2026-10-01 - Lane WB card sitting 5 (chunk 06, steps 17-21): **df03b5d live**
+
+Drill `VERDICT: dump is restorable and matches production row-for-row`; API StartedAt noted
+(2026-09-30T09:06:58Z / 09:07:06Z); steps 17-21 each plan, prov + card lanes, undo rehearsals,
+`accept` 0 deviations; `card-file --steps 17-21` changed 441 / removed 7, `card_json.py --check` 0;
+pushed by fixed SHA; CI green, API restarted 08:17Z, 0 `Card description overwritten`, re-accept 0,
+`commit` df03b5dc.
+
+## 2026-10-01 - The answer stamp named Opus for every answer: census, owner decisions O12-O16, the fix
+
+The session of 2026-10-01 started on Sonnet 5.5; its workflow scripts set no model, so every agent
+inherited Sonnet while `opus_handoff.answer` stamped the constant `OPUS_MODEL`. Stopped at ~08:30Z.
+A census over every Claude Code transcript (`output/remediation/model_census/`: each agent's
+`model` field joined to the `--answered-by` names and the directories it recorded into, then each
+answer file by its `answered_at` window) maps all 19,928 recorded answers: **11,456 Opus, 8,471
+Sonnet 5.5, 1 ambiguous (an explicitly Opus agent)** - Sonnet answers go back to 2026-09-27 (WB
+check/verify/rewrite stages of chunks 01/02/04/05/06, WD1 rounds, the scope review, WC r1 of chunks
+01-03, 2,170 image checks). Owner decisions the same day (FINISH_PLAN section 7): O12 orchestrator
+Opus 5.5, every subagent Sonnet 5.5; O13-O16 the research rules. Nothing is re-answered; the stamp
+and disclosure are made truthful: `wip/model-stamp` (75388d2 + review fixes 6dded6b, merged 071f242:
+`answer --model` required, `ANSWER_MODELS`, `model4.AI_SYSTEM` names both models, `AI_SYSTEM_OPUS`
+kept and accepted; the closed Phase-3 import takes Opus answers only). 185 live cards of chunks
+01/04/06 whose final text a Sonnet rewrite wrote still disclose Opus only: a journalled correction
+lane is being built (`wip/fixes`). Answers recorded before the merge keep their (wrong) stamp - they
+are write-once; the census is the record of who answered.
+
+## 2026-10-01 - Lane WB card sitting 6 (chunk 05, steps 22-26) and a near-overwrite by a parallel deploy
+
+Chunk 05's chain finished (verify 410 VERIFIED / 34 UNPROVEN / 5 CONTRADICTED, rewrite-v, check-v,
+verify2): 434 accepted, 16 cleared, 6 description defects. Its one rewrite2 site, "Temple of
+Augustus, Split", was cleared: its stored point is on the Pula forum ~27 m from Q770030 and its
+description is the Pula temple's - the name is the defect (rename lane in `wip/fixes`). Drill passed,
+StartedAt 10:07:55Z / 10:08:03Z (a parallel session's deploy of 6c31821, 0 overwrites since), steps
+22-26 accepted 0 deviations, `card-file --steps 22-26` changed 434 / removed 16, check 0, committed
+5611042. **The push was rejected**: another session (Touch, ancientmap-aa) had pushed 4b8c1a5
+during the gates, and its deploy job was already running (13:53:36Z) - its drift guard would rebuild
+and restart the API, whose boot imports the VPS checkout's (old) card file over the 450 written
+cells. Answer: the deploy's `git checkout`/`pull` had already run, so the committed card file blob
+of 5611042 (sha256 ad1a080b...) was written into the VPS checkout at 13:56:13Z (owner and mode
+kept); the API restarted at 13:56:39Z and imported a file equal to production: **0** overwrite
+lines in both containers, `card_json.py --check` 0, `accept --step 22..26` 0 deviations. Then
+origin/main merged (46ea685, which carries the same blob) and pushed through the gates. Both
+parallel AncientMap sessions now announce a push to main first (cross-session messages).

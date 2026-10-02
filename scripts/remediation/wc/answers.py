@@ -26,6 +26,13 @@ either, so no invented or garbled title reaches a citation. The fetcher is
 request): measured on 2026-09-26, httpx with that User-Agent is answered 403 by en/de.wikipedia.org,
 britannica.com and whc.unesco.org, which answer requests 200 (`FETCH_MEASURED`).
 
+**A write answer** (`parse_write`, lane WN, 2026-10-01) is one JSON object `{site_id, sentences, note}`
+where each sentence is `{text, quotes, note}`: 2 to 6 sentences an agent wrote for a site that has no
+description, each one sentence of 25 to 400 characters that stands alone (no pronoun opening, no
+citation marker, no copy of 12 words or more of its own quotes), 1 to 4 quotes each (the check
+answer's quote shape), distinct, and the whole text splitting back into exactly those sentences - or
+no sentence at all (the site stays empty), with the note saying what was searched.
+
 **A judge answer** (`parse_judge`) is `{site_id, kept, dropped, coherent, note}`: one verdict per kept
 sentence (`SUPPORTED`, `UNSUPPORTED`, `WRONG` - a quote needed) and per dropped one (`DROP_OK`,
 `DROP_WRONG` - a quote needed), quotes `{url, quote}`.
@@ -37,6 +44,7 @@ reference or meaning broke, empty when the text is coherent.
 
 from __future__ import annotations
 
+import re
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -56,6 +64,7 @@ import research_web  # noqa: E402
 from acceptance.answers import AnswerError, Quote, check_quotes, load_object  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 from phase4 import licences, wc4  # noqa: E402 - Phase 4's deny list and mirror rule; lane WC
+from phase4 import sentences as S  # noqa: E402 - the splitter's pronoun rule
 
 __all__ = ["AnswerError"]
 
@@ -92,6 +101,19 @@ MIN_QUOTE_CHARS = 20
 MAX_QUOTE_CHARS = 500
 MAX_TITLE_CHARS = 300
 MAX_NOTE_CHARS = 600
+#: Lane WN's write answer: how many sentences, how long, and how much of a quote it may repeat.
+WRITE_KEYS = frozenset({"site_id", "sentences", "note"})
+WRITTEN_KEYS = frozenset({"text", "quotes", "note"})
+MIN_SENTENCES = 2
+MAX_SENTENCES = 6
+MIN_SENTENCE_CHARS = wc4.MIN_TRIMMED_CHARS
+MAX_SENTENCE_CHARS = 400
+#: A written sentence shares no run of this many words (`\w+`, casefolded) with its own quotes: it
+#: states the quoted fact in its own words (a Wikipedia sentence pasted without its attribution line
+#: would be an uncredited copy). A design number, measured on no corpus: 12 words is most of a short
+#: sentence, so a paraphrase passes and a paste does not.
+MAX_SHARED_RUN = 12
+_WORD = re.compile(r"\w+")
 #: A mirror of our own text: why a quote on it does not count (the Phase-4 mirror rule).
 MIRROR = "mirror of this description"
 #: The quote was found, its title was not: the citation would publish a title the page lacks.
@@ -192,8 +214,10 @@ def _check_quotes(value: Any, where: str) -> tuple[wc4.Quote, ...]:
     return tuple(out)
 
 
-def parse_sentence(item: Any, sentence: str) -> SentenceAnswer:
-    """One sentence's answer against the sentence it answers; `AnswerError` names the problem."""
+def parse_sentence(item: Any, sentence: str, *, trims: bool = True) -> SentenceAnswer:
+    """One sentence's answer against the sentence it answers; `AnswerError` names the problem. A text
+    that may not be trimmed (`trims` false: a Phase-4 text of a site-list run, whose provenance
+    cannot follow a cut) answers KEEP or DROP only."""
     if not isinstance(item, dict) or set(item) != SENTENCE_KEYS:
         keys = sorted(item) if isinstance(item, dict) else item
         raise AnswerError(f"a sentence answer carries {keys!r}, not {sorted(SENTENCE_KEYS)}")
@@ -229,6 +253,11 @@ def parse_sentence(item: Any, sentence: str) -> SentenceAnswer:
                 f"{where}: KEEP removes nothing (remove is null); a cut is KEEP_TRIMMED"
             )
         return SentenceAnswer(n, verdict, None, None, quotes, note)
+    if not trims:
+        raise AnswerError(
+            f"{where}: this text is not trimmed - answer KEEP, or DROP a sentence with an "
+            "unsupported piece"
+        )
     if not isinstance(remove, str):
         raise AnswerError(f"{where}: KEEP_TRIMMED names the piece to remove")
     try:
@@ -239,9 +268,15 @@ def parse_sentence(item: Any, sentence: str) -> SentenceAnswer:
 
 
 def parse_check(
-    text: str, *, site_id: str, sentences: Sequence[str], asked: Sequence[int]
+    text: str,
+    *,
+    site_id: str,
+    sentences: Sequence[str],
+    asked: Sequence[int],
+    trims: bool = True,
 ) -> tuple[SentenceAnswer, ...]:
-    """A check answer: the site it names, and exactly the asked sentences, in order."""
+    """A check answer: the site it names, and exactly the asked sentences, in order (`trims`: see
+    `parse_sentence`)."""
     data = load_object(text, CHECK_KEYS)
     if data["site_id"] != site_id:
         raise AnswerError(f"the answer names site {data['site_id']!r}, the question {site_id}")
@@ -253,7 +288,117 @@ def parse_check(
         raise AnswerError(f"every sentence answer names its number n as an integer: {numbers}")
     if numbers != list(asked):
         raise AnswerError(f"the answer covers sentences {numbers}, the question asks {list(asked)}")
-    return tuple(parse_sentence(item, sentences[item["n"] - 1]) for item in items)
+    return tuple(parse_sentence(item, sentences[item["n"] - 1], trims=trims) for item in items)
+
+
+# ------------------------------------------------------------------------------ the write answer
+@dataclass(frozen=True)
+class WrittenSentence:
+    """One sentence an agent wrote for a site without a description, with the quotes it rests on."""
+
+    text: str
+    quotes: tuple[wc4.Quote, ...]
+    note: str
+
+
+@dataclass(frozen=True)
+class WriteAnswer:
+    """A write answer: the sentences in reading order (none: the site stays empty) and what was
+    searched."""
+
+    sentences: tuple[WrittenSentence, ...]
+    note: str
+
+    def as_check(self) -> tuple[SentenceAnswer, ...]:
+        """The sentences as lane WC's check answer: each one a KEEP on its quotes, numbered from 1 -
+        what the check import's record, the verification and the build read (`cli._import_write`)."""
+        return tuple(
+            SentenceAnswer(n, wc4.Verdict.KEEP, None, None, sentence.quotes, sentence.note)
+            for n, sentence in enumerate(self.sentences, start=1)
+        )
+
+
+def shared_run(sentence: str, quote: str, words: int = MAX_SHARED_RUN) -> bool:
+    """Do the two texts share a run of `words` words (`\\w+`, casefolded)?"""
+    mine = _WORD.findall(sentence.casefold())
+    theirs = _WORD.findall(quote.casefold())
+    windows = {tuple(theirs[i : i + words]) for i in range(len(theirs) - words + 1)}
+    return any(tuple(mine[i : i + words]) in windows for i in range(len(mine) - words + 1))
+
+
+def _written(item: Any, number: int) -> WrittenSentence:
+    where = f"sentence {number}"
+    if not isinstance(item, dict) or set(item) != WRITTEN_KEYS:
+        keys = sorted(item) if isinstance(item, dict) else item
+        raise AnswerError(f"{where} carries {keys!r}, not {sorted(WRITTEN_KEYS)}")
+    text = item["text"]
+    if not isinstance(text, str):
+        raise AnswerError(f"{where}: text is not a string")
+    if wc4.strip_markers(text) != text or re.search(r"\[\d+\]", text):
+        raise AnswerError(f"{where}: a citation marker like [1] - code adds the citations")
+    if not MIN_SENTENCE_CHARS <= len(text) <= MAX_SENTENCE_CHARS:
+        raise AnswerError(
+            f"{where}: {len(text)} characters; a sentence has {MIN_SENTENCE_CHARS}-"
+            f"{MAX_SENTENCE_CHARS}"
+        )
+    problems = wc4.sentence_problems(text)
+    if problems:
+        raise AnswerError(f"{where}: " + "; ".join(problems))
+    try:
+        pieces = wc4.checked_sentences(text)
+    except wc4.WcError as exc:
+        raise AnswerError(f"{where}: {exc}") from None
+    if pieces != (text,):
+        raise AnswerError(f"{where}: it is {len(pieces)} sentences - write one sentence at a time")
+    if S.leans_on_predecessor(text):
+        raise AnswerError(
+            f"{where}: it opens with a pronoun that points back to the sentence before it - "
+            "name the subject"
+        )
+    quotes = _check_quotes(item["quotes"], where)
+    if not quotes:
+        raise AnswerError(f"{where}: a written sentence rests on at least one quote")
+    for quote in quotes:
+        if shared_run(text, quote.quote):
+            raise AnswerError(
+                f"{where}: it shares a run of {MAX_SHARED_RUN} words or more with its quote "
+                f"from {quote.url} - state the fact in your own words"
+            )
+    note = _text(item["note"], f"{where}: note", limit=MAX_NOTE_CHARS)
+    return WrittenSentence(text, quotes, note)
+
+
+def parse_write(text: str, *, site_id: str) -> WriteAnswer:
+    """A write answer about the site: no sentence (the site stays empty), or `MIN_SENTENCES` to
+    `MAX_SENTENCES` distinct sentences (`_written`) that split back into exactly themselves."""
+    data = load_object(text, WRITE_KEYS)
+    if data["site_id"] != site_id:
+        raise AnswerError(f"the answer names site {data['site_id']!r}, the question {site_id}")
+    items = data["sentences"]
+    if not isinstance(items, list):
+        raise AnswerError("sentences is not a list")
+    note = _text(data["note"], "note", limit=MAX_NOTE_CHARS)
+    if not items:
+        return WriteAnswer((), note)
+    if not MIN_SENTENCES <= len(items) <= MAX_SENTENCES:
+        raise AnswerError(
+            f"{len(items)} sentences; write {MIN_SENTENCES} to {MAX_SENTENCES}, or none when no "
+            "reputable page supports that many"
+        )
+    written = tuple(_written(item, n) for n, item in enumerate(items, start=1))
+    texts = [sentence.text for sentence in written]
+    if len({t.casefold() for t in texts}) != len(texts):
+        raise AnswerError("a sentence is written twice")
+    try:
+        again = wc4.checked_sentences(" ".join(texts))
+    except wc4.WcError as exc:
+        raise AnswerError(f"the sentences together: {exc}") from None
+    if again != tuple(texts):
+        raise AnswerError(
+            "the sentences do not split back into themselves as one text - rephrase the one that "
+            "ends on an abbreviation or runs into the next"
+        )
+    return WriteAnswer(written, note)
 
 
 # ------------------------------------------------------------------------------ the quote check

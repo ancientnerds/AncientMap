@@ -10,6 +10,9 @@ Content Guidelines:
 - Note if something is a theory or speculation
 - Link to relevant archaeological sites/artifacts when referenced
 - Use accessible language while staying accurate
+- Write in English with the Latin alphabet only: names of sites and places in their common English
+  form or a Latin transliteration, never in Cyrillic, Chinese, Arabic or another script, and never
+  switch language inside a sentence
 
 Sharing Protocol:
 - Stick to what's actually shown/discussed in source

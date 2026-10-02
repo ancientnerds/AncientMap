@@ -1,0 +1,61 @@
+{
+ "asked_field_sets": {
+  "coordinates": 11,
+  "coordinates+period_start": 210,
+  "coordinates+period_start+site_type": 347,
+  "coordinates+period_start+site_type+source_url": 195,
+  "coordinates+site_type": 2,
+  "period_start": 1951,
+  "period_start+site_type": 626,
+  "site_type": 17
+ },
+ "fields_asked": 5476,
+ "flagged": {
+  "coordinates": 0,
+  "period_start": 0,
+  "site_type": 0,
+  "source_url": 0
+ },
+ "flagged_only": {
+  "coordinates": 0,
+  "period_start": 0,
+  "site_type": 0,
+  "source_url": 0
+ },
+ "identity_doubt": 0,
+ "part": "rest",
+ "per_field": {
+  "coordinates": {
+   "CONFIRMED": 2758,
+   "MISSING": 765
+  },
+  "period_start": {
+   "CONFIRMED": 194,
+   "MISSING": 3329
+  },
+  "site_type": {
+   "CONFIRMED": 2336,
+   "MISSING": 1187
+  },
+  "source_url": {
+   "CONFIRMED": 3328,
+   "MISSING": 195
+  }
+ },
+ "period_name_not_bucket_of_start": 4,
+ "pilot": null,
+ "retired_not_classified": 78,
+ "seeds": {
+  "cells": 54,
+  "sites": 46,
+  "sites_not_classified": []
+ },
+ "sites": 3523,
+ "sites_asked": 3359,
+ "stacked_points": 0,
+ "table_sha256": "7be7543dbf10817ad9ca51a58f65e3618e321149c86e3325997c00a5636abcde",
+ "without": {
+  "run": "output/remediation/fields/wd1-rest-pilot",
+  "sites": 80
+ }
+}

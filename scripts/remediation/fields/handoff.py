@@ -60,7 +60,7 @@ import json
 import sys
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
@@ -82,8 +82,10 @@ from phase4.route_stage import wikipedia_title  # noqa: E402
 from fields import answers as A  # noqa: E402
 from fields import classify as C  # noqa: E402
 from fields import harvest as H  # noqa: E402
+from fields import rule as R  # noqa: E402
 
-STAGE = "wd1"
+#: WD1's handoff stage (`Rule.stage`); a run's own stage is its rule's.
+STAGE = R.TWO_FAMILIES.stage
 BATCH_SIZE = 8
 #: Round 0 and two re-asks, as the acceptance does.
 MAX_ROUND = 2
@@ -105,6 +107,17 @@ REFUSED_STATUS = frozenset({401, 403, 406, 429})
 PILOT_MAX_RATE = 0.10
 PILOT_MAX_COUNTRY_RATE = 0.20
 PILOT_MIN_FIELDS = 10
+#: WD3 clears nothing, so its pilot guards the other way a run can go wrong - a checker that cannot
+#: read what the agents cite (every such field ends `held`): a chosen line, not a measured one. An
+#: unsourced field (`unresolved`) is a finding, not a defect: the population is what WD1 could not
+#: source, and its rate (every `unresolved` decision, answered outright or on exhaustion) is
+#: reported. The other way a run goes wrong is an agent that answers `unresolved` without
+#: researching: a field of a site whose question showed a Wikidata item or an English Wikipedia
+#: article usually has a source, so the share of those fields answered `unresolved` outright is
+#: gated, overall and when at least `PILOT_MIN_FIELDS` of them were asked (a chosen line).
+PILOT_MAX_HELD_RATE = 0.20
+PILOT_MAX_COUNTRY_HELD_RATE = 0.30
+PILOT_MAX_HINTED_UNRESOLVED_RATE = 0.60
 PILOT_FILE = "PILOT.json"
 
 
@@ -244,6 +257,129 @@ ANSWER_FORMAT = (
 )
 
 
+# ---------------------------------------------------------------------------- lane WD3's texts
+#: WD3's rules per field: the same checks as WD1's, but one source suffices and an answer that
+#: cannot be sourced is `unresolved` - never `clear`: the field stays as it is.
+FIELD_RULES_WD3 = {
+    "coordinates": (
+        "The site's point: the place of the site itself - its centre or its main monument - not "
+        "the nearest village, a namesake, the museum that keeps its finds, the hill or island it "
+        "stands on, or the region.\n"
+        f"- keep: a source gives a point within {A.KEEP_KM:g} km of the stored point. The stored "
+        'point then counts as sourced. value = "lat, lon" of the point the source gives, in '
+        "decimal degrees.\n"
+        f"- replace: the stored point is more than {A.KEEP_KM:g} km from the site and a source "
+        'gives the site\'s point. value = "lat, lon" in decimal degrees (at most 6 decimals).\n'
+        "- unresolved: no source can be quoted for the site's point. The stored point stays - "
+        "it cannot be emptied, every site stays on the map - and the site goes to the owner's "
+        "list.\n"
+        "Each quote must hold exactly the two coordinates as the page prints them - signed decimal "
+        'degrees, latitude first ("51.1789, -1.8262"), or degrees with a hemisphere letter each '
+        '("51°10′44″N 1°49′34″W", "51.1789°N 1.8262°W") - with nothing around them but labels such '
+        f'as "Coordinates:". They must lie within {A.KEEP_KM:g} km of your value, and be written '
+        "at least to whole arcminutes. A grid reference (OSGB, UTM) is not read."
+    ),
+    "period_start": (
+        "period_start is the year the site's securely attested history as a site begins - its "
+        "construction, foundation or first occupation - negative for BC. The map shows only its "
+        "bucket.\n"
+        "- keep: only when the field holds a value: a source dates the start into the stored "
+        "value's bucket. value = the attested start year.\n"
+        "- replace: a source dates the start (the field is empty, or the start lies in another "
+        'bucket). value = that year, e.g. "-2500" for c. 2500 BC; a century as its first year '
+        '("the 8th century BC" -> "-800", "the 2nd century AD" -> "101").\n'
+        "- unresolved: no source dates the start. The field stays as it is - an empty one stays "
+        "empty - and the site goes to the owner's list.\n"
+        "Each quote must carry the date as the page states it (a year, a century, a millennium), "
+        'and at least one must state your value itself: its year ("c. 2500 BC" for -2500), or its '
+        'century or millennium with that word ("the 26th century BC", "the 3rd millennium BC"). A '
+        'year worked out from "4,500 years ago" or a BP date is not read.'
+    ),
+    "site_type": (
+        "site_type is one canonical type: the most specific one that holds what the sources say "
+        "the site is. A generic type (Ruin, Archaeological site, Site, Heritage site, Scheduled "
+        "monument) only when nothing more specific fits.\n"
+        "- keep: only when the field holds a value: a source describes the site as the stored "
+        "type. value = the stored type.\n"
+        "- replace: a source describes the site as a type (the field is empty, or it is another "
+        "type). value = one canonical type.\n"
+        "- unresolved: no source says what kind of site it is. The field stays as it is and the "
+        "site goes to the owner's list.\n"
+        'A quote must hold a word of the chosen type ("temple" for Temple, "tumulus" or "mound" '
+        "for Mound/tumulus)."
+    ),
+    "source_url": (
+        "source_url is the page the site's entry names as its source. It must load without a "
+        "login or a script and be about this very site - not the island, town, region or hill it "
+        "lies in, not a namesake, not a list. Prefer the site's own Wikipedia article in English, "
+        "else in another language, else a heritage register entry or a scholarly page.\n"
+        "- keep: only when the field holds a URL: the stored page is about this site. value = the "
+        "stored URL, unchanged.\n"
+        "- replace: a page is about this site (the field is empty, or another page is the "
+        "better one). value = its URL - the article's own URL, not a redirect, a section link "
+        "(no #...), a search or a translation proxy - written percent-encoded, as a browser's "
+        'address bar copies it ("https://de.wikipedia.org/wiki/G%C3%B6bekli_Tepe", not '
+        '"Göbekli_Tepe"); check-answer prints the form it wants.\n'
+        "- unresolved: no page about this site can be found. The field stays as it is and the "
+        "site goes to the owner's list.\n"
+        "For keep and replace, one quote is from the value's page itself and names the site."
+    ),
+}
+
+#: Where lane WD3's agents start, and what they must not use. The machine-checked half of the
+#: quotes' rules is `RESEARCH`'s second section, kept word for word.
+RESEARCH_WD3 = (
+    "## How to research\n"
+    "\n"
+    "Start from what the database already holds about this site, in this order:\n"
+    "1. the site's Wikidata item and its English Wikipedia article (above), then the same "
+    "article in other languages (its language links) and the item's other statements;\n"
+    "2. the stored source_url and the pages the site's own page links to (listed above, with "
+    "their kind) - each was found for this site, but read it before you trust it;\n"
+    "3. then reputable sources: heritage agencies and national monument registers, UNESCO, "
+    "museums, universities, journals and excavation reports, Pleiades, established "
+    "encyclopedias.\n"
+    "\n"
+    "- Never use ancientnerds.com (it is this database), AI-written content farms, travel "
+    "blogs that restate Wikipedia, or Wikipedia mirrors (Wikiwand, DBpedia and the like): a "
+    "quote from one of them is refused.\n"
+    "- Before any answer, make sure the source is about this very site: its name AND its place.\n"
+    "- One source suffices. One Wikipedia article (in any language), its Wikidata item and "
+    "Wikimedia Commons are ONE source; so are all pages of one website. One verbatim quote from "
+    "one page is enough when it states the value itself.\n"
+    "- A field no source supports stays as it is: answer unresolved. That is an answer, not a "
+    "failure - do not stretch a source to fill a field.\n"
+    "\n"
+) + RESEARCH[RESEARCH.index("## Quotes are checked by machine") :]
+
+ANSWER_FORMAT_WD3 = (
+    "## Your answer\n"
+    "\n"
+    'One JSON object and nothing else: {{"fields": {{...}}}} with exactly these keys: {keys}. Each '
+    "is\n"
+    '{{"decision": "...", "value": "..." or null, "quotes": [{{"url": "https://...", "quote": '
+    '"verbatim text"}}], "reasoning": "..."}}\n'
+    "keep and replace carry the value and at least one quote; unresolved carries value null and "
+    "quotes []. The reasoning says, in a sentence or two, what the source says and why that "
+    "decides it.\n"
+)
+
+#: A field of a WD3 question is open for one of these reasons (`population.py`).
+OPEN_TEXT = {
+    "empty": "the field is empty",
+    "unresolved": "the stored point has no sourced witness: an earlier pass found none",
+    "held": "the stored value has no source: an earlier pass could not read the pages it cited. "
+    "A source that confirms it is a keep; a source for another value is a replace, which is "
+    "listed for the owner and not written - only an empty field is filled",
+    "unsourced": "the stored value has no source: an earlier pass found none (its clear was "
+    "refused). A source that confirms it is a keep; a source for another value is a replace, "
+    "which is listed for the owner and not written - only an empty field is filled",
+}
+WD1_SHOWN_CHARS = 600
+#: How many of a site's own links a WD3 question lists (best first).
+LINKS_SHOWN = 10
+
+
 def _evidence_lines(field: str, status: Mapping[str, Any]) -> list[str]:
     ev = status["evidence"]
     lines: list[str] = []
@@ -287,24 +423,64 @@ def _evidence_lines(field: str, status: Mapping[str, Any]) -> list[str]:
     return lines
 
 
-def render_prompt(
-    line: Mapping[str, Any], fields: Sequence[str], notes: Mapping[str, str] | None = None
-) -> str:
-    """The exact question for one site and `fields` - a pure function of the classified line and,
-    in a re-ask, of why each field's last answer did not count (`notes`, kept in the round's
-    record)."""
-    notes = notes or {}
-    fields = [f for f in C.FIELDS if f in fields]
-    if not fields:
-        raise HandoffStepError(f"{line['site_id']}: a question needs at least one field")
+@dataclass(frozen=True)
+class Texts:
+    """What a rule's question says in its own words: the opening, each field's rules, what an empty
+    field and a re-ask are told, how to research and the answer's format."""
+
+    intro: str
+    field_rules: Mapping[str, str]
+    empty_note: str
+    retry_note: str
+    research: str
+    answer_format: str
+
+
+TEXTS = {
+    R.TWO_FAMILIES.name: Texts(
+        intro=(
+            "You are an Opus researcher in the structured-field repair (lane WD1) of a curated "
+            "database of ancient sites. This question is about ONE site and the fields listed "
+            "below. Research each field on its own and decide it from sources you quote."
+        ),
+        field_rules=FIELD_RULES,
+        empty_note=(
+            "The field is empty, so keep is no answer: replace with a sourced value, or clear "
+            "to leave it empty."
+        ),
+        retry_note=(
+            "An earlier answer to this field did not count: {why}. Answer it again "
+            "from sources the checker can read - or clear it (unresolved for coordinates) "
+            "when none can be quoted."
+        ),
+        research=RESEARCH + "\n" + KNOWN_FETCH_TROUBLE,
+        answer_format=ANSWER_FORMAT,
+    ),
+    R.ONE_FAMILY.name: Texts(
+        intro=(
+            "You are a researcher in the structured-field fill (lane WD3) of a curated database "
+            "of ancient sites. This question is about ONE site and the open fields listed below: "
+            "each is empty, or holds a value no source stands behind yet. Research each field on "
+            "its own and decide it from a source you quote."
+        ),
+        field_rules=FIELD_RULES_WD3,
+        empty_note=(
+            "The field is empty, so keep is no answer: replace with a sourced value, or answer "
+            "unresolved to leave it empty."
+        ),
+        retry_note=(
+            "An earlier answer to this field did not count: {why}. Answer it again "
+            "from a source the checker can read - or answer unresolved when none can be quoted."
+        ),
+        research=RESEARCH_WD3 + "\n" + KNOWN_FETCH_TROUBLE,
+        answer_format=ANSWER_FORMAT_WD3,
+    ),
+}
+
+
+def _site_lines(line: Mapping[str, Any], rule: R.Rule) -> list[str]:
     item = line["qid"]
     out = [
-        "You are an Opus researcher in the structured-field repair (lane WD1) of a curated database "
-        "of ancient sites. This question is about ONE site and the fields listed below. Research "
-        "each field on its own and decide it from sources you quote.",
-        "",
-        "## The site",
-        "",
         f"- name: {line['name']}",
         f"- country: {line['country']}",
         f"- stored point: {line['fields']['coordinates']['stored']} (latitude, longitude)",
@@ -315,6 +491,56 @@ def render_prompt(
             else ""
         ),
         f"- English Wikipedia article of the item: {line['enwiki'] or 'none'}",
+    ]
+    if rule.fill_only:
+        out.append(f"- stored source_url: {line['fields']['source_url']['stored'] or 'none'}")
+        links = line["links"]
+        if links:
+            out.append("- pages the site's own page links to (best first):")
+            out.extend(
+                f"  - [{link['type']}] {link['title']} - {link['url']}"
+                for link in links[:LINKS_SHOWN]
+            )
+        else:
+            out.append("- pages the site's own page links to: none")
+    return out
+
+
+def _open_lines(line: Mapping[str, Any], field: str) -> list[str]:
+    """WD3: why the field is open, and what the earlier pass (WD1, which asked for two source
+    families) made of it - a lead to check, not evidence."""
+    opened = line["open"][field]
+    out = [f"Open because: {OPEN_TEXT[opened['why']]}."]
+    earlier = opened["wd1"]
+    if earlier is not None:
+        out.append(
+            f"The earlier pass (lane WD1, two independent source families required) decided "
+            f"{earlier['decision']}: {earlier['reasoning'][:WD1_SHOWN_CHARS]} "
+            "(a lead to check, not evidence)."
+        )
+    return out
+
+
+def render_prompt(
+    line: Mapping[str, Any],
+    fields: Sequence[str],
+    notes: Mapping[str, str] | None = None,
+    rule: R.Rule = R.DEFAULT,
+) -> str:
+    """The exact question for one site and `fields` - a pure function of the classified line, of
+    the rule the run decides under and, in a re-ask, of why each field's last answer did not count
+    (`notes`, kept in the round's record)."""
+    notes = notes or {}
+    fields = [f for f in C.FIELDS if f in fields]
+    if not fields:
+        raise HandoffStepError(f"{line['site_id']}: a question needs at least one field")
+    texts = TEXTS[rule.name]
+    out = [
+        texts.intro,
+        "",
+        "## The site",
+        "",
+        *_site_lines(line, rule),
         "",
         "## The fields you decide",
         "",
@@ -324,6 +550,8 @@ def render_prompt(
         out.append(f"### {field}")
         out.append("")
         out.append(f"Stored value: {json.dumps(status['stored'], ensure_ascii=False)}")
+        if rule.fill_only:
+            out.extend(_open_lines(line, field))
         out.append(f"Why you are asked: {status['status']} - {status['reason']}")
         evidence = _evidence_lines(field, status)
         if evidence:
@@ -336,32 +564,24 @@ def render_prompt(
             )
             out.extend(f"  - {flag}" for flag in status["flags"])
         if status["stored"] is None:
-            out.append(
-                "The field is empty, so keep is no answer: replace with a sourced value, or clear "
-                "to leave it empty."
-            )
+            out.append(texts.empty_note)
         if field in notes:
-            out.append(
-                f"An earlier answer to this field did not count: {notes[field]}. Answer it again "
-                "from sources the checker can read - or clear it (unresolved for coordinates) "
-                "when none can be quoted."
-            )
+            out.append(texts.retry_note.format(why=notes[field]))
         out.append("")
-        out.append(FIELD_RULES[field])
+        out.append(texts.field_rules[field])
         vocabulary = definitions(field)
         if vocabulary:
             out.append("")
             out.append(vocabulary)
         out.append("")
-    out.append(RESEARCH)
-    out.append(KNOWN_FETCH_TROUBLE)
-    out.append(ANSWER_FORMAT.format(keys=", ".join(f'"{f}"' for f in fields)))
+    out.append(texts.research)
+    out.append(texts.answer_format.format(keys=", ".join(f'"{f}"' for f in fields)))
     return "\n".join(out)
 
 
 # ------------------------------------------------------------------------------ export
 def batches(
-    labels: Sequence[str], classified: Mapping[str, Any], round_no: int
+    labels: Sequence[str], classified: Mapping[str, Any], round_no: int, stage: str = STAGE
 ) -> list[tuple[str, list[str]]]:
     """Sites by country, then name, cut into batches of `BATCH_SIZE` - one agent reads one
     country's registers for a whole batch."""
@@ -370,7 +590,7 @@ def batches(
         key=lambda s: (classified[s]["country"] or "", classified[s]["name"].casefold(), s),
     )
     return [
-        (f"wd1-r{round_no}-b{number + 1:04d}", ordered[i : i + BATCH_SIZE])
+        (f"{stage}-r{round_no}-b{number + 1:04d}", ordered[i : i + BATCH_SIZE])
         for number, i in enumerate(range(0, len(ordered), BATCH_SIZE))
     ]
 
@@ -382,6 +602,7 @@ def _export_round(
     fields_of: Mapping[str, Sequence[str]],
     notes: Mapping[str, Mapping[str, str]],
 ) -> dict[str, Any]:
+    rule = R.read_rule(run)
     rounds = read_rounds(run)
     if any(r["round"] == round_no for r in rounds):
         raise HandoffStepError(f"round {round_no} is already exported")
@@ -389,16 +610,16 @@ def _export_round(
     if target.exists() and any(target.iterdir()):
         raise HandoffStepError(f"{handoff} is not empty: a round gets a directory of its own")
     classified = read_classified(run)
-    groups = batches(list(fields_of), classified, round_no)
+    groups = batches(list(fields_of), classified, round_no, rule.stage)
     for batch_id, labels in groups:
         for label in labels:
             OH.export(
                 target,
                 batch_id=batch_id,
-                stage=STAGE,
+                stage=rule.stage,
                 label=label,
                 field="+".join(fields_of[label]),
-                prompt=render_prompt(classified[label], fields_of[label], notes.get(label)),
+                prompt=render_prompt(classified[label], fields_of[label], notes.get(label), rule),
             )
     record = {
         "round": round_no,
@@ -477,21 +698,19 @@ def check_answer(run: Path, handoff: Path, batch_id: str, label: str, text: str)
         raise HandoffStepError(f"{batch_id}/{label} is no question of {handoff}")
     line = read_classified(run)[label]
     try:
-        checked = A.check_shape(text, record["fields"][label], line)
+        checked = A.check_shape(text, record["fields"][label], line, R.read_rule(run))
     except AnswerError as exc:
         return {"ok": False, "problems": {"answer": str(exc)}}
     problems = {f: a for f, a in checked.items() if isinstance(a, str)}
     return {"ok": not problems, "problems": problems}
 
 
-BRIEF = """You are Opus researcher {batch} of the WD1 structured-field repair. You answer {count} \
+BRIEF = """You are {role} {batch} of the {lane} structured-field {work}. You answer {count} \
 question(s), each about another site. Answer each one on its own, as if it were the only one.
 
 Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per question \
 with its "label" and its "prompt_path" (relative to {handoff}). Open no other file of the repository - \
-no other batch, nothing else under output/ or docs/, no database, no git history. Your evidence is your \
-own web research, as each prompt says: heritage registers, Wikidata, Wikipedia in any language, \
-Pleiades, excavation reports, museum and university pages.
+no other batch, nothing else under output/ or docs/, no database, no git history. {evidence}
 
 For each question:
 1. Read {handoff}/<prompt_path>.
@@ -503,20 +722,55 @@ page itself, character for character.
    ./.venv/Scripts/python.exe scripts/remediation/fields/handoff.py check-answer --run {run} \
 --handoff {handoff} --batch-id {batch} --label <label> --text-file {scratch}/<label>.json
    It prints the problems per field, if any: fix the answer, never the finding - a field you cannot \
-source is "clear" (or "unresolved" for coordinates).
+source {unsourced}.
 5. Record it - an answer is written once:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
 --batch-id {batch} --stage {stage} --label <label> --answered-by {batch} \
+--model {model} \
 --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.
 """
 
 
+#: What differs between the rules' briefs: who answers, where the evidence comes from, what a field
+#: nobody can source is, and the model id the answer is recorded with (owner decision 2026-10-01:
+#: every answering agent of WD3 is Sonnet 5.5; WD1's agents named what they ran as).
+BRIEF_PARTS = {
+    R.TWO_FAMILIES.name: {
+        "role": "Opus researcher",
+        "lane": "WD1",
+        "work": "repair",
+        "evidence": (
+            "Your evidence is your own web research, as each prompt says: heritage registers, "
+            "Wikidata, Wikipedia in any language, Pleiades, excavation reports, museum and "
+            "university pages."
+        ),
+        "unsourced": 'is "clear" (or "unresolved" for coordinates)',
+        "model": "<the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>",
+    },
+    R.ONE_FAMILY.name: {
+        "role": "Sonnet researcher",
+        "lane": "WD3",
+        "work": "fill",
+        "evidence": (
+            "Your evidence is your own web research, as each prompt says: start from the site's "
+            "Wikidata item, its Wikipedia article in any language, its stored source_url and the "
+            "pages listed in the prompt, then reputable sources - heritage registers, museums, "
+            "universities, journals, Pleiades, excavation reports. Never ancientnerds.com, AI "
+            "content farms or Wikipedia mirrors."
+        ),
+        "unsourced": 'is "unresolved"',
+        "model": "claude-sonnet-5-5",
+    },
+}
+
+
 def brief(run: Path, handoff: Path, batch_id: str) -> str:
     record = _round_of(run, handoff)
     if batch_id not in record["batches"]:
         raise HandoffStepError(f"{batch_id} is no batch of {handoff}")
+    rule = R.read_rule(run)
     shown = _shown(handoff)
     return BRIEF.format(
         batch=batch_id,
@@ -524,7 +778,8 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
         handoff=shown,
         scratch=f"{shown}-scratch/{batch_id}",
         run=_shown(run),
-        stage=STAGE,
+        stage=rule.stage,
+        **BRIEF_PARTS[rule.name],
     )
 
 
@@ -619,6 +874,7 @@ def import_rounds(
     pace: float = Q.PACE_SECONDS,
 ) -> dict[str, Any]:
     """Every round's answers: validated, parsed, quote-checked, decided."""
+    rule = R.read_rule(run)
     classified = read_classified(run)
     rounds = sorted(read_rounds(run), key=lambda r: r["round"])
     if not rounds:
@@ -639,16 +895,16 @@ def import_rounds(
             raise HandoffStepError(f"{record['handoff']}: the manifest is not the round's record")
         for (batch_id, label), line in sorted(manifest.items()):
             fields = record["fields"][label]
-            prompt = render_prompt(classified[label], fields, record["notes"].get(label))
+            prompt = render_prompt(classified[label], fields, record["notes"].get(label), rule)
             if OH.prompt_sha256(prompt) != line["prompt_sha256"]:
                 raise HandoffStepError(
                     f"{batch_id}/{label}: the exported prompt is not this question's"
                 )
             answer = OH.read_answer(
-                handoff, batch_id=batch_id, stage=STAGE, label=label, prompt=prompt
+                handoff, batch_id=batch_id, stage=rule.stage, label=label, prompt=prompt
             )
             try:
-                checked = A.check_shape(answer.text, fields, classified[label])
+                checked = A.check_shape(answer.text, fields, classified[label], rule)
             except AnswerError as exc:
                 checked = dict.fromkeys(fields, f"malformed answer: {exc}")
             for field in fields:
@@ -660,6 +916,7 @@ def import_rounds(
                         "site_id": label,
                         "field": field,
                         "answered_by": answer.answered_by,
+                        "model": answer.model,
                         "answered_at": answer.answered_at,
                         "answer": None if isinstance(parsed, str) else parsed.to_dict(),
                         "problem": parsed if isinstance(parsed, str) else None,
@@ -740,7 +997,7 @@ def import_rounds(
         if own_net and api is not None:
             api.close()
 
-    decisions, waiting = _decide(attempts, classified, counted_before)
+    decisions, waiting = _decide(attempts, classified, counted_before, rule)
     _write_jsonl(run / ATTEMPTS_FILE, attempts)
     _write_jsonl(run / DECISIONS_FILE, decisions)
     _write_json(run / REASK_FILE, {"after_round": rounds[-1]["round"], "fields": waiting})
@@ -770,11 +1027,14 @@ def _decide(
     attempts: Sequence[Mapping[str, Any]],
     classified: Mapping[str, Mapping[str, Any]],
     counted_before: Iterable[tuple[int, str, str]],
+    rule: R.Rule = R.DEFAULT,
 ) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
-    """Each asked (site, field): its latest counted answer, or - after the last round - exhausted:
-    held when the last answer failed only on unreadable pages (and always for coordinates, which
-    cannot be cleared), else cleared. `counted_before`: the (round, site, field) that counted at
-    the last import - each must count still."""
+    """Each asked (site, field): its latest counted answer, or - after the last round - exhausted.
+    Under WD1's rule: held when the last answer failed only on unreadable pages (and always for
+    coordinates, which cannot be cleared), else cleared. Under WD3's, which never clears: held when
+    it failed only on unreadable pages, else unresolved - the field stays as it is, for the owner's
+    list. `counted_before`: the (round, site, field) that counted at the last import - each must
+    count still."""
     before = set(counted_before)
     by_cell: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
     for attempt in attempts:
@@ -814,16 +1074,17 @@ def _decide(
                     "round": chosen["round"],
                     "counted_rounds": [a["round"] for a in counted],
                     "answered_by": chosen["answered_by"],
+                    "model": chosen["model"],
                     "quotes": chosen["quotes"],
                     "reasoning": answer["reasoning"],
                     "value_page": chosen["value_page"],
                 }
             )
         elif tries[-1]["round"] >= MAX_ROUND:
-            if field == "coordinates":
-                outcome = A.UNRESOLVED
-            elif tries[-1]["unreadable"]:
+            if tries[-1]["unreadable"] and (not rule.clearable or field != "coordinates"):
                 outcome = HELD
+            elif field == "coordinates" or not rule.clearable:
+                outcome = A.UNRESOLVED
             else:
                 outcome = A.CLEAR
             decisions.append(
@@ -835,6 +1096,7 @@ def _decide(
                     "round": tries[-1]["round"],
                     "counted_rounds": [],
                     "answered_by": None,
+                    "model": None,
                     "quotes": [],
                     "reasoning": f"no counted answer in {len(tries)} rounds: "
                     + "; ".join(str(a["reason"]) for a in tries),
@@ -847,9 +1109,16 @@ def _decide(
 
 
 def pilot_report(run: Path) -> dict[str, Any]:
-    """A finished run's fields cleared on exhaustion - overall and per country - against the
-    pilot's gate (`PILOT_MAX_RATE`, `PILOT_MAX_COUNTRY_RATE` for a country with at least
-    `PILOT_MIN_FIELDS` fields): PILOT.json with the verdict PASS or STOP."""
+    """A finished run's exhausted fields - overall and per country - against the pilot's gate:
+    PILOT.json with the verdict PASS or STOP. Under WD1's rule the gate is the share cleared on
+    exhaustion (`PILOT_MAX_RATE`, `PILOT_MAX_COUNTRY_RATE` for a country with at least
+    `PILOT_MIN_FIELDS` fields); under WD3's, which clears nothing, the share held because the
+    checker could not read the cited pages (`PILOT_MAX_HELD_RATE`, `PILOT_MAX_COUNTRY_HELD_RATE`),
+    and the share of every `unresolved` decision, whatever its `via`, is reported beside it
+    (`unresolved_rate`), and the share of the fields of sites with a Wikidata item or an English
+    Wikipedia article that an agent answered `unresolved` outright (`hinted_unresolved_rate`) is
+    gated (`PILOT_MAX_HINTED_UNRESOLVED_RATE`): a lazy pilot cannot pass as a thin population."""
+    rule = R.read_rule(run)
     reask = json.loads((run / REASK_FILE).read_text(encoding="utf-8"))
     if reask["fields"]:
         waiting = sum(len(v) for v in reask["fields"].values())
@@ -862,30 +1131,69 @@ def pilot_report(run: Path) -> dict[str, Any]:
     for d in _read_jsonl(run / DECISIONS_FILE):
         tally = tallies.setdefault(str(classified[d["site_id"]]["country"]), Counter())
         tally["fields"] += 1
+        hinted = bool(classified[d["site_id"]]["qid"] or classified[d["site_id"]]["enwiki"])
+        tally["hinted"] += hinted
+        if d["decision"] == A.UNRESOLVED:
+            tally["unresolved"] += 1
+            if d["via"] == COUNTED:
+                tally["hinted_unresolved"] += hinted
         if d["via"] == EXHAUSTED:
-            tally["exhausted_clear" if d["decision"] == A.CLEAR else "exhausted_held"] += 1
+            tally[
+                "exhausted_"
+                + {A.CLEAR: "clear", A.UNRESOLVED: "unresolved"}.get(d["decision"], "held")
+            ] += 1
 
     def row(tally: Counter[str]) -> dict[str, Any]:
-        return {
+        figures = {
             "fields": tally["fields"],
             "exhausted_clear": tally["exhausted_clear"],
             "exhausted_held": tally["exhausted_held"],
-            "clear_rate": round(tally["exhausted_clear"] / tally["fields"], 3),
+        }
+        if rule.clearable:
+            return {**figures, "clear_rate": round(tally["exhausted_clear"] / tally["fields"], 3)}
+        return {
+            **figures,
+            "exhausted_unresolved": tally["exhausted_unresolved"],
+            "unresolved": tally["unresolved"],
+            "hinted": tally["hinted"],
+            "hinted_unresolved": tally["hinted_unresolved"],
+            "held_rate": round(tally["exhausted_held"] / tally["fields"], 3),
+            "unresolved_rate": round(tally["unresolved"] / tally["fields"], 3),
+            "hinted_unresolved_rate": (
+                round(tally["hinted_unresolved"] / tally["hinted"], 3) if tally["hinted"] else 0.0
+            ),
         }
 
+    # the gated share, what it is called in a message, and its two lines
+    gated, said, max_rate, max_country = (
+        ("clear_rate", "cleared", PILOT_MAX_RATE, PILOT_MAX_COUNTRY_RATE)
+        if rule.clearable
+        else ("held_rate", "held as unreadable", PILOT_MAX_HELD_RATE, PILOT_MAX_COUNTRY_HELD_RATE)
+    )
+    count_key = "exhausted_clear" if rule.clearable else "exhausted_held"
     overall = row(sum(tallies.values(), Counter()))
     stopped_by = []
-    if overall["clear_rate"] > PILOT_MAX_RATE:
+    if overall[gated] > max_rate:
         stopped_by.append(
-            f"overall: {overall['exhausted_clear']} of {overall['fields']} fields cleared on "
-            f"exhaustion ({overall['clear_rate']})"
+            f"overall: {overall[count_key]} of {overall['fields']} fields {said} on "
+            f"exhaustion ({overall[gated]})"
+        )
+    if (
+        not rule.clearable
+        and overall["hinted"] >= PILOT_MIN_FIELDS
+        and overall["hinted_unresolved_rate"] > PILOT_MAX_HINTED_UNRESOLVED_RATE
+    ):
+        stopped_by.append(
+            f"overall: {overall['hinted_unresolved']} of {overall['hinted']} fields of sites with "
+            "a Wikidata item or an English Wikipedia article answered `unresolved` outright "
+            f"({overall['hinted_unresolved_rate']}) - spot-check the agents' research"
         )
     countries = {country: row(tally) for country, tally in sorted(tallies.items())}
     for country, figures in countries.items():
-        if figures["fields"] >= PILOT_MIN_FIELDS and figures["clear_rate"] > PILOT_MAX_COUNTRY_RATE:
+        if figures["fields"] >= PILOT_MIN_FIELDS and figures[gated] > max_country:
             stopped_by.append(
-                f"{country}: {figures['exhausted_clear']} of {figures['fields']} fields cleared on "
-                f"exhaustion ({figures['clear_rate']})"
+                f"{country}: {figures[count_key]} of {figures['fields']} fields {said} on "
+                f"exhaustion ({figures[gated]})"
             )
     report = {
         "verdict": "STOP" if stopped_by else "PASS",
@@ -893,8 +1201,13 @@ def pilot_report(run: Path) -> dict[str, Any]:
         "overall": overall,
         "countries": countries,
         "gate": {
-            "max_rate": PILOT_MAX_RATE,
-            "max_country_rate": PILOT_MAX_COUNTRY_RATE,
+            "rule": rule.name,
+            "measure": gated,
+            "max_rate": max_rate,
+            "max_country_rate": max_country,
+            "max_hinted_unresolved_rate": None
+            if rule.clearable
+            else PILOT_MAX_HINTED_UNRESOLVED_RATE,
             "min_country_fields": PILOT_MIN_FIELDS,
         },
         "reported_at": H.now(),

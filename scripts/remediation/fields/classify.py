@@ -121,7 +121,7 @@ FIELDS = ("coordinates", "period_start", "site_type", "source_url")
 TABLE = _HERE.parent / "p31_site_types.json"
 #: sha256 of the table's LF text. The table is reviewed data: a changed table is refused until this
 #: pin is moved with it, in one reviewed commit.
-TABLE_SHA256 = "7be7543dbf10817ad9ca51a58f65e3618e321149c86e3325997c00a5636abcde"
+TABLE_SHA256 = "38140ab2415ce6d8352f96237d839ddab93131e0df3a9ac78e952d793bcba768"
 #: `other`: the item is no place at all - an object, a person, a deity, a concept, a Wikimedia page.
 KINDS = frozenset({"site", "generic", "container", "other"})
 #: The kinds that put the item's identity in doubt unless the stored type is one they list.
@@ -705,9 +705,15 @@ def classify_all(
     part: str,
     pilot: tuple[int, int] | None = None,
     without: Path | None = None,
+    refine: Callable[[Mapping[str, Any], Mapping[str, Any]], Mapping[str, Any] | None]
+    | None = None,
 ) -> dict[str, Any]:
     """CLASSIFIED.jsonl and COUNTS.json of one part - or of its pilot (`pilot`: a sample of
-    `(size, seed)` of its asked sites), or of the part less a pilot run's sites (`without`)."""
+    `(size, seed)` of its asked sites), or of the part less a pilot run's sites (`without`).
+
+    `refine(line, stored_row)` (lane WD3, `population.py`) is called with each site's classified
+    line and its stored row: `None` leaves the site out of the run, a mapping is merged into the
+    line - it names the fields asked (`asked`) and whatever the run's questions show besides."""
     if part not in PARTS:
         raise ClassifyError(f"{part!r} is not one of {PARTS}")
     sites = H.read_sites(root)
@@ -740,18 +746,22 @@ def classify_all(
             continue
         entity = entities.get(site["qid"]) if site["qid"] else None
         point = (float(row["lat_text"]), float(row["lon_text"]))
-        lines.append(
-            classify_site(
-                site,
-                row,
-                entity=entity,
-                article=H.load_enwiki(root, site["qid"]) if site["qid"] else None,
-                url_record=H.load_url(root, site),
-                table=table,
-                stacked=points[point] - 1,
-                flags=seeds.get(site["site_id"], {}),
-            )
+        line = classify_site(
+            site,
+            row,
+            entity=entity,
+            article=H.load_enwiki(root, site["qid"]) if site["qid"] else None,
+            url_record=H.load_url(root, site),
+            table=table,
+            stacked=points[point] - 1,
+            flags=seeds.get(site["site_id"], {}),
         )
+        if refine is not None:
+            extra = refine(line, row)
+            if extra is None:
+                continue
+            line = {**line, **extra}
+        lines.append(line)
     classified = {line["site_id"] for line in lines}
     if part != "all":
         lines = [line for line in lines if in_conflict_part(line) == (part == "conflict")]

@@ -1,0 +1,77 @@
+Correction plan, 2026-10-01. Nothing here has been written to production.
+
+====================================================================================================
+STORY 5733  (video KXaLFJfXYf8)
+  replace  'Researchers科尔 Chromemer'  ->  'Researchers Cole Chromemer'
+  because  科尔 is 'Cole'; the transcript segment of this item reads 'As Cole Chromemer and'.
+  FACT 6 before: Researchers科尔 Chromemer and Regillo evidence suggests pre-Khufu town at Giza (Pyramids)
+  FACT 6 after : Researchers Cole Chromemer and Regillo evidence suggests pre-Khufu town at Giza (Pyramids)
+  URL unchanged: /news-archive/giza-pyramids-served-as-secondary-necropolis-before-khufus-pyramid-5733
+====================================================================================================
+STORY 5797  (video 9oWiBnjCFJQ)
+  replace  'have存在的问题'  ->  'have problems'
+  because  存在的问题 means 'existing problems'; the sentence is 'dating methods have problems'. This story is withdrawn (significance 1); the text is fixed for consistency.
+  POST_TEXT before: Some researchers argue archaeological dating methods have存在的问题 — Göbekli Tepe was dated to the Pre-Pottery Neolithic (c. 9500–8000 BCE) using radiocarbon dating, which confirmed earlier suspicions of its great age. The debate over dating methodologies continues within the field.
+  POST_TEXT after : Some researchers argue archaeological dating methods have problems — Göbekli Tepe was dated to the Pre-Pottery Neolithic (c. 9500–8000 BCE) using radiocarbon dating, which confirmed earlier suspicions of its great age. The debate over dating methodologies continues within the field.
+  URL unchanged: /news-archive/academia-uses-biased-dating-methods-influenced-by-bible-5797
+====================================================================================================
+STORY 6266  (video QFPQ7jtLgB0)
+  full rewrite in English from the transcript segment 17:10-20:35 (see make_plan.py)
+  HEADLINE before: 伪造说逻辑漏洞：1960年代无精密加工能力
+  HEADLINE after : Precision stone vases as modern fakes? Host argues cost, tooling and provenance say no
+  SUMMARY before: 伪造说逻辑漏洞：1960年代无精密加工能力. 若为伪造需使用现代五轴CNC机床研磨花岗岩，成本极高 1960-1980年代容器价值不高，不值得如此高成本伪造 普通古董商不会使用中国机床大量生产无装饰的石容器
+  SUMMARY after : Precision stone vases as modern fakes? Host argues cost, tooling and provenance say no. Making the vases as they are today would take five-axis CNC machines grinding granite, at very high cost Plain stone vases were worth little on the 1960s to 1980s antiquities market, so such costly forgery would not pay A forger working for profit could have turned out imprecise copies from an ordinary lathe shop, and nobody was doing precision metrology on the vases until recently
+  POST_TEXT before: 若为伪造需使用现代五轴CNC机床研磨花岗岩，成本极高。1960-1980年代容器价值不高，不值得如此高成本伪造。普通古董商不会使用中国机床大量生产无装饰的石容器。容器具有复杂的数学设计和径向遍历图案，带把握把的容器具有复杂几何形状，无法仅用车床制造。至少部分容器可追溯到1980年代倒卖至1960年代，当时尚无计算机控制机床。
+  POST_TEXT after : The host argues that calling these precision stone vases modern forgeries makes little sense. Reproducing them today would take five-axis CNC machines grinding granite at great cost, while plain stone vases were worth little on the 1960s to 1980s antiquities market. A forger after profit could have turned out imprecise copies on a lathe. Even the least documented vases have histories back to the 1980s or the 1960s, before computer-controlled five-axis mills, and the lug-handled forms have geometry a lathe alone cannot produce.
+  FACT 1 before: 若为伪造需使用现代五轴CNC机床研磨花岗岩，成本极高
+  FACT 1 after : Making the vases as they are today would take five-axis CNC machines grinding granite, at very high cost
+  FACT 2 before: 1960-1980年代容器价值不高，不值得如此高成本伪造
+  FACT 2 after : Plain stone vases were worth little on the 1960s to 1980s antiquities market, so such costly forgery would not pay
+  FACT 3 before: 普通古董商不会使用中国机床大量生产无装饰的石容器
+  FACT 3 after : A forger working for profit could have turned out imprecise copies from an ordinary lathe shop, and nobody was doing precision metrology on the vases until recently
+  FACT 4 before: 容器具有复杂的数学设计和径向遍历图案
+  FACT 4 after : The vases show subtle mathematical design and a radial traversal pattern
+  FACT 5 before: 带握把的容器具有复杂几何形状，无法仅用车床制造
+  FACT 5 after : Lug-handled vases have complex geometry that cannot be made on a lathe alone; the host says evidence suggests a machine with five axes of freedom
+  FACT 6 before: 至少部分容器可追溯到1980年代或1960年代，当时尚无计算机控制机床
+  FACT 6 after : Even the least provenanced vases have histories back to the 1980s or the 1960s, before computer-controlled five-axis mills
+  URL before: /news-archive/伪造说逻辑漏洞1960年代无精密加工能力-6266
+  URL after : /news-archive/precision-stone-vases-as-modern-fakes-host-argues-cost-tooling-and-provenance-say-no-6266   (the old one answers 301 to it)
+====================================================================================================
+STORY 6342  (video 2D09Q_1P7w0)
+  replace  'vs人工 structure'  ->  'vs man-made structure'
+  because  人工 means man-made; the facts of the same item say 'natural or constructed'.
+  HEADLINE before: Geologists debate natural volcanic formation vs人工 structure
+  HEADLINE after : Geologists debate natural volcanic formation vs man-made structure
+  SUMMARY before: Geologists debate natural volcanic formation vs人工 structure. Discussion centers on whether the formation is natural or constructed One hypothesis is that it could be a volcanic dyke Comparison made to megalithic structures observed in Peru
+  SUMMARY after : Geologists debate natural volcanic formation vs man-made structure. Discussion centers on whether the formation is natural or constructed One hypothesis is that it could be a volcanic dyke Comparison made to megalithic structures observed in Peru
+  URL before: /news-archive/geologists-debate-natural-volcanic-formation-vs人工-structure-6342
+  URL after : /news-archive/geologists-debate-natural-volcanic-formation-vs-man-made-structure-6342   (the old one answers 301 to it)
+====================================================================================================
+STORY 8351  (video wQ4VNGqFV1Q)
+  replace  'Локалитет Беловоде код Петровца на Млави'  ->  'Belovode'
+  because  Serbian-Cyrillic name of the locality; the pipeline's own site_name_extracted for this item is 'Belovode', and the story already writes 'Pločnik' in Latin.
+  HEADLINE before: Локалитет Беловоде код Петровца на Млави furnaces: earliest secure copper smelting evidence worldwide, dated to 4900 BC
+  HEADLINE after : Belovode furnaces: earliest secure copper smelting evidence worldwide, dated to 4900 BC
+  SUMMARY before: Локалитет Беловоде код Петровца на Млави furnaces: earliest secure copper smelting evidence worldwide, dated to 4900 BC. Excavations at Локалитет Беловоде код Петровца на Млави and Pločnik led by archaeometallurgist Miljana Radivojević uncovered copper slag, malachite beads, and metal droplets in Vinča-period contexts Results confirmed through chemical and microstructural analysis, published in a 2021 monograph Pushed back confirmed date of true copper smelting to 4900 BC, making Локалитет Беловоде код Петровца на Млави the earliest secure evidence of extractive metallurgy anywhere in the world
+  SUMMARY after : Belovode furnaces: earliest secure copper smelting evidence worldwide, dated to 4900 BC. Excavations at Belovode and Pločnik led by archaeometallurgist Miljana Radivojević uncovered copper slag, malachite beads, and metal droplets in Vinča-period contexts Results confirmed through chemical and microstructural analysis, published in a 2021 monograph Pushed back confirmed date of true copper smelting to 4900 BC, making Belovode the earliest secure evidence of extractive metallurgy anywhere in the world
+  POST_TEXT before: Archaeometallurgist Miljana Radivojević's excavations at Локалитет Беловоде код Петровца на Млави and Pločnik uncovered copper slag, malachite beads, and metal droplets in Vinča-period layers, confirmed by chemical and microstructural analysis published in a 2010 Journal of Archaeological Science paper. This pushes confirmed copper smelting to c. 5000 BC, making Локалитет Беловоде код Петровца на Млави the earliest secure evidence of extractive metallurgy in Europe. Rudna Glava is one of the earliest known copper mines, mined at scale. Incredible! 🔥⚒️
+  POST_TEXT after : Archaeometallurgist Miljana Radivojević's excavations at Belovode and Pločnik uncovered copper slag, malachite beads, and metal droplets in Vinča-period layers, confirmed by chemical and microstructural analysis published in a 2010 Journal of Archaeological Science paper. This pushes confirmed copper smelting to c. 5000 BC, making Belovode the earliest secure evidence of extractive metallurgy in Europe. Rudna Glava is one of the earliest known copper mines, mined at scale. Incredible! 🔥⚒️
+  FACT 1 before: Excavations at Локалитет Беловоде код Петровца на Млави and Pločnik led by archaeometallurgist Miljana Radivojević uncovered copper slag, malachite beads, and metal droplets in Vinča-period contexts
+  FACT 1 after : Excavations at Belovode and Pločnik led by archaeometallurgist Miljana Radivojević uncovered copper slag, malachite beads, and metal droplets in Vinča-period contexts
+  FACT 3 before: Pushed back confirmed date of true copper smelting to 4900 BC, making Локалитет Беловоде код Петровца на Млави the earliest secure evidence of extractive metallurgy anywhere in the world
+  FACT 3 after : Pushed back confirmed date of true copper smelting to 4900 BC, making Belovode the earliest secure evidence of extractive metallurgy anywhere in the world
+  URL before: /news-archive/локалитет-беловоде-код-петровца-на-млави-furnaces-earliest-secure-copper-smelting-evidence-worldwide-dated-to-4900-bc-8351
+  URL after : /news-archive/belovode-furnaces-earliest-secure-copper-smelting-evidence-worldwide-dated-to-4900-bc-8351   (the old one answers 301 to it)
+====================================================================================================
+STORY 8359  (video drPNemGoxzM)
+  replace  '大汶口遗址公园'  ->  'Dawenkou'
+  because  Chinese name of the Dawenkou site; the pipeline's own site_name_extracted is 'Dawenkou', and the post's '4,300-2,600 BCE' is the Dawenkou culture.
+  HEADLINE before: China's 大汶口遗址公园 holds oldest elongated skulls claimed at 10,000 years old
+  HEADLINE after : China's Dawenkou holds oldest elongated skulls claimed at 10,000 years old
+  SUMMARY before: China's 大汶口遗址公园 holds oldest elongated skulls claimed at 10,000 years old. Host claims Dàrén Cùyū (Darren Cuyu) in China contains the oldest known elongated skulls, dated to approximately 10,000 years ago Host notes the site's top level was excavated first, meaning all archaeologists have passed through the oldest strata Host criticizes archaeological methodology of finding later-period artifacts in lower levels at this site
+  SUMMARY after : China's Dawenkou holds oldest elongated skulls claimed at 10,000 years old. Host claims Dàrén Cùyū (Darren Cuyu) in China contains the oldest known elongated skulls, dated to approximately 10,000 years ago Host notes the site's top level was excavated first, meaning all archaeologists have passed through the oldest strata Host criticizes archaeological methodology of finding later-period artifacts in lower levels at this site
+  POST_TEXT before: The oldest known elongated skulls in China date to approximately 12,000 years ago, not 10,000. The site name "Dàrén Cùyū (Darren Cuyu)" does not correspond to any verified archaeological site in available records, and the elongated skulls from this period are not associated with 大汶口遗址公园 culture, which dates to roughly 4,300–2,600 BCE. Claims about excavation methodology causing later artifacts to appear in lower strata remain unverified.
+  POST_TEXT after : The oldest known elongated skulls in China date to approximately 12,000 years ago, not 10,000. The site name "Dàrén Cùyū (Darren Cuyu)" does not correspond to any verified archaeological site in available records, and the elongated skulls from this period are not associated with Dawenkou culture, which dates to roughly 4,300–2,600 BCE. Claims about excavation methodology causing later artifacts to appear in lower strata remain unverified.
+  URL before: /news-archive/chinas-大汶口遗址公园-holds-oldest-elongated-skulls-claimed-at-10000-years-old-8359
+  URL after : /news-archive/chinas-dawenkou-holds-oldest-elongated-skulls-claimed-at-10000-years-old-8359   (the old one answers 301 to it)

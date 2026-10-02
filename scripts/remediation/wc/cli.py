@@ -21,6 +21,9 @@ order, is `docs/procedures/SENTENCE_CHECK.md`.
     $C judge-brief        --run-dir R --handoff HJ --batch-id B
     $C judge-check-answer --run-dir R --handoff HJ --batch-id B --label SITE --text-file F
     $C judge-import       --run-dir R --handoff HJ       # RESULT.json, JUDGE_EXIT=
+    $C defect-sites       --run-dir R --defects D ... --out F   # a site list from WB's defects
+    $C export --sites F   ...                            # a site-list run (kind wc-list)
+    $C export --wn        ...                            # lane WN: write the missing descriptions
 
 **The population** (`population`): every curated site of the read that is not retired, carries a
 description, and whose text is not Phase 4's and not one lane WC checked before - the 2026-03 AI
@@ -84,6 +87,27 @@ steps.
 chunk naming every earlier chunk not yet written in `--after`; each chunk is its own run, imported,
 built and written on its own, so the writes start while later chunks are still being answered.
 
+**Three kinds of run** (`run_kind`, recorded by `export` in `POPULATION.json` as `kind`; a run
+exported before 2026-10-01 records none and is a plain `wc` run, every prompt and brief of which is
+byte for byte what it was):
+
+* `wc` - the plain run above;
+* `wc-list` (`export --sites FILE`, owner decision 2026-10-01, `docs/procedures/SENTENCE_CHECK.md`
+  section 11) - the same check, verification, build and write over exactly the listed curated sites,
+  whatever their text is: a March text, a Phase-4 text (`wc4.Marking.PHASE4`: kept or dropped by
+  sentence, never trimmed, its provenance the old one filtered to the kept sentences; a text whose
+  check keeps every sentence is not written) or a text a check kept before (its record replaced).
+  `defect-sites` builds the list from WB's `DESCRIPTION_DEFECTS.jsonl` of every run;
+* `wn` (`export --wn`, owner decision "Neu aus Webquellen", section 12) - lane WN: for each curated
+  site without a description, round 1 is a **write** round (stage `write`, batches `wn-NNNN`, the
+  question `prompts_sonnet.WRITE_QUESTION`): a Sonnet agent writes 2 to 6 sentences, each on verbatim
+  quotes (`answers.parse_write`), `check-answer` machine-checks them, `import` fetches the pages itself
+  and records every written sentence as a KEEP on its quotes in the check round's own format - so
+  the verification (`verify`, `verify2`), the build, the judge and the writer are WC's, unchanged,
+  over the sentences that were written (`DRAFTS.jsonl`, merged into `read_sites`). A site whose text
+  ends empty is not planned: it stays without a description. No re-ask: a sentence whose quote is not
+  found at the import is dropped (`unverified`).
+
 **The pilot** (`export --pilot 20 --seed S`): a seeded draw of the population, run end to end; its
 post-verification result is measured by a fresh Opus judge (`judge-*`: every kept sentence
 SUPPORTED, UNSUPPORTED or WRONG, every dropped one DROP_OK or DROP_WRONG, the kept text coherent or
@@ -98,6 +122,7 @@ import argparse
 import dataclasses
 import hashlib
 import json
+import math
 import sys
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -120,9 +145,15 @@ from phase4 import model4 as M  # noqa: E402
 
 from wc import answers as A  # noqa: E402
 from wc import prompts as P  # noqa: E402
+from wc import prompts_sonnet as P2  # noqa: E402 - the texts added 2026-10-01 (site lists, WN)
 
 STAGE = "check"
 JUDGE_STAGE = "judge"
+#: The kinds of run (`run_kind`) and lane WN's round-1 stage, batch prefix and draft file.
+KIND_WC, KIND_LIST, KIND_WN = "wc", "wc-list", "wn"
+WRITE_STAGE = "write"
+WRITE_PREFIX = "wn"
+DRAFTS_FILE = "DRAFTS.jsonl"
 #: The import's own page store, under the run (the judge's: `<run>/judge/pages/`).
 PAGES_DIR = "pages"
 BATCH_SIZE = 5
@@ -147,6 +178,13 @@ FULL_LANES = frozenset(lane.value for lane in M.LANE_CHANGES)
 #: sentence a judge shows WRONG with a found quote, at most 5 % of kept sentences UNSUPPORTED (a
 #: WRONG whose quote was not found counts here), and no site whose kept text is incoherent.
 J_THRESHOLDS = {"wrong": 0, "unsupported_share": 0.05, "incoherent": 0}
+#: A WN pilot's size and its minimum sample (a design number, not an owner decision, measured on
+#: no corpus): the pilot draws 20 sites - or the whole population when it is smaller - and is judged
+#: only if at least half of the drawn sites ended with a text the judge could judge, and as many
+#: kept sentences as that (every judged text keeps at least one). An empty site gates nothing, but a
+#: pilot in which most sites ended empty measured nothing: it cannot approve a mass plan.
+WN_PILOT_SITES = 20
+WN_PILOT_MIN_WITH_TEXT = 0.5
 
 #: The one production read: the columns of Phase 4's plan read (`plan4.PLAN_SQL`, so a WC site is
 #: the same `PlanSite` lane L and P4 plan from) and the scope status, in one statement.
@@ -204,16 +242,27 @@ def cmd_read(run: Path, *, runner: W.SqlRunner = W.run_sql, host: str = W.SSH_HO
 
 # ------------------------------------------------------------------------------------ the population
 def population(
-    rows: Sequence[Mapping[str, Any]], *, excluded: set[str], earlier: set[str]
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    excluded: set[str],
+    earlier: set[str],
+    kind: str = KIND_WC,
+    only: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
     """The sites to ask, in site-id order (each `{site_id, name, marking, sentences, plan_site}`),
-    and every other curated site of the read, by the reason it is not asked."""
+    and every other curated site of the read, by the reason it is not asked. `kind` is the run's
+    (`run_kind`); `only` is a site-list run's list (every other site is left out and not listed: the
+    list is the population's frame)."""
     asked: list[dict[str, Any]] = []
     listed: dict[str, list[str]] = {}
     for row in sorted(rows, key=lambda row: row["id"]):
+        if only is not None and row["id"] not in only:
+            continue
         site_row = {key: value for key, value in row.items() if key != "scope_status"}
         site = plan4.plan_site(site_row, flags=frozenset())
-        reason, marking, sentences = _classify(row, site, excluded=excluded, earlier=earlier)
+        reason, marking, sentences = _classify(
+            row, site, excluded=excluded, earlier=earlier, kind=kind
+        )
         if reason is not None:
             listed.setdefault(reason, []).append(site.site_id)
             continue
@@ -230,21 +279,32 @@ def population(
 
 
 def _classify(
-    row: Mapping[str, Any], site: M.PlanSite, *, excluded: set[str], earlier: set[str]
+    row: Mapping[str, Any],
+    site: M.PlanSite,
+    *,
+    excluded: set[str],
+    earlier: set[str],
+    kind: str = KIND_WC,
 ) -> tuple[str | None, str | None, tuple[str, ...]]:
     if row["scope_status"] == "retired":
         return "retired", None, ()
+    if kind == KIND_WN:
+        return _classify_empty(site, excluded=excluded, earlier=earlier)
     if site.description is None or not site.description.strip():
         return "no-description", None, ()
+    # a site-list run asks a Phase-4 text, a lane-N text and a text a check kept before as well
+    listed = kind == KIND_LIST
     raw = site.raw_data or {}
-    if wc4.CHECK_KEY in raw:
+    if wc4.CHECK_KEY in raw and not listed:
         return "checked-before", None, ()
     if M.PROVENANCE_KEY in raw:
         stored = raw[M.PROVENANCE_KEY]
-        if isinstance(stored, dict) and stored.get("lane") in FULL_LANES:
+        if not listed and isinstance(stored, dict) and stored.get("lane") in FULL_LANES:
             return "phase4-text", None, ()
         try:
-            provenance = M.LegacyProvenance.from_dict(stored)
+            provenance = (
+                M.provenance_from_dict(stored) if listed else M.LegacyProvenance.from_dict(stored)
+            )
         except ValueError:
             return "provenance-unreadable", None, ()
         if provenance.desc_sha256 != M.text_sha256(site.description):
@@ -257,7 +317,31 @@ def _classify(
         sentences = wc4.checked_sentences(site.description)
     except wc4.WcError:
         return "not-splittable", None, ()
-    return None, wc4.old_marking(site).value, sentences
+    marking = wc4.old_marking(site, listed=listed)
+    if marking is wc4.Marking.PHASE4:
+        # a Phase-4 text keeps its provenance filtered to the kept sentences: one published sentence
+        # per checked sentence, or the two cannot be matched (`wc4.filtered_provenance`)
+        published = M.Provenance.from_dict(raw[M.PROVENANCE_KEY]).sentences
+        if len(published) != len(sentences):
+            return "provenance-misaligned", None, ()
+    return None, marking.value, sentences
+
+
+def _classify_empty(
+    site: M.PlanSite, *, excluded: set[str], earlier: set[str]
+) -> tuple[str | None, str | None, tuple[str, ...]]:
+    """Lane WN's population: a site without a description (NULL or blank, `wc4.is_empty`) that
+    carries none of WC's keys (a cleared site has none; `stale-keys` is a broken state of another
+    lane, never asked). Its marking is `none` and it has no sentences yet."""
+    if not wc4.is_empty(site.description):
+        return "has-description", None, ()
+    if wc4.WC_KEYS & (site.raw_data or {}).keys():
+        return "stale-keys", None, ()
+    if site.site_id in excluded:
+        return "excluded", None, ()
+    if site.site_id in earlier:
+        return "earlier-run", None, ()
+    return None, wc4.Marking.NONE.value, ()
 
 
 # ------------------------------------------------------------------------------------ the prompts
@@ -293,17 +377,54 @@ def _asked_text(asked: Sequence[int]) -> str:
     return ", ".join(f"S{n}" for n in asked)
 
 
+def _trims(entry: Mapping[str, Any]) -> bool:
+    """May the agent trim a sentence of this site's text? Not a Phase-4 text: its provenance cannot
+    follow a cut, so its sentences are kept whole or dropped (`wc4.Marking.PHASE4`)."""
+    return entry["marking"] != wc4.Marking.PHASE4.value
+
+
+def write_prompt(entry: Mapping[str, Any]) -> str:
+    """Lane WN's question about one site: write its description from reputable web pages."""
+    return P2.WRITE_QUESTION.format(
+        site=site_block(M.PlanSite.from_dict(entry["plan_site"])),
+        site_id=entry["site_id"],
+        min_sentences=A.MIN_SENTENCES,
+        max_sentences=A.MAX_SENTENCES,
+        min_chars=A.MIN_SENTENCE_CHARS,
+        max_chars=A.MAX_SENTENCE_CHARS,
+        max_run=A.MAX_SHARED_RUN,
+    )
+
+
 def check_prompt(
-    entry: Mapping[str, Any], asked: Sequence[int], failures: Mapping[str, Sequence[str]]
+    entry: Mapping[str, Any],
+    asked: Sequence[int],
+    failures: Mapping[str, Sequence[str]],
+    kind: str = KIND_WC,
 ) -> str:
     """The exact question about one site: round 1 asks every sentence and has no failures; the
-    re-ask round asks the failed ones and says what failed (`failures`: sentence number -> why)."""
+    re-ask round asks the failed ones and says what failed (`failures`: sentence number -> why). A
+    site-list run asks `prompts_sonnet.CHECK_QUESTION_LISTED` (the origin of the text said as it is,
+    no trim for a Phase-4 text), lane WN's round 1 the write question (`write_prompt`)."""
+    if kind == KIND_WN:
+        return write_prompt(entry)
     site = M.PlanSite.from_dict(entry["plan_site"])
     sentences = "\n".join(f"S{n}: {text}" for n, text in enumerate(entry["sentences"], start=1))
     reask = ""
     if failures:
         lines = [f"S{n}: " + "; ".join(failures[str(n)]) for n in asked]
         reask = P.REASK_BLOCK.format(failures="\n".join(lines))
+    if kind == KIND_LIST:
+        return P2.CHECK_QUESTION_LISTED.format(
+            site=site_block(site),
+            sentences=sentences,
+            reask=reask,
+            asked=_asked_text(asked),
+            site_id=entry["site_id"],
+            origin=P2.ORIGINS[entry["marking"]],
+            defects=defects_block(entry.get("defects")),
+            trims="" if _trims(entry) else P2.NO_TRIM,
+        )
     return P.CHECK_QUESTION.format(
         site=site_block(site),
         sentences=sentences,
@@ -314,8 +435,23 @@ def check_prompt(
 
 
 # ------------------------------------------------------------------------------------ the rounds
+def run_kind(run: Path) -> str:
+    """The kind of the run (`KIND_WC`, `KIND_LIST`, `KIND_WN`), as `export` recorded it. A run
+    exported before 2026-10-01 records none: it is a plain WC run."""
+    record = json.loads((run / POPULATION_FILE).read_text(encoding="utf-8"))
+    return record.get("kind", KIND_WC)
+
+
 def read_sites(run: Path) -> dict[str, dict[str, Any]]:
-    return {entry["site_id"]: entry for entry in read_jsonl(run / SITES_FILE)}
+    """Every asked site of the run, in the run's order. In a lane-WN run the sentences are the ones
+    the agent wrote (`DRAFTS.jsonl`, written by the import of the write round): the sites are
+    exported without any."""
+    sites = {entry["site_id"]: entry for entry in read_jsonl(run / SITES_FILE)}
+    drafts = run / DRAFTS_FILE
+    if drafts.exists():
+        for row in read_jsonl(drafts):
+            sites[row["site_id"]] = {**sites[row["site_id"]], "sentences": row["sentences"]}
+    return sites
 
 
 def read_rounds(run: Path) -> list[dict[str, Any]]:
@@ -344,17 +480,19 @@ def _export_round(
     if handoff.exists() and any(handoff.iterdir()):
         raise WcRunError(f"{handoff} is not empty: a round takes a new handoff directory")
     sites = read_sites(run)
+    kind = run_kind(run)
+    stage, prefix = (WRITE_STAGE, WRITE_PREFIX) if kind == KIND_WN else (STAGE, "wc")
     batches: dict[str, list[str]] = {}
     for start in range(0, len(questions), batch_size):
-        batch_id = f"wc-{start // batch_size + 1:04d}"
+        batch_id = f"{prefix}-{start // batch_size + 1:04d}"
         for site_id, asked, failures in questions[start : start + batch_size]:
             OH.export(
                 handoff,
                 batch_id=batch_id,
-                stage=STAGE,
+                stage=stage,
                 label=site_id,
                 field="description",
-                prompt=check_prompt(sites[site_id], asked, failures),
+                prompt=check_prompt(sites[site_id], asked, failures, kind),
             )
             batches.setdefault(batch_id, []).append(site_id)
     record = {
@@ -375,6 +513,72 @@ def _export_round(
     }
 
 
+def _read_defects(run: Path, report: Path, sites: Path) -> dict[str, list[dict[str, Any]]]:
+    """The claims of a `defect-sites` report, by site - only of the list this run asks and of the
+    read this run holds: the report's `desc_sha256` matching was made against its read, and a text
+    that moved since is not the defective one."""
+    record = json.loads(report.read_text(encoding="utf-8"))
+    if record["out"]["sha256"] != _sha256(sites):
+        raise WcRunError(f"{report} was made for another site list than {sites}")
+    read = json.loads((run / READ_FILE).read_text(encoding="utf-8"))["sha256"]
+    if record["read"]["sha256"] != read:
+        raise WcRunError(
+            f"{report} was made against another read ({record['read']['sha256'][:12]}) than this "
+            f"run's ({read[:12]}): run defect-sites again on this run"
+        )
+    return {site_id: list(claims) for site_id, claims in record["claims"].items()}
+
+
+def _defects_of(
+    entry: Mapping[str, Any], claims: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    """The claims reported against one asked text. A claim that names a sentence must name one of
+    the text's own, word for word (`sentence_text`): a number that points at another sentence would
+    send the agent to settle the wrong one. A claim without a sentence is tied to none."""
+    for claim in claims:
+        number = claim["sentence"]
+        if number is None:
+            continue
+        sentences = entry["sentences"]
+        if (
+            not 1 <= number <= len(sentences)
+            or sentences[number - 1].strip() != (claim["sentence_text"] or "").strip()
+        ):
+            raise WcRunError(
+                f"{entry['site_id']}: the defect names sentence {number}, which is not the text's "
+                f"own ({claim['sentence_text']!r}): the report and the read do not match"
+            )
+    return [dict(claim) for claim in claims]
+
+
+def defects_block(claims: Sequence[Mapping[str, Any]] | None) -> str:
+    """What a later web check reported against the text, as the question puts it (empty without)."""
+    if not claims:
+        return ""
+    lines = "".join(
+        P2.DEFECT_LINE.format(
+            where="No single sentence" if claim["sentence"] is None else f"S{claim['sentence']}",
+            claim=claim["claim"],
+            url=claim["url"],
+            quote=claim["quote"],
+            found="found" if claim["quote_outcome"] == "found" else "did not find",
+        )
+        for claim in claims
+    )
+    return P2.DEFECTS_HEAD + lines + P2.DEFECTS_TAIL
+
+
+def wn_pilot_size(population: int) -> int:
+    """The sites a WN pilot draws from `population` sites without a description."""
+    return min(WN_PILOT_SITES, population)
+
+
+def wn_pilot_minimum(drawn: int) -> int:
+    """The least number of a WN pilot's drawn sites that must end with a judged text, and the least
+    number of kept sentences those texts must hold (`WN_PILOT_MIN_WITH_TEXT`)."""
+    return max(1, math.ceil(WN_PILOT_MIN_WITH_TEXT * drawn))
+
+
 def cmd_export(
     run: Path,
     handoff: Path,
@@ -385,15 +589,24 @@ def cmd_export(
     pilot: int | None,
     seed: int | None,
     limit: int | None = None,
+    sites: Path | None = None,
+    wn: bool = False,
+    defects: Path | None = None,
 ) -> dict[str, Any]:
     """Round 1: the population of the run's read, a seeded pilot draw of it, or its first `limit`
     sites in site-id order (a chunk of the mass run: the next chunk names this run in `--after`),
-    one question per site. `POPULATION.json` records every count, reason and input; `SITES.jsonl`
-    the asked sites."""
+    one question per site. `POPULATION.json` records every count, reason and input (the run's
+    `kind` among them); `SITES.jsonl` the asked sites. `sites` (a file of site ids) makes a
+    site-list run: the population is those curated sites, whatever their text; `wn` lane WN's: the
+    sites without a description, and round 1 is the write round. `defects` (the `.report.json` of
+    `defect-sites`, a site-list run only) puts each listed site's reported claims into its question
+    (`defects_block`): the check must settle them, not find the sentence's own source again."""
     if (run / SITES_FILE).exists():
         raise WcRunError(f"{run} was exported already: a run has one population")
     if (pilot is None) != (seed is None):
         raise WcRunError("--pilot and --seed go together")
+    if defects is not None and sites is None:
+        raise WcRunError("--defects names the claims of a site list: it goes with --sites")
     if limit is not None and (pilot is not None or limit < 1):
         raise WcRunError("--limit is a chunk of at least one site, never beside --pilot")
     rows = read_jsonl(run / ROWS_FILE)
@@ -401,11 +614,31 @@ def cmd_export(
     earlier: set[str] = set()
     for other in after:
         earlier |= set(read_sites(other))
-    asked, listed = population(rows, excluded=excluded, earlier=earlier)
+    kind = KIND_WN if wn else (KIND_LIST if sites is not None else KIND_WC)
+    only = _ids(sites) if sites is not None else None
+    if only is not None:
+        if not only:
+            raise WcRunError(f"{sites}: an empty site list")
+        unknown = sorted(only - {row["id"] for row in rows})
+        if unknown:
+            raise WcRunError(
+                f"{sites}: {len(unknown)} listed site(s) are no curated row of the read "
+                f"({unknown[:3]}...): a list names curated sites only"
+            )
+    asked, listed = population(rows, excluded=excluded, earlier=earlier, kind=kind, only=only)
+    claims = _read_defects(run, defects, sites) if defects is not None and sites is not None else {}
+    for entry in asked:
+        if entry["site_id"] in claims:
+            entry["defects"] = _defects_of(entry, claims[entry["site_id"]])
     drawn = asked
     if pilot is not None and seed is not None:
         if not 1 <= pilot <= len(asked):
             raise WcRunError(f"a pilot of {pilot} from a population of {len(asked)}")
+        if kind == KIND_WN and pilot != wn_pilot_size(len(asked)):
+            raise WcRunError(
+                f"a WN pilot draws {wn_pilot_size(len(asked))} sites ({WN_PILOT_SITES}, or the "
+                f"whole population when it is smaller), not {pilot}: a smaller one measures too little"
+            )
         chosen = set(
             audit4.draw_sample([e["site_id"] for e in asked], seed=seed, count=pilot, exclude=set())
         )
@@ -418,6 +651,10 @@ def cmd_export(
     counts = Counter(entry["marking"] for entry in asked)
     record = {
         "read": json.loads((run / READ_FILE).read_text(encoding="utf-8")),
+        "kind": kind,
+        "list": None
+        if sites is None
+        else {"path": _shown(sites), "sha256": _sha256(sites), "sites": len(only or ())},
         "rows_sha256": _sha256(run / ROWS_FILE),
         "population": len(asked),
         "by_marking": dict(sorted(counts.items())),
@@ -427,6 +664,9 @@ def cmd_export(
         "exclude": None
         if exclude is None
         else {"path": _shown(exclude), "sha256": _sha256(exclude)},
+        "defects": None
+        if defects is None
+        else {"path": _shown(defects), "sha256": _sha256(defects), "sites": len(claims)},
         "after": [_shown(other) for other in after],
         "pilot": None if pilot is None else {"sites": pilot, "seed": seed},
         "limit": limit,
@@ -451,17 +691,30 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
     if batch_id not in record["batches"]:
         raise WcRunError(f"{batch_id} is no batch of {handoff}")
     shown = _shown(handoff)
+    kind = run_kind(run)
+    fields = {
+        "batch": batch_id,
+        "round": record["round"],
+        "count": len(record["batches"][batch_id]),
+        "handoff": shown,
+        "scratch": f"{shown}-scratch/{batch_id}",
+        "run": _shown(run),
+        "python": Path(sys.executable).as_posix(),
+        "repo": REPO.as_posix(),
+    }
+    if kind == KIND_WN:
+        return P2.WRITE_BRIEF.format(
+            **fields,
+            stage=WRITE_STAGE,
+            batch_agent=f"sonnet-write-{batch_id}",
+            min_sentences=A.MIN_SENTENCES,
+        )
+    if kind == KIND_LIST:
+        return P2.CHECK_BRIEF_SONNET.format(
+            **fields, stage=STAGE, batch_agent=f"sonnet-check-r{record['round']}-{batch_id}"
+        )
     return P.CHECK_BRIEF.format(
-        batch=batch_id,
-        round=record["round"],
-        count=len(record["batches"][batch_id]),
-        handoff=shown,
-        scratch=f"{shown}-scratch/{batch_id}",
-        run=_shown(run),
-        python=Path(sys.executable).as_posix(),
-        repo=REPO.as_posix(),
-        stage=STAGE,
-        batch_agent=f"opus-check-r{record['round']}-{batch_id}",
+        **fields, stage=STAGE, batch_agent=f"opus-check-r{record['round']}-{batch_id}"
     )
 
 
@@ -539,10 +792,22 @@ def check_answer(
     if label not in record["batches"].get(batch_id, []):
         raise WcRunError(f"{batch_id}/{label} is no question of {handoff}")
     entry = read_sites(run)[label]
+    written: A.WriteAnswer | None = None
     try:
-        parsed = A.parse_check(
-            text, site_id=label, sentences=entry["sentences"], asked=_asked(record, label)
-        )
+        if run_kind(run) == KIND_WN:
+            written = A.parse_write(text, site_id=label)
+            parsed = written.as_check()
+            entry = {**entry, "sentences": [sentence.text for sentence in written.sentences]}
+            if not parsed:
+                return True, f"no sentence: the site stays without a description ({written.note})"
+        else:
+            parsed = A.parse_check(
+                text,
+                site_id=label,
+                sentences=entry["sentences"],
+                asked=_asked(record, label),
+                trims=_trims(entry),
+            )
     except A.AnswerError as exc:
         return False, f"NOT IN SHAPE: {exc}"
     if not fetch_pages:
@@ -550,7 +815,10 @@ def check_answer(
     pages = _agent_pages(handoff, batch_id)
     fetch([q.url for a in parsed for q in a.quotes], pages, client=client, pace=pace)
     judged = judge_sentences(
-        parsed, Q.Library(REPO, pages), label=label, checked=entry["plan_site"]["description"]
+        parsed,
+        Q.Library(REPO, pages),
+        label=label,
+        checked=entry["plan_site"]["description"] or "",
     )
     lines = []
     for n, result in sorted(judged.items()):
@@ -641,15 +909,18 @@ def cmd_import(
     if set(manifest) != asked:
         raise WcRunError(f"{handoff}: the manifest is not the round's record")
     sites = read_sites(run)
+    kind = run_kind(run)
+    stage = WRITE_STAGE if kind == KIND_WN else STAGE
     parsed: dict[str, tuple[dict[str, Any], tuple[A.SentenceAnswer, ...] | None]] = {}
+    drafts: list[dict[str, Any]] = []
     urls: set[str] = set()
     for (batch_id, label), line in sorted(manifest.items()):
         entry = sites[label]
         failures = record["failures"].get(label, {})
-        prompt = check_prompt(entry, _asked(record, label), failures)
+        prompt = check_prompt(entry, _asked(record, label), failures, kind)
         if OH.prompt_sha256(prompt) != line["prompt_sha256"]:
             raise WcRunError(f"{batch_id}/{label}: the exported prompt is not this question's")
-        answer = OH.read_answer(handoff, batch_id=batch_id, stage=STAGE, label=label, prompt=prompt)
+        answer = OH.read_answer(handoff, batch_id=batch_id, stage=stage, label=label, prompt=prompt)
         attempt = {
             "round": number,
             "handoff": record["handoff"],
@@ -661,16 +932,34 @@ def cmd_import(
             "answer_sha256": M.text_sha256(answer.text),
             "problem": None,
         }
-        try:
-            answers = A.parse_check(
-                answer.text,
-                site_id=label,
-                sentences=entry["sentences"],
-                asked=_asked(record, label),
+        if kind == KIND_WN:
+            try:
+                written = A.parse_write(answer.text, site_id=label)
+            except A.AnswerError as exc:
+                raise WcRunError(
+                    f"{batch_id}/{label}: malformed answer ({exc}) - check-answer refuses it; "
+                    "delete the answer file and have the batch agent answer it again"
+                ) from exc
+            answers = written.as_check()
+            drafts.append(
+                {
+                    "site_id": label,
+                    "sentences": [sentence.text for sentence in written.sentences],
+                    "note": written.note,
+                }
             )
-        except A.AnswerError as exc:
-            attempt["problem"] = str(exc)
-            answers = None
+        else:
+            try:
+                answers = A.parse_check(
+                    answer.text,
+                    site_id=label,
+                    sentences=entry["sentences"],
+                    asked=_asked(record, label),
+                    trims=_trims(entry),
+                )
+            except A.AnswerError as exc:
+                attempt["problem"] = str(exc)
+                answers = None
         parsed[label] = (attempt, answers)
         if answers is not None:
             urls.update(q.url for a in answers for q in a.quotes)
@@ -687,15 +976,17 @@ def cmd_import(
             }
         else:
             results = judge_sentences(
-                answers, library, label=label, checked=entry["plan_site"]["description"]
+                answers, library, label=label, checked=entry["plan_site"]["description"] or ""
             )
         failed = {str(n): [str(r["why"])] for n, r in results.items() if not r["counted"]}
-        if failed:
+        if failed and kind != KIND_WN:  # a written sentence is never re-asked: it is dropped
             reask[label] = failed
         rows.append(
             {**attempt, "results": {str(n): result for n, result in sorted(results.items())}}
         )
     out = _round_dir(run, number)
+    if kind == KIND_WN:
+        RF.write_jsonl(run / DRAFTS_FILE, drafts)
     RF.write_jsonl(out / "ANSWERS.jsonl", rows)
     RF.write_json(out / "REASK.json", reask)
     verdicts = Counter(
@@ -712,6 +1003,7 @@ def cmd_import(
         "to_reask": sum(len(v) for v in reask.values()),
         "sites_to_reask": len(reask),
         "urls": len(urls),
+        **({"sites_without_sentences": sum(not d["sentences"] for d in drafts)} if drafts else {}),
     }
 
 
@@ -729,6 +1021,11 @@ def _imported(run: Path) -> list[dict[str, Any]]:
 
 def cmd_export_reask(run: Path, handoff: Path, *, batch_size: int) -> dict[str, Any]:
     """Round 2: the sentences of round 1 that do not count, asked once more with what failed."""
+    if run_kind(run) == KIND_WN:
+        raise WcRunError(
+            f"{run}: a written description is not re-asked - a sentence whose quote is not found "
+            "is dropped, and a site left without a sentence stays without a description"
+        )
     rounds = _imported(run)
     if len(rounds) >= MAX_ROUNDS:
         raise WcRunError(f"{run}: the re-ask round was exported; a sentence is re-asked once")
@@ -800,8 +1097,9 @@ def _results(run: Path) -> tuple[dict[str, dict[int, dict[str, Any]]], dict[str,
             attempts.setdefault(label, []).append(
                 {key: value for key, value in row.items() if key != "results"}
             )
+            results.setdefault(label, {})  # a lane-WN site may be answered with no sentence
             for n, result in row["results"].items():
-                results.setdefault(label, {})[int(n)] = {**result, "round": record["round"]}
+                results[label][int(n)] = {**result, "round": record["round"]}
     return results, attempts
 
 
@@ -827,7 +1125,7 @@ def checked_sites(run: Path) -> dict[str, Checked]:
     check round is due or a site was never answered."""
     results, attempts = _results(run)
     out: dict[str, Checked] = {}
-    for entry in read_jsonl(run / SITES_FILE):
+    for entry in read_sites(run).values():
         label = entry["site_id"]
         if label not in results:
             raise WcRunError(f"{label} was never answered")
@@ -837,13 +1135,18 @@ def checked_sites(run: Path) -> dict[str, Checked]:
 
 
 def outcome_of(
-    checked: Checked, rounds: Sequence[Mapping[str, Any]], *, run_name: str
+    checked: Checked,
+    rounds: Sequence[Mapping[str, Any]],
+    *,
+    run_name: str,
+    kind: str = KIND_WC,
 ) -> tuple[wc4.WcOutcome, list[wc4.Decision], dict[str, Any]]:
     """One site's outcome: its check decisions, the verification (`rounds`, the site's verification
     rounds as imported), the verified decisions, the composed text, the record, the raw_data and
     the journal evidence; and the verification record."""
     entry, results = checked.entry, checked.results
     site = M.PlanSite.from_dict(entry["plan_site"])
+    listed = kind != KIND_WC
     decisions, verification = wc4.apply_verification(checked.decisions, checked.quotes, rounds)
     composed = wc4.compose(decisions, checked.quotes)
     check = (
@@ -854,11 +1157,11 @@ def outcome_of(
             composed,
             checked.quotes,
             run=run_name,
-            checked=str(site.description),
+            checked=site.description,
             verification=verification,
         )
     )
-    raw = wc4.written_raw_data(site, composed, check)
+    raw = wc4.written_raw_data(site, composed, check, listed=listed)
     sentences = []
     for before, decision in zip(checked.decisions, decisions, strict=True):
         result = results.get(decision.n)
@@ -883,11 +1186,11 @@ def outcome_of(
         )
     evidence = {
         "group": "WC",
-        "decision": wc4.EVIDENCE_DECISION,
+        "decision": wc4.EVIDENCE_DECISION_WN if kind == KIND_WN else wc4.EVIDENCE_DECISION,
         "run": run_name,
         "checker": M.AI_SYSTEM,
         "checked": site.description,
-        "marking": wc4.marking_record(site),
+        "marking": wc4.marking_record(site, listed=listed),
         "description": composed.description,
         "kept": sum(d.kept for d in decisions),
         "of": len(decisions),
@@ -932,6 +1235,7 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
     due - nothing is built from an unverified text."""
     if first_batch < wc4.FIRST_BATCH:
         raise WcRunError(f"--first-batch {first_batch}: the WC block starts at {wc4.FIRST_BATCH}")
+    kind = run_kind(run)
     checked = checked_sites(run)
     inputs = _verification_inputs(run)
     for label, site in checked.items():
@@ -944,39 +1248,54 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
                 f"({VERIFY_STAGES[len(derived)]}) is due - verify-export, answer, validate and "
                 "verify-import it first: nothing is built from an unverified text"
             )
-        _asked_again(label, site, inputs.get(label, []))
+        _asked_again(label, site, inputs.get(label, []), kind)
     finals: list[dict[str, Any]] = []
     outcomes: list[wc4.WcOutcome] = []
+    not_planned: dict[str, list[str]] = {}
     reasons: Counter[str] = Counter()
     verdicts: Counter[str] = Counter()
     records: dict[str, dict[str, Any]] = {}
+    decisions_by: dict[str, Sequence[wc4.Decision]] = {}
     for label, site in checked.items():
         entry = site.entry
-        outcome, decisions, record = outcome_of(site, inputs.get(label, []), run_name=run.name)
-        records[label] = record
-        problems = wc4.wc_problems(outcome.description, outcome.raw_data) + wc4.evidence_problems(
-            outcome.evidence, outcome.description, outcome.raw_data
+        outcome, decisions, record = outcome_of(
+            site, inputs.get(label, []), run_name=run.name, kind=kind
         )
+        records[label] = record
+        problems = wc4.wc_problems(
+            outcome.description, outcome.raw_data, marking=outcome.evidence["marking"]["old"]
+        ) + wc4.evidence_problems(outcome.evidence, outcome.description, outcome.raw_data)
         if problems:
             raise WcRunError(f"{label}: the outcome breaks the lane's invariants: {problems}")
-        outcomes.append(outcome)
+        why_not = _not_planned(kind, entry, outcome, decisions)
+        if why_not is None:
+            outcomes.append(outcome)
+        else:
+            not_planned.setdefault(why_not, []).append(label)
         verdicts.update(d.verdict.value for d in decisions)
         reasons.update(d.reason.value for d in decisions if d.reason is not None)
-        finals.append(
-            {
-                "site_id": label,
-                "name": entry["name"],
-                "marking": entry["marking"],
-                "kept": sum(d.kept for d in decisions),
-                "of": len(decisions),
-                "cleared": outcome.description is None,
-                "description": outcome.description,
-                "decisions": [{**dataclasses.asdict(d), "text": d.text} for d in decisions],
-                "verification": verification_summary(record),
-                "evidence": outcome.evidence,
-            }
-        )
+        final = {
+            "site_id": label,
+            "name": entry["name"],
+            "marking": entry["marking"],
+            "kept": sum(d.kept for d in decisions),
+            "of": len(decisions),
+            "cleared": outcome.description is None,
+            "description": outcome.description,
+            "decisions": [{**dataclasses.asdict(d), "text": d.text} for d in decisions],
+            "verification": verification_summary(record),
+            "evidence": outcome.evidence,
+        }
+        if kind != KIND_WC:
+            final["planned"] = why_not is None
+        finals.append(final)
+        decisions_by[label] = decisions
     RF.write_jsonl(run / FINAL_FILE, finals)
+    defects_kept = {
+        label: kept
+        for label, site in checked.items()
+        if (kept := _defects_kept(site.entry, decisions_by[label]))
+    }
     plan_batches = []
     for start in range(0, len(outcomes), batch_size):
         chunk = outcomes[start : start + batch_size]
@@ -993,6 +1312,15 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
     RF.write_jsonl(run / PLAN_FILE, plan_batches)
     rounds = [r for record in records.values() for r in record["rounds"]]
     summary = {
+        **(
+            {
+                "kind": kind,
+                "not_planned": {why: sorted(ids) for why, ids in not_planned.items()},
+                "defects_kept": defects_kept,
+            }
+            if kind != KIND_WC
+            else {}
+        ),
         "sites": len(finals),
         "cleared": sum(f["cleared"] for f in finals),
         "kept_whole": sum(f["kept"] == f["of"] for f in finals),
@@ -1035,6 +1363,41 @@ def cmd_build(run: Path, *, first_batch: int, batch_size: int = wc4.BATCH_SIZE) 
     }
     RF.write_json(run / SUMMARY_FILE, summary)
     return summary
+
+
+def _defects_kept(entry: Mapping[str, Any], decisions: Sequence[wc4.Decision]) -> list[dict]:
+    """The reported claims a site's check left standing: its sentence kept, or - a claim tied to no
+    sentence - nothing of the text dropped. The owner's list: a defect reported on the web that the
+    check did not resolve by a drop (the agent's note says why)."""
+    standing = []
+    for claim in entry.get("defects") or []:
+        number = claim["sentence"]
+        kept = (
+            all(d.kept for d in decisions) if number is None else bool(decisions[number - 1].kept)
+        )
+        if kept:
+            standing.append({"sentence": number, "claim": claim["claim"], "url": claim["url"]})
+    return standing
+
+
+def _not_planned(
+    kind: str, entry: Mapping[str, Any], outcome: wc4.WcOutcome, decisions: Sequence[wc4.Decision]
+) -> str | None:
+    """Why a built site is not in the gate plan, or `None`. A plain run plans every site (a clear is
+    a write). Lane WN plans only the sites that got a text: the rest stay without a description,
+    nothing is written (`empty`). A site-list run does not write a Phase-4 text whose check kept
+    every sentence (`unchanged`): a rewrite would only replace the pinned citations with the
+    check's. One that a later web check reported a claim against and the check kept whole anyway is
+    `defect-kept`: nothing is written, and the report stands for the owner (`defects_kept`)."""
+    if kind == KIND_WN and outcome.description is None:
+        return "empty"
+    if (
+        kind == KIND_LIST
+        and entry["marking"] == wc4.Marking.PHASE4.value
+        and all(d.kept for d in decisions)
+    ):
+        return "defect-kept" if entry.get("defects") else "unchanged"
+    return None
 
 
 # ------------------------------------------------------------------------------------ the verification
@@ -1084,10 +1447,12 @@ def verify_prompt(
     entry: Mapping[str, Any],
     decisions: Sequence[wc4.Decision],
     quotes: Mapping[int, Sequence[wc4.Quote]],
+    kind: str = KIND_WC,
 ) -> str:
-    """The exact question about one site's kept text, as it stands at its verification round."""
+    """The exact question about one site's kept text, as it stands at its verification round (a
+    text lane WN wrote is told so: `prompts_sonnet.VERIFY_QUESTION_WN`)."""
     kept, dropped = _view(decisions, quotes)
-    return P.VERIFY_QUESTION.format(
+    return (P2.VERIFY_QUESTION_WN if kind == KIND_WN else P.VERIFY_QUESTION).format(
         site=site_block(M.PlanSite.from_dict(entry["plan_site"])),
         kept=_kept_lines(kept),
         dropped=_dropped_lines(dropped),
@@ -1096,7 +1461,9 @@ def verify_prompt(
     )
 
 
-def _asked_again(label: str, site: Checked, rounds: Sequence[Mapping[str, Any]]) -> None:
+def _asked_again(
+    label: str, site: Checked, rounds: Sequence[Mapping[str, Any]], kind: str = KIND_WC
+) -> None:
     """Every recorded verification round of a site asked the question the site's state at that
     round gives now (`verify_prompt`, byte for byte against the round's `prompt_sha256`): a check
     or a quote that moved under a round - even one that leaves the text as it was, which
@@ -1104,7 +1471,7 @@ def _asked_again(label: str, site: Checked, rounds: Sequence[Mapping[str, Any]])
     review of 2026-09-27)."""
     for index, given in enumerate(rounds):
         state, _, _ = wc4.run_verification(site.decisions, site.quotes, rounds[:index])
-        asked = OH.prompt_sha256(verify_prompt(site.entry, state, site.quotes))
+        asked = OH.prompt_sha256(verify_prompt(site.entry, state, site.quotes, kind))
         if asked != given["prompt_sha256"]:
             raise WcRunError(
                 f"{label}: verification round {index + 1} ({given['stage']}) asked another "
@@ -1120,6 +1487,7 @@ def cmd_verify_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str,
     kept text as it will be published (`verify_prompt`), in batches `<stage>-NNNN`."""
     rounds = _verify_rounds(run)
     inputs = _verification_inputs(run)
+    kind = run_kind(run)
     number = len(rounds) + 1
     if number > len(VERIFY_STAGES):
         raise WcRunError(
@@ -1158,7 +1526,7 @@ def cmd_verify_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str,
                 stage=stage,
                 label=label,
                 field="description",
-                prompt=verify_prompt(site.entry, current, site.quotes),
+                prompt=verify_prompt(site.entry, current, site.quotes, kind),
             )
             batches.setdefault(batch_id, []).append(label)
             shown[label] = wc4.kept_numbers(current)
@@ -1188,7 +1556,8 @@ def verify_brief(run: Path, handoff: Path, batch_id: str) -> str:
     if batch_id not in record["batches"]:
         raise WcRunError(f"{batch_id} is no batch of {handoff}")
     shown = _shown(handoff)
-    return P.VERIFY_BRIEF.format(
+    sonnet = run_kind(run) != KIND_WC
+    return (P2.VERIFY_BRIEF_SONNET if sonnet else P.VERIFY_BRIEF).format(
         batch=batch_id,
         round=record["round"],
         stage=record["stage"],
@@ -1198,7 +1567,7 @@ def verify_brief(run: Path, handoff: Path, batch_id: str) -> str:
         run=_shown(run),
         python=Path(sys.executable).as_posix(),
         repo=REPO.as_posix(),
-        batch_agent=f"opus-wc-{batch_id}",
+        batch_agent=f"{'sonnet' if sonnet else 'opus'}-wc-{batch_id}",
     )
 
 
@@ -1245,6 +1614,7 @@ def cmd_verify_import(
     if set(manifest) != asked:
         raise WcRunError(f"{handoff}: the manifest is not the verification round's record")
     sites = checked_sites(run)
+    kind = run_kind(run)
     earlier = _verification_inputs(run, before=number)
     parsed: dict[str, tuple[str, dict[str, Any], OH.Answer, A.VerifyAnswer, str]] = {}
     urls: set[str] = set()
@@ -1257,7 +1627,7 @@ def cmd_verify_import(
             raise WcRunError(f"{label} is not due at {stage}: its check or verification moved")
         if wc4.kept_numbers(current) != record["shown"][label]:
             raise WcRunError(f"{label}: the kept text is not the one {stage} showed")
-        prompt = verify_prompt(site.entry, current, site.quotes)
+        prompt = verify_prompt(site.entry, current, site.quotes, kind)
         if OH.prompt_sha256(prompt) != line["prompt_sha256"]:
             raise WcRunError(f"{batch_id}/{label}: the exported prompt is not this question's")
         answer = OH.read_answer(handoff, batch_id=batch_id, stage=stage, label=label, prompt=prompt)
@@ -1342,9 +1712,9 @@ def _judge_view(final: Mapping[str, Any]) -> tuple[list[dict[str, Any]], list[st
     return _view(decisions, quotes)
 
 
-def judge_prompt(final: Mapping[str, Any], site: M.PlanSite) -> str:
+def judge_prompt(final: Mapping[str, Any], site: M.PlanSite, kind: str = KIND_WC) -> str:
     kept, dropped = _judge_view(final)
-    return P.JUDGE_QUESTION.format(
+    return (P2.JUDGE_QUESTION_WN if kind == KIND_WN else P.JUDGE_QUESTION).format(
         site=site_block(site),
         kept=_kept_lines(kept),
         dropped=_dropped_lines(dropped),
@@ -1376,8 +1746,10 @@ def cmd_judge_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str, 
         raise WcRunError(f"{run}: the judge round was exported")
     finals = _finals(run)
     sites = read_sites(run)
+    kind = run_kind(run)
     batches: dict[str, list[str]] = {}
-    labels = sorted(finals)
+    # a lane-WN site whose agent wrote no sentence has nothing to judge
+    labels = sorted(label for label, final in finals.items() if final["of"] or kind != KIND_WN)
     for start in range(0, len(labels), batch_size):
         batch_id = f"judge-{start // batch_size + 1:04d}"
         for label in labels[start : start + batch_size]:
@@ -1388,7 +1760,7 @@ def cmd_judge_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str, 
                 stage=JUDGE_STAGE,
                 label=label,
                 field="description",
-                prompt=judge_prompt(finals[label], site),
+                prompt=judge_prompt(finals[label], site, kind),
             )
             batches.setdefault(batch_id, []).append(label)
     RF.write_json(
@@ -1408,7 +1780,8 @@ def judge_brief(run: Path, handoff: Path, batch_id: str) -> str:
     if batch_id not in record["batches"]:
         raise WcRunError(f"{batch_id} is no batch of {handoff}")
     shown = _shown(handoff)
-    return P.JUDGE_BRIEF.format(
+    sonnet = run_kind(run) != KIND_WC
+    return (P2.JUDGE_BRIEF_SONNET if sonnet else P.JUDGE_BRIEF).format(
         batch=batch_id,
         count=len(record["batches"][batch_id]),
         handoff=shown,
@@ -1417,7 +1790,7 @@ def judge_brief(run: Path, handoff: Path, batch_id: str) -> str:
         python=Path(sys.executable).as_posix(),
         repo=REPO.as_posix(),
         stage=JUDGE_STAGE,
-        batch_agent=f"opus-wc-judge-{batch_id}",
+        batch_agent=f"{'sonnet' if sonnet else 'opus'}-wc-judge-{batch_id}",
     )
 
 
@@ -1451,6 +1824,7 @@ def cmd_judge_import(
         raise WcRunError(f"{handoff}: the judge round does not validate: {check.to_dict()}")
     finals = _finals(run)
     sites = read_sites(run)
+    run_of = run_kind(run)
     workers = {
         attempt["answered_by"]
         for final in finals.values()
@@ -1464,7 +1838,7 @@ def cmd_judge_import(
     for line in OH.manifest(handoff):
         batch_id, label = line["batch_id"], line["label"]
         site = M.PlanSite.from_dict(sites[label]["plan_site"])
-        prompt = judge_prompt(finals[label], site)
+        prompt = judge_prompt(finals[label], site, run_of)
         answer = OH.read_answer(
             handoff, batch_id=batch_id, stage=JUDGE_STAGE, label=label, prompt=prompt
         )
@@ -1502,15 +1876,23 @@ def cmd_judge_import(
     }:
         raise WcRunError(f"{handoff}: the manifest is not the judge round's record")
     RF.write_jsonl(run / JUDGE_DIR / "JUDGED.jsonl", judged)
-    result = {**judge_result(judged), "plan_sha256": record["plan_sha256"]}
+    drawn = (
+        json.loads((run / POPULATION_FILE).read_text(encoding="utf-8"))["asked"]
+        if run_of == KIND_WN
+        else None
+    )
+    result = {**judge_result(judged, drawn=drawn), "plan_sha256": record["plan_sha256"]}
     RF.write_json(run / JUDGE_DIR / "RESULT.json", result)
     return result
 
 
-def judge_result(judged: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def judge_result(
+    judged: Sequence[Mapping[str, Any]], *, drawn: int | None = None
+) -> dict[str, Any]:
     """The pilot's measurement and its verdict against `J_THRESHOLDS`. A judge who checked or
     verified a site of the run is not independent: such a site does not count, and the pilot
-    cannot pass while one does not."""
+    cannot pass while one does not. `drawn` (a WN pilot: the sites it drew) adds the minimum sample
+    (`wn_pilot_minimum`): too few judged texts or kept sentences is a failure, not a pass."""
     counted = [row for row in judged if row["independent"]]
     kept = [item for row in counted for item in row["items"] if item["kind"] == "kept"]
     dropped = [item for row in counted for item in row["items"] if item["kind"] == "dropped"]
@@ -1543,6 +1925,16 @@ def judge_result(judged: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         failures.append(
             f"{len(judged) - len(counted)} site(s) judged by a checker or verifier of the run"
         )
+    if drawn is not None:
+        need = wn_pilot_minimum(drawn)
+        measured["drawn"], measured["minimum"] = drawn, need
+        if len(counted) < need:
+            failures.append(
+                f"{len(counted)} of the {drawn} drawn site(s) ended with a text the judge could "
+                f"judge, at least {need} are needed: the pilot measured too little"
+            )
+        if len(kept) < need:
+            failures.append(f"{len(kept)} kept sentence(s) judged, at least {need} are needed")
     if wrong > J_THRESHOLDS["wrong"]:
         failures.append(f"{wrong} kept sentence(s) WRONG with a found quote")
     if share > J_THRESHOLDS["unsupported_share"]:
@@ -1563,20 +1955,45 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
     first plan named is a pilot run's (`export --pilot`), and every pilot run named was judged and
     passed (`judge/RESULT.json`, `passed: true`) on exactly this plan (`plan_sha256`: a plan built
     again after its judge is not the judged one): a failed pilot's outcomes are never written, and
-    no chunk is written before a passed pilot. Returns each pilot run with its result's sha256."""
+    no chunk is written before a passed pilot. Returns each pilot run with its result's sha256.
+
+    Each **kind of text** has its own pilot (2026-10-01): a lane-WN plan (`kind` `wn`) is approved by a
+    WN pilot, every other plan (a plain run, a site-list run) by a WC pilot - the first plan named of
+    each is its pilot's, and a WN mass plan is never written on a WC pilot's verdict, nor the other
+    way round. The WC pilot is a **plain** run's: a site-list run (`wc-list`) is approved by it and
+    can never be it, so a pilot of Phase-4 texts does not approve plain chunks of March texts (a list
+    run may itself be a judged pilot, named after the plain one). Everything else is as above, for
+    each."""
     if not plans:
         raise WcRunError("no WC plan named")
     approvals: list[dict[str, str]] = []
-    for index, plan in enumerate(plans):
+    seen: set[str] = set()
+    for plan in plans:
         run = plan.parent
-        pilot = json.loads((run / POPULATION_FILE).read_text(encoding="utf-8"))["pilot"]
-        if index == 0 and pilot is None:
-            raise WcRunError(
-                f"{plan}: the first WC plan named is the pilot's (export --pilot), whose judge "
-                "passed - this run is not a pilot"
-            )
+        population = json.loads((run / POPULATION_FILE).read_text(encoding="utf-8"))
+        pilot = population["pilot"]
+        kind = population.get("kind", KIND_WC)
+        which = "WN" if kind == KIND_WN else "WC"
+        if which not in seen:
+            seen.add(which)
+            if pilot is None:
+                raise WcRunError(
+                    f"{plan}: the first {which} plan named is the pilot's (export --pilot), "
+                    "whose judge passed - this run is not a pilot"
+                )
+            if kind == KIND_LIST:
+                raise WcRunError(
+                    f"{plan}: the first WC plan named is a plain WC run's pilot, not a site-list "
+                    "run's: a list of Phase-4 texts measures no March text, so it cannot approve "
+                    "plain chunks - name the WC pilot first"
+                )
         if pilot is None:
             continue
+        if which == "WN" and pilot["sites"] != wn_pilot_size(population["population"]):
+            raise WcRunError(
+                f"{run}: a WN pilot of {pilot['sites']} sites from a population of "
+                f"{population['population']} - it draws {wn_pilot_size(population['population'])}"
+            )
         path = run / JUDGE_DIR / "RESULT.json"
         if not path.exists():
             raise WcRunError(f"{run}: the pilot was not judged (judge-import writes {path.name})")
@@ -1586,6 +2003,15 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
                 f"{run}: the pilot's judge did not pass ({result['failures']}): its outcomes are "
                 "never written - fix the cause and run a new pilot"
             )
+        if which == "WN":
+            need = wn_pilot_minimum(population["asked"])
+            measured = result["measured"]
+            if measured["independent"] < need or measured["kept_sentences"] < need:
+                raise WcRunError(
+                    f"{run}: the WN pilot measured too little ({measured['independent']} judged "
+                    f"text(s), {measured['kept_sentences']} kept sentence(s); at least {need} of "
+                    f"each for the {population['asked']} sites drawn)"
+                )
         if result.get("plan_sha256") != _sha256(plan):
             raise WcRunError(
                 f"{plan}: not the plan the pilot's judge judged (RESULT.json plan_sha256 "
@@ -1593,6 +2019,82 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
             )
         approvals.append({"run": _shown(run), "result_sha256": _sha256(path)})
     return approvals
+
+
+# ------------------------------------------------------------------------------------ the defects
+#: The keys of one line of a WB run's `DESCRIPTION_DEFECTS.jsonl` (`teaser/run.description_defects`).
+DEFECT_KEYS = frozenset(
+    {
+        "basis", "candidates", "claim", "desc_sha256", "mapped_by", "name", "owner_lane", "proven",
+        "quote", "quote_outcome", "run", "sentence", "sentence_text", "site_id", "stage", "url",
+        "verifier",
+    }
+)  # fmt: skip
+
+
+#: What the report keeps of a defect line, per site: enough to put the claim, its sentence and the
+#: contradicting page before the agent that checks the text again (`export --defects`).
+DEFECT_CLAIM_KEYS = (
+    "run", "stage", "owner_lane", "basis", "sentence", "sentence_text", "claim", "url", "quote",
+    "quote_outcome", "proven",
+)  # fmt: skip
+
+
+def cmd_defect_sites(
+    run: Path, defects: Sequence[Path], out: Path, *, proven_only: bool = False
+) -> dict[str, Any]:
+    """The site list of a repair run (`export --sites`) from WB's description defects: every site a
+    line names whose description is still the text the line was found on (`desc_sha256` is the
+    stored description's sha256 in the run's fresh read - a text WA or WC rewrote since is not the
+    defective one and is left out, counted `text-changed-since`), that is a curated, not retired
+    row of the read. `out` gets one site id per line; `out.report.json` the counts and, per site,
+    the claims. `proven_only` keeps only the lines whose contradicting quote the machine found."""
+    rows = {row["id"]: row for row in read_jsonl(run / ROWS_FILE)}
+    lines = 0
+    skipped: Counter[str] = Counter()
+    per_site: dict[str, list[dict[str, Any]]] = {}
+    for path in defects:
+        for number, line in enumerate(read_jsonl(path), start=1):
+            if set(line) != DEFECT_KEYS:
+                raise WcRunError(
+                    f"{path}:{number}: not a DESCRIPTION_DEFECTS line (keys {sorted(line)})"
+                )
+            lines += 1
+            try:
+                site_id = revert4.check_site(line["site_id"])
+            except revert4.RevertRefused as exc:
+                raise WcRunError(f"{path}:{number}: {exc}") from None
+            row = rows.get(site_id)
+            if proven_only and not line["proven"]:
+                skipped["unproven"] += 1
+            elif row is None:
+                skipped["not-a-curated-row"] += 1
+            elif row["scope_status"] == "retired":
+                skipped["retired"] += 1
+            elif row["description_sha256"] != line["desc_sha256"]:
+                skipped["text-changed-since"] += 1
+            else:
+                per_site.setdefault(site_id, []).append(
+                    {key: line[key] for key in DEFECT_CLAIM_KEYS}
+                )
+    ids = sorted(per_site)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("".join(f"{site_id}\n" for site_id in ids), encoding="utf-8", newline="\n")
+    report = {
+        "read": json.loads((run / READ_FILE).read_text(encoding="utf-8")),
+        "defects": [{"path": _shown(path), "sha256": _sha256(path)} for path in defects],
+        "proven_only": proven_only,
+        "lines": lines,
+        "sites": len(ids),
+        "skipped": dict(sorted(skipped.items())),
+        "by_owner_lane": dict(
+            sorted(Counter(c["owner_lane"] for cs in per_site.values() for c in cs[:1]).items())
+        ),
+        "out": {"path": _shown(out), "sha256": _sha256(out)},
+        "claims": {site_id: per_site[site_id] for site_id in ids},
+    }
+    RF.write_json(out.with_name(out.name + ".report.json"), report)
+    return {key: value for key, value in report.items() if key != "claims"}
 
 
 # ------------------------------------------------------------------------------------ the CLI
@@ -1619,10 +2121,11 @@ def build_parser() -> argparse.ArgumentParser:
         ("judge-brief", "the instruction of one judge batch's Opus agent"),
         ("judge-check-answer", "one judge answer's shape"),
         ("judge-import", "the judge's answers, the measurement and its verdict"),
+        ("defect-sites", "a site list from WB's DESCRIPTION_DEFECTS.jsonl files"),
     ):
         command = sub.add_parser(name, help=text)
         command.add_argument("--run-dir", required=True, type=Path)
-        if name not in ("read", "build"):
+        if name not in ("read", "build", "defect-sites"):
             command.add_argument("--handoff", required=True, type=Path)
         if name in (
             "brief",
@@ -1640,7 +2143,14 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--batch-size", type=int, default=BATCH_SIZE)
         if name == "read":
             command.add_argument("--host", default=W.SSH_HOST)
+        if name == "defect-sites":
+            command.add_argument("--defects", type=Path, action="append", required=True)
+            command.add_argument("--out", type=Path, required=True)
+            command.add_argument("--proven-only", action="store_true")
         if name == "export":
+            command.add_argument("--sites", type=Path, default=None)
+            command.add_argument("--wn", action="store_true")
+            command.add_argument("--defects", type=Path, default=None)
             command.add_argument("--exclude", type=Path, default=None)
             command.add_argument("--after", type=Path, action="append", default=[])
             command.add_argument("--pilot", type=int, default=None)
@@ -1670,6 +2180,9 @@ def run_command(args: argparse.Namespace) -> int:
                 pilot=args.pilot,
                 seed=args.seed,
                 limit=args.limit,
+                sites=args.sites,
+                wn=args.wn,
+                defects=args.defects,
             )
         )
     elif command == "brief":
@@ -1711,6 +2224,8 @@ def run_command(args: argparse.Namespace) -> int:
         result = cmd_judge_import(run, args.handoff)
         _print(result)
         return 0 if result["passed"] else 1
+    elif command == "defect-sites":
+        _print(cmd_defect_sites(run, args.defects, args.out, proven_only=args.proven_only))
     return 0
 
 
