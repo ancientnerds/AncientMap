@@ -683,6 +683,19 @@ def _record_side_effects(session: Any, journal_id: int, effects: dict) -> None:
     session.commit()
 
 
+def drop_public_api_cache() -> dict:
+    """Drop the public API's cached research responses so a changed paper is served at once.
+
+    GET /api/v1/research/{slug} and the list endpoint cache for minutes in Redis
+    (`pubv1:research:*`, api/routes/public_v1.py); the one pattern covers the paper
+    key and every list page. Redis is shared by both API containers. Runs in the API
+    image only (the CLI and the founder route), so `api.cache` is imported lazily.
+    """
+    from api.cache import cache_delete_pattern
+
+    return {"ok": True, "dropped": cache_delete_pattern("pubv1:research:*")}
+
+
 def run_publish_side_effects(
     *,
     request_id: str,
@@ -694,7 +707,7 @@ def run_publish_side_effects(
     published_at: str,
     reindex: bool,
 ) -> dict[str, dict]:
-    """IndexNow ping and Qdrant index after the commit (spec 2.6.5); also used by the founder route.
+    """IndexNow ping, Qdrant index and public API cache drop after the commit (spec 2.6.5); also used by the founder route.
 
     Failures are returned, not raised: they are journalled and never undo a
     publish. The nightly 03:00 UTC reindex (vector_sync) is the backstop for
@@ -724,6 +737,7 @@ def run_publish_side_effects(
         effects["qdrant"] = {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
     else:
         effects["qdrant"] = {"ok": sections > 0, "sections": sections}
+    effects["api_cache"] = drop_public_api_cache()
     return effects
 
 
@@ -1347,7 +1361,8 @@ def register_video(
     session.commit()
     _verify(session, request_id, result=stored, slug=row.slug)
     outcome.side_effects = {
-        "indexnow": {"ok": indexnow_submit([page_url(f"/research/{row.slug}")])}
+        "indexnow": {"ok": indexnow_submit([page_url(f"/research/{row.slug}")])},
+        "api_cache": drop_public_api_cache(),
     }
     _record_side_effects(session, outcome.journal_id, outcome.side_effects)
     return outcome

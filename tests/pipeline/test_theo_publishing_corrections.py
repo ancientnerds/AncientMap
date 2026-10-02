@@ -526,6 +526,11 @@ def _video(**overrides) -> dict:
     return video
 
 
+@pytest.fixture(autouse=True)
+def api_cache(monkeypatch) -> None:
+    monkeypatch.setattr("api.cache.cache_delete_pattern", lambda pattern: 1)
+
+
 @pytest.fixture
 def pinged(monkeypatch) -> list[list[str]]:
     urls: list[list[str]] = []
@@ -553,7 +558,10 @@ def test_a_video_is_appended_and_announced(pinged):
     assert video["evidence_timestamps"] == {"ev-01": 41, "ev-02": 312}
     assert "registered_at" in video
     assert "poster" not in video
-    assert outcome.side_effects == {"indexnow": {"ok": True}}
+    assert outcome.side_effects == {
+        "indexnow": {"ok": True},
+        "api_cache": {"ok": True, "dropped": 1},
+    }
     assert pinged == [[f"https://ancientnerds.com/research/{SLUG}"]]
     journal_params = next(
         p for sql, p in session.log if "INSERT INTO theo_paper_publications" in sql

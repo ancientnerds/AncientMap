@@ -230,6 +230,34 @@ def test_an_unknown_request_is_an_input_error(images, effects):
 # --- side effects ---------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def dropped_patterns(monkeypatch):
+    """The API cache is Redis: record what a publish drops instead of connecting."""
+    patterns: list[str] = []
+    monkeypatch.setattr(
+        "api.cache.cache_delete_pattern", lambda pattern: patterns.append(pattern) or 2
+    )
+    return patterns
+
+
+def test_side_effects_drop_the_public_api_research_cache(monkeypatch, dropped_patterns):
+    monkeypatch.setattr("pipeline.indexnow.submit", lambda urls: True)
+    monkeypatch.setattr("pipeline.lyra.theo_research_index.index_paper", lambda **kwargs: 3)
+    effects = tp.run_publish_side_effects(
+        request_id=REQ,
+        slug="s",
+        title="T",
+        paper_text=REPORT,
+        author_username="Theo",
+        author_discord_id="442000112756064260",
+        published_at="2026-09-28T10:00:00+00:00",
+        reindex=True,
+    )
+    # one pattern covers the paper (pubv1:research:paper:<slug>) and every list page
+    assert dropped_patterns == ["pubv1:research:*"]
+    assert effects["api_cache"] == {"ok": True, "dropped": 2}
+
+
 def test_side_effects_record_a_qdrant_failure_without_raising(monkeypatch):
     submitted: list[list[str]] = []
     monkeypatch.setattr(
@@ -253,6 +281,7 @@ def test_side_effects_record_a_qdrant_failure_without_raising(monkeypatch):
     assert effects == {
         "indexnow": {"ok": True},
         "qdrant": {"ok": False, "error": "RuntimeError: qdrant down"},
+        "api_cache": {"ok": True, "dropped": 2},
     }
     assert submitted == [
         ["https://ancientnerds.com/research/s", "https://ancientnerds.com/research/"]

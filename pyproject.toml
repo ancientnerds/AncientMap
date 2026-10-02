@@ -55,6 +55,8 @@ ignore_imports = [
     "pipeline.lyra.graph_full_ingest -> api.routes.public_v1",
     "pipeline.lyra.handlers.cross_pollination -> api.services.lyra_embeddings",
     "pipeline.lyra.theo_research_index -> api.services.lyra_embeddings",
+    # Publish/correct run in the API image and drop its cached research responses.
+    "pipeline.lyra.theo_publishing -> api.cache",
     "pipeline.lyra.theo_sources -> api.services.lyra_tools",
 ]
 
