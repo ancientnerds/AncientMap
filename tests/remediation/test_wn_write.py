@@ -11,6 +11,7 @@ p4wc` and `revert4.py`. The fake psql parses what it is sent (`phase4_write_fixt
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -51,7 +52,19 @@ def _git(repo: Path, *argv: str) -> str:
 
 
 @pytest.fixture(scope="module")
-def lane_n_history(tmp_path_factory) -> dict[str, str]:
+def _own_git_environment():
+    """The pre-push hook runs the suite with GIT_DIR (and friends) exported; `git -C <throwaway>`
+    then still acts on the pushed repository and the three commits below land in the real
+    branch. Without these variables every git call here, the gate's included, uses `-C`."""
+    patch = pytest.MonkeyPatch()
+    for name in [n for n in os.environ if n.startswith("GIT_")]:
+        patch.delenv(name)
+    yield
+    patch.undo()
+
+
+@pytest.fixture(scope="module")
+def lane_n_history(tmp_path_factory, _own_git_environment) -> dict[str, str]:
     """A throwaway repository with the three commits the gate reasons about: one before the change
     that puts lane N into the API's disclosure, the change, and one after. (The checkout the suite
     runs in may be shallow: CI clones with depth 1.)"""
