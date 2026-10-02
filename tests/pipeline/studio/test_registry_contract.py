@@ -193,7 +193,7 @@ def _validate_with_long_evidence(data: dict, *, fmt: str) -> list[str]:
 )
 def test_a_hook_evidence_card_the_hook_stage_cannot_hold_is_refused_by_episode_check(props):
     """Render-R2 on the hook stage: under the hook captions the stage is 140 px shorter, an
-    EvidenceCard holds a statement of 68 characters and a quote of 134 beside an image (88 and 165
+    EvidenceCard holds a statement of 68 characters and a quote of 120 beside an image (88 and 165
     beside none), and the registry's full-stage limits (100, 220) let `episode check` accept 99
     and 204 characters of real prose that only `episode render` then refused, after the voice."""
     assert (len(_STATEMENT_99), len(_QUOTE_204)) == (99, 204)
@@ -202,7 +202,7 @@ def test_a_hook_evidence_card_the_hook_stage_cannot_hold_is_refused_by_episode_c
     )
     assert hook == [
         "b01: props.evidence.statement: longer than 68 on a hook beat",
-        "b01: props.evidence.source.quote: longer than 134 on a hook beat",
+        "b01: props.evidence.source.quote: longer than 120 on a hook beat",
     ]
     # the same beat after the hook has the whole stage
     after = _script_opening_with("EvidenceCard", props, hook=False)

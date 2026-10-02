@@ -10,12 +10,12 @@ import React from 'react'
 import { AbsoluteFill, Img, staticFile, useCurrentFrame } from 'remotion'
 
 import { firstCue, latestCue } from '../cues'
-import { domainOf } from '../format'
 import type { Rect } from '../layout/geometry'
 import { LayoutBox } from '../layout/LayoutBox'
 import { bootIn, typeOn } from '../motion'
 import { type ClaimStatus, colors, statusColor } from '../theme/colors'
 import { body, heading, hud } from '../theme/type'
+import { COMPOSED, lineProblem, sourceLine } from './composed'
 import { Panel } from './Panel'
 import { Stamp } from './Stamp'
 import type { BlockProps, Evidence, Media } from './types'
@@ -28,6 +28,12 @@ const HEAD_H = 36
 const SOURCE_H = 80
 const IMAGE_W = 500
 const STAMP_COLUMN = 360
+
+/** The source line is one 18 px caps line: it must fit in total, whatever the host and the locator. */
+export function checkEvidenceCard(p: EvidenceCardProps): string[] {
+  const limits = COMPOSED['EvidenceCard.sourceLine']
+  return lineProblem(`evidence ${p.evidence.id}: the source line`, sourceLine(p.evidence), p.image ? limits.image : limits.plain, 'the card', p.image ? 'beside an image' : 'with no image')
+}
 
 /** Vertical layout of the card's text inside a panel of height h: statement 45 %, quote 55 % of the free space. */
 export function cardLayout(h: number): { statement: Rect; quote: Rect; source: Rect } {
@@ -55,7 +61,7 @@ export const EvidenceCard: React.FC<BlockProps<EvidenceCardProps>> = ({ props: p
   const status = latestCue(cues, 'status', e.claim_id, frame)
   const quote = e.source.quote
   const typed = typeOn(quote, frame, quoteAt, 2)
-  const source = [domainOf(e.source.url), `tier ${e.source.tier}`, e.source.locator, e.paper_anchor ? `paper #${e.paper_anchor}` : ''].filter(Boolean).join('  //  ')
+  const source = sourceLine(e)
   return (
     <AbsoluteFill style={{ backgroundColor: colors.bg }}>
       <Panel rect={panel}>

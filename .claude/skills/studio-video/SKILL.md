@@ -94,11 +94,18 @@ written `studio …` below. Exit 0 = ok, 1 = a check failed (`episode check`, `e
   punctuation, has at most 24 characters (`HOOK_LINE_MAX_CHARS`). Under hook captions the stage is
   140 px shorter and some boxes hold less, so `episode check` holds a hook beat to the registry's
   hook limits (`hookMaxLength`, `hookMaxItems`) and says "on a hook beat": an EvidenceCard
-  `statement` of at most 68 characters and `quote` of 134, a QuoteCard `quote` of 230, at most five
+  `statement` of at most 68 characters and `quote` of 120, a QuoteCard `quote` of 230, at most five
   claims on a ClaimBoard, four items on a ListCard, six bars, two unit groups, and no Meter `note`.
   Each is the strictest of the block's layouts (an EvidenceCard without an image holds 88 and 165,
-  a list without a note five items), so a card whose text does not fit goes after the hook, or its
-  text gets cut down; the case file's statement and quote stay as they are.
+  a list without a note five items), so a card whose text does not fit goes after the hook or the
+  case-file text is shortened (evidence enters a script only as a `$ref`, so the script cannot cut
+  it: edit the statement, quote or locator in the case file and run `studio-casefile-verify` again,
+  an edited item is `unverified` until then).
+- **Lines composed of several fields** are bounded in total, and `episode check` prints the line and
+  its length: a BarChart value text (digits plus unit) of at most 14 characters, 16 for a range
+  (`1,000-1,650 tonnes` is 18: use `tons`, or a 3-digit range of `tonnes`), an EvidenceCard source
+  line (host // tier // locator // paper #anchor) of at most 72 characters beside an image and 86
+  without, a QuoteCard meta line of 94.
 - **Glyph rule** (#32): only drawn strings are checked (the registry's `drawn` props, capture
   credits and place and pin labels, hook captions, chapter titles, credit lines, thumbnail
   teasers), and each character also in upper case: `ƒ` draws as `Ƒ`, which has no glyph, so it
@@ -193,7 +200,7 @@ unless its checkbox flips (a toggle the page disables switches nothing):
 |---|---|
 | `episode check` errors | fix `script.json` or the case file; never edit `timeline.json` |
 | the timeline refuses a stale voice | `episode voice` again |
-| lint violations (`render/lint_report.txt`) | fix the script props (no new voice or captures), render again |
+| lint violations (`render/lint_report.txt`) | fix the script props (no new voice or captures), render again; an overflow caused by case-file text (a source line, a quote, a quantity unit) needs the case file shortened and re-verified, or the card moved |
 | `episode check` or `episode voice`: a clip scene "holds one picture for N s" | shorten the beat, record a take whose camera moves through the scene, or cut to a card (script rule "Clip stills") |
 | render audit failed (`render/audit.json`, `package/FAILED.json`) | fix the cause (a clip frozen over 4 s: cut to a card), render again |
 | `render.ts` (or `still.ts`) `exited 1` and its log in `render/` says a render page "was closed from outside" or "crashed" | nothing was wrong with the script: something closed or crashed the render browser; render again |

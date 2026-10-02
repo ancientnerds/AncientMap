@@ -45,8 +45,13 @@ import { REGISTRY_BLOCKS } from '../src/blocks/schemas'
 import { LOCAL_VERBS } from '../src/timeline'
 import { schemaAt, schemaNodes } from './registryHelpers'
 
-/** The hostname of the evidence sources: longer than most (jstor.org, dainst.org), shorter than journals.sagepub.com. */
-const HOST = 'researchgate.net'
+/**
+ * The hostname of the evidence sources of the capacity episode. The evidence cards bound their source
+ * line in total (COMPOSED, blocks/composed.ts: 72 characters beside an image), so a host of 10 is what
+ * leaves room for the locator at its limit of 24; the combinations of a longer host with a shorter locator,
+ * up to exactly the limit, are the real-text test of test/gpu/capacity.gpu.ts.
+ */
+const HOST = 'dainst.org'
 
 const FILLER = 'limestone tool evidence mammoth excavation Roman weight quarrying report tonnes'
 
@@ -251,8 +256,8 @@ const COMPLETE: Record<string, (p: Json) => void> = {
  * - the Meter's stack of labels, numbers, words, bar and note is 514 px, the stage under it 450:
  *   the note runs into the captions, so a Meter under hook captions has none (hookMaxLength 0);
  * - the cards whose text wraps hold less: an EvidenceCard 88 characters of statement and 165 of
- *   quote beside no image and 68 and 134 beside one, a QuoteCard 230 of quote.
- * A block has one number per box, the strictest of its layouts (68 and 134 for an EvidenceCard),
+ *   quote beside no image and 68 and 120 beside one, a QuoteCard 230 of quote.
+ * A block has one number per box, the strictest of its layouts (68 and 120 for an EvidenceCard),
  * so a hook card without an image, a board without `by` lines or a list without a note is held
  * to the capacity of its widest layout: `episode check` cannot see which layout a scene gets.
  */
@@ -371,14 +376,84 @@ export function sceneVariants(sceneId: string, variants: { id: string; edit: (pr
   const base = cases.find((c) => c.id === sceneId)
   if (!scene || !base) throw new Error(`the capacity episode has no scene ${sceneId}`)
   let from = 0
+  const captions: { text: string; from: number; to: number }[] = []
   const scenes = variants.map(({ id, edit }) => {
     const copy = clone(scene)
     edit(copy.props)
     const placed = { ...copy, id, from, cues: copy.cues.map((c) => ({ ...c, frame: c.frame - scene.from + from })) }
+    // a variant of a hook scene is drawn under a hook caption, as the scene it is a copy of
+    if (base.hook) captions.push({ text: 'HOOK', from: from + 6, to: from + 54 })
     from += scene.durationInFrames
     return placed
   })
-  return episode(scenes, variants.map(({ id }) => ({ ...base, id })), [], from)
+  return episode(scenes, variants.map(({ id }) => ({ ...base, id })), captions, from)
+}
+
+/**
+ * Real prose of the kind a case file quotes (archaeological reports and field notes, written for
+ * these tests), long enough to cut `quotesOfLength` windows from: a filler's word wrap is one
+ * phase, real text has all of them (the reviewer's hook quotes of 133 and 134 characters wrapped
+ * into a fourth line where the filler of 134 did not).
+ */
+const QUOTE_PASSAGES = [
+  'The excavators of the German Archaeological Institute measured the Stone of the Pregnant Woman in the Roman quarry at Baalbek and estimated that the block weighs about 1,000 tonnes, although the trimming marks on its lower face suggest that the masons had not yet finished dressing it when work stopped.',
+  'Trench 4 cut through a series of compacted floors, each sealed by a thin layer of burnt clay, and the lowest of these produced a hearth with charred emmer grains that gave a calibrated radiocarbon date in the middle of the third millennium before the common era.',
+  'No inscription on the monument names its builders, but the orientation of the long axis towards the midwinter sunrise, together with the standardised length of the paving slabs, points to a community that kept records of the calendar over many generations.',
+  'The sediment cores from the harbour basin show a sudden coarse layer of shell and gravel that interrupts the quiet silt of the previous four centuries, a sequence usually read as the signature of a tsunami or an exceptional storm surge.',
+]
+
+/** `count` quotes of exactly `length` characters: windows of the real passages, started at successive words, never ending in a space. */
+export function quotesOfLength(length: number, count: number): string[] {
+  const out: string[] = []
+  for (let round = 0; out.length < count; round += 1) {
+    for (const passage of QUOTE_PASSAGES) {
+      const words = passage.split(' ')
+      const text = words.slice(round % (words.length - 25)).join(' ')
+      const cut = text.slice(0, length)
+      if (cut.length === length && !cut.endsWith(' ') && out.length < count) out.push(cut)
+    }
+    if (round > 400) throw new Error(`the passages have no ${count} windows of ${length} characters`)
+  }
+  return out
+}
+
+/** Real hostnames of paper sources, shortest to longest, and real locators (the case file's own limit is 24). */
+export const SOURCE_HOSTS = ['jstor.org', 'dainst.org', 'researchgate.net', 'academic.oup.com', 'link.springer.com', 'journals.sagepub.com', 'onlinelibrary.wiley.com', 'pubmed.ncbi.nlm.nih.gov']
+export const SOURCE_LOCATORS = ['Results, paragraph 2', 'Table 2, third column', 'Section 3.2', 'p. 112', 'Fig. 4 and note 7', 'Appendix B, table 12', 'Discussion, paragraph 4', 'Chapter 5, pp. 201-204']
+
+/**
+ * The evidence of a source line of exactly `limit` characters ("host  //  tier 1  //  locator  //  paper #anchor"): a real
+ * host with a real locator (cut to 24), the paper anchor lengthened to make up the rest. A host too long for the
+ * limit with the shortest anchor gets a shorter locator, then none. `hostOnly`: no locator and no anchor,
+ * the host a dotted name made as long as the line needs.
+ */
+export function sourceLineEdits(limit: number, hostOnly = false): { id: string; url: string; locator: string; anchor: string | null }[] {
+  const separator = '  //  '.length
+  const tier = 'tier 1'.length
+  if (hostOnly) {
+    const host = `${'journals.archive.'.repeat(10).slice(0, limit - separator - tier - 3)}org`
+    return [{ id: 'hostonly', url: `https://${host}/p`, locator: '', anchor: null }]
+  }
+  return SOURCE_HOSTS.map((host, i) => {
+    const fixed = host.length + 3 * separator + tier + 'paper #'.length
+    let locator = SOURCE_LOCATORS[i].slice(0, 24)
+    while (limit - fixed - locator.length < 'ev-01'.length) locator = locator.slice(0, -1).trimEnd()
+    const anchor = `ev-${'anchor-'.repeat(8)}`.slice(0, limit - fixed - locator.length)
+    return { id: `src${i}`, url: `https://www.${host}/paper`, locator, anchor }
+  })
+}
+
+/**
+ * The QuoteCard meta lines of exactly `limit` characters ("locator  //  host  //  tier 1"): the longest locator
+ * and a dotted host as long as that needs, then the host alone.
+ */
+export function metaLineEdits(limit: number): { id: string; url: string; locator: string }[] {
+  const separator = '  //  '.length
+  const tier = 'tier 1'.length
+  return [24, 0].map((n) => {
+    const host = `${'journals.archive.'.repeat(10).slice(0, limit - n - (n ? 2 : 1) * separator - tier - 3)}org`
+    return { id: `meta${n}`, url: `https://${host}/p`, locator: 'Chapter 5, pp. 201-204 and 9'.slice(0, n) }
+  })
 }
 
 /** A solid-colour PNG of w x h pixels (stands in for every image of the capacity episode). */

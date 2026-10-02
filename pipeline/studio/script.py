@@ -60,7 +60,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from pipeline.studio.blocks import FORBIDDEN_BLOCKS, props_errors
+from pipeline.studio.blocks import FORBIDDEN_BLOCKS, block_errors
 from pipeline.studio.casefile import (
     CLAIM_STATUSES,
     CaptureNotRecorded,
@@ -959,7 +959,9 @@ def validate_script(
             else:
                 # a hook beat is drawn under the captions: the stage is 140 px shorter and the
                 # registry's hook limits (what the lint refuses) bind
-                schema = props_errors(entry["props"], candidate, hook=beat.get("hook", False))
+                schema = block_errors(
+                    block, entry["props"], candidate, hook=beat.get("hook", False)
+                )
                 report.errors.extend(f"{bid}: {p}" for p in schema)
                 props = None if schema else candidate
         if entry["map"]:

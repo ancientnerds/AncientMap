@@ -81,7 +81,7 @@ const TONE = oneOf(TONES)
  * `episode check` applies them to a beat flagged hook (the renderer, to a scene a
  * hook caption is on screen in). A block has one number per box, the strictest of
  * its layouts: an EvidenceCard holds 88 / 165 characters of statement / quote beside
- * no image and 68 / 134 beside one, so 68 / 134; a claim board of five claims holds
+ * no image and 68 / 120 beside one, so 68 / 120; a claim board of five claims holds
  * a `by` line, six do not, and so on. test/gpu/capacity.gpu.ts proves every one on
  * the stage it is for, test/fixtures/capacity-hook-limits.json pins them.
  */
@@ -287,14 +287,16 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     map: false,
     platform: false,
     drawn: ['evidence.kind', 'evidence.statement', 'evidence.source.quote', 'evidence.source.title', 'evidence.source.locator'],
-    // Beside the image the text column is 964 px: the statement is three lines of Orbitron 40 px,
-    // the quote five lines of mono 32 px, the title one mono 24 px line (80 characters without
-    // the image), and the source line, 72 characters of 18 px caps, holds a 16-character
-    // hostname, "tier 1", "paper #ev-01" and three separators beside a locator of 26. Under
-    // hook captions the stage is 140 px shorter: the statement holds 88 characters beside no image
-    // and 68 beside one, the quote 165 and 134 (the hook limits are the smaller).
+    // Beside the image the statement is three lines of Orbitron 40 px, the quote five lines of mono
+    // 32 px, the title one mono 24 px line (80 characters without the image). The source line
+    // (host // tier // locator // paper #anchor, 18 px caps) is bounded in total, not per field:
+    // 72 characters beside an image, 86 without (COMPOSED, blocks/composed.ts; checkEvidenceCard
+    // refuses a longer one), so the locator limit of 24 holds only for a host of up to 12 characters.
+    // Under hook captions the stage is 140 px shorter: the statement holds 88 characters beside no
+    // image and 68 beside one, the quote 165 and 134-ish (real prose of 133 and 134 characters
+    // needed a fourth line and overflowed, measured 2026-10-02), so 120, a margin of 14.
     props: obj(
-      { evidence: evidenceSchema({ statement: 100, quote: 220, title: 66, locator: 24, hookStatement: 68, hookQuote: 134 }), image: MEDIA },
+      { evidence: evidenceSchema({ statement: 100, quote: 220, title: 66, locator: 24, hookStatement: 68, hookQuote: 120 }), image: MEDIA },
       ['evidence'],
       'One verified evidence item; cues highlight <evidence id> (quote types on), stamp <evidence id>',
     ),
@@ -390,7 +392,7 @@ export const REGISTRY_BLOCKS: Record<string, RegistryEntry> = {
     props: obj(
       {
         title: TITLE,
-        unit: str(1, 6), // the value box holds 14 characters (a range 16): a 6-character unit leaves room for a 4-digit value or a 3-digit range
+        unit: str(1, 6), // the value box holds 14 characters (a range 16), digits and unit together: checkBarChart refuses a value text above that (COMPOSED), whatever the unit
         basis: BASIS,
         bars: arr(
           obj(

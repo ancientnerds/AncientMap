@@ -37,7 +37,7 @@ file and the code disagree, the code is right and this file is stale: fix it.
   `theo-image-check.js`, `studio-casefile-verify.js` and `studio-marker-check.js` (I3). The skills hold
   the step-by-step session; this runbook holds the background, the gates and the recovery.
 - **Workstation proofs:** on 2026-10-01 `doctor` reported every probe ok, `npm run test:gpu` passed
-  (10 tests in 3 files, about 120 s) and one real CUDA float16 transcription ran (section 1.3). The
+  (19 tests in 3 files, about 330 s; measured 2026-10-02) and one real CUDA float16 transcription ran (section 1.3). The
   smoke render (plan D Task 22) and the real captures (plan D Task 36) have run on this workstation;
   they run again after any change to `video/` or `pipeline/studio/capture/` (index I8, step 1).
 
@@ -387,7 +387,7 @@ Rules the checks enforce (script, case file, captures):
   characters overflowed it (`Sacsayhuaman Walls Cusco`, 781 px of 716), while of the 139 real names of
   21 characters none does and `Normanton Down Barrows` (22) does. A hook beat is drawn under the
   captions on a stage 140 px shorter, where some boxes hold less: the registry also records
-  `hookMaxLength` / `hookMaxItems` (an EvidenceCard `statement` 68 and `quote` 134, a QuoteCard
+  `hookMaxLength` / `hookMaxItems` (an EvidenceCard `statement` 68 and `quote` 120, a QuoteCard
   `quote` 230, at most 5 claims, 4 list items, 6 bars, 2 unit groups, no Meter `note`; each the
   strictest layout of its block) and `episode check` applies them to a beat flagged `hook` (the
   renderer's block checks, to a scene a hook caption is on screen in).
@@ -400,6 +400,25 @@ Rules the checks enforce (script, case file, captures):
   covered by a static limit: free-standing labels (a scale object, a diagram element, a timeline
   event, a map pin), which take the room the script gives them; the render lint judges a crowded
   scene.
+  Text composed of several fields has a limit on the whole line, not on its parts
+  (`video/src/blocks/composed.ts`, mirrored by `pipeline/studio/blocks.py` `composed_errors`, pinned by
+  `video/test/fixtures/composed-limits.json`); the block checks refuse a longer line before any browser
+  starts, and `capacity.gpu.ts` lints lines of exactly the limit with real hosts, locators and quotes:
+  - **BarChart value text** (digits plus unit, with thousands separators and every decimal the value
+    has): at most 14 characters for a single value, 16 for a range. `unit` is at most 6 characters,
+    but what fits is the whole text: `1,000-1,650 tonnes` (18) is refused, `1,000-1,650 tons` (16),
+    `100-165 tonnes` (14), `125,000 tonnes` (14), `1,250 tonnes` and `19.6-20.5 metres` fit. For a
+    range with a 4-digit value, the unit has at most 4 characters; with a 3-digit value, 6.
+  - **EvidenceCard source line** (`host // tier N // locator // paper #anchor`, the host without
+    `www.`): at most 72 characters beside an image, 86 without. The locator limit of 24 therefore
+    holds only for a host of up to 12 characters (`jstor.org`, `dainst.org`); beside an image,
+    `researchgate.net` leaves 20, `onlinelibrary.wiley.com` 13 and `pubmed.ncbi.nlm.nih.gov` 13
+    characters of locator (with `tier 1` and an anchor like `ev-01`).
+  - **QuoteCard** meta line (`locator // host // tier N`): at most 94 characters; the work line
+    (`attribution, title`) is bounded by its own fields (32 + 2 + 43 = 77, the box holds exactly that).
+  When a card is refused for its source line, shorten the case file's locator (or move the card
+  to a layout without an image); the host is the source's. An edited locator resets the item to
+  `unverified` (re-run `studio-casefile-verify`).
 - No title card and no agent block. The ShareCard is the end card: the last beat only.
 - A full episode has 3-5 platform moments (a slice any number); every platform moment, in either
   format, lasts 5-15 s.
@@ -558,9 +577,9 @@ age, and `ssh ancientnerds`. A green
 really uses the NVIDIA.
 
 Checks only the workstation can run (CI never proves the capture and render path): `npm run test:gpu`
-in `video/` (3 files, 10 tests: the layout lint in a real browser on the NVIDIA, every block at its
-length limits, and a crashed and a closed render tab that each cancel the run at once, owner Q17;
-about 120 s, measured 2026-10-01), the
+in `video/` (3 files, 19 tests: the layout lint in a real browser on the NVIDIA, every block at its
+length limits, real quotes, source lines and bar values at exactly their limits, and a crashed and a closed render tab that each cancel the run at once, owner Q17;
+about 330 s, measured 2026-10-02), the
 smoke render (plan D Task 22), real captures (plan D Task 36), `doctor`, and the CUDA transcription.
 What CI does prove of `video/` is section 13.
 

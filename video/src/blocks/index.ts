@@ -26,7 +26,7 @@ import { type LocalVerb, type Timeline, sceneHasCaptions } from '../timeline'
 import { BarChart, type BarChartProps, checkBarChart } from './BarChart'
 import { ClaimBoard, type ClaimBoardProps } from './ClaimBoard'
 import { Diagram, type DiagramProps, checkDiagram } from './Diagram'
-import { EvidenceCard, type EvidenceCardProps } from './EvidenceCard'
+import { EvidenceCard, type EvidenceCardProps, checkEvidenceCard } from './EvidenceCard'
 import { GlobeShot, type GlobeShotProps, checkGlobeShot, globePins } from './GlobeShot'
 import { ListCard, type ListCardProps } from './ListCard'
 import { MapboxFlyover, checkMapboxFlyover } from './MapboxFlyover'
@@ -78,7 +78,7 @@ export const BLOCKS: Record<string, BlockDef> = {
   GlobeShot: block(GlobeShot, { check: checkGlobeShot, cues: { show: (p: GlobeShotProps) => globePins(p.clip).map((pin) => pin.id) } }),
   MapboxFlyover: block(MapboxFlyover, { check: checkMapboxFlyover }),
   SourceViewer: block(SourceViewer, { check: checkSourceViewer, cues: { highlight: (p: SourceViewerProps) => evidence(p) } }),
-  EvidenceCard: block(EvidenceCard, { cues: { highlight: (p: EvidenceCardProps) => evidence(p), stamp: (p: EvidenceCardProps) => evidence(p) } }),
+  EvidenceCard: block(EvidenceCard, { check: checkEvidenceCard, cues: { highlight: (p: EvidenceCardProps) => evidence(p), stamp: (p: EvidenceCardProps) => evidence(p) } }),
   QuoteCard: block(QuoteCard, { check: checkQuoteCard, cues: { highlight: (p: QuoteCardProps) => evidence(p) } }),
   ClaimBoard: block(ClaimBoard, { cues: { highlight: (p: ClaimBoardProps) => ids(p.claims) } }),
   Meter: block(Meter, { check: checkMeter }),

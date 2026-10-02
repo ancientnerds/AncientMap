@@ -8,11 +8,11 @@ import React from 'react'
 import { AbsoluteFill, useCurrentFrame } from 'remotion'
 
 import { firstCue } from '../cues'
-import { domainOf } from '../format'
 import { LayoutBox } from '../layout/LayoutBox'
 import { bootIn, typeOn } from '../motion'
 import { colors } from '../theme/colors'
 import { body, hud, serif } from '../theme/type'
+import { COMPOSED, lineProblem, metaLine } from './composed'
 import { Panel } from './Panel'
 import type { BlockProps, Evidence } from './types'
 
@@ -22,7 +22,9 @@ const PAD = 64
 const SOURCE_H = 96
 
 export function checkQuoteCard(p: QuoteCardProps): string[] {
-  return p.evidence.source.quote.trim() ? [] : [`evidence ${p.evidence.id} has no verbatim quote to show`]
+  const quote = p.evidence.source.quote.trim() ? [] : [`evidence ${p.evidence.id} has no verbatim quote to show`]
+  // the work line ("<attribution>, <title>") is bounded by its fields (COMPOSED); the meta line is not: the host has no limit
+  return [...quote, ...lineProblem(`evidence ${p.evidence.id}: the meta line`, metaLine(p.evidence), COMPOSED['QuoteCard.metaLine'], 'the card', 'for the 20 px caps line')]
 }
 
 export const QuoteCard: React.FC<BlockProps<QuoteCardProps>> = ({ props: p, cues, sceneId, stage }) => {
@@ -33,7 +35,7 @@ export const QuoteCard: React.FC<BlockProps<QuoteCardProps>> = ({ props: p, cues
   const quote = e.source.quote
   const typed = typeOn(quote, frame, at, 2)
   const work = p.attribution ? `${p.attribution}, ${e.source.title}` : e.source.title
-  const meta = [e.source.locator, domainOf(e.source.url), `tier ${e.source.tier}`].filter(Boolean).join('  //  ')
+  const meta = metaLine(e)
   return (
     <AbsoluteFill style={{ backgroundColor: colors.bg }}>
       <Panel rect={panel}>

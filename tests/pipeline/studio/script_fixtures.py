@@ -240,7 +240,7 @@ REGISTRY = {
     ),
     "EvidenceCard": _entry(
         _obj(
-            {"evidence": evidence_schema(100, 220, 66, 24, 68, 134), "image": MEDIA},
+            {"evidence": evidence_schema(100, 220, 66, 24, 68, 120), "image": MEDIA},
             ["evidence"],
             "One verified evidence item; cues highlight <evidence id> (quote types on), stamp <evidence id>",
         ),

@@ -18,6 +18,7 @@ import { LayoutBox } from '../layout/LayoutBox'
 import { bootIn, progress } from '../motion'
 import { type Tone, colors, toneColor } from '../theme/colors'
 import { body, heading, hud } from '../theme/type'
+import { COMPOSED, lineProblem } from './composed'
 import type { BlockProps, CheckContext } from './types'
 
 export type BarValue = number | [number, number]
@@ -52,6 +53,9 @@ export function checkBarChart(p: BarChartProps, ctx: CheckContext): string[] {
   const errors: string[] = []
   for (const b of p.bars) {
     if (Array.isArray(b.value) && !(b.value[0] < b.value[1])) errors.push(`bar ${b.id}: range [${b.value[0]}, ${b.value[1]}] needs low < high`)
+    // the value box holds characters of the digits and the unit together, not of the unit alone
+    const range = Array.isArray(b.value)
+    errors.push(...lineProblem(`bar ${b.id}:`, valueText(b.value, p.unit), COMPOSED['BarChart.valueText'][range ? 'range' : 'single'], 'the value box', range ? 'for a range' : 'for a single value'))
   }
   if (!p.bars.some((b) => highOf(b.value) > 0)) errors.push('every bar is 0: nothing to compare')
   const settled = settledAt(p.bars, () => null)

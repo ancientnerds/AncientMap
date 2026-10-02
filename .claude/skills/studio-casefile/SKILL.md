@@ -74,9 +74,13 @@ names its crop files, and the workflows pass every id through shell commands).
      100 characters, `quote` ≤ 220, `source.title` ≤ 66, `locator` ≤ 24. QuoteCard: `quote` ≤ 320,
      `source.title` ≤ 43, `locator` ≤ 24. Shorten the case file's text: the title without its
      site suffix (` - ResearchGate`), a shorter verbatim sentence or fragment for the quote. The
-     source line also draws the site's hostname, so these fit up to a hostname of 16 characters.
+     source line also draws the site's hostname, tier and paper anchor, and its total is bounded
+     (EvidenceCard: 72 characters beside an image, 86 without; QuoteCard meta line 94), so the
+     locator's 24 characters hold only for a host of up to 12 characters: `researchgate.net` leaves
+     20, `onlinelibrary.wiley.com` and `pubmed.ncbi.nlm.nih.gov` 13 beside an image (`episode check`
+     prints the line and its length).
      A card in a hook beat holds less (the stage under the hook captions is 140 px shorter):
-     EvidenceCard `statement` ≤ 68 and `quote` ≤ 134, QuoteCard `quote` ≤ 230. A case-file text
+     EvidenceCard `statement` ≤ 68 and `quote` ≤ 120, QuoteCard `quote` ≤ 230. A case-file text
      over that is for a card after the hook; `episode check` says "on a hook beat" otherwise.
    - Every new item, and every item whose `statement` or `source` you edit, gets
      `"verification": {"status": "unverified", "by": "", "at": "", "method": ""}`. Never set

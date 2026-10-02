@@ -19,21 +19,22 @@
  * lower-third-names.json). The names above the limit cannot be linted: `episode check` and
  * parseTimeline refuse them before any browser starts, which is the point.
  */
-import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
-import { SITE_PUBLIC_DIR } from '../../scripts/fontCoverage'
-import type { LintViolation } from '../../scripts/args'
-import { FONT_FILES } from '../../src/theme/fonts'
-import { type CapacityTimeline, capacityTimeline, sceneVariants, solidPng } from '../capacity'
+import { COMPOSED } from '../../src/blocks/composed'
+import { capacityTimeline, metaLineEdits, quotesOfLength, sceneVariants, sourceLineEdits } from '../capacity'
+import { lintEpisode as lint } from './lint'
 
 const VIDEO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 const SLOW = 900_000
+const NVIDIA = /^gpu: ANGLE \(NVIDIA, NVIDIA GeForce RTX 3080/m
+
+type Json = Record<string, any>
 
 let work = ''
 
@@ -45,43 +46,12 @@ afterAll(() => {
   rmSync(work, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
 })
 
-/** The violations of scripts/lint.ts on a capacity timeline (the whole episode, or variants of one scene of it), grouped by the scene they were found in. */
-function lintEpisode({ timeline, assets }: CapacityTimeline): { status: number | null; output: string; byScene: Map<string, string[]> } {
-  const publicDir = path.join(work, 'public')
-  for (const file of FONT_FILES) {
-    mkdirSync(path.dirname(path.join(publicDir, file)), { recursive: true })
-    cpSync(path.join(SITE_PUBLIC_DIR, file), path.join(publicDir, file))
-  }
-  for (const asset of assets) {
-    mkdirSync(path.dirname(path.join(publicDir, asset)), { recursive: true })
-    // Lint mode never decodes a clip, but every image is drawn (and measured) for real.
-    writeFileSync(path.join(publicDir, asset), asset.endsWith('.png') ? solidPng(960, 540) : '')
-  }
-  const timelineFile = path.join(work, 'timeline.json')
-  const report = path.join(work, 'lint.json')
-  writeFileSync(timelineFile, JSON.stringify(timeline))
-  const run = spawnSync(process.execPath, ['--import', 'tsx', 'scripts/lint.ts', '--timeline', timelineFile, '--public-dir', publicDir, '--report', report], {
-    cwd: VIDEO_ROOT,
-    encoding: 'utf-8',
-    maxBuffer: 256 * 1024 * 1024,
-  })
-  const output = `${run.stdout}\n${run.stderr}`
-  // lint.ts writes its report before it fails on the violations; no report means it failed before linting
-  if (!existsSync(report)) throw new Error(`scripts/lint.ts wrote no report (exit ${run.status}):\n${output}`)
-  const violations = (JSON.parse(readFileSync(report, 'utf-8')) as { violations: LintViolation[] }).violations
-  const byScene = new Map<string, string[]>()
-  for (const v of violations) {
-    const scene = v.a.split(':')[0]
-    const line = `${v.a}${v.b ? ` x ${v.b}` : ''}: ${v.reason}`
-    byScene.set(scene, [...new Set([...(byScene.get(scene) ?? []), line])])
-  }
-  return { status: run.status, output, byScene }
-}
+const lintEpisode = (episode: ReturnType<typeof capacityTimeline>) => lint(work, episode)
 
 describe('the capacity episode in a real browser', () => {
   it('draws every block, on the full and on the hook stage, with every drawn string at its maxLength (hook capacity on the hook stage), without one layout violation', () => {
     const { status, output, byScene } = lintEpisode(capacityTimeline())
-    expect(output).toMatch(/^gpu: ANGLE \(NVIDIA, NVIDIA GeForce RTX 3080/m)
+    expect(output).toMatch(NVIDIA)
     expect(Object.fromEntries(byScene)).toEqual({})
     expect(status, output).toBe(0)
   }, SLOW)
@@ -93,8 +63,95 @@ describe('the capacity episode in a real browser', () => {
       fit.map((name, i) => ({ id: `name${i}`, edit: (props) => ((props.label as { title: string }).title = name) })),
     )
     const { status, output, byScene } = lintEpisode(names)
-    expect(output).toMatch(/^gpu: ANGLE \(NVIDIA, NVIDIA GeForce RTX 3080/m)
+    expect(output).toMatch(NVIDIA)
     expect(Object.fromEntries(byScene)).toEqual({})
     expect(status, output).toBe(0)
   }, SLOW)
 })
+
+/** A variants run: every variant must lint clean, on the NVIDIA, naming the variant that does not. */
+function expectClean(episode: ReturnType<typeof capacityTimeline>): void {
+  const { status, output, byScene } = lintEpisode(episode)
+  expect(output).toMatch(NVIDIA)
+  expect(Object.fromEntries(byScene)).toEqual({})
+  expect(status, output).toBe(0)
+}
+
+describe('text composed of several fields, at exactly its limit, in a real browser', () => {
+  /*
+   * A filler proves one word-wrap phase and one glyph mix; these are real words and real hosts. The reviewer's
+   * hook quotes of 133 and 134 characters needed a fourth line in the 3-line box (2026-10-02), the limit is now 120.
+   */
+  const quote = (text: string) => (props: Json) => (props.evidence.source.quote = text)
+
+  it.each(['EvidenceCard.withimage.hook', 'EvidenceCard.noimage.hook'])('draws real quotes of exactly the hook limit on the hook stage, %s', (scene) => {
+    const limit = (JSON.parse(readFileSync(path.join(VIDEO_ROOT, 'src/blocks/registry.json'), 'utf-8')).blocks.EvidenceCard.props.properties.evidence.properties.source.properties.quote as { hookMaxLength: number }).hookMaxLength
+    expectClean(sceneVariants(scene, quotesOfLength(limit, 12).map((text, i) => ({ id: `quote${i}`, edit: quote(text) }))))
+  }, SLOW)
+
+  it('draws every value text that fills the BarChart value box: single values of 14 characters, ranges of 16, on both stages', () => {
+    const { single, range } = COMPOSED['BarChart.valueText']
+    // [unit, single value, range]: "125,000 tonnes" 14, "123.456 metres" 14; "1,000–1,650 tons" 16, "19.6–20.5 metres" 16, "8,888–8,889 tons" 16
+    const cases: [string, number, [number, number]][] = [
+      ['tonnes', 125000, [100, 165]],
+      ['metres', 123.456, [19.6, 20.5]],
+      ['tons', 1250, [1000, 1650]],
+      ['tons', 8888, [8888, 8889]],
+      ['t', 123456789, [10000, 16500]],
+    ]
+    for (const scene of ['BarChart.3bars.full', 'BarChart.3bars.hook']) {
+      const variants = cases.map(([unit, one, two], i) => ({
+        id: `bars${i}`,
+        edit: (props: Json) => {
+          props.unit = unit
+          props.bars[0].value = one
+          props.bars[1].value = two
+          expect(`${one.toLocaleString('en-US', { maximumFractionDigits: 3 })} ${unit}`.length).toBeLessThanOrEqual(single)
+          expect(`${two[0].toLocaleString('en-US', { maximumFractionDigits: 3 })}–${two[1].toLocaleString('en-US', { maximumFractionDigits: 3 })} ${unit}`.length).toBeLessThanOrEqual(range)
+        },
+      }))
+      expectClean(sceneVariants(scene, variants))
+    }
+  }, SLOW)
+
+  it('draws the longest accepted unit with the project range: 1,000-1,650 tonnes is refused, 1,000-1,650 tons is the widest that fits', () => {
+    // 'tonnes' with [1000, 1650] is 18 characters and overflowed the value box (the lint reported value:q4: overflow);
+    // checkBarChart now refuses it before any browser starts, so the longest accepted unit is drawn with the range it fits
+    expectClean(
+      sceneVariants('BarChart.3bars.full', [
+        { id: 'tons', edit: (p: Json) => ((p.unit = 'tons'), (p.bars[1].value = [1000, 1650])) },
+        { id: 'tonnes', edit: (p: Json) => ((p.unit = 'tonnes'), (p.bars[1].value = [100, 165])) },
+      ]),
+    )
+  }, SLOW)
+
+  it.each([
+    ['EvidenceCard.withimage.full', COMPOSED['EvidenceCard.sourceLine'].image],
+    ['EvidenceCard.noimage.full', COMPOSED['EvidenceCard.sourceLine'].plain],
+    ['EvidenceCard.withimage.hook', COMPOSED['EvidenceCard.sourceLine'].image],
+  ] as const)('draws source lines of exactly the limit (%s: %i characters) with real hosts, and a host alone', (scene, limit) => {
+    const edits = [...sourceLineEdits(limit), ...sourceLineEdits(limit, true)]
+    expectClean(
+      sceneVariants(
+        scene,
+        edits.map((e) => ({
+          id: e.id,
+          edit: (props: Json) => {
+            Object.assign(props.evidence.source, { url: e.url, locator: e.locator })
+            props.evidence.paper_anchor = e.anchor
+          },
+        })),
+      ),
+    )
+  }, SLOW)
+
+  it('draws QuoteCard meta lines of exactly the limit, with the longest locator and with none', () => {
+    expectClean(
+      sceneVariants(
+        'QuoteCard.full',
+        metaLineEdits(COMPOSED['QuoteCard.metaLine']).map((e) => ({ id: e.id, edit: (props: Json) => Object.assign(props.evidence.source, { url: e.url, locator: e.locator }) })),
+      ),
+    )
+  }, SLOW)
+})
+

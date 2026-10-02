@@ -32,9 +32,11 @@ from __future__ import annotations
 
 import json
 import math
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from pipeline.studio.capture.sources import ascii_host
 from pipeline.studio.config import REPO
 from pipeline.studio.errors import StudioError
 
@@ -62,6 +64,17 @@ SUPPORTED_KEYWORDS = frozenset(
         "$comment",
     }
 )
+#: The limits of text a block composes from several fields, in characters of the whole line (the
+#: renderer's video/src/blocks/composed.ts, measured with the real lint on the RTX 3080; the
+#: fixture video/test/fixtures/composed-limits.json pins both). A field's own maxLength cannot bound
+#: such a line: the BarChart value box holds "1,000–1,650 tonnes" or not by digits and unit
+#: together, the evidence card's source line by host, tier, locator and anchor together.
+COMPOSED: dict[str, Any] = {
+    "BarChart.valueText": {"single": 14, "range": 16},
+    "EvidenceCard.sourceLine": {"image": 72, "plain": 86},
+    "QuoteCard.metaLine": 94,
+    "QuoteCard.workLine": 77,
+}
 TYPES = frozenset({"string", "number", "integer", "boolean", "object", "array", "null"})
 
 
@@ -246,3 +259,96 @@ def props_errors(
             elif isinstance(extra, dict):
                 problems.extend(props_errors(extra, sub, f"{path}.{key}", hook))
     return problems
+
+
+def _number_text(x: float) -> str:
+    """`x` as the renderer prints a bar value: its shortest decimal form, thousands separators,
+    every decimal it has (BarChart formatNumber(x, decimalsOf(x))); 1000.0 is "1,000"."""
+    return format(Decimal(repr(x)).normalize(), ",f")
+
+
+def _value_text(value: Any, unit: str) -> str:
+    """BarChart valueText: "1,250 t", or "1,000–1,650 t" for a range."""
+    number = (
+        f"{_number_text(value[0])}–{_number_text(value[1])}"
+        if isinstance(value, list)
+        else _number_text(value)
+    )
+    return f"{number} {unit}"
+
+
+def _line_problem(what: str, text: str, limit: int, holder: str, layout: str) -> list[str]:
+    if len(text) <= limit:
+        return []
+    return [f'{what} "{text}" is {len(text)} characters; {holder} holds {limit} {layout}']
+
+
+def composed_errors(block: str, props: dict[str, Any]) -> list[str]:
+    """Every line a block composes from several fields that its box cannot hold (the renderer's
+    block checks, checkBarChart / checkEvidenceCard / checkQuoteCard, refuse the same lines).
+    `props` are valid against the block's schema."""
+    problems: list[str] = []
+    if block == "BarChart":
+        for bar in props["bars"]:
+            ranged = isinstance(bar["value"], list)
+            problems.extend(
+                _line_problem(
+                    f"bar {bar['id']}:",
+                    _value_text(bar["value"], props["unit"]),
+                    COMPOSED["BarChart.valueText"]["range" if ranged else "single"],
+                    "the value box",
+                    "for a range" if ranged else "for a single value",
+                )
+            )
+    elif block == "EvidenceCard":
+        e = props["evidence"]
+        line = "  //  ".join(
+            part
+            for part in (
+                ascii_host(e["source"]["url"]),
+                f"tier {e['source']['tier']}",
+                e["source"]["locator"],
+                f"paper #{e['paper_anchor']}" if e["paper_anchor"] else "",
+            )
+            if part
+        )
+        limits = COMPOSED["EvidenceCard.sourceLine"]
+        beside = "image" in props
+        problems.extend(
+            _line_problem(
+                f"evidence {e['id']}: the source line",
+                line,
+                limits["image" if beside else "plain"],
+                "the card",
+                "beside an image" if beside else "with no image",
+            )
+        )
+    elif block == "QuoteCard":
+        e = props["evidence"]
+        meta = "  //  ".join(
+            part
+            for part in (
+                e["source"]["locator"],
+                ascii_host(e["source"]["url"]),
+                f"tier {e['source']['tier']}",
+            )
+            if part
+        )
+        problems.extend(
+            _line_problem(
+                f"evidence {e['id']}: the meta line",
+                meta,
+                COMPOSED["QuoteCard.metaLine"],
+                "the card",
+                "for the 20 px caps line",
+            )
+        )
+    return problems
+
+
+def block_errors(
+    block: str, schema: dict[str, Any], props: Any, path: str = "props", hook: bool = False
+) -> list[str]:
+    """props_errors, and once the props are valid, the composed lines the box cannot hold."""
+    problems = props_errors(schema, props, path, hook)
+    return problems or composed_errors(block, props)

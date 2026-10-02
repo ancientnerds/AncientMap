@@ -1209,7 +1209,7 @@
                     "type": "string",
                     "minLength": 0,
                     "maxLength": 220,
-                    "hookMaxLength": 134
+                    "hookMaxLength": 120
                   },
                   "locator": {
                     "type": "string",
