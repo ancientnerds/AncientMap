@@ -1,7 +1,7 @@
 export const meta = {
   name: 'studio-casefile-verify',
   description: 'Verify every evidence item of an episode case file that is not yet verified, against its paper evidence entry, its archived text or its web page; writes each item\'s verification into casefile.json',
-  whenToUse: 'studio-casefile, after writing casefile.json and before ./.venv/Scripts/python.exe -m pipeline.studio episode check <slug>. args: {"workspace": "<absolute path of STUDIO_ASSETS/episodes/<slug>>"}',
+  whenToUse: 'studio-casefile, after writing casefile.json and before ./.venv/Scripts/python.exe -m pipeline.studio episode check <slug>. args: {"repo": "<optional: the checkout that holds .venv>", "workspace": "<absolute path of STUDIO_ASSETS/episodes/<slug>>"}',
   phases: [
     { title: 'Inventory', detail: 'the evidence items whose verification.status is not verified' },
     { title: 'Verify', detail: 'one agent per item: read its source, judge the statement' },
@@ -119,7 +119,12 @@ print(json.dumps([r[0] for r in results]))
 
 const command = (cmd) => `-----BEGIN COMMAND-----\n${cmd}\n-----END COMMAND-----`
 
-const RUN_ONCE = 'Run the command between the markers once, from the repository root (the directory that holds .venv), as one Bash command, exactly as written.'
+// args.repo: the checkout that holds .venv and pipeline/studio, when the session runs in another one
+// (a worktree). Without it the commands run from the session's current directory.
+const REPO = args && typeof args.repo === 'string' && args.repo.trim() ? args.repo.trim().replace(/\\/g, '/') : ''
+const RUN_ONCE = 'Run the command between the markers once, from the repository root (the directory that holds .venv'
+  + (REPO ? `, which is ${REPO}: start the Bash command with cd '${REPO}' &&` : '')
+  + '), as one Bash command, exactly as written.'
 
 const INVENTORY_SCHEMA = {
   type: 'object',

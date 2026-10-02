@@ -1,7 +1,7 @@
 export const meta = {
   name: 'studio-marker-check',
   description: 'Answer markers_check/pending.jsonl of an episode workspace: one agent opens the crop and the context picture of each case-file marker and says hits or misses; appends markers_check/verdicts.jsonl',
-  whenToUse: 'studio-casefile, after ./.venv/Scripts/python.exe -m pipeline.studio episode markers-export <slug> and before episode markers-import <slug>. args: {"workspace": "<absolute path of STUDIO_ASSETS/episodes/<slug>>"}',
+  whenToUse: 'studio-casefile, after ./.venv/Scripts/python.exe -m pipeline.studio episode markers-export <slug> and before episode markers-import <slug>. args: {"repo": "<optional: the checkout that holds .venv>", "workspace": "<absolute path of STUDIO_ASSETS/episodes/<slug>>"}',
   phases: [
     { title: 'Inventory', detail: 'pending.jsonl minus the tasks verdicts.jsonl already holds' },
     { title: 'Look', detail: 'one agent per marker' },
@@ -79,7 +79,12 @@ print(json.dumps([r['task_id'] for r in rows]))
 
 const command = (cmd) => `-----BEGIN COMMAND-----\n${cmd}\n-----END COMMAND-----`
 
-const RUN_ONCE = 'Run the command between the markers once, from the repository root (the directory that holds .venv), as one Bash command, exactly as written.'
+// args.repo: the checkout that holds .venv and pipeline/studio, when the session runs in another one
+// (a worktree). Without it the commands run from the session's current directory.
+const REPO = args && typeof args.repo === 'string' && args.repo.trim() ? args.repo.trim().replace(/\\/g, '/') : ''
+const RUN_ONCE = 'Run the command between the markers once, from the repository root (the directory that holds .venv'
+  + (REPO ? `, which is ${REPO}: start the Bash command with cd '${REPO}' &&` : '')
+  + '), as one Bash command, exactly as written.'
 
 const INVENTORY_SCHEMA = {
   type: 'object',

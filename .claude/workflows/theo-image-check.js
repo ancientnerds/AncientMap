@@ -1,7 +1,7 @@
 export const meta = {
   name: 'theo-image-check',
   description: 'Answer images/pending.jsonl of a paper workspace: one agent looks at each candidate picture; appends images/verdicts.jsonl',
-  whenToUse: 'theo-write, after ./.venv/Scripts/python.exe -m pipeline.studio paper images-export <id> and before paper images-import <id>. args: {"workspace": "<absolute path of STUDIO_ASSETS/papers/<request_id>>"}',
+  whenToUse: 'theo-write, after ./.venv/Scripts/python.exe -m pipeline.studio paper images-export <id> and before paper images-import <id>. args: {"repo": "<optional: the checkout that holds .venv>", "workspace": "<absolute path of STUDIO_ASSETS/papers/<request_id>>"}',
   phases: [
     { title: 'Inventory', detail: 'pending.jsonl minus the tasks verdicts.jsonl already holds' },
     { title: 'Look', detail: 'one agent per candidate picture' },
@@ -86,7 +86,12 @@ print(json.dumps([r['task_id'] for r in rows]))
 
 const command = (cmd) => `-----BEGIN COMMAND-----\n${cmd}\n-----END COMMAND-----`
 
-const RUN_ONCE = 'Run the command between the markers once, from the repository root (the directory that holds .venv), as one Bash command, exactly as written.'
+// args.repo: the checkout that holds .venv and pipeline/studio, when the session runs in another one
+// (a worktree). Without it the commands run from the session's current directory.
+const REPO = args && typeof args.repo === 'string' && args.repo.trim() ? args.repo.trim().replace(/\\/g, '/') : ''
+const RUN_ONCE = 'Run the command between the markers once, from the repository root (the directory that holds .venv'
+  + (REPO ? `, which is ${REPO}: start the Bash command with cd '${REPO}' &&` : '')
+  + '), as one Bash command, exactly as written.'
 
 const INVENTORY_SCHEMA = {
   type: 'object',

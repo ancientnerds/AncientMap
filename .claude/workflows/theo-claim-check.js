@@ -1,7 +1,7 @@
 export const meta = {
   name: 'theo-claim-check',
   description: 'Answer claims_check/pending.jsonl of a paper workspace: live read of TDM-reserved sources, one verifier per task, an adversarial skeptic for every supported verdict; appends claims_check/verdicts.jsonl',
-  whenToUse: 'theo-write, after ./.venv/Scripts/python.exe -m pipeline.studio paper claims-export <id> and before paper claims-import <id>. args: {"workspace": "<absolute path of STUDIO_ASSETS/papers/<request_id>>"}',
+  whenToUse: 'theo-write, after ./.venv/Scripts/python.exe -m pipeline.studio paper claims-export <id> and before paper claims-import <id>. args: {"repo": "<optional: the checkout that holds .venv>", "workspace": "<absolute path of STUDIO_ASSETS/papers/<request_id>>"}',
   phases: [
     { title: 'Inventory', detail: 'pending.jsonl minus the tasks verdicts.jsonl already holds' },
     { title: 'Live read', detail: 'each TDM-reserved source once, into claims_check/live/<id>.txt' },
@@ -121,7 +121,12 @@ print(json.dumps([r['task_id'] for r in rows]))
 
 const command = (cmd) => `-----BEGIN COMMAND-----\n${cmd}\n-----END COMMAND-----`
 
-const RUN_ONCE = 'Run the command between the markers once, from the repository root (the directory that holds .venv), as one Bash command, exactly as written.'
+// args.repo: the checkout that holds .venv and pipeline/studio, when the session runs in another one
+// (a worktree). Without it the commands run from the session's current directory.
+const REPO = args && typeof args.repo === 'string' && args.repo.trim() ? args.repo.trim().replace(/\\/g, '/') : ''
+const RUN_ONCE = 'Run the command between the markers once, from the repository root (the directory that holds .venv'
+  + (REPO ? `, which is ${REPO}: start the Bash command with cd '${REPO}' &&` : '')
+  + '), as one Bash command, exactly as written.'
 
 const LONG_LINES = 'A text file can be one very long line (a web page is flattened to a single line), which the Read tool cuts off: page through it with fold -s -w 1000 "<file>" | sed -n "1,40p" (then 41,80p and so on) and search it with Grep.'
 
