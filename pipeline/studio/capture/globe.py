@@ -14,7 +14,7 @@ places scene, and a fly-to with a place, also write where the page drew each pla
 grabbed frame (points.json: {place id: [[x, y] | null, ...]}, one entry
 per frame, from window.__DEMO.screenPoint): the owner's rule for globe markers is to
 project them per frame from their coordinates, so the renderer's pins follow the globe
-when the camera moves. The display is held awake for the take.
+when the camera moves. The recorder's Chrome is headless: no display is needed.
 
 Specs (kind "globe"; duration_s is the length of the take, at most 30 s)::
 
@@ -90,7 +90,6 @@ from pipeline.studio.capture.projection import (
 from pipeline.studio.capture.vite import (
     FRONTEND_DIR,
     PRODUCTION_URL,
-    display_awake,
     kill_tree,
     require_mapbox_token,
     require_tool,
@@ -563,7 +562,7 @@ def record_globe(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
     input_path.write_text(json.dumps(inp, indent=2), encoding="utf-8")
     log_path = work / "recorder.log"
     frames = expected_frames(inp["duration_s"])
-    with display_awake(), log_path.open("wb") as log:
+    with log_path.open("wb") as log:
         proc = start_recorder(
             recorder_command(npm, RECORDER_SCENES[spec["scene"]], input_path, work), log
         )

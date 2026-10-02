@@ -14,10 +14,10 @@
  * directory named by the scene input. pipeline/studio/capture/globe.py turns
  * the numbered frames into a constant-rate clip and checks the count.
  *
- * Headed Chrome draws only while the Windows display is on and the session
- * unlocked: a take whose display slept waited 15 minutes for its first frame
- * (2026-09-26). Every wait for an animation frame is therefore bounded by
- * NO_FRAME_MS and fails with that reason (globe.py also holds the display awake).
+ * A page that stops drawing (a take on a sleeping display waited 15 minutes for its
+ * first frame, 2026-09-26, in the headed Chrome of that time) must fail fast: every
+ * wait for an animation frame is bounded by NO_FRAME_MS. The recorder's Chrome is
+ * headless now, so no display has to be awake for a take.
  *
  * Both canvases keep their drawing buffer in demo mode (Three.js:
  * globeConstants preserveDrawingBuffer; Mapbox: MapboxGlobeService with
@@ -33,7 +33,7 @@ import type { SceneContext } from '../record'
 export const GLOBE_CANVAS = '.globe-container canvas'
 export const MAPBOX_CANVAS = '.mapbox-globe-container canvas'
 export const JPEG_QUALITY = 0.92
-/** Longest wait for an animation frame before the take fails (display asleep or session locked). */
+/** Longest wait for an animation frame before the take fails (the page is not drawing). */
 export const NO_FRAME_MS = 30_000
 const JPEG_PREFIX = 'data:image/jpeg;base64,'
 /** Tile polls per frame before the grab gives up (25 ms each: 10 s). */
@@ -54,7 +54,7 @@ export function frameCount(seconds: number, fps: number): number {
 /** Page-side: resolves after two animation frames, rejects after NO_FRAME_MS without one. */
 const TWO_FRAMES = `new Promise(function(resolve, reject) {
   var timer = setTimeout(function() {
-    reject(new Error('no animation frame for ${NO_FRAME_MS / 1000} s: headed Chrome draws only on an awake, unlocked Windows display'));
+    reject(new Error('no animation frame for ${NO_FRAME_MS / 1000} s: the page is not drawing'));
   }, ${NO_FRAME_MS});
   requestAnimationFrame(function() { requestAnimationFrame(function() { clearTimeout(timer); resolve(); }); });
 })`

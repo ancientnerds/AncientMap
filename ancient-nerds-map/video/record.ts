@@ -151,7 +151,9 @@ async function launchBrowser(portrait: boolean): Promise<{ browser: Browser; pag
   const height = portrait ? 1920 : 1080
 
   const browser = await puppeteer.launch({
-    headless: false,  // Use headed mode for WebGL support on Windows
+    // Headless on purpose: the studio runs with the screen asleep or locked (owner, 2026-10-02).
+    // WebGL still draws on the NVIDIA through the d3d11 ANGLE flags below.
+    headless: true,
     protocolTimeout: 900_000,  // 15 minutes: globe loading + a capture chunk with tile waits
     args: [
       '--use-angle=d3d11',

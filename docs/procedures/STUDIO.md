@@ -60,7 +60,7 @@ file and the code disagree, the code is right and this file is stale: fix it.
 - The main checkout's `video-assets/music/` holds exactly one track when an episode uses
   `--music auto`.
 - `ancient-nerds-map/node_modules` (the local site the platform takes record, and the recorder).
-- An awake, unlocked Windows display for every capture (section 9.2).
+- No display: every capture and the renderer run headless, with the screen asleep or locked (section 9.2).
 
 ### 1.2 Steps
 
@@ -69,7 +69,7 @@ From the root of the checkout the studio runs in:
 ```bash
 (cd video && npm ci && npx remotion browser ensure)
 ./.venv/Scripts/python.exe -m pip install playwright         # only when doctor names it missing
-./.venv/Scripts/python.exe -m playwright install chrome      # the Chrome channel the captures drive
+./.venv/Scripts/python.exe -m playwright install chrome chromium-headless-shell   # Chrome: source pages; the shell: platform takes
 ./.venv/Scripts/python.exe -m pipeline.studio doctor --fix-gpu   # once per machine, after `browser ensure`
 curl -sfR --create-dirs -o public/data/sites/index.json https://ancientnerds.com/data/sites/index.json   # section 11
 ./.venv/Scripts/python.exe -m pipeline.studio doctor
@@ -501,10 +501,9 @@ Rules the checks enforce (script, case file, captures):
   narration already paid for, and that beat counts as estimated too (`voice/words.json` is written
   last, so it still holds the old duration): run `episode voice` again, it times the beat without
   narrating it twice.
-- **A capture on a sleeping display:** headed Chrome stops drawing, and the take waits for a frame
-  that never comes. The captures hold the display awake while they run, but cannot wake one that is
-  already off or locked, and the recorder scenes fail within 30 s without a frame. Unlock the display
-  and record again (`episode capture SLUG --only <id>`). A retake first removes the capture's stored
+- **A capture whose page stops drawing:** the recorder scenes fail within 30 s without a frame, and a
+  platform take whose frames are not 2880x1620 fails. The display does not matter (section 9.2). Record
+  again (`episode capture SLUG --only <id>`). A retake first removes the capture's stored
   manifest, so a failed take counts as not recorded.
 - **Port in use:** a take refuses a port that answers (`port 5198 is in use ... netstat -ano |
   findstr :5198`): a dev server left by an interrupted take, or another session's capture. Stop that
@@ -570,8 +569,8 @@ A run that would land on the AMD or on software rendering fails loudly instead.
 `doctor` probes: the studio assets root, `ffmpeg`, `ffprobe`, `node`, `video/node_modules`, the block
 registry, the site fonts, the Python modules (faster_whisper, mutagen, PIL, playwright, the capture
 package), `nvidia-smi` naming the RTX 3080, NVENC (both encoders encode a test frame on GPU 0), CUDA
-for faster-whisper, Remotion's browser and its GPU preference, the renderer of a headless Chrome
-launched as the captures launch it, `LYRA_MINIMAX_API_KEY`, the music bed, the site export and its
+for faster-whisper, Remotion's browser and its GPU preference, the renderer of a headless Chrome and of the
+headless Chromium shell, each launched as the captures launch it, `LYRA_MINIMAX_API_KEY`, the music bed, the site export and its
 age, and `ssh ancientnerds`. A green
 `doctor` says the machine is set up; the first `lint.ts` of an `episode render` says Remotion's browser
 really uses the NVIDIA.
@@ -593,7 +592,7 @@ since counts as not recorded.
 |---|---|---|
 | `source` | `capture/sources.py`: Playwright on the NVIDIA, the quote found in the text readers see and highlighted, banners hidden; also our paper page scrolled to `#ev-NN` | a still; credit `Source page: <ASCII host>` (our paper page: none) |
 | `mapbox_topdown` | `capture/mapbox.py`: an exact Mapbox Static frame with pins projected onto their objects | a still; `© Mapbox © Maxar` (`satellite-v9`) or `© Mapbox © OpenStreetMap © Maxar` (`satellite-streets-v12`) |
-| `platform` | `capture/platform.py`: the real site in headed Chrome, CDP screencast, fast NERV cursor | an HEVC clip; `© Mapbox © OpenStreetMap © Maxar` |
+| `platform` | `capture/platform.py`: the real site in Playwright's headless Chromium shell on the NVIDIA, CDP screencast, fast NERV cursor | an HEVC clip; `© Mapbox © OpenStreetMap © Maxar` |
 | `globe` | `capture/globe.py` through the recorder `npm run video:record` (`studio-globe-flyto`, `studio-globe-places`, `studio-mapbox-flyin`, `studio-mapbox-orbit`) | an HEVC clip; our vector globe has no credit, a Mapbox take has the Mapbox credit |
 
 ### 9.1 The local site and the recorder
@@ -607,12 +606,34 @@ data from the checkout's `public/data/` (section 11). `target: production` needs
 announces the port (section 7); the recorder uses port 5199 with `--strictPort`. Every Playwright
 capture blocks the site's Umami tracker (`/pulse.js`), so no take counts as a visit.
 
-### 9.2 An awake, unlocked display
+### 9.2 No display needed
 
-Headed Chrome draws only while the Windows display is on. The first studio Mapbox fly-in
-(2026-09-26) hung for 15 minutes when the display slept; with the display throttled, a 5-second
-globe take crawled for 7 minutes. The captures hold the display awake (`vite.display_awake`,
-`SetThreadExecutionState`) but cannot wake it. Keep it on and unlocked for the whole capture run.
+The whole studio runs without a display (owner requirement 2026-10-02): the screen may be asleep or
+locked while you are away. Every Chrome the studio starts is headless (Playwright `headless=True` for the
+platform take, the source pages and the doctor probe; Puppeteer `headless: true` in the recorder
+`ancient-nerds-map/video/record.ts`; Remotion's headless shell), and nothing holds the display awake:
+`display_awake()` and `SetThreadExecutionState` are gone. Headed Chrome drew only while the Windows
+display was on, which hung the first studio Mapbox fly-in for 15 minutes (2026-09-26).
+
+What a headless take needs, and what it proves:
+- The platform take drives Playwright's headless Chromium shell, not real Chrome's headless mode: same
+  engine and flags, but the shell screencast 25-37 frames/s while the cursor moved (median frame gap
+  23-24 ms, like headed Chrome) against 23-28 for Chrome's new headless (median 30-34 ms, 1 take in 3
+  under the gate of 24; measured 2026-10-02). It forces the pixel density (`--force-device-scale-factor=2`) and caps the screencast at
+  `platform.FRAME_SIZE`, 2880x1620. Headless Chrome screencasts at the view's real pixel size and no
+  display sets one: the first headless take came out 1920x1080 (measured 2026-10-02). A take at any other
+  size fails (`frames are WxH, expected 2880x1620`).
+- The GPU rule holds unchanged: the same `CHROMIUM_GPU_ARGS`, and every take still reads its WebGL renderer
+  and fails unless it names the NVIDIA (the `gpu` event). Measured headless 2026-10-02: `ANGLE (NVIDIA,
+  NVIDIA GeForce RTX 3080 Laptop GPU ... Direct3D11 ...)` for the platform take, a globe take and a Mapbox
+  take. `--disable-gpu-vsync --disable-frame-rate-limit` lifted the cursor-move frame rate of the platform
+  take to 26-31 frames/s (headed: 26-45; the gate is 24).
+- A page that stops drawing still fails fast in the recorder scenes (`NO_FRAME_MS`, 30 s).
+- `tests/pipeline/studio/test_no_display.py` fails when any source under `pipeline/studio`, `video` or
+  `ancient-nerds-map/video` launches a headed browser or holds the display awake.
+
+A Mapbox fly-in take takes about 7.5 minutes of wall time for 6 s of video, headless as headed (tile
+waits, measured 2026-10-02).
 
 ### 9.3 Why capture clips are HEVC
 

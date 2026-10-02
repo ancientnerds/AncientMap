@@ -1,5 +1,5 @@
-"""Planning logic of platform takes (pipeline/studio/capture/platform.py); the take needs headed
-Chrome, the driver's clicks run here on small synthetic pages in headless Chrome."""
+"""Planning logic of platform takes (pipeline/studio/capture/platform.py); the driver's clicks run
+here on small synthetic pages in headless Chrome."""
 
 import asyncio
 import base64
@@ -9,7 +9,6 @@ import json
 import math
 import time
 import types
-from contextlib import nullcontext
 
 import pytest
 
@@ -306,7 +305,6 @@ def test_a_browser_failure_is_a_capture_error_with_its_cause(tmp_path, monkeypat
         raise playwright.TimeoutError("Timeout 10000ms exceeded.")
 
     monkeypatch.setattr(platform_take, "_record", crash)
-    monkeypatch.setattr(platform_take, "display_awake", nullcontext)
     spec = {
         "id": "platform-01",
         "kind": "platform",
@@ -344,7 +342,6 @@ def test_a_screencast_without_frames_is_a_capture_error(tmp_path, monkeypatch):
         return Take()
 
     monkeypatch.setattr(platform_take, "_record", no_frames)
-    monkeypatch.setattr(platform_take, "display_awake", nullcontext)
     spec = {
         "id": "platform-01",
         "kind": "platform",
@@ -1048,3 +1045,77 @@ def test_a_second_empire_borders_click_closes_the_window(monkeypatch):
         )
 
     assert _drive(LAYERS_PAGE, steps) == [[["roman", False]], "none"]
+
+
+def test_the_take_launches_the_headless_shell_at_the_frame_size_it_screencasts(
+    tmp_path, monkeypatch
+):
+    """Owner requirement 2026-10-02: no display. Headless Chrome screencasts at the view's
+    pixel size, which a physical display used to set (2880x1620), so the scale is forced."""
+    pw = pytest.importorskip("playwright.async_api")
+    launched: dict = {}
+
+    async def launch(**kwargs):
+        launched.update(kwargs)
+        raise CaptureError("stop here")
+
+    class FakePlaywright:
+        async def __aenter__(self):
+            return types.SimpleNamespace(chromium=types.SimpleNamespace(launch=launch))
+
+        async def __aexit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(pw, "async_playwright", FakePlaywright)
+    with pytest.raises(CaptureError, match="stop here"):
+        asyncio.run(platform_take._record("http://localhost:5198", 1.3, [{"do": "wait"}], tmp_path))
+    assert launched["headless"] is True
+    # Playwright's headless shell: measured 2026-10-02, real Chrome's headless mode screencast
+    # 23-28 frames/s of the take against 25-37 of the shell (gate: 24)
+    assert "channel" not in launched
+    assert "--force-device-scale-factor=2" in launched["args"]
+    for flag in platform_take.CHROMIUM_GPU_ARGS:
+        assert flag in launched["args"]
+    assert platform_take.FRAME_SIZE == (2880, 1620)
+
+
+def test_the_screencast_asks_for_the_frame_size():
+    cdp, take = _ScreencastCdp(), Take()
+    params: dict = {}
+    original = cdp.send
+
+    async def send(method, p=None):
+        params[method] = p
+        await original(method, p)
+
+    cdp.send = send
+    asyncio.run(_Screencast(cdp, take, None).start())
+    start = params["Page.startScreencast"]
+    assert (start["maxWidth"], start["maxHeight"]) == (2880, 1620)
+
+
+def test_a_take_at_another_frame_size_is_refused(tmp_path, monkeypatch):
+    pytest.importorskip("playwright")
+    from PIL import Image
+
+    async def one_frame(base_url, hud, actions, frames_dir):
+        Image.new("RGB", (1920, 1080)).save(frames_dir / "f000000.jpg")
+        take = Take()
+        take.renderer = NVIDIA
+        take.timestamps.append(1.0)
+        take.moves.append((0.0, 0.1))
+        take.end_ts = 2.0
+        return take
+
+    monkeypatch.setattr(platform_take, "_record", one_frame)
+    monkeypatch.setattr(platform_take, "motion_fps", lambda *args: 60.0)
+    spec = {
+        "id": "platform-01",
+        "kind": "platform",
+        "target": "production",
+        "actions": [{"do": "pause_rotation"}],
+    }
+    with pytest.raises(
+        CaptureError, match=r"platform-01: frames are 1920x1080, expected 2880x1620"
+    ):
+        record_platform(tmp_path, spec)

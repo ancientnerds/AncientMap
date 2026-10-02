@@ -1,7 +1,7 @@
 /**
  * Pure input, path and frame logic of the studio recorder scenes
  * (video/scenes/studio-globe.ts, studio-mapbox.ts, studio-frames.ts). The takes
- * themselves need headed Chrome and run only on the workstation
+ * themselves need Chrome on the NVIDIA and run only on the workstation
  * (pipeline/studio/capture/globe.py).
  */
 

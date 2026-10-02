@@ -1,4 +1,4 @@
-"""Token, tools, the awake display and the local site of the captures (capture/vite.py)."""
+"""Token, tools and the local site of the captures (capture/vite.py)."""
 
 import http.server
 import os
@@ -214,16 +214,3 @@ def test_the_analytics_tracker_is_recognised_on_every_host():
         "https://ancientnerds.com/research/x",
     ):
         assert not vite.ANALYTICS_URL_RE.match(url), url
-
-
-@pytest.mark.skipif(os.name != "nt", reason="SetThreadExecutionState exists only on Windows")
-def test_display_awake_holds_the_display_for_the_take():
-    with vite.display_awake():
-        pass
-
-
-@pytest.mark.skipif(os.name == "nt", reason="the refusal is for systems other than Windows")
-def test_display_awake_refuses_other_systems():
-    with pytest.raises(CaptureError, match="captures run on the Windows workstation"):
-        with vite.display_awake():
-            pass

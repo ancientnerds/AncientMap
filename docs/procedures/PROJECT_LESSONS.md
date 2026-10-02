@@ -208,14 +208,14 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
 
 Runbook: `docs/procedures/STUDIO.md`.
 
-- **Headed Chrome draws only while the Windows display is on.** The first studio Mapbox fly-in
-  (2026-09-26, 11:41) hung for 15 minutes: the display slept, Chrome produced no animation frame, and
-  the first frame grab waited until Puppeteer's protocol timeout. With the display throttled, a
-  5-second globe take crawled for 7 minutes. The captures now hold the display awake for a take
-  (`display_awake()` in `pipeline/studio/capture/vite.py`, `SetThreadExecutionState`) and the recorder
-  scenes fail after 30 s without a frame (`NO_FRAME_MS`,
-  `ancient-nerds-map/video/scenes/studio-frames.ts`), but nothing can wake a display that is already
-  off or locked: keep it on and unlocked for every capture run. *(plan D Tasks 27 and 36, 2026-09-26)*
+- **The studio runs headless; headed Chrome needs an awake display.** The first studio Mapbox fly-in
+  (2026-09-26, 11:41) hung for 15 minutes: the display slept and headed Chrome produced no animation
+  frame. Since 2026-10-02 every studio Chrome is headless (owner requirement: no display), the
+  display-awake guard is gone, and headless Chrome screencasts at the view's pixel size, so the platform
+  take forces `--force-device-scale-factor=2` and caps at 2880x1620 (first headless take: 1920x1080).
+  The recorder scenes still fail after 30 s without a frame (`NO_FRAME_MS`). Guard:
+  `tests/pipeline/studio/test_no_display.py`; details in `docs/procedures/STUDIO.md` section 9.2.
+  *(plan D Tasks 27 and 36, 2026-09-26; superseded 2026-10-02)*
 - **Remotion's `bundle()` leaves a copy of the whole public dir in `%TEMP%`.** Its default output is a
   fresh `remotion-webpack-bundle-*` directory in the system temp dir that nothing deletes, and it
   copies the public dir, so every run left a copy of every capture on C: (67 such directories were in

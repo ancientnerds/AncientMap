@@ -144,8 +144,7 @@ def frames_to_cfr_mp4(
 
 def frame_size(frames_dir: Path) -> tuple[int, int]:
     """Pixel size of the first frame f000000.jpg of a take. A platform take's screencast is
-    capped at the display's pixel size (2880x1620 on the workstation, measured 2026-09-26)
-    and a recorder take must hold its scene's size, so it is read, never assumed."""
+    capped at platform.FRAME_SIZE (2880x1620) and a recorder take must hold its scene's size, so it is read, never assumed."""
     from PIL import Image
 
     with Image.open(frames_dir / "f000000.jpg") as first:

@@ -8,7 +8,8 @@ per-app preference, pipeline.studio.capture.gpu.set_gpu_preference) before probi
 The GPU probes (spec 4.11: every GPU workload on the NVIDIA RTX 3080, never the integrated
 AMD): nvidia-smi names the RTX 3080; the system ffmpeg encodes a test frame with h264_nvenc
 and hevc_nvenc on GPU 0; CUDA loads for faster-whisper; the renderer of a headless Chrome
-launched as the captures launch it names the NVIDIA; Remotion's headless shell exists and
+and of Playwright's headless Chromium shell (the platform take), each launched as the captures
+launch it, names the NVIDIA; Remotion's headless shell exists and
 carries the high-performance per-app preference. That preference does not prove the renderer Remotion's own browser gets (it draws
 on the NVIDIA only with `gl: 'angle'`, SwiftShader by default, stream D's Task 19), so the
 Remotion browser's renderer string is proven where it renders: every lint.ts, render.ts and
@@ -144,19 +145,25 @@ def _cuda() -> Probe:
     return Probe("CUDA for faster-whisper", count >= 1, f"{count} CUDA device(s)")
 
 
-def _chrome_renderer() -> Probe:
-    """A headless Chrome as the captures launch it must draw on the NVIDIA."""
+def _chrome_renderer(headless_shell: bool = False) -> Probe:
+    """A headless Chrome as the captures launch it must draw on the NVIDIA; with `headless_shell`, the
+    headless Chromium shell the platform take drives."""
+    name = "headless shell renderer" if headless_shell else "chrome renderer"
     if importlib.util.find_spec("playwright") is None:
-        return Probe("chrome renderer", False, "Playwright is not installed in this venv")
+        return Probe(name, False, "Playwright is not installed in this venv")
     from playwright.sync_api import Error as PlaywrightError
 
     from pipeline.studio.capture import gpu
 
     try:
-        renderer = gpu.require_nvidia(gpu.chrome_renderer(), "doctor")
+        renderer = gpu.require_nvidia(gpu.chrome_renderer(headless_shell), "doctor")
     except (StudioError, PlaywrightError) as exc:
-        return Probe("chrome renderer", False, str(exc))
-    return Probe("chrome renderer", True, renderer)
+        return Probe(name, False, str(exc))
+    return Probe(name, True, renderer)
+
+
+def _shell_renderer() -> Probe:
+    return _chrome_renderer(headless_shell=True)
 
 
 def gpu_probes() -> list[Probe]:
@@ -178,6 +185,7 @@ def gpu_probes() -> list[Probe]:
             )
         )
     found.append(_chrome_renderer())
+    found.append(_shell_renderer())
     return found
 
 

@@ -176,9 +176,10 @@ def set_gpu_preference(exe: Path) -> None:
         winreg.SetValueEx(key, str(exe), 0, winreg.REG_SZ, value)
 
 
-def chrome_renderer() -> str:
-    """The WebGL renderer of a headless Chrome with the GPU flags every capture passes
-    (CHROMIUM_GPU_ARGS; the platform take's Chrome runs headed with them).
+def chrome_renderer(headless_shell: bool = False) -> str:
+    """The WebGL renderer of a headless browser with the GPU flags every capture passes
+    (CHROMIUM_GPU_ARGS): real Chrome (sources.py), or with `headless_shell` Playwright's headless
+    Chromium shell, which the platform take drives.
 
     The doctor's probe (plan C Task 26): ok when require_nvidia() accepts the string. It
     tells the doctor the flags reach the NVIDIA here; every capture still proves the
@@ -187,7 +188,8 @@ def chrome_renderer() -> str:
     from playwright.sync_api import sync_playwright  # local-only dependency
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel="chrome", headless=True, args=CHROMIUM_GPU_ARGS)
+        channel = {} if headless_shell else {"channel": "chrome"}
+        browser = p.chromium.launch(headless=True, args=CHROMIUM_GPU_ARGS, **channel)
         page = browser.new_page()
         page.goto("about:blank")
         renderer = str(page.evaluate(RENDERER_JS))

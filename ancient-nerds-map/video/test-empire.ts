@@ -12,7 +12,7 @@ const GLOBE_URL = 'http://localhost:5199/globe.html?demo=1'
 async function main() {
   console.log('Launching browser...')
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true,
     args: ['--use-angle=default', '--enable-webgl', '--no-sandbox', '--window-size=1280,720'],
     defaultViewport: { width: 1280, height: 720 },
   })

@@ -1,10 +1,13 @@
 """Platform moments: a real take of ancientnerds.com (spec 2026-09-26 section 4.5).
 
-Playwright drives Chrome (headed, GPU) at 1920x1080 CSS px with deviceScaleFactor 2; the
-CDP screencast delivers frames up to the display's pixel size (2880x1620 on the
-workstation, measured 2026-09-26), so the renderer's virtual camera can zoom to 1.5x
-and stay sharp (PlatformClip refuses more). The manifest records the real frame size
-and the events' x/y in those media pixels. The page runs in
+Playwright drives its headless Chromium shell (GPU, no display: the take runs with the
+screen asleep or locked; real Chrome's headless mode delivered fewer frames/s, see STUDIO.md 9.2) at 1920x1080 CSS px with deviceScaleFactor 2; the CDP screencast delivers
+FRAME_SIZE frames, 2880x1620, so the renderer's virtual camera can zoom to 1.5x and stay
+sharp (PlatformClip refuses more). Headless Chrome screencasts at the view's real pixel
+size, which no display sets, so the scale is forced (--force-device-scale-factor, measured
+2026-10-02: without it 1920x1080) and the screencast is capped at FRAME_SIZE; a take at
+another size fails. The manifest records the real frame size and the events' x/y in those
+media pixels. The page runs in
 ``?demo=1&video=1&hud=<scale>``: panels hidden, HUD scaled, window.__VIDEO.ready at
 globe_ready (ancient-nerds-map/src/utils/videoMode.ts). The cursor is fast on purpose
 (retention, owner rule): 0.25 s moves, paced against a deadline so slow CDP round trips
@@ -13,8 +16,7 @@ never stretch them, and 45 ms keystrokes. Frames and their timestamps become a c
 manifest's events, which the renderer's virtual camera can follow. Chrome runs with the
 NVIDIA flags of gpu.py, and the take proves the GPU from the page's WebGL renderer
 before the first frame (spec 4.11); the renderer string is the manifest's "gpu" event.
-The display is held awake meanwhile, and the site's analytics tracker is blocked, so a
-take of production counts as no visit.
+The site's analytics tracker is blocked, so a take of production counts as no visit.
 
 Spec (kind "platform")::
 
@@ -106,12 +108,14 @@ from pipeline.studio.capture.manifest import (
 from pipeline.studio.capture.vite import (
     ANALYTICS_URL_RE,
     PRODUCTION_URL,
-    display_awake,
     local_site,
 )
 
 VIEWPORT = (1920, 1080)
 DEVICE_SCALE = 2
+# Pixel size of the screencast frames: 1.5x the viewport, the most the renderer's virtual camera
+# zooms (PlatformClip). Measured 2026-10-02 against headed Chrome on the workstation display.
+FRAME_SIZE = (2880, 1620)
 FPS = 60
 HUD_SCALE = 1.3
 # videoMode.ts HUD_MIN..HUD_MAX: outside it the page throws and never gets ready.
@@ -160,9 +164,13 @@ START_POS = (620.0, 220.0)
 CURSOR_JS = Path(__file__).with_name("nerv_cursor.js")
 CHROME_ARGS = [
     *CHROMIUM_GPU_ARGS,
+    # headless Chrome has no display to take the pixel density from
+    f"--force-device-scale-factor={DEVICE_SCALE}",
+    # measured 2026-10-02: the cursor-move frame rate rose from 25 to 26-31 frames/s
+    "--disable-gpu-vsync",
+    "--disable-frame-rate-limit",
     "--disable-backgrounding-occluded-windows",
     "--disable-renderer-backgrounding",
-    "--window-size=1940,1200",
 ]
 CREDITS = [CREDIT_MAPBOX_STREETS]
 # Filter panel modes with legend entries (FilterPanel.tsx; "age" is a range slider).
@@ -702,8 +710,8 @@ class _Screencast:
             {
                 "format": "jpeg",
                 "quality": 80,
-                "maxWidth": VIEWPORT[0] * DEVICE_SCALE,
-                "maxHeight": VIEWPORT[1] * DEVICE_SCALE,
+                "maxWidth": FRAME_SIZE[0],
+                "maxHeight": FRAME_SIZE[1],
                 "everyNthFrame": 1,
             },
         )
@@ -743,7 +751,7 @@ async def _record(
 
     take = Take()
     async with async_playwright() as p:
-        browser = await p.chromium.launch(channel="chrome", headless=False, args=CHROME_ARGS)
+        browser = await p.chromium.launch(headless=True, args=CHROME_ARGS)
         context = await browser.new_context(
             viewport={"width": VIEWPORT[0], "height": VIEWPORT[1]}, device_scale_factor=DEVICE_SCALE
         )
@@ -790,7 +798,7 @@ def record_platform(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
     if importlib.util.find_spec("playwright") is None:
         raise CaptureError(
             f"{cid}: Playwright is not installed in this venv "
-            "(pip install playwright, then playwright install chrome)"
+            "(pip install playwright, then playwright install chromium-headless-shell)"
         )
     from playwright.async_api import Error as PlaywrightError  # local-only, after validation
 
@@ -803,7 +811,7 @@ def record_platform(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
         if spec["target"] == "local"
         else nullcontext(PRODUCTION_URL)
     )
-    with display_awake(), site as base_url:
+    with site as base_url:
         try:
             take = asyncio.run(_record(base_url, hud, actions, frames_dir))
         except PlaywrightError as exc:
@@ -817,6 +825,10 @@ def record_platform(episode_dir: Path, spec: dict[str, Any]) -> dict[str, Any]:
             f"(< {MIN_MOTION_FPS}); the take would stutter"
         )
     width, height = frame_size(frames_dir)
+    if (width, height) != FRAME_SIZE:
+        raise CaptureError(
+            f"{cid}: frames are {width}x{height}, expected {FRAME_SIZE[0]}x{FRAME_SIZE[1]}"
+        )
     out = media_path(episode_dir, cid, ".mp4")
     try:
         duration = frames_to_cfr_mp4(frames_dir, take.timestamps, take.end_ts, out, FPS)

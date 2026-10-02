@@ -183,3 +183,11 @@ def test_a_gpu_preference_windows_did_not_write_is_named(monkeypatch, tmp_path):
 def test_the_doctor_probe_finds_chrome_on_the_nvidia():
     pytest.importorskip("playwright")
     assert gpu.require_nvidia(gpu.chrome_renderer(), "doctor").startswith("ANGLE (NVIDIA")
+
+
+@pytest.mark.skipif(shutil.which("nvidia-smi") is None, reason="no NVIDIA driver on this machine")
+def test_the_doctor_probe_finds_the_headless_shell_of_the_platform_take_on_the_nvidia():
+    pytest.importorskip("playwright")
+    assert gpu.require_nvidia(gpu.chrome_renderer(headless_shell=True), "doctor").startswith(
+        "ANGLE (NVIDIA"
+    )

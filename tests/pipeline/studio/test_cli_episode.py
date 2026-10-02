@@ -447,7 +447,7 @@ def test_gpu_probes(monkeypatch):
     monkeypatch.setattr(gpu, "nvenc_problem", lambda: None)
     monkeypatch.setattr(gpu, "remotion_browser", lambda video_dir: exe)
     monkeypatch.setattr(gpu, "gpu_preference", lambda path: gpu.HIGH_PERFORMANCE)
-    for name in ("_nvidia_smi", "_cuda", "_chrome_renderer"):
+    for name in ("_nvidia_smi", "_cuda", "_chrome_renderer", "_shell_renderer"):
         monkeypatch.setattr(doctor, name, lambda n=name: doctor.Probe(n, True, "ok"))
     assert all(p.ok for p in doctor.gpu_probes())
     monkeypatch.setattr(gpu, "gpu_preference", lambda path: None)

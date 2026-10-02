@@ -2,6 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Superseded 2026-10-02:** captures are headless and hold no display awake (`display_awake` and every
+> "headed" listing below are gone); see `docs/procedures/STUDIO.md` section 9.2.
+
 **Goal:** Build the studio's picture side: the Remotion renderer in `video/` (Episode + Thumbnail compositions driven by `timeline.json`, the NERV block library for the four topic types, frame-driven motion, the layout lint, and the `lint.ts` / `render.ts` / `still.ts` scripts), the capture package `pipeline/studio/capture/` (platform takes of the real site, globe and Mapbox takes, source-page captures, exact top-down frames) and the frontend's `?video=1` capture mode with the recorder's studio scenes, all bound to the NVIDIA RTX 3080 and proving it.
 
 **Architecture:** `timeline.json` (plan C's compiler) is the only input of the renderer: `calculateMetadata` validates it against the block registry, measures narration and images in the browser and sets duration, fps and size, so nothing about an episode is hard-coded. Every frame is a pure function of `useCurrentFrame()`; claim statuses and the probability meter are episode-wide state derived from the cues. Text and markers register their boxes in lint mode, and a pure overlap checker reports violations as JSON console lines that `lint.ts` collects. The captures write media plus a manifest (plan C's contract C7); every Chrome they drive, and Remotion's own browser, proves from its WebGL renderer that it draws on the NVIDIA, every H.264/HEVC encode is NVENC on GPU 0 (spec 4.11). The frontend gains a `?video=1` mode (panels hidden, HUD scale, a ready flag) and a `screenPoint` demo call, the recorder gains landscape studio scenes that grab every frame exactly.

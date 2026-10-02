@@ -1,5 +1,5 @@
-"""The workstation side of the captures: paths, the Mapbox token, tools, an awake
-display and a local Vite dev server of the frontend.
+"""The workstation side of the captures: paths, the Mapbox token, tools and a local Vite
+dev server of the frontend.
 
 Same setup as the Puppeteer recorder (ancient-nerds-map/video/record.ts): data and API
 from production through VITE_DEV_API_TARGET, VIDEO_RECORD=1 so Vite neither watches
@@ -13,13 +13,6 @@ first and serve the take from an older checkout, with its watcher off: the failu
 record.ts's --strictPort is there for. local_site() refuses a port in use and counts as
 ready only what its own Vite announces in its log.
 
-Headed Chrome draws only while the Windows display is on: when the display slept
-during a recorder take (2026-09-26, the first studio-mapbox-flyin), no animation frame
-came for 15 minutes and the take died on Puppeteer's protocol timeout. display_awake()
-holds the display on for the length of a take (SetThreadExecutionState, as video
-players do); if the display stops drawing anyway, the recorder scenes fail within 30 s
-with that reason (ancient-nerds-map/video/scenes/studio-frames.ts).
-
 The site's Umami tracker (/pulse.js, ancient-nerds-map/src/analytics) would count every
 take of production, and every paper-page capture, as a human visitor: the Playwright
 captures abort its request (ANALYTICS_URL_RE) before they load a page.
@@ -27,7 +20,6 @@ captures abort its request (ANALYTICS_URL_RE) before they load a page.
 
 from __future__ import annotations
 
-import ctypes
 import os
 import re
 import shutil
@@ -56,10 +48,6 @@ PORT_PROBE_TIMEOUT_S = 5
 # Vite colours its output even into a file on Windows (picocolors), e.g. "\x1b[1mLocal\x1b[22m:".
 ANSI_ESCAPE_RE = re.compile(rb"\x1b\[[0-9;]*m")
 MAPBOX_ENV_VAR = "VITE_MAPBOX_ACCESS_TOKEN"
-# SetThreadExecutionState flags (winbase.h)
-ES_CONTINUOUS = 0x80000000
-ES_SYSTEM_REQUIRED = 0x00000001
-ES_DISPLAY_REQUIRED = 0x00000002
 
 
 def require_mapbox_token() -> str:
@@ -100,22 +88,6 @@ def kill_tree(proc: subprocess.Popen[bytes]) -> None:
     else:
         proc.terminate()
     proc.wait(timeout=30)
-
-
-@contextmanager
-def display_awake() -> Iterator[None]:
-    """Keep the Windows display and system awake for the block (headed Chrome needs it)."""
-    if os.name != "nt":
-        raise CaptureError("captures run on the Windows workstation (headed Chrome on the NVIDIA)")
-    kernel32 = ctypes.windll.kernel32
-    if not kernel32.SetThreadExecutionState(
-        ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
-    ):
-        raise CaptureError("SetThreadExecutionState refused to keep the display awake")
-    try:
-        yield
-    finally:
-        kernel32.SetThreadExecutionState(ES_CONTINUOUS)
 
 
 def refuse_port_in_use(port: int) -> None:

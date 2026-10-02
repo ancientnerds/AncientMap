@@ -24,7 +24,7 @@ written `studio …` below. Exit 0 = ok, 1 = a check failed (`episode check`, `e
 
 - `studio doctor` reports every probe ok. Once per machine, after
   `cd video && npm ci && npx remotion browser ensure` and
-  `./.venv/Scripts/python.exe -m playwright install chrome` (Playwright is in no requirements
+  `./.venv/Scripts/python.exe -m playwright install chrome chromium-headless-shell` (Playwright is in no requirements
   file: `pip install playwright` into the venv when `doctor` names it missing):
   `studio doctor --fix-gpu`. A probe that finds the AMD, software rendering, no NVENC or no CUDA
   is a setup error to fix: never a CPU or software path.
@@ -32,7 +32,7 @@ written `studio …` below. Exit 0 = ok, 1 = a check failed (`episode check`, `e
   the checkout the studio runs in:
   `curl -sfR --create-dirs -o public/data/sites/index.json https://ancientnerds.com/data/sites/index.json`
   (`doctor` reports its age).
-- Captures drive headed Chrome: keep the display awake and unlocked for the whole capture step.
+- Captures run headless Chrome on the NVIDIA: no display is needed, the screen may sleep or be locked.
 
 ## Steps
 
@@ -206,7 +206,7 @@ unless its checkbox flips (a toggle the page disables switches nothing):
 | `render.ts` (or `still.ts`) `exited 1` and its log in `render/` says a render page "was closed from outside" or "crashed" | nothing was wrong with the script: something closed or crashed the render browser; render again |
 | a description over 5,000 bytes (stops `episode render` at its start) | shorten the evidence statements, picture attributions or music credit it is built from, then render again |
 | `<file> changed since the render` (`episode package`: timeline.json, script.json, casefile.json, voice/words.json; `episode thumbnail`: timeline.json, script.json), or a music file other than the one mixed | `episode render` again; titles, tags and the wording of the music credit may change after the render |
-| a capture hangs or fails with the display asleep | wake and unlock it, `episode capture <slug> --only <id>` |
+| a capture fails with "frames are WxH" or "no animation frame" | the headless Chrome did not draw at the frame size (STUDIO.md 9.2); `episode capture <slug> --only <id>` again, and report it if it repeats |
 | voice refuses on the MiniMax quota | wait for the 5-hour window; never another plan or model |
 | a ledger write (`episode render`, `episode register-youtube`) ends in `RemoteOutcomeUnknown` | do not run the step again: read the `studio_episodes` row of the video's sha256 first (STUDIO.md section 7) |
 

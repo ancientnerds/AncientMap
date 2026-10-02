@@ -2,7 +2,6 @@
 
 import json
 import subprocess
-from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
@@ -404,9 +403,8 @@ class FakeRecorder:
 
 @pytest.fixture
 def workstation(monkeypatch):
-    """The workstation parts of a take the tests replace: npm on PATH and the awake display."""
+    """The workstation parts of a take the tests replace: npm on PATH."""
     monkeypatch.setattr(globe, "require_tool", lambda name: "npm")
-    monkeypatch.setattr(globe, "display_awake", nullcontext)
 
 
 @needs_nvenc
