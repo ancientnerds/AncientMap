@@ -1,6 +1,6 @@
 export const meta = {
   name: 'theo-image-check',
-  description: 'Answer images/pending.jsonl of a paper workspace: one Opus agent looks at each candidate picture; appends images/verdicts.jsonl',
+  description: 'Answer images/pending.jsonl of a paper workspace: one agent looks at each candidate picture; appends images/verdicts.jsonl',
   whenToUse: 'theo-write, after ./.venv/Scripts/python.exe -m pipeline.studio paper images-export <id> and before paper images-import <id>. args: {"workspace": "<absolute path of STUDIO_ASSETS/papers/<request_id>>"}',
   phases: [
     { title: 'Inventory', detail: 'pending.jsonl minus the tasks verdicts.jsonl already holds' },
@@ -10,7 +10,7 @@ export const meta = {
 }
 
 /*
- * The image check of spec 3.6 and plan C's contract C2, answered by Opus agents.
+ * The image check of spec 3.6 and plan C's contract C2, answered by Sonnet 5.5 agents.
  *
  * Input: the handoff directory <workspace>/images/ that `paper images-export` wrote
  * (pipeline/studio/paper/images.py, pipeline/studio/handoff.py). Output: one line per answered
@@ -23,7 +23,7 @@ export const meta = {
  *
  * - Tasks that already have a line in verdicts.jsonl are not answered again. A file that
  *   images-import refused stays in place: delete its bad lines, then run this workflow again.
- * - Only Opus judges (owner rule): an agent that reports another model ID gets no answer
+ * - Only Sonnet 5.5 or Opus judges (owner rule 2026-10-02): an agent that reports another model ID gets no answer
  *   written; its task stays pending and is listed in the result.
  * - An answer with a box outside the picture or a meaningful or weak picture without a caption
  *   is not written; its task is listed with the reason. The answer schema holds a caption to
@@ -41,7 +41,9 @@ const PART = 'verdicts.part.jsonl'
 const LINES_PER_WRITE = 20
 const KEEP = ['meaningful', 'weak']
 const MAX_CAPTION_CHARS = 120
-const OPUS_RE = /^claude-opus-/
+const JUDGE_RE = /^claude-(sonnet|opus)-/
+// Every subagent runs on Sonnet 5.5 (owner rule 2026-10-02, also for the checks).
+const judge = (prompt, opts = {}) => agent(prompt, { ...opts, model: 'sonnet' })
 
 if (!args || typeof args.workspace !== 'string' || !args.workspace.trim()) {
   throw new Error('args.workspace must be the absolute path of the paper workspace <STUDIO_ASSETS>/papers/<request_id>')
@@ -115,7 +117,7 @@ const ANSWER_SCHEMA = {
       ],
     },
     caption: { type: 'string', maxLength: MAX_CAPTION_CHARS, pattern: '^[^\\[*]*$' },
-    model: { type: 'string', description: 'The exact model ID your system prompt names, for example claude-opus-5-5' },
+    model: { type: 'string', description: 'The exact model ID your system prompt names, for example claude-sonnet-5-5' },
   },
   required: ['verdict', 'depicts', 'subject_box', 'caption', 'model'],
 }
@@ -156,7 +158,7 @@ function writePrompt(lines) {
 // ---- Inventory ------------------------------------------------------------------------------
 
 phase('Inventory')
-const inv = await agent(
+const inv = await judge(
   [
     `List the pending image-check tasks of the paper workspace ${WS}. ${RUN_ONCE} Change no file.`,
     command(INVENTORY_CMD),
@@ -177,9 +179,9 @@ if (!inv.tasks.length) {
 // ---- Look: one agent per picture ------------------------------------------------------------
 
 async function look(t) {
-  const a = await agent(lookPrompt(t), { label: `look ${t.ref}`, phase: 'Look', schema: ANSWER_SCHEMA })
+  const a = await judge(lookPrompt(t), { label: `look ${t.ref}`, phase: 'Look', schema: ANSWER_SCHEMA })
   if (a === null) return { t, skipped: 'the agent did not finish' }
-  if (!OPUS_RE.test(a.model)) return { t, skipped: `the agent ran on ${a.model}; only Opus judges (owner rule)` }
+  if (!JUDGE_RE.test(a.model)) return { t, skipped: `the agent ran on ${a.model}; only Sonnet 5.5 or Opus judges (owner rule 2026-10-02)` }
   const box = a.subject_box
   if (box !== null && (box[0] + box[2] > 1.0001 || box[1] + box[3] > 1.0001)) {
     return { t, skipped: `subject_box ${JSON.stringify(box)} reaches outside the picture` }
@@ -218,7 +220,7 @@ phase('Write')
 for (let i = 0; i < lines.length; i += LINES_PER_WRITE) {
   const chunk = lines.slice(i, i + LINES_PER_WRITE)
   const ids = chunk.map((l) => l.task_id)
-  const w = await agent(writePrompt(chunk.map((l) => JSON.stringify(l))), {
+  const w = await judge(writePrompt(chunk.map((l) => JSON.stringify(l))), {
     label: `write ${i / LINES_PER_WRITE + 1}`,
     phase: 'Write',
     schema: WRITE_SCHEMA,

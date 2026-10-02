@@ -14,7 +14,7 @@ export const meta = {
  * and no studio CLI: its contract is casefile.json itself (pipeline/studio/casefile.py), which
  * `episode check` then enforces (a script may use only verified evidence).
  *
- * For every evidence[] item whose verification.status is not "verified", one Opus agent runs a
+ * For every evidence[] item whose verification.status is not "verified", one agent runs a
  * probe that reads the item from casefile.json and prints the text its verbatim source.quote is
  * checked against, by route:
  *   "paper evidence"  the item has a paper_anchor: that entry of
@@ -30,14 +30,16 @@ export const meta = {
  * write (ISO 8601), "method": the route}. It changes no other key; the file is written back as
  * JSON with an indent of 2.
  *
- * Only Opus judges (owner rule): an agent that reports another model ID gets nothing written;
+ * Only Sonnet 5.5 or Opus judges (owner rule 2026-10-02): an agent that reports another model ID gets nothing written;
  * its item stays as it is and is listed in the result.
  */
 
 const PY = './.venv/Scripts/python.exe'
 const STUDIO = `${PY} -m pipeline.studio`
 const METHODS = ['paper evidence', 'archived text', 'web page']
-const OPUS_RE = /^claude-opus-/
+const JUDGE_RE = /^claude-(sonnet|opus)-/
+// Every subagent runs on Sonnet 5.5 (owner rule 2026-10-02, also for the checks).
+const judge = (prompt, opts = {}) => agent(prompt, { ...opts, model: 'sonnet' })
 
 if (!args || typeof args.workspace !== 'string' || !args.workspace.trim()) {
   throw new Error('args.workspace must be the absolute path of the episode workspace <STUDIO_ASSETS>/episodes/<slug>')
@@ -142,7 +144,7 @@ const VERDICT_SCHEMA = {
     status: { type: 'string', enum: ['verified', 'refuted', 'unverified'] },
     method: { type: 'string', enum: METHODS },
     explanation: { type: 'string', minLength: 1 },
-    model: { type: 'string', description: 'The exact model ID your system prompt names, for example claude-opus-5-5' },
+    model: { type: 'string', description: 'The exact model ID your system prompt names, for example claude-sonnet-5-5' },
   },
   required: ['status', 'method', 'explanation', 'model'],
 }
@@ -170,7 +172,7 @@ function verifyPrompt(item) {
 // ---- Inventory ------------------------------------------------------------------------------
 
 phase('Inventory')
-const inv = await agent(
+const inv = await judge(
   [
     `List the evidence items of the case file in ${EP} that are not yet verified. ${RUN_ONCE} Change no file.`,
     command(INVENTORY_CMD),
@@ -188,9 +190,9 @@ if (!inv.items.length) {
 // ---- Verify: one agent per item -------------------------------------------------------------
 
 async function verify(item) {
-  const v = await agent(verifyPrompt(item), { label: `verify ${item.id}`, phase: 'Verify', schema: VERDICT_SCHEMA })
+  const v = await judge(verifyPrompt(item), { label: `verify ${item.id}`, phase: 'Verify', schema: VERDICT_SCHEMA })
   if (v === null) return { item, skipped: 'the agent did not finish' }
-  if (!OPUS_RE.test(v.model)) return { item, skipped: `the agent ran on ${v.model}; only Opus judges (owner rule)` }
+  if (!JUDGE_RE.test(v.model)) return { item, skipped: `the agent ran on ${v.model}; only Sonnet 5.5 or Opus judges (owner rule 2026-10-02)` }
   return { item, v, by: `${v.model} (verifier agent, studio-casefile-verify, ${item.id})` }
 }
 
@@ -212,7 +214,7 @@ for (const n of notChecked) log(`not checked: ${n.id}: ${n.reason}`)
 phase('Write')
 if (checked.length) {
   const rows = checked.map((r) => [r.item.id, r.v.status, r.v.method, r.by])
-  const w = await agent(
+  const w = await judge(
     [
       `Write the verification of ${rows.length} evidence items into ${EP}/casefile.json. ${RUN_ONCE} It sets verification = {status, by, at, method} of each listed item (at = the UTC time now), changes no other key, checks the result with the case-file parser, writes the file back and prints the ids it updated as a JSON list. Change no other file.`,
       command(writeCmd(rows)),

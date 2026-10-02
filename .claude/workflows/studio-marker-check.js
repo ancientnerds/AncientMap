@@ -1,6 +1,6 @@
 export const meta = {
   name: 'studio-marker-check',
-  description: 'Answer markers_check/pending.jsonl of an episode workspace: one Opus agent opens the crop and the context picture of each case-file marker and says hits or misses; appends markers_check/verdicts.jsonl',
+  description: 'Answer markers_check/pending.jsonl of an episode workspace: one agent opens the crop and the context picture of each case-file marker and says hits or misses; appends markers_check/verdicts.jsonl',
   whenToUse: 'studio-casefile, after ./.venv/Scripts/python.exe -m pipeline.studio episode markers-export <slug> and before episode markers-import <slug>. args: {"workspace": "<absolute path of STUDIO_ASSETS/episodes/<slug>>"}',
   phases: [
     { title: 'Inventory', detail: 'pending.jsonl minus the tasks verdicts.jsonl already holds' },
@@ -24,7 +24,7 @@ export const meta = {
  *
  * - Tasks that already have a line in verdicts.jsonl are not answered again. A file that
  *   markers-import refused stays in place: delete its bad lines, then run this workflow again.
- * - Only Opus judges (owner rule): an agent that reports another model ID gets no answer
+ * - Only Sonnet 5.5 or Opus judges (owner rule 2026-10-02): an agent that reports another model ID gets no answer
  *   written; its task stays pending and is listed in the result.
  * - prompt_sha256 is copied by the append command from the pending.jsonl row of the same
  *   task_id (the agent read prompts/<task_id>.txt; a task id is derived from its prompt's hash).
@@ -34,7 +34,9 @@ const PY = './.venv/Scripts/python.exe'
 const STUDIO = `${PY} -m pipeline.studio`
 const PART = 'verdicts.part.jsonl'
 const LINES_PER_WRITE = 20
-const OPUS_RE = /^claude-opus-/
+const JUDGE_RE = /^claude-(sonnet|opus)-/
+// Every subagent runs on Sonnet 5.5 (owner rule 2026-10-02, also for the checks).
+const judge = (prompt, opts = {}) => agent(prompt, { ...opts, model: 'sonnet' })
 
 if (!args || typeof args.workspace !== 'string' || !args.workspace.trim()) {
   throw new Error('args.workspace must be the absolute path of the episode workspace <STUDIO_ASSETS>/episodes/<slug>')
@@ -101,7 +103,7 @@ const ANSWER_SCHEMA = {
   properties: {
     verdict: { type: 'string', enum: ['hits', 'misses'] },
     explanation: { type: 'string', minLength: 1 },
-    model: { type: 'string', description: 'The exact model ID your system prompt names, for example claude-opus-5-5' },
+    model: { type: 'string', description: 'The exact model ID your system prompt names, for example claude-sonnet-5-5' },
   },
   required: ['verdict', 'explanation', 'model'],
 }
@@ -142,7 +144,7 @@ function writePrompt(lines) {
 // ---- Inventory ------------------------------------------------------------------------------
 
 phase('Inventory')
-const inv = await agent(
+const inv = await judge(
   [
     `List the pending marker crop checks of the episode workspace ${EP}. ${RUN_ONCE} Change no file.`,
     command(INVENTORY_CMD),
@@ -163,9 +165,9 @@ if (!inv.tasks.length) {
 // ---- Look: one agent per marker -------------------------------------------------------------
 
 async function look(t) {
-  const a = await agent(lookPrompt(t), { label: `look ${t.ref}`, phase: 'Look', schema: ANSWER_SCHEMA })
+  const a = await judge(lookPrompt(t), { label: `look ${t.ref}`, phase: 'Look', schema: ANSWER_SCHEMA })
   if (a === null) return { t, skipped: 'the agent did not finish' }
-  if (!OPUS_RE.test(a.model)) return { t, skipped: `the agent ran on ${a.model}; only Opus judges (owner rule)` }
+  if (!JUDGE_RE.test(a.model)) return { t, skipped: `the agent ran on ${a.model}; only Sonnet 5.5 or Opus judges (owner rule 2026-10-02)` }
   return {
     t,
     line: {
@@ -196,7 +198,7 @@ phase('Write')
 for (let i = 0; i < lines.length; i += LINES_PER_WRITE) {
   const chunk = lines.slice(i, i + LINES_PER_WRITE)
   const ids = chunk.map((l) => l.task_id)
-  const w = await agent(writePrompt(chunk.map((l) => JSON.stringify(l))), {
+  const w = await judge(writePrompt(chunk.map((l) => JSON.stringify(l))), {
     label: `write ${i / LINES_PER_WRITE + 1}`,
     phase: 'Write',
     schema: WRITE_SCHEMA,

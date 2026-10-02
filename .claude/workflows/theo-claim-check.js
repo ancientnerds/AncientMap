@@ -12,7 +12,7 @@ export const meta = {
 }
 
 /*
- * The claim check of spec 3.5 and plan C's contract C2, answered by Opus agents.
+ * The claim check of spec 3.5 and plan C's contract C2, answered by Sonnet 5.5 agents.
  *
  * Input: the handoff directory <workspace>/claims_check/ that `paper claims-export` wrote
  * (pipeline/studio/paper/claims.py, pipeline/studio/handoff.py). Output: one line per answered
@@ -34,7 +34,7 @@ export const meta = {
  * - Every `supported` verdict, the coherence task's included, goes to an adversarial skeptic.
  *   If the skeptic confirms it, skeptic_by names the skeptic; if it refutes it, the skeptic's
  *   verdict is written and skeptic_by stays "".
- * - Only Opus judges (owner rule): an agent that reports another model ID gets no answer
+ * - Only Sonnet 5.5 or Opus judges (owner rule 2026-10-02): an agent that reports another model ID gets no answer
  *   written; its task stays pending and is listed in the result.
  * - prompt_sha256 is copied by the append command from the pending.jsonl row of the same
  *   task_id: the verifier read prompts/<task_id>.txt, and a task id is derived from its
@@ -46,7 +46,9 @@ const STUDIO = `${PY} -m pipeline.studio`
 const PART = 'verdicts.part.jsonl'
 const LINES_PER_WRITE = 20
 const VERDICTS = ['supported', 'partly', 'unsupported', 'source_missing']
-const OPUS_RE = /^claude-opus-/
+const JUDGE_RE = /^claude-(sonnet|opus)-/
+// Every subagent runs on Sonnet 5.5 (owner rule 2026-10-02, also for the checks).
+const judge = (prompt, opts = {}) => agent(prompt, { ...opts, model: 'sonnet' })
 
 if (!args || typeof args.workspace !== 'string' || !args.workspace.trim()) {
   throw new Error('args.workspace must be the absolute path of the paper workspace <STUDIO_ASSETS>/papers/<request_id>')
@@ -125,7 +127,7 @@ const LONG_LINES = 'A text file can be one very long line (a web page is flatten
 
 const NO_FORMAT = 'Ignore the answer-format paragraph at the end of the prompt file: answer through the structured output below; the workflow adds task_id, prompt_sha256, answered_by and skeptic_by.'
 
-const MODEL_FIELD = { type: 'string', description: 'The exact model ID your system prompt names, for example claude-opus-5-5' }
+const MODEL_FIELD = { type: 'string', description: 'The exact model ID your system prompt names, for example claude-sonnet-5-5' }
 
 const INVENTORY_SCHEMA = {
   type: 'object',
@@ -286,7 +288,7 @@ function writePrompt(lines) {
 // ---- Inventory ------------------------------------------------------------------------------
 
 phase('Inventory')
-const inv = await agent(
+const inv = await judge(
   [
     `List the pending claim-check tasks of the paper workspace ${WS}. ${RUN_ONCE} Change no file.`,
     command(INVENTORY_CMD),
@@ -310,7 +312,7 @@ const liveReads = {}
 for (const s of inv.tdm_sources) {
   liveReads[s.source_id] = s.live_saved
     ? Promise.resolve({ saved: true, chars: 0, detail: 'kept: an earlier run saved it' })
-    : agent(
+    : judge(
         [
           `Read one TDM-reserved source of a Theo paper live: ${s.source_id}. The paper cites it like any source; only the automatic archive skips such sources (owner decision 16).`,
           `${RUN_ONCE} It fetches the page with the archive's own reader (pipeline.lyra.archive_completion.fetch_document, HTML or PDF), saves the exact text to ${DIR}/live/${s.source_id}.txt with the header the import checks ("URL: <url>", "Fetched: <UTC time>", an empty line) and prints what it saved.`,
@@ -330,13 +332,13 @@ async function verify(t) {
   const lost = lives.filter((l) => l.read == null)
   if (lost.length) return { t, skipped: `no live read result for ${lost.map((l) => l.sid).join(', ')}` }
   const unread = lives.filter((l) => !l.read.saved)
-  const v = await agent(verifierPrompt(t, unread), {
+  const v = await judge(verifierPrompt(t, unread), {
     label: `verify ${t.ref}`,
     phase: 'Verify',
     schema: verifierSchema(t, unread),
   })
   if (v === null) return { t, skipped: 'the verifier did not finish' }
-  if (!OPUS_RE.test(v.model)) return { t, skipped: `the verifier ran on ${v.model}; only Opus judges (owner rule)` }
+  if (!JUDGE_RE.test(v.model)) return { t, skipped: `the verifier ran on ${v.model}; only Sonnet 5.5 or Opus judges (owner rule 2026-10-02)` }
   if (v.verdict === 'supported' && t.kind !== 'coherence' && !(v.quote.trim() && v.quote_source_id)) {
     return { t, skipped: 'the verifier judged it supported without a quote and its source' }
   }
@@ -345,13 +347,13 @@ async function verify(t) {
 
 async function challenge(r) {
   if (!r.v || r.v.verdict !== 'supported') return r
-  const s = await agent(skepticPrompt(r.t, r.v), {
+  const s = await judge(skepticPrompt(r.t, r.v), {
     label: `skeptic ${r.t.ref}`,
     phase: 'Skeptic',
     schema: skepticSchema(r.t),
   })
   if (s === null) return { t: r.t, skipped: 'the skeptic did not finish' }
-  if (!OPUS_RE.test(s.model)) return { t: r.t, skipped: `the skeptic ran on ${s.model}; only Opus judges (owner rule)` }
+  if (!JUDGE_RE.test(s.model)) return { t: r.t, skipped: `the skeptic ran on ${s.model}; only Sonnet 5.5 or Opus judges (owner rule 2026-10-02)` }
   return { ...r, s }
 }
 
@@ -403,7 +405,7 @@ const lines = answered.map(answerLine)
 for (let i = 0; i < lines.length; i += LINES_PER_WRITE) {
   const chunk = lines.slice(i, i + LINES_PER_WRITE)
   const ids = chunk.map((l) => l.task_id)
-  const w = await agent(writePrompt(chunk.map((l) => JSON.stringify(l))), {
+  const w = await judge(writePrompt(chunk.map((l) => JSON.stringify(l))), {
     label: `write ${i / LINES_PER_WRITE + 1}`,
     phase: 'Write',
     schema: WRITE_SCHEMA,

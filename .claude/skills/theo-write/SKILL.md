@@ -13,7 +13,7 @@ publishes it through the gated VPS CLI `theo_publish`. **Publishing is automatic
 passes (spec §0): there is no owner approval step.** The apply itself sends the owner notice.
 
 Core rule: the code validates, Claude judges. Every judgement is made in this session or by the
-named workflows (Opus only: no DeepSeek, no MiniMax, no Pi or opencode). A red gate is fixed in
+named workflows (Sonnet 5.5 agents, owner rule 2026-10-02: no DeepSeek, no MiniMax, no Pi or opencode). A red gate is fixed in
 the paper, never in a derived file or a handoff answer.
 
 Run every command from the checkout root as `./.venv/Scripts/python.exe -m pipeline.studio …`;
