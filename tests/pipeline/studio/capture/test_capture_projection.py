@@ -142,8 +142,10 @@ def test_globe_takes_stay_below_the_frontends_mapbox_switch():
     max_dist = _ts_number(constants, camera_block + r"\bMAX_DISTANCE:\s*([\d.]+)")
     threejs_camera_max = _ts_number(constants, r"export const THREEJS_CAMERA_MAX = ([\d.]+)")
     transition = _ts_number(
-        rendering / "mapboxEffects.ts", r"export const TRANSITION_POINT = ([\d.]+)"
+        _GLOBE_SRC / "utils" / "unifiedZoom.ts", r"export const MAPBOX_SWITCH_PERCENT = ([\d.]+)"
     )
+    effects = (rendering / "mapboxEffects.ts").read_text(encoding="utf-8")
+    assert "export const TRANSITION_POINT = MAPBOX_SWITCH_PERCENT" in effects
     assert (min_dist, max_dist) == (CAMERA_MIN_DISTANCE, CAMERA_MAX_DISTANCE)
     scene_init = (rendering / "sceneInit.ts").read_text(encoding="utf-8")
     assert "const minDist = CAMERA.MIN_DISTANCE" in scene_init
