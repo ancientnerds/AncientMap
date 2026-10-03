@@ -13806,6 +13806,36 @@ FINISH_PLAN section 7 step 9 places the wave after WD1/WD2/**WD3** - and WD3 is 
 what the frontend renders - that is the owner's visual call, and a card whose `rarity_tier` moved is
 a visible change on 4,468 of 4,977 sites.
 
+### The fields round had been finished for an hour, and the watchdog kept starting it again
+
+The lane stopped writing its state at 00:17:56 and by 01:27 no driver process existed, while the
+watchdog log showed the lane being relaunched every round. A finished round and a lane that died
+mid-batch left the same thing: `opus_handoff.py validate` was not in anyone's hands.
+
+`validate_handoff(...)` on `fields-wd3-r0` answers **0 missing** of 327 batches, and 2,613 answer
+files exist for 2,613 questions in the manifests - the round is complete. Two reasons nobody saw it:
+
+1. **The driver wrote nothing on its "nothing missing" path.** `_main_wd3` printed
+   `{"batches": [], "note": "nothing missing"}` and returned 0 *before* the state file was touched, so
+   the state kept the last batch's outcome and said nothing about what is still owed. The state now
+   carries `missing` (and `batches`) from `record_round`, written when the handoff is validated, in
+   the wd3 path and the WC path alike. Two tests: a finished round reads back `missing == []` with its
+   batch count, and a round in progress names the batches it owes.
+2. **The watchdog compared two different quantities.** Its finished test was
+   `answered >= batch folders on disk`: 71 against 327, for a round whose 327 batches were answered
+   across earlier rounds. That comparison can never hold for any round this driver did not answer
+   from the first batch, which is every resumed round. The test is now `Owed $lane.states` - the
+   driver's own `missing` count, summed over a lane's runs - verified against the real state files
+   for all four cases: a finished round (0), three state files that do not exist yet (`$null`),
+   a missing file (`$null`) and an empty list (`$null`). **`$null` is not zero**: unknown must not be
+   read as finished.
+
+With that, the chain can do what it was built for: `wd3-fields` is finished, so `wc-verify` stops
+waiting for a lane that will never die.
+
+**Not checked here:** whether the import of the completed round and the write of its answers are ready
+to run. Those are the next steps and the write is the owner's.
+
 **A wave is owed after the WD3 write.** Field values are card inputs (`INPUT_COLUMNS`), so the field
 fill moves the same derived cells; the next wave recomputes from the inputs as they are then, which is
 what the runbook's undo note describes. Measured 2026-10-04 00:18: the field round is at 71 of its 78

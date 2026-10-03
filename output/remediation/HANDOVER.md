@@ -457,7 +457,7 @@ model call: `python scripts/remediation/mcode_driver.py wc --runs <run>... --fir
 | WD1 fields | **complete** - 3,444 sites, 8,055 cells, 0 deviations | runbook step 15 (`handoff --wave`) was never run |
 | WD2 scope | **written** - 20 sites retired | nothing |
 | WD2 image | **complete and verified 2026-10-03** - the 35 chunks are *not* 0 applied: 8,713 planned rows = 8,713 journalled rows, written 2026-10-02 00:42-00:55 UTC over 3,481 sites; `chunk-001 --readback` "plan = journal = data", `accept` 0 deviations for chunk-001 and chunk-035 | nothing - **including** the runbook's follow-up: the `card_stats` recompute after the chunks ran as wave `2026-09-30` (see below) |
-| WD3 field fill | pilot 2 passed, wave `2026-10-01a` written; the round holds **327 batches, 249 answered before this lane started**, so 78 were open - **71 of those are answered** (2026-10-04 00:18) | let the round finish, import, then write - the write needs the owner |
+| WD3 field fill | pilot 2 passed, wave `2026-10-01a` written; **the answering round is COMPLETE 2026-10-04** - `opus_handoff.py validate` reports **0 of 327 batches missing**, all 2,613 questions have an answer file, last batch answered 00:17:56 | import the round, then write it (owner); after that a **new `card_stats` wave**, because field values are card inputs |
 | WN | implemented, **never run**; population is 1 site | pilot, then mass |
 | WA v3/v3d | v3 + v3d main written, 37 steps, 0 deviations | write `p4-2510`/`p4-2511`; the `wip/p4-pilot` merge is still open and **the WA run dirs live in that worktree** |
 
@@ -551,6 +551,19 @@ not seen yet, and the first write of a new one throws.
   `--lane card-stats-2026-09-30` writes rows stamped **`2026-09-30_mechanical-card-stats`**
   (measured 2026-10-04 01:28, 21,041 rows, `applied_at` 2026-10-03T23:24:39Z). A journal query for the
   lane name finds nothing and reads as "the write did not happen".
+- **A finished round and a dead lane looked identical, and the watchdog paid for it every 20
+  minutes.** The driver wrote nothing on its `not check.missing` path - it printed "nothing missing"
+  and returned 0 - so a completed round left the same state file as a lane that died mid-batch: the
+  last outcome and nothing else. The watchdog then compared its ledger (`answered`, the batches *it*
+  answered: 71) against the batch folders on disk (327), which can never match for a round exported
+  before the driver existed, so it kept starting a lane that had nothing to do. Measured 2026-10-04:
+  the wd3 round had all 327 batches answered and 0 missing, and the watchdog had relaunched it four
+  times in a row. The driver now writes `missing` (and `batches`) into the state when it validates
+  (`record_round`), and the watchdog asks `Owed $lane.states` - the driver's own count, summed over a
+  lane's runs. A missing key reads as *unknown*, not as zero.
+- **The answer files of the fields lane are `<batch>/wd3/<site_id>.answer.json`**, one per question
+  beside a `.prompt.txt`, 8 questions a batch; there is no `ANSWERS.jsonl` per batch. Counting
+  answers with the wrong filename says "0 answered" next to a complete round.
 - **A git call that names a repository has to run without `GIT_*`** (`pipeline/utils/git_env.py`).
   `GIT_DIR` beats both `-C` and `cwd`, and a redirected `git status` reports a clean tree in a
   repository nobody asked about - which is the tree guard's only instrument.

@@ -654,6 +654,21 @@ class State:
         tmp.replace(self.path)
 
 
+def record_round(state: State, check: Validation, *, batches: int) -> None:
+    """Write the round's completeness into the state file, so a reader can tell a finished round
+    from a stopped one without running the lane.
+
+    The driver used to write nothing on the `not check.missing` path - it printed "nothing missing"
+    and returned 0 - so a finished round and a lane that died mid-batch left the same state: the
+    last outcome, and nothing about what is still owed. Measured 2026-10-04 on the wd3 round, which
+    answered its last batch: the watchdog could not see that, started the lane again, and the driver
+    exited again with nothing to do. That is `missing: []` next to the batch count: a fact a file can
+    hold and a reader can use.
+    """
+    state.put("batches", batches)
+    state.put("missing", list(check.missing))
+
+
 # ------------------------------------------------------------------------------------ the answer prompt
 _OPERATOR_RULES = (
     "Never search the file system: no find over /, output/ or any large directory - open exactly "
@@ -1077,6 +1092,7 @@ def drive_wc_run(
             if not check.ok:
                 log.append({**entry, "stopped": f"validate refused: {check.problems}"})
                 return {"run": run.name, "steps": log, "stopped": check.problems}
+            record_round(state, check, batches=len(batch_folders(plan.answer_handoff)))
             if not check.missing:
                 # nothing missing: the import is the next step's business, and the next plan will see
                 # the files it left behind
@@ -1944,16 +1960,17 @@ def _main_wd3(args: Any) -> int:
     if not check.ok:
         print(json.dumps({"stopped": f"validate refused: {check.problems}"}), file=sys.stderr)
         return 1
-    if not check.missing:
-        print(json.dumps({"batches": [], "note": "nothing missing"}))
-        return 0
-
     state = State(
         STATE_DIR / f"wd3-{args.run.name}.json",
         lane="wd3",
         run=str(args.run),
         handoff=args.handoff,
     )
+    record_round(state, check, batches=len(plan.batches))
+    if not check.missing:
+        print(json.dumps({"batches": [], "note": "nothing missing"}))
+        return 0
+
     width = Width.from_start(args.width)
     runner = McodeRunner()
 

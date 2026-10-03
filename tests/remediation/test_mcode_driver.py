@@ -926,6 +926,33 @@ def no_model_call(command: Sequence[str]) -> bool:
     return not any("mcode" in part for part in command)
 
 
+# ---------------------------------------------------------------------------- the round's completeness
+def test_the_state_says_when_a_round_has_nothing_left_to_answer(tmp_path: Path) -> None:
+    """A round that is finished and a lane that stopped look the same in the state file: both leave
+    the last batch's outcome and nothing else. Measured 2026-10-04, the wd3 round answered its last
+    batch, the driver then printed "nothing missing" and exited - without touching the state - and
+    the watchdog read that as a dead lane and started it again, every 20 minutes, forever."""
+    path = tmp_path / "wd3-state.json"
+    state = D.State(path, lane="wd3", run="r", handoff="h")
+    D.record_round(state, D.Validation(ok=True, missing=(), missing_count=0), batches=327)
+
+    reread = D.State(path, lane="wd3", run="r", handoff="h")
+
+    assert reread.get("missing") == []
+    assert reread.get("batches") == 327
+
+
+def test_the_state_names_the_batches_a_round_still_owes(tmp_path: Path) -> None:
+    state = D.State(tmp_path / "wd3-state.json", lane="wd3", run="r", handoff="h")
+    D.record_round(
+        state,
+        D.Validation(ok=True, missing=("wd3-r0-b0031", "wd3-r0-b0032"), missing_count=2),
+        batches=327,
+    )
+
+    assert state.get("missing") == ["wd3-r0-b0031", "wd3-r0-b0032"]
+
+
 # ---------------------------------------------------------------------------- the answer prompt
 def test_the_answer_prompt_names_the_minimax_stamp_and_its_own_working_directory(
     tmp_path: Path,
