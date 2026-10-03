@@ -639,6 +639,14 @@ def test_a_row_imported_before_the_stamp_keeps_its_opus_label() -> None:
         R.judged_by({**old, "model": "anthropic/claude-haiku (Claude Code agent)"})
 
 
+def test_a_minimax_row_is_labelled_by_its_family_not_by_a_model_id_fragment() -> None:
+    """The label names the family that judged, like `opus:` and `sonnet:`. The family is declared
+    next to the stamp, never split out of the model id: `MiniMax-M3.1-Flash-Preview` has no
+    `claude-<family>` shape, and `split("-")[1]` would call its evidence `M3.1:`."""
+    row = {"answered_by": "mcode-1", "model": OH.MINIMAX_MODEL}
+    assert R.judged_by(row) == "minimax:mcode-1"
+
+
 class TestThePlan:
     def test_a_counted_not_a_site_is_retired_with_its_reason_and_found_quotes(self, review) -> None:
         counted_baltic(review)

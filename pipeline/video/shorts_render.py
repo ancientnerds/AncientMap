@@ -79,13 +79,14 @@ MAPBOX_CREDIT = "© Mapbox © Maxar"
 # EU AI Act Art. 50 (owner decision O10, 2026-09-26): a lane-WB teaser card - the narrated text -
 # is written by an AI system from the site's sourced description and checked claim by claim by a
 # second one (docs/procedures/CARD_DESCRIPTIONS.md). Said in the video description, as the voice is.
-# The note names the AI system's maker and family, not a model tier: the writers, rewriters and
-# checkers of the cards were Claude Opus and Claude Sonnet agents (owner decision 2026-10-01), and
-# which one wrote a given card is stated per card in its provenance (`ai_system`) on the site page.
-# "Claude Opus" here named a model that did not write every card.
+# The note names the AI systems' makers and families, not one model tier: the writers, rewriters
+# and checkers of the cards were Claude Opus and Claude Sonnet agents (owner decision 2026-10-01)
+# and are MiniMax M3.1 Flash agents from 2026-10-03, and which one wrote a given card is stated per
+# card in its provenance (`ai_system`) on the site page. "Claude Opus" here named a model that did
+# not write every card.
 TEASER_NOTE = (
-    "Text: AI-generated (Claude, Anthropic) from the site's sourced description, "
-    "each claim checked against it."
+    "Text: AI-generated (Claude / Anthropic, MiniMax M3.1 Flash / MiniMax) from the site's "
+    "sourced description, each claim checked against it."
 )
 
 # Music bed: looped under the whole short, faded in at the start and out

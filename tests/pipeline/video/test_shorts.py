@@ -293,10 +293,14 @@ class TestText:
         assert TEASER_NOTE in teaser
         assert teaser.index(TEASER_NOTE) < teaser.index("AI-generated voice")
 
-    def test_the_teaser_note_names_no_model_tier(self):
+    def test_the_teaser_note_names_every_writing_family_and_no_single_claude_tier(self):
         """The cards were written by Claude Opus and Claude Sonnet agents (owner decision
-        2026-10-01), so the note names the maker and family, never one tier."""
-        assert "(Claude, Anthropic)" in TEASER_NOTE
+        2026-10-01), so the note names the makers and families, never one Claude tier. Owner
+        decision 2026-10-03: MiniMax M3.1 Flash writes the cards from now on, so its maker and
+        model join the note; which model wrote a given card is stated per card in the site
+        page's provenance (`ai_system`)."""
+        assert "Claude" in TEASER_NOTE and "Anthropic" in TEASER_NOTE
+        assert "MiniMax" in TEASER_NOTE
         assert "Opus" not in TEASER_NOTE and "Sonnet" not in TEASER_NOTE
 
     def test_hashtags_use_the_specific_place_and_skip_duplicates(self):
