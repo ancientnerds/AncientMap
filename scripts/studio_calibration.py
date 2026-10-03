@@ -76,7 +76,9 @@ def _copy(ws: PaperWorkspace, stamp: str) -> PaperWorkspace:
     if target.exists():
         raise SystemExit(f"{target} exists: pick a new stamp or delete that copy first")
     target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(ws.root, target, ignore=shutil.ignore_patterns("mcode_runs", "*.imported-*.jsonl"))
+    shutil.copytree(
+        ws.root, target, ignore=shutil.ignore_patterns("mcode_runs", "*.imported-*.jsonl")
+    )
     return PaperWorkspace(target, ws.request_id)
 
 
@@ -93,7 +95,9 @@ def _only_evidence(ws: PaperWorkspace) -> list[str]:
     return [r["task_id"] for r in evidence]
 
 
-def spot_check(ws: PaperWorkspace, rows: dict[str, dict[str, Any]], lines: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def spot_check(
+    ws: PaperWorkspace, rows: dict[str, dict[str, Any]], lines: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     """The worksheet the owner protocol reads at the source text.
 
     Every deviation plus `SPOT_AGREEMENTS` random agreements, each with the answer's own
@@ -101,6 +105,11 @@ def spot_check(ws: PaperWorkspace, rows: dict[str, dict[str, Any]], lines: dict[
     it - so a reader can judge the line without re-running anything.
     """
     dossier = claims.load_dossier(ws)
+    # The archived texts plus the live texts the verifier saved for TDM-reserved sources: the
+    # same reader the claim-check gate uses, so "the quote occurs in the text" is checked
+    # against the file that gate would check. `live_text` alone is wrong here - it refuses any
+    # source that is not TDM-reserved, and most quotes come from an archived text.
+    texts = claims.source_texts(ws, dossier)
     pairs = []
     for task_id, row in rows.items():
         if row["kind"] != "evidence":
@@ -116,11 +125,19 @@ def spot_check(ws: PaperWorkspace, rows: dict[str, dict[str, Any]], lines: dict[
         agreements, min(SPOT_AGREEMENTS, len(agreements))
     )
 
-    def line_of(task_id: str, row: dict[str, Any], answer: dict[str, Any], why: str) -> dict[str, Any]:
+    def line_of(
+        task_id: str, row: dict[str, Any], answer: dict[str, Any], why: str
+    ) -> dict[str, Any]:
         sid = answer.get("quote_source_id") or ""
-        text = claims.live_text(ws, dossier.sources[sid]) if sid and sid in dossier.sources else ""
+        text = texts.get(sid, "")
         quote = answer.get("quote") or ""
         at = text.find(quote) if quote and text else -1
+        if sid in dossier.texts:
+            where = f"texts/{sid}.txt"
+        elif text:
+            where = claims.live_rel(ws, sid)
+        else:
+            where = f"no text for {sid or '(no source named)'}"
         return {
             "task_id": task_id,
             "ref": row["ref"],
@@ -129,6 +146,7 @@ def spot_check(ws: PaperWorkspace, rows: dict[str, dict[str, Any]], lines: dict[
             "answer_verdict": answer["verdict"],
             "quote": quote,
             "quote_source_id": sid,
+            "quote_read_in": where,
             "quote_occurs_in_text": at >= 0,
             "context": text[max(0, at - 200) : at + len(quote) + 200] if at >= 0 else "",
             "fix_suggestion": answer.get("fix_suggestion", ""),
@@ -141,7 +159,9 @@ def spot_check(ws: PaperWorkspace, rows: dict[str, dict[str, Any]], lines: dict[
             "read every line at the source text, then write "
             "spot_check_verdicts.json = {task_id: 'holds' | 'refuted: <why>'}"
         ),
-        "deviations": [line_of(t, r, l, "deviation: the answer is not supported") for t, r, l in deviations],
+        "deviations": [
+            line_of(t, r, l, "deviation: the answer is not supported") for t, r, l in deviations
+        ],
         "sampled_agreements": [
             line_of(t, r, l, f"random agreement (seed {SPOT_SEED})") for t, r, l in sampled
         ],
@@ -153,6 +173,10 @@ def with_verdicts(worksheet: dict[str, Any], path: Path) -> dict[str, Any]:
     if not path.is_file():
         worksheet["verdicts"] = None
         worksheet["all_judged"] = False
+        worksheet["refuted"] = []
+        worksheet["unjudged"] = [
+            line["task_id"] for line in worksheet["deviations"] + worksheet["sampled_agreements"]
+        ]
         return worksheet
     given = json.loads(path.read_text(encoding="utf-8"))
     lines = worksheet["deviations"] + worksheet["sampled_agreements"]
@@ -163,18 +187,19 @@ def with_verdicts(worksheet: dict[str, Any], path: Path) -> dict[str, Any]:
     worksheet["judged"] = len(judged)
     worksheet["of"] = len(lines)
     worksheet["all_judged"] = len(judged) == len(lines)
+    # "refuted" is a finding, so only a line that says so counts (2026-10-03: a line nobody had
+    # judged yet was reported as refuted, which reads as a verdict where there is a blank).
     worksheet["refuted"] = [
-        line["task_id"] for line in lines if not line["verdict"].strip().lower().startswith("holds")
+        line["task_id"] for line in lines if line["verdict"].strip().lower().startswith("refuted")
     ]
+    worksheet["unjudged"] = [line["task_id"] for line in lines if not line["verdict"].strip()]
     return worksheet
 
 
 def compare(ws: PaperWorkspace, recorded: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """The measurement: agreement with the recorded verdicts, and the false sources."""
     rows = {r["task_id"]: r for r in handoff.read_jsonl(ws.claims_dir / handoff.TASKS_FILE)}
-    lines = {
-        r["task_id"]: r for r in handoff.read_jsonl(ws.claims_dir / handoff.VERDICTS_FILE)
-    }
+    lines = {r["task_id"]: r for r in handoff.read_jsonl(ws.claims_dir / handoff.VERDICTS_FILE)}
     pairs: list[dict[str, Any]] = []
     false_sources: list[str] = []
     for task_id, row in sorted(rows.items()):
@@ -188,7 +213,9 @@ def compare(ws: PaperWorkspace, recorded: dict[str, dict[str, Any]]) -> dict[str
         line = lines[task_id]
         cited = {c["source_id"] for c in row["cited"]}
         if line["quote_source_id"] not in cited:
-            false_sources.append(f"{row['ref']}: quote names {line['quote_source_id']!r}, not cited")
+            false_sources.append(
+                f"{row['ref']}: quote names {line['quote_source_id']!r}, not cited"
+            )
     answered = [p for p in pairs if p["answered"] is not None]
     agree = [p for p in answered if p["recorded"] == p["answered"]]
     share = len(agree) / len(answered) if answered else 0.0
@@ -226,7 +253,9 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "workspace": str(source),
-                    "recorded_evidence_verdicts": len(read_json(PaperWorkspace(source, args.request_id).evidence, "evidence")),
+                    "recorded_evidence_verdicts": len(
+                        read_json(PaperWorkspace(source, args.request_id).evidence, "evidence")
+                    ),
                     "copy_target": str(
                         config.studio_assets() / CALIBRATION_DIR / f"<stamp>-{args.request_id}"
                     ),
@@ -277,7 +306,9 @@ def main(argv: list[str] | None = None) -> int:
         and not report["spot_check"].get("refuted")
     )
     out = ws.root / "calibration_report.json"
-    out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="")
+    out.write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline=""
+    )
     print(json.dumps(measured, ensure_ascii=False, indent=2))
     print(
         json.dumps(
