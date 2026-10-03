@@ -551,6 +551,15 @@ not seen yet, and the first write of a new one throws.
   `--lane card-stats-2026-09-30` writes rows stamped **`2026-09-30_mechanical-card-stats`**
   (measured 2026-10-04 01:28, 21,041 rows, `applied_at` 2026-10-03T23:24:39Z). A journal query for the
   lane name finds nothing and reads as "the write did not happen".
+- **A launch can fail while the log says "relaunched".** The watchdog's start line was
+  `Start-Process -ArgumentList @($driver) + $lane.args`: in PowerShell's *argument* mode that is three
+  arguments - the array, a literal `+`, and the args - so `Start-Process` was handed a positional `+`
+  and threw, while the round went on to write "relaunched: procs=0" because the count was taken from
+  the failed call. Measured 2026-10-04: every restart since 01:07 had been a no-op, and the round that
+  correctly found the fields round finished still started nothing. The argument is now
+  `(@($driver) + $lane.args)` in parentheses, and a start that leaves no process logs
+  **"LAUNCH FAILED"** with the path to its stderr instead of "relaunched". The line that matters when
+  something is not running is that one, not the driver's absence.
 - **A finished round and a dead lane looked identical, and the watchdog paid for it every 20
   minutes.** The driver wrote nothing on its `not check.missing` path - it printed "nothing missing"
   and returned 0 - so a completed round left the same state file as a lane that died mid-batch: the

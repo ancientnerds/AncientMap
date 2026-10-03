@@ -13833,6 +13833,36 @@ files exist for 2,613 questions in the manifests - the round is complete. Two re
 With that, the chain can do what it was built for: `wd3-fields` is finished, so `wc-verify` stops
 waiting for a lane that will never die.
 
+### And then the relaunch it had been doing for an hour turned out never to have launched anything
+
+The 01:49 round took the finished branch correctly - `wd3-fields finished: nothing missing - not
+restarting` - and then wrote `wc-verify relaunched: procs=0` while a `Start-Process` error sat in the
+same output:
+
+    Start-Process : Es wurde kein Positionsparameter gefunden, der das Argument "+" akzeptiert.
+
+The line is `Start-Process -FilePath $py -ArgumentList @($driver) + $lane.args`. In PowerShell's
+**argument** mode that is not an addition, it is three arguments - the array, a literal `+`, and the
+args - so `Start-Process` got a positional `+` and threw; the round then counted processes from the
+failed call and logged the count as a result. The message "relaunched" was the log's own summary of a
+call that had already failed.
+
+**Every restart since 01:07 was a no-op.** The fields lane's last state write is 00:17:56 and there
+was no driver process at all; each 20-minute round had "relaunched" a lane into the void, and the
+`state_fresh` line that made it look alive was reading the state file the 01:33 validation run wrote.
+The fix is the parentheses - `(@($driver) + $lane.args)` - and a start that leaves no process now logs
+**`LAUNCH FAILED`** with the path to its stderr, so this cannot read as success again.
+
+Verified in the same minute, on the same script and the same data:
+
+    01:50:38  wd3-fields finished: nothing missing - not restarting
+    01:50:38  wc-verify no process and no fresh state, round 1 in a row, gate=ready
+    01:50:58  wc-verify relaunched: procs=1
+
+**The lesson is not the parenthesis.** It is that a watchdog's own log line is not evidence: the line
+that says "relaunched" was written by the same statement that failed. The count has to be taken after
+the call, and a start that leaves nothing behind has to say so.
+
 **Not checked here:** whether the import of the completed round and the write of its answers are ready
 to run. Those are the next steps and the write is the owner's.
 
