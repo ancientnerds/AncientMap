@@ -13725,3 +13725,59 @@ is what made the wrong directory look right. Two tests hold it there: the export
 tool of the repository the driver works in, and that file exists; and the prompt an agent receives
 names that path and not the data one.
 
+### The image lane was finished all along, and the handover said it was not
+
+Asked what the next open work was, the HANDOVER answered: **"WD2 image - 35 chunk plans built, 0
+chunks applied - the largest block of open production work"**. So the first step was the runbook's own
+per-chunk gate, on chunk-001, and it stopped on its own guard:
+
+    ERROR:  served image chunk 001: 96 planned thumbnail_url row(s) no longer hold the planned old value
+    REHEARSAL FAILED: psql exit 3
+
+That message reads like corruption. It is the opposite: a plan records the value a row held *before*
+the write, so "no longer holds the planned old value" is what a **landed** chunk looks like. The plan
+was built 2026-10-02 02:42, the rehearsal ran 2026-10-03 23:43.
+
+Four read-only checks, no writes, and the question is closed:
+
+| check | result |
+| --- | --- |
+| `chunk-001 --rehearse` | refused: 96 `thumbnail_url` rows drifted - and ended in `ROLLBACK` |
+| `chunk-001 --readback` | **`READBACK OK: 233 row(s), plan = journal = data`** |
+| all 35 stamps in `remediation_change_log` | **8,713 planned = 8,713 journalled**, 0 chunks without a journal row, 3,481 sites, written 2026-10-02 00:42:46 - 00:55:04 UTC |
+| `serve_image/run.py accept` chunk-001 / chunk-035 | **`"deviations": []`**, 100 and 81 sites |
+
+**The largest block of open production work was closed a day before the driver started.** The
+handover's lane table was a week stale, and the reason it stayed stale is that nothing in the loop
+reads the journal: the table is prose, the write path never consults it.
+
+The one thing the runbook's follow-up section asked for is genuinely open, and this is how it was
+found: the chunks change `thumbnail_url`, `is_hero` and `is_excluded`, which are card inputs, so a
+`card_stats` recompute follows the last accepted chunk. The last one is `P6/card-stats-recompute` of
+**2026-09-25**; the chunks landed on **2026-10-02**.
+
+Wave `2026-09-30` is therefore planned and taken through every gate that leaves production alone:
+
+- `--export` (read-only) and `--write` (no database): **21,041 cells over 4,468 of 4,977 cards, 27
+  refused**; 4,387 of the changed cards belong to sites with a journalled field write, the rest move
+  because a `(site_type, period_name)` share moved. The counterfactual in `PLAN.md` is the part that
+  makes the wave safe: putting back the 13,620 journalled input values and recomputing gives **0 of
+  60,048 cells** differing from the stored cards, so the generator is the one that wrote them and the
+  21,041 cells differ because the inputs moved.
+- `--check-primitive`: the deployed journal function casts the value, casts the old value and re-reads
+  the stored value.
+- `--verify` (read-only, before): 5,004 curated sites, 0 without a card_stats row, 0 journal rows for
+  this run stamp.
+- `--interests` (read-only): every other writer's interest in the touched values, named.
+- `--emit`: `APPLY.sql`, 21,041 rows.
+- `--rehearse`: 21,041 rows inserted, **`ROLLBACK`**, 0 journal rows for this stamp afterwards.
+- `--probe-guards`: **7 of 7 probes refused by their own guard**, `refused by its own guard=False` 0
+  times, 0 journal rows left by any of them.
+
+`--apply`, the after-`--verify` and the `--rehearse-rollback` are the owner's word: 21,041 cells is
+the largest single write in the remediation, and FINISH_PLAN section 7 step 9 places the wave after
+WD1/WD2/**WD3** - and WD3 is still answering. The wave is a flag away and waits for that decision.
+
+**Not checked here:** whether the game's cards look right after the write. The sitting proves the
+values the generator computes, not how the frontend renders them; that is the owner's visual call.
+
