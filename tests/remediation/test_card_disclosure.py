@@ -41,9 +41,21 @@ from tests.remediation import test_mechanical_teaser as TT  # noqa: E402
 from tests.remediation import test_phase4_accept as TA  # noqa: E402
 from tests.remediation.test_mechanical import FOREIGN, ProbeProduction  # noqa: E402
 
-OLD, NEW = M.AI_SYSTEM_OPUS, M.AI_SYSTEM
+OLD, NEW = M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE  # the lane's own pair, not the new-write alias
 OPUS, SONNET = "claude-opus-5-5", "claude-sonnet-5-5"
 SITES = (T.SKARA, T.NEWGRANGE, T.STONEHENGE)
+
+
+def test_the_correction_owns_the_two_disclosures_that_are_in_production() -> None:
+    """This lane finished on 2026-10-01 and wrote 185 provenances: from the Opus-only string to the
+    Claude string of that day. Its pair is pinned to those two strings, never to the alias
+    `AI_SYSTEM` that a new write carries - `AI_SYSTEM` names the combined Claude and MiniMax
+    disclosure since 2026-10-03, and following it would make a finished lane plan a second
+    correction of 185 sites it already corrected."""
+    assert C.OLD == M.AI_SYSTEM_OPUS
+    assert C.NEW == M.AI_SYSTEM_CLAUDE
+    assert C.NEW in M.AI_SYSTEMS
+    assert "MiniMax" not in C.NEW and "MiniMax" not in C.OLD
 RUN = "wb-test"
 NOW = "2026-10-01T00:00:00+00:00"
 

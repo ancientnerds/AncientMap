@@ -125,9 +125,12 @@ MAX_SITES = 100
 MIN_SITES = 2
 EXCERPT = 600
 TEST_ID = "E3/scope-review"
-#: The stamp of the model that judged, by the model id it runs as: the family (`opus`, `sonnet`) the
-#: evidence label of a retirement names.
-_FAMILY_OF_STAMP = {stamp: model_id.split("-")[1] for model_id, stamp in OH.ANSWER_MODELS.items()}
+#: The stamp of the model that judged, by the model id it runs as: the family (`opus`, `sonnet`,
+#: `minimax`) the evidence label of a retirement names. From `opus_handoff.ANSWER_FAMILIES`, which
+#: declares the family per model id.
+_FAMILY_OF_STAMP = {
+    stamp: OH.ANSWER_FAMILIES[model_id] for model_id, stamp in OH.ANSWER_MODELS.items()
+}
 
 #: Site types that do not by themselves say "human-made" (each a canonical type).
 NON_SITE_TYPES = frozenset(

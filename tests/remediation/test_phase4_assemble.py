@@ -156,10 +156,11 @@ def test_the_provenance_pins_ranges_drops_hashes_and_the_disclosure() -> None:
     ]
     assert provenance["lane"] == "W" and provenance["ai"] == "selected"
     assert provenance["ai_system"] == M.AI_SYSTEM and provenance["run"] == "pilot"
-    # a NEW write discloses the orchestrator and the answering subagents (owner decision 2026-10-01)
+    # a NEW write discloses both AI families (owner decisions 2026-10-01 and 2026-10-03)
     assert provenance["ai_system"] == (
-        "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
-        "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09"
+        "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
+        "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
+        "an-sites-remediation-2026-09"
     )
     assert provenance["attribution"] == {
         "title": "Stone Temple",

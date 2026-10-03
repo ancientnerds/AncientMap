@@ -688,10 +688,12 @@ class TestTheRun:
             assert CP.describes(provenance, T.GOOD[row["site_id"]])
             assert provenance["desc_sha256"] == T.sha(T.DESCRIPTIONS[row["site_id"]])
             assert provenance["check"]["by"].startswith("teaser-check-")
-            # `outcome_rows` writes the new disclosure (owner decision 2026-10-01: Opus + Sonnet)
+            # `outcome_rows` writes the disclosure of a new write (owner decisions 2026-10-01,
+            # 2026-10-03: Claude and MiniMax)
             assert provenance["ai_system"] == (
-                "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
-                "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09"
+                "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
+                "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
+                "an-sites-remediation-2026-09"
             )
             assert provenance["verify"] == {
                 "verdict": "VERIFIED",
