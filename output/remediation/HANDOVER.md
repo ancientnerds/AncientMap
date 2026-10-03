@@ -477,10 +477,19 @@ Nothing in any lane has moved since 2026-10-02 03:28.
     still gives 89.33 %. The 8 real flips are symmetric (4 to DROP, 4 to KEEP), and the fresh
     answers cite a median of 2 sources where the recorded ones cite 5. **The 91 open check questions
     stay unanswered until the owner decides.**
-  - **WD3 field fill: not yet measured.** `fields-02` is prepared (3 batches, 24 questions) with its
-    own calibration run; the fields tool accepts it (brief checked by hand).
+  - **WD3 field fill FAILED** - `fields-02`, 3 batches / 24 questions, all answered, 34 judged
+    units, 22 agreed = **64.71 %**. 9 of the 12 disagreements have `unresolved` on one side: the two
+    sides give up at the same rate (9 and 10 of 34 cells) but on different cells, and where **both**
+    decided it is 17/20 = 85 %. Forgiving `unresolved` as `keep` still gives only 67.65 %. **The 618
+    open field-fill questions stay unanswered until the owner decides.**
   - **WN cannot be calibrated at all**: its population is one site and there are no answered batches
     to re-answer. O18 is unsatisfiable there - an owner decision, not a measurement.
+- **A field the model keeps is compared by the decision alone.** The lane writes nothing for `keep`,
+  `clear` and `unresolved`, and its own rule does not ask a `keep` to carry the stored value
+  (`period_start`: any year in the stored bucket, `coordinates`: within `KEEP_KM` -
+  `fields/answers.py`). Comparing that value invents a disagreement: on `fields-02` it turned a
+  `keep: 42.0465` against a `keep: 42.046332` into a measured difference, which was the harness
+  guessing, not the model deciding.
 - **A calibration needs a run of its own.** The WC tool takes an answer only into a handoff one of a
   run's rounds registers. A calibration copy without a run is refused by the tool - correctly, and
   the model will not work around it. `calibrate --prepare-only` writes `<out>-run/` with the source

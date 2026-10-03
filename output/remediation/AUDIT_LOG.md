@@ -13474,3 +13474,47 @@ Sites with a verdict flip: `3c466fde-...` (Visockica), `3c47ded2-...` (Midea), `
 killed: after the per-attempt diagnostics fix it re-ran cleanly, the ledger counted 5 of 5 per
 batch, and the comparison says `passed: false` with an exit code of 1. Nothing about this verdict
 depends on a number the driver had to guess.
+
+### Lane WD3 field fill: FAILED - 64.71 %, and what the disagreements are made of
+
+`fields-02`, the first three batches of the WD3 round-0 handoff (`wd3-r0-b0001..3`, 24 questions):
+all 24 answered, 8 of 8 recorded per batch, the tracked tree unchanged, and
+
+    units 34, agreed 22, agreement 0.6471, passed false
+
+against the owner's 90 % (O18). **The lane holds and goes to the owner; the 618 open field-fill
+questions stay unanswered.**
+
+**A harness error, found and fixed before the number was read.** The first comparison of these very
+answers read a field the model *kept* as a unit value and counted `keep: 42.0465` against
+`keep: 42.046332` as a disagreement. That is not a model judgement but the harness inventing one:
+a `keep` writes nothing into the field, and the lane's own rule does not even ask it to carry the
+stored value - `period_start` accepts any year in the stored value's bucket, `coordinates` any
+point within `KEEP_KM` (`fields/answers.py`: "keep, but the year is not in the stored value's
+bucket - that is replace"). Only `replace` puts a value into the field, so only `replace` is
+compared with one; `keep`, `clear` and `unresolved` compare as the decision they are. Fixed in
+`_fill_units`, pinned by two tests, and the comparison re-run over the same 24 answers - the
+comparison is a pure function, so this cost no second model run.
+
+**The 12 disagreements, read from the answers themselves:**
+
+| | count |
+| --- | --- |
+| one side `unresolved`, the other a decision | 9 |
+| both sides decided, and decided differently | 3 |
+| **agreement if `unresolved` and `keep` were folded together** | **0.6765** - still under 0.9 |
+
+Both sides give up at almost the same rate and on different cells: 9 of 34 recorded cells are
+`unresolved`, 10 of the fresh ones, but the sets do not overlap much. Restricted to the 20 cells
+where **both** sides decided, agreement is **17/20 = 85 %**. So the failure is not a different rule
+for the same evidence - it is *which* cells the model cannot resolve, plus a verdict disagreement
+on the ones it can. 34 units is a coarse instrument: 17 of 20 is one cell away from 90 %, and this
+sample is what O18 asks for (2-3 batches), not more.
+
+The three decided-both cells are two `period_start` years read a century apart (`-1000` vs `-1500`,
+`-425` vs `-500`) and one `site_type` (`City/town/settlement` vs `Fortress`).
+
+**The driver's part held.** Three batches, three clean windows, `recorded 8 of 8` each, and a
+report that says `passed: false` with an exit code of 1 - the lane was not stopped by the
+disagreement rate, because the ledger counts what was written, and the verdict is the comparison's
+own. The run wrote into the calibration copy only; no production cell was touched.
