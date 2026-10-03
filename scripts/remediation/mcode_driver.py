@@ -814,7 +814,16 @@ class Command:
 
     @property
     def json(self) -> dict[str, Any]:
-        return _last_json_line(self.stdout)
+        """The command's own JSON payload. The tools print it in two shapes and both are real: an
+        operator command (`opus_handoff.py validate`, the WC CLI) pretty-prints it across many lines
+        and it is the whole stdout, while an `mcode exec` prints one object on the last line after
+        whatever the agent wrote before it. Whichever shape it is, the payload is read; a shape that
+        is not there is not guessed."""
+        try:
+            whole = json.loads(self.stdout)
+        except json.JSONDecodeError:
+            return _last_json_line(self.stdout)
+        return whole if isinstance(whole, dict) else {}
 
     def refuses_with(self, phrase: str) -> bool:
         return phrase.lower() in f"{self.stdout}\n{self.stderr}".lower()

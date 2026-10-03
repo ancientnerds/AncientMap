@@ -207,6 +207,41 @@ def test_a_rate_limited_batch_is_told_apart_from_another_failure(tmp_path: Path)
     )
 
 
+# ---------------------------------------------------------------------------- the operator command's JSON
+def test_an_operator_command_that_prints_its_json_across_lines_is_read() -> None:
+    """`opus_handoff.py validate` prints its JSON pretty-printed - 882 lines for one round - and the
+    driver read only whole lines. Measured 2026-10-03 18:11: driving lane WC for the first time in
+    production, the very first step stopped with "validate --dir ... printed no JSON" and named
+    nothing but a logging line: the payload was there, on stdout, in 882 lines. The dry run never
+    showed it, because `--dry-run` computes the plan from the run's files and calls no tool."""
+    payload = {"questions": 480, "answered": 371, "missing": [{"batch_id": "verify-0075"}]}
+    command = D.Command(
+        argv=("python", "opus_handoff.py", "validate"),
+        exit_code=1,
+        stdout=json.dumps(payload, indent=1) + "\n",
+        stderr="INFO pipeline.utils.logging: Logging configured\n",
+    )
+
+    assert command.json == payload
+
+
+def test_a_command_that_prints_its_json_on_one_line_after_its_own_output_is_read() -> None:
+    """The exec result is the other shape: one JSON object on the last stdout line, after whatever
+    the agent printed before it. Both shapes are real, so both are read - neither is a guess."""
+    command = D.Command(
+        argv=("mcode", "exec"),
+        exit_code=0,
+        stdout='thinking...\n{"status": "succeeded", "exit_code": 0}\n',
+        stderr="",
+    )
+
+    assert command.json == {"status": "succeeded", "exit_code": 0}
+
+
+def test_a_command_that_prints_no_json_reports_empty_rather_than_guessing() -> None:
+    assert D.Command(argv=("wc",), exit_code=3, stdout="not json at all\n", stderr="boom").json == {}
+
+
 # ---------------------------------------------------------------------------- the tracked-tree guard
 def test_the_tree_guard_reports_only_tracked_changes(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
