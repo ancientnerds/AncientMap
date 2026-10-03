@@ -61,3 +61,11 @@ failing lane holds and goes to the owner.
 before (rehearse, steps <= 100 sites, read back, rollback rehearsal, acceptance with 0 deviations).
 Push rule: MEMORY.md (pushes to main without asking for pure code with green gates; ask for
 migrations, compose, CI, secrets, data deletion, publishing).
+
+## 6. Push lock shared with the studio session (added 2026-10-03)
+A second mcode session works on the studio in `C:\PythonProjects\AncientMap-studio` and also pushes to
+`main`. A deploy re-imports `public/data/card_descriptions.json`, so a foreign push between a card write
+and its card-file push overwrites new cards. Therefore: before a production card write, create
+`C:\PythonProjects\AncientMap\.git\main-push.lock` (your session name + UTC time) - wait if it exists -
+and keep it until your own push of the regenerated card file is deployed; delete it afterwards. Every
+other push to `main` takes the same lock for the push and its deploy.
