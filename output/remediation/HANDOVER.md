@@ -414,3 +414,83 @@ every batch, which is why nothing there may be edited while a run is in flight.
 | the Python environment | `.venv/` locally; the repo carries the `requirements*.txt` | rebuild it |
 
 Everything else - the code, the plan, the audit, the instruments, the tests - is in git.
+
+## 0.0 Resume point - MiniMax Code since 2026-10-03 (this section wins over everything below it)
+
+The owner replaced Claude Code with MiniMax Code on 2026-10-03 (FINISH_PLAN section 8, O17-O23;
+`MCODE_START.md` is the start brief). Everything below was written by the previous harness and is
+kept as the evidence trail; this section is the state as measured on 2026-10-03.
+
+**Two model strings, never mixed up:**
+- the **answer stamp** - `opus_handoff.py answer --model MiniMax-M3.1-Flash-Preview`. This is the
+  model id exactly as the answering agent's own system prompt names it, and it is what the answer
+  records. `ANSWER_MODELS` holds all three accepted ids (Opus, Sonnet, MiniMax); an answer recorded
+  before keeps its stamp.
+- the **exec route** - `mcode exec --model minimax/MiniMax-M3.1-Flash-Preview`. Different string on
+  purpose. An answer must never name the route.
+
+**The disclosure of a new write changed once more.** `model4.AI_SYSTEM` is now the combined string
+("Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax)", naming every model that can have written a
+text of this corpus). `AI_SYSTEM_OPUS` and `AI_SYSTEM_CLAUDE` are the two strings already in
+production and stay accepted. **The card-disclosure correction lane owns the pair
+`AI_SYSTEM_OPUS` -> `AI_SYSTEM_CLAUDE` and is pinned to it** - never let it follow the `AI_SYSTEM`
+alias, or a finished 185-site lane plans a second correction.
+
+**The Workflow tool is gone.** `output/remediation/orchestration/*.js` cannot be resumed;
+`scripts/remediation/mcode_driver.py` replaces them. An operator step is now a command run as a
+subprocess and the numbers are counted from the files - no model decides whether a chunk is done.
+Only answering batches are a model call, one `mcode exec` each. After every batch the **tracked**
+tree must be unchanged or the batch is void and the lane stops (an M3.1 run once rewrote a check
+file). The width starts at 2, grows by one per clean window, halves on the first 429, caps by free
+RAM; the driver stops at <= 10 percent of the weekly MiniMax quota (read from `.env`, never printed)
+and resumes after the reset. A per-run state file under `output/remediation/mcode_driver/` makes a
+stopped lane resumable. **Lane WD3 and lane WC are both wired.** WC's next step per run, without a
+model call: `python scripts/remediation/mcode_driver.py wc --runs <run>... --first-batch-base 4200
+--dry-run` prints the stage and the handoff it would work on.
+
+**Where the lanes stand (measured 2026-10-03, not read from the notes):**
+
+| Lane | State | Next step |
+| --- | --- | --- |
+| WB teaser cards | **complete** - 6 chunks, 31 steps, 2,716 cells, 0 deviations | nothing |
+| WC sentence check | pilot written; mass-01 built, **not written**; chunks 02-05 unbuilt | answer 692 + 91 open questions, then build 02-05, then write mass-01 |
+| WD1 fields | **complete** - 3,444 sites, 8,055 cells, 0 deviations | runbook step 15 (`handoff --wave`) was never run |
+| WD2 scope | **written** - 20 sites retired | nothing |
+| WD2 image | 4,064 + 933 answered, 35 chunk plans built, **0 chunks applied** | the largest block of open production work |
+| WD3 field fill | pilot 2 passed, wave `2026-10-01a` written; main run 1,995/2,613 answered | answer the 618 missing, import, write |
+| WN | implemented, **never run**; population is 1 site | pilot, then mass |
+| WA v3/v3d | v3 + v3d main written, 37 steps, 0 deviations | write `p4-2510`/`p4-2511`; the `wip/p4-pilot` merge is still open and **the WA run dirs live in that worktree** |
+
+Nothing in any lane has moved since 2026-10-02 03:28.
+
+**Traps that cost a session:**
+- **Before the first MiniMax answer, the lane must be calibrated** (O18): re-answer 2-3
+  already-answered batches per lane type through the driver, compare with the recorded answers,
+  pass at >= 90 percent agreement and 0 false sources. A failing lane holds and goes to the owner.
+  The numbers go into the AUDIT_LOG.
+- **Nothing in the 18 commits on `integrate/wave1` has been deployed.** That branch is 18 ahead and
+  **271 behind `origin/main`**; a push is a merge of two diverged histories and a live deploy, so it
+  is an owner decision, not a code change.
+- **Push lock (`MCODE_START.md` section 6, added 2026-10-03):** a second mcode session works on the
+  studio in `C:\PythonProjects\AncientMap-studio` and also pushes to `main`. A deploy re-imports
+  `public/data/card_descriptions.json`, so a foreign push between a card write and its card-file push
+  overwrites new cards. Before any production card write, create
+  `C:\PythonProjects\AncientMap\.git\main-push.lock` (session name + UTC time), wait if it exists, and
+  keep it until your own push of the regenerated card file is deployed. Every other push to `main`
+  takes the same lock for the push and its deploy.
+- `handoff/_interrupted-2026-10-01_served-image-2026-09-30-replace` and the `_partial-` sibling are
+  abandoned duplicate exports (734 and 467 prompts, 0 answers). Do not resume them.
+- An answer must go through `opus_handoff.py answer`. A file an agent writes itself - even a correct
+  one - has no `prompt_sha256`, no `model` and no `answered_by`, so the lane does not see it and it
+  cannot be imported. 15 such files were found in the repo root on 2026-10-03 (see the AUDIT_LOG).
+- **A second session writes in this checkout.** On 2026-10-03 15:23 it edited
+  `scripts/remediation/mcode_driver.py` in the main tree while the same file was being changed in a
+  worktree, which blocked a merge. Look at `git status` before merging, and never overwrite an
+  uncommitted change you did not make.
+- WC's import marker is `verify/round-<n>/VERIFIED.jsonl`, one file per round - not
+  `VERIFIED.jsonl` in the run root, which is where the old JS script looked. A machine that followed
+  the script would have answered a round that is already imported, and WC's rounds are written once.
+- Worktrees cost ~4.2 GB each and there are already 24. 18 GB free at last check; a fresh worktree
+  also skips 133 tests that the main tree runs (gitignored working data).
+- In a worktree `.git` is a file, not a directory: redirect a log there with
+  `> C:\Users\marti\.minimax\file.txt`, not `> .git/file.txt`.
