@@ -13518,3 +13518,45 @@ The three decided-both cells are two `period_start` years read a century apart (
 report that says `passed: false` with an exit code of 1 - the lane was not stopped by the
 disagreement rate, because the ledger counts what was written, and the verdict is the comparison's
 own. The run wrote into the calibration copy only; no production cell was touched.
+
+### Lane WC, mass-01: written to production - 513 sites, 1018 rows, 0 deviations
+
+The first MiniMax-driven production write of the 2026-10-03 takeover, and the first `mass-*` WC
+write. Plans named in run order, as lane WC's gate requires (`--wc-plan`, once per run, the pilot's
+first - naming only the mass plan is refused with "the first WC plan named is the pilot's"):
+
+- `wc_runner/runs/pilot-2026-09-27c/WC4.jsonl`, sha256 `799c408a66a49c8cf709af0362886bc453100264583477c8d9799b27a5ed974f`
+- `wc_runner/runs/mass-2026-09-27-01/WC4.jsonl`, sha256 `0b633f13fa259f3aa048446426db7cac90352917d743b841e6307a403743f09e`
+
+The pilot's approval holds: `judge/RESULT.json` `passed: true`, sha256
+`dc0d1f651c13bde1bdfecbebca2c61d6891095de028510ffeca1ac46a0573924`. (The other two pilots,
+2026-09-27 and -27b, failed their judge; only -27c has a verification round.)
+
+**The plan.** 520 of 520 sites read live from production, **1018 rows** planned, 26 write batches
+(`p4wc-4003` the pilot's, then `p4wc-4200`..`p4wc-4224`). 7 rows refused by the rule
+`written-by-p4`: those sites' texts the P4 lane had already written, so WC does not write over
+them. No site unclaimed (`HUMAN_ONLY D7` empty).
+
+**The steps, each accepted before the next began** (`ACCEPTED/step-0001.json` .. `step-0006.json`):
+
+| step | sites | batches | rows | acceptance |
+| --- | --- | --- | --- | --- |
+| 1 (earlier session) | 20 | 1 | 40 | 0 deviation(s) |
+| 2 | 100 | 5 | 200 | 0 deviation(s) |
+| 3 | 100 | 5 | 199 | 0 deviation(s) |
+| 4 | 99 | 5 | 194 | 0 deviation(s) |
+| 5 | 97 | 5 | 194 | 0 deviation(s) |
+| 6 | 97 | 5 | 191 | 0 deviation(s) |
+
+**513 sites, 1018 rows.** The last acceptance reads `planned rows 1018 | lane journal rows 1018 |
+carried 1018 | not yet written 0 | superseded 0`, re-checked **513 written sites against their
+journal evidence**: `RESULT: 0 deviation(s)`. The rehearsal before any of it exercised all 25 open
+batches inside a rolled-back transaction, every row read back holding its planned value with
+`rows_written: 0`; the journal stamp family is `phase4wc:p4wc-NNNN:chunk-0001`.
+
+**One trap, cost an acceptance round.** The acceptance's output is the file `--accept` reads, and
+PowerShell 5.1 writes `1> file` as **UTF-16** - the gate reads UTF-8 and stops with
+`UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position 0`. The log has to be written
+as UTF-8 without a BOM; capturing the tool's output and writing it with
+`[IO.File]::WriteAllText(..., UTF8Encoding($false))` is the way. Nothing was written by the failed
+round.
