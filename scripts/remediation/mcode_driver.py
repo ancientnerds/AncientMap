@@ -322,12 +322,27 @@ def quota_remaining(
     *,
     env_file: Path = REPO / ".env",
     fetch: Callable[..., dict[str, Any]] | None = None,
+    key_name: str = QUOTA_KEY_NAME,
 ) -> float:
     """The weekly quota left in percent. The key travels in the Authorization header and nowhere
-    else; this function never returns or logs it."""
-    key = _env_value(QUOTA_KEY_NAME, env_file)
+    else; this function never returns or logs it.
+
+    The key is the **MiniMax platform secret** of `api.minimax.io`, which is not the key the Lyra
+    pipeline uses: `LYRA_MINIMAX_API_KEY` authenticates the Anthropic-compatible route and is
+    refused here with `login fail` (measured 2026-10-03). So the variable name is a parameter, and
+    the refusal names the variable to set - never its value.
+    """
+    key = _env_value(key_name, env_file)
     call = fetch or _http_json
     payload = call(QUOTA_URL, headers={"Authorization": key}, timeout=30.0)
+    base = payload.get("base_resp") or {}
+    if base.get("status_code") not in (None, 0):
+        raise DriverError(
+            f"{QUOTA_URL} refused the key in {key_name}: {base.get('status_msg', '')[:200]} "
+            f"(status {base.get('status_code')}). That variable must hold the MiniMax platform "
+            "secret of api.minimax.io, not the Anthropic-compatible key the Lyra pipeline uses. "
+            "The driver stops here rather than run without a quota check."
+        )
     value = payload.get("current_weekly_remaining_percent")
     if not isinstance(value, (int, float)):
         raise DriverError(f"{QUOTA_URL} returned no current_weekly_remaining_percent: {payload!r}")
@@ -917,6 +932,16 @@ def answer_all(
     return outcomes
 
 
+def _quota_check() -> Callable[[], bool]:
+    """The weekly quota stop, read once per batch. The key is read inside `quota_remaining`; this
+    function never holds or prints it."""
+
+    def exceeded() -> bool:
+        return quota_exhausted(quota_remaining())
+
+    return exceeded
+
+
 # ------------------------------------------------------------------------------------ the CLI
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="mcode-driver", description=__doc__.splitlines()[0])
@@ -930,6 +955,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     wd3.add_argument("--width", type=int, default=WIDTH_START)
     wd3.add_argument("--timeout", type=int, default=3600)
     wd3.add_argument("--max-steps", type=int, default=200)
+    wd3.add_argument("--no-quota-check", action="store_true", help="skip the weekly quota stop")
     wd3.add_argument("--dry-run", action="store_true", help="report the plan, answer nothing")
 
     wc = lanes.add_parser("wc", help="lane WC (sentence check): the JS state machine, in Python")
@@ -975,7 +1001,7 @@ def _first_batch_for(args: Any, run: str, index: int) -> int:
 def _main_wc(args: Any) -> int:
     width = Width.from_start(args.width)
     runner = McodeRunner()
-    quota = None if args.no_quota_check else (lambda: quota_exhausted(quota_remaining()))
+    quota = None if args.no_quota_check else _quota_check()
     results: list[dict[str, Any]] = []
     for index, run in enumerate(args.runs):
         run_dir = Path(args.runs_root) / run
@@ -1070,7 +1096,7 @@ def _main_wd3(args: Any) -> int:
             state=state,
             timeout=args.timeout,
             max_steps=args.max_steps,
-            quota_check=lambda: quota_exhausted(quota_remaining()),
+            quota_check=None if args.no_quota_check else _quota_check(),
             on_void=lambda outcome: print(
                 json.dumps(
                     {
