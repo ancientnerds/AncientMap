@@ -1770,6 +1770,19 @@ def _main_wd3(args: Any) -> int:
         print(json.dumps({"batches": list(plan.batches), "exported": plan.exported}, indent=1))
         return 0
 
+    # Which batches still owe an answer is the validator's answer, not the folders on disk: the
+    # round was exported before, and 249 of its 327 batches are already answered (measured
+    # 2026-10-03). `plan.batches` counts what exists, so answering it would re-answer every
+    # answered batch and overwrite the answers the earlier rounds recorded. Lane WC reads it the
+    # same way, and a handoff with stale, malformed or orphaned answers is refused here too.
+    check = validate_handoff(plan.validate_dir)
+    if not check.ok:
+        print(json.dumps({"stopped": f"validate refused: {check.problems}"}), file=sys.stderr)
+        return 1
+    if not check.missing:
+        print(json.dumps({"batches": [], "note": "nothing missing"}))
+        return 0
+
     state = State(
         STATE_DIR / f"wd3-{args.run.name}.json",
         lane="wd3",
@@ -1792,7 +1805,7 @@ def _main_wd3(args: Any) -> int:
 
     try:
         outcomes = answer_all(
-            plan.batches,
+            check.missing,
             prompt_for=prompt,
             runner=runner,
             width=width,

@@ -13,6 +13,7 @@ state machine.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import stat
@@ -690,6 +691,83 @@ def test_a_lane_resumes_from_its_state_file(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------- one lane state machine
+def test_wd3_on_resume_answers_only_the_batches_the_validator_names_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The plan counts the batch folders on disk; the answering step must ask the validator, the
+    way lane WC does. Measured 2026-10-03 18:33, before the lane was ever started: `_main_wd3`
+    handed `plan.batches` to `answer_all`, which on the real handoff is all 327 folders - 249 of
+    them already answered, 1995 recorded answers. Starting it would have re-answered every
+    answered batch and overwritten what the earlier rounds recorded. The test above, whose name
+    promised this, only ever exercised `plan_wd3`."""
+    handoff = tmp_path / "fields-wd3-r0"
+    for batch in ("wd3-r0-b0001", "wd3-r0-b0002", "wd3-r0-b0003"):
+        (handoff / batch).mkdir(parents=True)
+        (handoff / batch / "MANIFEST.jsonl").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(
+        D,
+        "validate_handoff",
+        lambda directory, **kwargs: D.Validation(
+            ok=True, missing=("wd3-r0-b0002",), missing_count=5
+        ),
+    )
+    asked: list[tuple[str, ...]] = []
+    monkeypatch.setattr(
+        D, "answer_all", lambda batches, **kwargs: asked.append(tuple(batches)) or []
+    )
+
+    code = D._main_wd3(
+        argparse.Namespace(
+            run=tmp_path / "run",
+            handoff=str(tmp_path / "fields-wd3"),
+            resume=True,
+            width=1,
+            timeout=10,
+            max_steps=2,
+            no_quota_check=True,
+            dry_run=False,
+        )
+    )
+
+    assert code == 0
+    assert asked == [("wd3-r0-b0002",)]  # the one the validator named, not the three on disk
+
+
+def test_wd3_stops_when_the_validator_refuses_the_handoff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stale, malformed or orphaned answers mean the directory is not one to answer into. The lane
+    holds and says so instead of writing into it."""
+    handoff = tmp_path / "fields-wd3-r0"
+    (handoff / "wd3-r0-b0001").mkdir(parents=True)
+    (handoff / "wd3-r0-b0001" / "MANIFEST.jsonl").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(
+        D,
+        "validate_handoff",
+        lambda directory, **kwargs: D.Validation(
+            ok=False, missing=("wd3-r0-b0001",), missing_count=5, problems='{"stale": [1]}'
+        ),
+    )
+    called: list[str] = []
+    monkeypatch.setattr(D, "answer_all", lambda *a, **k: called.append("answered") or [])
+
+    code = D._main_wd3(
+        argparse.Namespace(
+            run=tmp_path / "run",
+            handoff=str(tmp_path / "fields-wd3"),
+            resume=True,
+            width=1,
+            timeout=10,
+            max_steps=2,
+            no_quota_check=True,
+            dry_run=False,
+        )
+    )
+
+    assert code == 1
+    assert called == []
+
+
 def test_wd3_on_resume_does_not_export_again_and_answers_only_what_is_missing(
     tmp_path: Path,
 ) -> None:
