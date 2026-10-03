@@ -312,7 +312,8 @@ def a_check_run(tmp_path: Path, handoff: Path, batch: str = "wc-0001") -> Path:
             json.dumps({"site_id": f"{batch}-site-{n}", "sentences": ["a", "b"]}) + "\n"
             for n in range(2)
         )
-        + json.dumps({"site_id": "other-site", "sentences": ["c"]}) + "\n",
+        + json.dumps({"site_id": "other-site", "sentences": ["c"]})
+        + "\n",
         encoding="utf-8",
     )
     return run
@@ -338,6 +339,27 @@ def test_a_check_calibration_is_registered_in_rounds_jsonl_too(tmp_path: Path) -
     # the answer check of a check round reads the run's sites: the calibration brings its own and
     # nothing else
     assert sorted(C.read_sites(cal_run)) == ["wc-0001-site-0", "wc-0001-site-1"]
+
+
+def test_a_calibration_run_counts_as_ready_in_either_layout(tmp_path: Path) -> None:
+    """Measured 2026-10-03: the check calibration refused to start because the readiness check looked
+    for `verify/round-1/ROUND.json` only. A check lane's round lives in `ROUNDS.jsonl`, and refusing
+    there was right: the file the check had written is the other one."""
+    handoff = a_handoff(tmp_path)
+    check_out = tmp_path / "check-calibration"
+    D.copy_for_calibration(handoff, check_out, ["wc-0001"])
+    check_run = D.register_calibration_run(
+        a_check_run(tmp_path, handoff), handoff, check_out, ["wc-0001"]
+    )
+    verify_out = tmp_path / "verify-calibration"
+    D.copy_for_calibration(handoff, verify_out, ["wc-0001"])
+    verify_run = D.register_calibration_run(
+        a_source_run(tmp_path, handoff), handoff, verify_out, ["wc-0001"]
+    )
+
+    assert D.calibration_run_ready(check_run) is True
+    assert D.calibration_run_ready(verify_run) is True
+    assert D.calibration_run_ready(tmp_path / "nothing") is False
 
 
 # ---------------------------------------------------------------------------- the verdict

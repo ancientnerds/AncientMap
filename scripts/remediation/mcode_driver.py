@@ -1378,6 +1378,16 @@ def _shown(path: Path) -> str:
         return str(path.resolve())
 
 
+def calibration_run_ready(run_dir: Path) -> bool:
+    """Whether `run_dir` is a run whose round record the WC tool will read: a verification round in
+    `verify/round-1/ROUND.json`, a check round in `ROUNDS.jsonl`. Measured 2026-10-03: the check
+    calibration refused to start because the check looked for the verification file only - and the
+    refusal was right, the round it had written is the other one."""
+    return (run_dir / "verify" / "round-1" / "ROUND.json").exists() or (
+        run_dir / "ROUNDS.jsonl"
+    ).exists()
+
+
 def _source_round(source_run: Path, source_handoff: Path) -> tuple[dict[str, Any], Path]:
     """The round record of `source_run` that registered `source_handoff`, and the file the run keeps
     it in: the check rounds in `ROUNDS.jsonl`, the verification rounds in `verify/round-N/ROUND.json`.
@@ -1525,7 +1535,7 @@ def _main_calibrate(args: Any) -> int:
         )
         return 1
     recorded = json.loads(recorded_path.read_text(encoding="utf-8"))
-    if is_wc and not (cal_run / "verify" / "round-1" / "ROUND.json").exists():
+    if is_wc and not calibration_run_ready(cal_run):
         print(
             json.dumps(
                 {
