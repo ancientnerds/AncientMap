@@ -244,6 +244,49 @@ def test_a_missing_key_stops_the_driver_instead_of_calling_without_one() -> None
         D.quota_remaining(env_file=env_file, fetch=lambda *a, **k: {})
 
 
+def test_a_key_the_quota_endpoint_refuses_stops_the_driver_and_names_the_variable(
+    tmp_path: Path,
+) -> None:
+    """Measured 2026-10-03: the repo's key is the Anthropic-compatible one, and the quota endpoint
+    refuses it with `login fail`. The driver must stop - running a lane without a quota check would
+    break owner decision O20 - and the refusal must name the variable to set, never its value."""
+    env_file = tmp_path / ".env"
+    env_file.write_text("LYRA_MINIMAX_API_KEY=not-the-platform-secret\n", encoding="utf-8")
+    seen: dict[str, str] = {}
+
+    def fetch(url: str, *, headers: dict[str, str], timeout: float) -> dict[str, Any]:
+        seen["auth"] = headers["Authorization"]
+        return {
+            "base_resp": {
+                "status_code": 1004,
+                "status_msg": "login fail: Please carry the API secret key in the 'Authorization' field",
+            }
+        }
+
+    with pytest.raises(D.DriverError) as caught:
+        D.quota_remaining(env_file=env_file, fetch=fetch)
+
+    message = str(caught.value)
+    assert "LYRA_MINIMAX_API_KEY" in message
+    assert "platform secret" in message
+    assert "not-the-platform-secret" not in message  # the value is never in the refusal
+    assert seen["auth"] == "not-the-platform-secret"  # but it did travel in the header
+
+
+def test_the_quota_variable_name_can_be_chosen(tmp_path: Path) -> None:
+    """A repo may hold the platform secret under its own name; the driver asks for one."""
+    env_file = tmp_path / ".env"
+    env_file.write_text("MINIMAX_PLATFORM_KEY=k\nLYRA_MINIMAX_API_KEY=w\n", encoding="utf-8")
+    assert (
+        D.quota_remaining(
+            env_file=env_file,
+            key_name="MINIMAX_PLATFORM_KEY",
+            fetch=lambda *a, **k: {"current_weekly_remaining_percent": 55},
+        )
+        == 55
+    )
+
+
 # ---------------------------------------------------------------------------- the resume
 def test_a_lane_resumes_from_its_state_file(tmp_path: Path) -> None:
     state = D.State(tmp_path / "state.json", lane="wd3", run="wd3-run", handoff="fields-wd3")
