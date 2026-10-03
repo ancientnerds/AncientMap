@@ -49,11 +49,19 @@ def verify_answer(*verdicts: str, coherent: bool = True) -> str:
         {
             "site_id": SITE,
             "kept": [
-                {"k": k, "verdict": verdict, "quotes": [{"url": f"https://example.org/k{k}"}]}
+                {
+                    "k": k,
+                    "verdict": verdict,
+                    "quotes": [
+                        {"url": f"https://example.org/k{k}", "quote": f"page {k} says so, in full"}
+                    ],
+                    "note": "the page says it",
+                }
                 for k, verdict in enumerate(verdicts, start=1)
             ],
             "coherent": coherent,
             "broken": [],
+            "note": "the kept text reads as one description",
         }
     )
 
@@ -208,6 +216,176 @@ def test_the_report_states_the_verdict_the_brief_asks_for() -> None:
     assert isinstance(report["disagreements"][0]["fresh_sources"], list)
 
 
+# ---------------------------------------------------------------------------- the calibration run
+def a_source_run(
+    tmp_path: Path, handoff: Path, batches: tuple[str, ...] = ("wc-0001", "wc-0002")
+) -> Path:
+    """A WC run whose verification round 1 registered `handoff`, with the questions it asked."""
+    run = tmp_path / "run"
+    (run / "verify" / "round-1").mkdir(parents=True)
+    (run / "POPULATION.json").write_text(json.dumps({"kind": "wc"}) + "\n", encoding="utf-8")
+    record = {
+        "round": 1,
+        "stage": "verify",
+        "handoff": str(handoff),
+        "exported_at": "2026-10-01T18:00:00+00:00",
+        "batches": {batch: [f"{batch}-site-{n}" for n in range(2)] for batch in batches},
+        "shown": {f"{batch}-site-{n}": [1] for batch in batches for n in range(2)},
+    }
+    (run / "verify" / "round-1" / "ROUND.json").write_text(
+        json.dumps(record, indent=1) + "\n", encoding="utf-8"
+    )
+    return run
+
+
+def test_the_calibration_answers_into_a_registered_run_of_its_own(tmp_path: Path) -> None:
+    """Measured 2026-10-03: the WC tool accepts a verification answer only into a handoff that one
+    of the run's rounds registers (`wc/cli.py:_verify_round_of`). The calibration copy had no run,
+    so the model refused to answer and reported the block - correctly. Registering the copy as a
+    round of the *production* run is no option: that run's import would read the comparison answers
+    as verdicts. So the calibration gets a run of its own."""
+    from wc import cli as C  # the tool whose guard refused the copy
+
+    handoff = a_handoff(tmp_path)
+    out = tmp_path / "calibration"
+    D.copy_for_calibration(handoff, out, ["wc-0001"])
+
+    cal_run = D.register_calibration_run(a_source_run(tmp_path, handoff), handoff, out, ["wc-0001"])
+
+    assert cal_run != tmp_path / "run"  # not the production run
+    brief = C.verify_brief(cal_run, out, "wc-0001")
+    assert "wc-0001" in brief
+    label = C._verify_round_of(cal_run, out)["batches"]["wc-0001"][0]
+    answer = json.loads(verify_answer("SUPPORTED"))
+    answer["site_id"] = label
+    assert C.verify_check_answer(cal_run, out, "wc-0001", label, json.dumps(answer)) is None
+    # a batch that is not calibrated is no question of the calibration run
+    with pytest.raises(C.WcRunError, match="no batch"):
+        C.verify_brief(cal_run, out, "wc-0002")
+
+
+def test_a_calibration_run_is_written_once_and_names_what_it_was_calibrated_from(
+    tmp_path: Path,
+) -> None:
+    handoff = a_handoff(tmp_path)
+    out = tmp_path / "calibration"
+    D.copy_for_calibration(handoff, out, ["wc-0001"])
+    source = a_source_run(tmp_path, handoff)
+
+    cal_run = D.register_calibration_run(source, handoff, out, ["wc-0001"])
+    record = json.loads((cal_run / "verify" / "round-1" / "ROUND.json").read_text(encoding="utf-8"))
+
+    assert record["calibration"] is True
+    assert record["calibrated_from"]["batches"] == ["wc-0001"]
+    with pytest.raises(D.DriverError, match="written once"):
+        D.register_calibration_run(source, handoff, out, ["wc-0001"])
+
+
+def test_a_batch_the_source_run_never_exported_cannot_be_calibrated(tmp_path: Path) -> None:
+    handoff = a_handoff(tmp_path)
+    out = tmp_path / "calibration"
+    D.copy_for_calibration(handoff, out, ["wc-0001"])
+
+    with pytest.raises(D.DriverError, match="no batch"):
+        D.register_calibration_run(a_source_run(tmp_path, handoff), handoff, out, ["wc-0099"])
+
+
+def a_check_run(tmp_path: Path, handoff: Path, batch: str = "wc-0001") -> Path:
+    """A WC run whose *check* round registered `handoff` - the check rounds live in the run's
+    `ROUNDS.jsonl`, not in a `verify/round-N/ROUND.json`, and they carry neither a stage nor the
+    shown sentence numbers a verification round carries. The sites come with the run: the check's own
+    answer check reads them."""
+    run = tmp_path / "check-run"
+    run.mkdir(parents=True)
+    (run / "POPULATION.json").write_text(json.dumps({"kind": "wc"}) + "\n", encoding="utf-8")
+    record = {
+        "round": 1,
+        "handoff": str(handoff),
+        "exported_at": "2026-09-28T12:00:00+00:00",
+        "asked": {f"{batch}-site-{n}": [1, 2] for n in range(2)},
+        "batches": {batch: [f"{batch}-site-{n}" for n in range(2)]},
+        "failures": {},
+    }
+    (run / "ROUNDS.jsonl").write_text(json.dumps(record) + "\n", encoding="utf-8")
+    (run / "SITES.jsonl").write_text(
+        "".join(
+            json.dumps({"site_id": f"{batch}-site-{n}", "sentences": ["a", "b"]}) + "\n"
+            for n in range(2)
+        )
+        + json.dumps({"site_id": "other-site", "sentences": ["c"]}) + "\n",
+        encoding="utf-8",
+    )
+    return run
+
+
+def test_a_check_calibration_is_registered_in_rounds_jsonl_too(tmp_path: Path) -> None:
+    """The check stage keeps its rounds in the run's ROUNDS.jsonl, so the calibration run has to
+    carry its round there; a calibration written only under `verify/` would be refused exactly the
+    way the verification one was."""
+    from wc import cli as C
+
+    handoff = a_handoff(tmp_path)
+    out = tmp_path / "calibration"
+    D.copy_for_calibration(handoff, out, ["wc-0001"])
+
+    cal_run = D.register_calibration_run(a_check_run(tmp_path, handoff), handoff, out, ["wc-0001"])
+
+    assert "wc-0001" in C.brief(cal_run, out, "wc-0001")
+    assert not (cal_run / "verify").exists()
+    (line,) = (cal_run / "ROUNDS.jsonl").read_text(encoding="utf-8").splitlines()
+    record = json.loads(line)
+    assert record["calibration"] is True
+    # the answer check of a check round reads the run's sites: the calibration brings its own and
+    # nothing else
+    assert sorted(C.read_sites(cal_run)) == ["wc-0001-site-0", "wc-0001-site-1"]
+
+
+# ---------------------------------------------------------------------------- the verdict
+def test_a_calibration_with_an_unanswered_question_does_not_pass() -> None:
+    """Owner decision 2026-10-03 (O18) asks for >= 90 % agreement. A question the model never
+    answered is not agreement, and a lane measured on half its questions has not been measured."""
+    report = D.compare_answers(
+        "wc-verify",
+        [SITE, OTHER_SITE],
+        {SITE: verify_answer("SUPPORTED")},
+        {SITE: verify_answer("SUPPORTED")},
+    )
+
+    assert report.passed is False
+    assert report.to_dict()["passed"] is False
+
+
+def test_the_verdict_is_the_agreement_floor_the_owner_decided() -> None:
+    assert (
+        D.compare_answers(
+            "wc-verify",
+            [SITE],
+            {SITE: verify_answer("SUPPORTED")},
+            {SITE: verify_answer("SUPPORTED")},
+        ).passed
+        is True
+    )
+    # 10 of 11 judged units (one claim of ten in a different verdict): 0.909, over the floor
+    ten = verify_answer(*["SUPPORTED"] * 10)
+    nine = verify_answer(*["SUPPORTED"] * 9, "NOT SUPPORTED")
+    assert D.compare_answers("wc-verify", [SITE], {SITE: ten}, {SITE: nine}).passed is True
+    # 9 of 11: 0.818, under it
+    assert (
+        D.compare_answers(
+            "wc-verify",
+            [SITE],
+            {SITE: ten},
+            {SITE: verify_answer(*["SUPPORTED"] * 8, "NOT SUPPORTED", "NOT SUPPORTED")},
+        ).passed
+        is False
+    )
+    assert D.AGREEMENT_FLOOR == 0.9
+
+
+def test_no_questions_measured_is_not_a_pass() -> None:
+    assert D.compare_answers("wc-verify", [SITE], {SITE: verify_answer("KEEP")}, {}).passed is False
+
+
 # ---------------------------------------------------------------------------- the command line
 def test_the_calibrate_subcommand_is_reachable_and_keeps_its_lane_type(tmp_path: Path) -> None:
     """The subcommand name and `--lane` (the lane *type* being calibrated) are two different
@@ -226,7 +404,7 @@ def test_the_calibrate_subcommand_is_reachable_and_keeps_its_lane_type(tmp_path:
             "--out",
             str(out),
             "--run",
-            str(tmp_path / "run"),
+            str(a_source_run(tmp_path, handoff)),
             "--batches",
             "wc-0001",
             "--prepare-only",
@@ -237,6 +415,8 @@ def test_the_calibrate_subcommand_is_reachable_and_keeps_its_lane_type(tmp_path:
     assert (out / "RECORDED.json").exists()
     assert (out / "wc-0001" / "check" / f"{SITE}.prompt.txt").exists()
     assert not (out / "wc-0001" / "check" / f"{SITE}.answer.json").exists()
+    # the copy is a round of a run of its own, so the tool's own helpers accept it
+    assert (tmp_path / "calibration-run" / "verify" / "round-1" / "ROUND.json").exists()
 
 
 def test_an_unknown_lane_type_is_refused(tmp_path: Path) -> None:

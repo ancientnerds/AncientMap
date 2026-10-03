@@ -29,6 +29,7 @@ A lane's arguments are the arguments of the JS script it replaces.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import shutil
@@ -68,6 +69,9 @@ QUOTA_AUTH_PREFIX = "Bearer "
 #: would report 100 percent while the plan the lane spends is the one that runs out.
 QUOTA_MODEL_NAME = "general"
 QUOTA_FLOOR_PERCENT = 10.0
+#: Owner decision 2026-10-03 (O18): a lane type is calibrated before it writes a MiniMax answer to
+#: production, and it passes at this share of judged units agreeing with the recorded answers.
+AGREEMENT_FLOOR = 0.9
 WIDTH_START = 2
 WIDTH_CAP = 14
 HANDOFF = REPO / "output" / "remediation" / "handoff"
@@ -108,19 +112,48 @@ def tracked_changes(repo: Path) -> str:
     return run_git(repo, "status", "--porcelain", "--untracked-files=no", check=False).rstrip()
 
 
+def _free_ram_gb_from_meminfo(text: str) -> float:
+    """`/proc/meminfo`'s `MemAvailable` in GB, 0.0 when the line is not in it."""
+    for line in text.splitlines():
+        if line.startswith("MemAvailable:"):
+            return int(line.split()[1]) / 1024 / 1024
+    return 0.0
+
+
 def free_ram_gb() -> float:
     """Free RAM in GB, for the width cap. 0.0 when it cannot be read: the cap then does not bind,
-    which is the safe direction (too narrow a cap would stall a lane on a healthy machine)."""
+    which is the safe direction (too narrow a cap would stall a lane on a healthy machine).
+
+    Measured 2026-10-03: this shelled out to `wmic OS get FreePhysicalMemory`, which this Windows
+    no longer ships. The command processor answered `wMic is not recognized` on stderr, the reader
+    found no line, and the cap read that as "no cap" - the width governor grew unbounded on the
+    machine that was supposed to hold it back. `GlobalMemoryStatusEx` is the API behind it, in the
+    standard library, with nothing to go missing.
+    """
+    if os.name == "nt":
+
+        class _MemoryStatusEx(ctypes.Structure):
+            _fields_ = [
+                ("dwLength", ctypes.c_ulong),
+                ("dwMemoryLoad", ctypes.c_ulong),
+                ("ullTotalPhys", ctypes.c_ulonglong),
+                ("ullAvailPhys", ctypes.c_ulonglong),
+                ("ullTotalPageFile", ctypes.c_ulonglong),
+                ("ullAvailPageFile", ctypes.c_ulonglong),
+                ("ullTotalVirtual", ctypes.c_ulonglong),
+                ("ullAvailVirtual", ctypes.c_ulonglong),
+                ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+            ]
+
+        status = _MemoryStatusEx()
+        status.dwLength = ctypes.sizeof(_MemoryStatusEx)
+        if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
+            return status.ullAvailPhys / 1024 / 1024
+        return 0.0
     try:
-        info = os.popen(  # noqa: S605 - a fixed command, no interpolation
-            "wmic OS get FreePhysicalMemory /value"
-        ).read()
+        return _free_ram_gb_from_meminfo(Path("/proc/meminfo").read_text(encoding="utf-8"))
     except OSError:
         return 0.0
-    for line in info.splitlines():
-        if line.lower().startswith("freephysicalmemory="):
-            return int(line.split("=", 1)[1].strip()) / 1024 / 1024
-    return 0.0
 
 
 # ------------------------------------------------------------------------------------ one mcode exec
@@ -899,12 +932,21 @@ def drive_wc_run(
                 timeout=timeout,
                 max_steps=max_steps,
                 quota_check=quota_check,
+                ledger=HandoffLedger(plan.answer_handoff),
             )
             entry["answered"] = sum(1 for o in outcomes if o.ok)
             entry["void"] = [o.label for o in outcomes if o.void]
+            entry["unanswered_batches"] = [
+                {"label": o.label, "reason": o.reason} for o in outcomes if not o.ok
+            ]
             log.append(entry)
-            if entry["void"]:
-                return {"run": run.name, "steps": log, "stopped": f"void batch {entry['void'][0]}"}
+            if any(not o.ok for o in outcomes):
+                first = next(o for o in outcomes if not o.ok)
+                return {
+                    "run": run.name,
+                    "steps": log,
+                    "stopped": first.reason or f"void batch {first.label}",
+                }
             continue
 
         done = run_operator(plan.command)
@@ -924,6 +966,33 @@ def drive_wc_run(
 
 
 # ------------------------------------------------------------------------------------ the driver loop
+@dataclass(frozen=True)
+class HandoffLedger:
+    """What a batch still owes and what it has recorded, counted from the files the tool itself
+    writes: `<batch>/<stage>/<label>.prompt.txt` and the answer file of the same name.
+
+    The count is the only honest witness that a batch did its work. An `mcode exec` that ends with
+    exit 0 and `status: succeeded` says the *turn* ended, not that an answer was written: measured
+    2026-10-03, a model that refused to answer (the WC tool's own round guard rejected the
+    calibration handoff) ended exactly like that, and the lane counted the batch as done.
+    """
+
+    handoff: Path
+
+    def _files(self, batch: str, suffix: str) -> set[str]:
+        directory = self.handoff / batch
+        if not directory.is_dir():
+            return set()
+        return {p.name[: -len(suffix)] for p in directory.rglob(f"*{suffix}")}
+
+    def open(self, batch: str) -> int:
+        """The questions of `batch` that carry a prompt and no answer."""
+        return len(self._files(batch, ".prompt.txt") - self._files(batch, ".answer.json"))
+
+    def answered(self, batch: str) -> int:
+        return len(self._files(batch, ".answer.json"))
+
+
 @dataclass
 class BatchOutcome:
     label: str
@@ -933,6 +1002,10 @@ class BatchOutcome:
     exit_code: int
     diagnostics: str
     tree_changed: tuple[str, ...] = ()
+    due: int = 0
+    recorded: int = 0
+    reason: str = ""
+    executed: bool = True
 
 
 def answer_all(
@@ -944,59 +1017,98 @@ def answer_all(
     state: State,
     timeout: int,
     max_steps: int,
+    ledger: HandoffLedger,
     effort: str = EXEC_EFFORT,
     quota_check: Callable[[], bool] | None = None,
     on_void: Callable[[BatchOutcome], None] | None = None,
 ) -> list[BatchOutcome]:
-    """Answer every batch label, `width` at a time, and stop the lane the moment a batch is void.
+    """Answer every batch label and stop the lane the moment a batch does not deliver.
 
-    The void rule is the point of the whole guard: a batch whose agent edited a tracked file may
-    have changed the lane's own rules, so its answers are not counted and the next batch is not
-    started. Every batch's outcome is written to the state file before the next one starts, so a
-    stop loses at most the batch in flight.
+    Two stops, both measured. A batch whose agent edited a tracked file may have changed the lane's
+    own rules, so its answers are not counted (*void*). A batch that owed questions and recorded
+    none of them did not do its work, whatever its exit code said - the reason names the count.
+    Either way the batches behind it are not started: the pool holds one window, not the lane, so
+    a stop costs at most the window in flight.
+
+    Every batch's outcome is written to the state file before the next one starts, so a stop loses
+    at most the batch in flight, and a batch that did not deliver is not marked answered: a resume
+    tries it again (the answers it did write are write-once, so the retry only fills the gap).
     """
     done: set[str] = set(state.get("answered", []))
     outcomes: list[BatchOutcome] = []
     remaining = [label for label in labels if label not in done]
-    with ThreadPoolExecutor(max_workers=max(1, width.next_window())) as pool:
-        futures = {}
-        for label in remaining:
-            if quota_check is not None and quota_check():
-                outcomes.append(BatchOutcome(label, False, True, False, 0, "", ("quota",)))
-                break
-            futures[label] = pool.submit(
-                runner.run,
-                prompt_for(label),
-                label=label,
-                timeout=timeout,
-                max_steps=max_steps,
-                effort=effort,
+    index = 0
+    while index < len(remaining):
+        size = max(1, width.next_window())
+        window = remaining[index : index + size]
+        if quota_check is not None and quota_check():
+            outcomes.append(BatchOutcome(window[0], False, True, False, 0, "", ("quota",)))
+            break
+        due = {label: ledger.open(label) for label in window}
+        # What a batch had recorded is read *before* it is submitted: an exec that answers quickly
+        # writes its files while the driver is still setting the window up, and a count taken
+        # afterwards reads a full batch as `recorded 0 of 5`.
+        owed = {label: ledger.answered(label) for label in window}
+        owes = [label for label in window if due[label] > 0]
+        index += size
+        for label in [label for label in window if due[label] == 0]:
+            outcomes.append(
+                BatchOutcome(label, True, False, False, 0, "", (), 0, 0, "", executed=False)
             )
-        for label, future in futures.items():
-            result = future.result()
-            void = runner.voids(result)
-            outcome = BatchOutcome(
-                label=label,
-                ok=not void,
-                void=void,
-                rate_limited=result.rate_limited,
-                exit_code=result.exit_code,
-                diagnostics=str(result.diagnostics),
-                tree_changed=result.tree_changed,
-            )
-            outcomes.append(outcome)
-            state.put("outcomes", {**(state.get("outcomes", {})), label: outcome.__dict__})
-            if not void:
-                done.add(label)
-                state.put("answered", sorted(done))
-            if result.rate_limited:
-                width.rate_limited()
-            if void:
-                if on_void is not None:
-                    on_void(outcome)
-                break
-    if outcomes and all(o.ok for o in outcomes) and not any(o.rate_limited for o in outcomes):
-        width.window_clean()
+            done.add(label)
+            state.put("answered", sorted(done))
+        if not owes:
+            width.window_clean()
+            continue
+        stopped = False
+        clean = True
+        with ThreadPoolExecutor(max_workers=len(owes)) as pool:
+            futures = {
+                label: pool.submit(
+                    runner.run,
+                    prompt_for(label),
+                    label=label,
+                    timeout=timeout,
+                    max_steps=max_steps,
+                    effort=effort,
+                )
+                for label in owes
+            }
+            for label, future in futures.items():
+                result = future.result()
+                recorded = ledger.answered(label) - owed[label]
+                void = runner.voids(result)
+                stalled = recorded < due[label]
+                outcome = BatchOutcome(
+                    label=label,
+                    ok=not void and not stalled,
+                    void=void,
+                    rate_limited=result.rate_limited,
+                    exit_code=result.exit_code,
+                    diagnostics=str(result.diagnostics),
+                    tree_changed=result.tree_changed,
+                    due=due[label],
+                    recorded=recorded,
+                    reason="" if not stalled else f"recorded {recorded} of {due[label]}",
+                )
+                outcomes.append(outcome)
+                state.put("outcomes", {**(state.get("outcomes", {})), label: outcome.__dict__})
+                if outcome.ok:
+                    done.add(label)
+                    state.put("answered", sorted(done))
+                else:
+                    clean = False
+                if result.rate_limited:
+                    width.rate_limited()
+                if void or stalled:
+                    if on_void is not None:
+                        on_void(outcome)
+                    stopped = True
+                    break
+        if stopped:
+            break
+        if clean:
+            width.window_clean()
     return outcomes
 
 
@@ -1048,6 +1160,13 @@ class Calibration:
         """
         return 0.0 if self.units == 0 else self.agreed / self.units
 
+    @property
+    def passed(self) -> bool:
+        """Owner decision 2026-10-03 (O18): the lane type passes at >= 90 % agreement **and** every
+        calibrated question answered. An unanswered question is not agreement, so a run that could
+        only answer half of them has not measured the lane it is supposed to clear."""
+        return not self.unanswered and self.units > 0 and self.agreement >= AGREEMENT_FLOOR
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "lane": self.lane,
@@ -1055,6 +1174,7 @@ class Calibration:
             "units": self.units,
             "agreed": self.agreed,
             "agreement": round(self.agreement, 4),
+            "passed": self.passed,
             "unanswered": list(self.unanswered),
             "disagreements": [
                 {
@@ -1242,12 +1362,136 @@ def main(argv: Sequence[str] | None = None) -> int:
     return _main_wd3(args)
 
 
+def calibration_run(out: Path) -> Path:
+    """Where the calibration's own run lives - a function of the copy's path, so both halves of the
+    calibration (`--prepare-only` and the answering run) name the same directory."""
+    return out.with_name(out.name + "-run")
+
+
+def _shown(path: Path) -> str:
+    """The path as the records and the briefs write it: inside the repo relative with forward
+    slashes, outside it absolute. The tool resolves a round record's handoff against the working
+    directory, and every brief runs its command from the repo root."""
+    try:
+        return path.resolve().relative_to(REPO.resolve()).as_posix()
+    except ValueError:
+        return str(path.resolve())
+
+
+def _source_round(source_run: Path, source_handoff: Path) -> tuple[dict[str, Any], Path]:
+    """The round record of `source_run` that registered `source_handoff`, and the file the run keeps
+    it in: the check rounds in `ROUNDS.jsonl`, the verification rounds in `verify/round-N/ROUND.json`.
+    The calibration run has to be written where the tool reads it from, or the guard refuses it the
+    same way it refused the unregistered copy."""
+    rounds = source_run / "ROUNDS.jsonl"
+    if rounds.exists():
+        for line in rounds.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            if Path(record["handoff"]).resolve() == source_handoff.resolve():
+                return record, rounds
+    for round_dir in sorted((source_run / "verify").glob("round-*")):
+        path = round_dir / "ROUND.json"
+        if not path.exists():
+            continue
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if Path(record["handoff"]).resolve() == source_handoff.resolve():
+            return record, path
+    raise DriverError(f"{source_handoff} is no round of {source_run}")
+
+
+def register_calibration_run(
+    source_run: Path, source_handoff: Path, out: Path, batches: Sequence[str]
+) -> Path:
+    """The run the calibration answers into: a directory of its own holding the source round's
+    record, and return its path.
+
+    Measured 2026-10-03: the WC tool accepts an answer only into a handoff that one of a run's
+    rounds registers (`wc/cli.py:round_of` for a check, `_verify_round_of` for a verification). A
+    calibration copy has no run, so the model refused to answer and reported the block - right of it,
+    and the reason the report read 100 % over half its questions. Registering the copy as a round of
+    the *production* run is no option: that run's import would read the comparison answers as
+    verdicts about the sites.
+
+    So the calibration gets a run of its own, with the same stage, the same questions and the same
+    shown sentence numbers, and nothing but the calibrated batches in it: the copy holds every
+    answered batch of the source, and the comparison must not touch the others. The round is marked
+    `calibration`, which the import refuses, so a measurement can never reach a ledger.
+    """
+    record, where = _source_round(source_run, source_handoff)
+    wanted = [batch for batch in batches if batch not in record["batches"]]
+    if wanted:
+        raise DriverError(
+            f"{source_handoff}: no batch {', '.join(wanted)} in round {record['round']} of "
+            f"{source_run}"
+        )
+
+    run_dir = calibration_run(out)
+    if run_dir.exists():
+        raise DriverError(f"{run_dir} exists: a calibration run is written once")
+    run_dir.mkdir(parents=True)
+    population = source_run / "POPULATION.json"
+    kind = "wc"
+    if population.exists():
+        kind = json.loads(population.read_text(encoding="utf-8")).get("kind", kind)
+    (run_dir / "POPULATION.json").write_text(
+        json.dumps({"kind": kind}, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    labels = [label for batch in batches for label in record["batches"][batch]]
+    calibration_round: dict[str, Any] = {
+        "round": 1,
+        "handoff": _shown(out),
+        "exported_at": record.get("exported_at", ""),
+        "batches": {batch: list(record["batches"][batch]) for batch in batches},
+        "calibration": True,
+        "calibrated_from": {
+            "run": _shown(source_run),
+            "handoff": _shown(source_handoff),
+            "batches": list(batches),
+        },
+    }
+    # A verification round names its stage and the sentence numbers it showed; a check round names
+    # neither (it asks about a text, not about sentences of a round), and the tool reads what its
+    # own rounds carry. Copying only what the source has keeps the calibration round the shape the
+    # guard on the other side expects.
+    if "stage" in record:
+        calibration_round["stage"] = record["stage"]
+    if "shown" in record:
+        calibration_round["shown"] = {label: list(record["shown"][label]) for label in labels}
+    if where.name == "ROUNDS.jsonl":
+        (run_dir / "ROUNDS.jsonl").write_text(
+            json.dumps(calibration_round, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+    else:
+        (run_dir / "verify" / "round-1").mkdir(parents=True)
+        (run_dir / "verify" / "round-1" / "ROUND.json").write_text(
+            json.dumps(calibration_round, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+        )
+    # A check round's answer check (`wc/cli.py:check_answer`) reads the run's sites, so the
+    # calibration carries the sites of its own questions and nothing else. A verification round does
+    # not read them: its check reads the round record alone.
+    sites = source_run / "SITES.jsonl"
+    if where.name == "ROUNDS.jsonl" and sites.exists():
+        (run_dir / "SITES.jsonl").write_text(
+            "".join(
+                line
+                for line in sites.read_text(encoding="utf-8").splitlines(keepends=True)
+                if line.strip() and json.loads(line).get("site_id") in set(labels)
+            ),
+            encoding="utf-8",
+        )
+    return run_dir
+
+
 def _main_calibrate(args: Any) -> int:
     """Owner decision 2026-10-03 (O18): before any lane writes a MiniMax answer to production, the
     lane type must be calibrated. 2-3 already-answered batches are copied into a separate handoff
     directory, re-answered through the driver, and compared with the recorded answers. Pass is
     >= 90 % agreement and 0 false sources; a failing lane holds and goes to the owner."""
     brief = "verify-brief" if args.lane == "wc-verify" else "brief"
+    cal_run = calibration_run(args.out)
+    is_wc = args.lane.startswith("wc-")
     if args.prepare_only:
         recorded = copy_for_calibration(args.handoff, args.out, args.batches)
         (args.out / "RECORDED.json").write_text(
@@ -1257,6 +1501,11 @@ def _main_calibrate(args: Any) -> int:
             json.dumps(
                 {
                     "prepared": str(args.out),
+                    "calibration_run": str(
+                        register_calibration_run(args.run, args.handoff, args.out, args.batches)
+                    )
+                    if is_wc
+                    else "",
                     "batches": list(args.batches),
                     "labels": sorted(recorded),
                     "questions": len(recorded),
@@ -1276,19 +1525,31 @@ def _main_calibrate(args: Any) -> int:
         )
         return 1
     recorded = json.loads(recorded_path.read_text(encoding="utf-8"))
+    if is_wc and not (cal_run / "verify" / "round-1" / "ROUND.json").exists():
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": f"{cal_run} is missing: run this with --prepare-only, so the copy is a "
+                    "round a registered run owns",
+                }
+            ),
+            file=sys.stderr,
+        )
+        return 1
 
     width = Width.from_start(args.width)
     runner = McodeRunner(diagnostics=STATE_DIR / "calibration" / args.out.name)
     state = State(
         STATE_DIR / f"calibration-{args.out.name}.json",
         lane=f"calibration:{args.lane}",
-        run=str(args.run),
+        run=str(cal_run if is_wc else args.run),
         handoff=str(args.out),
     )
     outcomes = answer_all(
         args.batches,
         prompt_for=lambda batch: wc_answer_prompt(
-            run=args.run, handoff=args.out, batch=batch, brief=brief
+            run=cal_run, handoff=args.out, batch=batch, brief=brief
         ),
         runner=runner,
         width=width,
@@ -1296,6 +1557,7 @@ def _main_calibrate(args: Any) -> int:
         timeout=args.timeout,
         max_steps=args.max_steps,
         quota_check=None if args.no_quota_check else _quota_check(),
+        ledger=HandoffLedger(args.out),
     )
     # The comparison is per answer, not per batch: the answers are filed under the site id, so a
     # batch is a list of labels to compare, never one label itself.
@@ -1306,10 +1568,20 @@ def _main_calibrate(args: Any) -> int:
                 "text"
             ]
     report = compare_answers(args.lane, sorted(recorded), recorded, fresh).to_dict()
-    report["batches"] = list(args.batches)
-    report["void"] = [o.label for o in outcomes if o.void]
+    report["batches"] = [
+        {
+            "batch": o.label,
+            "due": o.due,
+            "recorded": o.recorded,
+            "executed": o.executed,
+            "ok": o.ok,
+            **({"reason": o.reason} if o.reason else {}),
+        }
+        for o in outcomes
+    ]
+    report["passed"] = bool(report["passed"]) and not any(not o.ok for o in outcomes)
     print(json.dumps(report, indent=1))
-    return 0 if not report["void"] else 1
+    return 0 if report["passed"] else 1
 
 
 def _first_batch_for(args: Any, run: str, index: int) -> int:
@@ -1421,11 +1693,14 @@ def _main_wd3(args: Any) -> int:
             timeout=args.timeout,
             max_steps=args.max_steps,
             quota_check=None if args.no_quota_check else _quota_check(),
+            ledger=HandoffLedger(plan.validate_dir),
             on_void=lambda outcome: print(
                 json.dumps(
                     {
-                        "stopped": "void batch",
+                        "stopped": outcome.reason or "void batch",
                         "label": outcome.label,
+                        "due": outcome.due,
+                        "recorded": outcome.recorded,
                         "tree_changed": list(outcome.tree_changed),
                     }
                 ),

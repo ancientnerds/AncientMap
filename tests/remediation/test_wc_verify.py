@@ -684,6 +684,23 @@ def test_a_manifest_that_is_not_the_verification_rounds_record_is_refused(tmp_pa
     assert not (run / "verify" / "round-1" / "VERIFIED.jsonl").exists()
 
 
+def test_a_calibration_round_is_never_imported(tmp_path: Path) -> None:
+    """Owner decision 2026-10-03 (O18): the calibration re-answers recorded questions so a model can
+    be measured against them. Those answers are a comparison, not a verdict, and no ledger may ever
+    read them - so the round carries the mark and the import refuses it."""
+    run = _checked(tmp_path)
+    C.cmd_verify_export(run, _hv(tmp_path), batch_size=5)
+    FX.record_answers(_hv(tmp_path), _both_answers(), by="opus-verify")
+    path = run / "verify" / "round-1" / "ROUND.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["calibration"] = True
+    path.write_text(json.dumps(record), encoding="utf-8")
+
+    with pytest.raises(C.WcRunError, match="calibration round"):
+        C.cmd_verify_import(run, _hv(tmp_path), client=FX.FakeClient(), pace=0.0)
+    assert not (run / "verify" / "round-1" / "VERIFIED.jsonl").exists()
+
+
 def test_verify_check_answer_reads_the_shape_only(tmp_path: Path) -> None:
     run = _checked(tmp_path)
     C.cmd_verify_export(run, _hv(tmp_path), batch_size=5)

@@ -45,6 +45,10 @@ if os.environ.get("FAKE_FAIL"):
 touch = os.environ.get("FAKE_TOUCH")
 if touch:
     Path(touch).write_text("the batch edited a tracked file\\n", encoding="utf-8")
+record = os.environ.get("FAKE_RECORD")
+if record:
+    for n in range(int(os.environ.get("FAKE_RECORD_N", "0"))):
+        Path(record, f"written-{n}.answer.json").write_text('{"text": "{}"}\\n', encoding="utf-8")
 print("noise before the answer")
 print(json.dumps(payload))
 """
@@ -232,6 +236,213 @@ def test_a_batch_that_changed_a_tracked_file_voids_itself_and_stops(tmp_path: Pa
     assert result.tree_clean is False
     assert "scripts/check.py" in result.tree_changed
     assert runner.voids(result) is True
+
+
+# ---------------------------------------------------------------------------- did the batch answer?
+def a_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir(exist_ok=True)
+    D.run_git(repo, "init")
+    D.run_git(repo, "config", "user.email", "driver@example.com")
+    D.run_git(repo, "config", "user.name", "mcode driver test")
+    (repo / "keep.txt").write_text("a\n", encoding="utf-8")
+    D.run_git(repo, "add", "keep.txt")
+    D.run_git(repo, "commit", "-m", "the tree the lane starts from")
+    return repo
+
+
+def a_handoff(tmp_path: Path, batches: Sequence[str], labels: int, answered: int = 0) -> Path:
+    """A handoff with `batches`, each `labels` questions, the first `answered` of them recorded."""
+    handoff = tmp_path / "handoff"
+    for batch in batches:
+        stage = handoff / batch / "verify"
+        stage.mkdir(parents=True, exist_ok=True)
+        for n in range(labels):
+            label = f"site-{n:02d}"
+            (stage / f"{label}.prompt.txt").write_text("the question\n", encoding="utf-8")
+            if n < answered:
+                (stage / f"{label}.answer.json").write_text('{"text": "{}"}\n', encoding="utf-8")
+    return handoff
+
+
+def test_a_batch_that_records_nothing_is_a_failure_and_not_a_finished_batch(tmp_path: Path) -> None:
+    """Measured 2026-10-03, calibration `wc-verify-01` / `verify-0001`: the model refused to answer
+    (the WC tool's own round guard rejected the calibration handoff), ended its turn with
+    `status: succeeded` and exit 0, and recorded nothing. Counted as a finished batch it made the
+    report read 100 % agreement over half the questions."""
+    handoff = a_handoff(tmp_path, ["verify-0001"], labels=5)
+    binary, env = fake_mcode(tmp_path)
+    runner = D.McodeRunner(
+        binary=binary, repo=a_repo(tmp_path), diagnostics=tmp_path / "d", env=env
+    )
+    state = D.State(tmp_path / "state.json", lane="test", run="r", handoff=str(handoff))
+
+    outcomes = D.answer_all(
+        ["verify-0001"],
+        prompt_for=lambda batch: f"answer {batch}",
+        runner=runner,
+        width=D.Width(start=2, cap=2, ram_cap=lambda: 8),
+        state=state,
+        timeout=60,
+        max_steps=4,
+        ledger=D.HandoffLedger(handoff),
+    )
+
+    (only,) = outcomes
+    assert only.ok is False
+    assert (only.due, only.recorded) == (5, 0)
+    assert "0 of 5" in only.reason
+    # a resume has to try it again: the batch was never answered
+    assert state.get("answered", []) == []
+
+
+def test_a_batch_that_records_part_of_its_questions_is_a_failure(tmp_path: Path) -> None:
+    handoff = a_handoff(tmp_path, ["verify-0001"], labels=5)
+    binary, env = fake_mcode(
+        tmp_path,
+        FAKE_RECORD=str(handoff / "verify-0001" / "verify"),
+        FAKE_RECORD_N="2",
+    )
+    runner = D.McodeRunner(
+        binary=binary, repo=a_repo(tmp_path), diagnostics=tmp_path / "d", env=env
+    )
+    state = D.State(tmp_path / "state.json", lane="test", run="r", handoff=str(handoff))
+
+    (only,) = D.answer_all(
+        ["verify-0001"],
+        prompt_for=lambda batch: f"answer {batch}",
+        runner=runner,
+        width=D.Width(start=1, cap=1, ram_cap=lambda: 8),
+        state=state,
+        timeout=60,
+        max_steps=4,
+        ledger=D.HandoffLedger(handoff),
+    )
+
+    assert only.ok is False
+    assert (only.due, only.recorded) == (5, 2)
+    assert "2 of 5" in only.reason
+
+
+def test_a_batch_that_owes_nothing_is_not_run_at_all(tmp_path: Path) -> None:
+    """A batch whose questions are all recorded has nothing to answer. Sending an agent there
+    spends quota to be told so, and its 'nothing to do' would read as a batch that recorded
+    nothing."""
+    handoff = a_handoff(tmp_path, ["verify-0001"], labels=5, answered=5)
+    binary, env = fake_mcode(tmp_path)
+    runner = D.McodeRunner(
+        binary=binary, repo=a_repo(tmp_path), diagnostics=tmp_path / "d", env=env
+    )
+    state = D.State(tmp_path / "state.json", lane="test", run="r", handoff=str(handoff))
+
+    (only,) = D.answer_all(
+        ["verify-0001"],
+        prompt_for=lambda batch: f"answer {batch}",
+        runner=runner,
+        width=D.Width(start=1, cap=1, ram_cap=lambda: 8),
+        state=state,
+        timeout=60,
+        max_steps=4,
+        ledger=D.HandoffLedger(handoff),
+    )
+
+    assert only.ok is True
+    assert only.executed is False
+    assert argv_of(tmp_path) == []  # no exec at all
+    assert state.get("answered", []) == ["verify-0001"]
+
+
+def test_a_stopped_batch_does_not_start_the_batches_queued_behind_it(tmp_path: Path) -> None:
+    """The stop has to be a stop: a lane of 100 batches must not run 98 of them after the third
+    records nothing. Only the window in flight may still finish."""
+    handoff = a_handoff(tmp_path, [f"verify-{n:04d}" for n in range(1, 5)], labels=1)
+    binary, env = fake_mcode(tmp_path)
+    runner = D.McodeRunner(
+        binary=binary, repo=a_repo(tmp_path), diagnostics=tmp_path / "d", env=env
+    )
+    state = D.State(tmp_path / "state.json", lane="test", run="r", handoff=str(handoff))
+
+    outcomes = D.answer_all(
+        [f"verify-{n:04d}" for n in range(1, 5)],
+        prompt_for=lambda batch: f"answer {batch}",
+        runner=runner,
+        width=D.Width(start=2, cap=2, ram_cap=lambda: 8),
+        state=state,
+        timeout=60,
+        max_steps=4,
+        ledger=D.HandoffLedger(handoff),
+    )
+
+    assert [o.label for o in outcomes] == ["verify-0001"]
+    assert len(argv_of(tmp_path)) == 2  # the window, not the lane
+
+
+def test_the_ram_reader_sees_the_memory_of_this_machine() -> None:
+    """Measured 2026-10-03: the reader shelled out to `wmic`, which this Windows no longer ships,
+    so it answered 0.0 on every call and the width cap never bound - silently."""
+    assert D.free_ram_gb() > 0
+
+
+def test_the_ram_reader_parses_the_linux_meminfo_line() -> None:
+    assert D._free_ram_gb_from_meminfo("MemTotal: 16000000 kB\nMemFree: 200 kB\n") == 0.0
+    assert D._free_ram_gb_from_meminfo("MemAvailable: 8000000 kB\n") == pytest.approx(
+        7.629, abs=1e-3
+    )
+
+
+class _CountingLedger:
+    """A ledger that counts nothing real and remembers only when it was asked."""
+
+    def __init__(self, order: list[tuple[str, str]]) -> None:
+        self.order = order
+
+    def open(self, batch: str) -> int:
+        self.order.append(("open", batch))
+        return 1
+
+    def answered(self, batch: str) -> int:
+        self.order.append(("answered", batch))
+        return 0
+
+
+class _RecordingRunner:
+    """A runner that records only when it was asked to run."""
+
+    def __init__(self, order: list[tuple[str, str]]) -> None:
+        self.order = order
+
+    def run(self, prompt: str, **kwargs: Any) -> D.ExecResult:
+        self.order.append(("run", str(kwargs.get("label"))))
+        return D.ExecResult(0, True, {}, "", "", Path("."))
+
+    def voids(self, result: D.ExecResult) -> bool:
+        return False
+
+
+def test_the_answers_are_counted_before_the_batch_runs(tmp_path: Path) -> None:
+    """Measured 2026-10-03, calibration `wc-verify-02`: the count of what a batch had already
+    recorded was read *after* its exec was submitted. A batch that answers quickly had written its
+    five files before the driver counted them, so a complete batch read as `recorded 0 of 5` - a
+    false failure that stops the lane and leaves its questions unanswered."""
+    order: list[tuple[str, str]] = []
+    state = D.State(tmp_path / "state.json", lane="test", run="r", handoff="h")
+
+    D.answer_all(
+        ["verify-0001", "verify-0002"],
+        prompt_for=lambda batch: f"answer {batch}",
+        runner=_RecordingRunner(order),
+        width=D.Width(start=2, cap=2, ram_cap=lambda: 8),
+        state=state,
+        timeout=60,
+        max_steps=4,
+        ledger=_CountingLedger(order),
+    )
+
+    first_run = next(i for i, entry in enumerate(order) if entry[0] == "run")
+    counted_before = [entry for entry in order[:first_run] if entry[0] == "answered"]
+    assert counted_before == [("answered", "verify-0001"), ("answered", "verify-0002")], (
+        f"a batch was counted after it ran: {order}"
+    )
 
 
 # ---------------------------------------------------------------------------- the width governor

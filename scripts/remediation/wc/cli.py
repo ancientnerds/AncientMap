@@ -1598,6 +1598,14 @@ def cmd_verify_import(
     site's round read by `wc4.run_verification` before `VERIFIED.jsonl` is written."""
     record = _verify_round_of(run, handoff)
     number, stage = record["round"], record["stage"]
+    if record.get("calibration"):
+        # Owner decision 2026-10-03 (O18): a calibration round holds answers written to *compare* a
+        # model with the recorded ones. They are not verdicts about the sites, so no ledger may read
+        # them - the calibration is a measurement, and it stays outside the run it measures.
+        raise WcRunError(
+            f"{run}: verification round {number} is a calibration round; a comparison is never "
+            "imported"
+        )
     out = _verify_dir(run, number) / "VERIFIED.jsonl"
     if out.exists():
         raise WcRunError(
