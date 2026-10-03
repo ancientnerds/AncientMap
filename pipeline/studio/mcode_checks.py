@@ -145,12 +145,30 @@ def _answer_block(
     )
 
 
-def _ask(repo: Path, prompt: str) -> tuple[mcode.Run | None, str]:
-    """One run; a failure is a reason, never an exception the pool would not see."""
+def _trace_path(answer: Path) -> Path:
+    """Where the run that produced `answer` is archived: `<task>.exec.json` beside it."""
+    return answer.with_suffix(".exec.json")
+
+
+def _ask(repo: Path, prompt: str, *, trace: Path | None = None) -> tuple[mcode.Run | None, str]:
+    """One run; a failure is a reason, never an exception the pool would not see.
+
+    `trace` is where the run's own `exec.result` is kept, so the stamp this run's answer will
+    carry can be checked against the run later. A run that never got that far has no result to
+    write, and no answer either, so nothing is traced.
+    """
     try:
-        return mcode.exec(prompt, cwd=repo), ""
+        run = mcode.exec(prompt, cwd=repo)
     except StudioError as exc:
         return None, str(exc)
+    if trace is not None and run.result:
+        trace.parent.mkdir(parents=True, exist_ok=True)
+        trace.write_text(
+            json.dumps(run.result, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+            newline="",
+        )
+    return run, ""
 
 
 def _quota_stop() -> mcode.Outcome | None:
@@ -648,9 +666,10 @@ def answer_claims(
     def one(row: dict[str, Any]) -> mcode.Outcome:
         if (quota := _quota_stop()) is not None:
             return quota
+        answer = _answer_path(ws.claims_dir, row["task_id"])
         unread = [(sid, live[sid][1]) for sid in _tdm_ids(row) if not live[sid][0]]
         prompt = _verifier_prompt(ws, row, unread)
-        run, why = _ask(repo, prompt)
+        run, why = _ask(repo, prompt, trace=_trace_path(answer))
         if run is None:
             return _skipped(mcode.Outcome(item=None, reason=why), row["task_id"], row["ref"])
         if run.rate_limited:
@@ -659,7 +678,6 @@ def answer_claims(
                 row["task_id"],
                 row["ref"],
             )
-        answer = _answer_path(ws.claims_dir, row["task_id"])
         verdict = _read_answer(answer)
         problems = validate_answer_file("claims", answer, task_id=row["task_id"], ws=ws)
         if verdict is None or problems:
@@ -675,7 +693,8 @@ def answer_claims(
         line = _claim_line(row, verdict, run, None, None)
         srun: mcode.Run | None = None
         if verdict["verdict"] == "supported":
-            srun, swhy = _ask(repo, _skeptic_prompt(ws, row, verdict))
+            spath = _answer_path(ws.claims_dir, f"{row['task_id']}.skeptic")
+            srun, swhy = _ask(repo, _skeptic_prompt(ws, row, verdict), trace=_trace_path(spath))
             if srun is None or srun.rate_limited:
                 return _skipped(
                     mcode.Outcome(
@@ -797,7 +816,11 @@ def answer_images(ws: PaperWorkspace, *, repo: Path, limit: int | None = None) -
     def one(row: dict[str, Any]) -> mcode.Outcome:
         if (quota := _quota_stop()) is not None:
             return quota
-        run, why = _ask(repo, _image_prompt(ws, row))
+        run, why = _ask(
+            repo,
+            _image_prompt(ws, row),
+            trace=_trace_path(_answer_path(ws.images_dir, row["task_id"])),
+        )
         if run is None:
             return _skipped(
                 mcode.Outcome(item=None, reason=why), row["task_id"], row.get("ref", "")
@@ -935,7 +958,11 @@ def answer_markers(ep_root: Path, *, repo: Path, limit: int | None = None) -> Ch
     def one(row: dict[str, Any]) -> mcode.Outcome:
         if (quota := _quota_stop()) is not None:
             return quota
-        run, why = _ask(repo, _marker_prompt(ep_root, row))
+        run, why = _ask(
+            repo,
+            _marker_prompt(ep_root, row),
+            trace=_trace_path(_answer_path(directory, row["task_id"])),
+        )
         if run is None:
             return _skipped(
                 mcode.Outcome(item=None, reason=why), row["task_id"], row.get("ref", "")
@@ -1162,7 +1189,11 @@ def verify_casefile(
         except Exception as exc:  # noqa: BLE001 - an unreadable source is an answer
             return mcode.Outcome(item=item["id"], reason=f"the probe failed: {exc}")
         probe_cmd = f'The route is "{found.get("route", "web page")}"; found: {found.get("found")}.'
-        run, why = _ask(repo, _casefile_prompt(ep_root, item, probe_cmd))
+        run, why = _ask(
+            repo,
+            _casefile_prompt(ep_root, item, probe_cmd),
+            trace=_trace_path(ep_root / ANSWER_DIR / f"{item['id']}.json"),
+        )
         if run is None:
             return mcode.Outcome(item=item["id"], reason=why)
         if run.rate_limited:

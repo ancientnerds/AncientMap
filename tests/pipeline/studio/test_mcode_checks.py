@@ -59,15 +59,27 @@ class FakeMcode:
             path = Path(_field(prompt, "Write your answer as one JSON object to this file:"))
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(answer), encoding="utf-8")
+        run_id = f"run_{role}_{item}"
+        result = {
+            "type": "exec.result",
+            "runId": run_id,
+            "sessionId": "mvs_9d3d18599ba34b12a81cf4588ee799d0",
+            "status": "succeeded",
+            "output": "",
+            "model": {"providerId": "minimax", "modelId": mcode.MODEL},
+            "usage": {"inputTokens": 21001, "outputTokens": 40, "totalTokens": 21041},
+            "durationMs": 10,
+        }
         return mcode.Run(
-            run_id=f"run_{role}_{item}",
-            session_id="mvs_9d3d18599ba34b12a81cf4588ee799d0",
+            run_id=run_id,
+            session_id=result["sessionId"],
             status="succeeded",
             model=mcode.MODEL,
             output="",
             duration_ms=10,
             input_tokens=21001,
             output_tokens=40,
+            result=result,
         )
 
     def prompt_of(self, role: str, item: str) -> str:
@@ -175,6 +187,39 @@ def test_a_supported_verdict_gets_its_own_independent_skeptic_run(tmp_path, monk
     skeptic = fake.prompt_of("skeptic", row["task_id"])
     assert "Try hard to refute" in skeptic or "refute" in skeptic.lower()
     assert f"run_verifier_{row['task_id']}" not in skeptic
+
+
+def test_every_stamp_can_be_checked_against_the_run_it_names(tmp_path, monkeypatch):
+    """A stamp is only worth something if the run behind it can be read later.
+
+    The plan asks for the real model and the real run id in `answered_by` / `skeptic_by`; on
+    2026-10-03 all 55 stamps of the calibration named one, and none of the run ids was in the
+    workspace - the answer file holds the verdict, not the `exec.result` the stamp is taken from.
+    So the exec result is written beside the answer, per role.
+    """
+    ws, row = _tdm_workspace(tmp_path)
+    _save_live(ws)
+    repo = _repo(tmp_path)
+    _install(
+        monkeypatch,
+        {
+            ("verifier", row["task_id"]): _supported(row),
+            ("skeptic", "*"): {"verdict": "supported", "explanation": "cannot refute", "fix_suggestion": ""},
+        },
+    )
+
+    result = mcode_checks.answer_claims(ws, repo=repo, live_read=lambda sid, url: _save_live(ws))
+
+    (line,) = [r for r in handoff.read_jsonl(ws.claims_dir / "verdicts.jsonl") if r["task_id"] == row["task_id"]]
+    assert result.answered >= 1
+    for stamp, suffix in ((line["answered_by"], ""), (line["skeptic_by"], ".skeptic")):
+        run_id = stamp.split("mcode exec, ")[1].split(",")[0]
+        trace = ws.claims_dir / "mcode_runs" / f"{row['task_id']}{suffix}.exec.json"
+        assert trace.is_file(), f"no exec result archived for {stamp}"
+        evidence = json.loads(trace.read_text(encoding="utf-8"))
+        assert evidence["runId"] == run_id
+        assert evidence["model"]["modelId"] == mcode.MODEL
+        assert evidence["type"] == "exec.result"
 
 
 def test_a_refuting_skeptic_overrules_the_verdict_and_keeps_both_stamps(tmp_path, monkeypatch):

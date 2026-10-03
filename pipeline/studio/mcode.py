@@ -141,7 +141,14 @@ def _result_of(stdout: str) -> dict[str, Any] | None:
 
 @dataclass(frozen=True)
 class Run:
-    """One finished `mcode exec`: its ids, the model that ran, the tokens it cost."""
+    """One finished `mcode exec`: its ids, the model that ran, the tokens it cost.
+
+    `result` is the `exec.result` object itself, unedited. A stamp that names a run id is only
+    worth something if the run can be read later: on 2026-10-03 all 55 stamps of the claim-check
+    calibration named a real `exec_turn_…` id, and not one of them was in the workspace, because
+    the driver kept the verdict and dropped the result. `mcode_checks` writes this next to the
+    answer, so `runId` and `model` can be checked against the file a week later.
+    """
 
     run_id: str
     session_id: str
@@ -153,6 +160,7 @@ class Run:
     output_tokens: int
     rate_limited: bool = False
     error: str = ""
+    result: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.model and not self.rate_limited:
@@ -325,6 +333,7 @@ def exec(prompt: str, *, cwd: Path, timeout: str = TIMEOUT) -> Run:
         duration_ms=int(data.get("durationMs", 0) or 0),
         input_tokens=int(usage.get("inputTokens", 0) or 0),
         output_tokens=int(usage.get("outputTokens", 0) or 0),
+        result=data,
     )
 
 
