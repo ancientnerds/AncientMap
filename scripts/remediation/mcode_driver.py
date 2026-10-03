@@ -55,9 +55,18 @@ ANSWER_STAMP_MODEL = "MiniMax-M3.1-Flash-Preview"
 #: route is not the model id, and an answer must never name the route.
 EXEC_MODEL = "minimax/MiniMax-M3.1-Flash-Preview"
 EXEC_EFFORT = "max"
-#: Owner decision 2026-10-03 (O22): the weekly quota below which the driver stops.
+#: Owner decision 2026-10-03 (O20): the weekly quota below which the driver stops, read from
+#: `https://api.minimax.io/v1/token_plan/remains` with the key the Lyra pipeline already uses.
+#: The endpoint wants an `Authorization: Bearer <key>` header - a bare key answers `login fail`
+#: (status 1004), which is what the driver sent before 2026-10-03 and what cost a lane its quota
+#: check.
 QUOTA_URL = "https://api.minimax.io/v1/token_plan/remains"
 QUOTA_KEY_NAME = "LYRA_MINIMAX_API_KEY"
+QUOTA_AUTH_PREFIX = "Bearer "
+#: The quota is reported per model. The driver answers with the coding model, so it reads that
+#: entry and not the first one: the payload also carries `video`, which is a different plan and
+#: would report 100 percent while the plan the lane spends is the one that runs out.
+QUOTA_MODEL_NAME = "general"
 QUOTA_FLOOR_PERCENT = 10.0
 WIDTH_START = 2
 WIDTH_CAP = 14
@@ -306,15 +315,24 @@ class Width:
 
 # ------------------------------------------------------------------------------------ the quota
 def _env_value(name: str, env_file: Path) -> str:
-    """One value of the repo's `.env`. Read, never printed, never logged."""
+    """One value of the repo's `.env`. Read, never printed, never logged.
+
+    `.env` is written on Windows and therefore has CRLF line endings, and a value may be quoted.
+    A `\r` left on the key would be part of the Authorization header and the endpoint answers
+    `login fail`; the quotes are not part of the key either.
+    """
     if not env_file.exists():
         raise DriverError(f"{name} is not set: {env_file} is missing")
-    for line in env_file.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line.startswith(f"{name}="):
-            value = line.split("=", 1)[1].strip().strip('"').strip("'")
-            if value:
-                return value
+    for raw in env_file.read_text(encoding="utf-8").splitlines():
+        line = raw.strip("\r\n").strip()
+        if not line or line.startswith("#") or not line.startswith(f"{name}="):
+            continue
+        value = line.split("=", 1)[1].strip().strip("\r\n").strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        value = value.strip().strip("\r\n")
+        if value:
+            return value
     raise DriverError(f"{name} is not set in {env_file}")
 
 
@@ -327,26 +345,44 @@ def quota_remaining(
     """The weekly quota left in percent. The key travels in the Authorization header and nowhere
     else; this function never returns or logs it.
 
-    The key is the **MiniMax platform secret** of `api.minimax.io`, which is not the key the Lyra
-    pipeline uses: `LYRA_MINIMAX_API_KEY` authenticates the Anthropic-compatible route and is
-    refused here with `login fail` (measured 2026-10-03). So the variable name is a parameter, and
-    the refusal names the variable to set - never its value.
+    The header is `Authorization: Bearer <key>` (owner, measured 2026-10-03: a bare key answers
+    `login fail` / status 1004; with the prefix the same key returns the percent). The key is the
+    one the Lyra pipeline already uses - no second secret is involved - and the variable name
+    stays a parameter for a repo that stores it elsewhere.
     """
     key = _env_value(key_name, env_file)
     call = fetch or _http_json
-    payload = call(QUOTA_URL, headers={"Authorization": key}, timeout=30.0)
+    payload = call(QUOTA_URL, headers={"Authorization": f"{QUOTA_AUTH_PREFIX}{key}"}, timeout=30.0)
     base = payload.get("base_resp") or {}
     if base.get("status_code") not in (None, 0):
         raise DriverError(
-            f"{QUOTA_URL} refused the key in {key_name}: {base.get('status_msg', '')[:200]} "
-            f"(status {base.get('status_code')}). That variable must hold the MiniMax platform "
-            "secret of api.minimax.io, not the Anthropic-compatible key the Lyra pipeline uses. "
-            "The driver stops here rather than run without a quota check."
+            f"{QUOTA_URL} refused the request: {base.get('status_msg', '')[:200]} (status "
+            f"{base.get('status_code')}), with the key of {key_name} read from {env_file}. The "
+            f"header is Authorization: {QUOTA_AUTH_PREFIX}<key>; a bare key answers 'login fail'. "
+            "The driver stops here rather than run a lane without a quota check."
         )
     value = payload.get("current_weekly_remaining_percent")
     if not isinstance(value, (int, float)):
-        raise DriverError(f"{QUOTA_URL} returned no current_weekly_remaining_percent: {payload!r}")
+        value = _weekly_percent_of(payload, QUOTA_MODEL_NAME)
+    if not isinstance(value, (int, float)):
+        raise DriverError(
+            f"{QUOTA_URL} returned no weekly percent for {QUOTA_MODEL_NAME!r}: {payload!r}"
+        )
     return float(value)
+
+
+def _weekly_percent_of(payload: Mapping[str, Any], model: str) -> float | None:
+    """The weekly percent of one model's plan. The endpoint reports a list, one entry per model
+    (measured 2026-10-03: `general` at 77, `video` at 100), and a driver that read the first
+    entry or averaged them would stop on the wrong plan."""
+    entries = payload.get("model_remains")
+    if not isinstance(entries, list):
+        return None
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("model_name") == model:
+            value = entry.get("current_weekly_remaining_percent")
+            return float(value) if isinstance(value, (int, float)) else None
+    return None
 
 
 def quota_exhausted(percent: float, floor: float = QUOTA_FLOOR_PERCENT) -> bool:
@@ -942,6 +978,169 @@ def _quota_check() -> Callable[[], bool]:
     return exceeded
 
 
+# ------------------------------------------------------------------------------------ calibration
+@dataclass(frozen=True)
+class Disagreement:
+    """One unit of judgement the two answers do not share, with the sources either side cited. The
+    brief's bar is "spot-check every cited URL/quote of disagreements yourself", so a disagreement
+    that does not carry them cannot be spot-checked."""
+
+    label: str
+    unit: str
+    recorded: str
+    fresh: str
+    recorded_sources: tuple[str, ...]
+    fresh_sources: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class Calibration:
+    """What one calibration run measured. `agreement` is per judged unit (a sentence for a check
+    answer, a kept claim for a verification answer), not per site: that is the level a disagreement
+    is judged at, and the level the spot-check reads."""
+
+    lane: str
+    labels: tuple[str, ...]
+    units: int
+    agreed: int
+    disagreements: tuple[Disagreement, ...]
+    unanswered: tuple[str, ...]
+
+    @property
+    def agreement(self) -> float:
+        """The share of judged units both answers agree on.
+
+        No units means nothing was measured, and that is 0, not 1: a run whose agent answered
+        nothing would otherwise report perfect agreement, which is the one outcome the calibration
+        exists to catch.
+        """
+        return 0.0 if self.units == 0 else self.agreed / self.units
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "lane": self.lane,
+            "labels": list(self.labels),
+            "units": self.units,
+            "agreed": self.agreed,
+            "agreement": round(self.agreement, 4),
+            "unanswered": list(self.unanswered),
+            "disagreements": [
+                {
+                    **d.__dict__,
+                    "recorded_sources": list(d.recorded_sources),
+                    "fresh_sources": list(d.fresh_sources),
+                }
+                for d in self.disagreements
+            ],
+        }
+
+
+def _verdicts(text: str) -> tuple[tuple[str, str], ...] | None:
+    """The judged units of one answer as `(unit, verdict)` pairs, or `None` when the text is not
+    that shape. Two shapes exist: a check answer carries `sentences`, a verification answer
+    `kept`; both also carry a `coherent` flag, read as its own unit."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    if isinstance(data.get("sentences"), list):
+        pairs = [(f"sentence-{row.get('n')}", str(row.get("verdict"))) for row in data["sentences"]]
+    elif isinstance(data.get("kept"), list):
+        pairs = [(f"kept-{row.get('k')}", str(row.get("verdict"))) for row in data["kept"]]
+    else:
+        return None
+    return tuple(pairs) + (("coherent", str(data.get("coherent"))),)
+
+
+def _sources(text: str) -> tuple[str, ...]:
+    """Every URL the answer cites, in the order it cites them."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return ()
+    urls: list[str] = []
+    for group in (data.get("sentences"), data.get("kept"), [data]):
+        for row in group or []:
+            for quote in (row.get("quotes") if isinstance(row, dict) else None) or []:
+                url = quote.get("url") if isinstance(quote, dict) else None
+                if isinstance(url, str) and url not in urls:
+                    urls.append(url)
+    return tuple(urls)
+
+
+def copy_for_calibration(handoff: Path, out: Path, batches: Sequence[str]) -> dict[str, str]:
+    """Copy `handoff` to `out` without the answers of `batches`, and return the recorded answer
+    text per label.
+
+    The copy is a real handoff directory, so the answering agent's own brief runs unchanged; only
+    the answers of the calibrated batches are absent, which is what makes the re-answer a
+    measurement. Answers of the *other* batches come along, so the lane's own `validate` sees a
+    directory in progress exactly as a real one does.
+    """
+    if out.exists():
+        raise DriverError(f"{out} exists: a calibration copy is written once")
+    out.mkdir(parents=True)
+    wanted = set(batches)
+    recorded: dict[str, str] = {}
+    for batch in sorted(p for p in handoff.iterdir() if p.is_dir()):
+        target = out / batch.name
+        target.mkdir()
+        for file in sorted(batch.rglob("*")):
+            if not file.is_file():
+                continue
+            relative = file.relative_to(batch)
+            if file.suffix == ".json" and file.name.endswith(".answer.json"):
+                label = file.name[: -len(".answer.json")]
+                recorded[label] = json.loads(file.read_text(encoding="utf-8"))["text"]
+                if batch.name in wanted:
+                    continue  # the calibrated batch is re-answered, not copied
+            (target / relative).parent.mkdir(parents=True, exist_ok=True)
+            (target / relative).write_bytes(file.read_bytes())
+    return recorded
+
+
+def compare_answers(
+    lane: str, labels: Sequence[str], recorded: Mapping[str, str], fresh: Mapping[str, str]
+) -> Calibration:
+    """Compare the recorded answers with the fresh ones, unit by unit.
+
+    A label whose fresh answer is missing is counted as unanswered, never as agreement: an agent
+    that did not answer has not agreed with anything.
+    """
+    units = agreed = 0
+    disagreements: list[Disagreement] = []
+    unanswered: list[str] = []
+    for label in labels:
+        new_text = fresh.get(label)
+        if new_text is None:
+            unanswered.append(label)
+            continue
+        old_pairs = _verdicts(recorded[label]) if label in recorded else None
+        new_pairs = _verdicts(new_text)
+        if old_pairs is None or new_pairs is None:
+            unanswered.append(label)
+            continue
+        old_map = dict(old_pairs)
+        for unit, verdict in new_pairs:
+            units += 1
+            if old_map.get(unit) == verdict:
+                agreed += 1
+                continue
+            disagreements.append(
+                Disagreement(
+                    label=label,
+                    unit=unit,
+                    recorded=old_map.get(unit, "<none>"),
+                    fresh=verdict,
+                    recorded_sources=_sources(recorded[label]),
+                    fresh_sources=_sources(new_text),
+                )
+            )
+    return Calibration(lane, tuple(labels), units, agreed, tuple(disagreements), tuple(unanswered))
+
+
 # ------------------------------------------------------------------------------------ the CLI
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="mcode-driver", description=__doc__.splitlines()[0])
@@ -982,10 +1181,82 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--dry-run", action="store_true", help="report the next step per run, do nothing"
     )
 
+    cal = lanes.add_parser(
+        "calibrate",
+        help="O18: re-answer already-answered batches in a copy and compare (never in production)",
+    )
+    cal.add_argument("--lane", required=True, choices=("wc-check", "wc-verify", "fields"))
+    cal.add_argument("--handoff", required=True, type=Path, help="an already-answered handoff dir")
+    cal.add_argument("--out", required=True, type=Path, help="the copy to answer into")
+    cal.add_argument("--batches", required=True, nargs="+", help="the batch ids to re-answer")
+    cal.add_argument("--run", required=True, type=Path, help="the run the handoff belongs to")
+    cal.add_argument("--width", type=int, default=WIDTH_START)
+    cal.add_argument("--timeout", type=int, default=3600)
+    cal.add_argument("--max-steps", type=int, default=200)
+    cal.add_argument("--prepare-only", action="store_true", help="make the copy, answer nothing")
+    cal.add_argument("--no-quota-check", action="store_true", help="skip the weekly quota stop")
+
     args = parser.parse_args(list(argv) if argv is not None else None)
     if args.lane == "wc":
         return _main_wc(args)
+    if args.lane == "calibrate":
+        return _main_calibrate(args)
     return _main_wd3(args)
+
+
+def _main_calibrate(args: Any) -> int:
+    """Owner decision 2026-10-03 (O18): before any lane writes a MiniMax answer to production, the
+    lane type must be calibrated. 2-3 already-answered batches are copied into a separate handoff
+    directory, re-answered through the driver, and compared with the recorded answers. Pass is
+    >= 90 % agreement and 0 false sources; a failing lane holds and goes to the owner."""
+    brief = "verify-brief" if args.lane == "wc-verify" else "brief"
+    if args.prepare_only:
+        recorded = copy_for_calibration(args.handoff, args.out, args.batches)
+        (args.out / "RECORDED.json").write_text(
+            json.dumps(recorded, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+        )
+        print(json.dumps({"prepared": str(args.out), "labels": sorted(recorded)}, indent=1))
+        return 0
+
+    recorded_path = args.out / "RECORDED.json"
+    if not recorded_path.exists():
+        print(
+            json.dumps(
+                {"ok": False, "error": f"{recorded_path} is missing: run this with --prepare-only"}
+            ),
+            file=sys.stderr,
+        )
+        return 1
+    recorded = json.loads(recorded_path.read_text(encoding="utf-8"))
+
+    width = Width.from_start(args.width)
+    runner = McodeRunner(diagnostics=STATE_DIR / "calibration" / args.out.name)
+    state = State(
+        STATE_DIR / f"calibration-{args.out.name}.json",
+        lane=f"calibration:{args.lane}",
+        run=str(args.run),
+        handoff=str(args.out),
+    )
+    outcomes = answer_all(
+        args.batches,
+        prompt_for=lambda batch: wc_answer_prompt(
+            run=args.run, handoff=args.out, batch=batch, brief=brief
+        ),
+        runner=runner,
+        width=width,
+        state=state,
+        timeout=args.timeout,
+        max_steps=args.max_steps,
+        quota_check=None if args.no_quota_check else _quota_check(),
+    )
+    fresh: dict[str, str] = {}
+    for label in args.batches:
+        for path in args.out.glob(f"*/{label}/*.answer.json"):
+            fresh[label] = json.loads(path.read_text(encoding="utf-8"))["text"]
+    report = compare_answers(args.lane, args.batches, recorded, fresh).to_dict()
+    report["void"] = [o.label for o in outcomes if o.void]
+    print(json.dumps(report, indent=1))
+    return 0 if not report["void"] else 1
 
 
 def _first_batch_for(args: Any, run: str, index: int) -> int:

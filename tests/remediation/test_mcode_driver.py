@@ -233,15 +233,80 @@ def test_the_quota_stop_reads_the_weekly_remaining_percent(tmp_path: Path) -> No
 
     assert percent == 42
     assert seen["url"] == "https://api.minimax.io/v1/token_plan/remains"
-    assert "secret-key-value" in seen["auth"]  # the key goes in the header, nowhere else
+    # `Authorization: Bearer <key>` - a bare key answers "login fail" (owner, measured 2026-10-03)
+    assert seen["auth"] == "Bearer secret-key-value"
     assert D.quota_exhausted(10.0) is True  # <= 10 percent stops
     assert D.quota_exhausted(10.5) is False
 
 
+def test_the_quota_key_is_read_out_of_a_crlf_quoted_env_line(tmp_path: Path) -> None:
+    """`.env` is written on Windows, so its lines end CRLF, and a value may be quoted. A `\\r` left
+    on the key would travel in the Authorization header; the quotes are not part of the key. Both
+    would read as a wrong key to the endpoint (owner, measured 2026-10-03)."""
+    env_file = tmp_path / ".env"
+    env_file.write_bytes(b'# a comment\r\nLYRA_MINIMAX_API_KEY="quoted-key"\r\nOTHER=x\r\n')
+    seen: dict[str, str] = {}
+
+    def fetch(url: str, *, headers: dict[str, str], timeout: float) -> dict[str, Any]:
+        seen["auth"] = headers["Authorization"]
+        return {"current_weekly_remaining_percent": 77}
+
+    assert D.quota_remaining(env_file=env_file, fetch=fetch) == 77
+    assert seen["auth"] == "Bearer quoted-key"
+    assert "\r" not in seen["auth"]
+
+
+def test_the_quota_stop_reads_the_weekly_percent_of_the_model_the_driver_uses(
+    tmp_path: Path,
+) -> None:
+    """The endpoint reports one entry per model, not one number (measured 2026-10-03: `general`
+    at 77, `video` at 100). The driver answers with the coding model, so it reads that entry: a
+    driver that read the first entry, or averaged them, would report a plan that never runs out."""
+    env_file = tmp_path / ".env"
+    env_file.write_bytes(b"LYRA_MINIMAX_API_KEY=key\r\n")
+    seen: dict[str, str] = {}
+
+    def fetch(url: str, *, headers: dict[str, str], timeout: float) -> dict[str, Any]:
+        seen["auth"] = headers["Authorization"]
+        return {
+            "model_remains": [
+                {"model_name": "video", "current_weekly_remaining_percent": 100},
+                {"model_name": "general", "current_weekly_remaining_percent": 77},
+            ],
+            "base_resp": {"status_code": 0, "status_msg": "success"},
+        }
+
+    assert D.quota_remaining(env_file=env_file, fetch=fetch) == 77
+    assert D.quota_exhausted(D.quota_remaining(env_file=env_file, fetch=fetch)) is False
+    assert seen["auth"] == "Bearer key"
+
+
+def test_a_quota_payload_without_the_model_the_driver_uses_stops_the_driver(tmp_path: Path) -> None:
+    """Silently using another model's plan is the one wrong answer here, so it is a refusal."""
+    env_file = tmp_path / ".env"
+    env_file.write_bytes(b"LYRA_MINIMAX_API_KEY=key\r\n")
+
+    with pytest.raises(D.DriverError, match="general"):
+        D.quota_remaining(
+            env_file=env_file,
+            fetch=lambda *a, **k: {
+                "model_remains": [{"model_name": "video", "current_weekly_remaining_percent": 100}],
+                "base_resp": {"status_code": 0, "status_msg": "success"},
+            },
+        )
+
+
 def test_a_missing_key_stops_the_driver_instead_of_calling_without_one() -> None:
     env_file = Path(os.devnull)
-    with pytest.raises(D.DriverError, match="LYRA_MINIMAX_API_KEY"):
+    with pytest.raises(D.DriverError, match=D.QUOTA_KEY_NAME):
         D.quota_remaining(env_file=env_file, fetch=lambda *a, **k: {})
+
+
+def test_the_quota_key_is_the_one_the_lyra_pipeline_uses() -> None:
+    """No second secret is involved: the same key serves the Anthropic-compatible route and the
+    quota endpoint, and only the header format differs (owner, measured 2026-10-03)."""
+    assert D.QUOTA_KEY_NAME == "LYRA_MINIMAX_API_KEY"
+    assert D.QUOTA_AUTH_PREFIX == "Bearer "
 
 
 def test_a_key_the_quota_endpoint_refuses_stops_the_driver_and_names_the_variable(
@@ -251,7 +316,7 @@ def test_a_key_the_quota_endpoint_refuses_stops_the_driver_and_names_the_variabl
     refuses it with `login fail`. The driver must stop - running a lane without a quota check would
     break owner decision O20 - and the refusal must name the variable to set, never its value."""
     env_file = tmp_path / ".env"
-    env_file.write_text("LYRA_MINIMAX_API_KEY=not-the-platform-secret\n", encoding="utf-8")
+    env_file.write_text("LYRA_MINIMAX_API_KEY=not-the-key\n", encoding="utf-8")
     seen: dict[str, str] = {}
 
     def fetch(url: str, *, headers: dict[str, str], timeout: float) -> dict[str, Any]:
@@ -267,20 +332,20 @@ def test_a_key_the_quota_endpoint_refuses_stops_the_driver_and_names_the_variabl
         D.quota_remaining(env_file=env_file, fetch=fetch)
 
     message = str(caught.value)
-    assert "LYRA_MINIMAX_API_KEY" in message
-    assert "platform secret" in message
-    assert "not-the-platform-secret" not in message  # the value is never in the refusal
-    assert seen["auth"] == "not-the-platform-secret"  # but it did travel in the header
+    assert D.QUOTA_KEY_NAME in message
+    assert "Bearer" in message  # the header format is the thing to check
+    assert "not-the-key" not in message  # the value is never in the refusal
+    assert seen["auth"] == "Bearer not-the-key"  # but it did travel in the header
 
 
 def test_the_quota_variable_name_can_be_chosen(tmp_path: Path) -> None:
-    """A repo may hold the platform secret under its own name; the driver asks for one."""
+    """A repo may hold the key under its own name; the driver asks for one."""
     env_file = tmp_path / ".env"
-    env_file.write_text("MINIMAX_PLATFORM_KEY=k\nLYRA_MINIMAX_API_KEY=w\n", encoding="utf-8")
+    env_file.write_bytes(b"MINIMAX_KEY=k\r\nOTHER_KEY=w\r\n")
     assert (
         D.quota_remaining(
             env_file=env_file,
-            key_name="MINIMAX_PLATFORM_KEY",
+            key_name="OTHER_KEY",
             fetch=lambda *a, **k: {"current_weekly_remaining_percent": 55},
         )
         == 55
