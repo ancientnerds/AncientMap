@@ -462,6 +462,105 @@ def test_a_fields_calibration_prompt_names_the_fields_tool_and_its_own_run(tmp_p
     assert "output/remediation/calibration/fields-01-run" in prompt
 
 
+def fill_answer(*fields: tuple[str, str, str]) -> str:
+    """A field-fill answer: `period_start` replaced with "201", `site_type` unresolved, ..."""
+    return json.dumps(
+        {
+            "fields": {
+                name: {
+                    "decision": decision,
+                    "value": value,
+                    "quotes": [{"url": f"https://example.org/{name}", "quote": "page says so"}],
+                    "reasoning": "the page says so",
+                }
+                for name, decision, value in fields
+            }
+        }
+    )
+
+
+def test_a_field_fill_answer_is_compared_per_field_with_its_value() -> None:
+    """The field fill's answer has a third shape: a `fields` object per site, one decision and value
+    per field. Measured 2026-10-03: `fields-02` answered 24 of 24 questions and the comparison
+    reported **0 units** and every label unanswered - it knew only the check and the verification
+    shape, so a filled field counted as nothing to compare."""
+    same = fill_answer(("period_start", "replace", "201"), ("site_type", "unresolved", ""))
+    report = D.compare_answers("fields", [SITE], {SITE: same}, {SITE: same})
+
+    assert report.unanswered == ()
+    assert report.units == 2  # one unit per filled field, no coherent flag in this shape
+    assert report.agreement == 1.0
+
+
+def test_a_field_that_resolves_to_a_different_value_is_a_disagreement() -> None:
+    report = D.compare_answers(
+        "fields",
+        [SITE],
+        {SITE: fill_answer(("period_start", "unresolved", ""))},
+        {SITE: fill_answer(("period_start", "replace", "201"))},
+    )
+
+    (only,) = report.disagreements
+    assert (only.unit, only.recorded, only.fresh) == ("period_start", "unresolved", "replace: 201")
+    assert only.fresh_sources == ("https://example.org/period_start",)
+
+
+def test_a_value_that_differs_only_in_surrounding_whitespace_is_the_same_value() -> None:
+    """The comparison reads what the lane would write, and the lane trims a value before it stores
+    it (`fields/answers.py`: "a trimmed, non-empty string"). Whitespace *inside* a value is part of
+    the value and stays a difference - normalising more than the lane does would hide a real one."""
+    report = D.compare_answers(
+        "fields",
+        [SITE],
+        {SITE: fill_answer(("coordinates", "replace", " 41.148, 24.389 "))},
+        {SITE: fill_answer(("coordinates", "replace", "41.148, 24.389"))},
+    )
+
+    assert report.agreement == 1.0
+    assert report.disagreements == ()
+
+    spaced = D.compare_answers(
+        "fields",
+        [SITE],
+        {SITE: fill_answer(("coordinates", "replace", "41.148, 24.389"))},
+        {SITE: fill_answer(("coordinates", "replace", "41.148,24.389"))},
+    )
+    assert spaced.units == 1 and spaced.agreed == 0  # inside the value: a real difference
+
+
+def test_a_kept_field_is_compared_by_its_decision_not_by_its_value() -> None:
+    """`keep` writes nothing, so its value is not part of what the lane would do - and the field's
+    own rule says it need not even be the stored one: `period_start` accepts any year in the stored
+    value's bucket and `coordinates` any point within `KEEP_KM`
+    (`fields/answers.py`: "keep, but the year is not in the stored value's bucket"). Measured
+    2026-10-03: `fields-02` counted a `keep: 42.0465` against a `keep: 42.046332` as a
+    disagreement - that is the harness inventing a difference, not a model judgement."""
+    report = D.compare_answers(
+        "fields",
+        [SITE],
+        {SITE: fill_answer(("period_start", "keep", "201"))},
+        {SITE: fill_answer(("period_start", "keep", "199"))},
+    )
+
+    assert report.units == 1
+    assert report.agreement == 1.0
+    assert report.disagreements == ()
+
+
+def test_a_kept_field_against_a_replaced_one_is_a_disagreement() -> None:
+    """The decision is the whole unit for a `keep`: keeping and replacing the same cell are
+    opposite verdicts even when the value is the same string."""
+    report = D.compare_answers(
+        "fields",
+        [SITE],
+        {SITE: fill_answer(("site_type", "keep", "temple"))},
+        {SITE: fill_answer(("site_type", "replace", "temple"))},
+    )
+
+    (only,) = report.disagreements
+    assert (only.unit, only.recorded, only.fresh) == ("site_type", "keep", "replace: temple")
+
+
 # ---------------------------------------------------------------------------- the verdict
 def test_a_calibration_with_an_unanswered_question_does_not_pass() -> None:
     """Owner decision 2026-10-03 (O18) asks for >= 90 % agreement. A question the model never

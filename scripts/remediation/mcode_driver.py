@@ -1207,14 +1207,17 @@ class Calibration:
 
 def _verdicts(text: str) -> tuple[tuple[str, str], ...] | None:
     """The judged units of one answer as `(unit, verdict)` pairs, or `None` when the text is not
-    that shape. Two shapes exist: a check answer carries `sentences`, a verification answer
-    `kept`; both also carry a `coherent` flag, read as its own unit."""
+    that shape. Three shapes exist: a check answer carries `sentences`, a verification answer
+    `kept`, a field-fill answer a `fields` object; the first two also carry a `coherent` flag, read
+    as its own unit."""
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
         return None
     if not isinstance(data, dict):
         return None
+    if isinstance(data.get("fields"), dict):
+        return _fill_units(data["fields"])
     if isinstance(data.get("sentences"), list):
         pairs = [(f"sentence-{row.get('n')}", str(row.get("verdict"))) for row in data["sentences"]]
     elif isinstance(data.get("kept"), list):
@@ -1224,6 +1227,33 @@ def _verdicts(text: str) -> tuple[tuple[str, str], ...] | None:
     return tuple(pairs) + (("coherent", str(data.get("coherent"))),)
 
 
+def _fill_units(fields: Any) -> tuple[tuple[str, str], ...] | None:
+    """The field-fill shape as one unit per field: what the lane would write into it.
+
+    Measured 2026-10-03: a field-fill answer carries none of the two shapes above, so every one of
+    the 24 answers of `fields-02` counted as unreadable and the comparison reported 0 units. The
+    unit is the cell, and what the import writes for it is the decision - only `replace` puts a
+    value into the field. A `keep` writes nothing, so its value is not compared at all: the field's
+    own rule does not even require it to be the stored one (`fields/answers.py`: `keep, but the
+    year is not in the stored value's bucket` for `period_start`, `KEEP_KM` for `coordinates`), and
+    comparing it would have counted a `keep: 42.0465` against a `keep: 42.046332` as a
+    disagreement - the harness inventing a difference instead of the model making a judgement. Only
+    the whitespace around a value is normalised, because that is what the lane trims before it
+    stores (`fields/answers.py`: "a trimmed, non-empty string"); whitespace *inside* a value is part
+    of the value and stays a difference.
+    """
+    if not isinstance(fields, dict):
+        return None
+    units: list[tuple[str, str]] = []
+    for name, row in fields.items():
+        if not isinstance(row, dict) or "decision" not in row:
+            return None
+        decision = str(row["decision"])
+        value = str(row.get("value") or "").strip() if decision == "replace" else ""
+        units.append((str(name), f"{decision}: {value}" if value else decision))
+    return tuple(units)
+
+
 def _sources(text: str) -> tuple[str, ...]:
     """Every URL the answer cites, in the order it cites them."""
     try:
@@ -1231,7 +1261,13 @@ def _sources(text: str) -> tuple[str, ...]:
     except json.JSONDecodeError:
         return ()
     urls: list[str] = []
-    for group in (data.get("sentences"), data.get("kept"), [data]):
+    fields = data.get("fields")
+    for group in (
+        data.get("sentences"),
+        data.get("kept"),
+        (list(fields.values()) if isinstance(fields, dict) else None),
+        [data],
+    ):
         for row in group or []:
             for quote in (row.get("quotes") if isinstance(row, dict) else None) or []:
                 url = quote.get("url") if isinstance(quote, dict) else None
