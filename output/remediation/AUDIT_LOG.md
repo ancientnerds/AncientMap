@@ -13593,3 +13593,61 @@ after the batch's before/after snapshot was taken, so it was not in `tree_change
 reading `git status` afterwards. A batch that edits a tracked file in a turn that spans more than one
 snapshot can slip past the name list while still being caught by the stop; the names are a report,
 not the boundary.
+
+### Two defects in the driver itself: a deadline that never came back, and a git call about the wrong repository
+
+Both were written down in the project memory before they were measured here, and both were still in
+`scripts/remediation/mcode_driver.py` - the file that runs the lanes unattended, for hours, with
+nobody watching a call.
+
+**1. `subprocess.run(..., timeout=…)` under the `cmd /c` wrapper never returns.** Measured on this
+machine with a probe that gives the driver its *own* deadline and a hard bound of its own
+(`C:\tmp\hangprobe\probe.py`, deliberately outside the repo): a fake `mcode exec` that never returns
+and leaves a grandchild holding stdout, driven with `timeout=1` - the driver's deadline is then
+121 s, well inside the probe's 170 s.
+
+- **before:** *STILL BLOCKED after 170.0 s, past the driver's own deadline of 121 s.* The timeout
+  fired, `Popen.kill()` reached `cmd.exe`, and the `communicate()` that follows a timeout drained
+  pipes that the `node` underneath still held. The call never came back.
+- **after:** *returned after 3.1 s*, `exit=1 ok=False timed_out=True`, and the grandchild (pid
+  38776) was no longer running.
+
+The fix is not a longer timeout. All three streams are files - the prompt, stdout, stderr - so there
+is nothing to drain. The driver owns the process, and at the deadline it kills the **tree**
+(`taskkill /PID <pid> /T /F` on Windows, `killpg` on POSIX with the child in a process group of its
+own), gives it `KILL_GRACE_S` = 10 s to be gone, and answers from what the run left on disk. A run
+that does not die counts as unanswered, which is true either way. `ExecResult` now carries
+`timed_out`, and `succeeded` is false for it whatever exit code the kill happened to leave behind -
+without that, a run killed at its deadline with exit 0 would be read as a success.
+
+**2. `run_git()` named a repository it was not guaranteed to get.** `GIT_DIR`, `GIT_WORK_TREE` and
+`GIT_INDEX_FILE` are read before the command line, so `subprocess.run(["git", ...], cwd=repo)`
+answers about whatever the environment says - and answers *successfully* about it. The pre-push hook
+exports `GIT_DIR` for the checkout it pushes and the test suite runs inside that hook (measured
+2026-10-03 in the studio, where a test's `commit` landed on the branch being pushed). The driver's
+tree guard is built on `git status`: a redirected status reports a clean tree in a repository nobody
+asked about. Every git call in the driver now goes through `pipeline/utils/git_env.py`, the one
+place in the project that knows this. That module was **taken into this branch unchanged** from
+`3200ffb` (byte-identical to `origin/main`, `git diff origin/main -- pipeline/utils/git_env.py` is
+empty) rather than rewritten here, because a second copy of it is how the two drift apart in the
+first place.
+
+**What the fix broke on the way, and who caught it.** The first version opened `stdout.txt` and
+`stderr.txt` *inside* the diagnostics directory before starting the run. Four existing tests failed
+with `mcode exec failed: --diagnostics-dir is invalid: must be empty`: the runtime refuses a
+diagnostics directory that already holds something, so a stream opened into it before the run starts
+is a run that never starts. The two streams are now written **beside** the run directory and moved
+into it afterwards. That refusal is the reason the fake in the test suite models it at all.
+
+**Tests** - `tests/remediation/test_mcode_driver.py`, 38 passed:
+- `test_a_batch_that_overruns_its_deadline_dies_with_its_whole_tree`: a fake that hangs behind a
+  grandchild, driven past its deadline; asserts `timed_out`, `ok is False`, that the lane counts the
+  batch void, and that the grandchild's pid is gone (`tasklist` on Windows, a signal probe elsewhere).
+- `test_a_git_command_asks_the_repository_it_names_and_not_one_from_the_environment`: two real git
+  repositories, `GIT_DIR` pointed at the wrong one through `monkeypatch`; asserts the call answers
+  about the repository it names.
+
+**Not verified here:** the fix was measured against a fake `mcode`, not against the real runtime. The
+first production batch after the merge is the real test, and the watchdog relaunches the lane within
+20 minutes, so that test arrives on its own.
+

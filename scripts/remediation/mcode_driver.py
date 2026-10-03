@@ -34,6 +34,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -45,8 +46,16 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+_HERE = Path(__file__).resolve()
 if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    sys.path.insert(0, str(_HERE.parent))
+#: The repository root, so the driver can share the one git helper with the pipeline
+#: (`pipeline/utils/git_env.py`). A git call that names a repository is only about that
+#: repository when it runs without an inherited `GIT_DIR`; see `run_git`.
+if str(_HERE.parents[2]) not in sys.path:
+    sys.path.insert(0, str(_HERE.parents[2]))
+
+from pipeline.utils.git_env import run_git as _git_without_git_env  # noqa: E402
 
 REPO = Path("C:/PythonProjects/AncientMap")
 PYTHON = REPO / ".venv" / "Scripts" / "python.exe"
@@ -70,6 +79,14 @@ QUOTA_AUTH_PREFIX = "Bearer "
 #: would report 100 percent while the plan the lane spends is the one that runs out.
 QUOTA_MODEL_NAME = "general"
 QUOTA_FLOOR_PERCENT = 10.0
+#: How long past the agent's own `--timeout` the driver waits before it takes the run back. The
+#: runtime gets its deadline plus this much to wind down and print its JSON; after that the driver
+#: kills the tree and counts the batch unanswered, whatever state it is in.
+EXEC_OVERHEAD_S = 120
+#: How long a killed tree is given to be gone before the driver answers without it. It is the
+#: bound on the one wait that must not be open-ended: the driver took a process away and does not
+#: stand there until it agrees to die.
+KILL_GRACE_S = 10
 #: Owner decision 2026-10-03 (O18): a lane type is calibrated before it writes a MiniMax answer to
 #: production, and it passes at this share of judged units agreeing with the recorded answers.
 AGREEMENT_FLOOR = 0.9
@@ -93,10 +110,16 @@ class DriverError(RuntimeError):
 # ------------------------------------------------------------------------------------ subprocesses
 def run_git(repo: Path, *args: str, check: bool = True) -> str:
     """One git command in `repo`, its stdout. `check=False` for the calls whose exit code is the
-    answer (a `status` is 0 either way)."""
-    done = subprocess.run(
-        ["git", *args], cwd=repo, capture_output=True, text=True, encoding="utf-8", check=False
-    )
+    answer (a `status` is 0 either way).
+
+    The call runs without `GIT_*` (`pipeline/utils/git_env.py`, the one place that knows this).
+    Git reads the repository from the environment before it looks at the command line, and the
+    pre-push hook exports `GIT_DIR` for the checkout it pushes while the test suite runs inside
+    that hook - so `cwd=<repo>` alone answers about *that* repository, and answers successfully
+    about it (measured 2026-10-03: a test's `commit` landed on the branch being pushed). A tree
+    guard built on a redirected `status` sees a clean tree in a repository it never asked about.
+    """
+    done = _git_without_git_env(repo, *args)
     if check and done.returncode != 0:
         raise DriverError(f"git {' '.join(args)} in {repo} failed: {done.stderr.strip()[:400]}")
     return done.stdout
@@ -159,6 +182,48 @@ def free_ram_gb() -> float:
 
 
 # ------------------------------------------------------------------------------------ one mcode exec
+def _own_process_group() -> dict[str, bool]:
+    """A child in a process group of its own, so a kill can reach everything under it.
+
+    POSIX only: `killpg` needs a group, and the group is the child's alone only when the child was
+    started into one. Windows walks the parent-child tree instead (`taskkill /T`), which needs no
+    flag and follows the runtime's `node` under the command processor.
+    """
+    return {} if os.name == "nt" else {"start_new_session": True}
+
+
+def _kill_tree(process: subprocess.Popen[bytes]) -> None:
+    """Every process under `process`, not only the one this driver started.
+
+    The one this driver started is the command processor (`mcode` on PATH is a `.cmd` shim, and
+    `CreateProcess` runs neither). Killing only that leaves the runtime's `node` running with the
+    answer half-written - measured 2026-10-03, three `node` children on ~1 % CPU on a socket that
+    would never answer again.
+    """
+    if os.name == "nt":
+        subprocess.run(  # noqa: S603 - a fixed argv, `taskkill` on PATH
+            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+            capture_output=True,
+            check=False,
+            timeout=KILL_GRACE_S,
+        )
+        return
+    try:
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+    except ProcessLookupError:
+        # the group is already gone: the deadline and this kill raced the process's own exit
+        process.kill()
+
+
+def _reap(process: subprocess.Popen[bytes], grace: int = KILL_GRACE_S) -> int:
+    """The exit code of a killed process, or -1 when it outlived its own kill. A driver that waits
+    for a process that will not stop is the defect this replaces; it answers without one."""
+    try:
+        return process.wait(timeout=grace)
+    except subprocess.TimeoutExpired:
+        return -1
+
+
 def mcode_argv(*args: str, binary: str = "mcode") -> list[str]:
     """The command that runs `mcode` here.
 
@@ -184,6 +249,9 @@ class ExecResult:
     stderr: str
     diagnostics: Path
     tree_changed: tuple[str, ...] = ()
+    #: Whether the driver took this run back at its own deadline. Not the same as a failure the
+    #: run reported, and not derivable from the exit code: the code is whatever the kill left.
+    timed_out: bool = False
 
     @property
     def rate_limited(self) -> bool:
@@ -206,8 +274,9 @@ class ExecResult:
     def succeeded(self) -> bool:
         """Whether the run itself succeeded. `mcode exec --output-format json` answers an
         `exec.result` with a `status` ("succeeded", "failed", ...) and no `ok`, so a run that failed
-        while exiting 0 - a refused permission, a step limit - is not a success."""
-        if self.exit_code != 0:
+        while exiting 0 - a refused permission, a step limit - is not a success. A run the driver
+        had to kill is not one either, whatever exit code the kill left behind."""
+        if self.timed_out or self.exit_code != 0:
             return False
         status = self.payload.get("status")
         if isinstance(status, str):
@@ -258,6 +327,7 @@ class McodeRunner:
         timeout: int,
         max_steps: int,
         effort: str = EXEC_EFFORT,
+        overhead: int = EXEC_OVERHEAD_S,
     ) -> ExecResult:
         """Run one batch. The tracked tree is sampled before and after, so the result carries what
         the batch changed - or nothing, which is the normal case."""
@@ -269,6 +339,11 @@ class McodeRunner:
         last_message = target / "last-message.txt"
         # The prompt goes in over stdin, never on this command line: it is a long multi-line text
         # with quotes, and on Windows the command line would go through `cmd`'s argument parsing.
+        # It is a file and not a pipe, like the two output streams - and beside the run, not in it:
+        # `mcode exec` refuses a diagnostics directory that is not empty.
+        prompt_file = self.diagnostics / "prompts" / f"{target.name}.txt"
+        prompt_file.parent.mkdir(parents=True, exist_ok=True)
+        prompt_file.write_text(prompt, encoding="utf-8")
         # `--timeout` takes a duration ("3600s"), not a bare number, and there is no `--label`: the
         # batch's own name is what this directory is called, and the agent's last message is kept
         # beside it.
@@ -296,24 +371,9 @@ class McodeRunner:
             "-",
             binary=self.binary,
         )
-        try:
-            done = subprocess.run(
-                argv,
-                cwd=self.repo,
-                input=prompt,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout + 120,
-                env={**os.environ, **self.extra_env} if self.extra_env else None,
-                check=False,
-            )
-            code, out, err = done.returncode, done.stdout, done.stderr
-        except FileNotFoundError as exc:
-            raise DriverError(f"{self.binary} is not on PATH: {exc}") from exc
-        (target / "stdout.txt").write_text(out, encoding="utf-8")
-        (target / "stderr.txt").write_text(err, encoding="utf-8")
+        code, out, err, timed_out = self._exec(
+            argv, prompt_file, target, deadline=timeout + overhead
+        )
         changed = _changed_since(before, tracked_changes(self.repo))
         payload = _last_json_line(out)
         result = ExecResult(
@@ -324,12 +384,82 @@ class McodeRunner:
             stderr=err,
             diagnostics=target,
             tree_changed=changed,
+            timed_out=timed_out,
         )
         return replace(result, ok=result.succeeded)
+
+    def _exec(
+        self, argv: Sequence[str], prompt: Path, target: Path, *, deadline: int
+    ) -> tuple[int, str, str, bool]:
+        """One `mcode exec` with all three streams on files and the process owned by this driver.
+
+        The files are the point. With pipes, `subprocess.run(..., timeout=…)` kills the process it
+        started - the command processor - and then drains the pipes, which the `node` underneath
+        still holds open: the call never returns, however long the timeout was (measured on this
+        machine 2026-10-03: a deadline of 121 s, still blocked at 170 s; the studio lost 3.5 h to
+        it). With files there is nothing to drain, so the deadline can be kept: the whole tree is
+        killed, given `KILL_GRACE_S` to be gone, and whatever the run left on disk is the answer.
+        A run that does not die counts as unanswered - which is true either way.
+
+        The two output files are written **beside** the diagnostics directory and moved into it
+        afterwards. `mcode exec` refuses a diagnostics directory that is not empty (measured
+        2026-10-03), so a stream opened into it before the run starts is a run that never starts.
+        """
+        out_path = target.with_name(f"{target.name}.stdout.txt")
+        err_path = target.with_name(f"{target.name}.stderr.txt")
+        with (
+            prompt.open("rb") as stdin,
+            out_path.open("wb") as out,
+            err_path.open("wb") as err,
+        ):
+            try:
+                process = subprocess.Popen(  # noqa: S603 - argv built here, `mcode` on PATH
+                    list(argv),
+                    cwd=self.repo,
+                    stdin=stdin,
+                    stdout=out,
+                    stderr=err,
+                    env={**os.environ, **self.extra_env} if self.extra_env else None,
+                    **_own_process_group(),
+                )
+            except FileNotFoundError as exc:
+                raise DriverError(f"{self.binary} is not on PATH: {exc}") from exc
+            timed_out = False
+            try:
+                code = process.wait(timeout=deadline)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                _kill_tree(process)
+                code = _reap(process)
+                if process.poll() is None:
+                    # What a run that outlives its own kill leaves behind. The driver does not wait
+                    # for a process that will not stop; the evidence goes to disk instead.
+                    err.write(
+                        f"mcode_driver: pid {process.pid} was still running {KILL_GRACE_S}s after "
+                        f"the tree kill at {deadline}s\n".encode()
+                    )
+                    err.flush()
+        return (
+            code,
+            _read_and_keep(out_path, target / "stdout.txt"),
+            _read_and_keep(err_path, target / "stderr.txt"),
+            timed_out,
+        )
 
     def voids(self, result: ExecResult) -> bool:
         """Whether this batch may not be counted: it failed, or it edited a tracked file."""
         return not result.ok or not result.tree_clean
+
+
+def _read_and_keep(staged: Path, into: Path) -> str:
+    """What the run wrote, and the file itself beside the rest of its diagnostics.
+
+    The text is read first: a run's stdout is read a week later out of the diagnostics directory
+    the run was given, not out of the scratch its streams needed while it was still running.
+    """
+    text = staged.read_text(encoding="utf-8", errors="replace")
+    staged.replace(into)
+    return text
 
 
 def _last_json_line(stdout: str) -> dict[str, Any]:

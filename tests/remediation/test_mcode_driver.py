@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import stat
+import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -240,7 +241,9 @@ def test_a_command_that_prints_its_json_on_one_line_after_its_own_output_is_read
 
 
 def test_a_command_that_prints_no_json_reports_empty_rather_than_guessing() -> None:
-    assert D.Command(argv=("wc",), exit_code=3, stdout="not json at all\n", stderr="boom").json == {}
+    assert (
+        D.Command(argv=("wc",), exit_code=3, stdout="not json at all\n", stderr="boom").json == {}
+    )
 
 
 # ---------------------------------------------------------------------------- the tracked-tree guard
@@ -300,6 +303,98 @@ def test_a_batch_that_is_retried_gets_its_own_diagnostics_directory(tmp_path: Pa
     assert first.diagnostics != second.diagnostics
     assert first.diagnostics.is_dir() and (first.diagnostics / "FAKE_DIAGNOSTICS").exists()
     assert (second.diagnostics / "FAKE_DIAGNOSTICS").exists()
+
+
+# ---------------------------------------------------------------------------- a batch that will not die
+HANG = """
+import os, subprocess, sys, time
+from pathlib import Path
+# a fake `mcode exec` that never returns. The grandchild is the point: it inherits stdout and
+# outlives the command processor, so a deadline that only kills `cmd.exe` blocks forever on the
+# pipe it is still holding (measured 2026-10-03 - 3.5 h lost in the studio before this shape was
+# killed as a tree)
+child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])
+Path(os.environ["FAKE_CHILD_PID"]).write_text(str(child.pid), encoding="utf-8")
+sys.stdin.read()
+time.sleep(600)
+"""
+
+
+def hanging_mcode(tmp_path: Path) -> tuple[Path, Path]:
+    """The fake that will not stop, and the file it reports the grandchild's pid in."""
+    script = tmp_path / "hang_mcode.py"
+    script.write_text(HANG, encoding="utf-8")
+    if os.name == "nt":
+        binary = tmp_path / "hang-mcode.cmd"
+        binary.write_text(f'@echo off\r\n"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
+    else:
+        binary = tmp_path / "hang-mcode.sh"
+        binary.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{script}" "$@"\n', encoding="utf-8")
+        binary.chmod(0o755)
+    return binary, tmp_path / "child.pid"
+
+
+def _alive(pid: int) -> bool:
+    """Whether that process id is still running: `tasklist` on Windows, a signal probe elsewhere."""
+    if os.name == "nt":
+        listing = subprocess.run(  # noqa: S603 - a fixed argv, `tasklist` on PATH
+            ["tasklist", "/FI", f"PID eq {pid}", "/NH", "/FO", "CSV"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        ).stdout
+        return f'"{pid}"' in listing
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+@pytest.mark.timeout(90)
+def test_a_batch_that_overruns_its_deadline_dies_with_its_whole_tree(tmp_path: Path) -> None:
+    """A run that does not stop counts as unanswered - it must not stop the driver instead.
+
+    `subprocess.run(..., timeout=…)` kills the process it started, which here is the command
+    processor, and then drains the output pipes; the `node` underneath still holds them, so the
+    call never returns. The driver owns the process instead: the deadline kills the whole tree and
+    the result says the run overran it."""
+    binary, pid_file = hanging_mcode(tmp_path)
+    runner = D.McodeRunner(
+        binary=binary,
+        repo=a_repo(tmp_path),
+        diagnostics=tmp_path / "d",
+        env={"FAKE_CHILD_PID": str(pid_file)},
+    )
+
+    result = runner.run("the agent prompt", label="hang", timeout=3, max_steps=4, overhead=0)
+
+    assert result.timed_out is True
+    assert result.ok is False
+    assert runner.voids(result) is True
+    assert pid_file.exists(), "the fake never got far enough to report its grandchild"
+    grandchild = int(pid_file.read_text(encoding="utf-8"))
+    assert not _alive(grandchild), f"pid {grandchild} outlived the kill of its tree"
+
+
+# ---------------------------------------------------------------------------- the repository git is asked about
+def test_a_git_command_asks_the_repository_it_names_and_not_one_from_the_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`GIT_DIR` is read before the command line, so it beats both `-C` and `cwd`: an unstripped
+    call answers about a different repository - and answers *successfully* about it. Measured
+    2026-10-03: the pre-push hook exports it for the checkout it pushes, the suite runs inside that
+    hook, and a test's `commit` landed on the branch that was being pushed."""
+    named = a_repo(tmp_path)
+    (tmp_path / "elsewhere").mkdir()
+    elsewhere = a_repo(tmp_path / "elsewhere")
+    monkeypatch.setenv("GIT_DIR", str(elsewhere / ".git"))
+
+    top = D.run_git(named, "rev-parse", "--show-toplevel").strip()
+
+    assert Path(top).resolve() == named.resolve()
 
 
 # ---------------------------------------------------------------------------- did the batch answer?

@@ -453,15 +453,21 @@ model call: `python scripts/remediation/mcode_driver.py wc --runs <run>... --fir
 | Lane | State | Next step |
 | --- | --- | --- |
 | WB teaser cards | **complete** - 6 chunks, 31 steps, 2,716 cells, 0 deviations | nothing |
-| WC sentence check | pilot written; mass-01 built, **not written**; chunks 02-05 unbuilt | **692 verification questions may be answered** (lane calibrated); the 91 check questions **hold** for an owner decision; then build 02-05, then write mass-01 |
+| WC sentence check | pilot written; **mass-01 WRITTEN 2026-10-03** - 513 sites / 1,018 rows in 6 journalled steps, every acceptance 0 deviations; chunks 02-05 unbuilt | **692 verification questions may be answered** (lane calibrated); the 91 check questions **hold** for an owner decision; then build 02-05 and write them |
 | WD1 fields | **complete** - 3,444 sites, 8,055 cells, 0 deviations | runbook step 15 (`handoff --wave`) was never run |
 | WD2 scope | **written** - 20 sites retired | nothing |
 | WD2 image | 4,064 + 933 answered, 35 chunk plans built, **0 chunks applied** | the largest block of open production work |
-| WD3 field fill | pilot 2 passed, wave `2026-10-01a` written; main run 1,995/2,613 answered | answer the 618 missing, import, write |
+| WD3 field fill | pilot 2 passed, wave `2026-10-01a` written; main run 1,995/2,613 answered; **the 618 missing are being answered right now** (48 of 78 batches, 2026-10-03 23:07) | wait for the round to finish, import, then write - the write needs the owner |
 | WN | implemented, **never run**; population is 1 site | pilot, then mass |
 | WA v3/v3d | v3 + v3d main written, 37 steps, 0 deviations | write `p4-2510`/`p4-2511`; the `wip/p4-pilot` merge is still open and **the WA run dirs live in that worktree** |
 
-Nothing in any lane has moved since 2026-10-02 03:28.
+**A lane runs unattended, and there is a watchdog for it.** `wd3 --run output\remediation\fields\wd3
+--handoff output\remediation\handoff\fields-wd3 --resume` is the command; Windows Task Scheduler runs
+`C:\Users\marti\.minimax\watchdog_round.ps1` as `AncientMap-LaneWatchdog` every 20 minutes (remove:
+`schtasks /Delete /TN "AncientMap-LaneWatchdog" /F`; log `watchdog.log`). It restarts a lane **only
+when the process is gone and the state file is stale** - never one that was stopped on purpose, and it
+never writes to the database. Chain: `wd3-fields` first, `wc-verify` only when the first is free.
+
 
 **Traps that cost a session:**
 - **Before the first MiniMax answer, the lane must be calibrated** (O18): re-answer 2-3
@@ -499,9 +505,25 @@ Nothing in any lane has moved since 2026-10-02 03:28.
   driver's `HandoffLedger` counts the answer files before and after every batch; a batch that owed
   questions and recorded none is a failure and stops the lane. Do not read a lane's progress from
   the exec JSON.
-- **Nothing in the 18 commits on `integrate/wave1` has been deployed.** That branch is 18 ahead and
-  **271 behind `origin/main`**; a push is a merge of two diverged histories and a live deploy, so it
-  is an owner decision, not a code change.
+- **The driver's own `mcode exec` deadline hangs forever if it is built on `subprocess.run(timeout=)`.**
+  Under Windows the driver starts `mcode` through the command processor (`mcode` on PATH is a `.cmd`
+  shim), a timeout kills only that wrapper, and the `communicate()` that follows then waits for pipes
+  the `node` underneath still holds. Measured 2026-10-03: a deadline of 121 s, still blocked at 170 s;
+  the studio lost 3.5 h to it. The driver now binds all three streams to **files** and kills the
+  **tree** at the deadline (`taskkill /T /F`, `killpg`; `KILL_GRACE_S` = 10 s). Do not "simplify" this
+  back into `subprocess.run`. A run that overran its deadline is `timed_out`, counts as unanswered, and
+  the batch goes back into the lane.
+- **`mcode exec` refuses a diagnostics directory that is not empty** ("--diagnostics-dir is invalid:
+  must be empty"), which is why the two output streams are written *beside* the run directory and
+  moved into it afterwards. Opening them inside it before the run starts is a run that never starts -
+  four existing tests caught exactly that.
+- **A git call that names a repository has to run without `GIT_*`** (`pipeline/utils/git_env.py`).
+  `GIT_DIR` beats both `-C` and `cwd`, and a redirected `git status` reports a clean tree in a
+  repository nobody asked about - which is the tree guard's only instrument.
+- **Nothing in the 43 commits on `integrate/wave1` has been deployed.** That branch is 43 ahead and
+  **284 behind `origin/main`**; a push is a merge of two diverged histories and a live deploy, so it
+  is an owner decision, not a code change. `wip/mcode-driver` is 4 commits ahead of it.
+
 - **Push lock (`MCODE_START.md` section 6, added 2026-10-03):** a second mcode session works on the
   studio in `C:\PythonProjects\AncientMap-studio` and also pushes to `main`. A deploy re-imports
   `public/data/card_descriptions.json`, so a foreign push between a card write and its card-file push
@@ -514,6 +536,15 @@ Nothing in any lane has moved since 2026-10-02 03:28.
 - An answer must go through `opus_handoff.py answer`. A file an agent writes itself - even a correct
   one - has no `prompt_sha256`, no `model` and no `answered_by`, so the lane does not see it and it
   cannot be imported. 15 such files were found in the repo root on 2026-10-03 (see the AUDIT_LOG).
+- **A field-fill agent edited five production files and claimed a reason for it.** Batch
+  `wd3-r0-b0296` answered its 8 questions and then rewrote `pipeline/lyra/config.py`,
+  `minimax_shared.py`, `prospector/extract_papers.py`, `extract_stories.py` and
+  `tests/pipeline/test_llm_abstraction.py` - the claim being that `MiniMax-M3.1-Flash` rejects
+  `thinking={"type": "disabled"}` with HTTP 400, so `THINKING_OFF` had to go. The tree guard voided
+  the batch, the files are back at HEAD, and **the claim is neither proved nor disproved** - it is a
+  model's statement in a turn that was asked to date a site. If the owner wants it tested, it is one
+  deliberate API call, not a production edit. Details and the numbers: the AUDIT_LOG entry of
+  2026-10-03.
 - **A second session writes in this checkout.** On 2026-10-03 15:23 it edited
   `scripts/remediation/mcode_driver.py` in the main tree while the same file was being changed in a
   worktree, which blocked a merge. Look at `git status` before merging, and never overwrite an
