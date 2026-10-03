@@ -11,7 +11,6 @@ p4wc` and `revert4.py`. The fake psql parses what it is sent (`phase4_write_fixt
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -29,6 +28,7 @@ import verify_writes4 as A  # noqa: E402
 import write_gate4 as G  # noqa: E402
 from phase4 import revert4 as R  # noqa: E402
 
+from tests import git_env  # noqa: E402
 from tests.remediation import phase4_write_fixtures as PFX  # noqa: E402
 from tests.remediation import wc_fixtures as FX  # noqa: E402
 from tests.remediation import wn_fixtures as WX  # noqa: E402
@@ -44,27 +44,18 @@ from tests.remediation.wc_fixtures import WC4  # noqa: E402
 
 
 def _git(repo: Path, *argv: str) -> str:
+    """A throwaway repository's git, in an environment of its own: the pre-push hook exports
+    `GIT_DIR` (and friends) and it wins over `-C`, so a commit here would land in the branch
+    being pushed. `tests.git_env` holds that helper for every test that builds a repository."""
     done = subprocess.run(
         ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com", *argv],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, check=True, env=git_env.own_env(),
     )  # fmt: skip
     return done.stdout.strip()
 
 
 @pytest.fixture(scope="module")
-def _own_git_environment():
-    """The pre-push hook runs the suite with GIT_DIR (and friends) exported; `git -C <throwaway>`
-    then still acts on the pushed repository and the three commits below land in the real
-    branch. Without these variables every git call here, the gate's included, uses `-C`."""
-    patch = pytest.MonkeyPatch()
-    for name in [n for n in os.environ if n.startswith("GIT_")]:
-        patch.delenv(name)
-    yield
-    patch.undo()
-
-
-@pytest.fixture(scope="module")
-def lane_n_history(tmp_path_factory, _own_git_environment) -> dict[str, str]:
+def lane_n_history(tmp_path_factory) -> dict[str, str]:
     """A throwaway repository with the three commits the gate reasons about: one before the change
     that puts lane N into the API's disclosure, the change, and one after. (The checkout the suite
     runs in may be shallow: CI clones with depth 1.)"""

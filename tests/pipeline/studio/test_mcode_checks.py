@@ -21,6 +21,7 @@ from pipeline.studio import handoff, mcode, mcode_checks
 from pipeline.studio.errors import StudioError
 from pipeline.studio.paper import claims, images
 from pipeline.studio.paper.workspace import read_json, write_json
+from tests import git_env
 
 LIVE_QUOTE = "Roman engineers moved the largest blocks on sledges."
 TDM_URL = "https://publisher.example/paywalled"
@@ -86,15 +87,21 @@ def _install(monkeypatch, answers: dict[tuple[str, str], dict[str, Any]]) -> Fak
 
 
 def _repo(tmp_path: Path) -> Path:
-    """A git repository for the tracked-file guard: a clean tree with one tracked file."""
+    """A git repository for the tracked-file guard: a clean tree with one tracked file.
+
+    Every call runs with `env=git_env.own_env()`: the pre-push hook exports `GIT_DIR`, and
+    it wins over `-C`, so without this the repository below is the branch being pushed
+    (2026-10-03: the gate went red with 24 failures and the push was blocked).
+    """
     repo = tmp_path / "repo"
     repo.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env.own_env())
     (repo / "a.txt").write_text("a\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(repo), "add", "a.txt"], check=True)
+    subprocess.run(["git", "-C", str(repo), "add", "a.txt"], check=True, env=git_env.own_env())
     subprocess.run(
         ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "a"],
         check=True,
+        env=git_env.own_env(),
     )
     return repo
 
@@ -348,7 +355,7 @@ def test_a_subject_box_outside_the_picture_is_refused_and_named(tmp_path, monkey
     ws = fx.make_workspace(tmp_path)
     write_json(ws.images_dir / "opportunities.json", fx.OPS)
     images.export_images(ws, search=fx.fake_search, download=fx.fake_download)
-    row = handoff.read_jsonl(ws.images_dir / "tasks.jsonl")[0]
+    assert (ws.images_dir / "tasks.jsonl").is_file()  # the export wrote the task the run answers
     repo = _repo(tmp_path)
     _install(monkeypatch, {("verifier", "*"): {"verdict": "meaningful", "depicts": "a megalith", "subject_box": [0.8, 0.8, 0.5, 0.5], "caption": "The block"}})
 
@@ -545,7 +552,7 @@ def test_a_stopped_batch_keeps_the_lines_of_the_waves_it_finished(tmp_path, monk
     ws = fx.make_workspace(tmp_path)
     claims.export_claims(ws)
     repo = _repo(tmp_path)
-    fake = _install(monkeypatch, {("verifier", "*"): _unsupported})
+    _install(monkeypatch, {("verifier", "*"): _unsupported})
     seen: list[int] = []
 
     def weekly() -> str:
@@ -559,7 +566,6 @@ def test_a_stopped_batch_keeps_the_lines_of_the_waves_it_finished(tmp_path, monk
     lines = handoff.read_jsonl(ws.claims_dir / "verdicts.jsonl")
     assert len(lines) == 2  # the first wave, banked before the stop
     assert all(r["verdict"] == "unsupported" for r in lines)
-
 
 def test_the_validator_refuses_an_answer_file_that_is_not_json(tmp_path):
     path = tmp_path / "answer.json"

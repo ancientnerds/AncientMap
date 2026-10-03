@@ -16,6 +16,7 @@ import pytest
 
 from pipeline.studio import mcode
 from pipeline.studio.errors import StudioError
+from tests import git_env
 
 OK = {
     "schemaVersion": 1,
@@ -324,14 +325,29 @@ def test_the_weekly_percent_comes_from_the_token_plan_probe(monkeypatch):
 # --- the tracked-file guard -------------------------------------------------------------------
 
 
+def test_a_throwaway_repository_ignores_the_gate_s_git_variables(tmp_path, monkeypatch):
+    """The pre-push hook exports GIT_DIR, and it wins over `git -C <throwaway>`: on
+    2026-10-03 this helper's commit landed on the branch that was being pushed, staged
+    `a.txt` in the real index and left the gate with 24 failures. Without the fix the whole
+    branch push was blocked."""
+    for name, value in (("GIT_DIR", str(tmp_path / "elsewhere")), ("GIT_WORK_TREE", str(tmp_path))):
+        monkeypatch.setenv(name, value)
+    assert not [name for name in git_env.own_env() if name.startswith("GIT_")]
+
+
 def _git(repo: Path, monkeypatch) -> None:
+    """A throwaway repository with one tracked file, in an environment of its own.
+
+    `env=git_env.own_env()` on every call: see the test above.
+    """
     repo.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    subprocess.run(["git", "init", "-q", str(repo)], check=True, env=git_env.own_env())
     (repo / "a.txt").write_text("a\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(repo), "add", "a.txt"], check=True)
+    subprocess.run(["git", "-C", str(repo), "add", "a.txt"], check=True, env=git_env.own_env())
     subprocess.run(
         ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "a"],
         check=True,
+        env=git_env.own_env(),
     )
 
 
@@ -370,10 +386,11 @@ def test_a_file_a_run_committed_is_a_change_too(tmp_path, monkeypatch):
     _git(repo, monkeypatch)
     (repo / "a.txt").write_text("changed by an agent\n", encoding="utf-8")
     before = mcode.tree_state(repo)
-    subprocess.run(["git", "-C", str(repo), "add", "a.txt"], check=True)
+    subprocess.run(["git", "-C", str(repo), "add", "a.txt"], check=True, env=git_env.own_env())
     subprocess.run(
         ["git", "-C", str(repo), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "x"],
         check=True,
+        env=git_env.own_env(),
     )
 
     with pytest.raises(StudioError, match="a run changed tracked files"):
