@@ -183,14 +183,19 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   Denken als ~89 % des M3-Outputs kostet, existiert auf M3 und auf M3.1 nicht.
   **Eine Sonde ohne Modellnamen beweist nichts** - ohne `model` serviert der Endpoint `MiniMax-M3`,
   und die M3.1-Verweigerung ist unsichtbar (genau so war der erste Lauf dieser Messung).
-  `MINIMAX_MODEL` (`pipeline/lyra/minimax_shared.py`, Default `MiniMax-M3`, per `.env` umstellbar)
-  ist in **keinem** Produktionscontainer gesetzt (2026-10-03 in `ancient_nerds_lyra` und
-  `ancient_nerds_api` geprüft), also laufen die mechanischen `THINKING_OFF`-Aufrufe des Prospectors
-  auf M3 und sind nicht kaputt. Wer das Modell umstellt, bekommt einen lauten, benannten 400 - die
-  Falle ist dokumentiert, nicht still.
-  *(`project_theo_pipeline` / `reference_minimax_m3_endpoint`, 2026-10-03; die Behauptung
-  "M3.1 lehnt disabled ab" stammt von einem Field-Fill-Agenten und ist für M3.1 **richtig**, für den
-  tatsächlich eingesetzten Default M3 **falsch** - siehe `output/remediation/AUDIT_LOG.md`)*
+  **Stand `main` (Deploy `896e9fc`, 2026-10-03):** `MINIMAX_MODEL` ist in keinem
+  Produktionscontainer gesetzt, aber der **Code-Default ist `MiniMax-M3.1-Flash-Preview`** - es
+  rechnet also jeder Call, ein Sparmodus existiert auf diesem Modell nicht. `THINKING_OFF` und alle
+  `thinking={"type":"disabled"}`-Aufrufstellen sind im selben Commit aus den Prospector-Extraktern
+  entfernt; in `pipeline/` und `api/` steht der String nur noch in Kommentaren. **Es 400t nichts.**
+  *(`project_theo_pipeline` / `reference_minimax_m3_endpoint`, 2026-10-03; die Behauptung des
+  Field-Fill-Agenten war für M3.1 richtig und ist inzwischen umgesetzt - siehe
+  `output/remediation/AUDIT_LOG.md`)*
+- **Fragen über Produktion gehören gegen `origin/main` gestellt**, nicht gegen den eigenen
+  Checkout. Am 2026-10-03 lag `integrate/wave1` 284 Commits hinter `main`; eine Aussage über
+  `MINIMAX_MODEL` aus diesem Baum war schlicht falsch, obwohl die Messung selbst stimmte. Immer
+  `git show origin/main:<datei>`, und wenn der Unterschied eine Aussage trägt, dazuschreiben, gegen
+  welchen Baum sie gemessen wurde.
 - **`card_description` ist der gesprochene Shorts-Text** — 904 Texte enthielten Zahlen, die
   nie im Generator-Input standen. `verify_descriptions.py` bestraft Hedging und wurde
   deshalb als Gate stillgelegt. *(`project-db-audit-weekend:30-33`, 2026-09-19)*

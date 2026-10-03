@@ -13666,24 +13666,32 @@ of any message defensively):
 | `MiniMax-M3.1-Flash-Preview` | `{"type":"disabled"}` | **400** `invalid_request_error` 2013, request_id `0710a521e54f57b778e8b694c5c7d696`: *"invalid params, model \"MiniMax-M3.1-Flash-Preview\" requires adaptive thinking; thinking.type=\"disabled\" (including reasoning.effort=none) is not allowed (2013)"* |
 | `MiniMax-M3.1-Flash-Preview` | `{"type":"adaptive"}` | **200**, `model=MiniMax-M3.1-Flash-Preview`, `in=14 out=15`, text `ok` |
 
-**The claim is true for M3.1 and false for the model production actually runs.** That is the whole
-answer, and the first row is why a careless probe gets the wrong one: with no `model` in the request
-the endpoint serves its own default `MiniMax-M3`, and M3 accepts `disabled` happily. A probe has to
-name the model it is testing.
+**The claim is true for M3.1 and false for the model this branch runs.** That is the whole answer,
+and the first row is why a careless probe gets the wrong one: with no `model` in the request the
+endpoint serves its own default `MiniMax-M3`, and M3 accepts `disabled` happily. A probe has to name
+the model it is testing.
 
-**Nothing in production is broken, and the revert stands.** `MINIMAX_MODEL` is
-`os.getenv("MINIMAX_MODEL", "MiniMax-M3")` (`pipeline/lyra/minimax_shared.py:140`), and it is **not
-set in any production container** - checked read-only on the VPS on 2026-10-03 in `ancient_nerds_lyra`
-and `ancient_nerds_api` (`printenv MINIMAX_MODEL` exits 1 in both). So the prospector's mechanical
-`THINKING_OFF` calls run on `MiniMax-M3`, where `disabled` is accepted, and restoring those five
-files to HEAD restored working code. Had the variable been set to a 3.1 model, every one of those
-calls would 400 - loudly, and naming the cause.
+**CORRECTION, 2026-10-03 ~23:50.** The paragraph below first concluded that production runs `MiniMax-M3`
+and that nothing is broken. The *outcome* ("nothing is broken") is right; the *reason* was wrong, and
+the error is worth recording because it nearly became a wrong recommendation. `MINIMAX_MODEL` really
+is unset in every production container (read-only `docker exec printenv`, exit 1 in
+`ancient_nerds_lyra` and `ancient_nerds_api`) - but the **code default on `main` is
+`MiniMax-M3.1-Flash-Preview`**, set by deploy `896e9fc "Run Theo research and Lyra on MiniMax-M3.1-Flash"`,
+and the `MINIMAX_MODEL = os.getenv(..., "MiniMax-M3")` line read for that check lives in
+`integrate/wave1`, which is **284 commits behind `main`**. Production reasons on every call; there
+is no lean mode on the model it runs.
 
-**The trap is the comment right above that line**, which invites exactly that switch ("so a successor
-model … can be switched on the VPS without a code deploy: set MINIMAX_MODEL in .env"). Recorded in
-`docs/procedures/PROJECT_LESSONS.md` and in the memory entry for the endpoint. The failure mode is a
-named 400, not a silent one, so no code change is warranted today - and a "defensive" strip of the
-thinking block would be exactly the fallback code `CLAUDE.md` forbids.
+Nothing 400s, because the same commit removed `THINKING_OFF` and every
+`thinking={"type":"disabled"}` call site from `prospector/extract_papers.py` and `extract_stories.py`;
+in `pipeline/` and `api/` the string now survives only in comments. The field-fill agent's claim was
+accurate, the studio had already acted on it, and the five files its turn touched were duplicating a
+change that was already made. The revert restored this branch's HEAD, which is the right thing for
+this branch and would have reintroduced the dead call had it been merged onto `main` as it stood.
+
+**How the wrong reason nearly survived:** the check was done against a checkout that was 284 commits
+behind the deployed branch, and nothing in the check said so. A question about production has to be
+asked against `origin/main` (`git show origin/main:<file>`), or the answer is about a tree that only
+exists here.
 
 **For the lanes the lever does not exist at all.** `mcode exec --help` offers `--model`, `--effort`,
 `--prompt-mode`, `--permission`, `--timeout`, `--max-steps` - and no thinking switch. The driver
