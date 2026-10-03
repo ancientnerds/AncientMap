@@ -522,3 +522,10 @@ output/remediation/mechanical_chiapa/*/REHEARSAL.sql
 # and the read they rest on (ten rows), versioned like the other mechanical lanes, never the rehearsal.
 !output/remediation/mechanical_dups/
 output/remediation/mechanical_dups/REHEARSAL.sql
+# The mcode driver's own working state (per-run state files, per-batch mcode diagnostics) and the
+# O18 calibration copies (an answered handoff with the calibrated batches' answers removed) are
+# working data, like `phase4_runner/runs/`: not versioned. A calibration's verdict is recorded in
+# the AUDIT_LOG - the numbers, the disagreements and the spot-check - not in the copy, which is an
+# answered handoff directory an agent writes into and which the next calibration replaces.
+output/remediation/mcode_driver/
+output/remediation/calibration/

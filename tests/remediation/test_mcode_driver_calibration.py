@@ -24,6 +24,7 @@ sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 import mcode_driver as D  # noqa: E402
 
 SITE = "1f3c04f4-4025-4779-9968-6aa298127478"
+OTHER_SITE = "1f9d65ff-7a7d-4885-85d4-2d581dbc3081"
 
 
 def check_answer(*verdicts: str) -> str:
@@ -87,6 +88,26 @@ def test_the_copy_omits_the_answers_of_the_calibrated_batches_only(tmp_path: Pat
     # a batch that was not calibrated keeps its answer: the lane sees a round in progress
     assert (out / "wc-0002" / "check" / f"{SITE}.answer.json").exists()
     assert handoff.joinpath("wc-0001", "check", f"{SITE}.answer.json").exists()  # source untouched
+
+
+def test_the_copy_records_only_the_calibrated_batches_and_by_label(tmp_path: Path) -> None:
+    """The answers are filed under the site id, so a batch is a list of labels to compare, never
+    one label. A recorded file of every answer in the handoff would be hundreds of judgements nobody
+    compares - and the batch id is not a label, so comparing on it compares one site's answer with
+    another's."""
+    handoff = a_handoff(tmp_path)
+    (handoff / "wc-0002" / "check" / f"{OTHER_SITE}.prompt.txt").write_text("q\n", encoding="utf-8")
+    (handoff / "wc-0002" / "check" / f"{OTHER_SITE}.answer.json").write_text(
+        json.dumps({"text": check_answer("KEEP")}) + "\n", encoding="utf-8"
+    )
+    out = tmp_path / "calibration"
+
+    recorded = D.copy_for_calibration(handoff, out, ["wc-0001"])
+
+    assert sorted(recorded) == [SITE]  # the calibrated batch's label, not wc-0001, not wc-0002
+    assert OTHER_SITE not in recorded
+    # the non-calibrated batch keeps its answer in the copy
+    assert (out / "wc-0002" / "check" / f"{OTHER_SITE}.answer.json").exists()
 
 
 def test_a_calibration_copy_is_written_once(tmp_path: Path) -> None:
@@ -185,3 +206,54 @@ def test_the_report_states_the_verdict_the_brief_asks_for() -> None:
     assert len(report["disagreements"]) == 1
     assert report["disagreements"][0]["fresh"] == "DROP"
     assert isinstance(report["disagreements"][0]["fresh_sources"], list)
+
+
+# ---------------------------------------------------------------------------- the command line
+def test_the_calibrate_subcommand_is_reachable_and_keeps_its_lane_type(tmp_path: Path) -> None:
+    """The subcommand name and `--lane` (the lane *type* being calibrated) are two different
+    strings. Measured 2026-10-03: sharing one argparse dest made `--lane wc-verify` overwrite the
+    subcommand name, and the driver fell through to the WD3 lane instead of calibrating."""
+    handoff = a_handoff(tmp_path)
+    out = tmp_path / "calibration"
+
+    code = D.main(
+        [
+            "calibrate",
+            "--lane",
+            "wc-check",
+            "--handoff",
+            str(handoff),
+            "--out",
+            str(out),
+            "--run",
+            str(tmp_path / "run"),
+            "--batches",
+            "wc-0001",
+            "--prepare-only",
+        ]
+    )
+
+    assert code == 0
+    assert (out / "RECORDED.json").exists()
+    assert (out / "wc-0001" / "check" / f"{SITE}.prompt.txt").exists()
+    assert not (out / "wc-0001" / "check" / f"{SITE}.answer.json").exists()
+
+
+def test_an_unknown_lane_type_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit):
+        D.main(
+            [
+                "calibrate",
+                "--lane",
+                "wb-image",
+                "--handoff",
+                str(tmp_path / "h"),
+                "--out",
+                str(tmp_path / "o"),
+                "--run",
+                str(tmp_path / "r"),
+                "--batches",
+                "b1",
+                "--prepare-only",
+            ]
+        )

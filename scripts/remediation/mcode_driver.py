@@ -1072,12 +1072,16 @@ def _sources(text: str) -> tuple[str, ...]:
 
 def copy_for_calibration(handoff: Path, out: Path, batches: Sequence[str]) -> dict[str, str]:
     """Copy `handoff` to `out` without the answers of `batches`, and return the recorded answer
-    text per label.
+    text per **label** (the site id the answer file is named after) of those batches.
 
     The copy is a real handoff directory, so the answering agent's own brief runs unchanged; only
     the answers of the calibrated batches are absent, which is what makes the re-answer a
     measurement. Answers of the *other* batches come along, so the lane's own `validate` sees a
     directory in progress exactly as a real one does.
+
+    Only the calibrated batches' answers are recorded: a report of every answer in the handoff would
+    be a file of hundreds of judgements nobody compares, and the batch id is not the label the
+    answers are filed under.
     """
     if out.exists():
         raise DriverError(f"{out} exists: a calibration copy is written once")
@@ -1091,11 +1095,11 @@ def copy_for_calibration(handoff: Path, out: Path, batches: Sequence[str]) -> di
             if not file.is_file():
                 continue
             relative = file.relative_to(batch)
-            if file.suffix == ".json" and file.name.endswith(".answer.json"):
-                label = file.name[: -len(".answer.json")]
-                recorded[label] = json.loads(file.read_text(encoding="utf-8"))["text"]
-                if batch.name in wanted:
-                    continue  # the calibrated batch is re-answered, not copied
+            if file.name.endswith(".answer.json") and batch.name in wanted:
+                recorded[file.name[: -len(".answer.json")]] = json.loads(
+                    file.read_text(encoding="utf-8")
+                )["text"]
+                continue  # the calibrated batch is re-answered, not copied
             (target / relative).parent.mkdir(parents=True, exist_ok=True)
             (target / relative).write_bytes(file.read_bytes())
     return recorded
@@ -1144,7 +1148,9 @@ def compare_answers(
 # ------------------------------------------------------------------------------------ the CLI
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="mcode-driver", description=__doc__.splitlines()[0])
-    lanes = parser.add_subparsers(dest="lane", required=True)
+    # `dest="command"`, not "lane": the `calibrate` subcommand has its own `--lane` (the lane *type*
+    # being calibrated), and one dest for both would silently overwrite the subcommand name.
+    lanes = parser.add_subparsers(dest="command", required=True)
 
     wd3 = lanes.add_parser("wd3", help="lane WD3 (structured-field fill): the JS pool, in Python")
     wd3.add_argument("--run", required=True, type=Path)
@@ -1197,9 +1203,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     cal.add_argument("--no-quota-check", action="store_true", help="skip the weekly quota stop")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
-    if args.lane == "wc":
+    if args.command == "wc":
         return _main_wc(args)
-    if args.lane == "calibrate":
+    if args.command == "calibrate":
         return _main_calibrate(args)
     return _main_wd3(args)
 
@@ -1215,7 +1221,17 @@ def _main_calibrate(args: Any) -> int:
         (args.out / "RECORDED.json").write_text(
             json.dumps(recorded, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
         )
-        print(json.dumps({"prepared": str(args.out), "labels": sorted(recorded)}, indent=1))
+        print(
+            json.dumps(
+                {
+                    "prepared": str(args.out),
+                    "batches": list(args.batches),
+                    "labels": sorted(recorded),
+                    "questions": len(recorded),
+                },
+                indent=1,
+            )
+        )
         return 0
 
     recorded_path = args.out / "RECORDED.json"
@@ -1249,11 +1265,16 @@ def _main_calibrate(args: Any) -> int:
         max_steps=args.max_steps,
         quota_check=None if args.no_quota_check else _quota_check(),
     )
+    # The comparison is per answer, not per batch: the answers are filed under the site id, so a
+    # batch is a list of labels to compare, never one label itself.
     fresh: dict[str, str] = {}
-    for label in args.batches:
-        for path in args.out.glob(f"*/{label}/*.answer.json"):
-            fresh[label] = json.loads(path.read_text(encoding="utf-8"))["text"]
-    report = compare_answers(args.lane, args.batches, recorded, fresh).to_dict()
+    for batch in args.batches:
+        for path in sorted((args.out / batch).rglob("*.answer.json")):
+            fresh[path.name[: -len(".answer.json")]] = json.loads(path.read_text(encoding="utf-8"))[
+                "text"
+            ]
+    report = compare_answers(args.lane, sorted(recorded), recorded, fresh).to_dict()
+    report["batches"] = list(args.batches)
     report["void"] = [o.label for o in outcomes if o.void]
     print(json.dumps(report, indent=1))
     return 0 if not report["void"] else 1
