@@ -13289,3 +13289,153 @@ directories and run directories:
   were never asked, not ones to repair. This is the first answer batch the driver should take, and
   only after the calibration below.
 - Gates: 9037 passed / 133 skipped in the worktree; ruff, ruff format, lint-imports, vulture clean.
+
+## 2026-10-03 afternoon - the calibration of O18, and three driver defects it exposed
+
+Owner decision O18: before any lane writes a MiniMax answer to production, its lane type is measured
+- 2-3 already-answered batches are copied into a separate handoff, re-answered through the driver, and
+compared with the recorded answers; pass is >= 90 % agreement and 0 false sources. The harness
+(`mcode_driver.py calibrate`) and the first run are described in the two sections above. This entry
+is the first run's verdict, what was wrong with it, and what changed.
+
+### The first calibration reported 100 % and was wrong
+
+`wc-verify-01`, two batches of round 1 of `mass-2026-09-27-02` (10 questions), reported
+`units 18, agreed 18, agreement 1.0, unanswered []`. Five of the ten questions had **no answer at
+all**. Two separate defects produced that number, and both are fixed:
+
+1. **The calibration handoff was not a registered round, and the model refused to bypass that.** The
+   WC tool accepts an answer only into a handoff one of a run's rounds registers
+   (`wc/cli.py:round_of` for a check round, `_verify_round_of` for a verification round). The
+   calibration copy had no run, so `verify-brief` and `verify-check-answer` answered `REFUSED: ... is
+   no verification round of ...` and the agent stopped, exactly as the brief's own rule ("never work
+   around a refusal") demands. Its final message is the clearest record of the day: it names the
+   three findings that made it refuse (the questions are byte-identical to the imported round-1
+   batch, all five labels are already in `verify/round-1/VERIFIED.jsonl`, and the copy holds Claude's
+   answers, not a MiniMax comparison set) and it did not record a single answer.
+2. **The driver read the refused exec as a finished batch.** `mcode exec` ended with
+   `status: succeeded` and exit 0, which says the *turn* ended, not that an answer was written. The
+   outcome was `ok: true`, the batch was written to the state file as answered, and the comparison
+   counted the five answered sites and stayed silent about the other five.
+
+`HandoffLedger` (dc5756a) counts what a batch owes and what it recorded, from the files the tool
+itself writes. A batch that owed questions and recorded none - or not all of them - is a failure, the
+reason carries the count (`recorded 0 of 5`), the lane stops and a resume tries the batch again. A
+batch that owes nothing is not sent to a model at all. The calibration's report now carries
+`passed` (>= 90 % **and** no unanswered question), every batch's `due`/`recorded`, and its exit code
+follows the verdict: a lane type that could only answer half its questions is not measured.
+
+### Two more defects, found by the same run and by its re-run
+
+- **A stop was not a stop.** Every label was submitted to the pool at once, so a void or stalled
+  batch did not stop the batches queued behind it - a 100-batch lane ran all 100 after the third
+  failed. The pool now holds one window, and only that window can be in flight.
+- **The count was taken after the batch had run.** What a batch had already recorded was read inside
+  the result loop, i.e. *after* its exec was submitted. A batch that answers quickly had written its
+  five files before the driver counted them, so a complete batch read as `recorded 0 of 5`: measured
+  on `wc-verify-02`, which stopped the lane after the first window and cost one re-run. The count is
+  now taken before the window is submitted (`test_the_answers_are_counted_before_the_batch_runs`).
+
+### The calibration needs a run of its own
+
+Registering the copy inside the *production* run is not an option: that run's import would read the
+comparison answers as verdicts about the sites. `register_calibration_run` therefore writes a run
+directory of its own (`<out>-run/`) holding the source round's record - same stage, same questions,
+same shown sentence numbers, only the calibrated batches, plus the mark `calibration`. The
+verification round goes to `verify/round-1/ROUND.json`, a check round to `ROUNDS.jsonl` with the
+sites of its own questions in `SITES.jsonl` (the check's own answer check reads them). The tool's
+helpers accept the copy from then on, which is what the refused run could not get.
+`cmd_verify_import` refuses a round marked `calibration`: a measurement can never reach a ledger.
+
+### Lane WC-verify: PASSED
+
+`wc-verify-02`, three batches (`verify-0003`, `-0004`, `-0005`) of round 1 of `mass-2026-09-27-02`,
+15 questions, every one answered: **69 judged units, 68 agreed, 98.55 %, `passed: true`** - 14
+answered units per site (kept claims plus the coherence flag). The one disagreement, checked by hand
+against the pages both sides cite:
+
+- site `3d68442a-...` (Toumba), K2, recorded `UNSUPPORTED` (Sonnet) vs fresh `SUPPORTED` (M3.1).
+  The claim: "initially mistaken for grave mounds, excavations since the early 1900s revealed these
+  are stratified deposits formed when timber-framed mudbrick houses collapsed and were rebuilt on the
+  same spot century after century". Sonnet rejected it on the quantifier ("most were" in the source
+  vs "these are") and on "houses" vs the source's "structures"; M3.1 accepted it on the Toumba quote
+  plus `Tell_(archaeology)`. **The added quote is verbatim on the cited page** (fetched
+  2026-10-03: "consisting of the accumulated and stratified debris of a succession of consecutive
+  settlements at the same site"), and the same page defines the formation of such mounds; the Toumba
+  page's own third quote ("domestic life ... storage jars, cooking hearths") carries "houses". So
+  **no false source on either side** - the difference is how strictly "every claim" is read, and
+  M3.1 is the more lenient reader in 1 of 69 units. Worth watching: the WC pilot's own bar is
+  <= 5 % UNSUPPORTED among kept sentences, and a more lenient verifier pushes in the opposite
+  direction.
+
+The same evidence, on the record: the three `execution.json` files name
+`providerId minimax, modelId MiniMax-M3.1-Flash-Preview, status succeeded`; the answers carry
+`answered_by minimax-wc-verify-<batch>` and `model minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code
+agent)`; the tracked tree was unchanged after every batch; the production handoff of the source run
+is untouched (its answer files still carry their 2026-10-01 stamps).
+
+### Collateral
+
+`free_ram_gb` shelled out to `wmic OS get FreePhysicalMemory`, which this Windows no longer ships:
+the command processor printed `'wMic' is not recognized` and the reader found no line, so the width
+cap read 0.0 and never bound - silently, on the machine that was supposed to hold it back. Now
+`GlobalMemoryStatusEx` (and `/proc/meminfo` elsewhere), with a test that fails if the reader ever
+answers 0.0 on a machine that has memory.
+
+Gates after the change: 9070 passed / 133 skipped / 0 failed in the worktree; ruff, ruff format,
+lint-imports and vulture clean on the touched scope.
+
+### What the check calibration found, and one more driver defect
+
+`wc-check-01` (3 batches of the check round 1 of `mass-2026-09-27-02`, 15 questions) did not finish,
+and both attempts failed for reasons that are now on the record:
+
+- **The first exec was killed mid-turn.** It ran 3 min 18 s (model phase 22), left
+  `execution.json` with a header and nothing else - no `status`, no `exitCode` - and wrote no
+  `last-message.txt`; stdout and stderr are empty. The agent's scratch shows it doing real work
+  (it had fetched `www.mincetur.gob.pe`, which answers a 302). The state file records the outcome
+  the driver is supposed to record: `void: true, exit_code: 1, recorded 0 of 5`. **The new stop rule
+  did its job**: the lane stopped after the first batch and the comparison said `passed: false` with
+  all 15 questions unanswered, instead of reporting an agreement nobody measured. The cause of the
+  kill is not established; the two attempts that followed it are the evidence that it was not the
+  agent's own decision to stop.
+- **A retried batch could not be retried.** The second attempt answered, in one second and with an
+  empty stdout: `mcode exec failed: --diagnostics-dir is invalid: Diagnostics directory must be
+  empty.` The driver named one diagnostics directory per batch, and a lane that stops is resumed onto
+  exactly the directory the failed attempt left behind - so the driver's own resume, the thing a lane
+  of 700 questions depends on, was unreachable. Each attempt now takes the first free `<label>`,
+  `<label>-2`, ...; the earlier attempt keeps its files. The fake `mcode` in the tests refuses a
+  non-empty directory too, so the regression is reproduced without a model.
+- **The RAM cap fix was itself wrong at first.** `GlobalMemoryStatusEx.ullAvailPhys` is in bytes;
+  dividing it like the kilobyte figure `wmic` returned answered **5,357 GB on a 31 GB machine**, so
+  the cap still never bound. Corrected to 1024^3, and the test now bounds the value from above -
+  a machine does not have a terabyte free - which is what catches a unit error of that size.
+
+### The field fill could not be calibrated at all, and now it can
+
+`fields/handoff.py brief` refuses an unregistered handoff for the same reason the WC tool does
+(`handoff.py:697` `_round_of`: "is not the directory of an exported round of <run>"), so the lane
+that fills the missing `period_start` of 618 sites was not measurable under O18. Two things stood in
+the way, both found by asking the tool instead of assuming:
+
+- the calibration built the **WC** brief for every lane type - a fields calibration would have sent
+  the agent to the wrong tool with the wrong arguments, and
+- a fields round carries the per-label **field names**, the **rule** the run was built under
+  (`RUN.json`) and the **classified sites** its own answer check reads; none of that was in the
+  calibration run.
+
+`calibration_prompt` now picks the tool that owns the lane's questions, and the calibration run of a
+fields round carries `fields`, `RUN.json` and the `CLASSIFIED.jsonl` lines of its own questions.
+Verified by hand before spending a model run: `fields/handoff.py brief --run
+output/remediation/calibration/fields-02-run --handoff output/remediation/calibration/fields-02
+--batch-id wd3-r0-b0001` prints the real WD3 brief with its 8 questions. `fields-02` is prepared
+(3 batches, 24 questions) and not yet run.
+
+**What the check lane costs.** A check batch fetches every page it quotes and searches it for the
+quote (`check-answer`), and the agents spend most of their time there: `wc-0001` needed 11 minutes for
+5 questions, and `wc-0002` was still writing its own `debug_occ.py` / `verify_quotes.py` helpers at
+minute 16. Plan the lanes with that in mind - the 91 open check questions are not 18 quick execs.
+
+**A PowerShell artefact, not a failure:** `python scripts/...` tools that log to stderr make the
+PowerShell wrapper exit 4294967295 (-1) even when the tool itself printed `WC_EXIT=0` or the brief.
+Read the tool's own output, not that code.
