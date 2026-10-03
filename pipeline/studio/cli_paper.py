@@ -193,7 +193,7 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--rewrite",
         action="store_true",
-        help="with --report-file: a full Claude rewrite (the page shows the disclosure line)",
+        help="with --report-file: a full rewrite (the page shows the writer's disclosure line)",
     )
     p.set_defaults(func=cmd_correct)
     p = ps.add_parser("register-video", help="attach a YouTube video to the published paper")

@@ -141,14 +141,14 @@ desktop.ini
 # =============================================================================
 # CLAUDE CODE / PI CODING AGENT
 # =============================================================================
-# Claude Code local state only: .claude/skills/ and .claude/workflows/ are shared
-# project configuration and stay tracked. Keep `.claude/*`, not `.claude/`: git
-# never re-includes a file under an excluded directory.
+# Claude Code / MiniMax Code local state only: .claude/skills/ is shared project
+# configuration and stays tracked. `.claude/workflows/` is gone: the four studio checks
+# run through `python -m pipeline.studio mcode ...` (owner decision 2026-10-03), and no
+# Workflow runtime exists in MiniMax Code. Keep `.claude/*`, not `.claude/`: git never
+# re-includes a file under an excluded directory.
 .claude/*
 !.claude/skills/
 !.claude/skills/**
-!.claude/workflows/
-!.claude/workflows/**
 .worktrees/
 .superpowers/
 # Pi runtime scratch only — .pi/settings.json, .pi/prompts/, .pi/agents/ and

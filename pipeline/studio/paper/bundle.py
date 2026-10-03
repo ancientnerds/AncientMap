@@ -27,9 +27,13 @@ from pipeline.studio.paper.gates import sha256_text
 from pipeline.studio.paper.numbering import BuiltPaper, build_paper
 from pipeline.studio.paper.workspace import PaperWorkspace, read_json, read_meta
 
+#: The writer record every bundle carries. A stamp is never a guess: since 2026-10-03 the
+#: studio runs on MiniMax Code (`mcode`, model `MiniMax-M3.1-Flash-Preview`, owner decision
+#: 2026-10-03), so a new paper names the model that wrote it. Papers published earlier keep
+#: the writer they were published with.
 WRITER = {
-    "model": "claude-opus-5-5",
-    "tool": "claude-code",
+    "model": "MiniMax-M3.1-Flash-Preview",
+    "tool": "mcode",
     "research_model": "MiniMax-M3",
     "published": "automatic",
     "human_review": False,

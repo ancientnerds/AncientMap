@@ -1,5 +1,5 @@
 /**
- * The visible AI disclosure line of a Claude-written paper (studio spec
+ * The visible AI disclosure line of a model-written paper (studio spec
  * 2026-09-26 §3.7, EU AI Act Art. 50(4)/(5)), rendered as the SSR sidecar
  * renders it.
  */
@@ -13,6 +13,15 @@ import PaperDisclosure, { disclosureText } from '../PaperDisclosure'
 const WRITER: ResearchWriter = {
   model: 'claude-opus-5-5',
   tool: 'claude-code',
+  research_model: 'MiniMax-M3',
+  published: 'automatic',
+  human_review: false,
+}
+
+/** The studio's own WRITER since 2026-10-03: a paper written in MiniMax Code. */
+const MCODE_WRITER: ResearchWriter = {
+  model: 'MiniMax-M3.1-Flash-Preview',
+  tool: 'mcode',
   research_model: 'MiniMax-M3',
   published: 'automatic',
   human_review: false,
@@ -36,6 +45,13 @@ describe('disclosureText', () => {
   it('prints a non-Claude model id as stored', () => {
     expect(disclosureText({ ...WRITER, model: 'other-model-1' })).toContain(
       'written by other-model-1 ·',
+    )
+  })
+
+  it('names MiniMax M3.1 Flash as the writer of a paper the studio wrote', () => {
+    expect(disclosureText(MCODE_WRITER)).toBe(
+      'Researched by Theo (AI research agent) · written by MiniMax M3.1 Flash (MiniMax) · ' +
+        'published automatically after automated source checks, without human editorial review',
     )
   })
 })

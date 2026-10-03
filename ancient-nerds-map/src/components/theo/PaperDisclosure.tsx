@@ -13,9 +13,17 @@ import type { ResearchWriter } from '../../types/anRoute'
 
 import '../../styles/paper-extras.css'
 
-/** "Claude (Anthropic)" for any claude-* model id; other ids are printed as stored. */
+/**
+ * The maker and family of the model that wrote the paper, as EU AI Act Art. 50 wants it
+ * named, from the model id `result_json.writer` stores: "Claude (Anthropic)" for any
+ * claude-* id, "MiniMax M3.1 Flash (MiniMax)" for any minimax id. Every other id is
+ * printed exactly as stored (a paper published by an unknown tool stays honest about it).
+ * The id itself never changes here: `result_json.writer.model` keeps it for the machine.
+ */
 function writerName(model: string): string {
-  return model.startsWith('claude') ? 'Claude (Anthropic)' : model
+  if (model.startsWith('claude')) return 'Claude (Anthropic)'
+  if (/^minimax/i.test(model)) return 'MiniMax M3.1 Flash (MiniMax)'
+  return model
 }
 
 export function disclosureText(writer: ResearchWriter): string {

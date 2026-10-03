@@ -8,10 +8,11 @@ description: Use when building or fixing a studio episode's casefile.json from a
 ## Overview
 
 `<STUDIO_ASSETS>/episodes/<slug>/casefile.json` is the only source of the facts, places,
-numbers and pictures that the script and the capture specs may show. Claude writes it. The
-workflow `studio-casefile-verify` verifies every evidence item, and the workflow
-`studio-marker-check` crop-checks every marker. The code enforces both: a script may use only
-`verified` evidence, and a marker without an accepted `hits` blocks the episode.
+numbers and pictures that the script and the capture specs may show. This session's model
+writes it. `studio mcode casefile-verify <slug>` verifies every evidence item (one `mcode exec`
+per item), and `studio mcode marker-check <slug>` crop-checks every marker. The code enforces
+both: a script may use only `verified` evidence, and a marker without an accepted `hits` blocks
+the episode.
 
 Commands run from the checkout root as `./.venv/Scripts/python.exe -m pipeline.studio …`,
 written `studio …` below. The episode must exist (skill studio-video, step 1).
@@ -46,7 +47,7 @@ written `studio …` below. The episode must exist (skill studio-video, step 1).
 `paper` and `paper_anchor` may be `null`; `ai_generated` is the one optional key (default
 `false`). `kind` is one of fact, quote, quantity, date, image, place. Ids are unique across the
 whole file; write them as lowercase letters, digits and hyphens (a marker id must be, because it
-names its crop files, and the workflows pass every id through shell commands).
+names its crop files, and the checks pass every id through shell commands).
 
 ## Steps
 
@@ -95,7 +96,7 @@ names its crop files, and the workflows pass every id through shell commands).
    is refused), 1-500 points together with at most 12 labelled case-file places. Find ids in the
    site export (current copy: skill studio-video, "Before the first step"):
    `./.venv/Scripts/python.exe -X utf8 -c "import json,sys; q=sys.argv[1].lower(); [print(r['i'], r['n'], r.get('c'), r['la'], r['lo']) for r in json.load(open('public/data/sites/index.json', encoding='utf-8'))['sites'] if r['s'] == 'ancient_nerds' and q in r['n'].lower()]" <name part>`
-   Keep `-X utf8`: the Bash tool hands Python a cp1252 pipe, and the first name outside cp1252
+   Keep `-X utf8`: the shell hands Python a cp1252 pipe, and the first name outside cp1252
    (ı, Ş, ł, ě) would end the listing with a `UnicodeEncodeError`.
 6. **Quantities.** Where sources differ, `value` is `[low, high]` (low < high) and `basis` says
    so. `evidence` lists existing evidence ids. A chart bar or ScaleZoom end that uses the id
@@ -108,11 +109,10 @@ names its crop files, and the workflows pass every id through shell commands).
    no photorealistic AI imagery.
 8. **Markers.** `box` is `[x, y, w, h]` as fractions of the stored pixels, tight on the object
    its `label` names; `"verified": "crop-check"` is required by the format, the proof is step 10.
-9. **Verify evidence.** Run the workflow **`studio-casefile-verify`** (Workflow tool by name,
-   `args: {"workspace": "<absolute path of <STUDIO_ASSETS>/episodes/<slug>>"}`; a bare path
-   string is refused). It checks each item that is not yet `verified` by one of three routes and
-   writes `verification = {status, by, at, method}` (`method` is the route), leaving every other
-   key untouched:
+9. **Verify evidence.** Run **`studio mcode casefile-verify <slug>`** (one `mcode exec` per item,
+   model `MiniMax-M3.1-Flash-Preview`). It checks each item that is not yet `verified` by one of
+   three routes and writes `verification = {status, by, at, method}` (`method` is the route),
+   leaving every other key untouched:
    - `paper evidence`: the item has a `paper_anchor`; its quote is checked against that entry of
      `papers/<id>/evidence.json`.
    - `archived text`: no anchor, and `source.source_id` names a source whose archived text
@@ -122,11 +122,16 @@ names its crop files, and the workflows pass every id through shell commands).
    - `web page`: otherwise, the page at `source.url`, read live. A YouTube source has no page text
      and stays `unverified`.
 
+   `verification.by` names the model and the run id of the run that judged the item. Exit 1
+   means at least one item has no verdict: `not_answered[]` names it, and a run that only
+   failed on a 429 or the weekly plan stop (exit 3, `stopped`) is not a case-file problem - run
+   the command again.
+
    `refuted`: fix the statement or drop the item. `unverified`: find a source that can be
    checked, or drop the item.
 10. **Crop-check markers.** `studio episode markers-export <slug>` (it validates the case file
-    first and lists every problem), the workflow **`studio-marker-check`** (the same `args` as
-    step 9), then `studio episode markers-import <slug>`. `misses`: fix the box or
+    first and lists every problem), **`studio mcode marker-check <slug>`**, then
+    `studio episode markers-import <slug>`. `misses`: fix the box or
     remove the marker, then export again (a changed box, label or picture is a new task).
 11. `studio episode check <slug>` (needs `script.json`) reports what is left: an unverified item
     the script uses, a marker without `hits`, a `paper` that differs from episode.json's, a

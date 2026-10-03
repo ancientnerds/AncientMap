@@ -1,6 +1,6 @@
-# Studio runbook: the Claude paper write and the video studio
+# Studio runbook: the paper write and the video studio
 
-Theo researches on the VPS and stops at a dossier (status `researched`). A local Claude Code session
+Theo researches on the VPS and stops at a dossier (status `researched`). A local MiniMax Code session
 then writes, checks and publishes the paper through gated VPS CLIs (the paper studio), and turns a
 published paper into a YouTube episode (the video studio). This runbook says how to set the
 workstation up, how the two sessions run, what every gate checks, how to correct a published paper,
@@ -33,8 +33,11 @@ file and the code disagree, the code is right and this file is stale: fix it.
 - **Committed:** both studios, the renderer `video/`, all four capture recorders
   (`pipeline/studio/capture/`: `sources.py`, `mapbox.py`, `platform.py` and `globe.py`, with the four
   entry points of `capture/__init__.py`), the skills `.claude/skills/theo-write`, `studio-video` and
-  `studio-casefile` (integration item I2) and the workflows `.claude/workflows/theo-claim-check.js`,
-  `theo-image-check.js`, `studio-casefile-verify.js` and `studio-marker-check.js` (I3). The skills hold
+  `studio-casefile` (integration item I2) and, since 2026-10-03, the check driver
+  `pipeline/studio/mcode.py` + `pipeline/studio/mcode_checks.py` with its
+  `python -m pipeline.studio mcode …` commands (I3) - they replaced the four JavaScript workflows
+  `.claude/workflows/theo-claim-check.js`, `theo-image-check.js`, `studio-casefile-verify.js` and
+  `studio-marker-check.js`, which only ran inside Claude Code's Workflow runtime. The skills hold
   the step-by-step session; this runbook holds the background, the gates and the recovery.
 - **Workstation proofs:** on 2026-10-01 `doctor` reported every probe ok, `npm run test:gpu` passed
   (19 tests in 3 files, about 330 s; measured 2026-10-02) and one real CUDA float16 transcription ran (section 1.3). The
@@ -121,8 +124,9 @@ export of section 11.
   for three modules (`remote.ALLOWED_MODULES`: `theo_dossier`, `theo_publish`, `ledger_cli`), and
   through scp into `/var/www/ancientnerds/public/data/research-images/<request_id>/`, verified byte for
   byte with `sha256sum`. Production credentials never leave the VPS. Nothing retries automatically.
-- Every model judgement is Claude's, made in the session or by a workflow, and handed to the code as
-  files. No studio code calls an LLM. The one paid call is the narration: `episode voice` sends each
+- Every model judgement is the model's, made in the session or by one `mcode exec` per task inside
+  `python -m pipeline.studio mcode …`, and handed to the code as files. No studio code calls an LLM
+  by itself. The one paid call inside the code is the narration: `episode voice` sends each
   beat's `spoken` text to MiniMax's speech model (`speech-2.8-hd`, the Shorts narrator) after a quota
   check.
 
@@ -136,10 +140,10 @@ The skill `.claude/skills/theo-write/SKILL.md` runs these steps. Workspace:
 |---|---|---|
 | 1 | `paper list` | `theo_dossier list` unchanged: the `researched` rows, oldest first (the writing queue) |
 | 2 | `paper pull ID` | `dossier.json.gz`, `texts/<source_id>.txt` (the archived texts), `brief.md` |
-| 3 | Claude writes `draft.md`, `paper_meta.json`, `evidence.json` | as `brief.md` says: cite with `[S:<12-hex id>]`, no images, no title line, no References |
+| 3 | the session writes `draft.md`, `paper_meta.json`, `evidence.json` | as `brief.md` says: cite with `[S:<12-hex id>]`, no images, no title line, no References |
 | 4 | `paper number ID` | `sources.json` (`[N]` -> source id) and `paper.md` with `# Title`, `[N]` and References |
-| 5 | `paper claims-export ID`, the theo-claim-check workflow, `paper claims-import ID` | the claim check (section 4.2) |
-| 6 | Claude writes `images/opportunities.json` (4-10 entries), then `paper images-export ID`, the theo-image-check workflow, `paper images-import ID` | the image check (section 4.3) |
+| 5 | `paper claims-export ID`, `mcode claim-check ID`, `paper claims-import ID` | the claim check (section 4.2) |
+| 6 | the session writes `images/opportunities.json` (4-10 entries), then `paper images-export ID`, `mcode image-check ID`, `paper images-import ID` | the image check (section 4.3) |
 | 7 | `paper check ID` | `check_report.json`; exit 1 names the failing gates (section 4.1) |
 | 8 | `paper bundle ID` | `bundle.json` from a passing check |
 | 9 | `paper publish ID` | uploads the images, dry-runs, applies; writes `publish_outcome.json` and `published_bundle.json` |
@@ -158,9 +162,13 @@ The skill `.claude/skills/theo-write/SKILL.md` runs these steps. Workspace:
 - The owner notice goes out on the apply: a `thinking_log` `run_event` `paper_published`. The Discord
   embed is sent only while `DISCORD_WEBHOOK_URL` is set, and it is unset (owner decision 5), so the
   outcome's `side_effects.notify` reads `{"discord": false}` normally.
-- A first publish sets `published_by = 'Theo'` and `result_json.writer = {model: "claude-opus-5-5",
-  tool: "claude-code", research_model: "MiniMax-M3", published: "automatic", human_review: false}`.
-  The page then shows the evidence anchors `#ev-NN` and the disclosure line (spec 3.7).
+- A first publish sets `published_by = 'Theo'` and `result_json.writer` to the studio's `WRITER`
+  record (`pipeline/studio/paper/bundle.py`): since 2026-10-03 `{model: "MiniMax-M3.1-Flash-Preview",
+  tool: "mcode", research_model: "MiniMax-M3", published: "automatic", human_review: false}`, which
+  names the model that actually wrote it (owner rule: a stamp is never a guess). Papers published
+  before that keep their stored `writer` (`claude-opus-5-5`).
+  The page then shows the evidence anchors `#ev-NN` and the disclosure line (spec 3.7): the
+  frontend prints the model id it is given, and a `minimax` id as `MiniMax M3.1 Flash (MiniMax)`.
 - Pages are cached for 1800 s and the public API for 600 s (Redis); a change can take that long to
   show.
 - `paper publish` refuses a public paper ("change it with `paper correct`", section 5) and a rewrite
@@ -191,24 +199,56 @@ place a paper gets fixed.
 `theo_publish` on the VPS runs its own gates again on every call (section 12.2) and never repairs
 either: a local pass that the VPS refuses is a bug in one of the two.
 
-### 4.2 The claim check (`paper claims-export` / `claims-import`)
+### 4.2 The claim check (`paper claims-export` / `mcode claim-check` / `claims-import`)
 
 Every handoff (claims, images, markers) uses the same seam (`pipeline/studio/handoff.py`):
 
 - `tasks.jsonl` (every current task), `pending.jsonl` (tasks without an accepted answer),
   `prompts/<task_id>.txt` (the exact prompt; its sha256 is the task's `prompt_sha256`).
-- The workflow answers `pending.jsonl` into `verdicts.jsonl`, one JSON object per line, echoing
-  `task_id` and `prompt_sha256`, with `answered_by` set.
+- `python -m pipeline.studio mcode claim-check ID` answers `pending.jsonl` into `verdicts.jsonl`,
+  one JSON object per line, echoing `task_id` and `prompt_sha256`, with `answered_by` set.
 - The import validates the whole file and merges it into `accepted.json`. A successful import moves
   the file to `verdicts.imported-<NNNN>.jsonl`, so the next round starts from no file. A refused file
   stays in place, nothing of it merged: correct or replace it and import again.
+
+### 4.2a How the checks run (since 2026-10-03)
+
+The four checks run through one driver, `pipeline/studio/mcode.py` (one `mcode exec` per judgement)
+plus `pipeline/studio/mcode_checks.py` (the checks themselves), exposed as
+`python -m pipeline.studio mcode {claim-check,image-check,marker-check,casefile-verify,validate,probe}`.
+They replaced the four JavaScript workflows, which ran only inside Claude Code's Workflow runtime.
+What the code took over from the workflow's agents:
+
+- the inventory (read `pending.jsonl`, minus what `verdicts.jsonl` already holds),
+- the live read of a TDM-reserved source (`pipeline.lyra.archive_completion`, the same reader the
+  worker uses, into `claims_check/live/<source_id>.txt`, header and all),
+- the append to `verdicts.jsonl` (every line a pending task, `prompt_sha256` copied from it), and
+- the case file's `verification` blocks (written by the driver after `casefile.from_dict` accepted
+  the result).
+
+What still gets a run: the judgement. The claim check gives every task one verifier and every
+`supported` answer an adversarial skeptic in its own independent run (a fresh `mcode exec`); the
+image, marker and case-file checks give every item one run. Every run writes its answer to
+`mcode_runs/<task_id>.json` and validates it with `mcode validate` (`mcode exec --output-schema`
+does not work with M3.1); the driver validates the file again itself with the import's own code, so
+an answer that counts in the check counts on import. `answered_by` and `skeptic_by` name the model
+the exec JSON reported plus its run id - never a name a model wrote about itself. Exit codes: 0 all
+pending tasks answered, 1 at least one not (`not_answered[]` names every one with its reason), 2 a
+`StudioError`, 3 the weekly-plan stop.
+
+Parallelism and quota follow the owner's decisions: two runs at a time, one more per clean wave,
+half on the first 429, never above 14 (the local RAM ceiling of `PROJECT_LESSONS.md`), and a stop
+at 10 % or less of the weekly plan (`/v1/token_plan/remains` through Lyra's `probe_minimax_quota`;
+the key is never printed). Before appending anything, the driver compares `git status --porcelain`
+with the state before the first run: a run that wrote into the checkout instead of its answer file
+voids the batch and names the file.
 
 Tasks (`claims_check/`): one per `evidence.json` entry (`evidence`), one per cited prose paragraph
 (`paragraph`), and one per paper with two or more measurements (`coherence`). A task's `cited[]`
 lists each source with the reference number `n` its marker shows, its `url`, and its `text_path`
 (`texts/<id>.txt`, or null when the archive holds no text).
 
-The theo-claim-check workflow gives every task one verifier, and every `supported` answer an
+The claim check gives every task one verifier, and every `supported` answer an
 adversarial skeptic whose id goes into `skeptic_by`. An answer is `{task_id, prompt_sha256, verdict:
 supported|partly|unsupported|source_missing, quote, quote_source_id, explanation, fix_suggestion,
 answered_by, skeptic_by}`. The import checks by machine, never trusting the answer:
@@ -233,7 +273,7 @@ passage) means: re-source the claim or remove it.
 
 ### 4.3 The image check (`paper images-export` / `images-import`)
 
-Claude names 4-10 image opportunities in `images/opportunities.json` (`{id, anchor_text, subject,
+The session names 4-10 image opportunities in `images/opportunities.json` (`{id, anchor_text, subject,
 queries}`, the anchor inside a `##` section, never the hook). The export gathers candidates (the
 dossier's image pool plus fresh searches through `image_fetcher.fetch_candidates`, which asks Wikimedia
 Commons, Wikidata, the Met and Europeana; its Library of Congress, Getty, Louvre and PAS connectors are
@@ -241,7 +281,7 @@ flagged `available = False` and answer nothing), filters them with `image_gates.
 them into `images/candidates/` and exports one task per candidate. `export_report.json` records what
 became of every candidate.
 
-The theo-image-check workflow looks at every image and answers `{task_id, prompt_sha256, verdict:
+`mcode image-check ID` looks at every image and answers `{task_id, prompt_sha256, verdict:
 meaningful|weak|misleading|off_topic, depicts, subject_box: [x, y, w, h] | null, caption,
 answered_by}` (caption at most 120 characters). The import takes, per opportunity, the first
 `meaningful` candidate (then the first `weak` one, captioned as an illustration) that has licence,
@@ -251,15 +291,15 @@ attribution and source URL and is not already in the paper, re-encodes it as
 
 ### 4.4 The case-file and marker checks (video)
 
-- **Case file** (studio-casefile-verify workflow): it works on `episodes/<slug>/casefile.json` directly,
-  without the CLI. For every evidence item not yet `verified` it checks the statement against its
-  source and writes `verification = {status: verified|refuted|unverified, by, at, method}` (`method` is
-  the route), leaving every other key untouched. The routes: `papers/<request_id>/evidence.json` when
+- **Case file** (`mcode casefile-verify SLUG`): it works on `episodes/<slug>/casefile.json` directly,
+  without the CLI's export step. For every evidence item not yet `verified` it checks the statement
+  against its source and writes `verification = {status: verified|refuted|unverified, by, at, method}`
+  (`method` is the route), leaving every other key untouched. The routes: `papers/<request_id>/evidence.json` when
   `paper_anchor` is set; the archived or saved live text of `source.source_id` in that paper workspace
   (`texts/<id>.txt`, `claims_check/live/<id>.txt`); otherwise the verbatim `source.quote` at
   `source.url`, read live. `episode check` then lets a script use only `verified`
   evidence.
-- **Markers** (`episode markers-export`, the studio-marker-check workflow, `episode markers-import`):
+- **Markers** (`episode markers-export`, `mcode marker-check SLUG`, `episode markers-import`):
   every marker is checked on a crop of its image (`markers_check/crops/<mk>.png`, the box plus a 10 %
   margin) and on the whole image with the box outlined (`context/<mk>.png`); the verdict is `hits` or
   `misses`. `episode check` reports every marker without an accepted `hits` for its current image
@@ -281,7 +321,7 @@ exact bytes sent.
 | Text correction of a studio paper | `... --with-report` | the re-checked `report` and `evidence` | none |
 | Full republish of a studio paper | `... --republish` | `bundle.json`'s `result` | `paper_published` |
 | Small fix of a legacy paper | `... --report-file FILE` | `report` | none; the stored writer stays |
-| Full Claude rewrite of a legacy paper's text | `... --report-file FILE --rewrite` | `report` and `rewrite: true` | `paper_published`; the page shows the Claude disclosure line |
+| Full rewrite of a legacy paper's text by this session's model | `... --report-file FILE --rewrite` | `report` and `rewrite: true` | `paper_published`; the page shows the writer's disclosure line |
 | Rewrite from a fresh Theo run | `paper pull ID --dossier-from RUN`, the session of section 3, then `paper correct ID --text T --republish` | `result` and, on the first republish, `dossier_request_id: RUN` | `paper_published`; RUN ends `cancelled` |
 
 - `--with-report` cannot change the images, the title or the card description: they must equal
@@ -327,10 +367,10 @@ episodes (owner decision 11); acceptance (c) renders the Baalbek claim-5 slice o
    [--music auto|none|FILE] [--music-credit C]`. With `--paper`, the slug comes from the paper's
    `publish_outcome.json` when it records a successful publish from this machine; otherwise
    `--paper-slug` is required. A music bed needs its credit line.
-2. Claude writes `casefile.json` and puts the checked stills into `media/`; the studio-casefile-verify
-   workflow verifies the evidence (section 4.4).
-3. `episode markers-export SLUG`, the studio-marker-check workflow, `episode markers-import SLUG`.
-4. Claude writes `script.json` (spec 4.3 plus `captures`, `thumbnails`), and fills `title_candidates`
+2. The session writes `casefile.json` and puts the checked stills into `media/`;
+   `mcode casefile-verify SLUG` verifies the evidence (section 4.4).
+3. `episode markers-export SLUG`, `mcode marker-check SLUG`, `episode markers-import SLUG`.
+4. The session writes `script.json` (spec 4.3 plus `captures`, `thumbnails`), and fills `title_candidates`
    and `tags` in `episode.json`.
 5. `episode check SLUG`: exit 1 on errors. Checks that need a capture or the voice are reported as
    deferred and run once those exist.
@@ -821,8 +861,9 @@ CI proves the part that needs no GPU:
   exactly like the rest, and do not ignore the advisory.
 - The `backend` filter also matches `video/src/blocks/registry.json`, `video/src/theme/glyphs.ts` and
   `video/src/captions.ts`, which the studio's Python contract tests read.
-- `tests/pipeline/studio/test_workflows.py` runs the four workflows under `node` against canned agent
-  answers (`workflow_harness.mjs`), so the backend tests need Node as the studio does.
+- `tests/pipeline/studio/test_mcode.py` and `test_mcode_checks.py` drive the four checks against a
+  fake `mcode.exec` (canned answers, the two waves of the pool, the 429, the quota stop, the git
+  guard), so the backend tests need neither Node nor a MiniMax account.
 
 What only the workstation proves is `npm run test:gpu` (section 8), the smoke render and the real
 captures.

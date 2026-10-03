@@ -320,7 +320,7 @@ def correct(
       published baseline's (published_bundle.json; the images are on the VPS already); a
       changed title or card is a --republish;
     - republish: the checked workspace's bundle.json `result` replaces the published result
-      (a Claude rewrite of a public paper, e.g. one of the legacy M3 papers); its apply makes
+      (a full rewrite of a public paper, e.g. one of the legacy M3 papers); its apply makes
       that bundle the new published_bundle.json. In a rewrite workspace (dossier_from.json,
       owner decisions 17 and 18) the first republish, the one before any published_bundle.json
       exists, also sends `dossier_request_id` = the fresh run: theo_publish stores that run's
@@ -342,7 +342,7 @@ def correct(
         raise StudioError("choose one of --with-report, --republish, --report-file")
     if rewrite and report is None:
         raise StudioError(
-            "--rewrite goes with --report-file: it marks the full Claude rewrite of a paper "
+            "--rewrite goes with --report-file: it marks the full rewrite of a paper "
             "without a studio workspace check (a studio rewrite is --republish)"
         )
     payload: dict[str, Any] = {

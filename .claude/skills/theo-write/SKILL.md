@@ -8,13 +8,14 @@ description: Use when the owner runs /theo-write for the weekly Theo paper sessi
 ## Overview
 
 Theo (MiniMax M3 on the VPS) only researches: a run ends as `researched` with a dossier. This
-session writes the paper as Claude, has it fact-checked claim by claim and image by image, and
+session writes the paper with the model of this session (MiniMax M3.1 Flash in MiniMax Code,
+owner decision 2026-10-03), has it fact-checked claim by claim and image by image, and
 publishes it through the gated VPS CLI `theo_publish`. **Publishing is automatic once every gate
 passes (spec §0): there is no owner approval step.** The apply itself sends the owner notice.
 
-Core rule: the code validates, Claude judges. Every judgement is made in this session or by the
-named workflows (Sonnet 5.5 agents, owner rule 2026-10-02: no DeepSeek, no MiniMax, no Pi or opencode). A red gate is fixed in
-the paper, never in a derived file or a handoff answer.
+Core rule: the code validates, the model judges. Every judgement is made in this session or by
+`studio mcode …` (one `mcode exec` per task, model `MiniMax-M3.1-Flash-Preview`, effort max).
+A red gate is fixed in the paper, never in a derived file or a handoff answer.
 
 Run every command from the checkout root as `./.venv/Scripts/python.exe -m pipeline.studio …`;
 below it is written `studio …`. Exit 0 = ok, 1 = a check failed (`paper check`), 2 = a
@@ -33,21 +34,21 @@ a worktree). `<id>` is always the research request id (a lowercase uuid), never 
    1-9), the rules the checker enforces and the dossier. Write `draft.md`, `paper_meta.json`
    and `evidence.json` exactly as its "What you hand in" says. Cite only with
    `[S:<source_id>]`. Every evidence entry is `"verdict": "supported"`.
-3. **Claim check.** `studio paper number <id>`, `studio paper claims-export <id>`, then the
-   workflow **theo-claim-check** (below), then `studio paper claims-import <id>`.
+3. **Claim check.** `studio paper number <id>`, `studio paper claims-export <id>`, then
+   `studio mcode claim-check <id>` (below), then `studio paper claims-import <id>`.
    - The import prints only `{"accepted": N}`, and refuses while a current task has no accepted
-     answer (it names the first eight as `kind:ref`): run the workflow and the import again.
+     answer (it names the first eight as `kind:ref`): run the check and the import again.
    - Where the verdicts are: `studio paper check <id>` (step 5), gate `claims` of
      `check_report.json`: `details.status.not_supported[]` holds `ref`, `verdict`, `explanation`
      and `fix_suggestion` of every task whose answer is not `supported`, `missing` the tasks
      without one. The accepted answers themselves are `claims_check/accepted.json`.
    - `partly` or `unsupported`: fix the paragraph (see `fix_suggestion`) or the evidence entry.
    - `source_missing`: re-source the claim or drop it.
-   - An evidence `quote` from a `tdm_reserved` source cannot be checked before the workflow has
+   - An evidence `quote` from a `tdm_reserved` source cannot be checked before the check has
      saved that source's live text, `claims_check/live/<source_id>.txt`: copy the quote verbatim
      from that file, and `paper check` (gate `evidence`) holds it to the file.
 4. **Images.** Write `images/opportunities.json` (4-10 entries, `brief.md` item 4), then
-   `studio paper images-export <id>`, the workflow **theo-image-check**, and
+   `studio paper images-export <id>`, `studio mcode image-check <id>`, and
    `studio paper images-import <id>`.
 5. **Check.** `studio paper check <id>`. On exit 1 read the failing gates in `check_report.json`,
    fix `draft.md`, `paper_meta.json`, `evidence.json` or `opportunities.json`, and repeat from
@@ -63,23 +64,38 @@ a worktree). `<id>` is always the research request id (a lowercase uuid), never 
    notice (`side_effects.notify`) goes to `thinking_log` automatically; Discord stays unset
    (owner #5). A failed side effect does not undo the publish: name it in the report.
 
-## Workflows (the handoff seam)
+## The checks (the handoff seam)
 
-Run each with the Workflow tool by name and
-`args: {"workspace": "<absolute path of <STUDIO_ASSETS>/papers/<id>>"}`; a bare path string is
-refused (`args.workspace must be the absolute path of ...`). They write answers only; the import
-step validates them by machine and refuses the whole file on any problem, listing each as
-`answer N (<task_id>): <problem>`. A refused `verdicts.jsonl` stays in place, and the workflows
-answer only the tasks it holds no line for: delete the lines the error names (deleting the whole
-file answers every pending task again), then run the workflow again. Never write or edit an
+`studio mcode claim-check <id>` and `studio mcode image-check <id>` read the pending tasks, run
+one `mcode exec` per task and append the answers to `verdicts.jsonl`; the import step validates
+them by machine and refuses the whole file on any problem, listing each as
+`answer N (<task_id>): <problem>`. A refused `verdicts.jsonl` stays in place, and a check
+answers only the tasks it holds no line for: delete the lines the error names (deleting the
+whole file answers every pending task again), then run the check again. Never write or edit an
 answer by hand.
 
-| Workflow | Answers | Then |
+| Command | Answers | Then |
 |---|---|---|
-| `theo-claim-check` | `claims_check/pending.jsonl`: one verifier per task, an adversarial skeptic (`skeptic_by`) for every `supported`, a live read of every cited `tdm_reserved` source into `claims_check/live/<id>.txt` | `paper claims-import` |
-| `theo-image-check` | `images/pending.jsonl`: `meaningful\|weak\|misleading\|off_topic`, `depicts`, `subject_box`, caption ≤ 120 chars | `paper images-import` |
+| `studio mcode claim-check <id>` | `claims_check/pending.jsonl`: one verifier per task, an adversarial skeptic in its own independent run (`skeptic_by`) for every `supported`, a live read of every cited `tdm_reserved` source into `claims_check/live/<id>.txt` | `paper claims-import` |
+| `studio mcode image-check <id>` | `images/pending.jsonl`: `meaningful\|weak\|misleading\|off_topic`, `depicts`, `subject_box`, caption ≤ 120 chars | `paper images-import` |
 
-When an import still reports pending tasks, run the workflow again and import again.
+What the driver does and does not decide:
+
+- Every run writes its answer to `mcode_runs/<task_id>.json` and validates it with
+  `studio mcode validate`; the driver validates the file again itself, with the same code the
+  import uses. An answer that counts in the check counts on import.
+- `answered_by` and `skeptic_by` name the model the run's exec JSON reported and its run id.
+- After the batch the driver checks that no tracked file changed (`git status`): a run that
+  wrote into the checkout instead of its answer file voids the batch and says so.
+- Two runs at a time, more while no 429 appears, half on the first one. The weekly MiniMax plan
+  at 10 % or less stops the batch (exit 3, `stopped` names the line): wait for the reset and run
+  again - the pending tasks are exactly the unanswered ones. `studio mcode probe` prints the CLI,
+  the model and the remaining plan.
+- Exit 1 means at least one task is unanswered; `not_answered[]` names every one with its
+  reason. A task the model did not finish is normal: run the check again.
+- A batch that only fails on 429 or the quota stop is not a paper problem. Never paper over it.
+
+When an import still reports pending tasks, run the check again and import again.
 
 ## Corrections and legacy rewrites
 
@@ -94,7 +110,7 @@ Slug, `published_at`, the publisher and the stored corrections log stay.
 | Text fix of a studio paper (same images, title, card description) | fix `draft.md`, steps 3-5, then `studio paper correct <id> --text '<entry>' --with-report` |
 | New title, card or images; full rewrite of a studio paper | edit its workspace files, steps 3-5, `paper bundle`, then `studio paper correct <id> --text '<entry>' --republish` |
 | Legacy paper, small fix (e.g. the Roswell date, owner #6) | `content` of `GET https://ancientnerds.com/api/v1/research/<slug>` (its `id` is `<id>`), fixed, saved as FILE: `studio paper correct <id> --text '<entry>' --report-file FILE`. Keeps the stored writer, sends no notice |
-| Legacy paper, full Claude rewrite of its stored text | the same plus `--rewrite`: the page shows the Claude disclosure line and the `paper_published` notice goes out |
+| Legacy paper, full rewrite of its stored text by this session | the same plus `--rewrite`: the page shows the writer's disclosure line and the `paper_published` notice goes out |
 | Legacy paper, rewrite from a fresh Theo run RUN on its question (#17, #18) | `studio paper pull <id> --dossier-from <RUN>` (RUN must be `researched`), write as in step 2, steps 3-5, `paper bundle`, then `studio paper correct <id> --text '<entry>' --republish`. **Never `paper publish`**: it refuses this workspace. The first republish sends RUN as `dossier_request_id` and theo_publish closes RUN as `cancelled` |
 
 - Legacy rewrites run only when the owner asks; the owner picks the basis per paper (#18).
@@ -161,8 +177,10 @@ is IndexNow.
 
 - Edit `paper.md`, `sources.json`, `check_report.json`, `bundle.json`, `published_bundle.json`
   (except in the adoption procedure) or the handoff files (`tasks.jsonl`, `pending.jsonl`,
-  `prompts/`, `accepted.json`, `verdicts.jsonl`).
+  `prompts/`, `accepted.json`, `verdicts.jsonl`, `mcode_runs/`).
 - Keep an evidence entry the claim check did not support, or give one another verdict.
+- Name another model in a stamp, a provenance, a ledger row or a disclosure: a stamp names the
+  model that produced the text, and this is `MiniMax-M3.1-Flash-Preview`.
 - Write to the production database or copy files to the VPS by hand: the CLIs are the only path.
 - Re-run a write whose outcome is unknown before reading the journal.
 - Use `--rewrite` for a small fix, or `paper publish` for a paper that is already public.

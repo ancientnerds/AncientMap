@@ -1,6 +1,7 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance for the coding agents that work in this repository (MiniMax Code;
+the tools are named as MiniMax Code spells them, `todowrite`, `read`, `edit`, `bash`, `grep`).
 
 ## Where the 2026-09 sites remediation stands
 
@@ -139,7 +140,7 @@ The `source_meta` table has two boolean columns:
 
 The static exporter writes `"on"` in `sources.json` from `enabled_by_default`. The frontend uses this to decide which sources render immediately vs require user opt-in in the Filter panel.
 
-## Theo: research on the VPS, the paper in Claude Code
+## Theo: research on the VPS, the paper in a local session
 
 Theo researches only (design: `docs/superpowers/specs/2026-09-26-studio-and-claude-write-design.md`).
 MiniMax M3 runs the convergence pipeline up to the moderator. The `DossierHandler`
@@ -153,7 +154,7 @@ every public reader filters `is_public AND status = 'completed'`, so a `research
 invisible. `THEO_WORKER_DISABLED=1` in the VPS `.env` idles the worker container (set on the owner's
 behalf by another session on 2026-09-26, about 18:20 UTC; owner question Q1 keeps it off).
 
-A local Claude session writes, checks and publishes the paper ("Studio" below) through two CLIs in
+A local session writes, checks and publishes the paper ("Studio" below) through two CLIs in
 the API image, run over ssh so production credentials stay on the VPS:
 
 ```bash
@@ -176,9 +177,10 @@ ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_p
   a public paper answers `apply_allowed: false`: a public paper changes only through `--correct`.
 - **Correction kinds** (`--correct`; each re-runs the gates and keeps every published evidence id
   that no `corrections_append` entry names): a log entry only (`corrections_append`); a text
-  correction (`report`, optionally `evidence`); a full Claude rewrite of a stored text (`report`
-  with `rewrite: true`, which excludes `evidence` and `result`: the writer is stored, the page shows
-  the AI disclosure line, the owner is notified), where a small fix goes without `rewrite`; a full
+  correction (`report`, optionally `evidence`); a full rewrite of a stored text by the session's
+  model (`report` with `rewrite: true`, which excludes `evidence` and `result`: the writer is
+  stored, the page shows the AI disclosure line, the owner is notified), where a small fix goes
+  without `rewrite`; a full
   republish (`result`, the complete publish result, which excludes `report` and `evidence`), which
   keeps slug, `published_at` and `published_by`, optionally with `dossier_request_id`: the fresh
   `researched` run it was written from, closed as `cancelled` in the same transaction.
@@ -209,44 +211,51 @@ ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_p
 
 ## Studio: papers and YouTube episodes, on the workstation
 
-`pipeline/studio/` and `video/` run only on the owner's workstation, inside a Claude Code session.
-No studio code calls an LLM: Claude makes every judgement (writing, claim check, image check,
-case file, script) and hands it over as files; the code validates, compiles and transports. The one
-paid call is the narration: `episode voice` sends each beat's text to MiniMax's speech model after a
+`pipeline/studio/` and `video/` run only on the owner's workstation, inside a MiniMax Code session.
+No studio code calls an LLM by itself: the model makes every judgement (writing, claim check,
+image check, case file, script) and hands it over as files - in the session, or through one
+`mcode exec` per task inside `python -m pipeline.studio mcode …` (`pipeline/studio/mcode.py`:
+model `MiniMax-M3.1-Flash-Preview`, effort max, two runs at a time and more while no 429, a
+10 % weekly-plan stop, and a `git status` guard that voids a batch whose runs wrote into the
+checkout). The code validates, compiles and transports. The one paid call inside the code is
+the narration: `episode voice` sends each beat's text to MiniMax's speech model after a
 quota check. Nothing in `api/` or `pipeline/lyra` imports the package; only
 `pipeline.studio.ledger_cli` runs in the API container.
 
 ```
 ./.venv/Scripts/python.exe -m pipeline.studio paper   {list,pull,number,check,claims-export,claims-import,images-export,images-import,bundle,publish,correct,register-video}
 ./.venv/Scripts/python.exe -m pipeline.studio episode {init,markers-export,markers-import,check,review,voice,capture,timeline,render,thumbnail,package,register-youtube}
+./.venv/Scripts/python.exe -m pipeline.studio mcode   {claim-check,image-check,marker-check,casefile-verify,validate,probe}
 ./.venv/Scripts/python.exe -m pipeline.studio doctor [--fix-gpu]
 ```
 
 A `StudioError` prints `error: <message>` and exits 2; `paper check`, `episode check`, `episode
-voice` and `doctor` exit 1 when a gate or probe fails.
+voice` and `doctor` exit 1 when a gate or probe fails. A `mcode` check exits 0 when every pending
+task was answered, 1 when at least one was not (each is named in `not_answered[]`) and 3 on the
+weekly-plan stop.
 
 - **Workspaces** live under `STUDIO_ASSETS`, default `<main checkout>/video-assets/studio`
   (gitignored; found through git's common dir, so a worktree writes into the main checkout's tree;
   the env var overrides it): `papers/<request_id>/` and `episodes/<slug>/`. The CLI loads the main
   checkout's `.env` (the MiniMax key for the voice, `VITE_MAPBOX_ACCESS_TOKEN` for the captures).
-- **Skills and workflows** are tracked under `.claude/` (the rest of `.claude/` stays local). The
-  owner starts the weekly paper session by hand with `/theo-write` (`.claude/skills/theo-write`);
-  episodes follow `studio-video` and `studio-casefile`. The checks run as workflows
-  (`.claude/workflows/theo-claim-check.js`, `theo-image-check.js`, `studio-casefile-verify.js`,
-  `studio-marker-check.js`), all on Opus.
-- **Paper**: `paper pull` → Claude writes `draft.md`, `paper_meta.json`, `evidence.json` →
-  `number` → `claims-export`, claim-check workflow, `claims-import` → the same for images → `check`
+- **Skills** are tracked under `.claude/skills/` (the rest of `.claude/` stays local). The owner
+  starts the weekly paper session by hand with `/theo-write`; episodes follow `studio-video` and
+  `studio-casefile`. The four checks run through the Python driver
+  `python -m pipeline.studio mcode {claim-check,image-check,marker-check,casefile-verify}`,
+  one `mcode exec` per task on `MiniMax-M3.1-Flash-Preview` (see `pipeline/studio/mcode.py`).
+- **Paper**: `paper pull` → this session writes `draft.md`, `paper_meta.json`, `evidence.json` →
+  `number` → `claims-export`, `mcode claim-check`, `claims-import` → the same for images → `check`
   → `bundle` → `publish` (images uploaded by verified scp, dry run, apply once every gate passes;
   `publish --dry-run` uploads the images too).
   A public paper changes through `paper correct ID --text …|--entries FILE`: a log entry alone, or
   with `--with-report`, `--republish`, or `--report-file FILE [--rewrite]` (the full markdown of a
   legacy paper without a studio check, starting from the `content` of `GET /api/v1/research/{slug}`;
-  `--rewrite` marks a full Claude rewrite). A legacy rewrite from a fresh Theo run is `paper pull
-  ID --dossier-from RUN`, then `paper correct ID --republish`, never `paper publish`. Exit 3
-  committed nothing (re-run after `paper check`); exit 4, a timeout or no JSON answer is a
+  `--rewrite` marks a full rewrite by this session's model). A legacy rewrite from a fresh Theo run
+  is `paper pull ID --dossier-from RUN`, then `paper correct ID --republish`, never `paper publish`.
+  Exit 3 committed nothing (re-run after `paper check`); exit 4, a timeout or no JSON answer is a
   `RemoteOutcomeUnknown`: follow the adoption procedure it prints and never re-run the write.
-- **Episode**: `episode init` → case file (verified by `studio-casefile-verify`) → `markers-export`,
-  marker-check workflow, `markers-import` → script → `check` → `review` → `voice` → `capture` →
+- **Episode**: `episode init` → case file (verified by `mcode casefile-verify`) → `markers-export`,
+  `mcode marker-check`, `markers-import` → script → `check` → `review` → `voice` → `capture` →
   `timeline` → `render` (layout lint, Remotion, −14 LUFS, audit, ledger row) → `package` (MP4, SRT,
   description, three thumbnail candidates). The final package is the owner's only release gate. The
   upload is manual; then `episode register-youtube SLUG --youtube-id ID --title T --published-at TS
@@ -309,23 +318,38 @@ voice` and `doctor` exit 1 when a gate or probe fails.
 
 Runbook (setup, both sessions, gates, recovery): `docs/procedures/STUDIO.md`.
 
-## Local verification (measured 2026-09-20)
+## Local verification (measured 2026-10-03)
 
 Use the repo venv explicitly. Bare `python`/`python3` is not reliable here: fresh shells and
 pi-lens can put a foreign venv without pytest in front of PATH.
 
+**A worktree has no `.env`**, and `pipeline/lyra/config.py` reads `env_file=".env"` relative
+to the working directory. `tests/api/lyra/test_backends.py::TestGetBackend` then fails three
+tests with "Anthropic API key is empty" — an environment gap, not a code defect. Load the
+main checkout's `.env` for the run (it never prints the value):
+
+```bash
+./.venv/Scripts/python.exe -c "import sys,pytest; from dotenv import load_dotenv; load_dotenv(r'<main checkout>/.env'); sys.exit(pytest.main(['-q','-rs','--timeout','90','-m','not integration and not live_llm']))"
+```
+
 ```bash
 # Backend: the suite the pre-push hook runs (CI adds `and not slow`, which labels 0 tests)
 ./.venv/Scripts/python.exe -m pytest -q -rs --timeout 90 -m "not integration and not live_llm"
-#   2026-09-20: 1648 passed, 3 skipped, 57 deselected in 47.71s
-#   (+16 seit dem Lyra-Funnel: Allowlist-Tests fuer /lyra.html und Query-Strings)
-#   -rs is mandatory: 3 skips are silent otherwise.
+#   2026-10-03: 10506 passed, 132 skipped, 57 deselected in 453.66s
+#   (2026-09-20: 1648 passed, 3 skipped, 57 deselected in 47.71s; the skips are gitignored
+#    inputs - the remediation snapshot, the Natural Earth cache, the brand fonts - and
+#    00_prune_backups.sh, which cannot run on Windows)
+#   -rs is mandatory: the skips are silent otherwise.
 
 # Frontend
 cd ancient-nerds-map && npm run type-check && npm run test
-#   2026-09-20: type-check clean, 432 tests in 40 files passed
-#   (394/36 war der Stand vom Vormittag; die Linsen-Tests kamen danach dazu)
+#   2026-10-03: type-check clean, 1215 tests in 126 files passed
+#   (2026-09-20: 432 tests in 40 files)
 ```
+
+In PowerShell 5.1 an argument with commas needs the `=` form: `npx knip
+--no-progress "--include=files,dependencies,devDependencies"` — `npx.ps1` re-splits the
+space-separated list and knip answers "Invalid issue type".
 
 The studio renderer (`video/`, CI job `lint-video`) and the frontend's video recorder
 (`ancient-nerds-map/video/`, which `npm run type-check` does not cover: its `tsconfig.json`

@@ -8,7 +8,7 @@ from PIL import Image
 
 from pipeline import research_html_renderer
 from pipeline.research_html_renderer import video_clock
-from pipeline.studio import casefile, package, render, script, timeline
+from pipeline.studio import casefile, mcode, package, render, script, timeline
 from pipeline.studio.episode import load_all
 from pipeline.studio.errors import StudioError
 from pipeline.video.shorts_ledger import sha256_file
@@ -95,6 +95,16 @@ def test_description_carries_evidence_links_credits_and_disclosure():
     assert "© Mapbox © Maxar" in text
     assert text.endswith(package.DISCLOSURE)
     assert "<" not in text and ">" not in text
+
+
+def test_the_disclosure_names_the_model_that_wrote_the_script():
+    """The 2026-10-03 pilot's description ended in "Script: Claude (AI)." The script was
+    written by the mcode session, not by Claude, and a stamp that names another model is a
+    false claim on a public page (owner rule: model stamps must be true). It is built from
+    the one model the studio runs with, so it cannot drift from the checks' stamps."""
+    assert "Claude" not in package.DISCLOSURE
+    assert f"Script: {package.WRITER_MODEL} (MiniMax Code)." in package.DISCLOSURE
+    assert package.WRITER_MODEL == mcode.MODEL_REF.split("/", 1)[-1]
 
 
 def test_description_byte_limit_counts_utf8_bytes():

@@ -40,15 +40,21 @@ from pipeline.research_html_renderer import video_clock
 from pipeline.studio.casefile import CaseFile, refs_in
 from pipeline.studio.episode import EpisodeWorkspace, Loaded, load_all, load_json, require_valid
 from pipeline.studio.errors import StudioError
+from pipeline.studio.mcode import MODEL_REF
 from pipeline.studio.render import CANDIDATES, link_or_copy, thumbnail_files
 from pipeline.studio.script import CHAPTER_MIN_S as SCRIPT_CHAPTER_MIN_S
 from pipeline.studio.script import CHAPTERS_MIN_FULL
 from pipeline.utils.slugs import BASE_URL
 
 UTM = "utm_source=youtube&utm_medium=longform"
+#: The model that writes the scripts, named from the one the mcode driver runs the checks
+#: with, so a stamp can never name another model by accident (owner rule: model stamps must
+#: be true; the 2026-10-03 pilot shipped "Script: Claude (AI)" for a script MiniMax wrote).
+#: A session on another model changes this one line.
+WRITER_MODEL = MODEL_REF.split("/", 1)[-1]
 DISCLOSURE = (
     "Narration: AI-generated voice (MiniMax speech-2.8-hd). Research: Theo (AI). "
-    "Script: Claude (AI)."
+    f"Script: {WRITER_MODEL} (MiniMax Code)."
 )
 DESCRIPTION_MAX_BYTES = 5000
 TITLE_MAX_CHARS = 100

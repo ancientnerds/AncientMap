@@ -8,8 +8,8 @@ description: Use when making a YouTube episode or slice from a Theo paper or top
 ## Overview
 
 The studio turns a verified case file into a frame-exact NERV video, rendered by Remotion on
-the NVIDIA RTX 3080, and an upload package. Claude writes the case file and the script; the code
-validates, narrates, captures, compiles, renders and packages.
+the NVIDIA RTX 3080, and an upload package. This session's model writes the case file and the
+script; the code validates, narrates, captures, compiles, renders and packages.
 
 **The run does not stop for the owner before the final package** (owner #9): `review.html` is a
 table for the owner, not a gate. The owner reviews the package, uploads it by hand (#10) and
@@ -44,8 +44,8 @@ written `studio …` below. Exit 0 = ok, 1 = a check failed (`episode check`, `e
    (the first becomes the YouTube title; 1-100 characters, no `<` `>`) and `tags` in
    `episode.json`.
 2. **REQUIRED SUB-SKILL: studio-casefile.** Build `casefile.json` and `media/`, verify the
-   evidence (workflow `studio-casefile-verify`) and crop-check the markers (`markers-export` →
-   workflow `studio-marker-check` → `markers-import`).
+   evidence (`studio mcode casefile-verify <slug>`) and crop-check the markers
+   (`markers-export` → `studio mcode marker-check <slug>` → `markers-import`).
 3. Write `script.json`: its shape is the docstring of `pipeline/studio/script.py`, its rules are
    below.
 4. `studio episode check <slug>`: fix every error. `deferred` lists checks that wait for the
@@ -212,8 +212,8 @@ unless its checkbox flips (a toggle the page disables switches nothing):
 
 ## Stop conditions
 
-- **Stop at the final package** and hand it to the owner: the only release gate. Claude never
-  uploads.
+- **Stop at the final package** and hand it to the owner: the only release gate. This session
+  never uploads.
 - **Stop and report** when `doctor` stays red, when evidence the episode needs cannot be
   verified, or when a step could pass only by bending a rule (a thumbnail that shows the answer,
   a Satellite toggle, a log scale, a coordinate the case file lacks).
