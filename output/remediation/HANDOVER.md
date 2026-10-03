@@ -547,7 +547,10 @@ not seen yet, and the first write of a new one throws.
   still hold the written value. The generator was cross-checked before the write: putting back the
   13,620 journalled input values and recomputing gives **0 of 60,048 cells** differing, so the change
   is the inputs moving, not a disagreement. **A new wave is owed after the WD3 write**, because field
-  values are card inputs too.
+  values are card inputs too. **The `--lane` argument is a directory name, not the journal stamp**:
+  `--lane card-stats-2026-09-30` writes rows stamped **`2026-09-30_mechanical-card-stats`**
+  (measured 2026-10-04 01:28, 21,041 rows, `applied_at` 2026-10-03T23:24:39Z). A journal query for the
+  lane name finds nothing and reads as "the write did not happen".
 - **A git call that names a repository has to run without `GIT_*`** (`pipeline/utils/git_env.py`).
   `GIT_DIR` beats both `-C` and `cwd`, and a redirected `git status` reports a clean tree in a
   repository nobody asked about - which is the tree guard's only instrument.
