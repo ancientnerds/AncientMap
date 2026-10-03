@@ -192,6 +192,11 @@ def _kill_tree(proc: subprocess.Popen[Any]) -> None:
     the run open, and on Windows a process whose thread sits in a hung socket can refuse
     to die for minutes. So the whole tree goes, and a corpse that outlives `KILL_GRACE_S`
     is left to the OS: the caller is told the run is unanswered, which is true either way.
+
+    A pid the kernel does not know has no tree left to kill, and `proc.kill()` on it would
+    raise `ProcessLookupError` out of the timeout handler: the batch would die with a
+    confusing error instead of the "not answered, the batch continues" it is owed. That is
+    why the POSIX branch has no bare-kill fallback (measured on the Linux CI runner, 2026-10-03).
     """
     if os.name == "nt":
         try:
@@ -203,15 +208,24 @@ def _kill_tree(proc: subprocess.Popen[Any]) -> None:
                 timeout=60,
             )
         except (OSError, subprocess.TimeoutExpired):
-            proc.kill()
+            # taskkill itself could not run: the process goes, its tree may survive.
+            _kill_quietly(proc)
     else:
         try:
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
-        except (OSError, ProcessLookupError):
-            proc.kill()
+        except ProcessLookupError:
+            return
     try:
         proc.wait(timeout=KILL_GRACE_S)
     except subprocess.TimeoutExpired:
+        return
+
+
+def _kill_quietly(proc: subprocess.Popen[Any]) -> None:
+    """`proc.kill()` for the one case that reaches it: the tree kill could not be attempted."""
+    try:
+        proc.kill()
+    except OSError:
         return
 
 

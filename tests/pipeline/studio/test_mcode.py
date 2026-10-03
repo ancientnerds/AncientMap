@@ -8,9 +8,12 @@ so they need no MiniMax account and no network.
 from __future__ import annotations
 
 import json
+import os
+import signal
 import subprocess
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -188,15 +191,32 @@ def test_the_run_never_waits_on_a_pipe_a_lingering_grandchild_holds_open(tmp_pat
 
 
 def test_a_run_that_overruns_its_bound_kills_its_tree_and_answers_nothing(tmp_path, monkeypatch):
+    """The bound is only worth having if the whole tree goes: `proc.kill()` reaches `mcode.cmd`
+    alone, and the `node` process underneath it is what holds the run open.
+
+    Both platforms are asserted, because the tree kill is a different call on each (`taskkill /T`
+    on Windows, `killpg` on the run's own process group elsewhere). Measured 2026-10-03: the
+    Linux runner failed this test because the fake pid has no process group, so the run took the
+    `proc.kill()` fallback and the assertion that caught it was the wrong one for that branch.
+    """
     _exe(tmp_path, monkeypatch)
     seen = _calls(monkeypatch, hang=True)
     killed: list[list[str]] = []
+    groups: list[tuple[int, int]] = []
 
     def fake_run(args, **kwargs):
         killed.append(list(args))
         return subprocess.CompletedProcess(args, 0, "", "")
 
+    def fake_getpgid(pid: int) -> int:
+        return pid + 1000  # a group of its own, which is what start_new_session gives a run
+
+    def fake_killpg(pgid: int, sig: int) -> None:
+        groups.append((pgid, sig))
+
     monkeypatch.setattr(mcode.subprocess, "run", fake_run)
+    monkeypatch.setattr(mcode.os, "getpgid", fake_getpgid, raising=False)
+    monkeypatch.setattr(mcode.os, "killpg", fake_killpg, raising=False)
 
     with pytest.raises(StudioError) as exc:
         mcode.exec("Do the check.", cwd=tmp_path, timeout="30m")
@@ -204,9 +224,90 @@ def test_a_run_that_overruns_its_bound_kills_its_tree_and_answers_nothing(tmp_pa
     assert "did not finish" in str(exc.value)
     assert "30m" in str(exc.value)
     assert seen.procs[0].killed is False  # the tree kill did the work, not a bare kill()
-    assert killed and killed[0][0] == "taskkill"
-    assert "/T" in killed[0] and "/F" in killed[0]
-    assert str(seen.procs[0].pid) in killed[0]
+    if os.name == "nt":
+        assert killed and killed[0][0] == "taskkill"
+        assert "/T" in killed[0] and "/F" in killed[0]
+        assert str(seen.procs[0].pid) in killed[0]
+        assert groups == []
+    else:
+        assert groups == [(seen.procs[0].pid + 1000, signal.SIGKILL)]
+        assert killed == []  # taskkill is the Windows path
+
+
+def _posix_runtime(groups: list[tuple[int, int]], *, forgotten: bool = False):
+    """The POSIX-only names `_kill_tree` uses, so that branch runs on Windows too.
+
+    `killpg` and `SIGKILL` do not exist here at all (`os.kill` and `signal.SIGTERM` are what
+    Windows has), which is why the branch needs a stand-in rather than a monkeypatch on the real
+    modules. `SIGKILL` is 9 on every POSIX platform; it is the kernel's, not Python's.
+    """
+    def getpgid(pid: int) -> int:
+        if forgotten:
+            raise ProcessLookupError(pid)
+        return pid + 1000  # a group of its own, which is what start_new_session gives a run
+
+    return SimpleNamespace(
+        name="posix",
+        getpgid=getpgid,
+        killpg=lambda pgid, sig: groups.append((pgid, sig)),
+    )
+
+
+def _no_taskkill() -> None:
+    pytest.fail("taskkill is the Windows path")
+
+
+def test_the_tree_kill_uses_the_run_s_own_process_group_where_taskkill_does_not_exist(monkeypatch):
+    """The POSIX branch, exercised on every platform: SIGKILL to the process group `exec` gave
+    the run, which is the only call that reaches the `node` process under `mcode.cmd`. Windows
+    uses `taskkill /T` instead, so the Linux CI runner is the only place this line would ever
+    run on its own - and on 2026-10-03 the test that covered it there asserted the Windows call.
+    """
+    proc = _FakeProc(["mcode", "exec"], 0, hang=True)
+    groups: list[tuple[int, int]] = []
+    monkeypatch.setattr(mcode, "os", _posix_runtime(groups))
+    monkeypatch.setattr(mcode, "signal", SimpleNamespace(SIGKILL=9))
+    monkeypatch.setattr(mcode.subprocess, "run", _no_taskkill)
+
+    mcode._kill_tree(proc)
+
+    assert groups == [(proc.pid + 1000, 9)]
+    assert proc.killed is False
+
+
+def test_a_process_the_kernel_does_not_know_has_no_tree_left_to_kill(monkeypatch):
+    """`proc.kill()` on a pid the kernel has forgotten raises `ProcessLookupError` out of the
+    timeout handler, which would kill the batch instead of the task."""
+    proc = _FakeProc(["mcode", "exec"], 0, hang=True)
+    groups: list[tuple[int, int]] = []
+    monkeypatch.setattr(mcode, "os", _posix_runtime(groups, forgotten=True))
+    monkeypatch.setattr(mcode, "signal", SimpleNamespace(SIGKILL=9))
+    monkeypatch.setattr(mcode.subprocess, "run", _no_taskkill)
+
+    mcode._kill_tree(proc)  # must not raise
+
+    assert groups == []
+    assert proc.killed is False
+    assert proc.waits == []  # a process that is gone has nothing to wait for
+
+
+def test_taskkill_itself_cannot_run_so_the_process_goes_without_its_tree(monkeypatch):
+    """The one documented last resort: Windows without `taskkill` on PATH kills the process and
+    says so, rather than leaving a run alive that the pool has already written off."""
+    proc = _FakeProc(["mcode", "exec"], 0, hang=True)
+    ran: list[list[str]] = []
+
+    def missing(args, **kwargs):
+        ran.append(list(args))
+        raise FileNotFoundError("taskkill")
+
+    monkeypatch.setattr(mcode.subprocess, "run", missing)
+    monkeypatch.setattr(mcode.os, "name", "nt")
+
+    mcode._kill_tree(proc)
+
+    assert ran and ran[0][:1] == ["taskkill"]
+    assert proc.killed is True
 
 
 def test_a_corpse_that_will_not_die_never_blocks_the_batch(tmp_path, monkeypatch):
