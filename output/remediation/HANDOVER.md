@@ -457,7 +457,7 @@ model call: `python scripts/remediation/mcode_driver.py wc --runs <run>... --fir
 | WD1 fields | **complete** - 3,444 sites, 8,055 cells, 0 deviations | runbook step 15 (`handoff --wave`) was never run |
 | WD2 scope | **written** - 20 sites retired | nothing |
 | WD2 image | 4,064 + 933 answered, 35 chunk plans built, **0 chunks applied** | the largest block of open production work |
-| WD3 field fill | pilot 2 passed, wave `2026-10-01a` written; main run 1,995/2,613 answered; **the 618 missing are being answered right now** (48 of 78 batches, 2026-10-03 23:07) | wait for the round to finish, import, then write - the write needs the owner |
+| WD3 field fill | pilot 2 passed, wave `2026-10-01a` written; the round holds **327 batches, 249 answered before this lane started**, so 78 were open - **51 of those are answered** (2026-10-03 23:27) | let the round finish, import, then write - the write needs the owner |
 | WN | implemented, **never run**; population is 1 site | pilot, then mass |
 | WA v3/v3d | v3 + v3d main written, 37 steps, 0 deviations | write `p4-2510`/`p4-2511`; the `wip/p4-pilot` merge is still open and **the WA run dirs live in that worktree** |
 
@@ -522,6 +522,14 @@ not seen yet, and the first write of a new one throws.
   must be empty"), which is why the two output streams are written *beside* the run directory and
   moved into it afterwards. Opening them inside it before the run starts is a run that never starts -
   four existing tests caught exactly that.
+- **Every field-fill agent so far was sent a brief that could not run.** The driver's `FIELDS`
+  constant pointed at the run's *data* directory, so the brief command named
+  `output/remediation/fields/handoff.py`, which is not a file - the tool is
+  `scripts/remediation/fields/handoff.py`. 51 batches were answered against a command that answered
+  `can't open file`; the agents found the real tool themselves. Fixed in the driver, and **the lane
+  was deliberately not restarted for it**: a second driver on one handoff is the worst failure mode
+  here, and the watchdog applies the fix on the next relaunch. The batches answered under the broken
+  command stay valid - `HandoffLedger` counts answer files, and the import fetches every quote.
 - **A git call that names a repository has to run without `GIT_*`** (`pipeline/utils/git_env.py`).
   `GIT_DIR` beats both `-C` and `cwd`, and a redirected `git status` reports a clean tree in a
   repository nobody asked about - which is the tree guard's only instrument.

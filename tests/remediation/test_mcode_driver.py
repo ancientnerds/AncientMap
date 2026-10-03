@@ -894,6 +894,33 @@ def test_wd3_without_resume_exports_the_first_round(tmp_path: Path) -> None:
     assert no_model_call(plan.export_command) is True
 
 
+#: The fields lane's own tool, in the repository the driver works in. A path constant does not
+#: notice that its file moved, and a constant is what both commands below are built from.
+FIELDS_TOOL = D.REPO / "scripts" / "remediation" / "fields" / "handoff.py"
+
+
+def test_the_export_command_names_the_fields_tool_of_this_checkout(tmp_path: Path) -> None:
+    """`output/remediation/fields/` holds the run's data; the tool that reads it is
+    `scripts/remediation/fields/handoff.py`. Nothing ever ran the export command - the round was
+    exported by hand and every lane resumes onto it - so the wrong path was never caught, and
+    `wd3 --dry-run` named a file that does not exist."""
+    plan = D.plan_wd3(run=tmp_path / "run", handoff=tmp_path / "fields-wd3", resume=False)
+
+    assert Path(plan.export_command[1]) == FIELDS_TOOL
+    assert FIELDS_TOOL.is_file()
+
+
+def test_the_brief_the_agent_is_sent_names_the_fields_tool_that_is_there() -> None:
+    """The brief command is the answering agent's *whole* instruction, and this one has been
+    pointing at a file that is not there: every field-fill batch started with a command that failed
+    with "can't open file", and the agent had to find the real tool itself (measured 2026-10-03,
+    after 51 batches). The answers the lane counted were produced under that detour."""
+    prompt = D.fields_answer_prompt(run="run", handoff="handoff", batch="wd3-r0-b0001")
+
+    assert str(FIELDS_TOOL) in prompt
+    assert "output/remediation/fields/handoff.py" not in prompt
+
+
 def no_model_call(command: Sequence[str]) -> bool:
     """A plan names no model call: the operator steps are the commands themselves."""
     return not any("mcode" in part for part in command)

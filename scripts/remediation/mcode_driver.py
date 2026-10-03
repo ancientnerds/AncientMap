@@ -94,7 +94,11 @@ WIDTH_START = 2
 WIDTH_CAP = 14
 HANDOFF = REPO / "output" / "remediation" / "handoff"
 RUNS = REPO / "output" / "remediation" / "wc_runner" / "runs"
-FIELDS = REPO / "output" / "remediation" / "fields"
+#: The fields lane's tool directory, **not** its data directory. `output/remediation/fields/` holds
+#: the run; the CLI that reads it is `scripts/remediation/fields/handoff.py`. Measured 2026-10-03:
+#: this constant pointed at the data directory, so every field-fill brief named a file that is not
+#: there and every answering batch started with a command that failed.
+FIELDS = REPO / "scripts" / "remediation" / "fields"
 ORCHESTRATION = REPO / "output" / "remediation" / "orchestration"
 STATE_DIR = REPO / "output" / "remediation" / "mcode_driver"
 #: The User-Agent every research agent of this remediation sends (no personal data).

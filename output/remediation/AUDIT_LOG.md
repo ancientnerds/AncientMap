@@ -13693,3 +13693,35 @@ calibration that is the only thing authorising these answers to reach production
 at `max` and run at `low` is a different lane. So the effort stays, and the quota is managed by the
 stop at <= 10 percent instead.
 
+### Every field-fill agent was sent a command that could not run
+
+Found while checking what the next lane would do, not by a test failing. `mcode_driver.FIELDS` was
+`REPO / "output" / "remediation" / "fields"` - the **data** directory of the run - and both commands
+built from it name `FIELDS / "handoff.py"`:
+
+- `plan_wd3`'s export command (`plan_wd3`, only displayed; nothing ever runs it, because the round
+  is exported by hand and every lane resumes onto it), and
+- `fields_answer_prompt`'s `brief_command`, which is **the answering agent's whole instruction**.
+
+`output/remediation/fields/handoff.py` is not a file. The tool is
+`scripts/remediation/fields/handoff.py` (`export`, `export-reask`, `brief`, `check-answer`), and it
+exists. So for 51 answered batches and counting, every field-fill agent began its turn with
+
+    cd C:\PythonProjects\AncientMap && PYTHONIOENCODING=utf-8 ...\python.exe \
+        C:\PythonProjects\AncientMap\output\remediation\fields\handoff.py brief --run ... --batch-id ...
+
+which answers `can't open file '...output\\remediation\\fields\\handoff.py'`, and then had to find
+the real tool on its own before it could read the brief the lane owes it. The lane counted those
+batches as answered because `HandoffLedger` counts the answer *files* - a batch that improvises its
+way to a correct answer file looks identical to one that followed the brief.
+
+Nothing in the calibration contradicts the fix: `fields-02` was measured through the same broken
+command, and what O18 measures is whether the judging model agrees with the recorded answers. The
+tool named in the brief is now the one the lane means, which is the instrument the recorded answers
+were produced with.
+
+The constant now points at the tool directory and says so in its comment, because the name `FIELDS`
+is what made the wrong directory look right. Two tests hold it there: the export command names the
+tool of the repository the driver works in, and that file exists; and the prompt an agent receives
+names that path and not the data one.
+
