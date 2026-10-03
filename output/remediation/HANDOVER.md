@@ -444,7 +444,9 @@ tree must be unchanged or the batch is void and the lane stops (an M3.1 run once
 file). The width starts at 2, grows by one per clean window, halves on the first 429, caps by free
 RAM; the driver stops at <= 10 percent of the weekly MiniMax quota (read from `.env`, never printed)
 and resumes after the reset. A per-run state file under `output/remediation/mcode_driver/` makes a
-stopped lane resumable. **Lane WD3 is wired; lane WC is not yet.**
+stopped lane resumable. **Lane WD3 and lane WC are both wired.** WC's next step per run, without a
+model call: `python scripts/remediation/mcode_driver.py wc --runs <run>... --first-batch-base 4200
+--dry-run` prints the stage and the handoff it would work on.
 
 **Where the lanes stand (measured 2026-10-03, not read from the notes):**
 
@@ -481,6 +483,13 @@ Nothing in any lane has moved since 2026-10-02 03:28.
 - An answer must go through `opus_handoff.py answer`. A file an agent writes itself - even a correct
   one - has no `prompt_sha256`, no `model` and no `answered_by`, so the lane does not see it and it
   cannot be imported. 15 such files were found in the repo root on 2026-10-03 (see the AUDIT_LOG).
+- **A second session writes in this checkout.** On 2026-10-03 15:23 it edited
+  `scripts/remediation/mcode_driver.py` in the main tree while the same file was being changed in a
+  worktree, which blocked a merge. Look at `git status` before merging, and never overwrite an
+  uncommitted change you did not make.
+- WC's import marker is `verify/round-<n>/VERIFIED.jsonl`, one file per round - not
+  `VERIFIED.jsonl` in the run root, which is where the old JS script looked. A machine that followed
+  the script would have answered a round that is already imported, and WC's rounds are written once.
 - Worktrees cost ~4.2 GB each and there are already 24. 18 GB free at last check; a fresh worktree
   also skips 133 tests that the main tree runs (gitignored working data).
 - In a worktree `.git` is a file, not a directory: redirect a log there with

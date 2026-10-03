@@ -13269,3 +13269,23 @@ directories and run directories:
 - Lane WD3 (`wd3`) is wired end to end. Lane WC is not yet: its operator is a six-stage state machine
   over the run's own files, and it gets its own subcommand before WC is driven.
 - 15 tests, no model in them: a fake `mcode` stands in for the CLI.
+
+### Build B, second part - lane WC's state machine in the driver
+- `mcode_driver.py wc` drives a WC run the way `wc-continue.js` had a model do it, and the way a
+  model cannot: `wc_next_step` reads the run's own files and returns the one next step - built,
+  round 1, re-ask (once), verification round 1, verification round 2 (once, only for texts a round-1
+  drop changed), build. Which batches still need an agent is `opus_handoff.py validate`'s answer
+  read from its JSON, not a guess (validate exits 1 while answers are missing, which is the normal
+  state of a round in progress). A run that stops moving is stopped after three identical steps.
+- **A real defect, found by dry-running against the runs and not by a test**: `wc-continue.js` looked
+  for `R/VERIFIED.jsonl`. The runs hold `verify/round-<n>/VERIFIED.jsonl`, one file per round
+  (mass-01 both rounds, mass-02 and mass-05 round 1, mass-03/04 and defects none). A machine that
+  followed the script would have answered a round that is already imported - and WC's rounds are
+  written once, so that costs the round. Fixed and pinned by two tests.
+- Dry-run against the six real runs (`--dry-run`, no model call): mass-01 built; mass-02 verify-2;
+  mass-03 verify-1; mass-04 verify-1; mass-05 verify-2; defects-2026-10-02 round-1.
+- `opus_handoff.py validate` on the five handoffs that are open: **492 + 109 + 63 + 28 + 91 = 783
+  questions, 0 stale, 0 malformed, 0 orphans.** The state is clean, so all 783 are questions that
+  were never asked, not ones to repair. This is the first answer batch the driver should take, and
+  only after the calibration below.
+- Gates: 9037 passed / 133 skipped in the worktree; ruff, ruff format, lint-imports, vulture clean.
