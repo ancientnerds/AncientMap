@@ -456,8 +456,8 @@ model call: `python scripts/remediation/mcode_driver.py wc --runs <run>... --fir
 | WC sentence check | pilot written; **mass-01 WRITTEN 2026-10-03** - 513 sites / 1,018 rows in 6 journalled steps, every acceptance 0 deviations; chunks 02-05 unbuilt | **692 verification questions may be answered** (lane calibrated); the 91 check questions **hold** for an owner decision; then build 02-05 and write them |
 | WD1 fields | **complete** - 3,444 sites, 8,055 cells, 0 deviations | runbook step 15 (`handoff --wave`) was never run |
 | WD2 scope | **written** - 20 sites retired | nothing |
-| WD2 image | **complete and verified 2026-10-03** - the 35 chunks are *not* 0 applied: 8,713 planned rows = 8,713 journalled rows, written 2026-10-02 00:42-00:55 UTC over 3,481 sites; `chunk-001 --readback` "plan = journal = data", `accept` 0 deviations for chunk-001 and chunk-035 | the runbook's follow-up is **open**: the `card_stats` recompute after the chunks has not run (last one 2026-09-25) |
-| WD3 field fill | pilot 2 passed, wave `2026-10-01a` written; the round holds **327 batches, 249 answered before this lane started**, so 78 were open - **51 of those are answered** (2026-10-03 23:27) | let the round finish, import, then write - the write needs the owner |
+| WD2 image | **complete and verified 2026-10-03** - the 35 chunks are *not* 0 applied: 8,713 planned rows = 8,713 journalled rows, written 2026-10-02 00:42-00:55 UTC over 3,481 sites; `chunk-001 --readback` "plan = journal = data", `accept` 0 deviations for chunk-001 and chunk-035 | nothing - **including** the runbook's follow-up: the `card_stats` recompute after the chunks ran as wave `2026-09-30` (see below) |
+| WD3 field fill | pilot 2 passed, wave `2026-10-01a` written; the round holds **327 batches, 249 answered before this lane started**, so 78 were open - **71 of those are answered** (2026-10-04 00:18) | let the round finish, import, then write - the write needs the owner |
 | WN | implemented, **never run**; population is 1 site | pilot, then mass |
 | WA v3/v3d | v3 + v3d main written, 37 steps, 0 deviations | write `p4-2510`/`p4-2511`; the `wip/p4-pilot` merge is still open and **the WA run dirs live in that worktree** |
 
@@ -539,13 +539,15 @@ not seen yet, and the first write of a new one throws.
   this file, ask `remediation_change_log` what is actually live** (`SELECT run_stamp, count(*),
   max(applied_at) ... GROUP BY run_stamp`), and note the journal's timestamp column is `applied_at`,
   not `changed_at`, and its `row_pk` is `text` (a uuid literal needs no cast in an `IN` list).
-- **A prepared mechanical lane is one flag from done.** `mechanical_card_stats` wave `2026-09-30`
-  (`--check-primitive`, `--verify`, `--interests`, `--emit`, `--rehearse`, `--probe-guards`) is green:
-  21,041 cells over 4,468 of 4,977 cards, 27 refused, 7 of 7 guards refuse their own probe, rehearsal
-  rolled back with 0 journal rows. `--apply` and the two gates after it are the owner's word. The
-  generator was cross-checked against the stored cards: putting back the 13,620 journalled input
-  values and recomputing gives **0 of 60,048 cells** differing, so the change is the inputs moving,
-  not a disagreement.
+- **A prepared mechanical lane is one flag from done, and the sitting is the evidence.**
+  `mechanical_card_stats` wave `2026-09-30` is **applied** (owner 2026-10-04 01:24): 21,041 cells over
+  4,468 of 4,977 cards, 27 refused, `APPLY OK` with the read-back matching row for row, 0 journal rows
+  outside the owned columns, and the two pre-existing `civilization` mismatches went 2 -> 0. The
+  rollback was rehearsed, not taken: 21,041 rows restored and rolled back, and afterwards all 21,041
+  still hold the written value. The generator was cross-checked before the write: putting back the
+  13,620 journalled input values and recomputing gives **0 of 60,048 cells** differing, so the change
+  is the inputs moving, not a disagreement. **A new wave is owed after the WD3 write**, because field
+  values are card inputs too.
 - **A git call that names a repository has to run without `GIT_*`** (`pipeline/utils/git_env.py`).
   `GIT_DIR` beats both `-C` and `cwd`, and a redirected `git status` reports a clean tree in a
   repository nobody asked about - which is the tree guard's only instrument.

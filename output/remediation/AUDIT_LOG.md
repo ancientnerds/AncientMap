@@ -13782,10 +13782,32 @@ Wave `2026-09-30` is therefore planned and taken through every gate that leaves 
 - `--probe-guards`: **7 of 7 probes refused by their own guard**, `refused by its own guard=False` 0
   times, 0 journal rows left by any of them.
 
-`--apply`, the after-`--verify` and the `--rehearse-rollback` are the owner's word: 21,041 cells is
-the largest single write in the remediation, and FINISH_PLAN section 7 step 9 places the wave after
-WD1/WD2/**WD3** - and WD3 is still answering. The wave is a flag away and waits for that decision.
+`--apply`, the after-`--verify` and the `--rehearse-rollback` were the owner's word, and on 2026-10-04
+01:24 the answer was *apply now* (21,041 cells is the largest single write in the remediation, and
+FINISH_PLAN section 7 step 9 places the wave after WD1/WD2/**WD3** - and WD3 is still answering).
 
-**Not checked here:** whether the game's cards look right after the write. The sitting proves the
-values the generator computes, not how the frontend renders them; that is the owner's visual call.
+**The sitting, end to end, every number from the evidence files in
+`mechanical_card_stats/2026-09-30/evidence/`:**
+
+| gate | result |
+| --- | --- |
+| `--export` (read-only) + `--write` (no database) | 21,041 cells over 4,468 of 4,977 cards, 27 refused; 4,387 of the changed cards belong to sites with a journalled field write; the counterfactual is **0 of 60,048 cells** differing |
+| `--check-primitive` | the deployed function casts the value, casts the old value, re-reads the stored value |
+| `--verify` before | 5,004 curated sites, 0 without a card_stats row, 0 journal rows for this stamp, 2 `civilization` mismatches |
+| `--interests` | every other writer's interest in the touched values, named |
+| `--emit` | `APPLY.sql`, 21,041 rows |
+| `--rehearse` | 21,041 inserted, **`ROLLBACK`**, 0 journal rows for this stamp afterwards |
+| `--probe-guards` | **7 of 7 refused by their own guard**, `refused=False` 0 times, 0 journal rows left by any |
+| `--apply` | **`APPLY OK: the read-back matches the plan, row for row`** - 21,041 journal rows, 21,041 planned rows holding the new value, 0 without a journal row, 0 outside the owned columns |
+| `--verify` after | 5,004 sites, 0 without a card_stats row, 0 rows whose `total_power` is not the sum of the five stats, **`civilization` mismatches 2 -> 0**, tier-5 rows 21 -> 23, 25,147 journal rows for the test id |
+| `--rehearse-rollback` | 21,041 restored then `ROLLBACK`; afterwards **21,041 planned rows still hold the written value** and 0 journal rows for the rollback stamp - the undo path is proven and was not taken |
+
+**Not checked here:** how the cards look. The sitting proves the values the generator computes, not
+what the frontend renders - that is the owner's visual call, and a card whose `rarity_tier` moved is
+a visible change on 4,468 of 4,977 sites.
+
+**A wave is owed after the WD3 write.** Field values are card inputs (`INPUT_COLUMNS`), so the field
+fill moves the same derived cells; the next wave recomputes from the inputs as they are then, which is
+what the runbook's undo note describes. Measured 2026-10-04 00:18: the field round is at 71 of its 78
+open batches.
 
