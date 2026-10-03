@@ -247,6 +247,19 @@ Runbook: `docs/procedures/STUDIO.md`.
   (Vite binds only the first one, `::1` here) and counts the site as ready only when its own Vite
   announces the port. Find the stale server with `netstat -ano | findstr :5198`.
   *(`pipeline/studio/capture/vite.py`, commit `12f5832`, 2026-09-27)*
+- **Ein `mcode`-Lauf, der über `cmd /c` startet, darf nicht mit `subprocess.run(timeout=…)`
+  gebunden werden — der Kill trifft nur den Wrapper.** `subprocess.run` killt bei Timeout den
+  Prozess, den es gestartet hat, und ruft danach `communicate()`; unter Windows läuft der Befehl
+  über den Command Processor, und der `node`-Prozess darunter hält das geerbte Pipe-Ende offen,
+  also blockiert `communicate()` **ohne jede weitere Frist**. Am 2026-10-03 kostete das das Studio
+  3,5 Stunden (drei `node`-Kinder mit ~1 % CPU auf einem hängenden Provider-Socket); in 45 Sekunden
+  mit reinem Python reproduziert: 5 s Timeout, bei 45 s noch blockiert, der Enkelprozess lebt nach
+  dem Kill. Zwei Konsequenzen: Streams an **Dateien** binden und den **Prozessbaum** killen
+  (`taskkill /T /F` bzw. `killpg`) — so arbeitet `pipeline/studio/mcode.py`; und wer über
+  `cmd /c` startet, bekommt einen zusätzlichen Prozess, den man mitbedenken muss. Betrifft auch
+  den Remediation-Fahrer `scripts/remediation/mcode_driver.py` (Stand 2026-10-03 noch nicht auf
+  `main`); er entfernt in `run_git()` außerdem kein `GIT_*` (siehe „Betrieb und Deploy" oben).
+  *(`pipeline/studio/mcode.py`, Messung `C:\tmp\studio_build\hangtest\probe.py`, 2026-10-03)*
 
 ## Nicht mehr gültig
 
