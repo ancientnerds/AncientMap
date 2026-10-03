@@ -189,3 +189,41 @@ A heartbeat (session cron, every 30 min) re-invokes the orchestrator: if a workf
 - Live: name-fix (2 renames), card-disclosure s001/s002 (185 cells), P4 v3 re-queue p4-2214 (2 sites). House of Dionysus and Paphos Archaeological Park due again 2026-10-03T14:33Z (one-shot cron set).
 - Inventory of unwritten lanes (agent report): country-b2, name-key-lyra (Nr. 9), VPS Nr. 8 -> workflow apply-delivered; 5 shared-item duplicate pairs -> workflow duplicates-lane (research + build); Hadrian's Wall Path -> next scope wave; WD1 follow-ups after WD3; WF last.
 - Running: WC chunks (wc-continue wf_dca4b49f-f99), WD2 replace re-export (partial dir moved to handoff/_partial-2026-10-01_...), WD3 (wd3-run wf_760ce4cd-297: pilot 80 sites, wave labels 2026-10-01a/b).
+
+## 8. 2026-10-03 (newer than section 7) - the harness changes: MiniMax Code replaces Claude Code
+
+**Owner decision of 2026-10-03** (verbatim): "ich will claude code damit ersetzen. es muss zuverlässig
+mit hoher qualität alle offenen punkte im Ancient Nerds projekt aschließen können." Claude Code is too
+expensive; the remaining work runs in MiniMax Code CLI (`mcode`, `MiniMax-M3.1-Flash-Preview`, M Plan
+login). This supersedes O12 (Opus orchestrator, Sonnet subagents) for all new work. Setup and measured
+behaviour: owner memory `reference-minimax-code-cli`.
+
+What this changes, in order, before any MiniMax answer is written to production:
+1. **Truthful stamp and disclosure.** `opus_handoff.ANSWER_MODELS`, `model4.AI_SYSTEM` (and the
+   gates/acceptances that accept a fixed set of disclosure strings) must accept a MiniMax stamp and a
+   disclosure that names MiniMax for texts it writes or checks; tests first.
+2. **No Workflow tool.** The `orchestration/*.js` scripts run only in Claude Code's Workflow runtime and
+   cannot be resumed from mcode (their `wf_...` run ids are Claude Code state). Their operator steps are
+   plain commands; a Python driver replaces them: export/validate/import run directly, and each batch is
+   one `mcode exec --permission full --effort <level> --timeout ... --output-format json` following
+   its `brief`. The driver checks after every batch that no tracked file changed (`git status`), keeps
+   each run's exec JSON, and records `--model MiniMax-M3.1-Flash-Preview` as the stamp.
+3. **Calibration.** Before any lane's mass run: M3.1 Flash re-answers already-answered batches of that
+   lane type (WC sentence check, WD3 field research, WB checker/writer, WD2 image) into a copy of the
+   handoff; agreement with the recorded answers is measured against a threshold fixed before the run.
+   A lane that fails stays on hold and goes to the owner.
+4. Then the order of section 7 continues from where the progress log stands.
+
+**Owner decisions of 2026-10-03 for the MiniMax Code phase** (asked once; answers):
+
+| # | question | answer |
+|---|---|---|
+| O17 | Who builds the prerequisites (truthful stamp/disclosure, Python driver replacing the Workflow tool) | **mcode alone** - no Claude review. |
+| O18 | Calibration threshold per lane | **>= 90 % agreement with the recorded answers and 0 false sources** (an invented or wrong citation); else the lane holds and goes to the owner. |
+| O19 | Public AI disclosure for texts M3.1 Flash writes or checks | **One combined disclosure** naming both families, e.g. "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax)": one new `AI_SYSTEM` string for new writes; existing writes keep their strings. The answer stamp itself stays per answer and exact (`MiniMax-M3.1-Flash-Preview`). |
+| O20 | Weekly quota stop (shared with Lyra) | a batch run stops when `current_weekly_remaining_percent` of the plan (`/v1/token_plan/remains`) is **<= 10 %**, and resumes after the reset. |
+| O21 | Where | **local first**; the VPS only after the calibration has passed. |
+| O22 | Parallelism | **"so viel wie möglich ohne das minimax 429 wirft"**: the driver starts small and raises the number of concurrent `mcode exec` runs while no 429/rate-limit appears, backs off on the first one; local RAM caps it (~14 agents, PROJECT_LESSONS). |
+| O23 | Effort for answering/judging agents | **max**. |
+
+Also found 2026-10-03: `.git/config` had `core.bare = true` since 2026-10-02 18:55 (cause unknown, an earlier session) - every git command failed; reset to `false` with the owner's consent.

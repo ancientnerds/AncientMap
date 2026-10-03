@@ -8,8 +8,11 @@ All 5,004 `ancient_nerds` sites have been examined. In production (2026-09-25, e
 0 deviations): Phase 3's 994 field writes, of which 499 stand (Opus re-judged the 934 DeepSeek decided:
 481 kept, 453 reverted by `journal-reversal-3`); further lanes (wrong-both, coordinates, ids, images,
 scope-e4: 78 sites retired); and Phase 4's **984 defect sites with a new Wikipedia-based description**.
-Every model judgement runs through Opus agents via `scripts/remediation/opus_handoff.py`: no DeepSeek,
-Pi or opencode (owner, 2026-09-23), no MiniMax. Start with `output/remediation/HANDOVER.md` (state,
+Every model judgement runs through agents via `scripts/remediation/opus_handoff.py`: no DeepSeek,
+Pi or opencode (owner, 2026-09-23). Since 2026-10-03 the owner replaces Claude Code with MiniMax Code
+(`mcode`, model `MiniMax-M3.1-Flash-Preview`); MiniMax answers enter production only after the answer
+stamp and the public AI disclosure name MiniMax truthfully (`ANSWER_MODELS`, `model4.AI_SYSTEM`) and a
+calibration against already-answered batches has passed. Start with `output/remediation/HANDOVER.md` (state,
 next steps in order, traps); evidence `AUDIT_LOG.md`, owner items `HUMAN_ONLY.md`. Open: lane L
 (running), the `wip/p4-pilot` merge, Phase 6 incl. Push #2 and the final acceptance.
 
