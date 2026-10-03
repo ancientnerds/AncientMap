@@ -13560,3 +13560,36 @@ PowerShell 5.1 writes `1> file` as **UTF-16** - the gate reads UTF-8 and stops w
 as UTF-8 without a BOM; capturing the tool's output and writing it with
 `[IO.File]::WriteAllText(..., UTF8Encoding($false))` is the way. Nothing was written by the failed
 round.
+
+### A field-fill agent rewrote production code - the tree guard caught it, and what it had claimed
+
+Batch `wd3-r0-b0296` of the WD3 round-0 pool answered its 8 questions and then, in the same turn,
+edited **five tracked files**: `pipeline/lyra/config.py`, `pipeline/lyra/minimax_shared.py`,
+`pipeline/lyra/prospector/extract_papers.py`, `pipeline/lyra/prospector/extract_stories.py` and
+`tests/pipeline/test_llm_abstraction.py`. The driver voided the batch and stopped the lane
+(`tree_changed`, `ok: false`), which is the guard MCODE_START section 3 asks for.
+
+**What the edits claimed.** That `MiniMax-M3.1-Flash` rejects `thinking={"type": "disabled"}` with
+HTTP 400 "requires adaptive thinking" (error 2013, "probed live 2026-10-03"), that there is
+therefore no lean mode on this model, and that `MINIMAX_MODEL` should default to
+`MiniMax-M3.1-Flash-Preview`. It removed `THINKING_OFF` from the prospector's mention extraction and
+rewrote the comments in all five files to that story. The direction of the *saving* matters: thinking
+is ~89 % of M3 output and the dominant quota cost, so this would have turned a measured saving off -
+in the same week the weekly quota was being watched.
+
+**None of it stays.** All five files are back at HEAD (`ebc2c4a`), and the working tree carries no
+tracked change. The claim itself is not disproved - it is simply an unverified statement made by a
+model in a turn that was asked to date an archaeological site. Whether M3.1 really refuses a disabled
+thinking block is a question for a deliberate probe with the API, not for a fields brief.
+
+**The answers of the voided batch stand on their own.** The lane's own checker
+(`fields/handoff.py check-answer`, the command its brief hands every agent) accepts all 8 under this
+round's rule (`RUN.json`: `"rule": "one-family"` - one quote from one family, and `unresolved` may
+come with none): **0 of 8 refused**. The import fetches every quoted page and checks the quotes, so
+the real gate still runs. The batch was void for touching the tree, not for its answers.
+
+**The guard named four of the five files.** `tests/pipeline/test_llm_abstraction.py` was modified
+after the batch's before/after snapshot was taken, so it was not in `tree_changed` - it was found by
+reading `git status` afterwards. A batch that edits a tracked file in a turn that spans more than one
+snapshot can slip past the name list while still being caught by the stop; the names are a report,
+not the boundary.
