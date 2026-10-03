@@ -484,6 +484,362 @@ def check_batch_names(plan: Plan, names: Sequence[str]) -> bool:
     return plan.batch_names_ok(names)
 
 
+# ------------------------------------------------------------------------------------ the WC lane
+@dataclass(frozen=True)
+class WcPlan:
+    """The one step lane WC takes next for one run, read off the run's own files.
+
+    `answer_batches` is empty until a `validate` run named the missing ones: which batches still
+    need an agent is the validator's answer, not this function's guess.
+    """
+
+    ok: bool
+    stage: str
+    command: tuple[str, ...] = ()
+    answer_handoff: Path | None = None
+    answer_brief: str = ""
+    answer_batches: tuple[str, ...] = ()
+    done: bool = False
+    note: str = ""
+    #: The refusal of `command` that means "there is nothing here to do", and the stage to continue
+    #: at when it happens. `wc-continue.js` read this out of the command's own output; the driver
+    #: cannot re-read a command it already ran, so it remembers the refusal in the state file.
+    refusal_advances: str = ""
+
+
+def _wc_cli(command: str, *args: str) -> tuple[str, ...]:
+    return (str(PYTHON), str(REPO / "scripts" / "remediation" / "wc" / "cli.py"), command, *args)
+
+
+def _reask_asks(run: Path) -> bool:
+    """Whether the re-ask file of round 1 actually asks something. A run with no `REASK.json`, or an
+    empty one, is past this stage - the JS script skipped to verification on the same rule."""
+    path = run / "round-1" / "REASK.json"
+    if not path.exists():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return True  # unreadable: ask the questions again rather than skip them
+    if isinstance(data, list):
+        return bool(data)
+    if isinstance(data, dict):
+        return any(
+            bool(value) for key, value in data.items() if key in {"reask", "sentences", "ask"}
+        ) or bool(data)
+    return True
+
+
+def _verified_rounds(run: Path) -> set[int]:
+    """The verification rounds already imported.
+
+    `wc-continue.js` looked for `R/VERIFIED.jsonl`; the runs on disk (measured 2026-10-03) hold
+    `verify/round-<n>/VERIFIED.jsonl`, one file per round, every line naming its own `round`. Both
+    are read: a round counts as imported when a line of that round exists anywhere under `verify/`,
+    so neither a missing file nor a file of the wrong round can pass for an import.
+    """
+    rounds: set[int] = set()
+    for path in sorted((run / "verify").glob("round-*/VERIFIED.jsonl")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            number = value.get("round") if isinstance(value, dict) else None
+            if isinstance(number, int):
+                rounds.add(number)
+    return rounds
+
+
+def wc_next_step(
+    run: Path,
+    handoff_root: Path,
+    *,
+    first_batch: int,
+    state: State | None = None,
+) -> WcPlan:
+    """Lane WC's state machine, in the order `wc-continue.js` laid out: built, round 1, re-ask,
+    verification round 1, verification round 2, build. The files on disk decide; no model does."""
+    run = Path(run)
+    name = run.name
+    handoff_r1 = handoff_root / f"wc-{name}-r1"
+    handoff_r2 = handoff_root / f"wc-{name}-r2"
+    handoff_v1 = handoff_root / f"wc-{name}-verify"
+    handoff_v2 = handoff_root / f"wc-{name}-verify2"
+    refused = set(state.get("refused", [])) if state else set()
+
+    if (run / "WC4.jsonl").exists():
+        return WcPlan(True, "built", done=True, note="WC4.jsonl exists: the run is built")
+
+    # 1. round 1: validate, answer what is missing, import when clean
+    if not (run / "round-1" / "ANSWERS.jsonl").exists():
+        if not handoff_r1.is_dir():
+            return WcPlan(
+                False,
+                "round-1",
+                note=f"{handoff_r1} does not exist: nothing was exported, or the "
+                "export is gone; the driver does not invent the questions",
+            )
+        return WcPlan(True, "round-1", answer_handoff=handoff_r1, answer_brief="brief")
+
+    # 2. the re-ask, once
+    if _reask_asks(run) and not (run / "round-2" / "ANSWERS.jsonl").exists():
+        if not handoff_r2.is_dir():
+            return WcPlan(
+                True,
+                "reask",
+                command=_wc_cli(
+                    "export-reask", "--run-dir", str(run), "--handoff", str(handoff_r2)
+                ),
+            )
+        return WcPlan(True, "reask", answer_handoff=handoff_r2, answer_brief="brief")
+
+    # 3. and 4. the two verification rounds; round 2 only when round 1 is imported
+    imported = _verified_rounds(run)
+    for number, handoff in ((1, handoff_v1), (2, handoff_v2)):
+        stage = f"verify-{number}"
+        if number == 2 and 1 not in imported:
+            break
+        if stage in refused:
+            continue
+        if not (run / "verify" / f"round-{number}" / "ROUND.json").exists():
+            return WcPlan(
+                True,
+                stage,
+                command=_wc_cli("verify-export", "--run-dir", str(run), "--handoff", str(handoff)),
+                refusal_advances=stage,
+            )
+        if number not in imported:
+            if not handoff.is_dir():
+                return WcPlan(
+                    False, stage, note=f"{handoff} does not exist: the round was not exported"
+                )
+            return WcPlan(True, stage, answer_handoff=handoff, answer_brief="verify-brief")
+
+    # 5. the build
+    return WcPlan(
+        True,
+        "build",
+        command=_wc_cli("build", "--run-dir", str(run), "--first-batch", str(first_batch)),
+    )
+
+
+def wc_answer_prompt(
+    *, run: Path, handoff: Path, batch: str, brief: str = "brief", repo: str = str(REPO)
+) -> str:
+    """One WC answering batch's instruction, from `wc-continue.js` with the model strings replaced."""
+    return answer_prompt(
+        lane="wc",
+        run=str(run),
+        batch=batch,
+        repo=repo,
+        brief=brief,
+        brief_command=(
+            f"cd {repo} && PYTHONIOENCODING=utf-8 {PYTHON} {REPO / 'scripts' / 'remediation' / 'wc' / 'cli.py'} "
+            f"{brief} --run-dir {run} --handoff {handoff} --batch-id {batch}"
+        ),
+    )
+
+
+@dataclass
+class StepGuard:
+    """Stops a run that stops moving. The JS script gave up after three identical steps; the
+    counter is that one, and it resets the moment a step differs."""
+
+    limit: int = 3
+    counts: dict[str, int] = field(default_factory=dict)
+
+    def seen(self, key: str) -> int:
+        self.counts[key] = self.counts.get(key, 0) + 1
+        return self.counts[key]
+
+    def stopped(self, key: str) -> bool:
+        return self.counts.get(key, 0) >= self.limit
+
+
+# ------------------------------------------------------------------------------------ the operator commands
+@dataclass(frozen=True)
+class Command:
+    """One operator command: the argv, its exit code and its own JSON output. A command that
+    refuses is not retried by the driver and not worked around; its output is what stops the lane."""
+
+    argv: tuple[str, ...]
+    exit_code: int
+    stdout: str
+    stderr: str
+
+    @property
+    def ok(self) -> bool:
+        return self.exit_code == 0
+
+    @property
+    def json(self) -> dict[str, Any]:
+        return _last_json_line(self.stdout)
+
+    def refuses_with(self, phrase: str) -> bool:
+        return phrase.lower() in f"{self.stdout}\n{self.stderr}".lower()
+
+
+def run_operator(argv: Sequence[str], *, repo: Path = REPO, timeout: int = 3600) -> Command:
+    """Run one lane command. Its stdout is the payload, so a refusal is read from the command's own
+    output and not from a wrapper's status."""
+    try:
+        done = subprocess.run(
+            list(argv),
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise DriverError(f"{argv[0]} is not there: {exc}") from exc
+    return Command(tuple(argv), done.returncode, done.stdout, done.stderr)
+
+
+@dataclass(frozen=True)
+class Validation:
+    """What `opus_handoff.py validate` said about one handoff directory."""
+
+    ok: bool
+    missing: tuple[str, ...]  #: the batch ids that still need an agent, sorted
+    missing_count: int
+    problems: str = ""
+
+
+def validate_handoff(handoff: Path, *, repo: Path = REPO) -> Validation:
+    """Validate one exported round. `validate` exits 1 while answers are missing, which is the normal
+    state of a round in progress, so the exit code is not the verdict - the JSON is."""
+    command = run_operator(
+        (
+            str(PYTHON),
+            str(REPO / "scripts" / "remediation" / "opus_handoff.py"),
+            "validate",
+            "--dir",
+            str(handoff),
+        ),
+        repo=repo,
+    )
+    payload = command.json
+    if not payload:
+        raise DriverError(f"validate --dir {handoff} printed no JSON: {command.stderr[:400]}")
+    missing = payload.get("missing") or []
+    problems = {
+        key: payload.get(key) for key in ("stale", "malformed", "orphans") if payload.get(key)
+    }
+    return Validation(
+        ok=not problems,
+        missing=tuple(sorted({row.get("batch_id", "") for row in missing if row.get("batch_id")})),
+        missing_count=len(missing),
+        problems=json.dumps(problems, ensure_ascii=False) if problems else "",
+    )
+
+
+# ------------------------------------------------------------------------------------ driving WC
+NOTHING_TO_VERIFY = "nothing to verify"
+
+
+def drive_wc_run(
+    run: Path,
+    handoff_root: Path,
+    *,
+    first_batch: int,
+    state: State,
+    runner: McodeRunner,
+    width: Width,
+    timeout: int,
+    max_steps: int,
+    steps: int = 16,
+    quota_check: Callable[[], bool] | None = None,
+) -> dict[str, Any]:
+    """Drive one WC run from wherever its files say it stands until it is built, or until it stops.
+
+    One thing happens per iteration, the JS script's rule: validate, answer what is missing, import
+    when clean, export the next round, build last. A step that changes nothing three times in a row
+    stops the run rather than looping.
+    """
+    guard = StepGuard()
+    log: list[dict[str, Any]] = []
+    for _ in range(steps):
+        plan = wc_next_step(run, handoff_root, first_batch=first_batch, state=state)
+        entry: dict[str, Any] = {"stage": plan.stage, "ok": plan.ok}
+        if not plan.ok:
+            log.append({**entry, "stopped": plan.note})
+            return {"run": run.name, "steps": log, "stopped": plan.note}
+        if plan.done:
+            return {"run": run.name, "steps": log, "built": True, "note": plan.note}
+        key = f"stage={plan.stage} ran={plan.command[2] if plan.command else 'answer'}"
+        guard.seen(key)
+        if guard.stopped(key):
+            log.append({**entry, "stopped": f"no progress after {guard.limit} identical steps"})
+            return {"run": run.name, "steps": log, "stopped": f"no progress at {plan.stage}"}
+
+        if plan.answer_handoff is not None:
+            check = validate_handoff(plan.answer_handoff)
+            if not check.ok:
+                log.append({**entry, "stopped": f"validate refused: {check.problems}"})
+                return {"run": run.name, "steps": log, "stopped": check.problems}
+            if not check.missing:
+                # nothing missing: the import is the next step's business, and the next plan will see
+                # the files it left behind
+                log.append({**entry, "validate": "clean, nothing missing"})
+                import_argv = _wc_cli(
+                    "import" if plan.answer_brief == "brief" else "verify-import",
+                    "--run-dir",
+                    str(run),
+                    "--handoff",
+                    str(plan.answer_handoff),
+                )
+                done = run_operator(import_argv)
+                if not done.ok:
+                    log.append(
+                        {**entry, "stopped": f"{import_argv[2]} failed: {done.stderr[:200]}"}
+                    )
+                    return {"run": run.name, "steps": log, "stopped": f"{import_argv[2]} failed"}
+                continue
+            outcomes = answer_all(
+                check.missing,
+                prompt_for=lambda batch, h=plan.answer_handoff, b=plan.answer_brief: (
+                    wc_answer_prompt(run=run, handoff=h, batch=batch, brief=b)
+                ),
+                runner=runner,
+                width=width,
+                state=state,
+                timeout=timeout,
+                max_steps=max_steps,
+                quota_check=quota_check,
+            )
+            entry["answered"] = sum(1 for o in outcomes if o.ok)
+            entry["void"] = [o.label for o in outcomes if o.void]
+            log.append(entry)
+            if entry["void"]:
+                return {"run": run.name, "steps": log, "stopped": f"void batch {entry['void'][0]}"}
+            continue
+
+        done = run_operator(plan.command)
+        entry["ran"] = plan.command[2]
+        if not done.ok and plan.refusal_advances and done.refuses_with(NOTHING_TO_VERIFY):
+            state.put("refused", sorted({*state.get("refused", []), plan.refusal_advances}))
+            entry["refused"] = NOTHING_TO_VERIFY
+            log.append(entry)
+            continue
+        if not done.ok:
+            entry["stopped"] = f"{plan.command[2]} exited {done.exit_code}: {done.stderr[:200]}"
+            log.append(entry)
+            return {"run": run.name, "steps": log, "stopped": entry["stopped"]}
+        entry["summary"] = done.json
+        log.append(entry)
+    return {"run": run.name, "steps": log, "stopped": f"step guard reached ({steps} steps)"}
+
+
 # ------------------------------------------------------------------------------------ the driver loop
 @dataclass
 class BatchOutcome:
@@ -525,7 +881,6 @@ def answer_all(
             if quota_check is not None and quota_check():
                 outcomes.append(BatchOutcome(label, False, True, False, 0, "", ("quota",)))
                 break
-            width.rate_limits = width.rate_limits
             futures[label] = pool.submit(
                 runner.run,
                 prompt_for(label),
@@ -577,7 +932,98 @@ def main(argv: Sequence[str] | None = None) -> int:
     wd3.add_argument("--max-steps", type=int, default=200)
     wd3.add_argument("--dry-run", action="store_true", help="report the plan, answer nothing")
 
+    wc = lanes.add_parser("wc", help="lane WC (sentence check): the JS state machine, in Python")
+    wc.add_argument("--runs", required=True, nargs="+", help="the run directory names under runs/")
+    wc.add_argument("--runs-root", type=Path, default=RUNS)
+    wc.add_argument("--handoff-root", type=Path, default=HANDOFF)
+    wc.add_argument(
+        "--first-batch-base",
+        type=int,
+        required=True,
+        help="the first WC4 batch number of the first run; each later run adds 100",
+    )
+    wc.add_argument(
+        "--first-batch-by-run",
+        default="",
+        help='JSON {"<run>": N} for a run whose name does not end in its chunk number',
+    )
+    wc.add_argument("--width", type=int, default=WIDTH_START)
+    wc.add_argument("--timeout", type=int, default=3600)
+    wc.add_argument("--max-steps", type=int, default=200)
+    wc.add_argument("--steps", type=int, default=16)
+    wc.add_argument("--no-quota-check", action="store_true", help="skip the weekly quota stop")
+    wc.add_argument(
+        "--dry-run", action="store_true", help="report the next step per run, do nothing"
+    )
+
     args = parser.parse_args(list(argv) if argv is not None else None)
+    if args.lane == "wc":
+        return _main_wc(args)
+    return _main_wd3(args)
+
+
+def _first_batch_for(args: Any, run: str, index: int) -> int:
+    """A run whose name does not end in its chunk number (a site list or a WN run) needs its own
+    first write batch; the JS script took it from `--firstBatchByRun`."""
+    if args.first_batch_by_run:
+        given = json.loads(args.first_batch_by_run)
+        if run in given:
+            return int(given[run])
+    return args.first_batch_base + 100 * index
+
+
+def _main_wc(args: Any) -> int:
+    width = Width.from_start(args.width)
+    runner = McodeRunner()
+    quota = None if args.no_quota_check else (lambda: quota_exhausted(quota_remaining()))
+    results: list[dict[str, Any]] = []
+    for index, run in enumerate(args.runs):
+        run_dir = Path(args.runs_root) / run
+        state = State(
+            STATE_DIR / f"wc-{run}.json", lane="wc", run=run, handoff=str(args.handoff_root)
+        )
+        if args.dry_run:
+            step = wc_next_step(
+                run_dir,
+                Path(args.handoff_root),
+                first_batch=_first_batch_for(args, run, index),
+                state=state,
+            )
+            results.append(
+                {
+                    "run": run,
+                    "stage": step.stage,
+                    "ok": step.ok,
+                    "done": step.done,
+                    "command": list(step.command),
+                    "answer_handoff": str(step.answer_handoff or ""),
+                    "note": step.note,
+                }
+            )
+            continue
+        try:
+            results.append(
+                drive_wc_run(
+                    run_dir,
+                    Path(args.handoff_root),
+                    first_batch=_first_batch_for(args, run, index),
+                    state=state,
+                    runner=runner,
+                    width=width,
+                    timeout=args.timeout,
+                    max_steps=args.max_steps,
+                    steps=args.steps,
+                    quota_check=quota,
+                )
+            )
+        except DriverError as exc:
+            print(json.dumps({"run": run, "stopped": str(exc)}), file=sys.stderr)
+            return 2
+    print(json.dumps({"runs": results}, indent=1, default=list))
+    return 0 if all(r.get("built") or "stopped" not in r for r in results) else 1
+
+
+def _main_wd3(args: Any) -> int:
     plan = plan_wd3(run=args.run, handoff=Path(args.handoff), resume=args.resume)
     if not plan.batches:
         print(json.dumps({"batches": [], "exported": plan.exported, "note": "nothing exported"}))
