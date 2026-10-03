@@ -32,6 +32,7 @@ import argparse
 import ctypes
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -645,6 +646,18 @@ def _wc_cli(command: str, *args: str) -> tuple[str, ...]:
     return (str(PYTHON), str(REPO / "scripts" / "remediation" / "wc" / "cli.py"), command, *args)
 
 
+#: `wc/cli.py` names the answer it refuses as `REFUSED: <batch-id>/<stage>/<label>: <why>`, followed
+#: by what to do about it. The batch id is what the driver needs; a refusal without one is about
+#: something else and is not guessed at.
+_REFUSED = re.compile(r"^REFUSED:\s+([A-Za-z0-9._-]+)/", re.MULTILINE)
+
+
+def refused_batch(text: str) -> str:
+    """The batch an operator command refused an answer of, or `""` when it refused no answer."""
+    found = _REFUSED.search(text or "")
+    return found.group(1) if found else ""
+
+
 def _reask_asks(run: Path) -> bool:
     """Whether the re-ask file of round 1 actually asks something. A run with no `REASK.json`, or an
     empty one, is past this stage - the JS script skipped to verification on the same rule."""
@@ -943,10 +956,28 @@ def drive_wc_run(
                 )
                 done = run_operator(import_argv)
                 if not done.ok:
-                    log.append(
-                        {**entry, "stopped": f"{import_argv[2]} failed: {done.stderr[:200]}"}
-                    )
-                    return {"run": run.name, "steps": log, "stopped": f"{import_argv[2]} failed"}
+                    # A refusal that names a batch is about one of its answers, and an answer the
+                    # lane's own checker will not accept is not a finished batch. The state file
+                    # marked it answered because the agent wrote its files, so a resume would skip
+                    # it, the validator would keep naming it missing, and the run would stop with
+                    # "no progress" instead of asking for the question again. Put it back, and say
+                    # which file to delete: an answer is write-once (`opus_handoff.write_answer`
+                    # refuses different bytes), so the retry only lands once the bad file is gone.
+                    refusal = f"{done.stdout}\n{done.stderr}"
+                    batch = refused_batch(refusal)
+                    if batch:
+                        state.put("answered", [b for b in state.get("answered", []) if b != batch])
+                        state.put(
+                            "outcomes",
+                            {k: v for k, v in state.get("outcomes", {}).items() if k != batch},
+                        )
+                    log.append({**entry, "stopped": f"{import_argv[2]} failed: {refusal.strip()}"})
+                    return {
+                        "run": run.name,
+                        "steps": log,
+                        "stopped": f"{import_argv[2]} failed",
+                        **({"rejected_batch": batch} if batch else {}),
+                    }
                 continue
             outcomes = answer_all(
                 check.missing,

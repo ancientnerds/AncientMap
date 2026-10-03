@@ -44,6 +44,76 @@ def plan(root: Path, run: Path, **kwargs: Any) -> D.WcPlan:
     return D.wc_next_step(run, root / "handoff", **kwargs)
 
 
+# ---------------------------------------------------------------------------- a refused import
+#: What `verify-import` says about one answer it will not accept, measured 2026-10-03 18:34 on
+#: mass-2026-09-27-05: a note of 631 characters where the lane allows 600.
+REFUSAL = (
+    "2026-10-03 18:34:00 | INFO | pipeline.utils.logging: Logging configured: level=INFO\n"
+    "REFUSED: verify2-0003/f5c6a56e-79b4-4f06-a064-d0e33524a118: malformed answer "
+    "(K1: note is 631 characters, at most 600)\n"
+    "- verify-check-answer refuses it; delete the answer file and have the batch agent answer it again\n"
+)
+
+
+def a_run_at_verify_2(root: Path) -> Path:
+    run = a_run(root, handoffs=("wc-mass-2026-09-27-01-verify", "wc-mass-2026-09-27-01-verify2"))
+    write(run / "round-1" / "ANSWERS.jsonl")
+    write(run / "round-2" / "ANSWERS.jsonl")
+    write(run / "verify" / "round-1" / "ROUND.json")
+    write(run / "verify" / "round-1" / "VERIFIED.jsonl", json.dumps({"round": 1}) + "\n")
+    write(run / "verify" / "round-2" / "ROUND.json")
+    return run
+
+
+def test_an_import_that_refuses_one_answer_puts_that_batch_back_into_the_lane(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A recorded answer the lane's own checker will not accept is not a finished batch. The state
+    file marked `verify2-0003` answered because the agent wrote five files - so a resume skipped it,
+    the validator kept naming it missing, and the run stopped with "no progress" instead of asking
+    for the one question again. Measured 2026-10-03 20:20 on mass-2026-09-27-05, which had all 28
+    answers on disk and could not be imported."""
+    run = a_run_at_verify_2(tmp_path)
+    state = D.State(tmp_path / "state.json", lane="wc", run=RUN, handoff="h")
+    state.put("answered", ["verify2-0001", "verify2-0002", "verify2-0003"])
+    monkeypatch.setattr(
+        D,
+        "validate_handoff",
+        lambda directory, **kw: D.Validation(ok=True, missing=(), missing_count=0),
+    )
+    monkeypatch.setattr(
+        D,
+        "run_operator",
+        lambda argv, **kw: D.Command(tuple(argv), 1, "", REFUSAL),
+    )
+
+    result = D.drive_wc_run(
+        run,
+        tmp_path / "handoff",
+        first_batch=4200,
+        state=state,
+        runner=None,  # type: ignore[arg-type]
+        width=D.Width.from_start(1),
+        timeout=10,
+        max_steps=2,
+        steps=4,
+    )
+
+    assert "verify2-0003" not in state.get("answered")  # the lane owes it again
+    assert state.get("answered") == ["verify2-0001", "verify2-0002"]
+    (last,) = result["steps"][-1:]
+    assert "verify2-0003" in last["stopped"]  # and the refusal names the batch
+    assert "f5c6a56e-79b4-4f06-a064-d0e33524a118" in last["stopped"]  # and the answer file
+
+
+def test_a_refusal_that_names_no_batch_leaves_the_state_alone() -> None:
+    """Not every refusal is about one answer. A refusal the driver cannot place must not guess a
+    batch to retry."""
+    assert D.refused_batch(REFUSAL) == "verify2-0003"
+    assert D.refused_batch("REFUSED: the run is already built\n") == ""
+    assert D.refused_batch("") == ""
+
+
 # ---------------------------------------------------------------------------- the six stages
 def test_a_built_run_is_done_and_runs_nothing(tmp_path: Path) -> None:
     run = a_run(tmp_path)
