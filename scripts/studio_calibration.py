@@ -16,6 +16,11 @@ checked reference: no human or higher model audited it, so agreement with it mea
 Tasks are the 42 `evidence` ones; the `paragraph` and `coherence` tasks have no recorded
 verdict anywhere, so they are not part of the measurement.
 
+O18 asks whether a MiniMax verdict agrees with a recorded one, so it can only be measured for
+a check type where a verdict **another** run wrote. The owner ruled on 2026-10-03 that a type
+without one holds; `check_types` reports the state of all four of `mcode_checks.CHECKS` and
+`verdict_passed` keeps O18 red while any of them is held.
+
     ./.venv/Scripts/python.exe scripts/studio_calibration.py --request-id 95fa3798-...
     ./.venv/Scripts/python.exe scripts/studio_calibration.py --request-id 95fa3798-... --dry-run
 
@@ -196,6 +201,124 @@ def with_verdicts(worksheet: dict[str, Any], path: Path) -> dict[str, Any]:
     return worksheet
 
 
+def _line_count(path: Path) -> int:
+    return len(handoff.read_jsonl(path)) if path.is_file() else 0
+
+
+def _stamped_lines(directory: Path, key: str = "answered_by") -> list[str]:
+    """Every verdict stamp a check directory holds, the imported files included."""
+    if not directory.is_dir():
+        return []
+    return [
+        str(row.get(key, ""))
+        for path in sorted(directory.glob("verdicts*.jsonl"))
+        for row in handoff.read_jsonl(path)
+    ]
+
+
+def _marker_stamps(assets: Path) -> list[str]:
+    out: list[str] = []
+    for path in sorted(assets.glob("episodes/*/markers_check/verdicts*.jsonl")):
+        out.extend(str(r.get("answered_by", "")) for r in handoff.read_jsonl(path))
+    return out
+
+
+def _casefile_stamps(assets: Path) -> list[str]:
+    out: list[str] = []
+    for path in sorted(assets.glob("episodes/*/casefile.json")):
+        items = read_json(path, "the episode's case file").get("evidence", [])
+        out.extend(str(i.get("verification", {}).get("by", "")) for i in items)
+    return out
+
+
+def _measured(stamps: list[str], absent: str) -> dict[str, Any]:
+    """One check type's state, from the verdicts recorded for it.
+
+    A stamp that names the model being calibrated is that model's own output: grading a run
+    against its earlier output measures nothing, so the type holds. Any other stamp - a
+    human's, or another model's - is a reference.
+    """
+    model = mcode_checks.mcode.MODEL
+    others = [s for s in stamps if s and model not in s]
+    if others:
+        return {
+            "measured": True,
+            "reference": others[0],
+            "reference_verdicts": len(others),
+            "why": "",
+        }
+    if not stamps:
+        return {"measured": False, "reference": None, "reference_verdicts": 0, "why": absent}
+    return {
+        "measured": False,
+        "reference": None,
+        "reference_verdicts": 0,
+        "why": (
+            f"the only {len(stamps)} recorded verdict(s) were written by {model} itself, the "
+            "model this run would be measured against"
+        ),
+    }
+
+
+def check_types(
+    ws: PaperWorkspace, recorded: dict[str, dict[str, Any]], assets: Path
+) -> dict[str, Any]:
+    """What a calibration of each of the studio's four check types compares against.
+
+    O18 asks whether a MiniMax verdict agrees with a recorded one, so a type can only answer it
+    where a verdict *another* run wrote exists. The owner ruled on 2026-10-03 that a type
+    without one **holds**: the report names it as unmeasured instead of leaving it out, which is
+    what the first run did for the image check - no `images/`, no image field in
+    `evidence.json`, no image verdict under `video-assets/studio`.
+
+    Keyed by `mcode_checks.CHECKS` on purpose: a fifth check type raises here rather than
+    passing a report that never mentions it.
+    """
+    images_dir = ws.images_dir
+    states = {
+        "claims": lambda: {
+            "measured": bool(recorded),
+            "reference": REFERENCE,
+            "reference_verdicts": sum(1 for e in recorded.values() if e.get("verdict")),
+            "why": "" if recorded else "evidence.json holds no recorded verdict",
+        },
+        "images": lambda: _measured(
+            _stamped_lines(images_dir),
+            "nothing to compare a run against: the paper holds "
+            f"{_line_count(images_dir / handoff.TASKS_FILE)} exported image task(s) and "
+            f"{len(_stamped_lines(images_dir))} recorded image verdict(s) - no image field in "
+            "evidence.json and no image verdict under video-assets/studio",
+        ),
+        "markers": lambda: _measured(
+            _marker_stamps(assets), "no episode has recorded a marker verdict"
+        ),
+        "casefile": lambda: _measured(
+            _casefile_stamps(assets), "no episode has a case file with recorded verifications"
+        ),
+    }
+    detail = {name: states[name]() for name in mcode_checks.CHECKS}
+    return {
+        "reference": REFERENCE,
+        "measured": [k for k, v in detail.items() if v["measured"]],
+        "held": [k for k, v in detail.items() if not v["measured"]],
+        "detail": detail,
+    }
+
+
+def verdict_passed(
+    measurement: dict[str, Any], worksheet: dict[str, Any], types: dict[str, Any]
+) -> bool:
+    """O18 as the owner set it: >= 90 % agreement, no false source, every worksheet line judged
+    and holding - and every check type measured."""
+    return bool(
+        measurement["agreement_pass"]
+        and not measurement["false_sources"]
+        and worksheet.get("all_judged")
+        and not worksheet.get("refuted")
+        and not types["held"]
+    )
+
+
 def compare(ws: PaperWorkspace, recorded: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """The measurement: agreement with the recorded verdicts, and the false sources."""
     rows = {r["task_id"]: r for r in handoff.read_jsonl(ws.claims_dir / handoff.TASKS_FILE)}
@@ -299,12 +422,8 @@ def main(argv: list[str] | None = None) -> int:
         spot_check(ws, rows, lines), ws.root / "spot_check_verdicts.json"
     )
     measured = report["measurement"]
-    report["passed"] = bool(
-        measured["agreement_pass"]
-        and not measured["false_sources"]
-        and report["spot_check"].get("all_judged")
-        and not report["spot_check"].get("refuted")
-    )
+    report["check_types"] = check_types(ws, recorded, config.studio_assets())
+    report["passed"] = verdict_passed(measured, report["spot_check"], report["check_types"])
     out = ws.root / "calibration_report.json"
     out.write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline=""
@@ -320,6 +439,11 @@ def main(argv: list[str] | None = None) -> int:
                     "judged": report["spot_check"].get("judged", 0),
                     "all_judged": report["spot_check"].get("all_judged"),
                     "refuted": report["spot_check"].get("refuted"),
+                },
+                "check_types": {
+                    "measured": report["check_types"]["measured"],
+                    "held": report["check_types"]["held"],
+                    "why": {k: v["why"] for k, v in report["check_types"]["detail"].items() if v["why"]},
                 },
                 "passed": report["passed"],
             },

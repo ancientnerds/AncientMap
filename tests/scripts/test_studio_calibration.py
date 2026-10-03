@@ -171,3 +171,132 @@ def test_a_missing_verdict_file_leaves_the_worksheet_unjudged(tmp_path: Path):
     assert out["verdicts"] is None
     assert out["all_judged"] is False
     assert out["unjudged"] == ["a", "b", "c"]
+
+
+# --- the check types O18 has to cover (owner decision 2026-10-03) --------------------------------
+
+
+def _paper(tmp_path: Path, *, image_tasks: int = 0) -> SimpleNamespace:
+    """A paper workspace with `image_tasks` exported image tasks and no image verdicts."""
+    root = tmp_path / "paper"
+    (root / "claims_check").mkdir(parents=True)
+    (root / "images").mkdir(parents=True)
+    if image_tasks:
+        (root / "images" / "tasks.jsonl").write_text(
+            "".join(json.dumps({"task_id": f"image-{i}"}) + "\n" for i in range(image_tasks)),
+            encoding="utf-8",
+        )
+    return SimpleNamespace(images_dir=root / "images", root=root)
+
+
+def _assets(tmp_path: Path, *, marker_stamp: str = "", casefile_stamp: str = "") -> Path:
+    """A studio assets tree; a stamp given is written as this model's own verdict."""
+    assets = tmp_path / "assets"
+    episode = assets / "episodes" / "baalbek-c5"
+    if marker_stamp:
+        (episode / "markers_check").mkdir(parents=True)
+        (episode / "markers_check" / "verdicts.imported-0001.jsonl").write_text(
+            json.dumps({"task_id": "marker-1", "verdict": "hits", "answered_by": marker_stamp}) + "\n",
+            encoding="utf-8",
+        )
+    if casefile_stamp:
+        episode.mkdir(parents=True, exist_ok=True)
+        (episode / "casefile.json").write_text(
+            json.dumps(
+                {
+                    "evidence": [
+                        {"id": "e1", "verification": {"status": "verified", "by": casefile_stamp}}
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+    assets.mkdir(parents=True, exist_ok=True)
+    return assets
+
+
+def _recorded(n: int) -> dict[str, dict]:
+    return {f"ev-{i:02d}": {"verdict": "supported"} for i in range(1, n + 1)}
+
+
+def test_only_the_claim_check_has_a_reference_and_the_others_hold(tmp_path: Path):
+    """The owner ruling of 2026-10-03: a check type with no recorded verdict to compare a run
+    against holds. The image check holds because the paper has no images at all."""
+    out = cal.check_types(_paper(tmp_path), _recorded(42), _assets(tmp_path))
+
+    assert out["measured"] == ["claims"]
+    assert out["held"] == ["images", "markers", "casefile"]
+    assert out["detail"]["claims"]["reference"] == "MiniMax-M3, unchecked"
+    assert out["detail"]["claims"]["reference_verdicts"] == 42
+
+
+def test_the_image_check_names_what_is_missing_instead_of_staying_out(tmp_path: Path):
+    out = cal.check_types(_paper(tmp_path, image_tasks=0), _recorded(42), _assets(tmp_path))
+
+    why = out["detail"]["images"]["why"]
+    assert out["detail"]["images"]["reference_verdicts"] == 0
+    assert "0 exported image task" in why
+    assert "0 recorded image verdict" in why
+
+
+def test_an_exported_image_task_is_not_a_reference(tmp_path: Path):
+    """Tasks to check are not verdicts to compare against: the model would grade its own work."""
+    out = cal.check_types(_paper(tmp_path, image_tasks=3), _recorded(42), _assets(tmp_path))
+
+    assert out["held"] == ["images", "markers", "casefile"]
+    assert "3 exported image task" in out["detail"]["images"]["why"]
+
+
+def test_marker_and_casefile_verdicts_the_model_wrote_itself_are_no_reference(tmp_path: Path):
+    model = cal.mcode_checks.mcode.MODEL
+    out = cal.check_types(
+        _paper(tmp_path),
+        _recorded(42),
+        _assets(
+            tmp_path,
+            marker_stamp=f"{model} (marker check, mcode exec, exec_turn_x, marker-1)",
+            casefile_stamp=f"{model} (case file check, mcode exec, exec_turn_y, e1)",
+        ),
+    )
+
+    assert out["measured"] == ["claims"]
+    assert "written by " + model in out["detail"]["markers"]["why"]
+    assert "written by " + model in out["detail"]["casefile"]["why"]
+
+
+def test_a_verdict_another_model_wrote_is_a_reference(tmp_path: Path):
+    out = cal.check_types(
+        _paper(tmp_path),
+        _recorded(42),
+        _assets(tmp_path, marker_stamp="a human, checked at the picture on 2026-10-03"),
+    )
+
+    assert "markers" in out["measured"]
+    assert "markers" not in out["held"]
+    assert out["detail"]["markers"]["reference"] == "a human, checked at the picture on 2026-10-03"
+
+
+def _passing(agreement: bool = True) -> tuple[dict, dict, dict]:
+    return (
+        {"agreement_pass": agreement, "false_sources": []},
+        {"all_judged": True, "refuted": []},
+        {"held": []},
+    )
+
+
+def test_a_held_check_type_keeps_o18_from_passing():
+    """O18 asks for agreement on the checks; a type that cannot be measured is not a pass."""
+    measurement, worksheet, types = _passing()
+    types["held"] = ["images"]
+
+    assert cal.verdict_passed(measurement, worksheet, types) is False
+
+
+def test_everything_together_passes_o18():
+    assert cal.verdict_passed(*_passing()) is True
+
+
+def test_low_agreement_keeps_o18_from_passing():
+    measurement, worksheet, types = _passing(agreement=False)
+
+    assert cal.verdict_passed(measurement, worksheet, types) is False
