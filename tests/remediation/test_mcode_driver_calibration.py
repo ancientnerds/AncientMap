@@ -362,6 +362,106 @@ def test_a_calibration_run_counts_as_ready_in_either_layout(tmp_path: Path) -> N
     assert D.calibration_run_ready(tmp_path / "nothing") is False
 
 
+def a_fields_handoff(tmp_path: Path, batch: str = "wd3-r0-b0001") -> Path:
+    """An answered fields handoff: batch folders with a `wd3/` stage, a prompt and an answer per site."""
+    handoff = tmp_path / "fields-handoff"
+    stage = handoff / batch / "wd3"
+    stage.mkdir(parents=True)
+    for label in ("site-a", "site-b"):
+        (stage / f"{label}.prompt.txt").write_text("the question\n", encoding="utf-8")
+        (stage / f"{label}.answer.json").write_text(
+            json.dumps({"text": field_answer(), "model": "m"}) + "\n", encoding="utf-8"
+        )
+    (handoff / batch / "MANIFEST.jsonl").write_text("{}\n", encoding="utf-8")
+    return handoff
+
+
+def field_answer() -> str:
+    return json.dumps(
+        {
+            "site_id": "site-a",
+            "fields": {"period_start": {"value": "Archaic", "note": "the page says so"}},
+            "note": "filled from the stored source",
+        }
+    )
+
+
+def a_fields_run(tmp_path: Path, handoff: Path, batch: str = "wd3-r0-b0001") -> Path:
+    """A fields run: the rule it was built under, the round that registered `handoff` (with the
+    per-label field names), and the classified sites the round's own check reads."""
+    run = tmp_path / "fields-run"
+    run.mkdir(parents=True)
+    (run / "RUN.json").write_text(
+        json.dumps({"rule": "one-family", "stage": "wd3"}) + "\n", encoding="utf-8"
+    )
+    (run / "ROUNDS.jsonl").write_text(
+        json.dumps(
+            {
+                "round": 0,
+                "handoff": str(handoff),
+                "exported_at": "2026-10-01T18:12:14+00:00",
+                "batches": {batch: ["site-a", "site-b"]},
+                "fields": {"site-a": ["period_start"], "site-b": ["period_start"]},
+                "notes": {},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (run / "CLASSIFIED.jsonl").write_text(
+        "".join(
+            json.dumps({"site_id": label, "name": label, "fields": {"period_start": {}}}) + "\n"
+            for label in ("site-a", "site-b", "site-c")
+        ),
+        encoding="utf-8",
+    )
+    return run
+
+
+def test_a_fields_calibration_is_registered_with_the_rule_and_its_own_sites(tmp_path: Path) -> None:
+    """Measured 2026-10-03: the fields tool refuses the copy for the same reason the WC tool does -
+    `handoff.py brief` answers "is not the directory of an exported round of <run>" - so the field
+    fill, the lane that finds the missing `period_start` of 618 sites, could not be calibrated at
+    all. Its round lives in `ROUNDS.jsonl` as well, but it carries the per-label field names, the
+    rule the run was built under, and the classified sites its own check reads."""
+    from fields import handoff as FH
+
+    handoff = a_fields_handoff(tmp_path)
+    out = tmp_path / "calibration"
+    D.copy_for_calibration(handoff, out, ["wd3-r0-b0001"])
+
+    cal_run = D.register_calibration_run(
+        a_fields_run(tmp_path, handoff), handoff, out, ["wd3-r0-b0001"]
+    )
+
+    assert "wd3-r0-b0001" in FH.brief(cal_run, out, "wd3-r0-b0001")
+    assert D.calibration_run_ready(cal_run) is True
+    assert sorted(FH.read_classified(cal_run)) == [
+        "site-a",
+        "site-b",
+    ]  # its own sites, not the run's
+    (line,) = (cal_run / "ROUNDS.jsonl").read_text(encoding="utf-8").splitlines()
+    record = json.loads(line)
+    assert record["fields"] == {"site-a": ["period_start"], "site-b": ["period_start"]}
+    assert record["calibration"] is True
+
+
+def test_a_fields_calibration_prompt_names_the_fields_tool_and_its_own_run(tmp_path: Path) -> None:
+    """The driver's calibration built the *WC* brief for every lane type. For the field fill that is
+    the wrong tool, the wrong arguments and the wrong rule - the agent would run a WC brief against
+    a fields handoff and be refused, exactly as the WC calibration was on its first day."""
+    prompt = D.calibration_prompt(
+        lane="fields",
+        run="output/remediation/calibration/fields-01-run",
+        handoff=Path("h"),
+        batch="b",
+    )
+
+    assert "fields" in prompt and "handoff.py" in prompt
+    assert "wc/cli.py" not in prompt
+    assert "output/remediation/calibration/fields-01-run" in prompt
+
+
 # ---------------------------------------------------------------------------- the verdict
 def test_a_calibration_with_an_unanswered_question_does_not_pass() -> None:
     """Owner decision 2026-10-03 (O18) asks for >= 90 % agreement. A question the model never

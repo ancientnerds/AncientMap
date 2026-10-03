@@ -1480,13 +1480,15 @@ def register_calibration_run(
         },
     }
     # A verification round names its stage and the sentence numbers it showed; a check round names
-    # neither (it asks about a text, not about sentences of a round), and the tool reads what its
-    # own rounds carry. Copying only what the source has keeps the calibration round the shape the
-    # guard on the other side expects.
-    if "stage" in record:
-        calibration_round["stage"] = record["stage"]
-    if "shown" in record:
-        calibration_round["shown"] = {label: list(record["shown"][label]) for label in labels}
+    # neither, and a fields round names the fields it asked per label. Each tool reads what its own
+    # rounds carry, so the calibration round carries the same optional keys and nothing else.
+    for key in ("stage", "shown", "fields"):
+        if key in record:
+            calibration_round[key] = (
+                {label: list(record[key][label]) for label in labels}
+                if key in ("shown", "fields")
+                else record[key]
+            )
     if where.name == "ROUNDS.jsonl":
         (run_dir / "ROUNDS.jsonl").write_text(
             json.dumps(calibration_round, ensure_ascii=False) + "\n", encoding="utf-8"
@@ -1500,16 +1502,52 @@ def register_calibration_run(
     # calibration carries the sites of its own questions and nothing else. A verification round does
     # not read them: its check reads the round record alone.
     sites = source_run / "SITES.jsonl"
-    if where.name == "ROUNDS.jsonl" and sites.exists():
-        (run_dir / "SITES.jsonl").write_text(
-            "".join(
-                line
-                for line in sites.read_text(encoding="utf-8").splitlines(keepends=True)
-                if line.strip() and json.loads(line).get("site_id") in set(labels)
-            ),
-            encoding="utf-8",
+    if where.name == "ROUNDS.jsonl" and "fields" not in record and sites.exists():
+        (run_dir / "SITES.jsonl").write_text(_labels_of(sites, labels), encoding="utf-8")
+    # The field fill's own check reads the rule the run was built under and the classified sites, and
+    # its round record names the fields per label. Copy what the calibration's own questions need.
+    if "fields" in record:
+        (run_dir / "RUN.json").write_bytes((source_run / "RUN.json").read_bytes())
+        (run_dir / "CLASSIFIED.jsonl").write_text(
+            _labels_of(source_run / "CLASSIFIED.jsonl", labels), encoding="utf-8"
         )
     return run_dir
+
+
+def _labels_of(path: Path, labels: Sequence[str]) -> str:
+    """The lines of a jsonl file whose `site_id` is one of `labels`, in the file's own order."""
+    wanted = set(labels)
+    return "".join(
+        line
+        for line in path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if line.strip() and json.loads(line).get("site_id") in wanted
+    )
+
+
+def fields_answer_prompt(*, run: str, handoff: str, batch: str) -> str:
+    """One field-fill answering batch's instruction, from `fields/handoff.py brief`."""
+    return answer_prompt(
+        lane="fields",
+        run=run,
+        batch=batch,
+        brief_command=(
+            f"cd {REPO} && PYTHONIOENCODING=utf-8 {PYTHON} {FIELDS / 'handoff.py'} brief "
+            f"--run {run} --handoff {handoff} --batch-id {batch}"
+        ),
+    )
+
+
+def calibration_prompt(*, lane: str, run: Path, handoff: Path, batch: str) -> str:
+    """The prompt of one calibration batch, from the tool that owns the lane's questions.
+
+    Measured 2026-10-03: the calibration built the WC brief for every lane type. For the field fill
+    that is the wrong tool with the wrong arguments, and the agent is refused by the fields tool
+    exactly as the WC calibration was on its first day.
+    """
+    if lane == "fields":
+        return fields_answer_prompt(run=str(run), handoff=str(handoff), batch=batch)
+    brief = "verify-brief" if lane == "wc-verify" else "brief"
+    return wc_answer_prompt(run=run, handoff=handoff, batch=batch, brief=brief)
 
 
 def _main_calibrate(args: Any) -> int:
@@ -1517,9 +1555,7 @@ def _main_calibrate(args: Any) -> int:
     lane type must be calibrated. 2-3 already-answered batches are copied into a separate handoff
     directory, re-answered through the driver, and compared with the recorded answers. Pass is
     >= 90 % agreement and 0 false sources; a failing lane holds and goes to the owner."""
-    brief = "verify-brief" if args.lane == "wc-verify" else "brief"
     cal_run = calibration_run(args.out)
-    is_wc = args.lane.startswith("wc-")
     if args.prepare_only:
         recorded = copy_for_calibration(args.handoff, args.out, args.batches)
         (args.out / "RECORDED.json").write_text(
@@ -1531,9 +1567,7 @@ def _main_calibrate(args: Any) -> int:
                     "prepared": str(args.out),
                     "calibration_run": str(
                         register_calibration_run(args.run, args.handoff, args.out, args.batches)
-                    )
-                    if is_wc
-                    else "",
+                    ),
                     "batches": list(args.batches),
                     "labels": sorted(recorded),
                     "questions": len(recorded),
@@ -1553,7 +1587,7 @@ def _main_calibrate(args: Any) -> int:
         )
         return 1
     recorded = json.loads(recorded_path.read_text(encoding="utf-8"))
-    if is_wc and not calibration_run_ready(cal_run):
+    if not calibration_run_ready(cal_run):
         print(
             json.dumps(
                 {
@@ -1571,13 +1605,13 @@ def _main_calibrate(args: Any) -> int:
     state = State(
         STATE_DIR / f"calibration-{args.out.name}.json",
         lane=f"calibration:{args.lane}",
-        run=str(cal_run if is_wc else args.run),
+        run=str(cal_run),
         handoff=str(args.out),
     )
     outcomes = answer_all(
         args.batches,
-        prompt_for=lambda batch: wc_answer_prompt(
-            run=cal_run, handoff=args.out, batch=batch, brief=brief
+        prompt_for=lambda batch: calibration_prompt(
+            lane=args.lane, run=cal_run, handoff=args.out, batch=batch
         ),
         runner=runner,
         width=width,
