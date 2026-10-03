@@ -372,6 +372,22 @@ episodes (owner decision 11); acceptance (c) renders the Baalbek claim-5 slice o
 3. `episode markers-export SLUG`, `mcode marker-check SLUG`, `episode markers-import SLUG`.
 4. The session writes `script.json` (spec 4.3 plus `captures`, `thumbnails`), and fills `title_candidates`
    and `tags` in `episode.json`.
+4a. **Read the beat list as prose, before `episode voice`.** `episode check` verifies rules — that a
+   spoken number is in the case file, that a beat carries evidence, that its clip exists. It cannot
+   see whether the episode makes sense. The Baalbek pilot of 2026-10-03 passed every gate and was
+   unusable, and the three breaks are the ones to look for:
+   - the hook announced **one** stone at "about a thousand tonnes" and three beats later **three
+     different** stones at "up to eight hundred tonnes", with no word telling the viewer these are
+     different objects;
+   - a beat cued as the twist ("But 900 metres away, another block was never moved at all") turned
+     against nothing, because the beat before it had already said nobody had to lift the stones;
+   - the meter tipped to 70/30 for the Roman answer on the word "Roman", and the evidence for that
+     verdict was never laid out anywhere in the episode.
+   Read the `spoken` texts as one paragraph in order and ask: does each sentence follow from the
+   last? Which stone is this, by name, every time a number is spoken? What does the "But" turn
+   against? Where does the verdict come from? **No mechanical gate catches any of this** — all
+   three numbers are correctly sourced, which is exactly why the gates stayed green — so the
+   reading happens before the minutes-long voice and render steps, not at the package.
 5. `episode check SLUG`: exit 1 on errors. Checks that need a capture or the voice are reported as
    deferred and run once those exist.
 6. `episode review SLUG` writes `review.html`, the owner's script table. It is not a release gate.
@@ -392,6 +408,7 @@ episodes (owner decision 11); acceptance (c) renders the Baalbek claim-5 slice o
     `evidence_timestamps.json`.
 12. The owner reviews the final package (the only release gate). A candidate can be taken from
     another frame: `episode thumbnail SLUG --candidate K --frame N`, then `episode package SLUG` again.
+    The package proves the chain ran; step 4a is what proves the episode is worth watching.
 13. The owner uploads by hand (owner decision 10: no OAuth token, upload off) and picks the title and
     the thumbnail test on YouTube.
 14. `episode register-youtube SLUG --youtube-id X --title '<the uploaded title>' --published-at

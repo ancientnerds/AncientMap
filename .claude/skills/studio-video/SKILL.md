@@ -47,9 +47,21 @@ written `studio …` below. Exit 0 = ok, 1 = a check failed (`episode check`, `e
    evidence (`studio mcode casefile-verify <slug>`) and crop-check the markers
    (`markers-export` → `studio mcode marker-check <slug>` → `markers-import`).
 3. Write `script.json`: its shape is the docstring of `pipeline/studio/script.py`, its rules are
-   below.
+   below. **Then read the `spoken` texts as one paragraph, in order, before the voice step.** Every
+   rule below is a rule the checks enforce; none of them is "this makes sense", and on 2026-10-03
+   the Baalbek pilot passed every one of them and was unusable: the hook announced one stone at
+   "about a thousand tonnes" and three beats later three *different* stones at "up to eight
+   hundred tonnes" with nothing saying they differ; a beat cued as the twist turned against
+   nothing, because the beat before it had already made its point; and the meter tipped to 70/30
+   for the Roman answer with the evidence for that verdict never laid out. All three numbers were
+   correctly sourced, which is why every gate stayed green. Before you narrate, ask yourself:
+   does each sentence follow from the last? Which stone is this, by name, every time a number is
+   spoken? What does the "But" turn against? Where does the verdict come from? A slice is 45
+   seconds; a full episode is minutes. Say plainly if the beats do not yet make an argument, and
+   write more beats instead of rendering a skeleton.
 4. `studio episode check <slug>`: fix every error. `deferred` lists checks that wait for the
-   voice or the captures; they run then.
+   voice or the captures; they run then. A clean `episode check` means the rules hold, not that
+   the episode is watchable.
 5. `studio episode review <slug>` writes `review.html`. Do not wait for it.
 6. `studio episode voice <slug>`: the Shorts narrator (MiniMax), word timings on the NVIDIA. It
    refuses below 10 % of the MiniMax 5-hour window, and a sentence over 1,000 characters (split
