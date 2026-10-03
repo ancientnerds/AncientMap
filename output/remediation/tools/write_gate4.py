@@ -144,6 +144,8 @@ from phase4 import scope4 as S  # noqa: E402 - the owner's defect scope
 from phase4 import wc4 as WC4  # noqa: E402 - the markings: which texts are lane N's
 from phase4 import write4 as W4  # noqa: E402
 
+from pipeline.utils import git_env  # noqa: E402 - a git call must not inherit the gate's GIT_DIR
+
 APPLIED_FILE = W4.APPLIED_FILE
 #: The owner's step (2026-09-21): after every hundred sites, a check - the most one step may write.
 STEP_MAX = W.DEFAULT_CHUNK_SIZE
@@ -446,9 +448,7 @@ LANE_N_REPO = lanes.REPO
 
 
 def _git(*argv: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", "-C", str(LANE_N_REPO), *argv], capture_output=True, text=True, encoding="utf-8"
-    )
+    return git_env.run_git(LANE_N_REPO, *argv)
 
 
 def lane_n_commit() -> str:

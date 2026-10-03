@@ -8,7 +8,7 @@ the music bed and the local .env live. The env var STUDIO_ASSETS overrides it (t
 This module is also the one home of the studio's shared patterns (a request id, a sha256, a
 capture id and the capture kinds): casefile.py, script.py, ledger.py and stream D's
 capture/manifest.py import them. Its module level stays standard library only, because
-ledger.py runs inside the API container.
+ledger.py runs inside the API container - `pipeline.utils.git_env` is standard library too.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import subprocess
 from pathlib import Path
 
 from pipeline.studio.errors import StudioError
+from pipeline.utils import git_env
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -47,7 +48,9 @@ def main_checkout() -> Path:
     command = ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]
     where = f"cannot locate the main checkout: `{' '.join(command)}` in {REPO}"
     try:
-        proc = subprocess.run(command, cwd=REPO, capture_output=True, text=True, timeout=30)
+        proc = subprocess.run(
+            command, cwd=REPO, capture_output=True, text=True, timeout=30, env=git_env.own_env()
+        )
     except FileNotFoundError as exc:
         raise StudioError(f"{where}: git is not on PATH") from exc
     except subprocess.TimeoutExpired as exc:

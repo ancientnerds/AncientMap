@@ -121,9 +121,7 @@ def _answer_path(handoff_dir: Path, task_id: str) -> Path:
     return handoff_dir / ANSWER_DIR / f"{task_id}.json"
 
 
-def _validate_cmd(
-    check: str, workspace: Path, answer: Path, task_id: str, stage: str
-) -> str:
+def _validate_cmd(check: str, workspace: Path, answer: Path, task_id: str, stage: str) -> str:
     return (
         f"{VENV_STUDIO} mcode validate --check {check} --stage {stage} --workspace "
         f"{workspace.as_posix()} --answer {answer.as_posix()} --task {task_id}"
@@ -216,9 +214,7 @@ def _validate_object(
     if missing:
         return [f"missing {missing}"]
     types = {"subject_box": (list, type(None))}
-    wrong = [
-        k for k in STAGE_FIELDS[stage] if not isinstance(obj[k], types.get(k, (str,)))
-    ]
+    wrong = [k for k in STAGE_FIELDS[stage] if not isinstance(obj[k], types.get(k, (str,)))]
     if wrong:
         return [f"wrong type for {wrong}"]
     if stage != "casefile":
@@ -229,7 +225,9 @@ def _validate_object(
         cited = [c["source_id"] for c in row["cited"]]
         if row["kind"] == "coherence":
             if obj["quote"] or obj["quote_source_id"]:
-                problems.append("a coherence task quotes no source: quote and quote_source_id are ''")
+                problems.append(
+                    "a coherence task quotes no source: quote and quote_source_id are ''"
+                )
         else:
             if obj["quote_source_id"] not in ("", *cited):
                 problems.append(
@@ -357,10 +355,7 @@ def _append_lines(handoff_dir: Path, lines: list[dict[str, Any]]) -> list[str]:
     lead = "\n" if old and not old.endswith("\n") else ""
     with verdicts.open("a", encoding="utf-8", newline="") as handle:
         handle.write(
-            lead
-            + "".join(
-                json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n" for r in lines
-            )
+            lead + "".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n" for r in lines)
         )
     return [r["task_id"] for r in lines]
 
@@ -419,7 +414,12 @@ def _live_reads(
 ) -> dict[str, tuple[bool, str]]:
     """One live read per TDM-reserved source of the pending tasks, before any verifier."""
     read = live_read or (lambda sid, url: _default_live_read(ws, sid, url))
-    urls = {c["source_id"]: c["url"] for row in rows for c in row["cited"] if c["source_id"] in _tdm_ids(row)}
+    urls = {
+        c["source_id"]: c["url"]
+        for row in rows
+        for c in row["cited"]
+        if c["source_id"] in _tdm_ids(row)
+    }
     out: dict[str, tuple[bool, str]] = {}
     for sid in sorted(urls):
         saved = (ws.claims_dir / claims.LIVE_DIR / f"{sid}.txt").is_file()
@@ -471,8 +471,8 @@ def _verifier_prompt(ws: PaperWorkspace, row: dict[str, Any], unread: list[tuple
         "Its task JSON holds the paragraph, the claim and the cited sources; cited[].n is "
         "the number that source's marker [n] shows in the paragraph.",
         (
-            "2. Kind coherence: judge the list of measurements in \"claim\". There are no "
-            "source files; quote and quote_source_id are \"\"."
+            '2. Kind coherence: judge the list of measurements in "claim". There are no '
+            'source files; quote and quote_source_id are "".'
             if coherence
             else f"2. Read the text of every cited source in full: {ws.root.as_posix()}"
             "/<text_path> for each cited[].text_path. " + LONG_LINES
@@ -504,9 +504,9 @@ def _verifier_prompt(ws: PaperWorkspace, row: dict[str, Any], unread: list[tuple
             else ": supported, partly, unsupported or source_missing."
         )
         + " quote: the sentence that proves the claim, copied character for character from the "
-        "text of quote_source_id (\"\" when no quote applies); quote_source_id: the id of that "
-        "source (\"\" when none); explanation: what the sources say about the claim; "
-        "fix_suggestion: how to fix the paper (\"\" when supported).",
+        'text of quote_source_id ("" when no quote applies); quote_source_id: the id of that '
+        'source ("" when none); explanation: what the sources say about the claim; '
+        'fix_suggestion: how to fix the paper ("" when supported).',
     ]
     return "\n\n".join(p for p in parts if p)
 
@@ -547,7 +547,7 @@ def _skeptic_prompt(ws: PaperWorkspace, row: dict[str, Any], verdict: dict[str, 
             ensure_ascii=False,
         ),
         (
-            "Read the prompt file in full; the list of measurements is its \"claim\"."
+            'Read the prompt file in full; the list of measurements is its "claim".'
             if coherence
             else f"Read the prompt file in full, and the text of every cited source it names: "
             f"{ws.root.as_posix()}/<text_path>. " + LONG_LINES
@@ -566,13 +566,17 @@ def _skeptic_prompt(ws: PaperWorkspace, row: dict[str, Any], verdict: dict[str, 
         ),
         "Answer: verdict: supported when every check holds, otherwise the verdict the prompt "
         "file defines for what you found; explanation: what you checked and, when you refute, "
-        "exactly what fails; fix_suggestion: how to fix the paper (\"\" when supported).",
+        'exactly what fails; fix_suggestion: how to fix the paper ("" when supported).',
     ]
     return "\n\n".join(p for p in parts if p)
 
 
 def _claim_line(
-    row: dict[str, Any], verifier: dict[str, Any], run: mcode.Run, skeptic: dict[str, Any] | None, srun: mcode.Run | None
+    row: dict[str, Any],
+    verifier: dict[str, Any],
+    run: mcode.Run,
+    skeptic: dict[str, Any] | None,
+    srun: mcode.Run | None,
 ) -> dict[str, Any]:
     coherence = row["kind"] == "coherence"
     answered_by = _stamp(run, "verifier", "claims", row["task_id"])
@@ -708,8 +712,12 @@ def answer_claims(
                 claims.quote_check(ws, dossier),
             )
         except handoff.HandoffError as exc:
-            return _skipped(mcode.Outcome(item=None, reason=str(exc), run=run), row["task_id"], row["ref"])
-        return mcode.Outcome(item=row, value=line, run=run, rate_limited=bool(srun and srun.rate_limited))
+            return _skipped(
+                mcode.Outcome(item=None, reason=str(exc), run=run), row["task_id"], row["ref"]
+            )
+        return mcode.Outcome(
+            item=row, value=line, run=run, rate_limited=bool(srun and srun.rate_limited)
+        )
 
     def bank(batch: list[mcode.Outcome]) -> None:
         _bank(repo, tree, handoff_dir, batch, banked)
@@ -722,9 +730,7 @@ def answer_claims(
     mcode.guard_tree(repo, tree)
     result.answered = len(lines)
     result.counts = _count([line["verdict"] for line in lines])
-    result.overruled_by_skeptic = sum(
-        1 for line in lines if "overruled by" in line["answered_by"]
-    )
+    result.overruled_by_skeptic = sum(1 for line in lines if "overruled by" in line["answered_by"])
     return result
 
 
@@ -793,7 +799,9 @@ def answer_images(ws: PaperWorkspace, *, repo: Path, limit: int | None = None) -
             return quota
         run, why = _ask(repo, _image_prompt(ws, row))
         if run is None:
-            return _skipped(mcode.Outcome(item=None, reason=why), row["task_id"], row.get("ref", ""))
+            return _skipped(
+                mcode.Outcome(item=None, reason=why), row["task_id"], row.get("ref", "")
+            )
         if run.rate_limited:
             return _skipped(
                 mcode.Outcome(item=None, reason=run.error, rate_limited=True),
@@ -805,9 +813,7 @@ def answer_images(ws: PaperWorkspace, *, repo: Path, limit: int | None = None) -
         problems = validate_answer_file("images", answer, task_id=row["task_id"], ws=ws)
         if obj is None or problems:
             return _skipped(
-                mcode.Outcome(
-                    item=None, reason="; ".join(problems) or "no JSON object", run=run
-                ),
+                mcode.Outcome(item=None, reason="; ".join(problems) or "no JSON object", run=run),
                 row["task_id"],
                 row.get("ref", ""),
             )
@@ -828,7 +834,9 @@ def answer_images(ws: PaperWorkspace, *, repo: Path, limit: int | None = None) -
             )
         except handoff.HandoffError as exc:
             return _skipped(
-                mcode.Outcome(item=None, reason=str(exc), run=run), row["task_id"], row.get("ref", "")
+                mcode.Outcome(item=None, reason=str(exc), run=run),
+                row["task_id"],
+                row.get("ref", ""),
             )
         return mcode.Outcome(item=row, value=line, run=run)
 
@@ -929,7 +937,9 @@ def answer_markers(ep_root: Path, *, repo: Path, limit: int | None = None) -> Ch
             return quota
         run, why = _ask(repo, _marker_prompt(ep_root, row))
         if run is None:
-            return _skipped(mcode.Outcome(item=None, reason=why), row["task_id"], row.get("ref", ""))
+            return _skipped(
+                mcode.Outcome(item=None, reason=why), row["task_id"], row.get("ref", "")
+            )
         if run.rate_limited:
             return _skipped(
                 mcode.Outcome(item=None, reason=run.error, rate_limited=True),
@@ -941,9 +951,7 @@ def answer_markers(ep_root: Path, *, repo: Path, limit: int | None = None) -> Ch
         problems = validate_answer_file("markers", answer, task_id=row["task_id"], ep_root=ep_root)
         if obj is None or problems:
             return _skipped(
-                mcode.Outcome(
-                    item=None, reason="; ".join(problems) or "no JSON object", run=run
-                ),
+                mcode.Outcome(item=None, reason="; ".join(problems) or "no JSON object", run=run),
                 row["task_id"],
                 row.get("ref", ""),
             )
@@ -961,7 +969,9 @@ def answer_markers(ep_root: Path, *, repo: Path, limit: int | None = None) -> Ch
             )
         except handoff.HandoffError as exc:
             return _skipped(
-                mcode.Outcome(item=None, reason=str(exc), run=run), row["task_id"], row.get("ref", "")
+                mcode.Outcome(item=None, reason=str(exc), run=run),
+                row["task_id"],
+                row.get("ref", ""),
             )
         return mcode.Outcome(item=row, value=line, run=run)
 
@@ -1017,9 +1027,7 @@ def default_casefile_probe(ep_root: Path, item_id: str) -> dict[str, Any]:
         return {
             "found": i >= 0,
             "chars": len(norm),
-            "context": (
-                norm[max(0, i - 600) : i + len(quote) + 600] if i >= 0 else norm[:1500]
-            ),
+            "context": (norm[max(0, i - 600) : i + len(quote) + 600] if i >= 0 else norm[:1500]),
         }
 
     if item.paper_anchor:
@@ -1085,16 +1093,18 @@ def _casefile_prompt(ep_root: Path, item: dict[str, str], probe_cmd: str) -> str
             f"or error.\n{probe_cmd}",
             "2. Judge:\n- verified: found is true, and the quote read in its context states the "
             "statement: the statement says nothing the quote does not (names, dates, numbers, "
-            "certainty). With route \"paper evidence\", the statement must also say no more than "
+            'certainty). With route "paper evidence", the statement must also say no more than '
             "the entry's claim.\n- refuted: the text is readable and the quote, read in its "
             "context, says something else, or the source contradicts the statement.\n"
             "- unverified: the text cannot be checked: the command failed while reading the "
             "page (its last error line says why), the source is a YouTube video, the page is a "
-            'paywall, login or cookie wall, or the quote does not occur verbatim in a '
+            "paywall, login or cookie wall, or the quote does not occur verbatim in a "
             'readable text.\nWith route "archived text" you may read more of the file at path '
             "with the read tool. Do not search the web.",
-            _answer_block("casefile", ep_root, answer, item["id"], "status, method and explanation"),
-            "Answer: status; method: the route the command printed (\"web page\" when it failed "
+            _answer_block(
+                "casefile", ep_root, answer, item["id"], "status, method and explanation"
+            ),
+            'Answer: status; method: the route the command printed ("web page" when it failed '
             "while reading the page); explanation: what you found, and for refuted or "
             "unverified exactly why.",
         ]
@@ -1119,12 +1129,12 @@ def verify_casefile(
     from pipeline.studio.episode import EpisodeWorkspace
 
     slug = ep_root.name
-    result = CheckResult(
-        workspace=ep_root.as_posix(), next=f"{VENV_STUDIO} episode check {slug}"
-    )
+    result = CheckResult(workspace=ep_root.as_posix(), next=f"{VENV_STUDIO} episode check {slug}")
     path = EpisodeWorkspace(ep_root, slug).casefile
     if not path.is_file():
-        raise StudioError(f"{path} does not exist: build the case file first (skill studio-casefile)")
+        raise StudioError(
+            f"{path} does not exist: build the case file first (skill studio-casefile)"
+        )
     data = json.loads(path.read_text(encoding="utf-8"))
     items = [
         {"id": e.id, "status": e.verification.status}
@@ -1151,14 +1161,12 @@ def verify_casefile(
             found = read_probe(ep_root, item["id"])
         except Exception as exc:  # noqa: BLE001 - an unreadable source is an answer
             return mcode.Outcome(item=item["id"], reason=f"the probe failed: {exc}")
-        probe_cmd = f"The route is \"{found.get('route', 'web page')}\"; found: {found.get('found')}."
+        probe_cmd = f'The route is "{found.get("route", "web page")}"; found: {found.get("found")}.'
         run, why = _ask(repo, _casefile_prompt(ep_root, item, probe_cmd))
         if run is None:
             return mcode.Outcome(item=item["id"], reason=why)
         if run.rate_limited:
-            return mcode.Outcome(
-                item=item["id"], reason=run.error, rate_limited=True
-            )
+            return mcode.Outcome(item=item["id"], reason=run.error, rate_limited=True)
         answer = ep_root / ANSWER_DIR / f"{item['id']}.json"
         problems = validate_answer_file("casefile", answer, task_id=item["id"])
         obj = _read_answer(answer)
@@ -1170,7 +1178,11 @@ def verify_casefile(
             )
         return mcode.Outcome(
             item=item["id"],
-            value={"id": item["id"], **obj, "by": _stamp(run, "case file check", "casefile", item["id"])},
+            value={
+                "id": item["id"],
+                **obj,
+                "by": _stamp(run, "case file check", "casefile", item["id"]),
+            },
             run=run,
         )
 

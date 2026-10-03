@@ -78,11 +78,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     path = Path(args.workspace)
     if not path.is_dir():
         raise StudioError(f"{path} is not a directory")
-    ws = (
-        PaperWorkspace(path, path.name)
-        if args.check in ("claims", "images")
-        else None
-    )
+    ws = PaperWorkspace(path, path.name) if args.check in ("claims", "images") else None
     problems = mcode_checks.validate_answer_file(
         args.check,
         Path(args.answer),
@@ -129,7 +125,12 @@ def register(sub: argparse._SubParsersAction) -> None:
     )
     commands = area.add_subparsers(dest="command", required=True)
     for name, func, text, takes in [
-        ("claim-check", cmd_claim_check, "answer claims_check/pending.jsonl (verifier + skeptic)", "request_id"),
+        (
+            "claim-check",
+            cmd_claim_check,
+            "answer claims_check/pending.jsonl (verifier + skeptic)",
+            "request_id",
+        ),
         ("image-check", cmd_image_check, "answer images/pending.jsonl", "request_id"),
         ("marker-check", cmd_marker_check, "answer markers_check/pending.jsonl", "slug"),
         ("casefile-verify", cmd_casefile_verify, "verify an episode's case-file evidence", "slug"),
@@ -140,9 +141,7 @@ def register(sub: argparse._SubParsersAction) -> None:
         p.set_defaults(func=func)
     p = commands.add_parser("validate", help="ACCEPTED or REJECTED for one answer file")
     p.add_argument("--check", required=True, choices=list(mcode_checks.CHECKS))
-    p.add_argument(
-        "--stage", help="the run's own stage, `skeptic` for a claim task's second run"
-    )
+    p.add_argument("--stage", help="the run's own stage, `skeptic` for a claim task's second run")
     p.add_argument("--workspace", required=True, help="the paper or episode workspace path")
     p.add_argument("--answer", required=True, help="the answer file a run wrote")
     p.add_argument("--task", required=True, help="the task id the prompt names")

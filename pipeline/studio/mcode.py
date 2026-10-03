@@ -42,6 +42,7 @@ from typing import Any
 
 from pipeline.lyra.minimax_shared import probe_minimax_quota
 from pipeline.studio.errors import StudioError
+from pipeline.utils import git_env
 
 #: The model every studio judgement runs on, exactly as the exec JSON names it.
 MODEL = "MiniMax-M3.1-Flash-Preview"
@@ -79,8 +80,9 @@ _TAIL_CHARS = 800
 #: A run gets its own process group, so one Ctrl-C in the studio's console cannot cut a
 #: half-written answer file in half from the outside. Windows-only; POSIX uses a session.
 _POPEN_KWARGS: dict[str, Any] = (
-    {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else
-    {"start_new_session": True}
+    {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    if os.name == "nt"
+    else {"start_new_session": True}
 )
 
 
@@ -343,14 +345,7 @@ def tree_state(repo: Path) -> list[str]:
     The snapshot a batch takes before its first run, so the guard can tell a run's own
     writes from the work the owner had in the tree already.
     """
-    done = subprocess.run(  # noqa: S603 - a fixed argv
-        ["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=no"],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
+    done = git_env.run_git(repo, "status", "--porcelain", "--untracked-files=no")
     if done.returncode != 0:
         raise StudioError(f"git status in {repo} failed: {_tail(done.stderr)}")
     return [line.rstrip() for line in done.stdout.splitlines() if line.strip()]

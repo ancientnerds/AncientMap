@@ -43,6 +43,21 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   und brechen alle MiniMax-Aufrufe. *(`reference-deployment-lessons`, 2026-08-25)*
 - **Nie `… | tail` hinter `gh run watch --exit-status` oder `ruff check`** — die Pipe
   maskiert den Exit-Code. *(`reference-deployment-lessons:10`, 2026-09-17)*
+- **`GIT_DIR` schlägt `git -C` — jede `git`-Kommando, das ein Repository *nennt*, braucht eine
+  Umgebung ohne `GIT_*`.** Git setzt `GIT_DIR` (und `GIT_WORK_TREE`/`GIT_INDEX_FILE`, wenn
+  passend) selbst, wenn es `.githooks/pre-push` aufruft; der Hook exportiert nichts. Die
+  Testsuite läuft in dieser Umgebung, also läuft sie in der des gepushten Checkouts: am
+  2026-10-03 landete dadurch der `commit -m a` eines Tests mitten im Push auf dem Branch,
+  stellte `a.txt` in den echten Index und ließ das Gate mit 24 Fehlern umfallen. Nach dem
+  Test-Fix blieben 8 Fehler, weil **Produktionscode** umgeleitet wurde: `mcode.tree_state`
+  (`git -C <repo> status`) sah den gepushten Baum und meldete „keine Änderung", und
+  `write_gate4._git` (`git -C <LANE_N_REPO> merge-base`) las die Historie des falschen
+  Repos („Not a valid commit name"). Fix: `pipeline/utils/git_env.py` — `run_git(repo, …)`
+  für die Standardform, `env=own_env()` für Aufrufe mit eigenem `check=True`/Timeout;
+  `tests/git_env.py` re-exportiert dieselbe Funktion, damit es nur eine Implementierung gibt.
+  Vier Produktionsstellen nutzen sie: `pipeline/studio/mcode.py`, `pipeline/studio/config.py`,
+  `pipeline/video/shorts_ledger.py`, `output/remediation/tools/write_gate4.py`.
+  *(2026-10-03, Commits `4479abd` und der Nachfolger; Test `tests/pipeline/utils/test_git_env.py`)*
 - **Betriebs-Fallen auf dem VPS:** `docker exec -i` frisst stdin-geskriptete Eingaben;
   `docker logs --since` rechnet in Host-Lokalzeit (CEST), nicht UTC; `pkill -f` matcht die
   eigene SSH-Session (stattdessen PID-Dateien).

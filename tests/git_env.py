@@ -8,17 +8,12 @@ repository: on 2026-10-03 a test's `commit -m a` landed on the branch mid-push, 
 `a.txt` in the real index and left the pre-push gate with 24 failures.
 
 Every helper that calls git for a throwaway repository therefore passes `env=own_env()`.
+That helper is the production one - `pipeline.utils.git_env` is the single implementation,
+because the production call sites that name a repository need exactly the same protection.
 """
 
 from __future__ import annotations
 
-import os
+from pipeline.utils.git_env import own_env
 
-
-def own_env() -> dict[str, str]:
-    """This process's environment without any `GIT_*` variable.
-
-    A test that wants the gate's `GIT_*` values for the real checkout reads them from
-    `os.environ` itself; a throwaway repository must not inherit them.
-    """
-    return {name: value for name, value in os.environ.items() if not name.startswith("GIT_")}
+__all__ = ["own_env"]

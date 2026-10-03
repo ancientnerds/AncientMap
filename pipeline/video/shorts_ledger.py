@@ -34,6 +34,7 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from pipeline.utils import git_env
 from pipeline.utils.public_sites import RETIRED
 
 REPO = Path(__file__).resolve().parents[2]
@@ -150,6 +151,7 @@ def _git(repo: Path, *args: str) -> str:
         capture_output=True,
         text=True,
         check=True,
+        env=git_env.own_env(),
     ).stdout.strip()
 
 
