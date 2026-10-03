@@ -148,7 +148,8 @@ def free_ram_gb() -> float:
         status = _MemoryStatusEx()
         status.dwLength = ctypes.sizeof(_MemoryStatusEx)
         if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status)):
-            return status.ullAvailPhys / 1024 / 1024
+            # `ullAvailPhys` is bytes. The kilobyte figure this replaced was divided by 1024 twice.
+            return status.ullAvailPhys / 1024**3
         return 0.0
     try:
         return _free_ram_gb_from_meminfo(Path("/proc/meminfo").read_text(encoding="utf-8"))
@@ -231,6 +232,23 @@ class McodeRunner:
         #: its own configuration, and a replaced environment would run it with neither.
         self.extra_env = dict(env) if env else {}
 
+    def _free_diagnostics(self, label: str) -> Path:
+        """An empty diagnostics directory for this attempt at `label`: `<label>`, then `<label>-2`,
+        `<label>-3`, ...
+
+        Measured 2026-10-03: `mcode exec` refuses a diagnostics directory that is not empty
+        ("Diagnostics directory must be empty"). One directory per batch therefore means a batch can
+        never be retried - and a stopped lane is resumed, always onto the directory the failed
+        attempt left behind. Each attempt gets its own, and the earlier one keeps its evidence: a
+        run that has to be explained a week later is read from those files.
+        """
+        target = self.diagnostics / label
+        attempt = 1
+        while target.is_dir() and any(target.iterdir()):
+            attempt += 1
+            target = self.diagnostics / f"{label}-{attempt}"
+        return target
+
     def run(
         self,
         prompt: str,
@@ -244,7 +262,7 @@ class McodeRunner:
         the batch changed - or nothing, which is the normal case."""
         if effort not in EFFORTS:
             raise DriverError(f"effort {effort!r} is not one of {sorted(EFFORTS)}")
-        target = self.diagnostics / label
+        target = self._free_diagnostics(label)
         target.mkdir(parents=True, exist_ok=True)
         before = tracked_changes(self.repo)
         last_message = target / "last-message.txt"

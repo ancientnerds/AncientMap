@@ -42,6 +42,16 @@ payload = {"ok": True, "label": os.environ.get("FAKE_LABEL", "batch"), "steps": 
 if os.environ.get("FAKE_FAIL"):
     sys.stderr.write("boom\\n")
     sys.exit(3)
+diag = None
+if "--diagnostics-dir" in argv:
+    diag = Path(argv[argv.index("--diagnostics-dir") + 1])
+if diag is not None and diag.is_dir() and any(diag.iterdir()):
+    # what the real runtime answers (measured 2026-10-03): it refuses a directory that is not empty
+    sys.stderr.write("mcode exec failed: --diagnostics-dir is invalid: must be empty.\\n")
+    sys.exit(1)
+if os.environ.get("FAKE_DIAGNOSTICS") and diag is not None:
+    diag.mkdir(parents=True, exist_ok=True)
+    (diag / "FAKE_DIAGNOSTICS").write_text("the runtime wrote its diagnostics here\\n", encoding="utf-8")
 touch = os.environ.get("FAKE_TOUCH")
 if touch:
     Path(touch).write_text("the batch edited a tracked file\\n", encoding="utf-8")
@@ -238,6 +248,24 @@ def test_a_batch_that_changed_a_tracked_file_voids_itself_and_stops(tmp_path: Pa
     assert runner.voids(result) is True
 
 
+def test_a_batch_that_is_retried_gets_its_own_diagnostics_directory(tmp_path: Path) -> None:
+    """Measured 2026-10-03: `mcode exec` refuses a diagnostics directory that is not empty
+    ("Diagnostics directory must be empty"), so a driver that reuses one directory per batch can
+    never retry a batch - and a lane that stops is resumed, always onto a directory that already
+    holds the failed attempt. Each attempt gets its own, and the earlier one keeps its evidence."""
+    binary, env = fake_mcode(tmp_path, FAKE_DIAGNOSTICS="1")
+    runner = D.McodeRunner(
+        binary=binary, repo=a_repo(tmp_path), diagnostics=tmp_path / "d", env=env
+    )
+
+    first = runner.run("prompt", label="b", timeout=60, max_steps=4)
+    second = runner.run("prompt", label="b", timeout=60, max_steps=4)
+
+    assert first.diagnostics != second.diagnostics
+    assert first.diagnostics.is_dir() and (first.diagnostics / "FAKE_DIAGNOSTICS").exists()
+    assert (second.diagnostics / "FAKE_DIAGNOSTICS").exists()
+
+
 # ---------------------------------------------------------------------------- did the batch answer?
 def a_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
@@ -379,8 +407,12 @@ def test_a_stopped_batch_does_not_start_the_batches_queued_behind_it(tmp_path: P
 
 def test_the_ram_reader_sees_the_memory_of_this_machine() -> None:
     """Measured 2026-10-03: the reader shelled out to `wmic`, which this Windows no longer ships,
-    so it answered 0.0 on every call and the width cap never bound - silently."""
-    assert D.free_ram_gb() > 0
+    so it answered 0.0 on every call and the width cap never bound - silently. The replacement reads
+    `GlobalMemoryStatusEx`, whose `ullAvailPhys` is in **bytes**; dividing it like the old
+    kilobyte figure (1024 * 1024) answered 5,357 GB on a 31 GB machine, and the cap still never
+    bound. The upper bound is what catches that: a machine does not have a terabyte free."""
+    free = D.free_ram_gb()
+    assert 0 < free < 1024, f"implausible free RAM: {free} GB"
 
 
 def test_the_ram_reader_parses_the_linux_meminfo_line() -> None:
