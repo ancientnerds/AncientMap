@@ -13170,3 +13170,102 @@ parallel AncientMap sessions now announce a push to main first (cross-session me
   written last); the resumed state operator answered the partial folder: 841 agents, each refused by the
   brief (no export recorded) - nothing written, quota spent. wd2-image now treats a handoff without its
   export file as interrupted (ab2731c); partial folders kept under handoff/_partial-* and _interrupted-*.
+
+## 2026-10-03 MiniMax Code takes over the remediation (O17-O23, MCODE_START)
+
+### Housekeeping before any build
+- **Repo root strays removed** (25 files): 15 UUID-named `*.json` plus `dd.html`, `ddg_out.html`,
+  `page.html`, `sz.html`, `vdoc.html`, `wmu.pdf`, `pam.txt`, `wp_en.txt`, `wp_sr.txt`. The HTML and
+  PDF files were agent scratch from web research - `vdoc.html` and `wmu.pdf` are Cloudflare
+  "Just a moment..." challenge pages, not a document. The 15 JSON files are WC answers an agent wrote
+  to the repo root instead of through `opus_handoff.py answer` (see the next entry).
+- **The 15 root WC answers, checked before deleting them**: all 15 were recovered from the Recycle
+  Bin and compared against the recorded handoff answers, question by question. Every one of the 15
+  sites has a recorded answer in a handoff directory:
+  - the 5 `check`-shaped ones (chunk 04) are, 4 of 5, byte-identical to
+    `wc-mass-2026-09-27-04-r1/check` (compared on the JSON content, not the bytes). The fifth
+    (`eb760e32`, Puy Foradado Dam) carries a *different* r1 check judgement than the recorded one;
+    the recorded answer stands, so nothing is lost, and the file is a differing draft.
+  - the 10 `verify`-shaped ones (kept/coherent) are, all 10, distinct from every recorded answer.
+    For 8 of the sites the `verify` question is answered anyway, so these are lost *second* opinions.
+    For 2 - `74e0a41e` (Lydney Park) and `7504a195` (Plainsfield Camp) - the open question is
+    `wc-mass-2026-09-27-02-verify2`, and these files are the only trace of a judgement that lane
+    still needs.
+  - **Not imported, deliberately**: these files carry no `prompt_sha256`, no `model` and no
+    `answered_by`, so they are not answers in the handoff's sense. `write_answer` is write-once and
+    checks the shape; injecting them would break the one rule that makes an answer attributable.
+    Chunk 02 verify2 re-asks. The recovered files stay outside the repo as reference only.
+- **Lane records committed**: `fields/wd3-pilot/{RUN,COUNTS,PILOT}.json` (pilot 2, seed 20261003,
+  verdict PASS, hinted_unresolved 0.522 - the gate report behind wave 2026-10-01a; the .gitignore
+  rule re-includes exactly these three) and `mechanical_country_b2/REHEARSAL_ROLLBACK.sql` (the
+  rollback rehearsal of a lane that wrote production on 2026-10-01, versioned like every other write
+  step's rehearsal undo; the rehearsal SQL itself stays out, the undo of the rehearsal does not).
+- `mechanical_country_b2/APPLY.sql` showed as modified with an empty numstat - line endings only.
+  Restored from git; the committed bytes are correct.
+- `fields/wd3/` stays untracked and gitignored on purpose: it is the live run's working state, and
+  `.gitignore` re-includes only RUN.json, COUNTS.json, OWNER_LIST* and `write/`.
+
+### Where each lane actually stands (measured, not read from the notes)
+The Workflow-tool runs (`wf_...`) cannot be resumed, so every lane was measured from its handoff
+directories and run directories:
+- **WB (teaser cards): COMPLETE.** All 6 mass chunks ran the full chain and were written: 31
+  `mechanical_teaser` steps, 2,716 card cells, 0 deviations, no reversals. Every `*-verify2` and
+  `*-check-v` handoff is fully answered.
+- **WC (sentence check): the lane with the most open work.** Pilot written (20 sites). Mass chunk 01
+  answered, verified, built (`WC4.jsonl`, 25 batches p4-4200..4224) but **not written**. Chunks 02-05
+  have no build. Open answers: `wc-mass-2026-09-27-03-verify` 492/0, `-04-verify` 480/371,
+  `-02-verify2` 63/0, `-05-verify2` 28/0, `wc-defects-2026-10-02-r1` 136/45 - 692 + 91 questions.
+  `mass-2026-09-27-06` was never created.
+- **WD1 (structured fields): COMPLETE** - 4 runs, 3,444 sites, 8,055 cells, 36 step dirs each with
+  an ACCEPTED, 0 deviations, every handoff fully answered. Open: no wave has a `HANDOFF.json`
+  (runbook step 15 was never run).
+- **WD2 (scope review + served image): scope written, image not.** Scope: 572/572 answered, 20 sites
+  retired, "WAVE 2026-09-30 LANDED". Image: check 4,064/4,064 and replace 933/933 answered,
+  35 chunk plans built - and **0 chunks applied**. This is the largest block of open production
+  work. `handoff/_interrupted-*` and `_partial-*` (734 and 467 prompts, 0 answers) are abandoned
+  duplicate exports and must not be resumed.
+- **WD3 (field fill): export open.** r0 exported 2,613 questions, 1,995 answered, **618 missing**;
+  no import, no `write/`. Pilot 2 passed and its wave `2026-10-01a` is written (41 sites, 79 cells,
+  0 deviations).
+- **WN (description for sites left without one): implemented, never run.** 0 exported, 0 answered,
+  0 imported. Population measured at 1 site with no description.
+- **WA (Phase-4 v3/v3d): v3 and v3d main are written** (37 steps, 2,788 sites, 0 deviations). Open:
+  `p4-2510` and `p4-2511` are not written (`p4-2511` is not even exported), and the `wip/p4-pilot`
+  merge into this branch is still open - **the WA run directories live in that worktree, not in the
+  main tree.**
+- Nothing in any lane has moved since 2026-10-02 03:28. No half-written write step exists: every step
+  directory that exists carries its ACCEPTED, and no `REVERTED/` exists anywhere.
+
+### Build A - the truthful stamp and the combined disclosure (O19)
+- `opus_handoff`: `MINIMAX_MODEL` and a third `ANSWER_MODELS` key, so `answer --model
+  MiniMax-M3.1-Flash-Preview` records that stamp. `ANSWER_FAMILIES` declares the evidence family per
+  model id, replacing `model_id.split("-")[1]` in `mechanical/scope_review`, which would have
+  labelled a MiniMax retirement `M3.1:<agent>`. Guarded by a new mutation-sweep entry.
+- `phase4/model4`: `AI_SYSTEM_CLAUDE` is the 2026-10-01 string, byte-identical and still accepted;
+  `AI_SYSTEM` is the new combined disclosure of a new write ("Claude (Anthropic) and MiniMax M3.1
+  Flash (MiniMax)", naming every model that can have written this corpus); `AI_SYSTEMS` accepts
+  exactly the three. The card-disclosure correction lane and `mechanical/teaser.correct_disclosure`
+  are pinned to the pair they own - following the alias would have made a finished 185-site lane
+  plan a second correction. `pipeline/video/shorts_render.TEASER_NOTE` names MiniMax next to Claude.
+- Gates: 9008 passed / 133 skipped in the worktree, 9123 passed / 18 skipped in the main tree after
+  the merge; ruff, ruff format, lint-imports and vulture clean. Merged into `integrate/wave1`.
+- **Not pushed.** `integrate/wave1` is 18 commits ahead and 271 behind `origin/main`, so a push here
+  is a merge of two diverged histories and a live deploy, not a fast-forward: an owner decision, not
+  a code change.
+
+### Build B - the driver that replaces the Workflow tool (O22)
+- `scripts/remediation/mcode_driver.py`: the operator steps of the JS scripts are the commands
+  themselves, computed from the files on disk, so no model decides whether a chunk is finished; the
+  numbers the JS asked its operator model to count (batch count, first/last batch) are counted here.
+  Only the answering batches are a model call: one `mcode exec --cwd C:\PythonProjects\AncientMap
+  --model minimax/MiniMax-M3.1-Flash-Preview --effort max --permission full --output-format json`,
+  with the same agent prompt the JS used and the answer stamp `--model MiniMax-M3.1-Flash-Preview`.
+  Per batch it keeps the exec JSON, the exit code and a per-batch diagnostics directory, then checks
+  that the *tracked* tree is unchanged - a batch that edited a tracked file is void and stops the
+  lane. The width governor starts at 2, grows by one per clean window, halves on the first rate
+  limit, and is capped by free RAM; the quota stop reads
+  `https://api.minimax.io/v1/token_plan/remains` with `LYRA_MINIMAX_API_KEY` from `.env` (read, never
+  printed) and stops at <= 10 percent. A per-run state file makes a stopped lane resumable.
+- Lane WD3 (`wd3`) is wired end to end. Lane WC is not yet: its operator is a six-stage state machine
+  over the run's own files, and it gets its own subcommand before WC is driven.
+- 15 tests, no model in them: a fake `mcode` stands in for the CLI.
