@@ -13651,3 +13651,45 @@ into it afterwards. That refusal is the reason the fake in the test suite models
 first production batch after the merge is the real test, and the watchdog relaunches the lane within
 20 minutes, so that test arrives on its own.
 
+### The claim that was checked instead of believed: does M3.1 refuse a disabled thinking block?
+
+The `wd3-r0-b0296` incident turned on one sentence: *"MiniMax-M3.1-Flash rejects
+`thinking={"type": "disabled"}` with HTTP 400, probed live 2026-10-03."* A revert that leaves the
+question open is only half an answer - the next session meets the same claim. It was therefore
+measured, with the project's own client, one 64-token call per mode
+(`C:\tmp\probe_thinking\probe.py`, outside the repo; the key is never printed and is redacted out
+of any message defensively):
+
+| model sent | `thinking` | answer |
+| --- | --- | --- |
+| *none named* | `{"type":"disabled"}` | **200**, `model=MiniMax-M3`, `in=42 out=2`, text `ok` |
+| `MiniMax-M3.1-Flash-Preview` | `{"type":"disabled"}` | **400** `invalid_request_error` 2013, request_id `0710a521e54f57b778e8b694c5c7d696`: *"invalid params, model \"MiniMax-M3.1-Flash-Preview\" requires adaptive thinking; thinking.type=\"disabled\" (including reasoning.effort=none) is not allowed (2013)"* |
+| `MiniMax-M3.1-Flash-Preview` | `{"type":"adaptive"}` | **200**, `model=MiniMax-M3.1-Flash-Preview`, `in=14 out=15`, text `ok` |
+
+**The claim is true for M3.1 and false for the model production actually runs.** That is the whole
+answer, and the first row is why a careless probe gets the wrong one: with no `model` in the request
+the endpoint serves its own default `MiniMax-M3`, and M3 accepts `disabled` happily. A probe has to
+name the model it is testing.
+
+**Nothing in production is broken, and the revert stands.** `MINIMAX_MODEL` is
+`os.getenv("MINIMAX_MODEL", "MiniMax-M3")` (`pipeline/lyra/minimax_shared.py:140`), and it is **not
+set in any production container** - checked read-only on the VPS on 2026-10-03 in `ancient_nerds_lyra`
+and `ancient_nerds_api` (`printenv MINIMAX_MODEL` exits 1 in both). So the prospector's mechanical
+`THINKING_OFF` calls run on `MiniMax-M3`, where `disabled` is accepted, and restoring those five
+files to HEAD restored working code. Had the variable been set to a 3.1 model, every one of those
+calls would 400 - loudly, and naming the cause.
+
+**The trap is the comment right above that line**, which invites exactly that switch ("so a successor
+model … can be switched on the VPS without a code deploy: set MINIMAX_MODEL in .env"). Recorded in
+`docs/procedures/PROJECT_LESSONS.md` and in the memory entry for the endpoint. The failure mode is a
+named 400, not a silent one, so no code change is warranted today - and a "defensive" strip of the
+thinking block would be exactly the fallback code `CLAUDE.md` forbids.
+
+**For the lanes the lever does not exist at all.** `mcode exec --help` offers `--model`, `--effort`,
+`--prompt-mode`, `--permission`, `--timeout`, `--max-steps` - and no thinking switch. The driver
+runs `--effort max`, and that is also the setting the O18 calibration of every lane type was
+measured at. Lowering the effort would be a ~5x quota saving, and it would also invalidate the
+calibration that is the only thing authorising these answers to reach production: a lane calibrated
+at `max` and run at `low` is a different lane. So the effort stays, and the quota is managed by the
+stop at <= 10 percent instead.
+

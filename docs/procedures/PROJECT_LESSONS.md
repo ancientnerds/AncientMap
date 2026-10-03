@@ -175,6 +175,22 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
 - **MiniMax PAYG existiert nicht** — nie nennen, immer in der Quota planen. `total_tokens`
   unterschätzt etwa um Faktor 7; nur `probe_minimax_quota()` glauben.
   *(`minimax-max-vs-payg`, 2026-09-19)*
+- **`thinking={"type":"disabled"}` hängt am Modell, nicht an der API** (live gemessen 2026-10-03,
+  eine 64-Token-Anfrage je Modus über `pipeline.lyra.config._get_minimax_anthropic_client`):
+  `MiniMax-M3` antwortet **200**, `MiniMax-M3.1-Flash-Preview` antwortet **400**
+  `invalid_request_error` 2013 *"requires adaptive thinking; thinking.type=\"disabled\" (including
+  reasoning.effort=none) is not allowed"*, `adaptive` auf M3.1 antwortet 200. Der Lean-Modus, der
+  Denken als ~89 % des M3-Outputs kostet, existiert auf M3 und auf M3.1 nicht.
+  **Eine Sonde ohne Modellnamen beweist nichts** - ohne `model` serviert der Endpoint `MiniMax-M3`,
+  und die M3.1-Verweigerung ist unsichtbar (genau so war der erste Lauf dieser Messung).
+  `MINIMAX_MODEL` (`pipeline/lyra/minimax_shared.py`, Default `MiniMax-M3`, per `.env` umstellbar)
+  ist in **keinem** Produktionscontainer gesetzt (2026-10-03 in `ancient_nerds_lyra` und
+  `ancient_nerds_api` geprüft), also laufen die mechanischen `THINKING_OFF`-Aufrufe des Prospectors
+  auf M3 und sind nicht kaputt. Wer das Modell umstellt, bekommt einen lauten, benannten 400 - die
+  Falle ist dokumentiert, nicht still.
+  *(`project_theo_pipeline` / `reference_minimax_m3_endpoint`, 2026-10-03; die Behauptung
+  "M3.1 lehnt disabled ab" stammt von einem Field-Fill-Agenten und ist für M3.1 **richtig**, für den
+  tatsächlich eingesetzten Default M3 **falsch** - siehe `output/remediation/AUDIT_LOG.md`)*
 - **`card_description` ist der gesprochene Shorts-Text** — 904 Texte enthielten Zahlen, die
   nie im Generator-Input standen. `verify_descriptions.py` bestraft Hedging und wurde
   deshalb als Gate stillgelegt. *(`project-db-audit-weekend:30-33`, 2026-09-19)*
