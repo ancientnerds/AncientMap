@@ -124,15 +124,14 @@ class LyraSettings(BaseSettings):
     temperature_verification: float = 0.1
     temperature_narrative: float = 0.8
 
-    # MiniMax-M3 thinking control. RE-VERIFIED LIVE 2026-06-16 — the contract
-    # CHANGED since 2026-06-01: M3 now only honors thinking modes "adaptive" (ON)
-    # and "disabled" (OFF); `budget_tokens` is accepted but IGNORED (probe: budget
-    # 128 → 3448 chars of thinking). So the budget ladder below is DEAD CONFIG,
-    # kept only to avoid breaking any LYRA_MINIMAX_THINKING_BUDGET_* env overrides.
-    # The live mapping is binary and lives in thinking_for_effort():
-    # instant/low → disabled, medium/high → adaptive. Since per-TOKEN metering
-    # (2026-06-02) thinking (~89% of M3 output) is the dominant quota cost, so
-    # mechanical calls run thinking OFF.
+    # MiniMax thinking control. On M3 the contract changed twice; the current
+    # production model (MiniMax-M3.1-Flash, since 2026-10-03) accepts ONLY
+    # "adaptive": "disabled" answers HTTP 400 "requires adaptive thinking"
+    # (error 2013, probed live), so the mechanical-calls-run-thinking-off saving
+    # is not available on this model. The `budget_tokens` ladder remains DEAD
+    # CONFIG (`budget_tokens` is accepted and ignored), kept only so a
+    # LYRA_MINIMAX_THINKING_BUDGET_* env override keeps parsing.
+    # thinking_for_effort() is the single place that decides the block.
     minimax_thinking_enabled: bool = True
 
     # Theo research runs as a low-priority MiniMax consumer (2026-07-26): the

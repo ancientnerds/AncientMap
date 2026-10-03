@@ -12,6 +12,8 @@ from pipeline.lyra.config import (
     _call_anthropic_api,
     call_api,
 )
+from pipeline.lyra.minimax_shared import MINIMAX_MODEL
+from pipeline.lyra.minimax_shared import MINIMAX_MODEL
 
 
 @pytest.fixture
@@ -197,7 +199,7 @@ class TestUnifiedDispatch:
         assert "tools" in captured
         assert captured["tools"][0]["name"] == "structured_output"
         assert captured["tool_choice"] == {"type": "tool", "name": "structured_output"}
-        assert captured["model"] == "MiniMax-M3"
+        assert captured["model"] == MINIMAX_MODEL
         assert resp.text == '{"score": 85}'
 
     def test_minimax_temperature_clamped(self, minimax_settings):
@@ -221,7 +223,7 @@ class TestUnifiedDispatch:
         assert captured["temperature"] == 0.01
 
     def test_minimax_model_override(self, minimax_settings):
-        """MiniMax overrides all model names to MiniMax-M3."""
+        """MiniMax overrides every model name it is handed with MINIMAX_MODEL."""
         captured = {}
 
         def fake_create(**kwargs):
@@ -237,7 +239,7 @@ class TestUnifiedDispatch:
                 messages=[{"role": "user", "content": "test"}],
             )
 
-        assert captured["model"] == "MiniMax-M3"
+        assert captured["model"] == MINIMAX_MODEL
 
     def test_minimax_documents_inlined(self, minimax_settings):
         """MiniMax inlines documents into user message text."""
@@ -403,7 +405,7 @@ class TestUnifiedDispatch:
             )
 
         assert captured["thinking"] == {"type": "adaptive"}
-        assert captured["model"] == "MiniMax-M3"
+        assert captured["model"] == MINIMAX_MODEL
 
 
 class TestMiniMaxThinking:
@@ -549,7 +551,7 @@ class TestCallApiDispatch:
                 messages=[{"role": "user", "content": "test"}],
             )
 
-        assert captured["model"] == "MiniMax-M3"
+        assert captured["model"] == MINIMAX_MODEL
         assert resp.text == "ok"
 
     def test_call_api_wraps_errors(self, minimax_settings):

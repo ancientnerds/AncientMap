@@ -133,11 +133,16 @@ def parse_fenced_json(
 
 # MiniMax model — single source of truth for every call site (config.py,
 # web_research.py, tweet_verifier.py, research_stages.py all import this).
-# Upgraded M3 → M3 on 2026-06-01; verified live via the Anthropic endpoint
-# (MiniMax-M3.0 aliases to MiniMax-M3; M3 still served as the prior model).
-# Env-overridable so a successor model (e.g. M3 Pro, expected Q3 2026) can be
-# switched on the VPS without a code deploy: set MINIMAX_MODEL in .env.
-MINIMAX_MODEL = os.getenv("MINIMAX_MODEL", "MiniMax-M3")
+# Owner decision 2026-10-03: Theo research and Lyra run on
+# `MiniMax-M3.1-Flash-Preview` (probed live that day: the forced tool call the
+# research stages depend on works, 14 findings vs 6 on the same realistic
+# prompt). One difference matters: M3.1-Flash REJECTS
+# `thinking={"type":"disabled"}` with HTTP 400 "requires adaptive thinking;
+# thinking.type=disabled (including reasoning.effort=none) is not allowed"
+# (error 2013), so every call reasons — there is no lean mode on this model.
+# M3.1 also needs no thinking block to reason: adaptive is the default.
+# Env-overridable so a successor can be switched without a code deploy.
+MINIMAX_MODEL = os.getenv("MINIMAX_MODEL", "MiniMax-M3.1-Flash-Preview")
 
 # MiniMax search endpoint (Token Plan / Coding Plan)
 MINIMAX_SEARCH_PATH = "/v1/coding_plan/search"
@@ -503,13 +508,13 @@ def minimax_chat_anthropic(
     (≈1.0 for M3). Theo V2 handlers should always pass an explicit stage
     temperature from LyraSettings (temperature_research/synthesis/verification/narrative).
 
-    `thinking` is an optional MiniMax-M3 thinking block. The only modes M3
-    honors are ``{"type": "adaptive"}`` (reasoning ON) and
-    ``{"type": "disabled"}`` (reasoning OFF) — ``budget_tokens`` is ignored
-    (verified 2026-06-16). This is the narrative/synthesis path, which is
+    `thinking` is an optional thinking block. On MiniMax-M3 the honored modes were
+    ``{"type": "adaptive"}`` (reasoning ON) and ``{"type": "disabled"}``
+    (reasoning OFF). On MiniMax-M3.1-Flash — the model production uses since
+    2026-10-03 — ONLY adaptive is allowed: ``disabled`` answers HTTP 400
+    (probed live). This is the narrative/synthesis path, which is
     quality-critical for reasoning, so when the caller passes None we DEFAULT
-    TO ADAPTIVE. Mechanical callers that want the lean path should pass
-    ``{"type": "disabled"}`` explicitly. thinking and temperature coexist on M3.
+    TO ADAPTIVE. thinking and temperature coexist on MiniMax.
     """
     from pipeline.lyra.config import (
         _MINIMAX_ADAPTIVE_MAX_TOKENS_FLOOR,
@@ -1070,10 +1075,11 @@ def structured_llm_call(
     stage explicitly (no accidental defaults). Use the per-stage values on
     LyraSettings: temperature_research/synthesis/verification/narrative.
 
-    `thinking` is forwarded to call_api unchanged. Mechanical callers (the
-    prospector's mention extraction) pass ``{"type": "disabled"}``: with
-    thinking left to default, thinking_for_effort() returns adaptive for
-    EVERY effort level and reasoning tokens cost ~7x the visible output.
+    `thinking` is forwarded to call_api unchanged. Production runs
+    MiniMax-M3.1-Flash, which accepts only ``{"type": "adaptive"}``: the lean
+    ``{"type": "disabled"}`` mode that the prospector's mention extraction used
+    to ask for answers HTTP 400 there (probed 2026-10-03), so no caller passes
+    it any more and the model default (adaptive) applies.
 
     `usage`, when a dict is passed, receives the response's token usage
     (input_tokens/output_tokens/cache fields) so a caller can enforce its
