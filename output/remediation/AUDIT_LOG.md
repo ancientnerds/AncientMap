@@ -13439,3 +13439,38 @@ minute 16. Plan the lanes with that in mind - the 91 open check questions are no
 **A PowerShell artefact, not a failure:** `python scripts/...` tools that log to stderr make the
 PowerShell wrapper exit 4294967295 (-1) even when the tool itself printed `WC_EXIT=0` or the brief.
 Read the tool's own output, not that code.
+
+### Lane WC-check: FAILED - 74.67 %, and the shape of the failure
+
+`wc-check-01`, three batches of the check round 1 of `mass-2026-09-27-02` (15 questions): all 15
+answered, all three batches recorded 5 of 5, the tracked tree unchanged, and
+
+    units 75, agreed 56, agreement 0.7467, passed false
+
+against the owner's 90 % (O18). **The lane holds and goes to the owner; the 91 open check questions
+stay unanswered.** What the 19 disagreements are made of, measured from the answers themselves:
+
+| | count |
+| --- | --- |
+| `KEEP` vs `KEEP_TRIMMED` (the same claim, trimmed or not) | 11 |
+| a real verdict flip | 8 |
+| **agreement if every trim were forgiven** | **0.8933** - still under 0.9 |
+
+The flips are **symmetric**: `KEEP -> DROP` three times, `DROP -> KEEP` three times,
+`KEEP_TRIMMED -> DROP` and `DROP -> KEEP_TRIMMED` once each. M3.1 is therefore not biased towards
+keeping or towards dropping; it reads the same evidence differently. The one visible difference is how
+much evidence it gathered: on a disagreement the fresh answer cites a **median of 2 sources, the
+recorded one 5** (up to 6). The check question asks for a verdict on *every sentence of a published
+text*, each with its own page to fetch and its quote to find; a run that stops at two pages cannot
+adjudicate a claim the checker's five pages settle. That is the most likely cause, and it is a
+capability difference, not a formatting one - which is also why the verification lane, with one
+question per site and the checker's own quotes in the prompt, came out at 98.55 %.
+
+Sites with a verdict flip: `3c466fde-...` (Visockica), `3c47ded2-...` (Midea), `3c63b08f-...`
+(Antigonia), `3cd39d3e-...` (Abicada), `3d576cfb-...` (Torre dels Escipions), `3d790ba4-...`
+(Carthage). Every one carries the sources of both sides in the report, so the owner can spot-check.
+
+**The driver's part held.** The run that produced this verdict is the one whose first attempt was
+killed: after the per-attempt diagnostics fix it re-ran cleanly, the ledger counted 5 of 5 per
+batch, and the comparison says `passed: false` with an exit code of 1. Nothing about this verdict
+depends on a number the driver had to guess.

@@ -453,7 +453,7 @@ model call: `python scripts/remediation/mcode_driver.py wc --runs <run>... --fir
 | Lane | State | Next step |
 | --- | --- | --- |
 | WB teaser cards | **complete** - 6 chunks, 31 steps, 2,716 cells, 0 deviations | nothing |
-| WC sentence check | pilot written; mass-01 built, **not written**; chunks 02-05 unbuilt | **calibrate the check lane**, then answer 692 + 91 open questions, then build 02-05, then write mass-01 |
+| WC sentence check | pilot written; mass-01 built, **not written**; chunks 02-05 unbuilt | **692 verification questions may be answered** (lane calibrated); the 91 check questions **hold** for an owner decision; then build 02-05, then write mass-01 |
 | WD1 fields | **complete** - 3,444 sites, 8,055 cells, 0 deviations | runbook step 15 (`handoff --wave`) was never run |
 | WD2 scope | **written** - 20 sites retired | nothing |
 | WD2 image | 4,064 + 933 answered, 35 chunk plans built, **0 chunks applied** | the largest block of open production work |
@@ -467,11 +467,20 @@ Nothing in any lane has moved since 2026-10-02 03:28.
 - **Before the first MiniMax answer, the lane must be calibrated** (O18): re-answer 2-3
   already-answered batches per lane type through the driver, compare with the recorded answers,
   pass at >= 90 percent agreement and 0 false sources. A failing lane holds and goes to the owner.
-  The numbers go into the AUDIT_LOG. **State 2026-10-03 16:40: lane type WC-verify PASSED** -
-  `wc-verify-02`, 3 batches / 15 questions, all answered, 69 judged units, 68 agreed = **98.55 %**,
-  0 unanswered, 1 disagreement (site `3d68442a-...`, K2 Toumba) whose added quote is verbatim on the
-  cited page, so 0 false sources. WC-check and the WD3 field fill are **not yet measured**; do not
-  start those lanes before they are.
+  The numbers go into the AUDIT_LOG. **State 2026-10-03 17:27:**
+  - **WC-verify PASSED** - `wc-verify-02`, 3 batches / 15 questions, all answered, 69 judged units,
+    68 agreed = **98.55 %**, 0 unanswered, 1 disagreement (site `3d68442a-...`, K2 Toumba) whose added
+    quote is verbatim on the cited page, so 0 false sources. **The 692 open verification questions
+    may be answered.**
+  - **WC-check FAILED** - `wc-check-01`, 15 questions, all answered, 75 units, 56 agreed =
+    **74.67 %**. 11 of the 19 disagreements are `KEEP` vs `KEEP_TRIMMED`; forgiving all of them
+    still gives 89.33 %. The 8 real flips are symmetric (4 to DROP, 4 to KEEP), and the fresh
+    answers cite a median of 2 sources where the recorded ones cite 5. **The 91 open check questions
+    stay unanswered until the owner decides.**
+  - **WD3 field fill: not yet measured.** `fields-02` is prepared (3 batches, 24 questions) with its
+    own calibration run; the fields tool accepts it (brief checked by hand).
+  - **WN cannot be calibrated at all**: its population is one site and there are no answered batches
+    to re-answer. O18 is unsatisfiable there - an owner decision, not a measurement.
 - **A calibration needs a run of its own.** The WC tool takes an answer only into a handoff one of a
   run's rounds registers. A calibration copy without a run is refused by the tool - correctly, and
   the model will not work around it. `calibrate --prepare-only` writes `<out>-run/` with the source
