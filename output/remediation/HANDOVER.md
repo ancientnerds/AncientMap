@@ -467,6 +467,11 @@ model call: `python scripts/remediation/mcode_driver.py wc --runs <run>... --fir
 `schtasks /Delete /TN "AncientMap-LaneWatchdog" /F`; log `watchdog.log`). It restarts a lane **only
 when the process is gone and the state file is stale** - never one that was stopped on purpose, and it
 never writes to the database. Chain: `wd3-fields` first, `wc-verify` only when the first is free.
+**A finished lane frees its successor** (`*_finished` in `watchdog_state.json`): a lane that answered
+everything is not restarted and keeps its miss counter at 0, so a successor gated on "missed twice"
+alone would wait forever. The gate is `miss >= 2 -or finished`, verified 2026-10-03 against all four
+states. The state file is a hashtable on purpose - a `ConvertFrom-Json` object refuses a key it has
+not seen yet, and the first write of a new one throws.
 
 
 **Traps that cost a session:**
