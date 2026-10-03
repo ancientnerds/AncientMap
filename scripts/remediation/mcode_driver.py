@@ -39,7 +39,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -124,6 +124,18 @@ def free_ram_gb() -> float:
 
 
 # ------------------------------------------------------------------------------------ one mcode exec
+def mcode_argv(*args: str, binary: str = "mcode") -> list[str]:
+    """The command that runs `mcode` here.
+
+    On Windows the `mcode` on PATH is a `.cmd`/`.ps1` shim, and `CreateProcess` runs neither, so
+    the command processor is asked to run the shim. Measured 2026-10-03:
+    `subprocess.run(["mcode", ...])` answers `FileNotFoundError: [WinError 2]`.
+    """
+    if os.name == "nt":
+        return [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", binary, *args]
+    return [binary, *args]
+
+
 @dataclass(frozen=True)
 class ExecResult:
     """What one `mcode exec` left behind: its exit code, the last stdout line parsed as JSON, the
@@ -154,6 +166,18 @@ class ExecResult:
     @property
     def tree_clean(self) -> bool:
         return not self.tree_changed
+
+    @property
+    def succeeded(self) -> bool:
+        """Whether the run itself succeeded. `mcode exec --output-format json` answers an
+        `exec.result` with a `status` ("succeeded", "failed", ...) and no `ok`, so a run that failed
+        while exiting 0 - a refused permission, a step limit - is not a success."""
+        if self.exit_code != 0:
+            return False
+        status = self.payload.get("status")
+        if isinstance(status, str):
+            return status == "succeeded"
+        return bool(self.payload.get("ok", True))
 
 
 class McodeRunner:
@@ -190,8 +214,13 @@ class McodeRunner:
         target = self.diagnostics / label
         target.mkdir(parents=True, exist_ok=True)
         before = tracked_changes(self.repo)
-        argv = [
-            self.binary,
+        last_message = target / "last-message.txt"
+        # The prompt goes in over stdin, never on this command line: it is a long multi-line text
+        # with quotes, and on Windows the command line would go through `cmd`'s argument parsing.
+        # `--timeout` takes a duration ("3600s"), not a bare number, and there is no `--label`: the
+        # batch's own name is what this directory is called, and the agent's last message is kept
+        # beside it.
+        argv = mcode_argv(
             "exec",
             "--cwd",
             str(self.repo),
@@ -202,22 +231,24 @@ class McodeRunner:
             "--permission",
             "full",
             "--timeout",
-            str(timeout),
+            f"{timeout}s",
             "--max-steps",
             str(max_steps),
             "--output-format",
             "json",
             "--diagnostics-dir",
             str(target),
-            "--label",
-            label,
-            "--prompt",
-            prompt,
-        ]
+            "--output-last-message",
+            str(last_message),
+            "--input",
+            "-",
+            binary=self.binary,
+        )
         try:
             done = subprocess.run(
                 argv,
                 cwd=self.repo,
+                input=prompt,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -233,15 +264,16 @@ class McodeRunner:
         (target / "stderr.txt").write_text(err, encoding="utf-8")
         changed = _changed_since(before, tracked_changes(self.repo))
         payload = _last_json_line(out)
-        return ExecResult(
+        result = ExecResult(
             exit_code=code,
-            ok=code == 0 and bool(payload.get("ok", True)),
+            ok=False,  # the run's own verdict, from the exec result's `status`, set below
             payload=payload,
             stdout=out,
             stderr=err,
             diagnostics=target,
             tree_changed=changed,
         )
+        return replace(result, ok=result.succeeded)
 
     def voids(self, result: ExecResult) -> bool:
         """Whether this batch may not be counted: it failed, or it edited a tracked file."""

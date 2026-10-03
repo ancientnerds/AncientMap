@@ -31,10 +31,13 @@ import mcode_driver as D  # noqa: E402
 # ---------------------------------------------------------------------------- a fake `mcode`
 FAKE = """\
 import json, os, sys
-# a fake `mcode exec`: records its argv, prints one JSON line, touches what the test asked for
-argv = sys.argv[1:]
+# a fake `mcode exec`: records its argv and the prompt it reads on stdin, prints one JSON line,
+# touches what the test asked for
 Path = __import__("pathlib").Path
-Path(os.environ["FAKE_LOG"]).open("a", encoding="utf-8").write(json.dumps(argv) + "\\n")
+argv = sys.argv[1:]
+prompt = sys.stdin.read()
+Path(os.environ["FAKE_LOG"]).open("a", encoding="utf-8").write(
+    json.dumps({"argv": argv, "prompt": prompt}) + "\\n")
 payload = {"ok": True, "label": os.environ.get("FAKE_LABEL", "batch"), "steps": 1}
 if os.environ.get("FAKE_FAIL"):
     sys.stderr.write("boom\\n")
@@ -63,7 +66,7 @@ def fake_mcode(tmp_path: Path, **env: str) -> tuple[Path, dict[str, str]]:
     return binary, full
 
 
-def argv_of(tmp_path: Path) -> list[list[str]]:
+def argv_of(tmp_path: Path) -> list[dict[str, Any]]:
     log = tmp_path / "argv.jsonl"
     if not log.exists():
         return []
@@ -98,17 +101,36 @@ def test_a_batch_keeps_its_exec_json_exit_code_and_diagnostics(tmp_path: Path) -
     assert result.diagnostics == diagnostics / "wd3-r0-b0007"
     assert result.diagnostics.is_dir()
     assert (result.diagnostics / "stdout.txt").read_text(encoding="utf-8").startswith("noise")
-    # every flag the Workflow tool used, and the two model strings of their own
+    # every flag `mcode exec` really has (checked against `mcode exec --help`, 2026-10-03), and the
+    # prompt on stdin rather than on the command line
     (call,) = argv_of(tmp_path)
-    assert "--cwd" in call and str(tmp_path) in call
-    assert call[call.index("--model") + 1] == D.EXEC_MODEL
-    assert call[call.index("--effort") + 1] in {"max", "high", "medium", "low"}
-    assert call[call.index("--permission") + 1] == "full"
-    assert call[call.index("--timeout") + 1] == "60"
-    assert call[call.index("--max-steps") + 1] == "4"
-    assert call[call.index("--output-format") + 1] == "json"
-    assert call[call.index("--diagnostics-dir") + 1] == str(diagnostics / "wd3-r0-b0007")
-    assert "the agent prompt" in call[call.index("--prompt") + 1]
+    argv = call["argv"]
+    assert argv[0] == "exec"
+    assert argv[argv.index("--cwd") + 1] == str(tmp_path)
+    assert argv[argv.index("--model") + 1] == D.EXEC_MODEL
+    assert argv[argv.index("--effort") + 1] in {"max", "high", "medium", "low"}
+    assert argv[argv.index("--permission") + 1] == "full"
+    assert argv[argv.index("--timeout") + 1] == "60s"  # a duration, not a bare number
+    assert argv[argv.index("--max-steps") + 1] == "4"
+    assert argv[argv.index("--output-format") + 1] == "json"
+    assert argv[argv.index("--diagnostics-dir") + 1] == str(diagnostics / "wd3-r0-b0007")
+    assert argv[argv.index("--input") + 1] == "-"
+    assert "--label" not in argv  # `mcode exec` has no such flag
+    assert "the agent prompt" in call["prompt"]
+
+
+def test_the_mcode_command_runs_through_the_shim_this_platform_needs() -> None:
+    """On Windows the `mcode` on PATH is a `.cmd`/`.ps1` shim and `CreateProcess` runs neither, so
+    the command processor is asked to run it. Measured 2026-10-03: `subprocess.run(["mcode", ...])`
+    answers `FileNotFoundError: [WinError 2]` - not a permissions problem, a missing interpreter.
+    """
+    argv = D.mcode_argv("exec", "--input", "-")
+
+    if os.name == "nt":
+        assert Path(argv[0]).name.lower() in {"cmd.exe", "cmd"}
+        assert argv[1:4] == ["/d", "/c", "mcode"]
+    else:
+        assert argv == ["mcode", "exec", "--input", "-"]
 
 
 def test_a_failed_batch_is_kept_with_its_exit_code_and_is_not_ok(tmp_path: Path) -> None:
@@ -120,6 +142,31 @@ def test_a_failed_batch_is_kept_with_its_exit_code_and_is_not_ok(tmp_path: Path)
     assert result.exit_code == 3
     assert result.ok is False
     assert "boom" in result.stderr
+
+
+def test_a_run_that_exits_zero_but_failed_is_not_a_success(tmp_path: Path) -> None:
+    """`mcode exec --output-format json` answers an `exec.result` with a `status` and no `ok`, so a
+    run that failed inside - a refused permission, a step limit - exits 0. Reading only the exit
+    code would count it as answered."""
+    failed = D.ExecResult(
+        exit_code=0,
+        ok=True,
+        payload={"type": "exec.result", "status": "failed", "error": "step limit reached"},
+        stdout="",
+        stderr="",
+        diagnostics=tmp_path / "d",
+    )
+    assert failed.succeeded is False
+
+    ran = D.ExecResult(
+        exit_code=0,
+        ok=True,
+        payload={"type": "exec.result", "status": "succeeded", "output": "done"},
+        stdout="",
+        stderr="",
+        diagnostics=tmp_path / "d",
+    )
+    assert ran.succeeded is True
 
 
 def test_a_rate_limited_batch_is_told_apart_from_another_failure(tmp_path: Path) -> None:
