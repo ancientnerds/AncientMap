@@ -563,6 +563,14 @@ class TestWd1sRecords:
         with pytest.raises(POP.PopulationError, match="with deviations"):
             POP.read_wd1(*self.tree(tmp_path / "x", deviations=1))
 
+    def test_a_wd1_run_that_is_not_there_is_refused(self, tmp_path: Path) -> None:
+        # WD1's runs are untracked data: they live in the checkout that holds `output/`, and a
+        # worktree that has none must be told with `--wd1-dir` instead of a FileNotFoundError
+        # traceback from inside the read (measured 2026-10-04, the wd4 build from the worktree).
+        runs, waves = self.tree(tmp_path)
+        with pytest.raises(POP.PopulationError, match="is not there"):
+            POP.read_wd1([tmp_path / "gone", *runs[1:]], waves)
+
     def test_a_run_whose_held_fields_its_waves_do_not_list_is_refused(self, tmp_path: Path) -> None:
         with pytest.raises(POP.PopulationError, match="WD1's records disagree"):
             POP.read_wd1(*self.tree(tmp_path, held_listed=False))

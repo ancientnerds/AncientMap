@@ -175,7 +175,13 @@ def read_wd1(runs: Sequence[Path], waves: Path) -> Wd1:
     classified: set[str] = set()
     held_of_run: dict[str, set[tuple[str, str]]] = {}
     for run in runs:
-        reask = json.loads((run / "REASK.json").read_text(encoding="utf-8"))
+        reask_file = run / "REASK.json"
+        if not reask_file.exists():
+            raise PopulationError(
+                f"{run} is not there - WD1's runs are untracked files of the checkout that holds "
+                f"output/, and this one has none; --wd1-dir points the read at that checkout"
+            )
+        reask = json.loads(reask_file.read_text(encoding="utf-8"))
         if reask["fields"]:
             raise PopulationError(f"{run}: fields still wait for a re-ask - WD1 is not finished")
         rows = _read_jsonl(run / "DECISIONS.jsonl")
@@ -481,7 +487,8 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=FIELDS_DIR,
         help="where WD1's runs (wd1, wd1-pilot, wd1-rest, wd1-rest-pilot) and its waves "
-        "(wd1/write) live - the main checkout's output/remediation/fields",
+        "(wd1/write) live - this checkout's output/remediation/fields, which holds them only "
+        "where the run itself was built; from a worktree, name the checkout that has them",
     )
     cut = run.add_mutually_exclusive_group()
     cut.add_argument("--pilot", type=int, help="a pilot: this many of the population's sites")
