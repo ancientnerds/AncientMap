@@ -16,11 +16,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Breadcrumbs from '../components/layout/Breadcrumbs'
 import PaperArticle from '../components/theo/PaperArticle'
+import { useEvidenceHashScroll } from '../components/theo/useEvidenceHashScroll'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import ThumbsFeedback from '../components/feedback/ThumbsFeedback'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import { useIsFounder } from '../hooks/useIsFounder'
+import { PageOpen } from '../components/analytics/PageOpen'
 import { useRoute } from '../seo/RouteContext'
 import { shareOrCopy } from '../utils/share'
 import '../styles/theo.css'
@@ -40,6 +42,9 @@ export default function ResearchPaperPage() {
   const [audioProgress, setAudioProgress] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // #ev-NN deep links from video descriptions land after the images settle.
+  useEvidenceHashScroll()
 
   const route = useRoute()
   const paper = route?.type === 'research' ? route : null
@@ -124,6 +129,10 @@ export default function ResearchPaperPage() {
 
   return (
     <div className="theo-page">
+      {/* Der Lesezugriff, nicht der Klick aus der Bibliothek - siehe PageOpen.
+          ResearchRoute traegt den Slug, darum ist es hier ein Pfad und die
+          Panel-Zeile verlinkt. */}
+      <PageOpen event="paper_open" paper={`/research/${slug}`} method="landing" context="paper" />
       <PageHeader currentPage="theo">
         <a href="/theo.html#research-library" className="page-header-title">Research</a>
       </PageHeader>

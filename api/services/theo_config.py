@@ -22,9 +22,9 @@ THEO_RESEARCH_COST = 600
 
 # The permanent researcher (feeder) enqueues frontier topics under this
 # account. The row owner stays the operator so owner-gated endpoints keep
-# working; auto-published papers carry published_by='Theo' for attribution.
+# working; a paper the Claude write publishes first carries published_by='Theo'
+# (pipeline/lyra/theo_publishing.py PUBLISH_AUTHOR).
 THEO_FEEDER_USER_ID = os.getenv("THEO_FEEDER_USER_ID", "442000112756064260")
-THEO_AUTO_PUBLISH_AUTHOR = "Theo"
 
 # --- Quota watchdog (2026-06-28 plan, layer "active supervision") -----------
 # 5h-rolling % thresholds for the quota watchdog tier classification.
@@ -69,35 +69,37 @@ QUOTA_WEEKLY_FREEZE_PCT = int(os.getenv("QUOTA_WEEKLY_FREEZE_PCT", "5"))
 # (2026-08-04: the feeder had the week at 50% by Tuesday). Window opens at
 # most this many days before the reset — 3 = Friday 00:00 UTC. A start
 # additionally needs the weekly budget to cover the pre-reset SHARE of one
-# paper (at the measured pace of the last 5 completed batch papers,
-# fallback THEO_PAPER_EST_HOURS) plus the Lyra reserve per remaining day.
+# run (at the measured pace of the last 5 research-only batch runs,
+# fallback THEO_RUN_EST_HOURS) plus the Lyra reserve per remaining day.
 # The weekend's LAST run may cross the reset and finish on Monday's fresh
 # budget — what must never happen is the weekly hitting 0% mid-run, which
 # aborts the run (error 2056) and freezes everything else with it. UI
 # submissions bypass the batch gate entirely. Raise to 7 for always-on.
 THEO_BATCH_MAX_DAYS_TO_RESET = float(os.getenv("THEO_BATCH_MAX_DAYS_TO_RESET", "3"))
 
-# Weekly-budget share of one full-depth batch paper. MEASURED 2026-08-08
-# (migration 0013): the simulation-hypothesis paper burned 54.6M plan tokens
-# of a 597M weekly budget = 9.1% over 15.2h, including the parallel Lyra and
-# curator traffic that shares the plan. 12 keeps a third of headroom on top.
-#
-# The old 25 was an eyeball estimate from the ENTITÄT batch that attributed a
-# whole week's consumption to its papers; it blocked batch starts at 36%
-# weekly remaining. Re-check with scripts/theo_plan_cost.py as n grows —
-# raise it again if a paper ever measures above ~10%.
-THEO_PAPER_COST_PCT = float(os.getenv("THEO_PAPER_COST_PCT", "12"))
+# Weekly-budget share of one research-only batch run (spec 2.4, 2026-09-26).
+# The last full-pipeline measurement (2026-08-08, migration 0013) put a whole
+# paper at 9.1% of the weekly budget over 15.2h. The M3 writing chain was about
+# 4h of a 14h run (production run 23336ade), so research alone costs less;
+# 9 keeps headroom on top of that share. Re-measure with
+# scripts/theo_plan_cost.py once research-only runs exist.
+THEO_RUN_COST_PCT = float(os.getenv("THEO_RUN_COST_PCT", "9"))
 
 # Weekly-% reserved PER REMAINING DAY for Lyra's hourly cycles and
 # interactive research. The dynamic claim requirement is
-# paper cost + days-to-reset * this — Friday needs more headroom than a
+# run cost + days-to-reset * this — Friday needs more headroom than a
 # Saturday-night start.
 THEO_LYRA_DAILY_RESERVE_PCT = float(os.getenv("THEO_LYRA_DAILY_RESERVE_PCT", "5"))
 
-# Wall-clock fallback for one batch paper when no completed history exists
-# yet. The live gate prefers the average of the last 5 completed batch runs
-# (duration_ms), which includes crawl-lane pacing and quota sleeps.
-THEO_PAPER_EST_HOURS = float(os.getenv("THEO_PAPER_EST_HOURS", "18"))
+# Wall-clock fallback for one research-only batch run while no research-only
+# history exists (the full runs took 14h13m, of which about 4h10m was M3
+# writing). The live gate prefers the average of the last 5 research-only
+# batch runs (duration_ms), which includes crawl-lane pacing and quota sleeps.
+THEO_RUN_EST_HOURS = float(os.getenv("THEO_RUN_EST_HOURS", "11"))
+
+# The feeder stops enqueueing frontier topics while this many dossiers wait for
+# the Claude write (status 'researched'), so research cannot outrun writing.
+THEO_MAX_UNWRITTEN_DOSSIERS = int(os.getenv("THEO_MAX_UNWRITTEN_DOSSIERS", "6"))
 
 # How often the watchdog probes /v1/token_plan/remains. The probe is cached
 # 60s server-side (minimax_shared.probe_minimax_quota), so 60s is a

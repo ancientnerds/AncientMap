@@ -25,7 +25,11 @@ from pipeline.lyra.prospector.wiki import enwiki_title_from_url
 logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).parent.parent / "prompts" / "prospector_mentions.txt"
-THINKING_OFF = {"type": "disabled"}
+# No thinking override: MiniMax-M3.1-Flash rejects `{"type": "disabled"}` with
+# HTTP 400 ("requires adaptive thinking", error 2013 — probed 2026-10-03), so the
+# extraction runs on the model default, which is adaptive. That costs more
+# reasoning tokens than the old lean mode and buys the richer extraction M3.1
+# returns; the budget guard below is what keeps a run from running away.
 MAX_OUTPUT_TOKENS = 3000
 # Above this share of ungroundable strings the model (or the prompt) has
 # drifted; ship nothing rather than degraded cards.
@@ -91,7 +95,6 @@ def extract_paper(unit: PaperUnit, *, budget: Budget, temperature: float) -> Pap
             MENTION_SCHEMA,
             MAX_OUTPUT_TOKENS,
             temperature=temperature,
-            thinking=THINKING_OFF,
             usage=usage,
         )
         budget.charge(usage)

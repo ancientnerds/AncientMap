@@ -39,9 +39,9 @@
 # reworked are simply done again, so pass SKIP_SLUGS to leave them alone.
 set -uo pipefail
 
-# Reserve for Theo: THEO_PAPER_COST_PCT says one research run costs ~25% of
-# the weekly budget and the batch window opens Friday, so 25 is the floor
-# that keeps ONE paper possible. 45 leaves room for the billing lag above —
+# Reserve for Theo: THEO_RUN_COST_PCT says one research-only run costs ~9% of
+# the weekly budget (the M3 paper run it replaced cost ~25%, which set this
+# floor), and the batch window opens Friday. 45 leaves room for the billing lag above —
 # at 35 the settled figure could already be under Theo's reserve by the time
 # the backfill notices.
 MIN_WEEKLY=${MIN_WEEKLY:-45}

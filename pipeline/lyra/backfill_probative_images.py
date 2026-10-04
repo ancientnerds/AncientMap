@@ -43,6 +43,11 @@ from sqlalchemy import text
 from pipeline.database import engine
 from pipeline.lyra.handlers.probative_images import embed_probative_images
 from pipeline.lyra.hero_picker import pick_hero_image
+from pipeline.lyra.theo_publishing import (
+    JOURNALLED_PAPER_SQL,
+    refuse_journalled_paper,
+    write_unjournalled_result,
+)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -83,15 +88,21 @@ def _strip_inline_images(report: str) -> str:
 
 
 def _fetch_papers(slug: str | None = None) -> list[dict]:
-    """Fetch public completed papers, optionally filtered by slug."""
+    """Fetch public completed papers, optionally filtered by slug.
+
+    A journalled paper changes only through theo_publish (Task 21b): --all
+    skips it, --slug refuses it.
+    """
     with engine.connect() as conn:
         if slug:
+            refuse_journalled_paper(conn, slug)
             rows = conn.execute(
                 text(
-                    """
+                    f"""
                     SELECT id::text, slug, question, result_json
                     FROM research_requests
                     WHERE slug = :slug AND is_public = TRUE AND status = 'completed'
+                      AND NOT ({JOURNALLED_PAPER_SQL})
                     """
                 ),
                 {"slug": slug},
@@ -99,10 +110,11 @@ def _fetch_papers(slug: str | None = None) -> list[dict]:
         else:
             rows = conn.execute(
                 text(
-                    """
+                    f"""
                     SELECT id::text, slug, question, result_json
                     FROM research_requests
                     WHERE is_public = TRUE AND status = 'completed'
+                      AND NOT ({JOURNALLED_PAPER_SQL})
                     ORDER BY published_at DESC
                     """
                 )
@@ -213,19 +225,18 @@ async def _process_paper(paper: dict, apply: bool, replace: bool = False) -> tup
                     "Re-publish the paper to pick up the new images.",
                     slug,
                 )
-        # Deleting the old files is only safe once nothing references them.
-        if published_synced:
-            _delete_unreferenced_images(paper_id, embedded)
     else:
         result.setdefault("probative_images", []).extend(embedded)
     result["probative_images_diversity"] = diversity
 
     with engine.connect() as conn:
-        conn.execute(
-            text("UPDATE research_requests SET result_json = :json WHERE id = :id"),
-            {"json": json.dumps(result), "id": paper_id},
-        )
+        write_unjournalled_result(conn, paper_id, result)
         conn.commit()
+    # Deleting the old files is only safe once nothing references them: after
+    # the write (a paper theo_publish journalled meanwhile keeps its files),
+    # and only when the public snapshot follows the new set.
+    if replace and published_synced:
+        _delete_unreferenced_images(paper_id, embedded)
 
     return (
         slug,

@@ -20,6 +20,18 @@ import { NervLoadingBar } from '../components/NervLoadingBar'
 const TheoReportOverlay = lazy(() => import('../components/theo/TheoReportOverlay'))
 const TheoResearchLive = lazy(() => import('../components/theo/TheoResearchLive'))
 
+/** Owner-list badge text for a research row. 'researched' is a finished Theo run
+ *  whose dossier waits for the Claude write (spec 2.5). */
+export function researchStatusLabel(status: string): string {
+  switch (status) {
+    case 'completed': return 'Done'
+    case 'failed': return 'Failed'
+    case 'cancelled': return 'Cancelled'
+    case 'researched': return 'Researched · awaiting write'
+    default: return status
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tutorial hints — shown until the user publishes their first paper
 // ---------------------------------------------------------------------------
@@ -338,8 +350,13 @@ export default function TheoPage() {
       if (notifGranted) {
         for (const item of data) {
           const prev = prevStatusRef.current.get(item.id)
-          if (prev && prev !== 'completed' && item.status === 'completed') {
+          if (!prev || prev === item.status) continue
+          if (item.status === 'researched') {
             new Notification('Theo finished his research', {
+              body: `Dossier ready, the paper is written next: ${item.question.substring(0, 80)}`,
+            })
+          } else if (item.status === 'completed') {
+            new Notification('Theo paper published', {
               body: item.question.substring(0, 100),
             })
           }
@@ -1346,9 +1363,10 @@ export default function TheoPage() {
                   <div className="theo-card-top">
                     <TruncatedQuestion text={item.question} />
                     <span className={`theo-badge theo-badge-status theo-badge-${item.status}`}>
-                      {item.status === 'completed' ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>Done</> :
-                       item.status === 'failed' ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Failed</> :
-                       item.status === 'cancelled' ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><line x1="5" y1="12" x2="19" y2="12"/></svg>Cancelled</> : item.status}
+                      {item.status === 'completed' && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
+                      {item.status === 'failed' && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>}
+                      {item.status === 'cancelled' && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}><line x1="5" y1="12" x2="19" y2="12"/></svg>}
+                      {researchStatusLabel(item.status)}
                     </span>
                     {item.is_public && (
                       <span className="theo-badge theo-badge-published">Published</span>

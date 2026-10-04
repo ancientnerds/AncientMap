@@ -28,6 +28,7 @@ import verify_writes4 as A  # noqa: E402
 import write_gate4 as G  # noqa: E402
 from phase4 import revert4 as R  # noqa: E402
 
+from tests import git_env  # noqa: E402
 from tests.remediation import phase4_write_fixtures as PFX  # noqa: E402
 from tests.remediation import wc_fixtures as FX  # noqa: E402
 from tests.remediation import wn_fixtures as WX  # noqa: E402
@@ -43,9 +44,12 @@ from tests.remediation.wc_fixtures import WC4  # noqa: E402
 
 
 def _git(repo: Path, *argv: str) -> str:
+    """A throwaway repository's git, in an environment of its own: the pre-push hook exports
+    `GIT_DIR` (and friends) and it wins over `-C`, so a commit here would land in the branch
+    being pushed. `tests.git_env` holds that helper for every test that builds a repository."""
     done = subprocess.run(
         ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com", *argv],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, check=True, env=git_env.own_env(),
     )  # fmt: skip
     return done.stdout.strip()
 

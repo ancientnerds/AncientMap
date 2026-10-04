@@ -1,8 +1,9 @@
 """
 Background worker for Theodore Furcade — processes research requests asynchronously.
 
-Polls the research_requests table for queued requests (FIFO),
-runs the agent pipeline, and saves structured reports to the DB.
+Polls the research_requests table for queued requests (FIFO), runs the
+research-only convergence pipeline and marks a finished run 'researched': its
+dossier waits in research_artifacts for the Claude write (spec 2.4).
 """
 
 from __future__ import annotations
@@ -19,13 +20,12 @@ from sqlalchemy import text
 
 from api.cache import get_redis_client, mark_redis_lost
 from api.services.theo_config import (
+    THEO_MAX_UNWRITTEN_DOSSIERS,
     THEO_MIN_TASK_INTERVAL_S,
     THEO_PARALLEL_SLOTS,
     THEO_RESEARCH_COST,
 )
 from pipeline.database import affected_rows, get_session
-from pipeline.indexnow import page_url as indexnow_url
-from pipeline.indexnow import submit as indexnow_submit
 
 # One spelling of the weekly reset, shared with the phase-3 search stage's quota gate.
 from pipeline.lyra.minimax_shared import hours_until_weekly_reset as _hours_until_weekly_reset
@@ -252,35 +252,13 @@ def _drop_live_events(request_id: str) -> None:
         mark_redis_lost(f"theo event drop {request_id}", exc)
 
 
-def _paper_artifact(ctx) -> dict:
-    """Run-closing metrics that never reach result_json.
-
-    Written after the result row is committed, which is also the first moment
-    they exist: strip metrics and the coherence/hallucination checks are
-    produced by the presentation stage, i.e. after PaperReady. The paper text
-    itself is deliberately absent — it is already in result_json.
-    """
-    return {
-        "title": ctx.paper_title,
-        "card_description": ctx.card_description,
-        "audit": ctx.audit_result,
-        "quality_score": ctx.quality_score,
-        "probative_images": getattr(ctx, "probative_images", []) or [],
-        "probative_images_diversity": getattr(ctx, "probative_images_diversity", {}),
-        "image_candidate_pool": getattr(ctx, "image_candidate_pool", {}),
-        "strip_metrics": getattr(ctx, "strip_metrics", None),
-        "coherence_result": getattr(ctx, "coherence_result", None),
-        "hallucination_metrics": getattr(ctx, "hallucination_metrics", None),
-    }
-
-
 def _failure_snapshot(ctx, status: str) -> dict:
     """Everything a dying run still holds in memory.
 
     Quota deaths are the common terminal state, and until now they discarded
-    hours of completed research — angles, findings and any partial paper were
-    only ever in RAM. Unlike the success path, paper_text belongs in here:
-    nothing else stores it.
+    hours of completed research — angles and findings were only ever in RAM.
+    A run ends at the dossier (research only since 2026-09-26), so there is
+    no partial paper to keep.
     """
     from dataclasses import asdict
 
@@ -294,23 +272,24 @@ def _failure_snapshot(ctx, status: str) -> dict:
         "cross_angle_connections": getattr(ctx, "cross_angle_connections", []),
         "debate_result": getattr(ctx, "debate_result", {}),
         "moderated_result": getattr(ctx, "moderated_result", {}),
-        "paper_text": getattr(ctx, "paper_text", ""),
     }
 
 
-async def _persist_training_corpus(ctx, request_id: str, artifact: tuple[str, dict]) -> None:
-    """Close out the run's training-corpus record.
+async def _persist_training_corpus(ctx, request_id: str, artifact: tuple[str, dict] | None) -> None:
+    """Close out the run's training-corpus record: snippet documents and run links.
 
-    Called only after the result (or failure) row is committed. The corpus is
-    a passenger on the run: it must never be able to cost us a paper, so a
-    write failure here is logged loudly and dropped rather than raised.
-    Nothing reads these tables back.
+    Called only after the result (or failure) row is committed. `artifact` is
+    the failure snapshot on the error paths and None on success: the dossier
+    (registry, image pool, manifest) was written, loudly, by the DossierHandler
+    before the run returned. This close-out is a passenger: a write failure
+    here is logged loudly and dropped rather than raised.
     """
     try:
         from pipeline.lyra.training_corpus import persist_run_corpus, save_artifact
 
-        kind, payload = artifact
-        await asyncio.to_thread(save_artifact, request_id, kind, payload, "")
+        if artifact is not None:
+            kind, payload = artifact
+            await asyncio.to_thread(save_artifact, request_id, kind, payload, "")
         stats = await asyncio.to_thread(persist_run_corpus, ctx, request_id)
         logger.info(
             "[THEO] %s corpus: %d documents, %d source links",
@@ -320,6 +299,34 @@ async def _persist_training_corpus(ctx, request_id: str, artifact: tuple[str, di
         )
     except Exception as exc:
         logger.error("[THEO] %s training-corpus write failed: %s", request_id, exc)
+
+
+def _notify_dossier_ready(request_id: str, question: str, summary: dict) -> None:
+    """Tell the owner a dossier waits for the Claude write.
+
+    The Discord embed goes out only when DISCORD_WEBHOOK_URL is set
+    (send_discord_webhook returns False otherwise); the thinking_log event the
+    caller writes for batch runs is the record that always exists.
+    """
+    from api.services.notify import send_discord_webhook
+
+    counts = summary["counts"]
+    archive = summary["archive"]
+    send_discord_webhook(
+        {
+            "embeds": [
+                {
+                    "title": "Theo dossier ready — awaiting the Claude write",
+                    "description": (
+                        f"`{request_id}`\n**{question[:200]}**\n"
+                        f"{counts['final_claims']} final claims · {counts['sources']} sources · "
+                        f"{archive['full_text']}/{archive['cited_sources']} cited sources with full text"
+                    ),
+                    "color": 0x2ECC71,
+                }
+            ]
+        }
+    )
 
 
 def _terminal_status_for_error(ctx) -> str:
@@ -376,6 +383,8 @@ async def _process_request(
         return
 
     pipeline_trace: list[dict] = []
+    # (ctx, duration_ms, status written) once the research-only result is committed.
+    researched: tuple[Any, int, bool] | None = None
     start = time.monotonic()
     plan_start = await asyncio.to_thread(_plan_balance_snapshot)
     if plan_start:
@@ -494,96 +503,43 @@ async def _process_request(
                 ctx, request_id, ("failure_snapshot", _failure_snapshot(ctx, status))
             )
         else:
-            # Deduct credits and release reservation on success
+            # Research-only (spec 2.4): the run ends with a dossier, not a paper.
+            # Credits are still deducted at research end.
             _deduct_credits(request_id)
-
-            result = {
-                "report": ctx.paper_text,
-                "title": ctx.paper_title,
-                "card_description": ctx.card_description,
-                "audit": ctx.audit_result,
-                "quality_score": ctx.quality_score,
-                # Persist probative image metadata so reflow/rewrite backfills
-                # can rebuild captions against the source list without
-                # re-fetching from connectors.
-                "probative_images": getattr(ctx, "probative_images", []) or [],
-                # Hero banner picked from the probative_images list — used as
-                # the page-top banner and og:image. None when no probative
-                # images were embedded.
-                "hero_image": getattr(ctx, "hero_image", None),
-            }
-            emit({"type": "done", "status": "completed"})
-            try:
-                with get_session() as session:
-                    # Guarded on status='running': a DELETE that cancelled the
-                    # row mid-run must not be overwritten back to 'completed'.
-                    completed = session.execute(
-                        text("""
-                            UPDATE research_requests
-                            SET status = 'completed',
-                                result_json = :result,
-                                pipeline_trace = :trace,
-                                debug_log = :debug_log,
-                                total_tokens = :tokens,
-                                llm_calls = :llm_calls,
-                                duration_ms = :duration,
-                                sites_found = :sites,
-                                tools_used = :tools,
-                                completed_at = NOW()
-                            WHERE id = :id AND status = 'running'
-                        """),
-                        {
-                            "id": request_id,
-                            "result": json.dumps(result),
-                            "trace": json.dumps(pipeline_trace),
-                            "debug_log": json.dumps(ctx.debug_log),
-                            "tokens": ctx.total_tokens,
-                            "llm_calls": ctx.llm_call_count,
-                            "duration": duration_ms,
-                            "sites": len(ctx.registry.sources),
-                            "tools": len(ctx.specialist_analyses),
-                        },
-                    )
-                    session.commit()
-                    if affected_rows(completed) == 0:
-                        logger.warning(
-                            "[THEO] Request %s was no longer 'running' at completion "
-                            "(cancelled mid-run?) — result not written.",
-                            request_id,
-                        )
-            except Exception as db_exc:
-                logger.error(f"[THEO] DB commit failed for {request_id}: {db_exc}")
-            # After the commit, in its own session: the citation state is only
-            # final once presentation has pruned references, and an archive
-            # error must not roll back the result we just wrote.
-            await _persist_training_corpus(ctx, request_id, ("paper_final", _paper_artifact(ctx)))
-            logger.info(
-                f"[THEO] Request {request_id} completed in {duration_ms}ms"
-                f" ({ctx.total_tokens} tokens)"
-            )
-            if is_batch:
-                # Permanent-researcher flow (2026-07-26): the frontier node
-                # is explored either way; gate-passing papers go live
-                # immediately, gate failures ping Discord for manual review.
-                from pipeline.lyra.research_graph import mark_node_explored
-
-                mark_node_explored(request_id)
-
-                from pipeline.lyra.thinking_log import log_thinking
-
-                # This completion event fires BEFORE _auto_publish runs, so
-                # the activity feed reports "completed" a moment ahead of
-                # publish/gate-review outcome — a pre-existing visibility
-                # gap (the feed reflects pipeline completion, not
-                # publication status).
-                log_thinking(
-                    "run_event",
-                    f"Research completed: {question[:200]}",
-                    {"request_id": request_id},
+            summary = ctx.dossier_summary
+            emit({"type": "done", "status": "researched"})
+            with get_session() as session:
+                # Guarded on status='running': a DELETE that cancelled the row
+                # mid-run must not be overwritten back to a live status.
+                written = session.execute(
+                    text("""
+                        UPDATE research_requests
+                        SET status = 'researched',
+                            result_json = :result,
+                            pipeline_trace = :trace,
+                            debug_log = :debug_log,
+                            total_tokens = :tokens,
+                            llm_calls = :llm_calls,
+                            duration_ms = :duration,
+                            sites_found = :sites,
+                            tools_used = :tools,
+                            completed_at = NOW()
+                        WHERE id = :id AND status = 'running'
+                    """),
+                    {
+                        "id": request_id,
+                        "result": json.dumps({"dossier": summary, "title": None}),
+                        "trace": json.dumps(pipeline_trace),
+                        "debug_log": json.dumps(ctx.debug_log),
+                        "tokens": ctx.total_tokens,
+                        "llm_calls": ctx.llm_call_count,
+                        "duration": duration_ms,
+                        "sites": len(ctx.registry.sources),
+                        "tools": len(ctx.specialist_analyses),
+                    },
                 )
-                # Sync DB + citation work — run in a thread so the event loop
-                # (SSE streams, other runs) is not blocked for its duration.
-                await asyncio.to_thread(_auto_publish, request_id)
+                session.commit()
+            researched = (ctx, duration_ms, affected_rows(written) > 0)
 
     except Exception as exc:
         from pipeline.lyra.minimax_limiter import (
@@ -664,6 +620,56 @@ async def _process_request(
             loop.call_later(10, _drop_live_events, request_id)
         except RuntimeError:
             _drop_live_events(request_id)
+
+    if researched is not None:
+        await _close_out_researched(request_id, question, is_batch, *researched)
+
+
+async def _close_out_researched(
+    request_id: str, question: str, is_batch: bool, ctx: Any, duration_ms: int, written: bool
+) -> None:
+    """What follows a committed research-only run: the corpus snippets, the graph node, the
+    thinking-log event and the owner notice.
+
+    Outside the run's failure handling on purpose: the dossier and the 'researched' status
+    are committed, so a failure here is raised (the supervisor logs it with its traceback)
+    and never rewrites the row to 'failed' or hands its graph node back to the frontier.
+    """
+    summary = ctx.dossier_summary
+    # Snippet documents + run links (the dossier itself is already written).
+    await _persist_training_corpus(ctx, request_id, None)
+    if not written:
+        logger.warning(
+            "[THEO] Request %s was no longer 'running' at research end (cancelled "
+            "mid-run?): the dossier stays in research_artifacts, the status was not written.",
+            request_id,
+        )
+        return
+    logger.info(
+        "[THEO] Request %s researched in %dms (%d tokens), dossier artifact %s",
+        request_id,
+        duration_ms,
+        ctx.total_tokens,
+        summary["artifact_id"],
+    )
+    if is_batch:
+        # The frontier topic is researched; its paper follows in a Claude session.
+        from pipeline.lyra.research_graph import mark_node_explored
+
+        mark_node_explored(request_id)
+
+        from pipeline.lyra.thinking_log import log_thinking
+
+        log_thinking(
+            "run_event",
+            f"Dossier ready: {question[:200]}",
+            {
+                "request_id": request_id,
+                "event": "dossier_ready",
+                "final_claims": summary["counts"]["final_claims"],
+            },
+        )
+    _notify_dossier_ready(request_id, question, summary)
 
 
 # Hard ceiling on a single research run. The user's explicit guidance is that
@@ -768,160 +774,6 @@ def _read_progress_sig(request_id: str) -> tuple | None:
         return None
 
 
-def _auto_publish(request_id: str) -> None:
-    """DB-level publish for quality-gate-passing batch papers (2026-07-26).
-
-    Mirrors POST /theo/research/{id}/publish minus the HTTP layer: fresh
-    papers have no section approvals, so the legacy approved_by path applies
-    with the full report as the published view. No Discord role refresh —
-    the feeder's papers are system-authored ('Theo'). Gate failures leave
-    the paper unpublished and ping the Discord webhook for manual review.
-    """
-    from datetime import UTC, datetime
-
-    from api.routes.theo import _make_slug
-    from api.services.theo_config import THEO_AUTO_PUBLISH_AUTHOR
-
-    try:
-        with get_session() as session:
-            row = session.execute(
-                text("""
-                    SELECT question, result_json, is_public, user_id
-                    FROM research_requests WHERE id = :id
-                """),
-                {"id": request_id},
-            ).fetchone()
-            if not row or row.is_public:
-                return
-            result = json.loads(row.result_json) if row.result_json else {}
-            quality = result.get("quality_score") or {}
-
-            # Citation integrity is recomputed on the artifact — the stored
-            # audit can be stale. The deterministic repair never fabricates
-            # or remaps a citation, so auto-publish may apply it directly.
-            from pipeline.lyra.theo_citations import validate_or_repair
-
-            report_text = result.get("report") or ""
-            repaired_text, artifact_report = validate_or_repair(report_text)
-            if repaired_text != report_text:
-                logger.info("[THEO] Auto-repaired citations for %s before publish", request_id)
-                result["report"] = repaired_text
-            result["audit"] = artifact_report
-
-            # The stored `quality.passed` has the audit verdict from write
-            # time baked into it, so repairing the artifact could never lift
-            # it — five papers sat held on that stale flag after the
-            # 2026-08-31 citation fixes made their audits pass. Re-derive it
-            # from the audit we just recomputed, with the same rule the judge
-            # applies; the LLM measurements it cannot redo stay as stored.
-            from pipeline.lyra.quality_gate import recompute_quality_passed
-
-            quality_passed = recompute_quality_passed(quality, artifact_report)
-            if not (quality_passed and artifact_report["passed"]):
-                logger.warning(
-                    "[THEO] Auto-publish gate failed for %s (quality=%s stored=%s audit=%s) — held.",
-                    request_id,
-                    quality_passed,
-                    quality.get("passed"),
-                    artifact_report["passed"],
-                )
-                try:
-                    from api.services.notify import send_discord_webhook
-
-                    send_discord_webhook(
-                        {
-                            "embeds": [
-                                {
-                                    "title": "Theo paper held — quality gate failed",
-                                    "description": (
-                                        f"`{request_id}`\n"
-                                        f"**{(result.get('title') or row.question)[:200]}**\n"
-                                        f"quality_passed={quality_passed} "
-                                        f"(stored={quality.get('passed')}) "
-                                        f"recomputed_audit_passed={artifact_report['passed']}\n"
-                                        f"issues: {(artifact_report.get('issues') or [])[:3]}"
-                                    ),
-                                    "color": 0xE67E22,
-                                }
-                            ]
-                        }
-                    )
-                except Exception:  # noqa: BLE001 — notification is best-effort
-                    pass
-                return
-
-            title = result.get("title") or row.question
-            slug = _make_slug(title)
-            collision = session.execute(
-                text("SELECT 1 FROM research_requests WHERE slug = :slug AND id != :id"),
-                {"slug": slug, "id": request_id},
-            ).fetchone()
-            if collision:
-                slug = f"{slug}-{request_id[:8]}"
-
-            now_iso = datetime.now(UTC).isoformat()
-            result["approved_by"] = THEO_AUTO_PUBLISH_AUTHOR
-            result["approved_at"] = now_iso
-            result["published_report"] = result.get("report") or ""
-            result["published_block_ids"] = []
-            result["published_hero_image"] = result.get("hero_image")
-
-            session.execute(
-                text("""
-                    UPDATE research_requests
-                    SET is_public = TRUE,
-                        published_at = NOW(),
-                        published_by = :author,
-                        slug = :slug,
-                        result_json = :result
-                    WHERE id = :id
-                """),
-                {
-                    "id": request_id,
-                    "author": THEO_AUTO_PUBLISH_AUTHOR,
-                    "slug": slug,
-                    "result": json.dumps(result),
-                },
-            )
-            session.commit()
-            author_discord_id = row.user_id
-
-        logger.info("[THEO] Auto-published %s as %r", request_id, slug)
-        indexnow_submit([indexnow_url(f"/research/{slug}"), indexnow_url("/research/")])
-        try:
-            from pipeline.lyra.theo_research_index import index_paper
-
-            index_paper(
-                paper_id=request_id,
-                paper_text=result["published_report"],
-                paper_title=title,
-                paper_slug=slug,
-                author_username=THEO_AUTO_PUBLISH_AUTHOR,
-                author_discord_id=author_discord_id,
-                published_at=now_iso,
-            )
-        except Exception as exc:  # noqa: BLE001 — same best-effort as the route
-            logger.error("[THEO] Qdrant indexing failed for %s: %s", request_id, exc)
-    except Exception as exc:  # noqa: BLE001 — auto-publish must never kill the worker
-        logger.error("[THEO] Auto-publish crashed for %s: %s", request_id, exc, exc_info=True)
-        try:
-            from api.services.notify import send_discord_webhook
-
-            send_discord_webhook(
-                {
-                    "embeds": [
-                        {
-                            "title": "Theo auto-publish CRASHED — paper stuck unpublished",
-                            "description": f"`{request_id}`\n{type(exc).__name__}: {exc}",
-                            "color": 0xE74C3C,
-                        }
-                    ]
-                }
-            )
-        except Exception:  # noqa: BLE001 — notification is best-effort
-            pass
-
-
 async def _run_with_stall_guard(
     request_id: str, question: str, specialist_options: dict | None, is_batch: bool
 ) -> None:
@@ -996,24 +848,28 @@ _avg_run_cache: tuple[float, float] | None = None
 
 
 def _avg_batch_run_hours() -> float:
-    """Measured wall-clock hours of one batch paper: average of the last 5
-    completed batch runs (duration_ms includes crawl-lane pacing and quota
-    sleeps). Falls back to THEO_PAPER_EST_HOURS without history."""
+    """Measured wall-clock hours of one research-only batch run: the average of
+    the last 5 batch rows that ended with a dossier (status 'researched', or
+    'completed' after the Claude publish, which keeps result_json['dossier']).
+    duration_ms includes crawl-lane pacing and quota sleeps. Full-pipeline runs
+    (no 'dossier' key) are excluded: their 4h of M3 writing no longer happens.
+    Falls back to THEO_RUN_EST_HOURS without history."""
     global _avg_run_cache
-    from api.services.theo_config import THEO_PAPER_EST_HOURS
+    from api.services.theo_config import THEO_RUN_EST_HOURS
 
     now = time.monotonic()
     if _avg_run_cache and now - _avg_run_cache[1] < 600:
         return _avg_run_cache[0]
-    hours = THEO_PAPER_EST_HOURS
+    hours = THEO_RUN_EST_HOURS
     try:
         with get_session() as session:
             avg_ms = session.execute(
                 text("""
                     SELECT AVG(duration_ms) FROM (
                         SELECT duration_ms FROM research_requests
-                        WHERE is_batch = TRUE AND status = 'completed'
+                        WHERE is_batch = TRUE AND status IN ('completed', 'researched')
                           AND duration_ms IS NOT NULL
+                          AND result_json::jsonb -> 'dossier' IS NOT NULL
                         ORDER BY completed_at DESC LIMIT 5
                     ) recent
                 """)
@@ -1042,9 +898,9 @@ def _batch_claim_allowed(
 
     1. Window: at most THEO_BATCH_MAX_DAYS_TO_RESET days before the reset
        (default 3 = Friday 00:00 UTC) — surplus is use-it-or-lose-it there.
-    2. Budget: the weekly remaining must cover the share of one paper that
-       burns BEFORE the reset (uniform burn at the measured pace of recent
-       batch papers) plus the Lyra reserve for every remaining day. The
+    2. Budget: the weekly remaining must cover the share of one research run
+       that burns BEFORE the reset (uniform burn at the measured pace of recent
+       research-only batch runs) plus the Lyra reserve for every remaining day. The
        weekend's LAST run may cross the reset — it finishes on Monday's
        fresh budget, and the window condition keeps Monday itself free of
        NEW starts. What must never happen is the weekly hitting 0%
@@ -1058,7 +914,7 @@ def _batch_claim_allowed(
     from api.services.theo_config import (
         THEO_BATCH_MAX_DAYS_TO_RESET,
         THEO_LYRA_DAILY_RESERVE_PCT,
-        THEO_PAPER_COST_PCT,
+        THEO_RUN_COST_PCT,
     )
 
     if not gate_open or tier != "HEALTHY":
@@ -1071,7 +927,7 @@ def _batch_claim_allowed(
         return False
     run_hours = max(avg_run_hours if avg_run_hours is not None else _avg_batch_run_hours(), 0.1)
     pre_reset_share = min(1.0, hours_left / run_hours)
-    required = pre_reset_share * THEO_PAPER_COST_PCT + days_left * THEO_LYRA_DAILY_RESERVE_PCT
+    required = pre_reset_share * THEO_RUN_COST_PCT + days_left * THEO_LYRA_DAILY_RESERVE_PCT
     return weekly_pct >= required
 
 
@@ -1280,11 +1136,34 @@ async def _maybe_run_thinking_pass() -> None:
         await asyncio.to_thread(run_curator_pass)
 
 
+_FEEDER_BACKLOG_SQL = text("""
+    SELECT
+        COUNT(*) FILTER (WHERE is_batch = TRUE
+                           AND status IN ('queued', 'running', 'deferred')) AS pending,
+        COUNT(*) FILTER (WHERE status = 'researched') AS unwritten
+    FROM research_requests
+""")
+
+
+def _read_feeder_backlog() -> tuple[int, int]:
+    """(batch rows queued/running/deferred, dossiers awaiting the Claude write)."""
+    with get_session() as session:
+        row = session.execute(_FEEDER_BACKLOG_SQL).fetchone()
+    return int(row.pending), int(row.unwritten)
+
+
+def _feeder_may_enqueue(pending: int, unwritten: int, cap: int) -> bool:
+    """The feeder adds a frontier topic only to an empty batch queue, and only while
+    fewer than `cap` researched dossiers wait for a write (spec 2.4)."""
+    return pending == 0 and unwritten < cap
+
+
 async def _feeder_loop() -> None:
     """Keep the batch queue fed from the knowledge-graph frontier.
 
-    Every 10 min: when no batch row is queued/running/deferred and the batch
-    gate inputs allow a start, promote the best frontier node to a queued
+    Every 10 min: when no batch row is queued/running/deferred, fewer than
+    THEO_MAX_UNWRITTEN_DOSSIERS dossiers wait for the Claude write, and the
+    batch gate inputs allow a start, promote the best frontier node to a queued
     research_request. Source injectors run hourly from the same loop (cheap
     SQL only). Pre-existing batch rows always drain first — the feeder only
     acts on an EMPTY batch queue.
@@ -1314,16 +1193,14 @@ async def _feeder_loop() -> None:
             # last_pass comes from thinking_log so restarts don't double-run.
             await _maybe_run_thinking_pass()
 
-            with get_session() as session:
-                pending = session.execute(
-                    text("""
-                        SELECT COUNT(*) FROM research_requests
-                        WHERE is_batch = TRUE
-                          AND status IN ('queued', 'running', 'deferred')
-                    """)
-                ).scalar()
-
-            if not pending:
+            pending, unwritten = _read_feeder_backlog()
+            if unwritten >= THEO_MAX_UNWRITTEN_DOSSIERS:
+                logger.info(
+                    "[THEO] Feeder paused: %d dossiers await the Claude write (cap %d)",
+                    unwritten,
+                    THEO_MAX_UNWRITTEN_DOSSIERS,
+                )
+            if _feeder_may_enqueue(pending, unwritten, THEO_MAX_UNWRITTEN_DOSSIERS):
                 # Mirror the claim-side gating so we never enqueue into a
                 # quota wall — the row would only sit and count against the
                 # pacing clock.

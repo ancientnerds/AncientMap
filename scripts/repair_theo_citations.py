@@ -45,14 +45,22 @@ from sqlalchemy import text  # noqa: E402
 
 from pipeline.database import get_session  # noqa: E402
 from pipeline.lyra.theo_citations import repair_artifact, validate_paper_artifact  # noqa: E402
+from pipeline.lyra.theo_publishing import (  # noqa: E402
+    JOURNALLED_PAPER_SQL,
+    refuse_journalled_paper,
+    write_unjournalled_result,
+)
 
 
 def _fetch_rows(session):
+    # A journalled paper changes only through theo_publish, whose gates re-run
+    # the citation audit on every write (Task 21b): the scan skips it.
     return session.execute(
-        text("""
+        text(f"""
             SELECT id::text, slug, is_public, result_json
             FROM research_requests
             WHERE status = 'completed' AND result_json IS NOT NULL
+              AND NOT ({JOURNALLED_PAPER_SQL})
             ORDER BY created_at
         """)
     ).fetchall()
@@ -90,6 +98,8 @@ def main() -> int:
     dirty = held = clean = 0
 
     with get_session() as session:
+        for request_id in sorted(apply_ids):
+            refuse_journalled_paper(session, request_id)
         for row in _fetch_rows(session):
             result = json.loads(row.result_json)
             report_md = result.get("report") or ""
@@ -133,10 +143,7 @@ def main() -> int:
                 or ""
             )
             result["audit"] = validate_paper_artifact(final_md)
-            session.execute(
-                text("UPDATE research_requests SET result_json = :r WHERE id = :id"),
-                {"id": row.id, "r": json.dumps(result)},
-            )
+            write_unjournalled_result(session, row.id, result)
             session.commit()
             print(
                 f"FIXED  {row.id}  (report={'yes' if changed else 'already-clean'}, "

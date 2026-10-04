@@ -18,7 +18,6 @@ from pipeline.lyra.prospector.corpus import StoryUnit
 from pipeline.lyra.prospector.extract_papers import (
     ABORT_REJECT_RATE,
     MAX_OUTPUT_TOKENS,
-    THINKING_OFF,
     Budget,
 )
 from pipeline.lyra.prospector.mentions import (
@@ -111,7 +110,6 @@ def extract_stories(
             MENTION_SCHEMA,
             MAX_OUTPUT_TOKENS,
             temperature=temperature,
-            thinking=THINKING_OFF,
             usage=usage,
         )
         budget.charge(usage)

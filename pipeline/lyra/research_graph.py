@@ -68,7 +68,9 @@ def build_graph_from_state(state: Any, request_id: str) -> tuple[list[dict], lis
     - one ``topic`` node per unexplored rabbit hole (frontier)
     - ``leads_to`` edges paper -> every topic it surfaced
     """
-    paper_label = (getattr(state, "paper_title", "") or state.question).strip()
+    # A run ends at the dossier (research only since 2026-09-26): there is no
+    # paper title yet, so the run's paper node carries the question.
+    paper_label = state.question.strip()
     paper_norm = normalize_label(paper_label)
 
     nodes: dict[tuple[str, str], dict] = {}

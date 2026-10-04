@@ -3,10 +3,10 @@
 Runs in parallel with angle_search (both listen on AngleCreated). For each
 angle, asks a specialist for 3-5 short image queries, fans those out across
 the imagery connectors, dedupes, and stores serialized ImageCandidate dicts
-in the state pool. ProbativeImagesHandler later selects from this pool.
+in the state pool. The DossierHandler persists the pool; the Claude image
+check picks from it.
 
-If the feature flag is off, this handler no-ops so the pool stays empty and
-PIH's on-demand fetch fallback takes over transparently.
+If the feature flag is off, this handler no-ops so the pool stays empty.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ class AngleImageResearchHandler(BaseHandler):
 
     async def _on_angle_created(self, event: AngleCreated):
         settings = _get_settings()
-        if not getattr(settings, "probative_images_enabled", True):
+        if not settings.probative_images_enabled:
             return
 
         angle = next((a for a in self.state.angles if a.id == event.angle_id), None)

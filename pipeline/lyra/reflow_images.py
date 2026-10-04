@@ -38,6 +38,11 @@ from pipeline.lyra.theo_image_captions import (
     insert_image_after_paragraph,
     resolve_section_heading,
 )
+from pipeline.lyra.theo_publishing import (
+    JOURNALLED_PAPER_SQL,
+    refuse_journalled_paper,
+    write_unjournalled_result,
+)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -172,12 +177,16 @@ def _reflow_report(report: str, probative_images: list[dict]) -> tuple[str, dict
 
 
 def _fetch_papers(slug: str | None) -> list[dict]:
+    # A journalled paper changes only through theo_publish (Task 21b): --all
+    # skips it, --slug refuses it.
     with engine.connect() as conn:
         if slug:
+            refuse_journalled_paper(conn, slug)
             rows = conn.execute(
                 text(
                     "SELECT id::text, slug, result_json FROM research_requests "
-                    "WHERE slug = :slug AND is_public = TRUE AND status = 'completed'"
+                    "WHERE slug = :slug AND is_public = TRUE AND status = 'completed' "
+                    f"AND NOT ({JOURNALLED_PAPER_SQL})"
                 ),
                 {"slug": slug},
             ).fetchall()
@@ -186,6 +195,7 @@ def _fetch_papers(slug: str | None) -> list[dict]:
                 text(
                     "SELECT id::text, slug, result_json FROM research_requests "
                     "WHERE is_public = TRUE AND status = 'completed' "
+                    f"AND NOT ({JOURNALLED_PAPER_SQL}) "
                     "ORDER BY published_at DESC"
                 )
             ).fetchall()
@@ -226,10 +236,7 @@ def _process(paper: dict, apply: bool) -> tuple[str, dict, str]:
     result["report"] = new_report
     result["probative_images"] = stats["surviving_probative"]
     with engine.connect() as conn:
-        conn.execute(
-            text("UPDATE research_requests SET result_json = :json WHERE id = :id"),
-            {"json": json.dumps(result), "id": paper["id"]},
-        )
+        write_unjournalled_result(conn, paper["id"], result)
         conn.commit()
     return (
         slug,

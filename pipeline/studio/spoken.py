@@ -1,0 +1,597 @@
+"""Spoken vs display text: they may differ only in how numbers and units are spelled.
+
+The narrator reads `spoken` ("about a thousand tonnes"), the captions and SRT show `display`
+("about 1,000 tonnes"). `normalize_tokens` maps both to one canonical token list: number words
+become digits (years such as "nineteen sixty-six" and "twenty fourteen" included, "four and a
+half" is 4.5, "6 million" and "one point five million" are numbers too), ordinal words become
+digit ordinals ("twenty-first", "one hundred and first" and "the two hundredth" are 21st, 101st
+and 200th, "the thousandth" is 1000th), decades and centuries become their digits ("the
+nineteen-sixties" is the 1960s, "the twenty-tens" the 2010s, "the fifteen hundreds" the 1500s,
+"the two thousands" the 2000s), thousands separators go ("1,000th" is 1000th), unit words and
+symbols become one unit token ("square metres" is m², "two millimetres" 2 mm, "twenty-three
+degrees" 23°), a range written with a dash is its two numbers and "to" ("12–15 m" is "twelve
+to fifteen metres"), edge punctuation is ignored and so is case, save that only an upper-case
+Roman numeral is a number, a possessive "'s" is a word of its own.
+Clause punctuation after a number word (, ; : . ! ? … or a dash) still ends that number:
+"forty, six" is 40 and 6, never 46. Any other difference is a script error.
+
+Where the words allow two readings, both stand and `spelling_mismatch` accepts a display that
+shows either: the British "two hundred and fifty thousand" is 250,000, "between five hundred
+and one thousand" is 500 and 1,000; "one point five" is 1.5, but in "at one point five
+hundred men" it is 1, "point" and 500; "a thirty-second exposure" may be a 30-second one;
+"the Second" is 2nd or the regnal numeral II ("Ramesses the Second" is "Ramesses II"); an
+upper-case Roman numeral I-XXXIX is itself or its number, cardinal or ordinal ("World War II"
+is "World War Two", "Troy VI" "Troy Six", "the XIX Dynasty" "the Nineteenth Dynasty"); a day
+ordinal right after its month name is the ordinal or the bare day ("June twenty-first" is
+"June 21st" or "June 21"), and so is "the" and a day ordinal in a date, the "the" dropped
+("June the twenty-first" is "June 21" too, "the twenty-first of December" "21 December" or
+"21st December"). `normalize_tokens` gives the primary reading, every number run read as far as
+it goes (but "6 million" is 6 and "million" there, as the spoken "two thousand million" is 2000
+and "million").
+
+Known limits: two numbers spoken back to back with no punctuation between them, the second a
+British "hundred and" group, read like the plan's "one thousand five hundred and one thousand
+six hundred fifty" (1,500 and 1,650), so "a hundred thousand two hundred and fifty thousand" is
+100,200 and 50,000; a comma after the first number makes it 100,000 and 250,000. The pronoun
+"I" is an upper-case Roman numeral too, so "one said" against "I said" goes unnoticed.
+"""
+
+from __future__ import annotations
+
+import math
+import re
+
+ONES = {
+    "zero": 0, "nought": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13,
+    "fourteen": 14, "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18,
+    "nineteen": 19,
+}  # fmt: skip
+TENS = {
+    "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70,
+    "eighty": 80, "ninety": 90,
+}  # fmt: skip
+MAGNITUDES = {"thousand": 1_000, "million": 1_000_000, "billion": 1_000_000_000}
+ORDINAL_MAGNITUDES = {f"{w}th": v for w, v in MAGNITUDES.items()}  # "thousandth": 1000
+# a magnitude spelled as a number word or as its ordinal: the ordinal multiplies the group
+# before it just as the number word does ("five hundred thousandth" is 500,000th), so the
+# look-ahead that decides whether a group is multiplied reads both
+ANY_MAGNITUDE = {**MAGNITUDES, **ORDINAL_MAGNITUDES}
+# "hundredth" and the ordinal magnitudes end a run as the ordinal of all they multiply: "the two
+# hundredth" is 200th, "the one thousand two hundredth" 1200th, a bare "thousandth" 1000th
+SCALE_ORDINALS = {"hundredth": 100, **ORDINAL_MAGNITUDES}
+# the plural tens words name a decade: "the sixties" is the 60s, "the nineteen-sixties" the 1960s,
+# "the twenty-tens" the 2010s
+DECADES = {"tens": 10, **{f"{w[:-1]}ies": v for w, v in TENS.items()}}
+ORDINALS = {
+    "first": "1st", "second": "2nd", "third": "3rd", "fourth": "4th", "fifth": "5th",
+    "sixth": "6th", "seventh": "7th", "eighth": "8th", "ninth": "9th", "tenth": "10th",
+    "eleventh": "11th", "twelfth": "12th", "thirteenth": "13th", "fourteenth": "14th",
+    "fifteenth": "15th", "sixteenth": "16th", "seventeenth": "17th", "eighteenth": "18th",
+    "nineteenth": "19th", "twentieth": "20th", "thirtieth": "30th", "fortieth": "40th",
+    "fiftieth": "50th", "sixtieth": "60th", "seventieth": "70th", "eightieth": "80th",
+    "ninetieth": "90th",
+}  # fmt: skip
+# the ordinals that end a compound one after a tens word: "twenty-first" is "21st"
+UNIT_ORDINALS = {w: int(o[:-2]) for w, o in ORDINALS.items() if int(o[:-2]) < 10}
+# a spoken day ordinal right after one of these may show as the bare day: "June 21"
+MONTHS = frozenset(
+    (
+        "january", "february", "march", "april", "may", "june", "july", "august", "september",
+        "october", "november", "december",
+    )
+)  # fmt: skip
+UNITS = {
+    "t": "t", "tonne": "t", "tonnes": "t", "ton": "t", "tons": "t",
+    "m": "m", "metre": "m", "metres": "m", "meter": "m", "meters": "m",
+    "km": "km", "kilometre": "km", "kilometres": "km", "kilometer": "km", "kilometers": "km",
+    "cm": "cm", "centimetre": "cm", "centimetres": "cm", "centimeter": "cm", "centimeters": "cm",
+    "mm": "mm", "millimetre": "mm", "millimetres": "mm", "millimeter": "mm", "millimeters": "mm",
+    "kg": "kg", "kilogram": "kg", "kilograms": "kg",
+    "ft": "ft", "foot": "ft", "feet": "ft",
+    "ha": "ha", "hectare": "ha", "hectares": "ha",
+    "m²": "m²", "km²": "km²", "cm²": "cm²", "mm²": "mm²", "ft²": "ft²",
+    "m³": "m³", "km³": "km³", "cm³": "cm³", "mm³": "mm³", "ft³": "ft³",
+    "%": "percent", "percent": "percent",
+    "°": "°", "degree": "°", "degrees": "°",
+    # dotted forms without their last full stop: _words strips it as edge punctuation
+    "bc": "bc", "bce": "bc", "b.c": "bc", "b.c.e": "bc",
+    "ad": "ad", "ce": "ad", "a.d": "ad", "c.e": "ad",
+}  # fmt: skip
+# "square metres" is "m²", "cubic metres" "m³": the word before a length unit
+POWERS = {"square": "²", "cubic": "³"}
+LENGTHS = ("m", "km", "cm", "mm", "ft")  # the units a POWERS word raises
+# the unit symbols written glued to their number: "15%" is "15" and "%", "23°" "23" and "°"
+GLUED = ("%", "°")
+EDGE = ".,;:!?\"'()[]…—–“”‘’"
+STOPS = ",;:.!?…—–"  # trailing punctuation that closes a clause, and with it a spoken number
+_NUMBER = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"  # "1,000.5", "1000", "2.5"
+_DIGITS_RE = re.compile(rf"^{_NUMBER}$")
+_RANGE_RE = re.compile(rf"^({_NUMBER})[-–]({_NUMBER})$")  # "12–15", "800–1,000", "10-20"
+# "21st", "1000th", "1,000th"
+_ORDINAL_DIGITS_RE = re.compile(r"^(?:\d{1,3}(?:,\d{3})+|\d+)(?:st|nd|rd|th)$")
+_DECADE_DIGITS_RE = re.compile(r"^(\d*0)['’]?s$")  # "1960s", "1960's", "60s" ("'60s" unquoted)
+# "II's" is "II" and "'s", "IT'S" "it" and "'s"; "1960's" is a decade
+_POSSESSIVE_RE = re.compile(r"^(.*\D)(['’]s)$", re.IGNORECASE)
+_ROMAN = (
+    (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"), (50, "l"),
+    (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
+)  # fmt: skip
+_PER_CENT_RE = re.compile(r"\bper\s+cent\b", re.IGNORECASE)  # "Per cent" is "percent" too
+
+
+def _format(integer: int, fraction: str = "") -> str:
+    """The canonical digits of `integer`.`fraction`, exact at any length: two numbers that
+    differ in any digit get different tokens. Only trailing zeros of the fraction are spelling
+    ("2.50" is "2.5", "2.0" is "2"); no float is involved, since one would round them away."""
+    fraction = fraction.rstrip("0")
+    return f"{integer}.{fraction}" if fraction else str(integer)
+
+
+def _scaled(integer: int, fraction: str, magnitude: int) -> str:
+    """The canonical digits of `integer`.`fraction` times `magnitude`, exact like `_format`:
+    1.5 million is "1500000"."""
+    scale = 10 ** len(fraction)
+    product = (integer * scale + int(fraction or "0")) * magnitude
+    return _format(product // scale, str(product % scale).zfill(len(fraction)))
+
+
+def _roman(n: int) -> str:
+    """`n` (1-3999) in lower-case Roman numerals: 23 is "xxiii"."""
+    out = ""
+    for value, letters in _ROMAN:
+        count, n = divmod(n, value)
+        out += letters * count
+    return out
+
+
+_ORDINAL_OF = {int(o[:-2]): o for o in ORDINALS.values()}  # 2: "2nd", 30: "30th"
+
+
+def _ordinal(n: int) -> str:
+    """`n` (1-99) as a digit ordinal: 21 is "21st", 12 "12th", 30 "30th"."""
+    return _ORDINAL_OF.get(n) or f"{n}{_ORDINAL_OF[n % 10][-2:]}"
+
+
+# an upper-case Roman numeral I-XXXIX is a number as well, cardinal or ordinal: "World War II"
+# is "World War Two", "the XIX Dynasty" "the Nineteenth Dynasty". In lower case it stays a
+# word, and from XL on the letters are units and abbreviations as well (L, C, CM, MM)
+ROMAN_NUMERALS = {_roman(n).upper(): n for n in range(1, 40)}
+
+
+def _words(text: str) -> tuple[list[str], set[int]]:
+    """The words without edge punctuation, lower-cased but for an upper-case Roman numeral of
+    ROMAN_NUMERALS, and the indices of the words that close a clause. That punctuation is the
+    only sign that "forty, six" is two numbers, so the number parser never reads past such a
+    word. A split token ("sixty-six," "15%," or "23°,") hands the stop to its last part; a
+    free-standing dash or comma ("forty — six") to the word before. A possessive "'s" is a word
+    of its own, so "the Second's" and "II's" differ only in the number. A range written with a
+    dash is its two numbers with "to" between them: "12–15" and "12-15" are the spoken "twelve
+    to fifteen"."""
+    out: list[str] = []
+    stops: set[int] = set()
+    for raw in _PER_CENT_RE.sub("percent", text).split():
+        closes = raw.strip("-") == "" or any(ch in STOPS for ch in raw[len(raw.rstrip(EDGE)) :])
+        token = raw.strip(EDGE)
+        possessive = _POSSESSIVE_RE.match(token)
+        if possessive:
+            token = possessive[1]
+        sign = ""
+        if token.endswith(GLUED) and token[:-1]:
+            token, sign = token[:-1], token[-1]
+        span = _RANGE_RE.match(token)
+        parts = [span[1], "to", span[2]] if span else [p for p in token.split("-") if p]
+        # only its case tells the numeral "II" from a word: the one word kept as written
+        out.extend(p if p in ROMAN_NUMERALS else p.lower() for p in parts)
+        if sign:
+            out.append(sign)
+        if possessive:
+            out.append(possessive[2].lower())
+        if closes and out:
+            stops.add(len(out) - 1)
+    return out, stops
+
+
+def _small(words: list[str], stops: set[int], i: int) -> tuple[int, int] | None:
+    """A number 0-99 at words[i] ("twenty four" counts as one, "twenty, four" does not);
+    (value, next index)."""
+    w = words[i]
+    if w in ONES:
+        return ONES[w], i + 1
+    if w in TENS:
+        value = TENS[w]
+        if (
+            i not in stops
+            and i + 1 < len(words)
+            and words[i + 1] in ONES
+            and ONES[words[i + 1]] < 10
+        ):
+            return value + ONES[words[i + 1]], i + 2
+        return value, i + 1
+    return None
+
+
+def _multiplied(words: list[str], stops: set[int], nxt: int) -> bool:
+    """Whether the group ending before words[nxt] is multiplied by a "hundred" or a magnitude
+    that follows it, the ordinal forms ("hundredth", "thousandth") included. A group that
+    closes a clause is final whatever follows it."""
+    return (
+        nxt < len(words)
+        and nxt - 1 not in stops
+        and (words[nxt] in ("hundred", "hundredth") or words[nxt] in ANY_MAGNITUDE)
+    )
+
+
+def _joins_after_and(words: list[str], stops: set[int], i: int) -> bool:
+    """ "and" surely continues a number only before a final 0-99 ("two thousand and
+    fourteen"); before a 0-99 that a hundred or a magnitude multiplies it does so only in the
+    British reading of `_british_and`. A 0-99 that closes a clause is final whatever follows
+    it."""
+    if i >= len(words):
+        return False
+    small = _small(words, stops, i)
+    if small is None:
+        return False
+    return not _multiplied(words, stops, small[1])
+
+
+def _british_and(words: list[str], stops: set[int], i: int, last_magnitude: float) -> bool:
+    """Whether the "and" at words[i], after "hundred", may join a 0-99 that a magnitude smaller
+    than the run's last one multiplies, as British English does: "two hundred and fifty
+    thousand" is 250,000. The same words may be two numbers ("between five hundred and one
+    thousand" is 500 and 1,000), so the run keeps its end before the "and" as a second
+    reading."""
+    small = _small(words, stops, i + 1) if i + 1 < len(words) else None
+    if small is None or not _multiplied(words, stops, small[1]):
+        return False
+    after = words[small[1]]
+    return after in ANY_MAGNITUDE and ANY_MAGNITUDE[after] < last_magnitude
+
+
+def _group_magnitude(words: list[str], stops: set[int], h: int) -> int:
+    """The magnitude that multiplies the hundred-group whose "hundred" is words[h], or 0 when
+    none does. The group runs on through its 0-99: "two hundred fifty thousand" is multiplied
+    by a thousand, just as "two hundred thousand" and "two hundred thousandth" are. A word
+    that closes a clause ends the group, and so does a "hundredth" and any word that is
+    neither a 0-99 nor a magnitude."""
+    if h in stops or words[h] == "hundredth":
+        return 0
+    j = h + 1
+    small = _small(words, stops, j) if j < len(words) else None
+    if small is not None:
+        if small[1] - 1 in stops:
+            return 0
+        j = small[1]
+    return ANY_MAGNITUDE[words[j]] if j < len(words) and words[j] in ANY_MAGNITUDE else 0
+
+
+def _small_continues(
+    words: list[str], stops: set[int], nxt: int, prev: str, last_magnitude: float
+) -> bool:
+    """Whether a 0-99 ending before words[nxt] continues the run after `prev` (the last word
+    kind the run consumed) instead of starting a new number. A 0-99 follows only "hundred",
+    a magnitude or a joining "and": "between two and three", "two three-tonne" and "fifteen
+    hundred two hundred" are two numbers each. After a magnitude it may open the next group
+    ("one thousand five hundred") or a smaller magnitude ("one million two thousand"), never
+    an equal or larger one ("two thousand three thousand" is two numbers). The same holds
+    past a whole hundred-group, its 0-99 included: "one million two hundred fifty thousand"
+    goes on, "a hundred thousand two hundred thousand" and "a hundred thousand two hundred
+    fifty thousand" are two numbers each. A 0-99 or a hundred that closes a clause is the
+    run's last group, so the word after it decides nothing. An ordinal "hundredth" or
+    magnitude after the 0-99 counts as its number word: "two thousand three thousandth" is two
+    numbers as well."""
+    if prev == "":
+        return True
+    if prev == "small":
+        return False
+    if nxt - 1 in stops:
+        return True
+    if nxt < len(words) and words[nxt] in ("hundred", "hundredth"):
+        return prev == "magnitude" and _group_magnitude(words, stops, nxt) < last_magnitude
+    if nxt < len(words) and words[nxt] in ANY_MAGNITUDE:
+        return ANY_MAGNITUDE[words[nxt]] < last_magnitude
+    return True
+
+
+def _number_run(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]] | None:
+    """Parse the number-word run starting at words[i]: its readings as (canonical digits, next
+    index), the run read as far as it goes first, then each earlier end the words also allow
+    (before a British "and", see `_british_and`, or a decimal "point"). The run ends at the
+    first word that closes a clause."""
+    if (
+        words[i] in ("a", "an")
+        and i not in stops
+        and i + 1 < len(words)
+        and (words[i + 1] == "hundred" or words[i + 1] in MAGNITUDES)
+    ):
+        words = [*words[:i], "one", *words[i + 1 :]]
+    first = _small(words, stops, i)
+    if first is None:
+        return None
+    a, j = first
+    # a decade or a century spoken as a plural: "nineteen-sixties" is the 1960s, "twenty tens"
+    # the 2010s, "fifteen hundreds" the 1500s and "two thousands" the 2000s
+    if j - 1 not in stops and j < len(words):
+        if 10 <= a <= 99 and words[j] in DECADES:
+            return [(f"{a * 100 + DECADES[words[j]]}s", j + 1)]
+        if a >= 1 and words[j] == "hundreds":
+            return [(f"{a * 100}s", j + 1)]
+        if 1 <= a <= 9 and words[j] == "thousands":
+            return [(f"{a * 1000}s", j + 1)]
+    # year pattern: "nineteen sixty six", "twenty fourteen", "nineteen oh five"; never when a
+    # hundred or a magnitude multiplies the second group ("eighteen twelve thousand" is 18 and
+    # 12000, not 1812 and a stray "thousand")
+    if (
+        10 <= a <= 99
+        and j - 1 not in stops
+        and j < len(words)
+        and words[j] not in ("hundred", *MAGNITUDES)
+    ):
+        if (
+            words[j] == "oh"
+            and j not in stops
+            and j + 1 < len(words)
+            and words[j + 1] in ONES
+            and not _multiplied(words, stops, j + 2)
+        ):
+            return [(str(a * 100 + ONES[words[j + 1]]), j + 2)]
+        second = _small(words, stops, j)
+        if second is not None and second[0] >= 10 and not _multiplied(words, stops, second[1]):
+            return [(str(a * 100 + second[0]), second[1])]
+    total, current = 0, 0
+    prev = ""  # what the run consumed last: "", "small", "hundred", "magnitude" or "and"
+    last_magnitude: float = math.inf  # the first magnitude may be any, later ones only smaller
+    ends: list[tuple[str, int]] = []  # the earlier ends of the second readings
+    while i < len(words):
+        w = words[i]
+        small = _small(words, stops, i)
+        if small is not None:
+            if not _small_continues(words, stops, small[1], prev, last_magnitude):
+                break
+            current += small[0]
+            i, prev = small[1], "small"
+        elif w == "hundred" and prev == "small":
+            current *= 100
+            i, prev = i + 1, "hundred"
+        elif w in MAGNITUDES and prev in ("small", "hundred") and MAGNITUDES[w] < last_magnitude:
+            total += current * MAGNITUDES[w]
+            current, last_magnitude = 0, MAGNITUDES[w]
+            i, prev = i + 1, "magnitude"
+        elif (
+            w == "and"
+            and i not in stops
+            and prev in ("hundred", "magnitude")
+            and _joins_after_and(words, stops, i + 1)
+        ):
+            i, prev = i + 1, "and"
+        elif (
+            w == "and"
+            and i not in stops
+            and prev == "hundred"
+            and _british_and(words, stops, i, last_magnitude)
+        ):
+            ends.append((_format(total + current), i))
+            i, prev = i + 1, "and"
+        else:
+            break
+        if i - 1 in stops:
+            break
+    # a run may end on an ordinal "hundredth" or magnitude, which multiplies what it would as a
+    # number word: "two hundredth" is 200th, "one thousand two hundredth" 1200th, "five hundred
+    # thousandth" 500,000th
+    if i - 1 not in stops and i < len(words) and words[i] in SCALE_ORDINALS:
+        scale = SCALE_ORDINALS[words[i]]
+        if (words[i] == "hundredth" and prev == "small") or (
+            words[i] != "hundredth" and prev in ("small", "hundred") and scale < last_magnitude
+        ):
+            return [(f"{total + current * scale}th", i + 1), *ends]
+    # a run that ends on a tens word may end on a unit ordinal: "twenty-first" is 21st and
+    # "one hundred thirty-second" 132nd, never 20 and 1st. "second" is a time unit as well,
+    # so "a thirty-second exposure" may be a 30-second one: that end is a second reading
+    if (
+        prev == "small"
+        and words[i - 1] in TENS
+        and i - 1 not in stops
+        and i < len(words)
+        and words[i] in UNIT_ORDINALS
+    ):
+        if words[i] == "second":
+            ends.append((_format(total + current), i))
+        ordinal = f"{total + current + UNIT_ORDINALS[words[i]]}{ORDINALS[words[i]][-2:]}"
+        return [(ordinal, i + 1), *ends]
+    # a British "and" after a hundred or a magnitude joins a final ordinal as well: "one
+    # hundred and first" is 101st
+    if (
+        prev in ("hundred", "magnitude")
+        and i - 1 not in stops
+        and i not in stops
+        and i + 1 < len(words)
+        and words[i] == "and"
+        and words[i + 1] in ORDINALS
+    ):
+        ordinal = ORDINALS[words[i + 1]]
+        return [(f"{total + current + int(ordinal[:-2])}{ordinal[-2:]}", i + 2), *ends]
+    # a fraction: "four and a half" is 4.5, and the whole number before a word "and" is a
+    # second reading. A decimal needs a digit word after "point": "one point ten thousand" is
+    # 1, "point" and 10,000, never 1 with "point" swallowed. Before a digit word the "point"
+    # may still be a word, "at one point five hundred men" is 1, "point" and 500 too: that end
+    # is a second reading
+    digits = ""
+    if (
+        prev == "small"
+        and i - 1 not in stops
+        and words[i : i + 3] == ["and", "a", "half"]
+        and i not in stops
+        and i + 1 not in stops
+    ):
+        ends.append((_format(total + current), i))
+        digits, i = "5", i + 3
+    elif (
+        i - 1 not in stops
+        and i not in stops
+        and i + 1 < len(words)
+        and words[i] == "point"
+        and words[i + 1] in ONES
+        and ONES[words[i + 1]] < 10
+    ):
+        ends.append((_format(total + current), i))
+        i += 1
+        while i < len(words) and words[i] in ONES and ONES[words[i]] < 10:
+            digits += str(ONES[words[i]])
+            i += 1
+            if i - 1 in stops:
+                break
+    # a decimal takes a magnitude after it like a whole number does: "one point five
+    # million" is 1,500,000
+    if (
+        digits
+        and i - 1 not in stops
+        and i < len(words)
+        and words[i] in MAGNITUDES
+        and MAGNITUDES[words[i]] < last_magnitude
+    ):
+        return [(_scaled(total + current, digits, MAGNITUDES[words[i]]), i + 1), *ends]
+    return [(_format(total + current, digits), i), *ends]
+
+
+def _is_day(token: str) -> bool:
+    """Whether `token` is a digit ordinal a day of the month can have, 1st-31st."""
+    return bool(_ORDINAL_DIGITS_RE.match(token)) and 1 <= int(token[:-2]) <= 31
+
+
+def _after_month(words: list[str], stops: set[int], i: int) -> bool:
+    """Whether a month name comes right before words[i]. A month name that closes a clause
+    starts no date ("in June, twenty-first")."""
+    return i > 0 and i - 1 not in stops and words[i - 1] in MONTHS
+
+
+def _days(
+    words: list[str], stops: set[int], i: int, readings: list[tuple[str, int]]
+) -> list[tuple[str, int]]:
+    """The bare day of each spoken ordinal 1st-31st among the `readings` of words[i] when a month
+    name comes right before it, as a second reading: "June twenty-first" may be "June 21" as
+    well as "June 21st"."""
+    if not _after_month(words, stops, i):
+        return []
+    return [(token[:-2], nxt) for token, nxt in readings if _is_day(token)]
+
+
+def _dates(
+    words: list[str], stops: set[int], i: int, ordinals: list[tuple[str, int]]
+) -> list[tuple[str, int]]:
+    """The day that "the" at words[i] and one of its `ordinals` 1st-31st name in a date, the
+    "the" dropped, as the ordinal or the bare day: after a month name ("June the twenty-first"
+    is "June 21st" or "June 21") and before "of" and a month name, whose "of" the reading takes
+    as well ("the twenty-first of December" is "21st December" or "21 December"; the month is a
+    token of its own). An ordinal that closes a clause is no day of a month after it ("the
+    first, of June")."""
+    days = [(token, nxt) for token, nxt in ordinals if _is_day(token)]
+    out = [*days, *_days(words, stops, i, days)] if _after_month(words, stops, i) else []
+    for token, nxt in days:
+        if (
+            nxt - 1 not in stops
+            and nxt not in stops
+            and nxt + 1 < len(words)
+            and words[nxt] == "of"
+            and words[nxt + 1] in MONTHS
+        ):
+            out += [(token, nxt + 1), (token[:-2], nxt + 1)]
+    return out
+
+
+def _readings(words: list[str], stops: set[int], i: int) -> list[tuple[str, int]]:
+    """The tokens that words[i] can start, each with the index after it, the primary reading
+    first. Only a number, "the" before an ordinal, a day after its month and an upper-case
+    Roman numeral can have more than one."""
+    w = words[i]
+    if w == "the" and i not in stops and i + 1 < len(words) and words[i + 1] != "the":
+        ordinals = [
+            (token, nxt)
+            for token, nxt in _readings(words, stops, i + 1)
+            if _ORDINAL_DIGITS_RE.match(token)
+        ]
+        # a regnal number: "Ramesses the Second" is "Ramesses II"
+        regnal = [(_roman(int(t[:-2])), nxt) for t, nxt in ordinals if 0 < int(t[:-2]) < 4000]
+        return [(w, i + 1), *regnal, *_dates(words, stops, i, ordinals)]
+    if w in ROMAN_NUMERALS:
+        n = ROMAN_NUMERALS[w]
+        return [(w.lower(), i + 1), (str(n), i + 1), (_ordinal(n), i + 1)]
+    if w in ONES or w in TENS or w in ("a", "an"):
+        run = _number_run(words, stops, i)
+        if run is not None:
+            return [*run, *_days(words, stops, i, run)]
+    if _DIGITS_RE.match(w):
+        whole, _, fraction = w.replace(",", "").partition(".")
+        plain = (_format(int(whole), fraction), i + 1)
+        # digits before a magnitude word are the digits and a word, as where a spoken run
+        # cannot take that magnitude ("two thousand million" is 2000 and "million"), or one
+        # number: "6 million" is 6,000,000 too
+        if i not in stops and i + 1 < len(words) and words[i + 1] in MAGNITUDES:
+            return [plain, (_scaled(int(whole), fraction, MAGNITUDES[words[i + 1]]), i + 2)]
+        return [plain]
+    decade = _DECADE_DIGITS_RE.match(w)
+    if decade:
+        return [(f"{int(decade[1])}s", i + 1)]
+    if w in DECADES:
+        return [(f"{DECADES[w]}s", i + 1)]
+    if _ORDINAL_DIGITS_RE.match(w):
+        return [(w.replace(",", ""), i + 1)]
+    if w in ORDINALS:
+        ordinal = [(ORDINALS[w], i + 1)]
+        return [*ordinal, *_days(words, stops, i, ordinal)]
+    if w in SCALE_ORDINALS:
+        return [(f"{SCALE_ORDINALS[w]}th", i + 1)]
+    if w in POWERS and i not in stops and i + 1 < len(words) and UNITS.get(words[i + 1]) in LENGTHS:
+        return [(UNITS[words[i + 1]] + POWERS[w], i + 2)]
+    if w in UNITS:
+        return [(UNITS[w], i + 1)]
+    return [(w, i + 1)]
+
+
+def _primary(words: list[str], stops: set[int], i: int) -> list[str]:
+    """The tokens of words[i:] in the primary reading, every number run read as far as it goes."""
+    out: list[str] = []
+    while i < len(words):
+        token, i = _readings(words, stops, i)[0]
+        out.append(token)
+    return out
+
+
+def normalize_tokens(text: str) -> list[str]:
+    """The canonical tokens of `text` in its primary reading."""
+    words, stops = _words(text)
+    return _primary(words, stops, 0)
+
+
+def spelling_mismatch(spoken: str, display: str) -> str | None:
+    """None when some reading of `spoken` has the tokens of some reading of `display`, so the
+    two differ only in number/unit spelling; else where they diverge. Nearly every text has one
+    reading; where the words allow two (a British "hundred and", a "point" that may be a word),
+    the display shows which one the narrator meant. The report follows the readings that agree
+    longest, each continued in its primary reading, so for a text with one reading it names the
+    first differing token."""
+    a_words, a_stops = _words(spoken)
+    b_words, b_stops = _words(display)
+    # both token streams in step: every (spoken index, display index) pair that k equal tokens
+    # reach, in the order of the primary readings
+    front, k = [(0, 0)], 0
+    while True:
+        reached: list[tuple[int, int]] = []
+        for i, j in front:
+            if i == len(a_words) and j == len(b_words):
+                return None
+            if i == len(a_words) or j == len(b_words):
+                continue
+            shown = _readings(b_words, b_stops, j)
+            for token, i_next in _readings(a_words, a_stops, i):
+                for other, j_next in shown:
+                    if token == other and (i_next, j_next) not in reached:
+                        reached.append((i_next, j_next))
+        if not reached:
+            break
+        front, k = reached, k + 1
+    a = _primary(a_words, a_stops, front[0][0])
+    b = _primary(b_words, b_stops, front[0][1])
+    if a and b:
+        return f"token {k}: spoken {a[0]!r} vs display {b[0]!r}"
+    return f"spoken has {k + len(a)} tokens, display {k + len(b)}"

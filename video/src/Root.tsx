@@ -1,85 +1,71 @@
 /**
- * Root — Remotion composition registry.
- *
- * Registers the WeeklyVideo composition with default props for Remotion Studio preview.
+ * Compositions. Both take the timeline as an input prop; calculateMetadata
+ * validates it (parseTimeline + checkBlocks), measures the narration clips and
+ * the images in the browser, and sets duration, fps and size from the
+ * timeline, so nothing about an episode is hard-coded here. The default props
+ * are the graphics-only demo timeline for `npm run studio`.
  */
+import React from 'react'
+import { type CalculateMetadataFunction, Composition } from 'remotion'
 
-import React from "react";
-import { Composition } from "remotion";
-import { WeeklyVideo } from "./WeeklyVideo";
-import type { Timeline } from "./types";
+import { narrationSpans } from './audio'
+import { checkBlocks, imagesToMeasure } from './blocks'
+import { Episode, type EpisodeProps } from './Episode'
+import { DEMO_TIMELINE } from './fixtures/demo'
+import { webglRenderer } from './gpu'
+import { audioSeconds, measureImages } from './media'
+import { loadBrandFonts } from './theme/fonts'
+import { Thumbnail, type ThumbnailProps, teaserOf } from './Thumbnail'
+import { parseTimeline } from './timeline'
 
-// Default props for Remotion Studio preview (no actual assets)
-const defaultProps: Timeline = {
-  fps: 30,
-  width: 1920,
-  height: 1080,
-  totalDurationFrames: 900, // 30 seconds preview
-  totalDurationSeconds: 30,
-  title: "This Week in Archaeology",
-  articleTitle: "Preview: Temple Discovery at Gobekli Tepe",
-  dateRange: "February 10-16, 2026",
-  segments: [
-    {
-      type: "intro",
-      startFrame: 0,
-      durationFrames: 240,
-      audio: "",
-      wordTimings: [],
-      titleText: "This Week in Archaeology",
-      dateRange: "February 10-16, 2026",
-    },
-    {
-      type: "transition",
-      startFrame: 240,
-      durationFrames: 60,
-      audio: "",
-      wordTimings: [],
-      narration: "Meanwhile, in Turkey...",
-    },
-    {
-      type: "story",
-      startFrame: 300,
-      durationFrames: 450,
-      audio: "",
-      wordTimings: [],
-      visuals: [],
-      lowerThird: {
-        siteName: "Gobekli Tepe",
-        period: "Pre-Pottery Neolithic",
-        country: "Turkey",
-        siteType: "Temple",
-      },
-      sectionHeading: "New Excavations & Fieldwork",
-    },
-    {
-      type: "outro",
-      startFrame: 750,
-      durationFrames: 150,
-      audio: "",
-      wordTimings: [],
-      credits: [
-        { channel: "World of Antiquity", clips_used: 3 },
-        { channel: "Stefan Milo", clips_used: 2 },
-      ],
-      sources: [],
-    },
-  ],
-};
+loadBrandFonts()
 
-export const RemotionRoot: React.FC = () => {
-  return (
-    <>
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <Composition
-        id="WeeklyVideo"
-        component={WeeklyVideo as any}
-        durationInFrames={defaultProps.totalDurationFrames}
-        fps={defaultProps.fps}
-        width={defaultProps.width}
-        height={defaultProps.height}
-        defaultProps={defaultProps as any}
-      />
-    </>
-  );
-};
+const episodeMetadata: CalculateMetadataFunction<EpisodeProps> = async ({ props }) => {
+  const timeline = parseTimeline(props.timeline)
+  checkBlocks(timeline)
+  const seconds = await Promise.all(timeline.audio.narration.map((n) => audioSeconds(n.src)))
+  const imageSizes = await measureImages(imagesToMeasure(timeline))
+  return {
+    durationInFrames: timeline.durationInFrames,
+    fps: timeline.fps,
+    width: timeline.width,
+    height: timeline.height,
+    props: { ...props, timeline, imageSizes, narrationSpans: narrationSpans(timeline.audio.narration, seconds, timeline.fps), gpu: webglRenderer() },
+  }
+}
+
+const thumbnailMetadata: CalculateMetadataFunction<ThumbnailProps> = async ({ props }) => {
+  const timeline = parseTimeline(props.timeline)
+  checkBlocks(timeline)
+  teaserOf(timeline, props.candidate)
+  if (!Number.isInteger(props.frame) || props.frame < 0 || props.frame >= timeline.durationInFrames) {
+    throw new Error(`Thumbnail frame ${props.frame} is outside the episode (0..${timeline.durationInFrames - 1})`)
+  }
+  const imageSizes = await measureImages(imagesToMeasure(timeline))
+  return { durationInFrames: 1, fps: timeline.fps, width: timeline.width, height: timeline.height, props: { ...props, timeline, imageSizes, gpu: webglRenderer() } }
+}
+
+export const RemotionRoot: React.FC = () => (
+  <>
+    <Composition
+      id="Episode"
+      component={Episode}
+      defaultProps={{ timeline: DEMO_TIMELINE, lint: false, narrationSpans: [], imageSizes: {}, gpu: '' }}
+      calculateMetadata={episodeMetadata}
+      durationInFrames={1}
+      fps={60}
+      width={1920}
+      height={1080}
+    />
+    <Composition
+      id="Thumbnail"
+      component={Thumbnail}
+      defaultProps={{ timeline: DEMO_TIMELINE, candidate: 1, frame: DEMO_TIMELINE.thumbnails[0].frame, lint: false, imageSizes: {}, gpu: '' }}
+      calculateMetadata={thumbnailMetadata}
+      durationInFrames={1}
+      fps={60}
+      width={1920}
+      height={1080}
+    />
+  </>
+)

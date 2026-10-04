@@ -1,12 +1,9 @@
 """Tests for pipeline.lyra.hallucination_gate."""
 
-import pytest
-
 from pipeline.lyra.hallucination_gate import (
     Specific,
     delete_sentences_with_specifics,
     extract_specifics,
-    repair_prose,
     verify_against_pack,
 )
 from pipeline.lyra.theo_citations import CitationRegistry
@@ -216,99 +213,3 @@ def test_delete_sentences_with_specifics_removes_offenders():
 def test_delete_sentences_with_specifics_empty_list_is_noop():
     prose = "Some prose here. More prose."
     assert delete_sentences_with_specifics(prose, []) == prose
-
-
-# ---------------------------------------------------------------------------
-# repair_prose
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_repair_prose_no_retries_when_clean():
-    """If there are no unsupported specifics, return immediately with zero retries."""
-
-    async def fake_llm(*a, **k):
-        raise AssertionError("llm should not be called")
-
-    prose = "Clean prose."
-    result, remaining, retries = await repair_prose(
-        prose, [], pack="", sources={}, original_question="", llm_call=fake_llm, settings=None
-    )
-    assert result == prose
-    assert remaining == []
-    assert retries == 0
-
-
-@pytest.mark.asyncio
-async def test_repair_prose_succeeds_on_first_retry():
-    """LLM returns clean prose on first attempt; no sentences deleted."""
-    registry = CitationRegistry()
-    registry.register_source("https://a", "a", "Debertolis measured it.")
-    pack = "Debertolis measured it."
-
-    async def fake_llm(system, user, max_tokens, settings, temperature):
-        return "Debertolis measured it."
-
-    unsupported = [Specific(kind="person", text="Kisheton", sentence="Kisheton did it.")]
-    result, remaining, retries = await repair_prose(
-        "Kisheton did it.",
-        unsupported,
-        pack=pack,
-        sources=registry.sources,
-        original_question="",
-        llm_call=fake_llm,
-        settings=None,
-    )
-    assert "Kisheton" not in result
-    assert remaining == []
-    assert retries == 1
-
-
-@pytest.mark.asyncio
-async def test_repair_prose_falls_back_to_deletion_after_retries():
-    """If LLM keeps returning bad prose, fall through to mechanical deletion."""
-
-    async def stubborn_llm(system, user, max_tokens, settings, temperature):
-        # LLM returns the same bad prose each retry — never clean
-        return "David Kisheton did it. More prose here."
-
-    unsupported = [
-        Specific(kind="person", text="David Kisheton", sentence="David Kisheton did it.")
-    ]
-    result, remaining, retries = await repair_prose(
-        "David Kisheton did it. More prose here.",
-        unsupported,
-        pack="",
-        sources={},
-        original_question="",
-        llm_call=stubborn_llm,
-        settings=None,
-        max_retries=2,
-    )
-    # After 2 retries + mechanical delete, the Kisheton sentence is gone
-    assert "Kisheton" not in result
-    assert "More prose here" in result
-    assert retries == 2
-
-
-@pytest.mark.asyncio
-async def test_repair_prose_llm_exception_falls_through():
-    """If the LLM raises, fall through to mechanical deletion gracefully."""
-
-    async def failing_llm(*a, **k):
-        raise RuntimeError("LLM is down")
-
-    unsupported = [Specific(kind="person", text="Kisheton", sentence="Kisheton did it.")]
-    result, remaining, retries = await repair_prose(
-        "Kisheton did it. Keep this sentence.",
-        unsupported,
-        pack="",
-        sources={},
-        original_question="",
-        llm_call=failing_llm,
-        settings=None,
-    )
-    assert "Kisheton" not in result
-    assert "Keep this sentence" in result
-    # We attempted one retry before the exception propagated out of the loop
-    assert retries >= 1

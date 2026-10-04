@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useDeferredValue, useRef } from 'react'
 import { config } from '../config'
 import { CATEGORY_COLORS, PERIOD_ORDER, SORTED_PERIODS, getCategoryColor, getPeriodColor, SOURCE_CONFIG } from '../constants/colors'
 import { useAuth } from '../contexts/AuthContext'
@@ -240,6 +240,13 @@ export default function DbAuditPage() {
   const heroPopoverRef = useRef<HTMLDivElement>(null)
   // Filters & sort
   const [searchQuery, setSearchQuery] = useState('')
+  // Das Suchfeld bleibt an searchQuery gebunden, die Tabelle an den
+  // aufgeschobenen Wert: sonst filtert jeder Tastendruck synchron ueber die
+  // ganze Liste, und die Eingabe wartet auf das Rendern der Tabelle. Gemessen
+  // am 04.10.2026 auf /db.html: db·INP p75 1956 ms an genau diesem Input,
+  // db·LCP p75 4284 ms an table.db-table. useDeferredValue haelt den Tastendruck
+  // sofort; die Tabelle holt auf, sobald React Zeit hat.
+  const deferredSearchQuery = useDeferredValue(searchQuery)
   const [activeIssue, setActiveIssue] = useState<IssueFilter>('all')
   const [typeFilters, setTypeFilters] = useState<Set<string>>(new Set())
   const [countryFilters, setCountryFilters] = useState<Set<string>>(new Set())
@@ -649,8 +656,8 @@ export default function DbAuditPage() {
     if (confFilters.size > 0) result = result.filter(s => confFilters.has(confBucket(s.cf)))
 
     // Search
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase()
+    if (deferredSearchQuery) {
+      const q = deferredSearchQuery.toLowerCase()
       result = result.filter(s => s.n.toLowerCase().includes(q))
     }
 
@@ -680,7 +687,7 @@ export default function DbAuditPage() {
     })
 
     return result
-  }, [sites, sourceFilter, activeIssue, typeFilters, countryFilters, periodFilters, editedByFilters, confFilters, searchQuery, sortColumn, sortDir])
+  }, [sites, sourceFilter, activeIssue, typeFilters, countryFilters, periodFilters, editedByFilters, confFilters, deferredSearchQuery, sortColumn, sortDir])
 
   // Reset pagination when filters change
   useEffect(() => { setVisibleRows(ROWS_PER_PAGE) }, [filteredSites])

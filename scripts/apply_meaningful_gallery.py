@@ -38,8 +38,29 @@ try:
 except Exception:
     pass
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+
+from pipeline.lyra.theo_publishing import JOURNALLED_PAPER_SQL, JournalledPaperError  # noqa: E402
+
 PAPER_ID = "edfff317-5240-42d1-9dec-1ad6a5805d9a"
 OUT_DIR = pathlib.Path(r"C:/tmp/meaningful")
+# The paper's row, only while no theo_publish write has journalled it (Task 21b).
+_PAPER_SQL = (
+    f"SELECT result_json FROM research_requests WHERE id = %s AND NOT ({JOURNALLED_PAPER_SQL})"
+)
+
+
+def _paper_result(cur) -> dict:
+    """The paper's result_json; a journalled paper changes only through theo_publish."""
+    cur.execute(_PAPER_SQL, (PAPER_ID,))
+    row = cur.fetchone()
+    if row is None:
+        raise JournalledPaperError(
+            f"{PAPER_ID}: missing or journalled; a journalled paper changes only through "
+            "theo_publish --correct"
+        )
+    raw = row[0]
+    return raw if isinstance(raw, dict) else json.loads(raw)
 
 # Same regex the assessor uses — matches one full image-caption-source block.
 IMAGE_BLOCK_RE = re.compile(
@@ -182,14 +203,7 @@ def fetch_current_report() -> str:
         dbname="ancient_map",
     )
     try:
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT result_json FROM research_requests WHERE id = %s",
-            (PAPER_ID,),
-        )
-        raw = cur.fetchone()[0]
-        d = raw if isinstance(raw, dict) else json.loads(raw)
-        return d.get("report") or ""
+        return _paper_result(conn.cursor()).get("report") or ""
     finally:
         conn.close()
 
@@ -204,20 +218,21 @@ def write_new_report(new_report: str) -> None:
     )
     try:
         cur = conn.cursor()
-        cur.execute(
-            "SELECT result_json FROM research_requests WHERE id = %s",
-            (PAPER_ID,),
-        )
-        raw = cur.fetchone()[0]
-        result = raw if isinstance(raw, dict) else json.loads(raw)
+        result = _paper_result(cur)
         result["report"] = new_report
         from datetime import UTC, datetime
 
         result["edited_at"] = datetime.now(UTC).isoformat()
         cur.execute(
-            "UPDATE research_requests SET result_json = %s WHERE id = %s",
+            "UPDATE research_requests SET result_json = %s "
+            f"WHERE id = %s AND NOT ({JOURNALLED_PAPER_SQL})",
             (json.dumps(result), PAPER_ID),
         )
+        if cur.rowcount != 1:
+            conn.rollback()
+            raise JournalledPaperError(
+                f"{PAPER_ID}: journalled or deleted since it was read; nothing written"
+            )
         conn.commit()
         print(f"  DB: wrote {len(new_report)} chars to result_json.report")
     finally:

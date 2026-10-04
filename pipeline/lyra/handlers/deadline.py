@@ -50,12 +50,15 @@ class DeadlineHandler(BaseHandler):
             ResearchPhase.SYNTHESIZING,
             ResearchPhase.DEBATING,
         ):
-            # Less than 1 hour --- skip to writing and emit DebateComplete to trigger paper
+            # Less than 1 hour --- skip to moderation: DebateComplete triggers the
+            # moderator, whose ModeratorComplete makes the DossierHandler end the run.
+            # MODERATING is outside (SYNTHESIZING, DEBATING), so the next tick does
+            # not force it again.
             self.state.log(
                 "deadline",
-                f"Deadline imminent ({hours_left:.1f}h left) --- forcing paper assembly",
+                f"Deadline imminent ({hours_left:.1f}h left) --- forcing moderation and the dossier",
             )
-            self.state.phase = ResearchPhase.WRITING
+            self.state.phase = ResearchPhase.MODERATING
             await self.bus.emit(DebateComplete())
             return True
 

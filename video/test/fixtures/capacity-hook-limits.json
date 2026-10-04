@@ -1,0 +1,24 @@
+{
+  "EvidenceCard": {
+    "evidence.statement": 68,
+    "evidence.source.quote": 120
+  },
+  "QuoteCard": {
+    "evidence.source.quote": 230
+  },
+  "ClaimBoard": {
+    "claims (items)": 5
+  },
+  "Meter": {
+    "note": 0
+  },
+  "UnitGrid": {
+    "groups (items)": 2
+  },
+  "BarChart": {
+    "bars (items)": 6
+  },
+  "ListCard": {
+    "items (items)": 4
+  }
+}

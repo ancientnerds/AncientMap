@@ -15,6 +15,7 @@ import { fileURLToPath } from 'url'
 import { mkdirSync, readFileSync, unlinkSync } from 'fs'
 import puppeteer, { type Browser, type Page } from 'puppeteer'
 import type { CameraState, DemoAPI } from '../src/utils/demoApi'
+import type { ScreenPoint } from '../src/utils/screenPoint'
 
 // Scene imports
 import { heroScene } from './scenes/hero.js'
@@ -27,6 +28,8 @@ import { empireSpotlightsScene } from './scenes/empire-spotlights.js'
 import { dataStoriesScene } from './scenes/data-stories.js'
 import { brollScene } from './scenes/b-roll.js'
 import { siteShortScenes } from './scenes/site-short.js'
+import { studioGlobeScenes } from './scenes/studio-globe.js'
+import { studioMapboxScenes } from './scenes/studio-mapbox.js'
 import { encodeScene } from './utils/encode.js'
 import { bindRecorderFunctions, injectTimeControl, StreamRecorder } from './utils/capture.js'
 
@@ -53,6 +56,11 @@ export interface SceneDefinition {
   frameYieldMs?: number
   /** Mapbox scenes: hold each frame until every tile of the current view is loaded. */
   waitForTiles?: boolean
+  /**
+   * The scene writes its own exact frames (scenes/studio-frames.ts) instead of the
+   * MediaRecorder stream: no WebM and no encode step here (studio captures).
+   */
+  grabsFrames?: boolean
   run: (ctx: SceneContext) => Promise<void>
 }
 
@@ -67,12 +75,15 @@ const ALL_SCENES: SceneDefinition[] = [
   ...dataStoriesScene,
   ...brollScene,
   ...siteShortScenes,
+  ...studioGlobeScenes,
+  ...studioMapboxScenes,
 ]
 
 /**
  * CLI flags. Positional = scene name.
  *   --portrait        1080×1920 viewport (site shorts)
- *   --input <path>    site.json for the site-short scenes (exposed as SITE_SHORT_INPUT)
+ *   --input <path>    site.json for the site-short scenes (exposed as SITE_SHORT_INPUT) or the
+ *                     studio scene input of pipeline/studio/capture/globe.py (STUDIO_SCENE_INPUT)
  *   --out <dir>       where the MP4s go (default: public/landing/video)
  *   --batch <path>    JSON [{input, out}, ...]: record many sites in ONE browser
  *                     session (saves the Vite start, the Chrome launch and the
@@ -102,7 +113,9 @@ const GLOBE_URL = `${DEV_SERVER_URL}/globe.html?demo=1`
 async function startDevServer(): Promise<ChildProcess> {
   console.log('Starting Vite dev server...')
 
-  const vite = spawn('npm', ['run', 'dev', '--', '--port', String(DEV_SERVER_PORT)], {
+  // --strictPort: a dev server left running on the port (an interrupted take) must fail this
+  // start, not silently serve the page from an older checkout while Vite moves to the next port
+  const vite = spawn('npm', ['run', 'dev', '--', '--port', String(DEV_SERVER_PORT), '--strictPort'], {
     cwd: join(__dirname, '..'),
     stdio: ['pipe', 'pipe', 'pipe'],
     shell: true,
@@ -138,7 +151,9 @@ async function launchBrowser(portrait: boolean): Promise<{ browser: Browser; pag
   const height = portrait ? 1920 : 1080
 
   const browser = await puppeteer.launch({
-    headless: false,  // Use headed mode for WebGL support on Windows
+    // Headless on purpose: the studio runs with the screen asleep or locked (owner, 2026-10-02).
+    // WebGL still draws on the NVIDIA through the d3d11 ANGLE flags below.
+    headless: true,
     protocolTimeout: 900_000,  // 15 minutes: globe loading + a capture chunk with tile waits
     args: [
       '--use-angle=d3d11',
@@ -245,6 +260,7 @@ function createDemoProxy(page: Page): DemoAPI {
     setGeoLabels: (vis) => evalDemo(`window.__DEMO.setGeoLabels(${vis})`),
     showEmpire: (id) => evalDemo(`window.__DEMO.showEmpire("${id}")`),
     hideAllEmpires: () => evalDemo(`window.__DEMO.hideAllEmpires()`),
+    setEmpireTimeline: (on) => evalDemo(`window.__DEMO.setEmpireTimeline(${on})`),
     setPaleoshoreline: (vis, sl) => evalDemo(`window.__DEMO.setPaleoshoreline(${vis}${sl !== undefined ? ', ' + sl : ''})`),
     // Site interaction
     selectSite: (name) => evalDemo(`window.__DEMO.selectSite("${name}")`),
@@ -272,6 +288,7 @@ function createDemoProxy(page: Page): DemoAPI {
     hideAllUI: () => evalDemo(`window.__DEMO.hideAllUI()`),
     showUI: () => evalDemo(`window.__DEMO.showUI()`),
     getCameraState: () => page.evaluate('window.__DEMO.getCameraState()') as Promise<CameraState>,
+    screenPoint: (lat, lng) => page.evaluate(`window.__DEMO.screenPoint(${lat}, ${lng})`) as Promise<ScreenPoint | null>,
     isReady: () => { throw new Error('Use page.evaluate for isReady') },
     waitUntilReady: () => evalDemo(`window.__DEMO.waitUntilReady()`),
   }
@@ -280,7 +297,10 @@ function createDemoProxy(page: Page): DemoAPI {
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   const requestedScene = args.scene
-  if (args.input) process.env.SITE_SHORT_INPUT = args.input
+  if (args.input) {
+    process.env.SITE_SHORT_INPUT = args.input
+    process.env.STUDIO_SCENE_INPUT = args.input
+  }
 
   const baseDir = __dirname
   const outputDir = args.out ?? join(baseDir, '..', 'public', 'landing', 'video')
@@ -336,7 +356,10 @@ async function main() {
 
     for (let t = 0; t < targets.length; t++) {
       const target = targets[t]
-      if (target.input) process.env.SITE_SHORT_INPUT = target.input
+      if (target.input) {
+        process.env.SITE_SHORT_INPUT = target.input
+        process.env.STUDIO_SCENE_INPUT = target.input
+      }
       mkdirSync(target.out, { recursive: true })
       if (targets.length > 1) {
         console.log(`\n${'#'.repeat(60)}`)
@@ -378,6 +401,7 @@ async function main() {
 
         // Run the scene choreography + capture
         await scene.run(ctx)
+        if (scene.grabsFrames) continue
 
         // Stop recorder and save WebM
         const webmPath = join(webmDir, `${scene.name}.webm`)

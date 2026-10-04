@@ -43,6 +43,21 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   und brechen alle MiniMax-Aufrufe. *(`reference-deployment-lessons`, 2026-08-25)*
 - **Nie `… | tail` hinter `gh run watch --exit-status` oder `ruff check`** — die Pipe
   maskiert den Exit-Code. *(`reference-deployment-lessons:10`, 2026-09-17)*
+- **`GIT_DIR` schlägt `git -C` — jede `git`-Kommando, das ein Repository *nennt*, braucht eine
+  Umgebung ohne `GIT_*`.** Git setzt `GIT_DIR` (und `GIT_WORK_TREE`/`GIT_INDEX_FILE`, wenn
+  passend) selbst, wenn es `.githooks/pre-push` aufruft; der Hook exportiert nichts. Die
+  Testsuite läuft in dieser Umgebung, also läuft sie in der des gepushten Checkouts: am
+  2026-10-03 landete dadurch der `commit -m a` eines Tests mitten im Push auf dem Branch,
+  stellte `a.txt` in den echten Index und ließ das Gate mit 24 Fehlern umfallen. Nach dem
+  Test-Fix blieben 8 Fehler, weil **Produktionscode** umgeleitet wurde: `mcode.tree_state`
+  (`git -C <repo> status`) sah den gepushten Baum und meldete „keine Änderung", und
+  `write_gate4._git` (`git -C <LANE_N_REPO> merge-base`) las die Historie des falschen
+  Repos („Not a valid commit name"). Fix: `pipeline/utils/git_env.py` — `run_git(repo, …)`
+  für die Standardform, `env=own_env()` für Aufrufe mit eigenem `check=True`/Timeout;
+  `tests/git_env.py` re-exportiert dieselbe Funktion, damit es nur eine Implementierung gibt.
+  Vier Produktionsstellen nutzen sie: `pipeline/studio/mcode.py`, `pipeline/studio/config.py`,
+  `pipeline/video/shorts_ledger.py`, `output/remediation/tools/write_gate4.py`.
+  *(2026-10-03, Commits `4479abd` und der Nachfolger; Test `tests/pipeline/utils/test_git_env.py`)*
 - **Betriebs-Fallen auf dem VPS:** `docker exec -i` frisst stdin-geskriptete Eingaben;
   `docker logs --since` rechnet in Host-Lokalzeit (CEST), nicht UTC; `pkill -f` matcht die
   eigene SSH-Session (stattdessen PID-Dateien).
@@ -224,6 +239,48 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   anderen TLS-Handshake): UNESCO WHC, Atlas Obscura, Britannica und Historic England antworten
   mit 403 und gelten als maschinell nicht lesbar. *(WD1-Review, `docs/procedures/FIELDS_WD1.md`,
   2026-09-26)*
+
+## Studio (captures and renderer)
+
+Runbook: `docs/procedures/STUDIO.md`.
+
+- **The studio runs headless; headed Chrome needs an awake display.** The first studio Mapbox fly-in
+  (2026-09-26, 11:41) hung for 15 minutes: the display slept and headed Chrome produced no animation
+  frame. Since 2026-10-02 every studio Chrome is headless (owner requirement: no display), the
+  display-awake guard is gone, and headless Chrome screencasts at the view's pixel size, so the platform
+  take forces `--force-device-scale-factor=2` and caps at 2880x1620 (first headless take: 1920x1080).
+  The recorder scenes still fail after 30 s without a frame (`NO_FRAME_MS`). Guard:
+  `tests/pipeline/studio/test_no_display.py`; details in `docs/procedures/STUDIO.md` section 9.2.
+  *(plan D Tasks 27 and 36, 2026-09-26; superseded 2026-10-02)*
+- **Remotion's `bundle()` leaves a copy of the whole public dir in `%TEMP%`.** Its default output is a
+  fresh `remotion-webpack-bundle-*` directory in the system temp dir that nothing deletes, and it
+  copies the public dir, so every run left a copy of every capture on C: (67 such directories were in
+  `%TEMP%` on 2026-09-29, from the build's verification runs). The studio's node scripts bundle into
+  `render/bundle/` next to the public dir and delete it on success and failure (`withBundle`,
+  `video/scripts/cli.ts`). Delete old `%TEMP%\remotion-webpack-bundle-*` directories by hand, and
+  only while no render runs. *(plan D contract D4; build index I8 step 10, 2026-09-27)*
+- **A dev server left on a capture port serves the take from an older checkout.** Windows does not
+  end npm's children when the Python process dies, so an interrupted take leaves Vite running.
+  Without `--strictPort` the next Vite moves to another port while the page still loads from the old
+  server (with its file watcher off); an orphaned Vite on port 5199 once served takes that way
+  without an error. `record.ts` (port 5199) and the studio's `local_site()` (port 5198) start Vite
+  with `--strictPort`; `local_site()` also refuses a port that answers at any address of localhost
+  (Vite binds only the first one, `::1` here) and counts the site as ready only when its own Vite
+  announces the port. Find the stale server with `netstat -ano | findstr :5198`.
+  *(`pipeline/studio/capture/vite.py`, commit `12f5832`, 2026-09-27)*
+- **Ein `mcode`-Lauf, der über `cmd /c` startet, darf nicht mit `subprocess.run(timeout=…)`
+  gebunden werden — der Kill trifft nur den Wrapper.** `subprocess.run` killt bei Timeout den
+  Prozess, den es gestartet hat, und ruft danach `communicate()`; unter Windows läuft der Befehl
+  über den Command Processor, und der `node`-Prozess darunter hält das geerbte Pipe-Ende offen,
+  also blockiert `communicate()` **ohne jede weitere Frist**. Am 2026-10-03 kostete das das Studio
+  3,5 Stunden (drei `node`-Kinder mit ~1 % CPU auf einem hängenden Provider-Socket); in 45 Sekunden
+  mit reinem Python reproduziert: 5 s Timeout, bei 45 s noch blockiert, der Enkelprozess lebt nach
+  dem Kill. Zwei Konsequenzen: Streams an **Dateien** binden und den **Prozessbaum** killen
+  (`taskkill /T /F` bzw. `killpg`) — so arbeitet `pipeline/studio/mcode.py`; und wer über
+  `cmd /c` startet, bekommt einen zusätzlichen Prozess, den man mitbedenken muss. Betrifft auch
+  den Remediation-Fahrer `scripts/remediation/mcode_driver.py` (Stand 2026-10-03 noch nicht auf
+  `main`); er entfernt in `run_git()` außerdem kein `GIT_*` (siehe „Betrieb und Deploy" oben).
+  *(`pipeline/studio/mcode.py`, Messung `C:\tmp\studio_build\hangtest\probe.py`, 2026-10-03)*
 
 ## Nicht mehr gültig
 

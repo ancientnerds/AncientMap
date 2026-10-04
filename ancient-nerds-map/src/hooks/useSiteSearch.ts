@@ -3,7 +3,7 @@
  * Encapsulates search query state, debouncing, API search, and client-side filtering.
  */
 
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { SiteData, getCategoryColor, getPeriodColor, getSourceColor, resolvePeriod } from '../data/sites'
 import {
   normalizeForSearch,
@@ -73,6 +73,13 @@ export interface UseSiteSearchOptions {
   searchAllSources: boolean
   applyFiltersToSearch: boolean
   /**
+   * Answer from the whole database a query the visitor's own sources cannot
+   * answer at all, and say so on the "All sources" button. The search page
+   * passes `true`; the globe leaves it off, because there the same flag also
+   * decides which dots the map draws, and that is the visitor's choice.
+   */
+  widenToAllSources?: boolean
+  /**
    * The sites carry their detail fields (description etc.). The globe starts without
    * them; until they arrive a query answers nothing and reports `isSearching` instead of
    * results matched on half the data. The search page loads them up front: `true`.
@@ -92,8 +99,18 @@ export interface UseSiteSearchReturn {
   isSearching: boolean
   /** The "All sources" API search for the current query failed (no answer): what to show instead of a count. */
   searchError: string | null
+  /** The search answers from every source: the visitor's own choice, or the automatic one below. */
+  allSourcesActive: boolean
+  /** The whole database was searched because the visitor's own sources held no match. */
+  autoAllSources: boolean
+  /** The visitor turned the automatic widening off for the current query. */
+  dismissAutoAllSources: () => void
   handleSearchResultSelect: (siteId: string, openPopup: boolean, onSiteClick: (site: SiteData) => void) => Promise<void>
 }
+
+/** Below this many characters neither the API search nor the results row answers
+ *  anything, so there is nothing to widen to yet. */
+const MIN_API_QUERY = 3
 
 /** A site's names and place, normalized: worked out once per site object, not
  *  once per keystroke. */
@@ -129,6 +146,41 @@ function nameTrigrams(site: SiteData): Set<string>[] {
   return sets
 }
 
+/** A site the card can say something about: the visitor reads a teaser, not
+ *  just a name on a map. Read on production 2026-10-04: 1,595,613 of the
+ *  1,759,573 shown sites carry neither (list_inscriptions and canmore_scotland
+ *  alone hold 821,000), while 4,874 of the 4,900 curated ones do. This is what
+ *  separates a result worth reading from a row of bare names, and the results
+ *  are ordered by it: described sites first, bare ones after. */
+function hasText(site: SiteData): boolean {
+  return Boolean(site.cardDescription?.trim() || site.description?.trim())
+}
+
+/** The card's fields, resolved once per site: the colours and the source name
+ *  are the same for every query, so the match pass does not build them. */
+function toSearchResult(site: SiteData, sourceNameMap: Record<string, string>): SearchResult {
+  const category = site.category || 'Unknown'
+  const period = site.period || 'Unknown'
+  return {
+    id: site.id,
+    title: site.title,
+    category,
+    categoryColor: getCategoryColor(category),
+    location: site.location,
+    period,
+    periodStart: site.periodStart,
+    periodColor: getPeriodColor(period),
+    sourceName: sourceNameMap[site.sourceId] || site.sourceId,
+    sourceColor: getSourceColor(site.sourceId),
+    sourceId: site.sourceId,
+    sourceUrl: site.sourceUrl,
+    description: site.description,
+    cardDescription: site.cardDescription,
+    image: site.image,
+    coordinates: site.coordinates,
+  }
+}
+
 export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchReturn {
   const {
     sites,
@@ -145,6 +197,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
     spatialFilter,
     empireFilter,
   } = options
+  const widenToAllSources = options.widenToAllSources ?? false
 
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -155,6 +208,13 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
   // The query whose API search failed (HTTP error, network, no sites list): no answer, not pending.
   const [apiFailure, setApiFailure] = useState<{ query: string; reason: string } | null>(null)
   const apiSearchAbortRef = useRef<AbortController | null>(null)
+  // The whole database was searched because the visitor's own sources held no
+  // match; the button says so (`allSourcesActive`).
+  const [autoAllSources, setAutoAllSources] = useState(false)
+  // Which query the automatic widening belongs to, and whether the visitor
+  // turned it off. A ref, not state: it only gates the effect below, and
+  // `autoAllSources` is what the page reads.
+  const autoForRef = useRef<{ query: string | null; dismissed: boolean }>({ query: null, dismissed: false })
 
   // Debounce search query (200ms)
   useEffect(() => {
@@ -171,9 +231,17 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
     }
   }, [searchQuery])
 
-  // API search: fetch from backend when "All sources" is checked and query is long enough
+  // What the search can answer, and from where: the visitor's own sources, or
+  // the whole database because they chose it or because nothing matched.
+  const detailsPending = !detailsReady && debouncedQuery.trim().length > 0
+  const allSourcesActive = searchAllSources || autoAllSources
+  const apiFailureReason = allSourcesActive && apiFailure?.query === debouncedQuery.trim() ? apiFailure.reason : null
+  const apiFailed = apiFailureReason !== null
+
+  // API search: fetch from backend when the answer comes from every source and
+  // the query is long enough
   useEffect(() => {
-    if (!searchAllSources || debouncedQuery.trim().length < 3) {
+    if (!allSourcesActive || debouncedQuery.trim().length < MIN_API_QUERY) {
       setApiSearchResults([])
       setApiAnsweredQuery(null)
       setApiFailure(null)
@@ -219,50 +287,19 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
       })
 
     return () => controller.abort()
-  }, [searchAllSources, debouncedQuery])
+  }, [allSourcesActive, debouncedQuery])
 
-  // Generate search results
-  const detailsPending = !detailsReady && debouncedQuery.trim().length > 0
-  const apiFailureReason = searchAllSources && apiFailure?.query === debouncedQuery.trim() ? apiFailure.reason : null
-  const apiFailed = apiFailureReason !== null
-
-  const searchResults = useMemo((): SearchResult[] => {
-    if (!debouncedQuery.trim()) return []
-    if (detailsPending) return []
+  // The matches of the loaded sites, in one pass and in one order: the ones of
+  // the visitor's own sources, and all of them (the preview while the API is
+  // still answering). Split after the match, not before: the source filter is
+  // one more predicate on the same site, so a second pass would only cost time.
+  const matches = useMemo((): { selected: SiteData[]; all: SiteData[] } => {
+    if (!debouncedQuery.trim()) return { selected: [], all: [] }
+    if (detailsPending) return { selected: [], all: [] }
     // The local preview is no answer to an all-sources query the API failed on
-    if (apiFailed) return []
+    if (apiFailed) return { selected: [], all: [] }
 
-    // When "All sources" is checked and API results have arrived, use them.
-    if (searchAllSources && apiSearchResults.length > 0) {
-      return apiSearchResults.slice(0, 100).map(site => {
-        const category = site.category || 'Unknown'
-        const period = site.period || 'Unknown'
-        return {
-          id: site.id,
-          title: site.title,
-          category,
-          categoryColor: getCategoryColor(category),
-          location: site.location,
-          period,
-          periodStart: site.periodStart,
-          periodColor: getPeriodColor(period),
-          sourceName: sourceNameMap[site.sourceId] || site.sourceId,
-          sourceColor: getSourceColor(site.sourceId),
-          sourceId: site.sourceId,
-          sourceUrl: site.sourceUrl,
-          description: site.description,
-          cardDescription: site.cardDescription,
-          image: site.image,
-          coordinates: site.coordinates,
-        }
-      })
-    }
-
-    const query = normalizeForSearch(debouncedQuery)
-    // When "All sources" is checked (API loading), search all loaded sites as preview
-    let sitesToSearch = searchAllSources
-      ? sites
-      : sites.filter(s => selectedSources.includes(s.sourceId))
+    let sitesToSearch = sites
 
     // Apply filters to search results only if "Apply filters" is checked
     if (applyFiltersToSearch) {
@@ -325,6 +362,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
       }
     }
 
+    const query = normalizeForSearch(debouncedQuery)
     // Spaceless variants for matching "göbekli tepe" → "gobeklitepe"
     const querySpaceless = query.replace(/ /g, '')
     // Word by word, for a query of two words or more: every word starts a word
@@ -395,36 +433,51 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
         } else {
           score = 10 // a typo
         }
-        return { site, score }
+        return { site, score, text: hasText(site) }
       })
-      .sort((a, b) => b.score - a.score)
+      // Good results first: a site the card can say something about, then how
+      // well it matched. The API orders its answer the same way, so a query
+      // that widens to the whole database reads the same as one that does not.
+      .sort((a, b) => (b.text ? 1 : 0) - (a.text ? 1 : 0) || b.score - a.score)
       .map(({ site }) => site)
 
-    return matchingSites
-      .slice(0, 100)
-      .map(site => {
-        const category = site.category || 'Unknown'
-        const period = site.period || 'Unknown'
-        return {
-          id: site.id,
-          title: site.title,
-          category,
-          categoryColor: getCategoryColor(category),
-          location: site.location,
-          period,
-          periodStart: site.periodStart,
-          periodColor: getPeriodColor(period),
-          sourceName: sourceNameMap[site.sourceId] || site.sourceId,
-          sourceColor: getSourceColor(site.sourceId),
-          sourceId: site.sourceId,
-          sourceUrl: site.sourceUrl,
-          description: site.description,
-          cardDescription: site.cardDescription,
-          image: site.image,
-          coordinates: site.coordinates,
-        }
-      })
-  }, [debouncedQuery, detailsPending, apiFailed, searchAllSources, apiSearchResults, sites, selectedSources, sourceNameMap, applyFiltersToSearch, ageRange, selectedCategories, allCategories, selectedCountries, allCountries, spatialFilter, empireFilter])
+    return {
+      selected: matchingSites.filter(site => selectedSources.includes(site.sourceId)),
+      all: matchingSites,
+    }
+  }, [debouncedQuery, detailsPending, apiFailed, sites, selectedSources, applyFiltersToSearch, ageRange, selectedCategories, allCategories, selectedCountries, allCountries, spatialFilter, empireFilter])
+
+  // Nothing in the visitor's own sources: answer from the whole database
+  // instead of showing an empty page, and say so on the button. The decision
+  // belongs to one query and is forgotten with the next one, so a new search
+  // widens again; a dismissal holds for the query it was made for.
+  useEffect(() => {
+    const q = debouncedQuery.trim()
+    if (autoForRef.current.query !== q) {
+      autoForRef.current = { query: q, dismissed: false }
+      setAutoAllSources(false)
+    }
+    if (!widenToAllSources || searchAllSources || autoForRef.current.dismissed) return
+    if (q.length < MIN_API_QUERY || detailsPending || apiFailed) return
+    // The visitor's own sources have the match: there is nothing to widen
+    if (matches.selected.length > 0) return
+    setAutoAllSources(true)
+  }, [debouncedQuery, widenToAllSources, searchAllSources, detailsPending, apiFailed, matches.selected])
+
+  const dismissAutoAllSources = useCallback(() => {
+    autoForRef.current = { ...autoForRef.current, dismissed: true }
+    setAutoAllSources(false)
+  }, [])
+
+  // What the visitor reads: the API's answer when the whole database was
+  // searched and it has one, else the matches of the loaded sites — of the
+  // visitor's own sources, or of all of them while the API is still answering.
+  const searchResults = useMemo((): SearchResult[] => {
+    const list = allSourcesActive && apiSearchResults.length > 0
+      ? apiSearchResults
+      : (allSourcesActive ? matches.all : matches.selected)
+    return list.slice(0, 100).map(site => toSearchResult(site, sourceNameMap))
+  }, [allSourcesActive, apiSearchResults, matches, sourceNameMap])
 
   // Handle search result selection — resolves site data and calls the provided click handler
   const handleSearchResultSelect = async (siteId: string, openPopup: boolean, onSiteClick: (site: SiteData) => void) => {
@@ -450,7 +503,7 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
     }
   }
 
-  const apiPending = searchAllSources && debouncedQuery.trim().length >= 3 && apiAnsweredQuery !== debouncedQuery.trim() && !apiFailed
+  const apiPending = allSourcesActive && debouncedQuery.trim().length >= MIN_API_QUERY && apiAnsweredQuery !== debouncedQuery.trim() && !apiFailed
   const isSearching = detailsPending || apiPending
   const searchError = apiFailed ? `All-sources search failed (${apiFailureReason}). Try again.` : null
 
@@ -485,6 +538,9 @@ export function useSiteSearch(options: UseSiteSearchOptions): UseSiteSearchRetur
     apiSearchResults,
     isSearching,
     searchError,
+    allSourcesActive,
+    autoAllSources,
+    dismissAutoAllSources,
     handleSearchResultSelect,
   }
 }

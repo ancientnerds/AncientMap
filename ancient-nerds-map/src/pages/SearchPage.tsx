@@ -47,6 +47,13 @@ export default function SearchPage() {
     return () => clearInterval(interval)
   }, [isLoading])
 
+  // The field is disabled while the sites load, so autoFocus on the input lands
+  // on a disabled element and does nothing - the page opened with the caret
+  // nowhere. Focus it once the load is over and the field can take focus.
+  useEffect(() => {
+    if (!isLoading) searchInputRef.current?.focus()
+  }, [isLoading])
+
   // Load default source on mount
   useEffect(() => {
     async function loadData() {
@@ -140,7 +147,23 @@ export default function SearchPage() {
     allCategories: categoriesFromActiveSources, selectedCountries,
     allCountries: countries, ageRange, searchAllSources, applyFiltersToSearch: true,
     detailsReady: true, // fetchSites() loads the full payload
+    // A query the loaded sources cannot answer at all is answered from the whole
+    // database instead of showing nothing, and the chip below says so.
+    widenToAllSources: true,
   })
+
+  // The whole database is searched because the visitor chose it, or because
+  // their own sources held no match for what they typed.
+  const allSourcesActive = search.allSourcesActive
+
+  // One click on the chip turns the search off - and stops the automatic
+  // widening too, so a query the visitor has already answered for themselves
+  // is not widened again behind their back.
+  const toggleAllSources = useCallback(() => {
+    const next = !allSourcesActive
+    setSearchAllSources(next)
+    if (!next) search.dismissAutoAllSources()
+  }, [allSourcesActive, search.dismissAutoAllSources])
 
   // Card click — show popup overlay
   const handleCardClick = useCallback(async (result: { id: string }) => {
@@ -204,13 +227,13 @@ export default function SearchPage() {
     if (isLoading) return
     search.setSearchQuery('')
 
-    if (searchAllSources) {
+    if (allSourcesActive) {
       fetchApiRandom()
       return
     }
 
     doShuffle(sites)
-  }, [sites, search, searchAllSources, isLoading, doShuffle, fetchApiRandom])
+  }, [sites, search, allSourcesActive, isLoading, doShuffle, fetchApiRandom])
 
   // /search.html?random — the homepage portal (LandingLive.tsx) opens the page
   // on a random draw, because an empty search bar is a view of nothing. The
@@ -253,7 +276,6 @@ export default function SearchPage() {
               value={search.searchQuery}
               onChange={e => { search.setSearchQuery(e.target.value); if (randomSites.length) { setRandomSites([]); randomPoolRef.current = []; setRandomVisible(0) } }}
               disabled={isLoading}
-              autoFocus
             />
             {(search.searchQuery || randomSites.length > 0) && (
               <button
@@ -267,8 +289,11 @@ export default function SearchPage() {
               </button>
             )}
             <button
-              className={`news-page-chip${searchAllSources ? ' active' : ''}`}
-              onClick={() => setSearchAllSources(!searchAllSources)}
+              className={`news-page-chip${allSourcesActive ? ' active' : ''}`}
+              onClick={toggleAllSources}
+              title={search.autoAllSources
+                ? 'All sources - switched on because your sources had no match. Click to search only your sources.'
+                : 'Search every source, not just the ones you picked'}
             >
               All sources
             </button>
@@ -309,6 +334,7 @@ export default function SearchPage() {
         {search.searchQuery.trim().length >= 3 && (
           <div className="search-results-count">
             {search.searchError ? <span>{search.searchError}</span> : search.isSearching ? <span>Searching...</span> : <span>{search.searchResults.length} site{search.searchResults.length !== 1 ? 's' : ''} found</span>}
+            {search.autoAllSources && <span className="search-auto-note">Not in your sources - all sources searched</span>}
           </div>
         )}
 
@@ -317,7 +343,7 @@ export default function SearchPage() {
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity="0.3">
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
-            <p>Type at least 3 characters to search{searchAllSources ? ' across all sources' : ' Ancient Nerds originals'}, or hit Random</p>
+            <p>Type at least 3 characters to search{allSourcesActive ? ' across all sources' : ' Ancient Nerds originals'}, or hit Random</p>
           </div>
         )}
 
@@ -386,7 +412,7 @@ export default function SearchPage() {
 
         {search.searchQuery.trim().length >= 3 && !search.isSearching && !search.searchError && search.searchResults.length === 0 && (
           <div className="search-prompt">
-            <p>No sites found matching "{search.searchQuery}"{!searchAllSources && ' — try enabling "All sources"'}</p>
+            <p>No sites found matching "{search.searchQuery}"{!allSourcesActive && ' — try enabling "All sources"'}</p>
             <FeedbackPrompt
               prompt="search_empty"
               question="What were you looking for?"

@@ -47,6 +47,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { offlineFetch } from './services/OfflineFetch'
 import { ensureServiceWorkerActive, serviceWorkerTask, updateInstalledServiceWorker } from './pwa/registerServiceWorker'
 import { isDemoMode, registerAppDemoApi } from './utils/demoApi'
+import { applyVideoMode, markVideoReady, parseVideoMode } from './utils/videoMode'
 import { normalizeForSearch, periodToYear, extractCountry } from './utils/searchUtils'
 import { haversineDistance } from './utils/geoMath'
 import { reportAchievementEvent } from './utils/cardApi'
@@ -454,6 +455,9 @@ function AppContent() {
     if (!isDemoMode()) return
     registerAppDemoApi({ setFilterMode, setAgeRange, setFlyToCoords, setDemoMode, setSelectedSources, handleLoadSources, openSitePopup, closeAllPopups, sitesRef })
   }, [])
+
+  // Studio capture mode (?video=1): panels hidden, ?hud= scale, window.__VIDEO (utils/videoMode.ts)
+  useEffect(() => applyVideoMode(parseVideoMode(window.location.search), document, window), [])
 
   // Toggle body class for demo mode (hides all UI except the globe)
   useEffect(() => {
@@ -1693,6 +1697,8 @@ function AppContent() {
   // with no error screen over it and a live WebGL context under it
   const armGlobeIdle = useCallback(() => {
     idleTimerRef.current = setTimeout(() => track('globe_idle', { ms: 30000 }), 30000)
+    // studio captures (?video=1) start filming here (utils/videoMode.ts)
+    markVideoReady(window)
   }, [])
   useGlobeReady(loadingComplete && !globeFailure && !webglLost, endingLatch, globeReadyRef, armGlobeIdle)
 

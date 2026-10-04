@@ -1,0 +1,2248 @@
+{
+  "blocks": {
+    "PhotoPlate": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "label.title",
+        "label.subtitle",
+        "caption",
+        "image.markers[].label"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "image"
+        ],
+        "properties": {
+          "image": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "src",
+              "license",
+              "attribution",
+              "source_url",
+              "depicts",
+              "markers"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "src": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "license": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attribution": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_url": {
+                "type": "string",
+                "minLength": 1
+              },
+              "depicts": {
+                "type": "string",
+                "minLength": 1
+              },
+              "markers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "box",
+                    "label"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "box": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 24
+                    }
+                  }
+                },
+                "minItems": 0,
+                "maxItems": 6
+              }
+            }
+          },
+          "kenBurns": {
+            "type": "string",
+            "enum": [
+              "in",
+              "out",
+              "none"
+            ],
+            "description": "Camera over the whole scene (default in)"
+          },
+          "label": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 21
+              },
+              "subtitle": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 49
+              }
+            },
+            "description": "Lower third over footage"
+          },
+          "caption": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 51
+          }
+        },
+        "description": "A checked photo with its markers in the same moving layer; cues show/hide/highlight <marker id>"
+      }
+    },
+    "MapboxTopdown": {
+      "map": true,
+      "platform": false,
+      "drawn": [
+        "label.title",
+        "label.subtitle"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "map"
+        ],
+        "properties": {
+          "map": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind",
+              "src",
+              "fps",
+              "duration_s",
+              "width",
+              "height",
+              "events",
+              "credits"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "mapbox_topdown"
+                ]
+              },
+              "src": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "fps": {
+                "type": "null"
+              },
+              "duration_s": {
+                "type": "null"
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "events": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "t",
+                    "name"
+                  ],
+                  "properties": {
+                    "t": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    },
+                    "box": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "target": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 0
+                    },
+                    "lat": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "lng": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "track": {
+                      "type": "array",
+                      "items": {
+                        "type": [
+                          "array",
+                          "null"
+                        ],
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "description": "Globe place events: the pixel [x, y] in every capture frame from the event on, null while hidden"
+                    }
+                  }
+                }
+              },
+              "credits": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "from",
+                "to"
+              ],
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "to": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                }
+              }
+            },
+            "minItems": 0,
+            "maxItems": 4,
+            "description": "Distance lines between two pins; the length is computed from their coordinates"
+          },
+          "label": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 21
+              },
+              "subtitle": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 49
+              }
+            },
+            "description": "Lower third over footage"
+          }
+        },
+        "description": "Exact top-down satellite frame with projected pins (orthographic, so distance lines are allowed); cues show/highlight <place id>"
+      }
+    },
+    "PlatformClip": {
+      "map": true,
+      "platform": true,
+      "drawn": [
+        "label.title",
+        "label.subtitle"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clip"
+        ],
+        "properties": {
+          "clip": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind",
+              "src",
+              "fps",
+              "duration_s",
+              "width",
+              "height",
+              "events",
+              "credits"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "platform"
+                ]
+              },
+              "src": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "fps": {
+                "type": "number",
+                "minimum": 1
+              },
+              "duration_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "events": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "t",
+                    "name"
+                  ],
+                  "properties": {
+                    "t": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    },
+                    "box": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "target": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 0
+                    },
+                    "lat": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "lng": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "track": {
+                      "type": "array",
+                      "items": {
+                        "type": [
+                          "array",
+                          "null"
+                        ],
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "description": "Globe place events: the pixel [x, y] in every capture frame from the event on, null while hidden"
+                    }
+                  }
+                }
+              },
+              "credits": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "start_s": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds into the clip where the scene starts (default 0)"
+          },
+          "camera": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "t",
+                "cx",
+                "cy",
+                "zoom"
+              ],
+              "properties": {
+                "t": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cx": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cy": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "zoom": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 3
+                }
+              }
+            },
+            "minItems": 1,
+            "description": "Virtual camera keys on the capture clock (t in clip seconds, cx/cy in capture pixels)"
+          },
+          "follow": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 2.5,
+            "description": "Zoom the virtual camera onto each event with x/y (instead of camera)"
+          },
+          "label": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 21
+              },
+              "subtitle": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 49
+              }
+            },
+            "description": "Lower third over footage"
+          }
+        },
+        "description": "A platform moment: the real ancientnerds.com recorded by the capture step"
+      }
+    },
+    "GlobeShot": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "label.title",
+        "label.subtitle"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clip"
+        ],
+        "properties": {
+          "clip": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind",
+              "src",
+              "fps",
+              "duration_s",
+              "width",
+              "height",
+              "events",
+              "credits"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "globe"
+                ]
+              },
+              "src": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "fps": {
+                "type": "number",
+                "minimum": 1
+              },
+              "duration_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "events": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "t",
+                    "name"
+                  ],
+                  "properties": {
+                    "t": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    },
+                    "box": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "target": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 0
+                    },
+                    "lat": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "lng": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "track": {
+                      "type": "array",
+                      "items": {
+                        "type": [
+                          "array",
+                          "null"
+                        ],
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "description": "Globe place events: the pixel [x, y] in every capture frame from the event on, null while hidden"
+                    }
+                  }
+                }
+              },
+              "credits": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "start_s": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds into the clip where the scene starts (default 0)"
+          },
+          "label": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 21
+              },
+              "subtitle": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 49
+              }
+            },
+            "description": "Lower third over footage"
+          }
+        },
+        "description": "Our vector globe (no map credit); labelled places light up at their capture events and follow their per-frame track; cue show <place id>"
+      }
+    },
+    "MapboxFlyover": {
+      "map": true,
+      "platform": false,
+      "drawn": [
+        "label.title",
+        "label.subtitle"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clip"
+        ],
+        "properties": {
+          "clip": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind",
+              "src",
+              "fps",
+              "duration_s",
+              "width",
+              "height",
+              "events",
+              "credits"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "globe"
+                ]
+              },
+              "src": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "fps": {
+                "type": "number",
+                "minimum": 1
+              },
+              "duration_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "events": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "t",
+                    "name"
+                  ],
+                  "properties": {
+                    "t": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    },
+                    "box": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "target": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 0
+                    },
+                    "lat": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "lng": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "track": {
+                      "type": "array",
+                      "items": {
+                        "type": [
+                          "array",
+                          "null"
+                        ],
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "description": "Globe place events: the pixel [x, y] in every capture frame from the event on, null while hidden"
+                    }
+                  }
+                }
+              },
+              "credits": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "start_s": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds into the clip where the scene starts (default 0)"
+          },
+          "label": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "title"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 21
+              },
+              "subtitle": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 49
+              }
+            },
+            "description": "Lower third over footage"
+          }
+        },
+        "description": "A Mapbox fly-in or orbit take"
+      }
+    },
+    "SourceViewer": {
+      "map": false,
+      "platform": false,
+      "drawn": [],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "page",
+          "evidence"
+        ],
+        "properties": {
+          "page": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind",
+              "src",
+              "fps",
+              "duration_s",
+              "width",
+              "height",
+              "events",
+              "credits"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "source"
+                ]
+              },
+              "src": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "fps": {
+                "type": "null"
+              },
+              "duration_s": {
+                "type": "null"
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 2
+              },
+              "events": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "t",
+                    "name"
+                  ],
+                  "properties": {
+                    "t": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    },
+                    "box": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "target": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "url": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 0
+                    },
+                    "lat": {
+                      "type": "number",
+                      "minimum": -90,
+                      "maximum": 90
+                    },
+                    "lng": {
+                      "type": "number",
+                      "minimum": -180,
+                      "maximum": 180
+                    },
+                    "track": {
+                      "type": "array",
+                      "items": {
+                        "type": [
+                          "array",
+                          "null"
+                        ],
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "description": "Globe place events: the pixel [x, y] in every capture frame from the event on, null while hidden"
+                    }
+                  }
+                }
+              },
+              "credits": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "claim_id",
+              "kind",
+              "statement",
+              "source",
+              "paper_anchor"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "claim_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "fact",
+                  "quote",
+                  "quantity",
+                  "date",
+                  "image",
+                  "place"
+                ]
+              },
+              "statement": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "source": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "url",
+                  "title",
+                  "tier",
+                  "license",
+                  "quote",
+                  "locator"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tier": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "license": {
+                    "type": "string",
+                    "minLength": 0
+                  },
+                  "quote": {
+                    "type": "string",
+                    "minLength": 0
+                  },
+                  "locator": {
+                    "type": "string",
+                    "minLength": 0
+                  }
+                }
+              },
+              "paper_anchor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "description": "A captured source page with the quote highlighted; cue highlight <evidence id>"
+      }
+    },
+    "EvidenceCard": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "evidence.kind",
+        "evidence.statement",
+        "evidence.source.quote",
+        "evidence.source.title",
+        "evidence.source.locator"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidence"
+        ],
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "claim_id",
+              "kind",
+              "statement",
+              "source",
+              "paper_anchor"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "claim_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "fact",
+                  "quote",
+                  "quantity",
+                  "date",
+                  "image",
+                  "place"
+                ]
+              },
+              "statement": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "hookMaxLength": 68
+              },
+              "source": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "url",
+                  "title",
+                  "tier",
+                  "license",
+                  "quote",
+                  "locator"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 66
+                  },
+                  "tier": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "license": {
+                    "type": "string",
+                    "minLength": 0
+                  },
+                  "quote": {
+                    "type": "string",
+                    "minLength": 0,
+                    "maxLength": 220,
+                    "hookMaxLength": 120
+                  },
+                  "locator": {
+                    "type": "string",
+                    "minLength": 0,
+                    "maxLength": 24
+                  }
+                }
+              },
+              "paper_anchor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "image": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "src",
+              "license",
+              "attribution",
+              "source_url",
+              "depicts",
+              "markers"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "src": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              },
+              "license": {
+                "type": "string",
+                "minLength": 1
+              },
+              "attribution": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_url": {
+                "type": "string",
+                "minLength": 1
+              },
+              "depicts": {
+                "type": "string",
+                "minLength": 1
+              },
+              "markers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "box",
+                    "label"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "box": {
+                      "type": "array",
+                      "items": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "minItems": 4,
+                      "maxItems": 4
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 24
+                    }
+                  }
+                },
+                "minItems": 0,
+                "maxItems": 6
+              }
+            }
+          }
+        },
+        "description": "One verified evidence item; cues highlight <evidence id> (quote types on), stamp <evidence id>"
+      }
+    },
+    "QuoteCard": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "evidence.source.quote",
+        "evidence.source.title",
+        "evidence.source.locator",
+        "attribution"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidence"
+        ],
+        "properties": {
+          "evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "claim_id",
+              "kind",
+              "statement",
+              "source",
+              "paper_anchor"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "claim_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "fact",
+                  "quote",
+                  "quantity",
+                  "date",
+                  "image",
+                  "place"
+                ]
+              },
+              "statement": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "source": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "url",
+                  "title",
+                  "tier",
+                  "license",
+                  "quote",
+                  "locator"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 43
+                  },
+                  "tier": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "license": {
+                    "type": "string",
+                    "minLength": 0
+                  },
+                  "quote": {
+                    "type": "string",
+                    "minLength": 0,
+                    "maxLength": 320,
+                    "hookMaxLength": 230
+                  },
+                  "locator": {
+                    "type": "string",
+                    "minLength": 0,
+                    "maxLength": 24
+                  }
+                }
+              },
+              "paper_anchor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "attribution": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          }
+        },
+        "description": "A verbatim passage (texts and traditions, or a page that cannot be captured); cue highlight <evidence id>"
+      }
+    },
+    "ClaimBoard": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "title",
+        "claims[].label",
+        "claims[].by"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claims"
+        ],
+        "properties": {
+          "claims": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "label",
+                "by",
+                "icon",
+                "status"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 66
+                },
+                "by": {
+                  "type": "string",
+                  "minLength": 0,
+                  "maxLength": 40
+                },
+                "icon": {
+                  "type": "string",
+                  "enum": [
+                    "weight",
+                    "ruler",
+                    "clock",
+                    "globe",
+                    "tool",
+                    "eye",
+                    "scroll",
+                    "star",
+                    "question",
+                    "people"
+                  ],
+                  "description": "ClaimBoard icon; the case file must use one of these names"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "supported",
+                    "weakened",
+                    "refuted",
+                    "open"
+                  ]
+                }
+              }
+            },
+            "minItems": 1,
+            "maxItems": 6,
+            "hookMaxItems": 5
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 41
+          }
+        },
+        "description": "The claims under test; introduce/status cues (any scene) drive it; cue highlight <claim id>"
+      }
+    },
+    "Meter": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "title",
+        "hypotheses[]",
+        "note"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "hypotheses",
+          "start"
+        ],
+        "properties": {
+          "hypotheses": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "start": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Split before the first meter cue; sums to 100"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 41
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 110,
+            "hookMaxLength": 0
+          }
+        },
+        "description": "The probability meter; meter cues (any scene) move it"
+      }
+    },
+    "ScaleDrawing": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "title",
+        "basis",
+        "objects[].label"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "unit",
+          "basis",
+          "objects"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 41
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "cm",
+              "m",
+              "km"
+            ]
+          },
+          "basis": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 95,
+            "description": "What the comparison is based on, always shown on screen (owner rule)"
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "label",
+                "shape",
+                "width",
+                "height",
+                "x"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 24
+                },
+                "shape": {
+                  "type": "string",
+                  "enum": [
+                    "block",
+                    "person",
+                    "column",
+                    "bus",
+                    "pyramid",
+                    "rect"
+                  ]
+                },
+                "width": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "height": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "x": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            "minItems": 2,
+            "maxItems": 5
+          }
+        },
+        "description": "A to-scale side view on one ground line (no measuring on photos); cue show <object id>"
+      }
+    },
+    "UnitGrid": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "title",
+        "unitLabel",
+        "basis",
+        "groups[].label"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "basis",
+          "unitLabel",
+          "groups"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 41
+          },
+          "basis": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 60,
+            "description": "What the comparison is based on, always shown on screen (owner rule)"
+          },
+          "unitLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 36
+          },
+          "columns": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 40
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "count",
+                "label",
+                "tone"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 400
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 26
+                },
+                "tone": {
+                  "type": "string",
+                  "enum": [
+                    "accent",
+                    "info",
+                    "warn",
+                    "alert",
+                    "muted"
+                  ]
+                }
+              }
+            },
+            "minItems": 1,
+            "maxItems": 3,
+            "hookMaxItems": 2
+          }
+        },
+        "description": "Counts as lit unit squares (one block = 80 buses); cue show <group id>"
+      }
+    },
+    "BarChart": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "title",
+        "unit",
+        "basis",
+        "bars[].label"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "unit",
+          "basis",
+          "bars"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 41
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 6
+          },
+          "basis": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 95,
+            "description": "What the comparison is based on, always shown on screen (owner rule)"
+          },
+          "bars": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "label",
+                "value"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32
+                },
+                "value": {
+                  "type": [
+                    "number",
+                    "array"
+                  ],
+                  "minimum": 0,
+                  "items": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "description": "a number, or [low, high] when sources differ (the bar shows the range)"
+                },
+                "tone": {
+                  "type": "string",
+                  "enum": [
+                    "accent",
+                    "info",
+                    "warn",
+                    "alert",
+                    "muted"
+                  ]
+                }
+              }
+            },
+            "minItems": 2,
+            "maxItems": 8,
+            "hookMaxItems": 6
+          }
+        },
+        "description": "Horizontal bars on a linear axis (frequencies, sizes); a [low, high] value is drawn as a range; cue show <bar id>"
+      }
+    },
+    "Timeline": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "title",
+        "basis",
+        "events[].label"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "from",
+          "to",
+          "events"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 41
+          },
+          "from": {
+            "type": "integer"
+          },
+          "to": {
+            "type": "integer"
+          },
+          "basis": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 95,
+            "description": "What the comparison is based on, always shown on screen (owner rule)"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "year",
+                "label",
+                "tone"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "year": {
+                  "type": "integer"
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32
+                },
+                "tone": {
+                  "type": "string",
+                  "enum": [
+                    "accent",
+                    "info",
+                    "warn",
+                    "alert",
+                    "muted"
+                  ]
+                }
+              }
+            },
+            "minItems": 1,
+            "maxItems": 10
+          }
+        },
+        "description": "A year axis (negative = BCE, no year 0); cue show <event id>"
+      }
+    },
+    "Diagram": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "title",
+        "basis",
+        "elements[].label",
+        "elements[].text"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "width",
+          "height",
+          "elements"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 41
+          },
+          "width": {
+            "type": "number",
+            "minimum": 1
+          },
+          "height": {
+            "type": "number",
+            "minimum": 1
+          },
+          "basis": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 95,
+            "description": "What the comparison is based on, always shown on screen (owner rule)"
+          },
+          "elements": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "type",
+                "tone"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "circle",
+                    "line",
+                    "arrow",
+                    "curve",
+                    "orbit",
+                    "label"
+                  ]
+                },
+                "tone": {
+                  "type": "string",
+                  "enum": [
+                    "accent",
+                    "info",
+                    "warn",
+                    "alert",
+                    "muted"
+                  ]
+                },
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 32
+                },
+                "cx": {
+                  "type": "number"
+                },
+                "cy": {
+                  "type": "number"
+                },
+                "r": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "rx": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "ry": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "period": {
+                  "type": "number",
+                  "minimum": 0.5
+                },
+                "x1": {
+                  "type": "number"
+                },
+                "y1": {
+                  "type": "number"
+                },
+                "x2": {
+                  "type": "number"
+                },
+                "y2": {
+                  "type": "number"
+                },
+                "dashed": {
+                  "type": "boolean"
+                },
+                "points": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "minItems": 2
+                },
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                }
+              }
+            },
+            "minItems": 1,
+            "maxItems": 16
+          }
+        },
+        "description": "NERV wireframe primitives in a width x height user space (type C topics); cue show <element id>"
+      }
+    },
+    "ListCard": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "title",
+        "items[].text",
+        "note"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "items"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 39
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "text"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 72
+                }
+              }
+            },
+            "minItems": 1,
+            "maxItems": 5,
+            "hookMaxItems": 4
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 110
+          }
+        },
+        "description": "A short list, e.g. what would change our mind; cue show <item id>"
+      }
+    },
+    "ShareCard": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "headline",
+        "url",
+        "lines[]"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "headline",
+          "url",
+          "lines"
+        ],
+        "properties": {
+          "headline": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 43
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 66
+            },
+            "minItems": 0,
+            "maxItems": 3
+          }
+        },
+        "description": "The end card: the one place the link appears in the picture"
+      }
+    },
+    "ScaleZoom": {
+      "map": false,
+      "platform": false,
+      "drawn": [
+        "title",
+        "unit",
+        "basis",
+        "small.label",
+        "large.label"
+      ],
+      "props": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "unit",
+          "basis",
+          "small",
+          "large"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 41
+          },
+          "unit": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "basis": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 95,
+            "description": "What the comparison is based on, always shown on screen (owner rule)"
+          },
+          "small": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "value"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32
+              },
+              "value": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Greater than 0, in the chart unit"
+              }
+            }
+          },
+          "large": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "label",
+              "value"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32
+              },
+              "value": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Greater than 0, in the chart unit"
+              }
+            }
+          }
+        },
+        "description": "A linear zoom-out for ratios beyond a UnitGrid (1:400), never a log axis: the small quantity drawn readable, then the camera pulls back linearly until the large one fits, the small one shrinking to a dot; cue show <small id> or show <large id> (the quantity appears)"
+      }
+    }
+  }
+}

@@ -224,6 +224,18 @@ def tag_mp3_ai_generated(path) -> None:
 # ---------------------------------------------------------------------------
 
 
+def report_for_audio(result: dict) -> str:
+    """The text a reader sees: published_report, which /research/{slug} renders.
+
+    report is used only while published_report does not exist yet (an owner
+    queued audio for an unpublished paper). Reading report for a published paper
+    narrated the pre-publish draft (memory project-theo-published-report-trap).
+    """
+    if "published_report" in result:
+        return result["published_report"]
+    return result.get("report", "")
+
+
 def generate_paper_audio(tts_request_id: str, settings) -> tuple[str, int]:
     """Generate narrated MP3 for a research paper.
 
@@ -254,7 +266,7 @@ def generate_paper_audio(tts_request_id: str, settings) -> tuple[str, int]:
         import json
 
         result = json.loads(paper.result_json)
-        report = result.get("report", "")
+        report = report_for_audio(result)
         if not report:
             raise ValueError(f"Paper {tts_req.paper_id} has no report text")
 

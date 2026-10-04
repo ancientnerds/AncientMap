@@ -30,6 +30,7 @@ geopandas>=0.14.0           # Geospatial DataFrames
 h3>=3.7.6                   # Uber H3 hexagonal indexing
 pyproj>=3.6.0               # Coordinate transformations
 shapely>=2.0.0              # Geometric operations
+pypdf==6.19.0               # PDF text of cited sources (pipeline/lyra/archive_completion.py)
 
 # =============================================================================
 # NAME MATCHING & DEDUPLICATION

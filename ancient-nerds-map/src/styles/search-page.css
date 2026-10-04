@@ -130,6 +130,14 @@
   box-shadow: 0 0 4px rgba(0, 204, 102, 0.8);
 }
 
+/* The automatic widening — the whole database was searched because the
+   visitor's own sources had no match */
+.search-auto-note {
+  margin-left: 10px;
+  color: var(--nerv-steel-dim, #888880);
+  font-weight: 600;
+}
+
 /* Filters panel */
 .search-filters-panel {
   margin-bottom: 16px;

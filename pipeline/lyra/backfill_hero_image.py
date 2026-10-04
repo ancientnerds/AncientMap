@@ -32,6 +32,11 @@ from sqlalchemy import text
 from pipeline.database import engine
 from pipeline.lyra.hero_picker import pick_hero_image
 from pipeline.lyra.text_sentences import split_sentences
+from pipeline.lyra.theo_publishing import (
+    JOURNALLED_PAPER_SQL,
+    refuse_journalled_paper,
+    write_unjournalled_result,
+)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -113,12 +118,16 @@ def _reconstruct_from_report(report: str) -> list[dict]:
 
 
 def _fetch_papers(slug: str | None) -> list[dict]:
+    # A journalled paper changes only through theo_publish (Task 21b): --all
+    # skips it, --slug refuses it.
     with engine.connect() as conn:
         if slug:
+            refuse_journalled_paper(conn, slug)
             rows = conn.execute(
                 text(
                     "SELECT id::text, slug, result_json FROM research_requests "
-                    "WHERE slug = :slug AND is_public = TRUE AND status = 'completed'"
+                    "WHERE slug = :slug AND is_public = TRUE AND status = 'completed' "
+                    f"AND NOT ({JOURNALLED_PAPER_SQL})"
                 ),
                 {"slug": slug},
             ).fetchall()
@@ -127,6 +136,7 @@ def _fetch_papers(slug: str | None) -> list[dict]:
                 text(
                     "SELECT id::text, slug, result_json FROM research_requests "
                     "WHERE is_public = TRUE AND status = 'completed' "
+                    f"AND NOT ({JOURNALLED_PAPER_SQL}) "
                     "ORDER BY published_at DESC"
                 )
             ).fetchall()
@@ -162,10 +172,7 @@ def _process(paper: dict, apply: bool) -> tuple[str, str]:
 
     result["hero_image"] = hero
     with engine.connect() as conn:
-        conn.execute(
-            text("UPDATE research_requests SET result_json = :json WHERE id = :id"),
-            {"json": json.dumps(result), "id": paper["id"]},
-        )
+        write_unjournalled_result(conn, paper["id"], result)
         conn.commit()
     return (slug, f"set hero to {hero.get('web_path')}")
 

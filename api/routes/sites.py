@@ -44,6 +44,7 @@ from pipeline.normalizers.site_type import normalize_site_type
 from pipeline.utils.card_provenance import card_provenance_of
 from pipeline.utils.globe_payload import globe_projection
 from pipeline.utils.public_sites import RETIRED, is_retired, not_retired
+from pipeline.utils.text import normalize_name
 
 _heavy_limiter = RateLimiter(max_requests=50, window_seconds=60, namespace="heavy_sites")
 _viewport_limiter = RateLimiter(max_requests=60, window_seconds=60, namespace="viewport")
@@ -824,6 +825,81 @@ def country_matches(word_key: str, countries: list[str]) -> list[str]:
 _REGEX_SYNTAX = re.compile(r"([.^$*+?()\[\]{}|\\])")
 
 
+#: The column length the key is cut to (site_key_sql).
+_KEY_MAX = 500
+
+
+def _loader_key(s: str) -> str:
+    """The key the loaders wrote, as far as the column is concerned.
+
+    `unified_sites.name_normalized` has two producers: the canonical
+    `left(lower(unaccent(name)), 500)` (pipeline/lyra/site_key.py) and
+    pipeline.utils.text.normalize_name, which several loaders call with its
+    defaults. They fold differently outside Latin letters - NFKD decomposes the
+    Arabic hamza (أ -> ا) and the ae (ە -> ي) and drops tashkīl, Postgres's
+    unaccent leaves all of them alone, and normalize_name also drops a
+    bracketed suffix the column otherwise keeps.
+
+    So a query is built in both flavours: the canonical one, and this one. The
+    same two flavours are why site_matcher and the prospector miss those rows
+    for a canonical key (measured 2026-10-04 on production: 80,081 of 1,759,573
+    rows, 1,610 Arabic, 808 Chinese, 57,563 ASCII).
+    """
+    return normalize_name(s)[:_KEY_MAX]
+
+
+#: How many sites one alias lookup may contribute to a search. A name in another
+#: script is a handful of rows (Machu Picchu: 7); a broad Latin query can match
+#: thousands, and those are found by the site's own name anyway. The cap keeps
+#: the uuid array the planner sees small enough to compare against the primary
+#: key.
+_ALIAS_LIMIT = 200
+
+#: The columns both search statements read, so the two cannot drift apart.
+_SITE_COLUMNS = (
+    "us.id::text, us.name, us.lat, us.lon, us.source_id, us.site_type, "
+    "us.period_start, us.period_name, us.description, us.country, us.source_url, "
+    "cs.card_description"
+)
+
+
+def _alias_site_ids(db: Session, params: dict[str, object], loader_differs: bool) -> list[str]:
+    """The sites whose other names carry the query, as a list of ids.
+
+    ``unified_site_names`` holds every name a site is known by: the label
+    Wikidata gives it in up to 140 languages, and its aliases. The search asks
+    for them here rather than inside its own WHERE, because a subquery in the
+    disjunction costs that query its trigram index - measured 2026-10-04 on
+    production, "baalbek" went from 13 ms to 1,051 ms with a sequential scan
+    over 1.76M rows. The partial trigram index of migration 0027 covers the
+    non-label rows this reads.
+
+    The same binds as the site's own name arms, so a name keyed in the loaders'
+    flavour matches here as well; the word tier is not repeated, because a
+    visitor types the name as it is written and does not guess halves of a word
+    in a language they cannot read (and for Devanagari the splitter yields no
+    words at all - its matras are not word characters to ``\\w``).
+    """
+    arms = [
+        "n.name_normalized LIKE :p_name " + _LIKE_ESCAPE,
+        "replace(n.name_normalized, ' ', '') LIKE :p_space " + _LIKE_ESCAPE,
+    ]
+    if loader_differs:
+        arms += [
+            "n.name_normalized LIKE :p_name_loader " + _LIKE_ESCAPE,
+            "replace(n.name_normalized, ' ', '') LIKE :p_space_loader " + _LIKE_ESCAPE,
+        ]
+    rows = db.execute(
+        text(
+            "SELECT DISTINCT n.site_id FROM unified_site_names n "
+            f"WHERE n.name_type <> 'label' AND ({' OR '.join(arms)}) "
+            "LIMIT :alias_limit"
+        ),
+        {**params, "alias_limit": _ALIAS_LIMIT},
+    ).fetchall()
+    return [r.site_id for r in rows]
+
+
 @router.get("/search")
 def search_sites(
     req: Request,
@@ -842,9 +918,29 @@ def search_sites(
     2026-09-25 on production, before that migration: ~1.4 s for one word, a
     parallel seq scan of 1.76M rows.
 
+    A second key, the loaders' own normalize_name, joins it: the column has two
+    producers that fold differently, and a query in one flavour could not find
+    a site keyed in the other. See _loader_key.
+
+    The site's other names count too, in whatever language they are written:
+    unified_site_names carries Wikidata's labels and "also known as" for the
+    curated sites (pipeline/wikidata_name_backfill.py fills it), so a visitor
+    who types マチュ・ピチュ, Μάτσου Πίτσου or माचू पिच्चू finds Machu Picchu. For
+    the scripts whose names are transliterations this is the whole story; a
+    script the row does not carry a name in stays unfindable, which is a
+    question of data and not of this query.
+
     Ranks: 1 the name is the query, 2 the same without spaces, 3 the name
     contains the query, 4 the name holds every word, 5 a word named the
-    country. Curated cards first, as before.
+    country.
+
+    The order the visitor reads is: a site the card can say something about
+    first, then the bare ones, and inside each of those the rank. Read on
+    production 2026-10-04, 1,595,613 of the 1,759,573 shown sites carry
+    neither a card description nor a description (list_inscriptions and
+    canmore_scotland alone hold 821,000 of them), and a query like "great
+    zimbabwe" answered with three bare names before the one described site.
+    The key is the OR, because that is what the card renders.
 
     Returns compact format matching /sites/all for frontend reuse.
     """
@@ -881,10 +977,59 @@ def search_sites(
         "p_space": f"%{keys.kl.replace(' ', '')}%",
         "limit": limit,
     }
-    arms = [
-        f"us.name_normalized LIKE :p_name {_LIKE_ESCAPE}",
-        f"replace(us.name_normalized, ' ', '') LIKE :p_space {_LIKE_ESCAPE}",
-    ]
+    # The column has two producers; _loader_key has the whole story. The
+    # loaders' flavour is computed here, not in the column: both are bound
+    # constants, so the trigram indexes answer either way.
+    loader_key = _loader_key(raw)
+    loader_differs = loader_key != keys.kl
+
+    def _phrase_arms(column: str) -> list[str]:
+        """How a name may be read, in both key flavours, on one column."""
+        out = [
+            f"{column} LIKE :p_name {_LIKE_ESCAPE}",
+            f"replace({column}, ' ', '') LIKE :p_space {_LIKE_ESCAPE}",
+        ]
+        if loader_differs:
+            out += [
+                f"{column} LIKE :p_name_loader {_LIKE_ESCAPE}",
+                f"replace({column}, ' ', '') LIKE :p_space_loader {_LIKE_ESCAPE}",
+            ]
+        return out
+
+    # A query the two flavours fold alike - every Latin query without a bracket
+    # - keeps the canonical arms alone, as before: a second copy of the same
+    # condition would only make the planner's job longer.
+    loader_rank = ""
+    if loader_differs:
+        params["k_loader"] = loader_key
+        params["k_space_loader"] = loader_key.replace(" ", "")
+        params["p_name_loader"] = f"%{_escape_ilike(loader_key)}%"
+        params["p_space_loader"] = f"%{_escape_ilike(loader_key).replace(' ', '')}%"
+        # An exact name in the loaders' flavour is an exact name, so it takes
+        # the same two ranks as the canonical one.
+        loader_rank = (
+            "WHEN us.name_normalized = :k_loader THEN 1 "
+            "WHEN replace(us.name_normalized, ' ', '') = :k_space_loader THEN 2 "
+        )
+    # The site's other names, in any language: "Machu Picchu" in Japanese, Greek
+    # or Bengali is a row of unified_site_names, and until the names were asked
+    # for a visitor typing it in their own language found nothing. Only the
+    # non-label rows: a label row mirrors unified_sites.name, which the arms
+    # above already match, and the partial trigram index of migration 0027 covers
+    # this subset alone.
+    #
+    # The ids come back as a second, tiny query over the primary key rather than
+    # as an arm of this WHERE. Both alternatives inside the disjunction were
+    # measured on production 2026-10-04 and both cost the main query its trigram
+    # index: a correlated `us.id IN (SELECT ...)` turned "baalbek" from 13 ms into
+    # 1,051 ms with a sequential scan over 1.76M rows, and an `id = ANY(:array)`
+    # arm made the Japanese query a parallel sequential scan. So this WHERE is
+    # left exactly as it was, and the sites the names found are fetched and put in
+    # front.
+    alias_ids = _alias_site_ids(db, params, loader_differs)
+    # The word tier is appended to the WHERE arms below; the rank keeps these.
+    arms = _phrase_arms("us.name_normalized")
+    phrase_arms = list(arms)
     all_in_name = "FALSE"
     if len(words) >= 2:
         countries = _search_countries(db)
@@ -894,7 +1039,14 @@ def search_sites(
         for i in range(len(words)):
             word_key = getattr(keys, f"w{i}")
             params[f"r{i}"] = r"\m" + _REGEX_SYNTAX.sub(r"\\\1", word_key)
-            hit = f"us.name_normalized ~ :r{i}"
+            # The loader folded the word its own way too (Arabic hamza, the
+            # Turkish dotless i), so a word counts as found in either flavour.
+            loader_word = _loader_key(words[i])
+            if loader_word == word_key:
+                hit = f"us.name_normalized ~ :r{i}"
+            else:
+                params[f"rl{i}"] = r"\m" + _REGEX_SYNTAX.sub(r"\\\1", loader_word)
+                hit = f"(us.name_normalized ~ :r{i} OR us.name_normalized ~ :rl{i})"
             in_name.append(hit)
             named = country_matches(word_key, countries)
             if named:
@@ -912,13 +1064,11 @@ def search_sites(
 
     query = text(f"""
         SELECT
-            us.id::text, us.name, us.lat, us.lon, us.source_id, us.site_type,
-            us.period_start, us.period_name, us.description, us.country, us.source_url,
-            cs.card_description,
+            {_SITE_COLUMNS},
             CASE
                 WHEN us.name_normalized = :k THEN 1
                 WHEN replace(us.name_normalized, ' ', '') = :k_space THEN 2
-                WHEN {arms[0]} OR {arms[1]} THEN 3
+                {loader_rank}WHEN {" OR ".join(phrase_arms)} THEN 3
                 WHEN {all_in_name} THEN 4
                 ELSE 5
             END AS rank
@@ -926,36 +1076,66 @@ def search_sites(
         LEFT JOIN card_stats cs ON cs.site_id = us.id
         WHERE ({" OR ".join(arms)})
           AND {_US_SHOWN}
-        ORDER BY (cs.card_description IS NULL), rank, (us.source_id <> 'ancient_nerds'),
+        ORDER BY (NULLIF(btrim(us.description), '') IS NULL AND cs.card_description IS NULL),
+                 rank, (us.source_id <> 'ancient_nerds'),
                  length(us.name), us.name
         LIMIT :limit
     """)
 
-    result = db.execute(query, params)
-    sites = []
-    for row in result:
-        site = {
-            "id": row.id,
-            "n": row.name,
-            "la": row.lat,
-            "lo": row.lon,
-            "s": row.source_id,
-            "t": row.site_type,
-            "p": row.period_start,
-        }
-        if row.period_name:
-            site["pn"] = row.period_name
-        if row.description:
-            site["d"] = row.description
-        if row.country:
-            site["c"] = row.country
-        if row.source_url:
-            site["u"] = row.source_url
-        if row.card_description:
-            site["cd"] = row.card_description
-        sites.append(site)
+    def _collect(rows) -> list[dict]:
+        sites = []
+        for row in rows:
+            site = {
+                "id": row.id,
+                "n": row.name,
+                "la": row.lat,
+                "lo": row.lon,
+                "s": row.source_id,
+                "t": row.site_type,
+                "p": row.period_start,
+            }
+            if row.period_name:
+                site["pn"] = row.period_name
+            if row.description:
+                site["d"] = row.description
+            if row.country:
+                site["c"] = row.country
+            if row.source_url:
+                site["u"] = row.source_url
+            if row.card_description:
+                site["cd"] = row.card_description
+            sites.append(site)
+        return sites
 
-    response = {"count": len(sites), "sites": sites}
+    sites = _collect(db.execute(query, params))
+    if alias_ids:
+        # In front of the name matches: the visitor typed the name in their own
+        # language, so this is what they were looking for. The same described-first
+        # order holds, so a bare row from a gazetteer cannot jump ahead of a
+        # curated card.
+        params["alias_ids"] = alias_ids
+        by_name = _collect(
+            db.execute(
+                text(
+                    f"""
+                    SELECT {_SITE_COLUMNS}
+                    FROM unified_sites us
+                    LEFT JOIN card_stats cs ON cs.site_id = us.id
+                    WHERE us.id = ANY(CAST(:alias_ids AS uuid[]))
+                      AND {_US_SHOWN}
+                    ORDER BY (NULLIF(btrim(us.description), '') IS NULL AND cs.card_description IS NULL),
+                             (us.source_id <> 'ancient_nerds'),
+                             length(us.name), us.name
+                    LIMIT :limit
+                    """
+                ),
+                params,
+            )
+        )
+        seen = {site["id"] for site in by_name}
+        sites = by_name + [site for site in sites if site["id"] not in seen]
+
+    response = {"count": len(sites), "sites": sites[:limit]}
     cache_set(cache_key, response, ttl=120)
     return response
 

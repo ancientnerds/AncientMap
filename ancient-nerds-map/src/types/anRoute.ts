@@ -197,6 +197,53 @@ export interface CountryRoute {
 }
 
 /**
+ * A YouTube video made from a paper (result_json.videos, registered by
+ * `theo_publish --register-video`). The evidence timestamps stay in Python:
+ * they arrive as "Video at m:ss" links inside body_html.
+ */
+export interface ResearchVideo {
+  youtube_id: string
+  title: string
+  /** Raw ISO 8601 publication time on YouTube; date display is a TS decision. */
+  published_at: string
+  /**
+   * Our own studio thumbnail, served from our server:
+   * /data/research-images/<request_id>/video_<youtube_id>.jpg (owner decision
+   * #13, spec §2.7; pipeline.lyra.theo_publishing.poster_web_path). Null when
+   * the video was registered without one: the page then shows the posterless
+   * player. Either way nothing is requested from YouTube before the click.
+   */
+  poster: string | null
+}
+
+/** One entry of a paper's public corrections log (result_json.corrections). */
+export interface ResearchCorrection {
+  /** YYYY-MM-DD. */
+  date: string
+  text: string
+  /** The evidence paragraph (ev-NN) this correction concerns, or null. */
+  evidence_id: string | null
+  /**
+   * True when the correction retired evidence_id: this entry then carries that
+   * id itself, so a video description linking #ev-NN lands on the correction.
+   * False with an evidence_id: the entry links to the corrected paragraph.
+   */
+  holds_anchor: boolean
+}
+
+/**
+ * Who wrote and published a paper (result_json.writer): the source of the
+ * visible AI disclosure line (EU AI Act Art. 50(4), studio spec §3.7).
+ */
+export interface ResearchWriter {
+  model: string
+  tool: string
+  research_model: string
+  published: 'automatic' | 'manual'
+  human_review: boolean
+}
+
+/**
  * One public research paper — the raw paper_summary_kwargs fields the
  * route hands through (api/routes/research_html.py, react-ssr Task 12),
  * plus body_html: the published report rendered by the pipeline's
@@ -214,6 +261,15 @@ export interface ResearchRoute {
   published_at: string | null
   hero_image_url: string | null
   body_html: string
+  /**
+   * The parts of a Claude-written paper (studio spec 2026-09-26 §2.7, §3.7).
+   * Present only when the paper has them: api/routes/research_html.py adds a
+   * key only then, so the payload of every older paper stays byte-identical.
+   * Evidence anchors need no field: they are ids inside body_html.
+   */
+  videos?: ResearchVideo[]
+  corrections?: ResearchCorrection[]
+  writer?: ResearchWriter
 }
 
 /**

@@ -21,6 +21,8 @@ import { useUIState, useLabelVisibility, usePaleoshoreline, useGeologicalLayers,
 import { useConnectorStatus } from '../hooks/useConnectorStatus'
 import ConnectorStatusModal from './ConnectorStatusModal'
 import { isDemoMode, registerGlobeDemoApi } from '../utils/demoApi'
+import { globeScreenPoint, viewportPoint } from '../utils/screenPoint'
+import { parseVideoMode } from '../utils/videoMode'
 import { createFrontLineMaterial } from '../shaders/globe'
 import { calculateSiteTooltipPosition } from './Globe/rendering/highlightedSitesRenderer'
 import {
@@ -235,7 +237,9 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const reportStartError = useStartErrorBridge(isGlobeReady, refs.layersReadyCalled)
 
   // Custom Hooks
-  const ui = useUIState({ initialShowCoordinates: true })
+  // ?video=1&hud=1.3: the studio capture's HUD scale (utils/videoMode.ts); otherwise the HUD default
+  const [videoHudScale] = useState(() => parseVideoMode(window.location.search).hudScale)
+  const ui = useUIState({ initialShowCoordinates: true, ...(videoHudScale === null ? {} : { initialHudScale: videoHudScale }) })
   const { showTooltips, showCoordinates, showScale, hudScale, hudScalePreview, hudVisible, dotSize } = ui
 
   const labels = useLabelVisibility({ initialGeoLabelsVisible: false })
@@ -385,7 +389,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const { isPlaying, toggle } = useRotationControl({ refs, isZoomedIn, isHoveringList: isHoveringList ?? false })
 
   // Fullscreen: toggle and sync fullscreen state
-  const { isFullscreen, toggleFullscreen } = useFullscreen()
+  const { isFullscreen, canFullscreen, toggleFullscreen } = useFullscreen()
 
   // Cursor mode: crosshair cursor for globe, proximity/measure mode handling
   useCursorMode({
@@ -570,8 +574,10 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       setTileLayers,
       setVectorLayers,
       setGeoLabelsVisible: labels.setGeoLabelsVisible,
-      toggleEmpire,
+      // registered once: the latest toggleEmpire reads the current timeline and visible empires
+      toggleEmpire: (id) => toggleEmpireRef.current(id),
       getVisibleEmpires: () => empires.visibleEmpiresRef.current,
+      setGlobalTimelineEnabled,
       setPaleoshorelineVisible: paleo.setPaleoshorelineVisible,
       setSeaLevelWithSlider: paleo.setSeaLevelWithSlider,
       // Site tooltip control
@@ -589,6 +595,15 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       mapboxServiceRef,
       mapboxStateRef,
       requestMapbox: () => { background.promote('mapbox') },
+      screenPoint: (lat, lng) => {
+        if (showMapboxRef.current) {
+          const map = mapboxServiceRef.current?.getMap()
+          if (!map) throw new Error('screenPoint: Mapbox is shown but has no map')
+          return viewportPoint(map.project([lng, lat]), window.innerWidth, window.innerHeight)
+        }
+        if (!sceneRef.current) return null
+        return globeScreenPoint(sceneRef.current.camera, lat, lng, window.innerWidth, window.innerHeight)
+      },
     })
   }, [])
 
@@ -1839,6 +1854,8 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
       return next
     })
   }
+  const toggleEmpireRef = useRef(toggleEmpire)
+  toggleEmpireRef.current = toggleEmpire
 
   // Change empire year (for temporal slider)
   const changeEmpireYear = useCallback(async (empireId: string, year: number) => {
@@ -2650,6 +2667,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         onTogglePlay={toggle}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
+        canFullscreen={canFullscreen}
       />
 
       {/* Layer toggle panel */}

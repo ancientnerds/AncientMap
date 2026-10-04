@@ -13,9 +13,9 @@ import re
 
 from pipeline.lyra.theo_citations import CitationRegistry, audit_citations
 
-# This must match the regex baked into pipeline/lyra/handlers/paper.py Step 7.8.
-# If you change one, change the other — there's a unit test that compiles the
-# same pattern from disk to keep them in sync.
+# The scrub the M3 writer applied (handlers/paper.py Step 7.8, removed with the
+# writing chain on 2026-09-26). The pattern stays as the audit's reference case
+# for stray source-id tokens in prose.
 _HEX_TOKEN_RE = re.compile(r"(?<!\!)\[[a-f0-9]{6,16}\]")
 
 
@@ -85,19 +85,4 @@ def test_audit_passes_after_scrubbing_hex_tokens():
     post = audit_citations(cleaned, registry)
     assert not post["non_numeric_markers"], (
         f"post-scrub audit should be clean, got {post['non_numeric_markers']}"
-    )
-
-
-def test_handler_uses_same_regex():
-    """Pin: the regex string in paper.py matches the scrubber here."""
-    handler_src = (
-        __import__("pathlib").Path(__file__).parent.parent.parent
-        / "pipeline"
-        / "lyra"
-        / "handlers"
-        / "paper.py"
-    ).read_text(encoding="utf-8")
-    # The pattern is written exactly once in the handler — locked here.
-    assert r"(?<!\!)\[[a-f0-9]{6,16}\]" in handler_src, (
-        "paper.py hex-scrubber regex drifted from the test mirror"
     )

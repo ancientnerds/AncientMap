@@ -56,6 +56,7 @@ export const PIPELINE_STAGES: PipelineNodeDef[] = [
   { id: 'synthesis', label: 'Cross-Source Synthesis', sublabel: 'Argument mapping' },
   { id: 'debate', label: 'Specialist Debate', sublabel: 'Challenge & defense rounds' },
   { id: 'moderator', label: 'Moderator Review', sublabel: 'Final positions + devil\'s advocate' },
+  { id: 'dossier', label: 'Dossier', sublabel: 'Archive completion + manifest' },
   { id: 'paper_assembly', label: 'Paper Assembly', sublabel: 'Academic formatting + citation audit' },
   { id: 'quality_judge', label: 'Quality Judge', sublabel: 'Verification + backward routing' },
   { id: 'image_generation', label: 'Illustrations', sublabel: 'Picking banner hero from inline images' },

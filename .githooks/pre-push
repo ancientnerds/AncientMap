@@ -10,6 +10,10 @@
 #      actually goes live - and
 #   2. every local gate is green.
 #
+# The renderer gates (tsc and vitest in video/) run only when the push changes a path of
+# CI's `video` filter (.github/workflows/ci.yml, job `changes`), measured from the remote
+# main to the pushed commit; every other gate runs on every push to main.
+#
 # Pushes to any other branch skip the gates. Every check is fail-closed: a gate that
 # cannot be executed blocks the push instead of waving it through.
 #
@@ -29,6 +33,8 @@
 #   - A mixed push (main plus other refs) aborts as a whole when a gate is red.
 #   - Any remote pointing at the GitHub repository can trigger the deploy, so the hook
 #     does not guess which remote is 'the' deploy remote.
+#   - A remote main this clone has not fetched blocks the push: without it the hook cannot
+#     tell whether the push changes the renderer.
 #   - '--no-verify' and '-c core.hooksPath=' bypass every local hook; server-side
 #     protection for main is the only real backstop.
 #   - Committing this file needs the executable bit in the index (core.filemode is false
@@ -49,10 +55,12 @@ cat > "$REFS_FILE"
 
 PUSHES_MAIN=0
 MAIN_LOCAL_SHA=
+MAIN_REMOTE_SHA=
 while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
   if [ "$REMOTE_REF" = "refs/heads/main" ]; then
     PUSHES_MAIN=1
     MAIN_LOCAL_SHA="$LOCAL_SHA"
+    MAIN_REMOTE_SHA="$REMOTE_SHA"
   fi
 done < "$REFS_FILE"
 
@@ -151,6 +159,30 @@ if [ "$PUSHES_MAIN" -eq 1 ]; then
     exit 1
   fi
 
+  # Does this push change the renderer? The paths are CI's `video` filter
+  # (.github/workflows/ci.yml, job `changes`): change both together. A remote without
+  # main yet gets every file of the pushed commit as new (the diff from the empty tree).
+  if [ "$MAIN_REMOTE_SHA" = "0000000000000000000000000000000000000000" ]; then
+    VIDEO_BASE=$(git hash-object -t tree /dev/null) || { echo "pre-push: BLOCKED - 'git hash-object -t tree /dev/null' failed; cannot tell whether this push changes the renderer." >&2; exit 1; }
+  elif git rev-parse --verify --quiet "$MAIN_REMOTE_SHA^{commit}" >/dev/null; then
+    VIDEO_BASE="$MAIN_REMOTE_SHA"
+  else
+    echo "pre-push: BLOCKED - the remote main $MAIN_REMOTE_SHA is not in this repository, so the hook cannot tell whether this push changes the renderer (video/). Run git fetch, then push again." >&2
+    exit 1
+  fi
+  git diff --quiet "$VIDEO_BASE" "$MAIN_LOCAL_SHA" -- video/ tests/pipeline/studio/golden_timeline.json \
+    ancient-nerds-map/src/styles/tokens.css ancient-nerds-map/src/constants/colors.ts ancient-nerds-map/public/fonts/
+  VIDEO_DIFF_STATUS=$?
+  if [ "$VIDEO_DIFF_STATUS" -gt 1 ]; then
+    echo "pre-push: BLOCKED - 'git diff --quiet $VIDEO_BASE $MAIN_LOCAL_SHA -- <video filter paths>' failed (exit $VIDEO_DIFF_STATUS); cannot tell whether this push changes the renderer." >&2
+    exit 1
+  fi
+  VIDEO="$ROOT/video"
+  if [ "$VIDEO_DIFF_STATUS" -eq 1 ] && [ ! -x "$VIDEO/node_modules/.bin/tsc" ]; then
+    echo "pre-push: BLOCKED - this push changes the renderer, but tsc is not installed at '$VIDEO/node_modules/.bin/tsc': run npm ci in video/." >&2
+    exit 1
+  fi
+
   run_gate pytest "$PYTHON" -m pytest -q -rs --timeout 90 -m "not integration and not live_llm"
   run_gate ruff "$PYTHON" -m ruff check api/ pipeline/
   run_gate lint-imports "$LINT_IMPORTS"
@@ -161,6 +193,15 @@ if [ "$PUSHES_MAIN" -eq 1 ]; then
   run_gate npm-test npm run test
   run_gate knip npx knip --no-progress --include files,dependencies,devDependencies
   cd "$ROOT" || { echo "pre-push: BLOCKED - cannot change back into '$ROOT'." >&2; exit 1; }
+
+  if [ "$VIDEO_DIFF_STATUS" -eq 1 ]; then
+    cd "$VIDEO" || { echo "pre-push: BLOCKED - cannot change into '$VIDEO'." >&2; exit 1; }
+    run_gate video-tsc npx tsc --noEmit
+    run_gate video-vitest npx vitest run
+    cd "$ROOT" || { echo "pre-push: BLOCKED - cannot change back into '$ROOT'." >&2; exit 1; }
+  else
+    echo "pre-push: this push changes no path of CI's video filter - skipping the renderer gates."
+  fi
 
   echo "pre-push: all main gates are green."
 else

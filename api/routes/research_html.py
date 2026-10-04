@@ -23,10 +23,14 @@ from pipeline.article_html_renderer import (
 )
 from pipeline.database import get_db
 from pipeline.research_html_renderer import (
+    PAPER_EXTRAS_COLUMNS,
     PUBLIC_PAPER_WHERE,
+    evidence_video_moments,
     format_image_captions_medium,
-    format_references_md,
-    strip_leading_title_heading,
+    inject_evidence_anchors,
+    page_extras_payload,
+    paper_extras,
+    paper_markdown,
 )
 from pipeline.utils.slugs import BASE_URL
 
@@ -86,12 +90,13 @@ async def research_listing(db: Session = Depends(get_db)):
 
 
 def fetch_paper(slug: str, db: Session):
-    """Load one public paper row incl. report content, or None."""
+    """Load one public paper row incl. report content and extras, or None."""
     return db.execute(
         text(f"""
             SELECT {PAPER_SUMMARY_COLUMNS},
                    r.result_json::jsonb->>'published_report' AS published_report,
-                   r.result_json::jsonb->>'report' AS report
+                   r.result_json::jsonb->>'report' AS report,
+                   {PAPER_EXTRAS_COLUMNS}
             FROM research_requests r
             WHERE r.slug = :slug AND {PUBLIC_PAPER_WHERE}
         """),
@@ -119,9 +124,7 @@ def report_markdown(row, title: str) -> str:
     References as consecutive plain-text lines with bare URLs that markdown
     collapses into one dead-link paragraph.
     """
-    return format_references_md(
-        strip_leading_title_heading(row.published_report or row.report or "", title)
-    )
+    return paper_markdown(row.published_report or row.report or "", title)
 
 
 @router.get("/research/{slug}")
@@ -135,7 +138,17 @@ async def research_paper_page(slug: str, db: Session = Depends(get_db)):
     # author defaults are display decisions and live in src/seo/. body_html
     # stays Python-markdown on purpose (nh3-sanitized in markdown_to_html) —
     # React injects the finished HTML instead of re-rendering the markdown.
+    # Evidence anchors (#ev-NN) are added to that finished HTML, because nh3
+    # drops id attributes; the optional videos/corrections/writer keys join
+    # the payload only when the paper has them, so older papers keep their
+    # exact payload (studio spec 2026-09-26 §2.7, §3.7).
     paper = paper_summary_kwargs(row)
+    extras = paper_extras(row)
+    body_html = inject_evidence_anchors(
+        markdown_to_html(report_markdown(row, paper["title"])),
+        extras.evidence,
+        evidence_video_moments(extras),
+    )
     return ssr_shell_response(
         "research.html",
         {
@@ -146,7 +159,8 @@ async def research_paper_page(slug: str, db: Session = Depends(get_db)):
             "author": paper["author"],
             "published_at": paper["published_at"],
             "hero_image_url": paper["hero_image_url"],
-            "body_html": markdown_to_html(report_markdown(row, paper["title"])),
+            "body_html": body_html,
+            **page_extras_payload(extras),
         },
         _HTML_HEADERS,
     )

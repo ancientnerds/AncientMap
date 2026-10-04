@@ -1,0 +1,447 @@
+{
+  "version": 1,
+  "fps": 60,
+  "width": 1920,
+  "height": 1080,
+  "durationInFrames": 3213,
+  "audio": {
+    "narration": [
+      {
+        "src": "voice/b01.mp3",
+        "from": 21
+      },
+      {
+        "src": "voice/b02.mp3",
+        "from": 378
+      },
+      {
+        "src": "voice/b03.mp3",
+        "from": 735
+      },
+      {
+        "src": "voice/b04.mp3",
+        "from": 1092
+      },
+      {
+        "src": "voice/b05.mp3",
+        "from": 1449
+      },
+      {
+        "src": "voice/b06.mp3",
+        "from": 1806
+      },
+      {
+        "src": "voice/b07.mp3",
+        "from": 2163
+      },
+      {
+        "src": "voice/b08.mp3",
+        "from": 2520
+      },
+      {
+        "src": "voice/b09.mp3",
+        "from": 2877
+      }
+    ],
+    "music": {
+      "src": "music/bed.wav",
+      "gainDb": -8,
+      "duck": {
+        "underNarrationDb": -12,
+        "attackFrames": 6,
+        "releaseFrames": 24
+      }
+    }
+  },
+  "scenes": [
+    {
+      "id": "b01",
+      "from": 0,
+      "durationInFrames": 357,
+      "block": "PhotoPlate",
+      "props": {
+        "image": {
+          "id": "m1",
+          "src": "media/stone_person.jpg",
+          "license": "CC BY-SA 4.0",
+          "attribution": "Jane Doe",
+          "source_url": "https://commons.wikimedia.org/wiki/File:Stone.jpg",
+          "depicts": "the Stone of the Pregnant Woman with a person for scale",
+          "markers": [
+            {
+              "id": "mk1",
+              "box": [
+                0.1,
+                0.5,
+                0.1,
+                0.3
+              ],
+              "label": "1 PERSON"
+            }
+          ]
+        },
+        "kenBurns": "in"
+      },
+      "cues": [
+        {
+          "frame": 212,
+          "do": "show",
+          "target": "mk1"
+        }
+      ]
+    },
+    {
+      "id": "b02",
+      "from": 357,
+      "durationInFrames": 357,
+      "block": "ClaimBoard",
+      "props": {
+        "claims": [
+          {
+            "id": "c1",
+            "label": "No one could move 800 t without machines",
+            "by": "core claim",
+            "icon": "weight",
+            "status": "pending"
+          }
+        ]
+      },
+      "cues": [
+        {
+          "frame": 645,
+          "do": "introduce",
+          "target": "c1"
+        }
+      ]
+    },
+    {
+      "id": "b03",
+      "from": 714,
+      "durationInFrames": 357,
+      "block": "PlatformClip",
+      "props": {
+        "clip": {
+          "id": "platform-01",
+          "kind": "platform",
+          "src": "captures/platform-01.mp4",
+          "fps": 60,
+          "duration_s": 8.0,
+          "width": 1920,
+          "height": 1080,
+          "events": [
+            {
+              "t": 0.4,
+              "name": "search"
+            }
+          ],
+          "credits": [
+            "© Mapbox © Maxar"
+          ]
+        }
+      },
+      "cues": []
+    },
+    {
+      "id": "b04",
+      "from": 1071,
+      "durationInFrames": 357,
+      "block": "PlatformClip",
+      "props": {
+        "clip": {
+          "id": "platform-02",
+          "kind": "platform",
+          "src": "captures/platform-02.mp4",
+          "fps": 60,
+          "duration_s": 8.0,
+          "width": 1920,
+          "height": 1080,
+          "events": [
+            {
+              "t": 0.4,
+              "name": "search"
+            }
+          ],
+          "credits": [
+            "© Mapbox © Maxar"
+          ]
+        }
+      },
+      "cues": []
+    },
+    {
+      "id": "b05",
+      "from": 1428,
+      "durationInFrames": 357,
+      "block": "PlatformClip",
+      "props": {
+        "clip": {
+          "id": "platform-03",
+          "kind": "platform",
+          "src": "captures/platform-03.mp4",
+          "fps": 60,
+          "duration_s": 8.0,
+          "width": 1920,
+          "height": 1080,
+          "events": [
+            {
+              "t": 0.4,
+              "name": "search"
+            }
+          ],
+          "credits": [
+            "© Mapbox © Maxar"
+          ]
+        }
+      },
+      "cues": []
+    },
+    {
+      "id": "b06",
+      "from": 1785,
+      "durationInFrames": 357,
+      "block": "EvidenceCard",
+      "props": {
+        "evidence": {
+          "id": "e1",
+          "claim_id": "c1",
+          "kind": "quantity",
+          "statement": "The Stone of the Pregnant Woman weighs about 1,000 tonnes.",
+          "source": {
+            "url": "https://www.dainst.org/baalbek-report",
+            "title": "DAI report",
+            "tier": 1,
+            "license": "",
+            "quote": "weighs about 1000 tons",
+            "locator": "p. 3"
+          },
+          "paper_anchor": "ev-01"
+        }
+      },
+      "cues": [
+        {
+          "frame": 1892,
+          "do": "status",
+          "target": "c1",
+          "value": "weakened"
+        }
+      ]
+    },
+    {
+      "id": "b07",
+      "from": 2142,
+      "durationInFrames": 357,
+      "block": "Meter",
+      "props": {
+        "hypotheses": [
+          "Roman engineers",
+          "An older, lost civilization"
+        ],
+        "start": [
+          50,
+          50
+        ]
+      },
+      "cues": [
+        {
+          "frame": 2377,
+          "do": "meter",
+          "target": "meter",
+          "value": [
+            70,
+            30
+          ]
+        }
+      ]
+    },
+    {
+      "id": "b08",
+      "from": 2499,
+      "durationInFrames": 357,
+      "block": "ListCard",
+      "props": {
+        "title": "What would change our mind",
+        "items": [
+          {
+            "id": "i1",
+            "text": "A tool mark dated before Rome"
+          }
+        ]
+      },
+      "cues": [
+        {
+          "frame": 2575,
+          "do": "show",
+          "target": "i1"
+        }
+      ]
+    },
+    {
+      "id": "b09",
+      "from": 2856,
+      "durationInFrames": 357,
+      "block": "ShareCard",
+      "props": {
+        "headline": "Who moved the Baalbek stones?",
+        "url": "ancientnerds.com",
+        "lines": []
+      },
+      "cues": []
+    }
+  ],
+  "captions": [
+    {
+      "text": "THIS",
+      "from": 21,
+      "to": 45
+    },
+    {
+      "text": "STONE",
+      "from": 48,
+      "to": 73
+    },
+    {
+      "text": "WEIGHS",
+      "from": 76,
+      "to": 100
+    },
+    {
+      "text": "ABOUT",
+      "from": 103,
+      "to": 127
+    },
+    {
+      "text": "1,000",
+      "from": 130,
+      "to": 154
+    },
+    {
+      "text": "TONNES.",
+      "from": 157,
+      "to": 182
+    },
+    {
+      "text": "ONE",
+      "from": 185,
+      "to": 209
+    },
+    {
+      "text": "PERSON",
+      "from": 212,
+      "to": 236
+    },
+    {
+      "text": "GIVES",
+      "from": 239,
+      "to": 263
+    },
+    {
+      "text": "THE",
+      "from": 266,
+      "to": 291
+    },
+    {
+      "text": "SCALE.",
+      "from": 294,
+      "to": 318
+    },
+    {
+      "text": "SOME",
+      "from": 378,
+      "to": 408
+    },
+    {
+      "text": "SAY",
+      "from": 411,
+      "to": 442
+    },
+    {
+      "text": "NO",
+      "from": 445,
+      "to": 475
+    },
+    {
+      "text": "ONE",
+      "from": 478,
+      "to": 508
+    },
+    {
+      "text": "COULD",
+      "from": 511,
+      "to": 542
+    },
+    {
+      "text": "MOVE",
+      "from": 545,
+      "to": 575
+    },
+    {
+      "text": "IT",
+      "from": 578,
+      "to": 608
+    },
+    {
+      "text": "WITHOUT",
+      "from": 611,
+      "to": 642
+    },
+    {
+      "text": "MACHINES.",
+      "from": 645,
+      "to": 675
+    }
+  ],
+  "ticker": {
+    "evidence": [
+      {
+        "frame": 0,
+        "n": 1
+      }
+    ]
+  },
+  "chapters": [
+    {
+      "title": "The stone",
+      "frame": 0
+    },
+    {
+      "title": "On the globe",
+      "frame": 714
+    },
+    {
+      "title": "The verdict",
+      "frame": 1785
+    }
+  ],
+  "credits": [
+    {
+      "sceneId": "b01",
+      "text": "Photo: Jane Doe (CC BY-SA 4.0)"
+    },
+    {
+      "sceneId": "b03",
+      "text": "© Mapbox © Maxar"
+    },
+    {
+      "sceneId": "b04",
+      "text": "© Mapbox © Maxar"
+    },
+    {
+      "sceneId": "b05",
+      "text": "© Mapbox © Maxar"
+    }
+  ],
+  "thumbnails": [
+    {
+      "frame": 214,
+      "text": "Who moved it?"
+    },
+    {
+      "frame": 1249,
+      "text": "A thousand tonnes?"
+    },
+    {
+      "frame": 1820,
+      "text": "Lifted by hand?"
+    }
+  ]
+}

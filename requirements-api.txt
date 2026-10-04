@@ -50,6 +50,7 @@ markdown>=3.5.0
 markdown-it-py>=3.0.0
 nh3>=0.3.0  # allowlist HTML sanitizer for LLM-derived markdown (audit 2026-08-05)
 youtube-transcript-api>=1.0.0
+pypdf==6.19.0  # archive completion: text of cited PDF sources (pipeline/lyra/archive_completion.py)
 
 # --- Auth ---
 PyJWT>=2.8.0

@@ -93,51 +93,14 @@ class ModeratorComplete(ResearchEvent):
 
 
 @dataclass
-class PaperReady(ResearchEvent):
-    pass
+class DossierReady(ResearchEvent):
+    """The dossier is persisted and the run is done (handlers/dossier.py).
 
-
-@dataclass
-class ProbativeImagesReady(ResearchEvent):
-    """Emitted after probative images are fetched, gated, and inserted.
-
-    Payload: count of images successfully embedded. The paper text on
-    state.paper_text has already been mutated by the handler.
+    The orchestrator's done signal since the research-only split (2026-09-26);
+    QualityPassed held that role while Theo still wrote papers.
     """
 
-    embedded_count: int = 0
-
-
-@dataclass
-class FactCheckComplete(ResearchEvent):
-    """Fact-checking stage has verified citations in the paper."""
-
-    pass
-
-
-@dataclass
-class PresentationChecked(ResearchEvent):
-    """Presentation assessor has reviewed and corrected the paper."""
-
-    pass
-
-
-@dataclass
-class ImageGenComplete(ResearchEvent):
-    """Cover image generation is complete (or skipped)."""
-
-    pass
-
-
-@dataclass
-class QualityPassed(ResearchEvent):
-    score: int
-
-
-@dataclass
-class QualityFailed(ResearchEvent):
-    score: int
-    weak_areas: list[str]
+    request_id: str
 
 
 @dataclass

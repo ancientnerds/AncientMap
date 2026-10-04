@@ -85,6 +85,38 @@ def _resolve_max_content_chars() -> int:
         return _MAX_CONTENT_CHARS
 
 
+async def fetch_domain_policy(domain: str) -> DomainPolicy:
+    """Reservation signals published by one host (robots.txt and tdmrep.json).
+
+    A host that answers neither document has reserved nothing, which is the
+    normal case. A host we could not reach at all is recorded as `check_failed`
+    on every document it produced: an unchecked row must never masquerade as a
+    checked one. Shared with archive_completion.py.
+    """
+    try:
+        async with httpx.AsyncClient(
+            timeout=_HTTP_TIMEOUT,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (research bot)"},
+        ) as client:
+            robots_resp, tdm_resp = await asyncio.gather(
+                client.get(f"https://{domain}/robots.txt"),
+                client.get(f"https://{domain}/.well-known/tdmrep.json"),
+            )
+        return DomainPolicy(
+            robots=parse_robots(robots_resp.text) if robots_resp.status_code == 200 else None,
+            reserved_paths=parse_tdmrep(tdm_resp.text) if tdm_resp.status_code == 200 else (),
+        )
+    except Exception as exc:
+        logger.debug("[archive] reservation check failed for %s: %s", domain, exc)
+        return DomainPolicy(check_error=str(exc)[:200])
+
+
+def domain_of(url: str) -> str:
+    """Host of a URL without a leading www. (the key of the reservation policies)."""
+    return (urllib.parse.urlparse(url).hostname or "").removeprefix("www.")
+
+
 @dataclass
 class _Page:
     """One fetched page, before it is split into prompt text and archive row."""
@@ -277,36 +309,9 @@ class ContentFetchHandler(BaseHandler):
         results = await asyncio.gather(*[self._domain_policy(host) for host in hosts])
         return dict(zip(hosts, results, strict=True))
 
-    @staticmethod
-    async def _domain_policy(domain: str) -> DomainPolicy:
-        """Reservation signals published by one host.
-
-        A host that answers neither document has reserved nothing, which is
-        the normal case. A host we could not reach at all is recorded as
-        `check_failed` on every document it produced — an unchecked row must
-        never masquerade as a checked one.
-        """
-        try:
-            async with httpx.AsyncClient(
-                timeout=_HTTP_TIMEOUT,
-                follow_redirects=True,
-                headers={"User-Agent": "Mozilla/5.0 (research bot)"},
-            ) as client:
-                robots_resp, tdm_resp = await asyncio.gather(
-                    client.get(f"https://{domain}/robots.txt"),
-                    client.get(f"https://{domain}/.well-known/tdmrep.json"),
-                )
-            return DomainPolicy(
-                robots=parse_robots(robots_resp.text) if robots_resp.status_code == 200 else None,
-                reserved_paths=parse_tdmrep(tdm_resp.text) if tdm_resp.status_code == 200 else (),
-            )
-        except Exception as exc:
-            logger.debug("[archive] reservation check failed for %s: %s", domain, exc)
-            return DomainPolicy(check_error=str(exc)[:200])
-
-    @staticmethod
-    def _domain_of(url: str) -> str:
-        return (urllib.parse.urlparse(url).hostname or "").removeprefix("www.")
+    # Reached through the class so tests can swap them (test_content_fetch_archive.py).
+    _domain_policy = staticmethod(fetch_domain_policy)
+    _domain_of = staticmethod(domain_of)
 
     @staticmethod
     async def _fetch_one(sid: str, url: str) -> _Page | None:

@@ -385,6 +385,47 @@ _TIER_2_DOMAINS: tuple[str, ...] = (
 )
 
 
+_PERSONAL_PATH_RE = re.compile(
+    r"(?:^|/)~[^/]+(?:/|$)"  # /~user/ - classic unix webspace
+    r"|/people/"  # /people/<name>/
+    r"|/user/|/users/|/members/|/author/|/authors/"
+    r"|/faculty/|/staff/|/student/|/students/"
+    r"|/personal/|/homepage/|/blog/|/blogs/"
+    r"|/coursework/|/student_projects/",
+    re.IGNORECASE,
+)
+
+# A file with a document extension is a document, not a personal web page - a
+# peer-reviewed PDF in a reprint directory is still the published article.
+_DOCUMENT_PATH_RE = re.compile(r"\.(?:pdf|djvu|ps|epub|chm|ps2|dvi|tex|bib)$", re.IGNORECASE)
+
+# Coursework beats the document exemption: an undergraduate project is a .pdf
+# like any other, and it is not a publication.
+_COURSEWORK_PATH_RE = re.compile(
+    r"/student_projects?/|/coursework/|/homework/|/assignments?/|/hw[0-9]?/|/essays?/",
+    re.IGNORECASE,
+)
+
+
+def is_personal_page_path(path: str) -> bool:
+    """True when a path points at one person's own page rather than a publication.
+
+    Used to stop a tier-1 HOST from asserting that an HTML page is academic. A
+    document (PDF and friends) in the same directory is exempt, because there the
+    host is serving someone else's published work - measured on the live corpus:
+    Morbidelli 2015 and Yin 2012 are peer-reviewed reprints in `~user` directories
+    and must stay tier 1, while a `student_projects/` PDF is coursework and must
+    not.
+    """
+    if not path:
+        return False
+    if _COURSEWORK_PATH_RE.search(path):
+        return True
+    if _DOCUMENT_PATH_RE.search(path):
+        return False
+    return bool(_PERSONAL_PATH_RE.search(path))
+
+
 def score_tier_by_domain(url: str) -> int:
     """Return a reliability tier (1=academic, 2=reputable, 3=general) from a URL.
 
@@ -405,8 +446,9 @@ def score_tier_by_domain(url: str) -> int:
     candidate = url.strip().lower()
     if "://" not in candidate:
         candidate = "//" + candidate  # scheme-less input: force netloc parsing
+    parsed = urllib.parse.urlparse(candidate)
     # .hostname strips userinfo, port, and IPv6 brackets from the netloc.
-    host = (urllib.parse.urlparse(candidate).hostname or "").removeprefix("www.")
+    host = (parsed.hostname or "").removeprefix("www.")
     if not host:
         return 3
 
@@ -417,9 +459,19 @@ def score_tier_by_domain(url: str) -> int:
         return host == domain or host.endswith("." + domain)
 
     # Tier 1 takes priority — check first
-    for domain in _TIER_1_DOMAINS:
-        if _host_matches(domain):
-            return 1
+    tier1_hit = next((d for d in _TIER_1_DOMAINS if _host_matches(d)), None)
+    if tier1_hit:
+        if is_personal_page_path(parsed.path):
+            # A .edu host is not an academic publication when the page is one
+            # person's own writing. Measured on the published corpus: 8 of 260
+            # [Academic] references are `~user` pages, including a 378-word
+            # student course-notes file, a professor's blog post, and an
+            # undergraduate student project. The tag is a claim about the
+            # source, and for those it was wrong. Documents are exempt: a
+            # peer-reviewed paper PDF in a reprint directory (Morbidelli 2015,
+            # Yin 2012) is academic content regardless of who hosts the copy.
+            return 3
+        return 1
     for domain in _TIER_2_DOMAINS:
         if _host_matches(domain):
             return 2

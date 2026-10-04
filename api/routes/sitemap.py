@@ -128,6 +128,31 @@ _COUNTRIES_SQL = text(
     + " GROUP BY u.country ORDER BY u.country"
 )
 
+# A paper's page changes when it is published, again when `theo_publish
+# --correct` appends to result_json.corrections and again when `--register-video`
+# appends to result_json.videos (the player, its poster, the VideoObject JSON-LD;
+# studio spec 2026-09-26 §2.7); neither touches published_at, so the lastmod is
+# the latest of the three. registered_at is an ISO string with its UTC offset,
+# folded to UTC like published_at. GREATEST ignores the NULL of a paper without
+# corrections or videos.
+_RESEARCH_SQL = text("""
+    SELECT slug,
+           GREATEST(
+               COALESCE(published_at, created_at),
+               (SELECT MAX((c->>'date')::date)::timestamp
+                FROM jsonb_array_elements(
+                    COALESCE(result_json::jsonb->'corrections', '[]'::jsonb)
+                ) c),
+               (SELECT MAX((v->>'registered_at')::timestamptz AT TIME ZONE 'UTC')
+                FROM jsonb_array_elements(
+                    COALESCE(result_json::jsonb->'videos', '[]'::jsonb)
+                ) v)
+           ) AS lastmod
+    FROM research_requests
+    WHERE is_public = TRUE AND status = 'completed' AND slug IS NOT NULL
+    ORDER BY published_at DESC NULLS LAST
+""")
+
 
 @router.api_route("/sitemap.xml", methods=["GET", "HEAD"])
 async def sitemap_index():
@@ -273,14 +298,7 @@ async def sitemap_stories(db: Session = Depends(get_db)):
 @router.api_route("/sitemap-research.xml", methods=["GET", "HEAD"])
 async def sitemap_research(db: Session = Depends(get_db)):
     """The /research/ hub + all published open-access papers."""
-    rows = db.execute(
-        text("""
-            SELECT slug, COALESCE(published_at, created_at) AS lastmod
-            FROM research_requests
-            WHERE is_public = TRUE AND status = 'completed' AND slug IS NOT NULL
-            ORDER BY published_at DESC NULLS LAST
-        """)
-    ).fetchall()
+    rows = db.execute(_RESEARCH_SQL).fetchall()
     urls = [_url("/research/", _newest([row.lastmod for row in rows]))]
     urls += [_url(f"/research/{row.slug}", row.lastmod) for row in rows]
     return _xml(_urlset(urls))

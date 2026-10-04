@@ -1,0 +1,416 @@
+{
+  "version": 1,
+  "fps": 60,
+  "width": 1920,
+  "height": 1080,
+  "durationInFrames": 600,
+  "audio": {
+    "narration": [
+      {
+        "src": "voice/b01.mp3",
+        "from": 12
+      },
+      {
+        "src": "voice/b02.mp3",
+        "from": 300
+      }
+    ],
+    "music": {
+      "src": "music/bed.wav",
+      "gainDb": -8,
+      "duck": {
+        "underNarrationDb": -12,
+        "attackFrames": 6,
+        "releaseFrames": 24
+      }
+    }
+  },
+  "scenes": [
+    {
+      "id": "s1",
+      "from": 0,
+      "durationInFrames": 150,
+      "block": "PhotoPlate",
+      "props": {
+        "image": {
+          "id": "m1",
+          "src": "media/plate.jpg",
+          "license": "CC BY-SA 4.0",
+          "attribution": "Smoke Test",
+          "source_url": "https://commons.wikimedia.org/wiki/File:Smoke.jpg",
+          "depicts": "a test pattern standing in for the stone",
+          "markers": [
+            {
+              "id": "mk1",
+              "box": [
+                0.42,
+                0.38,
+                0.14,
+                0.2
+              ],
+              "label": "1 PERSON"
+            }
+          ]
+        },
+        "kenBurns": "in",
+        "label": {
+          "title": "Test plate",
+          "subtitle": "smoke render"
+        }
+      },
+      "cues": [
+        {
+          "frame": 30,
+          "do": "show",
+          "target": "mk1"
+        },
+        {
+          "frame": 122,
+          "do": "highlight",
+          "target": "mk1"
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "from": 150,
+      "durationInFrames": 120,
+      "block": "PlatformClip",
+      "props": {
+        "clip": {
+          "id": "pf1",
+          "kind": "platform",
+          "src": "captures/platform.mp4",
+          "fps": 60,
+          "duration_s": 4.0,
+          "width": 2880,
+          "height": 1620,
+          "events": [
+            {
+              "t": 0.4,
+              "name": "pause_rotation"
+            },
+            {
+              "t": 1.0,
+              "name": "search",
+              "x": 540.0,
+              "y": 350.0
+            }
+          ],
+          "credits": [
+            "© Mapbox © OpenStreetMap © Maxar"
+          ]
+        },
+        "start_s": 0.5,
+        "follow": 1.5
+      },
+      "cues": []
+    },
+    {
+      "id": "s3",
+      "from": 270,
+      "durationInFrames": 120,
+      "block": "GlobeShot",
+      "props": {
+        "clip": {
+          "id": "g1",
+          "kind": "globe",
+          "src": "captures/globe.mp4",
+          "fps": 60,
+          "duration_s": 3.0,
+          "width": 1920,
+          "height": 1080,
+          "events": [
+            {
+              "t": 0.0,
+              "name": "rotate"
+            },
+            {
+              "t": 0.5,
+              "name": "zoom"
+            },
+            {
+              "t": 1.0,
+              "name": "arrive",
+              "x": 960.0,
+              "y": 540.0
+            },
+            {
+              "t": 1.0,
+              "name": "place",
+              "x": 900.0,
+              "y": 560.0,
+              "target": "p1",
+              "label": "Baalbek",
+              "track": [[900.0, 560.0], [900.5, 559.8], [901.0, 559.7], [901.5, 559.5], [902.0, 559.3], [902.5, 559.2], [903.0, 559.0], [903.5, 558.8], [904.0, 558.7], [904.5, 558.5], [905.0, 558.3], [905.5, 558.2], [906.1, 558.0], [906.6, 557.8], [907.1, 557.6], [907.6, 557.5], [908.1, 557.3], [908.6, 557.1], [909.1, 557.0], [909.6, 556.8], [910.1, 556.6], [910.6, 556.5], [911.1, 556.3], [911.6, 556.1], [912.1, 556.0], [912.6, 555.8], [913.1, 555.6], [913.6, 555.5], [914.1, 555.3], [914.6, 555.1], [915.1, 555.0], [915.6, 554.8], [916.1, 554.6], [916.6, 554.5], [917.1, 554.3], [917.6, 554.1], [918.2, 553.9], [918.7, 553.8], [919.2, 553.6], [919.7, 553.4], [920.2, 553.3], [920.7, 553.1], [921.2, 552.9], [921.7, 552.8], [922.2, 552.6], [922.7, 552.4], [923.2, 552.3], [923.7, 552.1], [924.2, 551.9], [924.7, 551.8], [925.2, 551.6], [925.7, 551.4], [926.2, 551.3], [926.7, 551.1], [927.2, 550.9], [927.7, 550.8], [928.2, 550.6], [928.7, 550.4], [929.2, 550.3], [929.7, 550.1], [930.3, 549.9], [930.8, 549.7], [931.3, 549.6], [931.8, 549.4], [932.3, 549.2], [932.8, 549.1], [933.3, 548.9], [933.8, 548.7], [934.3, 548.6], [934.8, 548.4], [935.3, 548.2], [935.8, 548.1], [936.3, 547.9], [936.8, 547.7], [937.3, 547.6], [937.8, 547.4], [938.3, 547.2], [938.8, 547.1], [939.3, 546.9], [939.8, 546.7], [940.3, 546.6], [940.8, 546.4], [941.3, 546.2], [941.8, 546.1], [942.4, 545.9], [942.9, 545.7], [943.4, 545.5], [943.9, 545.4], [944.4, 545.2], [944.9, 545.0], [945.4, 544.9], [945.9, 544.7], [946.4, 544.5], [946.9, 544.4], [947.4, 544.2], [947.9, 544.0], [948.4, 543.9], [948.9, 543.7], [949.4, 543.5], [949.9, 543.4], [950.4, 543.2], [950.9, 543.0], [951.4, 542.9], [951.9, 542.7], [952.4, 542.5], [952.9, 542.4], [953.4, 542.2], [953.9, 542.0], [954.5, 541.8], [955.0, 541.7], [955.5, 541.5], [956.0, 541.3], [956.5, 541.2], [957.0, 541.0], [957.5, 540.8], [958.0, 540.7], [958.5, 540.5], [959.0, 540.3], [959.5, 540.2], [960.0, 540.0]]
+            }
+          ],
+          "credits": []
+        },
+        "label": {
+          "title": "Baalbek",
+          "subtitle": "Beqaa Valley, Lebanon"
+        }
+      },
+      "cues": []
+    },
+    {
+      "id": "s4",
+      "from": 390,
+      "durationInFrames": 90,
+      "block": "MapboxTopdown",
+      "props": {
+        "map": {
+          "id": "td1",
+          "kind": "mapbox_topdown",
+          "src": "captures/topdown.jpg",
+          "fps": null,
+          "duration_s": null,
+          "width": 2560,
+          "height": 1440,
+          "events": [
+            {
+              "t": 0.0,
+              "name": "pin",
+              "x": 1065.3,
+              "y": 1100.6,
+              "target": "p2",
+              "label": "Quarry",
+              "lat": 33.99917,
+              "lng": 36.20028
+            },
+            {
+              "t": 0.0,
+              "name": "pin",
+              "x": 1496.2,
+              "y": 377.5,
+              "target": "p1",
+              "label": "Temple",
+              "lat": 34.00667,
+              "lng": 36.20333
+            }
+          ],
+          "credits": [
+            "© Mapbox © Maxar"
+          ]
+        },
+        "lines": [
+          {
+            "from": "p2",
+            "to": "p1"
+          }
+        ]
+      },
+      "cues": []
+    },
+    {
+      "id": "s5",
+      "from": 480,
+      "durationInFrames": 60,
+      "block": "SourceViewer",
+      "props": {
+        "page": {
+          "id": "src1",
+          "kind": "source",
+          "src": "captures/page.png",
+          "fps": null,
+          "duration_s": null,
+          "width": 2560,
+          "height": 3000,
+          "events": [
+            {
+              "t": 0.0,
+              "name": "page",
+              "url": "https://www.dainst.org/baalbek-report",
+              "title": "Baalbek report"
+            },
+            {
+              "t": 0.0,
+              "name": "highlight",
+              "box": [
+                200.0,
+                1500.0,
+                1800.0,
+                120.0
+              ],
+              "target": "quote"
+            }
+          ],
+          "credits": [
+            "Source page: dainst.org"
+          ]
+        },
+        "evidence": {
+          "id": "e1",
+          "claim_id": "c1",
+          "kind": "quantity",
+          "statement": "The Stone of the Pregnant Woman weighs about 1,000 tonnes.",
+          "source": {
+            "url": "https://www.dainst.org/baalbek-report",
+            "title": "Baalbek: the largest stone blocks of antiquity",
+            "tier": 1,
+            "license": "",
+            "quote": "the block, measuring 19.6 m in length, is estimated to weigh 1,650 tonnes",
+            "locator": "section 2"
+          },
+          "paper_anchor": "ev-01"
+        }
+      },
+      "cues": [
+        {
+          "frame": 500,
+          "do": "highlight",
+          "target": "e1"
+        }
+      ]
+    },
+    {
+      "id": "s6",
+      "from": 540,
+      "durationInFrames": 60,
+      "block": "EvidenceCard",
+      "props": {
+        "evidence": {
+          "id": "e1",
+          "claim_id": "c1",
+          "kind": "quantity",
+          "statement": "The Stone of the Pregnant Woman weighs about 1,000 tonnes.",
+          "source": {
+            "url": "https://www.dainst.org/baalbek-report",
+            "title": "Baalbek: the largest stone blocks of antiquity",
+            "tier": 1,
+            "license": "",
+            "quote": "the block, measuring 19.6 m in length, is estimated to weigh 1,650 tonnes",
+            "locator": "section 2"
+          },
+          "paper_anchor": "ev-01"
+        },
+        "image": {
+          "id": "m1",
+          "src": "media/plate.jpg",
+          "license": "CC BY-SA 4.0",
+          "attribution": "Smoke Test",
+          "source_url": "https://commons.wikimedia.org/wiki/File:Smoke.jpg",
+          "depicts": "a test pattern standing in for the stone",
+          "markers": [
+            {
+              "id": "mk1",
+              "box": [
+                0.42,
+                0.38,
+                0.14,
+                0.2
+              ],
+              "label": "1 PERSON"
+            }
+          ]
+        }
+      },
+      "cues": [
+        {
+          "frame": 550,
+          "do": "stamp",
+          "target": "e1"
+        }
+      ]
+    }
+  ],
+  "captions": [
+    {
+      "text": "THIS",
+      "from": 12,
+      "to": 24
+    },
+    {
+      "text": "STONE",
+      "from": 24,
+      "to": 40
+    },
+    {
+      "text": "WEIGHS",
+      "from": 40,
+      "to": 56
+    },
+    {
+      "text": "ABOUT",
+      "from": 56,
+      "to": 70
+    },
+    {
+      "text": "1,000",
+      "from": 70,
+      "to": 90
+    },
+    {
+      "text": "TONNES.",
+      "from": 90,
+      "to": 110
+    }
+  ],
+  "ticker": {
+    "evidence": [
+      {
+        "frame": 0,
+        "n": 0
+      },
+      {
+        "frame": 480,
+        "n": 1
+      }
+    ]
+  },
+  "chapters": [
+    {
+      "title": "The stone",
+      "frame": 0
+    },
+    {
+      "title": "On the globe",
+      "frame": 150
+    },
+    {
+      "title": "The evidence",
+      "frame": 480
+    }
+  ],
+  "credits": [
+    {
+      "sceneId": "s1",
+      "text": "Photo: Smoke Test (CC BY-SA 4.0)"
+    },
+    {
+      "sceneId": "s2",
+      "text": "© Mapbox © OpenStreetMap © Maxar"
+    },
+    {
+      "sceneId": "s2",
+      "text": "© Mapbox © Maxar"
+    },
+    {
+      "sceneId": "s4",
+      "text": "© Mapbox © Maxar"
+    },
+    {
+      "sceneId": "s5",
+      "text": "Source page: dainst.org"
+    },
+    {
+      "sceneId": "s6",
+      "text": "Photo: Smoke Test (CC BY-SA 4.0)"
+    }
+  ],
+  "thumbnails": [
+    {
+      "frame": 90,
+      "text": "Who moved it?"
+    },
+    {
+      "frame": 330,
+      "text": "Where is Baalbek?"
+    },
+    {
+      "frame": 440,
+      "text": "How far apart?"
+    }
+  ]
+}
