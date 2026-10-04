@@ -1,0 +1,17 @@
+{
+ "accepted_at": "2026-10-04T13:30:46+00:00",
+ "counts": {
+  "journal rows for the stamp": 136,
+  "journal rows matching a planned cell exactly": 136,
+  "journal rows of another stamp on a planned cell since": 0,
+  "planned cells holding their new value": 136,
+  "planned sites breaking: planned site(s) hold a geom that is not their point": 0,
+  "planned sites breaking: planned site(s) hold a period_name that is not the bucket of their period_start": 0
+ },
+ "deviations": 0,
+ "found": [],
+ "planned": 136,
+ "run_stamp": "2026-10-04_fields-wd3-s001",
+ "sites": 68,
+ "step": 1
+}
