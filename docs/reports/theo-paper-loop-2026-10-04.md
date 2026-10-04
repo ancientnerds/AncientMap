@@ -198,9 +198,10 @@ with a worked example:
   two sentences, one claim each, one marker each."
 
 The writer broke the placement rule 35 times and the one-claim rule 82 times, out of
-169 citations. Compliance with an explicit, exemplified rule was about 12 %. **More
-words in the brief will not fix that**, so the two fixes above went into code, and the
-third went into the *order* of the steps.
+169 citations: 134 of 169 for placement, 87 of 169 for one-claim. Those two sets are not
+independent - at least 5 of the 82 are consequences of the 35 - so this is not a
+compliance rate. Either way, **more words in the brief will not fix that**, so the two
+fixes above went into code, and the third went into the *order* of the steps.
 
 ### The order was the expensive mistake
 
@@ -232,3 +233,75 @@ and named the fix, plus the knock-on: the next sentence's "That same day" no lon
 refers to anything. This is the pass that repairs content. The support gate is the pass
 that finds the plumbing. They are one job seen from two sides, and the cheap half has
 to come first.
+
+### What the claim check found, and where the defect actually sits
+
+The claim check answers 85 tasks with two model runs each: a verifier, and a skeptic on
+every `supported`. A first pass over the 37 evidence tasks it completed before a
+runtime cap cut it short:
+
+| verdict | count |
+| --- | --- |
+| `supported` | 15 |
+| `partly` | 21 |
+| `unsupported` | 1 |
+
+Grouping the 22 non-supported fixes by what they ask for, one verdict often asking for
+more than one thing: 18 ask to **delete or drop** a detail, 10 to change a **date**, 10
+to **narrow or split** a sentence, 10 to change a **number**, 2 to **re-source**. So the
+paper is not wrong in its structure; it is **sharper than its sources**, and mostly in
+plausible ways:
+
+> Delete 'gun-camera' from the first sentence and keep the rest unchanged. [35] supports
+> exactly this ('filmed by Navy Advanced Targeting Forward-Looking Infrared').
+
+> Drop 'on KLAS-TV Las Vegas', or cite a source that names the station: this episode never
+> does.
+
+> replace 'then-USAF Captain' with 'lieutenant' as [49] states.
+
+Every one of those is an elaboration a careful writer makes on purpose and no gate can
+prevent by instruction.
+
+**And here is the part that changes the verdict on the writer.** Those phrases are in
+the brief already. `brief.md` line 811, in the dossier's moderated claims, at high
+confidence, with markers already attached:
+
+> (high) The Department of Defense officially released three Navy forward-looking infrared
+> (FLIR/ATFLIR) gun-camera videos in April 2020 ...
+
+Line 804: `Bob Lazar publicly claimed in May 1989, via investigative journalist George
+Knapp on KLAS-TV Las Vegas ...`. Line 660: `then-USAF Captain Robert Salas`. Line 696:
+`on a ranch near Corona, New Mexico`.
+
+Of the fixes where the verifier named the offending phrase in quotes, **8 of 8** name a
+phrase the brief states too. The other 14 fixes do not quote a phrase, so this
+instrument does not classify them, and the count is not 8 of 22.
+
+So the chain is **dossier -> brief -> draft -> gate**, and the gate blames the draft. The
+writer was handed claims that already carry markers their sources do not support, and
+writing them faithfully is the only available behaviour. Fixing the draft repairs this
+paper; it does not make the next one cheaper, because the next writer gets the same
+brief.
+
+**Where such a gate would go, and why it is cheap.** The check is not new work:
+`claim_support.locate_support` already answers "does this source carry this sentence",
+and `paper_claim_gate` already applies it to the numbered paper. What is missing is the
+same call on the **moderated claims**, at the moment the dossier is assembled.
+`pipeline/lyra/archive_completion.py:377` already archives the full text of every source
+a moderated claim cites and returns its coverage, so by the time
+`pipeline/studio/paper/brief_template.md:385` fills `{{moderated}}` the texts that gate
+would need are on disk and keyed to exactly those claims. Nothing today applies
+`locate_support` to them, which is why a claim can leave the research stage carrying a
+marker its own source does not support and be handed to a writer as settled.
+
+That is a change to the research chain, not to the studio, so it is stated here as the
+proposal the evidence supports and **not** implemented: the owner owns the research side
+and the material decision that goes with it.
+
+This is also the honest answer to the loop's own acceptance threshold. Paper 1 is a
+legacy draft, and it cannot reach two green iterations, because 43 of its marked
+sentences are carried by none of the 387 archived texts, and no part of that is a
+writing defect. The measurement the loop wanted is in hand: the brief-order change and
+the marker normalisation cut the free part of the work; the rest is a data-quality
+problem that belongs to the research stage.
