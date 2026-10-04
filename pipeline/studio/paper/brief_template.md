@@ -32,11 +32,16 @@ claim has been checked against its source text (archived, or read live for a TDM
    the text of `quote_source_id`: its `texts/<id>.txt`, or for a `tdm_reserved` source the page
    text the claim check reads live and saves to `claims_check/live/<id>.txt`. Ids run ev-01,
    ev-02, ... in paper order and are never reused for a different claim once published.
-4. `images/opportunities.json` (after `paper number`): 4 to 10 places where an image would show
+4. `images/opportunities.json` (after `paper number`): the places where an image would show
    the reader the evidence: `[{"id": "op-01", "anchor_text": "...", "subject": "what the image
    must show, in one sentence", "queries": ["search query", "..."]}]`, 1 to 4 queries each;
    `anchor_text` follows the same rule as in evidence.json and names a paragraph inside a `##`
    section (images never sit in the hook).
+   **Every section needs at least one opportunity** — that is the hard rule the checker
+   enforces (measured on the 31 live papers before it existed: 109 of 189 sections carried no
+   image, the three fixed sections 76 times out of 93). Aim for four per section, which is the
+   goal the campaign reports but does not require: a 6 to 9 section paper wants 24 to 36
+   opportunities, one per paragraph that names something a picture can show.
 
 Then run, in order: `paper number`, `paper claims-export` (answer with the theo-claim-check
 workflow), `paper claims-import`, `paper images-export` (theo-image-check workflow),
@@ -47,7 +52,7 @@ public paper pulled with `--dossier-from`: `paper correct <id> --republish` inst
 ## Hard rules the checker enforces
 
 - Structure: the hook (1 to 2 paragraphs directly under the title, no heading of its own), then
-  2 to 4 investigation sections (`## <descriptive title>`), then exactly `## Connecting the Dots`,
+  3 to 6 investigation sections (`## <descriptive title>`), then exactly `## Connecting the Dots`,
   `## The Other Side`, `## What We Actually Know`. `paper number` adds `# <title>` and
   `## References`. Every heading is on its own line with a blank line after it.
 - Length: 5,000 to 7,500 words of prose (References and image captions do not count).
@@ -132,7 +137,7 @@ Cross-Cultural Analysis" (subtitle and em dash).
 <hook: 1-2 paragraphs, no heading of its own>
 
 ## <Investigation section 1>
-## <Investigation section 2>        (2 to 4 investigation sections in total)
+## <Investigation section 2>        (3 to 6 investigation sections in total)
 ## Connecting the Dots
 ## The Other Side
 ## What We Actually Know
@@ -152,7 +157,10 @@ Length: 5,000 to 7,500 words for the whole paper (the last six published papers 
    "Evidence Review".
 2. Assign the dossier's research angles to the investigation sections. Every angle with usable findings
    appears in exactly one investigation section. An angle with no usable findings gets no section.
-   Two angles with closely related findings merge into one section.
+   Two angles with closely related findings merge into one section — but merge only when the merged
+   section still has a subject a reader can picture. The section count is a lever, not a target: three
+   to six, and every one of them needs at least one image opportunity, so a longer section with two
+   strong angles is better than a short one with nothing to show.
 3. Order the investigation sections for narrative flow: build toward the most interesting findings.
 4. "Connecting the Dots" references specific findings from specific investigation sections. It ties
    threads together; it introduces no new evidence.

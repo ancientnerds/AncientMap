@@ -139,7 +139,7 @@ def test_number_then_check_through_the_cli(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
     fx.make_workspace(tmp_path)
     assert cli.main(["paper", "number", fx.REQ]) == 0
-    assert json.loads(capsys.readouterr().out) == {"sources": 2, "images": 0}
+    assert json.loads(capsys.readouterr().out) == {"sources": 3, "images": 0}
     assert cli.main(["paper", "check", fx.REQ]) == 1
     out = json.loads(capsys.readouterr().out)
     assert out["passed"] is False and "claims" in out["failing"]

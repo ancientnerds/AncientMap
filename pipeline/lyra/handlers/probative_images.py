@@ -55,6 +55,40 @@ IMAGES_DIR = Path(__file__).resolve().parents[3] / "public" / "data" / "research
 _EMBED_MAX_PARALLEL = 6
 
 
+def order_opportunities_by_section(opportunities: list[dict]) -> list[dict]:
+    """Interleave the opportunities so the image budget reaches every section first.
+
+    The budget used to be consumed in reading order, which left the later
+    sections empty: measured on the 31 live papers on 2026-10-04, 109 of 189
+    sections carried no image, and the three fixed tail sections were empty 76
+    times out of 93 (mean 0.46 images per instance against 3.58 in the
+    investigation sections). 54 % of a paper's images sat in its single most
+    illustrated section, and 11 of the 31 longest sections had none at all.
+
+    Round-robin over the sections — the sections keep the order of their first
+    appearance, and inside a section the paragraphs keep their reading order —
+    makes the first pass of the budget hand one image to every section. So a
+    budget of one per section is the floor, and everything above it is the
+    top-up towards the target.
+    """
+    by_section: dict[str, list[dict]] = {}
+    for opp in opportunities:
+        by_section.setdefault(opp.get("section") or "", []).append(opp)
+    for section_opps in by_section.values():
+        section_opps.sort(key=lambda o: o.get("paragraph_index") or 0)
+    ordered: list[dict] = []
+    round_no = 0
+    while True:
+        added = False
+        for section_opps in by_section.values():
+            if round_no < len(section_opps):
+                ordered.append(section_opps[round_no])
+                added = True
+        if not added:
+            return ordered
+        round_no += 1
+
+
 @dataclass
 class _EmbedContext:
     """Shared mutable state for one embed run.
@@ -443,6 +477,9 @@ async def embed_probative_images(
         writer_markers_text=writer_markers_text,
         settings=settings,
     )
+    # The budget is spent in dispatch order, so the order decides which sections
+    # get an image at all (see order_opportunities_by_section).
+    opportunities = order_opportunities_by_section(opportunities)
     # Echo the count to the SSE stream so result_json captures it (the prior
     # logger.info was Python-stdout only, invisible in published artifacts).
     emit(
@@ -472,7 +509,7 @@ async def embed_probative_images(
         registry=registry,
         paper_dir=paper_dir,
         client=client,
-        max_images=getattr(_get_settings(), "probative_images_max_per_paper", 24),
+        max_images=settings.probative_images_max_per_paper,
     )
 
     try:

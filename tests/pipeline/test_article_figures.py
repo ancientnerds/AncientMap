@@ -37,6 +37,27 @@ class TestStandaloneImages:
         assert "<figure" in html
         assert "figcaption" not in html
 
+    def test_the_gallery_marker_never_reaches_the_reader(self):
+        """The embed writes `gallery:<hash>|verified:yes|<title>` into the alt text
+        so the frontend can group one paragraph's images. On the published page it
+        was printed inside the figcaption: 52 occurrences in the rendered HTML of
+        the live Baalbek paper, measured 2026-10-04."""
+        html = render("![gallery:561e16f1|verified:yes|Baalbek stone](/x/p0_stone.jpg)")
+        assert "gallery:" not in html
+        assert "verified:yes" not in html
+        assert "Baalbek stone" in html
+        assert "561e16f1" not in html
+
+    def test_a_gallery_marker_without_a_verdict_flag_is_stripped_too(self):
+        html = render("![gallery:abc123|Baalbek stone](/x/p0_stone.jpg)")
+        assert "gallery:" not in html
+        assert "Baalbek stone" in html
+
+    def test_a_gallery_marker_without_a_title_still_gets_a_readable_caption(self):
+        html = render("![gallery:abc123|verified:no|](/x/p0_stone.jpg)")
+        assert "gallery:" not in html
+        assert "Research image" in html
+
 
 class TestUntouched:
     def test_image_inside_a_sentence_stays_in_the_sentence(self):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import date
+from pathlib import PurePosixPath
 
 import pytest
 from PIL import Image
@@ -91,7 +92,14 @@ def test_bundle_carries_the_published_snapshot(checked):
     assert r["corrections"] == [] and r["published_block_ids"] == []
     assert r["quality_score"]["passed"] is True
     assert json.loads(checked.bundle.read_text(encoding="utf-8")) == b
-    assert bundle.upload_names(r) == [r["probative_images"][0]["web_path"].rsplit("/", 1)[1]]
+    # every probative image of the paper plus the hero, as a sorted set: the
+    # house draft now carries one image per section, not one for the whole paper
+    expected = sorted(
+        {PurePosixPath(e["web_path"]).name for e in r["probative_images"]}
+        | {PurePosixPath(r["hero_image"]["src"]).name}
+        | {PurePosixPath(r["hero_image"]["web_path"]).name}
+    )
+    assert bundle.upload_names(r) == expected
 
 
 def test_bundle_refuses_a_stale_or_failing_check(checked):
@@ -135,7 +143,9 @@ def test_publish_uploads_then_dry_runs_then_applies(monkeypatch, checked):
     fake = FakeRemote([(0, DRY_OK), (0, APPLIED)])
     _patch(monkeypatch, fake)
     record = publish.publish(checked, dry_run=False)
-    assert fake.uploads[0][0] == fx.REQ and len(fake.uploads[0][1]) == 1
+    # every image of the paper is uploaded: the house draft has one per section
+    assert fake.uploads[0][0] == fx.REQ
+    assert len(fake.uploads[0][1]) == len(json.loads(checked.bundle.read_text(encoding="utf-8"))["result"]["probative_images"])
     assert [c[1] for c in fake.calls] == [["--dry-run"], ["--apply"]]
     assert fake.calls[0][2] == checked.bundle.read_bytes()
     assert record["apply"]["url"] == "https://ancientnerds.com/research/the-megaliths"

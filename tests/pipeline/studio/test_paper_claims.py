@@ -158,7 +158,9 @@ def test_a_tdm_reserved_source_is_read_live_and_its_quote_machine_checked(tmp_pa
     assert [c for c in row["cited"] if c["source_id"] == fx.S4] == [
         {
             "source_id": fx.S4,
-            "n": 3,
+            # the number is the position of the first appearance: S1 in the hook,
+            # S2 and S5 in the investigation sections, so the added S4 is [4]
+            "n": 4,
             "url": TDM_URL,
             "title": "Paywalled monograph",
             "text_path": None,

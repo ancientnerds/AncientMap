@@ -34,6 +34,8 @@ from typing import Any
 
 from markdown_it import MarkdownIt
 
+from pipeline.lyra.theo_image_captions import clean_gallery_alt as _clean_alt
+
 # Mirror of the frontend regex in `ancient-nerds-map/src/components/theo/galleryParser.ts`.
 # Keep these two in sync.
 _FIGURE_RE = re.compile(
@@ -41,15 +43,6 @@ _FIGURE_RE = re.compile(
     r"(?:\s*\n\n\*(?P<caption>[^*\n][^*]*?)\*"
     r"(?:\s*\n\[Source\]\((?P<url>[^)]+)\))?)?"
 )
-
-_GALLERY_ALT_RE = re.compile(r"^gallery:[^|]+\|(?:verified:(?:yes|no)\|)?(.*)$")
-
-
-def _clean_alt(alt: str) -> str:
-    """Strip legacy `gallery:ID|verified:yes|` alt prefixes — matches galleryParser.ts."""
-    m = _GALLERY_ALT_RE.match(alt)
-    cleaned = (m.group(1) if m else alt).strip()
-    return cleaned or "Research image"
 
 
 @dataclass

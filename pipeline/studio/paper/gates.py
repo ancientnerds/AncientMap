@@ -4,7 +4,7 @@ Pure functions over the built paper, the dossier and Claude's files; `run_check`
 and writes check_report.json. A paper is publishable only when every gate passes.
 
  1 artifact    validate_paper_artifact(report) passes (theo_citations)
- 2 structure   1-2 hook paragraphs under the title (no heading), 2-4 investigation sections,
+ 2 structure   1-2 hook paragraphs under the title (no heading), 3-6 investigation sections,
                the three fixed sections, References, in order; every heading preceded and
                followed by a blank line; 5,000-7,500 prose words
    meta        title and card description follow the house rules
@@ -23,7 +23,8 @@ and writes check_report.json. A paper is publishable only when every gate passes
                page half of stream A's check_evidence_anchors)
  7 claims      every claim-check task answered and `supported` (claims.py)
  8 images      every embedded image checked meaningful/weak, licence + attribution + source
-               URL + caption, file present; the paper embeds exactly the selected images
+               URL + caption, file present; the paper embeds exactly the selected images;
+               every content section carries at least one image
  9 hero        hero_picker.pick_hero_image found a banner among the checked images
 10 quality     quality_score, passed only when 1-9 pass and quality_gate_passed agrees
 """
@@ -45,6 +46,7 @@ from pipeline.lyra.quality_gate import (
 )
 from pipeline.lyra.text_sentences import split_sentences
 from pipeline.lyra.theo_citations import split_artifact, validate_paper_artifact
+from pipeline.lyra.theo_image_captions import images_per_section
 from pipeline.studio.paper.anchors import MARKER_RE, paragraphs
 from pipeline.studio.paper.claims import ClaimStatus, claim_status, source_texts
 from pipeline.studio.paper.evidence import PAGE_PREFIX, evidence_problems
@@ -62,7 +64,15 @@ from pipeline.utils.card_provenance import text_sha256 as sha256_text
 WORD_MIN = 5000
 WORD_MAX = 7500
 FIXED_SECTIONS = ("Connecting the Dots", "The Other Side", "What We Actually Know")
-INVESTIGATIONS = (2, 4)
+# Owner decision 2026-10-04: 3-6 investigation sections, not 2-4. The old cap
+# bound 14 of the 31 live papers and 4 of them had a single investigation
+# section, which left the image budget nowhere to go. 6-9 sections at the 5,000
+# word floor is ~550-830 words per section, the current median is 634.
+INVESTIGATIONS = (3, 6)
+# One image per section is the hard rule; four is the target and is reported, not
+# enforced (the measured loss is dominated by rejected candidates).
+IMAGES_MIN_PER_SECTION = 1
+IMAGES_TARGET_PER_SECTION = 4
 HOOK_PARAGRAPHS = (1, 2)
 TITLE_MAX_CHARS = 80
 TITLE_WORDS = (4, 12)
@@ -260,6 +270,17 @@ def gate_images(ws: PaperWorkspace, report: str, placed: list[dict[str, Any]]) -
     embedded = report.count("![")
     if embedded != len(placed):
         problems.append(f"report embeds {embedded} images, images-import selected {len(placed)}")
+    # Owner decision 2026-10-04: one image per section is the hard floor, four is
+    # the target. Measured on the 31 live papers before the rule existed: 109 of
+    # 189 sections carried no image, the three fixed tail sections 76 of 93.
+    # A total count cannot see that, so the floor is checked per section.
+    coverage = images_per_section(report)
+    without = [name for name, count in coverage.items() if count < IMAGES_MIN_PER_SECTION]
+    if without:
+        problems.append(
+            f"sections without {IMAGES_MIN_PER_SECTION} image: {without} "
+            f"(the opportunities in images/opportunities.json must name every section)"
+        )
     return Gate(
         "images",
         not problems,
@@ -268,6 +289,8 @@ def gate_images(ws: PaperWorkspace, report: str, placed: list[dict[str, Any]]) -
             "embedded": len(placed),
             "meaningful": sum(1 for e in placed if e["verified"]),
             "weak": sum(1 for e in placed if not e["verified"]),
+            "images_per_section": coverage,
+            "sections_without_image": without,
         },
     )
 
