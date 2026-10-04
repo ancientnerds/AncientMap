@@ -10,22 +10,35 @@ their Latin name: read on production 2026-10-04, 4,537 of the 4,900 curated site
 carry a Wikidata QID in ``site_external_ids`` but zero rows in the names table
 beyond that one label.
 
-Wikidata carries a label in up to 140 languages for such a site (Q676203: 140
-languages, 7 of them with aliases), so the names are one read-only API call per
-50 sites away.
+WHERE THE NAMES COME FROM - TWO PLACES, NOT ONE
+Wikidata holds a label and aliases per language (Q676203: 140 languages, 7 with
+aliases) and, separately, the title of the item's article in every Wikipedia that
+has one (Q676203: 132). **A label is not the article title, and in the scripts that
+matter they differ:** for Telugu the label is the Latin transcription
+"machu pichu", while the tewiki article is titled మాచు పిచ్చు - which is what the
+owner typed on 2026-10-04 and what the search did not find. Both ride in the same
+call (``props=labels|aliases|sitelinks``): the ``languages`` filter applies to
+labels and aliases, and the sitelinks come back whole, so the article titles cost
+no extra requests.
 
-WHAT IT WRITES, AND WHY IT IS SAFE TO RUN TWICE
-Every row goes in with ``name_type = 'wikidata_alias'`` and the match key
-computed by the INSERT itself, ``site_key_sql(':name')`` - the one definition of
-the key (pipeline/lyra/site_key.py), the same expression the search compares
-against. The (site_id, name_normalized) constraint ``uq_usn`` decides what
-already exists, so ``ON CONFLICT DO NOTHING`` makes a rerun a no-op. Nothing
-already in the table is read, changed or deleted.
+What is written, and why it is safe to run twice
+Every row goes in with a ``name_type`` that says where it came from -
+``wikidata_alias`` for a label or alias, ``wikipedia_title`` for an article title -
+and the match key computed by the INSERT itself, ``site_key_sql(':name')``: the one
+definition of the key (pipeline/lyra/site_key.py), the same expression the search
+compares against. The (site_id, name_normalized) constraint ``uq_usn`` decides
+what already exists, so ``ON CONFLICT DO NOTHING`` makes a rerun a no-op. Nothing
+already in the table is read, changed or deleted. A rerun therefore runs over every
+site again and lets the constraint drop the names it wrote before - ``--only-
+without`` would skip exactly the sites that gained labels first and now have
+article titles to gain.
 
-The rows are only what Wikidata calls a label or an alias of that one item, so
-they are evidence about the same site rather than a guess: a wrong QID would
-carry wrong names, which is why the QIDs come from ``site_external_ids``
-(resolved 2026-09-22, audited) and never from a name search.
+The rows are only what Wikidata asserts about that one item, so they are evidence
+about the same site rather than a guess: a wrong QID would carry wrong names, which
+is why the QIDs come from ``site_external_ids`` (resolved 2026-09-22, audited) and
+never from a name search. An article wiki is the one title that names this site
+alone; a Wikivoyage entry, a Wikinews headline or a Commons file page names a
+journey, a sentence or a set of places, so those are dropped (``NON_ARTICLE_WIKIS``).
 
 USAGE
 Read-only by default, and it prints what it would write::
@@ -180,9 +193,58 @@ LANGUAGES = (
 #: and site_identifier has skipped them for the aliases it writes since 2026-09.
 MIN_NAME_CHARS = 3
 
+#: What a row says about itself in ``name_type``: the name Wikidata asserts about
+#: the item, or the title the Wikipedia of one language gives its article about it.
+#: Both are found by the search, which reads ``name_type <> 'label'``, and both sit
+#: in the partial trigram index of migration 0027.
+NAME_TYPE_WIKIDATA = "wikidata_alias"
+NAME_TYPE_ARTICLE = "wikipedia_title"
+
+#: The wikis whose titles are not article titles. A Wikivoyage entry, a Wikinews
+#: headline, a quotation or a Commons file page carries a journey, a sentence or a
+#: set of places: ruwikinews titles Q676203 "Мачу-Пикчу и другие исторические
+#: объекты Перу, фотосъёмка" (measured 2026-10-04). Only the article wikis name
+#: the one site, so only those contribute a name.
+#:
+#: Measured over all 4,537 curated QIDs the run also answered with these project
+#: codes, whose titles are a source text or a namespace, not a place: sourceswiki
+#: (Wikisource), quotewiki, abstractwiki (the Simple English article namespace).
+NON_ARTICLE_WIKIS = (
+    "wikivoyage",
+    "wikiquote",
+    "wikinews",
+    "wiktionary",
+    "wikisource",
+    "wikibooks",
+    "wikiversity",
+    "wikimedia",
+    "wikidata",
+    "mediawiki",
+    "metawiki",
+    "commonswiki",
+    "specieswiki",
+    "sourceswiki",
+    "quotewiki",
+    "abstractwiki",
+)
+
 #: Names that are only punctuation, or that repeat the site in a script no reader
 #: would type. Kept deliberately blunt: Wikidata's own label is the evidence.
 _NOISE = {".", "..", "...", "-", "–", "—", "?", "!", "/", "\\"}
+
+
+def _article_language(site: str) -> str | None:
+    """The language code of a sitelink that is an article, or None.
+
+    ``tewiki`` -> ``te``; ``be_x_oldwiki`` -> ``be_x_old``; ``ruwikivoyage`` and
+    ``commonswiki`` -> None, because their titles are not the name of this site.
+    """
+    if not site.endswith("wiki"):
+        return None
+    if any(site.endswith(other) for other in NON_ARTICLE_WIKIS):
+        return None
+    return site[: -len("wiki")] or None
+
 
 _SELECT_SITES = text(
     """
@@ -200,16 +262,18 @@ _SELECT_SITES = text(
 #: One statement for a whole site: the key is computed in the INSERT from the raw
 #: name, exactly as _store_wikidata_aliases does for a single alias, and the
 #: constraint decides what exists. The VALUES list is built per call - a
-#: parameter has no type Postgres can infer in that position, so both columns are
-#: cast. CAST(...) and not ``:n0::text``: SQLAlchemy's text() does not read a
+#: parameter has no type Postgres can infer in that position, so all three columns
+#: are cast. CAST(...) and not ``:n0::text``: SQLAlchemy's text() does not read a
 #: bind that is immediately followed by a colon, and the statement then fails
 #: with "syntax error at or near ':'" (measured 2026-10-04 on production).
 def _insert_sql(count: int) -> str:
-    values = ",".join(f"(CAST(:n{i} AS text), CAST(:l{i} AS text))" for i in range(count))
+    values = ",".join(
+        f"(CAST(:n{i} AS text), CAST(:l{i} AS text), CAST(:t{i} AS text))" for i in range(count)
+    )
     return f"""
     INSERT INTO unified_site_names (site_id, name, name_normalized, language_code, name_type)
-    SELECT :site_id, n.name, {site_key_sql("n.name")}, n.language_code, 'wikidata_alias'
-    FROM (VALUES {values}) AS n(name, language_code)
+    SELECT :site_id, n.name, {site_key_sql("n.name")}, n.language_code, n.name_type
+    FROM (VALUES {values}) AS n(name, language_code, name_type)
     WHERE {site_key_sql("n.name")} <> {site_key_sql(":canonical")}
       AND char_length(n.name) >= :min_chars
     ON CONFLICT ON CONSTRAINT uq_usn DO NOTHING
@@ -223,7 +287,7 @@ class SiteNames:
     site_id: str
     name: str
     qid: str
-    rows: list[tuple[str, str]] = field(default_factory=list)
+    rows: list[tuple[str, str, str]] = field(default_factory=list)
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -238,14 +302,20 @@ def _http_json(params: dict[str, str], timeout: int = 45) -> dict:
         return json.load(response)
 
 
-def fetch_names(qids: list[str]) -> tuple[dict[str, list[tuple[str, str]]], int]:
-    """({qid: [(name, language_code), ...]}, requests_made) for labels and aliases.
+def fetch_names(qids: list[str]) -> tuple[dict[str, list[tuple[str, str, str]]], int]:
+    """({qid: [(name, language_code, name_type), ...]}, requests_made).
 
-    50 items and 50 languages per call, one second apart. A call that fails is
-    logged and skipped: a site whose names are missing stays findable by its own
-    name, which is where it was before.
+    Labels, aliases and the titles of the articles about the item, 50 items and 50
+    languages per call, one second apart. A call that fails is logged and skipped: a
+    site whose names are missing stays findable by its own name, which is where it
+    was before.
+
+    The article titles ride along in the same call rather than in a second one: the
+    ``languages`` filter applies to labels and aliases, and ``props=sitelinks`` comes
+    back in full whatever was asked for (measured 2026-10-04 on Q676203 with
+    ``languages=te|en|kn``: three labels, every sitelink).
     """
-    found: dict[str, dict[str, str]] = {qid: {} for qid in qids}
+    found: dict[str, dict[str, tuple[str, str]]] = {qid: {} for qid in qids}
     language_blocks = [
         LANGUAGES[i : i + LANGUAGES_PER_REQUEST]
         for i in range(0, len(LANGUAGES), LANGUAGES_PER_REQUEST)
@@ -259,7 +329,7 @@ def fetch_names(qids: list[str]) -> tuple[dict[str, list[tuple[str, str]]], int]
                     {
                         "action": "wbgetentities",
                         "ids": "|".join(batch),
-                        "props": "labels|aliases",
+                        "props": "labels|aliases|sitelinks",
                         "languages": "|".join(block),
                         "format": "json",
                     }
@@ -280,25 +350,36 @@ def fetch_names(qids: list[str]) -> tuple[dict[str, list[tuple[str, str]]], int]
                 for lang, label in (entity.get("labels") or {}).items():
                     value = label.get("value", "").strip()
                     if value and value not in _NOISE:
-                        names.setdefault(value, lang)
+                        names.setdefault(value, (lang, NAME_TYPE_WIKIDATA))
                 for lang, aliases in (entity.get("aliases") or {}).items():
                     for alias in aliases:
                         value = alias.get("value", "").strip()
                         if value and value not in _NOISE:
-                            names.setdefault(value, lang)
+                            names.setdefault(value, (lang, NAME_TYPE_WIKIDATA))
+                for site, link in (entity.get("sitelinks") or {}).items():
+                    lang = _article_language(site)
+                    value = (link.get("title") or "").strip()
+                    if lang and value and value not in _NOISE:
+                        names.setdefault(value, (lang, NAME_TYPE_ARTICLE))
             time.sleep(PACE_SECONDS)
     # One name, one row: 30 language codes spell "Machu Picchu" alike and the
-    # constraint would drop them one by one anyway.
-    return {qid: sorted(rows.items()) for qid, rows in found.items() if rows}, requests_made
+    # constraint would drop them one by one anyway. A name Wikidata labels and an
+    # article that titles alike keeps the label - it is the assertion about the item
+    # itself, the article title only its rendering in one Wikipedia.
+    return {
+        qid: sorted((value, lang, kind) for value, (lang, kind) in rows.items())
+        for qid, rows in found.items()
+        if rows
+    }, requests_made
 
 
 def plan(
-    sites: list[tuple[str, str, str]], found: dict[str, list[tuple[str, str]]]
+    sites: list[tuple[str, str, str]], found: dict[str, list[tuple[str, str, str]]]
 ) -> list[SiteNames]:
     """The rows one site would gain, before the database is asked anything."""
     plans = []
     for site_id, name, qid in sites:
-        rows = [(value, lang) for value, lang in found.get(qid, []) if value != name]
+        rows = [row for row in found.get(qid, []) if row[0] != name]
         if rows:
             plans.append(SiteNames(site_id=site_id, name=name, qid=qid, rows=rows))
     return plans
@@ -306,17 +387,19 @@ def plan(
 
 def report(plans: list[SiteNames], sites: list[tuple[str, str, str]], requests_made: int) -> dict:
     """The yield, so a dry run says what an --apply would write."""
-    languages = Counter(lang for p in plans for _name, lang in p.rows)
+    languages = Counter(lang for p in plans for _name, lang, _kind in p.rows)
+    kinds = Counter(kind for p in plans for _name, _lang, kind in p.rows)
     return {
         "sites_considered": len(sites),
         "sites_with_names": len(plans),
         "sites_without_a_label": len(sites) - len(plans),
         "rows": sum(len(p) for p in plans),
         "rows_per_site": round(sum(len(p) for p in plans) / len(plans), 1) if plans else 0,
+        "name_types": dict(kinds.most_common()),
         "languages": dict(languages.most_common()),
         "api_requests": requests_made,
         "examples": [
-            {"site": p.name, "qid": p.qid, "names": [n for n, _lang in p.rows[:6]]}
+            {"site": p.name, "qid": p.qid, "names": [n for n, _lang, _kind in p.rows[:6]]}
             for p in plans[:5]
         ],
     }
@@ -329,9 +412,10 @@ def store(session: Session, plan_row: SiteNames) -> int:
         "canonical": plan_row.name,
         "min_chars": MIN_NAME_CHARS,
     }
-    for i, (name, lang) in enumerate(plan_row.rows):
+    for i, (name, lang, kind) in enumerate(plan_row.rows):
         params[f"n{i}"] = name
         params[f"l{i}"] = lang
+        params[f"t{i}"] = kind
     result = session.execute(text(_insert_sql(len(plan_row.rows))), params)
     session.commit()
     return result.rowcount
@@ -428,6 +512,13 @@ def main(argv: list[str] | None = None) -> int:
                             "name": plan_row.name,
                             "qid": plan_row.qid,
                             "rows": count,
+                            # What the statement was given; "rows" is what the
+                            # constraint let through, so it can be the smaller
+                            # number when a name is already in the table.
+                            "names": [
+                                {"name": n, "language_code": lang, "name_type": kind}
+                                for n, lang, kind in plan_row.rows
+                            ],
                         },
                         ensure_ascii=False,
                     )
