@@ -20,6 +20,14 @@ for every field a question asked, which ended in one of these states:
 * `pending` - no decision yet, or its wave's step is not accepted: listed apart; the list is final only
   when none is pending (the command prints the count and `--final` refuses while one is).
 
+**The population is what the run asked.** A run classifies every site it can and then puts a part of
+that population to the model - WD4 classified 2,636 sites (3,551 questions) and asked 144 of them
+(260 questions) over three rounds, measured on its own files 2026-10-04. The list reads each run's
+`ROUNDS.jsonl`, which is written when a round is exported and so says what was asked before any
+answer existed: a site a run never asked is not an open question of that run, and a site a round did
+ask and no answer reached is still `pending`. A run with no rounds (WD3 before the rounds, or a run
+that predates the file) is read as its whole classification.
+
     owner_list.py build [--runs RUN ...] [--waves DIR] [--out DIR] [--final]
 """
 
@@ -40,6 +48,8 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+from mechanical.lane import FIELDS_ROOTS  # noqa: E402
+
 from fields import classify as C  # noqa: E402
 from fields import plan as FP  # noqa: E402
 from fields import population as POP  # noqa: E402
@@ -56,6 +66,9 @@ UNRESOLVED, HELD, REFUSED, NO_WRITE, PENDING = (
 #: The states the owner reads, in the order the list shows them.
 LISTED = (UNRESOLVED, HELD, REFUSED, NO_WRITE)
 OWNER_MD, OWNER_JSONL = "OWNER_LIST.md", "OWNER_LIST.jsonl"
+#: The run's own record of what it put to the model, one line per round (a re-ask round is a line
+#: of its own). Written when the round is exported, so it exists before any answer does.
+ROUNDS_FILE = "ROUNDS.jsonl"
 #: The rules whose runs the list can read: both lanes ask the same question under one source family -
 #: WD3 (owner decisions of 2026-10-01) and WD4 (2026-10-04, the same plus a named period as a
 #: value). They differ in name and stage only, and the stage is in every batch id and write lane, so
@@ -91,43 +104,72 @@ def _shown(path: Path) -> str:
         return path.resolve().as_posix()
 
 
+def waves_root(stage: str) -> Path:
+    """Where a stage's waves live: `output/remediation/fields/<stage>/write`.
+
+    Each stage has its own lane root (`mechanical.lane.FIELDS_ROOTS`), so one list over WD3 and WD4
+    reads two directories - `--waves` still names one for every run, which is what it always meant
+    for a single-lane list.
+    """
+    return REPO / "output" / "remediation" / FIELDS_ROOTS[stage]
+
+
 def read_waves(
-    runs: Sequence[Path], waves: Path
+    runs: Sequence[Path], waves: Path | None
 ) -> tuple[dict[tuple[str, str], dict[str, Any]], set[str]]:
     """What the write plans did with each (site, field) over every wave of `runs`: `{"written":
     True, "accepted": bool}` for a planned cell (written only once its step is accepted with 0
     deviations) and `{"refused": reason}` for a refusal - and the sites of the waves whose every
-    step is accepted (`settled`: whatever they hold no cell or refusal for was not written)."""
+    step is accepted (`settled`: whatever they hold no cell or refusal for was not written).
+
+    `waves` is one directory for every run, or `None` for each run's own lane root.
+    """
     shown = {_shown(run) for run in runs}
     out: dict[tuple[str, str], dict[str, Any]] = {}
     settled: set[str] = set()
-    if not waves.exists():
-        return out, settled
-    for wave in sorted(p for p in waves.iterdir() if (p / FP.WAVE_FILE).exists()):
-        record = FP.read_wave_at(wave)
-        if record["run"] not in shown:
+    roots = (
+        {waves}
+        if waves is not None
+        else {waves_root(R.read_rule(run).stage) for run in runs}
+    )
+    for root in sorted(roots):
+        if not root.exists():
             continue
-        accepted_steps = 0
-        for number in range(1, len(record["steps"]) + 1):
-            step = wave / f"s{number:03d}"
-            accepted_path = step / FP.ACCEPTED_FILE
-            accepted = (
-                accepted_path.exists()
-                and json.loads(accepted_path.read_text(encoding="utf-8"))["deviations"] == 0
-            )
-            accepted_steps += accepted
-            planned = step / "PLAN.jsonl"
-            for row in _rows(planned) if planned.exists() else []:
-                cell = out.setdefault((row["site_id"], FIELD_OF_COLUMN[row["column"]]), {})
-                cell.update(written=True, accepted=accepted)
-            skipped = step / "SKIPPED.jsonl"
-            for row in _rows(skipped) if skipped.exists() else []:
-                if row["column"] in FIELD_OF_COLUMN:
-                    cell = out.setdefault((row["site_id"], FIELD_OF_COLUMN[row["column"]]), {})
-                    cell.update(refused=f"{row['reason']}: {row['note']}"[:REASON_CHARS])
-        if accepted_steps == len(record["steps"]):
-            settled |= {site for step_sites in record["steps"] for site in step_sites}
+        for wave in sorted(p for p in root.iterdir() if (p / FP.WAVE_FILE).exists()):
+            _read_wave(wave, shown, out, settled)
     return out, settled
+
+
+def _read_wave(
+    wave: Path,
+    shown: set[str],
+    out: dict[tuple[str, str], dict[str, Any]],
+    settled: set[str],
+) -> None:
+    """One wave's planned cells and refusals, for the runs of `shown` only."""
+    record = FP.read_wave_at(wave)
+    if record["run"] not in shown:
+        return
+    accepted_steps = 0
+    for number in range(1, len(record["steps"]) + 1):
+        step = wave / f"s{number:03d}"
+        accepted_path = step / FP.ACCEPTED_FILE
+        accepted = (
+            accepted_path.exists()
+            and json.loads(accepted_path.read_text(encoding="utf-8"))["deviations"] == 0
+        )
+        accepted_steps += accepted
+        planned = step / "PLAN.jsonl"
+        for row in _rows(planned) if planned.exists() else []:
+            cell = out.setdefault((row["site_id"], FIELD_OF_COLUMN[row["column"]]), {})
+            cell.update(written=True, accepted=accepted)
+        skipped = step / "SKIPPED.jsonl"
+        for row in _rows(skipped) if skipped.exists() else []:
+            if row["column"] in FIELD_OF_COLUMN:
+                cell = out.setdefault((row["site_id"], FIELD_OF_COLUMN[row["column"]]), {})
+                cell.update(refused=f"{row['reason']}: {row['note']}"[:REASON_CHARS])
+    if accepted_steps == len(record["steps"]):
+        settled |= {site for step_sites in record["steps"] for site in step_sites}
 
 
 def state_of(
@@ -157,7 +199,30 @@ def state_of(
     return PENDING, "decided, not written yet: its wave is not planned or not accepted"
 
 
-def build(runs: Sequence[Path], waves: Path) -> dict[str, Any]:
+def asked_by_rounds(run: Path) -> set[tuple[str, str]] | None:
+    """The `(site, field)` pairs this run's rounds put to the model - `None` when it has no rounds,
+    and then the whole classification is the run's population.
+
+    A run classifies every site it can and then asks the model a part of that population: WD4
+    classified 2,636 sites (3,551 questions) and put **144 sites / 260 questions** to the model over
+    three rounds, measured on its own files 2026-10-04; every one of its 260 decisions lies inside
+    that set. The list is about the questions a run asked - a site it never asked is not an open
+    question of that run, it is not its work - and the rounds say what was asked *before* any answer
+    existed, so this can never hide a question the run did put: a site a round asked and no answer
+    reached is still `pending`.
+    """
+    path = run / ROUNDS_FILE
+    if not path.exists():
+        return None
+    return {
+        (site, field)
+        for entry in _rows(path)
+        for site, fields in entry.get("fields", {}).items()
+        for field in fields
+    }
+
+
+def build(runs: Sequence[Path], waves: Path | None) -> dict[str, Any]:
     """The rows of the list and its counts, from the runs' files."""
     for run in runs:
         if R.read_rule(run) not in OWNED_RULES:
@@ -168,15 +233,22 @@ def build(runs: Sequence[Path], waves: Path) -> dict[str, Any]:
     cells, settled = read_waves(runs, waves)
     rows: list[dict[str, Any]] = []
     counts: dict[str, Counter[str]] = {field: Counter() for field in C.FIELDS}
+    classified = asked = 0
     for run in runs:
         decisions = (
             {(d["site_id"], d["field"]): d for d in _rows(run / "DECISIONS.jsonl")}
             if (run / "DECISIONS.jsonl").exists()
             else {}
         )
+        asked_here = asked_by_rounds(run)
         for line in _rows(run / C.CLASSIFIED_FILE):
+            site = line["site_id"]
             for field in line["asked"]:
-                site = line["site_id"]
+                classified += 1
+                if asked_here is not None:
+                    if (site, field) not in asked_here:
+                        continue
+                    asked += 1
                 decision = decisions.get((site, field))
                 state, reason = state_of(decision, cells.get((site, field)), site in settled)
                 counts[field][state] += 1
@@ -198,7 +270,11 @@ def build(runs: Sequence[Path], waves: Path) -> dict[str, Any]:
     rows.sort(
         key=lambda r: (C.FIELDS.index(r["field"]), str(r["country"]), r["name"], r["site_id"])
     )
-    return {"rows": rows, "counts": {f: dict(sorted(c.items())) for f, c in counts.items()}}
+    return {
+        "rows": rows,
+        "counts": {f: dict(sorted(c.items())) for f, c in counts.items()},
+        "population": {"classified": classified, "asked": asked},
+    }
 
 
 # ------------------------------------------------------------------------------ the writing
@@ -223,6 +299,7 @@ def _cell(text: Any) -> str:
 
 def render(result: Mapping[str, Any], runs: Sequence[Path]) -> str:
     counts = result["counts"]
+    population = result["population"]
     out = [
         "# Owner list (lanes WD3 and WD4): the fields that stay open",
         "",
@@ -231,6 +308,10 @@ def render(result: Mapping[str, Any], runs: Sequence[Path]) -> str:
         + ", ".join(f"`{_shown(run)}`" for run in runs)
         + ". Owner decisions of 2026-10-01: a field no source supports stays empty, a point no source "
         "supports stays where it is - this is the list of both.",
+        "",
+        f"**{population['asked']} of {population['classified']} classified questions** were put to the "
+        "model, and this list is about those: a site a run never asked is not an open question of that "
+        "run (each run's rounds say what it asked, in `ROUNDS.jsonl`).",
         "",
         "| field | asked | filled | sourced (kept) | no source | unreadable pages | refused | "
         "no write | pending |",
@@ -268,7 +349,7 @@ def render(result: Mapping[str, Any], runs: Sequence[Path]) -> str:
     return "\n".join(out) + "\n"
 
 
-def write(runs: Sequence[Path], waves: Path, out: Path, *, final: bool) -> dict[str, Any]:
+def write(runs: Sequence[Path], waves: Path | None, out: Path, *, final: bool) -> dict[str, Any]:
     result = build(runs, waves)
     pending = sum(1 for r in result["rows"] if r["state"] == PENDING)
     if final and pending:
@@ -280,7 +361,12 @@ def write(runs: Sequence[Path], waves: Path, out: Path, *, final: bool) -> dict[
         encoding="utf-8",
         newline="\n",
     )
-    return {"listed": len(result["rows"]), "pending": pending, "counts": result["counts"]}
+    return {
+        "listed": len(result["rows"]),
+        "pending": pending,
+        "counts": result["counts"],
+        "population": result["population"],
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -293,7 +379,10 @@ def main(argv: list[str] | None = None) -> int:
     cmd = sub.add_parser("build")
     cmd.add_argument("--runs", type=Path, nargs="+", default=list(DEFAULT_RUNS))
     cmd.add_argument(
-        "--waves", type=Path, default=REPO / "output" / "remediation" / "fields" / "wd3" / "write"
+        "--waves",
+        type=Path,
+        default=None,
+        help="this directory for every run; default: each run's own lane (fields/<stage>/write)",
     )
     cmd.add_argument("--out", type=Path, default=POP.DEFAULT_OUT)
     cmd.add_argument("--final", action="store_true", help="refuse while a field is pending")

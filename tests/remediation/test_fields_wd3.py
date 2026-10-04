@@ -1104,6 +1104,132 @@ class TestTheOwnerList:
         assert states[(self.S[2], "source_url")] == "refused"
 
 
+class TestTheRunsRoundsAreItsPopulation:
+    """A run classifies every site it can and then puts a part of that population to the model.
+
+    WD4 measured on its own files, 2026-10-04: 2,636 classified sites, 3,551 classified
+    questions, and **144 sites / 260 questions** put to the model over three rounds (round 1 and 2
+    re-asked 13 of them). Every one of the 260 decisions lies inside the asked set. The other
+    2,092 sites are not open questions of that run - they are not its work - and counting them as
+    `pending` is what kept `owner_list --final` refusing after the run was finished.
+
+    `ROUNDS.jsonl` is written when a round is exported, before any answer exists, so the list can
+    read what the run asked without ever hiding a question it did put.
+    """
+
+    S = [f"00000000-0000-4000-8000-{n:012d}" for n in range(1, 5)]
+
+    def build_files(self, tmp_path: Path) -> tuple[Path, Path]:
+        run, waves = tmp_path / "wd3", tmp_path / "wd3" / "write"
+        run.mkdir()
+        R.write_run(run, ONE)
+        s = self.S
+        spec = [  # site, asked field, decision
+            (s[0], "period_start", "replace"),
+            (s[1], "site_type", "unresolved"),
+            (s[2], "coordinates", None),
+            (s[3], "source_url", "keep"),
+        ]
+        lines, decisions = [], []
+        for number, (site, field, verdict) in enumerate(spec):
+            lines.append({"site_id": site, "name": f"Site {number}", "country": "Peru",
+                          "asked": [field], "fields": {field: {"stored": None}},
+                          "open": {field: {"why": "empty", "wd1": None}}})
+            if verdict:
+                decisions.append({"site_id": site, "field": field, "decision": verdict, "asked": 3,
+                                  "reasoning": f"{verdict} reasoning", "via": "counted"})
+        HO._write_jsonl(run / C.CLASSIFIED_FILE, lines)
+        HO._write_jsonl(run / "DECISIONS.jsonl", decisions)
+        wave = waves / "2026-10-02a"
+        step = wave / "s001"
+        step.mkdir(parents=True)
+        HO._write_json(wave / "WAVE.json", {"run": POP._shown(run), "steps": [[s[0]]]})
+        (wave / "WAVE.sha256").write_text(sha(wave / "WAVE.json") + "\n", encoding="utf-8")
+        HO._write_jsonl(step / "PLAN.jsonl", [{"site_id": s[0], "column": "period_start"}])
+        HO._write_jsonl(step / "SKIPPED.jsonl", [])
+        HO._write_json(step / "ACCEPTED.json", {"deviations": 0})
+        return run, waves
+
+    def test_a_field_the_run_never_asked_is_not_a_question_of_it(self, tmp_path: Path) -> None:
+        run, waves = self.build_files(tmp_path)
+        HO._write_jsonl(run / OL.ROUNDS_FILE, [{"round": 0, "fields": {self.S[0]: ["period_start"]}}])
+        result = OL.build([run], waves)
+        assert result["counts"]["period_start"] == {"filled": 1}
+        assert result["counts"]["site_type"] == {}, "never asked, so never a question of this run"
+        assert result["population"] == {"classified": 4, "asked": 1}
+
+    def test_a_site_asked_in_a_later_round_stays_pending_until_answered(self, tmp_path: Path) -> None:
+        run, waves = self.build_files(tmp_path)
+        HO._write_jsonl(run / OL.ROUNDS_FILE, [
+            {"round": 0, "fields": {self.S[0]: ["period_start"]}},
+            {"round": 1, "fields": {self.S[1]: ["site_type"], self.S[2]: ["coordinates"]}},
+        ])
+        result = OL.build([run], waves)
+        assert result["counts"]["period_start"] == {"filled": 1}
+        assert result["counts"]["site_type"] == {"unresolved": 1}
+        assert result["counts"]["coordinates"] == {"pending": 1}
+        assert result["population"] == {"classified": 4, "asked": 3}
+        with pytest.raises(OL.OwnerListError, match="1 field"):
+            OL.write([run], waves, tmp_path / "out", final=True)
+
+    def test_a_run_whose_questions_were_all_answered_is_final(self, tmp_path: Path) -> None:
+        run, waves = self.build_files(tmp_path)
+        HO._write_jsonl(run / OL.ROUNDS_FILE, [
+            {"round": 0, "fields": {self.S[0]: ["period_start"], self.S[1]: ["site_type"]}},
+            {"round": 1, "fields": {self.S[1]: ["site_type"]}},
+        ])
+        summary = OL.write([run], waves, tmp_path / "out", final=True)
+        assert summary["pending"] == 0 and summary["listed"] == 1
+        assert summary["population"] == {"classified": 4, "asked": 2}
+        text = (tmp_path / "out" / OL.OWNER_MD).read_text(encoding="utf-8")
+        assert "2 of 4 classified questions" in text
+
+    def test_each_run_reads_the_waves_of_its_own_lane(self, tmp_path: Path) -> None:
+        """Two runs, two lanes, two wave roots - and one list.
+
+        `--waves` named a single directory, so a list over WD3 and WD4 read WD3's waves and saw
+        WD4's as never written: 65 questions that were decided *and* written came out as `pending`
+        (measured 2026-10-04, after the rounds cut the population to 3,823 of 7,114). Each run
+        says which lane it is (its rule's stage) and its waves live under that lane, so the list
+        reads `fields/<stage>/write` per run; `--waves` stays as the override it was.
+        """
+        base = tmp_path / "output" / "remediation"
+        monkey = pytest.MonkeyPatch()
+        monkey.setattr(OL, "waves_root", lambda stage: base / "fields" / stage / "write")
+        try:
+            runs = []
+            for stage, rule in (("wd3", ONE), ("wd4", R.ONE_FAMILY_PERIOD)):
+                run = base / "fields" / stage
+                (run / "write").mkdir(parents=True)
+                R.write_run(run, rule)
+                site = f"00000000-0000-4000-8000-00000000000{len(runs) + 1}"
+                HO._write_jsonl(run / C.CLASSIFIED_FILE, [{
+                    "site_id": site, "name": f"{stage} site", "country": "Peru",
+                    "asked": ["period_start"], "fields": {"period_start": {"stored": None}},
+                    "open": {"period_start": {"why": "empty", "wd1": None}}}])
+                HO._write_jsonl(run / "DECISIONS.jsonl", [{
+                    "site_id": site, "field": "period_start", "decision": "replace", "asked": 1,
+                    "reasoning": "a source says so", "via": "counted"}])
+                HO._write_jsonl(run / OL.ROUNDS_FILE, [{"round": 0, "fields": {site: ["period_start"]}}])
+                wave = run / "write" / "2026-10-04"
+                step = wave / "s001"
+                step.mkdir(parents=True)
+                HO._write_json(wave / "WAVE.json", {"run": POP._shown(run), "steps": [[site]],
+                                                    "stage": stage, "rule": rule.name})
+                (wave / "WAVE.sha256").write_text(sha(wave / "WAVE.json") + "\n", encoding="utf-8")
+                HO._write_jsonl(step / "PLAN.jsonl", [
+                    {"site_id": site, "column": "period_start"},
+                    {"site_id": site, "column": "period_name"}])
+                HO._write_jsonl(step / "SKIPPED.jsonl", [])
+                HO._write_json(step / "ACCEPTED.json", {"deviations": 0})
+                runs.append(run)
+            summary = OL.write(runs, None, tmp_path / "out", final=True)
+        finally:
+            monkey.undo()
+        assert summary["pending"] == 0 and summary["listed"] == 0
+        assert summary["population"] == {"classified": 2, "asked": 2}
+
+
 # ------------------------------------------------------------------------------ the scripts
 class TestTheScripts:
     def test_the_wave_script_drives_wd3_lanes_only(self) -> None:
