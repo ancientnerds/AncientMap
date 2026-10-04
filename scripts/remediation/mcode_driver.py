@@ -59,6 +59,14 @@ from pipeline.utils.git_env import run_git as _git_without_git_env  # noqa: E402
 
 REPO = Path("C:/PythonProjects/AncientMap")
 PYTHON = REPO / ".venv" / "Scripts" / "python.exe"
+#: The checkout that holds *this file*, and with it the code a lane runs and an answering agent
+#: obeys. It is not `REPO`: the driver is written and run in a worktree, and only the data stays
+#: behind in the data root. Every path the driver names for *code* comes from here, an answering
+#: agent is sent into here, and the tracked-tree guard watches here and nowhere else - the guard
+#: can only attribute a change to a batch if the tree it watches is the tree the batch ran in.
+#: Measured 2026-10-04 11:43: the guard watched the data root, a second session was working in it,
+#: and its six committed files voided a batch that had answered 8 sites.
+WORKTREE = _HERE.parents[2]
 #: The model id an answer is recorded with (`opus_handoff.answer --model`): exactly as the
 #: answering agent's own system prompt names it.
 ANSWER_STAMP_MODEL = "MiniMax-M3.1-Flash-Preview"
@@ -97,8 +105,10 @@ RUNS = REPO / "output" / "remediation" / "wc_runner" / "runs"
 #: The fields lane's tool directory, **not** its data directory. `output/remediation/fields/` holds
 #: the run; the CLI that reads it is `scripts/remediation/fields/handoff.py`. Measured 2026-10-03:
 #: this constant pointed at the data directory, so every field-fill brief named a file that is not
-#: there and every answering batch started with a command that failed.
-FIELDS = REPO / "scripts" / "remediation" / "fields"
+#: there and every answering batch started with a command that failed. It is the tool of the
+#: checkout the driver runs in, so the questions a batch answers are the ones that checkout's tool
+#: asked.
+FIELDS = WORKTREE / "scripts" / "remediation" / "fields"
 ORCHESTRATION = REPO / "output" / "remediation" / "orchestration"
 STATE_DIR = REPO / "output" / "remediation" / "mcode_driver"
 #: The User-Agent every research agent of this remediation sends (no personal data).
@@ -295,7 +305,7 @@ class McodeRunner:
         self,
         *,
         binary: str | Path = "mcode",
-        repo: Path = REPO,
+        repo: Path = WORKTREE,
         diagnostics: Path | None = None,
         env: Mapping[str, str] | None = None,
     ) -> None:
@@ -334,7 +344,9 @@ class McodeRunner:
         overhead: int = EXEC_OVERHEAD_S,
     ) -> ExecResult:
         """Run one batch. The tracked tree is sampled before and after, so the result carries what
-        the batch changed - or nothing, which is the normal case."""
+        the batch changed - or nothing, which is the normal case. The tree is `self.repo`, the
+        checkout the agent is sent into, and never the data root: a dirty tracked file there is
+        another session's work, and the lane stops for its own agent's changes only."""
         if effort not in EFFORTS:
             raise DriverError(f"effort {effort!r} is not one of {sorted(EFFORTS)}")
         target = self._free_diagnostics(label)
@@ -690,7 +702,7 @@ def answer_prompt(
     lane: str,
     run: str,
     batch: str,
-    repo: str = str(REPO),
+    repo: str = str(WORKTREE),
     python: str = str(PYTHON),
     brief: str = "brief",
     brief_command: str = "",
@@ -939,7 +951,7 @@ def wc_next_step(
 
 
 def wc_answer_prompt(
-    *, run: Path, handoff: Path, batch: str, brief: str = "brief", repo: str = str(REPO)
+    *, run: Path, handoff: Path, batch: str, brief: str = "brief", repo: str = str(WORKTREE)
 ) -> str:
     """One WC answering batch's instruction, from `wc-continue.js` with the model strings replaced."""
     return answer_prompt(
@@ -949,7 +961,8 @@ def wc_answer_prompt(
         repo=repo,
         brief=brief,
         brief_command=(
-            f"cd {repo} && PYTHONIOENCODING=utf-8 {PYTHON} {REPO / 'scripts' / 'remediation' / 'wc' / 'cli.py'} "
+            f"cd {repo} && PYTHONIOENCODING=utf-8 {PYTHON} "
+            f"{WORKTREE / 'scripts' / 'remediation' / 'wc' / 'cli.py'} "
             f"{brief} --run-dir {run} --handoff {handoff} --batch-id {batch}"
         ),
     )
@@ -1034,11 +1047,16 @@ class Validation:
 
 def validate_handoff(handoff: Path, *, repo: Path = REPO) -> Validation:
     """Validate one exported round. `validate` exits 1 while answers are missing, which is the normal
-    state of a round in progress, so the exit code is not the verdict - the JSON is."""
+    state of a round in progress, so the exit code is not the verdict - the JSON is.
+
+    The tool is the one of the checkout the driver runs in, because it is that checkout's brief
+    that wrote the questions and the answers have to pass its checker. `repo` stays the data root:
+    the command runs there, because a tool that resolves `output/` against its working directory
+    has to find the run and not a copy of it."""
     command = run_operator(
         (
             str(PYTHON),
-            str(REPO / "scripts" / "remediation" / "opus_handoff.py"),
+            str(WORKTREE / "scripts" / "remediation" / "opus_handoff.py"),
             "validate",
             "--dir",
             str(handoff),
@@ -1777,7 +1795,7 @@ def fields_answer_prompt(*, run: str, handoff: str, batch: str) -> str:
         run=run,
         batch=batch,
         brief_command=(
-            f"cd {REPO} && PYTHONIOENCODING=utf-8 {PYTHON} {FIELDS / 'handoff.py'} brief "
+            f"cd {WORKTREE} && PYTHONIOENCODING=utf-8 {PYTHON} {FIELDS / 'handoff.py'} brief "
             f"--run {run} --handoff {handoff} --batch-id {batch}"
         ),
     )
@@ -2004,7 +2022,7 @@ def _main_wd3(args: Any) -> int:
             run=str(args.run),
             batch=label,
             brief_command=(
-                f"cd {REPO} && PYTHONIOENCODING=utf-8 {PYTHON} {FIELDS / 'handoff.py'} brief "
+                f"cd {WORKTREE} && PYTHONIOENCODING=utf-8 {PYTHON} {FIELDS / 'handoff.py'} brief "
                 f"--run {args.run} --handoff {plan.validate_dir} --batch-id {label}"
             ),
         )

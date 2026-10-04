@@ -300,6 +300,46 @@ def test_a_batch_that_changed_a_tracked_file_voids_itself_and_stops(tmp_path: Pa
     assert runner.voids(result) is True
 
 
+def test_the_tree_guard_watches_the_checkout_that_holds_the_driver_code() -> None:
+    """The guard samples the tracked tree before and after a batch, and the tree it may attribute
+    to a batch is the one that holds the code the batch was asked to obey.
+
+    This repository is not one tree. The driver's code lives in the checkout it is run from, and
+    the run's data (`output/`, `.env`, the venv) lives in the data root - which is a *different*
+    checkout as soon as the driver runs from a worktree. Measured 2026-10-04 11:43: the guard
+    sampled the data root, where a second session was working, so that session's six committed
+    files came dirty in the window and voided a batch that had answered its 8 sites."""
+    assert D.McodeRunner().repo == REPO
+
+
+def test_a_change_in_another_checkout_of_this_repository_does_not_void_a_batch(
+    tmp_path: Path,
+) -> None:
+    """The incident above, in miniature: the batch changed nothing, and a tracked file in the
+    *other* checkout came dirty while it ran. A batch is void for what its own agent changed, and
+    a second checkout is not that agent - the driver cannot tell the two apart by looking at the
+    tree, so it must only ever look at one, the one the agent ran in."""
+    work = tmp_path / "work"
+    other = tmp_path / "other"
+    for repo, file in ((work, "scripts/check.py"), (other, "api/routes/sites.py")):
+        (repo / Path(file).parent).mkdir(parents=True)
+        D.run_git(repo, "init")
+        D.run_git(repo, "config", "user.email", "driver@example.com")
+        D.run_git(repo, "config", "user.name", "mcode driver test")
+        (repo / file).write_text("original\n", encoding="utf-8")
+        D.run_git(repo, "add", file)
+        D.run_git(repo, "commit", "-m", "committed by the other session")
+    binary, env = fake_mcode(tmp_path)
+    runner = D.McodeRunner(binary=binary, repo=work, diagnostics=tmp_path / "d", env=env)
+    (other / "api/routes/sites.py").write_text("the other session's work\n", encoding="utf-8")
+
+    result = runner.run("prompt", label="b", timeout=60, max_steps=4)
+
+    assert result.tree_clean is True
+    assert "api/routes/sites.py" not in result.tree_changed
+    assert runner.voids(result) is False
+
+
 def test_a_batch_that_is_retried_gets_its_own_diagnostics_directory(tmp_path: Path) -> None:
     """Measured 2026-10-03: `mcode exec` refuses a diagnostics directory that is not empty
     ("Diagnostics directory must be empty"), so a driver that reuses one directory per batch can
@@ -854,6 +894,49 @@ def test_wd3_on_resume_answers_only_the_batches_the_validator_names_missing(
     assert asked == [("wd3-r0-b0002",)]  # the one the validator named, not the three on disk
 
 
+def test_the_lane_answers_its_batches_in_the_checkout_that_holds_the_driver_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The lane builds the runner that runs its batches, so the tree the guard watches and the
+    directory the agent is sent into are decided right here.
+
+    It took the data root, which is the checkout that holds `output/` and the checkout a second
+    session works in, while the code that judges the answers is this one. Measured 2026-10-04
+    11:43: batch `wd3-r1-b0001` answered 8 sites and was voided over another session's six files.
+    """
+    handoff = tmp_path / "fields-wd3-r0"
+    (handoff / "wd3-r0-b0001").mkdir(parents=True)
+    (handoff / "wd3-r0-b0001" / "MANIFEST.jsonl").write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(
+        D,
+        "validate_handoff",
+        lambda directory, **kwargs: D.Validation(
+            ok=True, missing=("wd3-r0-b0001",), missing_count=3
+        ),
+    )
+    seen: list[Path] = []
+    monkeypatch.setattr(
+        D, "answer_all", lambda batches, **kwargs: seen.append(kwargs["runner"].repo) or []
+    )
+
+    code = D._main_wd3(
+        argparse.Namespace(
+            run=tmp_path / "run",
+            handoff=str(tmp_path / "fields-wd3"),
+            resume=True,
+            round=0,
+            width=1,
+            timeout=10,
+            max_steps=2,
+            no_quota_check=True,
+            dry_run=False,
+        )
+    )
+
+    assert code == 0
+    assert seen == [REPO]  # the checkout this test - and the driver - runs from
+
+
 def test_wd3_stops_when_the_validator_refuses_the_handoff(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -951,7 +1034,7 @@ def test_a_reask_round_gets_its_own_handoff_and_its_own_export(tmp_path: Path) -
 
 #: The fields lane's own tool, in the repository the driver works in. A path constant does not
 #: notice that its file moved, and a constant is what both commands below are built from.
-FIELDS_TOOL = D.REPO / "scripts" / "remediation" / "fields" / "handoff.py"
+FIELDS_TOOL = REPO / "scripts" / "remediation" / "fields" / "handoff.py"
 
 
 def test_the_export_command_names_the_fields_tool_of_this_checkout(tmp_path: Path) -> None:
@@ -969,16 +1052,27 @@ def test_the_brief_the_agent_is_sent_names_the_fields_tool_that_is_there() -> No
     """The brief command is the answering agent's *whole* instruction, and this one has been
     pointing at a file that is not there: every field-fill batch started with a command that failed
     with "can't open file", and the agent had to find the real tool itself (measured 2026-10-03,
-    after 51 batches). The answers the lane counted were produced under that detour."""
+    after 51 batches). The answers the lane counted were produced under that detour.
+
+    The tool is the one of the checkout the driver runs in, and the agent is sent into that same
+    checkout: the questions would otherwise be written by one version of the tool and read by
+    another, and the agent would be working in a tree the guard does not watch."""
     prompt = D.fields_answer_prompt(run="run", handoff="handoff", batch="wd3-r0-b0001")
 
     assert str(FIELDS_TOOL) in prompt
+    assert f"cd {REPO} " in prompt
     assert "output/remediation/fields/handoff.py" not in prompt
 
 
 def no_model_call(command: Sequence[str]) -> bool:
-    """A plan names no model call: the operator steps are the commands themselves."""
-    return not any("mcode" in part for part in command)
+    """A plan names no model call: the operator steps are the commands themselves.
+
+    The question is asked of the executable's own name and not of the whole argument. The driver
+    builds every command from the checkout it runs in, and that checkout is called
+    `mcode-driver`, so a substring test over the path called a `python.exe` export a model call
+    (measured 2026-10-04, the day the driver was pointed at its own checkout instead of the data
+    root)."""
+    return Path(command[0]).name.lower() not in {"mcode", "mcode.exe", "mcode.cmd"}
 
 
 # ---------------------------------------------------------------------------- the round's completeness
