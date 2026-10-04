@@ -450,9 +450,7 @@ def patch_image_files(patch: dict[str, Any], images_dir: Path) -> list[Path]:
         if not file.is_file()
     ]
     if missing:
-        raise StudioError(
-            f"the patch's new pictures are missing under {images_dir}: {missing}"
-        )
+        raise StudioError(f"the patch's new pictures are missing under {images_dir}: {missing}")
     return files
 
 

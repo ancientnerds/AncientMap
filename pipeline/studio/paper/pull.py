@@ -111,7 +111,9 @@ def _cite(text: str, source_ids: list[str] | None, citable: set[str]) -> str:
     return " ".join(part for part in (text, markers) if part)
 
 
-def _carried(claim: str, source_ids: list[str] | None, dossier: Dossier) -> tuple[list[str], list[str]]:
+def _carried(
+    claim: str, source_ids: list[str] | None, dossier: Dossier
+) -> tuple[list[str], list[str]]:
     """The cited sources whose archived text carries the claim, and those that do not.
 
     The defect report's rule 1 is "a marker requires a located sentence", and the

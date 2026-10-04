@@ -135,7 +135,10 @@ def cmd_patch_images(args: argparse.Namespace) -> int:
     ws = workspace(args.request_id)
     patch = publish.patch_images_payload(ws, Path(args.patch))
     record = publish.patch_images(
-        ws, patch, Path(args.images) if args.images else ws.images_dir / "selected", dry_run=args.dry_run
+        ws,
+        patch,
+        Path(args.images) if args.images else ws.images_dir / "selected",
+        dry_run=args.dry_run,
     )
     if args.dry_run:
         _print({"dry_run": "passed", "uploaded": record["uploaded"]})

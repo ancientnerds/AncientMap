@@ -135,7 +135,9 @@ def _sentence_spans(text: str) -> list[tuple[int, int]]:
             continue
         found = text.find(sentence, cursor)
         if found < 0:
-            raise ValueError("split_sentences returned a slice that is not a substring of its input")
+            raise ValueError(
+                "split_sentences returned a slice that is not a substring of its input"
+            )
         spans.append((found, found + len(sentence)))
         cursor = found + len(sentence)
     return spans
@@ -457,7 +459,9 @@ def locate_support(claim: str, source_text: str, *, window: int = 2) -> Located 
             return None
         first, last = located.start, located.end
         covering = [
-            index for index, (begin, finish) in enumerate(spans) if begin >= first and finish <= last
+            index
+            for index, (begin, finish) in enumerate(spans)
+            if begin >= first and finish <= last
         ]
         if len(covering) > window:
             return None
@@ -469,9 +473,7 @@ def locate_support(claim: str, source_text: str, *, window: int = 2) -> Located 
     # text for a string the source never contains.
     source_numbers = frozenset(claim_numbers(source_text))
     missing = tuple(
-        text
-        for kind, text in specifics
-        if not _carried(kind, text, source_norm, source_numbers)
+        text for kind, text in specifics if not _carried(kind, text, source_norm, source_numbers)
     )
 
     best: tuple[tuple[int, int, int], int, int, tuple[str, ...]] | None = None
@@ -490,9 +492,7 @@ def locate_support(claim: str, source_text: str, *, window: int = 2) -> Located 
             )
             if not matched:
                 continue
-            if any(
-                kind in _HARD_KINDS and text not in matched for kind, text in specifics
-            ):
+            if any(kind in _HARD_KINDS and text not in matched for kind, text in specifics):
                 continue
             if len(matched) < _MIN_MATCHED and len(specifics) > 1:
                 continue
@@ -514,7 +514,20 @@ def locate_support(claim: str, source_text: str, *, window: int = 2) -> Located 
 # Museum and archive accession prefixes seen in this corpus. A code-shaped
 # token with a prefix that is not on this list is not decided here: guessing an
 # accession number is the failure the rule exists to stop.
-_ACCESSION_PREFIXES = ("USNM", "NMNH", "AMNH", "PMNH", "SAM", "QVM", "BM", "AM", "MS", "PP", "NA", "AC")
+_ACCESSION_PREFIXES = (
+    "USNM",
+    "NMNH",
+    "AMNH",
+    "PMNH",
+    "SAM",
+    "QVM",
+    "BM",
+    "AM",
+    "MS",
+    "PP",
+    "NA",
+    "AC",
+)
 _ACCESSION_RE = re.compile(
     rf"\b(?:{'|'.join(_ACCESSION_PREFIXES)})[ .-]?\d{{2,7}}(?:-[A-Za-z0-9]{{1,4}})?\b"
 )
@@ -527,7 +540,25 @@ _POSTAL_CODES = tuple(
         "AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ "
         "NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC AS GU MP PR VI AA AE AP"
     ).split()
-    if code not in {"IN", "AS", "AT", "BE", "DO", "GO", "HE", "IF", "ME", "MY", "NO", "OF", "ON", "OR", "PA", "US"}
+    if code
+    not in {
+        "IN",
+        "AS",
+        "AT",
+        "BE",
+        "DO",
+        "GO",
+        "HE",
+        "IF",
+        "ME",
+        "MY",
+        "NO",
+        "OF",
+        "ON",
+        "OR",
+        "PA",
+        "US",
+    }
 )
 _STATE_INVENTORY_RE = re.compile(rf"\b(?:{'|'.join(_POSTAL_CODES)})\s?\d{{3,7}}\b")
 
@@ -572,7 +603,9 @@ def claim_site_codes(text: str) -> tuple[str, ...]:
 
 
 _DOI_RE = re.compile(r"10\.\d{4,9}/[^\s\"'<>,;)\]]+", re.IGNORECASE)
-_ISBN_LABELLED_RE = re.compile(r"\bISBN(?:\s*[:\-]?\s*)((?:97[89][\s-]?)?(?:\d[\s-]?){9}[\dXx])\b", re.IGNORECASE)
+_ISBN_LABELLED_RE = re.compile(
+    r"\bISBN(?:\s*[:\-]?\s*)((?:97[89][\s-]?)?(?:\d[\s-]?){9}[\dXx])\b", re.IGNORECASE
+)
 _PMID_RE = re.compile(r"\bPMID:?\s*(\d{5,9})\b", re.IGNORECASE)
 _PUBMED_URL_RE = re.compile(r"pubmed\.ncbi\.nlm\.nih\.gov/(\d{5,9})", re.IGNORECASE)
 _ARXIV_RE = re.compile(r"\barXiv:?\s*(\d{4}\.\d{4,5})(?:v\d+)?\b", re.IGNORECASE)
@@ -711,30 +744,90 @@ _FUNCTION_WORDS = frozenset(
     {
         # prepositions, without the six particles that read as adverbs
         # (above, below, over, out, up, down): real sentences end on those
-        "about", "across", "after", "against", "along", "among", "around",
-        "at", "before", "behind", "beneath", "beside", "between", "beyond",
-        "by", "concerning", "despite", "during", "except", "for", "from",
-        "in", "inside", "into", "like", "near", "of", "on", "onto",
-        "outside", "per", "through", "throughout", "till", "to",
-        "toward", "under", "until", "unto", "upon", "versus", "via", "with",
-        "within", "without",
+        "about",
+        "across",
+        "after",
+        "against",
+        "along",
+        "among",
+        "around",
+        "at",
+        "before",
+        "behind",
+        "beneath",
+        "beside",
+        "between",
+        "beyond",
+        "by",
+        "concerning",
+        "despite",
+        "during",
+        "except",
+        "for",
+        "from",
+        "in",
+        "inside",
+        "into",
+        "like",
+        "near",
+        "of",
+        "on",
+        "onto",
+        "outside",
+        "per",
+        "through",
+        "throughout",
+        "till",
+        "to",
+        "toward",
+        "under",
+        "until",
+        "unto",
+        "upon",
+        "versus",
+        "via",
+        "with",
+        "within",
+        "without",
         # coordinating and subordinating conjunctions ("for" and "since" are
         # already above; both are prepositions before a date and conjunctions
         # here, and a membership test cannot tell the two apart)
-        "and", "as", "because", "but", "if", "nor", "or", "since",
-        "so", "than", "that", "though", "unless", "when", "whenever",
-        "where", "wherever", "whether", "while", "yet",
+        "and",
+        "as",
+        "because",
+        "but",
+        "if",
+        "nor",
+        "or",
+        "since",
+        "so",
+        "than",
+        "that",
+        "though",
+        "unless",
+        "when",
+        "whenever",
+        "where",
+        "wherever",
+        "whether",
+        "while",
+        "yet",
         # relativizers
-        "which", "who", "whom", "whose",
+        "which",
+        "who",
+        "whom",
+        "whose",
         # definite and indefinite articles
-        "a", "an", "the",
+        "a",
+        "an",
+        "the",
     }
 )
 
 # A marker run's left neighbour counts as a sentence terminator only when the
 # closing quote or bracket that may sit after it is stepped over first: the
 # reference list ends every line with "[Academic]", and that is not a sentence.
-_CLOSERS = "\"”’)]»"
+_CLOSERS = '"”’)]»'
 _TERMINATORS = (".", "!", "?")
 
 
@@ -850,13 +943,17 @@ def sentence_defects(text: str) -> tuple[SentenceDefect, ...]:
                 if glued and not terminated:
                     defects.append(
                         SentenceDefect(
-                            "fragment_after_marker", run.group(0).rstrip(), start + line_start + run.start()
+                            "fragment_after_marker",
+                            run.group(0).rstrip(),
+                            start + line_start + run.start(),
                         )
                     )
                 elif terminated and opens_like_a_sentence(tail):
                     defects.append(
                         SentenceDefect(
-                            "no_clause_after_marker", run.group(0).rstrip(), start + line_start + run.start()
+                            "no_clause_after_marker",
+                            run.group(0).rstrip(),
+                            start + line_start + run.start(),
                         )
                     )
                 elif before.strip() and not glued and opens_like_a_sentence(tail):
@@ -871,7 +968,9 @@ def sentence_defects(text: str) -> tuple[SentenceDefect, ...]:
                 (_COMMA_BEFORE_STOP_RE, "comma_before_stop"),
             ):
                 for match in pattern.finditer(blanked):
-                    if any(url.start() <= match.start() < url.end() for url in _URL_RE.finditer(line)):
+                    if any(
+                        url.start() <= match.start() < url.end() for url in _URL_RE.finditer(line)
+                    ):
                         continue
                     defects.append(
                         SentenceDefect(kind, match.group(0), start + line_start + match.start())

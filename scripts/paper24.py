@@ -60,9 +60,7 @@ LIST_TIMEOUT_S = 120
 
 def _dossiers() -> list[dict[str, Any]]:
     """`theo_dossier list`: the researched runs with a complete dossier, oldest first."""
-    out = remote.check_module(
-        "pipeline.lyra.theo_dossier", ["list"], timeout=LIST_TIMEOUT_S
-    )
+    out = remote.check_module("pipeline.lyra.theo_dossier", ["list"], timeout=LIST_TIMEOUT_S)
     data = json.loads(out.decode("utf-8"))
     if not isinstance(data, list):
         raise StudioError(f"theo_dossier list did not return a list: {type(data).__name__}")
@@ -346,7 +344,9 @@ def cmd_ledger(_args: argparse.Namespace) -> int:
     foreign = [
         line
         for line in previous
-        if line.startswith("| ") and not line.startswith("| # |") and not any(r in line for r in owned)
+        if line.startswith("| ")
+        and not line.startswith("| # |")
+        and not any(r in line for r in owned)
     ]
     LEDGER.parent.mkdir(parents=True, exist_ok=True)
     LEDGER.write_text(

@@ -1413,8 +1413,7 @@ def _image_block(text: str, old_web_path: str) -> tuple[int, int]:
     hits = [
         index
         for index, line in enumerate(lines)
-        if _IMAGE_LINE_RE.match(line)
-        and _IMAGE_LINE_RE.match(line)["path"] == old_web_path
+        if _IMAGE_LINE_RE.match(line) and _IMAGE_LINE_RE.match(line)["path"] == old_web_path
     ]
     if len(hits) != 1:
         raise PublishInputError(
@@ -1431,9 +1430,7 @@ def _image_block(text: str, old_web_path: str) -> tuple[int, int]:
     # Blank lines *after* the block stay outside it: they are the paragraph break
     # to the next paragraph, and the replacement markdown ends with exactly one
     # newline (theo_image_captions.image_markdown).
-    return sum(len(line) + 1 for line in lines[:start]), sum(
-        len(line) + 1 for line in lines[:end]
-    )
+    return sum(len(line) + 1 for line in lines[:start]), sum(len(line) + 1 for line in lines[:end])
 
 
 def apply_image_replacements(text: str, replacements: list[dict]) -> str:
@@ -1496,13 +1493,13 @@ def check_patch_shape(patch: dict, *, published_on: date | None, today: date) ->
     return _gate(issues)
 
 
-def _patch_target_issues(
-    current: dict, patch: dict, texts: dict[str, str]
-) -> list[str]:
+def _patch_target_issues(current: dict, patch: dict, texts: dict[str, str]) -> list[str]:
     """Every replaced image exists in the stored list and in the text, once."""
     issues: list[str] = []
     stored_paths = [
-        entry.get("web_path") for entry in current.get("probative_images") or [] if isinstance(entry, dict)
+        entry.get("web_path")
+        for entry in current.get("probative_images") or []
+        if isinstance(entry, dict)
     ]
     new_paths = {entry["web_path"] for entry in patch["probative_images"]}
     for index, replacement in enumerate(patch["replacements"]):

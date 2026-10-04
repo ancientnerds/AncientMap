@@ -106,9 +106,7 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if args.apply and args.dry_run:
         parser.error("--apply and --dry-run exclude each other")
-    if not (
-        args.apply or args.correct or args.register_video or args.patch_images or args.dry_run
-    ):
+    if not (args.apply or args.correct or args.register_video or args.patch_images or args.dry_run):
         parser.error(
             "choose one of --dry-run, --apply, --correct, --register-video, --patch-images"
         )

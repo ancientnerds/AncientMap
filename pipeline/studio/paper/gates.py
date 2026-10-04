@@ -320,9 +320,7 @@ def texts_by_number(built: BuiltPaper, texts: dict[str, str]) -> dict[str, str]:
     a marker).
     """
     return {
-        str(row["n"]): texts[row["source_id"]]
-        for row in built.sources
-        if row["source_id"] in texts
+        str(row["n"]): texts[row["source_id"]] for row in built.sources if row["source_id"] in texts
     }
 
 
