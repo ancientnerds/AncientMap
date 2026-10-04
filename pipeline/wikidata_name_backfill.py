@@ -266,18 +266,52 @@ _SELECT_SITES = text(
 #: are cast. CAST(...) and not ``:n0::text``: SQLAlchemy's text() does not read a
 #: bind that is immediately followed by a colon, and the statement then fails
 #: with "syntax error at or near ':'" (measured 2026-10-04 on production).
+#:
+#: The two widths are binds, not constants, because the columns have limits and a
+#: row that ignores them dies the whole run: on production ``name`` is
+#: varchar(500) and ``language_code`` varchar(10), and the Wikipedia sitelink codes
+#: are longer than the Wikidata language codes (zh_classical has 12). The run died
+#: on the first site that had one, with StringDataRightTruncation, after 29 sites.
 def _insert_sql(count: int) -> str:
     values = ",".join(
         f"(CAST(:n{i} AS text), CAST(:l{i} AS text), CAST(:t{i} AS text))" for i in range(count)
     )
     return f"""
     INSERT INTO unified_site_names (site_id, name, name_normalized, language_code, name_type)
-    SELECT :site_id, n.name, {site_key_sql("n.name")}, n.language_code, n.name_type
+    SELECT :site_id, left(n.name, CAST(:max_name AS int)),
+           {site_key_sql("left(n.name, CAST(:max_name AS int))")},
+           n.language_code, n.name_type
     FROM (VALUES {values}) AS n(name, language_code, name_type)
-    WHERE {site_key_sql("n.name")} <> {site_key_sql(":canonical")}
+    WHERE {site_key_sql("left(n.name, CAST(:max_name AS int))")} <> {site_key_sql(":canonical")}
       AND char_length(n.name) >= :min_chars
+      AND char_length(n.language_code) <= CAST(:max_lang AS int)
     ON CONFLICT ON CONSTRAINT uq_usn DO NOTHING
     """
+
+
+_WIDTHS_SQL = """
+    SELECT column_name, character_maximum_length
+    FROM information_schema.columns
+    WHERE table_name = 'unified_site_names'
+      AND column_name IN ('name', 'language_code')
+"""
+
+
+def _column_widths(session: Session) -> dict[str, int]:
+    """How much room the two columns have, asked of the database once per run.
+
+    Read from information_schema rather than written down, because a guess that is
+    too small silently costs rows and a guess that is too large dies on the first
+    long name with StringDataRightTruncation. An empty answer stops the run rather
+    than falling back to a number: a guessed width is how rows go missing silently.
+    """
+    rows = session.execute(text(_WIDTHS_SQL)).fetchall()
+    widths = {name: width for name, width in rows if width is not None}
+    if not widths:
+        raise RuntimeError(
+            f"could not read the column widths of unified_site_names: {_WIDTHS_SQL.strip()}"
+        )
+    return widths
 
 
 @dataclass
@@ -405,12 +439,21 @@ def report(plans: list[SiteNames], sites: list[tuple[str, str, str]], requests_m
     }
 
 
-def store(session: Session, plan_row: SiteNames) -> int:
-    """Write one site's names. The key comes from the INSERT, the constraint decides."""
+def store(session: Session, plan_row: SiteNames, widths: dict[str, int]) -> int:
+    """Write one site's names. The key comes from the INSERT, the constraint decides.
+
+    The widths are the ones :func:`_column_widths` read, so a widened column takes
+    the rows it was widened for. The rows whose language_code does not fit are left
+    out by the statement rather than clipped: a shortened 'zh_classist' would name a
+    language that does not exist. plan_row.rows is unchanged, so the journal still
+    lists what was offered and :func:`skipped_codes` says what the column refused.
+    """
     params: dict[str, object] = {
         "site_id": plan_row.site_id,
         "canonical": plan_row.name,
         "min_chars": MIN_NAME_CHARS,
+        "max_name": widths["name"],
+        "max_lang": widths["language_code"],
     }
     for i, (name, lang, kind) in enumerate(plan_row.rows):
         params[f"n{i}"] = name
@@ -419,6 +462,15 @@ def store(session: Session, plan_row: SiteNames) -> int:
     result = session.execute(text(_insert_sql(len(plan_row.rows))), params)
     session.commit()
     return result.rowcount
+
+
+def skipped_codes(plan_row: SiteNames, max_lang: int) -> list[dict[str, str]]:
+    """The rows the column width left out, so a run says what it could not write."""
+    return [
+        {"name": name, "language_code": lang}
+        for name, lang, _kind in plan_row.rows
+        if len(lang) > max_lang
+    ]
 
 
 def load_sites(
@@ -505,11 +557,15 @@ def main(argv: list[str] | None = None) -> int:
         # there. Nothing had been written - this runs before the first store().
         args.journal.parent.mkdir(parents=True, exist_ok=True)
     journal = args.journal.open("a", encoding="utf-8") if args.journal else None
+    widths = _column_widths(session)
     written = 0
+    refused = 0
     try:
         for i, plan_row in enumerate(plans, 1):
-            count = store(session, plan_row)
+            skipped = skipped_codes(plan_row, widths["language_code"])
+            count = store(session, plan_row, widths)
             written += count
+            refused += len(skipped)
             if journal:
                 journal.write(
                     json.dumps(
@@ -525,6 +581,10 @@ def main(argv: list[str] | None = None) -> int:
                                 {"name": n, "language_code": lang, "name_type": kind}
                                 for n, lang, kind in plan_row.rows
                             ],
+                            # Left out because language_code is varchar(10) and
+                            # zh_classical is 12 characters. Clipping the code
+                            # would name a language that does not exist.
+                            "skipped_language_codes": skipped,
                         },
                         ensure_ascii=False,
                     )
@@ -538,6 +598,14 @@ def main(argv: list[str] | None = None) -> int:
             journal.close()
         session.close()
     print(f"wrote {written} rows for {len(plans)} sites")
+    if refused:
+        print(
+            f"left out {refused} rows: language_code is "
+            f"varchar({widths['language_code']}) and their code is longer "
+            "(zh_classical is 12 characters). Widening the column is a migration; "
+            "the names are in the journal under skipped_language_codes.",
+            file=sys.stderr,
+        )
     return 0
 
 
