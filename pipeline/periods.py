@@ -7,9 +7,11 @@ of the 2,113 curated sites lane WD3 asked for a `period_start`, 1,338 came back 
 one this table can turn into years. The research was done; the answer was thrown away. The owner's
 decision of 2026-10-04: a named period IS a value.
 
-**Where the names come from.** Twice, both measured: the vocabulary of those round-0 answers, and
-the 34 distinct `time period` (P2348) items of the 2,029 curated sites that still have no period
-(`output/remediation/period_wave/period_labels.json`, one read-only `wbgetentities` call). A name
+**Where the names come from.** Three times, all measured: the vocabulary of those round-0 answers, the
+34 distinct `time period` (P2348) items of the 2,029 curated sites that still have no period
+(`output/remediation/period_wave/period_labels.json`, one read-only `wbgetentities` call), and the
+1,849 dropped answers of lane WD3 - the names *they* used that this table did not hold, each added
+with the conventional span the source its comment names gives. A name
 may be **cultural, regional or geological** - "Ancient Greece", "Romano-British period", "Maya
 civilization", "Silurian". That is a property of the source statement, not a reason to refuse it: a
 city, a culture and a geological age each begin and end at a defensible year, and what a reader
@@ -148,6 +150,48 @@ PERIODS: dict[str, tuple[int, int]] = {
     "guanches": (-1000, 1500),
     "silurian": (-443800, -419200),
     "carboniferous": (-358900, -298900),
+    # --- the names lane WD3's own 1,849 dropped answers used and this table did not hold, added
+    # 2026-10-04. Every range is the conventional span of the period or culture, read on the source
+    # its comment names; a name whose start could not be sourced was left out and stays refused by
+    # name (`archaic` -> `archaic greece`, `celtic` -> `hallstatt`/`la tene`, `persian` ->
+    # `achaemenid`, `roman british` -> `romano british period`). `modern` is absent on purpose: it
+    # would date modern institutions, which is the owner's call. So is every `site_type` - a
+    # `hillfort`, `broch`, `oppidum`, `motte` or `clava cairn` is site_type's own value.
+    # the Near East and the Mediterranean
+    "achaemenid": (-550, -330),  # the Achaemenid Empire, 550 BC (Cyrus) to 330 BC (Alexander)
+    "phoenician": (-1500, -332),  # the Phoenician city-states, c. 1500-332 BC, to Alexander's conquest
+    "nabataean": (-250, 106),  # the Nabataean Kingdom, independent from the mid-3rd c. BC, annexed AD 106
+    "byzantine": (330, 1453),  # the Byzantine Empire, 330-1453, to the fall of Constantinople
+    "ottoman": (1299, 1922),  # the Ottoman Empire, c. 1299 (Osman I's beylik) to the sultanate's end, 1922
+    "safavid": (1501, 1736),  # Safavid Iran, 1501-1736; some place the end at 1722, when Isfahan fell
+    "inca": (1438, 1533),  # the Inca state, c. 1438-1533; the last Inca state fell in 1572
+    "chanka": (1200, 1500),  # the Chanka of Peru, the 13th to the 15th century AD, after the fall of Wari
+    # the Aegean and Italy
+    "classical": (-510, -323),  # Classical Greece, 510 BC (the last Athenian tyrant) to 323 BC (Alexander)
+    "geometric": (-900, -700),  # the Geometric period of Greek art, c. 900-700 BC
+    "helladic": (-3200, -1050),  # the Helladic chronology of mainland Greece, c. 3200-1050 BC
+    # the same range as `middle bronze age` above: the Greek Middle Bronze Age under its own name
+    "middle helladic": (-2000, -1550),  # the Middle Helladic, c. 2000-1550 BC
+    "mycenaean": (-1750, -1050),  # Mycenaean Greece, c. 1750-1050 BC, the last phase of its Bronze Age
+    "minoan": (-3100, -1100),  # the Minoan civilization, c. 3100-1100 BC
+    "etruscan": (-900, -27),  # the Etruscan culture from c. 900 BC, incorporated into Rome by 27 BC
+    "iberian": (-700, -100),  # the Iberian people and language, 7th to at least the 1st century BC
+    # Egypt, India and China
+    "old kingdom": (-2686, -2181),  # the Old Kingdom of Egypt, the Third to the Sixth dynasty
+    # from the 18th-dynasty start this table holds above to the end of the 20th, 1069 BC
+    "new kingdom": (-1550, -1069),
+    "harappan": (-2600, -1900),  # the Mature Harappan phase of the Indus civilisation, 2600-1900 BC
+    "indus valley": (-3300, -1300),  # the Indus Valley civilisation whole, 3300-1300 BC
+    "han": (-202, 220),  # the Han dynasty, the Western Han from 202 BC to AD 220
+    # northern and Atlantic Europe
+    "funnelbeaker": (-4100, -2800),  # the Funnelbeaker culture, c. 4100-2800 BC
+    "nuragic": (-1800, -238),  # the Nuragic civilization, the 18th c. BC to Roman colonisation, 238 BC
+    # the same era as `viking` above: the source's own span is c. 800-1050, the event span 793-1066
+    "viking age": (793, 1066),
+    "late middle ages": (1300, 1500),  # the Late Middle Ages, 1300-1500 AD
+    # a conventional span, the source names no fixed boundary for either end
+    "early modern": (1500, 1800),
+    "slavic": (500, 1000),  # the early Slavs, c. the 5th to the 10th century AD
 }
 
 #: A name is read as its folded words: every run of punctuation or whitespace a space, accents
