@@ -43,11 +43,23 @@ claim has been checked against its source text (archived, or read live for a TDM
    goal the campaign reports but does not require: a 6 to 9 section paper wants 24 to 36
    opportunities, one per paragraph that names something a picture can show.
 
-Then run, in order: `paper number`, `paper claims-export` (answer with the theo-claim-check
-workflow), `paper claims-import`, `paper images-export` (theo-image-check workflow),
-`paper images-import`, `paper check`. Fix `draft.md` and repeat until `check` passes; only the
-changed paragraphs are re-checked. Then `paper bundle` and `paper publish` (the rewrite of a
-public paper pulled with `--dossier-from`: `paper correct <id> --republish` instead).
+Then run, in order: `paper number`, **`paper check`**, `paper claims-export` (answer with the
+theo-claim-check workflow), `paper claims-import`, `paper images-export` (theo-image-check
+workflow), `paper images-import`, `paper check`. Fix `draft.md` and repeat until `check`
+passes; only the changed paragraphs are re-checked. Then `paper bundle` and `paper publish`
+(the rewrite of a public paper pulled with `--dossier-from`: `paper correct <id> --republish`
+instead).
+
+**Run `paper check` before the claim check, not only at the end.** Its `support` and
+`structure` gates cost no model calls and take seconds, and they say in seconds what the
+claim check would otherwise spend roughly 170 model runs discovering: every marker whose
+source does not carry its sentence, and which source in the paragraph does. Measured on
+2026-10-04, paper `95fa3798`: the first `check` named 82 markers wrong, and re-running the
+same gate over that paragraph's other sources named a replacement for 47 of them without a
+single model call. On that first run the `claims`, `images`, `coherence` and `hero` gates
+are red because their steps have not run yet - that is expected, and it is not a reason to
+wait. Fix the citation layer first; a claim check run over a draft with 82 wrong markers
+buys an answer for every one of them.
 
 ## Hard rules the checker enforces
 

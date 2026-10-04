@@ -181,3 +181,54 @@ verifier for a `fix_suggestion` naming the marker the claim needs, and
 findings and the 85 claim tasks are **one job seen from two sides**, so the order is
 `claims-export` → mcode → `claims-import` → apply the suggestions → `check`, not a
 hand repair of the 88 first.
+
+### The finding the loop was looking for: the brief already said it
+
+Before changing the brief, check what the brief says. It says all of it, twice, once
+with a worked example:
+
+- "Cite with `[S:<source_id>]` markers ... **placed before the period**:
+  `...in 1966 [S:3f2a9c1b7d4e].`"
+- "A citation points to a source that actually supports that specific sentence, not
+  merely a topically related one."
+- "**One marker per claim, and never two claims from two sources in one sentence.** A
+  marker is asked to carry the sentence it stands in, so `the quarry stone is local
+  limestone, and the podium blocks weigh 800 tons [S:a] [S:b]` is refused: the first
+  source does not carry the tonnage and the second does not carry the limestone. Write
+  two sentences, one claim each, one marker each."
+
+The writer broke the placement rule 35 times and the one-claim rule 82 times, out of
+169 citations. Compliance with an explicit, exemplified rule was about 12 %. **More
+words in the brief will not fix that**, so the two fixes above went into code, and the
+third went into the *order* of the steps.
+
+### The order was the expensive mistake
+
+The brief said: `paper number` → `paper claims-export` → `claims-import` →
+`images-export` → `images-import` → `paper check`.
+
+So the writer was told to spend the claim check - two model runs for each of 85 tasks,
+about 170 runs - **before** it ever ran `paper check`, whose `support` gate costs no
+model calls, takes seconds, and names exactly the markers the claim check would
+discover. Measured: two tasks took six minutes wall clock at concurrency 2, so the
+full pass is a multi-hour run, and every one of its answers would have been an answer
+about a marker the free gate had already named as wrong.
+
+The brief now runs `paper check` right after `paper number`, says to ignore the gates
+whose steps have not run yet, and gives the reason with the numbers. This is the
+single change that makes the next paper cheaper, and it costs one paragraph.
+
+### What the claim check adds that the gate cannot
+
+A probe of two tasks (`mcode claim-check --limit 2`, 6 min, both answered `partly`)
+showed what the model pass is for. On the first Roswell evidence entry it found a date
+the mechanical gate cannot see:
+
+> The substance of the claim is supported, but the date is wrong. The GAO report [2]
+> states ... it dates that report to 8 July 1947, not 7 July ... The claim conflates
+> the 7 July ranch report with the 8 July RAAF announcement.
+
+and named the fix, plus the knock-on: the next sentence's "That same day" no longer
+refers to anything. This is the pass that repairs content. The support gate is the pass
+that finds the plumbing. They are one job seen from two sides, and the cheap half has
+to come first.
