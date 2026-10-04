@@ -103,3 +103,81 @@ Option 1 first is the cheap calibration; 2 or 3 afterwards for the fresh ones.
 `docs/reports/theo-paper-loop-2026-10-04.md`, one section per paper: the gate
 findings by rule, what the writer changed, what the system changed because of it.
 The same directory as the defect report it answers.
+
+## Paper 1 — `95fa3798`, iteration 1: what the gate said (measured 2026-10-04 20:54)
+
+The workspace is a **legacy draft**: `draft.md` and `evidence.json` are dated
+02.10. 19:31, the gate that carries rules 1-8 landed in `f9647bc` on 04.10. 19:56.
+Nothing had ever checked this paper against rule 1, so its first `paper check` is
+the gate's first contact with it, not a regression.
+
+| | before | after |
+| --- | --- | --- |
+| support findings | **118** | **88** |
+| `no_clause_after_marker` | 35 | **0** |
+| `located_sentence` | 78 | 83 |
+| `fragment_after_marker` | 3 | 3 |
+| `number_exact` / `unsupported_specific` | 1 / 1 | 1 / 1 |
+| `evidence` / `page_anchors` / `coherence` | red | **green** |
+
+`located_sentence` rose by 5 and that is the fix working: a misplaced marker used to
+hide behind a structural defect, so the gate never got as far as asking the right
+source about the right sentence.
+
+### The one habit behind 113 of the 118
+
+The writer put the marker **after** the full stop instead of before it:
+
+    ...could not be scientifically justified. [S:262eb541b9f7] The 1997 Sturrock Panel...
+
+A marker in that position annotates the *following* sentence, so the gate asked the
+Condon source to carry the Sturrock sentence. One habit, both error classes: 35
+`no_clause_after_marker` plus the bulk of the 78 `located_sentence`.
+
+A marker that follows a full stop has exactly one possible meaning, so this is code
+and not a writer instruction: `normalize_marker_placement()` in
+`pipeline/studio/paper/numbering.py`, called by `number_draft()` before the
+`[S:<id>]` → `[N]` substitution. Precedent in the same house: `clean_gallery_alt()`.
+
+### What that fix exposed, and the second fix
+
+Moving the marker across the full stop broke **ev-12**: its anchor text ended in a
+full stop, and `normalize_anchor_text` replaces a citation marker with a *space*, so
+`... literary import [27].` normalised to `literary import .` while the anchor read
+`literary import.` — no match. Removing apparatus must not change the prose it
+stands in, so `normalize_anchor_text` now drops a space that sits in front of
+sentence punctuation or behind an opening one.
+
+This is a **hole that predates the normaliser**: the house form is marker-before-full
+stop, so every anchor written on the house form was already exposed. The existing
+test `test_citation_and_draft_markers_disappear` had pinned the wrong result
+(`"dated to 9600 bc ."`); it now pins the right one.
+
+The change can only **add** matches, never remove one: both sides of every comparison
+go through the same function.
+
+### The 88 that are left, classified without a model
+
+Of the 82 `located_sentence` findings, for every marker the gate checks whether a
+*different* source already cited in the same paragraph carries the sentence
+(`locate_support`, the gate's own function):
+
+| | count | what it costs |
+| --- | --- | --- |
+| another cited source carries it | **32** | one marker, mechanical |
+| the marker itself locates on a narrower sentence | **4** | split or narrow the sentence |
+| **no cited source in the paragraph carries it** | **54** | narrow, drop, or find the source |
+
+The 54 are not gate artefacts. Spot-checked by hand: marker `[37]` (a USA Today
+article about the June 2021 ODNI report) is cited for "AATIP was a $22 million
+Pentagon program that ran from 2007 to 2012", and marker `[28]` (a Metabunk thread
+about the GIMBAL video) for a sentence about the British Black Knight rocket. The
+texts are the right texts — **8 of 90 archived texts are filed under the wrong
+record**, the other 82 are clean — so these are the writer's own mis-citations.
+
+That is the defect the claim check exists to catch: `claims.py` asks each paragraph's
+verifier for a `fix_suggestion` naming the marker the claim needs, and
+`claim_status` fails the gate on every answer that is not `supported`. The 88 support
+findings and the 85 claim tasks are **one job seen from two sides**, so the order is
+`claims-export` → mcode → `claims-import` → apply the suggestions → `check`, not a
+hand repair of the 88 first.

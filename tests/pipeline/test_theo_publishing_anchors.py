@@ -85,8 +85,34 @@ def test_the_poster_is_the_studio_thumbnail_in_the_papers_folder():
 def test_citation_and_draft_markers_disappear():
     assert (
         normalize_anchor_text("Dated to 9600 BC [S:1a2b3c4d5e6f] [2, 3] [4–6].")
-        == "dated to 9600 bc ."
+        == "dated to 9600 bc."
     )
+
+
+def test_a_marker_taken_out_does_not_leave_its_space_behind():
+    """The house form puts the marker before the full stop, so a stripped marker must
+    not leave "import ." where the writer wrote "import." - an anchor on the house form
+    would then name no paragraph at all. Measured 2026-10-04 on paper 95fa3798: ev-12
+    lost its paragraph when the marker normalisation moved the marker across the stop.
+    """
+    assert (
+        normalize_anchor_text('The "Black Knight" label itself is a literary import [27].')
+        == normalize_anchor_text('The "Black Knight" label itself is a literary import.')
+    )
+    assert normalize_anchor_text("A 1 , 000 kg block ( [1] ) rests.") == "a 1, 000 kg block () rests."
+
+
+def test_an_anchor_copied_from_the_house_form_names_its_paragraph():
+    report = (
+        "# T\n\n"
+        "The label is a literary import [27]. A separate British rocket adds confusion [28].\n\n"
+        "## References\n\n[27] A — https://a.example (accessed 2026-01-01)\n"
+    )
+    resolved, issues = resolve_evidence_anchors(
+        report, [{"id": "ev-01", "anchor_text": "The label is a literary import."}]
+    )
+    assert issues == []
+    assert resolved == {"ev-01": 0}
 
 
 def test_emphasis_underscores_go_but_snake_case_stays():

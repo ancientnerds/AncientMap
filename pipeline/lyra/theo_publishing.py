@@ -87,6 +87,13 @@ _MD_LINK_RE = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
 _CITATION_MARKER_RE = re.compile(r"\[(?:\d+(?:\s*[,-]\s*\d+)*|S:[^\]\s]+)\]")
 _DASH_RUN_RE = re.compile(r"-{2,}")
 _EDGE_UNDERSCORE_RE = re.compile(r"(?<!\w)_+|_+(?!\w)")
+#: A space that only a stripped marker left behind: "... literary import [27]."
+#: normalises to "literary import ." with a space in front of the full stop, and an
+#: anchor written on the house form ("... literary import.") then matches no paragraph.
+#: Removing apparatus must not change the prose it stands in, so the space goes with it.
+#: This can only add matches, never remove one: both sides of every comparison are
+#: normalised by this same function.
+_APERTURE_RE = re.compile(r"([(\[{'\u2018\u201c])\s+|\s+([,;:.!?\u2026])")
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
@@ -104,15 +111,18 @@ def normalize_anchor_text(text: str) -> str:
     Unicode NFKC (an ellipsis becomes "...", a no-break space a space); markdown
     backslash escapes dropped; autolinks <https://...> to their URL; markdown
     links and images to their text; citation markers [N], [N, M], [N-M] and
-    draft markers [S:<id>] removed; runs of "-" folded to one ("--" is what the
-    renderer turns into an en dash); emphasis markers * and ` removed, _ removed
-    at word edges; whitespace folded to single spaces; stripped; case-folded.
+    draft markers [S:<id>] removed, and with them the space a marker standing
+    between a word and its full stop would leave behind ("import [27]." reads as
+    "import."); runs of "-" folded to one ("--" is what the renderer turns into
+    an en dash); emphasis markers * and ` removed, _ removed at word edges;
+    whitespace folded to single spaces; stripped; case-folded.
     """
     folded = unicodedata.normalize("NFKC", html.unescape(text).translate(_TYPOGRAPHY))
     folded = _MD_ESCAPE_RE.sub(r"\1", folded)
     folded = _AUTOLINK_RE.sub(r"\1", folded)
     folded = _MD_LINK_RE.sub(r"\1", folded)
     folded = _CITATION_MARKER_RE.sub(" ", folded)
+    folded = _APERTURE_RE.sub(lambda m: (m.group(1) or "") + (m.group(2) or ""), folded)
     folded = _DASH_RUN_RE.sub("-", folded)
     folded = folded.replace("*", "").replace("`", "")
     folded = _EDGE_UNDERSCORE_RE.sub("", folded)
