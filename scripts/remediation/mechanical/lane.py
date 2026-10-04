@@ -1601,13 +1601,15 @@ TEASER_LANE = re.compile(r"^teaser-(prov|card)-s(\d{3})\Z")
 #: family suffices, an open field is filled and nothing else is touched) writes through the same
 #: cells and invariants as `fields-wd3-<wave>-s<NNN>`: a stamp, a test id, a table and a directory
 #: of its own, so no step of one lane can be mistaken for a step of the other.
-FIELDS_LANE = re.compile(r"^fields-(wd1|wd3)-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
-FIELDS_STAGES = ("wd1", "wd3")
+FIELDS_LANE = re.compile(r"^fields-(wd1|wd3|wd4)-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
+FIELDS_STAGES = ("wd1", "wd3", "wd4")
 #: Where each stage's waves live: `output/remediation/<FIELDS_ROOTS[stage]>/<wave>/sNNN`.
 FIELDS_ROOTS = {stage: f"fields/{stage}/write" for stage in FIELDS_STAGES}
 #: The journal's `confidence` of a stage's writes: WD1 rests on two quotes of two source families,
-#: WD3 on one quote (the column's free text, `migrations/0017`).
-FIELDS_CONFIDENCE = {"wd1": "two_source", "wd3": "one_source"}
+#: WD3 on one quote (the column's free text, `migrations/0017`). WD4 asks WD3's question with the
+#: same discipline - a named period is a value, and one quote of one family carries it (rule
+#: `one-family-period`, 2026-10-04).
+FIELDS_CONFIDENCE = {"wd1": "two_source", "wd3": "one_source", "wd4": "one_source"}
 _BUCKETS = tuple(label for label, _lo, _hi in PERIOD_BUCKETS)
 
 #: A site's point is three cells: `lat` and `lon` (NOT NULL, corrected and never cleared -

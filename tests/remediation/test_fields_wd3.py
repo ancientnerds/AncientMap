@@ -941,6 +941,23 @@ class TestTheLaneDefinition:
             assert getattr(one, field) != getattr(three, field)
         assert three.cells == one.cells and three.site_invariants == one.site_invariants
 
+    def test_wd4_writes_through_the_same_cells_under_a_lane_of_its_own(self) -> None:
+        """Lane WD4 (owner decision 2026-10-04, "eine benannte Periode ist ein Wert") asks WD3's
+        question on a stage of its own, so its steps write through the same cells, guards and
+        invariants - and under a stamp, a plan table, a directory and a test id of their own, so no
+        step of one lane can be mistaken for a step of another. Measured 2026-10-04: `fields_lane`
+        knew only wd1 and wd3, so a wd4 wave could not be planned or written at all."""
+        three, four = L.fields_lane("2026-10-04a", 1, "wd3"), L.fields_lane("2026-10-04a", 1, "wd4")
+        assert four.name == "fields-wd4-2026-10-04a-s001" and four.key_prefix == four.name
+        assert four.run_stamp == "2026-10-04a_fields-wd4-s001"
+        assert four.test_id == "WD4/structured-fields" and four.label == "WD4 field correction"
+        assert four.confidence == "one_source"  # one quote of one family, WD3's discipline
+        assert four.out_dir_name == "fields/wd4/write/2026-10-04a/s001"
+        assert four.plan_table == "_fields_wd4_plan" and three.plan_table == "_fields_wd3_plan"
+        for field in ("run_stamp", "out_dir_name", "plan_table", "test_id", "key_prefix", "label"):
+            assert getattr(four, field) != getattr(three, field)
+        assert four.cells == three.cells and four.site_invariants == three.site_invariants
+
     def test_a_lane_name_resolves_to_its_own_stage(self) -> None:
         assert L.resolve_lane("fields-wd3-2026-10-02b-s012") == L.fields_lane(
             "2026-10-02b", 12, "wd3"
