@@ -259,7 +259,7 @@ All numbers below are from the 31 public papers, read from production today. **[
 | Measure | Value |
 |---|---|
 | public papers | 31, all `is_public`, oldest 2026-05-14, newest 2026-09-25 |
-| content sections (excluding the title hook and References) | **189** (4–7 per paper) |
+| content sections (every `##` except References) | **220** (5–8 per paper, median 7) |
 | investigation sections per paper | 1×1, 3×2, 10×3, **14×4** — 14 papers sit exactly on the cap of 4 |
 | fixed tail sections | 93 instances (31 × `Connecting the Dots` / `The Other Side` / `What We Actually Know`) |
 | section length | median 634 words, min 168, max 1418 |
@@ -274,14 +274,14 @@ All numbers below are from the 31 public papers, read from production today. **[
 | images visible in the published text | **482** |
 | images in `probative_images` (the pool) | **530** |
 | pool images not visible on the page | **48** (24 of them in `the-enuma-elish-…`, whose text has **zero** images) |
-| **sections with zero images** | **109 of 189 (58 %)** |
+| **sections with zero images** | **123 of 220 (56 %)** |
 | fixed tail sections with zero images | **76 of 93 (82 %)**, mean 0.46 images per instance |
-| investigation sections with zero images | 33 of 96 (34 %), mean 3.58 images per instance |
+| investigation sections with zero images | 47 of 127 (37 %), mean 2.19 images per instance |
 | median images per section | **0** (mean 1.76, max 16) |
-| sections with ≥1 image | 80 of 189 |
-| sections with ≥4 images | **37** |
-| images missing to reach 1 per section (corpus) | **140** |
-| images missing to reach 4 per section (corpus) | **649** |
+| sections with ≥1 image | 97 of 220 |
+| sections with ≥4 images | **45** |
+| images missing to reach 1 per section (corpus) | **123** |
+| images missing to reach 4 per section (corpus) | **598** |
 | share of a paper's images sitting in its single most illustrated section | mean 54 %, median 50 % |
 | pool entries carrying `section_heading` **and** `paragraph_index` | **530 of 530** |
 | pool entries with `section_heading == "[inline]"` (placed outside any section) | **26** |
@@ -314,8 +314,8 @@ to the investigation sections, so the tail is not under-cited — it is only und
 |---|---|
 | distinct source domains across the corpus | **535** |
 | distinct domains per paper | median 25 (min 8, max 39) |
-| reference lines with an `http` URL | **969 of 1052** — **83 lines (7.9 %) have no URL at all** |
-| reference lines with a DOI | 122 (11.6 %) |
+| reference lines with an `http` URL | **969 of 1052** — 83 lines carry no URL, **but every one of them has a DOI**, so 0 are unresolvable |
+| reference lines with a DOI | 122 (11.6 %) |'
 | `[Academic]` tag | 318 (30.2 %) |
 | `[Reputable]` tag | 112 (10.6 %) |
 | no tier tag at all | **622 (59.1 %)** |
@@ -574,9 +574,9 @@ write path is the journalled `theo_publish --correct --report-file`, which is dr
 **Stage 2 — One image per section, everywhere. [decisions 2 + 4]**
 Floor pass only, over the 9 untouched papers and every section still empty. This is the campaign that
 actually enforces the owner's minimum.
-*Acceptance:* 0 of 189 sections without an image, or a named list of sections where no probative
+*Acceptance:* 0 of 220 sections without an image, or a named list of sections where no probative
 image exists and the reason (this is the honest outcome the target must allow for).
-*Cost:* 140 images at the corpus level, i.e. roughly 4–6 per paper for the 31 papers — well under a
+*Cost:* 123 images at the corpus level, i.e. roughly 4–6 per paper for the 31 papers — well under a
 full backfill each.
 
 **Stage 3 — Top up to 4 per section. [decisions 2 + 4]**
@@ -638,3 +638,11 @@ small, it is user-visible today, and it carries no quota cost.
   running containers. The remaining `THEO_*` keys and the source-API keys were not read.
 - The video renderer's consumption of a paper's image set, except the glyph-rule intersection noted in
   the image-chain review (captions are only drawn if a caption is written into `timeline.credits`).
+
+> **Corrected 2026-10-04 18:40.** Two figures in this document were wrong and are now fixed:
+> the content-section count (the heading walk dropped the first `##` of every paper because it
+> treated it as the title, though the title is the `#` line) and the source finding below (83
+> reference lines have no URL, but all of them carry a DOI, so none is unresolvable). The gallery
+> figure of 52 was the count in the served HTML of one page; the stored reports carry 235. Full
+> table of the corrected numbers and how the error was caught:
+> `2026-10-04-C-no-second-correction-round.md` section 4. The conclusions are unchanged.

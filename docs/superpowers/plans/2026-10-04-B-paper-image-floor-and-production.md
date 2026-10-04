@@ -14,14 +14,18 @@ baseline this plan executes)
 
 ### Acceptance criteria (each one measurable with the scripts of plan A §2)
 
-| # | Criterion | Today (measured 2026-10-04) |
+| # | Criterion | Today (verified 2026-10-04, `scripts/theo_paper_acceptance.py`) |
 |---|---|---|
-| G1 | Every content section of every published paper carries at least one image | **109 of 189 sections empty** (58 %) |
+| G1 | Every content section of every published paper carries at least one image | **123 of 220 sections empty (56 %)** |
 | G2 | Every new paper passes `paper check`, which refuses a section without an image | not enforced anywhere |
-| G3 | Investigation sections 3–6 (was 2–4; 14 of 31 papers sat on the old cap) | cap binds |
-| G4 | No machine marker visible on a paper page | **52 occurrences** of `gallery:…\|verified:yes\|…` in the served HTML |
-| G5 | Every reference line carries a resolvable URL or a DOI, and no raw HTML | **83 without URL**, 3 with raw HTML |
+| G3 | Investigation sections 3–6 (was 2–4; 14 of 31 papers sat on the old cap) | min 2, max 5 across the corpus |
+| G4 | No machine marker visible on a paper page | **235 `gallery:…\|verified:…\|` in the stored reports** (52 in the served HTML of one page) |
+| G5 | Every reference line carries a resolvable URL or a DOI, and no raw HTML | 0 lines unresolvable; **3** with raw HTML |
 | G6 | Production: as many new papers as the measured budget allows, published with the new rules | 0 papers ever published through the new chain |
+
+The goal is checked, not asserted: `scripts/theo_paper_acceptance.py` prints PASS or FAIL per
+criterion against the live database and exits non-zero while one fails. It measures with the same
+functions the gates use, so a number in this table and a gate verdict cannot drift apart.
 
 **What "done" explicitly does not mean:** four images in every section of every paper. The measured
 loss is dominated by rejected candidates (36–189 per paper lost to `embed_skip_no_safe_candidates`),
