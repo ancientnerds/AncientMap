@@ -994,6 +994,52 @@ def test_wd3_on_resume_does_not_export_again_and_answers_only_what_is_missing(
     assert plan.batch_names_ok(["wd3-r0-b0001", "wd3-r0-b0002"]) is False
 
 
+def test_a_round_names_its_own_lane_instead_of_wd3(tmp_path: Path) -> None:
+    """The batch ids of a round are the exporting tool's own: `fields/handoff.py` writes
+    `wd4-r0-b0001` for a run whose stage is wd4, and the driver asked for `wd3-...`, so it saw no
+    batch at all. Measured 2026-10-04 on the owner's 18-batch cut of the wd4 run: `--dry-run`
+    answered `{"batches": [], "note": "nothing exported"}` and an unattended lane was impossible.
+    The lane comes from the round's own folders, so one driver answers every lane the tool exports,
+    and the state file and the batch-name check stop being about wd3."""
+    handoff = tmp_path / "wd4-r0"
+    for batch in ("wd4-r0-b0001", "wd4-r0-b0002"):
+        (handoff / batch).mkdir(parents=True)
+        (handoff / batch / "MANIFEST.jsonl").write_text("{}\n", encoding="utf-8")
+
+    plan = D.plan_wd3(run=tmp_path / "run", handoff=tmp_path / "wd4", resume=True)
+
+    assert plan.lane == "wd4"
+    assert list(plan.batches) == ["wd4-r0-b0001", "wd4-r0-b0002"]
+    assert plan.batch_names_ok(["wd4-r0-b0001", "wd4-r0-b0002"]) is True
+    assert plan.batch_names_ok(["wd3-r0-b0001", "wd3-r0-b0002"]) is False
+    assert D.batch_ids("wd4", "r0", 2) == ("wd4-r0-b0001", "wd4-r0-b0002")
+
+
+def test_a_round_whose_folders_are_not_its_own_is_refused_by_name(tmp_path: Path) -> None:
+    """A folder in the round's directory that is not `<lane>-<round>-bNNNN` cannot be answered: it
+    has no brief, so the driver would count it and then fail on it. It is refused by name instead,
+    together with the lane it was read as."""
+    handoff = tmp_path / "wd4-r0"
+    for batch in ("wd4-r0-b0001", "round-2"):
+        (handoff / batch).mkdir(parents=True)
+        (handoff / batch / "MANIFEST.jsonl").write_text("{}\n", encoding="utf-8")
+
+    with pytest.raises(D.DriverError, match="round-2"):
+        D.plan_wd3(run=tmp_path / "run", handoff=tmp_path / "wd4", resume=True)
+
+
+def test_two_lanes_in_one_round_directory_are_refused(tmp_path: Path) -> None:
+    """`wd3-r0-b0001` beside `wd4-r0-b0001` is two lanes' rounds in one place; the driver would have
+    to pick one, and picking is guessing. Both are named in the refusal."""
+    handoff = tmp_path / "wd4-r0"
+    for batch in ("wd3-r0-b0001", "wd4-r0-b0001"):
+        (handoff / batch).mkdir(parents=True)
+        (handoff / batch / "MANIFEST.jsonl").write_text("{}\n", encoding="utf-8")
+
+    with pytest.raises(D.DriverError, match="wd3-r0-b0001"):
+        D.plan_wd3(run=tmp_path / "run", handoff=tmp_path / "wd4", resume=True)
+
+
 def test_wd3_without_resume_exports_the_first_round(tmp_path: Path) -> None:
     plan = D.plan_wd3(run=tmp_path / "run", handoff=tmp_path / "fields-wd3", resume=False)
 

@@ -738,11 +738,15 @@ class Plan:
     export_command: tuple[str, ...]
     validate_dir: Path
     round_name: str = "r0"
+    #: The lane the round's batch ids belong to, read from those ids (`wd4-r0-b0001` is wd4). It
+    #: names the state file and the batch-name check. A round that has not been exported yet is
+    #: nothing to answer, and keeps the driver's own name.
+    lane: str = "wd3"
 
     def batch_names_ok(self, names: Sequence[str]) -> bool:
         """Whether the batch names on disk are the ones the lane's own naming scheme makes, so a
         directory that holds something else is refused instead of half-driven."""
-        return tuple(names) == batch_ids(self.round_name, len(self.batches))
+        return tuple(names) == batch_ids(self.lane, self.round_name, len(self.batches))
 
 
 def batch_folders(handoff: Path) -> tuple[str, ...]:
@@ -756,8 +760,41 @@ def batch_folders(handoff: Path) -> tuple[str, ...]:
     )
 
 
-def batch_ids(round_name: str, count: int) -> tuple[str, ...]:
-    return tuple(f"wd3-{round_name}-b{n:04d}" for n in range(1, count + 1))
+def batch_ids(lane: str, round_name: str, count: int) -> tuple[str, ...]:
+    """The batch ids a round of `lane` is made of, the way the exporting tool names them."""
+    return tuple(f"{lane}-{round_name}-b{n:04d}" for n in range(1, count + 1))
+
+
+def lane_of(name: str, round_name: str) -> str:
+    """The lane a batch id belongs to: `wd4-r0-b0001` in round `r0` is lane `wd4`.
+
+    Empty when the name is not a batch id of that round, which is the case the caller has to refuse
+    rather than read a lane out of a folder name.
+    """
+    head, marker, tail = name.partition(f"-{round_name}-b")
+    return head if marker and tail.isdigit() else ""
+
+
+def lanes_of(names: Sequence[str], round_name: str) -> str:
+    """The one lane every batch id of a round belongs to, or a refusal naming what does not fit.
+
+    Two lanes' rounds in one directory would have to be picked between, and picking is guessing.
+    """
+    lanes: dict[str, str] = {}
+    for name in names:
+        lanes.setdefault(lane_of(name, round_name), name)
+    if "" in lanes:
+        raise DriverError(
+            f"{lanes['']!r} in this round's directory is not a batch id of round {round_name!r} "
+            f"(the lane's own are {batch_ids('<lane>', round_name, 2)[0]} ...), so it has no brief "
+            f"and cannot be answered"
+        )
+    if len(lanes) > 1:
+        raise DriverError(
+            f"one round's directory holds {len(lanes)} lanes "
+            f"({', '.join(repr(v) for v in lanes.values())}); naming one of them would be a guess"
+        )
+    return next(iter(lanes))
 
 
 def plan_wd3(*, run: Path, handoff: Path, resume: bool, round_index: int = 0) -> Plan:
@@ -784,7 +821,14 @@ def plan_wd3(*, run: Path, handoff: Path, resume: bool, round_index: int = 0) ->
     if not resume:
         return Plan((), True, export, Path(f"{handoff}-{round_name}"), round_name=round_name)
     made = batch_folders(Path(f"{handoff}-{round_name}"))
-    return Plan(made, False, export, Path(f"{handoff}-{round_name}"), round_name=round_name)
+    return Plan(
+        made,
+        False,
+        export,
+        Path(f"{handoff}-{round_name}"),
+        round_name=round_name,
+        lane=lanes_of(made, round_name) if made else "wd3",
+    )
 
 
 def check_batch_names(plan: Plan, names: Sequence[str]) -> bool:
@@ -1979,7 +2023,8 @@ def _main_wd3(args: Any) -> int:
         print(json.dumps({"batches": [], "exported": plan.exported, "note": "nothing exported"}))
         return 1
     if not check_batch_names(
-        plan, [f"wd3-{plan.round_name}-b{n:04d}" for n in range(1, len(plan.batches) + 1)]
+        plan,
+        [f"{plan.lane}-{plan.round_name}-b{n:04d}" for n in range(1, len(plan.batches) + 1)],
     ):
         print(
             json.dumps(
@@ -2002,9 +2047,10 @@ def _main_wd3(args: Any) -> int:
         return 1
     state = State(
         # One state file per round: round 0's answered batches are not round 1's, and a shared file
-        # would make a re-ask resume past the questions it still owes.
-        STATE_DIR / f"wd3-{args.run.name}-{plan.round_name}.json",
-        lane="wd3",
+        # would make a re-ask resume past the questions it still owes. The lane is the round's own
+        # (`wd4-r0-b0001` is wd4), so a wd4 run's history is not filed as a wd3 run's.
+        STATE_DIR / f"{plan.lane}-{args.run.name}-{plan.round_name}.json",
+        lane=plan.lane,
         run=str(args.run),
         handoff=args.handoff,
     )
