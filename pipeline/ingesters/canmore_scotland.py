@@ -23,18 +23,14 @@ from typing import Any
 from loguru import logger
 
 from pipeline.ingesters.base import BaseIngester, ParsedSite, atomic_write_json
+from pipeline.periods import PERIODS
 from pipeline.utils.http import fetch_with_retry
 
-# Period name -> (start_year, end_year)
-PERIOD_DATES = {
-    "PREHISTORIC": (-10000, -800),
-    "NEOLITHIC": (-4000, -2500),
-    "BRONZE AGE": (-2500, -800),
-    "IRON AGE": (-800, 400),
-    "ROMAN": (43, 410),
-    "EARLY MEDIEVAL": (400, 1100),
-    "MEDIEVAL": (1100, 1500),
-}
+#: Period name -> (start_year, end_year), in the vocabulary's own folded spelling. The table and
+#: every range live in `pipeline.periods`; it keeps the seven Canmore names in front, in that
+#: order, because both loops below take the first key the upper-cased SITETYPE period contains -
+#: "EARLY IRON AGE" has always mapped to the Iron Age's range.
+PERIOD_DATES = PERIODS
 
 # Canmore SITETYPE -> our normalized site_type
 TYPE_MAPPING = {
@@ -297,7 +293,7 @@ class CanmoreScotlandIngester(BaseIngester):
                 continue
             # Check if it matches a known period
             for period_key in PERIOD_DATES:
-                if period_key in cleaned:
+                if period_key.upper() in cleaned:
                     return cleaned
             # Also return century-based periods like "19TH CENTURY"
             if "CENTURY" in cleaned:
@@ -324,7 +320,7 @@ class CanmoreScotlandIngester(BaseIngester):
 
         period_upper = raw_period.upper().strip()
         for key, (start, end) in PERIOD_DATES.items():
-            if key in period_upper:
+            if key.upper() in period_upper:
                 return start, end
 
         return None, None

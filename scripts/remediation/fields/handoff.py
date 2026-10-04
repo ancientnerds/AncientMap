@@ -83,6 +83,7 @@ from fields import answers as A  # noqa: E402
 from fields import classify as C  # noqa: E402
 from fields import harvest as H  # noqa: E402
 from fields import rule as R  # noqa: E402
+from pipeline import periods as P  # noqa: E402
 
 #: WD1's handoff stage (`Rule.stage`); a run's own stage is its rule's.
 STAGE = R.TWO_FAMILIES.stage
@@ -165,6 +166,38 @@ def read_classified(run: Path) -> dict[str, dict[str, Any]]:
 
 def read_rounds(run: Path) -> list[dict[str, Any]]:
     return _read_jsonl(run / ROUNDS_FILE)
+
+
+#: The claim the site's own article carried when the dataset was imported (2025-12-18), per site:
+#: the run's own copy of the measured rows in `output/remediation/period_wave/
+#: original_periods.jsonl` (`Year`, `Period` and the join that put the row on this site). A run
+#: without the file asks the same question without it.
+HINTS_FILE = "ORIGINAL_PERIODS.jsonl"
+HINT_KEYS = frozenset(
+    {"site_id", "name", "source_url", "match", "title", "year", "period", "category"}
+)
+
+
+def read_hints(run: Path) -> dict[str, dict[str, Any]]:
+    """`{site_id: hint}` of the run's own `ORIGINAL_PERIODS.jsonl`, or `{}` when it has no such
+    file. A row that is not a hint row is refused: the join behind it was measured once, and a row
+    of another shape is a file the owner has to look at."""
+    path = run / HINTS_FILE
+    if not path.exists():
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for row in _read_jsonl(path):
+        if not isinstance(row, dict) or set(row) != HINT_KEYS:
+            shown = sorted(row) if isinstance(row, dict) else type(row).__name__
+            raise HandoffStepError(f"{HINTS_FILE}: a row carries {shown}, not {sorted(HINT_KEYS)}")
+        if not all(isinstance(row[key], str) for key in HINT_KEYS - {"match"}) or not (
+            row["match"] is None or isinstance(row["match"], str)
+        ):
+            raise HandoffStepError(
+                f"{HINTS_FILE}: the row of {row['site_id']!r} carries a value that is not a string"
+            )
+        out[row["site_id"]] = row
+    return out
 
 
 # ------------------------------------------------------------------------------ the question
@@ -363,6 +396,57 @@ RESEARCH_WD3 = (
     "\n"
 ) + RESEARCH[RESEARCH.index("## Quotes are checked by machine") :]
 
+def _period_list() -> str:
+    """The period names the question accepts, as lines for the prompt. The whole vocabulary is in
+    the question on purpose: a name it does not hold is refused by name, so the agent reads the
+    refusal against this list instead of guessing a spelling."""
+    names = sorted(P.PERIODS)
+    return "\n".join(
+        ", ".join(names[start : start + 8]) for start in range(0, len(names), 8)
+    )
+
+
+#: WD4's rules per field: WD3's, with one change to `period_start` (the period word is an answer).
+#: Every other field's text is WD3's own string, not a copy of it.
+FIELD_RULES_WD4 = {
+    **FIELD_RULES_WD3,
+    "period_start": (
+        "period_start is the year a source gives for the start of the site's history as a site - "
+        "its construction, foundation or first occupation - negative for BC. The map shows only "
+        "its bucket.\n"
+        "- keep: only when the field holds a value: a source dates the start into the stored "
+        "value's bucket. value = the attested start year.\n"
+        "- replace: a source dates the start (the field is empty, or the start lies in another "
+        'bucket). value = that year, e.g. "-2500" for c. 2500 BC; a century as its first year '
+        '("the 8th century BC" -> "-800", "the 2nd century AD" -> "101").\n'
+        "- unresolved: no source dates the start. The field stays as it is - an empty one stays "
+        "empty - and the site goes to the owner's list.\n"
+        "Each quote must carry the date as the page states it (a year, a century, a millennium), "
+        'and at least one must state your value itself: its year ("c. 2500 BC" for -2500), or its '
+        'century or millennium with that word ("the 26th century BC", "the 3rd millennium BC"). A '
+        'year worked out from "4,500 years ago" or a BP date is not read.\n'
+        "What dates this site (owner rule of 2026-10-01: one source suffices): a year, century or "
+        "millennium a source gives for the start of THIS site counts also when the source hedges "
+        'it ("c.", "around", "probably", "is thought to", "vers", "vraisemblablement") - give that '
+        'year - unless the same source rejects it ("its date cannot be traced").\n'
+        "A period word is a date too, and this lane takes it (owner decision of 2026-10-04, \"a "
+        'named period is a value"). When a source calls the site a period of its own ("an Iron '
+        'Age hillfort", "a Neolithic causeway enclosure", "Romano-British", "Maya"), answer:\n'
+        '- "decision": "replace" (or "keep"), "value": null, "period_name": the period as the '
+        "source names it, and the quote that names it.\n"
+        "The year is then read from a fixed table, not from you: the one start the vocabulary "
+        'holds for that name ("iron age" -> -800, "neolithic" -> -4000, "victorian" -> 1837). '
+        "Never write a year next to a period_name. A name the table does not know is refused, so "
+        "use one of these spellings: "
+        f"{_period_list()}\n"
+        "What still dates nothing: a period a source gives for a whole class of monuments rather "
+        'than for this site ("slight univallate hillforts were built from the 8th to the 5th '
+        'century BC"), a period a source rejects, or a site a source dates no way: then answer '
+        "unresolved."
+    ),
+}
+
+
 ANSWER_FORMAT_WD3 = (
     "## Your answer\n"
     "\n"
@@ -373,6 +457,20 @@ ANSWER_FORMAT_WD3 = (
     "keep and replace carry the value and at least one quote; unresolved carries value null and "
     "quotes []. The reasoning says, in a sentence or two, what the source says and why that "
     "decides it.\n"
+)
+
+ANSWER_FORMAT_WD4 = (
+    "## Your answer\n"
+    "\n"
+    'One JSON object and nothing else: {{"fields": {{...}}}} with exactly these keys: {keys}. Each '
+    "is\n"
+    '{{"decision": "...", "value": "..." or null, "period_name": "..." (period_start only), '
+    '{{"url": "https://...", "quote": "verbatim text"}} quotes, "reasoning": "..."}}\n'
+    "keep and replace carry the value and at least one quote; unresolved carries value null and "
+    "quotes []. The reasoning says, in a sentence or two, what the source says and why that "
+    "decides it. A period_start that rests on a period word carries period_name instead of a value "
+    '(period_name: "iron age", value: null) - the year is read from the vocabulary, so a value '
+    "beside it is refused.\n"
 )
 
 #: A field of a WD3 question is open for one of these reasons (`population.py`).
@@ -389,6 +487,36 @@ OPEN_TEXT = {
 WD1_SHOWN_CHARS = 600
 #: How many of a site's own links a WD3 question lists (best first).
 LINKS_SHOWN = 10
+
+#: What the site's own article carried when the dataset was imported, told to the agent as a claim
+#: to check. Measured 2026-10-04 against the 2,775 curated sites that have a period: the file's
+#: nine-band `Period` agrees with the stored `period_start` in 70.6 % of the cases and its `Year` in
+#: 20.9 %, and none of 1,544 Years lands inside the stored [period_start, period_end] span. No code
+#: path reads a value because it equals the claim: an answer needs a page it quotes either way.
+ORIGINAL_CLAIM = (
+    'The original import of this database (2025-12-18) kept what the site\'s own article carried '
+    'then ("{title}", matched on its {match}): Year "{year}", Period "{period}".\n'
+    "A claim to confirm or contradict, not a source. The band spans up to a thousand years, the "
+    "file disagrees with what this database holds for about a third of the sites that have both, "
+    "and no answer is read because it agrees with it: confirm or contradict it with a page you "
+    "quote.\n"
+)
+
+
+def _original_claim(hint: Mapping[str, Any] | None, rule: R.Rule) -> list[str]:
+    """The lines of the original import's own period claim, or none. WD4 only: the two finished
+    lanes asked their question without it, and their prompts are pinned by hash."""
+    if hint is None or rule.stage != R.ONE_FAMILY_PERIOD.stage:
+        return []
+    year, period = str(hint.get("year") or "").strip(), str(hint.get("period") or "").strip()
+    if not year and not period:
+        return []
+    return [
+        ORIGINAL_CLAIM.format(
+            title=hint.get("title") or "the article", match=hint.get("match") or "stored URL",
+            year=year or "empty", period=period or "empty",
+        )
+    ]
 
 
 def _evidence_lines(field: str, status: Mapping[str, Any]) -> list[str]:
@@ -486,6 +614,25 @@ TEXTS = {
         research=RESEARCH_WD3 + "\n" + KNOWN_FETCH_TROUBLE,
         answer_format=ANSWER_FORMAT_WD3,
     ),
+    R.ONE_FAMILY_PERIOD.name: Texts(
+        intro=(
+            "You are a researcher in the structured-field fill (lane WD4) of a curated database "
+            "of ancient sites. This question is about ONE site and the open fields listed below: "
+            "each is empty, or holds a value no source stands behind yet. Research each field on "
+            "its own and decide it from a source you quote."
+        ),
+        field_rules=FIELD_RULES_WD4,
+        empty_note=(
+            "The field is empty, so keep is no answer: replace with a sourced value or a sourced "
+            "period name, or answer unresolved to leave it empty."
+        ),
+        retry_note=(
+            "An earlier answer to this field did not count: {why}. Answer it again "
+            "from a source the checker can read - or answer unresolved when none can be quoted."
+        ),
+        research=RESEARCH_WD3 + "\n" + KNOWN_FETCH_TROUBLE,
+        answer_format=ANSWER_FORMAT_WD4,
+    ),
 }
 
 
@@ -537,10 +684,12 @@ def render_prompt(
     fields: Sequence[str],
     notes: Mapping[str, str] | None = None,
     rule: R.Rule = R.DEFAULT,
+    hint: Mapping[str, Any] | None = None,
 ) -> str:
     """The exact question for one site and `fields` - a pure function of the classified line, of
-    the rule the run decides under and, in a re-ask, of why each field's last answer did not count
-    (`notes`, kept in the round's record)."""
+    the rule the run decides under, of the site's original-import claim (`hint`, `read_hints`, WD4
+    only) and, in a re-ask, of why each field's last answer did not count (`notes`, kept in the
+    round's record)."""
     notes = notes or {}
     fields = [f for f in C.FIELDS if f in fields]
     if not fields:
@@ -568,6 +717,10 @@ def render_prompt(
         if evidence:
             out.append("What the machine read:")
             out.extend(evidence)
+        if field == "period_start":
+            claim = _original_claim(hint, rule)
+            if claim:
+                out.extend(claim)
         if status["flags"]:
             out.append(
                 "An earlier reading found this field wrong (a lead to check, not evidence - "
@@ -621,6 +774,7 @@ def _export_round(
     if target.exists() and any(target.iterdir()):
         raise HandoffStepError(f"{handoff} is not empty: a round gets a directory of its own")
     classified = read_classified(run)
+    hints = read_hints(run)
     groups = batches(list(fields_of), classified, round_no, rule.stage)
     for batch_id, labels in groups:
         for label in labels:
@@ -630,7 +784,9 @@ def _export_round(
                 stage=rule.stage,
                 label=label,
                 field="+".join(fields_of[label]),
-                prompt=render_prompt(classified[label], fields_of[label], notes.get(label), rule),
+                prompt=render_prompt(
+                    classified[label], fields_of[label], notes.get(label), rule, hints.get(label)
+                ),
             )
     record = {
         "round": round_no,
@@ -774,6 +930,20 @@ BRIEF_PARTS = {
         "unsourced": 'is "unresolved"',
         "model": "claude-sonnet-5-5",
     },
+    R.ONE_FAMILY_PERIOD.name: {
+        "role": "Sonnet researcher",
+        "lane": "WD4",
+        "work": "fill",
+        "evidence": (
+            "Your evidence is your own web research, as each prompt says: start from the site's "
+            "Wikidata item, its Wikipedia article in any language, its stored source_url and the "
+            "pages listed in the prompt, then reputable sources - heritage registers, museums, "
+            "universities, journals, Pleiades, excavation reports. Never ancientnerds.com, AI "
+            "content farms or Wikipedia mirrors."
+        ),
+        "unsourced": 'is "unresolved"',
+        "model": "claude-sonnet-5-5",
+    },
 }
 
 
@@ -887,6 +1057,7 @@ def import_rounds(
     """Every round's answers: validated, parsed, quote-checked, decided."""
     rule = R.read_rule(run)
     classified = read_classified(run)
+    hints = read_hints(run)
     rounds = sorted(read_rounds(run), key=lambda r: r["round"])
     if not rounds:
         raise HandoffStepError("nothing was exported")
@@ -906,7 +1077,9 @@ def import_rounds(
             raise HandoffStepError(f"{record['handoff']}: the manifest is not the round's record")
         for (batch_id, label), line in sorted(manifest.items()):
             fields = record["fields"][label]
-            prompt = render_prompt(classified[label], fields, record["notes"].get(label), rule)
+            prompt = render_prompt(
+                classified[label], fields, record["notes"].get(label), rule, hints.get(label)
+            )
             if OH.prompt_sha256(prompt) != line["prompt_sha256"]:
                 raise HandoffStepError(
                     f"{batch_id}/{label}: the exported prompt is not this question's"

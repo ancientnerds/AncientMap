@@ -1,6 +1,6 @@
 """The rule a field run decides under, pinned in the run's own files.
 
-Two rules share every module of this package (`answers`, `handoff`, `plan`, the writer in
+Three rules share every module of this package (`answers`, `handoff`, `plan`, the writer in
 `mechanical/lane.py`); a run says which one it is in `RUN.json`, written once when the run is built.
 
 * **two-families** (lane WD1, owner decision O6 of 2026-09-26): a value is replaced only with a
@@ -12,6 +12,13 @@ Two rules share every module of this package (`answers`, `handoff`, `plan`, the 
   open fields only and **fills, never clears**: an exhausted field stays as it is (empty, or the
   stored point) and goes to the owner list. Quotes from the site's own pages and from Wikipedia
   mirrors are refused.
+* **one-family-period** (lane WD4, owner decision of 2026-10-04 - "eine benannte Periode ist ein
+  Wert"): WD3's rule on a stage of its own, because WD3 is finished and a period word is not its
+  answer. Measured on 2026-10-04 in `output/remediation/fields/wd3/DECISIONS.jsonl`: 792 of the
+  1,338 `unresolved` `period_start` answers name a period in their own reasoning and 677 of them
+  name one a table can turn into years. WD4 asks the same question, adds the answer kind
+  `period_name` (`pipeline.periods`), and its batches and write lanes carry `wd4`, so a period run
+  can never write into a finished wd3 run.
 
 A run without `RUN.json` is a WD1 run: the files of those runs were written before the switch
 existed, and their prompts are pinned by hash - `read_rule` names the default instead of guessing.
@@ -97,7 +104,8 @@ class Rule:
 
 TWO_FAMILIES = Rule("two-families", "wd1", 2, 2, frozenset(), True, False)
 ONE_FAMILY = Rule("one-family", "wd3", 1, 1, FORBIDDEN_FAMILIES, False, True)
-RULES = {rule.name: rule for rule in (TWO_FAMILIES, ONE_FAMILY)}
+ONE_FAMILY_PERIOD = Rule("one-family-period", "wd4", 1, 1, FORBIDDEN_FAMILIES, False, True)
+RULES = {rule.name: rule for rule in (TWO_FAMILIES, ONE_FAMILY, ONE_FAMILY_PERIOD)}
 BY_STAGE = {rule.stage: rule for rule in RULES.values()}
 #: The rule of a run without `RUN.json`: WD1's, the lane whose runs predate the file.
 DEFAULT = TWO_FAMILIES

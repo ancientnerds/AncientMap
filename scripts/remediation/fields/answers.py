@@ -9,6 +9,9 @@ acceptance's reader). Each field is parsed on its own, so one malformed field co
      "quotes": [{"url": "https://...", "quote": "verbatim text"}, ...],
      "reasoning": "<non-empty>"}
 
+and under lane WD4's `one-family-period` rule a `period_start` may carry the one optional key
+`PERIOD_KEY` in place of `value` (see `_period_of_answer`).
+
 **keep** and **replace** carry a value and rest on at least two quotes from at least two independent
 source families (`acceptance.answers.source_family`: one Wikipedia article in any language, its
 Wikidata item and Commons are one family, `wikimedia`; otherwise the registrable domain). **clear**
@@ -19,7 +22,9 @@ and cannot be emptied (FIELD_CONTRACT section 3): both carry no value and no quo
 That is the `two-families` rule of lane WD1. Under the `one-family` rule of lane WD3 (`rule.py`) one
 quote from one source suffices - never from the project's own site or a Wikipedia mirror
 (`Rule.forbidden_families`) - and **unresolved** is every field's answer when nothing can be quoted:
-WD3 never clears, a field nobody could source stays as it is. Every check below applies under both.
+WD3 never clears, a field nobody could source stays as it is. Lane WD4's `one-family-period` rule is
+WD3's on a stage of its own and adds one answer kind: a period word is a date. Every check below
+applies under all three.
 
 Per field, beyond the shape (every rule here needs no page - `check_shape`):
 
@@ -33,6 +38,8 @@ Per field, beyond the shape (every rule here needs no page - `check_shape`):
   (`categorize_period`); replace: another bucket, or any year when the stored value is empty. Every
   quote must carry a date - a digit, or a century or millennium word (`DATE_WORDS`) - and at
   least one must state the value itself (`states_year`: its year, or its century or millennium).
+  Under **one-family-period** (lane WD4) an answer may rest on a period word instead: it carries
+  `PERIOD_KEY` and no value, and the year is the vocabulary's (`_check_period`).
 * **site_type** - one canonical type (`CANONICAL_TYPES`, a fixed point of `normalize_site_type`).
   keep: the stored type; replace: another. At least one quote must hold a word of the type
   (`type_stems`: each word of the type cut to its stem, found where a word of the folded quote
@@ -64,6 +71,7 @@ from opus_audit import quotes as Q
 from fields import classify as C
 from fields import harvest as H
 from fields import rule as R
+from pipeline import periods as P
 from pipeline.normalizers.site_type import CANONICAL_TYPES, normalize_site_type
 from pipeline.utils.geo import haversine_distance
 
@@ -78,6 +86,14 @@ DECISIONS = {
 FILL_DECISIONS = (KEEP, REPLACE, UNRESOLVED)
 ANSWER_KEYS = frozenset({"fields"})
 FIELD_KEYS = frozenset({"decision", "value", "quotes", "reasoning"})
+#: The optional key of a period-word answer: the name of the period the quotes name ("iron age"),
+#: the year comes from `pipeline.periods` (`_check_period`). It is period_start's own key, and it
+#: is NOT the `period_name` column of `unified_sites` - that is the bucket label of the written
+#: start (`classify.bucket`), which `plan.py` writes beside the year this key resolves to.
+PERIOD_KEY = "period_name"
+#: The one rule whose question offers a period word as an answer (`handoff.FIELD_RULES_WD4`). Under
+#: the two older rules the key is no key at all: their answers never carry one.
+PERIOD_RULE = R.ONE_FAMILY_PERIOD
 QUOTE_KEYS = frozenset({"url", "quote"})
 #: A point within this distance of the stored one is the stored point (the acceptance's F3 row:
 #: "within 1 km is right").
@@ -138,6 +154,8 @@ class FieldAnswer:
     value: str | None
     quotes: tuple[tuple[str, str], ...]
     reasoning: str
+    #: The period the quotes name, for a period-word answer; `value` is then the vocabulary's year
+    period_name: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -173,9 +191,14 @@ def decisions_of(field: str, rule: R.Rule) -> tuple[str, ...]:
 
 
 def _block(field: str, data: Any, rule: R.Rule) -> FieldAnswer:
-    if not isinstance(data, dict) or set(data) != FIELD_KEYS:
+    if not isinstance(data, dict) or not FIELD_KEYS <= set(data) <= (FIELD_KEYS | {PERIOD_KEY}):
         shown = sorted(data) if isinstance(data, dict) else type(data).__name__
         raise AnswerError(f"{field}: carries {shown}, not {sorted(FIELD_KEYS)}")
+    if PERIOD_KEY in data and not (field == "period_start" and rule is PERIOD_RULE):
+        raise AnswerError(
+            f"{field}: {PERIOD_KEY} is period_start's own answer key and only "
+            f"{PERIOD_RULE.name}'s (lane {PERIOD_RULE.stage}) question asks for it"
+        )
     decision = data["decision"]
     if decision not in decisions_of(field, rule):
         raise AnswerError(
@@ -186,11 +209,19 @@ def _block(field: str, data: Any, rule: R.Rule) -> FieldAnswer:
         raise AnswerError(f"{field}: the reasoning is not a non-empty string")
     quotes = _quotes(data["quotes"], QUOTE_KEYS)
     value = data["value"]
+    named = data.get(PERIOD_KEY)
     if decision in (CLEAR, UNRESOLVED):
         if value is not None or quotes:
             raise AnswerError(f"{field}: {decision} carries no value and no quote")
+        if named is not None:
+            raise AnswerError(
+                f"{field}: {decision} names a period: it carries no value and no quote"
+            )
         return FieldAnswer(field, decision, None, (), reasoning)
-    if not isinstance(value, str) or not value.strip() or value != value.strip():
+    period = _period_of_answer(named, value, field, decision)
+    if period is None and (
+        not isinstance(value, str) or not value.strip() or value != value.strip()
+    ):
         raise AnswerError(f"{field}: {decision} needs its value as a trimmed, non-empty string")
     families = {family_of(q.url, rule) for q in quotes}
     if len(quotes) < rule.min_quotes or len(families) < rule.min_families:
@@ -200,7 +231,34 @@ def _block(field: str, data: Any, rule: R.Rule) -> FieldAnswer:
             f"{field}: a quote from {sorted(families & rule.forbidden_families)} is no source - "
             "never the project's own site or a Wikipedia mirror"
         )
+    if period is not None:
+        return FieldAnswer(
+            field, decision, str(period), tuple((q.url, q.quote) for q in quotes), reasoning, named
+        )
     return FieldAnswer(field, decision, value, tuple((q.url, q.quote) for q in quotes), reasoning)
+
+
+def _period_of_answer(named: Any, value: Any, field: str, decision: str) -> int | None:
+    """The vocabulary's year for the period a period-word answer names, or None for a year answer.
+
+    The contract (owner decision of 2026-10-04, a named period IS a value): the agent sends
+    `period_name` and its quotes and **no** value - the table holds the one year for the one name,
+    so an invented year is refused here rather than read (`pipeline.periods.period_of`).
+    """
+    if named is None:
+        return None
+    if not isinstance(named, str) or not named.strip() or named != named.strip():
+        raise AnswerError(f"{field}: {decision} needs {PERIOD_KEY} as a trimmed, non-empty string")
+    try:
+        year = P.start_year(named)
+    except P.PeriodError as exc:
+        raise AnswerError(f"{field}: {exc}") from exc
+    if value is not None:
+        raise AnswerError(
+            f"{field}: {decision} names the period {named!r}, so the year comes from the "
+            f"vocabulary: value is null and {year} is read"
+        )
+    return year
 
 
 def parse(
@@ -247,6 +305,14 @@ def dated(quote: str) -> bool:
     if re.search(r"\d", quote):
         return True
     return bool(set(fold(quote, keep_parentheses=True).split()) & DATE_WORDS)
+
+
+def dated_period(quote: str, name: str) -> bool:
+    """Whether a quote dates something under a period-word answer: a date as `dated` reads one, or
+    the period the answer names. "an Iron Age hillfort" carries no digit and no century word, and it
+    is the sentence 792 of WD3's 1,338 dropped answers were made of (measured 2026-10-04) - so the
+    period is a dating quote beside the year, never instead of it."""
+    return dated(quote) or P.states_period(quote, name)
 
 
 def _roman(number: int) -> str:
@@ -308,7 +374,7 @@ def holds_stem(quote: str, stem: str) -> bool:
     return re.search(r"(?<!\w)" + re.escape(stem), fold(quote, keep_parentheses=True)) is not None
 
 
-def _check_coordinates(answer: FieldAnswer, line: Mapping[str, Any]) -> None:
+def _check_coordinates(answer: FieldAnswer, line: Mapping[str, Any], _rule: R.Rule) -> None:
     value = _point(str(answer.value))
     distance = _km(value, _stored_point(line))
     if answer.decision == KEEP and distance > KEEP_KM:
@@ -331,8 +397,56 @@ def _check_coordinates(answer: FieldAnswer, line: Mapping[str, Any]) -> None:
             raise AnswerError(f"coordinates: the quote on {url} is {off:.2f} km from the value")
 
 
-def _check_period(answer: FieldAnswer, line: Mapping[str, Any]) -> None:
+def _check_period(answer: FieldAnswer, line: Mapping[str, Any], rule: R.Rule) -> None:
+    """The value is a year, and every quote dates it. Two ways to send it, one year:
+
+    * a **year answer** - `value` is the year the source gives for THIS site, read by `_year`;
+      every quote must carry a date (`dated`) and one must state the year (`states_year`).
+    * a **period-word answer** (lane WD4) - `period_name` names the period and the quotes carry
+      its name, and the year is the vocabulary's own start for it (`_block`, `pipeline.periods`).
+      Every quote must then carry a date or the period itself (`dated_period`) and one must name
+      the period. Nothing else changes: the keep/replace decision is still the stored value's
+      bucket against that one year.
+    """
+    if answer.period_name is not None:
+        name = answer.period_name
+        for url, quote in answer.quotes:
+            if not dated_period(quote, name):
+                raise AnswerError(
+                    f"period_start: the quote on {url} names no period and carries no date"
+                )
+        if not any(P.states_period(quote, name) for _, quote in answer.quotes):
+            raise AnswerError(
+                f"period_start: no quote names {name} - a period answer rests on the page saying "
+                "so (\"an Iron Age hillfort\")"
+            )
+        _period_decision(answer, line, P.start_year(name))
+        return
     year = _year(str(answer.value))
+    _period_decision(answer, line, year)
+    for url, quote in answer.quotes:
+        if not dated(quote):
+            named = _period_a_quote_carries(quote) if rule is PERIOD_RULE else None
+            raise AnswerError(
+                f"period_start: the quote on {url} carries no date"
+                + (
+                    f" - it names the period {named!r}: answer with {PERIOD_KEY} "
+                    f"{named!r} and no value, not with a year"
+                    if named
+                    else ""
+                )
+            )
+    if not any(states_year(quote, year) for _, quote in answer.quotes):
+        raise AnswerError(
+            f"period_start: no quote states {year} itself - its year, or its century or "
+            "millennium with that word"
+        )
+
+
+def _period_decision(answer: FieldAnswer, line: Mapping[str, Any], year: int) -> None:
+    """That `year` is a year a site can start in, and that keep/replace is the stored value's
+    bucket against it - the one comparison, for a year the source gave and for a year the
+    vocabulary gives a period word."""
     if year not in YEARS:
         raise AnswerError(f"period_start: {year} is not a year a site can start in")
     stored = line["fields"]["period_start"]["stored"]
@@ -345,17 +459,21 @@ def _check_period(answer: FieldAnswer, line: Mapping[str, Any]) -> None:
         raise AnswerError(
             f"period_start: replace, but {year} is in the stored value's bucket - that is keep"
         )
-    for url, quote in answer.quotes:
-        if not dated(quote):
-            raise AnswerError(f"period_start: the quote on {url} carries no date")
-    if not any(states_year(quote, year) for _, quote in answer.quotes):
-        raise AnswerError(
-            f"period_start: no quote states {year} itself - its year, or its century or "
-            "millennium with that word"
-        )
 
 
-def _check_site_type(answer: FieldAnswer, line: Mapping[str, Any]) -> None:
+def _period_a_quote_carries(quote: str) -> str | None:
+    """The period a quote names, if it names one the vocabulary knows. Used only to tell a
+    dropped year answer what to send instead, under the rule that accepts a period word."""
+    words = fold(quote, keep_parentheses=True).split()
+    for start in range(len(words)):
+        for end in range(len(words), start, -1):
+            name = P.fold_name(" ".join(words[start:end]))
+            if name in P.PERIODS:
+                return name
+    return None
+
+
+def _check_site_type(answer: FieldAnswer, line: Mapping[str, Any], _rule: R.Rule) -> None:
     value = str(answer.value)
     if value not in CANONICAL_TYPES or normalize_site_type(value) != value:
         raise AnswerError(f"site_type: {value!r} is not a canonical type")
@@ -374,7 +492,7 @@ def _page_of(url: str) -> str:
     return C.url_form(Q.canonical_url(url)[0])
 
 
-def _check_source_url(answer: FieldAnswer, line: Mapping[str, Any]) -> None:
+def _check_source_url(answer: FieldAnswer, line: Mapping[str, Any], _rule: R.Rule) -> None:
     value = str(answer.value)
     if H.url_kind(value) not in (H.URL_WIKIPEDIA, H.URL_WEB) or Q.not_fetchable(value):
         raise AnswerError(f"source_url: {value!r} is not a public page about a site")
@@ -419,7 +537,7 @@ def check_shape(
             out[field] = answer
             continue
         try:
-            CHECKS[field](answer, line)
+            CHECKS[field](answer, line, rule)
         except AnswerError as exc:
             out[field] = str(exc)
         else:
