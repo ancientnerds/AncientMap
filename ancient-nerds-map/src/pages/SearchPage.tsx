@@ -47,6 +47,13 @@ export default function SearchPage() {
     return () => clearInterval(interval)
   }, [isLoading])
 
+  // The field is disabled while the sites load, so autoFocus on the input lands
+  // on a disabled element and does nothing - the page opened with the caret
+  // nowhere. Focus it once the load is over and the field can take focus.
+  useEffect(() => {
+    if (!isLoading) searchInputRef.current?.focus()
+  }, [isLoading])
+
   // Load default source on mount
   useEffect(() => {
     async function loadData() {
@@ -269,7 +276,6 @@ export default function SearchPage() {
               value={search.searchQuery}
               onChange={e => { search.setSearchQuery(e.target.value); if (randomSites.length) { setRandomSites([]); randomPoolRef.current = []; setRandomVisible(0) } }}
               disabled={isLoading}
-              autoFocus
             />
             {(search.searchQuery || randomSites.length > 0) && (
               <button
