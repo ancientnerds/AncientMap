@@ -67,6 +67,27 @@ _RETIRED_HUBS = {
     "chile-easter-island": "chile",
 }
 
+# A slug a visitor (or a language model quoting a database) is likely to type,
+# mapped to the hub that actually answers. This is not the retired case above:
+# the hub exists and has 219 curated sites, only the spelling of its slug is out
+# of reach. country_slug() does not transliterate (pipeline/utils/slugs.py keeps
+# every \w character), so Türkiye lives at /sites/t%C3%BCrkiye — the only one of
+# the 92 hubs in sitemap-countries.xml whose slug is not plain ASCII — and
+# "turkey", the spelling in every database, answered 404. One 301, one hub, no
+# split link signals.
+#
+# Deliberately NOT here, measured 2026-10-02 (five 404s from five sessions):
+# /sites/united-kingdom - owner decision, the UK lane splits those rows into
+# England / Scotland / Wales / Northern Ireland, so no single hub replaces it and
+# tests/api/test_sites_html_scope.py pins the 404. /sites/united-states,
+# /sites/andorra, /sites/baltic-sea and /sites/turkmenistan carry exactly one
+# row each and that row is scope_status='retired' (verified 2026-10-04): those
+# hubs correctly do not exist, and a 301 would send visitors to a country they
+# did not ask for.
+_COUNTRY_SLUG_ALIASES = {
+    "turkey": "türkiye",
+}
+
 
 @router.get("/sites/")
 async def sites_index(db: Session = Depends(get_db)):
@@ -108,6 +129,11 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
 
     if not country and wanted in _RETIRED_HUBS:
         return RedirectResponse(url=f"/sites/{_RETIRED_HUBS[wanted]}", status_code=301)
+    if not country and wanted in _COUNTRY_SLUG_ALIASES:
+        # encode_path, like legacy_site_redirect: a Location header is a URI, and
+        # the target slug is 'türkiye'.
+        target = encode_path(country_path(_COUNTRY_SLUG_ALIASES[wanted]))
+        return RedirectResponse(url=target, status_code=301)
     if not country:
         return Response(
             content=render_error_html("Country"),

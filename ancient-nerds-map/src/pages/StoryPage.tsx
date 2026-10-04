@@ -15,6 +15,7 @@ import Breadcrumbs from '../components/layout/Breadcrumbs'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import StoryArticle from '../components/news/StoryArticle'
+import { PageOpen } from '../components/analytics/PageOpen'
 import { useRoute } from '../seo/RouteContext'
 
 import '../styles/story-page.css'
@@ -28,6 +29,17 @@ export default function StoryPage() {
 
   return (
     <div className="story-page">
+      {/* Der Lesezugriff, nicht der Klick aus dem Feed - siehe PageOpen.
+          StoryRoute traegt keine Slug-Spalte (der Slug ist story_slug(headline,
+          id) und entsteht in Python), deshalb gruppiert die Headline. Die
+          Karten-Klicks senden den Pfad, das Panel versteht beides
+          (components/dashboard/TopContent.tsx readablePath). */}
+      <PageOpen
+        event="story_open"
+        story={story.headline}
+        method="landing"
+        context="story"
+      />
       <PageHeader currentPage="news">
         <span className="page-header-title">Story Archive</span>
       </PageHeader>
