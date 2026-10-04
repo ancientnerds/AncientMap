@@ -132,3 +132,23 @@ def test_a_word_key_is_escaped_for_the_regular_expression():
     """A word is \\w characters only, but its key comes from unaccent(), which may map a
     letter onto something else; whatever it returns is matched literally."""
     assert sr._REGEX_SYNTAX.sub(r"\\\1", "a.b(c)") == "a\\.b\\(c\\)"
+
+
+def test_the_order_the_visitor_reads_is_described_sites_first():
+    """Read on production 2026-10-04, 1,595,613 of the 1,759,573 shown sites carry neither a
+    card description nor a description (list_inscriptions and canmore_scotland alone hold
+    821,000 of them), and "great zimbabwe" answered with three bare names before the one
+    described site. The card renders the OR of both columns, so the OR is the key - and it
+    comes before the rank, or a bare name would still outrank a described site."""
+    db = _search(
+        "great zimbabwe",
+        {"k": "great zimbabwe", "kl": "great zimbabwe", "w0": "great", "w1": "zimbabwe"},
+    )
+    sql, _params = _search_statement(db)
+    order = " ".join(sql.split("ORDER BY", 1)[1].split())
+    assert order.startswith(
+        "(NULLIF(btrim(us.description), '') IS NULL AND cs.card_description IS NULL), rank,"
+    )
+    # The bare key that was there alone reads as "no card teaser" alone, and put every site
+    # with only a description behind the bare ones
+    assert not order.startswith("(cs.card_description IS NULL),")

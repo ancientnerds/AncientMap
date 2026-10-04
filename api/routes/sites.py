@@ -844,7 +844,15 @@ def search_sites(
 
     Ranks: 1 the name is the query, 2 the same without spaces, 3 the name
     contains the query, 4 the name holds every word, 5 a word named the
-    country. Curated cards first, as before.
+    country.
+
+    The order the visitor reads is: a site the card can say something about
+    first, then the bare ones, and inside each of those the rank. Read on
+    production 2026-10-04, 1,595,613 of the 1,759,573 shown sites carry
+    neither a card description nor a description (list_inscriptions and
+    canmore_scotland alone hold 821,000 of them), and a query like "great
+    zimbabwe" answered with three bare names before the one described site.
+    The key is the OR, because that is what the card renders.
 
     Returns compact format matching /sites/all for frontend reuse.
     """
@@ -926,7 +934,8 @@ def search_sites(
         LEFT JOIN card_stats cs ON cs.site_id = us.id
         WHERE ({" OR ".join(arms)})
           AND {_US_SHOWN}
-        ORDER BY (cs.card_description IS NULL), rank, (us.source_id <> 'ancient_nerds'),
+        ORDER BY (NULLIF(btrim(us.description), '') IS NULL AND cs.card_description IS NULL),
+                 rank, (us.source_id <> 'ancient_nerds'),
                  length(us.name), us.name
         LIMIT :limit
     """)

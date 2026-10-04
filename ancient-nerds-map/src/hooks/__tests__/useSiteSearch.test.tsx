@@ -9,6 +9,11 @@
  * API has answered, also when the answer is empty (otherwise the globe's
  * results header would read "Searching..." forever).
  *
+ * With `widenToAllSources` a query the visitor's own sources cannot answer at
+ * all is answered from the whole database, and the results are ordered
+ * described sites first: production 2026-10-04 holds 1,595,613 sites with no
+ * text at all, and "great zimbabwe" answered with bare names first.
+ *
  * @vitest-environment jsdom
  */
 
@@ -265,3 +270,140 @@ describe('useSiteSearch with a typo', () => {
     expect(latest!.searchResults).toEqual([])
   })
 })
+
+// The order the visitor reads. Production 2026-10-04: 1,595,613 of the 1,759,573
+// shown sites carry neither a card description nor a description, so "how well it
+// matched" alone put bare names from the big gazetteers first.
+describe('useSiteSearch orders described sites before bare ones', () => {
+  const site = (id: string, title: string, text: Partial<SiteData> = {}): SiteData =>
+    ({ ...TEMPLE, id, title, ...text })
+
+  it('puts a described site before a better-matching bare one', () => {
+    // "Great Zimbabwe" bare (geonames) and described (wikidata), as production
+    // returned them on 2026-10-04 - the sources are the same one here, only
+    // the text differs, which is what the order reads
+    const bare = site('bare', 'Great Zimbabwe')
+    const described = site('described', 'Great Zimbabwe Ruins National', {
+      description: 'Ruined city in the south-eastern hills of Zimbabwe',
+    })
+    render(baseOptions([bare, described]))
+    type('great zimbabwe')
+    expect(latest!.searchResults.map(r => r.id)).toEqual(['described', 'bare'])
+  })
+
+  it('keeps the match order inside the described sites', () => {
+    const bare = site('bare', 'Alpha of the South')
+    const exact = site('exact', 'Alpha', { description: 'A temple on a hill' })
+    const starts = site('starts', 'Alpha North Gate', { cardDescription: 'A gate' })
+    render(baseOptions([bare, exact, starts]))
+    type('alpha')
+    // "Alpha" (score 100) before "Alpha North Gate" (80) before the bare one
+    expect(latest!.searchResults.map(r => r.id)).toEqual(['exact', 'starts', 'bare'])
+  })
+
+  it('treats a card teaser as text, and a blank one as none', () => {
+    const blank = site('blank', 'Beta Hill', { description: '   ' })
+    const teaser = site('teaser', 'Beta Hill', { cardDescription: 'A hill above the valley' })
+    render(baseOptions([blank, teaser]))
+    type('beta')
+    expect(latest!.searchResults.map(r => r.id)).toEqual(['teaser', 'blank'])
+  })
+})
+
+// A query the visitor's own sources cannot answer at all is answered from the
+// whole database, and the button says so. The search page passes
+// `widenToAllSources`; the globe does not, because there the same flag decides
+// which dots the map draws.
+describe('useSiteSearch widens to all sources when the visitor\'s sources have no match', () => {
+  const API_SITE = {
+    id: 'api-1', n: 'Great Zimbabwe National Monument', la: -20.27, lo: 30.93,
+    s: 'unesco', t: 'Monument', p: null, d: 'The ruins of Great Zimbabwe',
+  }
+
+  function stubApi(sites: unknown[] = [API_SITE]) {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ sites }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+
+  const settle = () => act(async () => { for (let i = 0; i < 10; i++) await Promise.resolve() })
+
+  it('searches the whole database and reports it, where the own sources found nothing', async () => {
+    const fetchMock = stubApi()
+    render(baseOptions([{ ...TEMPLE, id: 'curated', title: 'Alpha' }], { widenToAllSources: true }))
+    type('great zimbabwe')
+
+    expect(latest!.autoAllSources).toBe(true)
+    expect(latest!.allSourcesActive).toBe(true)
+    expect(latest!.isSearching).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0][0])).toContain('q=great%20zimbabwe')
+
+    await settle()
+    expect(latest!.isSearching).toBe(false)
+    expect(latest!.searchResults.map(r => r.id)).toEqual(['api-1'])
+  })
+
+  it('leaves the search alone where the visitor\'s own sources do have the match', () => {
+    const fetchMock = stubApi()
+    render(baseOptions([{ ...TEMPLE, id: 'curated', title: 'Great Zimbabwe' }], { widenToAllSources: true }))
+    type('great zimbabwe')
+    expect(latest!.autoAllSources).toBe(false)
+    expect(latest!.allSourcesActive).toBe(false)
+    expect(latest!.searchResults.map(r => r.id)).toEqual(['curated'])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('stays off without the option, so the globe keeps the choice to the visitor', () => {
+    const fetchMock = stubApi()
+    render(baseOptions([{ ...TEMPLE, id: 'curated', title: 'Alpha' }]))
+    type('great zimbabwe')
+    expect(latest!.autoAllSources).toBe(false)
+    expect(latest!.allSourcesActive).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('does not widen a query the visitor is still typing', () => {
+    const fetchMock = stubApi()
+    render(baseOptions([{ ...TEMPLE, id: 'curated', title: 'Alpha' }], { widenToAllSources: true }))
+    type('gr') // two characters: the results row answers nothing yet either
+    expect(latest!.autoAllSources).toBe(false)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('a click on the button stops the widening for that query', async () => {
+    stubApi()
+    render(baseOptions([{ ...TEMPLE, id: 'curated', title: 'Alpha' }], { widenToAllSources: true }))
+    type('great zimbabwe')
+    expect(latest!.allSourcesActive).toBe(true)
+
+    act(() => latest!.dismissAutoAllSources())
+    expect(latest!.autoAllSources).toBe(false)
+    expect(latest!.allSourcesActive).toBe(false)
+    expect(latest!.searchResults).toEqual([])
+    await settle()
+    // The answer that was already in flight is not shown as the result of a
+    // search the visitor turned off
+    expect(latest!.allSourcesActive).toBe(false)
+  })
+
+  it('widens again for the next query, and forgets the dismissal', async () => {
+    stubApi()
+    render(baseOptions([{ ...TEMPLE, id: 'curated', title: 'Alpha' }], { widenToAllSources: true }))
+    type('great zimbabwe')
+    act(() => latest!.dismissAutoAllSources())
+    type('stonehenge walls')
+    expect(latest!.autoAllSources).toBe(true)
+    await settle()
+  })
+
+  it('does not widen a query the whole database could not answer either', async () => {
+    stubApi([])
+    render(baseOptions([{ ...TEMPLE, id: 'curated', title: 'Alpha' }], { widenToAllSources: true }))
+    type('qqqq zzzz')
+    await settle()
+    expect(latest!.searchResults).toEqual([])
+    expect(latest!.autoAllSources).toBe(true) // the button stays on: it is the wider search
+  })
+})
+
