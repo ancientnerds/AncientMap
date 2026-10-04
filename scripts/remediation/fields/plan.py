@@ -159,14 +159,25 @@ def _sha256_text(path: Path) -> str:
 
 # ------------------------------------------------------------------------------ the wave
 def wants_write(
-    decisions: Sequence[Mapping[str, Any]], line: Mapping[str, Any], rule: R.Rule = R.DEFAULT
+    decisions: Sequence[Mapping[str, Any]], line: Mapping[str, Any] | None, rule: R.Rule = R.DEFAULT
 ) -> bool:
     """Whether a site may get a cell: a replace or clear decision, or a period label that is not
-    the bucket of its start (as classified). Under a fill-only rule only a replace."""
+    the bucket of its start (as classified). Under a fill-only rule only a replace.
+
+    `line` is the run's own classification of the site and `None` when the population never
+    classified it. A rule row is not a question and does not need one, so a fill-only rule plans it
+    from the rule file alone; a rule that can write a label needs the classification, because the
+    stored start is what the label is compared against, and is refused by name without it."""
     if any(d["decision"] in (A.REPLACE, A.CLEAR) for d in decisions):
         return True
     if rule.fill_only:
         return False
+    if line is None:
+        raise PlanError(
+            f"a {rule.name} run cannot plan a period label for a site its population never "
+            f"classified: the run's own CLASSIFIED.jsonl is the only record of the start the "
+            f"label would be compared against"
+        )
     return line["period_name"]["stored"] != line["period_name"]["bucket_of_stored_start"]
 
 
@@ -195,8 +206,12 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
     by_site: dict[str, list[dict[str, Any]]] = {}
     for d in decisions:
         by_site.setdefault(d["site_id"], []).append(d)
+    # every site a decision speaks for, not only the population's: a rule row is a value a named
+    # rule supports, and a site the run never asked is still a site the rule dates (2026-10-04)
     sites = sorted(
-        sid for sid, line in classified.items() if wants_write(by_site.get(sid, []), line, rule)
+        sid
+        for sid in by_site
+        if wants_write(by_site[sid], classified.get(sid), rule)
     )
     steps = [sites[i : i + STEP_SITES] for i in range(0, len(sites), STEP_SITES)]
     held = [

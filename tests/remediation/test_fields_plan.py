@@ -27,6 +27,8 @@ from mechanical.plan import JournalLink, PlanError  # noqa: E402
 
 SITE = "0025b0ba-fd74-4c08-96e3-acc17956aa44"
 OTHER = "786cada5-1feb-4c5c-9e79-b8ffdf8aacc6"
+#: not in the run's CLASSIFIED.jsonl at all: the population never asked it
+RULE_SITE = "b3c1f0de-6a2e-4f7b-9d51-2c8e4a1f6b30"
 AGREES = lambda country, lat, lon: {"agrees": True, "polygon": [country]}  # noqa: E731
 ELSEWHERE = lambda country, lat, lon: {"agrees": False, "polygon": ["Turkey"]}  # noqa: E731
 QUOTES = [{"source": "https://a.example", "quote": "q", "outcome": "found", "detail": ""}]
@@ -311,6 +313,35 @@ class TestWaveAndStep:
 
         assert record["sites"] == 1
         assert wave["derived_sha256"] == FP._sha256_text(run / FP.DERIVED_FILE)
+
+    def test_a_rule_row_reaches_a_site_the_population_never_asked(self, repo: Path) -> None:
+        """A rule is not a question, so it does not depend on the population: a site the run never
+        asked can still carry a value a named rule supports. `build_wave` reads the rule file into
+        the decisions and then picked its sites out of `CLASSIFIED.jsonl` alone, which threw those
+        rows away again - measured 2026-10-04: ten live sites whose band the 2025 import names and
+        whose own year confirms, and a follow-up wave that planned the same 2,214 sites as the wave
+        before it and could write nothing."""
+        run = repo / "run"
+        row = decision("period_start", "replace", -1500, None)
+        row.update(
+            site_id=RULE_SITE,
+            name="Tomb of Darius II",
+            via="band",
+            answered_by="ancient_nerds_original.geojson:Period (Year bestätigt)",
+            quotes=[],
+            reasoning=(
+                "the 2025 import put the site in the period '1500 - 500 BC' and its own year "
+                "'550 BC' falls in that band, so the band rule writes that period's beginning"
+            ),
+        )
+        (run / FP.DERIVED_FILE).write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+        record = FP.build_wave(run, "2026-09-27")
+        wave = json.loads(
+            (FP.wave_dir("2026-09-27") / FP.WAVE_FILE).read_text(encoding="utf-8")
+        )
+        assert record["sites"] == 2
+        assert RULE_SITE in wave["steps"][0]
 
     def test_a_wave_without_a_rule_file_pins_nothing(self, repo: Path) -> None:
         """The 12 sourced waves of 2026-10-02b have no rule file, and a wave that has none is the
