@@ -498,6 +498,12 @@ def main(argv: list[str] | None = None) -> int:
         print("--apply needs the database; drop --qids", file=sys.stderr)
         return 2
 
+    if args.journal:
+        # The run on production failed on this line with FileNotFoundError: the
+        # caller made the directory on the host, and only public/data, logs and
+        # frontend are mounted into the container, so output/ did not exist in
+        # there. Nothing had been written - this runs before the first store().
+        args.journal.parent.mkdir(parents=True, exist_ok=True)
     journal = args.journal.open("a", encoding="utf-8") if args.journal else None
     written = 0
     try:

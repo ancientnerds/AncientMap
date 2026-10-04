@@ -295,6 +295,33 @@ def test_what_is_written_is_exactly_the_planned_rows():
     assert session.commits == 1, "one commit per site, so a failure keeps what it wrote"
 
 
+def test_the_run_makes_the_journal_directory_itself(tmp_path, one_call, monkeypatch):
+    """The production run died on this: FileNotFoundError, because the caller made
+    the directory on the host and only public/data, logs and frontend are mounted
+    into the container, so output/ did not exist in there (measured 2026-10-04)."""
+    monkeypatch.setattr("pipeline.wikidata_name_backfill.SessionLocal", lambda: _Closed())
+    monkeypatch.setattr(
+        "pipeline.wikidata_name_backfill.load_sites",
+        lambda *a, **k: [("site-1", "Machu Picchu", QID)],
+    )
+    monkeypatch.setattr(
+        "pipeline.wikidata_name_backfill.store", lambda session, plan_row: len(plan_row.rows)
+    )
+    path = tmp_path / "remediation" / "wikidata_names" / "run.jsonl"
+    assert main(["--apply", "--journal", str(path)]) == 0
+    assert path.exists(), "the run has to create the directory it journals into"
+    written = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert [row["name"] for row in written] == ["Machu Picchu"]
+    assert [n["name"] for n in written[0]["names"]] == ["マチュ・ピチュ", "麻丘比丘"]
+
+
+class _Closed:
+    """A session that closes and does nothing else; the store is mocked."""
+
+    def close(self) -> None:
+        pass
+
+
 def test_a_qid_file_needs_no_database(tmp_path, one_call, capsys):
     """The yield must be measurable without a database, before anything is written."""
     path = tmp_path / "qids.tsv"
