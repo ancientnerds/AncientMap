@@ -22,9 +22,16 @@ and writes check_report.json. A paper is publishable only when every gate passes
    page_anchors the paper page's own resolver finds every #ev-NN on the served HTML (the
                page half of stream A's check_evidence_anchors)
  7 claims      every claim-check task answered and `supported` (claims.py)
+   support     the eight rules of docs/reports/theo-paper-defects-2026-10-04.md, decided
+               against the archived source texts (paper_claim_gate): every [n] has a located
+               supporting sentence, a number of a paragraph is in its located quote, a site
+               code or identifier is in a cited source, a retraction claim carries the
+               retraction word, no sentence ends on a preposition, conjunction or article
  8 images      every embedded image checked meaningful/weak, licence + attribution + source
                URL + caption, file present; the paper embeds exactly the selected images;
                every content section carries at least one image
+   picture     the picture rules of the same report (theo_image_gate): no `verified:no`
+               marker ships, every picture is served, credited, licensed and captioned
  9 hero        hero_picker.pick_hero_image found a banner among the checked images
 10 quality     quality_score, passed only when 1-9 pass and quality_gate_passed agrees
 """
@@ -36,6 +43,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from pipeline.lyra import paper_claim_gate, theo_image_gate
 from pipeline.lyra.coherence_pass import check_title_terms_in_body, extract_title_terms
 from pipeline.lyra.hallucination_gate import extract_specifics, verify_against_pack
 from pipeline.lyra.hero_picker import HERO_MIN_WIDTH, pick_hero_image
@@ -295,6 +303,75 @@ def gate_images(ws: PaperWorkspace, report: str, placed: list[dict[str, Any]]) -
     )
 
 
+def texts_by_number(built: BuiltPaper, texts: dict[str, str]) -> dict[str, str]:
+    """The archived source texts under the reference numbers the paper cites.
+
+    `texts` is keyed by source id (claims.source_texts); the paper's markers are
+    numbers, so the map the claim gate reads is `n -> text`. A source without a
+    text is simply absent: the claim gate reports its markers as unreadable
+    (rule 2, report class D: a reference that could not be fetched may not carry
+    a marker).
+    """
+    return {
+        str(row["n"]): texts[row["source_id"]]
+        for row in built.sources
+        if row["source_id"] in texts
+    }
+
+
+def gate_support(report: str, texts: dict[str, str]) -> Gate:
+    """The eight rules of the defect report, decided here and not in a prompt.
+
+    `docs/reports/theo-paper-defects-2026-10-04.md` measured 2,105 findings over
+    the 31 published papers and every one of those papers passed every gate that
+    existed: a marker only had to be syntactically a marker. These rules need
+    the fetched source texts, which is why they live in the check and not in the
+    brief: a wrong citation, a sharpened number, a spliced quotation, a sentence
+    cut mid-clause and a site code nobody wrote are all decidable here.
+    """
+    issues = paper_claim_gate.check_paper(report, texts)
+    return Gate(
+        "support",
+        not issues,
+        {
+            "checked_numbers": sorted(texts, key=lambda n: int(n)),
+            "rules": sorted({issue.rule for issue in issues}),
+            "issues": [asdict(issue) for issue in issues],
+        },
+    )
+
+
+#: The picture rules the studio does NOT run. `not_served` is the studio's own
+#: `gate_images` ("file missing from images/selected/"): the served copy on the
+#: VPS is a fact this workstation cannot see, so the disk rule belongs to
+#: theo_publishing.check_pictures.
+_STUDIO_IMAGE_SKIPPED = frozenset({"not_served"})
+
+
+def gate_picture(ws: PaperWorkspace, report: str, placed: list[dict[str, Any]]) -> Gate:
+    """Rule 6: an image is only correct if the picture was opened and recognised.
+
+    `verified:no` must mean "nobody has looked" and must never ship (the report's
+    own words), a credit must belong to a picture the paper embeds, and no
+    picture may be credited twice.
+    """
+    issues = [
+        issue
+        for issue in theo_image_gate.check_image_report(
+            report, placed, request_id=ws.request_id, served_root=None
+        )
+        if issue.rule not in _STUDIO_IMAGE_SKIPPED
+    ]
+    return Gate(
+        "picture",
+        not issues,
+        {
+            "rules": sorted({issue.rule for issue in issues}),
+            "issues": [asdict(issue) for issue in issues],
+        },
+    )
+
+
 def pick_hero(title: str, placed: list[dict[str, Any]]) -> dict[str, Any] | None:
     """hero_picker's choice, with the sizes it cannot read locally applied up front.
 
@@ -444,11 +521,13 @@ def run_check(ws: PaperWorkspace) -> dict[str, Any]:
         gate_meta(meta, dossier.question),
         gate_references(report, built.sources, dossier),
         gate_specifics(report, built.sources, dossier, texts),
+        gate_support(report, texts_by_number(built, texts)),
         gate_coherence(meta["title"], report, status),
         evidence_gate,
         page_gate,
         claims_gate,
         gate_images(ws, report, built.probative_images),
+        gate_picture(ws, report, built.probative_images),
         hero_gate,
     ]
     score = quality_score(gates, audit, built, dossier, status)

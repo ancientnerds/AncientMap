@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 from tests.fake_sql import FakeResult, RecordingSession
@@ -31,7 +32,8 @@ The Stone of the Pregnant Woman weighs roughly 1,000 tonnes according to the ins
 
 ![Quarry block with a person for scale]({IMG})
 
-*Quarry block with a person for scale* [Source](https://commons.wikimedia.org/wiki/File:Baalbek.jpg)
+*Quarry block with a person for scale*
+[Source](https://commons.wikimedia.org/wiki/File:Baalbek.jpg)
 
 ## Connecting the Dots
 
@@ -125,6 +127,24 @@ DOSSIER_SUMMARY = {
         "tdm_reserved": 0,
     },
 }
+
+
+def images_tree(tmp_path: Path, *names: str, request_id: str = REQ) -> tuple[Path, Path]:
+    """A served-data tree with the paper's pictures in it, as the site has them.
+
+    Returns `(images_root, served_root)`: `images_root` is the directory
+    `RESEARCH_IMAGES_DIR` names, `served_root` the one above it that nginx serves
+    as `/data/` and that a web path in a paper resolves against
+    (`theo_publishing.check_pictures`). In production the two are one tree, so a
+    test that puts a file in one without the other gets `not_served` out of the
+    other - which is the point of the rule.
+    """
+    served = tmp_path / "data"
+    images_root = served / "research-images"
+    (images_root / request_id).mkdir(parents=True)
+    for name in names:
+        (images_root / request_id / name).write_bytes(b"jpeg")
+    return images_root, served
 
 
 def make_result(**overrides) -> dict:

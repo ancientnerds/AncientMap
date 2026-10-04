@@ -102,6 +102,45 @@ def test_bundle_carries_the_published_snapshot(checked):
     assert bundle.upload_names(r) == expected
 
 
+def test_the_bundle_carries_the_sentence_evidence_card_without_touching_the_report(checked):
+    """The audit artefact of the defect report, and the promise that it changes
+    nothing a reader sees: the rendered markdown is byte-identical, the markers
+    stay paragraph-level, and the card says per sentence which source's fetched
+    text carries it."""
+    b = bundle.build_bundle(checked)
+    card = b["result"]["sentence_evidence"]
+    assert card["version"] == 1
+    counts = card["counts"]
+    assert counts["sentences"] > 0
+    assert counts["with_refs"] == counts["located"] + counts["unlocated"]
+    assert counts["sentences"] == counts["with_refs"] + counts["sentences_without_refs"]
+
+    located = [
+        sentence
+        for para in card["paragraphs"]
+        for sentence in para["sentences"]
+        if sentence["quote"]
+    ]
+    assert located, "the fixture's archive texts must locate at least one of its sentences"
+    built = numbering.number(checked)
+    by_number = gates.texts_by_number(
+        built, gates.source_texts(checked, gates.load_dossier(checked))
+    )
+    for sentence in located:
+        # Every quote is a contiguous run of the named source's text, at the offset
+        # the card gives, so a reader can check it without redoing the research.
+        source = by_number[sentence["quote_source"]]
+        start = sentence["quote_start"]
+        assert start >= 0
+        assert source[start : start + len(sentence["quote"])] == sentence["quote"]
+        assert sentence["quote_source"] in sentence["refs"]
+
+    # Nothing else moved: the report the page renders is the same text, and the
+    # marker grammar is untouched.
+    assert b["result"]["report"] == b["result"]["published_report"]
+    assert "[S:" not in b["result"]["report"]
+
+
 def test_bundle_refuses_a_stale_or_failing_check(checked):
     checked.draft.write_text(
         checked.draft.read_text(encoding="utf-8").replace("still lies", "still sits"),

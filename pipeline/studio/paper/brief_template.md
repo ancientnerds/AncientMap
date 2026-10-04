@@ -297,6 +297,12 @@ hard. That's not gullibility. That's hope."
 - A citation points to a source that actually supports that specific sentence, not merely a topically
   related one. The claim-by-claim fact check reads the cited source's archived text (a TDM-reserved
   source: its page, read live) and rejects mismatches.
+- **One marker per claim, and never two claims from two sources in one sentence.** A marker is asked to
+  carry the sentence it stands in, so "the quarry stone is local limestone, and the podium blocks weigh
+  800 tons [S:a] [S:b]" is refused: the first source does not carry the tonnage and the second does not
+  carry the limestone. Write two sentences, one claim each, one marker each. Several markers *in* one
+  sentence are right when they support that one claim from several sources ("...dates to 3000 BC [S:a]
+  [S:b].") and wrong when they are two claims.
 - `[self]` or any other bracket token that is not a citation marker, a footnote `[^n]` or a markdown link
   never appears in prose (the artifact gate holds the paper on any non-numeric bracket token).
 - If a sentence cannot be backed by a dossier source, delete the sentence. Fewer fully cited paragraphs beat
@@ -313,6 +319,21 @@ hard. That's not gullibility. That's hope."
   blocks the publish.
 - Do not include "common knowledge" claims that no cited source states.
 - If the dossier is thin on a point, write less about it. Short and honest beats long and fabricated.
+- **Find the sentence before you write the marker.** For every sentence you are about to mark, look up the
+  source's archived text (`sources/<id>.txt` or `texts/<id>.txt`) and find the sentence that supports it.
+  The support gate now requires it: a marked sentence whose specifics cannot be found in the source it
+  cites blocks the publish, and it is the defect the last audit measured most often (384 misattributed
+  sentences in 31 papers, more than half of all findings). No located sentence means re-source the sentence
+  or cut it — not a second citation to the same paragraph.
+- **Never sharpen a source.** Carry the hedge, the unit, the epoch and the uncertainty the source carries.
+  If the source says "about 1,000 tons", the paper says "about 1,000 tons", not "1,000 tons"; if it says
+  "may have been carved in the Roman period", the paper keeps "may". A quotation is a **contiguous** run of
+  text: two sentences of a source spliced into one quoted phrase is not a quotation and is refused.
+- **Complete every sentence.** A sentence ends on a full stop, a question mark or an exclamation mark — never
+  on a preposition, a conjunction or an article. A truncated sentence blocks the publish.
+- Copy identifiers (a DOI, a PMID, an ISBN, a precise date) from the source; never reconstruct them from
+  memory, and never invent an archive site code — if the paper names a site and the dossier has no code for
+  it, write the name without a code.
 
 ## 7. Banned phrases
 

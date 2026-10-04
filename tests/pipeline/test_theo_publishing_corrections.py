@@ -82,9 +82,11 @@ def _legacy_row(published_by: str = "Theo"):
 
 @pytest.fixture
 def images(tmp_path):
-    (tmp_path / REQ).mkdir()
-    (tmp_path / REQ / IMG_NAME).write_bytes(b"jpeg")
-    return tmp_path
+    """The site's `research-images` directory, so `images.parent` is the served root."""
+    root = tmp_path / "research-images"
+    (root / REQ).mkdir(parents=True)
+    (root / REQ / IMG_NAME).write_bytes(b"jpeg")
+    return root
 
 
 @pytest.fixture
@@ -125,7 +127,13 @@ def _correction(**overrides) -> dict:
 
 def _correct(session, images, correction, *, dry_run=False):
     return tp.correct_paper(
-        session, REQ, correction, bundle_sha256=SHA, dry_run=dry_run, images_root=images
+        session,
+        REQ,
+        correction,
+        bundle_sha256=SHA,
+        dry_run=dry_run,
+        images_root=images,
+        served_root=images.parent,
     )
 
 
@@ -145,6 +153,7 @@ def test_a_correction_replaces_both_texts_and_logs_itself(images, effects, notic
         "quality",
         "evidence",
         "images",
+        "pictures",
         "page",
     }
     stored = json.loads(session.written)
@@ -345,6 +354,7 @@ def test_a_legacy_paper_is_republished_in_full(images, effects, notices):
         "quality",
         "evidence",
         "images",
+        "pictures",
         "page",
     }
     stored = json.loads(session.written)

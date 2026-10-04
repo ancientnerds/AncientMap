@@ -29,9 +29,11 @@ URL = "https://ancientnerds.com/research/the-baalbek-trilithon"
 
 @pytest.fixture
 def images(tmp_path):
-    (tmp_path / REQ).mkdir()
-    (tmp_path / REQ / IMG_NAME).write_bytes(b"jpeg")
-    return tmp_path
+    """The site's `research-images` directory, so `images.parent` is the served root."""
+    root = tmp_path / "research-images"
+    (root / REQ).mkdir(parents=True)
+    (root / REQ / IMG_NAME).write_bytes(b"jpeg")
+    return root
 
 
 @pytest.fixture
@@ -61,6 +63,7 @@ def _publish(session, images, *, dry_run=False, result=None):
         dry_run=dry_run,
         bundle_sha256=SHA,
         images_root=images,
+        served_root=images.parent,
     )
 
 
@@ -82,6 +85,7 @@ def test_publish_writes_journals_verifies_and_announces(images, effects, notices
         "evidence",
         "retention",
         "images",
+        "pictures",
         "page",
     }
 

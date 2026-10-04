@@ -42,8 +42,8 @@ NEW_PATH = f"/data/research-images/{REQ}/{NEW_NAME}"
 NEW_BLOCK = (
     f"![gallery:1a2b3c4d|verified:yes|Quarry block on the cutting floor]({NEW_PATH})\n"
     "\n"
-    "*Quarry block on the cutting floor. Photo: DAI / Wikimedia Commons.*"
-    " [Source](https://commons.wikimedia.org/wiki/File:Baalbek_floor.jpg)\n"
+    "*Quarry block on the cutting floor. Photo: DAI / Wikimedia Commons.*\n"
+    "[Source](https://commons.wikimedia.org/wiki/File:Baalbek_floor.jpg)\n"
 )
 #: The corrections log's date range is [publication day, today], so the entry is
 #: dated today rather than a fixed date that would age out.
@@ -89,10 +89,12 @@ def _patch(**overrides) -> dict:
 
 @pytest.fixture
 def images(tmp_path):
-    (tmp_path / REQ).mkdir()
-    (tmp_path / REQ / IMG_NAME).write_bytes(b"jpeg")
-    (tmp_path / REQ / NEW_NAME).write_bytes(b"jpeg")
-    return tmp_path
+    """The site's `research-images` directory; `images.parent` is the served root."""
+    root = tmp_path / "research-images"
+    (root / REQ).mkdir(parents=True)
+    (root / REQ / IMG_NAME).write_bytes(b"jpeg")
+    (root / REQ / NEW_NAME).write_bytes(b"jpeg")
+    return root
 
 
 @pytest.fixture
@@ -120,6 +122,7 @@ def _patch_images(session, images, patch=None, *, sha=SHA, dry_run=False):
         bundle_sha256=sha,
         dry_run=dry_run,
         images_root=images,
+        served_root=images.parent,
     )
 
 
@@ -137,8 +140,8 @@ def test_a_patch_replaces_the_image_block_and_nothing_else(images, effects):
     old_block = (
         f"![Quarry block with a person for scale]({IMG})\n"
         "\n"
-        "*Quarry block with a person for scale*"
-        " [Source](https://commons.wikimedia.org/wiki/File:Baalbek.jpg)\n"
+        "*Quarry block with a person for scale*\n"
+        "[Source](https://commons.wikimedia.org/wiki/File:Baalbek.jpg)\n"
     )
     assert old_block in REPORT
     expected = REPORT.replace(old_block, NEW_BLOCK)
@@ -291,24 +294,24 @@ def test_the_halley_picture_is_replaced_by_the_block_the_studio_wrote():
         "\n"
         f"![gallery:aa11bb22|verified:no|Halley's comet]({old})\n"
         "\n"
-        "*Halley's comet. Photo: J. F. Julius Schmidt / Wikimedia Commons.*"
-        " [Source](https://commons.wikimedia.org/wiki/File:Halley.jpg)\n"
+        "*Halley's comet. Photo: J. F. Julius Schmidt / Wikimedia Commons.*\n"
+        "[Source](https://commons.wikimedia.org/wiki/File:Halley.jpg)\n"
         "\n"
         "Its 1910 return was photographed from every inhabited landmass. [2]\n"
     )
     block = (
         f"![gallery:aa11bb22|verified:yes|Halley's comet in 1910]({new})\n"
         "\n"
-        "*Halley's comet in 1910. Photo: Max Wolf / Astrophotographische Gesellschaft.*"
-        " [Source](https://commons.wikimedia.org/wiki/File:Halley_1910.jpg)\n"
+        "*Halley's comet in 1910. Photo: Max Wolf / Astrophotographische Gesellschaft.*\n"
+        "[Source](https://commons.wikimedia.org/wiki/File:Halley_1910.jpg)\n"
     )
     patched = tp.apply_image_replacements(paper, [{"old_web_path": old, "markdown": block}])
 
     assert patched == paper.replace(
         f"![gallery:aa11bb22|verified:no|Halley's comet]({old})\n"
         "\n"
-        "*Halley's comet. Photo: J. F. Julius Schmidt / Wikimedia Commons.*"
-        " [Source](https://commons.wikimedia.org/wiki/File:Halley.jpg)\n",
+        "*Halley's comet. Photo: J. F. Julius Schmidt / Wikimedia Commons.*\n"
+        "[Source](https://commons.wikimedia.org/wiki/File:Halley.jpg)\n",
         block,
     )
     # The verified:no marker is gone with the old block, and the prose is intact.

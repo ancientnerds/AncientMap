@@ -242,6 +242,9 @@ def pick_slug(session: Any, title: str, request_id: str) -> str:
 #: /app/public/data/research-images in the API container (bind mount of the VPS's
 #: /var/www/ancientnerds/public/data); the repo root's public/data elsewhere.
 RESEARCH_IMAGES_DIR = Path(__file__).resolve().parents[2] / "public" / "data" / "research-images"
+#: The directory nginx serves as `/data/`, which is what a web path in a paper
+#: resolves against (check_pictures).
+SERVED_DATA_DIR = RESEARCH_IMAGES_DIR.parent
 
 #: A citation-registry source id; applied with fullmatch like every id pattern here.
 SOURCE_ID_RE = re.compile(r"[0-9a-f]{12}")
@@ -270,7 +273,16 @@ _RESULT_REQUIRED: dict[str, type] = {
     "corrections": list,
 }
 _RESULT_NULLABLE_DICTS = ("hero_image", "published_hero_image")
-_RESULT_OPTIONAL = frozenset({"audit", "writer"})
+#: `sentence_evidence` is the audit artefact the studio builds for every paper
+#: (`studio.paper.evidence_card.build_evidence_card`): per cited sentence, the
+#: reference numbers of its paragraph and the quote `claim_support.locate_support`
+#: found for it in that reference's fetched text, with character offsets. It is
+#: stored so a reader of `result_json` can check which source supports which
+#: sentence without redoing the research. It changes nothing about the page: the
+#: markers stay paragraph-level (1,136 of 1,136 references cited, 0 of 853
+#: paragraphs uncited in the 31-paper corpus) and the rendered report is
+#: byte-identical with and without it.
+_RESULT_OPTIONAL = frozenset({"audit", "writer", "sentence_evidence"})
 
 
 def _gate(issues: list[str], **extra: Any) -> dict:
@@ -493,6 +505,46 @@ def check_images(
     if missing:
         issues.append(f"{len(missing)} image(s) missing under research-images/{request_id}/")
     return _gate(issues, checked=len(paths), missing=missing, foreign=foreign)
+
+
+#: The class-G rules the publish gate adds on top of the studio's own image gate
+#: (`studio.paper.gates.gate_images`, which already refuses a missing licence,
+#: source URL, attribution or caption, and a file missing from images/selected/).
+#: What is left is what a *published* page can still get wrong by itself: a
+#: picture nobody opened (`verified:no` in the stored alt text - the report:
+#: "must mean nobody has looked, and must never ship"), a credit without a
+#: picture (cargo-cults shipped 8 credits for 7 pictures), one picture credited
+#: twice, and a reference the site does not serve (7 of the 511 references in
+#: the 31-paper corpus answer 404, all 7 in one paper).
+_PUBLISH_IMAGE_RULES = frozenset(
+    {"unverified", "not_served", "credit_picture_mismatch", "duplicate_credit"}
+)
+
+
+def check_pictures(
+    request_id: str, report: str, probative_images: list, *, served_root: Path
+) -> dict:
+    """The picture rules of docs/reports/theo-paper-defects-2026-10-04.md section G.
+
+    `served_root` is the directory the site serves as `/data/`: every web path
+    has to exist under it, because a reference the site cannot answer is a
+    defect on the page, not a cosmetic one.
+    """
+    from pipeline.lyra import theo_image_gate
+
+    figures = theo_image_gate.parse_figures(report)
+    issues = [
+        issue
+        for issue in theo_image_gate.check_image_report(
+            report, probative_images, request_id=request_id, served_root=served_root
+        )
+        if issue.rule in _PUBLISH_IMAGE_RULES
+    ]
+    return _gate(
+        [f"{issue.rule}: {issue.detail}" for issue in issues],
+        figures=len(figures),
+        rules=sorted({issue.rule for issue in issues}),
+    )
 
 
 def check_publish_status(status: str, is_public: bool, *, dry_run: bool) -> dict:
@@ -887,6 +939,7 @@ def publish_paper(
     dry_run: bool,
     bundle_sha256: str,
     images_root: Path = RESEARCH_IMAGES_DIR,
+    served_root: Path = SERVED_DATA_DIR,
 ) -> PublishOutcome:
     """Gate, then publish a Claude-written paper in one guarded transaction with its journal row.
 
@@ -930,6 +983,12 @@ def publish_paper(
             result["probative_images"],
             result["hero_image"],
             images_root=images_root,
+        )
+        gates["pictures"] = check_pictures(
+            request_id,
+            result["report"],
+            result["probative_images"],
+            served_root=served_root,
         )
         stored = {**result, "audit": audit, "writer": writer}
         for key in ("dossier", "corrections", "videos"):
@@ -1141,6 +1200,7 @@ def correct_paper(
     bundle_sha256: str,
     dry_run: bool,
     images_root: Path = RESEARCH_IMAGES_DIR,
+    served_root: Path = SERVED_DATA_DIR,
 ) -> PublishOutcome:
     """Re-gate and apply a correction to a public paper (contract C5).
 
@@ -1239,6 +1299,12 @@ def correct_paper(
             paper.get("hero_image"),
             images_root=images_root,
         )
+        gates["pictures"] = check_pictures(
+            request_id,
+            served,
+            paper.get("probative_images") or [],
+            served_root=served_root,
+        )
         stored = {
             **current,
             **paper,
@@ -1314,25 +1380,32 @@ def correct_paper(
 # ---------------------------------------------------------------------------
 
 #: One embedded image as the page renders it: the `![alt](path)` line, then the
-#: caption line that carries the `[Source](url)` link (theo_image_captions.
-#: image_markdown). The alt text of a studio image is a `gallery:` marker, so
-#: the line is matched on the path alone.
+#: caption line and the `[Source](url)` line `theo_image_captions.image_markdown`
+#: writes after it. The alt text of a studio image is a `gallery:` marker, so the
+#: line is matched on the path alone.
 _IMAGE_LINE_RE = re.compile(r"^!\[(?P<alt>[^\]]*)\]\((?P<path>[^)]+)\)\s*$")
-_CAPTION_LINE_RE = re.compile(r"^(?P<caption>\*[^*].*\*)(?:\s*\[Source\]\((?P<url>[^)]+)\))?\s*$")
+_CAPTION_LINE_RE = re.compile(r"^\*[^*\n].*\*\s*$")
+_SOURCE_LINE_RE = re.compile(r"^\[Source\]\((?P<url>[^)\n]+)\)\s*$")
 _PATCH_ENTRY_KEYS = frozenset({"old_web_path", "markdown"})
 
 
 def _image_block(text: str, old_web_path: str) -> tuple[int, int]:
     """The (start, end) character range of the image block `old_web_path` renders.
 
-    The block is the `![...](path)` line, an optional blank line and the caption
-    line with its `[Source]` link. Raises PublishInputError when the paper does
-    not carry exactly one such block in that shape -- a patch that guesses which
-    lines belong to a picture would rewrite the reader's page on a guess.
+    The block is the `![...](path)` line, an optional blank line, the caption line
+    and the `[Source](url)` line. Raises PublishInputError when the paper does not
+    carry exactly one such block in that shape -- a patch that guessed which lines
+    belong to a picture would rewrite the reader's page on a guess, and one that
+    stopped at the caption would leave the old picture's credit under the new
+    picture.
     """
     lines = text.split("\n")
-    hits = [i for i, line in enumerate(lines) if _IMAGE_LINE_RE.match(line) and
-            _IMAGE_LINE_RE.match(line)["path"] == old_web_path]
+    hits = [
+        index
+        for index, line in enumerate(lines)
+        if _IMAGE_LINE_RE.match(line)
+        and _IMAGE_LINE_RE.match(line)["path"] == old_web_path
+    ]
     if len(hits) != 1:
         raise PublishInputError(
             f"{old_web_path}: the text renders {len(hits)} such images, not exactly one"
@@ -1343,10 +1416,14 @@ def _image_block(text: str, old_web_path: str) -> tuple[int, int]:
         end += 1
     if end < len(lines) and _CAPTION_LINE_RE.match(lines[end]):
         end += 1
-    # Blank lines *after* the caption line stay outside the block: they are the
-    # paragraph break to the next paragraph, and the replacement markdown ends
-    # with exactly one newline (theo_image_captions.image_markdown).
-    return sum(len(line) + 1 for line in lines[:start]), sum(len(line) + 1 for line in lines[:end])
+        if end < len(lines) and _SOURCE_LINE_RE.match(lines[end]):
+            end += 1
+    # Blank lines *after* the block stay outside it: they are the paragraph break
+    # to the next paragraph, and the replacement markdown ends with exactly one
+    # newline (theo_image_captions.image_markdown).
+    return sum(len(line) + 1 for line in lines[:start]), sum(
+        len(line) + 1 for line in lines[:end]
+    )
 
 
 def apply_image_replacements(text: str, replacements: list[dict]) -> str:
@@ -1452,6 +1529,7 @@ def patch_images(
     bundle_sha256: str,
     dry_run: bool,
     images_root: Path = RESEARCH_IMAGES_DIR,
+    served_root: Path = SERVED_DATA_DIR,
 ) -> PublishOutcome:
     """Replace pictures in a public paper without republishing its text (rule 8).
 
@@ -1505,6 +1583,12 @@ def patch_images(
                 patch["probative_images"],
                 current.get("hero_image"),
                 images_root=images_root,
+            )
+            gates["pictures"] = check_pictures(
+                request_id,
+                served,
+                patch["probative_images"],
+                served_root=served_root,
             )
             stored = {
                 **current,

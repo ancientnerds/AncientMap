@@ -20,6 +20,7 @@ from tests.pipeline.theo_publish_fixtures import (
     SOURCE_A,
     TITLE,
     WRITER,
+    images_tree,
     make_result,
 )
 
@@ -248,6 +249,51 @@ def test_missing_foreign_and_unsafe_images_fail(tmp_path):
     assert f"not a research-images path: /data/research-images/{REQ}/../etc.jpg" in gate["issues"]
     trailing = tp.check_images(REQ, "", [{"web_path": IMG + "\n"}], None, images_root=tmp_path)
     assert trailing["issues"] == [f"not a research-images path: {IMG}\n"]
+
+
+# --- pictures (report class G, rule 6) ----------------------------------------------
+
+
+def test_a_verified_no_marker_never_ships(tmp_path):
+    """Rule 6 in the report's own words: `verified:no` must mean "nobody has looked".
+
+    52 of the 511 image references in the 31-paper corpus carried it, and every one of
+    those papers passed every gate that existed.
+    """
+    report = REPORT.replace(f"![Quarry block with a person for scale]({IMG})", f"![gallery:aa11bb22|verified:no|Quarry block with a person for scale]({IMG})")
+    images_root, served = images_tree(tmp_path, IMG_NAME)
+    gate = tp.check_pictures(
+        REQ, report, make_result()["probative_images"], served_root=served
+    )
+    assert gate["passed"] is False
+    assert gate["rules"] == ["unverified"]
+    assert "verified:no" in gate["issues"][0]
+    assert images_root.is_dir()
+
+
+def test_a_picture_the_site_cannot_serve_fails(tmp_path):
+    """7 of the 511 references in the corpus answered 404, all in one paper.
+
+    The file check (`check_images`) asks whether the picture is in the paper's
+    folder; this asks whether the site can answer the URL the paper prints, which
+    is a different question and the one a reader hits.
+    """
+    images_root, served = images_tree(tmp_path)
+    report = REPORT.replace(IMG, f"/data/research-images/{REQ}/p9_never_uploaded.jpg")
+    gate = tp.check_pictures(
+        REQ, report, make_result()["probative_images"], served_root=served
+    )
+    assert gate["passed"] is False
+    assert gate["rules"] == ["not_served"]
+    assert "p9_never_uploaded.jpg" in gate["issues"][0]
+
+
+def test_a_credited_licensed_picture_in_the_right_folder_passes(tmp_path):
+    images_root, served = images_tree(tmp_path, IMG_NAME)
+    gate = tp.check_pictures(
+        REQ, REPORT, make_result()["probative_images"], served_root=served
+    )
+    assert gate == {"passed": True, "issues": [], "figures": 1, "rules": []}
 
 
 # --- status -------------------------------------------------------------------------

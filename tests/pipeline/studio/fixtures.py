@@ -472,8 +472,12 @@ SECTIONS = [
     (
         "How They Moved It",
         [
-            "The quarry stone of Baalbek is a local limestone, and the temple of Jupiter "
-            "stands on a podium of 800 tons blocks [S:e5e5e5e5e5e5] [S:bbbbbbbbbbb2].",
+            # One sentence per source, each marker standing in the sentence its
+            # reference carries: the support gate (rule 1) asks a marker to be
+            # located in the paragraph it stands in, and a sentence that
+            # combines a claim from S5 with one from S2 is offered to both.
+            "The quarry stone of Baalbek is a local limestone [S:e5e5e5e5e5e5]. "
+            "The temple of Jupiter stands on a podium of 800 tons blocks [S:bbbbbbbbbbb2].",
         ],
     ),
     (

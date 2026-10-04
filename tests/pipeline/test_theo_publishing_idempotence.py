@@ -14,11 +14,17 @@ from __future__ import annotations
 
 import io
 import json
+from datetime import UTC, datetime
 
 import pytest
 
 from pipeline.lyra import theo_publish as cli
 from pipeline.lyra import theo_publishing as tp
+from tests.pipeline.test_theo_publishing_corrections import (
+    NEW_REPORT,
+    SLUG,
+    _live_row,
+)
 from tests.pipeline.theo_publish_fixtures import (
     IMG_NAME,
     REQ,
@@ -28,13 +34,6 @@ from tests.pipeline.theo_publish_fixtures import (
     journal_entry,
     research_row,
 )
-from tests.pipeline.test_theo_publishing_corrections import (
-    NEW_REPORT,
-    SLUG,
-    _live_row,
-)
-
-from datetime import UTC, datetime
 
 PUBLISHED_AT = datetime(2026, 9, 20, 10, 0, tzinfo=UTC)
 SHA = "b" * 64
@@ -81,14 +80,22 @@ def _correct(session, images, correction=None, *, sha=SHA, dry_run=False):
         bundle_sha256=sha,
         dry_run=dry_run,
         images_root=images,
+        served_root=images.parent,
     )
 
 
 @pytest.fixture
 def images(tmp_path):
-    (tmp_path / REQ).mkdir()
-    (tmp_path / REQ / IMG_NAME).write_bytes(b"jpeg")
-    return tmp_path
+    """The site's `research-images` directory; `served` is the one nginx serves as /data/."""
+    root = tmp_path / "research-images"
+    (root / REQ).mkdir(parents=True)
+    (root / REQ / IMG_NAME).write_bytes(b"jpeg")
+    return root
+
+
+@pytest.fixture
+def served(images) -> Path:
+    return images.parent
 
 
 @pytest.fixture
@@ -206,10 +213,9 @@ def test_an_older_journal_row_with_the_same_hash_is_not_treated_as_applied(image
 
 
 def test_a_publish_bundle_sent_twice_publishes_once(tmp_path):
-    from tests.pipeline.theo_publish_fixtures import make_result
+    from tests.pipeline.theo_publish_fixtures import images_tree, make_result
 
-    (tmp_path / REQ).mkdir()
-    (tmp_path / REQ / IMG_NAME).write_bytes(b"jpeg")
+    images_root, served = images_tree(tmp_path, IMG_NAME)
     session = PublishSession(research_row())
     result = make_result()
     first = tp.publish_paper(
@@ -219,7 +225,8 @@ def test_a_publish_bundle_sent_twice_publishes_once(tmp_path):
         writer=WRITER,
         dry_run=False,
         bundle_sha256=SHA,
-        images_root=tmp_path,
+        images_root=images_root,
+        served_root=served,
     )
     assert first.ok is True
     assert first.already_applied is False
@@ -231,7 +238,8 @@ def test_a_publish_bundle_sent_twice_publishes_once(tmp_path):
         writer=WRITER,
         dry_run=False,
         bundle_sha256=SHA,
-        images_root=tmp_path,
+        images_root=images_root,
+        served_root=served,
     )
     assert second.ok is True
     assert second.already_applied is True
@@ -273,8 +281,9 @@ def test_the_cli_sends_the_same_bytes_twice_and_writes_once(images, monkeypatch,
     session = PublishSession(_live_row())
     monkeypatch.setattr(cli, "get_session", lambda: session)
     # The CLI's correct_paper has no images_root, so it reads the production
-    # directory; this test is about the hash, so the images gate is stubbed.
+    # directory; this test is about the hash, so the two picture gates are stubbed.
     monkeypatch.setattr(tp, "check_images", lambda *a, **k: {"passed": True, "issues": []})
+    monkeypatch.setattr(tp, "check_pictures", lambda *a, **k: {"passed": True, "issues": []})
     raw = json.dumps(_correction()).encode("utf-8")
 
     out = io.StringIO()
