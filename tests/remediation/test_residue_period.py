@@ -205,8 +205,25 @@ class TestTheClassifier:
         v = RP.classify(row(period_start=850, period_name="1 - 500 AD"), scope="bucket", frontend=lambda y: "1 - 500 AD")
         assert not v.ok and v.reason == "implementations-disagree"
 
+    def test_the_premise_of_a_yearless_row_names_its_absence(self) -> None:
+        """`Undated` is derived from the row having **no** year, and guard 5 compares the premise as
+        text - so the premise has to say so. `u.period_start::text` alone is NULL there, and the
+        plan refuses a write with no premise: the absence is the input, and it is named."""
+        lane = RP.lane_of("undated", WAVE)
+        assert lane.premise_sql == (
+            "CASE WHEN u.period_start IS NULL THEN 'no period_start' ELSE u.period_start::text END"
+        )
+
+    def test_a_yearless_row_is_conditioned_on_still_having_no_year(self, frontend) -> None:
+        v = RP.classify(row(premise="no period_start"), scope="undated", frontend=frontend)
+        assert v.ok and v.premise == "no period_start"
+
     def test_the_written_value_carries_the_premise_the_lane_conditions_on(self, frontend) -> None:
-        v = RP.classify(row(premise="850"), scope="undated", frontend=frontend)
+        v = RP.classify(
+            row(period_start=850, period_name="1 - 500 AD", premise="850"),
+            scope="bucket",
+            frontend=frontend,
+        )
         assert v.premise == "850", "guard 5 needs the live input the value was derived from"
 
 

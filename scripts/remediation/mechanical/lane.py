@@ -693,7 +693,15 @@ PERIOD_NAME_READBACK = journal_readback(
 #: exactly one rule; `residue_period.py` builds them, `resolve_lane` finds them by name.
 PERIOD_LABEL_LANE = re.compile(r"^period-label-(undated|bucket)-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
 PERIOD_LABEL_TEST_ID = "period-label/residue"
-PERIOD_LABEL_PREMISE = "u.period_start::text"
+#: The live input a period label is derived from: the site's own year, or - for the residue rung -
+#: the **absence** of one. Guard 5 compares this as text, and `u.period_start::text` is NULL on a
+#: yearless row, which a plan refuses as a missing premise; naming the absence is what lets the
+#: `undated` lane condition its write at all, and it makes the guard mean what it says: if a year
+#: appears between the plan and the apply, the row no longer holds `no period_start` and the write
+#: is refused rather than labelling a dated site `Undated`.
+PERIOD_LABEL_PREMISE = (
+    "CASE WHEN u.period_start IS NULL THEN 'no period_start' ELSE u.period_start::text END"
+)
 
 
 #: What a `site_type` value that is *not a site type* looks like, measured on the phase-3 writes of
