@@ -18,6 +18,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+from tests.pipeline.studio import fixtures as fx
+
 _SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "paper24.py"
 
 
@@ -69,8 +71,10 @@ def test_scan_sorts_dossiers_that_have_not_been_taken_yet(monkeypatch, tmp_path,
 def test_the_iteration_count_comes_from_the_reports_on_disk(monkeypatch, tmp_path, capsys):
     driver = _load()
     monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    monkeypatch.setattr(driver, "LEDGER", tmp_path / "ledger.md")
     ws = driver._ws("bbbbbbbb-0000-0000-0000-000000000001")
     ws.root.mkdir(parents=True)
+    ws.dossier_gz.write_bytes(fx.dossier_gz_bytes())
     ws.check_report.write_text(
         json.dumps(
             {
@@ -94,12 +98,30 @@ def test_the_iteration_count_comes_from_the_reports_on_disk(monkeypatch, tmp_pat
     )
     driver._save({"pulled": [ws.request_id], "checked": {ws.request_id: 2}, "bundled": []})
     assert driver.main(["ledger"]) == 0
-    row = json.loads(capsys.readouterr().out)["rows"][0]
-    assert row["iterations"] == 2
-    assert row["passed"] is False
-    assert row["support_findings"] == 3
-    assert row["rules"] == {"located_sentence": 2, "number_exact": 1}
-    assert row["bundle"] is False
+    assert json.loads(capsys.readouterr().out)["rows"] == 1
+    table = (tmp_path / "ledger.md").read_text(encoding="utf-8")
+    assert f"`{ws.request_id}`" in table
+    assert "| 1 |" in table
+    assert "| 2 | no | 3 | no |" in table  # iterations, green, support findings, bundle
+    # the topic cell is the dossier's question, on one line and without a pipe
+    assert "How were the Baalbek megaliths moved?" in table
+
+
+def test_the_ledger_replaces_a_row_instead_of_appending_a_second(monkeypatch, tmp_path):
+    driver = _load()
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    monkeypatch.setattr(driver, "LEDGER", tmp_path / "ledger.md")
+    ws = driver._ws("bbbbbbbb-0000-0000-0000-000000000001")
+    ws.root.mkdir(parents=True)
+    ws.dossier_gz.write_bytes(fx.dossier_gz_bytes())
+    ws.check_report.write_text(json.dumps({"passed": True, "gates": []}), encoding="utf-8")
+    driver._save({"pulled": [ws.request_id], "checked": {ws.request_id: 1}, "bundled": []})
+    assert driver.main(["ledger"]) == 0
+    assert driver.main(["ledger"]) == 0
+    table = (tmp_path / "ledger.md").read_text(encoding="utf-8")
+    # header + separator + exactly one data row, no matter how often it is rewritten
+    assert table.count(ws.request_id) == 1
+    assert len(table.strip().splitlines()) == 3
 
 
 def test_the_driver_cannot_reach_a_publish_call():

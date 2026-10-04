@@ -42,7 +42,7 @@ from typing import Any
 from pipeline.studio import config, mcode, mcode_checks, remote
 from pipeline.studio.errors import StudioError
 from pipeline.studio.paper import bundle, claims, gates, images, numbering, pull
-from pipeline.studio.paper.workspace import PaperWorkspace, workspace
+from pipeline.studio.paper.workspace import PaperWorkspace, parse_dossier, workspace
 
 # The owner's batch: created 2026-07-05, paused by the owner, resumed 2026-10-04.
 BATCH_USER = "442000112756064260"
@@ -284,29 +284,76 @@ def _iterations(state: dict[str, Any], rid: str) -> int:
     return int((state.get("checked") or {}).get(rid) or 0)
 
 
+#: The table's own header, written once. The columns are the DONE WHEN criteria, so a
+#: row is the whole claim for one topic: it is a bundle, it is green, it took at most
+#: two iterations, and the chain change that came out of it is named.
+LEDGER_HEADER = (
+    "| # | request_id | topic | iterations | green | support findings | bundle | chain change |\n"
+    "|---|---|---|---|---|---|---|---|\n"
+)
+
+
+def _ledger_row(index: int, rid: str, state: dict[str, Any]) -> str | None:
+    """The markdown row for one workspace, or None if it has no report yet.
+
+    Re-running the command replaces a row instead of appending a second one: the
+    ledger is the record of the current state, not a log of every check.
+    """
+    ws = workspace(rid)
+    if not ws.check_report.exists():
+        return None
+    report = json.loads(ws.check_report.read_text(encoding="utf-8"))
+    support = _count_issues(ws).get("support", {})
+    passed = "yes" if report.get("passed") else "no"
+    return (
+        f"| {index} | `{rid}` | {_topic_of(ws)} | {_iterations(state, rid)} | {passed} | "
+        f"{support.get('total', 0)} | {'yes' if ws.bundle.exists() else 'no'} | |"
+    )
+
+
+def _topic_of(ws: PaperWorkspace) -> str:
+    """The research question, in one table cell: no pipes, no newlines.
+
+    Taken from the dossier, because that is where the question is a field. Reading it
+    out of the brief means guessing which line is the question, and the brief's first
+    line is its heading.
+    """
+    if ws.dossier_gz.exists():
+        question = parse_dossier(ws.dossier_gz.read_bytes()).question
+        if question:
+            return " ".join(question.split())[:70]
+    return "(no dossier)"
+
+
 def cmd_ledger(_args: argparse.Namespace) -> int:
-    """One markdown table row per workspace that has a report, newest measurement last."""
+    """Rewrite the run table from the reports on disk, one row per workspace.
+
+    A workspace the driver owns is rewritten from its current report, so re-running
+    the command updates a row instead of appending a second one; rows for other
+    campaigns that share the file are left alone. The `chain change` column is empty
+    on purpose: the driver can measure what happened, but which defect of a paper
+    caused which change in the chain is a judgement, and that judgement is the
+    campaign's point.
+    """
     state = _state()
-    rows = []
-    for rid in sorted(set(state.get("pulled") or [])):
-        ws = workspace(rid)
-        if not ws.check_report.exists():
-            continue
-        report = json.loads(ws.check_report.read_text(encoding="utf-8"))
-        passed = bool(report.get("passed"))
-        findings = _count_issues(ws)
-        support = findings.get("support", {})
-        rows.append(
-            {
-                "request_id": rid,
-                "iterations": _iterations(state, rid),
-                "passed": passed,
-                "support_findings": support.get("total", 0),
-                "rules": support.get("rules", {}),
-                "bundle": ws.bundle.exists(),
-            }
-        )
-    _print({"rows": rows, "ledger": str(LEDGER)})
+    rows: list[str] = []
+    for index, rid in enumerate(sorted(state.get("pulled") or []), start=1):
+        row = _ledger_row(index, rid, state)
+        if row is not None:
+            rows.append(row)
+    owned = [f"`{rid}`" for rid in state.get("pulled") or []]
+    previous = LEDGER.read_text(encoding="utf-8").splitlines() if LEDGER.exists() else []
+    foreign = [
+        line
+        for line in previous
+        if line.startswith("| ") and not line.startswith("| # |") and not any(r in line for r in owned)
+    ]
+    LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    LEDGER.write_text(
+        LEDGER_HEADER + "\n".join(rows + foreign) + ("\n" if rows or foreign else ""),
+        encoding="utf-8",
+    )
+    _print({"rows": len(rows), "kept_foreign_rows": len(foreign), "ledger": str(LEDGER)})
     return 0
 
 
