@@ -611,6 +611,20 @@ class TestTheRun:
         assert counts["wd1"]["decisions"] == 1
         assert R.read_rule(out) is ONE
 
+    def test_a_period_run_pins_its_own_rule(self, tmp_path: Path) -> None:
+        # WD4 asks the same question under its own rule (owner decision of 2026-10-04), and a run
+        # that pinned WD3's rule could not be asked or written: the stage is in every batch id and
+        # in every write lane, so a period run can never write into the finished wd3 run.
+        root, out = self.prepare(tmp_path, period_start=None, period_name=None)
+        POP.build(root, out, table=TABLE, wd1=wd1([]), stage="wd4")
+        assert R.read_rule(out) is R.ONE_FAMILY_PERIOD
+        assert json.loads((out / R.RUN_FILE).read_text(encoding="utf-8"))["stage"] == "wd4"
+
+    def test_an_unknown_stage_names_the_known_ones(self, tmp_path: Path) -> None:
+        root, out = self.prepare(tmp_path, period_start=None)
+        with pytest.raises(R.RuleError, match="wd7"):
+            POP.build(root, out, table=TABLE, wd1=wd1([]), stage="wd7")
+
     def test_a_site_with_nothing_open_is_not_in_the_run(self, tmp_path: Path) -> None:
         root, out = self.prepare(tmp_path)
         counts = POP.build(root, out, table=TABLE, wd1=wd1([]))
