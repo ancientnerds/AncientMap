@@ -22,16 +22,23 @@ and writes check_report.json. A paper is publishable only when every gate passes
    page_anchors the paper page's own resolver finds every #ev-NN on the served HTML (the
                page half of stream A's check_evidence_anchors)
  7 claims      every claim-check task answered and `supported` (claims.py)
-   support     the eight rules of docs/reports/theo-paper-defects-2026-10-04.md, decided
-               against the archived source texts (paper_claim_gate): every [n] has a located
-               supporting sentence, a number of a paragraph is in its located quote, a site
-               code or identifier is in a cited source, a retraction claim carries the
-               retraction word, no sentence ends on a preposition, conjunction or article
+   support     rules 1-5 of docs/reports/theo-paper-defects-2026-10-04.md, decided
+               against the archived source texts (paper_claim_gate over
+               claim_support): every [n] carries a sentence its reference locates, a
+               number or date of a sentence is in that reference, a site code or
+               identifier is in a cited source, a retraction claim carries the
+               retraction word, no sentence ends on a preposition, conjunction or
+               article. A marker is asked to carry its own sentence, not its
+               paragraph, and a sentence with no verifiable content is undecidable
+               here rather than failed - see the two boundary tests in
+               tests/pipeline/test_paper_claim_gate.py
  8 images      every embedded image checked meaningful/weak, licence + attribution + source
                URL + caption, file present; the paper embeds exactly the selected images;
                every content section carries at least one image
-   picture     the picture rules of the same report (theo_image_gate): no `verified:no`
-               marker ships, every picture is served, credited, licensed and captioned
+   picture     rule 6 of the same report (theo_image_gate): no `verified:no` marker
+               ships, every picture is credited, licensed and captioned, and the
+               credit count matches the picture count. `not_served` is the VPS
+               gate's half (theo_publishing.check_pictures), not this one
  9 hero        hero_picker.pick_hero_image found a banner among the checked images
 10 quality     quality_score, passed only when 1-9 pass and quality_gate_passed agrees
 """
