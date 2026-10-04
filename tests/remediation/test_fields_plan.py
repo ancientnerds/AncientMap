@@ -133,6 +133,18 @@ class TestSiteCells:
         out = cells([], row=live(period_name="1 - 500 AD"))
         assert written(out) == {"period_name": ("1 - 500 AD", "1500 - 500 BC")}
 
+    def test_a_label_without_a_start_is_not_written(self) -> None:
+        """The owner's rule of 2026-10-04: a site no source and no type rule dates gets the
+        beginning of its band, and a site that has neither keeps both fields empty. Nothing writes
+        a label on its own: `GOLD_STANDARD.md:79` holds `period_name` equal to
+        `categorize_period(period_start)`, and with no start there is no bucket to name - a label
+        here would be a value no source and no named rule supports."""
+        out = cells(
+            [decision("period_name", "replace", "Undated", None)],
+            row=live(period_start=None, period_name=None),
+        )
+        assert written(out) == {}
+
     def test_a_start_after_the_end_is_refused(self) -> None:
         out = cells([decision("period_start", "replace", "100", -700)], row=live(period_end=-100))
         assert out[0].reason == "period-end-precedes-start" and written(out) == {}
@@ -273,6 +285,42 @@ class TestWaveAndStep:
         )
         with pytest.raises(PlanError, match="still wait for a re-ask"):
             FP.build_wave(repo / "run", "2026-09-27")
+
+    def test_a_rule_derived_start_is_planned_from_its_own_file(self, repo: Path) -> None:
+        """A value a named rule supports carries no quote, so it cannot live in `DECISIONS.jsonl`:
+        that file is the research log, the import rewrites it from the handoffs, and a rule row in
+        it would be read back as an answer. The rule's rows come in their own file, and the wave
+        pins that file by its digest - a rule that changed after the wave was planned is refused
+        like an edited wave.
+
+        Measured 2026-10-04: the sourced wave wrote 811 period starts, 1,418 curated sites hold
+        none, and 739 of them have a `site_type` whose measured rule names a period. Those rows
+        are what this reads; the journal names their origin in the `via`."""
+        run = repo / "run"
+        rule_row = decision("period_start", "replace", -800, None)
+        rule_row.update(
+            via="derived",
+            answered_by="rule:derived_rule.json",
+            quotes=[],
+            reasoning="site_type 'Hillfort' names the Iron Age; the epoch's start is the value",
+        )
+        (run / FP.DERIVED_FILE).write_text(json.dumps(rule_row) + "\n", encoding="utf-8")
+
+        record = FP.build_wave(run, "2026-09-27")
+        wave = json.loads((FP.wave_dir("2026-09-27") / FP.WAVE_FILE).read_text(encoding="utf-8"))
+
+        assert record["sites"] == 1
+        assert wave["derived_sha256"] == FP._sha256_text(run / FP.DERIVED_FILE)
+
+    def test_a_wave_without_a_rule_file_pins_nothing(self, repo: Path) -> None:
+        """The 12 sourced waves of 2026-10-02b have no rule file, and a wave that has none is the
+        normal case, not a broken one: the digest is pinned as `None` and nothing else changes."""
+        record = FP.build_wave(repo / "run", "2026-09-27")
+        assert record == {"wave": "2026-09-27", "sites": 1, "steps": 1, "held": 0}
+        wave = json.loads(
+            (FP.wave_dir("2026-09-27") / FP.WAVE_FILE).read_text(encoding="utf-8")
+        )
+        assert wave["derived_sha256"] is None
 
     def test_a_step_writes_its_plan_and_its_undo(self, repo: Path) -> None:
         FP.build_wave(repo / "run", "2026-09-27")
