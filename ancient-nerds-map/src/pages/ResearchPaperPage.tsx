@@ -22,6 +22,7 @@ import ThumbsFeedback from '../components/feedback/ThumbsFeedback'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
 import { useIsFounder } from '../hooks/useIsFounder'
+import { PageOpen } from '../components/analytics/PageOpen'
 import { useRoute } from '../seo/RouteContext'
 import { shareOrCopy } from '../utils/share'
 import '../styles/theo.css'
@@ -128,6 +129,10 @@ export default function ResearchPaperPage() {
 
   return (
     <div className="theo-page">
+      {/* Der Lesezugriff, nicht der Klick aus der Bibliothek - siehe PageOpen.
+          ResearchRoute traegt den Slug, darum ist es hier ein Pfad und die
+          Panel-Zeile verlinkt. */}
+      <PageOpen event="paper_open" paper={`/research/${slug}`} method="landing" context="paper" />
       <PageHeader currentPage="theo">
         <a href="/theo.html#research-library" className="page-header-title">Research</a>
       </PageHeader>

@@ -389,7 +389,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
   const { isPlaying, toggle } = useRotationControl({ refs, isZoomedIn, isHoveringList: isHoveringList ?? false })
 
   // Fullscreen: toggle and sync fullscreen state
-  const { isFullscreen, toggleFullscreen } = useFullscreen()
+  const { isFullscreen, canFullscreen, toggleFullscreen } = useFullscreen()
 
   // Cursor mode: crosshair cursor for globe, proximity/measure mode handling
   useCursorMode({
@@ -2667,6 +2667,7 @@ export default function Globe({ sites, filterMode, sourceColors, countryColors, 
         onTogglePlay={toggle}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
+        canFullscreen={canFullscreen}
       />
 
       {/* Layer toggle panel */}

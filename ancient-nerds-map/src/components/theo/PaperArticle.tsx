@@ -74,7 +74,23 @@ export default function PaperArticle({ paper, lead, actions, children }: Props) 
     <>
       {paper.hero_image_url && (
         <figure className="theo-paper-hero">
-          <img src={paper.hero_image_url} alt={title} className="theo-paper-hero-img" />
+          {/* fetchPriority="high" wie auf der Site-Detailseite (SitePage.tsx),
+              aus demselben Grund: dieses Bild ist das LCP-Element der Seite, und
+              die Web-Vitals-Messung vom 04.10.2026 nennt fuer paper·LCP genau
+              diese Phase - load_delay bei p75 2997 ms ueber 52 Messungen, also
+              der Browser startet den Abruf zu spaet. Die URL steht im
+              server-gerenderten HTML, ein Prioritaetshinweis wirkt also.
+              Kein loading="lazy" aus demselben Grund.
+              React 18 kennt fetchPriority nicht und reicht den Namen
+              unveraendert durch; Attributnamen sind in text/html
+              case-insensitiv. Nicht in fetchpriority umbenennen - die Seite
+              von SitePage.tsx beschreibt, warum. */}
+          <img
+            src={paper.hero_image_url}
+            alt={title}
+            className="theo-paper-hero-img"
+            fetchPriority="high"
+          />
         </figure>
       )}
 

@@ -21,7 +21,18 @@ upstream an_api {
 # four days of the access log: 279 of 479 search arrivals came from the
 # proxy's published ranges and loaded nothing after the HTML; of the 296
 # arrivals that loaded nothing else, 26 were viewed from another IP later.
-log_format referral escape=json '{"t":"$time_iso8601","ref":"$http_referer","req":"$request_method $request_uri","status":$status,"ua":"$http_user_agent","purpose":"$http_sec_purpose"}';
+# "dnt" and "gpc" are the two headers a browser sends when the visitor asked
+# not to be tracked: DNT (Do Not Track) and GPC (Global Privacy Control). The
+# tracker honours both on purpose (analytics/boot.ts data-do-not-track="true"),
+# and until now nothing recorded who did NOT arrive in Umami. Measured
+# 2026-10-04 over the same seven days: nginx counted 1,295 search arrivals,
+# Umami 553 page views - 43 %, against the 90 % the 2026-09-25 measurement
+# found. The prefetch filter is not the cause (it removes Google's proxy
+# correctly, verified on the log's own lines) and no page type is missing the
+# tracker tag (17 paths checked) - so the gap is either a browser that refused
+# to run the script or one that never arrived. These two fields decide which.
+# The panel does not have to read them yet: a week of log lines is the proof.
+log_format referral escape=json '{"t":"$time_iso8601","ref":"$http_referer","req":"$request_method $request_uri","status":$status,"ua":"$http_user_agent","purpose":"$http_sec_purpose","dnt":"$http_dnt","gpc":"$http_sec_gpc"}';
 
 map $http_referer $external_referral {
     default 1;
