@@ -619,6 +619,18 @@ class TestTheRun:
         assert counts["wd1"]["decisions"] == 1
         assert R.read_rule(out) is ONE
 
+    def test_a_run_is_shown_by_where_it_points(self, tmp_path: Path) -> None:
+        """A run's name is what a wave records and what every other tool compares against, so two
+        spellings of one directory must be one name. Measured 2026-10-04: `owner_list build
+        --final` called with the worktree's junction path answered "1262 field(s) are pending"
+        where the real path answered "pending: 0" - the fallback returned the path *as spelled*,
+        the waves' accepted steps stayed invisible, and the list looked unfinished."""
+        run = tmp_path / "run"
+        run.mkdir()
+        other = run / ".." / "run"  # the same directory, spelled differently
+        for module in (POP, HO, OL):
+            assert module._shown(run) == module._shown(other), module.__name__
+
     def test_a_period_run_pins_its_own_rule(self, tmp_path: Path) -> None:
         # WD4 asks the same question under its own rule (owner decision of 2026-10-04), and a run
         # that pinned WD3's rule could not be asked or written: the stage is in every batch id and

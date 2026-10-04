@@ -133,7 +133,9 @@ def _shown(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO.resolve()).as_posix()
     except ValueError:
-        return path.as_posix()
+        # the resolved path, never the path as spelled: a run reached through a junction or a
+        # `..` component is the same run, and the waves compare this string (2026-10-04)
+        return path.resolve().as_posix()
 
 
 def _names_run(recorded: str, run: Path) -> bool:

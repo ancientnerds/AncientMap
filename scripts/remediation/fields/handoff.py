@@ -154,7 +154,9 @@ def _shown(path: Path) -> str:
     try:
         return _resolve(path).resolve().relative_to(REPO.resolve()).as_posix()
     except ValueError:
-        return path.as_posix()
+        # the resolved path, never the path as spelled: a run reached through a junction or a
+        # `..` component is the same run, and a wave's `run` is compared against this (2026-10-04)
+        return path.resolve().as_posix()
 
 
 def read_classified(run: Path) -> dict[str, dict[str, Any]]:
