@@ -386,13 +386,14 @@ _TIER_2_DOMAINS: tuple[str, ...] = (
 
 
 _PERSONAL_PATH_RE = re.compile(
-    r"(?:^|/)~[^/]+(?:/|$)"          # /~user/ - classic unix webspace
-    r"|/people/"                     # /people/<name>/
+    r"(?:^|/)~[^/]+(?:/|$)"  # /~user/ - classic unix webspace
+    r"|/people/"  # /people/<name>/
     r"|/user/|/users/|/members/|/author/|/authors/"
     r"|/faculty/|/staff/|/student/|/students/"
     r"|/personal/|/homepage/|/blog/|/blogs/"
     r"|/coursework/|/student_projects/",
-    re.IGNORECASE)
+    re.IGNORECASE,
+)
 
 # A file with a document extension is a document, not a personal web page - a
 # peer-reviewed PDF in a reprint directory is still the published article.
@@ -402,7 +403,8 @@ _DOCUMENT_PATH_RE = re.compile(r"\.(?:pdf|djvu|ps|epub|chm|ps2|dvi|tex|bib)$", r
 # like any other, and it is not a publication.
 _COURSEWORK_PATH_RE = re.compile(
     r"/student_projects?/|/coursework/|/homework/|/assignments?/|/hw[0-9]?/|/essays?/",
-    re.IGNORECASE)
+    re.IGNORECASE,
+)
 
 
 def is_personal_page_path(path: str) -> bool:
