@@ -163,6 +163,56 @@ def test_a_brief_that_cannot_be_rendered_leaves_the_workspace_untouched(monkeypa
     assert not ws.dossier_gz.exists() and not ws.texts_dir.exists()
 
 
+# --- rule 1 at the root: a marker requires a located sentence. The 31-paper audit
+# measured 384 `misattributed` findings there, and paper 1 showed they arrive in the
+# brief, not in the draft: the claims pack carried them at high confidence.
+
+
+def test_carried_reads_the_archived_text_and_not_the_citation():
+    d = parse_dossier(fx.dossier_gz_bytes())
+    claim = "The Stone of the Pregnant Woman weighs about 1000 tons."
+    assert pull._carried(claim, [fx.S1], d) == ([fx.S1], [])
+    # abstract_only: a real file, and it does not carry the claim
+    assert pull._carried("An older civilization cut the blocks.", [fx.S3], d) == ([], [fx.S3])
+    # tdm_reserved: no file at all, so the pull promises nothing about it
+    assert pull._carried("Anything at all about a 1650 ton block.", [fx.S4], d) == ([], [fx.S4])
+
+
+def test_marker_only_where_the_archived_text_carries_the_claim():
+    brief = pull.render_brief(parse_dossier(fx.dossier_gz_bytes()))
+    # carried by its own text: the marker stays
+    assert f"(high) The Stone of the Pregnant Woman weighs about 1000 tons. [S:{fx.S1}]" in brief
+    # the same source listed in a claim it cannot carry: the marker is withheld
+    assert f"(low) An older civilization cut the blocks. [S:{fx.S3}]" not in brief
+    assert f"- (low) An older civilization cut the blocks." in brief
+
+
+def test_uncited_claim_lands_in_the_block_that_asks_for_a_re_source():
+    data = fx.dossier_dict()
+    # The misattribution shape from the defect report: the sentence is carried by a
+    # citable source, the claim's own citation does not carry it.
+    data["moderated"]["final_claims"].append(
+        {
+            "claim": "The podium blocks weigh about 800 tons.",
+            "confidence": "high",
+            "source_ids": [fx.S1],
+        }
+    )
+    brief = pull.render_brief(parse_dossier(fx.dossier_gz_bytes(data)))
+    line = (
+        f"- The podium blocks weigh about 800 tons. — cited by [S:{fx.S1}], "
+        "none of which carries this sentence. Another source does: "
+        '"The temple of Jupiter stands on a podium of 800 tons blocks."'
+    )
+    assert line in brief
+
+
+def test_every_carried_claim_is_reported_when_none_is_missing():
+    brief = pull.render_brief(parse_dossier(fx.dossier_gz_bytes()))
+    assert "### Claims not carried by the sources they cite" in brief
+
+
+
 def test_unfilled_placeholders_are_refused():
     with pytest.raises(StudioError, match="unfilled placeholders"):
         pull.render_brief(parse_dossier(fx.dossier_gz_bytes()), "{{question}} {{nope}}")

@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import os
 
-# Two slots (2026-07-26 two-lane design): one for the low-priority batch
+# Two slots by default (2026-07-26 two-lane design): one for the low-priority batch
 # crawl, one reserved for interactive (UI) submissions so a website user
 # never waits behind a 12-18h background run. The worker enforces "at most
 # one batch run" separately — two batch runs never execute concurrently.
-THEO_PARALLEL_SLOTS = 2
+# THEO_PARALLEL_SLOTS raises the number of runs in flight; a campaign over
+# queued topics sets it per deployment. The limiter's own ceiling
+# (MINIMAX_MAX_CONCURRENCY) still decides how many LLM calls those runs may
+# have open at once, so this number alone does not spend the plan faster.
+THEO_PARALLEL_SLOTS = int(os.getenv("THEO_PARALLEL_SLOTS", "2"))
 
 # Discord role ID that grants access to Theo Research Lab.
 # Set THEO_RESEARCHER_ROLE_ID in .env to the role ID.

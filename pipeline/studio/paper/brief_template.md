@@ -319,6 +319,14 @@ hard. That's not gullibility. That's hope."
   never appears in prose (the artifact gate holds the paper on any non-numeric bracket token).
 - If a sentence cannot be backed by a dossier source, delete the sentence. Fewer fully cited paragraphs beat
   longer ones with ungrounded filler.
+- **A marker in the claims pack below is already verified:** `paper pull` reads the archived text of every
+  source a moderated claim cites and writes the marker only where that text carries the sentence. Treat a
+  settled claim as safe to write, and keep its wording as close to the claim as the section allows.
+- **The claims in "not carried by the sources they cite" are the research stage's own gaps.** Their markers
+  were withheld because the archived text does not carry the sentence, so writing them as facts would put
+  an unchecked citation in the paper. For each one, either re-source it from a source in the list below
+  (a quoted sentence is given when one was found), or narrow it to what a source really says, or leave it
+  out. Dropping a claim is a correct outcome; inventing its support is not.
 
 ## 6. Grounding (anti-hallucination)
 
@@ -382,7 +390,17 @@ archived text of `quote_source_id` or, for a TDM-reserved source, in the live te
 
 ### Moderated claims (the research result)
 
+Every marker here was checked against the archived text of the source it names.
+
 {{moderated}}
+
+### Claims not carried by the sources they cite
+
+`paper pull` searched the archived text of each cited source for the sentence above and withheld the
+marker where it was not found. Do not write these as facts on the strength of their citation. Re-source
+them from the list below, narrow them to what a source really says, or leave them out.
+
+{{unsourced}}
 
 ### Synthesis highlights
 
