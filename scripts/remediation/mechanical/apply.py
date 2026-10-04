@@ -68,6 +68,7 @@ from mechanical.lane import (  # noqa: E402
     FIELDS_LANE,
     LANE_READBACKS,
     LANES,
+    PERIOD_LABEL_LANE,
     SCOPE_REVIEW_LANE,
     T05,
     TEASER_LANE,
@@ -1803,13 +1804,18 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
 
 def readback_for(lane: Lane) -> str:
     """The lane's read-only verification: `READBACKS`, a scope-review wave's, a WD1 fields
-    step's, a lane-WB teaser or disclosure step's, or a card_stats wave's own."""
+    step's, a residue period-label wave's, a lane-WB teaser or disclosure step's, or a card_stats
+    wave's own."""
     if lane.name in READBACKS:
         return READBACKS[lane.name]
     if SCOPE_REVIEW_LANE.match(lane.name) is not None:
         return scope_review_readback(lane)
     if FIELDS_LANE.match(lane.name):
         return fields_readback(lane)
+    if PERIOD_LABEL_LANE.match(lane.name) is not None:
+        from mechanical.residue_period import readback as residue_readback
+
+        return residue_readback(lane)
     if TEASER_LANE.match(lane.name):
         from mechanical.teaser import teaser_readback
 

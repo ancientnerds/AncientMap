@@ -129,6 +129,29 @@ class TestTheResidual:
         assert f"IS NULL THEN {UNDATED!r}" in predicate.replace('"', "'")
 
 
+class TestTheReadback:
+    def test_the_lane_reads_back_its_own_residue(self) -> None:
+        """`apply.py --verify` and every apply print the lane's readback. Without a wiring here it
+        would fall through to the card_stats one, and the wave's own claim - 0 rows left whose
+        label is not the rule's - would never be asked."""
+        from mechanical import apply as A
+
+        for scope in RP.SCOPES:
+            lane = RP.lane_of(scope, WAVE)
+            readback = A.readback_for(lane)
+            assert readback == RP.readback(lane), scope
+            assert lane.run_stamp in readback
+            assert L._PERIOD_MISMATCH.metric in readback
+            assert "carrying the residue label" in readback
+
+    def test_the_readback_separates_the_two_half_rules(self) -> None:
+        """A row carrying `Undated` **with** a year is the one state that must never exist, so the
+        readback counts it on its own rather than leaving it to the residual."""
+        readback = RP.readback(RP.lane_of("undated", WAVE))
+        assert "curated rows with the residue label and a year" in readback
+        assert f"period_name = {UNDATED!r} AND period_start IS NOT NULL".replace('"', "'") in readback
+
+
 class TestTheClassifier:
     def test_a_row_without_a_year_gets_the_residue_label(self, frontend) -> None:
         v = RP.classify(row(), scope="undated", frontend=frontend)
