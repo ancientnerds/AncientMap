@@ -279,12 +279,20 @@ class TestTheExportAndTheBrief:
         prompt = (tmp_path / "h-r0" / manifest[0]["prompt_path"]).read_text(encoding="utf-8")
         assert "lane WD3" in prompt and "### period_start" in prompt
 
-    def test_the_brief_is_a_sonnet_s_and_names_its_model(self, run: Path, tmp_path: Path) -> None:
+    def test_the_brief_names_the_round_s_model_and_claims_no_other(
+        self, run: Path, tmp_path: Path
+    ) -> None:
+        """The recording command is the only place a model id reaches an answer, so the brief names
+        the round's model and nothing else. It used to say "You are Sonnet researcher" and record
+        `claude-sonnet-5-5` whatever answered - measured 2026-10-04, that is what put a false
+        stamp on eight WD3 answers, and a lane answered by another model would repeat it. The
+        default is still the rule's own id, so an unchanged run exports an unchanged brief."""
         HO.export(run, tmp_path / "h-r0")
         text = HO.brief(run, tmp_path / "h-r0", "wd3-r0-b0001")
-        assert "You are Sonnet researcher wd3-r0-b0001 of the WD3 structured-field fill" in text
+        assert "You are researcher wd3-r0-b0001 of the WD3 structured-field fill" in text
         assert "--model claude-sonnet-5-5 --text-file" in text and "--stage wd3" in text
         assert "claude-opus-5-5" not in text and 'source is "unresolved"' in text
+        assert "Sonnet researcher" not in text
         assert "Never ancientnerds.com" in text
         assert "h-r0-scratch/wd3-r0-b0001/<label>.json" in text
 

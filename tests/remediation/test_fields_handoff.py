@@ -168,6 +168,29 @@ class TestTheExport:
         shown = HO.render_prompt(stacked, ["coordinates"])
         assert "3 other site(s) of the database hold exactly the stored point" in shown
 
+    def test_the_brief_names_the_model_that_answers(self, run: Path, tmp_path: Path) -> None:
+        """The recording command in the brief is where the stamp comes from: the prompt never names
+        a model. A brief that names one the lane does not run writes a false provenance into the
+        journal - measured 2026-10-04, round 1 of WD3 lost eight answers to an invented stamp
+        ("wrong model", 0 of 91 counted), and a WD4 run whose agents run on MiniMax would be told to
+        record `claude-sonnet-5-5`. So the model is chosen at export, stored in the round's record
+        and named by every brief of that round; the default stays what each rule names."""
+        HO.export(run, tmp_path / "h-r0", model="MiniMax-M3.1-Flash-Preview")
+        text = HO.brief(run, tmp_path / "h-r0", "wd1-r0-b0001")
+        assert "--model MiniMax-M3.1-Flash-Preview" in text
+        assert "claude-sonnet-5-5" not in text
+        assert "Sonnet researcher" not in text  # the role must not claim another model either
+        record = HO._round_of(run, tmp_path / "h-r0")
+        assert record["model"] == "MiniMax-M3.1-Flash-Preview"
+
+    def test_a_model_no_answer_may_carry_is_refused(self, run: Path, tmp_path: Path) -> None:
+        with pytest.raises(HO.HandoffStepError, match="not one of"):
+            HO.export(run, tmp_path / "h-r0", model="gpt-9")
+
+    def test_the_default_model_is_the_one_the_rule_names(self, run: Path, tmp_path: Path) -> None:
+        HO.export(run, tmp_path / "h-r0")
+        assert HO.brief(run, tmp_path / "h-r0", "wd1-r0-b0001").count("claude-sonnet-5-5") >= 1
+
     def test_the_brief_names_the_batch_s_own_files(self, run: Path, tmp_path: Path) -> None:
         HO.export(run, tmp_path / "h-r0")
         text = HO.brief(run, tmp_path / "h-r0", "wd1-r0-b0001")

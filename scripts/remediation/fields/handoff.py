@@ -761,14 +761,33 @@ def batches(
     ]
 
 
+def _answering_model(run: Path, model: str | None) -> str | None:
+    """The model id this round's answers are recorded under, or `None` when the rule's own brief
+    asks each agent to name what it runs as (WD1). It must be one `opus_handoff.ANSWER_MODELS`
+    knows, because the brief writes it into the recording command and the journal keeps it - a
+    typo here would be a stamp no model ever earned (2026-10-04: WD3's round 1 lost eight answers
+    to an invented stamp, "wrong model", 0 of 91 counted)."""
+    rule = R.read_rule(run)
+    if model is None:
+        named = BRIEF_PARTS[rule.name]["model"]
+        return None if named.startswith("<") else named
+    if model not in set(OH.ANSWER_MODELS):
+        raise HandoffStepError(
+            f"{model!r} is not one of the model ids an answer may carry: {sorted(OH.ANSWER_MODELS)}"
+        )
+    return model
+
+
 def _export_round(
     run: Path,
     handoff: Path,
     round_no: int,
     fields_of: Mapping[str, Sequence[str]],
     notes: Mapping[str, Mapping[str, str]],
+    model: str | None = None,
 ) -> dict[str, Any]:
     rule = R.read_rule(run)
+    answering = _answering_model(run, model)
     rounds = read_rounds(run)
     if any(r["round"] == round_no for r in rounds):
         raise HandoffStepError(f"round {round_no} is already exported")
@@ -793,6 +812,7 @@ def _export_round(
     record = {
         "round": round_no,
         "handoff": _shown(handoff),
+        "model": answering,
         "batches": dict(groups),
         "fields": {label: list(fields_of[label]) for label in sorted(fields_of)},
         "notes": {label: dict(notes[label]) for label in sorted(notes)},
@@ -808,13 +828,17 @@ def _export_round(
     }
 
 
-def export(run: Path, handoff: Path) -> dict[str, Any]:
-    """Round 0: every site with a field in CONFLICT or MISSING or flagged, with exactly those fields."""
+def export(run: Path, handoff: Path, model: str | None = None) -> dict[str, Any]:
+    """Round 0: every site with a field in CONFLICT or MISSING or flagged, with exactly those fields.
+
+    `model` is the stamp the round's answers may carry, stored in the round's record and named by
+    every brief of it; the default is what the run's rule names. It is the only place a model id
+    reaches an answer, so a lane answered by another model says so here (2026-10-04)."""
     if read_rounds(run):
         raise HandoffStepError("round 0 is exported already - re-asks go through export-reask")
     classified = read_classified(run)
     fields_of = {sid: line["asked"] for sid, line in classified.items() if line["asked"]}
-    return _export_round(run, handoff, 0, fields_of, {})
+    return _export_round(run, handoff, 0, fields_of, {}, model)
 
 
 def export_reask(run: Path, handoff: Path) -> dict[str, Any]:
@@ -848,7 +872,9 @@ def export_reask(run: Path, handoff: Path) -> dict[str, Any]:
         site: {field: str(reasons[(site, field)]) for field in fields}
         for site, fields in reask["fields"].items()
     }
-    return _export_round(run, handoff, last + 1, reask["fields"], notes)
+    # a re-ask goes to a new agent of the same lane, so it carries the round's stamp forward
+    carried = next((r.get("model") for r in rounds if r["round"] == last), None)
+    return _export_round(run, handoff, last + 1, reask["fields"], notes, carried)
 
 
 # ------------------------------------------------------------------------------ the agent's aids
@@ -955,6 +981,15 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
         raise HandoffStepError(f"{batch_id} is no batch of {handoff}")
     rule = R.read_rule(run)
     shown = _shown(handoff)
+    # the stamp the round was exported with; a round exported before this was recorded keeps the
+    # rule's own, which is what its answers were counted under
+    parts = {
+        **BRIEF_PARTS[rule.name],
+        "model": record.get("model") or BRIEF_PARTS[rule.name]["model"],
+    }
+    if record.get("model"):
+        # the round names the model, so the role must not claim to be another one
+        parts["role"] = "researcher"
     return BRIEF.format(
         batch=batch_id,
         count=len(record["batches"][batch_id]),
@@ -962,7 +997,7 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
         scratch=f"{shown}-scratch/{batch_id}",
         run=_shown(run),
         stage=rule.stage,
-        **BRIEF_PARTS[rule.name],
+        **parts,
     )
 
 
@@ -1445,6 +1480,12 @@ def main(argv: list[str] | None = None) -> int:
         commands[name].add_argument("--handoff", type=Path, required=True)
     for name in ("brief", "check-answer"):
         commands[name].add_argument("--batch-id", required=True)
+    commands["export"].add_argument(
+        "--model",
+        help="the stamp this round's answers may carry (one of opus_handoff.ANSWER_MODELS); "
+        "default: what the run's rule names. The recording command in every brief names it, and it "
+        "is what the journal keeps.",
+    )
     commands["check-answer"].add_argument("--label", required=True)
     commands["check-answer"].add_argument("--text-file", type=Path, required=True)
     commands["import"].add_argument("--pace", type=float, default=Q.PACE_SECONDS)
@@ -1452,7 +1493,7 @@ def main(argv: list[str] | None = None) -> int:
     run = _resolve(args.run)
     try:
         if args.command == "export":
-            result: Any = export(run, args.handoff)
+            result: Any = export(run, args.handoff, args.model)
         elif args.command == "export-reask":
             result = export_reask(run, args.handoff)
         elif args.command == "brief":

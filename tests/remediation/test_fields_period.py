@@ -25,8 +25,8 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
 from fields import answers as A  # noqa: E402
 from fields import handoff as HO  # noqa: E402
 from fields import rule as R  # noqa: E402
-from pipeline import periods as P  # noqa: E402
 
+from pipeline import periods as P  # noqa: E402
 from tests.remediation import test_fields_answers as TA  # noqa: E402
 from tests.remediation import test_fields_wd3 as TW  # noqa: E402
 
