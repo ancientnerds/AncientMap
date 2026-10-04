@@ -159,20 +159,27 @@ PERIODS: dict[str, tuple[int, int]] = {
     # `hillfort`, `broch`, `oppidum`, `motte` or `clava cairn` is site_type's own value.
     # the Near East and the Mediterranean
     "achaemenid": (-550, -330),  # the Achaemenid Empire, 550 BC (Cyrus) to 330 BC (Alexander)
-    "phoenician": (-1500, -332),  # the Phoenician city-states, c. 1500-332 BC, to Alexander's conquest
-    "nabataean": (-250, 106),  # the Nabataean Kingdom, independent from the mid-3rd c. BC, annexed AD 106
+    # the Phoenician city-states, c. 1500-332 BC, to Alexander's conquest
+    "phoenician": (-1500, -332),
+    # the Nabataean Kingdom, independent from the mid-3rd c. BC, annexed AD 106
+    "nabataean": (-250, 106),
     "byzantine": (330, 1453),  # the Byzantine Empire, 330-1453, to the fall of Constantinople
-    "ottoman": (1299, 1922),  # the Ottoman Empire, c. 1299 (Osman I's beylik) to the sultanate's end, 1922
-    "safavid": (1501, 1736),  # Safavid Iran, 1501-1736; some place the end at 1722, when Isfahan fell
+    # the Ottoman Empire, c. 1299 (Osman I's beylik) to the sultanate's end, 1922
+    "ottoman": (1299, 1922),
+    # Safavid Iran, 1501-1736; some place the end at 1722, when Isfahan fell
+    "safavid": (1501, 1736),
     "inca": (1438, 1533),  # the Inca state, c. 1438-1533; the last Inca state fell in 1572
-    "chanka": (1200, 1500),  # the Chanka of Peru, the 13th to the 15th century AD, after the fall of Wari
+    # the Chanka of Peru, the 13th to the 15th century AD, after the fall of Wari
+    "chanka": (1200, 1500),
     # the Aegean and Italy
-    "classical": (-510, -323),  # Classical Greece, 510 BC (the last Athenian tyrant) to 323 BC (Alexander)
+    # Classical Greece, 510 BC (the last Athenian tyrant) to 323 BC (Alexander)
+    "classical": (-510, -323),
     "geometric": (-900, -700),  # the Geometric period of Greek art, c. 900-700 BC
     "helladic": (-3200, -1050),  # the Helladic chronology of mainland Greece, c. 3200-1050 BC
     # the same range as `middle bronze age` above: the Greek Middle Bronze Age under its own name
     "middle helladic": (-2000, -1550),  # the Middle Helladic, c. 2000-1550 BC
-    "mycenaean": (-1750, -1050),  # Mycenaean Greece, c. 1750-1050 BC, the last phase of its Bronze Age
+    # Mycenaean Greece, c. 1750-1050 BC, the last phase of its Bronze Age
+    "mycenaean": (-1750, -1050),
     "minoan": (-3100, -1100),  # the Minoan civilization, c. 3100-1100 BC
     "etruscan": (-900, -27),  # the Etruscan culture from c. 900 BC, incorporated into Rome by 27 BC
     "iberian": (-700, -100),  # the Iberian people and language, 7th to at least the 1st century BC
@@ -185,7 +192,8 @@ PERIODS: dict[str, tuple[int, int]] = {
     "han": (-202, 220),  # the Han dynasty, the Western Han from 202 BC to AD 220
     # northern and Atlantic Europe
     "funnelbeaker": (-4100, -2800),  # the Funnelbeaker culture, c. 4100-2800 BC
-    "nuragic": (-1800, -238),  # the Nuragic civilization, the 18th c. BC to Roman colonisation, 238 BC
+    # the Nuragic civilization, the 18th c. BC to Roman colonisation, 238 BC
+    "nuragic": (-1800, -238),
     # the same era as `viking` above: the source's own span is c. 800-1050, the event span 793-1066
     "viking age": (793, 1066),
     "late middle ages": (1300, 1500),  # the Late Middle Ages, 1300-1500 AD
@@ -205,10 +213,16 @@ _ARTICLES = frozenset({"a", "an", "the"})
 #: "5th c.", "early 19th century". The number is digits - a Roman-numeral century is the year
 #: checker's own reading (`answers.ordinal_forms`), not a range of a period. The half is read
 #: first: "early 19th century" holds a plain "19th century" inside it.
-_CENTURY = re.compile(r"\b(?P<half>early|late)\s+(?P<number>\d{1,4})(?:st|nd|rd|th|e)?\s+"
-                      r"(?P<unit>century|centuries|c|cent)\b", re.IGNORECASE)
-_CENTURY_PLAIN = re.compile(r"\b(?P<number>\d{1,4})(?:st|nd|rd|th|e)?\s+"
-                            r"(?P<unit>century|centuries|c|cent)\b", re.IGNORECASE)
+_CENTURY = re.compile(
+    r"\b(?P<half>early|late)\s+(?P<number>\d{1,4})(?:st|nd|rd|th|e)?\s+"
+    r"(?P<unit>century|centuries|c|cent)\b",
+    re.IGNORECASE,
+)
+_CENTURY_PLAIN = re.compile(
+    r"\b(?P<number>\d{1,4})(?:st|nd|rd|th|e)?\s+"
+    r"(?P<unit>century|centuries|c|cent)\b",
+    re.IGNORECASE,
+)
 #: The word a century may follow. Any other word qualifies the century in a way this does not read
 #: ("middle 19th century", "mid-Victorian 19th century") - an unread qualifier is refused, not
 #: dropped: the whole century is not the range the source gave.
