@@ -828,16 +828,55 @@ def _export_round(
     }
 
 
-def export(run: Path, handoff: Path, model: str | None = None) -> dict[str, Any]:
+def _cut(
+    classified: dict[str, Any], fields_of: dict[str, list[str]], sites: frozenset[str]
+) -> dict[str, list[str]]:
+    """The named sites' questions, or a refusal naming what cannot be asked. A cut file that drifted
+    from the run would otherwise export fewer batches than it claims, silently."""
+    if not sites:
+        raise HandoffStepError("a cut that names no site asks nothing - name at least one")
+    unknown = sorted(set(sites) - set(classified))
+    if unknown:
+        raise HandoffStepError(
+            f"the cut names {len(unknown)} site(s) the run does not hold, e.g. {unknown[0]!r}"
+        )
+    silent = sorted(set(sites) - set(fields_of))
+    if silent:
+        raise HandoffStepError(
+            f"the cut names {len(silent)} site(s) with nothing open, e.g. {silent[0]!r}"
+        )
+    return {sid: fields_of[sid] for sid in sorted(sites)}
+
+
+def _read_site_ids(path: Path) -> frozenset[str]:
+    """The ids of a cut file, one per line. An unreadable file is refused by name."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise HandoffStepError(f"the cut file {path} cannot be read: {exc}") from exc
+    return frozenset(line.strip() for line in text.splitlines() if line.strip())
+
+
+def export(
+    run: Path, handoff: Path, model: str | None = None, *, sites: frozenset[str] | None = None
+) -> dict[str, Any]:
     """Round 0: every site with a field in CONFLICT or MISSING or flagged, with exactly those fields.
 
     `model` is the stamp the round's answers may carry, stored in the round's record and named by
     every brief of it; the default is what the run's rule names. It is the only place a model id
-    reaches an answer, so a lane answered by another model says so here (2026-10-04)."""
+    reaches an answer, so a lane answered by another model says so here (2026-10-04).
+
+    `sites` cuts the round down to the named sites of this run, and the run keeps every site it
+    classified: a round's own record lists the questions it asked, so a cut shows up as the
+    questions that are not in it. A site the run does not hold, or holds with nothing open, is
+    refused by name instead of being dropped. The owner's cut of 2026-10-04: 18 batches for the 144
+    live sites whose period cell is empty, out of a run that holds 2,636."""
     if read_rounds(run):
         raise HandoffStepError("round 0 is exported already - re-asks go through export-reask")
     classified = read_classified(run)
     fields_of = {sid: line["asked"] for sid, line in classified.items() if line["asked"]}
+    if sites is not None:
+        fields_of = _cut(classified, fields_of, sites)
     return _export_round(run, handoff, 0, fields_of, {}, model)
 
 
@@ -1486,6 +1525,12 @@ def main(argv: list[str] | None = None) -> int:
         "default: what the run's rule names. The recording command in every brief names it, and it "
         "is what the journal keeps.",
     )
+    commands["export"].add_argument(
+        "--sites",
+        type=Path,
+        help="a file of site ids, one per line: this round asks only these sites of the run, and "
+        "the run keeps the rest (the owner's cut of 2026-10-04: 18 of 330 batches)",
+    )
     commands["check-answer"].add_argument("--label", required=True)
     commands["check-answer"].add_argument("--text-file", type=Path, required=True)
     commands["import"].add_argument("--pace", type=float, default=Q.PACE_SECONDS)
@@ -1493,7 +1538,12 @@ def main(argv: list[str] | None = None) -> int:
     run = _resolve(args.run)
     try:
         if args.command == "export":
-            result: Any = export(run, args.handoff, args.model)
+            result: Any = export(
+                run,
+                args.handoff,
+                args.model,
+                sites=None if args.sites is None else _read_site_ids(_resolve(args.sites)),
+            )
         elif args.command == "export-reask":
             result = export_reask(run, args.handoff)
         elif args.command == "brief":

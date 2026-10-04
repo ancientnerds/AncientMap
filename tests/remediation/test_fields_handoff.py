@@ -141,6 +141,43 @@ class TestTheExport:
         with pytest.raises(HO.HandoffStepError, match="is not empty"):
             HO.export(run, tmp_path / "busy")
 
+    def two_asked(self, tmp_path: Path, name: str) -> Path:
+        out = tmp_path / name
+        out.mkdir()
+        lines = [
+            classified_line(A_ID, "Temple of Hephaestus", "Greece", ["period_start"]),
+            classified_line(B_ID, "Nea Paphos", "Cyprus", ["site_type"]),
+        ]
+        (out / C.CLASSIFIED_FILE).write_text(
+            "".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8"
+        )
+        return out
+
+    def test_a_cut_asks_the_named_sites_and_the_run_keeps_the_rest(self, tmp_path: Path) -> None:
+        """The owner's cut of 2026-10-04: 18 batches for the 144 live sites whose period cell is
+        empty, out of a run that holds 2,636. The cut belongs to the round, not to the population:
+        the run keeps every site it classified, and the round's own record lists the questions it
+        asked, so what was left out is visible without a second list of ids."""
+        whole = self.two_asked(tmp_path, "whole")
+        assert HO.export(whole, tmp_path / "h-all")["sites"] == 2
+        cut = self.two_asked(tmp_path, "cut")
+        result = HO.export(cut, tmp_path / "h-cut", sites=frozenset({A_ID}))
+        assert result["sites"] == 1 and result["fields"] == 1 and result["batches"] == 1
+        assert [m["label"] for m in OH.manifest(tmp_path / "h-cut")] == [A_ID]
+        assert sorted(HO.read_classified(cut)) == sorted([A_ID, B_ID])
+
+    def test_a_cut_names_what_it_cannot_ask(self, run: Path, tmp_path: Path) -> None:
+        """Nothing is dropped silently: a site the run does not hold, and a site it holds with
+        nothing open, are both refusals that name the site - a cut file that drifted would
+        otherwise export fewer batches than it claims without a word."""
+        with pytest.raises(HO.HandoffStepError, match="'nowhere-1'"):
+            HO.export(run, tmp_path / "h-unknown", sites=frozenset({"nowhere-1"}))
+        with pytest.raises(HO.HandoffStepError, match="nothing open"):
+            HO.export(run, tmp_path / "h-silent", sites=frozenset({B_ID}))
+        with pytest.raises(HO.HandoffStepError, match="names no site"):
+            HO.export(run, tmp_path / "h-empty", sites=frozenset())
+        assert not (run / HO.ROUNDS_FILE).exists()  # a refused cut exports no round
+
     def test_batches_follow_country_and_name(self) -> None:
         classified = {
             f"s{i}": {"country": country, "name": name}
