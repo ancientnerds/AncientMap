@@ -1598,9 +1598,10 @@ TEASER_LANE = re.compile(r"^teaser-(prov|card)-s(\d{3})\Z")
 #: transaction per step. Each step is a lane of its own - `fields-wd1-<wave>-s<NNN>`, its own run
 #: stamp and directory - so "never apply a stamp twice" holds per step and each step is accepted
 #: before the next is planned (`fields/plan.py`). Lane WD3 (owner decisions 2026-10-01: one source
-#: family suffices, an open field is filled and nothing else is touched) writes through the same
-#: cells and invariants as `fields-wd3-<wave>-s<NNN>`: a stamp, a test id, a table and a directory
-#: of its own, so no step of one lane can be mistaken for a step of the other.
+#: family suffices, an open field is filled and nothing else is touched) and lane WD4 (2026-10-04:
+#: WD3's question with WD3's rules, plus a named period as a value) write through the same cells and
+#: invariants as `fields-wd3-<wave>-s<NNN>` and `fields-wd4-<wave>-s<NNN>`: a stamp, a test id, a
+#: table and a directory of their own, so no step of one lane can be mistaken for a step of another.
 FIELDS_LANE = re.compile(r"^fields-(wd1|wd3|wd4)-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
 FIELDS_STAGES = ("wd1", "wd3", "wd4")
 #: Where each stage's waves live: `output/remediation/<FIELDS_ROOTS[stage]>/<wave>/sNNN`.
@@ -1673,7 +1674,7 @@ _GEOM_NOT_POINT = Residual(
 
 
 def fields_lane(wave: str, step: int, stage: str = "wd1") -> Lane:
-    """Step `step` of the `stage` (`wd1` or `wd3`) wave `wave` (a date label, `2026-09-27` or
+    """Step `step` of the `stage` (`wd1`, `wd3` or `wd4`) wave `wave` (a date label, `2026-09-27` or
     `2026-09-27b`)."""
     name = f"fields-{stage}-{wave}-s{step:03d}"
     if FIELDS_LANE.match(name) is None or step < 1:
