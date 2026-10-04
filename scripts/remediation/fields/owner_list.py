@@ -1,8 +1,8 @@
-"""WD3 last step: the owner's list - every open field that stays open, and why.
+"""WD3's and WD4's last step: the owner's list - every open field that stays open, and why.
 
 Owner decisions of 2026-10-01: a field the research cannot source stays empty ("Feld bleibt leer"),
 a point without a sourced witness stays ("Recherchieren, sonst behalten") - and the owner gets the
-list. This reads the finished WD3 runs and their waves, files only, and writes
+list. This reads the finished WD3 and WD4 runs and their waves, files only, and writes
 
     <out>/OWNER_LIST.md       per field, per site: what stays open and why (for the owner to read)
     <out>/OWNER_LIST.jsonl    the same rows, one per line (for a later pass)
@@ -56,6 +56,12 @@ UNRESOLVED, HELD, REFUSED, NO_WRITE, PENDING = (
 #: The states the owner reads, in the order the list shows them.
 LISTED = (UNRESOLVED, HELD, REFUSED, NO_WRITE)
 OWNER_MD, OWNER_JSONL = "OWNER_LIST.md", "OWNER_LIST.jsonl"
+#: The rules whose runs the list can read: both lanes ask the same question under one source family -
+#: WD3 (owner decisions of 2026-10-01) and WD4 (2026-10-04, the same plus a named period as a
+#: value). They differ in name and stage only, and the stage is in every batch id and write lane, so
+#: a WD4 run can never be mistaken for a WD3 one; the list itself reads neither. WD1 wants two
+#: families and is refused.
+OWNED_RULES = (R.ONE_FAMILY, R.ONE_FAMILY_PERIOD)
 DEFAULT_RUNS = tuple(POP.FIELDS_DIR / name for name in ("wd3-pilot", "wd3"))
 REASON_CHARS = 500
 #: The columns a field is written through (a point is three cells).
@@ -88,7 +94,7 @@ def _shown(path: Path) -> str:
 def read_waves(
     runs: Sequence[Path], waves: Path
 ) -> tuple[dict[tuple[str, str], dict[str, Any]], set[str]]:
-    """What the write plans did with each (site, field) over every WD3 wave of `runs`: `{"written":
+    """What the write plans did with each (site, field) over every wave of `runs`: `{"written":
     True, "accepted": bool}` for a planned cell (written only once its step is accepted with 0
     deviations) and `{"refused": reason}` for a refusal - and the sites of the waves whose every
     step is accepted (`settled`: whatever they hold no cell or refusal for was not written)."""
@@ -154,8 +160,11 @@ def state_of(
 def build(runs: Sequence[Path], waves: Path) -> dict[str, Any]:
     """The rows of the list and its counts, from the runs' files."""
     for run in runs:
-        if R.read_rule(run) != R.ONE_FAMILY:
-            raise OwnerListError(f"{run} is not a WD3 run (its RUN.json pins another rule)")
+        if R.read_rule(run) not in OWNED_RULES:
+            raise OwnerListError(
+                f"{run} is not a WD3 or WD4 run (its RUN.json pins "
+                f"{R.read_rule(run).name!r})"
+            )
     cells, settled = read_waves(runs, waves)
     rows: list[dict[str, Any]] = []
     counts: dict[str, Counter[str]] = {field: Counter() for field in C.FIELDS}
@@ -215,7 +224,7 @@ def _cell(text: Any) -> str:
 def render(result: Mapping[str, Any], runs: Sequence[Path]) -> str:
     counts = result["counts"]
     out = [
-        "# WD3 owner list: the fields that stay open",
+        "# Owner list (lanes WD3 and WD4): the fields that stay open",
         "",
         f"Built {datetime.now(UTC).replace(microsecond=0).isoformat()} by "
         "`scripts/remediation/fields/owner_list.py` from "

@@ -998,10 +998,12 @@ def sha(path: Path) -> str:
 class TestTheOwnerList:
     S = [f"00000000-0000-4000-8000-{n:012d}" for n in range(1, 7)]
 
-    def build_files(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    def build_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rule: R.Rule = ONE
+    ) -> tuple[Path, Path]:
         run, waves = tmp_path / "wd3", tmp_path / "wd3" / "write"
         run.mkdir()
-        R.write_run(run, ONE)
+        R.write_run(run, rule)
         s = self.S
         spec = [  # site, asked field, decision, open why
             (s[0], "period_start", "replace", "empty"),
@@ -1083,11 +1085,23 @@ class TestTheOwnerList:
         states = {r["site_id"]: r["state"] for r in OL.build([run], waves)["rows"]}
         assert states[self.S[2]] == "no-write"
 
-    def test_only_a_wd3_run_has_an_owner_list(self, tmp_path: Path) -> None:
+    def test_only_a_wd3_or_wd4_run_has_an_owner_list(self, tmp_path: Path) -> None:
         run = tmp_path / "wd1"
         run.mkdir()
-        with pytest.raises(OL.OwnerListError, match="not a WD3 run"):
+        with pytest.raises(OL.OwnerListError, match="not a WD3 or WD4 run"):
             OL.build([run], tmp_path / "none")
+
+    def test_a_period_run_has_an_owner_list_too(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """WD4 asks WD3's question under its own rule (owner decision of 2026-10-04), so its run
+        needs the same list: the runbook's step 17 is the tool that says a lane is finished, and it
+        answered "is not a WD3 run" for the wd4 run whose last wave was already written."""
+        run, waves = self.build_files(tmp_path, monkeypatch, rule=R.ONE_FAMILY_PERIOD)
+        result = OL.build([run], waves)
+        assert result["counts"]["period_start"] == {"filled": 1, "pending": 1}
+        states = {(r["site_id"], r["field"]): r["state"] for r in result["rows"]}
+        assert states[(self.S[2], "source_url")] == "refused"
 
 
 # ------------------------------------------------------------------------------ the scripts
