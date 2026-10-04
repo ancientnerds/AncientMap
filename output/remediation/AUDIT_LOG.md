@@ -13132,3 +13132,763 @@ kept); the API restarted at 13:56:39Z and imported a file equal to production: *
 lines in both containers, `card_json.py --check` 0, `accept --step 22..26` 0 deviations. Then
 origin/main merged (46ea685, which carries the same blob) and pushed through the gates. Both
 parallel AncientMap sessions now announce a push to main first (cross-session messages).
+
+## 2026-10-01 afternoon/evening - small lanes, delivered owner items, duplicates, WD3 pilot, two operational incidents
+
+- **wc4.check_record regression (own, from the stamp change)**: the cumulative p4wc acceptance read 19
+  deviations ("the check record is not the one the evidence's decisions give") on the WC pilot sites of
+  2026-09-27 - production held exactly what was written; check_record re-derived with the new AI_SYSTEM.
+  Fixed (dc80687: checker is a required keyword, the acceptance passes the written record's own, validated
+  against AI_SYSTEMS); p4wc 0 deviations, cumulative p4 (5 runs, later lanes named) 0 deviations.
+- **Card disclosure lane** `wb-card-disclosure-s001/s002`: 185 cells (`_card_provenance.ai_system` ->
+  AI_SYSTEM on the cards whose final text a Sonnet rewrite wrote; census refreshed first: 22,725 answers,
+  11,457 Opus / 11,268 Sonnet), both steps accepted 0 deviations, `teaser.py accept` 7..21 0 deviations,
+  0 rows changed anything but the key.
+- **name-fix**: "Temple of Augustus, Split" -> "Temple of Augustus, Pula", "Gate of All Nations<U+200C>
+  Persepolis" -> "Gate of All Nations" (4 journal rows, 7 probes refused).
+- **Inventory of unwritten lanes** (agent report): applied now - `country-b2` (Achladia -> Greece,
+  Delphinion -> Türkiye, 2 rows), Nr. 9 `name-key-lyra` (11 alias keys, plan = journal = data), Nr. 8 the six
+  Commons-deleted files removed from the VPS (all four pre-checks held; post-check 404, control 200).
+- **Duplicates (B1-D/B6)**: one Sonnet research agent per pair confirmed all five shared-item pairs as one
+  site each (Banias/Caesarea Philippi, Amathus/Ancient Amathunta, the Ñusta Hispana pair, the 39 Bridge Street
+  pair, Shaduppum/Tel Hermal Fort); lane `dup-retire` (wip/dups, reviewed: survivor and the loser's content
+  now pinned in guard 5) retired the five losers as `duplicate_of:<survivor>` - 10 journal rows, 9 probes
+  refused, rollback rehearsed; retired curated rows 99 -> 104. Nothing deleted.
+- **WD3 pilot 1 (seed 20261002) STOPPED** at its laziness gate (44/73 hinted fields unresolved, 0.603 > 0.6);
+  the agents' reasons and an independent spot-check showed research, not laziness (England's hillforts and
+  barrows carry only period words or class-wide ranges), but two fixable patterns: hedged site-specific
+  centuries rejected, Peru's MINCETUR record missed for a mirror. Brief changed for WD3 only (7cf7f5c);
+  pilot 1 moved aside, its PILOT/COUNTS committed. **Pilot 2 (seed 20261003) PASSED** (hinted unresolved
+  0.522; spot-check 1 clear miss of 10) and its wave `2026-10-01a` is written: 41 sites, 79 cells, accepted
+  0 deviations. Main run (2,613 sites, 3,563 fields, 327 batches) answering; the pool now builds batch ids
+  from a count (a 327-id list had come back as one string, f8829d4).
+- **Incident: machine memory**: WD2 state operators ran `find / ... | head` and `find output ... | head`
+  (34x); on Windows find keeps running after head exits; with shells/conhosts free memory fell to 0.1 GB.
+  All workflows stopped (answers are write-once), leftovers killed, operator prompts forbid file-system
+  search (c10545c), a watchdog kills find/head older than 5 min; resumed with width 3 each.
+- **Incident: interrupted WD2 export**: that stop interrupted the replace export (EXPORT_REPLACE.json is
+  written last); the resumed state operator answered the partial folder: 841 agents, each refused by the
+  brief (no export recorded) - nothing written, quota spent. wd2-image now treats a handoff without its
+  export file as interrupted (ab2731c); partial folders kept under handoff/_partial-* and _interrupted-*.
+
+## 2026-10-03 MiniMax Code takes over the remediation (O17-O23, MCODE_START)
+
+### Housekeeping before any build
+- **Repo root strays removed** (25 files): 15 UUID-named `*.json` plus `dd.html`, `ddg_out.html`,
+  `page.html`, `sz.html`, `vdoc.html`, `wmu.pdf`, `pam.txt`, `wp_en.txt`, `wp_sr.txt`. The HTML and
+  PDF files were agent scratch from web research - `vdoc.html` and `wmu.pdf` are Cloudflare
+  "Just a moment..." challenge pages, not a document. The 15 JSON files are WC answers an agent wrote
+  to the repo root instead of through `opus_handoff.py answer` (see the next entry).
+- **The 15 root WC answers, checked before deleting them**: all 15 were recovered from the Recycle
+  Bin and compared against the recorded handoff answers, question by question. Every one of the 15
+  sites has a recorded answer in a handoff directory:
+  - the 5 `check`-shaped ones (chunk 04) are, 4 of 5, byte-identical to
+    `wc-mass-2026-09-27-04-r1/check` (compared on the JSON content, not the bytes). The fifth
+    (`eb760e32`, Puy Foradado Dam) carries a *different* r1 check judgement than the recorded one;
+    the recorded answer stands, so nothing is lost, and the file is a differing draft.
+  - the 10 `verify`-shaped ones (kept/coherent) are, all 10, distinct from every recorded answer.
+    For 8 of the sites the `verify` question is answered anyway, so these are lost *second* opinions.
+    For 2 - `74e0a41e` (Lydney Park) and `7504a195` (Plainsfield Camp) - the open question is
+    `wc-mass-2026-09-27-02-verify2`, and these files are the only trace of a judgement that lane
+    still needs.
+  - **Not imported, deliberately**: these files carry no `prompt_sha256`, no `model` and no
+    `answered_by`, so they are not answers in the handoff's sense. `write_answer` is write-once and
+    checks the shape; injecting them would break the one rule that makes an answer attributable.
+    Chunk 02 verify2 re-asks. The recovered files stay outside the repo as reference only.
+- **Lane records committed**: `fields/wd3-pilot/{RUN,COUNTS,PILOT}.json` (pilot 2, seed 20261003,
+  verdict PASS, hinted_unresolved 0.522 - the gate report behind wave 2026-10-01a; the .gitignore
+  rule re-includes exactly these three) and `mechanical_country_b2/REHEARSAL_ROLLBACK.sql` (the
+  rollback rehearsal of a lane that wrote production on 2026-10-01, versioned like every other write
+  step's rehearsal undo; the rehearsal SQL itself stays out, the undo of the rehearsal does not).
+- `mechanical_country_b2/APPLY.sql` showed as modified with an empty numstat - line endings only.
+  Restored from git; the committed bytes are correct.
+- `fields/wd3/` stays untracked and gitignored on purpose: it is the live run's working state, and
+  `.gitignore` re-includes only RUN.json, COUNTS.json, OWNER_LIST* and `write/`.
+
+### Where each lane actually stands (measured, not read from the notes)
+The Workflow-tool runs (`wf_...`) cannot be resumed, so every lane was measured from its handoff
+directories and run directories:
+- **WB (teaser cards): COMPLETE.** All 6 mass chunks ran the full chain and were written: 31
+  `mechanical_teaser` steps, 2,716 card cells, 0 deviations, no reversals. Every `*-verify2` and
+  `*-check-v` handoff is fully answered.
+- **WC (sentence check): the lane with the most open work.** Pilot written (20 sites). Mass chunk 01
+  answered, verified, built (`WC4.jsonl`, 25 batches p4-4200..4224) but **not written**. Chunks 02-05
+  have no build. Open answers: `wc-mass-2026-09-27-03-verify` 492/0, `-04-verify` 480/371,
+  `-02-verify2` 63/0, `-05-verify2` 28/0, `wc-defects-2026-10-02-r1` 136/45 - 692 + 91 questions.
+  `mass-2026-09-27-06` was never created.
+- **WD1 (structured fields): COMPLETE** - 4 runs, 3,444 sites, 8,055 cells, 36 step dirs each with
+  an ACCEPTED, 0 deviations, every handoff fully answered. Open: no wave has a `HANDOFF.json`
+  (runbook step 15 was never run).
+- **WD2 (scope review + served image): scope written, image not.** Scope: 572/572 answered, 20 sites
+  retired, "WAVE 2026-09-30 LANDED". Image: check 4,064/4,064 and replace 933/933 answered,
+  35 chunk plans built - and **0 chunks applied**. This is the largest block of open production
+  work. `handoff/_interrupted-*` and `_partial-*` (734 and 467 prompts, 0 answers) are abandoned
+  duplicate exports and must not be resumed.
+- **WD3 (field fill): export open.** r0 exported 2,613 questions, 1,995 answered, **618 missing**;
+  no import, no `write/`. Pilot 2 passed and its wave `2026-10-01a` is written (41 sites, 79 cells,
+  0 deviations).
+- **WN (description for sites left without one): implemented, never run.** 0 exported, 0 answered,
+  0 imported. Population measured at 1 site with no description.
+- **WA (Phase-4 v3/v3d): v3 and v3d main are written** (37 steps, 2,788 sites, 0 deviations). Open:
+  `p4-2510` and `p4-2511` are not written (`p4-2511` is not even exported), and the `wip/p4-pilot`
+  merge into this branch is still open - **the WA run directories live in that worktree, not in the
+  main tree.**
+- Nothing in any lane has moved since 2026-10-02 03:28. No half-written write step exists: every step
+  directory that exists carries its ACCEPTED, and no `REVERTED/` exists anywhere.
+
+### Build A - the truthful stamp and the combined disclosure (O19)
+- `opus_handoff`: `MINIMAX_MODEL` and a third `ANSWER_MODELS` key, so `answer --model
+  MiniMax-M3.1-Flash-Preview` records that stamp. `ANSWER_FAMILIES` declares the evidence family per
+  model id, replacing `model_id.split("-")[1]` in `mechanical/scope_review`, which would have
+  labelled a MiniMax retirement `M3.1:<agent>`. Guarded by a new mutation-sweep entry.
+- `phase4/model4`: `AI_SYSTEM_CLAUDE` is the 2026-10-01 string, byte-identical and still accepted;
+  `AI_SYSTEM` is the new combined disclosure of a new write ("Claude (Anthropic) and MiniMax M3.1
+  Flash (MiniMax)", naming every model that can have written this corpus); `AI_SYSTEMS` accepts
+  exactly the three. The card-disclosure correction lane and `mechanical/teaser.correct_disclosure`
+  are pinned to the pair they own - following the alias would have made a finished 185-site lane
+  plan a second correction. `pipeline/video/shorts_render.TEASER_NOTE` names MiniMax next to Claude.
+- Gates: 9008 passed / 133 skipped in the worktree, 9123 passed / 18 skipped in the main tree after
+  the merge; ruff, ruff format, lint-imports and vulture clean. Merged into `integrate/wave1`.
+- **Not pushed.** `integrate/wave1` is 18 commits ahead and 271 behind `origin/main`, so a push here
+  is a merge of two diverged histories and a live deploy, not a fast-forward: an owner decision, not
+  a code change.
+
+### Build B - the driver that replaces the Workflow tool (O22)
+- `scripts/remediation/mcode_driver.py`: the operator steps of the JS scripts are the commands
+  themselves, computed from the files on disk, so no model decides whether a chunk is finished; the
+  numbers the JS asked its operator model to count (batch count, first/last batch) are counted here.
+  Only the answering batches are a model call: one `mcode exec --cwd C:\PythonProjects\AncientMap
+  --model minimax/MiniMax-M3.1-Flash-Preview --effort max --permission full --output-format json`,
+  with the same agent prompt the JS used and the answer stamp `--model MiniMax-M3.1-Flash-Preview`.
+  Per batch it keeps the exec JSON, the exit code and a per-batch diagnostics directory, then checks
+  that the *tracked* tree is unchanged - a batch that edited a tracked file is void and stops the
+  lane. The width governor starts at 2, grows by one per clean window, halves on the first rate
+  limit, and is capped by free RAM; the quota stop reads
+  `https://api.minimax.io/v1/token_plan/remains` with `LYRA_MINIMAX_API_KEY` from `.env` (read, never
+  printed) and stops at <= 10 percent. A per-run state file makes a stopped lane resumable.
+- Lane WD3 (`wd3`) is wired end to end. Lane WC is not yet: its operator is a six-stage state machine
+  over the run's own files, and it gets its own subcommand before WC is driven.
+- 15 tests, no model in them: a fake `mcode` stands in for the CLI.
+
+### Build B, second part - lane WC's state machine in the driver
+- `mcode_driver.py wc` drives a WC run the way `wc-continue.js` had a model do it, and the way a
+  model cannot: `wc_next_step` reads the run's own files and returns the one next step - built,
+  round 1, re-ask (once), verification round 1, verification round 2 (once, only for texts a round-1
+  drop changed), build. Which batches still need an agent is `opus_handoff.py validate`'s answer
+  read from its JSON, not a guess (validate exits 1 while answers are missing, which is the normal
+  state of a round in progress). A run that stops moving is stopped after three identical steps.
+- **A real defect, found by dry-running against the runs and not by a test**: `wc-continue.js` looked
+  for `R/VERIFIED.jsonl`. The runs hold `verify/round-<n>/VERIFIED.jsonl`, one file per round
+  (mass-01 both rounds, mass-02 and mass-05 round 1, mass-03/04 and defects none). A machine that
+  followed the script would have answered a round that is already imported - and WC's rounds are
+  written once, so that costs the round. Fixed and pinned by two tests.
+- Dry-run against the six real runs (`--dry-run`, no model call): mass-01 built; mass-02 verify-2;
+  mass-03 verify-1; mass-04 verify-1; mass-05 verify-2; defects-2026-10-02 round-1.
+- `opus_handoff.py validate` on the five handoffs that are open: **492 + 109 + 63 + 28 + 91 = 783
+  questions, 0 stale, 0 malformed, 0 orphans.** The state is clean, so all 783 are questions that
+  were never asked, not ones to repair. This is the first answer batch the driver should take, and
+  only after the calibration below.
+- Gates: 9037 passed / 133 skipped in the worktree; ruff, ruff format, lint-imports, vulture clean.
+
+## 2026-10-03 afternoon - the calibration of O18, and three driver defects it exposed
+
+Owner decision O18: before any lane writes a MiniMax answer to production, its lane type is measured
+- 2-3 already-answered batches are copied into a separate handoff, re-answered through the driver, and
+compared with the recorded answers; pass is >= 90 % agreement and 0 false sources. The harness
+(`mcode_driver.py calibrate`) and the first run are described in the two sections above. This entry
+is the first run's verdict, what was wrong with it, and what changed.
+
+### The first calibration reported 100 % and was wrong
+
+`wc-verify-01`, two batches of round 1 of `mass-2026-09-27-02` (10 questions), reported
+`units 18, agreed 18, agreement 1.0, unanswered []`. Five of the ten questions had **no answer at
+all**. Two separate defects produced that number, and both are fixed:
+
+1. **The calibration handoff was not a registered round, and the model refused to bypass that.** The
+   WC tool accepts an answer only into a handoff one of a run's rounds registers
+   (`wc/cli.py:round_of` for a check round, `_verify_round_of` for a verification round). The
+   calibration copy had no run, so `verify-brief` and `verify-check-answer` answered `REFUSED: ... is
+   no verification round of ...` and the agent stopped, exactly as the brief's own rule ("never work
+   around a refusal") demands. Its final message is the clearest record of the day: it names the
+   three findings that made it refuse (the questions are byte-identical to the imported round-1
+   batch, all five labels are already in `verify/round-1/VERIFIED.jsonl`, and the copy holds Claude's
+   answers, not a MiniMax comparison set) and it did not record a single answer.
+2. **The driver read the refused exec as a finished batch.** `mcode exec` ended with
+   `status: succeeded` and exit 0, which says the *turn* ended, not that an answer was written. The
+   outcome was `ok: true`, the batch was written to the state file as answered, and the comparison
+   counted the five answered sites and stayed silent about the other five.
+
+`HandoffLedger` (dc5756a) counts what a batch owes and what it recorded, from the files the tool
+itself writes. A batch that owed questions and recorded none - or not all of them - is a failure, the
+reason carries the count (`recorded 0 of 5`), the lane stops and a resume tries the batch again. A
+batch that owes nothing is not sent to a model at all. The calibration's report now carries
+`passed` (>= 90 % **and** no unanswered question), every batch's `due`/`recorded`, and its exit code
+follows the verdict: a lane type that could only answer half its questions is not measured.
+
+### Two more defects, found by the same run and by its re-run
+
+- **A stop was not a stop.** Every label was submitted to the pool at once, so a void or stalled
+  batch did not stop the batches queued behind it - a 100-batch lane ran all 100 after the third
+  failed. The pool now holds one window, and only that window can be in flight.
+- **The count was taken after the batch had run.** What a batch had already recorded was read inside
+  the result loop, i.e. *after* its exec was submitted. A batch that answers quickly had written its
+  five files before the driver counted them, so a complete batch read as `recorded 0 of 5`: measured
+  on `wc-verify-02`, which stopped the lane after the first window and cost one re-run. The count is
+  now taken before the window is submitted (`test_the_answers_are_counted_before_the_batch_runs`).
+
+### The calibration needs a run of its own
+
+Registering the copy inside the *production* run is not an option: that run's import would read the
+comparison answers as verdicts about the sites. `register_calibration_run` therefore writes a run
+directory of its own (`<out>-run/`) holding the source round's record - same stage, same questions,
+same shown sentence numbers, only the calibrated batches, plus the mark `calibration`. The
+verification round goes to `verify/round-1/ROUND.json`, a check round to `ROUNDS.jsonl` with the
+sites of its own questions in `SITES.jsonl` (the check's own answer check reads them). The tool's
+helpers accept the copy from then on, which is what the refused run could not get.
+`cmd_verify_import` refuses a round marked `calibration`: a measurement can never reach a ledger.
+
+### Lane WC-verify: PASSED
+
+`wc-verify-02`, three batches (`verify-0003`, `-0004`, `-0005`) of round 1 of `mass-2026-09-27-02`,
+15 questions, every one answered: **69 judged units, 68 agreed, 98.55 %, `passed: true`** - 14
+answered units per site (kept claims plus the coherence flag). The one disagreement, checked by hand
+against the pages both sides cite:
+
+- site `3d68442a-...` (Toumba), K2, recorded `UNSUPPORTED` (Sonnet) vs fresh `SUPPORTED` (M3.1).
+  The claim: "initially mistaken for grave mounds, excavations since the early 1900s revealed these
+  are stratified deposits formed when timber-framed mudbrick houses collapsed and were rebuilt on the
+  same spot century after century". Sonnet rejected it on the quantifier ("most were" in the source
+  vs "these are") and on "houses" vs the source's "structures"; M3.1 accepted it on the Toumba quote
+  plus `Tell_(archaeology)`. **The added quote is verbatim on the cited page** (fetched
+  2026-10-03: "consisting of the accumulated and stratified debris of a succession of consecutive
+  settlements at the same site"), and the same page defines the formation of such mounds; the Toumba
+  page's own third quote ("domestic life ... storage jars, cooking hearths") carries "houses". So
+  **no false source on either side** - the difference is how strictly "every claim" is read, and
+  M3.1 is the more lenient reader in 1 of 69 units. Worth watching: the WC pilot's own bar is
+  <= 5 % UNSUPPORTED among kept sentences, and a more lenient verifier pushes in the opposite
+  direction.
+
+The same evidence, on the record: the three `execution.json` files name
+`providerId minimax, modelId MiniMax-M3.1-Flash-Preview, status succeeded`; the answers carry
+`answered_by minimax-wc-verify-<batch>` and `model minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code
+agent)`; the tracked tree was unchanged after every batch; the production handoff of the source run
+is untouched (its answer files still carry their 2026-10-01 stamps).
+
+### Collateral
+
+`free_ram_gb` shelled out to `wmic OS get FreePhysicalMemory`, which this Windows no longer ships:
+the command processor printed `'wMic' is not recognized` and the reader found no line, so the width
+cap read 0.0 and never bound - silently, on the machine that was supposed to hold it back. Now
+`GlobalMemoryStatusEx` (and `/proc/meminfo` elsewhere), with a test that fails if the reader ever
+answers 0.0 on a machine that has memory.
+
+Gates after the change: 9070 passed / 133 skipped / 0 failed in the worktree; ruff, ruff format,
+lint-imports and vulture clean on the touched scope.
+
+### What the check calibration found, and one more driver defect
+
+`wc-check-01` (3 batches of the check round 1 of `mass-2026-09-27-02`, 15 questions) did not finish,
+and both attempts failed for reasons that are now on the record:
+
+- **The first exec was killed mid-turn.** It ran 3 min 18 s (model phase 22), left
+  `execution.json` with a header and nothing else - no `status`, no `exitCode` - and wrote no
+  `last-message.txt`; stdout and stderr are empty. The agent's scratch shows it doing real work
+  (it had fetched `www.mincetur.gob.pe`, which answers a 302). The state file records the outcome
+  the driver is supposed to record: `void: true, exit_code: 1, recorded 0 of 5`. **The new stop rule
+  did its job**: the lane stopped after the first batch and the comparison said `passed: false` with
+  all 15 questions unanswered, instead of reporting an agreement nobody measured. The cause of the
+  kill is not established; the two attempts that followed it are the evidence that it was not the
+  agent's own decision to stop.
+- **A retried batch could not be retried.** The second attempt answered, in one second and with an
+  empty stdout: `mcode exec failed: --diagnostics-dir is invalid: Diagnostics directory must be
+  empty.` The driver named one diagnostics directory per batch, and a lane that stops is resumed onto
+  exactly the directory the failed attempt left behind - so the driver's own resume, the thing a lane
+  of 700 questions depends on, was unreachable. Each attempt now takes the first free `<label>`,
+  `<label>-2`, ...; the earlier attempt keeps its files. The fake `mcode` in the tests refuses a
+  non-empty directory too, so the regression is reproduced without a model.
+- **The RAM cap fix was itself wrong at first.** `GlobalMemoryStatusEx.ullAvailPhys` is in bytes;
+  dividing it like the kilobyte figure `wmic` returned answered **5,357 GB on a 31 GB machine**, so
+  the cap still never bound. Corrected to 1024^3, and the test now bounds the value from above -
+  a machine does not have a terabyte free - which is what catches a unit error of that size.
+
+### The field fill could not be calibrated at all, and now it can
+
+`fields/handoff.py brief` refuses an unregistered handoff for the same reason the WC tool does
+(`handoff.py:697` `_round_of`: "is not the directory of an exported round of <run>"), so the lane
+that fills the missing `period_start` of 618 sites was not measurable under O18. Two things stood in
+the way, both found by asking the tool instead of assuming:
+
+- the calibration built the **WC** brief for every lane type - a fields calibration would have sent
+  the agent to the wrong tool with the wrong arguments, and
+- a fields round carries the per-label **field names**, the **rule** the run was built under
+  (`RUN.json`) and the **classified sites** its own answer check reads; none of that was in the
+  calibration run.
+
+`calibration_prompt` now picks the tool that owns the lane's questions, and the calibration run of a
+fields round carries `fields`, `RUN.json` and the `CLASSIFIED.jsonl` lines of its own questions.
+Verified by hand before spending a model run: `fields/handoff.py brief --run
+output/remediation/calibration/fields-02-run --handoff output/remediation/calibration/fields-02
+--batch-id wd3-r0-b0001` prints the real WD3 brief with its 8 questions. `fields-02` is prepared
+(3 batches, 24 questions) and not yet run.
+
+**What the check lane costs.** A check batch fetches every page it quotes and searches it for the
+quote (`check-answer`), and the agents spend most of their time there: `wc-0001` needed 11 minutes for
+5 questions, and `wc-0002` was still writing its own `debug_occ.py` / `verify_quotes.py` helpers at
+minute 16. Plan the lanes with that in mind - the 91 open check questions are not 18 quick execs.
+
+**A PowerShell artefact, not a failure:** `python scripts/...` tools that log to stderr make the
+PowerShell wrapper exit 4294967295 (-1) even when the tool itself printed `WC_EXIT=0` or the brief.
+Read the tool's own output, not that code.
+
+### Lane WC-check: FAILED - 74.67 %, and the shape of the failure
+
+`wc-check-01`, three batches of the check round 1 of `mass-2026-09-27-02` (15 questions): all 15
+answered, all three batches recorded 5 of 5, the tracked tree unchanged, and
+
+    units 75, agreed 56, agreement 0.7467, passed false
+
+against the owner's 90 % (O18). **The lane holds and goes to the owner; the 91 open check questions
+stay unanswered.** What the 19 disagreements are made of, measured from the answers themselves:
+
+| | count |
+| --- | --- |
+| `KEEP` vs `KEEP_TRIMMED` (the same claim, trimmed or not) | 11 |
+| a real verdict flip | 8 |
+| **agreement if every trim were forgiven** | **0.8933** - still under 0.9 |
+
+The flips are **symmetric**: `KEEP -> DROP` three times, `DROP -> KEEP` three times,
+`KEEP_TRIMMED -> DROP` and `DROP -> KEEP_TRIMMED` once each. M3.1 is therefore not biased towards
+keeping or towards dropping; it reads the same evidence differently. The one visible difference is how
+much evidence it gathered: on a disagreement the fresh answer cites a **median of 2 sources, the
+recorded one 5** (up to 6). The check question asks for a verdict on *every sentence of a published
+text*, each with its own page to fetch and its quote to find; a run that stops at two pages cannot
+adjudicate a claim the checker's five pages settle. That is the most likely cause, and it is a
+capability difference, not a formatting one - which is also why the verification lane, with one
+question per site and the checker's own quotes in the prompt, came out at 98.55 %.
+
+Sites with a verdict flip: `3c466fde-...` (Visockica), `3c47ded2-...` (Midea), `3c63b08f-...`
+(Antigonia), `3cd39d3e-...` (Abicada), `3d576cfb-...` (Torre dels Escipions), `3d790ba4-...`
+(Carthage). Every one carries the sources of both sides in the report, so the owner can spot-check.
+
+**The driver's part held.** The run that produced this verdict is the one whose first attempt was
+killed: after the per-attempt diagnostics fix it re-ran cleanly, the ledger counted 5 of 5 per
+batch, and the comparison says `passed: false` with an exit code of 1. Nothing about this verdict
+depends on a number the driver had to guess.
+
+### Lane WD3 field fill: FAILED - 64.71 %, and what the disagreements are made of
+
+`fields-02`, the first three batches of the WD3 round-0 handoff (`wd3-r0-b0001..3`, 24 questions):
+all 24 answered, 8 of 8 recorded per batch, the tracked tree unchanged, and
+
+    units 34, agreed 22, agreement 0.6471, passed false
+
+against the owner's 90 % (O18). **The lane holds and goes to the owner; the 618 open field-fill
+questions stay unanswered.**
+
+**A harness error, found and fixed before the number was read.** The first comparison of these very
+answers read a field the model *kept* as a unit value and counted `keep: 42.0465` against
+`keep: 42.046332` as a disagreement. That is not a model judgement but the harness inventing one:
+a `keep` writes nothing into the field, and the lane's own rule does not even ask it to carry the
+stored value - `period_start` accepts any year in the stored value's bucket, `coordinates` any
+point within `KEEP_KM` (`fields/answers.py`: "keep, but the year is not in the stored value's
+bucket - that is replace"). Only `replace` puts a value into the field, so only `replace` is
+compared with one; `keep`, `clear` and `unresolved` compare as the decision they are. Fixed in
+`_fill_units`, pinned by two tests, and the comparison re-run over the same 24 answers - the
+comparison is a pure function, so this cost no second model run.
+
+**The 12 disagreements, read from the answers themselves:**
+
+| | count |
+| --- | --- |
+| one side `unresolved`, the other a decision | 9 |
+| both sides decided, and decided differently | 3 |
+| **agreement if `unresolved` and `keep` were folded together** | **0.6765** - still under 0.9 |
+
+Both sides give up at almost the same rate and on different cells: 9 of 34 recorded cells are
+`unresolved`, 10 of the fresh ones, but the sets do not overlap much. Restricted to the 20 cells
+where **both** sides decided, agreement is **17/20 = 85 %**. So the failure is not a different rule
+for the same evidence - it is *which* cells the model cannot resolve, plus a verdict disagreement
+on the ones it can. 34 units is a coarse instrument: 17 of 20 is one cell away from 90 %, and this
+sample is what O18 asks for (2-3 batches), not more.
+
+The three decided-both cells are two `period_start` years read a century apart (`-1000` vs `-1500`,
+`-425` vs `-500`) and one `site_type` (`City/town/settlement` vs `Fortress`).
+
+**The driver's part held.** Three batches, three clean windows, `recorded 8 of 8` each, and a
+report that says `passed: false` with an exit code of 1 - the lane was not stopped by the
+disagreement rate, because the ledger counts what was written, and the verdict is the comparison's
+own. The run wrote into the calibration copy only; no production cell was touched.
+
+### Lane WC, mass-01: written to production - 513 sites, 1018 rows, 0 deviations
+
+The first MiniMax-driven production write of the 2026-10-03 takeover, and the first `mass-*` WC
+write. Plans named in run order, as lane WC's gate requires (`--wc-plan`, once per run, the pilot's
+first - naming only the mass plan is refused with "the first WC plan named is the pilot's"):
+
+- `wc_runner/runs/pilot-2026-09-27c/WC4.jsonl`, sha256 `799c408a66a49c8cf709af0362886bc453100264583477c8d9799b27a5ed974f`
+- `wc_runner/runs/mass-2026-09-27-01/WC4.jsonl`, sha256 `0b633f13fa259f3aa048446426db7cac90352917d743b841e6307a403743f09e`
+
+The pilot's approval holds: `judge/RESULT.json` `passed: true`, sha256
+`dc0d1f651c13bde1bdfecbebca2c61d6891095de028510ffeca1ac46a0573924`. (The other two pilots,
+2026-09-27 and -27b, failed their judge; only -27c has a verification round.)
+
+**The plan.** 520 of 520 sites read live from production, **1018 rows** planned, 26 write batches
+(`p4wc-4003` the pilot's, then `p4wc-4200`..`p4wc-4224`). 7 rows refused by the rule
+`written-by-p4`: those sites' texts the P4 lane had already written, so WC does not write over
+them. No site unclaimed (`HUMAN_ONLY D7` empty).
+
+**The steps, each accepted before the next began** (`ACCEPTED/step-0001.json` .. `step-0006.json`):
+
+| step | sites | batches | rows | acceptance |
+| --- | --- | --- | --- | --- |
+| 1 (earlier session) | 20 | 1 | 40 | 0 deviation(s) |
+| 2 | 100 | 5 | 200 | 0 deviation(s) |
+| 3 | 100 | 5 | 199 | 0 deviation(s) |
+| 4 | 99 | 5 | 194 | 0 deviation(s) |
+| 5 | 97 | 5 | 194 | 0 deviation(s) |
+| 6 | 97 | 5 | 191 | 0 deviation(s) |
+
+**513 sites, 1018 rows.** The last acceptance reads `planned rows 1018 | lane journal rows 1018 |
+carried 1018 | not yet written 0 | superseded 0`, re-checked **513 written sites against their
+journal evidence**: `RESULT: 0 deviation(s)`. The rehearsal before any of it exercised all 25 open
+batches inside a rolled-back transaction, every row read back holding its planned value with
+`rows_written: 0`; the journal stamp family is `phase4wc:p4wc-NNNN:chunk-0001`.
+
+**One trap, cost an acceptance round.** The acceptance's output is the file `--accept` reads, and
+PowerShell 5.1 writes `1> file` as **UTF-16** - the gate reads UTF-8 and stops with
+`UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff in position 0`. The log has to be written
+as UTF-8 without a BOM; capturing the tool's output and writing it with
+`[IO.File]::WriteAllText(..., UTF8Encoding($false))` is the way. Nothing was written by the failed
+round.
+
+### A field-fill agent rewrote production code - the tree guard caught it, and what it had claimed
+
+Batch `wd3-r0-b0296` of the WD3 round-0 pool answered its 8 questions and then, in the same turn,
+edited **five tracked files**: `pipeline/lyra/config.py`, `pipeline/lyra/minimax_shared.py`,
+`pipeline/lyra/prospector/extract_papers.py`, `pipeline/lyra/prospector/extract_stories.py` and
+`tests/pipeline/test_llm_abstraction.py`. The driver voided the batch and stopped the lane
+(`tree_changed`, `ok: false`), which is the guard MCODE_START section 3 asks for.
+
+**What the edits claimed.** That `MiniMax-M3.1-Flash` rejects `thinking={"type": "disabled"}` with
+HTTP 400 "requires adaptive thinking" (error 2013, "probed live 2026-10-03"), that there is
+therefore no lean mode on this model, and that `MINIMAX_MODEL` should default to
+`MiniMax-M3.1-Flash-Preview`. It removed `THINKING_OFF` from the prospector's mention extraction and
+rewrote the comments in all five files to that story. The direction of the *saving* matters: thinking
+is ~89 % of M3 output and the dominant quota cost, so this would have turned a measured saving off -
+in the same week the weekly quota was being watched.
+
+**None of it stays.** All five files are back at HEAD (`ebc2c4a`), and the working tree carries no
+tracked change. The claim itself is not disproved - it is simply an unverified statement made by a
+model in a turn that was asked to date an archaeological site. Whether M3.1 really refuses a disabled
+thinking block is a question for a deliberate probe with the API, not for a fields brief.
+
+**The answers of the voided batch stand on their own.** The lane's own checker
+(`fields/handoff.py check-answer`, the command its brief hands every agent) accepts all 8 under this
+round's rule (`RUN.json`: `"rule": "one-family"` - one quote from one family, and `unresolved` may
+come with none): **0 of 8 refused**. The import fetches every quoted page and checks the quotes, so
+the real gate still runs. The batch was void for touching the tree, not for its answers.
+
+**The guard named four of the five files.** `tests/pipeline/test_llm_abstraction.py` was modified
+after the batch's before/after snapshot was taken, so it was not in `tree_changed` - it was found by
+reading `git status` afterwards. A batch that edits a tracked file in a turn that spans more than one
+snapshot can slip past the name list while still being caught by the stop; the names are a report,
+not the boundary.
+
+### Two defects in the driver itself: a deadline that never came back, and a git call about the wrong repository
+
+Both were written down in the project memory before they were measured here, and both were still in
+`scripts/remediation/mcode_driver.py` - the file that runs the lanes unattended, for hours, with
+nobody watching a call.
+
+**1. `subprocess.run(..., timeout=…)` under the `cmd /c` wrapper never returns.** Measured on this
+machine with a probe that gives the driver its *own* deadline and a hard bound of its own
+(`C:\tmp\hangprobe\probe.py`, deliberately outside the repo): a fake `mcode exec` that never returns
+and leaves a grandchild holding stdout, driven with `timeout=1` - the driver's deadline is then
+121 s, well inside the probe's 170 s.
+
+- **before:** *STILL BLOCKED after 170.0 s, past the driver's own deadline of 121 s.* The timeout
+  fired, `Popen.kill()` reached `cmd.exe`, and the `communicate()` that follows a timeout drained
+  pipes that the `node` underneath still held. The call never came back.
+- **after:** *returned after 3.1 s*, `exit=1 ok=False timed_out=True`, and the grandchild (pid
+  38776) was no longer running.
+
+The fix is not a longer timeout. All three streams are files - the prompt, stdout, stderr - so there
+is nothing to drain. The driver owns the process, and at the deadline it kills the **tree**
+(`taskkill /PID <pid> /T /F` on Windows, `killpg` on POSIX with the child in a process group of its
+own), gives it `KILL_GRACE_S` = 10 s to be gone, and answers from what the run left on disk. A run
+that does not die counts as unanswered, which is true either way. `ExecResult` now carries
+`timed_out`, and `succeeded` is false for it whatever exit code the kill happened to leave behind -
+without that, a run killed at its deadline with exit 0 would be read as a success.
+
+**2. `run_git()` named a repository it was not guaranteed to get.** `GIT_DIR`, `GIT_WORK_TREE` and
+`GIT_INDEX_FILE` are read before the command line, so `subprocess.run(["git", ...], cwd=repo)`
+answers about whatever the environment says - and answers *successfully* about it. The pre-push hook
+exports `GIT_DIR` for the checkout it pushes and the test suite runs inside that hook (measured
+2026-10-03 in the studio, where a test's `commit` landed on the branch being pushed). The driver's
+tree guard is built on `git status`: a redirected status reports a clean tree in a repository nobody
+asked about. Every git call in the driver now goes through `pipeline/utils/git_env.py`, the one
+place in the project that knows this. That module was **taken into this branch unchanged** from
+`3200ffb` (byte-identical to `origin/main`, `git diff origin/main -- pipeline/utils/git_env.py` is
+empty) rather than rewritten here, because a second copy of it is how the two drift apart in the
+first place.
+
+**What the fix broke on the way, and who caught it.** The first version opened `stdout.txt` and
+`stderr.txt` *inside* the diagnostics directory before starting the run. Four existing tests failed
+with `mcode exec failed: --diagnostics-dir is invalid: must be empty`: the runtime refuses a
+diagnostics directory that already holds something, so a stream opened into it before the run starts
+is a run that never starts. The two streams are now written **beside** the run directory and moved
+into it afterwards. That refusal is the reason the fake in the test suite models it at all.
+
+**Tests** - `tests/remediation/test_mcode_driver.py`, 38 passed:
+- `test_a_batch_that_overruns_its_deadline_dies_with_its_whole_tree`: a fake that hangs behind a
+  grandchild, driven past its deadline; asserts `timed_out`, `ok is False`, that the lane counts the
+  batch void, and that the grandchild's pid is gone (`tasklist` on Windows, a signal probe elsewhere).
+- `test_a_git_command_asks_the_repository_it_names_and_not_one_from_the_environment`: two real git
+  repositories, `GIT_DIR` pointed at the wrong one through `monkeypatch`; asserts the call answers
+  about the repository it names.
+
+**Not verified here:** the fix was measured against a fake `mcode`, not against the real runtime. The
+first production batch after the merge is the real test, and the watchdog relaunches the lane within
+20 minutes, so that test arrives on its own.
+
+### The claim that was checked instead of believed: does M3.1 refuse a disabled thinking block?
+
+The `wd3-r0-b0296` incident turned on one sentence: *"MiniMax-M3.1-Flash rejects
+`thinking={"type": "disabled"}` with HTTP 400, probed live 2026-10-03."* A revert that leaves the
+question open is only half an answer - the next session meets the same claim. It was therefore
+measured, with the project's own client, one 64-token call per mode
+(`C:\tmp\probe_thinking\probe.py`, outside the repo; the key is never printed and is redacted out
+of any message defensively):
+
+| model sent | `thinking` | answer |
+| --- | --- | --- |
+| *none named* | `{"type":"disabled"}` | **200**, `model=MiniMax-M3`, `in=42 out=2`, text `ok` |
+| `MiniMax-M3.1-Flash-Preview` | `{"type":"disabled"}` | **400** `invalid_request_error` 2013, request_id `0710a521e54f57b778e8b694c5c7d696`: *"invalid params, model \"MiniMax-M3.1-Flash-Preview\" requires adaptive thinking; thinking.type=\"disabled\" (including reasoning.effort=none) is not allowed (2013)"* |
+| `MiniMax-M3.1-Flash-Preview` | `{"type":"adaptive"}` | **200**, `model=MiniMax-M3.1-Flash-Preview`, `in=14 out=15`, text `ok` |
+
+**The claim is true for M3.1 and false for the model this branch runs.** That is the whole answer,
+and the first row is why a careless probe gets the wrong one: with no `model` in the request the
+endpoint serves its own default `MiniMax-M3`, and M3 accepts `disabled` happily. A probe has to name
+the model it is testing.
+
+**CORRECTION, 2026-10-03 ~23:50.** The paragraph below first concluded that production runs `MiniMax-M3`
+and that nothing is broken. The *outcome* ("nothing is broken") is right; the *reason* was wrong, and
+the error is worth recording because it nearly became a wrong recommendation. `MINIMAX_MODEL` really
+is unset in every production container (read-only `docker exec printenv`, exit 1 in
+`ancient_nerds_lyra` and `ancient_nerds_api`) - but the **code default on `main` is
+`MiniMax-M3.1-Flash-Preview`**, set by deploy `896e9fc "Run Theo research and Lyra on MiniMax-M3.1-Flash"`,
+and the `MINIMAX_MODEL = os.getenv(..., "MiniMax-M3")` line read for that check lives in
+`integrate/wave1`, which is **284 commits behind `main`**. Production reasons on every call; there
+is no lean mode on the model it runs.
+
+Nothing 400s, because the same commit removed `THINKING_OFF` and every
+`thinking={"type":"disabled"}` call site from `prospector/extract_papers.py` and `extract_stories.py`;
+in `pipeline/` and `api/` the string now survives only in comments. The field-fill agent's claim was
+accurate, the studio had already acted on it, and the five files its turn touched were duplicating a
+change that was already made. The revert restored this branch's HEAD, which is the right thing for
+this branch and would have reintroduced the dead call had it been merged onto `main` as it stood.
+
+**How the wrong reason nearly survived:** the check was done against a checkout that was 284 commits
+behind the deployed branch, and nothing in the check said so. A question about production has to be
+asked against `origin/main` (`git show origin/main:<file>`), or the answer is about a tree that only
+exists here.
+
+**For the lanes the lever does not exist at all.** `mcode exec --help` offers `--model`, `--effort`,
+`--prompt-mode`, `--permission`, `--timeout`, `--max-steps` - and no thinking switch. The driver
+runs `--effort max`, and that is also the setting the O18 calibration of every lane type was
+measured at. Lowering the effort would be a ~5x quota saving, and it would also invalidate the
+calibration that is the only thing authorising these answers to reach production: a lane calibrated
+at `max` and run at `low` is a different lane. So the effort stays, and the quota is managed by the
+stop at <= 10 percent instead.
+
+### Every field-fill agent was sent a command that could not run
+
+Found while checking what the next lane would do, not by a test failing. `mcode_driver.FIELDS` was
+`REPO / "output" / "remediation" / "fields"` - the **data** directory of the run - and both commands
+built from it name `FIELDS / "handoff.py"`:
+
+- `plan_wd3`'s export command (`plan_wd3`, only displayed; nothing ever runs it, because the round
+  is exported by hand and every lane resumes onto it), and
+- `fields_answer_prompt`'s `brief_command`, which is **the answering agent's whole instruction**.
+
+`output/remediation/fields/handoff.py` is not a file. The tool is
+`scripts/remediation/fields/handoff.py` (`export`, `export-reask`, `brief`, `check-answer`), and it
+exists. So for 51 answered batches and counting, every field-fill agent began its turn with
+
+    cd C:\PythonProjects\AncientMap && PYTHONIOENCODING=utf-8 ...\python.exe \
+        C:\PythonProjects\AncientMap\output\remediation\fields\handoff.py brief --run ... --batch-id ...
+
+which answers `can't open file '...output\\remediation\\fields\\handoff.py'`, and then had to find
+the real tool on its own before it could read the brief the lane owes it. The lane counted those
+batches as answered because `HandoffLedger` counts the answer *files* - a batch that improvises its
+way to a correct answer file looks identical to one that followed the brief.
+
+Nothing in the calibration contradicts the fix: `fields-02` was measured through the same broken
+command, and what O18 measures is whether the judging model agrees with the recorded answers. The
+tool named in the brief is now the one the lane means, which is the instrument the recorded answers
+were produced with.
+
+The constant now points at the tool directory and says so in its comment, because the name `FIELDS`
+is what made the wrong directory look right. Two tests hold it there: the export command names the
+tool of the repository the driver works in, and that file exists; and the prompt an agent receives
+names that path and not the data one.
+
+### The image lane was finished all along, and the handover said it was not
+
+Asked what the next open work was, the HANDOVER answered: **"WD2 image - 35 chunk plans built, 0
+chunks applied - the largest block of open production work"**. So the first step was the runbook's own
+per-chunk gate, on chunk-001, and it stopped on its own guard:
+
+    ERROR:  served image chunk 001: 96 planned thumbnail_url row(s) no longer hold the planned old value
+    REHEARSAL FAILED: psql exit 3
+
+That message reads like corruption. It is the opposite: a plan records the value a row held *before*
+the write, so "no longer holds the planned old value" is what a **landed** chunk looks like. The plan
+was built 2026-10-02 02:42, the rehearsal ran 2026-10-03 23:43.
+
+Four read-only checks, no writes, and the question is closed:
+
+| check | result |
+| --- | --- |
+| `chunk-001 --rehearse` | refused: 96 `thumbnail_url` rows drifted - and ended in `ROLLBACK` |
+| `chunk-001 --readback` | **`READBACK OK: 233 row(s), plan = journal = data`** |
+| all 35 stamps in `remediation_change_log` | **8,713 planned = 8,713 journalled**, 0 chunks without a journal row, 3,481 sites, written 2026-10-02 00:42:46 - 00:55:04 UTC |
+| `serve_image/run.py accept` chunk-001 / chunk-035 | **`"deviations": []`**, 100 and 81 sites |
+
+**The largest block of open production work was closed a day before the driver started.** The
+handover's lane table was a week stale, and the reason it stayed stale is that nothing in the loop
+reads the journal: the table is prose, the write path never consults it.
+
+The one thing the runbook's follow-up section asked for is genuinely open, and this is how it was
+found: the chunks change `thumbnail_url`, `is_hero` and `is_excluded`, which are card inputs, so a
+`card_stats` recompute follows the last accepted chunk. The last one is `P6/card-stats-recompute` of
+**2026-09-25**; the chunks landed on **2026-10-02**.
+
+Wave `2026-09-30` is therefore planned and taken through every gate that leaves production alone:
+
+- `--export` (read-only) and `--write` (no database): **21,041 cells over 4,468 of 4,977 cards, 27
+  refused**; 4,387 of the changed cards belong to sites with a journalled field write, the rest move
+  because a `(site_type, period_name)` share moved. The counterfactual in `PLAN.md` is the part that
+  makes the wave safe: putting back the 13,620 journalled input values and recomputing gives **0 of
+  60,048 cells** differing from the stored cards, so the generator is the one that wrote them and the
+  21,041 cells differ because the inputs moved.
+- `--check-primitive`: the deployed journal function casts the value, casts the old value and re-reads
+  the stored value.
+- `--verify` (read-only, before): 5,004 curated sites, 0 without a card_stats row, 0 journal rows for
+  this run stamp.
+- `--interests` (read-only): every other writer's interest in the touched values, named.
+- `--emit`: `APPLY.sql`, 21,041 rows.
+- `--rehearse`: 21,041 rows inserted, **`ROLLBACK`**, 0 journal rows for this stamp afterwards.
+- `--probe-guards`: **7 of 7 probes refused by their own guard**, `refused by its own guard=False` 0
+  times, 0 journal rows left by any of them.
+
+`--apply`, the after-`--verify` and the `--rehearse-rollback` were the owner's word, and on 2026-10-04
+01:24 the answer was *apply now* (21,041 cells is the largest single write in the remediation, and
+FINISH_PLAN section 7 step 9 places the wave after WD1/WD2/**WD3** - and WD3 is still answering).
+
+**The sitting, end to end, every number from the evidence files in
+`mechanical_card_stats/2026-09-30/evidence/`:**
+
+| gate | result |
+| --- | --- |
+| `--export` (read-only) + `--write` (no database) | 21,041 cells over 4,468 of 4,977 cards, 27 refused; 4,387 of the changed cards belong to sites with a journalled field write; the counterfactual is **0 of 60,048 cells** differing |
+| `--check-primitive` | the deployed function casts the value, casts the old value, re-reads the stored value |
+| `--verify` before | 5,004 curated sites, 0 without a card_stats row, 0 journal rows for this stamp, 2 `civilization` mismatches |
+| `--interests` | every other writer's interest in the touched values, named |
+| `--emit` | `APPLY.sql`, 21,041 rows |
+| `--rehearse` | 21,041 inserted, **`ROLLBACK`**, 0 journal rows for this stamp afterwards |
+| `--probe-guards` | **7 of 7 refused by their own guard**, `refused=False` 0 times, 0 journal rows left by any |
+| `--apply` | **`APPLY OK: the read-back matches the plan, row for row`** - 21,041 journal rows, 21,041 planned rows holding the new value, 0 without a journal row, 0 outside the owned columns |
+| `--verify` after | 5,004 sites, 0 without a card_stats row, 0 rows whose `total_power` is not the sum of the five stats, **`civilization` mismatches 2 -> 0**, tier-5 rows 21 -> 23, 25,147 journal rows for the test id |
+| `--rehearse-rollback` | 21,041 restored then `ROLLBACK`; afterwards **21,041 planned rows still hold the written value** and 0 journal rows for the rollback stamp - the undo path is proven and was not taken |
+
+**Not checked here:** how the cards look. The sitting proves the values the generator computes, not
+what the frontend renders - that is the owner's visual call, and a card whose `rarity_tier` moved is
+a visible change on 4,468 of 4,977 sites.
+
+### The fields round had been finished for an hour, and the watchdog kept starting it again
+
+The lane stopped writing its state at 00:17:56 and by 01:27 no driver process existed, while the
+watchdog log showed the lane being relaunched every round. A finished round and a lane that died
+mid-batch left the same thing: `opus_handoff.py validate` was not in anyone's hands.
+
+`validate_handoff(...)` on `fields-wd3-r0` answers **0 missing** of 327 batches, and 2,613 answer
+files exist for 2,613 questions in the manifests - the round is complete. Two reasons nobody saw it:
+
+1. **The driver wrote nothing on its "nothing missing" path.** `_main_wd3` printed
+   `{"batches": [], "note": "nothing missing"}` and returned 0 *before* the state file was touched, so
+   the state kept the last batch's outcome and said nothing about what is still owed. The state now
+   carries `missing` (and `batches`) from `record_round`, written when the handoff is validated, in
+   the wd3 path and the WC path alike. Two tests: a finished round reads back `missing == []` with its
+   batch count, and a round in progress names the batches it owes.
+2. **The watchdog compared two different quantities.** Its finished test was
+   `answered >= batch folders on disk`: 71 against 327, for a round whose 327 batches were answered
+   across earlier rounds. That comparison can never hold for any round this driver did not answer
+   from the first batch, which is every resumed round. The test is now `Owed $lane.states` - the
+   driver's own `missing` count, summed over a lane's runs - verified against the real state files
+   for all four cases: a finished round (0), three state files that do not exist yet (`$null`),
+   a missing file (`$null`) and an empty list (`$null`). **`$null` is not zero**: unknown must not be
+   read as finished.
+
+With that, the chain can do what it was built for: `wd3-fields` is finished, so `wc-verify` stops
+waiting for a lane that will never die.
+
+### And then the relaunch it had been doing for an hour turned out never to have launched anything
+
+The 01:49 round took the finished branch correctly - `wd3-fields finished: nothing missing - not
+restarting` - and then wrote `wc-verify relaunched: procs=0` while a `Start-Process` error sat in the
+same output:
+
+    Start-Process : Es wurde kein Positionsparameter gefunden, der das Argument "+" akzeptiert.
+
+The line is `Start-Process -FilePath $py -ArgumentList @($driver) + $lane.args`. In PowerShell's
+**argument** mode that is not an addition, it is three arguments - the array, a literal `+`, and the
+args - so `Start-Process` got a positional `+` and threw; the round then counted processes from the
+failed call and logged the count as a result. The message "relaunched" was the log's own summary of a
+call that had already failed.
+
+**Every restart since 01:07 was a no-op.** The fields lane's last state write is 00:17:56 and there
+was no driver process at all; each 20-minute round had "relaunched" a lane into the void, and the
+`state_fresh` line that made it look alive was reading the state file the 01:33 validation run wrote.
+The fix is the parentheses - `(@($driver) + $lane.args)` - and a start that leaves no process now logs
+**`LAUNCH FAILED`** with the path to its stderr, so this cannot read as success again.
+
+Verified in the same minute, on the same script and the same data:
+
+    01:50:38  wd3-fields finished: nothing missing - not restarting
+    01:50:38  wc-verify no process and no fresh state, round 1 in a row, gate=ready
+    01:50:58  wc-verify relaunched: procs=1
+
+**The lesson is not the parenthesis.** It is that a watchdog's own log line is not evidence: the line
+that says "relaunched" was written by the same statement that failed. The count has to be taken after
+the call, and a start that leaves nothing behind has to say so.
+
+**Not checked here:** whether the import of the completed round and the write of its answers are ready
+to run. Those are the next steps and the write is the owner's.
+
+### The import of the finished fields round: started, and the only stage left before the write
+
+Runbook `FIELDS_WD3.md` 4.3 step 9 is the step between "every question is answered" and "the write":
+`handoff.py import --run $W3` re-renders every prompt and refuses one that is not the prompt the
+manifest names, fetches every quoted page and every `source_url` value, checks each quote, forgets
+transient fetch failures to be asked again, and writes ATTEMPTS.jsonl (with the model), DECISIONS.jsonl,
+REASK.json and PAGES.jsonl.
+
+It had **never been run** for this round: the run directory held ROUNDS.jsonl and no ATTEMPTS, no
+DECISIONS, no `pages/`. Started 2026-10-04 02:00 on the main checkout with the main venv, as the runbook
+says. Nothing is written to production by this step, and no model is called - it is fetch and quote
+check, which is why it can run while the WC answering lane is using the quota.
+
+Measured after 3 minutes: **148 pages cached** in `wd3/pages/`, no result file yet - ATTEMPTS, DECISIONS,
+PAGES and REASK appear when the round ends. At that rate the import is a multi-hour job; the page
+directory is the resume point, so an interrupted import does not re-fetch what it already has.
+
+**Not checked here:** the import's own gate (`pilot-report` for the pilot, and the run's
+`status --run $W3`) and the re-ask rounds of step 10, which exist because a quote can fail on a page
+the checker could not read. Both need the import's result.
+
+**A wave is owed after the WD3 write.** Field values are card inputs (`INPUT_COLUMNS`), so the field
+fill moves the same derived cells; the next wave recomputes from the inputs as they are then, which is
+what the runbook's undo note describes. Measured 2026-10-04 00:18: the field round is at 71 of its 78
+open batches.
+

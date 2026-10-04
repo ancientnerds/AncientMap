@@ -1,0 +1,443 @@
+{
+ "built_at": "2026-10-04T18:08:37+00:00",
+ "sites_written": [
+  "019573c7-aff6-4aab-848e-99063cc00b09",
+  "0286a741-77f2-4148-8e62-487041920281",
+  "043054e2-55c8-4b1a-8ad1-3f9092f0efea",
+  "05d60350-c231-4179-851b-380505d30a87",
+  "0abf05cb-0fda-4567-9d9d-0829911a8c66",
+  "0dcce77c-ef2f-481b-8069-ad5818b26aaa",
+  "0eaedf34-031e-4b8f-8fff-2db84a3e6da6",
+  "210925a1-b043-4a19-80c5-7ec9ade6d940",
+  "29074533-09e3-4f7b-9d43-dbffbf8a0a32",
+  "2968fd35-9b61-4dfb-bb1b-cc4489827fd6",
+  "2f93c277-9023-4fbd-9b56-dc2c4f18c1f6",
+  "30cf4488-c74c-42d8-8e21-a017ca0bf921",
+  "33e2399e-fd68-4aab-bf79-c5695a6c0bf0",
+  "4598fdbb-4025-4bb3-955f-cdd68dae05ba",
+  "470169f0-deb7-4c7c-b912-90a98acede1d",
+  "489f64e3-4967-4c14-8f69-f73c48508ca1",
+  "4a59d4e4-c3b6-40bf-9153-302dd1f52595",
+  "50f9ccc8-06b1-4283-af88-a6769d0b9083",
+  "57a2ea53-edcb-4096-8b4a-f5e0a7e23ddf",
+  "58dd6a0b-4c70-4eee-824f-a270800ef886",
+  "5c8779da-b96e-44a7-b460-fa391205e10d",
+  "5d0819e0-a352-4ea1-9d64-067da2e428f9",
+  "5e30b705-2163-47c0-bd65-3316be1806c9",
+  "5fe20684-2090-41cf-8154-c2a50a0b9602",
+  "63b855c8-c281-42d8-87ea-58aeeec070ef",
+  "704e228b-e4e7-4097-bd71-819f72fb8a0a",
+  "7504a195-6a15-4b53-951a-c58d093163d0",
+  "79484b17-4db6-454c-aacb-a3cb5eafaec9",
+  "7959bac1-48f2-4648-b9fa-7b23847cd894",
+  "7a339d92-507c-43e2-8eef-ff924f8c4231",
+  "7de8d13e-49dd-42ca-a5cf-9e8fc614fbd7",
+  "7e5a3822-699c-4603-be7a-ea8ba8278e15",
+  "81666db8-d2a8-4557-8986-376a02bf40b2",
+  "8293113e-b266-40c9-8aa5-dd683886e0ea",
+  "833d2de9-5bc4-425d-b5a5-111d742c8f0d",
+  "86383b38-f1a1-4f04-9b7e-8a49c3495829",
+  "87abc0f0-0a56-420f-94ce-ada2998bbd0d",
+  "88c417e9-5131-401f-8187-1da8cc344b0f",
+  "931ddb0f-7236-4315-ac59-8cc677dd5aa7",
+  "96395824-9c31-477a-bf51-13ecb5035d56",
+  "9845a5a2-4ecc-412f-8455-7e156e0cbb16",
+  "9adffc6f-a7ef-4809-96db-60b43fe3bf33",
+  "a2720609-acca-47c5-b778-15568e68a67e",
+  "a511e195-58d5-40e8-af84-baa83518f5e8",
+  "a80e7611-46f8-4fd6-a74b-0b5e29defa6e",
+  "aa90c7b3-4a88-4ea9-9ef2-4db7e5bba024",
+  "b3d487a0-2f8b-4eb0-b6b8-7560377ebe9f",
+  "b3ebbc47-7624-4ef9-9f6f-bc03eab227f5",
+  "b4357b01-a483-4b2b-b667-68e0a6e6f500",
+  "b4d35f13-0f0e-479e-84a1-e388dda01d4d",
+  "b5958bf8-444c-4966-8d9b-2a6ad8197350",
+  "ba2e3e1a-f3d0-4c41-9508-946ceced696a",
+  "c7aa9aff-8f4d-4b04-8216-529deb2cd734",
+  "c928294a-3522-4b13-b6ab-1721bebbeb2a",
+  "ccf1b82b-6822-40ba-adf3-07913b155b7b",
+  "cf7d3acb-1b74-484d-8084-6c7297b23ec0",
+  "d43a692d-7387-4bd2-8dd8-dcd70a85398d",
+  "d4ead0d9-4f61-4021-a84d-da1b667f002d",
+  "da2f5fea-80b2-4c88-a5d1-738c054512b5",
+  "dcbbad93-6d45-4a6f-93a7-a9a3887295aa",
+  "df891fda-0a06-48a3-a265-97c9b3138d23",
+  "edfe7ad8-3180-442e-890f-e68f0981394e",
+  "f294fd21-7428-4c73-9810-dae8ff8ee546",
+  "f4931c71-9e14-4bdc-ad9d-88bf763b6985",
+  "f7847cdc-5030-4ccf-bcdc-df1a6e47fce3",
+  "f7f2dac5-0f0a-4cbd-8ac0-c2f1f42311ca",
+  "fce614a8-8697-45d3-9574-4b092231b0bd",
+  "ff4dc88e-bebe-4b88-90d3-6697bffc9107"
+ ],
+ "source_urls": [],
+ "starts": [
+  {
+   "name": "Smythapark",
+   "new": "-800",
+   "old": null,
+   "site_id": "019573c7-aff6-4aab-848e-99063cc00b09"
+  },
+  {
+   "name": "Cochapata",
+   "new": "1438",
+   "old": null,
+   "site_id": "0286a741-77f2-4148-8e62-487041920281"
+  },
+  {
+   "name": "Cave of Mayrières Supérieure",
+   "new": "-10000",
+   "old": null,
+   "site_id": "043054e2-55c8-4b1a-8ad1-3f9092f0efea"
+  },
+  {
+   "name": "Lescudjack Hill Fort",
+   "new": "-800",
+   "old": null,
+   "site_id": "05d60350-c231-4179-851b-380505d30a87"
+  },
+  {
+   "name": "Paradise Cave",
+   "new": "-126000",
+   "old": null,
+   "site_id": "0abf05cb-0fda-4567-9d9d-0829911a8c66"
+  },
+  {
+   "name": "Curdon Camp",
+   "new": "-800",
+   "old": null,
+   "site_id": "0dcce77c-ef2f-481b-8069-ad5818b26aaa"
+  },
+  {
+   "name": "Moylehid",
+   "new": "-4000",
+   "old": null,
+   "site_id": "0eaedf34-031e-4b8f-8fff-2db84a3e6da6"
+  },
+  {
+   "name": "Caesar's Camp, Rushmoor and Waverley",
+   "new": "-800",
+   "old": null,
+   "site_id": "210925a1-b043-4a19-80c5-7ec9ade6d940"
+  },
+  {
+   "name": "Hawkesdown Hill",
+   "new": "-800",
+   "old": null,
+   "site_id": "29074533-09e3-4f7b-9d43-dbffbf8a0a32"
+  },
+  {
+   "name": "Dragon Hill, Uffington",
+   "new": "-800",
+   "old": null,
+   "site_id": "2f93c277-9023-4fbd-9b56-dc2c4f18c1f6"
+  },
+  {
+   "name": "Tarmatambo",
+   "new": "1438",
+   "old": null,
+   "site_id": "33e2399e-fd68-4aab-bf79-c5695a6c0bf0"
+  },
+  {
+   "name": "Grzybowa Góra",
+   "new": "-3000000",
+   "old": null,
+   "site_id": "4598fdbb-4025-4bb3-955f-cdd68dae05ba"
+  },
+  {
+   "name": "Museum of the Royal Tombs of Aigai, Vergina",
+   "new": "1993",
+   "old": null,
+   "site_id": "470169f0-deb7-4c7c-b912-90a98acede1d"
+  },
+  {
+   "name": "Chuping Archaeological Site",
+   "new": "-10000",
+   "old": null,
+   "site_id": "489f64e3-4967-4c14-8f69-f73c48508ca1"
+  },
+  {
+   "name": "Marcinków, Świętokrzyskie Voivodeship",
+   "new": "-3000000",
+   "old": null,
+   "site_id": "4a59d4e4-c3b6-40bf-9153-302dd1f52595"
+  },
+  {
+   "name": "Nine Stones, Winterbourne Abbas",
+   "new": "-2500",
+   "old": null,
+   "site_id": "50f9ccc8-06b1-4283-af88-a6769d0b9083"
+  },
+  {
+   "name": "Uqair Salt Mine Archaeological Site",
+   "new": "-323",
+   "old": null,
+   "site_id": "57a2ea53-edcb-4096-8b4a-f5e0a7e23ddf"
+  },
+  {
+   "name": "Tunel Wielki",
+   "new": "-3000000",
+   "old": null,
+   "site_id": "58dd6a0b-4c70-4eee-824f-a270800ef886"
+  },
+  {
+   "name": "Prehistoric Fortress Straževica (Dragaljevo)",
+   "new": "-10000",
+   "old": null,
+   "site_id": "5c8779da-b96e-44a7-b460-fa391205e10d"
+  },
+  {
+   "name": "Inka Raqay",
+   "new": "1460",
+   "old": null,
+   "site_id": "5d0819e0-a352-4ea1-9d64-067da2e428f9"
+  },
+  {
+   "name": "Gorzyczki, Silesian Voivodeship",
+   "new": "-3000000",
+   "old": null,
+   "site_id": "5e30b705-2163-47c0-bd65-3316be1806c9"
+  },
+  {
+   "name": "Kanamarka",
+   "new": "1438",
+   "old": null,
+   "site_id": "5fe20684-2090-41cf-8154-c2a50a0b9602"
+  },
+  {
+   "name": "Cave of Bacinete",
+   "new": "-10000",
+   "old": null,
+   "site_id": "704e228b-e4e7-4097-bd71-819f72fb8a0a"
+  },
+  {
+   "name": "Plainsfield Camp",
+   "new": "-800",
+   "old": null,
+   "site_id": "7504a195-6a15-4b53-951a-c58d093163d0"
+  },
+  {
+   "name": "Scutchamer Knob",
+   "new": "-800",
+   "old": null,
+   "site_id": "79484b17-4db6-454c-aacb-a3cb5eafaec9"
+  },
+  {
+   "name": "Muyu Muyu",
+   "new": "1200",
+   "old": null,
+   "site_id": "7a339d92-507c-43e2-8eef-ff924f8c4231"
+  },
+  {
+   "name": "Lukyanus Kitabesi",
+   "new": "-27",
+   "old": null,
+   "site_id": "7de8d13e-49dd-42ca-a5cf-9e8fc614fbd7"
+  },
+  {
+   "name": "Willendorf in der Wachau",
+   "new": "-50000",
+   "old": null,
+   "site_id": "7e5a3822-699c-4603-be7a-ea8ba8278e15"
+  },
+  {
+   "name": "Cave of Los Aviones",
+   "new": "-300000",
+   "old": null,
+   "site_id": "81666db8-d2a8-4557-8986-376a02bf40b2"
+  },
+  {
+   "name": "Ashleys Copse",
+   "new": "-800",
+   "old": null,
+   "site_id": "8293113e-b266-40c9-8aa5-dd683886e0ea"
+  },
+  {
+   "name": "Hadži-Prodan's Cave",
+   "new": "-3000000",
+   "old": null,
+   "site_id": "833d2de9-5bc4-425d-b5a5-111d742c8f0d"
+  },
+  {
+   "name": "Cave of Pego do Diabo",
+   "new": "-50000",
+   "old": null,
+   "site_id": "87abc0f0-0a56-420f-94ce-ada2998bbd0d"
+  },
+  {
+   "name": "Krzesin, Lubusz Voivodeship",
+   "new": "-4000",
+   "old": null,
+   "site_id": "88c417e9-5131-401f-8187-1da8cc344b0f"
+  },
+  {
+   "name": "Kents Cavern",
+   "new": "-2580000",
+   "old": null,
+   "site_id": "931ddb0f-7236-4315-ac59-8cc677dd5aa7"
+  },
+  {
+   "name": "Pintia",
+   "new": "-600",
+   "old": null,
+   "site_id": "96395824-9c31-477a-bf51-13ecb5035d56"
+  },
+  {
+   "name": "Choquequirao Puquio",
+   "new": "1438",
+   "old": null,
+   "site_id": "9845a5a2-4ecc-412f-8455-7e156e0cbb16"
+  },
+  {
+   "name": "Icknield Way",
+   "new": "-800",
+   "old": null,
+   "site_id": "9adffc6f-a7ef-4809-96db-60b43fe3bf33"
+  },
+  {
+   "name": "Cave of Aurignac",
+   "new": "-50000",
+   "old": null,
+   "site_id": "a2720609-acca-47c5-b778-15568e68a67e"
+  },
+  {
+   "name": "Colybrassus Antik Kenti",
+   "new": "43",
+   "old": null,
+   "site_id": "a511e195-58d5-40e8-af84-baa83518f5e8"
+  },
+  {
+   "name": "Archaeological Site of Atapuerca",
+   "new": "-2580000",
+   "old": null,
+   "site_id": "a80e7611-46f8-4fd6-a74b-0b5e29defa6e"
+  },
+  {
+   "name": "Cave of Bedmar",
+   "new": "-300000",
+   "old": null,
+   "site_id": "aa90c7b3-4a88-4ea9-9ef2-4db7e5bba024"
+  },
+  {
+   "name": "Rumiwasi",
+   "new": "1438",
+   "old": null,
+   "site_id": "b3d487a0-2f8b-4eb0-b6b8-7560377ebe9f"
+  },
+  {
+   "name": "Haidara - Temple of Sun",
+   "new": "43",
+   "old": null,
+   "site_id": "b3ebbc47-7624-4ef9-9f6f-bc03eab227f5"
+  },
+  {
+   "name": "Gradište Archaeological Site, Iđoš",
+   "new": "-4000",
+   "old": null,
+   "site_id": "b4357b01-a483-4b2b-b667-68e0a6e6f500"
+  },
+  {
+   "name": "Mawk'allaqta, Paruro",
+   "new": "1438",
+   "old": null,
+   "site_id": "b4d35f13-0f0e-479e-84a1-e388dda01d4d"
+  },
+  {
+   "name": "The Grey Mare and her Colts",
+   "new": "-3400",
+   "old": null,
+   "site_id": "b5958bf8-444c-4966-8d9b-2a6ad8197350"
+  },
+  {
+   "name": "Poston Camp",
+   "new": "-800",
+   "old": null,
+   "site_id": "c7aa9aff-8f4d-4b04-8216-529deb2cd734"
+  },
+  {
+   "name": "Židovar",
+   "new": "-2500",
+   "old": null,
+   "site_id": "c928294a-3522-4b13-b6ab-1721bebbeb2a"
+  },
+  {
+   "name": "Privlaka, Vukovar-Syrmia County",
+   "new": "-450",
+   "old": null,
+   "site_id": "ccf1b82b-6822-40ba-adf3-07913b155b7b"
+  },
+  {
+   "name": "Caves of Arcy-sur-Cure",
+   "new": "-3000000",
+   "old": null,
+   "site_id": "cf7d3acb-1b74-484d-8084-6c7297b23ec0"
+  },
+  {
+   "name": "Nargiztapa",
+   "new": "-2500",
+   "old": null,
+   "site_id": "d43a692d-7387-4bd2-8dd8-dcd70a85398d"
+  },
+  {
+   "name": "K'allapayuq Urqu",
+   "new": "1200",
+   "old": null,
+   "site_id": "d4ead0d9-4f61-4021-a84d-da1b667f002d"
+  },
+  {
+   "name": "Balanica",
+   "new": "-300000",
+   "old": null,
+   "site_id": "da2f5fea-80b2-4c88-a5d1-738c054512b5"
+  },
+  {
+   "name": "Paracas History Museum",
+   "new": "2009",
+   "old": null,
+   "site_id": "dcbbad93-6d45-4a6f-93a7-a9a3887295aa"
+  },
+  {
+   "name": "Tomb of Darius II",
+   "new": "-550",
+   "old": null,
+   "site_id": "edfe7ad8-3180-442e-890f-e68f0981394e"
+  },
+  {
+   "name": "Karakabaklı",
+   "new": "330",
+   "old": null,
+   "site_id": "f294fd21-7428-4c73-9810-dae8ff8ee546"
+  },
+  {
+   "name": "El Salt",
+   "new": "-300000",
+   "old": null,
+   "site_id": "f4931c71-9e14-4bdc-ad9d-88bf763b6985"
+  },
+  {
+   "name": "Martin Down Enclosure",
+   "new": "-2000",
+   "old": null,
+   "site_id": "f7847cdc-5030-4ccf-bcdc-df1a6e47fce3"
+  },
+  {
+   "name": "Pešturina",
+   "new": "-300000",
+   "old": null,
+   "site_id": "f7f2dac5-0f0a-4cbd-8ac0-c2f1f42311ca"
+  },
+  {
+   "name": "El Mirón Cave",
+   "new": "-300000",
+   "old": null,
+   "site_id": "fce614a8-8697-45d3-9574-4b092231b0bd"
+  },
+  {
+   "name": "Huamanmarca, La Convención",
+   "new": "1438",
+   "old": null,
+   "site_id": "ff4dc88e-bebe-4b88-90d3-6697bffc9107"
+  }
+ ],
+ "wave": "2026-10-04a"
+}

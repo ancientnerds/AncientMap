@@ -921,3 +921,51 @@ b390c17abfc5d502a035cd9c7d4454224c33df22:output/remediation/l5/PAGES.jsonl:gener
 b390c17abfc5d502a035cd9c7d4454224c33df22:output/remediation/l5/PAGES.jsonl:generic-api-key:388
 b390c17abfc5d502a035cd9c7d4454224c33df22:output/remediation/l5/PAGES.jsonl:generic-api-key:53
 b390c17abfc5d502a035cd9c7d4454224c33df22:output/remediation/l5/PAGES.jsonl:generic-api-key:63
+# A site's own UUID, not a credential (triaged 2026-10-04, CI run 37230554448): the card_stats
+# wave 2026-10-04 writes its rollback as a journal INSERT whose first column is
+# `'<site uuid>'::uuid`, and gitleaks' generic-api-key rule reads the 36-character token as a
+# key. Every value on these lines is a site identifier of this project and a card statistic;
+# the same shape in the 2026-09-23 wave is listed above. No credential is ignored here.
+
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:15050
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:15051
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:15052
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:15053
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:15054
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:1967
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:1968
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:1969
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:1970
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:6825
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:6826
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:6827
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:6828
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:6829
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:6830
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:801
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:802
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:803
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:9003
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:9004
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/REHEARSAL_ROLLBACK.sql:generic-api-key:9005
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:15050
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:15051
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:15052
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:15053
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:15054
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:1967
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:1968
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:1969
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:1970
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:6825
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:6826
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:6827
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:6828
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:6829
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:6830
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:801
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:802
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:803
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:9003
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:9004
+0a9411cdc04a45c42abd344b1da7e91e2846fefe:output/remediation/mechanical_card_stats/2026-10-04/ROLLBACK.sql:generic-api-key:9005

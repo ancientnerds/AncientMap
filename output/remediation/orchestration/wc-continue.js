@@ -20,7 +20,7 @@ const PRE = `cd ${MAIN} && export PYTHONIOENCODING=utf-8 && PY=${PY} && M=output
 const STEP = { type: 'object', properties: { ok: { type: 'boolean' }, done: { type: 'boolean' }, ran: { type: 'string', description: 'the command run in this step, or empty' }, answer: { type: 'object', properties: { handoff: { type: 'string' }, brief: { type: 'string', enum: ['brief', 'verify-brief'] }, batches: { type: 'array', items: { type: 'string' } } }, required: ['handoff', 'brief', 'batches'] }, state: { type: 'string', description: 'one line: where the chunk stands after this step' }, summary: { type: 'string' } }, required: ['ok', 'done', 'ran', 'state', 'summary'] }
 const SONNET = { model: 'sonnet' }
 
-const stepPrompt = (run, k) => `You are an operator of lane WC (sentence check) of the AncientMap remediation. You run commands exactly and report; you answer no model question and edit no file. Every command is one bash call starting with this prefix:
+const stepPrompt = (run, k) => `You are an operator of lane WC (sentence check) of the AncientMap remediation. Never search the file system: no find over /, output/ or any large directory - open exactly the paths named here (ls of one named directory is fine). Never pipe a command into head or tail -n (on Windows the producer keeps running after head exits and piles up). You run commands exactly and report; you answer no model question and edit no file. Every command is one bash call starting with this prefix:
   ${PRE}
 Read each tool's own output (JSON, WC_EXIT=), never only a wrapper's status. Runbook: docs/procedures/SENTENCE_CHECK.md sections 3 and 4 (read them if a rule below is unclear).
 

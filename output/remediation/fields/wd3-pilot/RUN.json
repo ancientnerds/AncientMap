@@ -1,0 +1,24 @@
+{
+ "built_from": {
+  "harvest": "output/remediation/fields/wd3/harvest",
+  "wd1_runs": [
+   "output/remediation/fields/wd1-pilot",
+   "output/remediation/fields/wd1",
+   "output/remediation/fields/wd1-rest-pilot",
+   "output/remediation/fields/wd1-rest"
+  ],
+  "wd1_waves": [
+   "2026-09-26a",
+   "2026-09-26b",
+   "2026-09-26c",
+   "2026-09-26d"
+  ]
+ },
+ "pilot": {
+  "seed": 20261003,
+  "size": 80
+ },
+ "rule": "one-family",
+ "stage": "wd3",
+ "without": null
+}

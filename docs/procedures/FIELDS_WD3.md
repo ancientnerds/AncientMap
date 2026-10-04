@@ -241,20 +241,34 @@ Each run with a wave label of its own (a date and at most one letter), pilot fir
     nothing re-runs it after a field write. **After WD3's last wave a card_stats wave runs** with an unused label C:
     `$PY scripts/remediation/mechanical/card_stats.py --wave C --export`, then `--write` (refuses unless its
     counterfactual reproduces every stored cell), then `$A --lane card-stats-C` with `--emit`, `--verify`,
-    `--rehearse`, `--probe-guards`, `--rehearse-rollback`, `--apply`, `--verify`; completion: `card_stats.py --wave
-    Cb --export --write` prints `"cells": 0`. A WD3 write to `site_type` or `period_name` voids every earlier
-    card_stats wave's ROLLBACK.sql (its guard 5 premise).
+    `--rehearse`, `--probe-guards`, `--apply`, `--verify`, `--rehearse-rollback` (the order of 4.5: the
+    reversal rehearses from the state the write left behind, so it refuses every planned row when it runs
+    before the apply - measured 2026-10-04, card-stats 2026-10-04, 15,463 rows); completion: `card_stats.py
+    --wave Cb --export --write` prints `"cells": 0`. A WD3 write to `site_type` or `period_name` voids every
+    earlier card_stats wave's ROLLBACK.sql (its guard 5 premise).
 15. **site_external_ids** - `source_urls` of HANDOFF.json is the input of the next journalled wave with L5's tool
     (`output/remediation/tools/qid_repair.py`): an id is written only when its item or article is this very site.
     WD3 writes no `site_external_ids` row.
 16. **Scope (WD2)** - a filled start can put a site that had none (an E3 case (b)) inside or outside the window (rest
     of the world to 500 AD, the Americas and Oceania to 1500 AD - O7); `starts` of HANDOFF.json goes to WD2's scope
     review. WD3 writes no `scope_status`.
-17. **The owner list** - `$PY $F/owner_list.py build --runs $W3P $W3 --final` writes
-    `output/remediation/fields/wd3/OWNER_LIST.md` and `OWNER_LIST.jsonl`: per field and site what stays open and
+17. **The owner list** - `$PY $F/owner_list.py build --runs $W3 $W4 --final` writes
+    `output/remediation/fields/<out>/OWNER_LIST.md` and `OWNER_LIST.jsonl`: per field and site what stays open and
     why (no source found; the pages the checker could not read - listed with their URLs; a sourced value the write
     plan refused, with the plan's reason; decided but not written). `--final` refuses while a field is still pending
     (no decision, or a step not accepted). Version both files.
+    Two things the command reads, both measured 2026-10-04:
+    * **The population is what the run asked, not what it classified.** A run classifies every site it can and puts
+      a part of that to the model; the list reads each run's `ROUNDS.jsonl`, which is written when a round is
+      exported and so says what was asked before any answer existed. WD4 classified 2,636 sites (3,551 questions)
+      and asked **144 sites / 260 questions**; WD3 asked its whole population. A site a run never asked is not an
+      open question of that run, and a site a round did ask and no answer reached is still `pending`. A run with no
+      rounds is read as its whole classification. The list prints both numbers (`population`).
+    * **`--waves` names one directory for every run** and defaults to each run's own lane
+      (`output/remediation/fields/<stage>/write`), so a list over WD3 and WD4 sees both lanes' waves. Pass it only
+      when the waves live somewhere else.
+    `--runs` names the runs that hold a `CLASSIFIED.jsonl`. A pilot run that was only cut (`--without`, no
+    classification of its own) has no questions and is not a `--runs` argument.
 18. The static export, IndexNow and the push (O8, WF) as in FIELDS_WD1.md 15.5. Archive the runs (`$W3`, `$W3P`,
     `$H*-r*`) as a tgz beside the other run archives: DECISIONS.jsonl holds every answer's quotes and reasoning.
 

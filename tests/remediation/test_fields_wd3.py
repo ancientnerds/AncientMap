@@ -279,12 +279,20 @@ class TestTheExportAndTheBrief:
         prompt = (tmp_path / "h-r0" / manifest[0]["prompt_path"]).read_text(encoding="utf-8")
         assert "lane WD3" in prompt and "### period_start" in prompt
 
-    def test_the_brief_is_a_sonnet_s_and_names_its_model(self, run: Path, tmp_path: Path) -> None:
+    def test_the_brief_names_the_round_s_model_and_claims_no_other(
+        self, run: Path, tmp_path: Path
+    ) -> None:
+        """The recording command is the only place a model id reaches an answer, so the brief names
+        the round's model and nothing else. It used to say "You are Sonnet researcher" and record
+        `claude-sonnet-5-5` whatever answered - measured 2026-10-04, that is what put a false
+        stamp on eight WD3 answers, and a lane answered by another model would repeat it. The
+        default is still the rule's own id, so an unchanged run exports an unchanged brief."""
         HO.export(run, tmp_path / "h-r0")
         text = HO.brief(run, tmp_path / "h-r0", "wd3-r0-b0001")
-        assert "You are Sonnet researcher wd3-r0-b0001 of the WD3 structured-field fill" in text
+        assert "You are researcher wd3-r0-b0001 of the WD3 structured-field fill" in text
         assert "--model claude-sonnet-5-5 --text-file" in text and "--stage wd3" in text
         assert "claude-opus-5-5" not in text and 'source is "unresolved"' in text
+        assert "Sonnet researcher" not in text
         assert "Never ancientnerds.com" in text
         assert "h-r0-scratch/wd3-r0-b0001/<label>.json" in text
 
@@ -563,6 +571,14 @@ class TestWd1sRecords:
         with pytest.raises(POP.PopulationError, match="with deviations"):
             POP.read_wd1(*self.tree(tmp_path / "x", deviations=1))
 
+    def test_a_wd1_run_that_is_not_there_is_refused(self, tmp_path: Path) -> None:
+        # WD1's runs are untracked data: they live in the checkout that holds `output/`, and a
+        # worktree that has none must be told with `--wd1-dir` instead of a FileNotFoundError
+        # traceback from inside the read (measured 2026-10-04, the wd4 build from the worktree).
+        runs, waves = self.tree(tmp_path)
+        with pytest.raises(POP.PopulationError, match="is not there"):
+            POP.read_wd1([tmp_path / "gone", *runs[1:]], waves)
+
     def test_a_run_whose_held_fields_its_waves_do_not_list_is_refused(self, tmp_path: Path) -> None:
         with pytest.raises(POP.PopulationError, match="WD1's records disagree"):
             POP.read_wd1(*self.tree(tmp_path, held_listed=False))
@@ -610,6 +626,32 @@ class TestTheRun:
         assert counts["population"]["why"] == {"period_start:empty": 1}
         assert counts["wd1"]["decisions"] == 1
         assert R.read_rule(out) is ONE
+
+    def test_a_run_is_shown_by_where_it_points(self, tmp_path: Path) -> None:
+        """A run's name is what a wave records and what every other tool compares against, so two
+        spellings of one directory must be one name. Measured 2026-10-04: `owner_list build
+        --final` called with the worktree's junction path answered "1262 field(s) are pending"
+        where the real path answered "pending: 0" - the fallback returned the path *as spelled*,
+        the waves' accepted steps stayed invisible, and the list looked unfinished."""
+        run = tmp_path / "run"
+        run.mkdir()
+        other = run / ".." / "run"  # the same directory, spelled differently
+        for module in (POP, HO, OL):
+            assert module._shown(run) == module._shown(other), module.__name__
+
+    def test_a_period_run_pins_its_own_rule(self, tmp_path: Path) -> None:
+        # WD4 asks the same question under its own rule (owner decision of 2026-10-04), and a run
+        # that pinned WD3's rule could not be asked or written: the stage is in every batch id and
+        # in every write lane, so a period run can never write into the finished wd3 run.
+        root, out = self.prepare(tmp_path, period_start=None, period_name=None)
+        POP.build(root, out, table=TABLE, wd1=wd1([]), stage="wd4")
+        assert R.read_rule(out) is R.ONE_FAMILY_PERIOD
+        assert json.loads((out / R.RUN_FILE).read_text(encoding="utf-8"))["stage"] == "wd4"
+
+    def test_an_unknown_stage_names_the_known_ones(self, tmp_path: Path) -> None:
+        root, out = self.prepare(tmp_path, period_start=None)
+        with pytest.raises(R.RuleError, match="wd7"):
+            POP.build(root, out, table=TABLE, wd1=wd1([]), stage="wd7")
 
     def test_a_site_with_nothing_open_is_not_in_the_run(self, tmp_path: Path) -> None:
         root, out = self.prepare(tmp_path)
@@ -899,6 +941,23 @@ class TestTheLaneDefinition:
             assert getattr(one, field) != getattr(three, field)
         assert three.cells == one.cells and three.site_invariants == one.site_invariants
 
+    def test_wd4_writes_through_the_same_cells_under_a_lane_of_its_own(self) -> None:
+        """Lane WD4 (owner decision 2026-10-04, "eine benannte Periode ist ein Wert") asks WD3's
+        question on a stage of its own, so its steps write through the same cells, guards and
+        invariants - and under a stamp, a plan table, a directory and a test id of their own, so no
+        step of one lane can be mistaken for a step of another. Measured 2026-10-04: `fields_lane`
+        knew only wd1 and wd3, so a wd4 wave could not be planned or written at all."""
+        three, four = L.fields_lane("2026-10-04a", 1, "wd3"), L.fields_lane("2026-10-04a", 1, "wd4")
+        assert four.name == "fields-wd4-2026-10-04a-s001" and four.key_prefix == four.name
+        assert four.run_stamp == "2026-10-04a_fields-wd4-s001"
+        assert four.test_id == "WD4/structured-fields" and four.label == "WD4 field correction"
+        assert four.confidence == "one_source"  # one quote of one family, WD3's discipline
+        assert four.out_dir_name == "fields/wd4/write/2026-10-04a/s001"
+        assert four.plan_table == "_fields_wd4_plan" and three.plan_table == "_fields_wd3_plan"
+        for field in ("run_stamp", "out_dir_name", "plan_table", "test_id", "key_prefix", "label"):
+            assert getattr(four, field) != getattr(three, field)
+        assert four.cells == three.cells and four.site_invariants == three.site_invariants
+
     def test_a_lane_name_resolves_to_its_own_stage(self) -> None:
         assert L.resolve_lane("fields-wd3-2026-10-02b-s012") == L.fields_lane(
             "2026-10-02b", 12, "wd3"
@@ -939,10 +998,12 @@ def sha(path: Path) -> str:
 class TestTheOwnerList:
     S = [f"00000000-0000-4000-8000-{n:012d}" for n in range(1, 7)]
 
-    def build_files(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    def build_files(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rule: R.Rule = ONE
+    ) -> tuple[Path, Path]:
         run, waves = tmp_path / "wd3", tmp_path / "wd3" / "write"
         run.mkdir()
-        R.write_run(run, ONE)
+        R.write_run(run, rule)
         s = self.S
         spec = [  # site, asked field, decision, open why
             (s[0], "period_start", "replace", "empty"),
@@ -1024,11 +1085,149 @@ class TestTheOwnerList:
         states = {r["site_id"]: r["state"] for r in OL.build([run], waves)["rows"]}
         assert states[self.S[2]] == "no-write"
 
-    def test_only_a_wd3_run_has_an_owner_list(self, tmp_path: Path) -> None:
+    def test_only_a_wd3_or_wd4_run_has_an_owner_list(self, tmp_path: Path) -> None:
         run = tmp_path / "wd1"
         run.mkdir()
-        with pytest.raises(OL.OwnerListError, match="not a WD3 run"):
+        with pytest.raises(OL.OwnerListError, match="not a WD3 or WD4 run"):
             OL.build([run], tmp_path / "none")
+
+    def test_a_period_run_has_an_owner_list_too(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """WD4 asks WD3's question under its own rule (owner decision of 2026-10-04), so its run
+        needs the same list: the runbook's step 17 is the tool that says a lane is finished, and it
+        answered "is not a WD3 run" for the wd4 run whose last wave was already written."""
+        run, waves = self.build_files(tmp_path, monkeypatch, rule=R.ONE_FAMILY_PERIOD)
+        result = OL.build([run], waves)
+        assert result["counts"]["period_start"] == {"filled": 1, "pending": 1}
+        states = {(r["site_id"], r["field"]): r["state"] for r in result["rows"]}
+        assert states[(self.S[2], "source_url")] == "refused"
+
+
+class TestTheRunsRoundsAreItsPopulation:
+    """A run classifies every site it can and then puts a part of that population to the model.
+
+    WD4 measured on its own files, 2026-10-04: 2,636 classified sites, 3,551 classified
+    questions, and **144 sites / 260 questions** put to the model over three rounds (round 1 and 2
+    re-asked 13 of them). Every one of the 260 decisions lies inside the asked set. The other
+    2,092 sites are not open questions of that run - they are not its work - and counting them as
+    `pending` is what kept `owner_list --final` refusing after the run was finished.
+
+    `ROUNDS.jsonl` is written when a round is exported, before any answer exists, so the list can
+    read what the run asked without ever hiding a question it did put.
+    """
+
+    S = [f"00000000-0000-4000-8000-{n:012d}" for n in range(1, 5)]
+
+    def build_files(self, tmp_path: Path) -> tuple[Path, Path]:
+        run, waves = tmp_path / "wd3", tmp_path / "wd3" / "write"
+        run.mkdir()
+        R.write_run(run, ONE)
+        s = self.S
+        spec = [  # site, asked field, decision
+            (s[0], "period_start", "replace"),
+            (s[1], "site_type", "unresolved"),
+            (s[2], "coordinates", None),
+            (s[3], "source_url", "keep"),
+        ]
+        lines, decisions = [], []
+        for number, (site, field, verdict) in enumerate(spec):
+            lines.append({"site_id": site, "name": f"Site {number}", "country": "Peru",
+                          "asked": [field], "fields": {field: {"stored": None}},
+                          "open": {field: {"why": "empty", "wd1": None}}})
+            if verdict:
+                decisions.append({"site_id": site, "field": field, "decision": verdict, "asked": 3,
+                                  "reasoning": f"{verdict} reasoning", "via": "counted"})
+        HO._write_jsonl(run / C.CLASSIFIED_FILE, lines)
+        HO._write_jsonl(run / "DECISIONS.jsonl", decisions)
+        wave = waves / "2026-10-02a"
+        step = wave / "s001"
+        step.mkdir(parents=True)
+        HO._write_json(wave / "WAVE.json", {"run": POP._shown(run), "steps": [[s[0]]]})
+        (wave / "WAVE.sha256").write_text(sha(wave / "WAVE.json") + "\n", encoding="utf-8")
+        HO._write_jsonl(step / "PLAN.jsonl", [{"site_id": s[0], "column": "period_start"}])
+        HO._write_jsonl(step / "SKIPPED.jsonl", [])
+        HO._write_json(step / "ACCEPTED.json", {"deviations": 0})
+        return run, waves
+
+    def test_a_field_the_run_never_asked_is_not_a_question_of_it(self, tmp_path: Path) -> None:
+        run, waves = self.build_files(tmp_path)
+        HO._write_jsonl(run / OL.ROUNDS_FILE, [{"round": 0, "fields": {self.S[0]: ["period_start"]}}])
+        result = OL.build([run], waves)
+        assert result["counts"]["period_start"] == {"filled": 1}
+        assert result["counts"]["site_type"] == {}, "never asked, so never a question of this run"
+        assert result["population"] == {"classified": 4, "asked": 1}
+
+    def test_a_site_asked_in_a_later_round_stays_pending_until_answered(self, tmp_path: Path) -> None:
+        run, waves = self.build_files(tmp_path)
+        HO._write_jsonl(run / OL.ROUNDS_FILE, [
+            {"round": 0, "fields": {self.S[0]: ["period_start"]}},
+            {"round": 1, "fields": {self.S[1]: ["site_type"], self.S[2]: ["coordinates"]}},
+        ])
+        result = OL.build([run], waves)
+        assert result["counts"]["period_start"] == {"filled": 1}
+        assert result["counts"]["site_type"] == {"unresolved": 1}
+        assert result["counts"]["coordinates"] == {"pending": 1}
+        assert result["population"] == {"classified": 4, "asked": 3}
+        with pytest.raises(OL.OwnerListError, match="1 field"):
+            OL.write([run], waves, tmp_path / "out", final=True)
+
+    def test_a_run_whose_questions_were_all_answered_is_final(self, tmp_path: Path) -> None:
+        run, waves = self.build_files(tmp_path)
+        HO._write_jsonl(run / OL.ROUNDS_FILE, [
+            {"round": 0, "fields": {self.S[0]: ["period_start"], self.S[1]: ["site_type"]}},
+            {"round": 1, "fields": {self.S[1]: ["site_type"]}},
+        ])
+        summary = OL.write([run], waves, tmp_path / "out", final=True)
+        assert summary["pending"] == 0 and summary["listed"] == 1
+        assert summary["population"] == {"classified": 4, "asked": 2}
+        text = (tmp_path / "out" / OL.OWNER_MD).read_text(encoding="utf-8")
+        assert "2 of 4 classified questions" in text
+
+    def test_each_run_reads_the_waves_of_its_own_lane(self, tmp_path: Path) -> None:
+        """Two runs, two lanes, two wave roots - and one list.
+
+        `--waves` named a single directory, so a list over WD3 and WD4 read WD3's waves and saw
+        WD4's as never written: 65 questions that were decided *and* written came out as `pending`
+        (measured 2026-10-04, after the rounds cut the population to 3,823 of 7,114). Each run
+        says which lane it is (its rule's stage) and its waves live under that lane, so the list
+        reads `fields/<stage>/write` per run; `--waves` stays as the override it was.
+        """
+        base = tmp_path / "output" / "remediation"
+        monkey = pytest.MonkeyPatch()
+        monkey.setattr(OL, "waves_root", lambda stage: base / "fields" / stage / "write")
+        try:
+            runs = []
+            for stage, rule in (("wd3", ONE), ("wd4", R.ONE_FAMILY_PERIOD)):
+                run = base / "fields" / stage
+                (run / "write").mkdir(parents=True)
+                R.write_run(run, rule)
+                site = f"00000000-0000-4000-8000-00000000000{len(runs) + 1}"
+                HO._write_jsonl(run / C.CLASSIFIED_FILE, [{
+                    "site_id": site, "name": f"{stage} site", "country": "Peru",
+                    "asked": ["period_start"], "fields": {"period_start": {"stored": None}},
+                    "open": {"period_start": {"why": "empty", "wd1": None}}}])
+                HO._write_jsonl(run / "DECISIONS.jsonl", [{
+                    "site_id": site, "field": "period_start", "decision": "replace", "asked": 1,
+                    "reasoning": "a source says so", "via": "counted"}])
+                HO._write_jsonl(run / OL.ROUNDS_FILE, [{"round": 0, "fields": {site: ["period_start"]}}])
+                wave = run / "write" / "2026-10-04"
+                step = wave / "s001"
+                step.mkdir(parents=True)
+                HO._write_json(wave / "WAVE.json", {"run": POP._shown(run), "steps": [[site]],
+                                                    "stage": stage, "rule": rule.name})
+                (wave / "WAVE.sha256").write_text(sha(wave / "WAVE.json") + "\n", encoding="utf-8")
+                HO._write_jsonl(step / "PLAN.jsonl", [
+                    {"site_id": site, "column": "period_start"},
+                    {"site_id": site, "column": "period_name"}])
+                HO._write_jsonl(step / "SKIPPED.jsonl", [])
+                HO._write_json(step / "ACCEPTED.json", {"deviations": 0})
+                runs.append(run)
+            summary = OL.write(runs, None, tmp_path / "out", final=True)
+        finally:
+            monkey.undo()
+        assert summary["pending"] == 0 and summary["listed"] == 0
+        assert summary["population"] == {"classified": 2, "asked": 2}
 
 
 # ------------------------------------------------------------------------------ the scripts

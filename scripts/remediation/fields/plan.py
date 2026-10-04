@@ -113,6 +113,14 @@ WAVE_FILE = "WAVE.json"
 #: sha256 of WAVE.json's LF text, written with it: an edited WAVE.json is refused.
 WAVE_PIN_FILE = "WAVE.sha256"
 HELD_FILE = "HELD.jsonl"
+#: The rows a *named rule* supports rather than a quote: a `site_type` that lies in one period, a
+#: Wikidata date the site's own item carries, the beginning of the band the 2025 import filed the
+#: site under. They cannot live in `DECISIONS.jsonl` - that file is the research log, the import
+#: rewrites it from the handoffs, and a rule row in it would be read back as an answer. Their own
+#: file is reproducible from the rule file, and the wave pins it the way it pins the decisions
+#: (measured 2026-10-04: 1,254 sites of the 1,418 that hold no period - 698 from a `site_type`
+#: rule, 511 from their band, 45 from their own Wikidata item).
+DERIVED_FILE = "DERIVED.jsonl"
 HANDOFF_FILE = "HANDOFF.json"
 ACCEPTED_FILE = "ACCEPTED.json"
 NOTHING_FILE = "NOTHING_TO_WRITE.json"
@@ -151,14 +159,25 @@ def _sha256_text(path: Path) -> str:
 
 # ------------------------------------------------------------------------------ the wave
 def wants_write(
-    decisions: Sequence[Mapping[str, Any]], line: Mapping[str, Any], rule: R.Rule = R.DEFAULT
+    decisions: Sequence[Mapping[str, Any]], line: Mapping[str, Any] | None, rule: R.Rule = R.DEFAULT
 ) -> bool:
     """Whether a site may get a cell: a replace or clear decision, or a period label that is not
-    the bucket of its start (as classified). Under a fill-only rule only a replace."""
+    the bucket of its start (as classified). Under a fill-only rule only a replace.
+
+    `line` is the run's own classification of the site and `None` when the population never
+    classified it. A rule row is not a question and does not need one, so a fill-only rule plans it
+    from the rule file alone; a rule that can write a label needs the classification, because the
+    stored start is what the label is compared against, and is refused by name without it."""
     if any(d["decision"] in (A.REPLACE, A.CLEAR) for d in decisions):
         return True
     if rule.fill_only:
         return False
+    if line is None:
+        raise PlanError(
+            f"a {rule.name} run cannot plan a period label for a site its population never "
+            f"classified: the run's own CLASSIFIED.jsonl is the only record of the start the "
+            f"label would be compared against"
+        )
     return line["period_name"]["stored"] != line["period_name"]["bucket_of_stored_start"]
 
 
@@ -172,6 +191,9 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
     decisions = HO._read_jsonl(fields_fn)
     if not decisions:
         raise PlanError(f"{fields_fn} holds no decision - import the handoff first")
+    derived_fn = run / DERIVED_FILE
+    derived = HO._read_jsonl(derived_fn) if derived_fn.exists() else []
+    decisions = [*decisions, *derived]
     reask = json.loads((run / HO.REASK_FILE).read_text(encoding="utf-8"))
     if reask["fields"]:
         raise PlanError(
@@ -184,8 +206,12 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
     by_site: dict[str, list[dict[str, Any]]] = {}
     for d in decisions:
         by_site.setdefault(d["site_id"], []).append(d)
+    # every site a decision speaks for, not only the population's: a rule row is a value a named
+    # rule supports, and a site the run never asked is still a site the rule dates (2026-10-04)
     sites = sorted(
-        sid for sid, line in classified.items() if wants_write(by_site.get(sid, []), line, rule)
+        sid
+        for sid in by_site
+        if wants_write(by_site[sid], classified.get(sid), rule)
     )
     steps = [sites[i : i + STEP_SITES] for i in range(0, len(sites), STEP_SITES)]
     held = [
@@ -202,6 +228,7 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
         "stage": rule.stage,
         "built_at": C.H.now(),
         "decisions_sha256": _sha256_text(fields_fn),
+        "derived_sha256": _sha256_text(derived_fn) if derived_fn.exists() else None,
         "classified_sha256": _sha256_text(run / C.CLASSIFIED_FILE),
         "run": HO._shown(run),
         "sites": len(sites),
@@ -568,9 +595,15 @@ def build_step(
     run = HO._resolve(Path(record["run"]))
     if _sha256_text(run / HO.DECISIONS_FILE) != record["decisions_sha256"]:
         raise PlanError("DECISIONS.jsonl is not the one the wave was built from")
+    derived_fn = run / DERIVED_FILE
+    if (_sha256_text(derived_fn) if derived_fn.exists() else None) != record["derived_sha256"]:
+        raise PlanError("DERIVED.jsonl is not the one the wave was built from")
     classified = HO.read_classified(run)
     decisions: dict[str, dict[str, Mapping[str, Any]]] = {}
-    for d in HO._read_jsonl(run / HO.DECISIONS_FILE):
+    for d in [
+        *HO._read_jsonl(run / HO.DECISIONS_FILE),
+        *(HO._read_jsonl(derived_fn) if derived_fn.exists() else []),
+    ]:
         decisions.setdefault(d["site_id"], {})[d["field"]] = d
     sites = record["steps"][step - 1]
     _step_size(sites)

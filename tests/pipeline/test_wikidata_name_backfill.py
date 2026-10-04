@@ -28,12 +28,15 @@ from pipeline.lyra.site_key import site_key_sql
 from pipeline.wikidata_name_backfill import (
     LANGUAGES,
     LANGUAGES_PER_REQUEST,
+    SiteNames,
+    _column_widths,
     _insert_sql,
     fetch_names,
     main,
     plan,
     read_qid_file,
     report,
+    skipped_codes,
     store,
 )
 
@@ -240,7 +243,9 @@ def test_the_key_is_computed_by_the_insert_from_the_raw_name():
     (pipeline/lyra/site_key.py). _store_wikidata_aliases computes it that way per
     alias; the batched statement has to, or its rows are unreachable."""
     sql = _insert_sql(2)
-    assert site_key_sql("n.name") in sql
+    # The name reaches the key through the column width, so the key is built from
+    # exactly the string the column keeps
+    assert site_key_sql("left(n.name, CAST(:max_name AS int))") in sql
     assert "name_normalized," in sql
     # Never a Python-side key: it folds neither the Turkish dotless i nor ø, and it
     # drops a parenthesised suffix the column keeps
@@ -257,19 +262,67 @@ def test_the_key_is_computed_by_the_insert_from_the_raw_name():
     assert "::text" not in sql
 
 
-class _Logged:
-    """A session that records the statement and its binds, and answers a row count."""
+def test_a_name_the_column_cannot_hold_is_shortened_to_its_width():
+    """name is varchar(500) on production and the statement writes the raw name, so a
+    title over 500 characters would die with StringDataRightTruncation - which is
+    what killed the run on 2026-10-04."""
+    sql = _insert_sql(1)
+    assert "left(n.name," in sql
+    assert ":max_name" in sql
 
-    def __init__(self) -> None:
+
+def test_a_language_code_too_long_for_its_column_leaves_the_row_out():
+    """language_code is varchar(10) on production (measured 2026-10-04), and the
+    Wikipedia sitelink codes are longer than the Wikidata language codes:
+    zh_classical has 12 characters. The run died on the site that had one, with
+    psycopg2.errors.StringDataRightTruncation, after 29 sites. The code must not be
+    shortened - a clipped 'zh_classist' is a wrong language, not a narrow one - so
+    the row leaves and the run says how many."""
+    sql = _insert_sql(1)
+    assert "char_length(n.language_code) <=" in sql
+    assert ":max_lang" in sql
+    assert "left(n.language_code" not in sql, "a clipped code would be a false language"
+
+
+def test_the_column_widths_are_read_from_the_database_not_guessed():
+    """Reading them once per run is what keeps a wider column from silently costing
+    rows: the statement asks the database how much room it has."""
+    session = _Logged(widths={"language_code": 24, "name": 500})
+    assert _column_widths(session) == {"language_code": 24, "name": 500}
+    assert session.commits == 0
+
+
+def test_the_run_reports_how_many_rows_a_narrow_code_cost():
+    rows = [("Akropolis", "el", "wikidata_alias"), ("雅典卫城", "zh_classical", "wikipedia_title")]
+    plan_row = SiteNames(site_id="site-1", name="Athens", qid=QID, rows=rows)
+    assert skipped_codes(plan_row, 10) == [{"name": "雅典卫城", "language_code": "zh_classical"}]
+    assert skipped_codes(plan_row, 24) == [], "a widened column takes the row"
+
+
+class _Logged:
+    """A session that records the statement and its binds, and answers a row count.
+
+    It also answers the column-width query, so the run reads the widths it then
+    writes them with: on production name=500 and language_code=10.
+    """
+
+    def __init__(self, widths: dict[str, int] | None = None) -> None:
         self.log: list[tuple[str, dict]] = []
         self.commits = 0
+        self.widths = widths or {"name": 500, "language_code": 10}
 
     def execute(self, stmt, params=None):
-        self.log.append((str(stmt), params))
+        sql = str(stmt)
+        if "information_schema" in sql:
+            return SimpleNamespace(fetchall=lambda: list(self.widths.items()))
+        self.log.append((sql, params))
         return SimpleNamespace(rowcount=2)
 
     def commit(self) -> None:
         self.commits += 1
+
+
+WIDTHS = {"name": 500, "language_code": 10}
 
 
 def test_what_is_written_is_exactly_the_planned_rows():
@@ -283,7 +336,7 @@ def test_what_is_written_is_exactly_the_planned_rows():
             ]
         },
     )[0]
-    assert store(session, plan_row) == 2
+    assert store(session, plan_row, WIDTHS) == 2
     (sql, params) = session.log[0]
     assert "INSERT INTO unified_site_names" in sql
     assert params["site_id"] == "site-1"
@@ -292,7 +345,39 @@ def test_what_is_written_is_exactly_the_planned_rows():
     assert params["t0"] == "wikidata_alias"
     assert params["n1"] == TELUGU_ARTICLE_TITLE and params["l1"] == "te"
     assert params["t1"] == "wikipedia_title"
+    assert params["max_name"] == 500 and params["max_lang"] == 10
     assert session.commits == 1, "one commit per site, so a failure keeps what it wrote"
+
+
+def test_the_run_makes_the_journal_directory_itself(tmp_path, one_call, monkeypatch):
+    """The production run died on this: FileNotFoundError, because the caller made
+    the directory on the host and only public/data, logs and frontend are mounted
+    into the container, so output/ did not exist in there (measured 2026-10-04)."""
+    monkeypatch.setattr("pipeline.wikidata_name_backfill.SessionLocal", lambda: _Closed())
+    monkeypatch.setattr(
+        "pipeline.wikidata_name_backfill.load_sites",
+        lambda *a, **k: [("site-1", "Machu Picchu", QID)],
+    )
+    monkeypatch.setattr(
+        "pipeline.wikidata_name_backfill._column_widths", lambda session: dict(WIDTHS)
+    )
+    monkeypatch.setattr(
+        "pipeline.wikidata_name_backfill.store",
+        lambda session, plan_row, widths: len(plan_row.rows),
+    )
+    path = tmp_path / "remediation" / "wikidata_names" / "run.jsonl"
+    assert main(["--apply", "--journal", str(path)]) == 0
+    assert path.exists(), "the run has to create the directory it journals into"
+    written = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert [row["name"] for row in written] == ["Machu Picchu"]
+    assert [n["name"] for n in written[0]["names"]] == ["マチュ・ピチュ", "麻丘比丘"]
+
+
+class _Closed:
+    """A session that closes and does nothing else; the store is mocked."""
+
+    def close(self) -> None:
+        pass
 
 
 def test_a_qid_file_needs_no_database(tmp_path, one_call, capsys):

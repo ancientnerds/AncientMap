@@ -1,0 +1,21 @@
+{
+ "built_from": {
+  "harvest": "C:/PythonProjects/AncientMap/output/remediation/fields/wd4/harvest",
+  "wd1_runs": [
+   "C:/PythonProjects/AncientMap/output/remediation/fields/wd1-pilot",
+   "C:/PythonProjects/AncientMap/output/remediation/fields/wd1",
+   "C:/PythonProjects/AncientMap/output/remediation/fields/wd1-rest-pilot",
+   "C:/PythonProjects/AncientMap/output/remediation/fields/wd1-rest"
+  ],
+  "wd1_waves": [
+   "2026-09-26a",
+   "2026-09-26b",
+   "2026-09-26c",
+   "2026-09-26d"
+  ]
+ },
+ "pilot": null,
+ "rule": "one-family-period",
+ "stage": "wd4",
+ "without": null
+}

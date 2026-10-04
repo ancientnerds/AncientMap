@@ -226,15 +226,6 @@
   margin: 0;
 }
 
-.site-card-desc--wiki {
-  font-size: 11px;
-  line-height: 1.45;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
 .site-card-footer {
   display: flex;
   align-items: center;

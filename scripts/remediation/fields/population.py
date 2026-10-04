@@ -133,7 +133,9 @@ def _shown(path: Path) -> str:
     try:
         return path.resolve().relative_to(REPO.resolve()).as_posix()
     except ValueError:
-        return path.as_posix()
+        # the resolved path, never the path as spelled: a run reached through a junction or a
+        # `..` component is the same run, and the waves compare this string (2026-10-04)
+        return path.resolve().as_posix()
 
 
 def _names_run(recorded: str, run: Path) -> bool:
@@ -175,7 +177,13 @@ def read_wd1(runs: Sequence[Path], waves: Path) -> Wd1:
     classified: set[str] = set()
     held_of_run: dict[str, set[tuple[str, str]]] = {}
     for run in runs:
-        reask = json.loads((run / "REASK.json").read_text(encoding="utf-8"))
+        reask_file = run / "REASK.json"
+        if not reask_file.exists():
+            raise PopulationError(
+                f"{run} is not there - WD1's runs are untracked files of the checkout that holds "
+                f"output/, and this one has none; --wd1-dir points the read at that checkout"
+            )
+        reask = json.loads(reask_file.read_text(encoding="utf-8"))
         if reask["fields"]:
             raise PopulationError(f"{run}: fields still wait for a re-ask - WD1 is not finished")
         rows = _read_jsonl(run / "DECISIONS.jsonl")
@@ -363,11 +371,17 @@ def build(
     *,
     table: Mapping[str, C.ClassEntry],
     wd1: Wd1,
+    stage: str = "wd3",
     pilot: tuple[int, int] | None = None,
     without: Path | None = None,
 ) -> dict[str, Any]:
     """RUN.json, CLASSIFIED.jsonl and COUNTS.json of the population (or of its pilot, or of the
-    population less a pilot): every live curated site with an open field, each with exactly those."""
+    population less a pilot): every live curated site with an open field, each with exactly those.
+    `stage` picks the rule `RUN.json` pins: `wd3` fills open fields, `wd4` asks the same question
+    and adds the answer kind `period_name`, and a run pinned to another rule is refused."""
+    rule = R.BY_STAGE.get(stage)
+    if rule is None:
+        raise R.RuleError(f"stage {stage!r} is not one of {sorted(R.BY_STAGE)}")
     if (out / "ROUNDS.jsonl").exists():
         raise PopulationError(f"{out} was asked already (ROUNDS.jsonl): a run is built once")
     C.read_stored(out)  # refused here, before anything is pinned, when the export is missing
@@ -396,7 +410,7 @@ def build(
 
     R.write_run(
         out,
-        R.ONE_FAMILY,
+        rule,
         built_from={
             "harvest": _shown(root),
             "wd1_runs": list(wd1.runs),
@@ -464,11 +478,19 @@ def main(argv: list[str] | None = None) -> int:
     run = sub.add_parser("build", help="RUN.json, CLASSIFIED.jsonl, COUNTS.json, from files only")
     run.add_argument("--root", type=Path, required=True, help="the refreshed harvest copy")
     run.add_argument(
+        "--stage",
+        default="wd3",
+        choices=sorted(R.BY_STAGE),
+        help="the rule RUN.json pins: wd3 fills open fields, wd4 asks the same question and adds "
+        "the answer kind period_name (default: wd3)",
+    )
+    run.add_argument(
         "--wd1-dir",
         type=Path,
         default=FIELDS_DIR,
         help="where WD1's runs (wd1, wd1-pilot, wd1-rest, wd1-rest-pilot) and its waves "
-        "(wd1/write) live - the main checkout's output/remediation/fields",
+        "(wd1/write) live - this checkout's output/remediation/fields, which holds them only "
+        "where the run itself was built; from a worktree, name the checkout that has them",
     )
     cut = run.add_mutually_exclusive_group()
     cut.add_argument("--pilot", type=int, help="a pilot: this many of the population's sites")
@@ -486,6 +508,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.out,
                 table=C.load_table(),
                 wd1=read_wd1(*wd1_files(args.wd1_dir)),
+                stage=args.stage,
                 pilot=None if args.pilot is None else (args.pilot, args.seed),
                 without=args.without,
             )

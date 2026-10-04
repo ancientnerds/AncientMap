@@ -12,7 +12,7 @@ const { width, run, handoff } = args
 const PRE = `cd ${MAIN} && export PYTHONIOENCODING=utf-8 && PY=${PY} && S=scripts/remediation/served_image/run.py && R=${run} && H=${handoff} && OH=scripts/remediation/opus_handoff.py`
 const ST = { type: 'object', properties: { ok: { type: 'boolean' }, nothing: { type: 'boolean' }, batches: { type: 'array', items: { type: 'string' } }, summary: { type: 'string' } }, required: ['ok', 'nothing', 'batches', 'summary'] }
 const OPS = { type: 'object', properties: { ok: { type: 'boolean' }, summary: { type: 'string' } }, required: ['ok', 'summary'] }
-const opText = (t) => `You are an operator of lane WD2 (served image, O6) of the AncientMap remediation. You run commands exactly and report; you answer no model question and edit no file. Every command is one bash call starting with this prefix:\n  ${PRE}\nRead each tool's own output (JSON, exit code), never only a wrapper's status. Runbook: docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md section 3.5.\n\n${t}\n\nOn a refusal or non-zero exit you cannot resolve as described: ok=false and the last 30 lines in summary.`
+const opText = (t) => `You are an operator of lane WD2 (served image, O6) of the AncientMap remediation. Never search the file system: no find over /, output/ or any large directory - open exactly the paths named here (ls of one named directory is fine). Never pipe a command into head or tail -n (on Windows the producer keeps running after head exits and piles up). You run commands exactly and report; you answer no model question and edit no file. Every command is one bash call starting with this prefix:\n  ${PRE}\nRead each tool's own output (JSON, exit code), never only a wrapper's status. Runbook: docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md section 3.5.\n\n${t}\n\nOn a refusal or non-zero exit you cannot resolve as described: ok=false and the last 30 lines in summary.`
 let active = 0
 const waiting = []
 const acquire = () => new Promise((resolve) => { if (active < width) { active++; resolve() } else waiting.push(resolve) })
@@ -31,6 +31,7 @@ for (const stage of ['check', 'replace']) {
   const H = `${handoff}-${stage}`
   const st = await agent(opText(`State of stage ${stage}:
 - If ${run}/${stage === 'check' ? 'CHECK.jsonl' : 'REPLACE.jsonl'} exists, the stage is imported: nothing=true, batches=[].
+- Else if the directory ${H} exists but ${run}/${stage === 'check' ? 'EXPORT_CHECK.json' : 'EXPORT_REPLACE.json'} does not: the export was interrupted (that file is written last) - ok=false, summary "export incomplete: move ${H} aside and export again"; answer nothing.
 - Else if the directory ${H} exists: $PY $OH validate --dir ${H}; batches = the distinct batch_id values of its "missing" list (empty if all answered; malformed or stale answers: ok=false). nothing=false.
 - Else export: ${stage === 'check' ? '$PY $S export-check --run-dir $R --handoff ' + H : '$PY $S export-replace --run-dir $R --handoff ' + H + ' (it prints "questions": N; with N = 0 no handoff exists: nothing=true, batches=[])'}. batches = the folders of ${H} that contain a MANIFEST.jsonl. nothing=false.`), { label: `state:${stage}`, phase: 'Operate', schema: ST, model: 'sonnet', effort: 'medium' })
   out[stage] = { st }

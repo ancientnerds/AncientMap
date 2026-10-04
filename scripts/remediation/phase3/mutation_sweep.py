@@ -4674,7 +4674,15 @@ PHASE4_MODEL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "\n',
         '    "opencode-go/deepseek-v4.1-flash via Pi and "  # mutant\n',
         P4_MODEL_TEST,
-        "test_the_disclosed_ai_systems_are_the_old_opus_one_and_the_new_opus_and_sonnet_one",
+        "test_the_disclosed_ai_systems_are_the_two_claude_ones_and_the_combined_one",
+    ),
+    (
+        "p4 model: the new disclosure names a model that is not called",
+        P4_MODEL,
+        '    "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "\n',
+        '    "anthropic/claude-sonnet-5-5, opencode-go/deepseek-v4.1-flash via Pi, "  # mutant\n',
+        P4_MODEL_TEST,
+        "test_the_combined_disclosure_names_the_writing_models_their_makers_and_nothing_else",
     ),
     (
         "p4 model: the Opus-only disclosure of the provenances in production is rewritten",
@@ -4682,12 +4690,12 @@ PHASE4_MODEL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "\n',
         '    "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent) , "  # mutant\n',
         P4_MODEL_TEST,
-        "test_the_disclosed_ai_systems_are_the_old_opus_one_and_the_new_opus_and_sonnet_one",
+        "test_the_disclosed_ai_systems_are_the_two_claude_ones_and_the_combined_one",
     ),
     (
         "p4 model: a provenance already in production is refused",
         P4_MODEL,
-        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM})\n",
+        "AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM_CLAUDE, AI_SYSTEM})\n",
         "AI_SYSTEMS = frozenset({AI_SYSTEM})  # mutant\n",
         P4_MODEL_TEST,
         "test_a_provenance_accepts_each_disclosed_ai_system",
@@ -16465,10 +16473,10 @@ MODEL_STAMP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "model stamp: the Sonnet stamp is not one of the accepted models",
         OPUS_HANDOFF,
-        '    {"claude-opus-5-5": OPUS_MODEL, "claude-sonnet-5-5": SONNET_MODEL}\n',
-        '    {"claude-opus-5-5": OPUS_MODEL}  # mutant\n',
+        '        "claude-sonnet-5-5": SONNET_MODEL,\n',
+        '        "claude-sonnet-5-5": OPUS_MODEL,  # mutant\n',
         OPUS_HANDOFF_TEST,
-        "test_the_answer_models_are_exactly_opus_and_sonnet",
+        "test_the_answer_models_are_exactly_opus_sonnet_and_minimax",
     ),
     (
         "model stamp: the Phase-4 record stamps every answer Opus",
@@ -16541,6 +16549,18 @@ MODEL_STAMP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '                "model": OH.OPUS_MODEL,  # mutant\n',
         "tests/remediation/test_scope_review.py",
         "test_the_evidence_label_names_the_model_that_judged",
+    ),
+    (
+        # The family used to be split out of the model id (`model_id.split("-")[1]`), which names
+        # `M3.1` for `MiniMax-M3.1-Flash-Preview`. This entry is the guard for that shape.
+        "model stamp: the evidence family is split out of the model id again",
+        "scripts/remediation/mechanical/scope_review.py",
+        "_FAMILY_OF_STAMP = {\n    stamp: OH.ANSWER_FAMILIES[model_id] for model_id, stamp in "
+        "OH.ANSWER_MODELS.items()\n}\n",
+        '_FAMILY_OF_STAMP = {\n    stamp: model_id.split("-")[1] for model_id, stamp in '
+        "OH.ANSWER_MODELS.items()  # mutant\n}\n",
+        "tests/remediation/test_scope_review.py",
+        "test_a_minimax_row_is_labelled_by_its_family_not_by_a_model_id_fragment",
     ),
     (
         "model stamp: a teaser write takes any disclosure string",

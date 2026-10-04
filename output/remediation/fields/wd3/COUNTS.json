@@ -1,0 +1,122 @@
+{
+ "asked_field_sets": {
+  "coordinates": 372,
+  "coordinates+period_start": 313,
+  "coordinates+period_start+site_type": 159,
+  "coordinates+period_start+site_type+source_url": 44,
+  "coordinates+period_start+source_url": 9,
+  "coordinates+site_type": 23,
+  "coordinates+source_url": 10,
+  "period_start": 1512,
+  "period_start+site_type": 135,
+  "period_start+source_url": 1,
+  "site_type": 34,
+  "source_url": 1
+ },
+ "fields_asked": 3563,
+ "flagged": {
+  "coordinates": 0,
+  "period_start": 0,
+  "site_type": 0,
+  "source_url": 0
+ },
+ "flagged_only": {
+  "coordinates": 0,
+  "period_start": 0,
+  "site_type": 0,
+  "source_url": 0
+ },
+ "identity_doubt": 206,
+ "part": "all",
+ "per_field": {
+  "coordinates": {
+   "CONFIRMED": 1475,
+   "CONFLICT": 386,
+   "MISSING": 752
+  },
+  "period_start": {
+   "CONFIRMED": 18,
+   "CONFLICT": 14,
+   "MISSING": 2581
+  },
+  "site_type": {
+   "CONFIRMED": 1429,
+   "CONFLICT": 224,
+   "MISSING": 960
+  },
+  "source_url": {
+   "CONFIRMED": 2274,
+   "CONFLICT": 120,
+   "MISSING": 219
+  }
+ },
+ "period_name_not_bucket_of_start": 0,
+ "pilot": null,
+ "population": {
+  "field_sets": {
+   "coordinates": 372,
+   "coordinates+period_start": 313,
+   "coordinates+period_start+site_type": 159,
+   "coordinates+period_start+site_type+source_url": 44,
+   "coordinates+period_start+source_url": 9,
+   "coordinates+site_type": 23,
+   "coordinates+source_url": 10,
+   "period_start": 1512,
+   "period_start+site_type": 135,
+   "period_start+source_url": 1,
+   "site_type": 34,
+   "source_url": 1
+  },
+  "fields": {
+   "coordinates": 930,
+   "period_start": 2173,
+   "site_type": 395,
+   "source_url": 65
+  },
+  "journal_sourced_points": {
+   "294968f3-036b-44ff-b704-91593648927d": "2026-09-23_owner-case-coordinates-wave2"
+  },
+  "sites": 2613,
+  "wd1_sourced_but_empty": {},
+  "wd1_unseen_sites": [],
+  "why": {
+   "coordinates:unresolved": 930,
+   "period_start:empty": 2168,
+   "period_start:held": 5,
+   "site_type:empty": 394,
+   "site_type:held": 1,
+   "source_url:empty": 65
+  }
+ },
+ "retired_not_classified": 99,
+ "seeds": {
+  "cells": 0,
+  "sites": 0,
+  "sites_not_classified": []
+ },
+ "sites": 2613,
+ "sites_asked": 2613,
+ "stacked_points": 11,
+ "table_sha256": "38140ab2415ce6d8352f96237d839ddab93131e0df3a9ac78e952d793bcba768",
+ "wd1": {
+  "decisions": 9524,
+  "runs": [
+   "output/remediation/fields/wd1-pilot",
+   "output/remediation/fields/wd1",
+   "output/remediation/fields/wd1-rest-pilot",
+   "output/remediation/fields/wd1-rest"
+  ],
+  "sites_classified": 4926,
+  "unresolved_or_held": 975,
+  "waves": [
+   "2026-09-26a",
+   "2026-09-26b",
+   "2026-09-26c",
+   "2026-09-26d"
+  ]
+ },
+ "without": {
+  "run": "output/remediation/fields/wd3-pilot",
+  "sites": 80
+ }
+}

@@ -7558,15 +7558,15 @@ CHIAPA_CASES: list[Case] = [
             (
                 "a retired survivor passes",
                 LANE,
-                "{_NAMES_SURVIVOR} AND {is_retired('s')})\"",
-                '{_NAMES_SURVIVOR} AND 1 = 0)"',
+                "f\"AND {is_retired('s')})\"",
+                'f"AND 1 = 0)"',
                 _CHIAPA_SURVIVOR,
             ),
             (
                 "a far survivor passes",
                 LANE,
-                "_SURVIVOR_FAR = f\"{sphere_metres('s', 'u')} > {DUPLICATE_METRES}\"",
-                "_SURVIVOR_FAR = f\"{sphere_metres('s', 'u')} < {DUPLICATE_METRES}\"",
+                "return f\"{sphere_metres('s', 'u')} > {metres}\"",
+                "return f\"{sphere_metres('s', 'u')} < {metres}\"",
                 _CHIAPA_SURVIVOR,
             ),
             (
@@ -7685,6 +7685,139 @@ CHIAPA_CASES: list[Case] = [
     ),
 ]
 CASES += CHIAPA_CASES
+
+
+# ----------------------------------- owner decision O9: the five duplicates retired (2026-10-01)
+#: Every guard `dup-retire` added (`mechanical/dups.py`, `lane.DUP_RETIRE`): the plan-side checks,
+#: the 2,000 m of the survivor checks (the Chiapa hide's are 100 m), the premise and the cells.
+#: Every label starts with "dups:", so the group runs on its own: `mutation_sweep.py dups:`.
+DUPS = MECHANICAL / "dups.py"
+DUPS_TESTS = "tests/remediation/test_mechanical_dups.py"
+_DUPS_REFUSES = "test_each_check_refuses_on_its_own"
+_DUPS_SURVIVOR = "test_each_survivor_check_fires_for_its_kind_alone_at_2000_m"
+_DUPS_RUNS = "test_the_survivor_checks_run_after_the_write_and_only_on_it"
+_DUPS_LIMIT = "test_two_thousand_metres_is_the_limit_and_the_two_far_pairs_pass_it"
+_DUPS_PREMISE = "test_the_premise_is_the_name_the_counts_the_ids_and_the_survivors_name_and_ids"
+_DUPS_STATUS = "test_the_lane_writes_retired_and_nothing_else"
+_DUPS_INVARIANTS = "    site_invariants=duplicate_survivor_invariants(DUP_RETIRE_METRES),"
+DUPS_CASES: list[Case] = [
+    *(
+        guard(f"dups: {label}", DUPS, needle, test, DUPS_TESTS)
+        for label, needle, test in (
+            ("a row that is gone is planned", "    if row is None:", _DUPS_REFUSES),
+            (
+                "a row of another source is planned",
+                '    if row["source_id"] != P.CURATED_SOURCE:',
+                _DUPS_REFUSES,
+            ),
+            ("a row of another name is planned", '    if row["name"] != name:', _DUPS_REFUSES),
+            (
+                "a decided row is retired again",
+                '    if loser["scope_status"] is not None or loser["scope_reason"] is not None:',
+                _DUPS_REFUSES,
+            ),
+            (
+                "a journal that broke is planned over",
+                "        if broken is not None:",
+                _DUPS_REFUSES,
+            ),
+            (
+                "a retired survivor is kept",
+                '    if survivor["scope_status"] == RETIRED:',
+                _DUPS_REFUSES,
+            ),
+            ("a row retired onto the loser is ignored", "    if onto:", _DUPS_REFUSES),
+            ("a pair of other items is planned", "        if values != [wanted]:", _DUPS_REFUSES),
+            (
+                "a premise other than the read's rows give is planned",
+                '    if loser["premise"] != premise:',
+                _DUPS_REFUSES,
+            ),
+            ("a pair without a distance is planned", "    if metres is None:", _DUPS_REFUSES),
+            ("a far pair is planned", "    if metres > DUP_RETIRE_METRES:", _DUPS_REFUSES),
+            (
+                "the survivor rule is not asked",
+                '    if sorted((loser, survivor), key=survivor_rank)[0]["id"] != pair.survivor:',
+                _DUPS_REFUSES,
+            ),
+            (
+                "a description without the quote is planned",
+                '    if _fold(quote) not in _fold(str(row["description"])):',
+                _DUPS_REFUSES,
+            ),
+            (
+                "a row in two pairs is planned",
+                "    if len(set(ids)) != len(ids):",
+                "test_a_row_in_two_pairs_is_refused",
+            ),
+            ("a lane that has written is re-planned", "    if written:", _DUPS_REFUSES),
+        )
+    ),
+    *(
+        Case(f"dups: {label}", path, old, new, test, DUPS_TESTS)
+        for label, path, old, new, test in (
+            (
+                "the lane allows 20 km",
+                LANE,
+                "DUP_RETIRE_METRES = 2000\n",
+                "DUP_RETIRE_METRES = 20000\n",
+                _DUPS_LIMIT,
+            ),
+            (
+                "the lane's survivors may be 100 m away only",
+                LANE,
+                _DUPS_INVARIANTS,
+                "    site_invariants=DUPLICATE_SURVIVOR_INVARIANTS,",
+                _DUPS_SURVIVOR,
+            ),
+            (
+                "the lane checks no survivor",
+                LANE,
+                _DUPS_INVARIANTS,
+                "    site_invariants=(),",
+                _DUPS_RUNS,
+            ),
+            (
+                "the lane asks no premise",
+                LANE,
+                "    premise_sql=DUP_RETIRE_PREMISE_SQL,",
+                "    premise_sql=None,",
+                _DUPS_RUNS,
+            ),
+            (
+                "the premise forgets the name",
+                LANE,
+                "    f\"u.name || ' | ' || {EMPTY_ROW_PREMISE_SQL} || ' | ' || {NAME_FIX_PREMISE_SQL} \"",
+                "    f\"{EMPTY_ROW_PREMISE_SQL} || ' | ' || {NAME_FIX_PREMISE_SQL} \"",
+                _DUPS_PREMISE,
+            ),
+            (
+                "the premise forgets the counts",
+                LANE,
+                "    f\"u.name || ' | ' || {EMPTY_ROW_PREMISE_SQL} || ' | ' || {NAME_FIX_PREMISE_SQL} \"",
+                "    f\"u.name || ' | ' || {NAME_FIX_PREMISE_SQL} \"",
+                _DUPS_PREMISE,
+            ),
+            (
+                "the premise forgets the survivor",
+                LANE,
+                "    \"|| ' | survivor ' || coalesce((SELECT s.name || ' | ' || \"\n"
+                "    f\"{external_ids_sql('s')} FROM unified_sites s WHERE CAST(s.id AS text) = "
+                "{_SURVIVOR_OF}), '')\"",
+                "    \"|| ''\"",
+                _DUPS_PREMISE,
+            ),
+            (
+                "the lane may write any status",
+                LANE,
+                'Column("scope_status", "text", allowed_new_values=(RETIRED,), fills_null=True),',
+                'Column("scope_status", "text", allowed_new_values=SCOPE_STATUSES, fills_null=True),',
+                _DUPS_STATUS,
+            ),
+        )
+    ),
+]
+CASES += DUPS_CASES
 
 
 # ---------------------------------------------- lane WB: a site no card can be written for

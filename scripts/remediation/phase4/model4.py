@@ -131,14 +131,25 @@ AI_SYSTEM_OPUS = (
     "an-sites-remediation-2026-09"
 )
 #: Owner decision 2026-10-01: the orchestrating session runs Opus 5.5, every answering subagent runs
-#: Sonnet 5.5, so the disclosure of every NEW write names both. Used by every writer.
-AI_SYSTEM = (
+#: Sonnet 5.5, so the disclosure of every NEW write names both. Written to production between
+#: 2026-10-01 and 2026-10-03, so it stays byte-identical and valid; `AI_SYSTEM` is the string a new
+#: write carries since 2026-10-03.
+AI_SYSTEM_CLAUDE = (
     "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
     "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09"
 )
-#: Every disclosure a validator accepts: the old one (provenances already in production, re-read by
-#: audits, accepts and plans) and the new one. A validator accepts exactly these two.
-AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM})
+#: Owner decision 2026-10-03: the owner replaced Claude Code with MiniMax Code, so from then on an
+#: AI agent of this remediation runs as `MiniMax-M3.1-Flash-Preview`. One combined disclosure for
+#: new writes names both families, each with its maker, and every model that can have written a text
+#: of this corpus: the Claude models wrote it until 2026-10-03, MiniMax writes it after.
+AI_SYSTEM = (
+    "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
+    "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
+    "an-sites-remediation-2026-09"
+)
+#: Every disclosure a validator accepts: the two strings already in production (provenances re-read by
+#: audits, accepts and plans) and the one a new write carries. A validator accepts exactly these three.
+AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM_CLAUDE, AI_SYSTEM})
 #: Lane L's `ai_system` and `basis`, verbatim from production_write.
 LEGACY_AI_SYSTEM = "2026-03 enrichment chain (LLM; model per site not recorded)"
 LEGACY_BASIS = "description differs from pre-March snapshot d4526691 (plan section 15.3)"

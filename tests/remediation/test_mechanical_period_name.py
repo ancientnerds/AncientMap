@@ -26,7 +26,7 @@ from mechanical import lane as L  # noqa: E402
 from mechanical import period_name as PN  # noqa: E402
 from mechanical import plan as P  # noqa: E402
 
-from pipeline.utils.text import PERIOD_BUCKETS, categorize_period  # noqa: E402
+from pipeline.utils.text import PERIOD_BUCKETS, UNDATED, categorize_period  # noqa: E402
 
 DELIVERED = REPO / "output" / "remediation" / "mechanical_period_name" / "PLAN.jsonl"
 needs_plan = pytest.mark.skipif(not DELIVERED.exists(), reason=f"{DELIVERED} not built yet")
@@ -119,6 +119,21 @@ class TestClassifyPeriod:
         verdict = decide(frontend, row("1 - 500 AD", None))
         assert not verdict.ok and verdict.reason == "no-period-start"
 
+    def test_the_residue_label_without_a_year_is_consistent(self, frontend: Any) -> None:
+        """A yearless row carrying `Undated` is the owner's residue rung (2026-10-04), not a
+        contradiction: without this lane a later run would list all 103 rows for review and offer
+        a bucket it cannot derive."""
+        verdict = decide(frontend, row(UNDATED, None))
+        assert not verdict.ok and verdict.reason == PN.CONSISTENT
+
+    def test_the_residue_label_with_a_year_is_not_accepted(self, frontend: Any) -> None:
+        """`Undated` is the answer for a row with **no** year. On a row that has one it contradicts
+        the year, so it is never passed off as consistent: this lane proposes the bucket, which is
+        the repair it is for."""
+        verdict = decide(frontend, row(UNDATED, 1537))
+        assert verdict.reason != PN.CONSISTENT
+        assert verdict.ok and verdict.new_value == "1500+ AD" and verdict.old_value == UNDATED
+
     def test_a_year_without_a_label_is_refused(self, frontend: Any) -> None:
         verdict = decide(frontend, row(None, 1537))
         assert not verdict.ok and verdict.reason == "no-period-name"
@@ -166,6 +181,26 @@ class TestTheLane:
         assert L.PERIOD_NAME.allowed_new_values == tuple(label for label, _, _ in PERIOD_BUCKETS)
         assert "> 1500 AD" not in L.PERIOD_NAME.allowed_new_values
 
+    def test_it_keeps_the_rule_it_was_applied_under(self) -> None:
+        """This lane was applied on 2026-09-22, when a row with no year carried no label. Its applied
+        `APPLY.sql`, its `ROLLBACK.sql` and every evidence quote that reads them are the record of a
+        statement that ran, and `test_mechanical.py` pins their digests - so the lane renders the
+        2026-09-22 predicate even though the live rule has moved on.
+
+        The residue rung of 2026-10-04 is a *later* rule, applied by `residue_period.py`'s own lanes
+        (whose stamp says so). Backdating it here would make the delivered artifacts claims about a
+        statement that was never executed.
+        """
+        predicate = L.PERIOD_NAME.post_commit_residual.predicate
+        assert "WHEN period_start IS NULL THEN NULL" in predicate
+        assert L.PERIOD_NAME.rehearsal_residual is L.PERIOD_NAME.post_commit_residual
+        # ... and the live rule really is a different one, or the freeze would be a copy of it.
+        assert "WHEN period_start IS NULL THEN NULL" not in L._PERIOD_MISMATCH.predicate
+        assert f"WHEN period_start IS NULL THEN {UNDATED!r}" in L._PERIOD_MISMATCH.predicate.replace(
+            '"', "'"
+        )
+        assert L.PERIOD_NAME.post_commit_residual is not L._PERIOD_MISMATCH
+
     def test_the_sql_bucket_is_the_frontend_bucket(self, frontend: Any) -> None:
         case = L.bucket_case()
         steps = [
@@ -173,7 +208,10 @@ class TestTheLane:
             for b, label in re.findall(r"WHEN period_start < (-?\d+) THEN '([^']+)'", case)
         ]
         assert steps, case
-        assert "WHEN period_start IS NULL THEN NULL" in case
+        # The column's rule, not the bucket function's: a curated row's label is the bucket of its
+        # year, or the owner's residue label when it has no year (2026-10-04). `categorize_period`
+        # itself still answers None for a missing year - it answers "which bucket is this year in".
+        assert f"WHEN period_start IS NULL THEN {UNDATED!r}" in case.replace('"', "'")
         tail = re.search(r"ELSE '([^']+)' END", case).group(1)  # type: ignore[union-attr]
 
         def sql_bucket(year: int) -> str:

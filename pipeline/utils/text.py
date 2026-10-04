@@ -264,6 +264,19 @@ PERIOD_BUCKETS: list[tuple[str, int, int]] = [
     ("1500+ AD", 1500, 999999),
 ]
 
+#: The owner's residue rung (2026-10-04, `output/remediation/period_wave/residue_rule.json`, written
+#: out here because `output/` is a gitignored snapshot): a curated site that no source, no Wikidata
+#: claim and no `site_type` dates carries this label and **no year** - a visible entry that says the
+#: period is not established, and never an invented one.
+#:
+#: It is a label, not a bucket. A bucket is a range of years and this is not one, so
+#: `categorize_period` does not answer it: a year maps to a bucket, and a row without a year is not
+#: a year (`categorize_period(None)` is `None`, the frontend's `categorizePeriod(null)` is
+#: `Unknown`). What carries it is the lane that owns the value
+#: (`scripts/remediation/mechanical/residue_period.py`), and the residual that every period lane
+#: checks: a curated row's label is the bucket of its year, or this when it has no year.
+UNDATED = "Undated"
+
 
 def categorize_period(year: int | None) -> str | None:
     """Convert a year to a canonical period bucket name.
@@ -280,6 +293,31 @@ def categorize_period(year: int | None) -> str | None:
         if year < hi:
             return label
     return PERIOD_BUCKETS[-1][0]
+
+
+def bucket_edge(label: str) -> int:
+    """The year a period band writes: the edge of its bucket nearest the present.
+
+    A site no source and no type rule dates takes the band the 2025 import names, and
+    `period_start` holds one year, so the band is written as the year its own bucket's edge carries.
+    Every bucket but the first begins at its own lower bound. The first one, "< 4500 BC", is open
+    below: its -999999 is a range-filter bound rather than an edge, and 4500 BC belongs to the next
+    bucket, so the nearest year that still reads as pre-4500 is 4501 BC. The same holds above for
+    "1500+ AD", which begins at 1500.
+
+    Owner's decision, 2026-10-04: "if something is Neolithic then it is < 4500 BC, that is
+    logical" - an open band carries its edge. Measured the same day on the 511 `via: "band"` rows
+    of `output/remediation/fields/wd3/DERIVED.jsonl`, of which 20 come from an open band: all 511
+    are the edge of the bucket they read as. `label` is one of the nine bucket labels; a period
+    name ("Iron Age") belongs to `pipeline.periods` and is refused here by name, not guessed into.
+    """
+    for index, (name, lo, hi) in enumerate(PERIOD_BUCKETS):
+        if name == label:
+            return hi - 1 if index == 0 else lo
+    raise ValueError(
+        f"{label!r} is not one of the {len(PERIOD_BUCKETS)} period buckets "
+        f"{[name for name, _, _ in PERIOD_BUCKETS]}"
+    )
 
 
 def sanitize_filename(name: str, max_length: int = 100) -> str:

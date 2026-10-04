@@ -438,20 +438,27 @@ def test_the_change_note_follows_the_lane() -> None:
     _refused(M.Provenance.from_dict, data, "attribution.changes: lane T")
 
 
-def test_the_disclosed_ai_systems_are_the_old_opus_one_and_the_new_opus_and_sonnet_one() -> None:
+def test_the_disclosed_ai_systems_are_the_two_claude_ones_and_the_combined_one() -> None:
     """EU AI Act Art. 50. Owner decision 2026-10-01: the orchestrating session runs Opus 5.5 and
     every answering subagent Sonnet 5.5, so every NEW write discloses both (`AI_SYSTEM`); the
     provenances in production carry the Opus-only string (`AI_SYSTEM_OPUS`, byte-identical to what
-    was written until 2026-09-30) and keep validating; the March texts keep their own disclosure."""
+    was written until 2026-09-30) and keep validating; the March texts keep their own disclosure.
+    Owner decision 2026-10-03: MiniMax Code writes from now on, so a NEW write discloses the two
+    families in one string (`AI_SYSTEM`, `AI_SYSTEM_CLAUDE`); both written strings stay accepted."""
     assert M.AI_SYSTEM_OPUS == (
         "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
         "an-sites-remediation-2026-09"
     )
-    assert M.AI_SYSTEM == (
+    assert M.AI_SYSTEM_CLAUDE == (
         "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
         "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09"
     )
-    assert M.AI_SYSTEMS == frozenset({M.AI_SYSTEM_OPUS, M.AI_SYSTEM})
+    assert M.AI_SYSTEM == (
+        "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
+        "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
+        "an-sites-remediation-2026-09"
+    )
+    assert M.AI_SYSTEMS == frozenset({M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE, M.AI_SYSTEM})
     assert M.AI_SYSTEM_OPUS == f"Claude Opus (Anthropic): {MS.MODEL}, an-sites-remediation-2026-09"
     assert MS.MODEL == "anthropic/claude-opus-5-5 (Claude Code agent)"
     assert OH.SONNET_MODEL.split(" (")[0] in M.AI_SYSTEM and "claude-opus-5-5" in M.AI_SYSTEM
@@ -460,14 +467,28 @@ def test_the_disclosed_ai_systems_are_the_old_opus_one_and_the_new_opus_and_sonn
     assert M.LEGACY_AI_SYSTEM == "2026-03 enrichment chain (LLM; model per site not recorded)"
 
 
+def test_the_combined_disclosure_names_the_writing_models_their_makers_and_nothing_else() -> None:
+    """The one new string is the disclosure of a MiniMax Code write inside a corpus the Claude
+    models wrote too. It names every model that can have written such a text, each with the maker
+    the label says, and no model whose answers this remediation refuses."""
+    text = M.AI_SYSTEM
+    assert "Claude (Anthropic)" in text and "MiniMax M3.1 Flash (MiniMax)" in text
+    for stamp in (OH.OPUS_MODEL, OH.SONNET_MODEL, OH.MINIMAX_MODEL):
+        assert stamp.split(" (")[0] in text
+    assert "deepseek" not in text.lower() and "opencode" not in text.lower() and " via Pi " not in text
+
+
 @pytest.mark.parametrize(
     "system",
     [
-        # copied, not read from `model4`: the old string must keep validating (it is in production)
+        # copied, not read from `model4`: the old strings must keep validating (they are in production)
         "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
         "an-sites-remediation-2026-09",
         "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
         "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09",
+        "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
+        "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
+        "an-sites-remediation-2026-09",
     ],
 )
 def test_a_provenance_accepts_each_disclosed_ai_system(system: str) -> None:

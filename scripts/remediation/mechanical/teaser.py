@@ -94,7 +94,7 @@ from phase3 import write_stage as WS  # noqa: E402 - the psql seam card_json rea
 from phase3.run import read_jsonl  # noqa: E402 - the strict JSON-lines reader (no line skipped)
 from phase4 import card_json as CJ  # noqa: E402 - the card file's one renderer
 from phase4 import (
-    model4 as M,  # noqa: E402 - AI_SYSTEMS (AI_SYSTEM_OPUS, AI_SYSTEM): the disclosures a write may carry
+    model4 as M,  # noqa: E402 - AI_SYSTEMS: the disclosures a write may carry; the correction pair is AI_SYSTEM_OPUS -> AI_SYSTEM_CLAUDE
 )
 from phase4 import write4 as W4  # noqa: E402 - the exit line
 from prod_write import send  # noqa: E402
@@ -182,9 +182,10 @@ _CURATED = "FROM unified_sites WHERE source_id = 'ancient_nerds' AND "
 #: Lane WB's disclosure correction (`mechanical/card_disclosure.py`, owner decision 2026-10-01): 185
 #: live cards were written by a Sonnet 5.5 rewrite agent while their provenance names Opus only
 #: (`M.AI_SYSTEM_OPUS`). It rewrites exactly one key of exactly those sites' `raw_data` -
-#: `_card_provenance.ai_system`, to `M.AI_SYSTEM` - under the stamps `wb-card-disclosure-sNNN`, and
-#: this module's acceptance reads a step's provenance cell as that lane left it, by that name and
-#: for that one key only (`corrected_cell`): a later lane that moved anything else is a deviation.
+#: `_card_provenance.ai_system`, to `M.AI_SYSTEM_CLAUDE` (the disclosure of that day, not the alias
+#: `M.AI_SYSTEM` a new write carries) - under the stamps `wb-card-disclosure-sNNN`, and this
+#: module's acceptance reads a step's provenance cell as that lane left it, by that name and for
+#: that one key only (`corrected_cell`): a later lane that moved anything else is a deviation.
 CORRECTION_STAMP_PREFIX = "wb-card-disclosure-s"
 CORRECTION_STAMP = re.compile(r"^wb-card-disclosure-s\d{3}\Z")
 ROLLBACK_SUFFIX = "-rollback"
@@ -198,20 +199,22 @@ def names_opus_only(raw: Mapping[str, Any] | None) -> bool:
 
 
 def correct_disclosure(raw: Mapping[str, Any]) -> dict[str, Any]:
-    """`raw` with `_card_provenance.ai_system` set to `M.AI_SYSTEM` and nothing else changed; the
-    value it replaces must be `M.AI_SYSTEM_OPUS`, the one string the correction lane owns."""
+    """`raw` with `_card_provenance.ai_system` set to `M.AI_SYSTEM_CLAUDE` and nothing else changed;
+    the value it replaces must be `M.AI_SYSTEM_OPUS`, the two strings the correction lane owns (it
+    wrote 185 provenances with that pair on 2026-10-01; `M.AI_SYSTEM` moved on 2026-10-03 and names
+    the disclosure of a new write)."""
     if not names_opus_only(raw):
         raise PlanError(f"{CP.CARD_PROVENANCE_KEY}.ai_system is not {M.AI_SYSTEM_OPUS!r}")
     return {
         **raw,
-        CP.CARD_PROVENANCE_KEY: {**raw[CP.CARD_PROVENANCE_KEY], "ai_system": M.AI_SYSTEM},
+        CP.CARD_PROVENANCE_KEY: {**raw[CP.CARD_PROVENANCE_KEY], "ai_system": M.AI_SYSTEM_CLAUDE},
     }
 
 
 def moves_one_key(old: str | None, new: str | None) -> bool:
     """Whether `old` -> `new` (two `raw_data` texts) is exactly the disclosure correction: the
-    provenance names `M.AI_SYSTEM_OPUS` before and, with that one key set to `M.AI_SYSTEM`, every
-    other key at every depth as it was, after."""
+    provenance names `M.AI_SYSTEM_OPUS` before and, with that one key set to `M.AI_SYSTEM_CLAUDE`,
+    every other key at every depth as it was, after."""
     if old is None or new is None:
         return False
     before = json.loads(old)

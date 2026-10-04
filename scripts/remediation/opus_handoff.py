@@ -40,7 +40,8 @@ Usage (the orchestrator's side):
         --answered-by AGENT --model MODEL_ID --text-file ANSWER.txt
 
 `--model` is required and has no default: it is the model id the answering agent runs as, as its own
-system prompt names it (`claude-opus-5-5` or `claude-sonnet-5-5`, the keys of `ANSWER_MODELS`).
+system prompt names it (`claude-opus-5-5`, `claude-sonnet-5-5` or `MiniMax-M3.1-Flash-Preview`, the
+keys of `ANSWER_MODELS`).
 """
 
 from __future__ import annotations
@@ -70,11 +71,30 @@ OPUS_MODEL = "anthropic/claude-opus-5-5 (Claude Code agent)"
 #: The stamp of an answer by a Sonnet agent. Owner decision 2026-10-01: the orchestrating session
 #: runs Opus 5.5, every answering subagent runs Sonnet 5.5.
 SONNET_MODEL = "anthropic/claude-sonnet-5-5 (Claude Code agent)"
+#: The stamp of an answer by a MiniMax Code agent. Owner decision 2026-10-03: the owner replaced
+#: Claude Code with MiniMax Code (`mcode`, model `MiniMax-M3.1-Flash-Preview`), so from then on the
+#: answering agents are MiniMax ones. Answers recorded before keep their stamp and stay valid.
+MINIMAX_MODEL = "minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent)"
 #: The model id an agent runs as (as its own system prompt names it) -> the stamp its answer carries.
 #: The only models an answer may name: `answer` offers exactly these keys, `read_answer` and
 #: `validate` accept exactly these values. There is no default model anywhere.
 ANSWER_MODELS: Mapping[str, str] = MappingProxyType(
-    {"claude-opus-5-5": OPUS_MODEL, "claude-sonnet-5-5": SONNET_MODEL}
+    {
+        "claude-opus-5-5": OPUS_MODEL,
+        "claude-sonnet-5-5": SONNET_MODEL,
+        "MiniMax-M3.1-Flash-Preview": MINIMAX_MODEL,
+    }
+)
+#: The model id -> the family its answers are labelled with in evidence that names who judged
+#: (`mechanical/scope_review.judged_by` writes `<family>:<agent>` into a `scope_reason`). Declared
+#: beside the stamps and never split out of the model id: the family is part of the identity, and
+#: `split("-")[1]` of `MiniMax-M3.1-Flash-Preview` is `M3.1`, not a family.
+ANSWER_FAMILIES: Mapping[str, str] = MappingProxyType(
+    {
+        "claude-opus-5-5": "opus",
+        "claude-sonnet-5-5": "sonnet",
+        "MiniMax-M3.1-Flash-Preview": "minimax",
+    }
 )
 
 MANIFEST_FILE = "MANIFEST.jsonl"

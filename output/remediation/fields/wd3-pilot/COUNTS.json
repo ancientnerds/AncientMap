@@ -1,0 +1,110 @@
+{
+ "asked_field_sets": {
+  "coordinates": 12,
+  "coordinates+period_start": 8,
+  "coordinates+period_start+site_type": 3,
+  "coordinates+period_start+site_type+source_url": 2,
+  "period_start": 44,
+  "period_start+site_type": 10,
+  "site_type": 1
+ },
+ "fields_asked": 110,
+ "flagged": {
+  "coordinates": 0,
+  "period_start": 0,
+  "site_type": 0,
+  "source_url": 0
+ },
+ "flagged_only": {
+  "coordinates": 0,
+  "period_start": 0,
+  "site_type": 0,
+  "source_url": 0
+ },
+ "identity_doubt": 5,
+ "part": "all",
+ "per_field": {
+  "coordinates": {
+   "CONFIRMED": 49,
+   "CONFLICT": 9,
+   "MISSING": 22
+  },
+  "period_start": {
+   "CONFIRMED": 1,
+   "CONFLICT": 1,
+   "MISSING": 78
+  },
+  "site_type": {
+   "CONFIRMED": 42,
+   "CONFLICT": 5,
+   "MISSING": 33
+  },
+  "source_url": {
+   "CONFIRMED": 74,
+   "CONFLICT": 2,
+   "MISSING": 4
+  }
+ },
+ "period_name_not_bucket_of_start": 0,
+ "pilot": {
+  "seed": 20261003,
+  "size": 80
+ },
+ "population": {
+  "field_sets": {
+   "coordinates": 12,
+   "coordinates+period_start": 8,
+   "coordinates+period_start+site_type": 3,
+   "coordinates+period_start+site_type+source_url": 2,
+   "period_start": 44,
+   "period_start+site_type": 10,
+   "site_type": 1
+  },
+  "fields": {
+   "coordinates": 25,
+   "period_start": 67,
+   "site_type": 16,
+   "source_url": 2
+  },
+  "journal_sourced_points": {
+   "294968f3-036b-44ff-b704-91593648927d": "2026-09-23_owner-case-coordinates-wave2"
+  },
+  "sites": 80,
+  "wd1_sourced_but_empty": {},
+  "wd1_unseen_sites": [],
+  "why": {
+   "coordinates:unresolved": 25,
+   "period_start:empty": 67,
+   "site_type:empty": 16,
+   "source_url:empty": 2
+  }
+ },
+ "retired_not_classified": 99,
+ "seeds": {
+  "cells": 0,
+  "sites": 0,
+  "sites_not_classified": []
+ },
+ "sites": 80,
+ "sites_asked": 80,
+ "stacked_points": 0,
+ "table_sha256": "38140ab2415ce6d8352f96237d839ddab93131e0df3a9ac78e952d793bcba768",
+ "wd1": {
+  "decisions": 9524,
+  "runs": [
+   "output/remediation/fields/wd1-pilot",
+   "output/remediation/fields/wd1",
+   "output/remediation/fields/wd1-rest-pilot",
+   "output/remediation/fields/wd1-rest"
+  ],
+  "sites_classified": 4926,
+  "unresolved_or_held": 975,
+  "waves": [
+   "2026-09-26a",
+   "2026-09-26b",
+   "2026-09-26c",
+   "2026-09-26d"
+  ]
+ },
+ "without": null
+}

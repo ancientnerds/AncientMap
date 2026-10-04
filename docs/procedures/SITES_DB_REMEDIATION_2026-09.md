@@ -933,6 +933,114 @@ Afterwards the hidden row's page answers 410 and the renamed one 301 (the slug r
 id, `sites_html.site_detail`); Lyra's next boot adds "Chiapa de Corzo" to the kept row's
 `unified_site_names` as a label, and the old name stays there.
 
+#### Owner decision O9 — five duplicates retired (lane `dup-retire`)
+
+HUMAN_ONLY_DECISIONS B1-D and B6 (O9, 2026-09-26): when the reading shows one site, "der Verlierer wird
+`retired` (`duplicate_of:<uuid>`). Nichts wird gelöscht." — the survivor by `scope.survivor_rank` (older row,
+then more content links, description citations, images, then the lower id), applied to Banias as B6 says.
+`scripts/remediation/mechanical/dups.py --write` plans the five confirmed pairs from one read-only snapshot
+(kept as `output/remediation/mechanical_dups/READ.jsonl`); the plan, `PLAN.md`, `APPLY.sql` and
+`ROLLBACK.sql` are delivered and committed beside it. The sixth B1-D candidate (Lycian Mezarı 2 / Amyntas
+Rock Tombs, 1.1 km) is not confirmed and not in this lane; neither is the Temple of Artemis (GR) → Selçuk.
+**Nothing is deleted and no country is written** (B10: Banias is Syria, Caesarea Philippi Israel, "so
+lassen"): the lane fills two NULL cells per retired row, `scope_status = 'retired'` and `scope_reason =
+'duplicate_of:<survivor>'` — scope-e4's shape, 10 cells on 5 sites. A retired row keeps its content links
+and images (Banias holds 4 and 20), as scope-e4's 19 duplicates did.
+
+| retired | survivor | by | shared item / title | apart |
+|---|---|---|---|---|
+| Banias `ae2ca7b1-89da-46cb-8924-f9d04dd5da2e` | Caesarea Philippi `ce7db300-8777-425d-917a-2f6d9f325b58` | 5 vs 4 content links (B6) | Q606295 / `Banias` | 289.5 m |
+| Ancient Amathunta `3ebb514f-ac4a-4913-b54b-409bcc29eff4` | Amathus `51daf6c9-25d3-4818-8857-0543f1203c57` | 1 vs 0 citations (links 5/5, images 17/17) | Q2343313 / `Amathus` | 11.3 m |
+| Ñusta Hispana `dafc7527-c6c8-45c3-8c7d-4813d20a4dcf` | Conjunto Arqueologico de Ñustahispana `d41368ba-6aa2-4b75-adf4-8f2cd3cc7e4d` | all tie, lower id | Q13191401 / `Ñusta Hispana` | 468 m |
+| Thirty-nine (39) Bridge Street, Chester `f23a31c3-6833-4df6-8583-3b3930b5a74f` | Bridge Street Number 39, Chester `21ac323f-7214-4891-9499-74e55c3d7d56` | 3 vs 0 content links | Q4636108 / `39 Bridge Street, Chester` | 14.0 m |
+| Shaduppum `f967e3c4-fc5b-4cd0-91d1-06030d51e31c` | Tel Hermal Fort `0d8af59c-71cb-4ff6-9620-3eb1faf2ebd3` | 5 vs 0 content links | Q3481186 / `Shaduppum` | 20.3 m |
+
+All ten rows share `created_at` 2026-03-04 21:07:57.660461, so the rule falls through to the links, citations,
+images and the id, as in the "by" column (read 2026-10-01). Evidence per pair, quoted into every cell's
+`evidence` (each Wikipedia and Wikidata quote read on 2026-10-01, and each description sentence checked in the
+live row by the plan):
+
+* **Banias / Caesarea Philippi** — en.wikipedia.org/wiki/Banias: "is a site in the Israeli-occupied Golan Heights,
+  Syria near a natural spring, once associated with the Greek god Pan"; "In 3 BCE, Herod's son, Philip (also
+  known as Philip the Tetrarch) founded a city which became his administrative capital, known from Josephus and
+  the Gospels of Matthew and Mark as Caesarea or Caesarea Philippi". Wikidata Q606295 "Banias — archaeological site
+  in the Golan Heights", enwiki sitelink `Banias`. The two rows are the one site under its modern and its ancient
+  name; the retired row's point is 11 m from Wikipedia's (33.24861, 35.69444), the survivor's 279 m. The
+  survivor's description: "Caesarea Philippi, originally called Banias, is an ancient site at the foot of Mount
+  Hermon in the Golan Heights".
+* **Ancient Amathunta / Amathus** — en.wikipedia.org/wiki/Amathus: "Amathus or Amathous (Ancient Greek: Ἀμαθοῦς)
+  was an ancient city-kingdom of Cyprus. [...] Remains of Amathus can be seen today on the southern coast near
+  Agios Tychonas, about 6 miles (9.7 km) east of Limassol and 24 miles (39 km) west of Larnaca". Wikidata Q2343313
+  "ancient city and one of the ancient royal cities of Cyprus until about 300 BC.", enwiki `Amathus`. Both rows
+  carry that item and title, lie 11 m apart, and their descriptions describe the same city (the retired row's:
+  "Ancient Amathus was one of the ancient royal cities of Cyprus"). en.wikipedia.org/wiki/Amathounta is the
+  municipality named after the city (Δήμος Αμαθούντας). The Amathus article does **not** list "Amathunta" as an
+  alias, so the reading rests on the shared item, title and place, not on the name.
+* **Ñusta Hispana / Conjunto Arqueologico de Ñustahispana** — en.wikipedia.org/wiki/Ñusta_Hispana: "previously known
+  as Chuquipalta [...] is an archaeological site in Peru. It is located at Vilcabamba, La Convención Province,
+  Cusco Region." Wikidata Q13191401 "archaeological site in Peru", one item, one enwiki article; both
+  descriptions are the Inca site with Yurac Rumi at Vilcabamba. Wikipedia's point (-13.11167, -72.92417) is 21 m
+  from the retired row and 473 m from the survivor, which stays visible with its own name: the survivor rule
+  has nothing to say about names, and this lane writes none.
+* **39 Bridge Street, Chester** — en.wikipedia.org/wiki/39_Bridge_Street,_Chester: "a designated Grade I listed
+  building, its major archaeological feature being the remains of a Roman hypocaust in its cellar" and "27 square
+  columns [...] originally contained 32 columns in eight rows of four" — both descriptions say so. Wikidata Q4636108
+  "Grade I listed building in Chester", one enwiki article. The retired row's `site_type` is Bath, the survivor's
+  none: a field matter, not part of the survivor choice.
+* **Shaduppum / Tel Hermal Fort** — en.wikipedia.org/wiki/Shaduppum: "Shaduppum (Šaduppȗm), modern Tell Harmal (also
+  Tell Abu Harmal and Tel Harmal), is an archaeological site in Baghdad Governorate (Iraq)"; one tell, "150 meters
+  in diameter and 5 meters high", with no second monument. Wikidata Q3481186 "Archaeological site in Baghdad",
+  alias "Tell Harmal". B1-D's "1.7 km" is not what production holds: the two points are 20 m apart and
+  Wikipedia's (33.309483, 44.467065) is the survivor's stored point. The survivor's description says "Tel Hermal
+  (ancient Shaduppum)". The retired row's richer text (Gilgamesh tablets, the Laws of Eshnunna) is **not** merged
+  here; a description merge is a field lane's job.
+
+`dups.py` refuses the plan unless, per pair: both rows are curated and hold the pinned names; the row to retire
+has no scope decision, its scope journal ends at the live values and no row is retired onto it; the survivor is
+not retired; both rows carry exactly the pinned `wikidata_qid` and `enwiki_title`; the premise printed for
+the retired row is the one the read's rows give (see guard 5 below); the pair lies within
+**2,000 m** (`lane.DUP_RETIRE_METRES`, the owner-case list's `DUP_MAX_M` — the scope lane's 100 m is for pairs it
+finds itself, and Banias and Ñusta Hispana are 290 m and 470 m apart); `survivor_rank` keeps the pinned survivor;
+and each row's description holds the pinned sentence. No id may appear in two pairs, and neither stamp may have
+journalled a row.
+
+Lane `dup-retire` (`mechanical_dups/`, run stamp `2026-10-01_mechanical-dup-retire`, test id
+`O9/duplicate-retire`): guard 1 curated; guard 2 two real changes, only `scope_status` and `scope_reason`; guard 3
+both cells still NULL; guard 4 the only status written is `retired`; guard 5 the premise
+`<name> | content links N, images M | <external ids> | survivor <survivor name> | <survivor external ids>`
+(`lane.DUP_RETIRE_PREMISE_SQL`; the survivor of each loser is `lane.DUP_SURVIVORS`, held to `dups.PAIRS` by a
+test; e.g. `Banias | content links 4, images 20 | enwiki_title=Banias, wikidata_qid=Q606295 | survivor Caesarea
+Philippi | enwiki_title=Banias, wikidata_qid=Q606295`): the write and its reversal are refused once the row's
+name, content links, images or ids moved, or its survivor was renamed or re-keyed (review 2026-10-01: the loser
+is not empty, so content added after the read must not be hidden unnoticed, and the survivor is pinned in the
+same transaction, not only checked afterwards). The plan holds the premise as the database printed it and
+`dups.py` compares it with what the read's own rows give. After the write, the three disjoint survivor checks of
+Chiapa's hide (`lane.duplicate_survivor_invariants`, now parameterised by the distance: curated, not retired —
+this very write included — within 2,000 m), each probed with a row of its kind: 9 probes. Measured read-only on
+2026-10-01 (`--verify` before): 20 curated rows retired as a duplicate (scope-e4's 19 and Chiapa's), 4,883 with
+no scope decision, 99 retired; the write moves these to 25, 4,878 and 104 with 10 journal rows. Neither the
+rehearsal nor the apply has been run for this plan: the only database commands sent were the plan's read-only
+snapshot and `--verify`.
+
+```bash
+$PY scripts/remediation/mechanical/dups.py --write   # read-only; only to re-plan, refused once the stamp wrote
+$PY scripts/remediation/mechanical/apply.py --lane dup-retire --check-primitive
+$PY scripts/remediation/mechanical/apply.py --lane dup-retire --verify      # before: 20 retired duplicates
+$PY scripts/remediation/mechanical/apply.py --lane dup-retire --interests
+$PY scripts/remediation/mechanical/apply.py --lane dup-retire --emit        # offline, byte-identical
+$PY scripts/remediation/mechanical/apply.py --lane dup-retire --rehearse
+$PY scripts/remediation/mechanical/apply.py --lane dup-retire --probe-guards   # 9 probes
+$PY scripts/remediation/mechanical/apply.py --lane dup-retire --apply
+$PY scripts/remediation/mechanical/apply.py --lane dup-retire --verify      # after: 25, 10 journal rows
+$PY scripts/remediation/mechanical/apply.py --lane dup-retire --rehearse-rollback
+```
+
+The guards are held by `tests/remediation/test_mechanical_dups.py` and 23 mutation cases (`mutation_sweep.py dups:`,
+all fired on 2026-10-01; the 35 `chiapa:` cases still fire after `duplicate_survivor_invariants` and
+`DUPLICATE_HIDE_CELLS` became shared).
+
+Undo only as a decision: `ROLLBACK.sql` sets the ten cells back to NULL.
+
 #### Two renames of 2026-10-01 (lane `name-fix`)
 
 Owner order of 2026-10-01 ("Wikipedia/Wikidata reicht"): a curated site is renamed only to the sourced

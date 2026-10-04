@@ -75,17 +75,21 @@ def test_every_answer_names_the_one_pinned_opus_model() -> None:
     assert "deepseek" not in OH.OPUS_MODEL.lower()
 
 
-def test_the_answer_models_are_exactly_opus_and_sonnet() -> None:
+def test_the_answer_models_are_exactly_opus_sonnet_and_minimax() -> None:
     """Owner decision 2026-10-01: the orchestrator runs Opus 5.5, every answering subagent Sonnet
-    5.5. The two stamps are pinned; an Opus answer recorded before stays valid."""
+    5.5. Owner decision 2026-10-03: MiniMax Code (`mcode`, `MiniMax-M3.1-Flash-Preview`) replaces
+    Claude Code, so an answer may name that model too. The three stamps are pinned; an answer
+    recorded before stays valid."""
     assert OH.SONNET_MODEL == "anthropic/claude-sonnet-5-5 (Claude Code agent)"
+    assert OH.MINIMAX_MODEL == "minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent)"
     assert dict(OH.ANSWER_MODELS) == {
         "claude-opus-5-5": OH.OPUS_MODEL,
         "claude-sonnet-5-5": OH.SONNET_MODEL,
+        "MiniMax-M3.1-Flash-Preview": OH.MINIMAX_MODEL,
     }
 
 
-@pytest.mark.parametrize("stamp", [OH.OPUS_MODEL, OH.SONNET_MODEL])
+@pytest.mark.parametrize("stamp", [OH.OPUS_MODEL, OH.SONNET_MODEL, OH.MINIMAX_MODEL])
 def test_each_answer_model_stamp_is_written_read_and_validated(tmp_path: Path, stamp: str) -> None:
     _export(tmp_path)
     assert _answer(tmp_path, model=stamp) is True
@@ -103,10 +107,13 @@ def test_each_answer_model_stamp_is_written_read_and_validated(tmp_path: Path, s
         "anthropic/claude-haiku-5-5 (Claude Code agent)",
         "claude-sonnet-5-5",  # the model id, not the stamp: the CLI maps one to the other
         "anthropic/claude-sonnet-5-5",
+        "MiniMax-M3.1-Flash-Preview",  # the MiniMax model id, not its stamp, either
         "",
     ],
 )
-def test_a_third_model_is_refused_on_write_read_and_validate(tmp_path: Path, stamp: str) -> None:
+def test_a_model_outside_the_three_stamps_is_refused_on_write_read_and_validate(
+    tmp_path: Path, stamp: str
+) -> None:
     _export(tmp_path)
     with pytest.raises(OH.HandoffError, match="wrong model"):
         _answer(tmp_path, model=stamp)
@@ -387,3 +394,33 @@ def test_the_cli_validates_and_answers(tmp_path: Path) -> None:
 
     second = subprocess.run([sys.executable, script, "validate", "--dir", str(tmp_path)], **env_run)
     assert second.returncode == 0 and json.loads(second.stdout)["ok"] is True
+
+
+def test_the_cli_offers_the_minimax_model(tmp_path: Path) -> None:
+    """A MiniMax Code run answers through the same command line, and the answer carries the
+    MiniMax stamp: `--model` is how the answer's `model` is recorded (owner decision 2026-10-03)."""
+    _export(tmp_path)
+    text = tmp_path / "answer.txt"
+    text.write_text("VERDICT: CORRECT - Ötzi\n", encoding="utf-8")
+    argv = [
+        sys.executable,
+        str(REMEDIATION / "opus_handoff.py"),
+        "answer",
+        "--dir",
+        str(tmp_path),
+        "--batch-id",
+        "batch-0001",
+        "--stage",
+        "finder",
+        "--label",
+        LABEL,
+        "--answered-by",
+        "mcode-driver-1",
+        "--text-file",
+        str(text),
+        "--model",
+        "MiniMax-M3.1-Flash-Preview",
+    ]
+    run = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", check=False)
+    assert run.returncode == 0, run.stderr
+    assert _read(tmp_path).model == OH.MINIMAX_MODEL

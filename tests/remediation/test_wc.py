@@ -414,6 +414,7 @@ def _outcome(site_row: dict, decisions=None, quotes=None):
             run="wc-test",
             checked=site.description,
             verification=verification,
+            checker=M.AI_SYSTEM,
         )
     )
     return site, composed, check, WC4.written_raw_data(site, composed, check)
@@ -426,10 +427,11 @@ def test_the_check_record_reads_back_strictly_and_counts_what_its_sentences_say(
     assert WC4.DescriptionCheck.from_dict(check.to_dict()) == check
     assert (check.kept, check.of, check.trimmed) == (3, 3, 1)
     assert check.checker == M.AI_SYSTEM and check.v == 2
-    # a NEW check names the orchestrator and the answering subagents (owner decision 2026-10-01)
+    # a NEW check names both AI families (owner decisions 2026-10-01 and 2026-10-03)
     assert check.checker == (
-        "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
-        "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09"
+        "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
+        "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
+        "an-sites-remediation-2026-09"
     )
     assert check.desc_sha256 == M.text_sha256(composed.description)
     assert check.verified_sha256 == check.desc_sha256

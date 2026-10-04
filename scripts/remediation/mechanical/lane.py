@@ -72,7 +72,7 @@ from mechanical.wrong_both_list import JOURNAL_IDS as WRONG_BOTH_JOURNAL_IDS
 from pipeline.lyra.site_key import site_key_sql
 from pipeline.normalizers.site_type import CANONICAL_TYPES
 from pipeline.utils.public_sites import RETIRED, SCOPE_STATUSES, is_retired, not_retired
-from pipeline.utils.text import PERIOD_BUCKETS
+from pipeline.utils.text import PERIOD_BUCKETS, UNDATED
 
 _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*\Z")
 #: The label is spliced into RAISE message literals: no quote (it would end the literal) and no `%`
@@ -593,21 +593,48 @@ UK_PARTS_READBACK = journal_readback(
 )
 
 
-def bucket_case(column: str = "period_start") -> str:
+def bucket_case(column: str = "period_start", *, yearless: str | None = UNDATED) -> str:
     """`categorize_period` as a SQL expression, built from the table it walks (upper bounds only).
 
     The same rule as the pipeline function and the frontend's `categorizePeriod`: the first bucket
-    is open below, the last open above, and no year means no bucket.
+    is open below, the last open above. A row with **no year** answers `yearless`, the owner's
+    residue label (`UNDATED`), because the column is `period_name` and the owner's rule of 2026-10-04
+    says a curated site that nothing dates carries a visible entry rather than nothing: the label is
+    the bucket of the year, or `Undated` when there is no year. This is the one place that rule is
+    stated, so every lane that checks a period label checks it - `categorize_period` itself still
+    answers `None`, because it answers "which bucket is this year in".
+
+    `yearless=None` renders `THEN NULL` instead. That is the `period-name` lane's own rendering of
+    2026-09-22, and it is passed only by `_PERIOD_NAME_AS_APPLIED`, which freezes the predicate a
+    delivered statement was applied under. Every lane that runs today leaves the default in place.
     """
     whens = " ".join(
         f"WHEN {column} < {hi} THEN {sql_literal(label)}" for label, _lo, hi in PERIOD_BUCKETS[:-1]
     )
-    return f"(CASE WHEN {column} IS NULL THEN NULL {whens} ELSE {sql_literal(PERIOD_BUCKETS[-1][0])} END)"
+    return (
+        f"(CASE WHEN {column} IS NULL THEN {sql_literal(yearless) if yearless else 'NULL'} "
+        f"{whens} ELSE {sql_literal(PERIOD_BUCKETS[-1][0])} END)"
+    )
 
 
 _PERIOD_MISMATCH = Residual(
-    "curated rows whose period_name is not the bucket of period_start",
+    "curated rows whose period_name is not the bucket of period_start, or not Undated where there is none",
     f"period_name IS DISTINCT FROM {bucket_case()}",
+)
+
+#: The `period-name` lane's residual **as it was applied on 2026-09-22**: a curated row's label was
+#: the bucket of its year, and a row with no year carried no label at all. Frozen deliberately. The
+#: applied statement, its undo, the rehearsal and the probes are pinned byte for byte
+#: (`test_mechanical.py`), and the evidence in the delivered plan quotes them - so this lane has to
+#: render what it rendered, whatever the rule became afterwards.
+#:
+#: The owner's residue rung (2026-10-04) makes a yearless row carry `Undated`. That is a *later*
+#: rule with its own lanes and its own stamps (`residue_period.py`), and backdating it here would
+#: turn the delivered artifacts into claims about a statement that was never executed. The live rule
+#: stays `_PERIOD_MISMATCH` above, and every lane that runs today uses that one.
+_PERIOD_NAME_AS_APPLIED = Residual(
+    "curated rows whose period_name is not the bucket of period_start",
+    f"period_name IS DISTINCT FROM {bucket_case(yearless=None)}",
 )
 
 #: Phase 6 item 2 (2026-09-22): `period_name` re-derived from `period_start` wherever the two
@@ -626,8 +653,8 @@ PERIOD_NAME = Lane(
     label="period_name derivation",
     plan_table="_period_name_plan",
     out_dir_name="mechanical_period_name",
-    post_commit_residual=_PERIOD_MISMATCH,
-    rehearsal_residual=_PERIOD_MISMATCH,
+    post_commit_residual=_PERIOD_NAME_AS_APPLIED,
+    rehearsal_residual=_PERIOD_NAME_AS_APPLIED,
     allowed_new_values=tuple(label for label, _lo, _hi in PERIOD_BUCKETS),
     premise_sql="u.period_start::text",
     lock_timeout=LOCK_TIMEOUT,
@@ -646,9 +673,9 @@ PERIOD_NAME_READBACK = journal_readback(
             "FROM unified_sites WHERE source_id = 'ancient_nerds' AND period_name = '> 1500 AD'",
         ),
         (
-            "curated rows with a period_name but no period_start",
+            "curated rows whose period_name is neither the bucket of a year nor Undated without one",
             "FROM unified_sites WHERE source_id = 'ancient_nerds' "
-            "AND period_start IS NULL AND period_name IS NOT NULL",
+            f"AND period_start IS NULL AND period_name IS DISTINCT FROM {sql_literal(UNDATED)}",
         ),
         (
             "journal rows for this run whose value is not the row's bucket",
@@ -658,6 +685,24 @@ PERIOD_NAME_READBACK = journal_readback(
         ),
     ],
 )
+
+#: The owner's residue rung (2026-10-04) as a lane family, one lane per scope and wave:
+#: `period-label-undated-<wave>` writes `Undated` on the rows that carry no year at all, and
+#: `period-label-bucket-<wave>` re-derives a label that contradicts the year it sits on. Two scopes
+#: and not one, because a crash between them must leave no half-written state and each stamp covers
+#: exactly one rule; `residue_period.py` builds them, `resolve_lane` finds them by name.
+PERIOD_LABEL_LANE = re.compile(r"^period-label-(undated|bucket)-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
+PERIOD_LABEL_TEST_ID = "period-label/residue"
+#: The live input a period label is derived from: the site's own year, or - for the residue rung -
+#: the **absence** of one. Guard 5 compares this as text, and `u.period_start::text` is NULL on a
+#: yearless row, which a plan refuses as a missing premise; naming the absence is what lets the
+#: `undated` lane condition its write at all, and it makes the guard mean what it says: if a year
+#: appears between the plan and the apply, the row no longer holds `no period_start` and the write
+#: is refused rather than labelling a dated site `Undated`.
+PERIOD_LABEL_PREMISE = (
+    "CASE WHEN u.period_start IS NULL THEN 'no period_start' ELSE u.period_start::text END"
+)
+
 
 #: What a `site_type` value that is *not a site type* looks like, measured on the phase-3 writes of
 #: 2026-09-21/22: a lowercase snake_case marker a program emitted (`suspect_modern`, twice) and the
@@ -1598,16 +1643,19 @@ TEASER_LANE = re.compile(r"^teaser-(prov|card)-s(\d{3})\Z")
 #: transaction per step. Each step is a lane of its own - `fields-wd1-<wave>-s<NNN>`, its own run
 #: stamp and directory - so "never apply a stamp twice" holds per step and each step is accepted
 #: before the next is planned (`fields/plan.py`). Lane WD3 (owner decisions 2026-10-01: one source
-#: family suffices, an open field is filled and nothing else is touched) writes through the same
-#: cells and invariants as `fields-wd3-<wave>-s<NNN>`: a stamp, a test id, a table and a directory
-#: of its own, so no step of one lane can be mistaken for a step of the other.
-FIELDS_LANE = re.compile(r"^fields-(wd1|wd3)-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
-FIELDS_STAGES = ("wd1", "wd3")
+#: family suffices, an open field is filled and nothing else is touched) and lane WD4 (2026-10-04:
+#: WD3's question with WD3's rules, plus a named period as a value) write through the same cells and
+#: invariants as `fields-wd3-<wave>-s<NNN>` and `fields-wd4-<wave>-s<NNN>`: a stamp, a test id, a
+#: table and a directory of their own, so no step of one lane can be mistaken for a step of another.
+FIELDS_LANE = re.compile(r"^fields-(wd1|wd3|wd4)-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
+FIELDS_STAGES = ("wd1", "wd3", "wd4")
 #: Where each stage's waves live: `output/remediation/<FIELDS_ROOTS[stage]>/<wave>/sNNN`.
 FIELDS_ROOTS = {stage: f"fields/{stage}/write" for stage in FIELDS_STAGES}
 #: The journal's `confidence` of a stage's writes: WD1 rests on two quotes of two source families,
-#: WD3 on one quote (the column's free text, `migrations/0017`).
-FIELDS_CONFIDENCE = {"wd1": "two_source", "wd3": "one_source"}
+#: WD3 on one quote (the column's free text, `migrations/0017`). WD4 asks WD3's question with the
+#: same discipline - a named period is a value, and one quote of one family carries it (rule
+#: `one-family-period`, 2026-10-04).
+FIELDS_CONFIDENCE = {"wd1": "two_source", "wd3": "one_source", "wd4": "one_source"}
 _BUCKETS = tuple(label for label, _lo, _hi in PERIOD_BUCKETS)
 
 #: A site's point is three cells: `lat` and `lon` (NOT NULL, corrected and never cleared -
@@ -1671,7 +1719,7 @@ _GEOM_NOT_POINT = Residual(
 
 
 def fields_lane(wave: str, step: int, stage: str = "wd1") -> Lane:
-    """Step `step` of the `stage` (`wd1` or `wd3`) wave `wave` (a date label, `2026-09-27` or
+    """Step `step` of the `stage` (`wd1`, `wd3` or `wd4`) wave `wave` (a date label, `2026-09-27` or
     `2026-09-27b`)."""
     name = f"fields-{stage}-{wave}-s{step:03d}"
     if FIELDS_LANE.match(name) is None or step < 1:
@@ -1742,52 +1790,67 @@ _NAMES_SURVIVOR = (
     f"u.scope_reason = {sql_literal(DUPLICATE_PREFIX)} || CAST(s.id AS text) "
     "AND s.source_id = 'ancient_nerds'"
 )
-_SURVIVOR_FAR = f"{sphere_metres('s', 'u')} > {DUPLICATE_METRES}"
 
-#: A retired duplicate's survivor is a visible curated row within 100 m - three checks after the
-#: write, one per way it can fail, disjoint, so each probe is refused by its own. Each probe writes
-#: `duplicate_of:<a row of that kind>` (read 2026-09-29): an id no row has and a GeoNames row; three
-#: duplicates scope-e4 retired; three visible curated sites 364 km to 11,400 km away.
-DUPLICATE_SURVIVOR_INVARIANTS = (
-    SiteInvariant(
-        says="planned site(s) name no curated site as their survivor",
-        predicate=f"NOT EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR})",
-        probe_column="scope_reason",
-        probe_values=(
-            f"{DUPLICATE_PREFIX}00000000-0000-0000-0000-000000000000",
-            f"{DUPLICATE_PREFIX}8db5555a-a9a3-417b-944c-6ec0c04de0db",  # GeoNames "Chiapa de Corzo"
-            "a reason that names no survivor",
+
+def _survivor_far(metres: int) -> str:
+    """SQL: the survivor `s` lies further than `metres` from the written site `u`."""
+    return f"{sphere_metres('s', 'u')} > {metres}"
+
+
+_SURVIVOR_FAR = _survivor_far(DUPLICATE_METRES)
+
+
+def duplicate_survivor_invariants(metres: int) -> tuple[SiteInvariant, ...]:
+    """A retired duplicate's survivor is a visible curated row within `metres` - three checks after
+    the write, one per way it can fail, disjoint, so each probe is refused by its own. Each probe
+    writes `duplicate_of:<a row of that kind>` (read 2026-09-29): an id no row has and a GeoNames
+    row; three duplicates scope-e4 retired; three visible curated sites 364 km to 11,400 km away
+    (so beyond any `metres` a lane allows). The scope lane's rule and the Chiapa hide use 100 m
+    (`DUPLICATE_METRES`); the owner-decided retirements of `dup-retire` 2,000 m."""
+    return (
+        SiteInvariant(
+            says="planned site(s) name no curated site as their survivor",
+            predicate=f"NOT EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR})",
+            probe_column="scope_reason",
+            probe_values=(
+                f"{DUPLICATE_PREFIX}00000000-0000-0000-0000-000000000000",
+                f"{DUPLICATE_PREFIX}8db5555a-a9a3-417b-944c-6ec0c04de0db",  # GeoNames Chiapa
+                "a reason that names no survivor",
+            ),
+            probe_name="survivor-not-curated",
         ),
-        probe_name="survivor-not-curated",
-    ),
-    SiteInvariant(
-        says="planned site(s) name a retired site as their survivor",
-        predicate=(
-            f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} AND {is_retired('s')})"
+        SiteInvariant(
+            says="planned site(s) name a retired site as their survivor",
+            predicate=(
+                f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} "
+                f"AND {is_retired('s')})"
+            ),
+            probe_column="scope_reason",
+            probe_values=(
+                f"{DUPLICATE_PREFIX}04d8ce82-4fa3-4e48-88b7-bb41b354260c",  # Olympos Ruins
+                f"{DUPLICATE_PREFIX}07fb4e2f-26e5-4720-a949-9c28d4712e11",  # Templo Romano Évora
+                f"{DUPLICATE_PREFIX}13c3f25f-3887-49c1-9492-cf7e512e5782",  # Alba Fucens
+            ),
+            probe_name="survivor-retired",
         ),
-        probe_column="scope_reason",
-        probe_values=(
-            f"{DUPLICATE_PREFIX}04d8ce82-4fa3-4e48-88b7-bb41b354260c",  # Olympos Ruins
-            f"{DUPLICATE_PREFIX}07fb4e2f-26e5-4720-a949-9c28d4712e11",  # Templo Romano Évora
-            f"{DUPLICATE_PREFIX}13c3f25f-3887-49c1-9492-cf7e512e5782",  # Alba Fucens
+        SiteInvariant(
+            says=f"planned site(s) name a survivor further than {metres} m",
+            predicate=(
+                f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} AND "
+                f"{not_retired('s')} AND {_survivor_far(metres)})"
+            ),
+            probe_column="scope_reason",
+            probe_values=(
+                f"{DUPLICATE_PREFIX}30d3fb78-6b80-42f9-87f8-7616e63bec4f",  # Tikal
+                f"{DUPLICATE_PREFIX}74145e9b-76a6-48de-a902-08ecb2f1f7bb",  # Achladia
+                f"{DUPLICATE_PREFIX}6aa4c8de-3794-42fe-b68e-6b6ab77bd8ed",  # Delphinion
+            ),
+            probe_name="survivor-far",
         ),
-        probe_name="survivor-retired",
-    ),
-    SiteInvariant(
-        says=f"planned site(s) name a survivor further than {DUPLICATE_METRES} m",
-        predicate=(
-            f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} AND "
-            f"{not_retired('s')} AND {_SURVIVOR_FAR})"
-        ),
-        probe_column="scope_reason",
-        probe_values=(
-            f"{DUPLICATE_PREFIX}30d3fb78-6b80-42f9-87f8-7616e63bec4f",  # Tikal
-            f"{DUPLICATE_PREFIX}74145e9b-76a6-48de-a902-08ecb2f1f7bb",  # Achladia
-            f"{DUPLICATE_PREFIX}6aa4c8de-3794-42fe-b68e-6b6ab77bd8ed",  # Delphinion
-        ),
-        probe_name="survivor-far",
-    ),
-)
+    )
+
+
+DUPLICATE_SURVIVOR_INVARIANTS = duplicate_survivor_invariants(DUPLICATE_METRES)
 
 #: What the hide rests on: the row is empty - no content link, no image - so hiding it takes
 #: nothing out of view. Read per site as the database prints it; guard 5 refuses a row that gained
@@ -1798,6 +1861,14 @@ EMPTY_ROW_PREMISE_SQL = (
     "AS text)"
 )
 EMPTY_ROW_PREMISE = "content links 0, images 0"
+
+#: What a duplicate's retirement writes: `scope_status` and `scope_reason`, filled from NULL in one
+#: transaction like scope-e4's, and the only status it writes is `retired` (guard 4) - the Chiapa
+#: hide's cells and the cells of `dup-retire`.
+DUPLICATE_HIDE_CELLS = (
+    Column("scope_status", "text", allowed_new_values=(RETIRED,), fills_null=True),
+    Column("scope_reason", "text", fills_null=True),
+)
 
 #: The hide: the empty row's `scope_status` and `scope_reason`, filled from NULL in one transaction
 #: like scope-e4's, and the only status it writes is `retired` (guard 4).
@@ -1815,10 +1886,7 @@ CHIAPA_HIDE = Lane(
     premise_sql=EMPTY_ROW_PREMISE_SQL,
     lock_timeout=LOCK_TIMEOUT,
     statement_timeout=STATEMENT_TIMEOUT,
-    cells=(
-        Column("scope_status", "text", allowed_new_values=(RETIRED,), fills_null=True),
-        Column("scope_reason", "text", fills_null=True),
-    ),
+    cells=DUPLICATE_HIDE_CELLS,
     site_invariants=DUPLICATE_SURVIVOR_INVARIANTS,
 )
 
@@ -1900,14 +1968,21 @@ LANES[CHIAPA_NAME.name] = CHIAPA_NAME
 LANE_READBACKS[CHIAPA_HIDE.name] = CHIAPA_HIDE_READBACK
 LANE_READBACKS[CHIAPA_NAME.name] = CHIAPA_NAME_READBACK
 
+
 # ------------------------------------------------------------ the name-fix lane (2026-10-01)
 #: What a Wikipedia-sourced rename rests on: the external ids the site carries - above all the
 #: `enwiki_title` its new name is. Read per site as the database prints it; guard 5 refuses the
 #: rename, and its reversal, once the site's ids moved (an item merged away, a title replaced).
-NAME_FIX_PREMISE_SQL = (
-    "coalesce((SELECT string_agg(e.kind || '=' || e.value, ', ' ORDER BY e.kind, e.value) "
-    "FROM site_external_ids e WHERE e.site_id = u.id), '')"
-)
+def external_ids_sql(row: str) -> str:
+    """SQL: the external ids of the site `row` (a `unified_sites` alias) as the database prints them,
+    `kind=value` joined in `kind, value` order - '' for a site without any."""
+    return (
+        "coalesce((SELECT string_agg(e.kind || '=' || e.value, ', ' ORDER BY e.kind, e.value) "
+        f"FROM site_external_ids e WHERE e.site_id = {row}.id), '')"
+    )
+
+
+NAME_FIX_PREMISE_SQL = external_ids_sql("u")
 #: Curated names that hold a zero-width character (U+200B-U+200F, U+2060, U+FEFF): the second
 #: rename's defect, read as a count before and after (`\u` is the regex's own escape).
 ZERO_WIDTH_NAME = r"name ~ '[\u200b-\u200f\u2060\ufeff]'"
@@ -1950,6 +2025,73 @@ NAME_FIX_READBACK = journal_readback(
 LANES[NAME_FIX.name] = NAME_FIX
 LANE_READBACKS[NAME_FIX.name] = NAME_FIX_READBACK
 
+# --------------------------------------------- the duplicate retirement (owner decision O9, 2026-10-01)
+#: Five confirmed duplicate pairs (HUMAN_ONLY_DECISIONS_2026-09-26.md B1-D and B6, `dups.py`): the
+#: loser of each is retired as `duplicate_of:<survivor id>`, deleting nothing - scope-e4's two cells
+#: and its three survivor checks (`duplicate_survivor_invariants`). Two things differ from the Chiapa
+#: hide and scope-e4. The pairs are owner-decided, not found by the 100 m rule: two lie 290 m and
+#: 470 m apart, so the survivor may be as far as the owner-case list's 2 km
+#: (`bcases.classify.DUP_MAX_M`). And a loser is not empty - Banias holds 4 content links and 20
+#: images - so its premise is not the empty-row count that must be zero but what the decision read
+#: it on: its name, how many content links and images it holds (a loser that gained content since
+#: the read would be hidden unnoticed), the external ids (the shared Wikidata item and Wikipedia
+#: title) the pair is one site by - and the same for its survivor, named per loser in
+#: `DUP_SURVIVORS`: a survivor renamed or re-keyed since the read refuses the plan, in the same
+#: transaction as the write (guard 5), not only the survivor checks after it.
+DUP_RETIRE_METRES = 2000
+#: loser id -> survivor id; `dups.PAIRS` holds the same five pairs (a test holds the two together).
+DUP_SURVIVORS = {
+    "ae2ca7b1-89da-46cb-8924-f9d04dd5da2e": "ce7db300-8777-425d-917a-2f6d9f325b58",
+    "3ebb514f-ac4a-4913-b54b-409bcc29eff4": "51daf6c9-25d3-4818-8857-0543f1203c57",
+    "dafc7527-c6c8-45c3-8c7d-4813d20a4dcf": "d41368ba-6aa2-4b75-adf4-8f2cd3cc7e4d",
+    "f23a31c3-6833-4df6-8583-3b3930b5a74f": "21ac323f-7214-4891-9499-74e55c3d7d56",
+    "f967e3c4-fc5b-4cd0-91d1-06030d51e31c": "0d8af59c-71cb-4ff6-9620-3eb1faf2ebd3",
+}
+_SURVIVOR_OF = (
+    "CASE CAST(u.id AS text) "
+    + " ".join(f"WHEN {sql_literal(k)} THEN {sql_literal(v)}" for k, v in DUP_SURVIVORS.items())
+    + " END"
+)
+DUP_RETIRE_PREMISE_SQL = (
+    f"u.name || ' | ' || {EMPTY_ROW_PREMISE_SQL} || ' | ' || {NAME_FIX_PREMISE_SQL} "
+    "|| ' | survivor ' || coalesce((SELECT s.name || ' | ' || "
+    f"{external_ids_sql('s')} FROM unified_sites s WHERE CAST(s.id AS text) = {_SURVIVOR_OF}), '')"
+)
+DUP_RETIRE = Lane(
+    name="dup-retire",
+    key_prefix="dup-retire",
+    run_stamp="2026-10-01_mechanical-dup-retire",
+    test_id="O9/duplicate-retire",
+    confidence="authoritative",
+    label="O9 duplicate retirement",
+    plan_table="_dup_retire_plan",
+    out_dir_name="mechanical_dups",
+    post_commit_residual=RETIRED_DUPLICATES,
+    rehearsal_residual=RETIRED_DUPLICATES,
+    premise_sql=DUP_RETIRE_PREMISE_SQL,
+    lock_timeout=LOCK_TIMEOUT,
+    statement_timeout=STATEMENT_TIMEOUT,
+    cells=DUPLICATE_HIDE_CELLS,
+    site_invariants=duplicate_survivor_invariants(DUP_RETIRE_METRES),
+)
+DUP_RETIRE_READBACK = journal_readback(
+    DUP_RETIRE,
+    [
+        *scope_status_counts(),
+        _RETIRED_DUPLICATE_ROWS,
+        _STATUS_WITHOUT_REASON,
+        _DUPLICATE_SURVIVOR_GONE,
+        (
+            f"retired duplicates whose survivor lies further than {DUP_RETIRE_METRES} m",
+            f"FROM unified_sites u WHERE u.source_id = 'ancient_nerds' AND {is_retired('u')} "
+            f"AND EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} AND "
+            f"{_survivor_far(DUP_RETIRE_METRES)})",
+        ),
+    ],
+)
+LANES[DUP_RETIRE.name] = DUP_RETIRE
+LANE_READBACKS[DUP_RETIRE.name] = DUP_RETIRE_READBACK
+
 # ------------------------------------------- the card disclosure correction (lane WB, 2026-10-01)
 #: Lane WB's disclosure correction (`card_disclosure.py`): one step of at most 100 sites per lane,
 #: `card-disclosure-sNNN`, built by `card_disclosure.lane_of` (it needs the pinned site list).
@@ -1958,12 +2100,13 @@ CARD_DISCLOSURE_LANE = re.compile(r"^card-disclosure-s(\d{3})\Z")
 
 def resolve_lane(name: str) -> Lane:
     """The lane called `name`: a registered one, a scope-review wave, a WD1 or WD3 fields step, a
-    lane-WB teaser step or disclosure-correction step, or a card_stats wave.
-    `KeyError` otherwise.
+    residue period-label step, a lane-WB teaser step or disclosure-correction step, or a card_stats
+    wave. `KeyError` otherwise.
 
     The card_stats lanes are built by `card_stats.card_stats_lane`, imported here and only here:
     their owned values are the card generator's own, and importing the API package is not a cost
-    every other lane should pay.
+    every other lane should pay. The residue period-label lanes come from `residue_period.lane_of`
+    for the same reason: the label is the owner's decision, written out in that one module.
     """
     if name in LANES:
         return LANES[name]
@@ -1973,6 +2116,11 @@ def resolve_lane(name: str) -> Lane:
     fields = FIELDS_LANE.match(name)
     if fields is not None:
         return fields_lane(fields.group(2), int(fields.group(3)), fields.group(1))
+    label_lane = PERIOD_LABEL_LANE.match(name)
+    if label_lane is not None:
+        from mechanical.residue_period import lane_of as residue_lane_of
+
+        return residue_lane_of(label_lane.group(1), label_lane.group(2))
     if TEASER_LANE.match(name):
         from mechanical.teaser import lane_of
 

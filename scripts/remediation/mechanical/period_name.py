@@ -64,7 +64,7 @@ from mechanical.plan import (  # noqa: E402
     write_rollback_sql,
     write_skipped_jsonl,
 )
-from pipeline.utils.text import categorize_period  # noqa: E402
+from pipeline.utils.text import UNDATED, categorize_period  # noqa: E402
 
 log = logging.getLogger("mechanical.period_name")
 
@@ -189,6 +189,13 @@ def classify_period(
     if row.period_start is None:
         if row.period_name is None:
             return verdict(False, CONSISTENT, "no period_start and no period_name")
+        if row.period_name == UNDATED:
+            # The owner's residue rung (2026-10-04, `pipeline/utils/text.py:UNDATED`): a curated site
+            # that no source, no Wikidata claim and no site_type dates carries this label and no
+            # year. It is the answer for a row *without* a year, so it is consistent here - the
+            # residue lane wrote it, this lane never does. On a row that has a year the same label
+            # is a contradiction and falls through to the bucket below.
+            return verdict(False, CONSISTENT, f"no period_start and the residue label {UNDATED!r}")
         return verdict(
             False,
             "no-period-start",

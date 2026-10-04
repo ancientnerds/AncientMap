@@ -123,7 +123,11 @@ LIST_MODULE = _HERE.with_name("card_disclosure_list.py")
 ACCEPTED_DIR = "ACCEPTED"
 MAX_SITES = 100
 PROV = CP.CARD_PROVENANCE_KEY
-OLD, NEW = M.AI_SYSTEM_OPUS, M.AI_SYSTEM
+#: The pair this lane owns, pinned to the two strings that are in production - never to the alias
+#: `AI_SYSTEM`, which names the string a NEW write carries and moved on 2026-10-03 when MiniMax
+#: Code joined. This lane corrected 185 provenances on 2026-10-01; its acceptance compares a
+#: written cell against `NEW`, so an alias would make the finished lane plan a second correction.
+OLD, NEW = M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE
 #: The two models a census row may name, as `anthropic/<id>` appears in a disclosure.
 KNOWN_MODELS = frozenset({"claude-opus-5-5", "claude-sonnet-5-5"})
 #: The writer stages whose answer is a card's final text (`teaser/run.py`).
