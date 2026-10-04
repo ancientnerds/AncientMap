@@ -35,6 +35,7 @@ section that stays below four is named in the report instead of hidden.
 | Weekly plan remaining now | **62 %** | `probe_minimax_quota()`, 2026-10-04 15:20 UTC |
 | Weekly window | Mo 2026-09-28 00:00 UTC → **Mo 2026-10-05 00:00 UTC** (resets in 8.6 h) | probe `weekly_start_time` / `weekly_end_time` |
 | Free allowance ends | 2026-10-07 — so exactly **one** more full weekly window falls inside it | owner |
+| **Cost until 07.10.2026** | **nothing is charged** — the allowance may be spent in full with no cost consequence | owner, 2026-10-04 18:14 |
 | Cost of one full-depth research run | ~380 LLM calls, ~25 M reported tokens, 10–20 h | 29 completed runs in `research_requests` |
 | Plan cost of that run | **≈ 25–33 % of one weekly window** | 49.6 M reported for 3 papers = 64 % of a 597 M window (2026-08-07) |
 | ⇒ Papers until 07.10. | **≈ 5–6 full-depth papers** (62 % + 100 %, minus Lyra's reserve) | arithmetic on the two rows above |
@@ -44,6 +45,14 @@ cap: measured on 2026-10-04, 8 concurrent calls are clean, 16 are clean, and onc
 burst bucket is drained even **1.9 calls/s** returns `429 … Token Plan rate limit reached (2062)`.
 Running four papers at once would not produce four times the papers, it would make all four hit 2062
 and retry. The only lever on paper count is depth per paper.
+
+**What "nothing is charged until 07.10.2026" does and does not change.** It removes the cost
+consequence, so the allowance can be spent in full and freely — a quota ceiling of the kind one
+would set against a bill is not needed here. It does **not** remove the 5-hour window, the weekly
+window, or the 2062 rate cap: those are Token Plan mechanics, not accounting, and they are what
+limit throughput. Whether the plan keeps resetting weekly after 07.10 (and is then billed) or the
+access ends is not yet answered, and it decides whether everything has to be finished before the
+07.10.
 
 ## 2. What is already written (this branch, uncommitted until the suite is green)
 
@@ -158,3 +167,6 @@ its journal run starts.
 4. **Production depth:** full depth (5–6 papers, ~14 h each) or a cheaper configuration for more,
    shallower papers. The lever is `minimax_source_max_content_chars` (12 000 now, was 2 000) and the
    number of angles — not concurrency.
+5. **After 07.10.:** does the Token Plan keep resetting weekly and is then billed, or does the access
+   end? Nothing is charged until that date either way, so the answer decides whether the work has to
+   be finished before it or may simply continue.
