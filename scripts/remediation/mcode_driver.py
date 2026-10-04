@@ -654,19 +654,24 @@ class State:
         tmp.replace(self.path)
 
 
-def record_round(state: State, check: Validation, *, batches: int) -> None:
-    """Write the round's completeness into the state file, so a reader can tell a finished round
-    from a stopped one without running the lane.
+def record_round(state: State, check: Validation, *, batches: int, done: bool) -> None:
+    """Write the round's completeness into the state file, so a reader can tell a finished run from
+    a stopped one without running the lane.
 
-    The driver used to write nothing on the `not check.missing` path - it printed "nothing missing"
-    and returned 0 - so a finished round and a lane that died mid-batch left the same state: the
-    last outcome, and nothing about what is still owed. Measured 2026-10-04 on the wd3 round, which
-    answered its last batch: the watchdog could not see that, started the lane again, and the driver
-    exited again with nothing to do. That is `missing: []` next to the batch count: a fact a file can
-    hold and a reader can use.
+    `missing` is what the run still owes in *questions*; `done` is whether this driver has anything
+    left to do for it. The two are not the same thing, and the difference cost a night: measured
+    2026-10-04, lane WC's three runs answered 13, 22 and 99 batches, validated clean, and every
+    import then stopped on "reading a PDF page needs pdftotext on PATH" - a run with no questions
+    left and no import. For the fields lane the driver answers and stops, so nothing missing is
+    finished; for lane WC the driver imports and builds after that, and only the plan says when the
+    run is done.
+
+    The driver used to write nothing at all on the "nothing missing" path - it printed the note and
+    returned 0 - so a finished round and a lane that died mid-batch left the same state file.
     """
     state.put("batches", batches)
     state.put("missing", list(check.missing))
+    state.put("done", done)
 
 
 # ------------------------------------------------------------------------------------ the answer prompt
@@ -743,24 +748,31 @@ def batch_ids(round_name: str, count: int) -> tuple[str, ...]:
     return tuple(f"wd3-{round_name}-b{n:04d}" for n in range(1, count + 1))
 
 
-def plan_wd3(*, run: Path, handoff: Path, resume: bool) -> Plan:
-    """The WD3 pool's first operator step. With `resume` the round was exported before, so the step
-    counts what is there; without it, the step exports. The export command is returned rather than
-    run, so the caller runs exactly one thing per step."""
+def plan_wd3(*, run: Path, handoff: Path, resume: bool, round_index: int = 0) -> Plan:
+    """The WD3 pool's first operator step, for one round. With `resume` the round was exported
+    before, so the step counts what is there; without it, the step exports. The export command is
+    returned rather than run, so the caller runs exactly one thing per step.
+
+    Round 0 is the run's own population (`export`); every round after it is a re-ask of the fields
+    that had no counted answer (`export-reask`, runbook step 10, at most two of them). Each round has
+    its own handoff directory and its own batch names, because a question is answered as it was
+    asked: a round's answers belong to that round's prompts.
+    """
+    round_name = f"r{round_index}"
     fields = str(FIELDS / "handoff.py")
     export = (
         str(PYTHON),
         fields,
-        "export",
+        "export" if round_index == 0 else "export-reask",
         "--run",
         str(run),
         "--handoff",
-        f"{handoff}-r0",
+        f"{handoff}-{round_name}",
     )
     if not resume:
-        return Plan((), True, export, Path(f"{handoff}-r0"))
-    made = batch_folders(Path(f"{handoff}-r0"))
-    return Plan(made, False, export, Path(f"{handoff}-r0"))
+        return Plan((), True, export, Path(f"{handoff}-{round_name}"), round_name=round_name)
+    made = batch_folders(Path(f"{handoff}-{round_name}"))
+    return Plan(made, False, export, Path(f"{handoff}-{round_name}"), round_name=round_name)
 
 
 def check_batch_names(plan: Plan, names: Sequence[str]) -> bool:
@@ -1092,7 +1104,12 @@ def drive_wc_run(
             if not check.ok:
                 log.append({**entry, "stopped": f"validate refused: {check.problems}"})
                 return {"run": run.name, "steps": log, "stopped": check.problems}
-            record_round(state, check, batches=len(batch_folders(plan.answer_handoff)))
+            record_round(
+                state,
+                check,
+                batches=len(batch_folders(plan.answer_handoff)),
+                done=plan.done,
+            )
             if not check.missing:
                 # nothing missing: the import is the next step's business, and the next plan will see
                 # the files it left behind
@@ -1553,6 +1570,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     wd3.add_argument("--handoff", required=True)
     wd3.add_argument("--pilot", action="store_true")
     wd3.add_argument("--resume", action="store_true")
+    # Round 0 is the run's own population; 1 and 2 are the runbook's re-asks (step 10), each on its
+    # own handoff and its own state file.
+    wd3.add_argument("--round", type=int, default=0, help="0 = the population, 1 or 2 = a re-ask")
     wd3.add_argument("--width", type=int, default=WIDTH_START)
     wd3.add_argument("--timeout", type=int, default=3600)
     wd3.add_argument("--max-steps", type=int, default=200)
@@ -1934,7 +1954,9 @@ def _main_wc(args: Any) -> int:
 
 
 def _main_wd3(args: Any) -> int:
-    plan = plan_wd3(run=args.run, handoff=Path(args.handoff), resume=args.resume)
+    plan = plan_wd3(
+        run=args.run, handoff=Path(args.handoff), resume=args.resume, round_index=args.round
+    )
     if not plan.batches:
         print(json.dumps({"batches": [], "exported": plan.exported, "note": "nothing exported"}))
         return 1
@@ -1961,12 +1983,14 @@ def _main_wd3(args: Any) -> int:
         print(json.dumps({"stopped": f"validate refused: {check.problems}"}), file=sys.stderr)
         return 1
     state = State(
-        STATE_DIR / f"wd3-{args.run.name}.json",
+        # One state file per round: round 0's answered batches are not round 1's, and a shared file
+        # would make a re-ask resume past the questions it still owes.
+        STATE_DIR / f"wd3-{args.run.name}-{plan.round_name}.json",
         lane="wd3",
         run=str(args.run),
         handoff=args.handoff,
     )
-    record_round(state, check, batches=len(plan.batches))
+    record_round(state, check, batches=len(plan.batches), done=not check.missing)
     if not check.missing:
         print(json.dumps({"batches": [], "note": "nothing missing"}))
         return 0

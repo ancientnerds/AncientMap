@@ -82,6 +82,19 @@ def fake_mcode(tmp_path: Path, **env: str) -> tuple[Path, dict[str, str]]:
     return binary, full
 
 
+@pytest.fixture(autouse=True)
+def _state_dir_below_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the lane's state directory at this test's own directory.
+
+    `STATE_DIR` is the production `output/remediation/mcode_driver`, the directory the watchdog reads
+    to decide what a lane still owes, and the lane entry points write into it. Without this every
+    test that reaches `_main_wd3` or `_main_wc` leaves a state file behind in production output
+    (`test_a_test_run_keeps_the_lane_state_out_of_the_production_output` is what caught it). The
+    directory is created by the first write, so nothing has to exist here.
+    """
+    monkeypatch.setattr(D, "STATE_DIR", tmp_path / "mcode_driver_state")
+
+
 def argv_of(tmp_path: Path) -> list[dict[str, Any]]:
     log = tmp_path / "argv.jsonl"
     if not log.exists():
@@ -786,6 +799,18 @@ def test_a_lane_resumes_from_its_state_file(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------- one lane state machine
+def test_a_test_run_keeps_the_lane_state_out_of_the_production_output() -> None:
+    """The lane's state directory is production output, and the entry points write into it.
+
+    `STATE_DIR` is the real `output/remediation/mcode_driver` - the directory the watchdog reads to
+    decide whether a lane owes anything - so a test that reaches `_main_wd3` or `_main_wc` writes
+    there. Measured 2026-10-04 10:08: `wd3-run.json` and `wd3-run-r0.json` sat next to the real
+    lane states, 365 bytes each, rewritten every time this suite ran and by nothing but it. A test
+    that leaves state behind in production output is a test that can be mistaken for a lane.
+    """
+    assert D.STATE_DIR != D.REPO / "output" / "remediation" / "mcode_driver"
+
+
 def test_wd3_on_resume_answers_only_the_batches_the_validator_names_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -816,6 +841,7 @@ def test_wd3_on_resume_answers_only_the_batches_the_validator_names_missing(
             run=tmp_path / "run",
             handoff=str(tmp_path / "fields-wd3"),
             resume=True,
+            round=0,
             width=1,
             timeout=10,
             max_steps=2,
@@ -851,6 +877,7 @@ def test_wd3_stops_when_the_validator_refuses_the_handoff(
             run=tmp_path / "run",
             handoff=str(tmp_path / "fields-wd3"),
             resume=True,
+            round=0,
             width=1,
             timeout=10,
             max_steps=2,
@@ -894,6 +921,34 @@ def test_wd3_without_resume_exports_the_first_round(tmp_path: Path) -> None:
     assert no_model_call(plan.export_command) is True
 
 
+def test_the_first_round_is_asked_on_its_own_handoff_and_exported_by_its_own_name(
+    tmp_path: Path,
+) -> None:
+    plan = D.plan_wd3(
+        run=tmp_path / "run", handoff=tmp_path / "fields-wd3", resume=True, round_index=0
+    )
+
+    assert plan.round_name == "r0"
+    assert plan.validate_dir == Path(f"{tmp_path / 'fields-wd3'}-r0")
+    assert plan.export_command[2] == "export"
+
+
+def test_a_reask_round_gets_its_own_handoff_and_its_own_export(tmp_path: Path) -> None:
+    """The runbook's step 10 asks the fields without a counted answer again, in a round of its own
+    (`-r1`, then `-r2`). Measured 2026-10-04: round 0's import named 98 fields on 91 sites that only
+    a re-ask can settle, and the driver knew `-r0` only - so that round had no unattended lane and
+    would have had to be run by hand."""
+    plan = D.plan_wd3(
+        run=tmp_path / "run", handoff=tmp_path / "fields-wd3", resume=True, round_index=1
+    )
+
+    assert plan.round_name == "r1"
+    assert plan.validate_dir == Path(f"{tmp_path / 'fields-wd3'}-r1")
+    assert plan.export_command[2] == "export-reask"
+    assert plan.export_command[-1] == f"{tmp_path / 'fields-wd3'}-r1"
+    assert no_model_call(plan.export_command) is True
+
+
 #: The fields lane's own tool, in the repository the driver works in. A path constant does not
 #: notice that its file moved, and a constant is what both commands below are built from.
 FIELDS_TOOL = D.REPO / "scripts" / "remediation" / "fields" / "handoff.py"
@@ -934,12 +989,15 @@ def test_the_state_says_when_a_round_has_nothing_left_to_answer(tmp_path: Path) 
     the watchdog read that as a dead lane and started it again, every 20 minutes, forever."""
     path = tmp_path / "wd3-state.json"
     state = D.State(path, lane="wd3", run="r", handoff="h")
-    D.record_round(state, D.Validation(ok=True, missing=(), missing_count=0), batches=327)
+    D.record_round(
+        state, D.Validation(ok=True, missing=(), missing_count=0), batches=327, done=True
+    )
 
     reread = D.State(path, lane="wd3", run="r", handoff="h")
 
     assert reread.get("missing") == []
     assert reread.get("batches") == 327
+    assert reread.get("done") is True
 
 
 def test_the_state_names_the_batches_a_round_still_owes(tmp_path: Path) -> None:
@@ -948,9 +1006,30 @@ def test_the_state_names_the_batches_a_round_still_owes(tmp_path: Path) -> None:
         state,
         D.Validation(ok=True, missing=("wd3-r0-b0031", "wd3-r0-b0032"), missing_count=2),
         batches=327,
+        done=False,
     )
 
     assert state.get("missing") == ["wd3-r0-b0031", "wd3-r0-b0032"]
+    assert state.get("done") is False
+
+
+def test_a_run_answered_to_the_end_is_not_finished_until_it_is_built(tmp_path: Path) -> None:
+    """`missing == []` says the run has no more *questions*. Lane WC's driver then imports and
+    builds, and both are stages that can refuse: measured 2026-10-04, all three runs answered
+    13/22/99 batches, validated clean, and every import stopped on
+    "reading a PDF page needs pdftotext on PATH". A state that reported only `missing` would have
+    called a run whose import never happened finished."""
+    state = D.State(tmp_path / "wc.json", lane="wc", run="mass-2026-09-27-02", handoff="h")
+    clean = D.Validation(ok=True, missing=(), missing_count=0)
+
+    D.record_round(state, clean, batches=13, done=False)
+
+    assert state.get("missing") == []
+    assert state.get("done") is False, "answered is not built"
+
+    D.record_round(state, clean, batches=13, done=True)
+
+    assert state.get("done") is True
 
 
 # ---------------------------------------------------------------------------- the answer prompt
