@@ -102,6 +102,10 @@ export function SiteCard({ site, sourceName, sourceColor, onClick, actions, comp
           hideExactYear
         />
 
+        {/* The teaser card and nothing else (owner, 2026-10-04): a site without a card shows no
+            text rather than the site's Wikipedia description, so one grid does not carry two kinds
+            of description. The wiki text stays where it belongs - on the site's page and in the
+            site's popup. */}
         {!compact && site.cardDescription && (
           <FitText
             text={site.cardDescription}
@@ -109,9 +113,6 @@ export function SiteCard({ site, sourceName, sourceColor, onClick, actions, comp
             lines={4}
             className="site-card-desc"
           />
-        )}
-        {!compact && !site.cardDescription && site.description && (
-          <p className="site-card-desc site-card-desc--wiki">{site.description}</p>
         )}
 
         {!compact && (actions || sourceName) && (
