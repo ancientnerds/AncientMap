@@ -1,28 +1,36 @@
-# Goal: perfect Theo's research with the 24 paused topics
+# Goal: run the owner's 24 paused paper topics and perfect Theo's research on them
 
 Supersedes `theo-paper-loop-2026-10-04.md` as the active goal. That goal asked the
-**studio writer** to pass the **paper gate** in two check iterations, on a legacy
-draft. This one runs **Theo's research** itself, on the owner's own material, and
-changes the chain until the papers are right without a human repairing them.
+**studio writer** to pass the **paper gate** in two check iterations, on a single
+legacy draft. This one runs the owner's **24 queued paper topics** through Theo's
+research chain, takes every one of them all the way to a checked paper, and changes the
+chain after each run by the findings that run produced - until the chain produces
+right papers without a human repairing them.
+
+Every one of the 24 is a **paper topic** and every one of them is expected to end as a
+`paper bundle`. There is no subset and no exception: the goal is not to research them,
+it is to write and publish-quality-check all 24 papers, and to fix Theo's research
+chain wherever those 24 show it to be weak.
 
 ## Objective
 
 (copy into the goal, verbatim)
 
-> Nutze die 24 von mir am 05.07.2026 pausierten Research-Themen, um Theo's
-> Research-Kette zu perfektionieren. Jedes Thema läuft einmal durch die Kette, das
-> Ergebnis wird bis `paper bundle` durchgeprüft, und die Kette wird nach jedem Lauf an
-> genau den Befunden geändert, die dieser Lauf erzeugt hat - bis die Kette von selbst
-> Papers liefert, die alle Gates in höchstens zwei Check-Iterationen bestehen.
-> Vollspeed: `MiniMax-M3.1-Flash-Preview`, effort max, zwei Läufe parallel, über
-> `python -m pipeline.studio mcode` und `mcode exec`.
+> Nimm die 24 von mir am 05.07.2026 pausierten Paper-Themen und schreibe **alle 24
+> als Paper**, jedes bis `paper bundle` durchgeprüft, und optimiere dabei Theo's
+> Research-Kette. Jedes Thema läuft einmal durch die Kette, wird vollständig geprüft,
+> und die Kette wird nach jedem Lauf an genau den Befunden geändert, die dieser Lauf
+> erzeugt hat - bis die Kette von selbst perfekte Papers liefert, die alle Gates in
+> höchstens zwei Check-Iterationen bestehen. Vollspeed, alle 24, keine Auslassungen:
+> `MiniMax-M3.1-Flash-Preview`, effort max, zwei Läufe parallel, über
+> `python -m pipeline.studio mcode` und `mcode exec`. Bis 07.10.2026 wird keine
+> MiniMax-Quota abgerechnet, also volle Geschwindigkeit.
 >
-> DONE WHEN: mindestens 8 der 24 Themen als `paper bundle` mit grünem
-> `check_report.json` vorliegen, jeder in höchstens 2 Check-Iterationen, je mit einem
-> Ledger-Eintrag und je mit einer gemessenen Ketten-Änderung, die den nächsten Lauf
-> messbar billiger macht. Ein Thema, das eine dritte Iteration braucht, ist ein
-> **Ketten**-Fehler: die Kette wird geändert und das Thema neu gefahren, nicht das
-> Paper von Hand repariert.
+> DONE WHEN: alle 24 Themen als `paper bundle` mit grünem `check_report.json` vorliegen,
+> jeder in höchstens 2 Check-Iterationen, je mit einem Ledger-Eintrag und je mit einer
+> gemessenen Ketten-Änderung, die den nächsten Lauf messbar billiger macht. Ein Thema,
+> das eine dritte Iteration braucht, ist ein **Ketten**-Fehler: die Kette wird geändert
+> und das Thema neu gefahren, nicht das Paper von Hand repariert.
 >
 > NEVER: kein `paper publish`, kein Push auf main, kein Deploy, kein Schreibzugriff
 > auf `unified_sites`, kein Ändern eines veröffentlichten Papers. Das Fortsetzen der
@@ -42,16 +50,15 @@ changes the chain until the papers are right without a human repairing them.
 | never started | **23** (`total_tokens = 0`) |
 | `error_message` | none on any of the 24 |
 
-Same batch, for contrast: 27 `completed` (26 public with slugs) and 1 `failed`. The
-completed ones are the ancientnerds.com paper topics; the paused ones are two-sided,
-citation-heavy science briefings for a cosmological mystery novel - Zeno effect against
-esoteric doctrine, delayed-choice, Schumann resonances against brainwave entrainment,
-megalithic stone chambers as tuned resonators, Younger Dryas impact against airburst,
-and so on. They are the hardest kind of prompt: contested, two-sided, and dense with
-numbers.
+These are **24 paper topics the owner queued on 2026-07-05 and paused himself**, from
+the same batch that produced the 27 `completed` runs (26 of them public, with slugs).
+They have never been run to a paper. Each one is now expected to come out as a paper
+through the studio, like the completed ones did.
 
-They are the right instrument for this goal precisely because they are hard. A chain
-that survives these has no easy case left.
+Their questions are long, two-sided and dense with numbers - they ask for the contested
+reading and the mainstream one, side by side, and they name the specific physics
+involved. That is a property of the material, not a judgement about it: it is what
+makes them a good measurement of the chain, and the goal treats all 24 alike.
 
 ## Why the chain is the thing to fix, measured
 
