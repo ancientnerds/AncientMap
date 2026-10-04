@@ -12,6 +12,12 @@ leave the VPS:
 Prints a PublishOutcome as JSON (contract C8). Exit codes: 0 ok, 1 a gate
 failed, 2 unusable input, 3 the row changed between read and write (nothing
 committed), 4 committed but the re-read row differs (side effects not run).
+
+Sending the same bytes again is a no-op: the outcome answers
+`already_applied: true` with the journal id of the write that already
+committed, and nothing is written twice. So a retry after a timeout or an
+exit 4 can simply be re-run, and a driver that sends twice cannot append a
+second copy of a correction to the page.
 """
 
 from __future__ import annotations

@@ -574,6 +574,10 @@ class PublishOutcome:
     gates: dict[str, dict] = field(default_factory=dict)
     side_effects: dict[str, dict] = field(default_factory=dict)
     journal_id: int | None = None
+    #: True when this exact input (the bundle's sha256) is the paper's newest
+    #: journal row, so its effect is already the stored state and nothing was
+    #: written again (rule 7; see _already_applied).
+    already_applied: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -598,6 +602,22 @@ _JOURNAL_SQL = text("""
 _SIDE_EFFECTS_SQL = text(
     "UPDATE theo_paper_publications SET side_effects = CAST(:side_effects AS jsonb) WHERE id = :id"
 )
+#: The paper's newest journal row, and only when it carries the action and the
+#: exact input bytes of this call (rule 7: writes are idempotent per input
+#: hash). Newest-only is what makes the short circuit sound: a correction
+#: followed by another one and then re-sent still applies, because the paper is
+#: no longer in the first correction's result. Re-sending the same input
+#: unchanged -- a retry after a timeout, a re-run of a script, a driver that
+#: sends twice -- is a no-op instead of a second journal row and a second copy
+#: of its corrections_append entries on the page.
+_ALREADY_APPLIED_SQL = text("""
+    SELECT id, gates, side_effects, slug
+    FROM theo_paper_publications
+    WHERE id = (SELECT MAX(id) FROM theo_paper_publications
+                WHERE request_id = CAST(:request_id AS uuid))
+      AND action = :action
+      AND bundle_sha256 = :bundle_sha256
+""")
 _PUBLISH_SQL = text("""
     UPDATE research_requests
     SET status = 'completed',
@@ -644,6 +664,41 @@ def _journal(
         },
     ).scalar_one()
     return int(journal_id)
+
+
+def _already_applied(
+    session: Any, request_id: str, *, action: str, bundle_sha256: str, dry_run: bool
+) -> PublishOutcome | None:
+    """The outcome of an input that already committed as this paper's newest write.
+
+    No gate runs and nothing is written: the stored state *is* this input's
+    result. That run's recorded gates and side effects are reported instead, so
+    a caller can see why it wrote what it wrote -- and, after an exit 4, which
+    side effects never ran (they are NULL in that row). A caller that sent the
+    same input twice gets exit 0 and the journal id of the first write rather
+    than a second write (rule 7).
+    """
+    row = session.execute(
+        _ALREADY_APPLIED_SQL,
+        {"request_id": request_id, "action": action, "bundle_sha256": bundle_sha256},
+    ).fetchone()
+    if row is None:
+        return None
+    from pipeline.indexnow import page_url
+
+    return PublishOutcome(
+        ok=True,
+        action=action,
+        request_id=request_id,
+        dry_run=dry_run,
+        slug=row.slug,
+        url=page_url(f"/research/{row.slug}") if row.slug else None,
+        # jsonb columns, read back as the dict psycopg hands over.
+        gates=row.gates,
+        side_effects=row.side_effects or {},
+        journal_id=int(row.id),
+        already_applied=True,
+    )
 
 
 def _verify(
@@ -844,8 +899,17 @@ def publish_paper(
     `dossier` summary and, for a paper the founder route unpublished, its public
     record: the `corrections` log, the `videos` and every evidence id it had
     (the retention gate, spec 2.7). result.corrections itself must be [].
+
+    A bundle whose sha256 is the paper's newest journal row is not written
+    twice: the outcome carries that journal id and `already_applied`
+    (rule 7, _already_applied).
     """
     row = _read_row(session, request_id)
+    repeated = _already_applied(
+        session, request_id, action="publish", bundle_sha256=bundle_sha256, dry_run=dry_run
+    )
+    if repeated is not None:
+        return repeated
     previous = _stored_result(row)
     gates: dict[str, dict] = {
         "status": check_publish_status(row.status, row.is_public, dry_run=dry_run),
@@ -1100,10 +1164,20 @@ def correct_paper(
     same transaction. The CLI refuses `result` together with `report` or
     `evidence`, a `rewrite` that is not true, comes without `report` or with
     `evidence`, and a `dossier_request_id` without `result` (exit 2).
+
+    The corrections log is appended to, so sending one correction twice would
+    leave two identical entries on the page -- 42 of them did (rule 7). A
+    correction whose sha256 is the paper's newest journal row is therefore not
+    written twice: the outcome carries that journal id and `already_applied`.
     """
     from pipeline.indexnow import page_url
 
     row = _read_row(session, request_id)
+    repeated = _already_applied(
+        session, request_id, action="correct", bundle_sha256=bundle_sha256, dry_run=dry_run
+    )
+    if repeated is not None:
+        return repeated
     current = _stored_result(row)
     stored_corrections = current.get("corrections", [])
     republish = "result" in correction
@@ -1288,11 +1362,19 @@ def register_video(
     registration sends one, and only once its file exists in the paper's
     folder: the images gate runs check_images on it. Without a poster the
     images gate checks nothing and the page keeps its posterless player.
+
+    A registration whose sha256 is the paper's newest journal row is not
+    written twice (rule 7).
     """
     from pipeline.indexnow import page_url
     from pipeline.indexnow import submit as indexnow_submit
 
     row = _read_row(session, request_id)
+    repeated = _already_applied(
+        session, request_id, action="register_video", bundle_sha256=bundle_sha256, dry_run=dry_run
+    )
+    if repeated is not None:
+        return repeated
     gates: dict[str, dict] = {
         "status": check_live_status(row.status, row.is_public),
         "shape": check_video_shape(video),

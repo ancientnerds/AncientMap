@@ -195,10 +195,21 @@ class PublishSession(RecordingSession):
 
     `row` is the paper being written; `others` are further rows by id (the fresh
     Theo run whose dossier a full republish takes, C5 `dossier_request_id`).
+    `journal` is the theo_paper_publications rows the paper already has (rule 7's
+    idempotence lookup reads them); an INSERT appends one, as the database would,
+    so a second identical write in the same session sees the first.
     """
 
     def __init__(
-        self, row, *, others=(), slug_taken=False, update_rowcount=1, close_rowcount=1, tamper=False
+        self,
+        row,
+        *,
+        others=(),
+        slug_taken=False,
+        update_rowcount=1,
+        close_rowcount=1,
+        tamper=False,
+        journal=(),
     ):
         super().__init__()
         self.row = row
@@ -207,10 +218,16 @@ class PublishSession(RecordingSession):
         self.update_rowcount = update_rowcount
         self.close_rowcount = close_rowcount
         self.tamper = tamper
+        self.journal = list(journal)
         self.written = None
         self.closed = None
         self.slug_after = row.slug
         self.published_by_after = row.published_by
+
+    def _newest_journal(self, request_id: str):
+        """The row _ALREADY_APPLIED_SQL's MAX(id) subquery returns, as the database would."""
+        rows = [entry for entry in self.journal if entry.request_id == request_id]
+        return max(rows, key=lambda entry: entry.id) if rows else None
 
     def execute(self, stmt, params=None):
         super().execute(stmt, params)
@@ -224,13 +241,40 @@ class PublishSession(RecordingSession):
         if "SET status = 'cancelled'" in sql:
             self.closed = params
             return FakeResult([], rowcount=self.close_rowcount)
+        if "MAX(id)" in sql:
+            newest = self._newest_journal(params["request_id"])
+            if (
+                newest is not None
+                and newest.action == params["action"]
+                and newest.bundle_sha256 == params["bundle_sha256"]
+            ):
+                return FakeResult([newest])
+            return FakeResult([])
         if sql.lstrip().startswith("UPDATE research_requests"):
             self.written = params["result"]
             self.slug_after = params.get("slug", self.row.slug)
             self.published_by_after = params.get("author", self.row.published_by)
+            # The row carries the new payload, as the database would: a second
+            # write in the same session reads what the first one stored.
+            self.row.result_json = params["result"]
+            if "is_public = TRUE" in sql:
+                self.row.status, self.row.is_public = "completed", True
+                self.row.slug, self.row.published_by = self.slug_after, self.published_by_after
             return FakeResult([], rowcount=self.update_rowcount)
         if "INSERT INTO theo_paper_publications" in sql:
-            return FakeResult([(42,)])
+            journal_id = 42 + len(self.journal)
+            self.journal.append(
+                SimpleNamespace(
+                    id=journal_id,
+                    request_id=params["request_id"],
+                    action=params["action"],
+                    slug=params["slug"],
+                    bundle_sha256=params["bundle_sha256"],
+                    gates=json.loads(params["gates"]),
+                    side_effects=None,
+                )
+            )
+            return FakeResult([(journal_id,)])
         if "SELECT status, is_public, slug, published_by, result_json" in sql:
             written = json.dumps({"tampered": True}) if self.tamper else self.written
             return FakeResult(
@@ -245,3 +289,18 @@ class PublishSession(RecordingSession):
                 ]
             )
         return FakeResult([])
+
+
+def journal_entry(journal_id: int, *, action: str, bundle_sha256: str, request_id: str = REQ, **kw):
+    """A theo_paper_publications row as the idempotence lookup reads it."""
+    values = {
+        "id": journal_id,
+        "request_id": request_id,
+        "action": action,
+        "slug": "the-baalbek-trilithon",
+        "bundle_sha256": bundle_sha256,
+        "gates": {"status": {"passed": True, "issues": []}},
+        "side_effects": {"indexnow": {"ok": True}},
+    }
+    values.update(kw)
+    return SimpleNamespace(**values)
