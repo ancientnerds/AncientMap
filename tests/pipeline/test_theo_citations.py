@@ -637,6 +637,46 @@ def test_score_tier_by_domain(url, expected):
     assert score_tier_by_domain(url) == expected
 
 
+@pytest.mark.parametrize(
+    "url,expected,why",
+    [
+        # A .edu host is not an academic publication when the page is one
+        # person's own writing. All eight cases below are live references from
+        # the published corpus, measured 2026-10-04.
+        ("http://shell.cas.usf.edu/~wclark/ANKOS_zuse_fredkin_thesis.html", 3,
+         "378-word student course-notes file"),
+        ("https://casa.colorado.edu/~dduncan/pseudoscience/Nibiru.html", 3,
+         "a personal page asserting a pseudoscience"),
+        ("https://sites.santafe.edu/~johnson/articles.nostratic.html", 3,
+         "personal page on an institute subdomain"),
+        ("https://www.math.columbia.edu/~woit/wordpress/?p=83", 3,
+         "a professor's blog post, not a reviewed publication"),
+        ("https://preview.memphis.edu/wmst/student_projects/hist_4057/pdfs/miller.pdf", 3,
+         "coursework: a .pdf is not a publication just because it is a PDF"),
+        # Documents in a personal directory stay academic - the host is serving
+        # someone else's published work there.
+        ("https://www2.boulder.swri.edu/~bottke/Reprints/Morbidelli_2015_Asteroids_IV_493.pdf", 1,
+         "peer-reviewed reprint in a reprint directory"),
+        ("http://www2.ess.ucla.edu/~yin/05-Publications/papers/138-Yin-2012-Lithosphere.pdf", 1,
+         "peer-reviewed reprint in a publications directory"),
+        # A document outside a recognised distribution directory is kept, since
+        # the URL alone cannot say whether the PDF is reviewed.
+        ("https://www.pas.rochester.edu/~tim/introframe/EnumaElish.pdf", 1,
+         "known limit: a lecture frame in a ~user directory, URL cannot tell"),
+        # A .edu host without a personal path is untouched.
+        ("https://dept.ox.ac.uk/research", 1, "institutional page"),
+        ("https://sub.domain.edu/paper.pdf", 1, "institutional PDF"),
+    ],
+)
+def test_tier_one_host_does_not_assert_a_personal_page_is_academic(url, expected, why):
+    assert score_tier_by_domain(url) == expected, why
+
+
+def test_tier2_hosts_are_unaffected_by_the_personal_page_rule():
+    # Wikipedia is tier 2 by host and stays tier 2 even under a people path.
+    assert score_tier_by_domain("https://en.wikipedia.org/wiki/Rome") == 2
+
+
 def test_register_source_defaults_tier_from_domain():
     """Registering a cambridge.org URL sets tier=1 without explicit assignment."""
     registry = CitationRegistry()
