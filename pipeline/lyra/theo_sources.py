@@ -18,10 +18,12 @@ import importlib.util
 import logging
 import os
 import re
+import threading
 import time
 import urllib.parse
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -47,6 +49,31 @@ logger = logging.getLogger(__name__)
 _API_TIMEOUT = 10.0
 
 
+def _server_asked_wait(resp: httpx.Response) -> float | None:
+    """Seconds the server asked for before another attempt, or None.
+
+    `Retry-After` is seconds by the standard. CORE sends its own
+    `x-ratelimit-retry-after` as an ISO-8601 instant instead, which is more useful:
+    it is the moment the sliding window has room again, so a saturated client stops
+    guessing. Both are honoured; the exponential backoff is the last resort, for a
+    server that says nothing.
+    """
+    seconds = resp.headers.get("retry-after")
+    if seconds:
+        try:
+            return float(seconds)
+        except ValueError:
+            return None
+    instant = resp.headers.get("x-ratelimit-retry-after")
+    if instant:
+        try:
+            when = datetime.fromisoformat(instant.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return max(0.0, (when - datetime.now(when.tzinfo)).total_seconds())
+    return None
+
+
 def _retry_request(
     client: httpx.Client,
     method: str,
@@ -59,19 +86,55 @@ def _retry_request(
         resp = client.request(method, url, **kwargs)
         if resp.status_code == 429 or resp.status_code >= 500:
             if attempt < max_retries:
-                wait = 2**attempt
+                wait = _server_asked_wait(resp) or float(2**attempt)
                 logger.warning(
-                    "Retrying %s %s (status %d, attempt %d, wait %ds)",
+                    "Retrying %s %s (status %d, attempt %d, wait %ss)",
                     method,
                     url,
                     resp.status_code,
                     attempt + 1,
-                    wait,
+                    round(wait, 2),
                 )
                 time.sleep(wait)
                 continue
         return resp
     return resp  # unreachable but satisfies type checker
+
+
+class _PacedHost:
+    """A process-wide minimum spacing between calls to one rate-limited host.
+
+    CORE publishes its limit in the answer: `x-ratelimit-limit: 10` per second, with
+    `x-ratelimit-remaining` counting down and `x-ratelimit-retry-after` naming the
+    moment the window is free again. Measured 2026-10-04 21:16 UTC from inside the
+    worker's own container with the production key: 200, so the limit is real and
+    the credential is not the problem.
+
+    The crawl asks for hundreds of queries at once, and every one of them became a
+    429, three retries, then "CORE search failed" and a source missing from the
+    dossier - which is a thinner dossier and a slower run, twice over. Staying
+    under the published limit is cheaper than paying for the breach after the fact.
+
+    One instance per process, shared by every adapter that talks to the host, and
+    thread-safe: a research run dispatches searches through `asyncio.to_thread`, so
+    the calls are concurrent threads, not coroutines.
+    """
+
+    def __init__(self, per_second: float) -> None:
+        self._min_gap = 1.0 / per_second
+        self._lock = threading.Lock()
+        self._free_at = 0.0
+
+    def wait(self) -> None:
+        """Block until this call's slot is due. Sleeps outside the lock, so waiting
+        for the next slot never blocks the calls that are already due."""
+        with self._lock:
+            now = time.monotonic()
+            slot = max(now, self._free_at)
+            self._free_at = slot + self._min_gap
+        delay = slot - now
+        if delay > 0:
+            time.sleep(delay)
 
 
 # ---------------------------------------------------------------------------
@@ -607,6 +670,12 @@ class CrossrefAdapter(SourceAdapter):
             return []
 
 
+#: 8 of the published 10 per second. The crawl bursts - hundreds of queries are
+#: dispatched at once - and the last two slots of a limit are not worth a request
+#: that costs three retries and then a source missing from the dossier.
+_CORE_PACING = _PacedHost(8.0)
+
+
 class CoreAdapter(SourceAdapter):
     """CORE API — requires API key."""
 
@@ -630,6 +699,7 @@ class CoreAdapter(SourceAdapter):
 
     async def search(self, query: str, max_results: int = 10) -> list[RawSource]:
         def _do() -> list[RawSource]:
+            _CORE_PACING.wait()
             resp = _retry_request(
                 self._client,
                 "GET",

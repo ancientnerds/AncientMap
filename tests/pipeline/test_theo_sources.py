@@ -3,6 +3,8 @@
 All tests exercise pure logic — no real HTTP calls are made.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import httpx
 import pytest
 
@@ -14,8 +16,69 @@ from pipeline.lyra.theo_sources import (
     NaraAdapter,
     RawSource,
     _is_blocked,
+    _PacedHost,
     _reconstruct_abstract,
+    _server_asked_wait,
 )
+
+# ---------------------------------------------------------------------------
+# Rate limiting — the chain broke its own source API on 2026-10-04
+# ---------------------------------------------------------------------------
+
+
+def test_the_paced_host_spaces_its_calls():
+    """Every call after the first is held to its own slot, and the sleep happens
+    outside the lock so a call that is due is never held up by one that is not.
+
+    The clock is frozen here, so the gaps accumulate - a burst of three arrives at
+    once and is served at 0.125s intervals, which is the point. With a clock that
+    runs, each call waits only the remainder of the gap; the next test covers that.
+    """
+    slept: list[float] = []
+    clock = [100.0]
+    host = _PacedHost(per_second=8.0)  # 0.125s apart
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr("pipeline.lyra.theo_sources.time.monotonic", lambda: clock[0])
+    monkey.setattr("pipeline.lyra.theo_sources.time.sleep", slept.append)
+    try:
+        host.wait()  # first call is free
+        host.wait()  # slot 2
+        host.wait()  # slot 3
+    finally:
+        monkey.undo()
+    assert slept == pytest.approx([0.125, 0.25])
+
+
+def test_the_paced_host_lets_a_late_call_through():
+    """A call that arrives after the gap is due must not sleep - otherwise the limiter
+    would add a delay to every request even when the host is idle."""
+    slept: list[float] = []
+    clock = [100.0]
+    host = _PacedHost(per_second=8.0)
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr("pipeline.lyra.theo_sources.time.monotonic", lambda: clock[0])
+    monkey.setattr("pipeline.lyra.theo_sources.time.sleep", slept.append)
+    try:
+        host.wait()
+        clock[0] = 200.0
+        host.wait()
+    finally:
+        monkey.undo()
+    assert slept == []
+
+
+def test_retry_after_is_seconds_and_core_names_the_moment_instead():
+    """CORE sends `x-ratelimit-retry-after` as an ISO instant, not as a duration."""
+    assert _server_asked_wait(httpx.Response(429, headers={"retry-after": "7"})) == 7.0
+    soon = datetime.now(UTC).isoformat()
+    assert _server_asked_wait(httpx.Response(429, headers={"x-ratelimit-retry-after": soon})) == 0.0
+    later = (datetime.now(UTC) + timedelta(seconds=3)).isoformat()
+    wait = _server_asked_wait(httpx.Response(429, headers={"x-ratelimit-retry-after": later}))
+    assert 2.0 < wait <= 3.0
+    # a server that says nothing gets the exponential backoff, not a guess at zero
+    assert _server_asked_wait(httpx.Response(429)) is None
+    assert _server_asked_wait(httpx.Response(429, headers={"retry-after": "soon"})) is None
+
 
 # ---------------------------------------------------------------------------
 # Blocked domain tests
