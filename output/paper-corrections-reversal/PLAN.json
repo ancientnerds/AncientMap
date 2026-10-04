@@ -1,0 +1,1108 @@
+[
+ {
+  "request_id": "4e86ca59-a8ec-4f8b-a3c3-f0d0e398932c",
+  "slug": "ardre-viii-and-the-norse-mythological-tradition",
+  "title": "Ardre VIII and the Norse Mythological Tradition",
+  "before": 4,
+  "after": 2,
+  "removed": 2,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2,
+   3
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "7f001be545181311e8d71d9872a917f719da5823561c7805b66dddef6f32f26a",
+    "chars": 1310,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "99269065367a0c41d714ad182c6f95aef6fe6e314db890ff053749ff387057e3",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "99269065367a0c41d714ad182c6f95aef6fe6e314db890ff053749ff387057e3",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "99269065367a0c41d714ad182c6f95aef6fe6e314db890ff053749ff387057e3",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "796a2fed4ce1e98a7160b573d3b916335a9cf2de903ac34d9a3104374ab759ae"
+ },
+ {
+  "request_id": "a00c4ee2-0162-4bfe-997f-72f7ac3457fc",
+  "slug": "cargo-cults-and-uncontacted-peoples-in-comparative-perspective",
+  "title": "Cargo Cults and Uncontacted Peoples in Comparative Perspective",
+  "before": 3,
+  "after": 2,
+  "removed": 1,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "ea8c8d8b766d7397edf71ab1aeb7f398320d1f975797b533cd3300aac3c4f04d",
+    "chars": 1291,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "29241c117769af2f510464721c0b6877e16177d406f230022fd51ee672ee9b8a",
+    "chars": 1073,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "29241c117769af2f510464721c0b6877e16177d406f230022fd51ee672ee9b8a",
+    "chars": 1073,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "7692163f937dabc63222c8b71ebdae5ea500ead5b371c7eb1d2963d17074e24b"
+ },
+ {
+  "request_id": "1d0053d4-c28b-45db-a30c-20c6501d6147",
+  "slug": "cyclical-world-ages-in-comparative-mythology",
+  "title": "Cyclical World Ages in Comparative Mythology",
+  "before": 5,
+  "after": 4,
+  "removed": 1,
+  "keep_ordinals": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "remove_ordinals": [
+   4
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "b8e98f71e355d6c76932e3d7e65367cb05eb3465e0e1785f6931a065354677cc",
+    "chars": 581,
+    "first_line": "Unabhaengige Belegpruefung am Quelltext (3. Oktober 2026): 38 Aussagen und Belegstellen korrigiert, sechs nich",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "22e393f1b2221a405a0c3c52cccaf778e7ddead246ad766e50e12ab86b840aea",
+    "chars": 748,
+    "first_line": "Nachtrag zur Belegpruefung vom 3. Oktober 2026: Die sechs zuvor als unbelegbar gemeldeten Passagen sind nun ta",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "f20b16e9c1bed03125514f7a6dc0fb8cd2340c293edfdab445d3881fff76214c",
+    "chars": 1292,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "b17ef6d56c5bfda9eaeafe8c5154c77abcc035d6384d256af81893f86224a22e",
+    "chars": 1089,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 4,
+    "sha256": "b17ef6d56c5bfda9eaeafe8c5154c77abcc035d6384d256af81893f86224a22e",
+    "chars": 1089,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "665fdbe914f71549a8c737e866ae6c840a6cdf25a6dd05c4cd0af209db11e772"
+ },
+ {
+  "request_id": "1e7678ad-2e4b-4e6d-8353-701d38037c8e",
+  "slug": "flying-discs-in-european-religious-art",
+  "title": "Flying Discs in European Religious Art",
+  "before": 3,
+  "after": 2,
+  "removed": 1,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "0e126b2313c68cfe83d1c85307e08310fb8dd7222d4b329c11ea48781e78c9fb",
+    "chars": 1293,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "fd829cba629a4a333f20a53185d81f55fd67adef4f8736f0b57df661d48d88d8",
+    "chars": 1091,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "fd829cba629a4a333f20a53185d81f55fd67adef4f8736f0b57df661d48d88d8",
+    "chars": 1091,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "88c079ac58527b74487386c0df85a492689a775a27b260ca881a8625ef9e24a6"
+ },
+ {
+  "request_id": "a56973e7-19b2-4394-be43-24182ef4fb1a",
+  "slug": "geomagnetic-excursions-and-pole-shift-catastrophism",
+  "title": "Geomagnetic Excursions and Pole Shift Catastrophism",
+  "before": 5,
+  "after": 2,
+  "removed": 3,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2,
+   3,
+   4
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "dfc5c7ff6535e7c0d959ad6bc09d3278de720f1a88475492625c455a649a78c2",
+    "chars": 1309,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "dab9452d4629df3294bdb846c5bab2064e0fa04e91f5b8025bc08770fe73ffbd",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "dab9452d4629df3294bdb846c5bab2064e0fa04e91f5b8025bc08770fe73ffbd",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "dab9452d4629df3294bdb846c5bab2064e0fa04e91f5b8025bc08770fe73ffbd",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 4,
+    "sha256": "dab9452d4629df3294bdb846c5bab2064e0fa04e91f5b8025bc08770fe73ffbd",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "a0ecfec74e20d6b0225ec1018dd6366a4c8b2c05b27c7eaa58be05522f326266"
+ },
+ {
+  "request_id": "9b23ae9a-d0d1-4c06-b65d-4098e2cb5761",
+  "slug": "global-flood-myths-and-the-younger-dryas-catastrophe-debate",
+  "title": "Global Flood Myths and the Younger Dryas Catastrophe Debate",
+  "before": 5,
+  "after": 2,
+  "removed": 3,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2,
+   3,
+   4
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "55e6d4bb4324f07bf0a781c4a09f629bb26c368fcefc38c814edb30625cf0074",
+    "chars": 1295,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "656d4500080da7ed4d662654f0638bab04239370111aa0869d26e6b5272a4cb3",
+    "chars": 1093,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "656d4500080da7ed4d662654f0638bab04239370111aa0869d26e6b5272a4cb3",
+    "chars": 1093,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "656d4500080da7ed4d662654f0638bab04239370111aa0869d26e6b5272a4cb3",
+    "chars": 1093,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 4,
+    "sha256": "656d4500080da7ed4d662654f0638bab04239370111aa0869d26e6b5272a4cb3",
+    "chars": 1093,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "7a1809ae2ff1bb49bdbf2d20d43d95b935f58da8493367297e89af53f09da9df"
+ },
+ {
+  "request_id": "994e7d40-e35d-49af-8af6-cfaef9e1279b",
+  "slug": "hawaras-labyrinth-between-mainstream-and-fringe-archaeology",
+  "title": "Hawara's Labyrinth Between Mainstream and Fringe Archaeology",
+  "before": 5,
+  "after": 2,
+  "removed": 3,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2,
+   3,
+   4
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "989c68418fe6b245c83aa30e8ccb8f96f733dacb1148f6c4eaaf6963dd5baf84",
+    "chars": 1291,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "cc8eee92c4d32d9e10b4ca32054e834a783e526af953fdd2a661c401b6bcb617",
+    "chars": 1089,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "cc8eee92c4d32d9e10b4ca32054e834a783e526af953fdd2a661c401b6bcb617",
+    "chars": 1089,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "cc8eee92c4d32d9e10b4ca32054e834a783e526af953fdd2a661c401b6bcb617",
+    "chars": 1089,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 4,
+    "sha256": "cc8eee92c4d32d9e10b4ca32054e834a783e526af953fdd2a661c401b6bcb617",
+    "chars": 1089,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "3fc8d7b18706524abdbc9f5475cda7d74f16fa17d4d404ec144eb012936178ac"
+ },
+ {
+  "request_id": "4886d748-c37f-4c09-8fc6-f29eef5caacb",
+  "slug": "induced-emf-in-ancient-megalithic-stone-structures",
+  "title": "Induced EMF in Ancient Megalithic Stone Structures",
+  "before": 4,
+  "after": 2,
+  "removed": 2,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2,
+   3
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "4fe5b3ce96975f941ed1af332296edc163ae03e85f307ce49cf985fe8bcfcf15",
+    "chars": 1328,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "caea8e090d3fcba31cf9579ab71cf3542f5935abda7801afc2b91954bbe851af",
+    "chars": 1126,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "caea8e090d3fcba31cf9579ab71cf3542f5935abda7801afc2b91954bbe851af",
+    "chars": 1126,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "caea8e090d3fcba31cf9579ab71cf3542f5935abda7801afc2b91954bbe851af",
+    "chars": 1126,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "f610f8d3d6c5f185de6818b2da6bc11e7425d4b8c3c6c69230e31dec5bad7487"
+ },
+ {
+  "request_id": "b142912a-5ab1-4898-86b6-436fa9f6cdce",
+  "slug": "near-death-experience-phenomenology-and-reincarnation-traditions",
+  "title": "Near-Death Experience Phenomenology and Reincarnation Traditions",
+  "before": 4,
+  "after": 2,
+  "removed": 2,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2,
+   3
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "85ca038794c02fe67b6fbda7f27a457260fb0440f6044f9fd853082ec91d8155",
+    "chars": 1326,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "91159d3903e34b61d72709911b474e41f2b7351a673430fc60bf9571f5f69690",
+    "chars": 1123,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "91159d3903e34b61d72709911b474e41f2b7351a673430fc60bf9571f5f69690",
+    "chars": 1123,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "91159d3903e34b61d72709911b474e41f2b7351a673430fc60bf9571f5f69690",
+    "chars": 1123,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "3f61ac61634defe9dad363fba24537e4191a2fe03a9747153c6c7e10fa0097b8"
+ },
+ {
+  "request_id": "aae36b9c-85e0-4825-9492-77ef3c02eb21",
+  "slug": "panspermia-and-directed-panspermia-in-scientific-and-cultural-context",
+  "title": "Panspermia and Directed Panspermia in Scientific and Cultural Context",
+  "before": 5,
+  "after": 2,
+  "removed": 3,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2,
+   3,
+   4
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "ae25a2a21f2c683926e05150384f9fb4f6dc560c05bfccf4f5ca0caa24c74117",
+    "chars": 1288,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "d61427a98949d8566c197dc65ff5a5effc0ebd1daefb623f309fe663109f21a4",
+    "chars": 1085,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "d61427a98949d8566c197dc65ff5a5effc0ebd1daefb623f309fe663109f21a4",
+    "chars": 1085,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "d61427a98949d8566c197dc65ff5a5effc0ebd1daefb623f309fe663109f21a4",
+    "chars": 1085,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 4,
+    "sha256": "d61427a98949d8566c197dc65ff5a5effc0ebd1daefb623f309fe663109f21a4",
+    "chars": 1085,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "9d211deb0af190712d342f680b67bd04f87dbad4b7572f81a3e790affea639d7"
+ },
+ {
+  "request_id": "4486b29c-8773-4b49-ab74-f7832426e88e",
+  "slug": "pineal-gland-dmt-in-near-death-and-cross-cultural-mysticism",
+  "title": "Pineal Gland DMT in Near-Death and Cross-Cultural Mysticism",
+  "before": 7,
+  "after": 4,
+  "removed": 3,
+  "keep_ordinals": [
+   0,
+   1,
+   4,
+   5
+  ],
+  "remove_ordinals": [
+   2,
+   3,
+   6
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "eb0f1b2942a428269eb7e4bc68fae777b032c26dde538957d9a1077ef15ab0af",
+    "chars": 1310,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "904f78ba485ab530b56b2f0b356497737ee3c2150759daeebfe89ad21742a08e",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "904f78ba485ab530b56b2f0b356497737ee3c2150759daeebfe89ad21742a08e",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "904f78ba485ab530b56b2f0b356497737ee3c2150759daeebfe89ad21742a08e",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 4,
+    "sha256": "f40ba3c45e73c39c05fc2884d6ad84f12889d52c6b7713eeb05b61d9a8664f19",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 5,
+    "sha256": "979e1764c32708cf63be2384c1f38e3d8aa52b69402c8aa004465298b80c2a6b",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 6,
+    "sha256": "979e1764c32708cf63be2384c1f38e3d8aa52b69402c8aa004465298b80c2a6b",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "0d57183336cbe3754fd4c05b09f2ed9e62835050a16db73e6e06223460ec879f"
+ },
+ {
+  "request_id": "02515a7a-2097-409d-8288-1da5f2a72216",
+  "slug": "plasma-cosmology-and-the-electric-universe",
+  "title": "Plasma Cosmology and the Electric Universe",
+  "before": 3,
+  "after": 2,
+  "removed": 1,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "c98856926e12399c3d42a39cc761b4be6e168df56e57053c86a42bb4c91ba558",
+    "chars": 1310,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "1b2b97de2715c62b32a89c831c8b8c979b5f2664968164af3152d2819072c734",
+    "chars": 1107,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "1b2b97de2715c62b32a89c831c8b8c979b5f2664968164af3152d2819072c734",
+    "chars": 1107,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "9d55d6e7cba0c3c4a9674d85fd4e808aa68796e7ddbe74a1a3bb73fa62f463e3"
+ },
+ {
+  "request_id": "80c629b4-f5e3-43d4-8920-1b4b6eddaa1b",
+  "slug": "quantum-approaches-to-consciousness",
+  "title": "Quantum Approaches to Consciousness",
+  "before": 5,
+  "after": 3,
+  "removed": 2,
+  "keep_ordinals": [
+   0,
+   1,
+   4
+  ],
+  "remove_ordinals": [
+   2,
+   3
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "829e56923be35da7144ad21196013bb6fb3fb4a50d7c24eb41cadec7a038693f",
+    "chars": 1326,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "d73ef8782c5a7b5cc3e16a68910ca57c0d2a3b8e3c5611e241c8e57b969b9fa5",
+    "chars": 1124,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "d73ef8782c5a7b5cc3e16a68910ca57c0d2a3b8e3c5611e241c8e57b969b9fa5",
+    "chars": 1124,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "d73ef8782c5a7b5cc3e16a68910ca57c0d2a3b8e3c5611e241c8e57b969b9fa5",
+    "chars": 1124,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 4,
+    "sha256": "1c9cf823eeeac38a79cfa014c867bf407748f67d38ae5c8885870246faf982a7",
+    "chars": 1123,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   }
+  ],
+  "resulting_corrections_sha256": "28b9a9bafa5df5f16f7d8228a356ce34b317ca47d3d03ee35d9fc3b3a1a9b1bb"
+ },
+ {
+  "request_id": "ee3493e8-70cb-4619-941d-9fa2afcc6739",
+  "slug": "solar-superflares-cosmic-impacts-and-fire-and-flood-mythology",
+  "title": "Solar Superflares, Cosmic Impacts, and Fire-and-Flood Mythology",
+  "before": 4,
+  "after": 2,
+  "removed": 2,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2,
+   3
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "dc850582952c659fc036c63d9d4b6d3ca76a18bad500b076eb021a792cd26ccf",
+    "chars": 1293,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "58ecaa4f38a6e5db7b4f45375b3b007aef23d9e7ace5c644c383d9076bf8aa12",
+    "chars": 1090,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "58ecaa4f38a6e5db7b4f45375b3b007aef23d9e7ace5c644c383d9076bf8aa12",
+    "chars": 1090,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "58ecaa4f38a6e5db7b4f45375b3b007aef23d9e7ace5c644c383d9076bf8aa12",
+    "chars": 1090,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "b72923fbe0c19bb2ad0630efa94e887cee68f9b1286e8e8d2fc5352b9febe9ca"
+ },
+ {
+  "request_id": "099ad920-2e52-4180-915c-c040d316f3d7",
+  "slug": "stargate-project-and-sri-remote-viewing-evidence",
+  "title": "Stargate Project and SRI Remote Viewing Evidence",
+  "before": 4,
+  "after": 3,
+  "removed": 1,
+  "keep_ordinals": [
+   0,
+   1,
+   2
+  ],
+  "remove_ordinals": [
+   3
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "4097b58ca3de53987b1c9411be295dbb43ca6e35434e9a31b9593dcbbf4b5172",
+    "chars": 799,
+    "first_line": "Unabhaengige Belegpruefung am Quelltext (3. Oktober 2026): 33 Aussagen und Belegstellen korrigiert. Die Remote",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "3c93afbcd6950ebaf33ed55a5beb58fcdd654e329b6bc6eb1adb71046de67e95",
+    "chars": 1321,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "74ace6fa070037803e4a227a57e3b24bc9835af4a6aed55e173e67f9dee45e0e",
+    "chars": 1120,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "74ace6fa070037803e4a227a57e3b24bc9835af4a6aed55e173e67f9dee45e0e",
+    "chars": 1120,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "477b6f65d9994d9838c60ab4f1271c52876b438a57cec3420f97f1a1a6b0ea4d"
+ },
+ {
+  "request_id": "e82bd854-1faa-460c-93b7-bdf9e57e09bc",
+  "slug": "the-bosnian-pyramid-project",
+  "title": "The Bosnian Pyramid Project",
+  "before": 4,
+  "after": 3,
+  "removed": 1,
+  "keep_ordinals": [
+   0,
+   1,
+   2
+  ],
+  "remove_ordinals": [
+   3
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "e3e82f9ea1b267f608c2b4b9c0b3e88aec0da463ac0b37ca92f5d04811a3f4ef",
+    "chars": 1311,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "30601a0cdb5d23b9ea09bb766a77f8ad5bc60f9cdc9eecc856e226a18c436116",
+    "chars": 668,
+    "first_line": "One structural repair, no claim touched. The stored text of this paper ended mid-sentence: the original resear",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "23f642a07d317d6c96ae2d64884a3e5155dc19528dc824fef96df478743af424",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "23f642a07d317d6c96ae2d64884a3e5155dc19528dc824fef96df478743af424",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "05a248e9481e29b6aed84f7dc620a928ab89b2b2c51cc5480350fa8049c5b49f"
+ },
+ {
+  "request_id": "29436601-239b-4139-a5a0-c9e34e32928f",
+  "slug": "the-engineering-and-origins-of-the-baalbek-megaliths",
+  "title": "The Engineering and Origins of the Baalbek Megaliths",
+  "before": 6,
+  "after": 3,
+  "removed": 3,
+  "keep_ordinals": [
+   0,
+   1,
+   2
+  ],
+  "remove_ordinals": [
+   3,
+   4,
+   5
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "85403df5019b8de41ea60f4fdd5a9d38674080b6b874d59f6e25086f29bb8076",
+    "chars": 1309,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "4ef660fa83786695a432ce8c6b73ee1c554d926b207d96651ea1043a0f35c7a3",
+    "chars": 784,
+    "first_line": "Provenance record added; no sentence of the paper's text changed. The correction published earlier today rewro",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "15b2cbc8dc6e7911f5592981b4e19c80b725820422de55469a56052f1926bf0d",
+    "chars": 1107,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "15b2cbc8dc6e7911f5592981b4e19c80b725820422de55469a56052f1926bf0d",
+    "chars": 1107,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 4,
+    "sha256": "15b2cbc8dc6e7911f5592981b4e19c80b725820422de55469a56052f1926bf0d",
+    "chars": 1107,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 5,
+    "sha256": "15b2cbc8dc6e7911f5592981b4e19c80b725820422de55469a56052f1926bf0d",
+    "chars": 1107,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "114a1e2602d737f8676d788cea8b0fa7bd7e5f1523ece2d70ab4c9f0f93669ae"
+ },
+ {
+  "request_id": "a98ad8fe-31e0-4abe-868e-02559f6c2c58",
+  "slug": "the-lost-universal-tongue-in-myth-and-linguistics",
+  "title": "The Lost Universal Tongue in Myth and Linguistics",
+  "before": 4,
+  "after": 2,
+  "removed": 2,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2,
+   3
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "0427e0e2beae3df47ad752d4f3340c3cf43c896a1f096a7e4cd09bc23ee8dd3e",
+    "chars": 1318,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "d7826193014cbb72e457b3cd61befbac73cfa584fc2e23b746cc606a810cb03c",
+    "chars": 1116,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "d7826193014cbb72e457b3cd61befbac73cfa584fc2e23b746cc606a810cb03c",
+    "chars": 1116,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "d7826193014cbb72e457b3cd61befbac73cfa584fc2e23b746cc606a810cb03c",
+    "chars": 1116,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "c07b1d9c43004bd45b835063f471c1d49d0971342cb8e19aa094866f93421e3d"
+ },
+ {
+  "request_id": "ea0c513e-fe1b-47df-855e-71f473a8a1f1",
+  "slug": "the-simulation-hypothesis-arguments-critics-and-ancient-predecessors",
+  "title": "The Simulation Hypothesis: Arguments, Critics, and Ancient Predecessors",
+  "before": 3,
+  "after": 2,
+  "removed": 1,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "6e2694edd2852a5c35b373e274ceb7fcee2f52a4a5b83e19b9fb3f87acc29560",
+    "chars": 1312,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "3c8942ee8c28af7d39e182c4508370b494fd8c7084112c48db8d330f6825a207",
+    "chars": 1109,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "3c8942ee8c28af7d39e182c4508370b494fd8c7084112c48db8d330f6825a207",
+    "chars": 1109,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "911d44472ab41d057f40fd2416d126f7c05be3bc9643d33b507213299aff644e"
+ },
+ {
+  "request_id": "27ec3538-258c-4960-9493-2bf6c0dc1a3b",
+  "slug": "the-squatter-man-petroglyph-and-auroral-sky-mythology",
+  "title": "The Squatter Man Petroglyph and Auroral Sky Mythology",
+  "before": 3,
+  "after": 2,
+  "removed": 1,
+  "keep_ordinals": [
+   0,
+   1
+  ],
+  "remove_ordinals": [
+   2
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "f61c965f1c2a15a88afbd45f5dc398f1e7f70202cab56301c5d084fc07fb5d67",
+    "chars": 1311,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "36193b6aceb85b9109b264400917581ca76598b3ce76782f0259bdb859e48854",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "36193b6aceb85b9109b264400917581ca76598b3ce76782f0259bdb859e48854",
+    "chars": 1108,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "02cc6cee1ab09b302f470329de89f974ebd9bccc8eb3ea7b8b8835eec885015c"
+ },
+ {
+  "request_id": "95fa3798-1678-40a4-ae2e-58595de93918",
+  "slug": "ufos-uap-and-the-modern-disclosure-debate",
+  "title": "UFOs, UAP, and the Modern Disclosure Debate",
+  "before": 6,
+  "after": 4,
+  "removed": 2,
+  "keep_ordinals": [
+   0,
+   1,
+   2,
+   3
+  ],
+  "remove_ordinals": [
+   4,
+   5
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "b8ee77553104c1223c3b1e9951c5973dd5c91547c1a217e5200755f7f01575b2",
+    "chars": 57,
+    "first_line": "Roswell date correction",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "6a0a6d5f0913851597f332b5e85813364d50e0259fb97f873cbc789dfd8686cf",
+    "chars": 313,
+    "first_line": "Removed an uncited sentence: the weather-balloon explanation did not hold as the official position for nearly ",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "6ebb69833981b56aee7936be83810acf0734411de258ad08189b9b492bcf53b8",
+    "chars": 1325,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "001a1c1ed487d1b2b49c06cb0d99abbc655ef67c9ec4c828c7e9b39c2b42965c",
+    "chars": 1123,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 4,
+    "sha256": "001a1c1ed487d1b2b49c06cb0d99abbc655ef67c9ec4c828c7e9b39c2b42965c",
+    "chars": 1123,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 5,
+    "sha256": "001a1c1ed487d1b2b49c06cb0d99abbc655ef67c9ec4c828c7e9b39c2b42965c",
+    "chars": 1123,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "bd4606bc2f14027f0770deadebf8107e140a349cee01cff00ae8ca7e923031b9"
+ },
+ {
+  "request_id": "ef52c194-e8c8-42a9-b317-e64a273f7780",
+  "slug": "water-erosion-evidence-in-the-osiris-shaft",
+  "title": "Water Erosion Evidence in the Osiris Shaft",
+  "before": 5,
+  "after": 3,
+  "removed": 2,
+  "keep_ordinals": [
+   0,
+   2,
+   3
+  ],
+  "remove_ordinals": [
+   1,
+   4
+  ],
+  "entries": [
+   {
+    "ordinal": 0,
+    "sha256": "f3715cccddaee7f6d28561965f2a77e29273e1be4d820c6c5d1787420ed72b28",
+    "chars": 631,
+    "first_line": "Unabhaengige Belegpruefung am Quelltext (3. Oktober 2026): 14 Aussagen an ihre Quellen angepasst, 5 unbelegte ",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 1,
+    "sha256": "f3715cccddaee7f6d28561965f2a77e29273e1be4d820c6c5d1787420ed72b28",
+    "chars": 631,
+    "first_line": "Unabhaengige Belegpruefung am Quelltext (3. Oktober 2026): 14 Aussagen an ihre Quellen angepasst, 5 unbelegte ",
+    "action": "remove (byte-identical repeat)"
+   },
+   {
+    "ordinal": 2,
+    "sha256": "d6d5e6bccece7bd660ab97ea47ea9772abb82be33711519e628861d492375b19",
+    "chars": 1292,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 3,
+    "sha256": "9cbebfee2d0de92f752be9491a27e3dce3d4d5ee029568c46dbd00e0d2261a07",
+    "chars": 1090,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "keep (first occurrence)"
+   },
+   {
+    "ordinal": 4,
+    "sha256": "9cbebfee2d0de92f752be9491a27e3dce3d4d5ee029568c46dbd00e0d2261a07",
+    "chars": 1090,
+    "first_line": "Every claim in this paper was re-checked against the sources it cites, by an independent audit that fetched an",
+    "action": "remove (byte-identical repeat)"
+   }
+  ],
+  "resulting_corrections_sha256": "d369731265e98b57542a5e741e62b346b01c068410c85b486ef98e2a013f7927"
+ }
+]
