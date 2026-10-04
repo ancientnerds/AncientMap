@@ -65,6 +65,41 @@ CANMORE = {
     "MEDIEVAL": (1100, 1500),
 }
 
+class TestTheTolerantLookup:
+    """Four keys carry a trailing " period", so an agent that sends the bare word names an era the
+    table knows and was refused for it: "Hellenistic" (21 mentions), "Romano-British" (13)
+    and "Migration"."""
+
+    #: (the name an agent sends, the key the table holds) - one era, one name in each spelling
+    BARE = (
+        ("Hellenistic", "hellenistic period"),
+        ("Romano-British", "romano british period"),
+        ("Migration", "migration period"),
+        ("Mesoamerican Preclassic", "mesoamerican preclassic period"),
+    )
+
+    @pytest.mark.parametrize(("sent", "key"), BARE)
+    def test_the_bare_word_and_the_keyed_name_are_one_period(self, sent: str, key: str) -> None:
+        assert P.period_of(sent) == P.period_of(key)
+        assert P.start_year(sent) == P.period_of(key)[0]
+
+    def test_a_quote_may_state_the_period_the_bare_name_names(self) -> None:
+        # the one reader that decides a period answer: a bare name that resolves to years but is
+        # not in the table under that spelling would pass the year and fail the quote
+        assert P.states_period("a Hellenistic fortress on the hill", "Hellenistic")
+        assert P.states_period("a fortress of the 3rd century BC", "Hellenistic") is False
+
+    def test_only_the_word_period_is_read_both_ways(self) -> None:
+        # "age" and "era" are not dropped: "iron", "late" and "migration age" would be eras
+        for name in ("iron", "late", "migration age", "Klingon period"):
+            with pytest.raises(P.PeriodError, match="not one of"):
+                P.period_of(name)
+
+    def test_a_name_the_table_does_not_know_stays_refused_by_name(self) -> None:
+        with pytest.raises(P.PeriodError, match="Klingon period"):
+            P.period_of("Klingon period")
+        assert not P.states_period("a hillfort of the Iron Age", "Klingon period")
+
 
 class TestTheTable:
     @pytest.mark.parametrize("label", WIKIDATA_LABELS)

@@ -28,7 +28,9 @@ answer that rests on a period word says so in `period_name`.
 
 The key of an entry is the **folded** name (see `fold_name`): lower case, punctuation a space, one
 leading article gone. "Prehistory", "prehistory" and "the Prehistory" are one entry, and so are
-"post medieval" and "post-medieval" - two spellings may not drift into two ranges.
+"post medieval" and "post-medieval" - two spellings may not drift into two ranges. One word more is
+read, on the name as well as on the quote: a trailing " period" is added and removed, so a bare
+"Hellenistic" is the era the key `hellenistic period` holds and the era keeps one key (see `_key_of`).
 """
 
 from __future__ import annotations
@@ -177,7 +179,8 @@ _BEFORE = re.compile(r"\bb\.?\s?c\.?\s?(?:e\.?)?\b", re.IGNORECASE)
 
 #: Every name's own folded words, and the words a text may leave out: the name without a trailing
 #: "period". Dropping that word is safe ("Romano-British" names the age); dropping "age" or "era" is
-#: not ("iron", "late"), so those names are quoted whole.
+#: not ("iron", "late"), so those names are quoted whole. `_key_of` reads a *name* the same way for
+#: a lookup, so the word has one reading and one place in this module.
 _FORMS: dict[str, tuple[str, ...]] = {
     key: ((key, key.removesuffix(" period").strip()) if key.endswith(" period") else (key,))
     for key in PERIODS
@@ -194,19 +197,33 @@ def fold_name(name: str) -> str:
     return " ".join(words)
 
 
+def _key_of(name: str) -> str | None:
+    """The key `name` is read under, or None when this vocabulary does not know it. The folded name
+    as it is, the same name with " period" appended, the same name with a trailing " period" removed:
+    four keys carry that word ("romano british period", "migration period", "hellenistic period",
+    "mesoamerican preclassic period") and an agent that sends the bare word names an era the table
+    holds, so it is read rather than refused and the era keeps one key. " period" is the only word
+    read this way - "age" and "era" are not dropped, because "iron" and "late" are names of their
+    own - and a name no form reaches stays refused, by name."""
+    key = fold_name(name)
+    for form in (key, f"{key} period", key.removesuffix(" period").strip()):
+        if form in PERIODS:
+            return form
+    return None
+
+
 def period_of(name: str) -> tuple[int, int]:
     """The `(start_year, end_year)` of the period `name` names. `PeriodError` when the vocabulary
     does not know it - naming the name and how many it does know, so a wrong name can be read
     against the list instead of guessed."""
-    key = fold_name(name)
-    if not key:
+    if not fold_name(name):
         raise PeriodError(f"{name!r} is not a name of a period")
-    try:
-        return PERIODS[key]
-    except KeyError:
+    key = _key_of(name)
+    if key is None:
         raise PeriodError(
             f"{name!r} is not one of the {len(PERIODS)} names the period vocabulary knows"
-        ) from None
+        )
+    return PERIODS[key]
 
 
 def start_year(name: str) -> int:
@@ -217,11 +234,14 @@ def start_year(name: str) -> int:
 def states_period(quote: str, name: str) -> bool:
     """Whether `quote` names the period `name` as its own words - "an Iron Age hillfort" names the
     Iron Age, "an iron mine" does not. The year is the table's; the quote only has to carry the
-    name."""
+    name. The name is read through `_key_of` like `period_of` reads it, because the one answer this
+    gates reads both: a bare "Hellenistic" that resolves to years but is not a key of its own would
+    pass the year and then fail here."""
     text = fold_name(quote)
     if not text:
         return False
-    return any(f" {form} " in f" {text} " for form in _FORMS.get(fold_name(name), ()))
+    key = _key_of(name)
+    return key is not None and any(f" {form} " in f" {text} " for form in _FORMS[key])
 
 
 def century_range(text: str) -> tuple[int, int] | None:
