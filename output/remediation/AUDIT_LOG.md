@@ -13866,6 +13866,27 @@ the call, and a start that leaves nothing behind has to say so.
 **Not checked here:** whether the import of the completed round and the write of its answers are ready
 to run. Those are the next steps and the write is the owner's.
 
+### The import of the finished fields round: started, and the only stage left before the write
+
+Runbook `FIELDS_WD3.md` 4.3 step 9 is the step between "every question is answered" and "the write":
+`handoff.py import --run $W3` re-renders every prompt and refuses one that is not the prompt the
+manifest names, fetches every quoted page and every `source_url` value, checks each quote, forgets
+transient fetch failures to be asked again, and writes ATTEMPTS.jsonl (with the model), DECISIONS.jsonl,
+REASK.json and PAGES.jsonl.
+
+It had **never been run** for this round: the run directory held ROUNDS.jsonl and no ATTEMPTS, no
+DECISIONS, no `pages/`. Started 2026-10-04 02:00 on the main checkout with the main venv, as the runbook
+says. Nothing is written to production by this step, and no model is called - it is fetch and quote
+check, which is why it can run while the WC answering lane is using the quota.
+
+Measured after 3 minutes: **148 pages cached** in `wd3/pages/`, no result file yet - ATTEMPTS, DECISIONS,
+PAGES and REASK appear when the round ends. At that rate the import is a multi-hour job; the page
+directory is the resume point, so an interrupted import does not re-fetch what it already has.
+
+**Not checked here:** the import's own gate (`pilot-report` for the pilot, and the run's
+`status --run $W3`) and the re-ask rounds of step 10, which exist because a quote can fail on a page
+the checker could not read. Both need the import's result.
+
 **A wave is owed after the WD3 write.** Field values are card inputs (`INPUT_COLUMNS`), so the field
 fill moves the same derived cells; the next wave recomputes from the inputs as they are then, which is
 what the runbook's undo note describes. Measured 2026-10-04 00:18: the field round is at 71 of its 78
