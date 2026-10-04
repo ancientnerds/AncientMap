@@ -72,7 +72,7 @@ from mechanical.wrong_both_list import JOURNAL_IDS as WRONG_BOTH_JOURNAL_IDS
 from pipeline.lyra.site_key import site_key_sql
 from pipeline.normalizers.site_type import CANONICAL_TYPES
 from pipeline.utils.public_sites import RETIRED, SCOPE_STATUSES, is_retired, not_retired
-from pipeline.utils.text import PERIOD_BUCKETS
+from pipeline.utils.text import PERIOD_BUCKETS, UNDATED
 
 _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*\Z")
 #: The label is spliced into RAISE message literals: no quote (it would end the literal) and no `%`
@@ -593,21 +593,48 @@ UK_PARTS_READBACK = journal_readback(
 )
 
 
-def bucket_case(column: str = "period_start") -> str:
+def bucket_case(column: str = "period_start", *, yearless: str | None = UNDATED) -> str:
     """`categorize_period` as a SQL expression, built from the table it walks (upper bounds only).
 
     The same rule as the pipeline function and the frontend's `categorizePeriod`: the first bucket
-    is open below, the last open above, and no year means no bucket.
+    is open below, the last open above. A row with **no year** answers `yearless`, the owner's
+    residue label (`UNDATED`), because the column is `period_name` and the owner's rule of 2026-10-04
+    says a curated site that nothing dates carries a visible entry rather than nothing: the label is
+    the bucket of the year, or `Undated` when there is no year. This is the one place that rule is
+    stated, so every lane that checks a period label checks it - `categorize_period` itself still
+    answers `None`, because it answers "which bucket is this year in".
+
+    `yearless=None` renders `THEN NULL` instead. That is the `period-name` lane's own rendering of
+    2026-09-22, and it is passed only by `_PERIOD_NAME_AS_APPLIED`, which freezes the predicate a
+    delivered statement was applied under. Every lane that runs today leaves the default in place.
     """
     whens = " ".join(
         f"WHEN {column} < {hi} THEN {sql_literal(label)}" for label, _lo, hi in PERIOD_BUCKETS[:-1]
     )
-    return f"(CASE WHEN {column} IS NULL THEN NULL {whens} ELSE {sql_literal(PERIOD_BUCKETS[-1][0])} END)"
+    return (
+        f"(CASE WHEN {column} IS NULL THEN {sql_literal(yearless) if yearless else 'NULL'} "
+        f"{whens} ELSE {sql_literal(PERIOD_BUCKETS[-1][0])} END)"
+    )
 
 
 _PERIOD_MISMATCH = Residual(
-    "curated rows whose period_name is not the bucket of period_start",
+    "curated rows whose period_name is not the bucket of period_start, or not Undated where there is none",
     f"period_name IS DISTINCT FROM {bucket_case()}",
+)
+
+#: The `period-name` lane's residual **as it was applied on 2026-09-22**: a curated row's label was
+#: the bucket of its year, and a row with no year carried no label at all. Frozen deliberately. The
+#: applied statement, its undo, the rehearsal and the probes are pinned byte for byte
+#: (`test_mechanical.py`), and the evidence in the delivered plan quotes them - so this lane has to
+#: render what it rendered, whatever the rule became afterwards.
+#:
+#: The owner's residue rung (2026-10-04) makes a yearless row carry `Undated`. That is a *later*
+#: rule with its own lanes and its own stamps (`residue_period.py`), and backdating it here would
+#: turn the delivered artifacts into claims about a statement that was never executed. The live rule
+#: stays `_PERIOD_MISMATCH` above, and every lane that runs today uses that one.
+_PERIOD_NAME_AS_APPLIED = Residual(
+    "curated rows whose period_name is not the bucket of period_start",
+    f"period_name IS DISTINCT FROM {bucket_case(yearless=None)}",
 )
 
 #: Phase 6 item 2 (2026-09-22): `period_name` re-derived from `period_start` wherever the two
@@ -626,8 +653,8 @@ PERIOD_NAME = Lane(
     label="period_name derivation",
     plan_table="_period_name_plan",
     out_dir_name="mechanical_period_name",
-    post_commit_residual=_PERIOD_MISMATCH,
-    rehearsal_residual=_PERIOD_MISMATCH,
+    post_commit_residual=_PERIOD_NAME_AS_APPLIED,
+    rehearsal_residual=_PERIOD_NAME_AS_APPLIED,
     allowed_new_values=tuple(label for label, _lo, _hi in PERIOD_BUCKETS),
     premise_sql="u.period_start::text",
     lock_timeout=LOCK_TIMEOUT,
@@ -646,9 +673,9 @@ PERIOD_NAME_READBACK = journal_readback(
             "FROM unified_sites WHERE source_id = 'ancient_nerds' AND period_name = '> 1500 AD'",
         ),
         (
-            "curated rows with a period_name but no period_start",
+            "curated rows whose period_name is neither the bucket of a year nor Undated without one",
             "FROM unified_sites WHERE source_id = 'ancient_nerds' "
-            "AND period_start IS NULL AND period_name IS NOT NULL",
+            f"AND period_start IS NULL AND period_name IS DISTINCT FROM {sql_literal(UNDATED)}",
         ),
         (
             "journal rows for this run whose value is not the row's bucket",
@@ -658,6 +685,16 @@ PERIOD_NAME_READBACK = journal_readback(
         ),
     ],
 )
+
+#: The owner's residue rung (2026-10-04) as a lane family, one lane per scope and wave:
+#: `period-label-undated-<wave>` writes `Undated` on the rows that carry no year at all, and
+#: `period-label-bucket-<wave>` re-derives a label that contradicts the year it sits on. Two scopes
+#: and not one, because a crash between them must leave no half-written state and each stamp covers
+#: exactly one rule; `residue_period.py` builds them, `resolve_lane` finds them by name.
+PERIOD_LABEL_LANE = re.compile(r"^period-label-(undated|bucket)-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
+PERIOD_LABEL_TEST_ID = "period-label/residue"
+PERIOD_LABEL_PREMISE = "u.period_start::text"
+
 
 #: What a `site_type` value that is *not a site type* looks like, measured on the phase-3 writes of
 #: 2026-09-21/22: a lowercase snake_case marker a program emitted (`suspect_modern`, twice) and the
@@ -2055,12 +2092,13 @@ CARD_DISCLOSURE_LANE = re.compile(r"^card-disclosure-s(\d{3})\Z")
 
 def resolve_lane(name: str) -> Lane:
     """The lane called `name`: a registered one, a scope-review wave, a WD1 or WD3 fields step, a
-    lane-WB teaser step or disclosure-correction step, or a card_stats wave.
-    `KeyError` otherwise.
+    residue period-label step, a lane-WB teaser step or disclosure-correction step, or a card_stats
+    wave. `KeyError` otherwise.
 
     The card_stats lanes are built by `card_stats.card_stats_lane`, imported here and only here:
     their owned values are the card generator's own, and importing the API package is not a cost
-    every other lane should pay.
+    every other lane should pay. The residue period-label lanes come from `residue_period.lane_of`
+    for the same reason: the label is the owner's decision, written out in that one module.
     """
     if name in LANES:
         return LANES[name]
@@ -2070,6 +2108,11 @@ def resolve_lane(name: str) -> Lane:
     fields = FIELDS_LANE.match(name)
     if fields is not None:
         return fields_lane(fields.group(2), int(fields.group(3)), fields.group(1))
+    label_lane = PERIOD_LABEL_LANE.match(name)
+    if label_lane is not None:
+        from mechanical.residue_period import lane_of as residue_lane_of
+
+        return residue_lane_of(label_lane.group(1), label_lane.group(2))
     if TEASER_LANE.match(name):
         from mechanical.teaser import lane_of
 

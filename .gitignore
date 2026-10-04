@@ -362,6 +362,13 @@ output/remediation/mechanical_citations/export/
 !output/remediation/mechanical_dangling_markers/
 output/remediation/mechanical_dangling_markers/REHEARSAL.sql
 output/remediation/mechanical_dangling_markers/export/
+# The owner's residue rung (2026-10-04, `scripts/remediation/mechanical/residue_period.py`): a
+# period-label lane per scope and wave, versioned like every other lane (plan, refusals, statement,
+# undo, rollback rehearsal, read-only checks). Its directories carry the scope and then the wave
+# (`bucket/2026-10-04d`, `undated/2026-10-04e`), so the rehearsal is excluded by scope and wave
+# rather than by a bare `REHEARSAL.sql`.
+!output/remediation/mechanical_period_label/
+output/remediation/mechanical_period_label/*/*/REHEARSAL.sql
 # The WD1 structured-field lane (2026-09-26, `scripts/remediation/fields/`, runbook
 # docs/procedures/FIELDS_WD1.md): every write step is versioned like the cell lanes (plan, refusals,
 # statement, undo, rollback rehearsal, acceptance), with its wave, the seeds and the counts of both

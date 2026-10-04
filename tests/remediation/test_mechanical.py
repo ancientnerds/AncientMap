@@ -2014,6 +2014,16 @@ class TestTheLandedCheck:
 #: One deliberate change since: the read-only `interests` query is read as JSON and skips NULL
 #: (audit 2026-09-25 M9: a value holding `|` broke the split reader) - re-pinned 2026-09-25. No
 #: write, undo, rehearsal or probe digest moved.
+#:
+#: A second deliberate change, 2026-10-04, and it moves `period-name`'s **readback** digest alone,
+#: for the same reason: the owner's residue rung (`pipeline/utils/text.py:UNDATED`) gives a curated
+#: row with no year the label `Undated`, so the readback's residual - the live rule, which is what a
+#: verification query is for - now names that state instead of "no label at all". A read-only query
+#: that reports the live rule is worth re-pinning; a *statement* is not, because its bytes are the
+#: record of a write that ran. So the `period-name` lane's statement, undo, rehearsal and probes
+#: keep rendering the 2026-09-22 predicate (`_PERIOD_NAME_AS_APPLIED` in `lane.py`) and their
+#: digests are unmoved; the readback follows the rule and is re-pinned. No write, undo, rehearsal or
+#: probe digest moved on any lane.
 COLUMN_LANE_PINS: dict[str, dict[str, str]] = {
     # the B2-L lane (WE, 2026-09-26): pinned as emitted, before its rehearsal
     "country-b2": {
@@ -2043,7 +2053,9 @@ COLUMN_LANE_PINS: dict[str, dict[str, str]] = {
         "probe:guard4-not-owned": "576450cc7efc119e3ec209d29c7348a4912054c320f518d87cb00024470e28e4",
         "probe:guard5-premise": "134432bf6b4bb5632f92c553e91c8224c9e1e54cf43e20de11ecc343360cf57f",
         "probe_foreign": "f7607f7f94abb06af84de4f2662c7dddd9521075da8ed942fa6fe4c983bb30f4",
-        "readback": "f19c8b23a424bf1a195276aacfb4cf0b911de9989417486585ba3be68bc7ac1a",
+        # re-pinned 2026-10-04, the only digest that moved: the readback follows the owner's residue
+        # rung (`Undated` where there is no year), the statements keep the 2026-09-22 rule.
+        "readback": "7504e407ab6b04ed44eda7c54070bb12a7e2cc50b299e935fc7d3fa808eab1e4",
         "rehearsal": "d5e1aa3505cb40101a299df0f3ac09bbb97dec4d14da42885d07770221f7e742",
         "rollback": "b2642ebb9fff2081f8977987849e522ee9a072a92eb25d576a39330dff6a6066",
         "rollback_rehearsal": "57313bcc24e085d3cc32e933e43932ec72d940783000ffae0115cbe2a5313985",

@@ -264,6 +264,19 @@ PERIOD_BUCKETS: list[tuple[str, int, int]] = [
     ("1500+ AD", 1500, 999999),
 ]
 
+#: The owner's residue rung (2026-10-04, `output/remediation/period_wave/residue_rule.json`, written
+#: out here because `output/` is a gitignored snapshot): a curated site that no source, no Wikidata
+#: claim and no `site_type` dates carries this label and **no year** - a visible entry that says the
+#: period is not established, and never an invented one.
+#:
+#: It is a label, not a bucket. A bucket is a range of years and this is not one, so
+#: `categorize_period` does not answer it: a year maps to a bucket, and a row without a year is not
+#: a year (`categorize_period(None)` is `None`, the frontend's `categorizePeriod(null)` is
+#: `Unknown`). What carries it is the lane that owns the value
+#: (`scripts/remediation/mechanical/residue_period.py`), and the residual that every period lane
+#: checks: a curated row's label is the bucket of its year, or this when it has no year.
+UNDATED = "Undated"
+
 
 def categorize_period(year: int | None) -> str | None:
     """Convert a year to a canonical period bucket name.
