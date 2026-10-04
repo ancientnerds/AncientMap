@@ -44,6 +44,7 @@ from pipeline.normalizers.site_type import normalize_site_type
 from pipeline.utils.card_provenance import card_provenance_of
 from pipeline.utils.globe_payload import globe_projection
 from pipeline.utils.public_sites import RETIRED, is_retired, not_retired
+from pipeline.utils.text import normalize_name
 
 _heavy_limiter = RateLimiter(max_requests=50, window_seconds=60, namespace="heavy_sites")
 _viewport_limiter = RateLimiter(max_requests=60, window_seconds=60, namespace="viewport")
@@ -824,6 +825,29 @@ def country_matches(word_key: str, countries: list[str]) -> list[str]:
 _REGEX_SYNTAX = re.compile(r"([.^$*+?()\[\]{}|\\])")
 
 
+#: The column length the key is cut to (site_key_sql).
+_KEY_MAX = 500
+
+
+def _loader_key(s: str) -> str:
+    """The key the loaders wrote, as far as the column is concerned.
+
+    `unified_sites.name_normalized` has two producers: the canonical
+    `left(lower(unaccent(name)), 500)` (pipeline/lyra/site_key.py) and
+    pipeline.utils.text.normalize_name, which several loaders call with its
+    defaults. They fold differently outside Latin letters - NFKD decomposes the
+    Arabic hamza (أ -> ا) and the ae (ە -> ي) and drops tashkīl, Postgres's
+    unaccent leaves all of them alone, and normalize_name also drops a
+    bracketed suffix the column otherwise keeps.
+
+    So a query is built in both flavours: the canonical one, and this one. The
+    same two flavours are why site_matcher and the prospector miss those rows
+    for a canonical key (measured 2026-10-04 on production: 80,081 of 1,759,573
+    rows, 1,610 Arabic, 808 Chinese, 57,563 ASCII).
+    """
+    return normalize_name(s)[:_KEY_MAX]
+
+
 @router.get("/search")
 def search_sites(
     req: Request,
@@ -841,6 +865,14 @@ def search_sites(
     of migration 0024 for the substrings and the word starts. Measured
     2026-09-25 on production, before that migration: ~1.4 s for one word, a
     parallel seq scan of 1.76M rows.
+
+    A second key, the loaders' own normalize_name, joins it: the column has two
+    producers that fold differently, and a query in one flavour could not find
+    a site keyed in the other. See _loader_key. The consequence for scripts
+    without a Latin spelling: a query finds a site by the name the site itself
+    carries, in Arabic, Chinese, Greek, Cyrillic, Hebrew, Thai and Devanagari
+    alike - it does not, and cannot, find an Arabic or Chinese *transliteration*
+    of a site whose row only holds a Latin name.
 
     Ranks: 1 the name is the query, 2 the same without spaces, 3 the name
     contains the query, 4 the name holds every word, 5 a word named the
@@ -889,10 +921,36 @@ def search_sites(
         "p_space": f"%{keys.kl.replace(' ', '')}%",
         "limit": limit,
     }
+    # The column has two producers; _loader_key has the whole story. The
+    # loaders' flavour is computed here, not in the column: both are bound
+    # constants, so the trigram indexes answer either way.
+    loader_key = _loader_key(raw)
+    # The phrase arms: what a name may be read with. The word tier is appended
+    # to the WHERE arms below; the rank keeps these.
     arms = [
         f"us.name_normalized LIKE :p_name {_LIKE_ESCAPE}",
         f"replace(us.name_normalized, ' ', '') LIKE :p_space {_LIKE_ESCAPE}",
     ]
+    # A query the two flavours fold alike - every Latin query without a bracket
+    # - keeps the canonical arms alone, as before: a second copy of the same
+    # condition would only make the planner's job longer.
+    loader_rank = ""
+    if loader_key != keys.kl:
+        params["k_loader"] = loader_key
+        params["k_space_loader"] = loader_key.replace(" ", "")
+        params["p_name_loader"] = f"%{_escape_ilike(loader_key)}%"
+        params["p_space_loader"] = f"%{_escape_ilike(loader_key).replace(' ', '')}%"
+        arms += [
+            f"us.name_normalized LIKE :p_name_loader {_LIKE_ESCAPE}",
+            f"replace(us.name_normalized, ' ', '') LIKE :p_space_loader {_LIKE_ESCAPE}",
+        ]
+        # An exact name in the loaders' flavour is an exact name, so it takes
+        # the same two ranks as the canonical one.
+        loader_rank = (
+            "WHEN us.name_normalized = :k_loader THEN 1 "
+            "WHEN replace(us.name_normalized, ' ', '') = :k_space_loader THEN 2 "
+        )
+    phrase_arms = list(arms)
     all_in_name = "FALSE"
     if len(words) >= 2:
         countries = _search_countries(db)
@@ -902,7 +960,14 @@ def search_sites(
         for i in range(len(words)):
             word_key = getattr(keys, f"w{i}")
             params[f"r{i}"] = r"\m" + _REGEX_SYNTAX.sub(r"\\\1", word_key)
-            hit = f"us.name_normalized ~ :r{i}"
+            # The loader folded the word its own way too (Arabic hamza, the
+            # Turkish dotless i), so a word counts as found in either flavour.
+            loader_word = _loader_key(words[i])
+            if loader_word == word_key:
+                hit = f"us.name_normalized ~ :r{i}"
+            else:
+                params[f"rl{i}"] = r"\m" + _REGEX_SYNTAX.sub(r"\\\1", loader_word)
+                hit = f"(us.name_normalized ~ :r{i} OR us.name_normalized ~ :rl{i})"
             in_name.append(hit)
             named = country_matches(word_key, countries)
             if named:
@@ -926,7 +991,7 @@ def search_sites(
             CASE
                 WHEN us.name_normalized = :k THEN 1
                 WHEN replace(us.name_normalized, ' ', '') = :k_space THEN 2
-                WHEN {arms[0]} OR {arms[1]} THEN 3
+                {loader_rank}WHEN {" OR ".join(phrase_arms)} THEN 3
                 WHEN {all_in_name} THEN 4
                 ELSE 5
             END AS rank
