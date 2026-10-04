@@ -76,6 +76,9 @@ PERIODS: dict[str, tuple[int, int]] = {
     "upper palaeolithic": (-50000, -10000),
     # the same three under Wikidata's spelling, which the structured rung reads as it stands
     "paleolithic": (-3000000, -10000),
+    # The Lower Palaeolithic is the Oldowan through the Acheulean, c. 2.6 Ma to 300 ka: the band
+    # below the Middle Palaeolithic, not a half of the Palaeolithic as early/late are elsewhere.
+    "lower paleolithic": (-2600000, -300000),
     "middle paleolithic": (-300000, -40000),
     "upper paleolithic": (-50000, -10000),
     "pleistocene": (-2580000, -9700),
@@ -92,9 +95,14 @@ PERIODS: dict[str, tuple[int, int]] = {
     "copper age": (-4500, -3300),
     "chalcolithic": (-4500, -3300),
     "early bronze age": (-2500, -1600),
+    # Early and late split the Bronze Age in half, so a "middle" is the Central European phase
+    # rather than a slot between them: c. 2000-1550 BC.
+    "middle bronze age": (-2000, -1550),
     "late bronze age": (-1600, -800),
     "british bronze age": (-2500, -800),
     "early iron age": (-800, -100),
+    # the same: the British Middle Iron Age, c. 400 BC to AD 100
+    "middle iron age": (-400, 100),
     "late iron age": (-100, 400),
     "british iron age": (-800, 100),
     "hallstatt": (-800, -450),
@@ -124,6 +132,8 @@ PERIODS: dict[str, tuple[int, int]] = {
     "frankish": (481, 843),
     "merovingian": (481, 751),
     "carolingian": (751, 987),
+    # the Viking Age, 793 (Lindisfarne) to 1066 (Stamford Bridge)
+    "viking": (793, 1066),
     "post medieval": (1500, 1800),
     "georgian": (1714, 1837),
     "victorian": (1837, 1901),
