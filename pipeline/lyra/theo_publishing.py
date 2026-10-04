@@ -1309,6 +1309,251 @@ def correct_paper(
     return outcome
 
 
+# ---------------------------------------------------------------------------
+# Image patch (rule 8, report class H.2)
+# ---------------------------------------------------------------------------
+
+#: One embedded image as the page renders it: the `![alt](path)` line, then the
+#: caption line that carries the `[Source](url)` link (theo_image_captions.
+#: image_markdown). The alt text of a studio image is a `gallery:` marker, so
+#: the line is matched on the path alone.
+_IMAGE_LINE_RE = re.compile(r"^!\[(?P<alt>[^\]]*)\]\((?P<path>[^)]+)\)\s*$")
+_CAPTION_LINE_RE = re.compile(r"^(?P<caption>\*[^*].*\*)(?:\s*\[Source\]\((?P<url>[^)]+)\))?\s*$")
+_PATCH_ENTRY_KEYS = frozenset({"old_web_path", "markdown"})
+
+
+def _image_block(text: str, old_web_path: str) -> tuple[int, int]:
+    """The (start, end) character range of the image block `old_web_path` renders.
+
+    The block is the `![...](path)` line, an optional blank line and the caption
+    line with its `[Source]` link. Raises PublishInputError when the paper does
+    not carry exactly one such block in that shape -- a patch that guesses which
+    lines belong to a picture would rewrite the reader's page on a guess.
+    """
+    lines = text.split("\n")
+    hits = [i for i, line in enumerate(lines) if _IMAGE_LINE_RE.match(line) and
+            _IMAGE_LINE_RE.match(line)["path"] == old_web_path]
+    if len(hits) != 1:
+        raise PublishInputError(
+            f"{old_web_path}: the text renders {len(hits)} such images, not exactly one"
+        )
+    start = hits[0]
+    end = start + 1
+    while end < len(lines) and not lines[end].strip():
+        end += 1
+    if end < len(lines) and _CAPTION_LINE_RE.match(lines[end]):
+        end += 1
+    # Blank lines *after* the caption line stay outside the block: they are the
+    # paragraph break to the next paragraph, and the replacement markdown ends
+    # with exactly one newline (theo_image_captions.image_markdown).
+    return sum(len(line) + 1 for line in lines[:start]), sum(len(line) + 1 for line in lines[:end])
+
+
+def apply_image_replacements(text: str, replacements: list[dict]) -> str:
+    """Swap each replaced image's block for the markdown the patch carries.
+
+    Everything outside the named blocks is byte-identical: that is the promise
+    of a patch path (report class H.2 -- changing a picture must not mean
+    republishing a public paper's whole text).
+    """
+    for replacement in replacements:
+        start, end = _image_block(text, replacement["old_web_path"])
+        text = text[:start] + replacement["markdown"] + text[end:]
+    return text
+
+
+def check_patch_shape(patch: dict, *, published_on: date | None, today: date) -> dict:
+    """Value types of an image patch input (the CLI checked the keys, C9).
+
+    `probative_images` is the complete new list, not a delta: the page's image
+    set is replaced wholesale so a removed picture cannot survive in the list
+    while its block is gone from the text.
+    """
+    issues = check_writer(patch.get("writer"))
+    images = patch.get("probative_images")
+    if not isinstance(images, list) or not images:
+        issues.append("probative_images must be a non-empty list: it replaces the stored list")
+    else:
+        for index, entry in enumerate(images):
+            if not isinstance(entry, dict):
+                issues.append(f"probative_images[{index}] must be an object")
+            elif not (isinstance(entry.get("web_path"), str) and entry["web_path"].strip()):
+                issues.append(f"probative_images[{index}].web_path must be a non-empty string")
+    replacements = patch.get("replacements")
+    if not isinstance(replacements, list) or not replacements:
+        issues.append("replacements must be a non-empty list: a patch changes at least one image")
+    else:
+        for index, replacement in enumerate(replacements):
+            label = f"replacements[{index}]"
+            if not isinstance(replacement, dict):
+                issues.append(f"{label} must be an object")
+                continue
+            unknown = sorted(set(replacement) - _PATCH_ENTRY_KEYS)
+            if unknown:
+                issues.append(f"{label} has unknown keys {unknown}")
+            if not (
+                isinstance(replacement.get("old_web_path"), str)
+                and replacement["old_web_path"].strip()
+            ):
+                issues.append(f"{label}.old_web_path must be a non-empty string")
+            markdown = replacement.get("markdown")
+            if not (isinstance(markdown, str) and markdown.strip()):
+                issues.append(f"{label}.markdown must be a non-empty string")
+            elif not _IMAGE_LINE_RE.match(markdown.split("\n")[0]):
+                issues.append(f"{label}.markdown must start with an ![alt](path) line")
+    issues.extend(
+        _correction_entry_issues(
+            patch.get("corrections_append"), earliest=published_on, latest=today
+        )
+    )
+    return _gate(issues)
+
+
+def _patch_target_issues(
+    current: dict, patch: dict, texts: dict[str, str]
+) -> list[str]:
+    """Every replaced image exists in the stored list and in the text, once."""
+    issues: list[str] = []
+    stored_paths = [
+        entry.get("web_path") for entry in current.get("probative_images") or [] if isinstance(entry, dict)
+    ]
+    new_paths = {entry["web_path"] for entry in patch["probative_images"]}
+    for index, replacement in enumerate(patch["replacements"]):
+        old = replacement["old_web_path"]
+        if stored_paths.count(old) != 1:
+            issues.append(
+                f"replacements[{index}]: probative_images holds {stored_paths.count(old)} entries "
+                f"for {old}, not exactly one"
+            )
+        rendered = re.findall(r"/data/research-images/[^\s)\"'<>]+", replacement["markdown"])
+        if not rendered:
+            issues.append(f"replacements[{index}].markdown references no image path")
+        for path in rendered:
+            if path not in new_paths:
+                issues.append(
+                    f"replacements[{index}].markdown references {path}, which the new "
+                    "probative_images does not carry"
+                )
+        for name, body in texts.items():
+            if body is None:
+                continue
+            try:
+                _image_block(body, old)
+            except PublishInputError as exc:
+                issues.append(f"replacements[{index}] in {name}: {exc}")
+    return issues
+
+
+def patch_images(
+    session: Any,
+    request_id: str,
+    patch: dict,
+    *,
+    bundle_sha256: str,
+    dry_run: bool,
+    images_root: Path = RESEARCH_IMAGES_DIR,
+) -> PublishOutcome:
+    """Replace pictures in a public paper without republishing its text (rule 8).
+
+    `correct_paper` cannot write `probative_images` (the stored ones stay), so
+    before this a picture could only change through a full republish, which
+    replaces the whole stored text of a live paper -- the report's 7 dead
+    image URLs would have cost 7 republications. This action writes the image
+    list and swaps the replaced images' markdown blocks, byte for byte outside
+    those blocks, and nothing else of the paper: slug, published_at,
+    published_by, title, card, evidence, videos and quality_score stay.
+
+    The patch carries the finished markdown, not a caption to assemble: the
+    studio writes the block (theo_image_captions.image_markdown), the server
+    only moves it. The corrections log grows, because the page a reader sees
+    changed, and the write is journalled and idempotent per input hash like
+    every other (rule 7).
+    """
+    from pipeline.indexnow import page_url
+
+    row = _read_row(session, request_id)
+    repeated = _already_applied(
+        session, request_id, action="patch_images", bundle_sha256=bundle_sha256, dry_run=dry_run
+    )
+    if repeated is not None:
+        return repeated
+    current = _stored_result(row)
+    stored_corrections = current.get("corrections", [])
+    gates: dict[str, dict] = {
+        "status": check_live_status(row.status, row.is_public),
+        "shape": check_patch_shape(
+            patch,
+            published_on=row.published_at.date() if row.published_at is not None else None,
+            today=datetime.now(UTC).date(),
+        ),
+    }
+    stored: dict = {}
+    patched: dict[str, str] = {}
+    if gates["status"]["passed"] and gates["shape"]["passed"]:
+        texts = {"report": current.get("report")}
+        if "published_report" in current:
+            texts["published_report"] = current["published_report"]
+        gates["targets"] = _gate(_patch_target_issues(current, patch, texts))
+        if gates["targets"]["passed"]:
+            for name, text in texts.items():
+                patched[name] = apply_image_replacements(text, patch["replacements"])
+            served = patched.get("published_report", patched["report"])
+            gates["artifact"], audit = check_artifact(served)
+            gates["images"] = check_images(
+                request_id,
+                served,
+                patch["probative_images"],
+                current.get("hero_image"),
+                images_root=images_root,
+            )
+            stored = {
+                **current,
+                **patched,
+                "probative_images": patch["probative_images"],
+                "corrections": [*stored_corrections, *patch["corrections_append"]],
+                "audit": audit,
+            }
+            gates["page"] = check_page(request_id, stored)
+    outcome = PublishOutcome(
+        ok=all(gate["passed"] for gate in gates.values()),
+        action="patch_images",
+        request_id=request_id,
+        dry_run=dry_run,
+        slug=row.slug,
+        url=page_url(f"/research/{row.slug}") if row.slug else None,
+        gates=gates,
+    )
+    if dry_run or not outcome.ok:
+        return outcome
+
+    _update_result(session, row, stored)
+    outcome.journal_id = _journal(
+        session,
+        request_id=request_id,
+        action="patch_images",
+        slug=row.slug,
+        writer=patch["writer"],
+        bundle_sha256=bundle_sha256,
+        gates=gates,
+    )
+    session.commit()
+    _verify(session, request_id, result=stored, slug=row.slug)
+    # The page's text changed, so IndexNow and Qdrant see the new one; a picture
+    # is not a rewrite, so the owner is not notified (as for a small fix).
+    outcome.side_effects = run_publish_side_effects(
+        request_id=request_id,
+        slug=row.slug,
+        title=stored["title"],
+        paper_text=stored.get("published_report") or stored["report"],
+        author_username=row.published_by,
+        author_discord_id=row.user_id,
+        published_at=row.published_at.replace(tzinfo=UTC).isoformat(),
+        reindex=True,
+    )
+    _record_side_effects(session, outcome.journal_id, outcome.side_effects)
+    return outcome
+
+
 def check_video_shape(video: dict) -> dict:
     """Value types of a video registration (the CLI checked the keys, contract C6).
 

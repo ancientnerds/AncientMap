@@ -130,6 +130,20 @@ def cmd_correct(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_patch_images(args: argparse.Namespace) -> int:
+    """Replace pictures in a published paper (rule 8), uploading the new files first."""
+    ws = workspace(args.request_id)
+    patch = publish.patch_images_payload(ws, Path(args.patch))
+    record = publish.patch_images(
+        ws, patch, Path(args.images) if args.images else ws.images_dir / "selected", dry_run=args.dry_run
+    )
+    if args.dry_run:
+        _print({"dry_run": "passed", "uploaded": record["uploaded"]})
+        return 0
+    _print(record["apply"])
+    return 0
+
+
 def cmd_register_video(args: argparse.Namespace) -> int:
     stamps = read_json(Path(args.timestamps), "a JSON object {ev-NN: seconds}")
     payload = publish.prepare_video(
@@ -196,6 +210,22 @@ def register(sub: argparse._SubParsersAction) -> None:
         help="with --report-file: a full rewrite (the page shows the writer's disclosure line)",
     )
     p.set_defaults(func=cmd_correct)
+    p = ps.add_parser(
+        "patch-images",
+        help="replace pictures in a published paper without republishing its text (rule 8)",
+    )
+    p.add_argument("request_id")
+    p.add_argument(
+        "--patch", required=True, help="the image patch JSON (the theo_publish envelope)"
+    )
+    p.add_argument(
+        "--images",
+        help="folder holding the patch's new pictures, default <workspace>/images/selected",
+    )
+    p.add_argument(
+        "--dry-run", action="store_true", help="run the gates without uploading or applying"
+    )
+    p.set_defaults(func=cmd_patch_images)
     p = ps.add_parser("register-video", help="attach a YouTube video to the published paper")
     p.add_argument("request_id")
     p.add_argument("--youtube-id", required=True)

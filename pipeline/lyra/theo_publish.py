@@ -8,6 +8,9 @@ leave the VPS:
     ... --correct [--dry-run] < correction.json   (a log entry, a text correction, or a full republish via
                                                      `result`, optionally from a fresh run's `dossier_request_id`)
     ... --register-video [--dry-run] < video.json   (an optional `poster`: our own thumbnail, uploaded first)
+    ... --patch-images [--dry-run] < patch.json   (replace pictures in a public paper; the stored
+                                                     text outside the replaced image blocks is
+                                                     byte-identical, the corrections log grows)
 
 Prints a PublishOutcome as JSON (contract C8). Exit codes: 0 ok, 1 a gate
 failed, 2 unusable input, 3 the row changed between read and write (nothing
@@ -35,6 +38,7 @@ from pipeline.lyra.theo_publishing import (
     PublishInputError,
     PublishVerificationError,
     correct_paper,
+    patch_images,
     publish_paper,
     register_video,
 )
@@ -66,6 +70,19 @@ ENVELOPES: dict[str, tuple[frozenset[str], frozenset[str]]] = {
         ),
         frozenset({"poster"}),
     ),
+    "patch_images": (
+        frozenset(
+            {
+                "version",
+                "request_id",
+                "writer",
+                "probative_images",
+                "replacements",
+                "corrections_append",
+            }
+        ),
+        frozenset(),
+    ),
 }
 
 
@@ -80,16 +97,27 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
         "--correct", action="store_true", help="apply a correction to a public paper"
     )
     modes.add_argument("--register-video", action="store_true", help="append a YouTube video")
+    modes.add_argument(
+        "--patch-images",
+        action="store_true",
+        help="replace pictures in a public paper without republishing its text",
+    )
     parser.add_argument("--dry-run", action="store_true", help="run every gate, write nothing")
     args = parser.parse_args(argv)
     if args.apply and args.dry_run:
         parser.error("--apply and --dry-run exclude each other")
-    if not (args.apply or args.correct or args.register_video or args.dry_run):
-        parser.error("choose one of --dry-run, --apply, --correct, --register-video")
+    if not (
+        args.apply or args.correct or args.register_video or args.patch_images or args.dry_run
+    ):
+        parser.error(
+            "choose one of --dry-run, --apply, --correct, --register-video, --patch-images"
+        )
     if args.correct:
         args.action = "correct"
     elif args.register_video:
         args.action = "register_video"
+    elif args.patch_images:
+        args.action = "patch_images"
     else:
         args.action = "publish"
     return args
@@ -189,6 +217,10 @@ def main(
                 )
             elif args.action == "correct":
                 outcome = correct_paper(
+                    session, request_id, payload, bundle_sha256=bundle_sha256, dry_run=args.dry_run
+                )
+            elif args.action == "patch_images":
+                outcome = patch_images(
                     session, request_id, payload, bundle_sha256=bundle_sha256, dry_run=args.dry_run
                 )
             else:
