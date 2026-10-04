@@ -241,9 +241,11 @@ Each run with a wave label of its own (a date and at most one letter), pilot fir
     nothing re-runs it after a field write. **After WD3's last wave a card_stats wave runs** with an unused label C:
     `$PY scripts/remediation/mechanical/card_stats.py --wave C --export`, then `--write` (refuses unless its
     counterfactual reproduces every stored cell), then `$A --lane card-stats-C` with `--emit`, `--verify`,
-    `--rehearse`, `--probe-guards`, `--rehearse-rollback`, `--apply`, `--verify`; completion: `card_stats.py --wave
-    Cb --export --write` prints `"cells": 0`. A WD3 write to `site_type` or `period_name` voids every earlier
-    card_stats wave's ROLLBACK.sql (its guard 5 premise).
+    `--rehearse`, `--probe-guards`, `--apply`, `--verify`, `--rehearse-rollback` (the order of 4.5: the
+    reversal rehearses from the state the write left behind, so it refuses every planned row when it runs
+    before the apply - measured 2026-10-04, card-stats 2026-10-04, 15,463 rows); completion: `card_stats.py
+    --wave Cb --export --write` prints `"cells": 0`. A WD3 write to `site_type` or `period_name` voids every
+    earlier card_stats wave's ROLLBACK.sql (its guard 5 premise).
 15. **site_external_ids** - `source_urls` of HANDOFF.json is the input of the next journalled wave with L5's tool
     (`output/remediation/tools/qid_repair.py`): an id is written only when its item or article is this very site.
     WD3 writes no `site_external_ids` row.
