@@ -46,9 +46,16 @@ def _windows(text: str) -> list[str]:
 
     Only single sentences: the archived texts put a newline between them, so a
     two-sentence window joined here would not be a substring of the file, and the
-    import's verbatim check compares against the file as written.
+    import's verbatim check compares against the file as written. A window that
+    still holds a newline is the article header ("Scientific reports 2023",
+    "## Introduction") that the sentence splitter glued to the first sentence of
+    the body; it is a real substring, but it is not a quote of anything.
     """
-    return [sentence for sentence in split_sentences(text) if sentence.strip()]
+    return [
+        sentence
+        for sentence in split_sentences(text)
+        if sentence.strip() and "\n" not in sentence
+    ]
 
 
 #: A window that is mostly article metadata is not a quote of anything; these windows are
@@ -117,7 +124,22 @@ def main(argv: list[str] | None = None) -> int:
         description="Answer the claim-check tasks of a paper from located source quotes.",
     )
     parser.add_argument("request_id")
+    parser.add_argument(
+        "--coherence-note-file",
+        help=(
+            "text file holding this paper's coherence answer. The reasoning is the model's "
+            "own for every paper, so it is read from a file rather than left in the script: "
+            "the values hardcoded here described the first paper of the batch and would be a "
+            "false claim about any other."
+        ),
+    )
     args = parser.parse_args(argv)
+    coherence_note = ""
+    if args.coherence_note_file:
+        coherence_note = Path(args.coherence_note_file).read_text(encoding="utf-8").strip()
+        if not coherence_note:
+            print("error: --coherence-note-file is empty", file=sys.stderr)
+            return 2
     try:
         ws = workspace(config.check_request_id(args.request_id))
         dossier = load_dossier(ws)
@@ -144,20 +166,19 @@ def main(argv: list[str] | None = None) -> int:
     for task in tasks:
         kind = task["kind"]
         if kind == "coherence":
+            if not coherence_note:
+                print(
+                    "error: pass --coherence-note-file; the coherence answer is this paper's",
+                    file=sys.stderr,
+                )
+                return 2
             answers.append(
                 {
                     "task_id": task["task_id"],
                     "verdict": "supported",
                     "quote": "",
                     "quote_source_id": "",
-                    "explanation": (
-                        "No two measurements in the paper contradict each other for the same "
-                        "quantity: the onset is 12,870 +/- 30 B.P. in the cave record and 12.8 ka "
-                        "in the Florida sequences, the interval is given as 12,900 to 11,700 "
-                        "years BP by the overview and as nominally 12,900 to 11,600 y in the "
-                        "timing paper, and the source ranges are stated as differing where they "
-                        "differ."
-                    ),
+                    "explanation": coherence_note,
                     "fix_suggestion": "",
                     "answered_by": ANSWERED_BY,
                     "skeptic_by": "",
