@@ -109,6 +109,16 @@ class PaperWorkspace:
         return self.root / "check_report.json"
 
     @property
+    def checks(self) -> Path:
+        """One line per run of the gates: the paper's own iteration count.
+
+        The count lives beside the report it describes rather than in the driver's
+        state, so a state file that is lost, shared or written by a foreign id cannot
+        reset a paper's history.
+        """
+        return self.root / "checks.jsonl"
+
+    @property
     def bundle(self) -> Path:
         return self.root / "bundle.json"
 

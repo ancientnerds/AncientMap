@@ -78,7 +78,7 @@ def _dossiers() -> list[dict[str, Any]]:
 def _state() -> dict[str, Any]:
     path = state_path()
     if not path.exists():
-        return {"pulled": [], "checked": {}, "bundled": []}
+        return {"pulled": [], "bundled": []}
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -209,13 +209,11 @@ def _count_issues(ws: PaperWorkspace) -> dict[str, Any]:
 def cmd_check(args: argparse.Namespace) -> int:
     ws = _ws(args.request_id)
     result = gates.run_check(ws)
-    state = _state()
-    state.setdefault("checked", {})[ws.request_id] = state["checked"].get(ws.request_id, 0) + 1
-    _save(state)
+    iteration = _record_check(ws, result)
     _print(
         {
             "request_id": ws.request_id,
-            "iteration": state["checked"][ws.request_id],
+            "iteration": iteration,
             "passed": result["passed"],
             "failing": [g["name"] for g in result["gates"] if not g["passed"]],
             "findings": _count_issues(ws),
@@ -268,11 +266,13 @@ def cmd_finish(args: argparse.Namespace) -> int:
     ws = _ws(args.request_id)
     built = numbering.number(ws)
     result = gates.run_check(ws)
+    iteration = _record_check(ws, result)
     if not result["passed"]:
         _print(
             {
                 "request_id": ws.request_id,
                 "numbered": {"sources": len(built.sources), "images": len(built.probative_images)},
+                "iteration": iteration,
                 "passed": False,
                 "failing": [g["name"] for g in result["gates"] if not g["passed"]],
                 "findings": _count_issues(ws),
@@ -287,6 +287,7 @@ def cmd_finish(args: argparse.Namespace) -> int:
     _print(
         {
             "request_id": ws.request_id,
+            "iteration": iteration,
             "bundle": str(ws.bundle),
             "images": bundle.upload_names(written["result"]),
             "published": False,
@@ -298,8 +299,29 @@ def cmd_finish(args: argparse.Namespace) -> int:
 # --- ledger -------------------------------------------------------------------
 
 
-def _iterations(state: dict[str, Any], rid: str) -> int:
-    return int((state.get("checked") or {}).get(rid) or 0)
+def _iterations(ws: PaperWorkspace) -> int:
+    """How many times the gates have run on this workspace, from its own history."""
+    if not ws.checks.exists():
+        return 0
+    return sum(1 for line in ws.checks.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
+def _record_check(ws: PaperWorkspace, result: dict[str, Any]) -> int:
+    """Append this gate run to the workspace's history and return the iteration number.
+
+    Every path that runs the gates records here, `check` and `finish` alike, because
+    the campaign's own limit is "at most two check iterations per paper": a counter
+    that only one of them writes would answer a question nobody asked.
+    """
+    entry = {
+        "at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "passed": bool(result.get("passed")),
+        "failing": [g["name"] for g in result.get("gates", []) if not g["passed"]],
+    }
+    ws.root.mkdir(parents=True, exist_ok=True)
+    with ws.checks.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    return _iterations(ws)
 
 
 #: The table's own header, written once. The columns are the DONE WHEN criteria, so a
@@ -329,7 +351,7 @@ def _failing_gates(report: dict[str, Any]) -> str:
     return ", ".join(names) if names else "-"
 
 
-def _ledger_row(index: int, rid: str, state: dict[str, Any]) -> str | None:
+def _ledger_row(index: int, rid: str) -> str | None:
     """The markdown row for one workspace, or None if it has no report yet.
 
     Re-running the command replaces a row instead of appending a second one: the
@@ -342,7 +364,7 @@ def _ledger_row(index: int, rid: str, state: dict[str, Any]) -> str | None:
     support = _count_issues(ws).get("support", {})
     passed = "yes" if report.get("passed") else "no"
     return (
-        f"| {index} | `{rid}` | {_topic_of(ws)} | {_iterations(state, rid)} | {passed} | "
+        f"| {index} | `{rid}` | {_topic_of(ws)} | {_iterations(ws)} | {passed} | "
         f"{_failing_gates(report)} | {support.get('total', 0)} | "
         f"{'yes' if ws.bundle.exists() else 'no'} | |"
     )
@@ -362,6 +384,36 @@ def _topic_of(ws: PaperWorkspace) -> str:
     return "(no dossier)"
 
 
+def _row_number(line: str) -> int | None:
+    """The `#` a row claims, or None for the header, the separator and anything else."""
+    parts = [cell.strip() for cell in line.split("|")]
+    if len(parts) < 2 or not parts[1].isdigit():
+        return None
+    return int(parts[1])
+
+
+def _refuse_colliding_numbers(rows: list[str], foreign: list[str]) -> None:
+    """Stop before a table can carry the same campaign number twice.
+
+    A kept foreign row whose `#` is a number the rewritten rows also use is not a
+    foreign campaign: it is a topic of this campaign that the driver's list lost, and
+    writing the table anyway would renumber the campaign and hide the loss. The state
+    file is the only thing that knows the order, so its loss is repaired by hand, not
+    by a guess here.
+    """
+    claimed = {_row_number(row) for row in rows} - {None}
+    for line in foreign:
+        number = _row_number(line)
+        if number in claimed:
+            kept = [cell.strip() for cell in line.split("|")][2]
+            raise StudioError(
+                f"ledger number {number} is claimed twice: the rewritten rows and the "
+                f"kept row {kept}. That kept row is a topic of this campaign that "
+                f"{state_path().name} no longer lists; add its request id back to "
+                f"`pulled` in the campaign order, then re-run."
+            )
+
+
 def cmd_ledger(_args: argparse.Namespace) -> int:
     """Rewrite the run table from the reports on disk, one row per workspace.
 
@@ -377,7 +429,7 @@ def cmd_ledger(_args: argparse.Namespace) -> int:
     # In registration order, not sorted: the `#` column is the campaign's running
     # number, so a paper finished second is paper 2 however its uuid sorts.
     for rid in dict.fromkeys(state.get("pulled") or []):
-        row = _ledger_row(len(rows) + 1, rid, state)
+        row = _ledger_row(len(rows) + 1, rid)
         if row is not None:
             rows.append(row)
     owned = [f"`{rid}`" for rid in state.get("pulled") or []]
@@ -389,6 +441,7 @@ def cmd_ledger(_args: argparse.Namespace) -> int:
         and not line.startswith("| # |")
         and not any(r in line for r in owned)
     ]
+    _refuse_colliding_numbers(rows, foreign)
     LEDGER.parent.mkdir(parents=True, exist_ok=True)
     LEDGER.write_text(
         LEDGER_HEADER + "\n".join(rows + foreign) + ("\n" if rows or foreign else ""),
@@ -422,7 +475,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="paper24", description=__doc__)
     register(parser.add_subparsers(dest="command", required=True))
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except StudioError as exc:
+        # The house rule for every studio CLI: the message names the cause, exit 2.
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":
