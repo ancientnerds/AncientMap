@@ -92,6 +92,14 @@ WRITABLE: dict[tuple[str, str], str] = {
     ("wiki_images", "commons_page_url"): "text",
     ("wiki_images", "original_url"): "text",
     ("wiki_images", "filename"): "text",
+    #: The three columns that say *which* file a row holds. Without them a lane that points a row
+    #: at another file (the import-hero lane's 1600 px fetch, a repoint) leaves the row naming the
+    #: previous file's caption and its **licence** - a wrong attribution shown to every visitor,
+    #: not a cosmetic leftover. They join `author`/`author_url` above, which the downloader has
+    #: always delivered with them.
+    ("wiki_images", "title"): "text",
+    ("wiki_images", "license"): "text",
+    ("wiki_images", "license_url"): "text",
     ("wiki_images", "width"): "integer",
     ("wiki_images", "height"): "integer",
     ("wiki_images", "file_size_bytes"): "integer",

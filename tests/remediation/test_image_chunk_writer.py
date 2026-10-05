@@ -362,7 +362,10 @@ def test_may_empty_names_only_sites_the_plan_touches():
 @pytest.mark.parametrize(
     ("change", "says"),
     [
-        (_change("101", column="license"), "not a column the image lanes write"),
+        # `license` was this case until 2026-10-05: the owner decided the caption and licence of
+        # a row must be writable together with the file they describe, so the example is now
+        # `is_lead`, which no lane writes (the served image is chosen on is_hero alone).
+        (_change("101", column="is_lead"), "not a column the image lanes write"),
         (_change("101", column="is_excluded", old="false", new="yes"), "'true' or 'false'"),
         (_change("101", column="width", old="800", new="1600px"), "not an integer"),
         (_change("101", old="Jane", new="Jane"), "a no-op is not a change"),
@@ -389,6 +392,29 @@ def test_a_change_the_writer_cannot_express_exactly_is_refused(change, says):
 def test_a_lane_whose_identity_could_break_the_sql_is_refused():
     with pytest.raises(C.ChunkError, match="confidence"):
         C.Lane("img-x", "T09/x", "img-x-1", "certain", "img x")
+
+
+@pytest.mark.parametrize("column", ["title", "license", "license_url", "author", "author_url"])
+def test_the_columns_that_name_a_rows_file_are_writable_text(column):
+    """A lane that points a row at another file must be able to write the caption and the
+    licence that go with it: without them the row would show the previous file's attribution
+    (import-hero's 1600 px fetch, measured 2026-10-05 on 807 sites)."""
+    assert C.WRITABLE[("wiki_images", column)] == "text"
+    C.validate_change(_change("101", column=column, old="old", new="new"))
+
+
+def test_the_writable_list_stays_within_the_image_columns_it_names():
+    """`WRITABLE` is the lane's whole vocabulary, so it may not drift into a table the guards
+    know nothing about."""
+    assert {(t, c) for t, c in C.WRITABLE} >= {
+        ("wiki_images", "is_hero"),
+        ("wiki_images", "filename"),
+        ("wiki_images", "license"),
+        ("wiki_images", "title"),
+    }
+    for table, column in C.WRITABLE:
+        assert table in C.KEY_TYPES
+        assert column != C.KEY_COLUMN
     with pytest.raises(C.ChunkError, match="RAISE message"):
         C.Lane("img-x", "T09/x", "img-x-1", "weak", "img 'x'")
     with pytest.raises(C.ChunkError, match="lower-case token"):

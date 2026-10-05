@@ -62,6 +62,8 @@ RULE_DEMOTE = "ih2"
 RULE_UNHIDE = "ih3"
 #: The thumbnail follows the served image - the hero repair's T1 target.
 RULE_THUMBNAIL = "ih4"
+#: The fetched 1600 px file's own columns: pixels, caption, author and licence together.
+RULE_FETCH = "ih5"
 
 #: The local derivative a hero must reach, from `census.tests.t09_commons_dimensions`.
 HERO_MIN_WIDTH = 1600
@@ -304,6 +306,24 @@ def plan(
     return changes, refusals
 
 
+#: The columns a fetched file brings with it. Every one of them names the *same* file: the
+#: caption and the licence as much as the pixels, so a row can never end up crediting one file
+#: while showing another. The downloader delivers all of them in one `imageinfo` answer.
+FETCH_COLUMNS = (
+    "filename",
+    "original_url",
+    "commons_page_url",
+    "title",
+    "author",
+    "author_url",
+    "license",
+    "license_url",
+    "width",
+    "height",
+    "file_size_bytes",
+)
+
+
 def _fetch_changes(
     state: ST.State,
     sid: str,
@@ -312,20 +332,37 @@ def _fetch_changes(
     *,
     reason: str,
 ) -> list[Change]:
-    """The row's file columns, pointed at the 1600 px derivative a fetch step wrote."""
+    """The row's file columns, pointed at the 1600 px derivative a fetch step wrote.
+
+    A manifest that names no attribution for the file is refused: a fetch that wrote the pixels
+    but not the licence would leave the row crediting the previous file.
+    """
+    missing = [column for column in FETCH_COLUMNS if fetch.get(column) is None]
+    if missing:
+        raise ImportHeroError(
+            f"the fetch of {sid} names no {', '.join(missing)}: a row must credit the file it "
+            "shows (owner decision 2026-10-05, and the writer's licence columns), so the fetch "
+            "step has to deliver the downloader's whole imageinfo answer."
+        )
     row_id = str(int(row["id"]))
+    absent = [column for column in FETCH_COLUMNS if column not in row]
+    if absent:
+        raise ImportHeroError(
+            f"the read of {sid} names no {', '.join(absent)} for row {row_id}: the plan cannot state "
+            "the old value a fetch would overwrite, and skipping the column silently would leave "
+            "the row crediting the previous file. The lane's read must carry every column the "
+            "fetch writes."
+        )
     evidence = _evidence(state, sid, row, str(fetch.get("image") or ""))
     out = []
-    for column, value in (
-        ("filename", fetch["filename"]),
-        ("original_url", fetch["original_url"]),
-        ("commons_page_url", fetch["commons_page_url"]),
-        ("width", str(int(fetch["width"]))),
-        ("height", str(int(fetch["height"]))),
-        ("file_size_bytes", str(int(fetch["file_size_bytes"]))),
-    ):
+    for column in FETCH_COLUMNS:
+        value = fetch[column]
+        if column in ("width", "height", "file_size_bytes"):
+            value = str(int(value))
+        else:
+            value = str(value)
         old = row.get(column)
-        if old is None or str(old) == str(value):
+        if old is None or str(old) == value:
             continue
         out.append(
             Change(
@@ -334,8 +371,8 @@ def _fetch_changes(
                 row_key=row_id,
                 site_id=sid,
                 old_value=str(old),
-                new_value=str(value),
-                rule="ih5",
+                new_value=value,
+                rule=RULE_FETCH,
                 reason=reason,
                 evidence=evidence,
             )

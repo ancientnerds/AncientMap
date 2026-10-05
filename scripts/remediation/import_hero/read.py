@@ -39,12 +39,16 @@ SITES_SQL = """SELECT row_to_json(t) FROM (
    ORDER BY u.id
 ) t;"""
 
-#: Every image row of those sites, with the local derivative's own size: `width`/`height` decide
-#: whether the flag may move (the hero must be at least 1600x900) and are the old values of the
-#: fetch's file columns.
+#: Every image row of those sites, with the local derivative's own size and the attribution the
+#: page shows. `width`/`height` decide whether the flag may move (the hero must be at least
+#: 1600x900) and are the old values of the fetch's file columns; `title`, `author`, `author_url`,
+#: `license` and `license_url` are what a fetch overwrites, so the read has to hold their old
+#: values too - the writer's guard 3 refuses a write whose planned old value differs from
+#: production, and a lane may not skip a column it cannot state.
 IMAGES_SQL = """SELECT row_to_json(t) FROM (
   SELECT w.id, w.site_id::text AS site_id, w.filename, w.title, w.commons_page_url,
-         w.original_url, w.is_hero, w.is_lead, w.is_excluded, w.sort_order, w.file_size_bytes,
+         w.original_url, w.author, w.author_url, w.license, w.license_url,
+         w.is_hero, w.is_lead, w.is_excluded, w.sort_order, w.file_size_bytes,
          w.width, w.height
     FROM wiki_images w JOIN unified_sites u ON u.id = w.site_id
    WHERE u.source_id = 'ancient_nerds' AND u.scope_status IS DISTINCT FROM 'retired'

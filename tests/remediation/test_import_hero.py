@@ -46,6 +46,10 @@ def _row(image_id: int, site_id: str, file: str, **flags: Any) -> dict[str, Any]
         "title": under.rsplit(".", 1)[0],
         "original_url": file,
         "commons_page_url": f"https://commons.wikimedia.org/wiki/File%3A{under}",
+        "author": flags.get("author", "Jane Doe"),
+        "author_url": "https://commons.wikimedia.org/wiki/User:Jane",
+        "license": flags.get("license", "CC BY-SA 4.0"),
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
         "is_hero": bool(flags.get("hero")),
         "is_lead": bool(flags.get("lead", flags.get("hero"))),
         "is_excluded": bool(flags.get("excluded")),
@@ -93,7 +97,17 @@ def _read() -> dict[str, Any]:
             _row(4, HIDDEN, HIDDEN_FILE, excluded=True),
             _row(5, BARE, RUIN, hero=True, lead=True, width=800, height=551),
             _row(6, SMALL, RUIN, hero=True, lead=True),
-            _row(7, SMALL, AGORA, order=1, width=800, height=551),
+            _row(
+                7,
+                SMALL,
+                AGORA,
+                order=1,
+                width=800,
+                height=551,
+                title="Old caption",
+                author="Old Author",
+                license="CC BY 2.0",
+            ),
         ],
         "retired": [],
     }
@@ -228,6 +242,11 @@ class TestThePlan:
                 "filename": filename,
                 "original_url": AGORA,
                 "commons_page_url": "https://commons.wikimedia.org/wiki/File%3AThasos_agora.jpg",
+                "title": "Thasos agora",
+                "author": "Jane Doe",
+                "author_url": "https://commons.wikimedia.org/wiki/User:Jane",
+                "license": "CC BY-SA 4.0",
+                "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
                 "width": 1600,
                 "height": 1067,
                 "file_size_bytes": 812_345,
@@ -331,6 +350,26 @@ class TestThePlan:
         )
         assert got[("filename", "7")].new_value == "Thasos_agora_1600.webp"
         assert got[("width", "7")].new_value == "1600"
+
+    def test_a_fetch_without_a_licence_is_refused_rather_than_writing_pixels_only(
+        self, tmp_path: Path
+    ) -> None:
+        """A row that shows the new file while crediting the old one is a wrong attribution on
+        the page, so an incomplete manifest is refused by name instead of half-applied."""
+        manifest = self._fetch(BARE, "Thasos_ruin_1600.webp")
+        del manifest[BARE]["license_url"]
+        with pytest.raises(IH.ImportHeroError, match="license_url"):
+            self._plan(tmp_path, fetched=manifest)
+
+    def test_the_fetch_writes_the_caption_and_the_licence_with_the_pixels(
+        self, tmp_path: Path
+    ) -> None:
+        changes, _ = self._plan(tmp_path, fetched=self._fetch(SMALL, "Thasos_agora_1600.webp"))
+        got = {(c.column, c.row_key): c for c in changes if c.site_id == SMALL}
+        assert got[("license", "7")].new_value == "CC BY-SA 4.0"
+        assert got[("title", "7")].new_value == "Thasos agora"
+        assert got[("author", "7")].new_value == "Jane Doe"
+        assert got[("license", "7")].rule == IH.RULE_FETCH
 
     def test_an_import_link_that_names_no_commons_file_is_refused(self, tmp_path: Path) -> None:
         state = _state(tmp_path)
