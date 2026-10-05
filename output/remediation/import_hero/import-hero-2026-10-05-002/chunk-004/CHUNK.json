@@ -1,0 +1,17 @@
+{
+ "chunk": 4,
+ "confidence": "authoritative",
+ "label": "import-hero import-hero-2026-10-05-002 - the import image takes the hero flag",
+ "lane": "import-hero",
+ "may_empty": [
+  "334be182-1b41-46d3-9fa1-d9ee8204db80",
+  "383a0107-b7f7-4431-a752-590f3c0a42b2",
+  "3ac6b54d-0231-4b56-b1c0-b7fac461bbcc"
+ ],
+ "rollback_stamp": "import-hero-2026-10-05-002-004-rollback",
+ "rows": 298,
+ "run_stamp": "import-hero-2026-10-05-002-004",
+ "sites": 100,
+ "stamp": "import-hero-2026-10-05-002",
+ "test_id": "import-hero/owner-2026-10-05"
+}

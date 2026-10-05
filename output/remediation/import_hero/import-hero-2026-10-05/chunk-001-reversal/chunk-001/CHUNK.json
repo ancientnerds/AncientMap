@@ -1,0 +1,17 @@
+{
+ "chunk": 1,
+ "confidence": "authoritative",
+ "label": "import-hero chunk 001 reversal - the three sites the rehearsal named",
+ "lane": "import-hero",
+ "may_empty": [
+  "0784c790-17b2-4450-9a95-286c1d9ef2f2",
+  "08d4b7da-794b-4cb7-9ed8-714758ae4487",
+  "0bee1a58-01b6-4d51-8caa-782b194828fb"
+ ],
+ "rollback_stamp": "import-hero-2026-10-05-001-001-rollback-001-rollback",
+ "rows": 9,
+ "run_stamp": "import-hero-2026-10-05-001-001-rollback-001",
+ "sites": 3,
+ "stamp": "import-hero-2026-10-05-001-001-rollback",
+ "test_id": "import-hero/owner-2026-10-05"
+}

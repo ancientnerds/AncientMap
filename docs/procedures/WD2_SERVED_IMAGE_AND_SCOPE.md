@@ -341,7 +341,7 @@ $PY $S plan --run-dir $R                        # -> chunks/chunk-NNN, EXPECTED.
 `missing`, `not a picture` with its MIME type, or `unfetchable` with the refusal) and every failed
 image without a candidate (`without_candidates`) - those sites are cleared.
 
-### 3.5 The no-image report (`no_image_report.py`) - one measured reason per site
+### 3.6 The no-image report (`no_image_report.py`) - one measured reason per site
 
 The goal asks for the no-image remainder to be reported **per site with its measured reason**, not
 left open. This is the one clause no vision model can block, and it writes nothing outside the run
@@ -425,6 +425,83 @@ come from the `--write` run that is applied (`card_stats.py`'s docstring).
 After the chunks: the globe reads the static export, so the new thumbnails show with the next WF
 export; the page and the hub read the database at once.
 
+### 3.7 The import-hero lane (WD2/IH) - the 2025 import's own link becomes the hero
+
+Owner decision 2026-10-05, 17:43: the hand-linked image of the 2025 import comes back as the site's
+hero. Not a fresh match against Wikidata - *that* picture, the one the owner linked himself.
+
+`scripts/remediation/import_hero/` (`read`, `plan`, `verify`). One source, and it is the only
+surviving copy of that hand-linked image:
+
+```
+data/raw/ancient_nerds/ancient_nerds_original.geojson   # 2025-12-18, 5,995 features, field Images
+```
+
+The loader wrote that field into `unified_sites.thumbnail_url` (`pipeline/unified_loader.py:1200`);
+the remediation since replaced, demoted or hid most of those rows. The join (`plan.join_import`)
+matches on the source URL first and on the folded title second - the same rule the period lane's
+join proved - and carries the ambiguity as a flag instead of picking one.
+
+**The five rules** (`plan.plan`, one `Change` each):
+
+| rule | what it moves |
+|---|---|
+| `ih1` | the hero flag onto the row of the file the import links |
+| `ih2` | the flag off the row that held it |
+| `ih3` | an excluded row of that file becomes visible (the site's *first* picture) |
+| `ih4` | `thumbnail_url` onto the row that now shows the hero |
+| `ih5` | the row's `title`, `author`, `license`, `license_url`, `original_url`, `commons_page_url` and the file's size - all of them name the same file, so a row can never credit one picture while showing another |
+
+`ih5` is why the shared writer's `WRITABLE` carries `title`, `license` and `license_url`: a fetch
+that wrote the pixels but no attribution would leave a row crediting its previous file.
+`PAGE_COLUMNS` (`pipeline/utils/public_sites.py`) is untouched - a test binds that set to the exact
+SELECT the page renders.
+
+**Two refusals, both named per site** in `IMPORT_HERO_REFUSALS.jsonl`:
+
+* `local_file_too_small` - the row exists but its local derivative is under 1600x900. The plan takes
+  a `fetched` manifest of 1600 px downloads (the whole `imageinfo` answer: `filename`, `width`,
+  `height`, `file_size_bytes` and the attribution); without one, the site is refused rather than
+  promoted onto a picture too small to show.
+* `no_target_row` - no row of that site holds the file. 133 of them have no row at all and 59 link
+  no Commons file, so no row can be named; those two groups are the owner's `thumbnail_url` decision,
+  not gallery rows. The remaining 410 need an INSERT, which this writer does not do
+  (`chunk_writer.lint_statement` refuses INSERT; `apply_remediation_change()` is UPDATE-only).
+
+**A site whose every row is hidden today** is named `may_empty` in its chunk header
+(`Planned.may_empty`), not excluded from the wave: unhiding the row gives it its *first* picture,
+which is not a hero move, and a reversal that restores "no image" is a faithful undo the writer's
+guard would otherwise refuse (measured 2026-10-05: 35 of 1,555 sites, and the pilot's 3 of 100 that
+made `--rehearse-rollback` stop). The guard stays strict; the exception is on the record.
+
+**The acceptance** (`import_hero/verify.py`) asks production, never the plan: for every site of the
+wave's chunks, does the page serve the file the import links, does the thumbnail name that row, and
+is there exactly one live hero row. It writes `ACCEPTANCE.json` and names every site that fails a
+question. `served_image/run.py accept` is the other acceptance and asks a different question
+("does production equal this lane's `EXPECTED.jsonl`"); the import-hero lane writes the shared
+writer's `PLAN.jsonl` and no `EXPECTED.jsonl`, and its question is the owner's - is *this* picture
+the one on the page.
+
+```bash
+PY=./.venv/Scripts/python.exe
+R=output/remediation/import_hero/import-hero-2026-10-05-002
+IH=scripts/remediation/import_hero
+# 1. read production (read-only) -> READ.json, and the join -> IMPORT_CLAIMS.json
+# 2. plan (read-only, writes only into the run directory) -> chunk-001..016/,
+#    IMPORT_HERO_REFUSALS.jsonl, IMPORT_HERO_SUMMARY.json
+# 3. per chunk, the writer's five steps in section 3.6's order, each accepted with 0 deviations
+# 4. acceptance over all chunks -> ACCEPTANCE.json
+```
+
+Applied 2026-10-05 (`c4976a9`, `b5aa98c`): 1,555 sites, 4,642 rows, 16 chunks, 35 `may_empty`,
+1,555 of 1,555 on all three acceptance questions (read `0e62aea4…`, 2026-10-05T17:58:27Z). Replanning
+the same lane over a fresh read yields **0 rows** (`REMAINDER.json`, run `-003`) - the lane is at its
+end, and what it still refuses is 807 `local_file_too_small` + 469 `no_target_row`, both by name.
+
+**The static export is not part of this.** A hero or licence change dates the rendered page
+(`pipeline/utils/public_sites.py`), so the globe shows the previous picture until the next export
+run; the page and the hub read the database at once and already show the new one.
+
 ---
 
 ## 4. Tests and the mutation sweep
@@ -433,6 +510,12 @@ export; the page and the hub read the database at once.
   check export), Commons (what a picture is, no rendering taken for the original), both stages,
   the thumbnail repair, the candidates (still pictures, unserved renderings listed), the plan
   (other sites out of a replaced gallery), the acceptance.
+* `tests/remediation/test_import_hero.py` - the import is read with its keys, the join (URL first,
+  folded title second, ambiguity kept), every rule `ih1`-`ih5`, both refusals by name, the fetch
+  manifest's whole `imageinfo` answer, `may_empty` (a site that shows nothing today is named, a site
+  with a live image never is), the chunk writer's five steps, and the acceptance's three questions
+  including the thumbnail that names the old row and the hidden row that a thumbnail alone does not
+  excuse.
 * `tests/remediation/test_scope_review.py` - the funnel, the answers (a site carries no quotes,
   the copies of Wikipedia), the rounds (in order, never empty, three asks at one premise, a moved
   entry asked again) and their quote check, the plan's guards (the latest answer decides), the
