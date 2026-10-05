@@ -21,6 +21,7 @@ for _p in (REPO, REPO / "scripts" / "remediation"):
 
 from gallery_audit.chunk_writer import ChunkError  # noqa: E402
 from import_hero import plan as IH  # noqa: E402
+from import_hero import verify as IV  # noqa: E402
 from served_image import state as ST  # noqa: E402
 
 THASOS = "33d2d754-e50a-4305-beff-87d2ad2c0227"
@@ -233,7 +234,8 @@ class TestThePlan:
                 },
             ],
         )
-        return IH.plan(state, IH.join_import(state, features), dimensions=BIG, fetched=fetched)
+        planned = IH.plan(state, IH.join_import(state, features), dimensions=BIG, fetched=fetched)
+        return planned.changes, planned.refusals
 
     def _fetch(self, site_id: str, filename: str) -> dict[str, Any]:
         return {
@@ -252,6 +254,34 @@ class TestThePlan:
                 "file_size_bytes": 812_345,
             }
         }
+
+    def _may_empty(self, tmp_path: Path) -> list[str]:
+        """The sites a chunk may leave without an image: the ones whose every row is excluded,
+        so the import's file would be their *first* picture rather than a new hero."""
+        state = _state(tmp_path)
+        features = _import(
+            tmp_path,
+            [
+                {
+                    "title": "Hidden row",
+                    "url": "https://en.wikipedia.org/wiki/Hidden_row",
+                    "image": HIDDEN_FILE,
+                },
+            ],
+        )
+        return IH.plan(state, IH.join_import(state, features), dimensions=BIG).may_empty
+
+    def test_a_site_that_shows_no_image_today_is_named_may_empty(self, tmp_path: Path) -> None:
+        """The writer's guard asks "does every touched site still hold an image". For a site
+        that shows none, unhiding its row is a first picture, and the reversal restores "none" -
+        which the guard reads as a loss unless the chunk names the site (measured 2026-10-05:
+        three of the pilot's 100 sites, 35 of the wave's 1,555)."""
+        assert self._may_empty(tmp_path) == [HIDDEN]
+
+    def test_a_site_with_a_live_image_is_never_may_empty(self, tmp_path: Path) -> None:
+        state = _state(tmp_path)
+        features = _import(tmp_path, [{"title": "Thasos", "url": "", "image": GATE}])
+        assert IH.plan(state, IH.join_import(state, features), dimensions=BIG).may_empty == []
 
     def _by(self, changes: list, site_id: str) -> dict[tuple[str, str, str], Any]:
         return {(c.table, c.column, c.row_key): c for c in changes if c.site_id == site_id}
@@ -383,7 +413,7 @@ class TestThePlan:
                 }
             ],
         )
-        _changes, refusals = IH.plan(state, IH.join_import(state, features), dimensions=BIG)
+        refusals = IH.plan(state, IH.join_import(state, features), dimensions=BIG).refusals
         refused = {r.site_id: r for r in refusals}
         assert refused[THASOS].reason == "no_target_row"
         assert "no Commons file" in refused[THASOS].detail
@@ -434,6 +464,97 @@ class TestTheChunks:
         the site's hero and its thumbnail already names that row, so the site is not in the plan."""
         state = _state(tmp_path)
         features = _import(tmp_path, [{"title": "Thasos", "url": "", "image": AGORA}])
-        changes, refusals = IH.plan(state, IH.join_import(state, features), dimensions=BIG)
-        assert changes == []
-        assert refusals == []
+        planned = IH.plan(state, IH.join_import(state, features), dimensions=BIG)
+        assert planned.changes == []
+        assert planned.refusals == []
+
+
+class TestTheAcceptance:
+    """What the wave is accepted on: a fresh production read, every planned site, three questions.
+
+    The read is not the plan's. The proof has to come from production - what the page serves, what
+    the thumbnail names, how many rows hold the hero flag - and not from what the wave meant to
+    write."""
+
+    def _applied(self, tmp_path: Path) -> ST.State:
+        """The fixture read after Thasos' gate row took the hero flag and the hidden row its
+        unhide - the two shapes the wave's rules ih1 and ih3 produce."""
+        read = _read()
+        for row in read["images"]:
+            if row["id"] == 1:
+                row["is_hero"] = False
+                row["is_lead"] = False
+            if row["id"] == 2:
+                row["is_hero"] = True
+                row["is_lead"] = True
+            if row["id"] == 4:
+                row["is_excluded"] = False
+                row["is_hero"] = True
+                row["is_lead"] = True
+        for site in read["sites"]:
+            if site["id"] == THASOS:
+                site["thumbnail_url"] = "/data/images/wiki/33d2d754/Thasos_gate.webp"
+            if site["id"] == HIDDEN:
+                site["thumbnail_url"] = "/data/images/wiki/7c8d0bac/Thasos_hidden.webp"
+        run = tmp_path / "applied"
+        run.mkdir(parents=True, exist_ok=True)
+        ST.write_read(run / "READ.json", read)
+        return ST.load_read(run / "READ.json")
+
+    def _claims(self) -> dict[str, dict[str, Any]]:
+        return {
+            THASOS: {"image": GATE, "matched_on": "title"},
+            HIDDEN: {"image": HIDDEN_FILE, "matched_on": "title"},
+        }
+
+    def test_a_wave_that_did_what_it_said_measures_clean(self, tmp_path: Path) -> None:
+        result = IV.check_wave(self._applied(tmp_path), self._claims(), [THASOS, HIDDEN])
+        assert result.sites == 2
+        assert result.served_the_import == 2
+        assert result.thumbnail_follows == 2
+        assert result.one_hero == 2
+        assert result.problems == []
+        assert result.ok
+
+    def test_a_site_whose_thumbnail_names_the_old_row_is_refused_by_name(
+        self, tmp_path: Path
+    ) -> None:
+        """Rule ih4 is what keeps the gallery and the card on one picture: a hero that moved but a
+        thumbnail that did not is the wave half-done, and the acceptance has to name it."""
+        state = self._applied(tmp_path)
+        state.sites[THASOS]["thumbnail_url"] = "/data/images/wiki/33d2d754/Thasos_agora.webp"
+        result = IV.check_wave(state, self._claims(), [THASOS, HIDDEN])
+        assert result.thumbnail_follows == 1
+        assert not result.ok
+        assert any("thumbnail" in p and "Thasos_gate.webp" in p for p in result.problems)
+
+    def test_two_live_hero_rows_are_refused_by_name(self, tmp_path: Path) -> None:
+        state = self._applied(tmp_path)
+        for row in state.rows[THASOS]:
+            if row["id"] == 1:
+                row["is_hero"] = True
+        result = IV.check_wave(state, self._claims(), [THASOS, HIDDEN])
+        assert result.one_hero == 1
+        assert not result.ok
+        assert any("2 live hero row" in p for p in result.problems)
+
+    def test_a_site_that_left_the_read_is_refused_by_name(self, tmp_path: Path) -> None:
+        state = self._applied(tmp_path)
+        del state.sites[NOTHING]
+        result = IV.check_wave(state, self._claims(), [NOTHING])
+        assert result.sites == 1
+        assert not result.ok
+        assert any("not in the read" in p for p in result.problems)
+
+    def test_a_thumbnail_alone_does_not_make_a_site_accepted(self, tmp_path: Path) -> None:
+        """A site whose every row is hidden still shows the import's file through its thumbnail, so
+        the picture is not missing - but no live row carries the hero flag, which is what the wave's
+        rule ih3 was for. The acceptance has to say that instead of passing the site."""
+        state = self._applied(tmp_path)
+        for row in state.rows[HIDDEN]:
+            row["is_excluded"] = True
+        result = IV.check_wave(state, self._claims(), [HIDDEN])
+        assert result.served_the_import == 1
+        assert result.one_hero == 0
+        assert not result.ok
+        assert any("0 live hero row" in p for p in result.problems)

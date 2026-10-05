@@ -175,22 +175,40 @@ def _target_row(state: ST.State, sid: str, image: str) -> tuple[dict[str, Any] |
     )
 
 
+@dataclass(frozen=True)
+class Planned:
+    """The planned rows, the sites the plan refuses by name, and the sites a chunk may leave
+    without an image.
+
+    `may_empty` is the writer's own mechanism for "this site shows nothing today": the import's
+    file is its *first* picture, so unhiding the row is not a hero move, and a rollback that
+    restores "no image" is a faithful reversal the guard would otherwise refuse. The chunk header
+    then names those sites, so the exception is on the record instead of hidden in the guard.
+    """
+
+    changes: list[Change]
+    refusals: list[Refusal]
+    may_empty: list[str]
+
+
 def plan(
     state: ST.State,
     claims: Mapping[str, Mapping[str, Any]],
     *,
     dimensions: Mapping[int, tuple[int | None, int | None]],
     fetched: Mapping[str, Mapping[str, Any]] | None = None,
-) -> tuple[list[Change], list[Refusal]]:
-    """The planned rows, and every curated site the plan refuses by name.
+) -> Planned:
+    """What the wave writes, what it refuses, and what a chunk may leave without an image.
 
     `fetched` maps a site id to the 1600 px derivative a fetch step wrote for it
-    (`filename`, `width`, `height`, `file_size_bytes`); a target row whose local file is too
-    small is planned only when its fetch is in that manifest, and refused otherwise.
+    (`filename`, `width`, `height`, `file_size_bytes` and the attribution of that file); a target
+    row whose local file is too small is planned only when its fetch is in that manifest, and
+    refused otherwise.
     """
     ready = fetched or {}
     changes: list[Change] = []
     refusals: list[Refusal] = []
+    may_empty: list[str] = []
     for sid in sorted(claims):
         claim = claims[sid]
         image = claim.get("image")
@@ -232,6 +250,10 @@ def plan(
                 )
             )
         if row.get("is_excluded"):
+            # A site whose every row is excluded shows no image at all today: unhiding this row
+            # gives it its first picture, so the chunk has to name it (see `Planned.may_empty`).
+            if not any(not other.get("is_excluded") for other in state.rows.get(sid, ())):
+                may_empty.append(sid)
             changes.append(
                 Change(
                     table="wiki_images",
@@ -303,7 +325,7 @@ def plan(
                     evidence=_evidence(state, sid, row, image),
                 )
             )
-    return changes, refusals
+    return Planned(changes=changes, refusals=refusals, may_empty=sorted(set(may_empty)))
 
 
 #: The columns a fetched file brings with it. Every one of them names the *same* file: the
@@ -434,30 +456,40 @@ def write_chunks(
     sites_per_chunk: int = 100,
 ) -> dict[str, Any]:
     """The chunks, the refusals and the counts. Nothing is written outside `out`."""
-    changes, refusals = plan(state, claims, dimensions=dimensions, fetched=fetched)
-    if not changes:
+    planned = plan(state, claims, dimensions=dimensions, fetched=fetched)
+    if not planned.changes:
         raise ImportHeroError(
             "the plan holds no row: the join found no import image on a curated site, or every "
             "candidate was refused"
         )
     lane = chunk_lane(run_stamp)
-    written = emit_chunks(out, chunk_changes(lane, changes, sites_per_chunk=sites_per_chunk))
+    written = emit_chunks(
+        out,
+        chunk_changes(
+            lane,
+            planned.changes,
+            sites_per_chunk=sites_per_chunk,
+            may_empty=tuple(planned.may_empty),
+        ),
+    )
     summary = {
         "run_stamp": run_stamp,
         "read_sha256": state.sha256,
         "sites_with_an_import_image": sum(1 for c in claims.values() if c.get("image")),
-        "planned_rows": len(changes),
-        "planned_sites": len({c.site_id for c in changes}),
-        "refused_sites": len(refusals),
+        "planned_rows": len(planned.changes),
+        "planned_sites": len({c.site_id for c in planned.changes}),
+        "may_empty_sites": len(planned.may_empty),
+        "refused_sites": len(planned.refusals),
         "refusals": {
-            reason: sum(1 for r in refusals if r.reason == reason)
-            for reason in sorted({r.reason for r in refusals})
+            reason: sum(1 for r in planned.refusals if r.reason == reason)
+            for reason in sorted({r.reason for r in planned.refusals})
         },
         "chunks": len(written),
     }
     (out / "IMPORT_HERO_REFUSALS.jsonl").write_text(
         "".join(
-            json.dumps(r.as_json(), ensure_ascii=False, sort_keys=True) + "\n" for r in refusals
+            json.dumps(r.as_json(), ensure_ascii=False, sort_keys=True) + "\n"
+            for r in planned.refusals
         ),
         encoding="utf-8",
     )
