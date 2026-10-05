@@ -460,9 +460,15 @@ SELECT the page renders.
 **Two refusals, both named per site** in `IMPORT_HERO_REFUSALS.jsonl`:
 
 * `local_file_too_small` - the row exists but its local derivative is under 1600x900. The plan takes
-  a `fetched` manifest of 1600 px downloads (the whole `imageinfo` answer: `filename`, `width`,
-  `height`, `file_size_bytes` and the attribution); without one, the site is refused rather than
-  promoted onto a picture too small to show.
+  a `fetched` manifest of 1600 px downloads (`import_hero/fetch.py` builds one entry per site: the
+  eleven `FETCH_COLUMNS`, refused by name when the download does not carry all of them); without one,
+  the site is refused rather than promoted onto a picture too small to show. Measured 2026-10-05:
+  380 of the 807 already serve their import file and only lack the flag, 427 must replace the file
+  first. The local name follows the owner's decision of that day: **the Commons name verbatim, only
+  the extension becomes `.webp`** - production holds two conventions (26,027 rows named after a
+  readable title, 18,746 after the Commons name), and the name is public, so the wave picks one
+  instead of adding a third. The file lands in the offsite copy of the image tree, which this lane
+  reads as the picture (section 3.2), and the VPS copy has to follow it - the two must not drift.
 * `no_target_row` - no row of that site holds the file. 133 of them have no row at all and 59 link
   no Commons file, so no row can be named; those two groups are the owner's `thumbnail_url` decision,
   not gallery rows. The remaining 410 need an INSERT, which this writer does not do
