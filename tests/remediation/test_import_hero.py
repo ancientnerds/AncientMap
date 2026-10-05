@@ -20,6 +20,7 @@ for _p in (REPO, REPO / "scripts" / "remediation"):
         sys.path.insert(0, str(_p))
 
 from gallery_audit.chunk_writer import ChunkError  # noqa: E402
+from import_hero import fetch as IF  # noqa: E402
 from import_hero import plan as IH  # noqa: E402
 from import_hero import verify as IV  # noqa: E402
 from served_image import state as ST  # noqa: E402
@@ -558,3 +559,90 @@ class TestTheAcceptance:
         assert result.one_hero == 0
         assert not result.ok
         assert any("0 live hero row" in p for p in result.problems)
+
+
+#: The Commons file the 807 refusals name, and the imageinfo answer the downloader returned for it.
+#: Measured 2026-10-05 against production, field for field.
+FETCH_FILE = "Area_archeologica_di_Herakleia_e_Siris_-_3.jpg"
+FETCH_META = {
+    "author": "Alessandro Antonelli",
+    "author_url": "https://commons.wikimedia.org/wiki/User:Una_giornata_uggiosa_%2794",
+    "height": "3000",
+    "license": "CC BY 3.0",
+    "license_url": "https://creativecommons.org/licenses/by/3.0",
+    "original_url": (
+        "https://upload.wikimedia.org/wikipedia/commons/1/1e/"
+        "Area_archeologica_di_Herakleia_e_Siris_-_3.jpg"
+    ),
+    "width": "4000",
+}
+
+
+class _Result:
+    """What `download_image` returns: the stored derivative's own size, not the original's."""
+
+    def __init__(self, *, width: int = 1600, height: int = 1200, file_size: int = 548_938) -> None:
+        self.width = width
+        self.height = height
+        self.file_size = file_size
+        self.fetch_url = "https://upload.wikimedia.org/…/1920px-Area_archeologica….jpg"
+        self.fetched_bucket = 1920
+
+
+class TestTheFetchManifest:
+    """The fetch step's only deliverable: one manifest entry per site, carrying all eleven columns.
+
+    `fetch_image_metadata_batch` answers seven columns; the lane refuses a manifest entry that does
+    not carry all eleven, because a row must credit the file it shows. The four it cannot know are
+    assembled here from the download's own result and the naming rule (owner decision 2026-10-05:
+    the Commons name verbatim, only the extension becomes `.webp`).
+    """
+
+    def _entry(self, meta: dict[str, str] | None = None, result: _Result | None = None) -> dict:
+        return IF.manifest_entry(
+            THASOS, FETCH_FILE, meta if meta is not None else FETCH_META, result or _Result()
+        )
+
+    def test_the_entry_carries_exactly_the_columns_the_lane_demands(self) -> None:
+        """Measured: the lane refuses any manifest missing one of `FETCH_COLUMNS` - by name."""
+        assert sorted(self._entry()) == sorted(IH.FETCH_COLUMNS)
+
+    def test_the_local_name_is_the_commons_name_with_only_the_extension_swapped(self) -> None:
+        entry = self._entry()
+        assert entry["filename"] == "Area_archeologica_di_Herakleia_e_Siris_-_3.webp"
+        assert entry["title"] == "Area_archeologica_di_Herakleia_e_Siris_-_3"
+
+    def test_the_commons_page_url_encodes_the_colon_the_way_production_does(self) -> None:
+        entry = self._entry()
+        assert entry["commons_page_url"] == (
+            "https://commons.wikimedia.org/wiki/File%3AArea_archeologica_di_Herakleia_e_Siris_-_3.jpg"
+        )
+
+    def test_the_derivative_carries_its_own_size_not_the_originals(self) -> None:
+        """A 4000x3000 original becomes a 1600x1200 file; a row that claimed the original's size
+        would lie about the picture the page serves."""
+        entry = self._entry()
+        assert (entry["width"], entry["height"]) == ("1600", "1200")
+        assert entry["file_size_bytes"] == "548938"
+
+    def test_an_imageinfo_answer_without_the_licence_is_refused_by_name(self) -> None:
+        thin = {k: v for k, v in FETCH_META.items() if k != "license"}
+        with pytest.raises(IF.FetchError, match="license"):
+            self._entry(meta=thin)
+
+    def test_a_download_narrower_than_the_lane_serves_is_refused_by_name(self) -> None:
+        """`local_file_too_small` is the very refusal this wave clears; a 800 px download that
+        reached the manifest would put the same site back where it started."""
+        with pytest.raises(IF.FetchError, match="1600"):
+            self._entry(result=_Result(width=800, height=531))
+
+    def test_a_commons_name_without_an_extension_is_refused_by_name(self) -> None:
+        with pytest.raises(IF.FetchError, match="extension"):
+            IF.manifest_entry(THASOS, "Area archeologica di Herakleia", FETCH_META, _Result())
+
+    def test_the_entry_is_the_sites_own_file_and_not_another_sites(self) -> None:
+        """Two sites may link the same Commons file; the manifest is keyed by site, so the entry
+        must carry the file it fetched, never a neighbour's."""
+        entry = IF.manifest_entry(HABU, FETCH_FILE, FETCH_META, _Result())
+        assert entry["filename"].endswith("Siris_-_3.webp")
+        assert entry["original_url"] == FETCH_META["original_url"]
