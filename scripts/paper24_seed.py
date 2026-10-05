@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import importlib.util
 import json
 import sys
 from collections import Counter
@@ -296,6 +297,7 @@ def seed(ws: PaperWorkspace, research: dict[str, Any], *, force: bool = False) -
     pull.write_texts(ws, dossier)
     ws.brief.write_text(brief, encoding="utf-8")
     check = parse_dossier(ws.dossier_gz.read_bytes())
+    _register(ws.request_id)
     return {
         "workspace": str(ws.root),
         "request_id": check.request_id,
@@ -306,6 +308,20 @@ def seed(ws: PaperWorkspace, research: dict[str, Any], *, force: bool = False) -
         "citable": len(check.citable_ids),
         "bytes": len(payload),
     }
+
+
+def _register(request_id: str) -> None:
+    """Record the workspace with the campaign driver, so `scan` and `ledger` see it.
+
+    The driver's list is called `pulled` because that is where a workspace used to
+    come from; a session-seeded workspace is the same thing from that moment on.
+    The driver stays the only writer of its state file.
+    """
+    spec = importlib.util.spec_from_file_location("paper24", Path(__file__).with_name("paper24.py"))
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.register_pulled(request_id)
 
 
 def main(argv: list[str] | None = None) -> int:

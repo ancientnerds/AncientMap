@@ -49,8 +49,16 @@ BATCH_USER = "442000112756064260"
 BATCH_DAY = "2026-07-05"
 LEDGER = Path(__file__).resolve().parents[1] / "docs" / "reports" / "theo-24-run-ledger.md"
 
-#: Dossier ids the studio has already pulled, in the order the driver took them.
-STATE = config.studio_assets() / "paper24_state.json"
+#: The driver's own list of the topics it owns. Resolved per call, not at import:
+#: a module-level constant would point at the real campaign for any caller that
+#: sets STUDIO_ASSETS after the import - the tests did exactly that and wrote the
+#: campaign's state file with fixture ids.
+STATE_NAME = "paper24_state.json"
+
+
+def state_path() -> Path:
+    """Where the driver keeps its list, for the assets root in force right now."""
+    return config.studio_assets() / STATE_NAME
 
 
 #: `theo_dossier list` over ssh into the API image; the same timeout the CLI's
@@ -68,14 +76,16 @@ def _dossiers() -> list[dict[str, Any]]:
 
 
 def _state() -> dict[str, Any]:
-    if not STATE.exists():
+    path = state_path()
+    if not path.exists():
         return {"pulled": [], "checked": {}, "bundled": []}
-    return json.loads(STATE.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _save(state: dict[str, Any]) -> None:
-    STATE.parent.mkdir(parents=True, exist_ok=True)
-    STATE.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+    path = state_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def _ws(request_id: str) -> PaperWorkspace:
@@ -134,12 +144,22 @@ def cmd_scan(_args: argparse.Namespace) -> int:
 # --- steps --------------------------------------------------------------------
 
 
+def register_pulled(request_id: str) -> None:
+    """Record a workspace the driver owns, whoever filled it.
+
+    `paper24 pull` takes the workspace from a Theo dossier and `paper24_seed`
+    builds the same workspace from research done in this session; both are the
+    driver's topic from that moment on, and `scan` and `ledger` read this list.
+    """
+    state = _state()
+    if request_id not in state["pulled"]:
+        state["pulled"].append(request_id)
+    _save(state)
+
+
 def cmd_pull(args: argparse.Namespace) -> int:
     ws = pull.pull(config.check_request_id(args.request_id))
-    state = _state()
-    if ws.request_id not in state["pulled"]:
-        state["pulled"].append(ws.request_id)
-    _save(state)
+    register_pulled(ws.request_id)
     _print(
         {
             "request_id": ws.request_id,
