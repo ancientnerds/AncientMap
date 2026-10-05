@@ -102,7 +102,7 @@ def test_the_iteration_count_comes_from_the_reports_on_disk(monkeypatch, tmp_pat
     table = (tmp_path / "ledger.md").read_text(encoding="utf-8")
     assert f"`{ws.request_id}`" in table
     assert "| 1 |" in table
-    assert "| 2 | no | 3 | no |" in table  # iterations, green, support findings, bundle
+    assert "| 2 | no | support | 3 | no |" in table  # iterations, green, gates, support, bundle
     # the topic cell is the dossier's question, on one line and without a pipe
     assert "How were the Baalbek megaliths moved?" in table
 

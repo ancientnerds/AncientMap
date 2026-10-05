@@ -108,6 +108,13 @@ def test_evidence_refuses_a_draft_with_an_unlocated_marker(monkeypatch, tmp_path
     assert evidence.main([fx.REQ]) == 1
 
 
+def _coherence_note(tmp_path) -> list[str]:
+    """The argv a real run passes: the coherence answer is this paper's own."""
+    note = tmp_path / "coherence.txt"
+    note.write_text("no two measurements in this paper contradict each other", encoding="utf-8")
+    return ["--coherence-note-file", str(note)]
+
+
 def test_the_claim_answers_are_accepted_by_the_studio(monkeypatch, tmp_path):
     monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
     ws = _numbered(tmp_path)
@@ -116,7 +123,7 @@ def test_the_claim_answers_are_accepted_by_the_studio(monkeypatch, tmp_path):
     )
     studio_claims.export_claims(ws)
     verdicts = _load("paper24_verdicts")
-    assert verdicts.main([fx.REQ]) == 0
+    assert verdicts.main([fx.REQ, *_coherence_note(tmp_path)]) == 0
     # The importer is the authority: it refuses a quote that is not verbatim.
     assert studio_claims.import_claims(ws) == {
         "accepted": len(
@@ -129,6 +136,23 @@ def test_the_claim_answers_are_accepted_by_the_studio(monkeypatch, tmp_path):
     }
 
 
+def test_the_run_refuses_to_answer_coherence_without_the_papers_own_words(
+    monkeypatch, tmp_path, capsys
+):
+    """The coherence verdict is a judgement about this paper, so no default exists.
+
+    The answer used to sit in the script in the first paper's own words, which
+    would have stamped that paper's reasoning onto every paper after it.
+    """
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    ws = _numbered(tmp_path)
+    studio_claims.export_claims(ws)
+    verdicts = _load("paper24_verdicts")
+    assert verdicts.main([fx.REQ]) == 2
+    assert "coherence-note-file" in capsys.readouterr().err
+    assert not (ws.claims_dir / "verdicts.jsonl").exists()
+
+
 def test_a_fabricated_quote_is_refused(monkeypatch, tmp_path):
     monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
     ws = _numbered(tmp_path)
@@ -139,7 +163,7 @@ def test_a_fabricated_quote_is_refused(monkeypatch, tmp_path):
         if line.strip()
     ]
     verdicts = _load("paper24_verdicts")
-    verdicts.main([fx.REQ])
+    verdicts.main([fx.REQ, *_coherence_note(tmp_path)])
     rows = [
         json.loads(line)
         for line in (ws.claims_dir / "verdicts.jsonl").read_text(encoding="utf-8").splitlines()

@@ -74,6 +74,77 @@ ok, Qdrant ok with 7 sections, page answers HTTP 200 with all 49 evidence anchor
 Not to be touched: the `paused`, `cancelled` and `failed` rows of this user, the one row in
 `running`, and every row that is already `completed` with `is_public = true`.
 
+## Run 2 — Rock art sky figures (`6c639144-47b7-4c71-b9e3-912d00733306`), 2026-10-05
+
+**Measured:** 51 archived full texts (23 Europe PMC, 29 Wikipedia), 1,373,820 characters,
+42 of them cited. 5,304 prose words, 42 references, 24 evidence entries, 120 citations,
+67 claim-check tasks all answered, 9 verified images (the floor is one per section and
+there are seven). Score 96, every gate green.
+
+**What the first draft cost.** The first `paper check` was red on eight gates at once:
+`artifact` (9 paragraphs over 50 characters carrying no marker), `structure` (3 hook
+paragraphs, 4,682 words against a floor of 5,000), `meta` (the title ended on `?`),
+`specifics` (2 unmatched), `coherence` (a title term absent from the body), `claims` (64
+tasks unanswered), `hero` (no image), `quality`. Not one of them was a research failure.
+Every one was a writing-rule failure, and every one was visible before a single model
+call — the same argument Run 1 made for running `check` before the claim check, now with
+a second data point.
+
+### Six rules this run added
+
+1. **A paragraph of pure argument is an uncited paragraph.** Nine paragraphs longer than
+   fifty characters had no marker, because an argument cites nothing and the audit counts
+   it anyway. They were folded into the neighbouring cited paragraph
+   (`C:\tmp\theo_opt\edit_draft2.py`, the `fold_uncited` step). The folding has a second
+   order effect: folding a paragraph in front moves the start of the one behind it, and an
+   **anchor is a prefix**, so all 24 evidence anchors were re-derived afterwards
+   (`repair_anchors.py`). Do every fold before writing `evidence.json` or
+   `images/opportunities.json`, or expect to re-derive both.
+2. **`specifics` compares against the source's own wording, so never paraphrase a proper
+   noun.** The draft read "the site is National Treasure No. 285 of South Korea"; the
+   Bangudae article writes "They are the National Treasure of South Korea No. 285". The
+   capitalised run `National Treasure No` became a `person` specific and did not occur in
+   the cited text. The second finding was a term carried in from elsewhere: `Upper
+   Palaeolithic` sat in a paragraph citing the radiocarbon paper, which never writes it.
+   Both were fixed by using the source's own sentence.
+3. **The title may not contain a colon either.** `gate_meta` forbids `?`, `:`, dashes and
+   quotes, and the reported problem names only the character found. A comma does the job
+   the colon was meant to do. The multi-word title terms must then appear verbatim in the
+   body: `Sky Figures in Rock Art, Message or Projection` requires `Sky Figures` and
+   `Rock Art` (the comma splits the fragments, `in` and `or` split further, single words
+   are dropped).
+4. **A fold can drag a word into a paragraph with other sources.** `Mentalist` was a
+   harmless capitalised word in its own uncited paragraph; folded into the constellation
+   paragraph it became `person: Mentalist` against two sources that do not write it. A
+   fold is not textually free.
+5. **The hook is 1 to 2 paragraphs, and the third one cannot be folded away by the marker
+   rule.** It carried markers of its own, so the rule left it alone and `structure` stayed
+   red. The hook is counted separately and has to be planned as two.
+6. **A quote chosen by word overlap is a ranking, not a judgement.** 14 of the 67
+   verdicts had no locatable sentence and fell back to the best-overlap window. Two of
+   those quoted the article header glued to the first sentence (`Scientific reports 2023
+   / ## Introduction`), and three quoted a neighbouring sentence about something else. The
+   windows are now single-line sentences only, and three quotes were read by hand and
+   written in. The coherence answer was the same shape of risk and worse: it was
+   hardcoded in `paper24_verdicts.py` in paper 1's own words (`the onset is 12,870 ± 30
+   B.P.`), so it would have stamped paper 1's reasoning onto paper 2. It is now read from
+   `--coherence-note-file` and the command refuses to run without it.
+
+### What this means for an autonomous writer on the VPS
+
+Every rule above except 6 is **already a gate**: `audit_citations` counts the uncited
+paragraphs, `gate_structure` counts the hooks and the words, `gate_meta` checks the title
+characters, `gate_specifics` checks the wording against the source text, `gate_coherence`
+checks the title terms, and the evidence and image checks resolve the prefix anchors. A
+writer that is forced through `paper check` cannot ship any of them. The gap is not the
+gate — it is that nobody has written a writer spec that produces a draft passing these
+gates on the first try, so every one of these costs a check cycle today.
+
+What such a spec has to say, in the order the costs came in: put every argument in a cited
+paragraph rather than in a paragraph of its own; write a proper noun the way the source
+writes it; plan the hook as two paragraphs and the title without a colon; plan the fold
+before writing `evidence.json`; and quote by hand every sentence the locator cannot find.
+
 ## State of the production rows (measured 2026-10-05 18:55 CEST)
 
 31 `completed`, 20 `queued`, 1 `running`, 1 `failed`, 2 `paused`, 2 `cancelled` for

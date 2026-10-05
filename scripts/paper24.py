@@ -306,9 +306,27 @@ def _iterations(state: dict[str, Any], rid: str) -> int:
 #: row is the whole claim for one topic: it is a bundle, it is green, it took at most
 #: two iterations, and the chain change that came out of it is named.
 LEDGER_HEADER = (
-    "| # | request_id | topic | iterations | green | support findings | bundle | chain change |\n"
-    "|---|---|---|---|---|---|---|---|\n"
+    "| # | request_id | topic | iterations | green | rote Gates | support findings |"
+    " bundle | chain change |\n"
+    "|---|---|---|---|---|---|---|---|---|\n"
 )
+
+
+def _failing_gates(report: dict[str, Any]) -> str:
+    """The gate names that were red, `quality` left out.
+
+    `quality` is a rollup of the other gates plus the quality score, so naming it
+    beside them says nothing the others do not. This column is the defect index of
+    the run: which gate a topic keeps failing on is the signal that decides whether
+    the next paper needs a different chain, and it has to be measured rather than
+    remembered.
+    """
+    names = [
+        gate["name"]
+        for gate in report.get("gates", [])
+        if not gate.get("passed") and gate.get("name") != "quality"
+    ]
+    return ", ".join(names) if names else "-"
 
 
 def _ledger_row(index: int, rid: str, state: dict[str, Any]) -> str | None:
@@ -325,7 +343,8 @@ def _ledger_row(index: int, rid: str, state: dict[str, Any]) -> str | None:
     passed = "yes" if report.get("passed") else "no"
     return (
         f"| {index} | `{rid}` | {_topic_of(ws)} | {_iterations(state, rid)} | {passed} | "
-        f"{support.get('total', 0)} | {'yes' if ws.bundle.exists() else 'no'} | |"
+        f"{_failing_gates(report)} | {support.get('total', 0)} | "
+        f"{'yes' if ws.bundle.exists() else 'no'} | |"
     )
 
 
@@ -355,8 +374,10 @@ def cmd_ledger(_args: argparse.Namespace) -> int:
     """
     state = _state()
     rows: list[str] = []
-    for index, rid in enumerate(sorted(state.get("pulled") or []), start=1):
-        row = _ledger_row(index, rid, state)
+    # In registration order, not sorted: the `#` column is the campaign's running
+    # number, so a paper finished second is paper 2 however its uuid sorts.
+    for rid in dict.fromkeys(state.get("pulled") or []):
+        row = _ledger_row(len(rows) + 1, rid, state)
         if row is not None:
             rows.append(row)
     owned = [f"`{rid}`" for rid in state.get("pulled") or []]
