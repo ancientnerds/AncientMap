@@ -36,10 +36,11 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+from served_image import state as ST  # noqa: E402
+
 from import_hero import plan as IH  # noqa: E402
 from import_hero import read as RD  # noqa: E402
 from import_hero import verify as IV  # noqa: E402
-from served_image import state as ST  # noqa: E402
 
 DEFAULT_IMPORT = Path("data/raw/ancient_nerds/ancient_nerds_original.geojson")
 ACCEPTANCE_READ = "VERIFY_READ.json"
