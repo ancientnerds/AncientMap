@@ -50,7 +50,7 @@ ok, Qdrant ok with 7 sections, page answers HTTP 200 with all 49 evidence anchor
 
 | # | request_id | question (cut) |
 |---|---|---|
-| 1 | `6c639144-47b7-4c71-b9e3-912d00733306` | recurring sky-figures in rock art, reception or pattern? |
+| 1 | `5b5f5803-40ff-4cde-aeba-0cffdacc93a9` | Kybalion's mentalism fused with the quantum observer effect, two readings |
 | 2 | `b2b6be16-7463-41f1-a30f-a89d627b7b4e` | historical provenance of the Kybalion (1908) |
 | 3 | `59468f64-156f-48ab-8bc9-05ce099bc53e` | Electric Universe / Birkeland currents, narrow scope |
 | 4 | `ad9fe380-706a-4d71-98b6-76e65a1c1447` | internal physics of a cosmological mystery novel, two-sided |
@@ -71,15 +71,24 @@ ok, Qdrant ok with 7 sections, page answers HTTP 200 with all 49 evidence anchor
 | 19 | `39eb9e0f-8170-472f-9572-f81776f0edb4` | two esoteric time-shapes that cannot both hold |
 | 20 | `238147d2-f1f8-42f6-9eb5-afc594b20351` | what ends a world-age: external physics or inner |
 
+The list was missing one row: `5b5f5803` was queued since 2026-07-05 10:09:48 and never made
+it into the table of run 1, so the twenty rows below the headline of that table were not the
+twenty rows the database held. Read the ids from `research_requests.question`, ordered by
+`created_at`.
+
 Not to be touched: the `paused`, `cancelled` and `failed` rows of this user, the one row in
 `running`, and every row that is already `completed` with `is_public = true`.
 
 ## Run 2 — Rock art sky figures (`6c639144-47b7-4c71-b9e3-912d00733306`), 2026-10-05
 
-**Measured:** 51 archived full texts (23 Europe PMC, 29 Wikipedia), 1,373,820 characters,
-42 of them cited. 5,304 prose words, 42 references, 24 evidence entries, 120 citations,
-67 claim-check tasks all answered, 9 verified images (the floor is one per section and
-there are seven). Score 96, every gate green.
+**Measured:** 51 archived full texts (23 Europe PMC, 28 Wikipedia), 42 of them cited.
+5,304 prose words, 42 references, 24 evidence entries, 120 citations, 67 claim-check tasks
+all answered, 13 verified images. Score 96, every gate green.
+
+**Published 2026-10-05 18:44 UTC** after the owner's release: slug
+`sky-figures-in-rock-art-message-or-projection`, `published_by = Theo`, journal row 116,
+IndexNow ok, Qdrant ok with 7 sections, page answers HTTP 200 with 24 evidence anchors.
+99 candidates were looked at over two image rounds.
 
 **What the first draft cost.** The first `paper check` was red on eight gates at once:
 `artifact` (9 paragraphs over 50 characters carrying no marker), `structure` (3 hook
@@ -129,27 +138,42 @@ a second data point.
    hardcoded in `paper24_verdicts.py` in paper 1's own words (`the onset is 12,870 ± 30
    B.P.`), so it would have stamped paper 1's reasoning onto paper 2. It is now read from
    `--coherence-note-file` and the command refuses to run without it.
+7. **The publish gate takes only `verified` images; the studio import does not.**
+   `images-import` fills every opportunity with the first `meaningful` or `weak` candidate
+   it finds and prefixes a weak one with `Illustration:`, so a green `paper check` said
+   nothing about the publish. `theo_publish` refused with `pictures`: "nobody has opened
+   this picture" for each of the five weak ones. Six of the fifteen opportunities had no
+   meaningful candidate at all; rewriting five subjects (an alchemical emblem is not the
+   Emerald Tablet, a Dobson map is not a curve in per cent) and dropping one raised the count
+   from 9 to 13. The studio and the server disagree about what a picture is for, and the
+   server is right: **budget a second image round, and give every opportunity a subject a
+   photograph can literally satisfy.**
+8. **A new image set re-asks exactly one claim-check task.** The coherence task lists every
+   measurement of the paper, and the numbers in the image captions are measurements, so the
+   second import invalidated `coherence:numbers` and nothing else. `claims-export` then
+   reported 66 accepted, 1 pending: re-answer that one instead of the whole paper.
 
 ### What this means for an autonomous writer on the VPS
 
 Every rule above except 6 is **already a gate**: `audit_citations` counts the uncited
 paragraphs, `gate_structure` counts the hooks and the words, `gate_meta` checks the title
 characters, `gate_specifics` checks the wording against the source text, `gate_coherence`
-checks the title terms, and the evidence and image checks resolve the prefix anchors. A
-writer that is forced through `paper check` cannot ship any of them. The gap is not the
-gate — it is that nobody has written a writer spec that produces a draft passing these
-gates on the first try, so every one of these costs a check cycle today.
+checks the title terms, the evidence and image checks resolve the prefix anchors, and
+`theo_publish`'s `pictures` gate rejects every picture nobody looked at. A writer that is
+forced through `paper check` **and** `theo_publish --dry-run` cannot ship any of them. The
+gap is not the gate — it is that nobody has written a writer spec that produces a draft
+passing these gates on the first try, so every one of these costs a check cycle today.
 
 What such a spec has to say, in the order the costs came in: put every argument in a cited
 paragraph rather than in a paragraph of its own; write a proper noun the way the source
 writes it; plan the hook as two paragraphs and the title without a colon; plan the fold
-before writing `evidence.json`; and quote by hand every sentence the locator cannot find.
+before writing `evidence.json`; give every image opportunity a subject a photograph can
+literally satisfy; and quote by hand every sentence the locator cannot find.
 
-## State of the production rows (measured 2026-10-05 18:55 CEST)
+## State of the production rows (measured 2026-10-05 18:50 UTC)
 
-31 `completed`, 20 `queued`, 1 `running`, 1 `failed`, 2 `paused`, 2 `cancelled` for
-`user_id = '442000112756064260'`. Before the first publish of this campaign it was 30
-`completed` and 21 `queued`; only one row was written by hand, the guarded
-`UPDATE … SET status = 'researched' WHERE id = … AND status = 'queued'` the publish needs.
-The publish itself set `completed`, `is_public`, `published_at`, `published_by` and the
-slug in its own transaction, journal row 115.
+32 `completed`, 20 `queued`, 1 `running`, 1 `failed`, 2 `paused`, 2 `cancelled` for
+`user_id = '442000112756064260'`. Two rows were written by hand in this campaign, each the
+guarded `UPDATE … SET status = 'researched' WHERE id = … AND status = 'queued'` the publish
+needs. The two publishes set `completed`, `is_public`, `published_at`, `published_by` and
+the slug in their own transaction, journal rows 115 and 116.
