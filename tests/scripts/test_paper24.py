@@ -10,6 +10,12 @@ break that quietly, and none of them would raise.
    driver keeps: a driver that loses its own state must not restart the count.
 3. The read-only boundary is a claim this module makes in prose. It is checked here
    by reading the module: `publish` must not appear in it at all.
+
+`STUDIO_ASSETS` is set **before** `_load()` in every test that needs a workspace,
+because the driver resolves it at import time. Set afterwards, the module keeps the
+owner's real path: the suite reads their campaign state - `scan` prints `bundled`
+straight from it, which is how a real id once failed an "empty campaign" test - and
+writes its own fixture ids into it.
 """
 
 from __future__ import annotations
@@ -36,8 +42,8 @@ def _dossier_list(*rows: dict) -> bytes:
 
 
 def test_scan_answers_with_an_empty_campaign(monkeypatch, tmp_path, capsys):
-    driver = _load()
     monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    driver = _load()
     monkeypatch.setattr(driver.remote, "check_module", lambda *a, **k: _dossier_list())
     monkeypatch.setattr(driver.mcode, "weekly_remaining_percent", lambda: 71.0)
     monkeypatch.setattr(driver.mcode, "weekly_stop", lambda: False)
@@ -50,8 +56,8 @@ def test_scan_answers_with_an_empty_campaign(monkeypatch, tmp_path, capsys):
 
 
 def test_scan_sorts_dossiers_that_have_not_been_taken_yet(monkeypatch, tmp_path, capsys):
-    driver = _load()
     monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    driver = _load()
     monkeypatch.setattr(
         driver.remote,
         "check_module",
@@ -69,8 +75,8 @@ def test_scan_sorts_dossiers_that_have_not_been_taken_yet(monkeypatch, tmp_path,
 
 
 def test_the_iteration_count_comes_from_the_reports_on_disk(monkeypatch, tmp_path, capsys):
-    driver = _load()
     monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    driver = _load()
     monkeypatch.setattr(driver, "LEDGER", tmp_path / "ledger.md")
     ws = driver._ws("bbbbbbbb-0000-0000-0000-000000000001")
     ws.root.mkdir(parents=True)
@@ -108,8 +114,8 @@ def test_the_iteration_count_comes_from_the_reports_on_disk(monkeypatch, tmp_pat
 
 
 def test_the_ledger_replaces_a_row_instead_of_appending_a_second(monkeypatch, tmp_path):
-    driver = _load()
     monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    driver = _load()
     monkeypatch.setattr(driver, "LEDGER", tmp_path / "ledger.md")
     ws = driver._ws("bbbbbbbb-0000-0000-0000-000000000001")
     ws.root.mkdir(parents=True)
