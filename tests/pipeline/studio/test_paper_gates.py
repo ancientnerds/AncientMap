@@ -32,7 +32,17 @@ def test_complete_workspace_passes_every_gate(tmp_path):
     assert score["badge"] == "Claim-checked"
     assert score["audit_gate_failures"]["hallucination_final"] == 0
     assert recompute_quality_passed(score, result["audit"]) is True
-    assert score["meta"]["images_verified"] == 1
+    assert score["meta"]["images_verified"] == 6
+    images_gate = _gate(result, "images")
+    assert images_gate["details"]["images_per_section"] == {
+        "How Heavy Is Heavy": 1,
+        "Who Cut the Blocks": 1,
+        "How They Moved It": 1,
+        "Connecting the Dots": 1,
+        "The Other Side": 1,
+        "What We Actually Know": 1,
+    }
+    assert images_gate["details"]["sections_without_image"] == []
     assert result["hero_image"]["src"].startswith(f"/data/research-images/{fx.REQ}/s")
     stored = json.loads(ws.check_report.read_text(encoding="utf-8"))
     assert stored["paper_sha256"] == gates.sha256_text(ws.paper.read_text(encoding="utf-8"))
@@ -90,13 +100,11 @@ def test_run_check_refuses_paper_meta_without_a_title(tmp_path):
 
 
 def test_structure_gate_counts_investigation_sections():
-    draft = (
-        fx.build_draft()
-        .replace("## How Heavy Is Heavy\n\n", "")
-        .replace("## Who Cut the Blocks\n\n", "")
-    )
+    draft = fx.build_draft()
+    for heading in ("How Heavy Is Heavy", "Who Cut the Blocks", "How They Moved It"):
+        draft = draft.replace(f"## {heading}\n\n", "")
     problems = gates.gate_structure(_report(draft)).details["problems"]
-    assert "need 2 to 4 investigation sections, got 0" in problems
+    assert "need 3 to 6 investigation sections, got 0" in problems
 
 
 def test_structure_gate_needs_one_or_two_hook_paragraphs():
@@ -109,7 +117,7 @@ def test_structure_gate_needs_one_or_two_hook_paragraphs():
     )
     gate = gates.gate_structure(_report(fx.build_draft()))
     assert gate.passed, gate.details
-    assert (gate.details["hook_paragraphs"], gate.details["investigations"]) == (2, 2)
+    assert (gate.details["hook_paragraphs"], gate.details["investigations"]) == (2, 3)
 
 
 def test_meta_gate():
@@ -134,7 +142,8 @@ def test_references_gate_catches_numbers_without_a_source():
     report = _report(fx.build_draft())
     rows = [{"n": 1, "source_id": fx.S1}]
     gate = gates.gate_references(report, rows, parse_dossier(fx.dossier_gz_bytes()))
-    assert gate.details == {"unresolved_numbers": [2], "unknown_source_ids": []}
+    # the draft cites S1, S2 and S5; only [1] resolves
+    assert gate.details == {"unresolved_numbers": [2, 3], "unknown_source_ids": []}
 
 
 def test_specifics_gate_fails_on_a_date_the_cited_source_lacks():

@@ -109,7 +109,7 @@ export of section 11.
 ## 2. Running the studio
 
 ```bash
-./.venv/Scripts/python.exe -m pipeline.studio paper   {list,pull,number,check,claims-export,claims-import,images-export,images-import,bundle,publish,correct,register-video}
+./.venv/Scripts/python.exe -m pipeline.studio paper   {list,pull,number,check,claims-export,claims-import,images-export,images-import,bundle,publish,correct,patch-images,register-video}
 ./.venv/Scripts/python.exe -m pipeline.studio episode {init,markers-export,markers-import,check,review,voice,capture,timeline,render,thumbnail,package,register-youtube}
 ./.venv/Scripts/python.exe -m pipeline.studio doctor [--fix-gpu]
 ```
@@ -347,6 +347,22 @@ exact bytes sent.
   republish's `dossier_source` gate checks RUN again, and the apply closes RUN in the same transaction:
   `status = 'cancelled'`, `error_message = 'dossier used by the republish of <ID>'` (Q10). RUN then
   leaves `theo_dossier list` and the unwritten-dossier cap.
+
+A picture of a published paper changes through `paper patch-images ID --patch FILE [--images DIR]
+[--dry-run]`, never through a republish. FILE is the `theo_publish --patch-images` envelope: the
+complete new `probative_images` list, one `replacements` entry per replaced picture (`old_web_path`
+plus the finished markdown block the studio built) and the `corrections_append` entries that say
+on the page what changed. The new files are uploaded from `--images` (default
+`<workspace>/images/selected`) before the dry run, because the images gate checks them on the VPS.
+The server swaps the replaced blocks and writes the image list; every other character of the stored
+text is left alone, and slug, `published_at`, `published_by`, title, card, evidence and videos do
+not move. The record lands in `<workspace>/image_patches/<stamp>.json` with the sha256 of the bytes
+sent. Migration 0028 must have run: the journal's action vocabulary is a CHECK constraint.
+
+Every write of the publish path (`publish`, `correct`, `patch_images`, `register_video`) is
+idempotent per input hash. Sending the same bytes twice answers `already_applied: true` with the
+journal id of the write that already committed and writes nothing, so a retry after an unknown
+outcome is safe to re-run (the adoption procedure below still names the read-only check).
 
 A video joins a paper through `paper register-video ID --youtube-id X --title T --published-at ISO
 --timestamps FILE [--poster FILE]` (`episode register-youtube` calls the same steps, section 6; FILE is

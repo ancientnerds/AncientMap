@@ -87,6 +87,13 @@ _MD_LINK_RE = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
 _CITATION_MARKER_RE = re.compile(r"\[(?:\d+(?:\s*[,-]\s*\d+)*|S:[^\]\s]+)\]")
 _DASH_RUN_RE = re.compile(r"-{2,}")
 _EDGE_UNDERSCORE_RE = re.compile(r"(?<!\w)_+|_+(?!\w)")
+#: A space that only a stripped marker left behind: "... literary import [27]."
+#: normalises to "literary import ." with a space in front of the full stop, and an
+#: anchor written on the house form ("... literary import.") then matches no paragraph.
+#: Removing apparatus must not change the prose it stands in, so the space goes with it.
+#: This can only add matches, never remove one: both sides of every comparison are
+#: normalised by this same function.
+_APERTURE_RE = re.compile(r"([(\[{'\u2018\u201c])\s+|\s+([,;:.!?\u2026])")
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
@@ -104,15 +111,18 @@ def normalize_anchor_text(text: str) -> str:
     Unicode NFKC (an ellipsis becomes "...", a no-break space a space); markdown
     backslash escapes dropped; autolinks <https://...> to their URL; markdown
     links and images to their text; citation markers [N], [N, M], [N-M] and
-    draft markers [S:<id>] removed; runs of "-" folded to one ("--" is what the
-    renderer turns into an en dash); emphasis markers * and ` removed, _ removed
-    at word edges; whitespace folded to single spaces; stripped; case-folded.
+    draft markers [S:<id>] removed, and with them the space a marker standing
+    between a word and its full stop would leave behind ("import [27]." reads as
+    "import."); runs of "-" folded to one ("--" is what the renderer turns into
+    an en dash); emphasis markers * and ` removed, _ removed at word edges;
+    whitespace folded to single spaces; stripped; case-folded.
     """
     folded = unicodedata.normalize("NFKC", html.unescape(text).translate(_TYPOGRAPHY))
     folded = _MD_ESCAPE_RE.sub(r"\1", folded)
     folded = _AUTOLINK_RE.sub(r"\1", folded)
     folded = _MD_LINK_RE.sub(r"\1", folded)
     folded = _CITATION_MARKER_RE.sub(" ", folded)
+    folded = _APERTURE_RE.sub(lambda m: (m.group(1) or "") + (m.group(2) or ""), folded)
     folded = _DASH_RUN_RE.sub("-", folded)
     folded = folded.replace("*", "").replace("`", "")
     folded = _EDGE_UNDERSCORE_RE.sub("", folded)
@@ -242,6 +252,9 @@ def pick_slug(session: Any, title: str, request_id: str) -> str:
 #: /app/public/data/research-images in the API container (bind mount of the VPS's
 #: /var/www/ancientnerds/public/data); the repo root's public/data elsewhere.
 RESEARCH_IMAGES_DIR = Path(__file__).resolve().parents[2] / "public" / "data" / "research-images"
+#: The directory nginx serves as `/data/`, which is what a web path in a paper
+#: resolves against (check_pictures).
+SERVED_DATA_DIR = RESEARCH_IMAGES_DIR.parent
 
 #: A citation-registry source id; applied with fullmatch like every id pattern here.
 SOURCE_ID_RE = re.compile(r"[0-9a-f]{12}")
@@ -270,7 +283,16 @@ _RESULT_REQUIRED: dict[str, type] = {
     "corrections": list,
 }
 _RESULT_NULLABLE_DICTS = ("hero_image", "published_hero_image")
-_RESULT_OPTIONAL = frozenset({"audit", "writer"})
+#: `sentence_evidence` is the audit artefact the studio builds for every paper
+#: (`studio.paper.evidence_card.build_evidence_card`): per cited sentence, the
+#: reference numbers of its paragraph and the quote `claim_support.locate_support`
+#: found for it in that reference's fetched text, with character offsets. It is
+#: stored so a reader of `result_json` can check which source supports which
+#: sentence without redoing the research. It changes nothing about the page: the
+#: markers stay paragraph-level (1,136 of 1,136 references cited, 0 of 853
+#: paragraphs uncited in the 31-paper corpus) and the rendered report is
+#: byte-identical with and without it.
+_RESULT_OPTIONAL = frozenset({"audit", "writer", "sentence_evidence"})
 
 
 def _gate(issues: list[str], **extra: Any) -> dict:
@@ -495,6 +517,46 @@ def check_images(
     return _gate(issues, checked=len(paths), missing=missing, foreign=foreign)
 
 
+#: The class-G rules the publish gate adds on top of the studio's own image gate
+#: (`studio.paper.gates.gate_images`, which already refuses a missing licence,
+#: source URL, attribution or caption, and a file missing from images/selected/).
+#: What is left is what a *published* page can still get wrong by itself: a
+#: picture nobody opened (`verified:no` in the stored alt text - the report:
+#: "must mean nobody has looked, and must never ship"), a credit without a
+#: picture (cargo-cults shipped 8 credits for 7 pictures), one picture credited
+#: twice, and a reference the site does not serve (7 of the 511 references in
+#: the 31-paper corpus answer 404, all 7 in one paper).
+_PUBLISH_IMAGE_RULES = frozenset(
+    {"unverified", "not_served", "credit_picture_mismatch", "duplicate_credit"}
+)
+
+
+def check_pictures(
+    request_id: str, report: str, probative_images: list, *, served_root: Path
+) -> dict:
+    """The picture rules of docs/reports/theo-paper-defects-2026-10-04.md section G.
+
+    `served_root` is the directory the site serves as `/data/`: every web path
+    has to exist under it, because a reference the site cannot answer is a
+    defect on the page, not a cosmetic one.
+    """
+    from pipeline.lyra import theo_image_gate
+
+    figures = theo_image_gate.parse_figures(report)
+    issues = [
+        issue
+        for issue in theo_image_gate.check_image_report(
+            report, probative_images, request_id=request_id, served_root=served_root
+        )
+        if issue.rule in _PUBLISH_IMAGE_RULES
+    ]
+    return _gate(
+        [f"{issue.rule}: {issue.detail}" for issue in issues],
+        figures=len(figures),
+        rules=sorted({issue.rule for issue in issues}),
+    )
+
+
 def check_publish_status(status: str, is_public: bool, *, dry_run: bool) -> dict:
     """Publish needs a 'researched' or 'completed' row; --apply also needs it not public.
 
@@ -574,6 +636,10 @@ class PublishOutcome:
     gates: dict[str, dict] = field(default_factory=dict)
     side_effects: dict[str, dict] = field(default_factory=dict)
     journal_id: int | None = None
+    #: True when this exact input (the bundle's sha256) is the paper's newest
+    #: journal row, so its effect is already the stored state and nothing was
+    #: written again (rule 7; see _already_applied).
+    already_applied: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -598,6 +664,22 @@ _JOURNAL_SQL = text("""
 _SIDE_EFFECTS_SQL = text(
     "UPDATE theo_paper_publications SET side_effects = CAST(:side_effects AS jsonb) WHERE id = :id"
 )
+#: The paper's newest journal row, and only when it carries the action and the
+#: exact input bytes of this call (rule 7: writes are idempotent per input
+#: hash). Newest-only is what makes the short circuit sound: a correction
+#: followed by another one and then re-sent still applies, because the paper is
+#: no longer in the first correction's result. Re-sending the same input
+#: unchanged -- a retry after a timeout, a re-run of a script, a driver that
+#: sends twice -- is a no-op instead of a second journal row and a second copy
+#: of its corrections_append entries on the page.
+_ALREADY_APPLIED_SQL = text("""
+    SELECT id, gates, side_effects, slug
+    FROM theo_paper_publications
+    WHERE id = (SELECT MAX(id) FROM theo_paper_publications
+                WHERE request_id = CAST(:request_id AS uuid))
+      AND action = :action
+      AND bundle_sha256 = :bundle_sha256
+""")
 _PUBLISH_SQL = text("""
     UPDATE research_requests
     SET status = 'completed',
@@ -644,6 +726,41 @@ def _journal(
         },
     ).scalar_one()
     return int(journal_id)
+
+
+def _already_applied(
+    session: Any, request_id: str, *, action: str, bundle_sha256: str, dry_run: bool
+) -> PublishOutcome | None:
+    """The outcome of an input that already committed as this paper's newest write.
+
+    No gate runs and nothing is written: the stored state *is* this input's
+    result. That run's recorded gates and side effects are reported instead, so
+    a caller can see why it wrote what it wrote -- and, after an exit 4, which
+    side effects never ran (they are NULL in that row). A caller that sent the
+    same input twice gets exit 0 and the journal id of the first write rather
+    than a second write (rule 7).
+    """
+    row = session.execute(
+        _ALREADY_APPLIED_SQL,
+        {"request_id": request_id, "action": action, "bundle_sha256": bundle_sha256},
+    ).fetchone()
+    if row is None:
+        return None
+    from pipeline.indexnow import page_url
+
+    return PublishOutcome(
+        ok=True,
+        action=action,
+        request_id=request_id,
+        dry_run=dry_run,
+        slug=row.slug,
+        url=page_url(f"/research/{row.slug}") if row.slug else None,
+        # jsonb columns, read back as the dict psycopg hands over.
+        gates=row.gates,
+        side_effects=row.side_effects or {},
+        journal_id=int(row.id),
+        already_applied=True,
+    )
 
 
 def _verify(
@@ -832,6 +949,7 @@ def publish_paper(
     dry_run: bool,
     bundle_sha256: str,
     images_root: Path = RESEARCH_IMAGES_DIR,
+    served_root: Path = SERVED_DATA_DIR,
 ) -> PublishOutcome:
     """Gate, then publish a Claude-written paper in one guarded transaction with its journal row.
 
@@ -844,8 +962,17 @@ def publish_paper(
     `dossier` summary and, for a paper the founder route unpublished, its public
     record: the `corrections` log, the `videos` and every evidence id it had
     (the retention gate, spec 2.7). result.corrections itself must be [].
+
+    A bundle whose sha256 is the paper's newest journal row is not written
+    twice: the outcome carries that journal id and `already_applied`
+    (rule 7, _already_applied).
     """
     row = _read_row(session, request_id)
+    repeated = _already_applied(
+        session, request_id, action="publish", bundle_sha256=bundle_sha256, dry_run=dry_run
+    )
+    if repeated is not None:
+        return repeated
     previous = _stored_result(row)
     gates: dict[str, dict] = {
         "status": check_publish_status(row.status, row.is_public, dry_run=dry_run),
@@ -866,6 +993,12 @@ def publish_paper(
             result["probative_images"],
             result["hero_image"],
             images_root=images_root,
+        )
+        gates["pictures"] = check_pictures(
+            request_id,
+            result["report"],
+            result["probative_images"],
+            served_root=served_root,
         )
         stored = {**result, "audit": audit, "writer": writer}
         for key in ("dossier", "corrections", "videos"):
@@ -1077,6 +1210,7 @@ def correct_paper(
     bundle_sha256: str,
     dry_run: bool,
     images_root: Path = RESEARCH_IMAGES_DIR,
+    served_root: Path = SERVED_DATA_DIR,
 ) -> PublishOutcome:
     """Re-gate and apply a correction to a public paper (contract C5).
 
@@ -1100,10 +1234,20 @@ def correct_paper(
     same transaction. The CLI refuses `result` together with `report` or
     `evidence`, a `rewrite` that is not true, comes without `report` or with
     `evidence`, and a `dossier_request_id` without `result` (exit 2).
+
+    The corrections log is appended to, so sending one correction twice would
+    leave two identical entries on the page -- 42 of them did (rule 7). A
+    correction whose sha256 is the paper's newest journal row is therefore not
+    written twice: the outcome carries that journal id and `already_applied`.
     """
     from pipeline.indexnow import page_url
 
     row = _read_row(session, request_id)
+    repeated = _already_applied(
+        session, request_id, action="correct", bundle_sha256=bundle_sha256, dry_run=dry_run
+    )
+    if repeated is not None:
+        return repeated
     current = _stored_result(row)
     stored_corrections = current.get("corrections", [])
     republish = "result" in correction
@@ -1164,6 +1308,12 @@ def correct_paper(
             paper.get("probative_images") or [],
             paper.get("hero_image"),
             images_root=images_root,
+        )
+        gates["pictures"] = check_pictures(
+            request_id,
+            served,
+            paper.get("probative_images") or [],
+            served_root=served_root,
         )
         stored = {
             **current,
@@ -1235,6 +1385,266 @@ def correct_paper(
     return outcome
 
 
+# ---------------------------------------------------------------------------
+# Image patch (rule 8, report class H.2)
+# ---------------------------------------------------------------------------
+
+#: One embedded image as the page renders it: the `![alt](path)` line, then the
+#: caption line and the `[Source](url)` line `theo_image_captions.image_markdown`
+#: writes after it. The alt text of a studio image is a `gallery:` marker, so the
+#: line is matched on the path alone.
+_IMAGE_LINE_RE = re.compile(r"^!\[(?P<alt>[^\]]*)\]\((?P<path>[^)]+)\)\s*$")
+_CAPTION_LINE_RE = re.compile(r"^\*[^*\n].*\*\s*$")
+_SOURCE_LINE_RE = re.compile(r"^\[Source\]\((?P<url>[^)\n]+)\)\s*$")
+_PATCH_ENTRY_KEYS = frozenset({"old_web_path", "markdown"})
+
+
+def _image_block(text: str, old_web_path: str) -> tuple[int, int]:
+    """The (start, end) character range of the image block `old_web_path` renders.
+
+    The block is the `![...](path)` line, an optional blank line, the caption line
+    and the `[Source](url)` line. Raises PublishInputError when the paper does not
+    carry exactly one such block in that shape -- a patch that guessed which lines
+    belong to a picture would rewrite the reader's page on a guess, and one that
+    stopped at the caption would leave the old picture's credit under the new
+    picture.
+    """
+    lines = text.split("\n")
+    hits = [
+        index
+        for index, line in enumerate(lines)
+        if _IMAGE_LINE_RE.match(line) and _IMAGE_LINE_RE.match(line)["path"] == old_web_path
+    ]
+    if len(hits) != 1:
+        raise PublishInputError(
+            f"{old_web_path}: the text renders {len(hits)} such images, not exactly one"
+        )
+    start = hits[0]
+    end = start + 1
+    while end < len(lines) and not lines[end].strip():
+        end += 1
+    if end < len(lines) and _CAPTION_LINE_RE.match(lines[end]):
+        end += 1
+        if end < len(lines) and _SOURCE_LINE_RE.match(lines[end]):
+            end += 1
+    # Blank lines *after* the block stay outside it: they are the paragraph break
+    # to the next paragraph, and the replacement markdown ends with exactly one
+    # newline (theo_image_captions.image_markdown).
+    return sum(len(line) + 1 for line in lines[:start]), sum(len(line) + 1 for line in lines[:end])
+
+
+def apply_image_replacements(text: str, replacements: list[dict]) -> str:
+    """Swap each replaced image's block for the markdown the patch carries.
+
+    Everything outside the named blocks is byte-identical: that is the promise
+    of a patch path (report class H.2 -- changing a picture must not mean
+    republishing a public paper's whole text).
+    """
+    for replacement in replacements:
+        start, end = _image_block(text, replacement["old_web_path"])
+        text = text[:start] + replacement["markdown"] + text[end:]
+    return text
+
+
+def check_patch_shape(patch: dict, *, published_on: date | None, today: date) -> dict:
+    """Value types of an image patch input (the CLI checked the keys, C9).
+
+    `probative_images` is the complete new list, not a delta: the page's image
+    set is replaced wholesale so a removed picture cannot survive in the list
+    while its block is gone from the text.
+    """
+    issues = check_writer(patch.get("writer"))
+    images = patch.get("probative_images")
+    if not isinstance(images, list) or not images:
+        issues.append("probative_images must be a non-empty list: it replaces the stored list")
+    else:
+        for index, entry in enumerate(images):
+            if not isinstance(entry, dict):
+                issues.append(f"probative_images[{index}] must be an object")
+            elif not (isinstance(entry.get("web_path"), str) and entry["web_path"].strip()):
+                issues.append(f"probative_images[{index}].web_path must be a non-empty string")
+    replacements = patch.get("replacements")
+    if not isinstance(replacements, list) or not replacements:
+        issues.append("replacements must be a non-empty list: a patch changes at least one image")
+    else:
+        for index, replacement in enumerate(replacements):
+            label = f"replacements[{index}]"
+            if not isinstance(replacement, dict):
+                issues.append(f"{label} must be an object")
+                continue
+            unknown = sorted(set(replacement) - _PATCH_ENTRY_KEYS)
+            if unknown:
+                issues.append(f"{label} has unknown keys {unknown}")
+            if not (
+                isinstance(replacement.get("old_web_path"), str)
+                and replacement["old_web_path"].strip()
+            ):
+                issues.append(f"{label}.old_web_path must be a non-empty string")
+            markdown = replacement.get("markdown")
+            if not (isinstance(markdown, str) and markdown.strip()):
+                issues.append(f"{label}.markdown must be a non-empty string")
+            elif not _IMAGE_LINE_RE.match(markdown.split("\n")[0]):
+                issues.append(f"{label}.markdown must start with an ![alt](path) line")
+    issues.extend(
+        _correction_entry_issues(
+            patch.get("corrections_append"), earliest=published_on, latest=today
+        )
+    )
+    return _gate(issues)
+
+
+def _patch_target_issues(current: dict, patch: dict, texts: dict[str, str]) -> list[str]:
+    """Every replaced image exists in the stored list and in the text, once."""
+    issues: list[str] = []
+    stored_paths = [
+        entry.get("web_path")
+        for entry in current.get("probative_images") or []
+        if isinstance(entry, dict)
+    ]
+    new_paths = {entry["web_path"] for entry in patch["probative_images"]}
+    for index, replacement in enumerate(patch["replacements"]):
+        old = replacement["old_web_path"]
+        if stored_paths.count(old) != 1:
+            issues.append(
+                f"replacements[{index}]: probative_images holds {stored_paths.count(old)} entries "
+                f"for {old}, not exactly one"
+            )
+        rendered = re.findall(r"/data/research-images/[^\s)\"'<>]+", replacement["markdown"])
+        if not rendered:
+            issues.append(f"replacements[{index}].markdown references no image path")
+        for path in rendered:
+            if path not in new_paths:
+                issues.append(
+                    f"replacements[{index}].markdown references {path}, which the new "
+                    "probative_images does not carry"
+                )
+        for name, body in texts.items():
+            if body is None:
+                continue
+            try:
+                _image_block(body, old)
+            except PublishInputError as exc:
+                issues.append(f"replacements[{index}] in {name}: {exc}")
+    return issues
+
+
+def patch_images(
+    session: Any,
+    request_id: str,
+    patch: dict,
+    *,
+    bundle_sha256: str,
+    dry_run: bool,
+    images_root: Path = RESEARCH_IMAGES_DIR,
+    served_root: Path = SERVED_DATA_DIR,
+) -> PublishOutcome:
+    """Replace pictures in a public paper without republishing its text (rule 8).
+
+    `correct_paper` cannot write `probative_images` (the stored ones stay), so
+    before this a picture could only change through a full republish, which
+    replaces the whole stored text of a live paper -- the report's 7 dead
+    image URLs would have cost 7 republications. This action writes the image
+    list and swaps the replaced images' markdown blocks, byte for byte outside
+    those blocks, and nothing else of the paper: slug, published_at,
+    published_by, title, card, evidence, videos and quality_score stay.
+
+    The patch carries the finished markdown, not a caption to assemble: the
+    studio writes the block (theo_image_captions.image_markdown), the server
+    only moves it. The corrections log grows, because the page a reader sees
+    changed, and the write is journalled and idempotent per input hash like
+    every other (rule 7).
+    """
+    from pipeline.indexnow import page_url
+
+    row = _read_row(session, request_id)
+    repeated = _already_applied(
+        session, request_id, action="patch_images", bundle_sha256=bundle_sha256, dry_run=dry_run
+    )
+    if repeated is not None:
+        return repeated
+    current = _stored_result(row)
+    stored_corrections = current.get("corrections", [])
+    gates: dict[str, dict] = {
+        "status": check_live_status(row.status, row.is_public),
+        "shape": check_patch_shape(
+            patch,
+            published_on=row.published_at.date() if row.published_at is not None else None,
+            today=datetime.now(UTC).date(),
+        ),
+    }
+    stored: dict = {}
+    patched: dict[str, str] = {}
+    if gates["status"]["passed"] and gates["shape"]["passed"]:
+        texts = {"report": current.get("report")}
+        if "published_report" in current:
+            texts["published_report"] = current["published_report"]
+        gates["targets"] = _gate(_patch_target_issues(current, patch, texts))
+        if gates["targets"]["passed"]:
+            for name, text in texts.items():
+                patched[name] = apply_image_replacements(text, patch["replacements"])
+            served = patched.get("published_report", patched["report"])
+            gates["artifact"], audit = check_artifact(served)
+            gates["images"] = check_images(
+                request_id,
+                served,
+                patch["probative_images"],
+                current.get("hero_image"),
+                images_root=images_root,
+            )
+            gates["pictures"] = check_pictures(
+                request_id,
+                served,
+                patch["probative_images"],
+                served_root=served_root,
+            )
+            stored = {
+                **current,
+                **patched,
+                "probative_images": patch["probative_images"],
+                "corrections": [*stored_corrections, *patch["corrections_append"]],
+                "audit": audit,
+            }
+            gates["page"] = check_page(request_id, stored)
+    outcome = PublishOutcome(
+        ok=all(gate["passed"] for gate in gates.values()),
+        action="patch_images",
+        request_id=request_id,
+        dry_run=dry_run,
+        slug=row.slug,
+        url=page_url(f"/research/{row.slug}") if row.slug else None,
+        gates=gates,
+    )
+    if dry_run or not outcome.ok:
+        return outcome
+
+    _update_result(session, row, stored)
+    outcome.journal_id = _journal(
+        session,
+        request_id=request_id,
+        action="patch_images",
+        slug=row.slug,
+        writer=patch["writer"],
+        bundle_sha256=bundle_sha256,
+        gates=gates,
+    )
+    session.commit()
+    _verify(session, request_id, result=stored, slug=row.slug)
+    # The page's text changed, so IndexNow and Qdrant see the new one; a picture
+    # is not a rewrite, so the owner is not notified (as for a small fix).
+    outcome.side_effects = run_publish_side_effects(
+        request_id=request_id,
+        slug=row.slug,
+        title=stored["title"],
+        paper_text=stored.get("published_report") or stored["report"],
+        author_username=row.published_by,
+        author_discord_id=row.user_id,
+        published_at=row.published_at.replace(tzinfo=UTC).isoformat(),
+        reindex=True,
+    )
+    _record_side_effects(session, outcome.journal_id, outcome.side_effects)
+    return outcome
+
+
 def check_video_shape(video: dict) -> dict:
     """Value types of a video registration (the CLI checked the keys, contract C6).
 
@@ -1288,11 +1698,19 @@ def register_video(
     registration sends one, and only once its file exists in the paper's
     folder: the images gate runs check_images on it. Without a poster the
     images gate checks nothing and the page keeps its posterless player.
+
+    A registration whose sha256 is the paper's newest journal row is not
+    written twice (rule 7).
     """
     from pipeline.indexnow import page_url
     from pipeline.indexnow import submit as indexnow_submit
 
     row = _read_row(session, request_id)
+    repeated = _already_applied(
+        session, request_id, action="register_video", bundle_sha256=bundle_sha256, dry_run=dry_run
+    )
+    if repeated is not None:
+        return repeated
     gates: dict[str, dict] = {
         "status": check_live_status(row.status, row.is_public),
         "shape": check_video_shape(video),

@@ -65,7 +65,11 @@ DRY_RUN_TIMEOUT_S = 300
 APPLY_TIMEOUT_S = 600
 CORRECT_TIMEOUT_S = 600
 VIDEO_TIMEOUT_S = 120
+PATCH_TIMEOUT_S = 600
 ENTRY_KEYS = frozenset({"text", "evidence_id"})
+_PATCH_KEYS = frozenset(
+    {"version", "request_id", "writer", "probative_images", "replacements", "corrections_append"}
+)
 
 
 def outcome_of(result: remote.RemoteResult, *, write: bool) -> dict[str, Any]:
@@ -404,6 +408,87 @@ def correct(
     _call(record, "apply", ["--correct"], body, CORRECT_TIMEOUT_S, path, unknown=steps)
     if sent_bundle is not None:
         ws.published_bundle.write_bytes(sent_bundle)
+    return record
+
+
+def patch_images_payload(ws: PaperWorkspace, patch_file: Path) -> dict[str, Any]:
+    """The --patch-images input (rule 8), read from the operator's patch file.
+
+    The file is the theo_publish envelope verbatim, so what the studio sends is
+    what the operator wrote down and the journal's bundle_sha256 covers it. The
+    studio only checks the keys the CLI cannot: the right paper, and no
+    unexpected top-level key.
+    """
+    patch = read_json(patch_file, f"an image patch {sorted(_PATCH_KEYS)}")
+    unknown = sorted(set(patch) - _PATCH_KEYS)
+    if unknown:
+        raise StudioError(f"{patch_file}: unknown keys {unknown}")
+    missing = sorted(_PATCH_KEYS - set(patch))
+    if missing:
+        raise StudioError(f"{patch_file}: missing keys {missing}")
+    if patch["request_id"] != ws.request_id:
+        raise StudioError(
+            f"{patch_file}: request_id is {patch['request_id']!r}, not this workspace's "
+            f"{ws.request_id!r}"
+        )
+    return patch
+
+
+def patch_image_files(patch: dict[str, Any], images_dir: Path) -> list[Path]:
+    """The local files of the patch's new pictures, one per new web path.
+
+    Every replacement's markdown must reference a path the new probative_images
+    carries, and every such file has to be here before the dry run: the images
+    gate on the VPS checks that the file exists, and a patch that uploaded
+    after its dry run would fail its own apply.
+    """
+    wanted = sorted({entry["web_path"] for entry in patch["probative_images"]})
+    files = [images_dir / PurePosixPath(path).name for path in wanted]
+    missing = [
+        f"{path} (expected {file.name})"
+        for path, file in zip(wanted, files, strict=True)
+        if not file.is_file()
+    ]
+    if missing:
+        raise StudioError(f"the patch's new pictures are missing under {images_dir}: {missing}")
+    return files
+
+
+def patch_images(
+    ws: PaperWorkspace, patch: dict[str, Any], images_dir: Path, *, dry_run: bool = False
+) -> dict[str, Any]:
+    """Replace pictures in a published paper without republishing its text (rule 8).
+
+    Upload the new files, dry-run, apply. The paper's text is not part of the
+    patch: the server swaps the replaced image blocks and leaves every other
+    character of the stored text alone, which is the point of the action
+    (report class H.2 -- seven dead image URLs must not cost seven
+    republications). The record lands in <workspace>/image_patches/, next to
+    the corrections log's, and carries the sha256 of the exact bytes sent.
+    """
+    files = patch_image_files(patch, images_dir)
+    if not dry_run:
+        remote.upload_research_images(ws.request_id, files)
+    body = json.dumps(patch, ensure_ascii=False).encode("utf-8")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    path = ws.root / "image_patches" / f"{stamp}.json"
+    record: dict[str, Any] = {
+        "payload": patch,
+        "body_sha256": hashlib.sha256(body).hexdigest(),
+        "uploaded": [file.name for file in files],
+        "dry_run": None,
+        "apply": None,
+    }
+    _call(record, "dry_run", ["--patch-images", "--dry-run"], body, PATCH_TIMEOUT_S, path)
+    steps = unknown_outcome_steps(
+        ws.request_id,
+        record["body_sha256"],
+        sent_bundle=False,
+        first_publish=False,
+    )
+    if dry_run:
+        return record
+    _call(record, "apply", ["--patch-images"], body, PATCH_TIMEOUT_S, path, unknown=steps)
     return record
 
 

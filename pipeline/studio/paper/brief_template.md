@@ -32,22 +32,39 @@ claim has been checked against its source text (archived, or read live for a TDM
    the text of `quote_source_id`: its `texts/<id>.txt`, or for a `tdm_reserved` source the page
    text the claim check reads live and saves to `claims_check/live/<id>.txt`. Ids run ev-01,
    ev-02, ... in paper order and are never reused for a different claim once published.
-4. `images/opportunities.json` (after `paper number`): 4 to 10 places where an image would show
+4. `images/opportunities.json` (after `paper number`): the places where an image would show
    the reader the evidence: `[{"id": "op-01", "anchor_text": "...", "subject": "what the image
    must show, in one sentence", "queries": ["search query", "..."]}]`, 1 to 4 queries each;
    `anchor_text` follows the same rule as in evidence.json and names a paragraph inside a `##`
    section (images never sit in the hook).
+   **Every section needs at least one opportunity** — that is the hard rule the checker
+   enforces (measured on the 31 live papers before it existed: 109 of 189 sections carried no
+   image, the three fixed sections 76 times out of 93). Aim for four per section, which is the
+   goal the campaign reports but does not require: a 6 to 9 section paper wants 24 to 36
+   opportunities, one per paragraph that names something a picture can show.
 
-Then run, in order: `paper number`, `paper claims-export` (answer with the theo-claim-check
-workflow), `paper claims-import`, `paper images-export` (theo-image-check workflow),
-`paper images-import`, `paper check`. Fix `draft.md` and repeat until `check` passes; only the
-changed paragraphs are re-checked. Then `paper bundle` and `paper publish` (the rewrite of a
-public paper pulled with `--dossier-from`: `paper correct <id> --republish` instead).
+Then run, in order: `paper number`, **`paper check`**, `paper claims-export` (answer with the
+theo-claim-check workflow), `paper claims-import`, `paper images-export` (theo-image-check
+workflow), `paper images-import`, `paper check`. Fix `draft.md` and repeat until `check`
+passes; only the changed paragraphs are re-checked. Then `paper bundle` and `paper publish`
+(the rewrite of a public paper pulled with `--dossier-from`: `paper correct <id> --republish`
+instead).
+
+**Run `paper check` before the claim check, not only at the end.** Its `support` and
+`structure` gates cost no model calls and take seconds, and they say in seconds what the
+claim check would otherwise spend roughly 170 model runs discovering: every marker whose
+source does not carry its sentence, and which source in the paragraph does. Measured on
+2026-10-04, paper `95fa3798`: the first `check` named 82 markers wrong, and re-running the
+same gate over that paragraph's other sources named a replacement for 47 of them without a
+single model call. On that first run the `claims`, `images`, `coherence` and `hero` gates
+are red because their steps have not run yet - that is expected, and it is not a reason to
+wait. Fix the citation layer first; a claim check run over a draft with 82 wrong markers
+buys an answer for every one of them.
 
 ## Hard rules the checker enforces
 
 - Structure: the hook (1 to 2 paragraphs directly under the title, no heading of its own), then
-  2 to 4 investigation sections (`## <descriptive title>`), then exactly `## Connecting the Dots`,
+  3 to 6 investigation sections (`## <descriptive title>`), then exactly `## Connecting the Dots`,
   `## The Other Side`, `## What We Actually Know`. `paper number` adds `# <title>` and
   `## References`. Every heading is on its own line with a blank line after it.
 - Length: 5,000 to 7,500 words of prose (References and image captions do not count).
@@ -132,7 +149,7 @@ Cross-Cultural Analysis" (subtitle and em dash).
 <hook: 1-2 paragraphs, no heading of its own>
 
 ## <Investigation section 1>
-## <Investigation section 2>        (2 to 4 investigation sections in total)
+## <Investigation section 2>        (3 to 6 investigation sections in total)
 ## Connecting the Dots
 ## The Other Side
 ## What We Actually Know
@@ -152,7 +169,10 @@ Length: 5,000 to 7,500 words for the whole paper (the last six published papers 
    "Evidence Review".
 2. Assign the dossier's research angles to the investigation sections. Every angle with usable findings
    appears in exactly one investigation section. An angle with no usable findings gets no section.
-   Two angles with closely related findings merge into one section.
+   Two angles with closely related findings merge into one section — but merge only when the merged
+   section still has a subject a reader can picture. The section count is a lever, not a target: three
+   to six, and every one of them needs at least one image opportunity, so a longer section with two
+   strong angles is better than a short one with nothing to show.
 3. Order the investigation sections for narrative flow: build toward the most interesting findings.
 4. "Connecting the Dots" references specific findings from specific investigation sections. It ties
    threads together; it introduces no new evidence.
@@ -289,10 +309,24 @@ hard. That's not gullibility. That's hope."
 - A citation points to a source that actually supports that specific sentence, not merely a topically
   related one. The claim-by-claim fact check reads the cited source's archived text (a TDM-reserved
   source: its page, read live) and rejects mismatches.
+- **One marker per claim, and never two claims from two sources in one sentence.** A marker is asked to
+  carry the sentence it stands in, so "the quarry stone is local limestone, and the podium blocks weigh
+  800 tons [S:a] [S:b]" is refused: the first source does not carry the tonnage and the second does not
+  carry the limestone. Write two sentences, one claim each, one marker each. Several markers *in* one
+  sentence are right when they support that one claim from several sources ("...dates to 3000 BC [S:a]
+  [S:b].") and wrong when they are two claims.
 - `[self]` or any other bracket token that is not a citation marker, a footnote `[^n]` or a markdown link
   never appears in prose (the artifact gate holds the paper on any non-numeric bracket token).
 - If a sentence cannot be backed by a dossier source, delete the sentence. Fewer fully cited paragraphs beat
   longer ones with ungrounded filler.
+- **A marker in the claims pack below is already verified:** `paper pull` reads the archived text of every
+  source a moderated claim cites and writes the marker only where that text carries the sentence. Treat a
+  settled claim as safe to write, and keep its wording as close to the claim as the section allows.
+- **The claims in "not carried by the sources they cite" are the research stage's own gaps.** Their markers
+  were withheld because the archived text does not carry the sentence, so writing them as facts would put
+  an unchecked citation in the paper. For each one, either re-source it from a source in the list below
+  (a quoted sentence is given when one was found), or narrow it to what a source really says, or leave it
+  out. Dropping a claim is a correct outcome; inventing its support is not.
 
 ## 6. Grounding (anti-hallucination)
 
@@ -305,6 +339,21 @@ hard. That's not gullibility. That's hope."
   blocks the publish.
 - Do not include "common knowledge" claims that no cited source states.
 - If the dossier is thin on a point, write less about it. Short and honest beats long and fabricated.
+- **Find the sentence before you write the marker.** For every sentence you are about to mark, look up the
+  source's archived text (`sources/<id>.txt` or `texts/<id>.txt`) and find the sentence that supports it.
+  The support gate now requires it: a marked sentence whose specifics cannot be found in the source it
+  cites blocks the publish, and it is the defect the last audit measured most often (384 misattributed
+  sentences in 31 papers, more than half of all findings). No located sentence means re-source the sentence
+  or cut it — not a second citation to the same paragraph.
+- **Never sharpen a source.** Carry the hedge, the unit, the epoch and the uncertainty the source carries.
+  If the source says "about 1,000 tons", the paper says "about 1,000 tons", not "1,000 tons"; if it says
+  "may have been carved in the Roman period", the paper keeps "may". A quotation is a **contiguous** run of
+  text: two sentences of a source spliced into one quoted phrase is not a quotation and is refused.
+- **Complete every sentence.** A sentence ends on a full stop, a question mark or an exclamation mark — never
+  on a preposition, a conjunction or an article. A truncated sentence blocks the publish.
+- Copy identifiers (a DOI, a PMID, an ISBN, a precise date) from the source; never reconstruct them from
+  memory, and never invent an archive site code — if the paper names a site and the dossier has no code for
+  it, write the name without a code.
 
 ## 7. Banned phrases
 
@@ -341,7 +390,17 @@ archived text of `quote_source_id` or, for a TDM-reserved source, in the live te
 
 ### Moderated claims (the research result)
 
+Every marker here was checked against the archived text of the source it names.
+
 {{moderated}}
+
+### Claims not carried by the sources they cite
+
+`paper pull` searched the archived text of each cited source for the sentence above and withheld the
+marker where it was not found. Do not write these as facts on the strength of their citation. Re-source
+them from the list below, narrow them to what a source really says, or leave them out.
+
+{{unsourced}}
 
 ### Synthesis highlights
 

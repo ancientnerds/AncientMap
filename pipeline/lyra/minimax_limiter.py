@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import os
 import threading
 import time
 from contextlib import contextmanager
@@ -626,4 +627,13 @@ class MiniMaxLimiter:
 
 
 # Singleton
-limiter = MiniMaxLimiter()
+#
+# MINIMAX_MAX_CONCURRENCY is the ceiling on calls in flight at once, and it is the
+# throughput knob of the whole chain: a research run's internal semaphore is 100, so
+# this is what a run actually gets. 8 is the value the limiter was tuned at, and the
+# value the pacing comments above assume ("parallelism past ~8 is harmful" at a token
+# quota). 16 concurrent calls measured clean on 2026-09-26; the burst bucket, not
+# this number, is what throws 429 (2062) past ~1.9 calls/s. Raise it per deployment
+# rather than in code, so the number that is in force is a deployment fact and can be
+# lowered again without a release.
+limiter = MiniMaxLimiter(max_concurrency=int(os.getenv("MINIMAX_MAX_CONCURRENCY", "8")))

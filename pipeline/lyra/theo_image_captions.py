@@ -201,6 +201,60 @@ def _encode_parens(url: str) -> str:
     return url.replace("(", "%28").replace(")", "%29") if url else url
 
 
+# `gallery:<hash>|verified:<yes|no>|<title>` is the marker the embed writes into
+# the alt text so the frontend can group the images of one paragraph. It is
+# machine data, not a caption: the published page used to print it verbatim
+# (measured on the live Baalbek paper page, 2026-10-04: 52 occurrences inside the
+# rendered HTML). Mirror of the regex in
+# `ancient-nerds-map/src/components/theo/galleryParser.ts` — keep the two in sync.
+GALLERY_ALT_RE = re.compile(r"^gallery:[^|]+\|(?:verified:(?:yes|no)\|)?(.*)$")
+
+
+def clean_gallery_alt(alt: str) -> str:
+    """The reader-facing alt text of a paper image.
+
+    The marker is stripped; an empty alt stays empty (the renderer gives an image
+    without a caption rather than an invented one), and a marker with nothing
+    behind it falls back to a neutral name so the image is never nameless.
+    """
+    if not alt.strip():
+        return ""
+    m = GALLERY_ALT_RE.match(alt)
+    return (m.group(1) if m else alt).strip() or "Research image"
+
+
+def images_per_section(report: str) -> dict[str, int]:
+    """Count the embedded images per `##` section of a paper, in reading order.
+
+    The acceptance measure of the image campaign (owner decision 2026-10-04):
+    every content section must reach at least `probative_images_min_per_section`,
+    and the sections that stayed below the target are named rather than hidden.
+    A section with no image is reported as 0 — the empty section is the finding,
+    not a missing key. The hook (before the first `##` heading) is counted under
+    the empty key, and the References section is left out: it carries no image
+    by design.
+
+    Reads the embedded `![` lines, not the caption or the source link, so it
+    describes the page as served.
+    """
+    counts: dict[str, int] = {}
+    section = ""
+    in_references = False
+    for line in report.split("\n"):
+        heading = re.match(r"^##\s+(.+?)\s*$", line)
+        if heading:
+            section = heading.group(1)
+            in_references = bool(re.match(r"^(references|sources)$", section, re.I))
+            if not in_references:
+                counts.setdefault(section, 0)
+            continue
+        if in_references:
+            continue
+        if line.startswith("!["):
+            counts[section] = counts.get(section, 0) + 1
+    return counts
+
+
 def image_markdown(
     cand: ImageCandidate,
     image_path_web: str,

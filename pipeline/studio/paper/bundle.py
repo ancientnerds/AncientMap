@@ -4,7 +4,16 @@
      "result": {report, published_report (== report), title, card_description,
                 probative_images, hero_image, published_hero_image (== hero_image),
                 published_block_ids: [], quality_score, audit, evidence, corrections: [],
-                writer}}
+                writer, sentence_evidence}}
+
+`sentence_evidence` is the audit artefact of
+docs/reports/theo-paper-defects-2026-10-04.md: per cited sentence, the
+reference numbers of its paragraph and the quote `claim_support.locate_support`
+found in that reference's fetched text, with character offsets. It is stored so
+a reader can check which source supports which sentence without redoing the
+research. The markers stay paragraph-level (1,136 of 1,136 references cited, 0
+of 853 paragraphs uncited in the 31-paper corpus) and the rendered report is
+byte-identical with and without it.
 
 Exactly these four top-level keys: theo_publish refuses any other (exit 2); a first publish
 credits published_by = 'Theo', a republish keeps the stored publisher (spec 3.7, owner decision
@@ -23,9 +32,16 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from pipeline.studio.errors import StudioError
-from pipeline.studio.paper.gates import sha256_text
+from pipeline.studio.paper.claims import source_texts
+from pipeline.studio.paper.evidence_card import build_evidence_card
+from pipeline.studio.paper.gates import sha256_text, texts_by_number
 from pipeline.studio.paper.numbering import BuiltPaper, build_paper
-from pipeline.studio.paper.workspace import PaperWorkspace, read_json, read_meta
+from pipeline.studio.paper.workspace import (
+    PaperWorkspace,
+    load_dossier,
+    read_json,
+    read_meta,
+)
 
 #: The writer record every bundle carries. A stamp is never a guess: since 2026-10-03 the
 #: studio runs on MiniMax Code (`mcode`, model `MiniMax-M3.1-Flash-Preview`, owner decision
@@ -91,6 +107,8 @@ def build_bundle(ws: PaperWorkspace) -> dict[str, Any]:
     meta = read_meta(ws)
     evidence = read_json(ws.evidence, "")
     hero = report["hero_image"]
+    dossier = load_dossier(ws)
+    texts = texts_by_number(built, source_texts(ws, dossier))
     result = {
         "report": built.markdown,
         "published_report": built.markdown,
@@ -105,6 +123,14 @@ def build_bundle(ws: PaperWorkspace) -> dict[str, Any]:
         "evidence": evidence,
         "corrections": [],
         "writer": WRITER,
+        # Per cited sentence, the reference numbers of its paragraph and the
+        # quote locate_support found for it in that reference's fetched text,
+        # with character offsets. The audit artefact of
+        # docs/reports/theo-paper-defects-2026-10-04.md: a reader of
+        # result_json can see which source supports which sentence without
+        # redoing the research. The markers stay paragraph-level and the
+        # rendered report is byte-identical with and without this key.
+        "sentence_evidence": build_evidence_card(built.markdown, texts),
     }
     return {"version": 1, "request_id": ws.request_id, "writer": WRITER, "result": result}
 

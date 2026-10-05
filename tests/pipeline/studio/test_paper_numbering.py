@@ -52,7 +52,7 @@ def test_number_writes_a_paper_the_artifact_gate_accepts(tmp_path):
     audit = validate_paper_artifact(paper)
     assert audit["passed"], audit["issues"]
     rows = json.loads(ws.sources_json.read_text(encoding="utf-8"))
-    assert [(r["n"], r["source_id"]) for r in rows] == [(1, fx.S1), (2, fx.S2)]
+    assert [(r["n"], r["source_id"]) for r in rows] == [(1, fx.S1), (2, fx.S2), (3, fx.S5)]
     assert built.probative_images == []
 
 

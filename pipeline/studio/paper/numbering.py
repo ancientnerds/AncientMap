@@ -33,6 +33,54 @@ _H1_RE = re.compile(r"^#\s", re.MULTILINE)
 _REFS_RE = re.compile(r"^#{2,3}\s+(?:References|Sources)\s*$", re.MULTILINE | re.IGNORECASE)
 EMBED_STRATEGIES = frozenset({"exact"})
 
+#: A marker run standing between the end of one sentence and the opening of the
+#: next: the house form is the marker *before* the full stop ("... in 1966
+#: [S:3f2a9c1b7d4e]."), so a run here annotates the sentence it follows and no
+#: other reading exists. The tail group is the closing quote or bracket a marked
+#: sentence can end on, which the marker has to be inserted after.
+_MARKER_AFTER_SENTENCE_RE = re.compile(
+    r"(?P<gap>[ \t]+)(?P<markers>(?:\[S:[0-9a-f]{12}\][ \t]*)+)(?=[^\s])"
+)
+_SENTENCE_END_CHARS = ".!?…"
+_CLOSING_CHARS = "\"')]»”’"
+
+
+def normalize_marker_placement(draft: str) -> str:
+    """Move every marker run that follows a full stop to before that full stop.
+
+    The writer's habit, measured on the 2026-10-04 paper loop: 35 of the 38
+    structural findings and, through it, 78 of the support findings of the real
+    workspace `95fa3798` came from one thing - the marker standing *after* the
+    period ("... scientifically justified. [S:262eb541b9f7] The 1997 Sturrock
+    Panel, ..."). The marker's position decides which sentence it annotates, so a
+    marker in that place annotates the Sturrock sentence and not the Condon one,
+    and the support gate then asks the Condon source to carry the Sturrock
+    sentence. Moving it is deterministic and has one answer: a marker that
+    follows a full stop belongs to the sentence before it.
+
+    Only a run with a sentence end behind it is moved, so a marker opening the
+    first sentence of a paragraph, a marker after a heading and a marker after an
+    image block stay where the writer put them - those have no preceding
+    sentence to belong to, and the writer has to decide them.
+    """
+    text = draft
+    for match in reversed(list(_MARKER_AFTER_SENTENCE_RE.finditer(draft))):
+        end = match.start("gap") - 1
+        while end >= 0 and text[end] in _CLOSING_CHARS:
+            end -= 1
+        if end < 0 or text[end] not in _SENTENCE_END_CHARS:
+            continue
+        markers = " ".join(match.group("markers").split())
+        text = (
+            text[:end]
+            + " "
+            + markers
+            + text[end : match.start("gap")]
+            + match.group("gap")
+            + text[match.end() :]
+        )
+    return text
+
 
 @dataclass(frozen=True)
 class BuiltPaper:
@@ -79,7 +127,8 @@ def number_draft(draft: str, dossier: Dossier) -> tuple[str, CitationRegistry]:
     for sid in dict.fromkeys(S_MARKER_RE.findall(draft)):
         registry.sources[sid] = dossier.cited_source(sid)
         registry.assign_reference_number(sid)
-    body = S_MARKER_RE.sub(lambda m: f"[{registry.reference_numbers[m.group(1)]}]", draft)
+    body = normalize_marker_placement(draft)
+    body = S_MARKER_RE.sub(lambda m: f"[{registry.reference_numbers[m.group(1)]}]", body)
     return body, registry
 
 

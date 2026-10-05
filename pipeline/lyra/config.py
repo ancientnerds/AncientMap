@@ -249,8 +249,17 @@ class LyraSettings(BaseSettings):
     probative_images_enabled: bool = True
     # Candidates to fetch per opportunity before gating (raised for density)
     probative_images_candidates_per_opportunity: int = 20
-    # Target minimum images per substantial paragraph (soft target, not hard cap)
-    images_per_paragraph_target: int = 3
+    # Hard budget of embedded images per paper. It was a getattr literal (24) in
+    # probative_images.py, so no environment could move it.
+    probative_images_max_per_paper: int = 24
+    # Owner decision 2026-10-04: at least one image per section is the hard rule
+    # and four per section is the goal. The opportunity order enforces the floor
+    # (round-robin over the sections, see order_opportunities_by_section), so the
+    # first pass of the budget covers every section and only the remainder is
+    # spent on topping sections up. `target` is reported, never enforced: the
+    # measured loss is dominated by rejected candidates, not by the budget.
+    probative_images_min_per_section: int = 1
+    probative_images_target_per_section: int = 4
     # Max images to embed per single opportunity (VLM-accepted candidates, dedup by source)
     probative_images_max_per_opportunity: int = 3
     # When True, pass the image candidate pool for this section's angles into the

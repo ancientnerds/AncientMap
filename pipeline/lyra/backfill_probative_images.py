@@ -41,8 +41,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from sqlalchemy import text
 
 from pipeline.database import engine
+from pipeline.lyra.config import _get_settings
 from pipeline.lyra.handlers.probative_images import embed_probative_images
 from pipeline.lyra.hero_picker import pick_hero_image
+from pipeline.lyra.theo_image_captions import images_per_section
 from pipeline.lyra.theo_publishing import (
     JOURNALLED_PAPER_SQL,
     refuse_journalled_paper,
@@ -228,6 +230,21 @@ async def _process_paper(paper: dict, apply: bool, replace: bool = False) -> tup
     else:
         result.setdefault("probative_images", []).extend(embedded)
     result["probative_images_diversity"] = diversity
+    # The campaign's acceptance measure: the image count per section of the page
+    # that is actually served. A backfill that fills the first sections and leaves
+    # the tail empty used to report success — this names what it reached.
+    coverage = images_per_section(result.get("published_report") or new_report)
+    target = _get_settings().probative_images_target_per_section
+    floor = _get_settings().probative_images_min_per_section
+    empty = [name or "(hook)" for name, n in coverage.items() if n < floor]
+    below_target = [name or "(hook)" for name, n in coverage.items() if n < target]
+    result["probative_images_coverage"] = {
+        "per_section": coverage,
+        "min_per_section": floor,
+        "target_per_section": target,
+        "sections_without_image": empty,
+        "sections_below_target": below_target,
+    }
 
     with engine.connect() as conn:
         write_unjournalled_result(conn, paper_id, result)

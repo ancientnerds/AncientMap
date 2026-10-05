@@ -226,7 +226,7 @@ quota check. Nothing in `api/` or `pipeline/lyra` imports the package; only
 `pipeline.studio.ledger_cli` runs in the API container.
 
 ```
-./.venv/Scripts/python.exe -m pipeline.studio paper   {list,pull,number,check,claims-export,claims-import,images-export,images-import,bundle,publish,correct,register-video}
+./.venv/Scripts/python.exe -m pipeline.studio paper   {list,pull,number,check,claims-export,claims-import,images-export,images-import,bundle,publish,correct,patch-images,register-video}
 ./.venv/Scripts/python.exe -m pipeline.studio episode {init,markers-export,markers-import,check,review,voice,capture,timeline,render,thumbnail,package,register-youtube}
 ./.venv/Scripts/python.exe -m pipeline.studio mcode   {claim-check,image-check,marker-check,casefile-verify,validate,probe}
 ./.venv/Scripts/python.exe -m pipeline.studio doctor [--fix-gpu]
@@ -257,6 +257,22 @@ weekly-plan stop.
   is `paper pull ID --dossier-from RUN`, then `paper correct ID --republish`, never `paper publish`.
   Exit 3 committed nothing (re-run after `paper check`); exit 4, a timeout or no JSON answer is a
   `RemoteOutcomeUnknown`: follow the adoption procedure it prints and never re-run the write.
+  A picture of a public paper changes through `paper patch-images ID --patch FILE [--images DIR]`
+  (migration 0028), never through a republish: the patch carries the new `probative_images` and, per
+  replaced picture, the finished markdown block; the server swaps those blocks and leaves every
+  other character of the stored text alone. Every write of the publish path is idempotent per input
+  hash: sending the same bytes twice answers `already_applied` with the journal id instead of
+  writing twice, so a retry after an unknown outcome can simply be re-run.
+- **The paper's gates** are the eight rules of `docs/reports/theo-paper-defects-2026-10-04.md`
+  (`docs/reports/theo-paper-defects-2026-10-04-response.md` maps each to its code and its test). Two
+  run in `paper check`: `support` (rules 1–5, decided against the archived source texts —
+  `lyra/paper_claim_gate.py` over `lyra/claim_support.py`) and `picture` (rule 6,
+  `lyra/theo_image_gate.py`). One runs on the VPS against the stored text on every publish,
+  correction and image patch: `pictures` (`theo_publishing.check_pictures`), which asks whether the
+  site can answer the URLs the paper prints and whether any `verified:no` marker ships. A marker is
+  asked to carry **its own sentence**, not its paragraph, and a sentence with no verifiable content
+  is undecidable for rule 1 rather than failed — both are the gate's documented boundary, and the
+  writer's rules are in `brief_template.md`.
 - **Episode**: `episode init` → case file (verified by `mcode casefile-verify`) → `markers-export`,
   `mcode marker-check`, `markers-import` → script → `check` → `review` → `voice` → `capture` →
   `timeline` → `render` (layout lint, Remotion, −14 LUFS, audit, ledger row) → `package` (MP4, SRT,

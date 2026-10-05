@@ -470,13 +470,31 @@ SECTIONS = [
         ],
     ),
     (
+        "How They Moved It",
+        [
+            # One sentence per source, each marker standing in the sentence its
+            # reference carries: the support gate (rule 1) asks a marker to be
+            # located in the paragraph it stands in, and a sentence that
+            # combines a claim from S5 with one from S2 is offered to both.
+            "The quarry stone of Baalbek is a local limestone [S:e5e5e5e5e5e5]. "
+            "The temple of Jupiter stands on a podium of 800 tons blocks [S:bbbbbbbbbbb2].",
+        ],
+    ),
+    (
         "Connecting the Dots",
         [
             "The podium blocks and the quarry blocks share the same stone "
             "[S:aaaaaaaaaaa1] [S:bbbbbbbbbbb2].",
         ],
     ),
-    ("The Other Side", [filler_paragraph(S2)]),
+    (
+        "The Other Side",
+        [
+            "Baalbek is a city in the Beqaa Valley, and some estimates put the 2014 block "
+            "at 1650 tons [S:bbbbbbbbbbb2].",
+            filler_paragraph(S2),
+        ],
+    ),
     (
         "What We Actually Know",
         ["It is likely that Roman engineers moved the blocks [S:aaaaaaaaaaa1]."],
@@ -485,8 +503,13 @@ SECTIONS = [
 
 
 def build_draft(filler: int = 9) -> str:
-    """A house-format draft: the hook (two paragraphs, no heading), two investigation
-    sections and the three fixed ones; filler=9 gives about 5,600 prose words."""
+    """A house-format draft: the hook (two paragraphs, no heading), three investigation
+    sections and the three fixed ones; filler=9 gives about 5,600 prose words.
+
+    Three investigation sections is the current floor (`gates.INVESTIGATIONS`).
+    Every section's lead sentence is distinct, so an image opportunity can anchor
+    to exactly one of them — an anchor that matches several paragraphs is refused.
+    """
     parts: list[str] = [HOOK, filler_paragraph()]
     for heading, leads in SECTIONS:
         parts.append(f"## {heading}")
@@ -550,6 +573,48 @@ OPS = [
     }
 ]
 
+# One opportunity per section: the floor the images gate enforces (owner decision
+# 2026-10-04, at least one image per section). Each query gets its own picture, so
+# the per-file content dedup does not reject the set.
+OPS_ONE_PER_SECTION = [
+    {
+        "id": "op-01",
+        "anchor_text": "The Stone of the Pregnant Woman weighs about 1000 tons",
+        "subject": "The Stone of the Pregnant Woman lying in the quarry",
+        "queries": ["Stone of the Pregnant Woman"],
+    },
+    {
+        "id": "op-02",
+        "anchor_text": "It is likely that Roman engineers moved the blocks",
+        "subject": "Roman engineers moving the Baalbek blocks",
+        "queries": ["Roman engineers Baalbek"],
+    },
+    {
+        "id": "op-03",
+        "anchor_text": "Jeanine Abdul Massih led the 2014 excavation",
+        "subject": "The 2014 excavation in the Baalbek quarry",
+        "queries": ["Baalbek excavation 2014"],
+    },
+    {
+        "id": "op-04",
+        "anchor_text": "The quarry stone of Baalbek is a local limestone",
+        "subject": "The limestone of the Baalbek quarry",
+        "queries": ["Baalbek limestone quarry"],
+    },
+    {
+        "id": "op-05",
+        "anchor_text": "The podium blocks and the quarry blocks share the same stone",
+        "subject": "Baalbek podium and quarry blocks of the same stone",
+        "queries": ["Baalbek podium blocks"],
+    },
+    {
+        "id": "op-06",
+        "anchor_text": "Baalbek is a city in the Beqaa Valley",
+        "subject": "The Beqaa Valley and the city of Baalbek",
+        "queries": ["Baalbek Beqaa Valley"],
+    },
+]
+
 
 def png(seed: int, width: int = 900, height: int = 600) -> bytes:
     """A distinct picture per seed (different dhash), `width` x `height` pixels."""
@@ -592,6 +657,42 @@ async def fake_search(query: str) -> list[ImageCandidate]:
     return [*found, cat]
 
 
+# One picture per query of OPS_ONE_PER_SECTION, each with its own dhash.
+_SECTION_IMAGE_SEEDS = {
+    "Stone of the Pregnant Woman": 11,
+    "Roman engineers Baalbek": 12,
+    "Baalbek excavation 2014": 13,
+    "Baalbek limestone quarry": 14,
+    "Baalbek podium blocks": 15,
+    "Baalbek Beqaa Valley": 16,
+}
+IMAGE_BYTES = {
+    "https://commons.wikimedia.org/wiki/File:Baalbek_stone.jpg": png(1),
+    "https://example.org/found-1": png(2),
+    "https://example.org/found-dup": png(1),
+    "https://example.org/tiny": png(3, width=200, height=150),
+    **{f"https://example.org/section-{i}": png(seed) for i, seed in enumerate(
+        _SECTION_IMAGE_SEEDS.values(), start=1
+    )},
+}
+
+
+async def fake_search_per_section(query: str) -> list[ImageCandidate]:
+    """One safe, distinct picture per query, so every section of the draft can
+    carry its own image without the per-file content dedup rejecting the set."""
+    assert query in _SECTION_IMAGE_SEEDS, f"unexpected query {query!r}"
+    index = list(_SECTION_IMAGE_SEEDS).index(query) + 1
+    return [
+        ImageCandidate(
+            url=f"https://example.org/section-{index}",
+            source="wikimedia",
+            title=f"{query} (photograph)",
+            license="CC BY 4.0",
+            artist="X",
+        )
+    ]
+
+
 async def fake_download(cand: ImageCandidate, out_path: Path) -> bool:
     out_path.write_bytes(IMAGE_BYTES[cand.url])
     return True
@@ -600,6 +701,7 @@ async def fake_download(cand: ImageCandidate, out_path: Path) -> bool:
 QUOTES = {
     S1: "The block still lies in the Baalbek quarry.",
     S2: "Baalbek is a city in the Beqaa Valley.",
+    S5: "The quarry stone of Baalbek is a local limestone.",
 }
 
 
@@ -642,15 +744,16 @@ def image_answers(rows: list[dict], verdicts: list[str]) -> list[dict]:
 
 
 def complete_workspace(root: Path, *, dossier: dict | None = None) -> PaperWorkspace:
-    """A workspace that passes every gate: claims all supported, one checked image."""
+    """A workspace that passes every gate: claims all supported, and one checked
+    image in every section (the floor `gates.IMAGES_MIN_PER_SECTION` enforces)."""
     from pipeline.studio.paper import claims, images
 
     ws = make_workspace(root, dossier=dossier)
-    write_json(ws.images_dir / "opportunities.json", OPS)
-    images.export_images(ws, search=fake_search, download=fake_download)
+    write_json(ws.images_dir / "opportunities.json", OPS_ONE_PER_SECTION)
+    images.export_images(ws, search=fake_search_per_section, download=fake_download)
     rows = handoff.read_jsonl(ws.images_dir / "tasks.jsonl")
     handoff.write_jsonl(
-        ws.images_dir / "verdicts.jsonl", image_answers(rows, ["meaningful", "weak"])
+        ws.images_dir / "verdicts.jsonl", image_answers(rows, ["meaningful"] * len(rows))
     )
     images.import_images(ws)
     claims.export_claims(ws)

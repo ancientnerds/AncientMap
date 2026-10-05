@@ -15,6 +15,7 @@ import nh3
 
 # Slug helpers and BASE_URL live in pipeline.utils.slugs (no third-party
 # imports) so the Lyra container can use them without markdown/nh3.
+from pipeline.lyra.theo_image_captions import clean_gallery_alt
 from pipeline.utils.slugs import BASE_URL, slugify
 
 # Mirrored in ancient-nerds-map/src/constants/brand.ts — the React pages need
@@ -199,7 +200,14 @@ def _figure_with_caption(html: str) -> str:
         # would survive the regex and become live markup in the caption.
         # Unescape first, then escape for text — escaping twice would print
         # "&quot;" at the reader.
-        alt = escape(unescape(alt_match.group(1))) if alt_match else ""
+        alt = ""
+        if alt_match:
+            alt = clean_gallery_alt(unescape(alt_match.group(1)))
+            # The `gallery:<hash>|verified:<yes|no>|` prefix is machine data. It
+            # is stripped from the attribute too, not only from the caption: a
+            # screen reader would otherwise read the hash out loud.
+            img = _ALT_RE.sub(f'alt="{escape(alt, quote=True)}"', img, count=1)
+            alt = escape(alt)
         shot = _SCREENSHOT_RE.search(img)
         credit = ""
         if shot:

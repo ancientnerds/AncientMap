@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from pipeline.lyra.claim_support import Located, locate_support
 from pipeline.lyra.dossier_manifest import moderated_source_ids
 from pipeline.studio import config, remote
 from pipeline.studio.errors import StudioError
@@ -110,6 +111,49 @@ def _cite(text: str, source_ids: list[str] | None, citable: set[str]) -> str:
     return " ".join(part for part in (text, markers) if part)
 
 
+def _carried(
+    claim: str, source_ids: list[str] | None, dossier: Dossier
+) -> tuple[list[str], list[str]]:
+    """The cited sources whose archived text carries the claim, and those that do not.
+
+    The defect report's rule 1 is "a marker requires a located sentence", and the
+    31-paper audit measured where it breaks: of 2 105 findings, 384 were
+    `misattributed` - a true-sounding sentence whose marker points at a source that
+    does not carry it. Paper 1 showed where those markers come from: the brief. It
+    renders the dossier's moderated claims at high confidence with their markers
+    attached, so the writer copies a citation the research stage never verified.
+
+    `locate_support` is the same call `paper_claim_gate` makes on the numbered
+    paper, so a marker this function keeps is a marker the gate can confirm, and the
+    two never disagree about what a source says. A source with no archived text
+    carries nothing here: the claim check may read a TDM-reserved page live, but
+    this pull cannot, so it does not hand the writer a marker it cannot show.
+    """
+    carried: list[str] = []
+    uncited: list[str] = []
+    for sid in source_ids or []:
+        text = dossier.texts.get(sid)
+        if text and locate_support(claim, text) is not None:
+            carried.append(sid)
+        else:
+            uncited.append(sid)
+    return carried, uncited
+
+
+def _quotable(claim: str, claim_source_ids: list[str] | None, dossier: Dossier) -> Located | None:
+    """A located sentence for `claim` from any citable source, for the re-source hint."""
+    for sid in dossier.citable_ids:
+        if sid in (claim_source_ids or []):
+            continue
+        text = dossier.texts.get(sid)
+        if not text:
+            continue
+        located = locate_support(claim, text)
+        if located is not None:
+            return located
+    return None
+
+
 def _counts(dossier: Dossier) -> str:
     c = dossier.data["manifest"]["counts"]
     return (
@@ -127,13 +171,28 @@ def _archive(dossier: Dossier) -> str:
     )
 
 
-def _moderated(dossier: Dossier) -> str:
+def _moderated(dossier: Dossier) -> tuple[str, str]:
+    """The research result, and the claims its own cited sources do not carry.
+
+    Two blocks, because they ask two different things of the writer. The first
+    carries a marker only where the archived text carries the sentence
+    (`_carried`), so a claim the gate can confirm is stated as settled. The second
+    names the claims no cited source carries: the writer must re-source them from
+    the source list, narrow them, or leave them out. They stay in the brief on
+    purpose - dropping them here would lose material the research paid for, and
+    handing them over with their markers would have the writer publish a
+    citation nobody verified.
+    """
     m = dossier.data["moderated"]
     citable = set(dossier.citable_ids)
     lines = ["Final claims:"]
+    unsourced: list[str] = []
     for c in m.get("final_claims") or []:
         text = f"- ({c.get('confidence') or '?'}) {c['claim']}"
-        lines.append(_cite(text, c["source_ids"], citable))
+        carried, uncited = _carried(c["claim"], c.get("source_ids"), dossier)
+        lines.append(_cite(text, [s for s in carried if s in citable], citable))
+        if uncited:
+            unsourced.append(_unsourced_line(c["claim"], uncited, c.get("source_ids"), dossier))
         if c.get("notes"):
             lines.append(f"  notes: {c['notes']}")
     lines.append("")
@@ -143,15 +202,39 @@ def _moderated(dossier: Dossier) -> str:
         text = f"- {original} -> {c['revised']}" if original else f"- {c['revised']}"
         if c.get("reason"):
             text += f" ({c['reason']})"
-        lines.append(_cite(text, c["source_ids"], citable))
+        carried, uncited = _carried(c["revised"], c.get("source_ids"), dossier)
+        lines.append(_cite(text, [s for s in carried if s in citable], citable))
+        if uncited:
+            unsourced.append(_unsourced_line(c["revised"], uncited, c.get("source_ids"), dossier))
     lines.append("")
     lines.append("Speculative claims (label them as speculation):")
     for c in m.get("speculative_claims") or []:
         text = f"- ({c.get('confidence') or '?'}) {c['claim']}"
-        lines.append(_cite(text, c["source_ids"], citable))
+        carried, uncited = _carried(c["claim"], c.get("source_ids"), dossier)
+        lines.append(_cite(text, [s for s in carried if s in citable], citable))
+        if uncited:
+            unsourced.append(_unsourced_line(c["claim"], uncited, c.get("source_ids"), dossier))
         if c.get("what_would_strengthen"):
             lines.append(f"  would strengthen: {c['what_would_strengthen']}")
-    return "\n".join(lines)
+    return "\n".join(lines), "\n".join(unsourced)
+
+
+def _unsourced_line(
+    claim: str, uncited: list[str], claim_source_ids: list[str] | None, dossier: Dossier
+) -> str:
+    """One uncarried claim, with the sentence that does carry it when one exists."""
+    ids = ", ".join(f"[S:{sid}]" for sid in uncited)
+    line = f"- {claim} — cited by {ids}, none of which carries this sentence."
+    located = _quotable(claim, claim_source_ids, dossier)
+    if located is not None:
+        line += f' Another source does: "{_one_line(located.quote)}"'
+    return line
+
+
+def _one_line(quote: str, limit: int = 240) -> str:
+    """A quote on one line, shortened - the brief is read, not parsed."""
+    text = " ".join(quote.split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
 def _synthesis(dossier: Dossier) -> str:
@@ -324,13 +407,15 @@ def render_brief(
     The placeholders are filled in one pass over the template, so dossier text that looks
     like a placeholder (a claim quoting wiki markup such as {{sfn}}) stays text."""
     text = template if template is not None else TEMPLATE_PATH.read_text(encoding="utf-8")
+    moderated, unsourced = _moderated(dossier)
     values = {
         "{{question}}": dossier.question,
         "{{request_id}}": target if target is not None else dossier.request_id,
         "{{rewrite}}": _rewrite_note(dossier, target),
         "{{counts}}": _counts(dossier),
         "{{archive}}": _archive(dossier),
-        "{{moderated}}": _moderated(dossier),
+        "{{moderated}}": moderated,
+        "{{unsourced}}": unsourced or "(none: every moderated claim's cited source carries it)",
         "{{synthesis}}": _synthesis(dossier),
         "{{contested}}": _contested(dossier),
         "{{debate}}": _debate(dossier),

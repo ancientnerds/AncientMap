@@ -4,7 +4,7 @@ Pure functions over the built paper, the dossier and Claude's files; `run_check`
 and writes check_report.json. A paper is publishable only when every gate passes.
 
  1 artifact    validate_paper_artifact(report) passes (theo_citations)
- 2 structure   1-2 hook paragraphs under the title (no heading), 2-4 investigation sections,
+ 2 structure   1-2 hook paragraphs under the title (no heading), 3-6 investigation sections,
                the three fixed sections, References, in order; every heading preceded and
                followed by a blank line; 5,000-7,500 prose words
    meta        title and card description follow the house rules
@@ -22,8 +22,23 @@ and writes check_report.json. A paper is publishable only when every gate passes
    page_anchors the paper page's own resolver finds every #ev-NN on the served HTML (the
                page half of stream A's check_evidence_anchors)
  7 claims      every claim-check task answered and `supported` (claims.py)
+   support     rules 1-5 of docs/reports/theo-paper-defects-2026-10-04.md, decided
+               against the archived source texts (paper_claim_gate over
+               claim_support): every [n] carries a sentence its reference locates, a
+               number or date of a sentence is in that reference, a site code or
+               identifier is in a cited source, a retraction claim carries the
+               retraction word, no sentence ends on a preposition, conjunction or
+               article. A marker is asked to carry its own sentence, not its
+               paragraph, and a sentence with no verifiable content is undecidable
+               here rather than failed - see the two boundary tests in
+               tests/pipeline/test_paper_claim_gate.py
  8 images      every embedded image checked meaningful/weak, licence + attribution + source
-               URL + caption, file present; the paper embeds exactly the selected images
+               URL + caption, file present; the paper embeds exactly the selected images;
+               every content section carries at least one image
+   picture     rule 6 of the same report (theo_image_gate): no `verified:no` marker
+               ships, every picture is credited, licensed and captioned, and the
+               credit count matches the picture count. `not_served` is the VPS
+               gate's half (theo_publishing.check_pictures), not this one
  9 hero        hero_picker.pick_hero_image found a banner among the checked images
 10 quality     quality_score, passed only when 1-9 pass and quality_gate_passed agrees
 """
@@ -35,6 +50,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from pipeline.lyra import paper_claim_gate, theo_image_gate
 from pipeline.lyra.coherence_pass import check_title_terms_in_body, extract_title_terms
 from pipeline.lyra.hallucination_gate import extract_specifics, verify_against_pack
 from pipeline.lyra.hero_picker import HERO_MIN_WIDTH, pick_hero_image
@@ -45,6 +61,7 @@ from pipeline.lyra.quality_gate import (
 )
 from pipeline.lyra.text_sentences import split_sentences
 from pipeline.lyra.theo_citations import split_artifact, validate_paper_artifact
+from pipeline.lyra.theo_image_captions import images_per_section
 from pipeline.studio.paper.anchors import MARKER_RE, paragraphs
 from pipeline.studio.paper.claims import ClaimStatus, claim_status, source_texts
 from pipeline.studio.paper.evidence import PAGE_PREFIX, evidence_problems
@@ -62,7 +79,15 @@ from pipeline.utils.card_provenance import text_sha256 as sha256_text
 WORD_MIN = 5000
 WORD_MAX = 7500
 FIXED_SECTIONS = ("Connecting the Dots", "The Other Side", "What We Actually Know")
-INVESTIGATIONS = (2, 4)
+# Owner decision 2026-10-04: 3-6 investigation sections, not 2-4. The old cap
+# bound 14 of the 31 live papers and 4 of them had a single investigation
+# section, which left the image budget nowhere to go. 6-9 sections at the 5,000
+# word floor is ~550-830 words per section, the current median is 634.
+INVESTIGATIONS = (3, 6)
+# One image per section is the hard rule; four is the target and is reported, not
+# enforced (the measured loss is dominated by rejected candidates).
+IMAGES_MIN_PER_SECTION = 1
+IMAGES_TARGET_PER_SECTION = 4
 HOOK_PARAGRAPHS = (1, 2)
 TITLE_MAX_CHARS = 80
 TITLE_WORDS = (4, 12)
@@ -260,6 +285,17 @@ def gate_images(ws: PaperWorkspace, report: str, placed: list[dict[str, Any]]) -
     embedded = report.count("![")
     if embedded != len(placed):
         problems.append(f"report embeds {embedded} images, images-import selected {len(placed)}")
+    # Owner decision 2026-10-04: one image per section is the hard floor, four is
+    # the target. Measured on the 31 live papers before the rule existed: 109 of
+    # 189 sections carried no image, the three fixed tail sections 76 of 93.
+    # A total count cannot see that, so the floor is checked per section.
+    coverage = images_per_section(report)
+    without = [name for name, count in coverage.items() if count < IMAGES_MIN_PER_SECTION]
+    if without:
+        problems.append(
+            f"sections without {IMAGES_MIN_PER_SECTION} image: {without} "
+            f"(the opportunities in images/opportunities.json must name every section)"
+        )
     return Gate(
         "images",
         not problems,
@@ -268,6 +304,75 @@ def gate_images(ws: PaperWorkspace, report: str, placed: list[dict[str, Any]]) -
             "embedded": len(placed),
             "meaningful": sum(1 for e in placed if e["verified"]),
             "weak": sum(1 for e in placed if not e["verified"]),
+            "images_per_section": coverage,
+            "sections_without_image": without,
+        },
+    )
+
+
+def texts_by_number(built: BuiltPaper, texts: dict[str, str]) -> dict[str, str]:
+    """The archived source texts under the reference numbers the paper cites.
+
+    `texts` is keyed by source id (claims.source_texts); the paper's markers are
+    numbers, so the map the claim gate reads is `n -> text`. A source without a
+    text is simply absent: the claim gate reports its markers as unreadable
+    (rule 2, report class D: a reference that could not be fetched may not carry
+    a marker).
+    """
+    return {
+        str(row["n"]): texts[row["source_id"]] for row in built.sources if row["source_id"] in texts
+    }
+
+
+def gate_support(report: str, texts: dict[str, str]) -> Gate:
+    """The eight rules of the defect report, decided here and not in a prompt.
+
+    `docs/reports/theo-paper-defects-2026-10-04.md` measured 2,105 findings over
+    the 31 published papers and every one of those papers passed every gate that
+    existed: a marker only had to be syntactically a marker. These rules need
+    the fetched source texts, which is why they live in the check and not in the
+    brief: a wrong citation, a sharpened number, a spliced quotation, a sentence
+    cut mid-clause and a site code nobody wrote are all decidable here.
+    """
+    issues = paper_claim_gate.check_paper(report, texts)
+    return Gate(
+        "support",
+        not issues,
+        {
+            "checked_numbers": sorted(texts, key=lambda n: int(n)),
+            "rules": sorted({issue.rule for issue in issues}),
+            "issues": [asdict(issue) for issue in issues],
+        },
+    )
+
+
+#: The picture rules the studio does NOT run. `not_served` is the studio's own
+#: `gate_images` ("file missing from images/selected/"): the served copy on the
+#: VPS is a fact this workstation cannot see, so the disk rule belongs to
+#: theo_publishing.check_pictures.
+_STUDIO_IMAGE_SKIPPED = frozenset({"not_served"})
+
+
+def gate_picture(ws: PaperWorkspace, report: str, placed: list[dict[str, Any]]) -> Gate:
+    """Rule 6: an image is only correct if the picture was opened and recognised.
+
+    `verified:no` must mean "nobody has looked" and must never ship (the report's
+    own words), a credit must belong to a picture the paper embeds, and no
+    picture may be credited twice.
+    """
+    issues = [
+        issue
+        for issue in theo_image_gate.check_image_report(
+            report, placed, request_id=ws.request_id, served_root=None
+        )
+        if issue.rule not in _STUDIO_IMAGE_SKIPPED
+    ]
+    return Gate(
+        "picture",
+        not issues,
+        {
+            "rules": sorted({issue.rule for issue in issues}),
+            "issues": [asdict(issue) for issue in issues],
         },
     )
 
@@ -421,11 +526,13 @@ def run_check(ws: PaperWorkspace) -> dict[str, Any]:
         gate_meta(meta, dossier.question),
         gate_references(report, built.sources, dossier),
         gate_specifics(report, built.sources, dossier, texts),
+        gate_support(report, texts_by_number(built, texts)),
         gate_coherence(meta["title"], report, status),
         evidence_gate,
         page_gate,
         claims_gate,
         gate_images(ws, report, built.probative_images),
+        gate_picture(ws, report, built.probative_images),
         hero_gate,
     ]
     score = quality_score(gates, audit, built, dossier, status)
