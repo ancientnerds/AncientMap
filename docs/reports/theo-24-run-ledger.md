@@ -21,7 +21,12 @@ support gate went from 25 issues to 0.
 - 69 claims, 6 angles, 6 investigation chapters, 3 mandatory chapters
 - 6,304 prose words, 29 references, 49 evidence entries, 111 claim-check tasks
 - 18 images, all 18 with licence, attribution, source URL and a caption; every one looked at
-- every server gate green except `status`: the row is still `queued`
+- every server gate green; `status` needed the owner's release, then the publish committed
+
+**Published 2026-10-05 16:50 UTC**, after the owner's release: slug
+`the-younger-dryas-impact-hypothesis`, `published_by = Theo`, journal row 115
+(`theo_paper_publications`, bundle sha256 `ef6a228e…`, side effects recorded), IndexNow ok,
+Qdrant ok with 7 sections, page answers HTTP 200 with 49 evidence anchors.
 
 **Three gate rules this run taught the chain** (they are in the tools now, not in a paper):
 
