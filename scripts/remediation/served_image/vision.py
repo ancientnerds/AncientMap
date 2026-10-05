@@ -513,15 +513,17 @@ def export_check(
 
 
 # ------------------------------------------------------------------------------ export: replace
-def _wanted_files(
+def wanted_files(
     precheck: Mapping[str, Any], harvest: PC.Harvest, commons: Commons
 ) -> list[tuple[str, str]]:
     """The files the site's own Wikidata item claims: its image (P18) and the files of its Commons
     categories (P373), each with the reason it was wanted.
 
-    One reader for two callers: `candidates_for` offers them to a site whose served image failed,
-    and `export_replace` asks about them for a site that serves **no** image - which the check
-    stage never sees, so without this its item's files would never be looked at.
+    One reader for three callers: `candidates_for` offers them to a site whose served image
+    failed, `export_replace` asks about them for a site that serves **no** image - which the check
+    stage never sees, so without this its item's files would never be looked at - and
+    `no_image_report` reads it to tell a claim that names a file from one whose category names
+    none.
     """
     qid = precheck["qid"]
     if not qid:
@@ -558,7 +560,7 @@ def candidates_for(
     known.discard(None)
     seen: set[str] = set()
     files: list[tuple[str, str]] = []
-    for name, why in _wanted_files(precheck, harvest, commons):
+    for name, why in wanted_files(precheck, harvest, commons):
         if name not in known and name not in seen:
             seen.add(name)
             files.append((name, why))
@@ -620,7 +622,7 @@ def export_replace(
     claimed = [
         sid
         for sid, pre in prechecks.items()
-        if pre["status"] == PC.NO_IMAGE and _wanted_files(pre, harvest, pictures.commons)
+        if pre["status"] == PC.NO_IMAGE and wanted_files(pre, harvest, pictures.commons)
     ]
     asked: list[tuple[str, Mapping[str, Any] | None]] = [(str(c["site_id"]), c) for c in failed]
     asked += [(sid, None) for sid in claimed]

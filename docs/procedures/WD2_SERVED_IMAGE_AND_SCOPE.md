@@ -251,8 +251,8 @@ evidence.
 
 A site that serves **no** image is `no-image` and its item is never read: the pre-check stops there,
 so the claim of such a site is not in `PRECHECK.jsonl` at all. `export-replace` reads it itself
-(`_wanted_files`) and asks about those files, which is the only place a claim of a site without an
-image can be examined.
+(`wanted_files`) and asks about those files, which is the only place a claim of a site without an
+image can be examined; the no-image report of section 3.5 reads the same claim for the same reason.
 
 **This departs from the specification, which sends only the images the pre-check does not
 confirm, and needs the orchestrator's (or the owner's) sign-off before the run**, recorded in
@@ -333,12 +333,39 @@ $PY $S export-replace --run-dir $R --handoff $H-replace   # prints "questions": 
 #   only when N > 0 (with N = 0 no handoff exists; import-replace says so and `plan` goes on):
 #   per batch: brief / check-answer / answer as above, then validate --dir $H-replace, and
 $PY $S import-replace --run-dir $R              # -> REPLACE.jsonl
+$PY $S no-image-report --run-dir $R             # -> NO_IMAGE_REPORT.jsonl, NO_IMAGE_SUMMARY.json
 $PY $S plan --run-dir $R                        # -> chunks/chunk-NNN, EXPECTED.jsonl, PLAN_SUMMARY.json
 ```
 
 `EXPORT_REPLACE.json` names, per site, every Wikidata file that was not shown (`unavailable`:
 `missing`, `not a picture` with its MIME type, or `unfetchable` with the refusal) and every failed
 image without a candidate (`without_candidates`) - those sites are cleared.
+
+### 3.5 The no-image report (`no_image_report.py`) - one measured reason per site
+
+The goal asks for the no-image remainder to be reported **per site with its measured reason**, not
+left open. This is the one clause no vision model can block, and it writes nothing outside the run
+directory. A row per curated site that serves no image, plus one per retired curated site, with the
+claim it was decided on, the state the export recorded for that claim, and a `detail` sentence in
+words. `NO_IMAGE_SUMMARY.json` carries the counts that close over the read
+(`curated = shown + retired`, `shown = confirmed + unconfirmed + no_image`) and
+`addressable_remainder`, the number the goal counts down.
+
+The five reasons, in the order they are decided: `no-wikidata-item` (the pre-check found no item),
+`no-image-claim` (the item holds no P18 and no P373), `claimed-no-file-named` (the item names a P373
+category and the category lists no file - `wanted_files` is the one reader, so such a site is
+invisible to `export-replace`, which asks only about named files), `claimed-awaiting-vision-check`
+(the claim named a file and the run exported candidates) and `claimed-no-file-is-a-picture` (every
+named file is no still picture). Retired curated sites carry `retired`.
+
+It refuses by name instead of counting: a claiming site the export does not list, a site the
+export asks about that does not serve nothing, an export pinned to another pre-check, a shown site
+without a pre-check row. The export is read exactly when a claim names a file.
+
+Measured on production 2026-10-05 (run `served-image-2026-10-05`): of 5,004 curated sites 104 are
+retired, 3,661 serve an image (2,722 the item vouches for, 939 it does not) and 1,239 serve nothing
+- 307 without a Wikidata item, 688 with an item that claims no image, 4 whose category names no
+file, 240 open. `claimed-no-file-is-a-picture` is reachable but measured 0.
 
 Per chunk, in order, each accepted with 0 deviations before the next:
 

@@ -26,6 +26,12 @@
     run.py accept         --run-dir R --chunk R/chunks/chunk-NNN
                                                read-only: every site of the chunk serves what the
                                                plan says; exit 0 only with 0 deviations
+    run.py no-image-report --run-dir R
+                                               -> R/NO_IMAGE_REPORT.jsonl, R/NO_IMAGE_SUMMARY.json:
+                                               every curated site that serves no image with the
+                                               reason measured for it, and the counts that close
+                                               over the read. Refused while a claiming site is
+                                               not covered by the replace export.
 """
 
 from __future__ import annotations
@@ -47,6 +53,7 @@ import research_web  # noqa: E402
 from gallery_audit.vision import Images  # noqa: E402
 from phase3.run import InputError  # noqa: E402
 
+from served_image import no_image_report as NR  # noqa: E402
 from served_image import plan as PL  # noqa: E402
 from served_image import state as ST  # noqa: E402
 from served_image import vision as V  # noqa: E402
@@ -152,10 +159,11 @@ def main(argv: list[str] | None = None) -> int:
         ("import-replace", "parse every replacement answer into REPLACE.jsonl"),
         ("plan", "the decisions as chunks of the shared image writer"),
         ("accept", "read-only: a written chunk's sites serve what the plan says"),
+        ("no-image-report", "every curated site that serves no image, with its measured reason"),
     ):
         commands[name] = sub.add_parser(name, help=helps)
         commands[name].add_argument("--run-dir", required=True, type=Path)
-    for name in ("precheck", "export-replace"):
+    for name in ("precheck", "export-replace", "no-image-report"):
         commands[name].add_argument("--harvest", type=Path, default=DEFAULT_HARVEST)
     commands["precheck"].add_argument(
         "--subset",
@@ -206,6 +214,8 @@ def main(argv: list[str] | None = None) -> int:
             _print(V.import_stage(run, V.STAGE_REPLACE))
         elif args.command == "plan":
             _print(PL.write_plan(run))
+        elif args.command == "no-image-report":
+            _print(NR.write_report(run, args.harvest, commons_for(run)))
         else:
             return cmd_accept(run, args.chunk)
     except (ST.StateError, OH.HandoffError, FileNotFoundError, InputError) as exc:
