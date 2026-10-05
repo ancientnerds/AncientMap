@@ -11,8 +11,12 @@
     run.py check-answer   --run-dir R --handoff H-check --batch-id B --label L --text-file F
     opus_handoff.py validate --dir H-check
     run.py import-check   --run-dir R          -> R/CHECK.jsonl
-    run.py export-replace --run-dir R --handoff H-replace
+    run.py export-replace --run-dir R --handoff H-replace [--claimed-only]
                                                every served image that does not depict its site
+                                               (--claimed-only: only the sites that serve no image
+                                               while their item claims a file - for a run that
+                                               does not re-judge the served images; refused
+                                               while a judged image failed)
     (brief, check-answer, validate as above)
     run.py import-replace --run-dir R          -> R/REPLACE.jsonl (only when export-replace
                                                reported questions > 0)
@@ -104,7 +108,9 @@ def cmd_export_check(run: Path, handoff: Path, population: str) -> dict[str, Any
     )
 
 
-def cmd_export_replace(run: Path, handoff: Path, harvest_root: Path) -> dict[str, Any]:
+def cmd_export_replace(
+    run: Path, handoff: Path, harvest_root: Path, claimed_only: bool = False
+) -> dict[str, Any]:
     state = ST.load_read(run / READ)
     summary = json.loads((run / PRECHECK_SUMMARY).read_text(encoding="utf-8"))
     same_harvest = Path(summary["harvest"]).resolve() == harvest_root.resolve()
@@ -117,6 +123,7 @@ def cmd_export_replace(run: Path, handoff: Path, harvest_root: Path) -> dict[str
         load_prechecks(run / PRECHECK_FILE),
         load_harvest(harvest_root),
         pictures_for(run),
+        claimed_only=claimed_only,
     )
 
 
@@ -164,6 +171,12 @@ def main(argv: list[str] | None = None) -> int:
         help="all (default): every served image; unconfirmed: only what the pre-check could not "
         "confirm - measured unsafe, see the module docstring of vision.py",
     )
+    commands["export-replace"].add_argument(
+        "--claimed-only",
+        action="store_true",
+        help="only the sites that serve no image while their Wikidata item claims a file: for a "
+        "run that does not re-judge the served images. Refused while a judged image failed",
+    )
     for name in ("brief", "check-answer"):
         commands[name].add_argument("--batch-id", required=True)
     commands["check-answer"].add_argument("--label", required=True)
@@ -179,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "export-check":
             _print(cmd_export_check(run, args.handoff, args.population))
         elif args.command == "export-replace":
-            _print(cmd_export_replace(run, args.handoff, args.harvest))
+            _print(cmd_export_replace(run, args.handoff, args.harvest, args.claimed_only))
         elif args.command == "brief":
             print(V.brief(run, args.handoff, args.batch_id))
         elif args.command == "check-answer":

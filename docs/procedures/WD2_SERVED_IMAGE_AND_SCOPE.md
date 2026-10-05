@@ -7,10 +7,13 @@ Owner decisions of 2026-09-26, binding:
   only by an image a vision check confirmed; otherwise the site serves no image.
 * **O7** "Ja, Ozeanien wie Amerika": Oceania is in scope through 1500 AD, like the Americas (E3).
 
-Every model judgement is an Opus agent answering through `scripts/remediation/opus_handoff.py`;
-no pipeline code calls a model. Every production write is journalled (`remediation_change_log`
-through `apply_remediation_change()`) by an existing writer, in steps of at most 100 sites, each
-accepted with 0 deviations before the next.
+Every model judgement is an agent answering through `scripts/remediation/opus_handoff.py`;
+no pipeline code calls a model. Since the owner's decision of 2026-10-03 the answering agents
+are MiniMax ones (`MiniMax-M3.1-Flash-Preview`, stamped
+`minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent)`); the answers of 2026-09-30 carry
+their Sonnet stamp and stay valid. Every production write is journalled
+(`remediation_change_log` through `apply_remediation_change()`) by an existing writer, in steps of
+at most 100 sites, each accepted with 0 deviations before the next.
 
 All commands run from the repository root with the repo venv (`./.venv/Scripts/python.exe`,
 abbreviated `$PY`) and `PYTHONIOENCODING=utf-8`. Output directories under `output/remediation/`
@@ -246,6 +249,11 @@ check** (`export-check --population all`, the default). `--population unconfirme
 design, kept as an explicit choice only. The pre-check's status travels with each decision as
 evidence.
 
+A site that serves **no** image is `no-image` and its item is never read: the pre-check stops there,
+so the claim of such a site is not in `PRECHECK.jsonl` at all. `export-replace` reads it itself
+(`_wanted_files`) and asks about those files, which is the only place a claim of a site without an
+image can be examined.
+
 **This departs from the specification, which sends only the images the pre-check does not
 confirm, and needs the orchestrator's (or the owner's) sign-off before the run**, recorded in
 AUDIT_LOG: `all` checks about 4,084 served images (about 341 check batches of 12), `unconfirmed`
@@ -253,7 +261,7 @@ about 1,184 (about 99 batches) - measured populations of section 5. Without the 
 `export-check --population unconfirmed`: the plan then keeps a pre-check CONFIRMED image unchecked
 (`plan.py`, `decide_site`).
 
-### 3.3 The two Opus stages
+### 3.3 The two vision stages
 
 * **served-check** (12 images per batch agent): `depicts` (the site itself, its remains, a drawing
   or reconstruction of it, or an object found there), `region_or_type` (region, landscape, town, a
@@ -287,7 +295,9 @@ about 1,184 (about 99 batches) - measured populations of section 5. Without the 
 | confirmed | the check says `depicts` | `thumbnail_url` := the served row's local file if it names anything else (`wd2-align`); a repaired thumbnail := the rendering of its file the check was shown (`wd2-thumb`) |
 | replaced | a `G` pick | hero flag off the old hero, onto the pick (`wd2-hero`); thumbnail := the pick's local file (`wd2-align`); every live row judged `other_site` - the served one by the check, a `G` by the replacement stage - excluded (`wd2-exclude`); a `region_or_type` row stays in the gallery |
 | cleared | no `G` depicts | every live row (each judged: the served one by the check, the rest as candidates) excluded and unheroed (`wd2-exclude`); thumbnail := the confirmed `W` file's rendering the agent was shown, else NULL (`wd2-thumb`) |
-| no image | the site serves nothing | nothing |
+| no image | the site serves nothing | nothing; the measured reason is the answer's `basis` in `REPLACE.jsonl` |
+| claimed | the site serves nothing, its item claims a file (P18/P373) and a claimed file was called `depicts` | thumbnail := the rendering the agent was shown (`wd2-thumb`) - the whole write, the site has no image row to move |
+| unjudged | a claim-only plan, the site serves an image this run did not judge | nothing; the site keeps what the delivered run left it |
 
 A live row nobody judged is never excluded (the plan refuses). Chunks of at most 100 sites; a
 cleared site is named in its chunk as one that may lose its last live image.
@@ -316,6 +326,10 @@ $PY $S brief --run-dir $R --handoff $H-check --batch-id B    # the agent's full 
 $PY scripts/remediation/opus_handoff.py validate --dir $H-check
 $PY $S import-check --run-dir $R                # -> CHECK.jsonl (unfetchable thumbnails included)
 $PY $S export-replace --run-dir $R --handoff $H-replace   # prints "questions": N
+#   --claimed-only instead exports only the sites that serve no image while their Wikidata item
+#   claims a file: for a run that does not re-judge the served images (they were judged and
+#   delivered on 2026-09-30). It is refused while a judged image failed, its record carries no
+#   check_sha256, and the plan then leaves every site that serves an image as "unjudged".
 #   only when N > 0 (with N = 0 no handoff exists; import-replace says so and `plan` goes on):
 #   per batch: brief / check-answer / answer as above, then validate --dir $H-replace, and
 $PY $S import-replace --run-dir $R              # -> REPLACE.jsonl
