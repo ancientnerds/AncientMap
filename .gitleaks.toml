@@ -31,4 +31,14 @@ regexes = [
 # generic-api-key, all such hashes).
 paths = [
     '''output/remediation/mechanical_teaser/s[0-9]{3}/(prov|card)/[A-Z_]+\.sql''',
+    # WD2/IH, the import-hero lane's plan files
+    # (output/remediation/import_hero/*/chunk-*/PLAN.jsonl, committed with each chunk's statement
+    # and undo - docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md section 3.7): every
+    # `unified_sites.thumbnail_url` record carries `"row_key": "<site uuid>"`, and the default
+    # generic-api-key rule reads a JSON key whose name ends in `key` followed by an
+    # entropy-looking value as a credential. It is the row's primary key - a site id, public in
+    # every page of this site. First flagged in the push of a5c51af: 1,668 findings, all of them,
+    # every one a `unified_sites` uuid, none in APPLY.sql, ROLLBACK.sql, CHUNK.json or the
+    # refusals.
+    '''output/remediation/import_hero/.*PLAN\.jsonl''',
 ]
