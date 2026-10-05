@@ -55,7 +55,9 @@ def _print(value: Any) -> None:
 
 def _load(path: Path) -> dict[str, Any]:
     if not path.is_file():
-        raise IH.ImportHeroError(f"{path} does not exist - run `plan --run-dir {path.parent}` first")
+        raise IH.ImportHeroError(
+            f"{path} does not exist - run `plan --run-dir {path.parent}` first"
+        )
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -95,8 +97,12 @@ def cmd_plan(
         fetched=json.loads(fetched.read_text(encoding="utf-8")) if fetched else None,
         sites_per_chunk=sites_per_chunk,
     )
-    return {"read_sha256": sha, "import_features": len(features), "shown_sites": len(state.sites),
-            **summary}
+    return {
+        "read_sha256": sha,
+        "import_features": len(features),
+        "shown_sites": len(state.sites),
+        **summary,
+    }
 
 
 def cmd_accept(run: Path) -> int:

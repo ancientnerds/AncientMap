@@ -564,6 +564,10 @@ class TestTheAcceptance:
 #: The Commons file the 807 refusals name, and the imageinfo answer the downloader returned for it.
 #: Measured 2026-10-05 against production, field for field.
 FETCH_FILE = "Area_archeologica_di_Herakleia_e_Siris_-_3.jpg"
+#: The same file as the Commons API spells it: MediaWiki's title form, `File:` off, spaces. The
+#: downloader normalises every answer to it (`fetch_image_metadata_batch`'s own note), so this is
+#: what `plan_targets` hands to the API and what the lane therefore names the stored file after.
+FETCH_TITLE = ST.canonical_file(FETCH_FILE)
 FETCH_META = {
     "author": "Alessandro Antonelli",
     "author_url": "https://commons.wikimedia.org/wiki/User:Una_giornata_uggiosa_%2794",
@@ -600,7 +604,7 @@ class TestTheFetchManifest:
 
     def _entry(self, meta: dict[str, str] | None = None, result: _Result | None = None) -> dict:
         return IF.manifest_entry(
-            THASOS, FETCH_FILE, meta if meta is not None else FETCH_META, result or _Result()
+            THASOS, FETCH_TITLE, meta if meta is not None else FETCH_META, result or _Result()
         )
 
     def test_the_entry_carries_exactly_the_columns_the_lane_demands(self) -> None:
@@ -608,14 +612,22 @@ class TestTheFetchManifest:
         assert sorted(self._entry()) == sorted(IH.FETCH_COLUMNS)
 
     def test_the_local_name_is_the_commons_name_with_only_the_extension_swapped(self) -> None:
+        """The wave names its files the Commons title, the spelling 43,392 of the 47,920 production
+        `commons_page_url` rows already use (measured 2026-10-05 over the read's 48,567 rows)."""
         entry = self._entry()
-        assert entry["filename"] == "Area_archeologica_di_Herakleia_e_Siris_-_3.webp"
-        assert entry["title"] == "Area_archeologica_di_Herakleia_e_Siris_-_3"
+        assert entry["filename"] == "Area archeologica di Herakleia e Siris - 3.webp"
+        assert entry["title"] == "Area archeologica di Herakleia e Siris - 3"
+
+    def test_the_underscore_spelling_is_passed_through_untouched(self) -> None:
+        """The other half of verbatim: an import link that spells its file with underscores stores that
+        name, only the extension swapped."""
+        assert IF.local_name(FETCH_FILE) == "Area_archeologica_di_Herakleia_e_Siris_-_3.webp"
 
     def test_the_commons_page_url_encodes_the_colon_the_way_production_does(self) -> None:
         entry = self._entry()
         assert entry["commons_page_url"] == (
-            "https://commons.wikimedia.org/wiki/File%3AArea_archeologica_di_Herakleia_e_Siris_-_3.jpg"
+            "https://commons.wikimedia.org/wiki/"
+            "File%3AArea%20archeologica%20di%20Herakleia%20e%20Siris%20-%203.jpg"
         )
 
     def test_the_derivative_carries_its_own_size_not_the_originals(self) -> None:
@@ -636,6 +648,18 @@ class TestTheFetchManifest:
         with pytest.raises(IF.FetchError, match="1600"):
             self._entry(result=_Result(width=800, height=531))
 
+    def test_a_download_shorter_than_the_lane_serves_is_refused_by_name(self) -> None:
+        """The plan's hero minimum is 1600x900, not 1600 alone: 121 of the 807 refusals are a
+        1600 px panorama under 900 px high (measured 2026-10-05), and the downloader keeps the
+        aspect ratio, so a 1600 px fetch of one returns the same box. Accepting it would install a
+        hero the lane itself calls too small, and the next plan would refuse the site again."""
+        with pytest.raises(IF.FetchError, match="900"):
+            self._entry(result=_Result(width=1600, height=812))
+
+    def test_the_minimum_the_manifest_enforces_is_the_plan_s_own(self) -> None:
+        """One rule, not two that can drift apart: `plan.py` decides what a hero may be."""
+        assert (IH.HERO_MIN_WIDTH, IH.HERO_MIN_HEIGHT) == (1600, 900)
+
     def test_a_commons_name_without_an_extension_is_refused_by_name(self) -> None:
         with pytest.raises(IF.FetchError, match="extension"):
             IF.manifest_entry(THASOS, "Area archeologica di Herakleia", FETCH_META, _Result())
@@ -643,6 +667,93 @@ class TestTheFetchManifest:
     def test_the_entry_is_the_sites_own_file_and_not_another_sites(self) -> None:
         """Two sites may link the same Commons file; the manifest is keyed by site, so the entry
         must carry the file it fetched, never a neighbour's."""
-        entry = IF.manifest_entry(HABU, FETCH_FILE, FETCH_META, _Result())
-        assert entry["filename"].endswith("Siris_-_3.webp")
+        entry = IF.manifest_entry(HABU, FETCH_TITLE, FETCH_META, _Result())
+        assert entry["filename"].endswith("Siris - 3.webp")
         assert entry["original_url"] == FETCH_META["original_url"]
+
+
+def _stub_downloader(monkeypatch, fail_file: str | None = None) -> None:
+    """Stand in for the Commons calls. `fetch_site` must be testable without the network, and the
+    stub is where a refusal is produced: a download whose file Commons does not hold."""
+    from pipeline import wiki_image_downloader as DL
+
+    def metadata(titles: list[str]) -> dict[str, dict]:
+        return {title: dict(FETCH_META) for title in titles}
+
+    def download(url: str | None, dest: Path, width: int) -> _Result:
+        # the stem, because `local_name` swaps the extension: "Broken_gate.jpg" is stored as
+        # "Broken_gate.webp" and a match on the whole name would never fire
+        if fail_file is not None and Path(fail_file).stem in dest.stem:
+            raise DL.DownloadError(url, f"{fail_file} is gone")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"RIFF....WEBP")
+        return _Result()
+
+    monkeypatch.setattr(DL, "fetch_image_metadata_batch", metadata)
+    monkeypatch.setattr(DL, "download_image", download)
+
+
+class TestTheFetchRun:
+    """The loop around that entry: which sites to fetch, where the file lands, what happens to
+    one that fails."""
+
+    def test_the_targets_are_the_refused_sites_that_name_a_commons_file(self) -> None:
+        claims = {
+            THASOS: {"image": f"https://upload.wikimedia.org/wikipedia/commons/1/1e/{FETCH_FILE}"},
+            HABU: {"image": f"https://upload.wikimedia.org/wikipedia/commons/2/2f/{FETCH_FILE}"},
+        }
+        refusals = [
+            {"site_id": THASOS, "reason": "local_file_too_small", "detail": ""},
+            {"site_id": HABU, "reason": "local_file_too_small", "detail": ""},
+            {"site_id": HIDDEN, "reason": "no_target_row", "detail": ""},
+        ]
+        # the title form, not the URL's underscores: that is what the API is asked for and what the
+        # lane names the stored file after
+        assert IF.plan_targets(claims, refusals) == [(THASOS, FETCH_TITLE), (HABU, FETCH_TITLE)]
+
+    def test_a_refusal_whose_import_link_names_no_commons_file_is_refused_by_name(self) -> None:
+        """`local_file_too_small` means the row holds the file, so a refusal without one is a
+        contradiction: fetching something the plan never named would be a guess."""
+        claims = {THASOS: {"image": ""}}
+        refusals = [{"site_id": THASOS, "reason": "local_file_too_small", "detail": ""}]
+        with pytest.raises(IF.FetchError, match="no Commons file"):
+            IF.plan_targets(claims, refusals)
+
+    def test_a_wave_with_nothing_to_fetch_is_refused_by_name(self) -> None:
+        with pytest.raises(IF.FetchError, match="no site to fetch"):
+            IF.plan_targets({}, [{"site_id": THASOS, "reason": "no_target_row", "detail": ""}])
+
+    def test_the_file_lands_in_the_sites_own_directory_under_the_offsite_root(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        _stub_downloader(monkeypatch)
+        entry = IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
+        assert entry["filename"] == "Area archeologica di Herakleia e Siris - 3.webp"
+        assert (tmp_path / THASOS[:8] / entry["filename"]).is_file()
+
+    def test_one_site_that_fails_does_not_take_the_manifest_with_it(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        _stub_downloader(monkeypatch, fail_file="Broken_gate.jpg")
+        manifest, failures = IF.fetch_manifest(
+            [(THASOS, FETCH_FILE), (SMALL, "Broken_gate.jpg")], tmp_path, delay_s=0.0
+        )
+        assert sorted(manifest) == [THASOS]
+        site_id, commons_file, why = failures[0]
+        assert (site_id, commons_file) == (SMALL, "Broken_gate.jpg")
+        # the downloader's own wording, which also carries the URL it asked for
+        assert why.startswith("the fetch failed: Broken_gate.jpg is gone")
+
+    def test_a_run_where_nothing_was_fetched_is_refused(self, tmp_path: Path, monkeypatch) -> None:
+        """A manifest of zero rows would look like a finished fetch and leave the plan refusing
+        every site of the wave."""
+        _stub_downloader(monkeypatch, fail_file="Broken")
+        with pytest.raises(IF.FetchError, match="no file of this wave"):
+            IF.fetch_manifest([(SMALL, "Broken_gate.jpg")], tmp_path, delay_s=0.0)
+
+    def test_the_manifest_is_written_once_and_its_digest_returned(self, tmp_path: Path) -> None:
+        path = tmp_path / "FETCHED.json"
+        digest = IF.write_manifest(path, {THASOS: {"filename": "a.webp"}})
+        assert path.is_file() and len(digest) == 64
+        with pytest.raises(IF.FetchError, match="already"):
+            IF.write_manifest(path, {THASOS: {"filename": "b.webp"}})
