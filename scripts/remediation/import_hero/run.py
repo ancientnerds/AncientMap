@@ -56,8 +56,9 @@ ACCEPTANCE_READ = "VERIFY_READ.json"
 ACCEPTANCE = "ACCEPTANCE.json"
 REMAINDER = "REMAINDER.json"
 CLAIMS = "IMPORT_CLAIMS.json"
+REFUSALS = "IMPORT_HERO_REFUSALS.jsonl"
 FETCHED = "FETCHED.json"
-FETCH_REFUSALS = "FETCH_REFUSALS.jsonl"
+FETCH_FAILURES = "FETCH_FAILURES.jsonl"
 
 
 def _print(value: Any) -> None:
@@ -70,6 +71,15 @@ def _load(path: Path) -> dict[str, Any]:
             f"{path} does not exist - run `plan --run-dir {path.parent}` first"
         )
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    """A record file of one object per line, as the lane writes them."""
+    if not path.is_file():
+        raise IH.ImportHeroError(
+            f"{path} does not exist - run `plan --run-dir {path.parent}` first"
+        )
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
 
 def _read_once(run: Path) -> tuple[dict[str, Any], str]:
@@ -121,37 +131,37 @@ def cmd_fetch(
     *,
     source: Path = DEFAULT_IMPORT,
     root: Path,
+    out: Path | None = None,
     limit: int | None = None,
     delay_s: float | None = None,
 ) -> dict[str, Any]:
     """The 1600 px files the `local_file_too_small` refusals need, and the manifest `plan --fetched`
-    reads. Reads production once, like `plan`, and writes only into the run directory and `root`.
+    reads. Writes only into the run directory and `root`; production is read at most once, and only
+    when the run holds no records of its own (`_wave_of`).
 
     The run directory is the same one the wave will be planned and applied in: one read, one join,
     one set of site ids. A second `fetch` over it continues where the first stopped - the manifest
     is the resume point, and the sites it carries are not fetched again.
+
+    `out` writes the manifest somewhere else than the run directory, for a pilot that has to leave
+    the wave's own path free.
     """
-    data, sha = _read_once(run)
-    state = ST.load_read(run / RD.READ)
-    features = IH.read_import(source)
-    claims = IH.join_import(state, features)
-    run.mkdir(parents=True, exist_ok=True)
-    (run / CLAIMS).write_text(
-        json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    planned = IH.plan(state, claims, dimensions=RD.dimensions(data))
+    data, sha, claims, refusals = _wave_of(run, source)
     by_reason: dict[str, int] = {}
-    for refusal in planned.refusals:
-        by_reason[refusal.reason] = by_reason.get(refusal.reason, 0) + 1
-    targets = IF.plan_targets(claims, [r.as_json() for r in planned.refusals])
+    for refusal in refusals:
+        by_reason[str(refusal.get("reason"))] = by_reason.get(str(refusal.get("reason")), 0) + 1
+    targets = IF.plan_targets(claims, refusals)
     if limit is not None:
         targets = targets[:limit]
-    manifest_path = run / FETCHED
+    manifest_path = out or (run / FETCHED)
 
     def progress(site_id: str, entry: dict[str, str]) -> None:
+        # stderr, not stdout: stdout is this command's one JSON summary, and a wave of 800
+        # downloads has to be watchable while it runs.
         print(
             f"fetched {site_id} -> {entry['filename']} "
             f"({entry['width']}x{entry['height']}, {entry['file_size_bytes']} bytes)",
+            file=sys.stderr,
             flush=True,
         )
 
@@ -159,18 +169,60 @@ def cmd_fetch(
         targets,
         root,
         manifest_path,
-        failures_path=run / FETCH_REFUSALS,
+        failures_path=run / FETCH_FAILURES,
         delay_s=delay_s,
         on_site=progress,
     )
     return {
         "run_id": run.name,
         "read_sha256": sha,
-        "read_at": state.read_at,
         "offsite_root": str(root),
         "refusals_of_the_plan": by_reason,
         **outcome.as_json(),
     }
+
+
+def _wave_of(
+    run: Path, source: Path
+) -> tuple[dict[str, Any] | None, str, dict[str, Any], list[dict[str, Any]]]:
+    """`(read, digest, claims, refusals)` of this run, from its own records where it has them.
+
+    The run's `plan` writes both: `IMPORT_CLAIMS.json` and `IMPORT_HERO_REFUSALS.jsonl`. A wave
+    whose plan holds nothing to write never got that far - `write_chunks` refuses an empty plan by
+    name, which is right for a writer - so those records are absent, and the run's own `READ.json`
+    decides: the same read, the same join, the same refusals, and still no second production read.
+    """
+    claims_path = run / CLAIMS
+    refusals_path = run / REFUSALS
+    if claims_path.is_file() and refusals_path.is_file():
+        read_path = run / RD.READ
+        data = _load(read_path) if read_path.is_file() else None
+        return data, RD.digest(data) if data else "", _load(claims_path), _load_jsonl(refusals_path)
+    read_path = run / RD.READ
+    if not read_path.is_file():
+        raise IH.ImportHeroError(
+            f"{claims_path} does not exist and {read_path} does not exist either - the run holds "
+            f"neither the claims and refusals of its plan nor its read, so run "
+            f"`plan --run-dir {run}` first"
+        )
+    data, sha = _read_once(run)
+    state = ST.load_read(read_path)
+    claims = IH.join_import(state, IH.read_import(source))
+    claims_path.parent.mkdir(parents=True, exist_ok=True)
+    claims_path.write_text(
+        json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    planned = IH.plan(state, claims, dimensions=RD.dimensions(data))
+    refusal_path = run / REFUSALS
+    refusal_path.write_text(
+        "".join(
+            json.dumps(r.as_json(), ensure_ascii=False, sort_keys=True) + "\n"
+            for r in planned.refusals
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return data, sha, claims, [r.as_json() for r in planned.refusals]
 
 
 def cmd_accept(run: Path) -> int:
@@ -264,6 +316,9 @@ def main(argv: list[str] | None = None) -> int:
         help="the offsite copy of the image tree; the VPS copy has to follow it",
     )
     commands["fetch"].add_argument(
+        "--out", type=Path, default=None, help="write the manifest here instead of into the run dir"
+    )
+    commands["fetch"].add_argument(
         "--limit", type=int, default=None, help="only the first N targets (a pilot)"
     )
     commands["fetch"].add_argument(
@@ -277,6 +332,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.run_dir,
                     source=args.source,
                     root=args.root,
+                    out=args.out,
                     limit=args.limit,
                     delay_s=args.delay_s,
                 )

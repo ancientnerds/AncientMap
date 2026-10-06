@@ -339,7 +339,7 @@ class FetchRun:
             key = why.split(":", 1)[0]
             by_reason[key] = by_reason.get(key, 0) + 1
         return {
-            "targets": self.targets,
+            "targeted": self.targets,
             "fetched": self.fetched,
             "already_in_the_manifest": self.already,
             "manifest_sha256": self.manifest_sha256,
@@ -397,7 +397,7 @@ def _append_refusal(path: Path, site_id: str, commons_file: str, why: str) -> No
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(
-        {"site_id": site_id, "commons_file": commons_file, "refusal": why},
+        {"site_id": site_id, "commons_file": commons_file, "why": why},
         ensure_ascii=False,
         sort_keys=True,
     )
