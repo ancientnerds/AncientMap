@@ -203,6 +203,19 @@ def _hero_row(state: ST.State, site_id: str) -> Mapping[str, Any] | None:
     return heroes[0] if heroes else None
 
 
+def _shows_a_picture_of_its_own(site: Mapping[str, Any]) -> bool:
+    """Whether the page shows something without a gallery row: the `thumbnail_url` the read holds.
+
+    This is where the owner's two decisions meet. On 2026-10-05 (18:32) a site with no row kept its
+    `thumbnail_url` and got no gallery row - the picture it already shows is the picture, and a row
+    would have replaced it. That reason holds only where such a `thumbnail_url` exists. Measured on
+    the read `b053ac17` (2026-10-06, 4,900 shown sites): 1,144 sites have neither a row nor a
+    `thumbnail_url`, so they show nothing at all, and for those the owner allowed the first row on
+    2026-10-06 after the candidate search confirmed a picture of 9 of them in one wave.
+    """
+    return bool(str(site.get("thumbnail_url") or "").strip())
+
+
 def plan(
     state: ST.State,
     refusals: Sequence[Mapping[str, Any]],
@@ -226,13 +239,14 @@ def plan(
             out.append(Refusal(site_id, "retired", "the site is not in the read"))
             continue
         rows = state.rows.get(site_id, ())
-        if not rows:
+        if not rows and _shows_a_picture_of_its_own(site):
             out.append(
                 Refusal(
                     site_id,
                     "no_row_at_all",
-                    "the site carries no image row at all: the owner decided on 2026-10-05 (18:32) "
-                    "that such a site keeps its thumbnail_url and gets no gallery row",
+                    "the site carries no image row at all but shows a thumbnail_url of its own: the "
+                    "owner decided on 2026-10-05 (18:32) that such a site keeps its thumbnail_url "
+                    "and gets no gallery row",
                 )
             )
             continue
@@ -273,6 +287,11 @@ def plan(
             continue
         hero = _hero_row(state, site_id)
         thumb = site.get("thumbnail_url")
+        # The row's reason is read out of the refusal that named this site, because the refusal is
+        # the run's own record of *why* the file is wanted - and a wave built from something other
+        # than the 2025 import must not sign its journal rows with the import's name. Only a
+        # refusal that names a source of its own overrides the import's wording.
+        source = str(refusal.get("source") or "")
         inserts.append(
             Insert(
                 site_id=site_id,
@@ -280,14 +299,16 @@ def plan(
                 old_thumbnail=str(thumb) if thumb else None,
                 new_thumbnail=local_path(site_id, values["filename"]),
                 change_key=f"{LANE}:{site_id}",
-                reason=(
+                reason=source
+                or (
                     "the 2025 import links this file for the site and no row of it holds the file; "
                     "the owner's decision of 2026-10-05 (17:43) is that the import's image is the "
                     "hero"
                 ),
                 evidence=[
                     {
-                        "source": "the 2025 import's own link (ancient_nerds_original.geojson)",
+                        "source": str(refusal.get("evidence_source") or "")
+                        or "the 2025 import's own link (ancient_nerds_original.geojson)",
                         "url": str(entry.get("commons_page_url") or ""),
                         "quote": values["original_url"],
                     },

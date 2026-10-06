@@ -1115,24 +1115,30 @@ class TestTheFetchCommand:
         assert json.loads(pilot.read_text(encoding="utf-8")) != {}
         assert not (run / IR.FETCHED).exists()
 
-    @pytest.mark.integration
     def test_a_run_without_its_claims_is_refused_by_name(self, tmp_path: Path, capsys) -> None:
-        """Marked integration: `fetch` reads production (`read_production` -> ssh ancientnerds)
-        before it refuses a missing run directory, so this needs the real host. It passes on the
-        workstation and failed the DB-less CI subset on 2026-10-06 with "Could not resolve
-        hostname ancientnerds". Move the refusal ahead of the production read and the marker can
-        go."""
+        """The refusal has to name the run and cost nothing: no directory created, and production
+        never read. Measured 2026-10-06: `fetch` wrote the floor into the run before `_wave_of`
+        looked at it, so the very directory the refusal looks for was created first - and the fetch
+        went on to read production instead. On the CI runner, which has no route to the VPS, that
+        surfaced as the only red test of the push (run 37508910683); here it was green for the wrong
+        reason, refused by the missing import export, which says "does not exist" as well.
+
+        The marker this test carried on main is gone with that fix, as 72b4eac asked for it."""
+        missing = tmp_path / "no-such-run"
         code = IR.main(
             [
                 "fetch",
                 "--run-dir",
-                str(tmp_path / "no-such-run"),
+                str(missing),
                 "--root",
                 str(tmp_path / "images"),
             ]
         )
         assert code == 1
-        assert "does not exist" in capsys.readouterr().err
+        err = capsys.readouterr().err
+        assert f"{missing} does not exist" in err
+        assert "plan --run-dir" in err
+        assert not missing.exists()
 
 
 class TestTheJoinRefusesAnEmptyKey:
@@ -1459,3 +1465,25 @@ class TestTheResumableFetchRun:
         assert sorted(IF.load_manifest(manifest)) == [THASOS]
         assert [f[0] for f in outcome.failures] == [HABU]
         assert "cannot be stored" in refusals.read_text(encoding="utf-8")
+
+
+class TestTheReadCommand:
+    """`insert-plan` measures its rows against `READ.json`, and a prepared run has no `fetch --start`
+    to get one - that command would read production *and* fetch the import's own 417 targets. The
+    read is written once, so a second one refuses instead of swapping the state under the plan."""
+
+    def test_the_read_is_written_once_and_a_second_refuses_by_name(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        from import_hero import read as RD
+
+        monkeypatch.setattr(RD, "read_production", _read)
+        run = tmp_path / "insert-2026-10-07-001"
+        assert IR.main(["read", "--run-dir", str(run)]) == 0
+        printed = json.loads(capsys.readouterr().out)
+        assert printed["shown_sites"] == len(_read()["sites"])
+        assert (run / RD.READ).is_file() and len(printed["read_sha256"]) == 64
+        summary = json.loads((run / IR.READ_SUMMARY).read_text(encoding="utf-8"))
+        assert summary["read_at"] == "2026-10-05T16:00:00Z"
+        assert IR.main(["read", "--run-dir", str(run)]) == 1
+        assert "written once" in capsys.readouterr().err

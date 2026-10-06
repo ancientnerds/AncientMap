@@ -161,6 +161,34 @@ class TestThePlanOfTheInsertWave:
         assert [r.reason for r in planned.refusals] == ["no_row_at_all"]
         assert "2026-10-05" in planned.refusals[0].detail
 
+    def test_a_site_that_shows_nothing_at_all_gets_its_first_row(self) -> None:
+        """The owner's decision of 2026-10-06 extends the rule: its reason - a site keeps the
+        picture it already shows - holds only where it shows one. Measured on the read `b053ac17`
+        (2026-10-06, 4,900 shown sites), 1,144 sites have neither a row nor a `thumbnail_url`, so
+        they show nothing at all; for those the first row is what the page needs.
+
+        The row is journalled with the refusal's own words, never with the 2025 import's: nothing
+        in this wave came from the import, and a journal that says otherwise is not an audit."""
+        state = _state(rows={SITE_A: []}, thumbs={SITE_A: None})
+        refusal = {
+            **_refusal(SITE_A),
+            "source": "a model judged this file 'depicts' and the site showed nothing at all",
+            "evidence_source": "the candidate search's confirmed verdict",
+        }
+        planned = IN.plan(state, [refusal], fetched=_fetched(SITE_A))
+        assert not planned.refusals
+        assert len(planned.inserts) == 1
+        row = planned.inserts[0]
+        assert row.reason == refusal["source"]
+        assert row.evidence[0]["source"] == refusal["evidence_source"]
+        # nothing to demote, and the thumbnail the page had (none) is replaced by the new row's file
+        assert row.demoted_id is None
+        assert row.old_thumbnail is None
+        assert row.new_thumbnail == f"/data/images/wiki/{SITE_A[:8]}/{FILENAME}"
+        assert row.thumbnail_changes is True
+        # 14 written columns, no demotion, the thumbnail change
+        assert row.journal_rows == 15
+
     def test_a_site_whose_fetch_was_refused_is_refused_by_name(self) -> None:
         """A row cannot name a file that is not on disk."""
         state = _state(rows={SITE_A: [_row(7, SITE_A)]}, thumbs={SITE_A: None})

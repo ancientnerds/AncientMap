@@ -64,6 +64,7 @@ ACCEPTANCE_READ = "VERIFY_READ.json"
 ACCEPTANCE = "ACCEPTANCE.json"
 ACCEPTANCE_INSERT = "ACCEPTANCE_INSERT.json"
 REMAINDER = "REMAINDER.json"
+READ_SUMMARY = "READ_SUMMARY.json"
 CLAIMS = "IMPORT_CLAIMS.json"
 REFUSALS = "IMPORT_HERO_REFUSALS.jsonl"
 FETCHED = "FETCHED.json"
@@ -113,7 +114,9 @@ def _floor_of(run: Path, min_width: int | None, min_height: int | None) -> tuple
 
 
 def _write_floor(run: Path, floor: tuple[int, int]) -> None:
-    run.mkdir(parents=True, exist_ok=True)
+    """The floor into the run directory. It does not create that directory: a command that refuses
+    its run by name must reach the refusal without having written anything first, so `plan` and
+    `fetch` decide for themselves whether the run exists."""
     (run / FLOOR).write_text(
         json.dumps(
             {
@@ -156,6 +159,9 @@ def cmd_plan(
 ) -> dict[str, Any]:
     """The read, the join and the chunks. Nothing outside `run` is written."""
     served = _floor_of(run, floor[0] if floor else None, floor[1] if floor else None)
+    # `plan` is the command that starts a run, so it may create the directory - and it writes the
+    # floor before the read, so the read that follows is the one this floor was planned at.
+    run.mkdir(parents=True, exist_ok=True)
     _write_floor(run, served)
     data, sha = _read_once(run)
     state = ST.load_read(run / RD.READ)
@@ -208,8 +214,10 @@ def cmd_fetch(
     the wave's own path free.
     """
     served = _floor_of(run, floor[0] if floor else None, floor[1] if floor else None)
-    _write_floor(run, served)
     data, sha, claims, refusals = _wave_of(run, source, start=start, floor=served)
+    # after `_wave_of`, never before it: `_wave_of` refuses a run that does not exist by name, and
+    # writing the floor into it first would create the very directory that refusal looks for.
+    _write_floor(run, served)
     by_reason: dict[str, int] = {}
     for refusal in refusals:
         by_reason[str(refusal.get("reason"))] = by_reason.get(str(refusal.get("reason")), 0) + 1
@@ -380,6 +388,38 @@ def cmd_remainder(run: Path) -> int:
     return 0
 
 
+def cmd_read(run: Path) -> int:
+    """The run's read of production, written once.
+
+    `insert-plan` measures its rows against the state this file holds, and a run that is prepared
+    rather than fetched - the INSERT wave of the candidate search, whose claims and refusals are
+    written by `judge_run.py insert-claims` - has no `fetch --start` to get it: that command would
+    read production *and* fetch the import's own 417 targets. One read, written once, so a second
+    `read` refuses by name rather than quietly swapping the state the plan was measured against.
+    """
+    path = run / RD.READ
+    if path.is_file():
+        raise IH.ImportHeroError(
+            f"{path} exists - a run's read is written once; delete it deliberately to read again"
+        )
+    data = RD.read_production()
+    run.mkdir(parents=True, exist_ok=True)
+    sha = RD.write_read(path, data)
+    state = ST.load_read(path)
+    record = {
+        "run_id": run.name,
+        "read_sha256": sha,
+        "read_at": state.read_at,
+        "shown_sites": len(state.sites),
+        "rows": sum(len(rows) for rows in state.rows.values()),
+    }
+    (run / READ_SUMMARY).write_text(
+        json.dumps(record, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _print(record)
+    return 0
+
+
 def cmd_insert_plan(
     run: Path,
     *,
@@ -486,6 +526,7 @@ def main(argv: list[str] | None = None) -> int:
         "insert-accept": "read production again and ask the INSERT wave's three questions per row",
         "accept": "read production again and ask the three questions per planned site",
         "remainder": "what the lane would still write over this run's read, and what it refuses",
+        "read": "read production once into READ.json, for a run that is prepared rather than fetched",
     }
     for name, help_text in helps.items():
         commands[name] = sub.add_parser(name, help=help_text)
@@ -587,6 +628,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_accept(args.run_dir, fetched=args.fetched)
         if args.command == "remainder":
             return cmd_remainder(args.run_dir)
+        if args.command == "read":
+            return cmd_read(args.run_dir)
         _print(
             cmd_plan(
                 args.run_dir,

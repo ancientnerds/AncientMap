@@ -662,21 +662,115 @@ precision of **13 %**, and **1 site in 3** with at least one picture of itself. 
 near misses: for *Gonnus* the search returned **three pictures of Mars** (`Gonnus Mons`, the USGS
 Arcadia MOLA maps), four bronze coins, a 1830 steel engraving and the modern village; for *Cerna,
 Croatia* graves of a different Cerna in Bucharest, a barracks in Brno and a ski slope in Slovakia;
-for *Smythapark* a farm, a field path and a treehouse. With the 51 % that have candidates at all,
-**one site in six of the class is what a full judgement round buys** - about 180 of the 1,081 - for
-~4,900 candidate images to look at.
+for *Smythapark* a farm, a field path and a treehouse.
 
-One judgement call to keep in view: two of the three `depicts` are **objects found at the site**
-(a votive inscription, an Athenian relief "from Gonnoi"), which the vision rule counts as depicting.
-Whether a museum object is the right picture for a site page is a question that rule does not
-answer; a drawing, a plan or a reconstruction of the site would be, an inscription kept in a museum
-is a different thing.
+**The same question, measured over the run's real candidates, is better than the pilot.** The full
+search (`CANDIDATE_SUMMARY.json`): of the 1,081 sites, **595 carry candidates (55 %) and 5,809
+candidate images reach the floor**; 486 sites are refused by name - 461 `no_candidate` (Commons names
+no file for them at all) and 25 `all_too_small`. The first 8 sites of the judgement export (65
+candidate images, one verdict each): **12 `depicts`, 18 `region_or_type`, 35 `other_site`** - a
+precision of **18 %**, and **2 sites in 8** with a picture of themselves (*Apazzu*, and eleven
+photographs of the *Tombeau de Tin Hanan*). Read across the class, the round is worth about **1,050
+confirmed images over roughly 150 of the 1,081 sites** - one site in seven.
+
+One judgement call to keep in view: the three `depicts` of the first pilot were **objects found at the
+site** (a votive inscription, an Athenian relief "from Gonnoi"), which the vision rule counts as
+depicting. Whether a museum object is the right picture for a site page is a question that rule does
+not answer; a drawing, a plan or a reconstruction of the site would be, an inscription kept in a
+museum is a different thing.
 
 ```bash
 PY=./.venv/Scripts/python.exe
 $PY scripts/remediation/candidate_search/run.py \
     --out output/remediation/candidate_search/candidates-2026-10-06 --limit 100   # a pilot
 ```
+
+**The judgement (`candidate_search/judge.py`) is the stage that decides.** One verdict per candidate -
+`depicts`, `region_or_type`, `other_site` - and **only `depicts` becomes a fetch target**
+(`write_targets`: one `(site_id, commons_file)` per site, the largest of them, which is exactly what
+the INSERT lane's `run_fetch` takes). The transport is the handoff the project already uses: the code
+writes the question, an agent **looks at the bytes** and answers one JSON object per site, the code
+checks the answer's shape and records it under the name of the model that wrote it. A verdict is
+never taken from the file name or from prior knowledge - the pilot's own miss list is why.
+
+Batches of 36 candidates packed **by site**, so a site is never split across two agents; a site with
+more candidates than a batch gets a batch of its own and the surplus is refused **by name**, because a
+candidate nobody looks at is one the site could have had. An answer that names a file nobody offered,
+judges one twice, leaves one unjudged or uses an unknown verdict lands in
+`CANDIDATE_VERDICT_REFUSALS.jsonl` with its reason.
+
+```bash
+$PY scripts/remediation/candidate_search/judge_run.py judge-export  --run-dir <run>          # images + questions
+$PY scripts/remediation/candidate_search/judge_run.py judge-import  --run-dir <run>          # the batch folders' answers -> VERDICTS
+```
+
+`judge-import` reads every `<run>/<batch_id>/<site_id>.answer.json` beside the question it answers,
+so an agent that never wrote a file is not half-answered - it is `not_answered` by name. The full
+wave is below, after the row rule.
+
+**What the judgement measured, over the run's own first 24 sites** (190 candidates, one verdict
+each, run `candidates-2026-10-06`, read `b053ac17`): **55 `depicts`, 84 `other_site`, 51
+`region_or_type`** - a precision of **29 %**, and **9 of 24 sites** with at least one picture of
+itself. The eight-site pilot read 18 % and one site in four; the misses are not near misses either
+(*Gonnus* returned three pictures of Mars, *Cochapata* two Mars-maps and a view of a lagoon).
+
+**The export paces itself, and the `PACE` it defined was dead.** `judge_run.py` declared
+`PACE = 1.0` and never read it: the export's client was a bare `httpx.Client`, so the renderings
+went out back to back. The pilot's 190 images hid that; the full run asks for **5,809**, and
+Wikimedia's robot policy asks for serial requests. The failure would have been quiet - a `HTTP 429`
+is a non-200, `judge.download` records it as a **refused candidate**, and the site loses a picture
+it could have had, by name, for a reason that was never about the picture. `PacedDownloads` is
+`Commons` itself with the search stage's pacing; only the refusal handling differs, because here a
+non-200 is an answer rather than an exception. **And `judge-export` writes its prompts only after
+it has downloaded every candidate** - the batch folders grow in one step at the end, so a run's
+first questions cannot be answered before its last picture is on disk.
+
+**The INSERT wave of a candidate run needed three things the runbook claimed and the code did not
+have.** `TARGETS.jsonl` is a judgement's result; the INSERT lane reads two other files, and until
+2026-10-06 only the 2025 import wrote them:
+
+* `judge_run.py insert-claims --run-dir <candidate run> --insert-run <INSERT run>` writes
+  `IMPORT_CLAIMS.json` (the URL of the file the judge chose - the fetch reads the Commons file out
+  of it) and the `no_target_row` refusal that names the site. Without it the fetch finds no import
+  picture in the claims and refuses the wave by name. Claims are **merged, never replaced**: a
+  second claim for one site is refused by name instead of overwriting the first.
+* `import_hero/run.py read --run-dir <INSERT run>` writes that run's `READ.json`, **once** - the
+  import lane gets it from `fetch --start`, which would also have fetched the import's own 417
+  targets, so a prepared wave has no other way to get one.
+* The row's journalled `reason` and evidence `source` are read **out of the refusal** that named
+  the site. Nothing in a candidate wave came from the 2025 import, and a journal row signed with the
+  import's name is not an audit.
+
+**The row rule, and what it had to be measured against.** `insert.plan` refused all nine targets as
+`no_row_at_all`: *"the owner decided on 2026-10-05 (18:32) that such a site keeps its
+`thumbnail_url` and gets no gallery row"*. That reason holds where a `thumbnail_url` exists. The
+candidate search's population is the other class: **1,144 of the 4,900 shown sites have neither a
+row nor a `thumbnail_url`**, so they show nothing at all (measured on `b053ac17`). **Owner decision
+2026-10-06:** those get their first row; the 150 sites that keep a thumbnail_url of their own are
+untouched, and their refusal keeps the old wording and its date.
+
+```bash
+$PY scripts/remediation/candidate_search/judge_run.py judge-export   --run-dir <run>          # images + questions
+$PY scripts/remediation/candidate_search/judge_run.py judge-import   --run-dir <run>          # answers -> VERDICTS
+$PY scripts/remediation/candidate_search/judge_run.py write-targets  --run-dir <run>          # depicts -> TARGETS
+$PY scripts/remediation/candidate_search/judge_run.py insert-claims  --run-dir <run> --insert-run $I
+$PY $IH/run.py read          --run-dir $I
+$PY $IH/run.py fetch         --run-dir $I --root $OFFSITE --target insert
+$PY $IH/run.py insert-plan   --run-dir $I
+$PY $IH/insert_writer.py $I/chunk-001 --check --rehearse --apply --readback --rehearse-rollback
+$PY $IH/run.py insert-accept --run-dir $I
+```
+
+**Applied 2026-10-06, run `insert-2026-10-06-001` (the first wave of this lane's candidate
+search):** 9 targets, **7 files fetched**, 2 refused by name by the credit rule of 2026-10-05
+(17:43) - `Apazzu` carries no `author_url`, `King's apartments Apadana Susa` no `license_url`. One
+chunk, **7 rows over 7 sites, 105 journal rows**, all five writer steps green (`plan = journal =
+data`, 105 rows, both ways). Acceptance **`ok: true`** on the read `d86789d3` (2026-10-06T20:51:54Z):
+7 sites, one hero each, the thumbnail follows the row. The 7 files were verified **byte-exact on
+the offsite tree, after the transfer, and inside the api container** (0 missing, 0 size mismatches;
+the served tree at 50,246 `.webp`), and all **7/7 live API answers point at the new file and serve
+its recorded byte count**. The two refusals are named in `FETCH_FAILURES.jsonl` and in the plan's
+`INSERT_REFUSALS.jsonl` - neither site gets a picture from this wave.
 
 ### 3.7.2 The floor the owner lowered (2026-10-06), and exactly what it released
 

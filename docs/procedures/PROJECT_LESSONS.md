@@ -10,6 +10,18 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
 - **Ein Deploy kann „success" melden, ohne neu gebaut zu haben.** Nach jedem Deploy den
   `commit` im Health-Endpoint prüfen (`curl localhost:8000/`), nicht den grünen Haken.
   *(`reference-deployment-lessons`, 2026-09-17)*
+- **Eine Verweigerung muss vor ihren Nebenwirkungen kommen, nicht danach.** `import_hero/run.py
+  fetch` schrieb den Boden des Laufs in das Laufverzeichnis, *bevor* `_wave_of` prüfte, ob der Lauf
+  überhaupt existiert — und legte damit genau das Verzeichnis an, dessen Fehlen die Verweigerung
+  prüft. Danach las der Befehl Produktion (`ssh ancientnerds`) statt zu verweigern. Auf der
+  Workstation blieb das grün, **aus dem falschen Grund**: der fehlende Import-Export sagt auch
+  „does not exist". Auf dem GitHub-Runner ohne Route zum VPS war es der einzige rote Test des
+  Pushes (`37508910683`, 18:14 UTC) und blockierte **jeden** Deploy — auch den Journal-Fix einer
+  anderen Session, der dahinter wartete. Zwei Lehren daraus: eine Verweigerung darf nichts
+  anlegen, was sie selbst prüft; und ein Test, der ein Fehlermeldungsfragment prüft, ohne den
+  Fehlerweg zu benennen, ist grün, bis die Umgebung ihn nicht mehr trägt. Der Test nennt heute den
+  Lauf, den Text und dass nichts entstanden ist (15,2 s Produktionslesen wurden 3,1 s Verweigerung).
+  *(`scripts/remediation/import_hero/run.py`, `tests/remediation/test_import_hero.py`, 2026-10-06)*
 - **Der Deploy baut nur, was der Diff berührt.** Eine Änderung unter `pipeline/` baut `api`
   **und** `lyra` neu (so seit `ea3f30a`, 2026-02-05); der Theo-Worker wird nur neu gebaut, wenn
   kein Lauf `running` ist. Die frühere Notiz „der Deploy rebuildet nur `api`, Lyra braucht ein
