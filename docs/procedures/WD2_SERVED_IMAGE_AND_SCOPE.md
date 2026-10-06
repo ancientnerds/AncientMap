@@ -551,10 +551,16 @@ end, and what it still refuses is 807 `local_file_too_small` + 469 `no_target_ro
 Applied 2026-10-06: the 807 `local_file_too_small` first (runs `-004`, `-005`: 310 sites fetched and
 accepted 310 of 310), then the INSERT wave (runs `-006`, `-007`, `-008`, above). After all of it the
 read of run `-008` counts **4,900 shown curated sites, 1,344 of them without a live hero, 0 sites
-with two**, 47,778 image rows and **583 live heroes still under 1600x900**. **54 sites whose live
-hero's thumbnail points somewhere else** are a different finding, and not this lane's: 32 carry a
-remote `upload.wikimedia.org` URL as `thumbnail_url` and 22 a `/data/…` path that names another
-file; none of them was written by a 2026-10-06 wave.
+with two**, 47,778 image rows and **583 live heroes still under 1600x900** (552 after this wave: 31
+of them lost the flag to a fetched 1600 px row).
+
+**The thumbnail question, asked properly** (2026-10-06): of the shown curated sites with a live
+hero, **all 3,556 name the served row** - the T1 rule holds everywhere it is visible. A first
+measurement without the `scope_status IS DISTINCT FROM 'retired'` filter reported "54 sites whose
+live hero's thumbnail points somewhere else" (32 remote `upload.wikimedia.org` URLs, 22 a local
+path naming another file); **all 54 are `retired`**, which the site does not render. A number that
+reads like a defect and is not one usually means a filter is missing, not that the database is
+wrong.
 
 ### 3.7.1 What is left, and why each class cannot be closed from here (measured 2026-10-06)
 
