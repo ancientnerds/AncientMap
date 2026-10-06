@@ -31,8 +31,10 @@ def _site(site_id: str, files: list[str], name: str = "Gonnus") -> dict:
             {
                 "file": f,
                 "why": "a search",
-                "picture_url": f"https://upload.wikimedia.org/{f}",
-                "original_url": f"https://upload.wikimedia.org/orig/{f}",
+                "picture_url": (
+                    f"https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/{f}/1280px-{f}"
+                ),
+                "original_url": f"https://upload.wikimedia.org/wikipedia/commons/1/1e/{f}",
                 "width": 1600,
                 "height": 1200,
                 "path": f"pictures/{f}",
@@ -318,6 +320,84 @@ class TestTheDownloadPace:
         assert answer.status_code == 429, (
             "judge.download turns this into a refused candidate by name"
         )
+
+
+class TestTheInsertHandover:
+    """`TARGETS.jsonl` is a judgement's result; the INSERT wave reads two other files.
+
+    `import_hero/run.py fetch --target insert` takes the Commons file out of `IMPORT_CLAIMS.json`
+    and `insert-plan` reads `IMPORT_HERO_REFUSALS.jsonl`. Both belong to the 2025 import until
+    something writes them for this run - and without that step the fetch refuses the wave by name
+    and the whole search ends in a file nobody reads.
+    """
+
+    def _run(self, tmp_path: Path, sites: list[dict], targets: list[dict]) -> Path:
+        out = tmp_path / "candidates"
+        out.mkdir()
+        (out / CJ.CANDIDATES).write_text(
+            "".join(json.dumps(s, ensure_ascii=False) + "\n" for s in sites), encoding="utf-8"
+        )
+        (out / CJ.TARGETS).write_text(
+            "".join(json.dumps(t, ensure_ascii=False) + "\n" for t in targets), encoding="utf-8"
+        )
+        return out
+
+    def test_a_target_becomes_a_claim_and_a_no_target_row_refusal(self, tmp_path: Path) -> None:
+        site = _site("a", ["Tomb.jpg"])
+        out = self._run(
+            tmp_path,
+            [site],
+            [{"site_id": "a", "commons_file": "Tomb.jpg", "width": 1600, "height": 1200}],
+        )
+        insert_run = tmp_path / "insert"
+        result = CJ.insert_claims(out, insert_run)
+        assert result["sites_prepared"] == 1 and result["refused_targets"] == []
+        claims = json.loads((insert_run / "IMPORT_CLAIMS.json").read_text(encoding="utf-8"))
+        assert claims == {
+            "a": {"image": "https://upload.wikimedia.org/wikipedia/commons/1/1e/Tomb.jpg"}
+        }
+        refusals = [
+            json.loads(line)
+            for line in (insert_run / "IMPORT_HERO_REFUSALS.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line
+        ]
+        assert [(r["site_id"], r["reason"]) for r in refusals] == [("a", "no_target_row")]
+
+    def test_a_target_the_search_recorded_no_url_for_is_refused_by_name(
+        self, tmp_path: Path
+    ) -> None:
+        site = _site("a", ["Tomb.jpg"])
+        site["candidates"][0]["original_url"] = ""
+        site["candidates"][0]["picture_url"] = ""
+        out = self._run(
+            tmp_path,
+            [site],
+            [{"site_id": "a", "commons_file": "Tomb.jpg", "width": 1600, "height": 1200}],
+        )
+        result = CJ.insert_claims(out, tmp_path / "insert")
+        assert result["sites_prepared"] == 0
+        assert [r["reason"] for r in result["refused_targets"]] == ["no_candidate_url"]
+
+    def test_a_second_claim_for_one_site_never_overwrites_the_first(self, tmp_path: Path) -> None:
+        site = _site("a", ["Tomb.jpg", "Mound.jpg"])
+        out = self._run(
+            tmp_path,
+            [site],
+            [
+                {"site_id": "a", "commons_file": "Tomb.jpg", "width": 1600, "height": 1200},
+                {"site_id": "a", "commons_file": "Mound.jpg", "width": 1600, "height": 1200},
+            ],
+        )
+        insert_run = tmp_path / "insert"
+        CJ.insert_claims(out, insert_run)
+        result = CJ.insert_claims(out, insert_run)
+        claims = json.loads((insert_run / "IMPORT_CLAIMS.json").read_text(encoding="utf-8"))
+        assert claims == {
+            "a": {"image": "https://upload.wikimedia.org/wikipedia/commons/1/1e/Tomb.jpg"}
+        }
+        assert [r["reason"] for r in result["refused_targets"]] == ["claim_conflict"]
 
 
 if __name__ == "__main__":

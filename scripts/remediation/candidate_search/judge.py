@@ -39,6 +39,8 @@ for _path in (_ROOT, _ROOT / "scripts" / "remediation"):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+from served_image import state as ST  # noqa: E402
+
 CANDIDATES = "CANDIDATES.jsonl"
 VERDICTS = "VERDICTS.jsonl"
 PICTURES = "pictures"
@@ -55,6 +57,20 @@ DEPICTS = "depicts"
 REGION = "region_or_type"
 OTHER = "other_site"
 VERDICTS_THAT_END_CANDIDACY = frozenset({DEPICTS, REGION, OTHER})
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        raise FileNotFoundError(f"{path} does not exist - run the search and the judge first")
+    return [
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
+
+
+def _read_jsonl_or_empty(path: Path) -> list[dict[str, Any]]:
+    """The same reading for a file a first run has not written yet: the INSERT wave's refusals are
+    the import's until this run adds its own, and a run that has none yet is empty, not broken."""
+    return _read_jsonl(path) if path.is_file() else []
 
 
 def pack(
@@ -171,6 +187,122 @@ def export(
         "images": str(pictures),
         "refused_images": len(refusals),
         "refusals": refusals[:20],
+    }
+
+
+def insert_claims(out: Path, insert_run: Path) -> dict[str, Any]:
+    """The INSERT wave's own two records, from the `depicts` verdicts this run confirmed.
+
+    `import_hero/run.py fetch --target insert` reads a run directory that already holds
+    `IMPORT_CLAIMS.json` and `IMPORT_HERO_REFUSALS.jsonl`: it takes the Commons file out of each
+    claim, and `insert-plan` reads the refusals. The candidate search is not the 2025 import, so
+    nothing else writes those two records for it - without this step the fetch finds no import
+    picture in the claims and refuses the wave by name, and the run would end in
+    `TARGETS.jsonl` with nothing written.
+
+    Claims are merged, never replaced: a wave can be prepared in more than one go, and a site whose
+    claim another lane already recorded keeps that URL - a second claim for one site is refused by
+    name instead of silently overwriting the first.
+    """
+    targets = _read_jsonl(out / TARGETS)
+    candidates = {str(site["site_id"]): site for site in _read_jsonl(out / CANDIDATES)}
+    claims_path = insert_run / "IMPORT_CLAIMS.json"
+    refusals_path = insert_run / "IMPORT_HERO_REFUSALS.jsonl"
+    claims = json.loads(claims_path.read_text(encoding="utf-8")) if claims_path.is_file() else {}
+    refusals = _read_jsonl_or_empty(refusals_path)
+    refused_sites = {str(row.get("site_id") or "") for row in refusals}
+
+    written = 0
+    out_refusals: list[dict[str, str]] = []
+    for target in targets:
+        site_id = str(target.get("site_id") or "")
+        commons_file = str(target.get("commons_file") or "")
+        candidate = next(
+            (
+                c
+                for c in (candidates.get(site_id, {}).get("candidates") or ())
+                if str(c.get("file") or "") == commons_file
+            ),
+            None,
+        )
+        url = ""
+        if candidate is not None:
+            url = str(candidate.get("original_url") or "") or str(
+                candidate.get("picture_url") or ""
+            )
+        if not url:
+            out_refusals.append(
+                {
+                    "site_id": site_id,
+                    "reason": "no_candidate_url",
+                    "detail": f"{site_id}: {commons_file!r} is a target but the search recorded no URL",
+                }
+            )
+            continue
+        if ST.file_of_url(url) is None:
+            out_refusals.append(
+                {
+                    "site_id": site_id,
+                    "reason": "unreadable_url",
+                    "detail": f"{site_id}: {url!r} names no Commons file",
+                }
+            )
+            continue
+        if site_id in claims:
+            if str(claims[site_id].get("image") or "") != url:
+                out_refusals.append(
+                    {
+                        "site_id": site_id,
+                        "reason": "claim_conflict",
+                        "detail": (
+                            f"{site_id}: the run already claims "
+                            f"{claims[site_id].get('image')!r}, the target brings {url!r}"
+                        ),
+                    }
+                )
+            continue
+        claims[site_id] = {"image": url}
+        if site_id not in refused_sites:
+            refusals.append(
+                {
+                    "site_id": site_id,
+                    "reason": "no_target_row",
+                    "detail": (
+                        f"the candidate search confirmed {commons_file!r} as a picture of this "
+                        f"site, and the site has no row that holds it"
+                    ),
+                    # The row this refusal produces is journalled with a reason and an evidence
+                    # source, and both have to name what actually wanted the file. The import's
+                    # wording would be a lie here: nothing in this wave came from the 2025 import.
+                    "source": (
+                        "a model looked at every Commons candidate of this site and judged this "
+                        f"file {DEPICTS!r} - a picture of the site itself - while the site showed "
+                        "nothing at all: no gallery row and no thumbnail_url (owner decision "
+                        "2026-10-06)"
+                    ),
+                    "evidence_source": (
+                        "the candidate search's confirmed verdict (candidate_search/VERDICTS.jsonl)"
+                    ),
+                }
+            )
+            refused_sites.add(site_id)
+        written += 1
+
+    insert_run.mkdir(parents=True, exist_ok=True)
+    claims_path.write_text(
+        json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    refusals_path.write_text(
+        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in refusals),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return {
+        "insert_run": str(insert_run),
+        "sites_prepared": written,
+        "claims_total": len(claims),
+        "refusals_total": len(refusals),
+        "refused_targets": out_refusals,
     }
 
 

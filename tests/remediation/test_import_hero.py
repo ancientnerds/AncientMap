@@ -1465,3 +1465,25 @@ class TestTheResumableFetchRun:
         assert sorted(IF.load_manifest(manifest)) == [THASOS]
         assert [f[0] for f in outcome.failures] == [HABU]
         assert "cannot be stored" in refusals.read_text(encoding="utf-8")
+
+
+class TestTheReadCommand:
+    """`insert-plan` measures its rows against `READ.json`, and a prepared run has no `fetch --start`
+    to get one - that command would read production *and* fetch the import's own 417 targets. The
+    read is written once, so a second one refuses instead of swapping the state under the plan."""
+
+    def test_the_read_is_written_once_and_a_second_refuses_by_name(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        from import_hero import read as RD
+
+        monkeypatch.setattr(RD, "read_production", _read)
+        run = tmp_path / "insert-2026-10-07-001"
+        assert IR.main(["read", "--run-dir", str(run)]) == 0
+        printed = json.loads(capsys.readouterr().out)
+        assert printed["shown_sites"] == len(_read()["sites"])
+        assert (run / RD.READ).is_file() and len(printed["read_sha256"]) == 64
+        summary = json.loads((run / IR.READ_SUMMARY).read_text(encoding="utf-8"))
+        assert summary["read_at"] == "2026-10-05T16:00:00Z"
+        assert IR.main(["read", "--run-dir", str(run)]) == 1
+        assert "written once" in capsys.readouterr().err

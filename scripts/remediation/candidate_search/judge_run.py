@@ -13,9 +13,21 @@ answer to `<run>/<batch_id>/<site_id>.answer.json` and **has to name itself and 
 `judge-import` refuses an answer without that stamp, because the audit of a wrong picture is what this
 stage exists for. `judge-import` checks every answer and writes `VERDICTS.jsonl` plus the refusals.
 
-After `write-targets`, the wave is an ordinary INSERT wave: `import_hero/run.py fetch` takes the
-`TARGETS.jsonl` pairs, and `insert-plan`, `insert_writer.py` and `insert-accept` are the same five
-writer steps and the same acceptance every other write of this project used.
+After `write-targets` the wave is an ordinary INSERT wave, in three steps that were missing until
+`insert-claims` and `import_hero/run.py read` wrote them:
+
+```bash
+$PY judge_run.py insert-claims --run-dir <this run> --insert-run <the INSERT wave's run dir>
+$PY import_hero/run.py read        --run-dir <the INSERT wave's run dir>
+$PY import_hero/run.py fetch       --run-dir <the INSERT wave's run dir> --root <offsite> --target insert
+```
+
+`insert-claims` writes the two records the fetch reads - `IMPORT_CLAIMS.json` (the URL of the file
+the judge chose) and the `no_target_row` refusal that names the site - because until now only the
+2025 import wrote them. `read` writes the `READ.json` the insert plan measures its rows against; the
+import lane gets that read from `fetch --start`, which would also have fetched the import's own 417
+targets. `insert-plan`, `insert_writer.py` and `insert-accept` are then the same five writer steps
+and the same acceptance every other write of this project used.
 """
 
 from __future__ import annotations
@@ -111,7 +123,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             stream.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(prog="candidate_search/judge_run.py", description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("judge-export", "judge-import", "write-targets"):
+    for name in ("judge-export", "judge-import", "write-targets", "insert-claims"):
         command = commands.add_parser(name)
         command.add_argument("--run-dir", type=Path, required=True)
         if name == "judge-export":
@@ -123,6 +135,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 default=None,
                 help="only the first N sites with candidates - a pilot that measures the "
                 "judgement's precision over the run's real candidates",
+            )
+        if name == "insert-claims":
+            command.add_argument(
+                "--insert-run",
+                type=Path,
+                default=None,
+                help="the INSERT wave's run directory (insert-claims writes its claims and refusals)",
             )
     args = parser.parse_args(argv)
     try:
@@ -146,8 +165,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 str(site["site_id"]): site for site in read_jsonl(args.run_dir / CS.CANDIDATES)
             }
             summary = CJ.import_answers(args.run_dir, recorded(args.run_dir), sites)
-        else:
+        elif args.command == "write-targets":
             summary = CJ.write_targets(args.run_dir, read_jsonl(args.run_dir / CJ.VERDICTS))
+        else:
+            if not args.insert_run:
+                raise JudgeError(
+                    "insert-claims writes the INSERT wave's records into another directory: "
+                    "--insert-run names it"
+                )
+            summary = CJ.insert_claims(args.run_dir, args.insert_run)
     except (JudgeError, OSError, ValueError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 1
