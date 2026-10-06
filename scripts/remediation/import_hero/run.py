@@ -68,6 +68,7 @@ CLAIMS = "IMPORT_CLAIMS.json"
 REFUSALS = "IMPORT_HERO_REFUSALS.jsonl"
 FETCHED = "FETCHED.json"
 FETCH_FAILURES = "FETCH_FAILURES.jsonl"
+FLOOR = "FLOOR.json"
 
 
 def _print(value: Any) -> None:
@@ -91,6 +92,49 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
 
+def _floor_of(run: Path, min_width: int | None, min_height: int | None) -> tuple[int, int]:
+    """The `(width, height)` this run serves, from the flags or from the run's own `FLOOR.json`.
+
+    A run that was planned at the owner's lowered floor must be fetched at the same floor, or the
+    fetch refuses what the plan would have accepted. Writing the pair into the run directory is
+    what makes that checkable instead of remembered.
+    """
+    if min_width is not None and min_height is not None:
+        return min_width, min_height
+    if min_width is not None or min_height is not None:
+        raise IH.ImportHeroError(
+            "--min-width and --min-height travel together: one floor, both halves"
+        )
+    path = run / FLOOR
+    if path.is_file():
+        recorded = _load(path)
+        return int(recorded["min_width"]), int(recorded["min_height"])
+    return IH.HERO_MIN_WIDTH, IH.HERO_MIN_HEIGHT
+
+
+def _write_floor(run: Path, floor: tuple[int, int]) -> None:
+    run.mkdir(parents=True, exist_ok=True)
+    (run / FLOOR).write_text(
+        json.dumps(
+            {
+                "min_width": floor[0],
+                "min_height": floor[1],
+                "note": (
+                    "the size a local file must reach for this run; the lane's own is "
+                    f"{IH.HERO_MIN_WIDTH}x{IH.HERO_MIN_HEIGHT}, and the owner's lowered floor is "
+                    f"{IH.OWNER_FLOOR_WIDTH}x{IH.OWNER_FLOOR_HEIGHT} (owner decision 2026-10-06, "
+                    '"for these cases the existing picture becomes the hero")'
+                ),
+            },
+            ensure_ascii=False,
+            indent=1,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def _read_once(run: Path) -> tuple[dict[str, Any], str]:
     """The run's read: written once per run directory, loaded again on a second `plan`."""
     path = run / RD.READ
@@ -108,8 +152,11 @@ def cmd_plan(
     source: Path = DEFAULT_IMPORT,
     sites_per_chunk: int = 100,
     fetched: Path | None = None,
+    floor: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
     """The read, the join and the chunks. Nothing outside `run` is written."""
+    served = _floor_of(run, floor[0] if floor else None, floor[1] if floor else None)
+    _write_floor(run, served)
     data, sha = _read_once(run)
     state = ST.load_read(run / RD.READ)
     features = IH.read_import(source)
@@ -126,11 +173,13 @@ def cmd_plan(
         dimensions=RD.dimensions(data),
         fetched=json.loads(fetched.read_text(encoding="utf-8")) if fetched else None,
         sites_per_chunk=sites_per_chunk,
+        floor=served,
     )
     return {
         "read_sha256": sha,
         "import_features": len(features),
         "shown_sites": len(state.sites),
+        "floor": {"min_width": served[0], "min_height": served[1]},
         **summary,
     }
 
@@ -145,6 +194,7 @@ def cmd_fetch(
     delay_s: float | None = None,
     target: str = "hero",
     start: bool = False,
+    floor: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
     """The 1600 px files the `local_file_too_small` refusals need, and the manifest `plan --fetched`
     reads. Writes only into the run directory and `root`; production is read at most once, and only
@@ -157,7 +207,9 @@ def cmd_fetch(
     `out` writes the manifest somewhere else than the run directory, for a pilot that has to leave
     the wave's own path free.
     """
-    data, sha, claims, refusals = _wave_of(run, source, start=start)
+    served = _floor_of(run, floor[0] if floor else None, floor[1] if floor else None)
+    _write_floor(run, served)
+    data, sha, claims, refusals = _wave_of(run, source, start=start, floor=served)
     by_reason: dict[str, int] = {}
     for refusal in refusals:
         by_reason[str(refusal.get("reason"))] = by_reason.get(str(refusal.get("reason")), 0) + 1
@@ -184,12 +236,14 @@ def cmd_fetch(
         failures_path=run / FETCH_FAILURES,
         delay_s=delay_s,
         on_site=progress,
+        floor=served,
     )
     return {
         "run_id": run.name,
         "read_sha256": sha,
         "offsite_root": str(root),
         "wave": target,
+        "floor": {"min_width": served[0], "min_height": served[1]},
         "refusal_classes_fetched_for": list(reasons),
         "refusals_of_the_plan": by_reason,
         **outcome.as_json(),
@@ -211,7 +265,11 @@ def _write_refusals(run: Path, refusals: Sequence[IH.Refusal]) -> Path:
 
 
 def _wave_of(
-    run: Path, source: Path, *, start: bool = False
+    run: Path,
+    source: Path,
+    *,
+    start: bool = False,
+    floor: tuple[int, int] | None = None,
 ) -> tuple[dict[str, Any] | None, str, dict[str, Any], list[dict[str, Any]]]:
     """`(read, digest, claims, refusals)` of this run, from its own records where it has them.
 
@@ -244,7 +302,7 @@ def _wave_of(
             json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-        planned = IH.plan(state, claims, dimensions=RD.dimensions(data))
+        planned = IH.plan(state, claims, dimensions=RD.dimensions(data), floor=floor)
         _write_refusals(run, planned.refusals)
         return data, sha, claims, [r.as_json() for r in planned.refusals]
     data, sha = _read_once(run)
@@ -254,7 +312,7 @@ def _wave_of(
     claims_path.write_text(
         json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
     )
-    planned = IH.plan(state, claims, dimensions=RD.dimensions(data))
+    planned = IH.plan(state, claims, dimensions=RD.dimensions(data), floor=floor)
     _write_refusals(run, planned.refusals)
     return data, sha, claims, [r.as_json() for r in planned.refusals]
 
@@ -298,7 +356,8 @@ def cmd_remainder(run: Path) -> int:
     data = _load(run / RD.READ)
     state = ST.load_read(run / RD.READ)
     claims = _load(run / CLAIMS)
-    planned = IH.plan(state, claims, dimensions=RD.dimensions(data))
+    floor = _floor_of(run, None, None)
+    planned = IH.plan(state, claims, dimensions=RD.dimensions(data), floor=floor)
     by_reason: dict[str, int] = {}
     for refusal in planned.refusals:
         by_reason[refusal.reason] = by_reason.get(refusal.reason, 0) + 1
@@ -306,6 +365,7 @@ def cmd_remainder(run: Path) -> int:
         "run_id": run.name,
         "read_sha256": state.sha256,
         "read_at": state.read_at,
+        "floor": {"min_width": floor[0], "min_height": floor[1]},
         "sites_with_an_import_image": sum(1 for c in claims.values() if c.get("image")),
         "planned_rows": len(planned.changes),
         "planned_sites": len({c.site_id for c in planned.changes}),
@@ -433,6 +493,21 @@ def main(argv: list[str] | None = None) -> int:
     commands["plan"].add_argument("--import", dest="source", type=Path, default=DEFAULT_IMPORT)
     commands["plan"].add_argument("--sites-per-chunk", type=int, default=100)
     commands["plan"].add_argument("--fetched", type=Path, default=None)
+    for name in ("plan", "fetch"):
+        commands[name].add_argument(
+            "--min-width",
+            type=int,
+            default=None,
+            help=(
+                "the width a local file must reach for this run, with --min-height; the owner's "
+                f"lowered floor for the import picture of a site that already has one is "
+                f"{IH.OWNER_FLOOR_WIDTH}x{IH.OWNER_FLOOR_HEIGHT}, the lane's own is "
+                f"{IH.HERO_MIN_WIDTH}x{IH.HERO_MIN_HEIGHT}"
+            ),
+        )
+        commands[name].add_argument(
+            "--min-height", type=int, default=None, help="the height half of --min-width"
+        )
     commands["fetch"].add_argument("--import", dest="source", type=Path, default=DEFAULT_IMPORT)
     commands["fetch"].add_argument(
         "--root",
@@ -479,6 +554,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
+        # `plan` and `fetch` carry the floor flags; the other commands read the run's own FLOOR.json
+        floor = None
+        width, height = getattr(args, "min_width", None), getattr(args, "min_height", None)
+        if width is not None or height is not None:
+            floor = (width, height)
         if args.command == "fetch":
             _print(
                 cmd_fetch(
@@ -490,6 +570,7 @@ def main(argv: list[str] | None = None) -> int:
                     delay_s=args.delay_s,
                     target=args.target,
                     start=args.start,
+                    floor=floor,
                 )
             )
             return 0
@@ -512,6 +593,7 @@ def main(argv: list[str] | None = None) -> int:
                 source=args.source,
                 sites_per_chunk=args.sites_per_chunk,
                 fetched=args.fetched,
+                floor=floor,
             )
         )
     except (IH.ImportHeroError, IF.FetchError, ST.StateError, FileNotFoundError) as exc:

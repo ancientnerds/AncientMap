@@ -446,6 +446,150 @@ class TestThePlan:
         assert "no Commons file" in refused[THASOS].detail
 
 
+class TestTheOwnerFloor:
+    """The owner's lowered floor (2026-10-06): for the sites that already have a picture, the
+    import's linked picture becomes the hero once its file reaches 800 px of width.
+
+    Measured over the rest inventory before the pair was chosen: all 26 sites refused as
+    `import_picture_too_small` hold a row of at least 800 px width and none below, and the smallest
+    of their heights is 337 px (800x600 and taller for the rest). So 800 px clears every one of them
+    and no width below 800 would, while the height has to travel with it or the 800x337 row stays
+    refused - which is why the floor is a pair and not a number.
+    """
+
+    def _plan(
+        self,
+        tmp_path: Path,
+        *,
+        dimensions: dict[int, tuple[int, int]] | None = None,
+        floor: tuple[int, int] | None = None,
+    ) -> IH.Planned:
+        state = _state(tmp_path)
+        features = _import(
+            tmp_path,
+            [
+                {"title": "Thasos", "url": "", "image": GATE},
+                {
+                    "title": "Medinet Habu",
+                    "url": "https://en.wikipedia.org/wiki/Medinet_Habu",
+                    "image": GATE,
+                },
+                {
+                    "title": "Hidden row",
+                    "url": "https://en.wikipedia.org/wiki/Hidden_row",
+                    "image": HIDDEN_FILE,
+                },
+                {"title": "Nothing", "url": "https://en.wikipedia.org/wiki/Nothing", "image": RUIN},
+                {
+                    "title": "Small hero",
+                    "url": "https://en.wikipedia.org/wiki/Small_hero",
+                    "image": RUIN,
+                },
+                {
+                    "title": "Small target",
+                    "url": "https://en.wikipedia.org/wiki/Small_target",
+                    "image": AGORA,
+                },
+            ],
+        )
+        return IH.plan(
+            state,
+            IH.join_import(state, features),
+            dimensions=dimensions or BIG,
+            floor=floor,
+        )
+
+    def test_the_lane_s_own_floor_refuses_the_800_px_row(self, tmp_path: Path) -> None:
+        planned = self._plan(tmp_path)
+        refused = {r.site_id: r for r in planned.refusals}
+        assert refused[BARE].reason == "local_file_too_small"
+        assert "1600x900" in refused[BARE].detail
+
+    def test_the_owner_s_floor_plans_the_row_the_lane_refuses(self, tmp_path: Path) -> None:
+        planned = self._plan(tmp_path, floor=(IH.OWNER_FLOOR_WIDTH, IH.OWNER_FLOOR_HEIGHT))
+        assert BARE not in {r.site_id for r in planned.refusals}
+        got = {(c.column, c.row_key): c for c in planned.changes if c.site_id == BARE}
+        # the row already holds the flag, so the only thing left to write is the thumbnail, and it
+        # names the file that row already has on disk (`Thasos_ruin.webp`)
+        assert (
+            got[("thumbnail_url", BARE)].new_value == "/data/images/wiki/5b36f014/Thasos_ruin.webp"
+        )
+        assert ("is_hero", "5") not in got
+
+    def test_the_height_is_half_of_the_floor_and_not_decoration(self, tmp_path: Path) -> None:
+        """800 px wide and 299 px high is refused as well: one floor, both halves, or the lane
+        serves a hero it would refuse again on the next plan."""
+        planned = self._plan(tmp_path, dimensions={**BIG, 5: (800, 299)}, floor=(800, 300))
+        refused = {r.site_id: r for r in planned.refusals}
+        assert refused[BARE].reason == "local_file_too_small"
+        assert "800x300" in refused[BARE].detail
+
+    def test_the_owner_s_floor_is_the_pair_measured_over_the_inventory(self) -> None:
+        assert (IH.OWNER_FLOOR_WIDTH, IH.OWNER_FLOOR_HEIGHT) == (800, 300)
+
+    def test_a_fetch_at_the_owner_s_floor_reaches_the_manifest_the_lane_s_own_refuses(self) -> None:
+        small = _Result(width=800, height=531)
+        with pytest.raises(IF.FetchError, match="1600"):
+            IF.manifest_entry(THASOS, FETCH_TITLE, FETCH_META, small)
+        entry = IF.manifest_entry(THASOS, FETCH_TITLE, FETCH_META, small, floor=(800, 300))
+        assert (entry["width"], entry["height"]) == ("800", "531")
+
+
+class TestTheFloorOfARun:
+    """One floor per run, recorded in the run directory: the plan and the fetch of the same wave
+    have to serve the same size, or the fetch refuses what the plan accepted."""
+
+    def _run(self, tmp_path: Path) -> tuple[Path, Path]:
+        _state(tmp_path)
+        _import(
+            tmp_path,
+            [
+                {"title": "Thasos", "url": "", "image": GATE},
+                {
+                    "title": "Small hero",
+                    "url": "https://en.wikipedia.org/wiki/Small_hero",
+                    "image": RUIN,
+                },
+            ],
+        )
+        return tmp_path / "run", tmp_path / "ancient_nerds_original.geojson"
+
+    def test_a_plan_records_the_floor_it_planned_at(self, tmp_path: Path) -> None:
+        run, source = self._run(tmp_path)
+        out = IR.cmd_plan(run, source=source, floor=(800, 300))
+        assert out["floor"] == {"min_width": 800, "min_height": 300}
+        recorded = json.loads((run / IR.FLOOR).read_text(encoding="utf-8"))
+        assert (recorded["min_width"], recorded["min_height"]) == (800, 300)
+
+    def test_the_plan_after_it_fetches_at_the_floor_it_recorded(self, tmp_path: Path) -> None:
+        """No flags the second time: the run's own `FLOOR.json` is the floor, which is what keeps a
+        resumed wave from silently serving at the lane's 1600x900 again."""
+        run, source = self._run(tmp_path)
+        IR.cmd_plan(run, source=source, floor=(800, 300))
+        out = IR.cmd_plan(run, source=source)
+        assert out["floor"] == {"min_width": 800, "min_height": 300}
+
+    def test_a_run_without_a_floor_serves_the_lane_s_own(self, tmp_path: Path) -> None:
+        run, source = self._run(tmp_path)
+        out = IR.cmd_plan(run, source=source)
+        assert out["floor"] == {"min_width": IH.HERO_MIN_WIDTH, "min_height": IH.HERO_MIN_HEIGHT}
+
+    def test_half_a_floor_is_refused_by_name(self, tmp_path: Path) -> None:
+        run, _ = self._run(tmp_path)
+        with pytest.raises(IH.ImportHeroError, match="travel together"):
+            IR.cmd_plan(run, source=tmp_path / "ancient_nerds_original.geojson", floor=(800, None))
+
+    def test_a_command_without_the_flags_reads_the_runs_own_floor(self, tmp_path: Path) -> None:
+        """`--min-width` belongs to `plan` and `fetch` alone. `main()` must not read an attribute the
+        other subparsers never defined - measured 2026-10-06: `accept` died on the missing
+        `min_width` the same minute the floor flags went in."""
+        run, source = self._run(tmp_path)
+        IR.cmd_plan(run, source=source, floor=(800, 300))
+        assert IR.main(["remainder", "--run-dir", str(run)]) == 0
+        recorded = json.loads((run / IR.REMAINDER).read_text(encoding="utf-8"))
+        assert recorded["floor"] == {"min_width": 800, "min_height": 300}
+
+
 class TestTheChunks:
     def test_a_chunk_carries_the_lane_the_undo_and_the_digest(self, tmp_path: Path) -> None:
         state = _state(tmp_path)

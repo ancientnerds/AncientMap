@@ -69,6 +69,17 @@ RULE_FETCH = "ih5"
 HERO_MIN_WIDTH = 1600
 HERO_MIN_HEIGHT = 900
 
+#: The owner's floor for the sites whose linked picture is smaller than the lane's (2026-10-06):
+#: *"Untergrenze für diese Fälle auf 800 px senken: das vorhandene Bild wird Hero."* It is a
+#: **run parameter**, never a second constant: `plan(..., floor=...)` and the fetch take the same
+#: pair, so a wave either serves at 1600x900 or at the floor the owner named, and the default is
+#: the lane's own. Measured for that decision: all 26 of the sites concerned hold a row of at least
+#: 800 px width, none below, so the *height* is what the floor has to move (800x337 is the smallest
+#: of them). The floor is written into the run directory as `FLOOR.json`, and the acceptance asks
+#: production with it.
+OWNER_FLOOR_WIDTH = 800
+OWNER_FLOOR_HEIGHT = 300
+
 
 class ImportHeroError(ChunkError):
     """A read, a join or a claim this lane must not turn into a write. Nothing was sent."""
@@ -228,6 +239,7 @@ def plan(
     *,
     dimensions: Mapping[int, tuple[int | None, int | None]],
     fetched: Mapping[str, Mapping[str, Any]] | None = None,
+    floor: tuple[int, int] | None = None,
 ) -> Planned:
     """What the wave writes, what it refuses, and what a chunk may leave without an image.
 
@@ -235,8 +247,14 @@ def plan(
     (`filename`, `width`, `height`, `file_size_bytes` and the attribution of that file); a target
     row whose local file is too small is planned only when its fetch is in that manifest, and
     refused otherwise.
+
+    `floor` is the `(width, height)` a local file must reach for this run; the lane's own
+    1600x900 by default. The owner lowered it to 800x300 for the sites whose linked picture is
+    smaller than the floor (2026-10-06), and a wave that runs at that floor must say so in its
+    acceptance - which is why the pair travels with the plan instead of living in two constants.
     """
     ready = fetched or {}
+    min_width, min_height = floor or (HERO_MIN_WIDTH, HERO_MIN_HEIGHT)
     changes: list[Change] = []
     refusals: list[Refusal] = []
     may_empty: list[str] = []
@@ -262,14 +280,14 @@ def plan(
         # fetched (measured 2026-10-06, run `import-hero-2026-10-06-007`: the acceptance refused all
         # three, and the globe popup would have asked for a file that does not exist).
         served_name = str(row["filename"])
-        if width is None or height is None or width < HERO_MIN_WIDTH or height < HERO_MIN_HEIGHT:
+        if width is None or height is None or width < min_width or height < min_height:
             if fetch is None:
                 refusals.append(
                     Refusal(
                         sid,
                         "local_file_too_small",
                         f"row {row_id} holds {width}x{height} locally, under "
-                        f"{HERO_MIN_WIDTH}x{HERO_MIN_HEIGHT}: the 1600 px derivative has to be "
+                        f"{min_width}x{min_height}: the 1600 px derivative has to be "
                         "fetched before the flag can move (owner decision 2026-10-05 17:54)",
                     )
                 )
@@ -497,9 +515,10 @@ def write_chunks(
     dimensions: Mapping[int, tuple[int | None, int | None]],
     fetched: Mapping[str, Mapping[str, Any]] | None = None,
     sites_per_chunk: int = 100,
+    floor: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
     """The chunks, the refusals and the counts. Nothing is written outside `out`."""
-    planned = plan(state, claims, dimensions=dimensions, fetched=fetched)
+    planned = plan(state, claims, dimensions=dimensions, fetched=fetched, floor=floor)
     if not planned.changes:
         raise ImportHeroError(
             "the plan holds no row: the join found no import image on a curated site, or every "
@@ -518,6 +537,10 @@ def write_chunks(
     summary = {
         "run_stamp": run_stamp,
         "read_sha256": state.sha256,
+        "floor": {
+            "min_width": (floor or (HERO_MIN_WIDTH, HERO_MIN_HEIGHT))[0],
+            "min_height": (floor or (HERO_MIN_WIDTH, HERO_MIN_HEIGHT))[1],
+        },
         "sites_with_an_import_image": sum(1 for c in claims.values() if c.get("image")),
         "planned_rows": len(planned.changes),
         "planned_sites": len({c.site_id for c in planned.changes}),

@@ -64,6 +64,16 @@ class FetchError(ImportHeroError):
     """A download cannot become a manifest entry. Named, never repaired."""
 
 
+def _floor(floor: tuple[int, int] | None) -> tuple[int, int]:
+    """The `(width, height)` this run serves. The lane's own 1600x900 when the run names none.
+
+    The owner lowered the floor to 800x300 for the sites whose linked picture is smaller than the
+    lane's own (2026-10-06). It travels as one parameter from `run.py` to the refusal that names
+    it, because a second constant here and one in `plan.py` would be two floors that can drift.
+    """
+    return floor or (HERO_MIN_WIDTH, HERO_MIN_HEIGHT)
+
+
 #: What a file name may not carry. Windows forbids `<>:"/\|?*` and the C0 controls, POSIX `/` and
 #: NUL; the offsite tree and the VPS tree both live on such a file system, so a title carrying one
 #: of these cannot be written at all. Production carries **no** row whose filename has one (measured
@@ -100,6 +110,8 @@ def manifest_entry(
     commons_file: str,
     metadata: Mapping[str, Any],
     result: Any,
+    *,
+    floor: tuple[int, int] | None = None,
 ) -> dict[str, str]:
     """The eleven columns of one fetched file, as strings.
 
@@ -116,10 +128,11 @@ def manifest_entry(
     filename = local_name(commons_file)
     width = int(result.width)
     height = int(result.height)
-    if width < HERO_MIN_WIDTH or height < HERO_MIN_HEIGHT:
+    min_width, min_height = _floor(floor)
+    if width < min_width or height < min_height:
         raise FetchError(
             f"{site_id}: the download of {commons_file!r} is {width}x{height}, under the "
-            f"{HERO_MIN_WIDTH}x{HERO_MIN_HEIGHT} this lane serves - the very refusal "
+            f"{min_width}x{min_height} this run serves - the very refusal "
             f"(`local_file_too_small`) it would clear"
         )
     entry = {
@@ -226,7 +239,9 @@ def stored_file(dest: Path) -> StoredFile:
     return StoredFile(width=width, height=height, file_size=dest.stat().st_size)
 
 
-def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
+def fetch_site(
+    site_id: str, commons_file: str, root: Path, *, floor: tuple[int, int] | None = None
+) -> dict[str, str]:
     """One site: its `imageinfo` answer, its 1600 px derivative, and the manifest entry for both.
 
     Four cases, decided before anything is written, because `download_image()` opens with `O_EXCL`
@@ -253,6 +268,7 @@ def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
     """
     from pipeline import wiki_image_downloader as DL
 
+    min_width, min_height = _floor(floor)
     answers = DL.fetch_image_metadata_batch([f"File:{commons_file}"])
     metadata = answers.get(f"File:{commons_file}")
     if metadata is None:
@@ -265,13 +281,13 @@ def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
     original_width = int(metadata.get("width") or 0)
     if dest.is_file():
         existing = stored_file(dest)
-        if existing.width >= HERO_MIN_WIDTH and existing.height >= HERO_MIN_HEIGHT:
-            return manifest_entry(site_id, commons_file, metadata, existing)
-        if existing.width >= HERO_MIN_WIDTH:
+        if existing.width >= min_width and existing.height >= min_height:
+            return manifest_entry(site_id, commons_file, metadata, existing, floor=floor)
+        if existing.width >= min_width:
             raise FetchError(
                 f"{site_id}: the stored file is {existing.width}x{existing.height} - a panorama at "
-                f"least {HERO_MIN_WIDTH} px wide but under {HERO_MIN_HEIGHT} px high, and "
-                "`download_image` keeps the aspect ratio, so a 1600 px fetch of it returns the same "
+                f"least {min_width} px wide but under {min_height} px high, and "
+                "`download_image` keeps the aspect ratio, so a fetch of it returns the same "
                 "box. This site needs a different picture, not a bigger one"
             )
     if not original_url or original_width <= 0:
@@ -288,10 +304,10 @@ def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
             f"2026-10-06: the page answers `missing`), so the 2025 import links a picture that is "
             f"not there. No fetch can deliver it"
         )
-    if 0 < original_width < HERO_MIN_WIDTH:
+    if 0 < original_width < min_width:
         raise FetchError(
             f"{site_id}: the Commons original of {commons_file!r} is {original_width} px wide, "
-            f"under the {HERO_MIN_WIDTH} px this lane serves - a fetch cannot deliver more pixels "
+            f"under the {min_width} px this run serves - a fetch cannot deliver more pixels "
             "than the original holds"
         )
     # The other half of that floor, and it is the one that costs a download: a 1600 px wide file
@@ -300,12 +316,12 @@ def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
     # name. (From main, commit 7600f1d, merged 2026-10-06.)
     original_height = int(metadata.get("height") or 0)
     stored_width, stored_height = DL.stored_size(original_width, original_height)
-    if stored_width < HERO_MIN_WIDTH or stored_height < HERO_MIN_HEIGHT:
+    if stored_width < min_width or stored_height < min_height:
         raise FetchError(
             f"{site_id}: the original of {commons_file!r} is {original_width}x{original_height} "
             f"and stores as {stored_width}x{stored_height}, under the "
-            f"{HERO_MIN_WIDTH}x{HERO_MIN_HEIGHT} this lane serves - a {HERO_MIN_WIDTH} px fetch "
-            "keeps the aspect ratio and returns that very box, so there is nothing to download"
+            f"{min_width}x{min_height} this run serves - a fetch keeps the aspect ratio and "
+            "returns that very box, so there is nothing to download"
         )
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(f"{dest.name}.fetching")
@@ -313,7 +329,7 @@ def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
         tmp.unlink()
     result = DL.download_image(original_url, tmp, original_width)
     os.replace(tmp, dest)
-    return manifest_entry(site_id, commons_file, metadata, result)
+    return manifest_entry(site_id, commons_file, metadata, result, floor=floor)
 
 
 def fetch_manifest(
@@ -322,6 +338,7 @@ def fetch_manifest(
     *,
     batch_titles: int = BATCH_TITLES,
     delay_s: float | None = None,
+    floor: tuple[int, int] | None = None,
 ) -> tuple[dict[str, dict[str, str]], list[tuple[str, str, str]]]:
     """Fetch every target and return `(manifest, failures)`.
 
@@ -338,7 +355,7 @@ def fetch_manifest(
     failures: list[tuple[str, str, str]] = []
     for site_id, commons_file in targets:
         try:
-            manifest[site_id] = fetch_site(site_id, commons_file, root)
+            manifest[site_id] = fetch_site(site_id, commons_file, root, floor=floor)
         except (FetchError, DL.DownloadError, OSError) as exc:
             failures.append((site_id, commons_file, f"the fetch failed: {exc}"))
         time.sleep(pace)
@@ -458,6 +475,7 @@ def run_fetch(
     failures_path: Path | None = None,
     delay_s: float | None = None,
     on_site: Any = None,
+    floor: tuple[int, int] | None = None,
 ) -> FetchRun:
     """Fetch every target, carrying `FETCHED.json` along after each file, so the run can be continued.
 
@@ -483,7 +501,7 @@ def run_fetch(
             skipped += 1
             continue
         try:
-            entry = fetch_site(site_id, commons_file, root)
+            entry = fetch_site(site_id, commons_file, root, floor=floor)
         except (FetchError, DL.DownloadError, OSError) as exc:
             why = f"the fetch failed: {exc}"
             failures.append((site_id, commons_file, why))

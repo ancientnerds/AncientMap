@@ -552,7 +552,8 @@ Applied 2026-10-06: the 807 `local_file_too_small` first (runs `-004`, `-005`: 3
 accepted 310 of 310), then the INSERT wave (runs `-006`, `-007`, `-008`, above). After all of it the
 read of run `-008` counts **4,900 shown curated sites, 1,344 of them without a live hero, 0 sites
 with two**, 47,778 image rows and **583 live heroes still under 1600x900** (552 after this wave: 31
-of them lost the flag to a fetched 1600 px row).
+of them lost the flag to a fetched 1600 px row). Both of those counts move again in §3.7.2, where the
+owner lowered the floor for 243 sites.
 
 **The thumbnail question, asked properly** (2026-10-06): of the shown curated sites with a live
 hero, **all 3,556 name the served row** - the T1 rule holds everywhere it is visible. A first
@@ -575,6 +576,9 @@ numbers that describe the finished state, over the 4,900 shown curated sites:
 | serves only its `thumbnail_url` | 153 |
 | **serves nothing at all** | **1,169** |
 | shows two heroes at once | 0 |
+
+(Before the floor wave of §3.7.2; after it, measured with the same script over the same question:
+3,616 / 140 / 1,144 / 0.)
 
 The 1,169 split by cause, and why no write closes them from here:
 
@@ -614,6 +618,71 @@ import-hero lane refused it for and **what would close it**; the counts are in
 | `import_picture_too_small` - the picture is a row, but its local file is under 1600x900 | 26 |
 
 A count is a fact about today; that file is what the next campaign works from.
+
+### 3.7.2 The floor the owner lowered (2026-10-06), and exactly what it released
+
+Owner decision, 2026-10-06: *"for these cases the existing picture becomes the hero"* - the size a
+local file must reach comes down for the sites that already have a picture. **The floor is a run
+parameter, not a second constant**: `run.py plan|fetch --min-width W --min-height H`, written into the
+run directory as `FLOOR.json` and read back by every later step of that run, because a plan at one
+size and a fetch at another would refuse exactly what the other accepted (`_floor_of`, `run.py`).
+
+The pair is measured, not chosen: of the sites the lane refused as `local_file_too_small`, **every
+one holds a row of at least 800 px width and none below**, and the smallest of their heights is
+337 px (800x600 and taller for the rest). So 800 px of width clears all of them and no width below
+800 would, and the height has to travel with it - hence **800x300**.
+
+Run `-009` (`FLOOR.json`, `IMPORT_HERO_SUMMARY.json`, `ACCEPTANCE.json`, `chunk-001..003`):
+
+* planned **243 sites / 727 rows** in 3 chunks, applied with the five writer steps each
+  (299 + 299 + 129 rows), **accepted 243/243/243/243** on the fresh read `d0c3852a…`
+  (2026-10-06T16:16:41Z), 0 problems, and **243/243 serve the file over HTTP with the exact
+  `file_size_bytes` of their row** (23 of those names carry non-ASCII characters and need URL
+  quoting before a request leaves the process - that is a fact about the check, not the site).
+* What the floor actually released, counted per promoted row: **131 at 800 px width, 111 at 1600 px,
+  1 at 1599 px**. The 112 sixteen-hundred-wide rows were refused only by the *height* half - they are
+  1600x600 up to 1600x899, not small pictures. A floor of width alone would have left them stuck
+  behind a rule whose own purpose is to keep strip images out.
+* **The lane's own floor is empty**: replanning the same read at 1600x900 yields **0 rows / 0 sites**,
+  and **every one of the 243 was refused at 1600x900 as `local_file_too_small`** - 0 exceptions. The
+  wave is the whole remainder of the hero lane, not a selection from it.
+* **Still refused at the owner's floor, by name**: 7 sites, all of them 800 px wide and **177-298 px
+  high** (row ids 60884, 73893, 76407, 83714, 93021, 99542, 102572). A 800x177 strip is not a
+  picture of a site, and the owner named a width; the height is this lane's own rule and it stops
+  there.
+
+Effect on the numbers of §3.7.1, the same script over the wave's two reads (a row counts as served
+when it is neither `is_excluded` nor `scope_status = 'retired'`; both columns total 1,284 sites
+without a served row, the §3.7.1 table's 153 + 1,169 total 1,322 - one site sits on the other side of
+the bucket boundary there, so the two are not to be subtracted):
+
+| over the 4,900 shown curated sites | read `-009` | read after `-009` |
+|---|---:|---:|
+| serves a gallery row | 3,578 | **3,616** |
+| serves only its `thumbnail_url` | 152 | 140 |
+| **serves nothing at all** | 1,170 | **1,144** |
+| shows two heroes at once | 0 | 0 |
+| live hero under 1600x900 | 552 | 772 |
+| live hero under **800x300** | 22 | **19** |
+
+The hero count under the lane's own floor *rises*, and that is the point: 243 heroes now point at the
+picture the 2025 import hand-linked, 131 of them the 800 px derivative. Under the owner's floor it
+falls. Of the rest inventory this wave closed **26 of 26 `import_picture_too_small`** and 12 more
+that already had a row (`ih3` unhides the only row of a site that showed nothing). Untouched, because
+they need a new picture rather than a lower bar: **1,081 `no_picture_at_all`**, 36
+`import_picture_is_no_row` and 26 `import_picture_never_fetched` for the INSERT lane.
+
+```bash
+PY=./.venv/Scripts/python.exe
+IH=scripts/remediation/import_hero
+CW=scripts/remediation/gallery_audit/chunk_writer.py
+R=output/remediation/import_hero/import-hero-2026-10-06-009
+$PY $IH/run.py plan --run-dir $R --min-width 800 --min-height 300
+for C in $R/chunk-001 $R/chunk-002 $R/chunk-003; do
+    $PY $CW $C --check --rehearse --apply --readback --rehearse-rollback
+done
+$PY $IH/run.py accept --run-dir $R
+```
 
 ```bash
 PY=./.venv/Scripts/python.exe
