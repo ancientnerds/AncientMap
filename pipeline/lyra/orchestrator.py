@@ -39,12 +39,9 @@ from pipeline.utils.boot_ddl import (
 logger = logging.getLogger(__name__)
 
 CYCLE_INTERVAL = 3600  # 1 hour between pipeline runs
-MAX_ARTICLE_ATTEMPTS = 3  # Stop retrying after 3 failures per week
-# Minimum spacing between article attempts. The main loop wakes every 60s, so
-# three fast failures (no items yet, a wedged LLM backend) used to burn the
-# whole week's retry budget in three minutes. The Monday 06:00 UTC window is
-# 18h long — spacing the retries lets a transient failure actually pass.
-ARTICLE_RETRY_INTERVAL = 1800  # 30 min
+# The journal's attempt budget and retry spacing live in
+# pipeline.lyra.journal_attempts, in the database: an in-memory counter was reset
+# by every deploy, which is how the 2026-10-05 week was lost.
 
 # Liveness file for the docker-compose lyra healthcheck (audit P9). Touched at
 # every main-loop wake (60s), at each pipeline-step start, and around article
@@ -2077,12 +2074,14 @@ def main() -> None:
         return
 
     # Production mode: infinite loop
-    from pipeline.lyra.article_generator import generate_weekly_article, should_generate_article
+    from pipeline.lyra.article_generator import (
+        generate_weekly_article,
+        journal_week_key,
+        should_generate_article,
+    )
+    from pipeline.lyra.journal_attempts import claim_attempt, finish_week
 
     last_pipeline_run = 0.0
-    article_attempts = 0
-    last_article_attempt = 0.0
-    article_week_tracked: str | None = None  # ISO date of the week we're tracking
 
     while True:
         _touch_heartbeat()
@@ -2126,45 +2125,30 @@ def main() -> None:
             except Exception:
                 logger.exception("Failed to write heartbeat")
 
-        # Weekly journal generation, Monday 06:00 UTC (with retry limit). Touch
+        # Weekly journal generation: Monday 06:00 UTC and the grace hours after
+        # it (see should_generate_article), with the attempt budget spent from
+        # the database so a deploy cannot hand the week a fresh budget. Touch
         # first: the pipeline cycle above may have run for a long time, and
-        # article generation itself can hold the loop for many minutes.
+        # article generation itself can hold the loop for many hours.
         _touch_heartbeat()
         if should_generate_article():
-            # %W weeks start on Monday, so this key is the week the run happens
-            # in — one key per Monday window, covering the week before it.
-            current_week = time.strftime("%Y-W%W", time.gmtime())
-            if current_week != article_week_tracked:
-                article_attempts = 0
-                last_article_attempt = 0.0
-                article_week_tracked = current_week
-
-            retry_due = (
-                article_attempts == 0
-                or time.time() - last_article_attempt >= ARTICLE_RETRY_INTERVAL
-            )
-            if article_attempts < MAX_ARTICLE_ATTEMPTS and retry_due:
-                article_attempts += 1
-                last_article_attempt = time.time()
-                try:
-                    success = generate_weekly_article(settings)
-                    if success:
-                        logger.info(
-                            "Article generated successfully on attempt %d", article_attempts
-                        )
-                        article_attempts = MAX_ARTICLE_ATTEMPTS  # stop retrying
+            # One try around the whole block: an unreachable budget row must
+            # skip the journal, not take the hourly news pipeline down with it.
+            try:
+                week_key = journal_week_key()
+                if claim_attempt(week_key):
+                    if generate_weekly_article(settings):
+                        # The week is written — spend the rest of its budget so
+                        # the loop stops asking (generate_weekly_article would
+                        # only return False for the existing article).
+                        finish_week(week_key)
+                        logger.info("Article generated successfully for the week of %s", week_key)
                     else:
                         logger.warning(
-                            "Article generation returned False (attempt %d/%d)",
-                            article_attempts,
-                            MAX_ARTICLE_ATTEMPTS,
+                            "Article generation returned False for the week of %s", week_key
                         )
-                except Exception:
-                    logger.exception(
-                        "Article generation failed with exception (attempt %d/%d)",
-                        article_attempts,
-                        MAX_ARTICLE_ATTEMPTS,
-                    )
+            except Exception:
+                logger.exception("Article generation failed with exception")
 
         # Sleep before next check. Touch right before sleeping so the mtime
         # is at most 60s (the sleep length) plus one iteration's work old.
