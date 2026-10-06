@@ -18,6 +18,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_ROOT / "scripts" / "remediation"))
 
 from candidate_search import judge as CJ  # noqa: E402
+from candidate_search import judge_run as JR  # noqa: E402
 
 
 def _site(site_id: str, files: list[str], name: str = "Gonnus") -> dict:
@@ -264,6 +265,59 @@ class TestTheExport:
         assert {r["file"] for r in out["refusals"]} == {"x.jpg", "y.jpg"}
         assert all("HTTP 404" in r["reason"] for r in out["refusals"])
         assert out["prompt_files"] == 0, "a site whose every image failed is not asked about"
+
+
+class TestTheDownloadPace:
+    """`judge-export` asks for one rendering per candidate: 190 for the pilot, 5,809 for the full run.
+
+    The `PACE` in `judge_run.py` was defined and never used, so a full export would have sent 5,809
+    requests back to back to a host whose robot policy asks for serial ones - and every `HTTP 429`
+    would have been recorded as a refused candidate, the site losing a picture for a reason that was
+    never about the picture.
+    """
+
+    def _client(self) -> object:
+        class _Answer:
+            status_code = 200
+            content = b"bytes"
+
+        class _Client:
+            def get(self, url: str) -> _Answer:
+                return _Answer()
+
+        return _Client()
+
+    def test_a_second_download_to_the_same_host_waits_the_pace(self, tmp_path: Path) -> None:
+        waited: list[float] = []
+        now = [100.0]
+        paced = JR.PacedDownloads(
+            self._client(),
+            tmp_path / "cache",
+            pace=1.0,
+            sleep=waited.append,
+            clock=lambda: now[0],
+        )
+        paced.get("https://upload.wikimedia.org/a.jpg")
+        now[0] += 0.2  # the first download took 0.2 s, so 0.8 s of the second are still owed
+        paced.get("https://upload.wikimedia.org/b.jpg")
+        assert waited == [pytest.approx(0.8)], waited
+
+    def test_a_download_that_is_refused_is_an_answer_and_not_an_exception(
+        self, tmp_path: Path
+    ) -> None:
+        class _Answer:
+            status_code = 429
+            content = b""
+
+        class _Client:
+            def get(self, url: str) -> _Answer:
+                return _Answer()
+
+        paced = JR.PacedDownloads(_Client(), tmp_path / "cache", sleep=lambda _s: None)
+        answer = paced.get("https://upload.wikimedia.org/c.jpg")
+        assert answer.status_code == 429, (
+            "judge.download turns this into a refused candidate by name"
+        )
 
 
 if __name__ == "__main__":

@@ -23,7 +23,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -34,8 +35,10 @@ for _path in (_ROOT, _ROOT / "scripts" / "remediation"):
         sys.path.insert(0, str(_path))
 
 import httpx  # noqa: E402
+from served_image import commons as CM  # noqa: E402
 
 from candidate_search import judge as CJ  # noqa: E402
+from candidate_search import run as CR  # noqa: E402
 from candidate_search import search as CS  # noqa: E402
 
 HEADERS = {
@@ -47,6 +50,33 @@ PACE = 1.0
 
 class JudgeError(Exception):
     """A request the run refuses to guess its way past."""
+
+
+class PacedDownloads(CM.Commons):
+    """`Commons`' own pacing, for a download whose non-200 is a refusal and not an exception.
+
+    `judge-export` asks for one rendering per candidate: 190 for the pilot, 5,809 for the full run.
+    The `PACE` this module defined was never used, so those downloads went out back to back, and a
+    `HTTP 429` would have been recorded as a refused candidate - the site would have lost a picture
+    it could have had, by name, for a reason that was never about the picture. The pacing is the one
+    the search stage already applies to its questions (Wikimedia's robot policy asks for serial
+    requests); only the refusal handling differs, because here a non-200 is an answer.
+    """
+
+    def __init__(
+        self,
+        client: Any,
+        cache: Path,
+        *,
+        pace: float = PACE,
+        sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        super().__init__(cache=cache, client=client, pace=pace, sleep=sleep, clock=clock)
+
+    def get(self, url: str) -> Any:
+        self._wait(url)
+        return self.client.get(url)
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -97,7 +127,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "judge-export":
-            client = httpx.Client(timeout=60, follow_redirects=True, headers=HEADERS)
+            client = PacedDownloads(
+                httpx.Client(timeout=60, follow_redirects=True, headers=HEADERS),
+                args.run_dir / CR.CACHE,
+            )
             sites = read_jsonl(args.run_dir / CS.CANDIDATES)
             if args.limit is not None:
                 sites = sites[: args.limit]
