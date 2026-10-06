@@ -240,26 +240,69 @@ def fetch_article_images(article_title: str) -> list[dict]:
     return images
 
 
-def _ext_value(ext: dict, *names: str) -> str:
-    """The `value` of the first of `names` the answer carries, as text.
+def ext_of(info: dict) -> dict:
+    """The `extmetadata` object of one `imageinfo` entry.
 
-    `extmetadata` answers a dict of dicts - except for a handful of files, where Commons answers a
-    **list** of them and `.get("value")` raises `AttributeError` (measured 2026-10-06: a wave of
-    800 downloads died on it). The first entry is the value the field names; a row carries one
-    attribution, not every statement about the same file.
-
-    Behaviour-preserving for the dict shape: `ext.get(a, ext.get(b, ...))` takes the first field
-    that is present, empty or not, and so does this.
+    MediaWiki answers it as a **list** of those objects when the file carries more than one
+    `imageinfo` entry - a multipage PDF among the import-hero wave's 807 targets, measured
+    2026-10-06, where the parser raised `'list' object has no attribute 'get'` on batch 3 of 17.
+    The file's own attribution is the first entry, exactly as the first `imageinfo` entry is the
+    file itself.
     """
-    for name in names:
-        if name not in ext:
-            continue
-        raw = ext[name]
-        if isinstance(raw, list):
-            raw = raw[0] if raw else {}
-        if isinstance(raw, dict):
-            return str(raw.get("value", "") or "")
-        return str(raw or "")
+    ext = info.get("extmetadata")
+    if isinstance(ext, list):
+        return next((entry for entry in ext if isinstance(entry, dict)), {})
+    return ext if isinstance(ext, dict) else {}
+
+
+def _ext_texts(value: object) -> list[str]:
+    """The texts one `extmetadata` field answers: one, or one per entry of a multi-valued field.
+
+    MediaWiki answers a field as `{"value": "..."}`, and as a **list** of those objects when the
+    field is multi-valued - an `Artist` that names two people, a `Credit` template with several
+    lines. Both shapes occur for the same API, and reading only the first one raised
+    `AttributeError: 'list' object has no attribute 'get'` inside a wave of 807 targets (measured
+    2026-10-06, two consecutive runs of the import-hero pre-flight). Every read of an `extmetadata`
+    value goes through `ext_value` or `ext_joined` here.
+    """
+    if isinstance(value, list):
+        return [str(entry.get("value", "")) for entry in value if isinstance(entry, dict)]
+    if isinstance(value, dict):
+        return [str(value.get("value", ""))]
+    if isinstance(value, str):
+        # A field that answers the text itself, without the `{"value": ...}` wrapper: MediaWiki
+        # does not do this, but the answer is unambiguous and dropping it would lose an
+        # attribution silently (the shape the pre-merge helper read as text).
+        return [value]
+    return []
+
+
+def ext_value(ext: dict, *keys: str) -> str:
+    """The first text of the first of `keys` that answers, empty when none does.
+
+    For the single-valued fields: a licence is one thing, so a field that answers two entries
+    contributes its first.
+    """
+    for key in keys:
+        for value_text in _ext_texts(ext.get(key)):
+            if value_text:
+                return value_text
+    return ""
+
+
+def ext_joined(ext: dict, *keys: str) -> str:
+    """Every text of the first of `keys` that answers, concatenated.
+
+    For the attribution fields: an `Artist` that names two people is two names, and the row has to
+    show both.
+    """
+    for key in keys:
+        texts = [value_text for value_text in _ext_texts(ext.get(key)) if value_text]
+        if texts:
+            # ", " and not "": a field answering `[{"value": "Jane"}, {"value": "and John"}]` is
+            # read as one name otherwise - measured 2026-10-06 while merging two readings of the
+            # same shape, where `ext_joined` produced "Janeand John".
+            return ", ".join(texts)
     return ""
 
 
@@ -312,24 +355,24 @@ def fetch_image_metadata_batch(file_titles: list[str]) -> dict[str, dict]:
         if page is None:
             continue
         info = (page.get("imageinfo") or [{}])[0]
-        ext = info.get("extmetadata", {})
+        ext = ext_of(info)
 
-        author = _ext_value(ext, "Artist", "Author", "Credit")
+        author = ext_joined(ext, "Artist", "Author", "Credit")
         if author:
             author = re.sub(r"<[^>]*>", "", author).strip()
             if len(author) > 200:
                 author = author[:200] + "..."
 
         author_url = None
-        raw_artist = _ext_value(ext, "Artist", "Author")
+        raw_artist = ext_joined(ext, "Artist", "Author")
         href_match = re.search(r'href="([^"]+)"', raw_artist)
         if href_match:
             author_url = href_match.group(1)
             if author_url.startswith("//"):
                 author_url = "https:" + author_url
 
-        license_name = _ext_value(ext, "LicenseShortName", "License")
-        license_url = _ext_value(ext, "LicenseUrl")
+        license_name = ext_value(ext, "LicenseShortName", "License")
+        license_url = ext_value(ext, "LicenseUrl")
         original = parse_attribution(info)
 
         results[title] = {
@@ -463,9 +506,9 @@ def parse_attribution(info: dict) -> dict:
     (scripts/backfill_image_attribution.py) — the Artist field is HTML and
     parsing it twice would drift.
     """
-    ext = info.get("extmetadata", {})
+    ext = ext_of(info)
 
-    author_raw = _ext_value(ext, "Artist")
+    author_raw = ext_joined(ext, "Artist")
     author = re.sub(r"<[^>]*>", "", author_raw).strip() if author_raw else None
     if author and len(author) > 200:
         author = author[:200] + "..."
@@ -486,8 +529,8 @@ def parse_attribution(info: dict) -> dict:
     return {
         "author": author or None,
         "author_url": author_url,
-        "license": _ext_value(ext, "LicenseShortName") or None,
-        "license_url": _ext_value(ext, "LicenseUrl") or None,
+        "license": ext_value(ext, "LicenseShortName") or None,
+        "license_url": ext_value(ext, "LicenseUrl") or None,
         "original_url": original_url,
         "width": info.get("width"),
         "height": info.get("height"),

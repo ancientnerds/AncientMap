@@ -453,10 +453,21 @@ output/remediation/import_hero/*/
 !output/remediation/import_hero/import-hero-2026-10-05/
 !output/remediation/import_hero/import-hero-2026-10-05-002/
 !output/remediation/import_hero/import-hero-2026-10-05-003/
+# The 1600 px fetch pilot (2026-10-06): five targets, one file fetched, four refused by name, and
+# the read-only pre-flight over all 807 targets that counted the wave at 312 fetchable. The
+# evidence of the wave's first live step, not regenerable - the pre-flight asks Commons again.
+!output/remediation/import_hero/pilot-5/
+# The fetch of all 807 targets (2026-10-06): 315 files, 534 refusals with their reason. The run's
+# own records - the manifest a later `plan --fetched` reads, and the refusal list that names every
+# site it did not serve.
+!output/remediation/import_hero/fetch-all-807/
+# The 2026-10-06 waves: -004/-005 the 310 fetched heroes, -006 the closing read that plans nothing
+# left to write (and, from the same run, the INSERT wave's 87 rows with its chunks and acceptance),
+# -007 the three sites whose stored row holds the file under another slug, -008 its thumbnail
+# correction. The read and the claims stay out (the two `*/READ.json` and `*/IMPORT_CLAIMS.json`
+# rules above).
 !output/remediation/import_hero/import-hero-2026-10-06-004/
 !output/remediation/import_hero/import-hero-2026-10-06-005/
-# The INSERT wave of 2026-10-06: -006 the 87 rows (fetch manifest, chunks, acceptance), -007 the
-# three sites whose stored row holds the file under another slug, -008 its thumbnail correction.
 !output/remediation/import_hero/import-hero-2026-10-06-006/
 !output/remediation/import_hero/import-hero-2026-10-06-007/
 !output/remediation/import_hero/import-hero-2026-10-06-008/

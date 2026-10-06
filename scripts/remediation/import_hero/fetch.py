@@ -84,13 +84,15 @@ def local_name(commons_file: str) -> str:
     stem, dot, extension = commons_file.rpartition(".")
     if not dot or not stem or not extension:
         raise FetchError(f"{commons_file!r} has no extension to swap for .webp")
-    if ILLEGAL_IN_NAME.search(commons_file):
+    name = f"{stem}.webp"
+    forbidden = ILLEGAL_IN_NAME.search(name)
+    if forbidden:
         raise FetchError(
-            f"{commons_file!r} carries a character a file name may not have "
-            f"({', '.join(sorted(set(ILLEGAL_IN_NAME.findall(commons_file))))}) - the row would "
-            "name a file that cannot be written on the tree that serves it"
+            f"{name!r} cannot be stored as a local file name: {forbidden.group()!r} is a character "
+            f"the filesystem refuses in a name, and the rule is the Commons name verbatim - refused "
+            f"by name, not renamed"
         )
-    return f"{stem}.webp"
+    return name
 
 
 def manifest_entry(
@@ -292,6 +294,19 @@ def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
             f"under the {HERO_MIN_WIDTH} px this lane serves - a fetch cannot deliver more pixels "
             "than the original holds"
         )
+    # The other half of that floor, and it is the one that costs a download: a 1600 px wide file
+    # that is under 900 px high keeps its aspect ratio and comes back that very box, so it is
+    # named before anything is downloaded - and nothing is left on disk that no manifest would
+    # name. (From main, commit 7600f1d, merged 2026-10-06.)
+    original_height = int(metadata.get("height") or 0)
+    stored_width, stored_height = DL.stored_size(original_width, original_height)
+    if stored_width < HERO_MIN_WIDTH or stored_height < HERO_MIN_HEIGHT:
+        raise FetchError(
+            f"{site_id}: the original of {commons_file!r} is {original_width}x{original_height} "
+            f"and stores as {stored_width}x{stored_height}, under the "
+            f"{HERO_MIN_WIDTH}x{HERO_MIN_HEIGHT} this lane serves - a {HERO_MIN_WIDTH} px fetch "
+            "keeps the aspect ratio and returns that very box, so there is nothing to download"
+        )
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(f"{dest.name}.fetching")
     if tmp.exists():
@@ -324,7 +339,7 @@ def fetch_manifest(
     for site_id, commons_file in targets:
         try:
             manifest[site_id] = fetch_site(site_id, commons_file, root)
-        except (FetchError, DL.DownloadError) as exc:
+        except (FetchError, DL.DownloadError, OSError) as exc:
             failures.append((site_id, commons_file, f"the fetch failed: {exc}"))
         time.sleep(pace)
     if not manifest:
@@ -469,7 +484,7 @@ def run_fetch(
             continue
         try:
             entry = fetch_site(site_id, commons_file, root)
-        except (FetchError, DL.DownloadError) as exc:
+        except (FetchError, DL.DownloadError, OSError) as exc:
             why = f"the fetch failed: {exc}"
             failures.append((site_id, commons_file, why))
             if failures_path is not None:

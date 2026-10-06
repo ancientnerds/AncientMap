@@ -296,29 +296,55 @@ class TestTheExtmetadataValue:
     `'list' object has no attribute 'get'` at `wiki_image_downloader.py:294`, one file into a
     wave of 807. The reading must not change for the shape that worked - `ext.get(a, ext.get(b))`
     takes the first field that is *present*, empty or not, and so does the helper.
+
+    Two helpers, because the two kinds of field answer differently: a single-valued one (a licence
+    is one thing) contributes its first text, an attribution field (an `Artist` that names two
+    people) keeps both - `ext_value` and `ext_joined` (merged from main, commit 04bcf59, which
+    also read a whole `extmetadata` that answers as a list for a multipage PDF).
     """
 
     def test_a_dict_field_is_read_as_before(self) -> None:
-        assert D._ext_value({"Artist": {"value": "Jane"}}, "Artist", "Author") == "Jane"
+        assert D.ext_value({"Artist": {"value": "Jane"}}, "Artist", "Author") == "Jane"
 
     def test_a_list_field_is_read_from_its_first_entry(self) -> None:
-        assert D._ext_value({"Artist": [{"value": "Jane"}, {"value": "John"}]}, "Artist") == "Jane"
+        assert D.ext_value({"Artist": [{"value": "Jane"}, {"value": "John"}]}, "Artist") == "Jane"
 
     def test_an_empty_list_is_no_value(self) -> None:
-        assert D._ext_value({"Artist": []}, "Artist") == ""
+        assert D.ext_value({"Artist": []}, "Artist") == ""
+        assert D.ext_joined({"Artist": []}, "Artist") == ""
 
-    def test_the_first_field_present_wins_even_when_it_is_empty(self) -> None:
-        """Faithful to `ext.get(a, ext.get(b))`, which does not skip ahead on an empty value."""
+    def test_the_first_field_that_answers_with_text_wins(self) -> None:
+        """Not `ext.get(a, ext.get(b))`: an empty `Artist` hands over to `Author` instead of
+        standing there empty. The pre-merge helper took the first field *present*; this one asks
+        for the first that says something (from main, commit 04bcf59)."""
         assert (
-            D._ext_value({"Artist": {"value": ""}, "Author": {"value": "Jane"}}, "Artist", "Author")
-            == ""
+            D.ext_value({"Artist": {"value": ""}, "Author": {"value": "Jane"}}, "Artist", "Author")
+            == "Jane"
+        )
+        assert D.ext_value({"Artist": [{"value": ""}, {"value": "Jane"}]}, "Artist") == "Jane"
+
+    def test_an_attribution_keeps_every_name_it_is_given(self) -> None:
+        """Two authors are two names, separated - `ext_joined` concatenated them to "JaneJohn"
+        while this branch was merged (2026-10-06), which no credit line should say."""
+        assert (
+            D.ext_joined({"Artist": [{"value": "Jane"}, {"value": "John"}]}, "Artist")
+            == "Jane, John"
         )
 
     def test_a_missing_field_is_no_value(self) -> None:
-        assert D._ext_value({}, "Artist", "Author") == ""
+        assert D.ext_value({}, "Artist", "Author") == ""
 
-    def test_a_plain_string_field_is_read_as_text(self) -> None:
-        assert D._ext_value({"License": "CC0"}, "LicenseShortName", "License") == "CC0"
+    def test_a_plain_text_field_is_read_as_text(self) -> None:
+        """MediaWiki does not answer this shape, but the answer is unambiguous - and dropping it
+        would lose an attribution silently."""
+        assert D.ext_value({"License": "CC0"}, "LicenseShortName", "License") == "CC0"
+
+    def test_a_whole_extmetadata_that_answers_as_a_list_is_read(self) -> None:
+        """A multipage PDF answers one `imageinfo` per page, so `extmetadata` itself is a list."""
+        info = {"extmetadata": [{"Artist": {"value": "Jane"}}]}
+        assert D.ext_of(info) == {"Artist": {"value": "Jane"}}
+        assert D.ext_of({}) == {}
+        assert D.ext_of({"extmetadata": "nonsense"}) == {}
 
     def test_the_batch_answer_survives_a_list_shaped_field(self, monkeypatch) -> None:
         """The whole call, as the lane makes it: no `Artist.get`, no crash, credit intact."""
@@ -341,7 +367,9 @@ class TestTheExtmetadataValue:
             D, "_http_client", SimpleNamespace(get=lambda url, params=None: _Answer())
         )
         result = D.fetch_image_metadata_batch([GATE_TITLE])
-        assert result[GATE_TITLE]["author"] == "Jane"
+        # both names, not only the first: a credit that answers two authors and shows one loses
+        # the other silently
+        assert result[GATE_TITLE]["author"] == "Jane, and John"
         assert result[GATE_TITLE]["license"] == "CC BY-SA 4.0"
 
 
@@ -361,6 +389,80 @@ def _media_list() -> dict[str, Any]:
             }
         ]
     }
+
+
+def test_a_multi_valued_attribution_is_read_from_the_list_commons_answers(monkeypatch):
+    """A multi-valued `extmetadata` field arrives as a list of `{value}` objects, not as one.
+
+    Measured 2026-10-06 on the import-hero wave: `fetch_image_metadata_batch` raised
+    `'list' object has no attribute 'get'` on two consecutive runs over the first 50 of 807
+    targets, and the same 50 answered cleanly in an isolated call - the shape depends on the file's
+    wikitext, not on the batch. A crash here kills a wave of several hundred files, so both shapes
+    have to be read.
+    """
+    _wikipedia(monkeypatch)
+    multi = {
+        "Artist": [
+            {"value": '<a href="//commons.wikimedia.org/wiki/User:Jane">Jane</a>'},
+            {"value": '<a href="//commons.wikimedia.org/wiki/User:John">John</a>'},
+        ],
+        "License": [{"value": "CC BY-SA 4.0"}],
+        "LicenseUrl": [
+            {"value": "https://creativecommons.org/licenses/by-sa/4.0"},
+            {"value": "https://creativecommons.org/licenses/by-sa/4.0/de/deed.xhtml"},
+        ],
+    }
+    _wikipedia_answer(monkeypatch, multi)
+
+    got = D.fetch_image_metadata_batch([GATE_TITLE])
+
+    meta = got[GATE_TITLE]
+    assert meta["author"] == "Jane, John"
+    assert meta["author_url"] == "https://commons.wikimedia.org/wiki/User:Jane"
+    assert meta["license"] == "CC BY-SA 4.0"
+    assert meta["license_url"] == "https://creativecommons.org/licenses/by-sa/4.0"
+
+
+def test_a_multipage_files_attribution_list_is_read_from_its_first_entry(monkeypatch):
+    """MediaWiki answers `extmetadata` as a **list** when the file carries more than one
+    `imageinfo` entry - a multipage PDF among the wave's targets.
+
+    Measured 2026-10-06 on the import-hero pre-flight over 807 targets: the first 50 titles parsed
+    until batch 3, where `ext` itself arrived as a list and the parser raised
+    `'list' object has no attribute 'get'`. The file's own attribution is the first entry.
+    """
+    _wikipedia(monkeypatch)
+    _wikipedia_answer(
+        monkeypatch,
+        [
+            {"Artist": {"value": '<a href="//commons.wikimedia.org/wiki/User:Jane">Jane</a>'}},
+            {"Artist": {"value": '<a href="//commons.wikimedia.org/wiki/User:John">John</a>'}},
+        ],
+    )
+
+    got = D.fetch_image_metadata_batch([GATE_TITLE])
+
+    meta = got[GATE_TITLE]
+    assert meta["author"] == "Jane"
+    assert meta["author_url"] == "https://commons.wikimedia.org/wiki/User:Jane"
+
+
+def _wikipedia_answer(monkeypatch, extmetadata):
+    """`_wikipedia`'s transport, with one `extmetadata` of our own on every page."""
+    asked: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(request)
+        url = request.url
+        assert (url.host, url.path) == ("en.wikipedia.org", "/w/api.php"), f"not asked: {url}"
+        answer = _imageinfo(url.params["titles"].split("|"))
+        for page in answer["query"]["pages"].values():
+            page["imageinfo"][0]["extmetadata"] = extmetadata
+        return httpx.Response(200, json=answer)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+    monkeypatch.setattr(D, "_http_client", client)
+    return asked
 
 
 def _imageinfo(titles: list[str]) -> dict[str, Any]:

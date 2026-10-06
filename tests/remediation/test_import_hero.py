@@ -690,6 +690,13 @@ class TestTheFetchManifest:
         with pytest.raises(IF.FetchError, match="extension"):
             IF.manifest_entry(THASOS, "Area archeologica di Herakleia", FETCH_META, _Result())
 
+    def test_a_name_the_local_filesystem_refuses_is_refused_by_name(self) -> None:
+        """Windows refuses `"` in a file name with `OSError: [Errno 22]` - measured 2026-10-06,
+        where it killed a run of 807 targets at `Makedonisches Grab Korinos "A" Dromos.webp`.
+        The rule is the Commons name verbatim, so such a file is named and refused, never renamed."""
+        with pytest.raises(IF.FetchError, match="cannot be stored"):
+            IF.local_name('Makedonisches Grab Korinos "A" Dromos.jpg')
+
     def test_the_entry_is_the_sites_own_file_and_not_another_sites(self) -> None:
         """Two sites may link the same Commons file; the manifest is keyed by site, so the entry
         must carry the file it fetched, never a neighbour's."""
@@ -704,13 +711,13 @@ def _stem_key(name: str) -> str:
     return Path(name).stem.replace(" ", "_").lower()
 
 
-def _stub_downloader(monkeypatch, fail_file: str | None = None) -> None:
+def _stub_downloader(monkeypatch, fail_file: str | None = None, meta: dict | None = None) -> None:
     """Stand in for the Commons calls. `fetch_site` must be testable without the network, and the
     stub is where a refusal is produced: a download whose file Commons does not hold."""
     from pipeline import wiki_image_downloader as DL
 
     def metadata(titles: list[str]) -> dict[str, dict]:
-        return {title: dict(FETCH_META) for title in titles}
+        return {title: dict(meta if meta is not None else FETCH_META) for title in titles}
 
     def download(url: str | None, dest: Path, width: int) -> _Result:
         if fail_file is not None and _stem_key(fail_file) in _stem_key(dest.name):
@@ -805,6 +812,52 @@ class TestTheFetchRun:
         entry = IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
         assert entry["filename"] == "Area archeologica di Herakleia e Siris - 3.webp"
         assert (tmp_path / THASOS[:8] / entry["filename"]).is_file()
+
+    def test_a_panorama_is_refused_before_a_single_byte_is_downloaded(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """A 4000x2030 original stores as 1600x812 and the downloader keeps the aspect ratio, so the
+        bytes would be spent on the very box `manifest_entry` refuses afterwards - and the file would
+        stay on disk, named by nothing. `imageinfo` already knows the original's size, and
+        `stored_size` is the downloader's own rule for what it will write."""
+        _stub_downloader(monkeypatch, meta={**FETCH_META, "width": "4000", "height": "2030"})
+        with pytest.raises(IF.FetchError, match="1600x812"):
+            IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
+        assert list(tmp_path.rglob("*.webp")) == []
+
+    def test_a_name_the_filesystem_refuses_never_reaches_the_downloader(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """The name is known before anything is fetched, so the refusal costs no download and
+        leaves no file: 3 of the wave's 807 targets, 2 of them otherwise fetchable."""
+        _stub_downloader(monkeypatch)
+        with pytest.raises(IF.FetchError, match="cannot be stored"):
+            IF.fetch_site(THASOS, 'Makedonisches Grab Korinos "A" Dromos.jpg', tmp_path)
+        assert list(tmp_path.rglob("*.webp")) == []
+
+    def test_a_local_filesystem_error_does_not_take_the_manifest_with_it(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """One site must never end a wave of several hundred. `download_image` writes with
+        `open("xb")`, so a name the filesystem refuses raises `OSError` - which is neither a
+        `FetchError` nor a `DownloadError` and killed the 807-target run (measured 2026-10-06)."""
+        from pipeline import wiki_image_downloader as DL
+
+        _stub_downloader(monkeypatch)
+        download = DL.download_image
+
+        def flaky(url: str | None, dest: Path, width: int) -> _Result:
+            if "Broken" in dest.name:
+                raise OSError(22, "Invalid argument", str(dest))
+            return download(url, dest, width)
+
+        monkeypatch.setattr(DL, "download_image", flaky)
+        manifest, failures = IF.fetch_manifest(
+            [(THASOS, FETCH_TITLE), (SMALL, "Broken_gate.jpg")], tmp_path, delay_s=0.0
+        )
+        assert sorted(manifest) == [THASOS]
+        assert failures[0][:2] == (SMALL, "Broken_gate.jpg")
+        assert "Invalid argument" in failures[0][2]
 
     def test_one_site_that_fails_does_not_take_the_manifest_with_it(
         self, tmp_path: Path, monkeypatch
@@ -1235,7 +1288,7 @@ class TestTheResumableFetchRun:
         """The offsite tree and the VPS tree both live on Windows volumes, where `"` cannot be in a
         file name; production carries no row whose filename has one (measured 2026-10-06 over the
         read's 48,567 rows), so three of the 807 refusals are named instead of renamed."""
-        with pytest.raises(IF.FetchError, match="may not have"):
+        with pytest.raises(IF.FetchError, match="cannot be stored"):
             IF.local_name('Makedonisches Grab Korinos "A" Dromos.jpg')
 
     def test_a_target_whose_name_cannot_be_written_is_a_refusal_not_a_crash(
@@ -1255,4 +1308,4 @@ class TestTheResumableFetchRun:
         )
         assert sorted(IF.load_manifest(manifest)) == [THASOS]
         assert [f[0] for f in outcome.failures] == [HABU]
-        assert "may not have" in refusals.read_text(encoding="utf-8")
+        assert "cannot be stored" in refusals.read_text(encoding="utf-8")
