@@ -1,0 +1,17 @@
+{
+ "classes": {
+  "every_row_excluded": 317,
+  "no_row_at_all": 852
+ },
+ "measured_at": "2026-10-06",
+ "note": "every one of them carries scope_status IS DISTINCT FROM 'retired' and thumbnail_url IS NULL; a site with any live row serves its lead row, so it is not here. none of the 852 'no_row_at_all' sites carries a wikidata id either (measured), so there is no P18 left to load - what they need is a picture that has to be found.",
+ "question": "shown curated sites whose page serves no image at all",
+ "read": "the read of run import-hero-2026-10-06-008",
+ "sites": 1169,
+ "what_would_close_it": {
+  "import_picture_is_no_row": 36,
+  "import_picture_never_fetched": 26,
+  "import_picture_too_small": 26,
+  "no_picture_at_all": 1081
+ }
+}

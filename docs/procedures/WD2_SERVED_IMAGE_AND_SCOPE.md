@@ -601,6 +601,20 @@ The 583 live heroes under 1600x900 are the same story from the other side: their
 owner-linked picture, but the Commons original of that picture is narrower than the lane's floor.
 Both numbers are floors this lane set itself, and raising either is a decision, not a fix.
 
+**The list behind those numbers**: `output/remediation/import_hero/RESTBESTAND_2026-10-06.jsonl`,
+1,169 lines, one per site, with its class, the rows it has, what the 2025 import links, what the
+import-hero lane refused it for and **what would close it**; the counts are in
+`RESTBESTAND_2026-10-06_SUMMARY.json`. The four closers, measured per site and not assumed:
+
+| what would close it | sites |
+|---|---:|
+| `no_picture_at_all` - the import links nothing, and none of these carries a wikidata id | **1,081** |
+| `import_picture_is_no_row` - the import links a picture that is no row of the site | 36 |
+| `import_picture_never_fetched` - such a picture, refused by the fetch (`FETCH_FAILURES.jsonl`) | 26 |
+| `import_picture_too_small` - the picture is a row, but its local file is under 1600x900 | 26 |
+
+A count is a fact about today; that file is what the next campaign works from.
+
 ```bash
 PY=./.venv/Scripts/python.exe
 R=output/remediation/import_hero/import-hero-2026-10-06-006
