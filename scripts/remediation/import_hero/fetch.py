@@ -159,9 +159,12 @@ def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
     """One site: its `imageinfo` answer, its 1600 px derivative, and the manifest entry for both.
 
     The file is written before the entry exists, so a manifest can never name a file that is not on
-    disk; a download that fails refuses by name and leaves no entry behind. The downloader is
-    imported here, not at module scope: it pulls in `pipeline`, and a lane module that only shapes
-    what a download said should not make every reader pay for it.
+    disk; a download that fails refuses by name and leaves no entry behind. A file that could not
+    become an entry is refused *before* it is fetched: `imageinfo` already knows the original's
+    size and `stored_size` is the downloader's own rule for what it will write, so a panorama is
+    named without spending the bandwidth - and without leaving a file on disk that no manifest
+    would ever name. The downloader is imported here, not at module scope: it pulls in `pipeline`,
+    and a lane module that only shapes what a download said should not make every reader pay for it.
     """
     from pipeline import wiki_image_downloader as DL
 
@@ -172,9 +175,19 @@ def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
             f"{site_id}: Commons answered no `imageinfo` for File:{commons_file} "
             f"(got {', '.join(sorted(answers)) or 'nothing'})"
         )
+    original_width = int(metadata.get("width") or 0)
+    original_height = int(metadata.get("height") or 0)
+    stored_width, stored_height = DL.stored_size(original_width, original_height)
+    if stored_width < HERO_MIN_WIDTH or stored_height < HERO_MIN_HEIGHT:
+        raise FetchError(
+            f"{site_id}: the original of {commons_file!r} is {original_width}x{original_height} and "
+            f"stores as {stored_width}x{stored_height}, under the {HERO_MIN_WIDTH}x{HERO_MIN_HEIGHT} "
+            f"this lane serves - a 1600 px fetch keeps the aspect ratio and returns that very box, "
+            f"so there is nothing to download"
+        )
     dest = site_dest(root, site_id, commons_file)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    result = DL.download_image(metadata.get("original_url"), dest, int(metadata.get("width") or 0))
+    result = DL.download_image(metadata.get("original_url"), dest, original_width)
     return manifest_entry(site_id, commons_file, metadata, result)
 
 

@@ -679,13 +679,13 @@ def _stem_key(name: str) -> str:
     return Path(name).stem.replace(" ", "_").lower()
 
 
-def _stub_downloader(monkeypatch, fail_file: str | None = None) -> None:
+def _stub_downloader(monkeypatch, fail_file: str | None = None, meta: dict | None = None) -> None:
     """Stand in for the Commons calls. `fetch_site` must be testable without the network, and the
     stub is where a refusal is produced: a download whose file Commons does not hold."""
     from pipeline import wiki_image_downloader as DL
 
     def metadata(titles: list[str]) -> dict[str, dict]:
-        return {title: dict(FETCH_META) for title in titles}
+        return {title: dict(meta if meta is not None else FETCH_META) for title in titles}
 
     def download(url: str | None, dest: Path, width: int) -> _Result:
         if fail_file is not None and _stem_key(fail_file) in _stem_key(dest.name):
@@ -735,6 +735,18 @@ class TestTheFetchRun:
         entry = IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
         assert entry["filename"] == "Area archeologica di Herakleia e Siris - 3.webp"
         assert (tmp_path / THASOS[:8] / entry["filename"]).is_file()
+
+    def test_a_panorama_is_refused_before_a_single_byte_is_downloaded(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """A 4000x2030 original stores as 1600x812 and the downloader keeps the aspect ratio, so the
+        bytes would be spent on the very box `manifest_entry` refuses afterwards - and the file would
+        stay on disk, named by nothing. `imageinfo` already knows the original's size, and
+        `stored_size` is the downloader's own rule for what it will write."""
+        _stub_downloader(monkeypatch, meta={**FETCH_META, "width": "4000", "height": "2030"})
+        with pytest.raises(IF.FetchError, match="1600x812"):
+            IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
+        assert list(tmp_path.rglob("*.webp")) == []
 
     def test_one_site_that_fails_does_not_take_the_manifest_with_it(
         self, tmp_path: Path, monkeypatch
