@@ -662,15 +662,22 @@ precision of **13 %**, and **1 site in 3** with at least one picture of itself. 
 near misses: for *Gonnus* the search returned **three pictures of Mars** (`Gonnus Mons`, the USGS
 Arcadia MOLA maps), four bronze coins, a 1830 steel engraving and the modern village; for *Cerna,
 Croatia* graves of a different Cerna in Bucharest, a barracks in Brno and a ski slope in Slovakia;
-for *Smythapark* a farm, a field path and a treehouse. With the 51 % that have candidates at all,
-**one site in six of the class is what a full judgement round buys** - about 180 of the 1,081 - for
-~4,900 candidate images to look at.
+for *Smythapark* a farm, a field path and a treehouse.
 
-One judgement call to keep in view: two of the three `depicts` are **objects found at the site**
-(a votive inscription, an Athenian relief "from Gonnoi"), which the vision rule counts as depicting.
-Whether a museum object is the right picture for a site page is a question that rule does not
-answer; a drawing, a plan or a reconstruction of the site would be, an inscription kept in a museum
-is a different thing.
+**The same question, measured over the run's real candidates, is better than the pilot.** The full
+search (`CANDIDATE_SUMMARY.json`): of the 1,081 sites, **595 carry candidates (55 %) and 5,809
+candidate images reach the floor**; 486 sites are refused by name - 461 `no_candidate` (Commons names
+no file for them at all) and 25 `all_too_small`. The first 8 sites of the judgement export (65
+candidate images, one verdict each): **12 `depicts`, 18 `region_or_type`, 35 `other_site`** - a
+precision of **18 %**, and **2 sites in 8** with a picture of themselves (*Apazzu*, and eleven
+photographs of the *Tombeau de Tin Hanan*). Read across the class, the round is worth about **1,050
+confirmed images over roughly 150 of the 1,081 sites** - one site in seven.
+
+One judgement call to keep in view: the three `depicts` of the first pilot were **objects found at the
+site** (a votive inscription, an Athenian relief "from Gonnoi"), which the vision rule counts as
+depicting. Whether a museum object is the right picture for a site page is a question that rule does
+not answer; a drawing, a plan or a reconstruction of the site would be, an inscription kept in a
+museum is a different thing.
 
 ```bash
 PY=./.venv/Scripts/python.exe
