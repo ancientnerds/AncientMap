@@ -62,17 +62,26 @@ def check_wave(
     state: ST.State,
     claims: Mapping[str, Mapping[str, Any]],
     site_ids: Sequence[str],
+    *,
+    fetched: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> WaveResult:
     """The three questions, per site of `site_ids`.
 
     `claims` is the lane's own join (`plan.join_import`), because it is the join that recorded
     which image the wave moved a site to; a site whose claim holds no image never entered a chunk
     and is not asked about here.
+
+    `fetched` is the fetch manifest, and it carries the same identity the plan used: where it names
+    the site, the served row has to hold *that* `original_url`, because the import's link and the
+    stored row can carry different slugs for one and the same file (measured 2026-10-06: 3 of the
+    147 downloaded files, e.g. `The_East_Facade_pf_the_Parthenon…` for `…_of_the_…`). Without it the
+    question falls back to the title in the import's link, which is what the other 310 sites answer.
     """
     served_the_import = 0
     thumbnail_follows = 0
     one_hero = 0
     problems: list[str] = []
+    resolved = fetched or {}
     for sid in site_ids:
         site = state.sites.get(sid)
         if site is None:
@@ -82,8 +91,15 @@ def check_wave(
         heroes = live_heroes(rows)
         claim = claims.get(sid, {})
         wanted_file = ST.file_of_url(str(claim.get("image") or "")) or "no Commons file"
+        wanted_url = str((resolved.get(sid) or {}).get("original_url") or "")
         served = ST.served_of(site, rows)
-        if served.kind == ST.NONE or served.file != wanted_file:
+        served_row = heroes[0] if len(heroes) == 1 else None
+        if wanted_url and served_row is not None:
+            # the upload URL is the file's identity, the same key the plan matched on
+            holds = str(served_row.get("original_url") or "") == wanted_url
+        else:
+            holds = served.kind != ST.NONE and served.file == wanted_file
+        if not holds:
             problems.append(
                 f"{sid} ({site.get('name')!r}): serves {served.file!r}, "
                 f"the 2025 import links {wanted_file!r}"

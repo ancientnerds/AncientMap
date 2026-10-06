@@ -1,0 +1,12 @@
+{
+ "chunks": 2,
+ "planned_rows": 87,
+ "planned_sites": 87,
+ "refusals": {
+  "already_holds_the_file": 3,
+  "no_row_at_all": 150,
+  "not_fetched": 236
+ },
+ "refused_sites": 389,
+ "run_id": "import-hero-2026-10-06-006"
+}

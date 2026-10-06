@@ -474,39 +474,40 @@ SELECT the page renders.
   not gallery rows. The remaining 410 need an INSERT, which this writer does not do
   (`chunk_writer.lint_statement` refuses INSERT; `apply_remediation_change()` is UPDATE-only).
 
-**The 410 that need an INSERT** (`no_target_row`, the file is a Commons picture and no row of the
-site holds it) are the rest of the wave's own subject: the owner linked that picture by hand, and
-the row that shows it does not exist. `chunk_writer` cannot create it - `lint_statement` refuses
-INSERT and `apply_remediation_change()` (migrations 0017/0018/0022) is a conditional UPDATE and its
-journal row in one statement. The decisions a builder needs, all measured on the read of run
-`import-hero-2026-10-06-004` (2026-10-06, 4,900 shown sites, 48,567 image rows):
+**The INSERT wave, applied 2026-10-06** (runs `-006`, `-007`, `-008`). Measured on the read
+`9a5c3b28…` (4,900 shown sites, 47,691 image rows):
 
-* **The file has to be fetched first, exactly as the 807 were.** A site with no row has no stored
-  derivative, so there is nothing to point an INSERT at; the fetch targets are the
-  `no_target_row` refusals whose import link names a Commons file, and the manifest carries the
-  same eleven `FETCH_COLUMNS` - `ih5` is what makes a row credit the file it shows.
-* **No migration is needed.** The journal's columns take an insert as they stand: one row per
-  written column with `old_value` NULL and `new_value` set, `row_pk` the new row's `id` from
-  `RETURNING`, `table_name = 'wiki_images'`, and the lane's `change_key` - which is what
-  `remediation_change_by_key` (0022) exists for. A statement that inserts a row and writes its
-  journal rows inside one `BEGIN`/`COMMIT` needs no database function; only `apply_remediation_change()`
-  is UPDATE-shaped, and an INSERT lane simply does not call it.
-* **The guards are the writer's, restated for a row that must not exist yet**: the site is a
-  curated, shown site; no row of that site holds the file (`WHERE NOT EXISTS`, so a re-run inserts
-  nothing rather than a second copy); the site keeps at most one hero, so the row that holds it
-  today is demoted in the same transaction; and the inserted file is at least 1600x900, the same
-  floor `plan.py` applies everywhere else.
-* **The reversal is a guarded DELETE, not a truncation**: `DELETE FROM wiki_images WHERE id = <the
-  inserted ids> AND original_url = <the file the lane inserted>` plus the restored hero flag, inside
-  the journal's own transaction. `unified_sites` is never touched by a DELETE, and the site's own
-  tables stay behind their site-owned `CASCADE`.
-* **The acceptance is the wave's own**: after the insert, `verify.check_wave` asks production the
-  same three questions it asked the 1,555 - the page serves the file the import links, the
-  thumbnail names that row, exactly one live hero row stands.
+* **The fetch: 417 targets, 147 files, 270 refusals by name.** The 476 `no_target_row` sites split
+  into 150 that carry no image row at all (the owner's decision of 2026-10-05, 18:32 — 57 of them
+  were downloaded before the insert plan refused them, because the fetch's target rule is coarser
+  than the insert plan's), 236 whose file never arrived, and 90 that got a row. All 147 files were
+  verified against their manifest on the offsite tree, packed, transferred and verified again inside
+  the api container: **147/147, 0 missing, 0 size mismatches**, the served tree at **50,239 `.webp`**.
+* **The wave: 87 rows over 2 chunks, 1,376 journal rows**, both chunks through the five steps of
+  section 3.6 (`insert_writer.py`, the shared writer's five commands over a statement that creates
+  a row), acceptance `ok: true`, **87/87 on all three questions** (read `13bb095a…`).
+* **Three sites needed no row at all.** `no_target_row` compared the *title in the import's link*
+  with the stored row's name, and Commons' upload slugs differ from the file's title for reasons of
+  its own: `The_East_Facade_pf_the_Parthenon…` (a typo in the import) for `…_of_the_…`,
+  `East_Terrace_(4961323529).jpg` for `Mount_Nemrut_-_East_Terrace_(4961323529).jpg`, and one title
+  that gained `zyklopenhaftes`. All three sites *hold* the file - the fetch resolved the link to the
+  same `original_url`. So `plan._target_row` now matches on the resolved upload URL when the fetch
+  has one, which is the same key the unique constraint `(site_id, original_url)` holds, and the
+  insert plan refuses such a site as `already_holds_the_file`. The three got the hero lane's `ih1` +
+  `ih4` instead (run `-007`).
+* **A rule that had to be corrected because the acceptance refused it:** `ih4` took the *fetched*
+  file name whenever a fetch existed, even where `ih5` never rewrote the row. On those three sites
+  that pointed the thumbnail at a file nobody had ever fetched. The thumbnail now names the row the
+  site serves, and takes the fetched name only where the wave renames that row (run `-008`, 3 rows,
+  acceptance `ok: true`). The acceptance learned the same identity: with the fetch manifest it
+  accepts a served row by its upload URL instead of the slug in the import's link.
 
-The 133 with no row at all and the 59 whose import link names no Commons file stay refused: the
-owner decided on 2026-10-05 (18:32) that a site with only a `thumbnail_url` gets no gallery image
-made up out of nothing.
+**Three columns the fetch does not carry, measured on production 2026-10-06:** `wiki_images`
+declares `is_lead`, `sort_order` and `source_type` NOT NULL without a default, so the insert
+statement has to write them. `sort_order` is derived (the next free number of that site), `is_lead`
+stays false (the import's link is the owner's picture, not a measured lead image) and `source_type`
+is `wikimedia`, which 49,683 of the 49,691 curated rows carry. The journal therefore carries
+**fourteen** rows per inserted site, not eleven.
 
 **A site whose every row is hidden today** is named `may_empty` in its chunk header
 (`Planned.may_empty`), not excluded from the wave: unhiding the row gives it its *first* picture,
@@ -538,6 +539,27 @@ Applied 2026-10-05 (`c4976a9`, `b5aa98c`): 1,555 sites, 4,642 rows, 16 chunks, 3
 the same lane over a fresh read yields **0 rows** (`REMAINDER.json`, run `-003`) - the lane is at its
 end, and what it still refuses is 807 `local_file_too_small` + 469 `no_target_row`, both by name.
 
+Applied 2026-10-06: the 807 `local_file_too_small` first (runs `-004`, `-005`: 310 sites fetched and
+accepted 310 of 310), then the INSERT wave (runs `-006`, `-007`, `-008`, above). After all of it the
+read of run `-008` counts **4,900 shown curated sites, 1,344 of them without a live hero, 0 sites
+with two**, 47,778 image rows and **583 live heroes still under 1600x900** - the remainder of this
+lane is the 498 `local_file_too_small` refusals, which need other pictures, and the 150 sites the
+owner keeps without a row. **54 sites whose live hero's thumbnail points somewhere else** are a
+different finding, and not this lane's: 32 carry a remote `upload.wikimedia.org` URL as
+`thumbnail_url` and 22 a `/data/…` path that names another file; none of them was written by a
+2026-10-06 wave.
+
+```bash
+PY=./.venv/Scripts/python.exe
+R=output/remediation/import_hero/import-hero-2026-10-06-006
+IH=scripts/remediation/import_hero
+# the INSERT wave: the fetch (resumable), the plan, the writer, the acceptance
+$PY $IH/run.py fetch         --run-dir $R --root $OFFSITE --target insert --start
+$PY $IH/run.py insert-plan   --run-dir $R
+$PY $IH/insert_writer.py $R/chunk-001 --check --rehearse --apply --readback --rehearse-rollback
+$PY $IH/run.py insert-accept --run-dir $R
+```
+
 **The static export is not part of this.** A hero or licence change dates the rendered page
 (`pipeline/utils/public_sites.py`), so the globe shows the previous picture until the next export
 run; the page and the hub read the database at once and already show the new one.
@@ -556,6 +578,13 @@ run; the page and the hub read the database at once and already show the new one
   with a live image never is), the chunk writer's five steps, and the acceptance's three questions
   including the thumbnail that names the old row and the hidden row that a thumbnail alone does not
   excuse.
+* `tests/remediation/test_import_hero_insert.py` - the insert plan's refusals (`no_row_at_all`,
+  `not_fetched`, `already_holds_the_file`), the statement's five guards and three invariants, the
+  journal read back from the row it created, the reversal's DELETE naming the triple the lane wrote,
+  the lint's two shapes, and the acceptance.
+* `tests/remediation/test_import_hero_slug_match.py` - a Commons slug that differs from the file's
+  title: the plan finds the row through the resolved upload URL, the insert plan refuses it by name,
+  `ih4` names the row the site serves, and the acceptance takes the same identity.
 * `tests/remediation/test_scope_review.py` - the funnel, the answers (a site carries no quotes,
   the copies of Wikipedia), the rounds (in order, never empty, three asks at one premise, a moved
   entry asked again) and their quote check, the plan's guards (the latest answer decides), the

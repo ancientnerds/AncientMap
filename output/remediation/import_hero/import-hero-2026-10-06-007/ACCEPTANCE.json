@@ -1,0 +1,22 @@
+{
+ "chunks": [
+  "chunk-001"
+ ],
+ "ok": false,
+ "one_hero": 3,
+ "problems": [
+  "33d2d754-e50a-4305-beff-87d2ad2c0227 ('Archaeological Site of Ancient Thasos'): serves 'Geschichtetes Mauerwerk über Parmenon-Turm, aus Süd C.jpg', the 2025 import links 'Geschichtetes, zyklopenhaftes Mauerwerk über Parmenon-Turm, aus Süd C.jpg'",
+  "33d2d754-e50a-4305-beff-87d2ad2c0227 ('Archaeological Site of Ancient Thasos'): thumbnail '/data/images/wiki/33d2d754/Geschichtetes, zyklopenhaftes Mauerwerk über Parmenon-Turm, aus Süd C.webp' does not name the served row '/data/images/wiki/33d2d754/Geschichtetes_Mauerwerk_über_Parmenon-Turm,_aus_Süd_C.webp'",
+  "417445b4-e0db-49ac-99db-fe236794e9ff ('Parthenon'): serves 'The East Facade of the Parthenon on March 22, 2021.jpg', the 2025 import links 'The East Facade pf the Parthenon on March 22, 2021.jpg'",
+  "417445b4-e0db-49ac-99db-fe236794e9ff ('Parthenon'): thumbnail '/data/images/wiki/417445b4/The East Facade pf the Parthenon on March 22, 2021.webp' does not name the served row '/data/images/wiki/417445b4/The_East_Facade_of_the_Parthenon_on_March_22,_2021.webp'",
+  "55d6f958-6ee7-4a0a-9e3c-23bbdb63d571 ('Mount Nemrut'): serves 'Mount Nemrut - East Terrace (4961323529).jpg', the 2025 import links 'East Terrace (4961323529).jpg'",
+  "55d6f958-6ee7-4a0a-9e3c-23bbdb63d571 ('Mount Nemrut'): thumbnail '/data/images/wiki/55d6f958/East Terrace (4961323529).webp' does not name the served row '/data/images/wiki/55d6f958/Mount_Nemrut_-_East_Terrace_(4961323529).webp'"
+ ],
+ "read_at": "2026-10-06T08:20:46Z",
+ "read_sha256": "b84515f98469683e94877e86d1ac9266aff85fcfbd6e78aa4f3a12dcbdde48bd",
+ "run_id": "import-hero-2026-10-06-007",
+ "served_the_import": 0,
+ "shown_sites": 4900,
+ "sites": 3,
+ "thumbnail_follows": 0
+}

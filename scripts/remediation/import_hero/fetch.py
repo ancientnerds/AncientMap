@@ -146,29 +146,44 @@ def manifest_entry(
 def plan_targets(
     claims: Mapping[str, Mapping[str, Any]],
     refusals: Sequence[Mapping[str, Any]],
+    *,
+    reasons: Sequence[str] = ("local_file_too_small",),
 ) -> list[tuple[str, str]]:
-    """The `(site id, Commons file)` pairs to fetch: the `local_file_too_small` refusals whose
-    import link names a Commons file.
+    """The `(site id, Commons file)` pairs to fetch: the refusals of the named classes whose import
+    link names a Commons file.
+
+    `reasons` says which wave this is. `local_file_too_small` is the hero wave: the row exists and
+    only its file is under the floor. `no_target_row` is the INSERT wave: the site's rows exist but
+    hold no file of the import, and the row that would show it is a statement this lane cannot make
+    - the file still has to be fetched, because a row cannot name a file that is not there. Every
+    other reason is never a target.
 
     A refusal whose link names no Commons file is refused by name - it is not a fetch target, and
     writing one would fetch something the plan never asked for.
     """
     targets: list[tuple[str, str]] = []
     for refusal in refusals:
-        if refusal.get("reason") != "local_file_too_small":
+        if refusal.get("reason") not in reasons:
             continue
         site_id = str(refusal.get("site_id") or "")
         claim = claims.get(site_id, {})
         commons_file = ST.file_of_url(str(claim.get("image") or "")) or ""
         if not commons_file:
-            raise FetchError(
-                f"{site_id}: refused as {refusal.get('reason')!r} but its import link "
-                f"{claim.get('image')!r} names no Commons file - there is nothing to fetch"
-            )
+            if refusal.get("reason") == "local_file_too_small":
+                # The hero wave's own invariant: a site it refuses for its file size must have a
+                # file to fetch, or the plan and the fetch disagree about what the wave is.
+                raise FetchError(
+                    f"{site_id}: refused as 'local_file_too_small' but its import link "
+                    f"{claim.get('image')!r} names no Commons file - there is nothing to fetch"
+                )
+            # The INSERT wave: a site whose import link names no Commons file has no picture to
+            # put in a row - measured 2026-10-06, 37 of the 326 (en.wikipedia, UNESCO, blogs,
+            # a Twitter image). It is not a target and not a defect of this wave.
+            continue
         targets.append((site_id, commons_file))
     if not targets:
         raise FetchError(
-            "no site to fetch: no refusal of this wave is a `local_file_too_small` one"
+            f"no site to fetch: no refusal of this wave is one of {', '.join(reasons)}"
         )
     return targets
 

@@ -171,8 +171,20 @@ class Refusal:
         return {"site_id": self.site_id, "reason": self.reason, "detail": self.detail}
 
 
-def _target_row(state: ST.State, sid: str, image: str) -> tuple[dict[str, Any] | None, str | None]:
-    """The row of the site that holds the import file, live or hidden, and why there is none."""
+def _target_row(
+    state: ST.State, sid: str, image: str, fetch: Mapping[str, Any] | None = None
+) -> tuple[dict[str, Any] | None, str | None]:
+    """The row of the site that holds the import file, live or hidden, and why there is none.
+
+    **The title in the URL is not the file's identity.** Three of the 147 files the INSERT fetch
+    downloaded (measured 2026-10-06, run `import-hero-2026-10-06-006`) were refused here as
+    `no_target_row` although the site *does* hold the file: the import's link carries a slightly
+    different slug than the stored row - `The_East_Facade_pf_the_Parthenon…` for `…_of_the_…`,
+    `East_Terrace_(4961323529).jpg` for `Mount_Nemrut_-_East_Terrace_(4961323529).jpg`, and one
+    title that gained `zyklopenhaftes` - while both resolve to the same `original_url`. So when the
+    fetch has resolved the import's link to its upload URL, that URL is the identity the plan
+    matches on: it is the same key the unique constraint `(site_id, original_url)` holds.
+    """
     wanted = ST.file_of_url(image)
     if wanted is None:
         return None, f"the import links {image!r}, which names no Commons file: no row can hold it"
@@ -183,6 +195,11 @@ def _target_row(state: ST.State, sid: str, image: str) -> tuple[dict[str, Any] |
     for row in rows:
         if ST.file_of_row(row) == wanted:
             return row, None
+    resolved = str((fetch or {}).get("original_url") or "")
+    if resolved:
+        for row in rows:
+            if str(row.get("original_url") or "") == resolved:
+                return row, None
     return None, (
         f"the import's file {wanted!r} is no row of the site: giving it a row needs an insert, "
         "which this writer (conditional UPDATEs through apply_remediation_change) cannot do"
@@ -231,14 +248,20 @@ def plan(
         if sid not in state.sites:
             refusals.append(Refusal(sid, "retired", "the site is not in the read"))
             continue
-        row, problem = _target_row(state, sid, str(image))
+        fetch = ready.get(sid)
+        row, problem = _target_row(state, sid, str(image), fetch)
         if row is None:
             refusals.append(Refusal(sid, "no_target_row", str(problem)))
             continue
 
         row_id = int(row["id"])
         width, height = dimensions.get(row_id, (None, None))
-        fetch = ready.get(sid)
+        # the file the page serves **after** this wave. It is the fetched name only where this wave
+        # actually renames the row (ih5 below); a site whose row already holds the file keeps its own
+        # name, and taking the fetch's name there pointed the thumbnail at a file that was never
+        # fetched (measured 2026-10-06, run `import-hero-2026-10-06-007`: the acceptance refused all
+        # three, and the globe popup would have asked for a file that does not exist).
+        served_name = str(row["filename"])
         if width is None or height is None or width < HERO_MIN_WIDTH or height < HERO_MIN_HEIGHT:
             if fetch is None:
                 refusals.append(
@@ -263,6 +286,7 @@ def plan(
                     ),
                 )
             )
+            served_name = str(fetch["filename"])
         if row.get("is_excluded"):
             # A site whose every row is excluded shows no image at all today: unhiding this row
             # gives it its first picture, so the chunk has to name it (see `Planned.may_empty`).
@@ -325,7 +349,6 @@ def plan(
         # old name. Measured 2026-10-06 on run `import-hero-2026-10-06-004`: the write landed right
         # and the acceptance still refused all 228 sites on this one question - the page served the
         # fetched 1600 px file, the globe popup still asked for `hero.webp`.
-        served_name = str(fetch.get("filename")) if fetch else str(row["filename"])
         wanted_thumb = local_path(sid, served_name)
         current = state.sites[sid].get("thumbnail_url")
         if current != wanted_thumb:

@@ -749,6 +749,23 @@ class TestTheFetchRun:
         with pytest.raises(IF.FetchError, match="no Commons file"):
             IF.plan_targets(claims, refusals)
 
+    def test_the_insert_wave_skips_a_site_whose_import_link_names_no_commons_file(self) -> None:
+        """The other half, measured 2026-10-06: 37 of the 326 `no_target_row` sites link
+        en.wikipedia, UNESCO, a blog or a Twitter image. There is no Commons file to fetch, and no
+        row this lane could name - so they are not targets, and the wave is not a defect for them.
+        """
+        claims = {
+            THASOS: {"image": "https://www.cais-soas.com/CAIS/Images2/x.jpg"},
+            HABU: {"image": FETCH_META["original_url"]},
+        }
+        refusals = [
+            {"site_id": THASOS, "reason": "no_target_row", "detail": ""},
+            {"site_id": HABU, "reason": "no_target_row", "detail": ""},
+        ]
+        assert IF.plan_targets(claims, refusals, reasons=("no_target_row",)) == [
+            (HABU, FETCH_TITLE)
+        ]
+
     def test_a_wave_with_nothing_to_fetch_is_refused_by_name(self) -> None:
         with pytest.raises(IF.FetchError, match="no site to fetch"):
             IF.plan_targets({}, [{"site_id": THASOS, "reason": "no_target_row", "detail": ""}])

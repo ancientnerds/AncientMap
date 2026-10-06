@@ -1,8 +1,10 @@
-"""The import-hero lane's four commands: `plan`, `fetch`, `accept`, `remainder`.
+"""The import-hero lane's commands: `plan`, `fetch`, `insert-plan`, `accept`, `insert-accept`, `remainder`.
 
 ```bash
 ./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py plan     --run-dir $R
 run.py fetch    --run-dir $R --root $OFFSITE
+run.py insert-plan  --run-dir $R
+run.py insert-accept --run-dir $R
 ./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py accept   --run-dir $R
 ./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py remainder --run-dir $R
 ```
@@ -22,6 +24,10 @@ copy of the image tree; the VPS copy has to follow it, the two must not drift.
 owner's three questions per planned site. It never reuses the plan's read - that one describes what
 production looked like before, which is exactly what an acceptance cannot settle.
 
+`insert-plan` and `insert-accept` are the same two halves for the INSERT wave
+(`import_hero/insert.py`), which creates rows instead of moving flags: `chunk_writer` refuses an
+INSERT, so `insert_writer.py` is its writer and its read-back.
+
 `remainder` is what a lane's last step needs: `write_chunks` refuses an empty plan by name, which
 is right for a writer and useless as a completion number. This reports the empty plan and what it
 still refuses.
@@ -35,6 +41,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +54,7 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
 from served_image import state as ST  # noqa: E402
 
 from import_hero import fetch as IF  # noqa: E402
+from import_hero import insert as IN  # noqa: E402
 from import_hero import plan as IH  # noqa: E402
 from import_hero import read as RD  # noqa: E402
 from import_hero import verify as IV  # noqa: E402
@@ -54,6 +62,7 @@ from import_hero import verify as IV  # noqa: E402
 DEFAULT_IMPORT = Path("data/raw/ancient_nerds/ancient_nerds_original.geojson")
 ACCEPTANCE_READ = "VERIFY_READ.json"
 ACCEPTANCE = "ACCEPTANCE.json"
+ACCEPTANCE_INSERT = "ACCEPTANCE_INSERT.json"
 REMAINDER = "REMAINDER.json"
 CLAIMS = "IMPORT_CLAIMS.json"
 REFUSALS = "IMPORT_HERO_REFUSALS.jsonl"
@@ -134,6 +143,8 @@ def cmd_fetch(
     out: Path | None = None,
     limit: int | None = None,
     delay_s: float | None = None,
+    target: str = "hero",
+    start: bool = False,
 ) -> dict[str, Any]:
     """The 1600 px files the `local_file_too_small` refusals need, and the manifest `plan --fetched`
     reads. Writes only into the run directory and `root`; production is read at most once, and only
@@ -146,11 +157,12 @@ def cmd_fetch(
     `out` writes the manifest somewhere else than the run directory, for a pilot that has to leave
     the wave's own path free.
     """
-    data, sha, claims, refusals = _wave_of(run, source)
+    data, sha, claims, refusals = _wave_of(run, source, start=start)
     by_reason: dict[str, int] = {}
     for refusal in refusals:
         by_reason[str(refusal.get("reason"))] = by_reason.get(str(refusal.get("reason")), 0) + 1
-    targets = IF.plan_targets(claims, refusals)
+    reasons = {"hero": ("local_file_too_small",), "insert": ("no_target_row",)}[target]
+    targets = IF.plan_targets(claims, refusals, reasons=reasons)
     if limit is not None:
         targets = targets[:limit]
     manifest_path = out or (run / FETCHED)
@@ -177,13 +189,29 @@ def cmd_fetch(
         "run_id": run.name,
         "read_sha256": sha,
         "offsite_root": str(root),
+        "wave": target,
+        "refusal_classes_fetched_for": list(reasons),
         "refusals_of_the_plan": by_reason,
         **outcome.as_json(),
     }
 
 
+def _write_refusals(run: Path, refusals: Sequence[IH.Refusal]) -> Path:
+    """The plan's refusal record, one object per line - the work list a fetch works from."""
+    path = run / REFUSALS
+    path.write_text(
+        "".join(
+            json.dumps(refusal.as_json(), ensure_ascii=False, sort_keys=True) + "\n"
+            for refusal in refusals
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return path
+
+
 def _wave_of(
-    run: Path, source: Path
+    run: Path, source: Path, *, start: bool = False
 ) -> tuple[dict[str, Any] | None, str, dict[str, Any], list[dict[str, Any]]]:
     """`(read, digest, claims, refusals)` of this run, from its own records where it has them.
 
@@ -200,11 +228,25 @@ def _wave_of(
         return data, RD.digest(data) if data else "", _load(claims_path), _load_jsonl(refusals_path)
     read_path = run / RD.READ
     if not read_path.is_file():
-        raise IH.ImportHeroError(
-            f"{claims_path} does not exist and {read_path} does not exist either - the run holds "
-            f"neither the claims and refusals of its plan nor its read, so run "
-            f"`plan --run-dir {run}` first"
+        if not run.is_dir() and not start:
+            raise IH.ImportHeroError(
+                f"{run} does not exist - run `plan --run-dir {run}` first, or pass --start to read "
+                "production for a wave that has not started yet"
+            )
+        run.mkdir(parents=True, exist_ok=True)
+        # A run directory that exists but holds nothing is a wave that has not been read yet: the
+        # fetch is what the plan's refusals are needed for, so it takes the first read itself.
+        data, sha = _read_once(run)
+        state = ST.load_read(run / RD.READ)
+        claims = IH.join_import(state, IH.read_import(source))
+        claims_path.parent.mkdir(parents=True, exist_ok=True)
+        claims_path.write_text(
+            json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+            encoding="utf-8",
         )
+        planned = IH.plan(state, claims, dimensions=RD.dimensions(data))
+        _write_refusals(run, planned.refusals)
+        return data, sha, claims, [r.as_json() for r in planned.refusals]
     data, sha = _read_once(run)
     state = ST.load_read(read_path)
     claims = IH.join_import(state, IH.read_import(source))
@@ -213,19 +255,11 @@ def _wave_of(
         json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
     )
     planned = IH.plan(state, claims, dimensions=RD.dimensions(data))
-    refusal_path = run / REFUSALS
-    refusal_path.write_text(
-        "".join(
-            json.dumps(r.as_json(), ensure_ascii=False, sort_keys=True) + "\n"
-            for r in planned.refusals
-        ),
-        encoding="utf-8",
-        newline="\n",
-    )
+    _write_refusals(run, planned.refusals)
     return data, sha, claims, [r.as_json() for r in planned.refusals]
 
 
-def cmd_accept(run: Path) -> int:
+def cmd_accept(run: Path, *, fetched: Path | None = None) -> int:
     """The wave's three questions, asked of a fresh production read. Writes ACCEPTANCE.json."""
     data = RD.read_production()
     read_path = run / ACCEPTANCE_READ
@@ -233,13 +267,20 @@ def cmd_accept(run: Path) -> int:
         read_path.unlink()
     sha = RD.write_read(read_path, data)
     state = ST.load_read(read_path)
-    result = IV.check_wave(state, _load(run / CLAIMS), IV.wave_site_ids(run))
+    manifest = fetched or (run / FETCHED)
+    result = IV.check_wave(
+        state,
+        _load(run / CLAIMS),
+        IV.wave_site_ids(run),
+        fetched=_load(manifest) if manifest.is_file() else None,
+    )
     record = {
         "run_id": run.name,
         "read_sha256": sha,
         "read_at": state.read_at,
         "shown_sites": len(state.sites),
         "chunks": sorted(p.name for p in run.glob("chunk-0*")),
+        "fetched_manifest": manifest.name if manifest.is_file() else None,
         **result.as_json(),
     }
     (run / ACCEPTANCE).write_text(
@@ -279,6 +320,88 @@ def cmd_remainder(run: Path) -> int:
     return 0
 
 
+def cmd_insert_plan(
+    run: Path,
+    *,
+    rows_per_chunk: int = 50,
+    fetched: Path | None = None,
+) -> dict[str, Any]:
+    """The rows the INSERT wave would create, and the sites it refuses by name.
+
+    Read-only against production: it takes the run's own `READ.json`, the plan's own
+    `IMPORT_HERO_REFUSALS.jsonl` and the fetch's `FETCHED.json`, and writes only into the run
+    directory. A site whose fetch was refused stays refused - a row cannot name a file that is not
+    on disk - which is what `INSERT_REFUSALS.jsonl` records.
+    """
+    read_path = run / RD.READ
+    if not read_path.is_file():
+        raise IH.ImportHeroError(
+            f"{read_path} does not exist - the fetch of this wave writes it; run "
+            f"`fetch --target insert --run-dir {run}` first"
+        )
+    manifest_path = fetched or (run / FETCHED)
+    state = ST.load_read(read_path)
+    planned = IN.plan(state, _load_jsonl(run / REFUSALS), fetched=_load(manifest_path))
+    chunks = IN.write_chunks(planned, run, per_chunk=rows_per_chunk)
+    return {
+        "run_id": run.name,
+        "read_sha256": state.sha256,
+        "fetched_manifest": manifest_path.name,
+        "chunks": len(chunks),
+        "stamps": [chunk.run_stamp for chunk in chunks],
+        "journal_rows": sum(row.journal_rows for chunk in chunks for row in chunk.inserts),
+        **planned.as_json(),
+    }
+
+
+def _planned_inserts(run: Path) -> list[IN.Insert]:
+    """The rows the wave's chunks plan, as they were planned - not as a second plan would see them."""
+    chunks = sorted(run.glob("chunk-0*"))
+    if not chunks:
+        raise IH.ImportHeroError(f"{run} holds no chunk - run `insert-plan` first")
+    out: list[IN.Insert] = []
+    for directory in chunks:
+        path = directory / "INSERT.jsonl"
+        if not path.is_file():
+            raise IH.ImportHeroError(f"{path} does not exist")
+        out.extend(
+            IN.Insert.from_json(json.loads(line))
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    return out
+
+
+def cmd_insert_accept(run: Path) -> int:
+    """The INSERT wave's three questions, asked of a fresh production read. Writes ACCEPTANCE_INSERT.json."""
+    inserts = _planned_inserts(run)
+    data = RD.read_production()
+    read_path = run / ACCEPTANCE_READ
+    if read_path.is_file():
+        read_path.unlink()
+    sha = RD.write_read(read_path, data)
+    state = ST.load_read(read_path)
+    result = IN.check(state, inserts)
+    record = {
+        "run_id": run.name,
+        "read_sha256": sha,
+        "read_at": state.read_at,
+        "shown_sites": len(state.sites),
+        "chunks": sorted(p.name for p in run.glob("chunk-0*")),
+        **result,
+    }
+    (run / ACCEPTANCE_INSERT).write_text(
+        json.dumps(record, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _print(record)
+    if not result["ok"]:
+        print(
+            f"REFUSED: {len(result['problems'])} site(s) answer a question wrongly", file=sys.stderr
+        )
+        return 1
+    return 0
+
+
 def _stamp(run: Path) -> str:
     """The run stamp every journal row of this wave carries: the run directory's own name."""
     return run.name
@@ -299,6 +422,8 @@ def main(argv: list[str] | None = None) -> int:
     helps = {
         "plan": "read production, join the 2025 import, write the chunks (writes only into R)",
         "fetch": "download the 1600 px file every `local_file_too_small` refusal needs -> FETCHED.json",
+        "insert-plan": "the rows of the INSERT wave: chunk-001.., INSERT_REFUSALS.jsonl (writes only into R)",
+        "insert-accept": "read production again and ask the INSERT wave's three questions per row",
         "accept": "read production again and ask the three questions per planned site",
         "remainder": "what the lane would still write over this run's read, and what it refuses",
     }
@@ -319,10 +444,38 @@ def main(argv: list[str] | None = None) -> int:
         "--out", type=Path, default=None, help="write the manifest here instead of into the run dir"
     )
     commands["fetch"].add_argument(
+        "--start",
+        action="store_true",
+        help="read production for a wave that has no read yet (the INSERT wave starts one)",
+    )
+    commands["fetch"].add_argument(
+        "--target",
+        choices=("hero", "insert"),
+        default="hero",
+        help=(
+            "which wave to fetch for: `hero` the sites whose row exists but whose file is too "
+            "small, `insert` the sites that need a row for the import's file"
+        ),
+    )
+    commands["fetch"].add_argument(
         "--limit", type=int, default=None, help="only the first N targets (a pilot)"
     )
     commands["fetch"].add_argument(
         "--delay", dest="delay_s", type=float, default=None, help="seconds between downloads"
+    )
+    commands["insert-plan"].add_argument("--rows-per-chunk", type=int, default=50)
+    commands["insert-plan"].add_argument(
+        "--fetched",
+        type=Path,
+        default=None,
+        help="the fetch manifest to plan from (the run's own FETCHED.json by default)",
+    )
+    commands["accept"].add_argument(
+        "--fetched",
+        type=Path,
+        default=None,
+        help="the fetch manifest that resolved the import's links (the run's own FETCHED.json by "
+        "default): a served row is then accepted by its upload URL, not by the slug in the link",
     )
     args = parser.parse_args(argv)
     try:
@@ -335,11 +488,22 @@ def main(argv: list[str] | None = None) -> int:
                     out=args.out,
                     limit=args.limit,
                     delay_s=args.delay_s,
+                    target=args.target,
+                    start=args.start,
                 )
             )
             return 0
+        if args.command == "insert-plan":
+            _print(
+                cmd_insert_plan(
+                    args.run_dir, rows_per_chunk=args.rows_per_chunk, fetched=args.fetched
+                )
+            )
+            return 0
+        if args.command == "insert-accept":
+            return cmd_insert_accept(args.run_dir)
         if args.command == "accept":
-            return cmd_accept(args.run_dir)
+            return cmd_accept(args.run_dir, fetched=args.fetched)
         if args.command == "remainder":
             return cmd_remainder(args.run_dir)
         _print(
