@@ -297,3 +297,56 @@ four rows; slug, `published_at`, `published_by` and the image set are unchanged;
 carries one dated correction-log entry that names what changed. Papers 2 and 3 also
 carried the reworded sentences of the support-gate repair. IndexNow, Qdrant (7 sections)
 and the API cache ran on each write; Discord is off.
+
+## Run 4: topic 5 (the plasma coupling mechanics), 2026-10-06 09:43 UTC
+
+Published as `birkeland-filaments-impedance-matching-and-the-vibration-principle`,
+journal row 123. 5,874 prose words, 115 evidence entries, 172 claim tasks, 12 verified
+images over nine sections, 68 archived sources (2.6 million characters, 47 Wikipedia
+plus 17 from the Kybalion archives of run 3). Zero API calls.
+
+Six things in this run cost a cycle each and none of them was the paper's fault. They are
+recorded here because each one is a rule for the next run, not an anecdote about this one.
+
+**`paper.md` is generated, `draft.md` is the source.** The support repair of topic 4 was
+applied to the numbered paper; the next `paper number` regenerated that file from the draft
+and every fix in it was gone. `number` reads `draft.md`, writes `paper.md`, and
+`require_fresh_check` compares against `build_paper(ws)`. **A text repair for any paper is
+written to `draft.md`, with `[S:<id>]` markers, and then numbered.** Patching the numbered
+file looks like it works — the local `check` passes — and the work is discarded silently.
+
+**A citation is a request that the source carry the sentence, not a promise that it does.**
+The first support pass removed the marker from fifteen commentary sentences, which is
+right, but then measured nothing: the sentences it left marked all carried their fact, in
+my wording rather than the source's ("on clear nights above the poles", "the older text
+states its axiom first and plainly"). Twelve of them failed an honest re-check. The rule
+that holds: a marked sentence must be the source's wording, and the framing goes in an
+unmarked neighbour. What finally worked was to give each factual claim its own sentence
+and let the commentary sit between them.
+
+**The claim check has to be an independent measure, not the builder's own locator.** The
+evidence builder finds a quote by locating the sentence in the text. A check that reuses
+that locator verifies nothing. Run 4 checks each marked sentence by token coverage and by
+the presence of every number in the cited archived text, and reports the misses rather than
+the hits. That measure found 21 of 172 tasks unsupported where the builder saw none.
+
+**Three field shapes cost an import each.** An evidence entry's `verdict` is `supported` —
+the probability ladder belongs to the prose, not to the record. An image answer carries
+`prompt_sha256`, keyed to the prompt it answered, or the merge refuses it. Its `subject_box`
+is `[x, y, w, h]` in fractions of the image, not `[x1, y1, x2, y2]`; eleven answers were
+written in the second form and all eleven were refused.
+
+**One image per opportunity, so a failed opportunity is not a thin section.** `import_images`
+walks the opportunities and takes the best candidate of each, meaningful before weak. An
+opportunity with nothing meaningful falls back to a weak candidate, and the picture gate
+then refuses the paper for a picture nobody vouched for. The honest repair is to delete the
+opportunity, not to promote the verdict: both weak candidates in this run (a reflection
+nebula for a laboratory current filament, an L-network quiz diagram for a Smith chart)
+failed because they did not show their subject, and their sections already had a verified
+picture of their own.
+
+**Images move the paragraphs.** Embedding a figure changes `paper.md`, so the evidence
+anchors and the claim tasks are rebuilt after `images-import`, not before it. The run order
+that held is: `number`, `evidence`, `claims`, `images-export`, `images-import`, then
+`number`, `evidence`, `claims`, `check`. Skipping the second pass is what produced a
+green-looking paper whose evidence gate turned red the moment the pictures were in.
