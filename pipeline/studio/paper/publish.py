@@ -379,6 +379,11 @@ def correct(
     elif republish:
         sent_bundle, bundle = _fresh_bundle(ws)
         _upload_selected(ws, upload_names(bundle["result"]))
+        # the envelope's writer is the bundle's own writer, never the module constant:
+        # theo_publish's shape gate refuses a `result.writer` that differs from it, and a
+        # bundle whose dossier names a different researcher than the constant (every paper
+        # researched in the writing session) would be refused with it.
+        payload["writer"] = bundle["writer"]
         payload["result"] = bundle["result"]
         if ws.dossier_from.exists() and not ws.published_bundle.exists():
             payload["dossier_request_id"] = dossier_request_id(ws)

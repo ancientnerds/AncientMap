@@ -241,3 +241,59 @@ The `running` row the 18:50 note recorded is not in that state any more, and no
 non-completed row of this owner carries a `started_at` or `completed_at` from today, so
 whatever left that state was not this campaign's work: this chain writes one row per
 paper, and only rows that were `queued`.
+
+### A stamp the papers named wrongly, and a fix that stopped half way (found 2026-10-06 07:50 UTC)
+
+All four published pages carried `research_model: "MiniMax-M3"` — the pipeline's model.
+Nobody researched these papers: the research, the sources and the text were produced in
+the writing session on `MiniMax-M3.1-Flash-Preview`, which the bundle's `model` already
+named and which `published_by: Theo` says nothing about. A stamp that names the wrong
+model is worse than no stamp, so `bundle.writer_for()` was given the dossier's own
+`manifest.research.researcher` and the constant stays only as the fallback for a dossier
+that names nobody.
+
+The first attempt at correcting the four pages failed on all four, at the server:
+
+```
+error: theo_publish --correct --dry-run refused: failing gates ['shape']:
+  {'shape': {'passed': False, 'issues': ["result.writer differs from the bundle's writer"]}}
+```
+
+The cause is one line. `theo_publishing._result_issues` refuses a republish whose
+`result.writer` differs from the envelope's `writer`, and `publish.correct()` sent the
+**module constant** in the envelope while sending the bundle's own writer inside `result`.
+The two were the same object for every paper the worker wrote, so the disagreement only
+became possible once `writer_for()` made the bundle honest — the earlier fix moved half
+the distance and the half it did not move was the half the gate reads. `bundle.json` never
+had the problem: it sets the envelope's writer and `result.writer` from one value
+(`bundle.py`, `build_bundle`), which is why the first publishes went through.
+
+Changes, both at the cause:
+
+- **`correct()` sends `bundle["writer"]` on the republish path**, with the reason next to
+  it. The envelope's writer has no meaning of its own — it exists to be compared with the
+  result's, and the result's is the bundle's.
+- **`test_a_republish_envelope_carries_the_bundles_own_writer`** builds a workspace
+  whose dossier names the session model and asserts on the bytes `correct()` sends:
+  `sent["writer"] == sent["result"]["writer"] == bundle["writer"]`.
+
+The lesson is about where the test sat, not about the gate. The first fix was verified by
+a unit test on `writer_for()`'s return value, which was green while the command it was
+meant to enable could not write a single page. **A change to what a bundle says has to be
+asserted on the payload the CLI sends**, because that payload — not the helper — is what
+the server reads. A helper test that never leaves the process is evidence about a
+function, not about a paper.
+
+Cost: four papers were bundled, checked and gated locally before the write was refused, and
+the first three publishes of the campaign had already gone out with the false stamp. What
+it buys the next run: the stamp is decided once, in `writer_for`, and the republish path
+cannot contradict it.
+
+### Corrected pages (2026-10-06 07:59 UTC)
+
+Journal rows 119 to 122, one `correct` per paper, each a dry run that passed before its
+apply. `research_model` and `model` now both read `MiniMax-M3.1-Flash-Preview` on all
+four rows; slug, `published_at`, `published_by` and the image set are unchanged; each page
+carries one dated correction-log entry that names what changed. Papers 2 and 3 also
+carried the reworded sentences of the support-gate repair. IndexNow, Qdrant (7 sections)
+and the API cache ran on each write; Discord is off.

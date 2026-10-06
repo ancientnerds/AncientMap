@@ -28,6 +28,7 @@ paper_meta.json; anything else means a file changed after the check, and the pub
 from __future__ import annotations
 
 import json
+import re
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -54,6 +55,29 @@ WRITER = {
     "published": "automatic",
     "human_review": False,
 }
+
+#: A model name as it is written in a stamp. The dashes belong to the name, not to a
+#: word boundary: `MiniMax-M3.1-Flash-Preview` is one token.
+_MODEL_RE = re.compile(r"MiniMax-[A-Za-z0-9.]+(?:-[A-Za-z0-9.]+)*")
+
+
+def writer_for(dossier: Any) -> dict[str, Any]:
+    """The writer record with `research_model` naming who actually did the research.
+
+    A stamp that is wrong is worse than no stamp: the four papers of the current
+    campaign were researched and written in the writing session, and the constant
+    still named the pipeline's model. The dossier says who researched it, in
+    `manifest.research.researcher`; a dossier that does not name a model keeps the
+    constant, which is never invented.
+    """
+    data = getattr(dossier, "data", dossier) or {}
+    research = (data.get("manifest") or {}).get("research") or {}
+    named = _MODEL_RE.search(str(research.get("researcher") or ""))
+    if named is None:
+        return dict(WRITER)
+    return {**WRITER, "research_model": named.group(0)}
+
+
 #: The probative_images keys every stored paper carries (theo-worker-api map, 415 items).
 PROBATIVE_KEYS = (
     "title",
@@ -108,6 +132,7 @@ def build_bundle(ws: PaperWorkspace) -> dict[str, Any]:
     evidence = read_json(ws.evidence, "")
     hero = report["hero_image"]
     dossier = load_dossier(ws)
+    writer = writer_for(dossier)
     texts = texts_by_number(built, source_texts(ws, dossier))
     result = {
         "report": built.markdown,
@@ -122,7 +147,7 @@ def build_bundle(ws: PaperWorkspace) -> dict[str, Any]:
         "audit": report["audit"],
         "evidence": evidence,
         "corrections": [],
-        "writer": WRITER,
+        "writer": writer,
         # Per cited sentence, the reference numbers of its paragraph and the
         # quote locate_support found for it in that reference's fetched text,
         # with character offsets. The audit artefact of
@@ -132,7 +157,7 @@ def build_bundle(ws: PaperWorkspace) -> dict[str, Any]:
         # rendered report is byte-identical with and without this key.
         "sentence_evidence": build_evidence_card(built.markdown, texts),
     }
-    return {"version": 1, "request_id": ws.request_id, "writer": WRITER, "result": result}
+    return {"version": 1, "request_id": ws.request_id, "writer": writer, "result": result}
 
 
 def write_bundle(ws: PaperWorkspace) -> dict[str, Any]:
