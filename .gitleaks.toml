@@ -41,4 +41,11 @@ paths = [
     # every one a `unified_sites` uuid, none in APPLY.sql, ROLLBACK.sql, CHUNK.json or the
     # refusals.
     '''output/remediation/import_hero/.*PLAN\.jsonl''',
+    # WD2/IH, the import-hero lane's acceptance report
+    # (output/remediation/import_hero/<run>/ACCEPTANCE.json): its per-site answers are keyed by the
+    # site's `unified_sites` uuid, so the default generic-api-key rule reads the uuid itself as a
+    # key with an entropy-looking value. Same finding as PLAN.jsonl, same public identifier - found
+    # 2026-10-06 in run import-hero-2026-10-06-004, commit 2b6081fe, which blocked the SAST gate for
+    # every push afterwards.
+    '''output/remediation/import_hero/.*ACCEPTANCE\.json''',
 ]

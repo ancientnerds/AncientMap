@@ -457,6 +457,10 @@ output/remediation/import_hero/*/
 # the read-only pre-flight over all 807 targets that counted the wave at 312 fetchable. The
 # evidence of the wave's first live step, not regenerable - the pre-flight asks Commons again.
 !output/remediation/import_hero/pilot-5/
+# The fetch of all 807 targets (2026-10-06): 315 files, 534 refusals with their reason. The run's
+# own records - the manifest a later `plan --fetched` reads, and the refusal list that names every
+# site it did not serve.
+!output/remediation/import_hero/fetch-all-807/
 output/remediation/import_hero/import-hero-2026-10-05/chunk-0*/
 !output/remediation/import_hero/import-hero-2026-10-05/chunk-001/
 !output/remediation/import_hero/import-hero-2026-10-05/chunk-001-reversal/

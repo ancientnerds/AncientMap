@@ -665,6 +665,13 @@ class TestTheFetchManifest:
         with pytest.raises(IF.FetchError, match="extension"):
             IF.manifest_entry(THASOS, "Area archeologica di Herakleia", FETCH_META, _Result())
 
+    def test_a_name_the_local_filesystem_refuses_is_refused_by_name(self) -> None:
+        """Windows refuses `"` in a file name with `OSError: [Errno 22]` - measured 2026-10-06,
+        where it killed a run of 807 targets at `Makedonisches Grab Korinos "A" Dromos.webp`.
+        The rule is the Commons name verbatim, so such a file is named and refused, never renamed."""
+        with pytest.raises(IF.FetchError, match="cannot be stored"):
+            IF.local_name('Makedonisches Grab Korinos "A" Dromos.jpg')
+
     def test_the_entry_is_the_sites_own_file_and_not_another_sites(self) -> None:
         """Two sites may link the same Commons file; the manifest is keyed by site, so the entry
         must carry the file it fetched, never a neighbour's."""
@@ -747,6 +754,40 @@ class TestTheFetchRun:
         with pytest.raises(IF.FetchError, match="1600x812"):
             IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
         assert list(tmp_path.rglob("*.webp")) == []
+
+    def test_a_name_the_filesystem_refuses_never_reaches_the_downloader(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """The name is known before anything is fetched, so the refusal costs no download and
+        leaves no file: 3 of the wave's 807 targets, 2 of them otherwise fetchable."""
+        _stub_downloader(monkeypatch)
+        with pytest.raises(IF.FetchError, match="cannot be stored"):
+            IF.fetch_site(THASOS, 'Makedonisches Grab Korinos "A" Dromos.jpg', tmp_path)
+        assert list(tmp_path.rglob("*.webp")) == []
+
+    def test_a_local_filesystem_error_does_not_take_the_manifest_with_it(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """One site must never end a wave of several hundred. `download_image` writes with
+        `open("xb")`, so a name the filesystem refuses raises `OSError` - which is neither a
+        `FetchError` nor a `DownloadError` and killed the 807-target run (measured 2026-10-06)."""
+        from pipeline import wiki_image_downloader as DL
+
+        _stub_downloader(monkeypatch)
+        download = DL.download_image
+
+        def flaky(url: str | None, dest: Path, width: int) -> _Result:
+            if "Broken" in dest.name:
+                raise OSError(22, "Invalid argument", str(dest))
+            return download(url, dest, width)
+
+        monkeypatch.setattr(DL, "download_image", flaky)
+        manifest, failures = IF.fetch_manifest(
+            [(THASOS, FETCH_TITLE), (SMALL, "Broken_gate.jpg")], tmp_path, delay_s=0.0
+        )
+        assert sorted(manifest) == [THASOS]
+        assert failures[0][:2] == (SMALL, "Broken_gate.jpg")
+        assert "Invalid argument" in failures[0][2]
 
     def test_one_site_that_fails_does_not_take_the_manifest_with_it(
         self, tmp_path: Path, monkeypatch

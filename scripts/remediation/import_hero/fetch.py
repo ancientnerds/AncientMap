@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -53,6 +54,12 @@ COMMONS_FILE_PAGE = "https://commons.wikimedia.org/wiki/File%3A"
 #: cannot drift apart.
 BATCH_TITLES = 50
 
+#: The characters a Windows file name may not hold (`< > : " | ? *` and the control characters).
+#: Measured on this wave: 3 of the 807 targets, two of them otherwise fetchable - one of them
+#: `Makedonisches Grab Korinos "A" Dromos.jpg`, which raised `OSError: [Errno 22]` inside
+#: `download_image`'s `open("xb")` and ended the run.
+FORBIDDEN_IN_NAME = re.compile(r'[<>:"|?*\x00-\x1f]')
+
 
 class FetchError(ImportHeroError):
     """A download cannot become a manifest entry. Named, never repaired."""
@@ -62,12 +69,22 @@ def local_name(commons_file: str) -> str:
     """The file's local name: the Commons name verbatim, only the extension becomes `.webp`.
 
     Refuses a name with no extension - there is nothing to swap, and guessing `.webp` on a name
-    that has none would write a file the DB cannot name.
+    that has none would write a file the DB cannot name. Refuses a name the filesystem may not
+    hold, too: the rule is verbatim, so a name Windows rejects is named and refused rather than
+    rewritten into something the owner never linked.
     """
     stem, dot, extension = commons_file.rpartition(".")
     if not dot or not stem or not extension:
         raise FetchError(f"{commons_file!r} has no extension to swap for .webp")
-    return f"{stem}.webp"
+    name = f"{stem}.webp"
+    forbidden = FORBIDDEN_IN_NAME.search(name)
+    if forbidden:
+        raise FetchError(
+            f"{name!r} cannot be stored as a local file name: {forbidden.group()!r} is one of the "
+            f"characters the filesystem refuses in a name, and the rule is the Commons name "
+            f"verbatim - refused by name, not renamed"
+        )
+    return name
 
 
 def manifest_entry(
@@ -203,8 +220,10 @@ def fetch_manifest(
     The downloads run serially at the downloader's own pace (`WIKIPEDIA_DELAY`, the Wikimedia robot
     policy) unless the caller names one. One site that fails does not take the rest with it: the
     refusal is returned with its site and file, and the plan refuses those sites by name on the next
-    run. A run where *nothing* was fetched is refused outright - the plan would then keep refusing
-    every site of the wave, and a manifest of zero rows would look like a finished fetch.
+    run. `OSError` is one of those failures - it is what a name the local filesystem refuses raises
+    inside `download_image`, and it ended a run of 807 targets on 2026-10-06. A run where *nothing*
+    was fetched is refused outright - the plan would then keep refusing every site of the wave, and a
+    manifest of zero rows would look like a finished fetch.
     """
     from pipeline import wiki_image_downloader as DL
 
@@ -214,7 +233,7 @@ def fetch_manifest(
     for site_id, commons_file in targets:
         try:
             manifest[site_id] = fetch_site(site_id, commons_file, root)
-        except (FetchError, DL.DownloadError) as exc:
+        except (FetchError, DL.DownloadError, OSError) as exc:
             failures.append((site_id, commons_file, f"the fetch failed: {exc}"))
         time.sleep(pace)
     if not manifest:
