@@ -279,7 +279,11 @@ def test_a_run_with_failures_exits_non_zero_and_lists_them(monkeypatch):
 # --------------------------------------------------------------------------------------
 
 SITE = "abcdef12-0000-4000-8000-000000000001"
-SITE_ROW = {"id": SITE, "name": "Temple of Test", "source_url": "https://en.wikipedia.org/wiki/Temple_of_Test"}
+SITE_ROW = {
+    "id": SITE,
+    "name": "Temple of Test",
+    "source_url": "https://en.wikipedia.org/wiki/Temple_of_Test",
+}
 GATE = "https://upload.wikimedia.org/wikipedia/commons/a/ab/Temple_gate.jpg"
 GATE_TITLE = "File:Temple_gate.jpg"  # the media-list spelling: underscores
 UTM = "?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=original"
@@ -301,6 +305,80 @@ def _media_list() -> dict[str, Any]:
             }
         ]
     }
+
+
+def test_a_multi_valued_attribution_is_read_from_the_list_commons_answers(monkeypatch):
+    """A multi-valued `extmetadata` field arrives as a list of `{value}` objects, not as one.
+
+    Measured 2026-10-06 on the import-hero wave: `fetch_image_metadata_batch` raised
+    `'list' object has no attribute 'get'` on two consecutive runs over the first 50 of 807
+    targets, and the same 50 answered cleanly in an isolated call - the shape depends on the file's
+    wikitext, not on the batch. A crash here kills a wave of several hundred files, so both shapes
+    have to be read.
+    """
+    _wikipedia(monkeypatch)
+    multi = {
+        "Artist": [
+            {"value": '<a href="//commons.wikimedia.org/wiki/User:Jane">Jane</a>'},
+            {"value": '<a href="//commons.wikimedia.org/wiki/User:John">John</a>'},
+        ],
+        "License": [{"value": "CC BY-SA 4.0"}],
+        "LicenseUrl": [
+            {"value": "https://creativecommons.org/licenses/by-sa/4.0"},
+            {"value": "https://creativecommons.org/licenses/by-sa/4.0/de/deed.xhtml"},
+        ],
+    }
+    _wikipedia_answer(monkeypatch, multi)
+
+    got = D.fetch_image_metadata_batch([GATE_TITLE])
+
+    meta = got[GATE_TITLE]
+    assert meta["author"] == "JaneJohn"
+    assert meta["author_url"] == "https://commons.wikimedia.org/wiki/User:Jane"
+    assert meta["license"] == "CC BY-SA 4.0"
+    assert meta["license_url"] == "https://creativecommons.org/licenses/by-sa/4.0"
+
+
+def test_a_multipage_files_attribution_list_is_read_from_its_first_entry(monkeypatch):
+    """MediaWiki answers `extmetadata` as a **list** when the file carries more than one
+    `imageinfo` entry - a multipage PDF among the wave's targets.
+
+    Measured 2026-10-06 on the import-hero pre-flight over 807 targets: the first 50 titles parsed
+    until batch 3, where `ext` itself arrived as a list and the parser raised
+    `'list' object has no attribute 'get'`. The file's own attribution is the first entry.
+    """
+    _wikipedia(monkeypatch)
+    _wikipedia_answer(
+        monkeypatch,
+        [
+            {"Artist": {"value": '<a href="//commons.wikimedia.org/wiki/User:Jane">Jane</a>'}},
+            {"Artist": {"value": '<a href="//commons.wikimedia.org/wiki/User:John">John</a>'}},
+        ],
+    )
+
+    got = D.fetch_image_metadata_batch([GATE_TITLE])
+
+    meta = got[GATE_TITLE]
+    assert meta["author"] == "Jane"
+    assert meta["author_url"] == "https://commons.wikimedia.org/wiki/User:Jane"
+
+
+def _wikipedia_answer(monkeypatch, extmetadata):
+    """`_wikipedia`'s transport, with one `extmetadata` of our own on every page."""
+    asked: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(request)
+        url = request.url
+        assert (url.host, url.path) == ("en.wikipedia.org", "/w/api.php"), f"not asked: {url}"
+        answer = _imageinfo(url.params["titles"].split("|"))
+        for page in answer["query"]["pages"].values():
+            page["imageinfo"][0]["extmetadata"] = extmetadata
+        return httpx.Response(200, json=answer)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler), follow_redirects=True)
+    monkeypatch.setattr(D, "_http_client", client)
+    return asked
 
 
 def _imageinfo(titles: list[str]) -> dict[str, Any]:
@@ -340,7 +418,9 @@ def _wikipedia(monkeypatch) -> list[httpx.Request]:
             return httpx.Response(200, json=_media_list())
         assert (url.host, url.path) == ("en.wikipedia.org", "/w/api.php"), f"not asked: {url}"
         if url.params["prop"] == "pageprops":
-            return httpx.Response(200, json={"query": {"pages": {"7": {"title": "Temple of Test"}}}})
+            return httpx.Response(
+                200, json={"query": {"pages": {"7": {"title": "Temple of Test"}}}}
+            )
         assert url.params["prop"] == "imageinfo", f"not asked: {url}"
         return httpx.Response(200, json=_imageinfo(url.params["titles"].split("|")))
 
@@ -399,10 +479,16 @@ class FakeSession:
                 raise IntegrityError(
                     "INSERT INTO wiki_images",
                     {},
-                    Exception('duplicate key value violates unique constraint "uq_wiki_image_site_url"'),
+                    Exception(
+                        'duplicate key value violates unique constraint "uq_wiki_image_site_url"'
+                    ),
                 )
             self.db.rows.append(
-                {"site_id": item.site_id, "original_url": item.original_url, "filename": item.filename}
+                {
+                    "site_id": item.site_id,
+                    "original_url": item.original_url,
+                    "filename": item.filename,
+                }
             )
             self.db.inserted.append(item)
 
