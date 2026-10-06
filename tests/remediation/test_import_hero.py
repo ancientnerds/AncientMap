@@ -22,6 +22,7 @@ for _p in (REPO, REPO / "scripts" / "remediation"):
 from gallery_audit.chunk_writer import ChunkError  # noqa: E402
 from import_hero import fetch as IF  # noqa: E402
 from import_hero import plan as IH  # noqa: E402
+from import_hero import run as IR  # noqa: E402
 from import_hero import verify as IV  # noqa: E402
 from served_image import state as ST  # noqa: E402
 
@@ -672,6 +673,12 @@ class TestTheFetchManifest:
         assert entry["original_url"] == FETCH_META["original_url"]
 
 
+def _stem_key(name: str) -> str:
+    """One file under both of the lane's spellings: MediaWiki writes titles with spaces, the upload
+    URL with underscores, and a target reaches the stub as one and is stored as the other."""
+    return Path(name).stem.replace(" ", "_").lower()
+
+
 def _stub_downloader(monkeypatch, fail_file: str | None = None) -> None:
     """Stand in for the Commons calls. `fetch_site` must be testable without the network, and the
     stub is where a refusal is produced: a download whose file Commons does not hold."""
@@ -681,9 +688,7 @@ def _stub_downloader(monkeypatch, fail_file: str | None = None) -> None:
         return {title: dict(FETCH_META) for title in titles}
 
     def download(url: str | None, dest: Path, width: int) -> _Result:
-        # the stem, because `local_name` swaps the extension: "Broken_gate.jpg" is stored as
-        # "Broken_gate.webp" and a match on the whole name would never fire
-        if fail_file is not None and Path(fail_file).stem in dest.stem:
+        if fail_file is not None and _stem_key(fail_file) in _stem_key(dest.name):
             raise DL.DownloadError(url, f"{fail_file} is gone")
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(b"RIFF....WEBP")
@@ -757,3 +762,101 @@ class TestTheFetchRun:
         assert path.is_file() and len(digest) == 64
         with pytest.raises(IF.FetchError, match="already"):
             IF.write_manifest(path, {THASOS: {"filename": "b.webp"}})
+
+
+class TestTheFetchCommand:
+    """`run.py fetch`: the loop behind four arguments, writing the manifest a later `plan --fetched`
+    reads. Commons is not a test fixture - the downloader is the stub above."""
+
+    def _run_dir(self, tmp_path: Path) -> Path:
+        run = tmp_path / "import-hero-2026-10-05-004"
+        run.mkdir()
+        (run / IR.CLAIMS).write_text(
+            json.dumps(
+                {
+                    THASOS: {
+                        "image": f"https://upload.wikimedia.org/wikipedia/commons/1/1e/{FETCH_FILE}"
+                    },
+                    SMALL: {
+                        "image": "https://upload.wikimedia.org/wikipedia/commons/2/2f/Broken_gate.jpg"
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        (run / IR.REFUSALS).write_text(
+            "".join(
+                json.dumps(row, sort_keys=True) + "\n"
+                for row in (
+                    {"site_id": THASOS, "reason": "local_file_too_small", "detail": "800x600"},
+                    {"site_id": SMALL, "reason": "local_file_too_small", "detail": "800x600"},
+                    {"site_id": HIDDEN, "reason": "no_target_row", "detail": ""},
+                )
+            ),
+            encoding="utf-8",
+        )
+        return run
+
+    def _fetch(self, capsys, tmp_path: Path, *extra: str) -> tuple[int, dict, Path]:
+        run = self._run_dir(tmp_path)
+        code = IR.main(
+            [
+                "fetch",
+                "--run-dir",
+                str(run),
+                "--root",
+                str(tmp_path / "images"),
+                "--delay",
+                "0",
+                *extra,
+            ]
+        )
+        return code, json.loads(capsys.readouterr().out), run
+
+    def test_the_command_writes_the_manifest_and_names_what_it_could_not_fetch(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        _stub_downloader(monkeypatch, fail_file="Broken_gate.jpg")
+        code, printed, run = self._fetch(capsys, tmp_path)
+        assert code == 0
+        manifest = json.loads((run / IR.FETCHED).read_text(encoding="utf-8"))
+        assert sorted(manifest) == [THASOS]
+        assert manifest[THASOS]["filename"] == "Area archeologica di Herakleia e Siris - 3.webp"
+        failures = [
+            json.loads(line)
+            for line in (run / IR.FETCH_FAILURES).read_text(encoding="utf-8").splitlines()
+            if line
+        ]
+        assert [row["site_id"] for row in failures] == [SMALL]
+        # the title form it was fetched under, the one the manifest and the plan both speak
+        assert failures[0]["commons_file"] == "Broken gate.jpg"
+        assert printed["fetched"] == 1 and printed["failed"] == 1
+        assert (
+            tmp_path / "images" / THASOS[:8] / "Area archeologica di Herakleia e Siris - 3.webp"
+        ).is_file()
+
+    def test_a_limit_fetches_the_first_targets_only(
+        self, tmp_path: Path, monkeypatch, capsys
+    ) -> None:
+        """The pilot before a wave of several hundred: a few files prove the path, the rest follows.
+        The pilot's manifest goes elsewhere, because a manifest is written once per path and the
+        wave's own still has to fit into this run directory."""
+        _stub_downloader(monkeypatch)
+        pilot = tmp_path / "pilot" / IR.FETCHED
+        code, printed, run = self._fetch(capsys, tmp_path, "--limit", "1", "--out", str(pilot))
+        assert code == 0 and printed["targeted"] == 1 and printed["fetched"] == 1
+        assert json.loads(pilot.read_text(encoding="utf-8")) != {}
+        assert not (run / IR.FETCHED).exists()
+
+    def test_a_run_without_its_claims_is_refused_by_name(self, tmp_path: Path, capsys) -> None:
+        code = IR.main(
+            [
+                "fetch",
+                "--run-dir",
+                str(tmp_path / "no-such-run"),
+                "--root",
+                str(tmp_path / "images"),
+            ]
+        )
+        assert code == 1
+        assert "does not exist" in capsys.readouterr().err

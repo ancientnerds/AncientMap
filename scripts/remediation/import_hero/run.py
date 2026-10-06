@@ -1,7 +1,8 @@
-"""The import-hero lane's three commands: `plan`, `accept`, `remainder`.
+"""The import-hero lane's four commands: `plan`, `fetch`, `accept`, `remainder`.
 
 ```bash
 ./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py plan     --run-dir $R
+./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py fetch    --run-dir $R --root $IMAGES
 ./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py accept   --run-dir $R
 ./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py remainder --run-dir $R
 ```
@@ -9,6 +10,12 @@
 `plan` is read-only against production and writes only into the run directory: the read, the join
 and the chunks the shared writer (`gallery_audit.chunk_writer`) then applies, five steps each, in
 section 3.7 of `docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md`.
+
+`fetch` is the step before those sites can be planned at all: the 1600 px derivative of every file
+the plan refused as `local_file_too_small`. It reads the run's own claims and refusals, downloads
+into the tree the caller names - the offsite copy, never the VPS, which is a separate transfer -
+and writes the manifest that `plan --fetched` reads. Nothing else in this module touches the
+network.
 
 `accept` is the other half: it reads production **again**, after the chunks landed, and asks the
 owner's three questions per planned site. It never reuses the plan's read - that one describes what
@@ -18,8 +25,8 @@ production looked like before, which is exactly what an acceptance cannot settle
 is right for a writer and useless as a completion number. This reports the empty plan and what it
 still refuses.
 
-This module is the lane's thin glue; the tested surface is `plan`, `read` and `verify` (like
-`served_image/run.py`, whose commands are covered the same way).
+This module is the lane's thin glue; the tested surface is `plan`, `read`, `verify` and `fetch`
+(like `served_image/run.py`, whose commands are covered the same way).
 """
 
 from __future__ import annotations
@@ -38,6 +45,7 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
 
 from served_image import state as ST  # noqa: E402
 
+from import_hero import fetch as IF  # noqa: E402
 from import_hero import plan as IH  # noqa: E402
 from import_hero import read as RD  # noqa: E402
 from import_hero import verify as IV  # noqa: E402
@@ -47,6 +55,9 @@ ACCEPTANCE_READ = "VERIFY_READ.json"
 ACCEPTANCE = "ACCEPTANCE.json"
 REMAINDER = "REMAINDER.json"
 CLAIMS = "IMPORT_CLAIMS.json"
+REFUSALS = "IMPORT_HERO_REFUSALS.jsonl"
+FETCHED = "FETCHED.json"
+FETCH_FAILURES = "FETCH_FAILURES.jsonl"
 
 
 def _print(value: Any) -> None:
@@ -59,6 +70,16 @@ def _load(path: Path) -> dict[str, Any]:
             f"{path} does not exist - run `plan --run-dir {path.parent}` first"
         )
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        raise IH.ImportHeroError(
+            f"{path} does not exist - run `plan --run-dir {path.parent}` first"
+        )
+    return [
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
 
 
 def _read_once(run: Path) -> tuple[dict[str, Any], str]:
@@ -159,6 +180,54 @@ def cmd_remainder(run: Path) -> int:
     return 0
 
 
+def cmd_fetch(
+    run: Path,
+    *,
+    root: Path,
+    out: Path | None = None,
+    limit: int | None = None,
+    delay_s: float | None = None,
+) -> dict[str, Any]:
+    """The 1600 px fetch for the `local_file_too_small` refusals of this run.
+
+    Every target lands in `root`, which the caller names: the offsite copy is where this lane reads
+    its pictures (runbook 3.2), the VPS copy is what production serves, and the transfer between
+    them is a separate, explicit step - nothing here writes to the VPS.
+
+    `limit` takes the first N targets, for the pilot before a wave of several hundred, and `out`
+    writes the manifest somewhere else than the run directory, because a manifest is written once
+    per path and a pilot has to leave room for the wave's own.
+    """
+    targets = IF.plan_targets(_load(run / CLAIMS), _load_jsonl(run / REFUSALS))
+    if limit is not None:
+        targets = targets[:limit]
+    manifest, failures = IF.fetch_manifest(targets, root, delay_s=delay_s)
+    path = out or (run / FETCHED)
+    digest = IF.write_manifest(path, manifest)
+    path.with_name(FETCH_FAILURES).write_text(
+        "".join(
+            json.dumps(
+                {"site_id": site_id, "commons_file": commons_file, "why": why},
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            + "\n"
+            for site_id, commons_file, why in failures
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return {
+        "run_id": run.name,
+        "targeted": len(targets),
+        "fetched": len(manifest),
+        "failed": len(failures),
+        "fetched_json": str(path),
+        "fetched_sha256": digest,
+        "root": str(root),
+    }
+
+
 def _stamp(run: Path) -> str:
     """The run stamp every journal row of this wave carries: the run directory's own name."""
     return run.name
@@ -170,6 +239,7 @@ def main(argv: list[str] | None = None) -> int:
     commands: dict[str, argparse.ArgumentParser] = {}
     helps = {
         "plan": "read production, join the 2025 import, write the chunks (writes only into R)",
+        "fetch": "download the 1600 px files the plan refused as too small, into --root",
         "accept": "read production again and ask the three questions per planned site",
         "remainder": "what the lane would still write over this run's read, and what it refuses",
     }
@@ -179,8 +249,23 @@ def main(argv: list[str] | None = None) -> int:
     commands["plan"].add_argument("--import", dest="source", type=Path, default=DEFAULT_IMPORT)
     commands["plan"].add_argument("--sites-per-chunk", type=int, default=100)
     commands["plan"].add_argument("--fetched", type=Path, default=None)
+    commands["fetch"].add_argument("--root", required=True, type=Path)
+    commands["fetch"].add_argument("--out", type=Path, default=None)
+    commands["fetch"].add_argument("--limit", type=int, default=None)
+    commands["fetch"].add_argument("--delay", dest="delay_s", type=float, default=None)
     args = parser.parse_args(argv)
     try:
+        if args.command == "fetch":
+            _print(
+                cmd_fetch(
+                    args.run_dir,
+                    root=args.root,
+                    out=args.out,
+                    limit=args.limit,
+                    delay_s=args.delay_s,
+                )
+            )
+            return 0
         if args.command == "accept":
             return cmd_accept(args.run_dir)
         if args.command == "remainder":
