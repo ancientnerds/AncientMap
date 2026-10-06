@@ -515,6 +515,15 @@ which is not a hero move, and a reversal that restores "no image" is a faithful 
 guard would otherwise refuse (measured 2026-10-05: 35 of 1,555 sites, and the pilot's 3 of 100 that
 made `--rehearse-rollback` stop). The guard stays strict; the exception is on the record.
 
+**What the wave is proven at, in four layers** (measured 2026-10-06): the acceptance's 87 of 87 on
+a fresh read; 147 of 147 files verified against their manifest inside the api container; **87 of 87
+files over HTTP - `200`, the manifest's exact `Content-Length`, `image/webp`, including the 78 whose
+file name carries a space**; and 8 of 8 sampled site pages naming the inserted file. The last layer
+is the one that catches what the container check cannot: a name nginx refuses or a URL a browser
+mangles. The canonical page form is the one `sitemap-sites.xml` lists,
+`/sites/<country slug>/<name slug>-<site_id[:8]>`; `sitemap-sites.xml` holds exactly 4,900 URLs, the
+shown curated sites.
+
 **The acceptance** (`import_hero/verify.py`) asks production, never the plan: for every site of the
 wave's chunks, does the page serve the file the import links, does the thumbnail name that row, and
 is there exactly one live hero row. It writes `ACCEPTANCE.json` and names every site that fails a
