@@ -62,6 +62,60 @@ def test_falls_back_to_a_small_image_when_nothing_qualifies(tmp_path, monkeypatc
     assert hero["src"] in (a, b)
 
 
+def test_portrait_never_becomes_the_banner_over_a_landscape_image(tmp_path, monkeypatch):
+    """The witness-only-channel failure: a 960x1440 portrait photograph of a
+    person ran as the banner because the studio's measured sizes were ignored,
+    so the landscape bonus was 0 for every image and title relevance alone
+    decided. Orientation is a tier now, not a bonus (owner 2026-10-06).
+    """
+    portrait = _write(tmp_path, monkeypatch, "portrait.jpg", (960, 1440))
+    landscape = _write(tmp_path, monkeypatch, "landscape.jpg", (960, 600))
+    # Only the portrait carries title words, and it is also the earlier image,
+    # so relevance and position both point at it. Format has to beat that.
+    entries = [
+        {**_entry(portrait, "Alain Aspect Nobel Prize physics"), "verified": True},
+        {**_entry(landscape, "detector array"), "verified": True},
+    ]
+    assert pick_hero_image("The witness-only channel and what physics allows", entries)["src"] == (
+        landscape
+    )
+
+
+def test_a_paper_of_portraits_only_still_gets_a_banner(tmp_path, monkeypatch):
+    """Degrading to no banner at all would be worse than a portrait one."""
+    a = _write(tmp_path, monkeypatch, "a.jpg", (800, 1200))
+    b = _write(tmp_path, monkeypatch, "b.jpg", (900, 1300))
+    hero = pick_hero_image("Any", [_entry(a, "x"), _entry(b, "y")])
+    assert hero is not None
+    assert hero["src"] in (a, b)
+
+
+def test_measured_size_on_the_entry_decides_without_the_file(tmp_path, monkeypatch):
+    """The studio measures every accepted candidate and stores the size in
+    selected.json, but the files live in the workspace and not under the
+    repo's public/data. Reading the file alone reported (0, 0) there and lost
+    the orientation tier entirely.
+    """
+    monkeypatch.setattr("pipeline.lyra.hero_picker._IMAGES_ROOT", tmp_path / "absent")
+    entries = [
+        {
+            **_entry("/data/research-images/paper/portrait.jpg", "Nobel Prize physics"),
+            "width": 960,
+            "height": 1440,
+            "verified": True,
+        },
+        {
+            **_entry("/data/research-images/paper/landscape.jpg", "detector array"),
+            "width": 960,
+            "height": 600,
+            "verified": True,
+        },
+    ]
+    hero = pick_hero_image("The witness-only channel and what physics allows", entries)
+    assert hero is not None
+    assert hero["src"].endswith("landscape.jpg")
+
+
 def test_min_width_is_above_thumbnail_territory():
     assert HERO_MIN_WIDTH >= 600
 
