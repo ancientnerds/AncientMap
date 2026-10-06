@@ -701,13 +701,76 @@ judges one twice, leaves one unjudged or uses an unknown verdict lands in
 
 ```bash
 $PY scripts/remediation/candidate_search/judge_run.py judge-export  --run-dir <run>          # images + questions
-$PY scripts/remediation/candidate_search/judge_run.py judge-import  --run-dir <run> --handoff <H>
-$PY scripts/remediation/candidate_search/judge_run.py write-targets --run-dir <run>          # depicts -> targets
+$PY scripts/remediation/candidate_search/judge_run.py judge-import  --run-dir <run>          # the batch folders' answers -> VERDICTS
 ```
 
-After `write-targets` the wave is an ordinary INSERT wave: `import_hero/run.py fetch` takes the
-`TARGETS.jsonl` pairs, and `insert-plan`, `insert_writer.py` and `insert-accept` are the same five
-writer steps and the same acceptance every other write of this project used.
+`judge-import` reads every `<run>/<batch_id>/<site_id>.answer.json` beside the question it answers,
+so an agent that never wrote a file is not half-answered - it is `not_answered` by name. The full
+wave is below, after the row rule.
+
+**What the judgement measured, over the run's own first 24 sites** (190 candidates, one verdict
+each, run `candidates-2026-10-06`, read `b053ac17`): **55 `depicts`, 84 `other_site`, 51
+`region_or_type`** - a precision of **29 %**, and **9 of 24 sites** with at least one picture of
+itself. The eight-site pilot read 18 % and one site in four; the misses are not near misses either
+(*Gonnus* returned three pictures of Mars, *Cochapata* two Mars-maps and a view of a lagoon).
+
+**The export paces itself, and the `PACE` it defined was dead.** `judge_run.py` declared
+`PACE = 1.0` and never read it: the export's client was a bare `httpx.Client`, so the renderings
+went out back to back. The pilot's 190 images hid that; the full run asks for **5,809**, and
+Wikimedia's robot policy asks for serial requests. The failure would have been quiet - a `HTTP 429`
+is a non-200, `judge.download` records it as a **refused candidate**, and the site loses a picture
+it could have had, by name, for a reason that was never about the picture. `PacedDownloads` is
+`Commons` itself with the search stage's pacing; only the refusal handling differs, because here a
+non-200 is an answer rather than an exception. **And `judge-export` writes its prompts only after
+it has downloaded every candidate** - the batch folders grow in one step at the end, so a run's
+first questions cannot be answered before its last picture is on disk.
+
+**The INSERT wave of a candidate run needed three things the runbook claimed and the code did not
+have.** `TARGETS.jsonl` is a judgement's result; the INSERT lane reads two other files, and until
+2026-10-06 only the 2025 import wrote them:
+
+* `judge_run.py insert-claims --run-dir <candidate run> --insert-run <INSERT run>` writes
+  `IMPORT_CLAIMS.json` (the URL of the file the judge chose - the fetch reads the Commons file out
+  of it) and the `no_target_row` refusal that names the site. Without it the fetch finds no import
+  picture in the claims and refuses the wave by name. Claims are **merged, never replaced**: a
+  second claim for one site is refused by name instead of overwriting the first.
+* `import_hero/run.py read --run-dir <INSERT run>` writes that run's `READ.json`, **once** - the
+  import lane gets it from `fetch --start`, which would also have fetched the import's own 417
+  targets, so a prepared wave has no other way to get one.
+* The row's journalled `reason` and evidence `source` are read **out of the refusal** that named
+  the site. Nothing in a candidate wave came from the 2025 import, and a journal row signed with the
+  import's name is not an audit.
+
+**The row rule, and what it had to be measured against.** `insert.plan` refused all nine targets as
+`no_row_at_all`: *"the owner decided on 2026-10-05 (18:32) that such a site keeps its
+`thumbnail_url` and gets no gallery row"*. That reason holds where a `thumbnail_url` exists. The
+candidate search's population is the other class: **1,144 of the 4,900 shown sites have neither a
+row nor a `thumbnail_url`**, so they show nothing at all (measured on `b053ac17`). **Owner decision
+2026-10-06:** those get their first row; the 150 sites that keep a thumbnail_url of their own are
+untouched, and their refusal keeps the old wording and its date.
+
+```bash
+$PY scripts/remediation/candidate_search/judge_run.py judge-export   --run-dir <run>          # images + questions
+$PY scripts/remediation/candidate_search/judge_run.py judge-import   --run-dir <run>          # answers -> VERDICTS
+$PY scripts/remediation/candidate_search/judge_run.py write-targets  --run-dir <run>          # depicts -> TARGETS
+$PY scripts/remediation/candidate_search/judge_run.py insert-claims  --run-dir <run> --insert-run $I
+$PY $IH/run.py read          --run-dir $I
+$PY $IH/run.py fetch         --run-dir $I --root $OFFSITE --target insert
+$PY $IH/run.py insert-plan   --run-dir $I
+$PY $IH/insert_writer.py $I/chunk-001 --check --rehearse --apply --readback --rehearse-rollback
+$PY $IH/run.py insert-accept --run-dir $I
+```
+
+**Applied 2026-10-06, run `insert-2026-10-06-001` (the first wave of this lane's candidate
+search):** 9 targets, **7 files fetched**, 2 refused by name by the credit rule of 2026-10-05
+(17:43) - `Apazzu` carries no `author_url`, `King's apartments Apadana Susa` no `license_url`. One
+chunk, **7 rows over 7 sites, 105 journal rows**, all five writer steps green (`plan = journal =
+data`, 105 rows, both ways). Acceptance **`ok: true`** on the read `d86789d3` (2026-10-06T20:51:54Z):
+7 sites, one hero each, the thumbnail follows the row. The 7 files were verified **byte-exact on
+the offsite tree, after the transfer, and inside the api container** (0 missing, 0 size mismatches;
+the served tree at 50,246 `.webp`), and all **7/7 live API answers point at the new file and serve
+its recorded byte count**. The two refusals are named in `FETCH_FAILURES.jsonl` and in the plan's
+`INSERT_REFUSALS.jsonl` - neither site gets a picture from this wave.
 
 ### 3.7.2 The floor the owner lowered (2026-10-06), and exactly what it released
 
