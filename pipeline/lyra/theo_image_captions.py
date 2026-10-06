@@ -156,14 +156,31 @@ def build_caption(cand: ImageCandidate, rationale: str, verified: bool = True) -
     but intentionally NOT rendered — readers don't care about CC BY-SA 4.0,
     and the [Source] link below the caption takes them to the original image
     page where the license is shown in context.
+
+    Title and artist, like the description, must be Latin script to be rendered:
+    a Commons uploader name in another script ("ترجمان05") would otherwise put
+    non-Latin script into the paper's prose and fail the artifact gate's
+    language-bleed check, which holds the finished paper (2026-10-06: the
+    Quantum-Zeno paper, on the neuron diagram's artist field). A dropped artist
+    is still credited through the source label and the [Source] link to the file
+    page, which names the uploader.
     """
-    lead = _sanitize_caption_field(_clean_title(cand.title)) or "Untitled image"
+    # A title or artist in another script is third-party metadata, not English
+    # prose: the artifact gate reads it as language bleed and holds the finished
+    # paper (see the description branch below for the same rule). Such a title
+    # falls back to the neutral lead the empty case already uses; such an artist
+    # is dropped and the source label plus the [Source] link carry the credit,
+    # because the linked file page still names the uploader.
+    lead = _sanitize_caption_field(_clean_title(cand.title))
+    if contains_non_latin_script(lead):
+        lead = ""
+    lead = lead or "Untitled image"
     if not verified:
         lead = f"Illustration: {lead}"
 
     attribution: list[str] = []
     artist_clean = _sanitize_caption_field(cand.artist or "")
-    if artist_clean:
+    if artist_clean and not contains_non_latin_script(artist_clean):
         attribution.append(artist_clean)
     attribution.append(_SOURCE_LABEL.get(cand.source, cand.source.title()))
     photo_line = " / ".join(attribution)

@@ -190,6 +190,39 @@ def test_caption_keeps_latin_source_description():
     assert "Bronze Age sky disc found near Nebra" in cap
 
 
+def test_caption_drops_non_latin_artist_and_keeps_the_source_credit():
+    """A Commons uploader name in another script is not English prose.
+
+    It landed in the paper's `Photo:` line on 2026-10-06 (the Quantum-Zeno
+    paper, neuron diagram "Neuron ar.JPG", artist "ترجمان05") and failed the
+    artifact gate's language-bleed check. The credit survives through the
+    source label and the [Source] link, which point at the file page naming
+    the uploader.
+    """
+    c = _cand(title="Neuron ar", artist="ترجمان05")
+    cap = build_caption(c, rationale="A diagram of a nerve cell and its parts.")
+    assert "ترجمان" not in cap
+    assert "Photo: Wikimedia Commons" in cap
+    assert "A diagram of a nerve cell and its parts." in cap
+
+
+def test_caption_drops_a_non_latin_title_but_keeps_the_rationale():
+    """The title lead is prose too; the same rule, the same neutral fallback."""
+    c = _cand(title="神经网络", artist="Necati AKSU")
+    cap = build_caption(c, rationale="A diagram of a nerve cell and its parts.")
+    assert "神经网络" not in cap
+    assert cap.startswith("*Untitled image.")
+    assert "Photo: Necati AKSU" in cap
+
+
+def test_caption_keeps_latin_title_and_artist():
+    """The non-Latin rule must not cost us ordinary titles and artists."""
+    c = _cand(title="Complete neuron cell diagram", artist="Necati AKSU")
+    cap = build_caption(c, rationale="A diagram of a nerve cell and its parts.")
+    assert "Complete neuron cell diagram" in cap
+    assert "Photo: Necati AKSU" in cap
+
+
 def test_caption_marks_an_unverified_image_as_illustration():
     """`weak`-verdict images embed, but must never read as evidence.
 
