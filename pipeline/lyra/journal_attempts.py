@@ -25,11 +25,20 @@ from sqlalchemy import text as sa_text
 
 logger = logging.getLogger(__name__)
 
-#: Attempts per covered week. Was MAX_ARTICLE_ATTEMPTS in orchestrator.py.
-MAX_ATTEMPTS = 3
+#: Attempts per covered week. Was MAX_ARTICLE_ATTEMPTS in orchestrator.py, then
+#: 3 — spent within two hours on 2026-10-06: three deploys, three attempts, and
+#: a week with no journal. A deploy kills the run and a killed run has already
+#: spent its attempt, so the budget has to survive the deploys of a normal
+#: working day, not just the failures of the pipeline.
+MAX_ATTEMPTS = 8
 #: Minimum spacing between two attempts. A journal run takes hours, so this
 #: only separates retries of runs that failed fast.
 RETRY_INTERVAL_S = 1800
+
+#: Weeks this process has already refused for a spent budget, so the refusal is
+#: logged once instead of once a minute until the window closes. A restart
+#: forgets it and says so again — that is the useful moment to repeat it.
+_spent_budget_logged: set[date] = set()
 
 
 def may_attempt(
@@ -46,6 +55,11 @@ def may_attempt(
     if last_attempt_at is None:
         return True
     return (now - last_attempt_at).total_seconds() >= retry_interval_s
+
+
+def budget_spent(attempts: int, *, max_attempts: int = MAX_ATTEMPTS) -> bool:
+    """Whether the week's attempts are used up (as opposed to merely too early)."""
+    return attempts >= max_attempts
 
 
 def _engine_connect() -> Callable[[], object]:
@@ -105,11 +119,23 @@ def claim_attempt(
     now = now or datetime.now(UTC)
     connect = connect or _engine_connect()
     attempts, last_attempt_at = _read_attempt(week_start, connect)
+    if budget_spent(attempts):
+        # Once, not once a minute: the orchestrator asks every loop, and the
+        # window is open for JOURNAL_GRACE_HOURS.
+        if week_start not in _spent_budget_logged:
+            _spent_budget_logged.add(week_start)
+            logger.info(
+                "Journal budget for week %s is spent after %d attempt(s) (last at %s) "
+                "— no run until the next Monday slot",
+                week_start,
+                attempts,
+                last_attempt_at.isoformat() if last_attempt_at else "never",
+            )
+        return False
     if not may_attempt(attempts, last_attempt_at, now):
-        logger.info(
-            "Journal attempt %d/%d for week %s already spent (last at %s) — not retrying",
-            attempts,
-            MAX_ATTEMPTS,
+        # Normal: the retry spacing has not elapsed. The loop wakes every 60s.
+        logger.debug(
+            "Journal attempt for week %s waits for the retry spacing (last at %s)",
             week_start,
             last_attempt_at.isoformat() if last_attempt_at else "never",
         )
@@ -165,6 +191,7 @@ def last_attempt_at(
 __all__ = [
     "MAX_ATTEMPTS",
     "RETRY_INTERVAL_S",
+    "budget_spent",
     "claim_attempt",
     "finish_week",
     "last_attempt_at",

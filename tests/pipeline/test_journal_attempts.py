@@ -142,3 +142,53 @@ class TestFinishWeek:
         # journal is already in the database.
         db.now = SLOT + timedelta(hours=1)
         assert not ja.claim_attempt(MONDAY, now=db.now, connect=db.connect)
+
+
+class TestRefusalIsLoggedOnce:
+    """The orchestrator asks every 60 s. A spent budget said so every 60 s too,
+    until it filled the log for two days (seen 2026-10-06, 22:20-23:00 UTC)."""
+
+    def test_a_spent_budget_is_announced_once_per_process(self, monkeypatch, caplog):
+        monkeypatch.setattr(ja, "_spent_budget_logged", set())
+        db = FakeDB(SLOT)
+        db.rows[MONDAY] = (ja.MAX_ATTEMPTS, SLOT)
+
+        with caplog.at_level("INFO"):
+            for minute in range(1, 61):
+                assert not ja.claim_attempt(
+                    MONDAY, now=SLOT + timedelta(minutes=minute), connect=db.connect
+                )
+
+        announced = [r for r in caplog.records if "budget" in r.message]
+        assert len(announced) == 1
+        assert str(MONDAY) in announced[0].message
+
+    def test_the_retry_spacing_is_not_announced_at_all(self, monkeypatch, caplog):
+        monkeypatch.setattr(ja, "_spent_budget_logged", set())
+        db = FakeDB(SLOT)
+        ja.claim_attempt(MONDAY, now=SLOT, connect=db.connect)
+
+        with caplog.at_level("INFO"):
+            # Ten minutes later: inside the 30-minute spacing.
+            assert not ja.claim_attempt(
+                MONDAY, now=SLOT + timedelta(minutes=10), connect=db.connect
+            )
+
+        assert [r for r in caplog.records if "retry spacing" in r.message] == []
+        assert [r for r in caplog.records if r.levelname == "INFO"] == []
+
+    def test_a_new_process_announces_it_again(self, monkeypatch):
+        # A restart is the moment where the owner looks, so it repeats itself.
+        monkeypatch.setattr(ja, "_spent_budget_logged", set())
+        db = FakeDB(SLOT)
+        db.rows[MONDAY] = (ja.MAX_ATTEMPTS, SLOT)
+
+        assert not ja.claim_attempt(MONDAY, now=SLOT, connect=db.connect)
+        assert MONDAY in ja._spent_budget_logged
+
+
+class TestBudgetSurvivesADeployDay:
+    def test_three_attempts_were_not_enough_on_2026_10_06(self):
+        # Measured that evening: three deploys between 19:00 and 22:20 UTC, each
+        # killing a run and spending an attempt, and the week had none left.
+        assert ja.MAX_ATTEMPTS > 3
