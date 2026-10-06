@@ -656,6 +656,22 @@ Two facts about that run that are worth more than the headline:
   nothing about whether a candidate depicts its site - it only decides what is worth showing. That
   is the judge's question, and only a `depicts` verdict reaches the fetch and the INSERT lane.
 
+**The judge's answer to that question, measured on the pilot's first three sites** (23 candidates,
+one verdict each, `VERDICTS_PILOT.jsonl`): **3 `depicts`, 7 `region_or_type`, 13 `other_site`** - a
+precision of **13 %**, and **1 site in 3** with at least one picture of itself. The misses are not
+near misses: for *Gonnus* the search returned **three pictures of Mars** (`Gonnus Mons`, the USGS
+Arcadia MOLA maps), four bronze coins, a 1830 steel engraving and the modern village; for *Cerna,
+Croatia* graves of a different Cerna in Bucharest, a barracks in Brno and a ski slope in Slovakia;
+for *Smythapark* a farm, a field path and a treehouse. With the 51 % that have candidates at all,
+**one site in six of the class is what a full judgement round buys** - about 180 of the 1,081 - for
+~4,900 candidate images to look at.
+
+One judgement call to keep in view: two of the three `depicts` are **objects found at the site**
+(a votive inscription, an Athenian relief "from Gonnoi"), which the vision rule counts as depicting.
+Whether a museum object is the right picture for a site page is a question that rule does not
+answer; a drawing, a plan or a reconstruction of the site would be, an inscription kept in a museum
+is a different thing.
+
 ```bash
 PY=./.venv/Scripts/python.exe
 $PY scripts/remediation/candidate_search/run.py \
