@@ -279,10 +279,70 @@ def test_a_run_with_failures_exits_non_zero_and_lists_them(monkeypatch):
 # --------------------------------------------------------------------------------------
 
 SITE = "abcdef12-0000-4000-8000-000000000001"
-SITE_ROW = {"id": SITE, "name": "Temple of Test", "source_url": "https://en.wikipedia.org/wiki/Temple_of_Test"}
+SITE_ROW = {
+    "id": SITE,
+    "name": "Temple of Test",
+    "source_url": "https://en.wikipedia.org/wiki/Temple_of_Test",
+}
 GATE = "https://upload.wikimedia.org/wikipedia/commons/a/ab/Temple_gate.jpg"
 GATE_TITLE = "File:Temple_gate.jpg"  # the media-list spelling: underscores
 UTM = "?utm_source=en.wikipedia.org&utm_campaign=imageinfo&utm_content=original"
+
+
+class TestTheExtmetadataValue:
+    """`extmetadata` answers a dict of dicts - and, for some files, a **list** of them.
+
+    Measured 2026-10-06: the 1600 px fetch of run `import-hero-2026-10-06-004` died on
+    `'list' object has no attribute 'get'` at `wiki_image_downloader.py:294`, one file into a
+    wave of 807. The reading must not change for the shape that worked - `ext.get(a, ext.get(b))`
+    takes the first field that is *present*, empty or not, and so does the helper.
+    """
+
+    def test_a_dict_field_is_read_as_before(self) -> None:
+        assert D._ext_value({"Artist": {"value": "Jane"}}, "Artist", "Author") == "Jane"
+
+    def test_a_list_field_is_read_from_its_first_entry(self) -> None:
+        assert D._ext_value({"Artist": [{"value": "Jane"}, {"value": "John"}]}, "Artist") == "Jane"
+
+    def test_an_empty_list_is_no_value(self) -> None:
+        assert D._ext_value({"Artist": []}, "Artist") == ""
+
+    def test_the_first_field_present_wins_even_when_it_is_empty(self) -> None:
+        """Faithful to `ext.get(a, ext.get(b))`, which does not skip ahead on an empty value."""
+        assert (
+            D._ext_value({"Artist": {"value": ""}, "Author": {"value": "Jane"}}, "Artist", "Author")
+            == ""
+        )
+
+    def test_a_missing_field_is_no_value(self) -> None:
+        assert D._ext_value({}, "Artist", "Author") == ""
+
+    def test_a_plain_string_field_is_read_as_text(self) -> None:
+        assert D._ext_value({"License": "CC0"}, "LicenseShortName", "License") == "CC0"
+
+    def test_the_batch_answer_survives_a_list_shaped_field(self, monkeypatch) -> None:
+        """The whole call, as the lane makes it: no `Artist.get`, no crash, credit intact."""
+        answer = _imageinfo([GATE_TITLE])
+        info = answer["query"]["pages"]["-1"]["imageinfo"][0]
+        info["extmetadata"]["Artist"] = [
+            {"value": '<a href="//commons.wikimedia.org/wiki/User:Jane">Jane</a>'},
+            {"value": "and John"},
+        ]
+        info["extmetadata"]["LicenseShortName"] = [{"value": "CC BY-SA 4.0"}]
+
+        class _Answer:
+            status_code = 200
+            text = "{}"
+
+            def json(self) -> dict[str, Any]:
+                return answer
+
+        monkeypatch.setattr(
+            D, "_http_client", SimpleNamespace(get=lambda url, params=None: _Answer())
+        )
+        result = D.fetch_image_metadata_batch([GATE_TITLE])
+        assert result[GATE_TITLE]["author"] == "Jane"
+        assert result[GATE_TITLE]["license"] == "CC BY-SA 4.0"
 
 
 def _media_list() -> dict[str, Any]:
@@ -340,7 +400,9 @@ def _wikipedia(monkeypatch) -> list[httpx.Request]:
             return httpx.Response(200, json=_media_list())
         assert (url.host, url.path) == ("en.wikipedia.org", "/w/api.php"), f"not asked: {url}"
         if url.params["prop"] == "pageprops":
-            return httpx.Response(200, json={"query": {"pages": {"7": {"title": "Temple of Test"}}}})
+            return httpx.Response(
+                200, json={"query": {"pages": {"7": {"title": "Temple of Test"}}}}
+            )
         assert url.params["prop"] == "imageinfo", f"not asked: {url}"
         return httpx.Response(200, json=_imageinfo(url.params["titles"].split("|")))
 
@@ -399,10 +461,16 @@ class FakeSession:
                 raise IntegrityError(
                     "INSERT INTO wiki_images",
                     {},
-                    Exception('duplicate key value violates unique constraint "uq_wiki_image_site_url"'),
+                    Exception(
+                        'duplicate key value violates unique constraint "uq_wiki_image_site_url"'
+                    ),
                 )
             self.db.rows.append(
-                {"site_id": item.site_id, "original_url": item.original_url, "filename": item.filename}
+                {
+                    "site_id": item.site_id,
+                    "original_url": item.original_url,
+                    "filename": item.filename,
+                }
             )
             self.db.inserted.append(item)
 

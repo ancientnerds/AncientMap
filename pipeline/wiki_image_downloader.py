@@ -240,6 +240,29 @@ def fetch_article_images(article_title: str) -> list[dict]:
     return images
 
 
+def _ext_value(ext: dict, *names: str) -> str:
+    """The `value` of the first of `names` the answer carries, as text.
+
+    `extmetadata` answers a dict of dicts - except for a handful of files, where Commons answers a
+    **list** of them and `.get("value")` raises `AttributeError` (measured 2026-10-06: a wave of
+    800 downloads died on it). The first entry is the value the field names; a row carries one
+    attribution, not every statement about the same file.
+
+    Behaviour-preserving for the dict shape: `ext.get(a, ext.get(b, ...))` takes the first field
+    that is present, empty or not, and so does this.
+    """
+    for name in names:
+        if name not in ext:
+            continue
+        raw = ext[name]
+        if isinstance(raw, list):
+            raw = raw[0] if raw else {}
+        if isinstance(raw, dict):
+            return str(raw.get("value", "") or "")
+        return str(raw or "")
+    return ""
+
+
 def fetch_image_metadata_batch(file_titles: list[str]) -> dict[str, dict]:
     """
     Fetch metadata for up to 50 images in one API call.
@@ -291,22 +314,22 @@ def fetch_image_metadata_batch(file_titles: list[str]) -> dict[str, dict]:
         info = (page.get("imageinfo") or [{}])[0]
         ext = info.get("extmetadata", {})
 
-        author = ext.get("Artist", ext.get("Author", ext.get("Credit", {}))).get("value", "")
+        author = _ext_value(ext, "Artist", "Author", "Credit")
         if author:
             author = re.sub(r"<[^>]*>", "", author).strip()
             if len(author) > 200:
                 author = author[:200] + "..."
 
         author_url = None
-        raw_artist = ext.get("Artist", ext.get("Author", {})).get("value", "")
+        raw_artist = _ext_value(ext, "Artist", "Author")
         href_match = re.search(r'href="([^"]+)"', raw_artist)
         if href_match:
             author_url = href_match.group(1)
             if author_url.startswith("//"):
                 author_url = "https:" + author_url
 
-        license_name = ext.get("LicenseShortName", ext.get("License", {})).get("value", "")
-        license_url = ext.get("LicenseUrl", {}).get("value", "")
+        license_name = _ext_value(ext, "LicenseShortName", "License")
+        license_url = _ext_value(ext, "LicenseUrl")
         original = parse_attribution(info)
 
         results[title] = {
@@ -442,7 +465,7 @@ def parse_attribution(info: dict) -> dict:
     """
     ext = info.get("extmetadata", {})
 
-    author_raw = ext.get("Artist", {}).get("value", "")
+    author_raw = _ext_value(ext, "Artist")
     author = re.sub(r"<[^>]*>", "", author_raw).strip() if author_raw else None
     if author and len(author) > 200:
         author = author[:200] + "..."
@@ -463,8 +486,8 @@ def parse_attribution(info: dict) -> dict:
     return {
         "author": author or None,
         "author_url": author_url,
-        "license": ext.get("LicenseShortName", {}).get("value", "") or None,
-        "license_url": ext.get("LicenseUrl", {}).get("value", "") or None,
+        "license": _ext_value(ext, "LicenseShortName") or None,
+        "license_url": _ext_value(ext, "LicenseUrl") or None,
         "original_url": original_url,
         "width": info.get("width"),
         "height": info.get("height"),

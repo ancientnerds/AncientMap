@@ -474,6 +474,40 @@ SELECT the page renders.
   not gallery rows. The remaining 410 need an INSERT, which this writer does not do
   (`chunk_writer.lint_statement` refuses INSERT; `apply_remediation_change()` is UPDATE-only).
 
+**The 410 that need an INSERT** (`no_target_row`, the file is a Commons picture and no row of the
+site holds it) are the rest of the wave's own subject: the owner linked that picture by hand, and
+the row that shows it does not exist. `chunk_writer` cannot create it - `lint_statement` refuses
+INSERT and `apply_remediation_change()` (migrations 0017/0018/0022) is a conditional UPDATE and its
+journal row in one statement. The decisions a builder needs, all measured on the read of run
+`import-hero-2026-10-06-004` (2026-10-06, 4,900 shown sites, 48,567 image rows):
+
+* **The file has to be fetched first, exactly as the 807 were.** A site with no row has no stored
+  derivative, so there is nothing to point an INSERT at; the fetch targets are the
+  `no_target_row` refusals whose import link names a Commons file, and the manifest carries the
+  same eleven `FETCH_COLUMNS` - `ih5` is what makes a row credit the file it shows.
+* **No migration is needed.** The journal's columns take an insert as they stand: one row per
+  written column with `old_value` NULL and `new_value` set, `row_pk` the new row's `id` from
+  `RETURNING`, `table_name = 'wiki_images'`, and the lane's `change_key` - which is what
+  `remediation_change_by_key` (0022) exists for. A statement that inserts a row and writes its
+  journal rows inside one `BEGIN`/`COMMIT` needs no database function; only `apply_remediation_change()`
+  is UPDATE-shaped, and an INSERT lane simply does not call it.
+* **The guards are the writer's, restated for a row that must not exist yet**: the site is a
+  curated, shown site; no row of that site holds the file (`WHERE NOT EXISTS`, so a re-run inserts
+  nothing rather than a second copy); the site keeps at most one hero, so the row that holds it
+  today is demoted in the same transaction; and the inserted file is at least 1600x900, the same
+  floor `plan.py` applies everywhere else.
+* **The reversal is a guarded DELETE, not a truncation**: `DELETE FROM wiki_images WHERE id = <the
+  inserted ids> AND original_url = <the file the lane inserted>` plus the restored hero flag, inside
+  the journal's own transaction. `unified_sites` is never touched by a DELETE, and the site's own
+  tables stay behind their site-owned `CASCADE`.
+* **The acceptance is the wave's own**: after the insert, `verify.check_wave` asks production the
+  same three questions it asked the 1,555 - the page serves the file the import links, the
+  thumbnail names that row, exactly one live hero row stands.
+
+The 133 with no row at all and the 59 whose import link names no Commons file stay refused: the
+owner decided on 2026-10-05 (18:32) that a site with only a `thumbnail_url` gets no gallery image
+made up out of nothing.
+
 **A site whose every row is hidden today** is named `may_empty` in its chunk header
 (`Planned.may_empty`), not excluded from the wave: unhiding the row gives it its *first* picture,
 which is not a hero move, and a reversal that restores "no image" is a faithful undo the writer's
