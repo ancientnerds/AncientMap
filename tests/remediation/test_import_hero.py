@@ -1115,7 +1115,13 @@ class TestTheFetchCommand:
         assert json.loads(pilot.read_text(encoding="utf-8")) != {}
         assert not (run / IR.FETCHED).exists()
 
+    @pytest.mark.integration
     def test_a_run_without_its_claims_is_refused_by_name(self, tmp_path: Path, capsys) -> None:
+        """Marked integration: `fetch` reads production (`read_production` -> ssh ancientnerds)
+        before it refuses a missing run directory, so this needs the real host. It passes on the
+        workstation and failed the DB-less CI subset on 2026-10-06 with "Could not resolve
+        hostname ancientnerds". Move the refusal ahead of the production read and the marker can
+        go."""
         code = IR.main(
             [
                 "fetch",
