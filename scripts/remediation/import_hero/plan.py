@@ -320,7 +320,13 @@ def plan(
                     evidence=_evidence(state, sid, other, image),
                 )
             )
-        wanted_thumb = local_path(sid, str(row["filename"]))
+        # The thumbnail has to name the file the page will serve **after this wave**, not the one
+        # the read found: `ih5` may be renaming this very row's file, and the read still holds the
+        # old name. Measured 2026-10-06 on run `import-hero-2026-10-06-004`: the write landed right
+        # and the acceptance still refused all 228 sites on this one question - the page served the
+        # fetched 1600 px file, the globe popup still asked for `hero.webp`.
+        served_name = str(fetch.get("filename")) if fetch else str(row["filename"])
+        wanted_thumb = local_path(sid, served_name)
         current = state.sites[sid].get("thumbnail_url")
         if current != wanted_thumb:
             changes.append(

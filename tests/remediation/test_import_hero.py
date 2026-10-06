@@ -318,6 +318,31 @@ class TestThePlan:
         assert thumb.new_value == f"/data/images/wiki/{THASOS[:8]}/Thasos_gate.webp"
         assert thumb.rule == IH.RULE_THUMBNAIL
 
+    def test_the_thumbnail_follows_a_row_this_wave_renames(self, tmp_path: Path) -> None:
+        """`ih5` writes the fetched file's own name into the row, so the thumbnail has to name
+        *that* - the name the read found is the one the wave replaces.
+
+        Measured 2026-10-06: run `import-hero-2026-10-06-004` applied 229 sites and the acceptance
+        refused all 228 on this one question - the page served the 1600 px file, the globe popup
+        still asked for the file the read held.
+        """
+        changes, _ = self._plan(tmp_path, fetched=self._fetch(SMALL, "Thasos_agora_1600.webp"))
+        got = self._by(changes, SMALL)
+        rename = [c for key, c in got.items() if key[:2] == ("wiki_images", "filename")]
+        assert len(rename) == 1
+        assert rename[0].rule == IH.RULE_FETCH and rename[0].new_value == "Thasos_agora_1600.webp"
+        thumb = got[("unified_sites", "thumbnail_url", SMALL)]
+        assert thumb.new_value == f"/data/images/wiki/{SMALL[:8]}/Thasos_agora_1600.webp"
+
+    def test_a_site_whose_row_is_not_renamed_keeps_the_name_the_row_holds(
+        self, tmp_path: Path
+    ) -> None:
+        """The other half: a fetched manifest that names the file the row already holds must not
+        move the thumbnail away from the row's own name."""
+        changes, _ = self._plan(tmp_path, fetched=self._fetch(SMALL, "hero.webp"))
+        thumb = self._by(changes, SMALL)[("unified_sites", "thumbnail_url", SMALL)]
+        assert thumb.new_value == f"/data/images/wiki/{SMALL[:8]}/hero.webp"
+
     def test_a_site_that_already_serves_the_import_image_gets_no_flag_move(
         self, tmp_path: Path
     ) -> None:
