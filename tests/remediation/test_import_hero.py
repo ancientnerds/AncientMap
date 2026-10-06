@@ -723,6 +723,34 @@ def _stub_downloader(monkeypatch, fail_file: str | None = None) -> None:
     monkeypatch.setattr(DL, "download_image", download)
 
 
+def test_a_file_commons_does_not_host_is_refused_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """9 of the 270 refusals of the INSERT wave read `not an upload.wikimedia.org original: None`,
+    which said nothing: Commons answers a page it does not have with no `imageinfo` at all, and the
+    batch reader turns that into an entry whose fields are all None - the download then failed on a
+    URL that was never there. Measured 2026-10-06 with one API call over all nine: every page
+    answers `missing` (e.g. File:Thul Hairo Khan.jpg), so the import links pictures Commons does
+    not host."""
+    from pipeline import wiki_image_downloader as DL
+
+    def metadata(titles: list[str]) -> dict[str, dict]:
+        gone = {**FETCH_META, "original_url": None, "width": None, "height": None}
+        return {title: dict(gone) for title in titles}
+
+    monkeypatch.setattr(DL, "fetch_image_metadata_batch", metadata)
+    monkeypatch.setattr(
+        DL,
+        "download_image",
+        lambda *a, **k: pytest.fail("a file Commons does not host must not be downloaded"),
+    )
+    with pytest.raises(IF.FetchError, match="hosts no file of this name"):
+        IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
+    with pytest.raises(IF.FetchError, match="`missing`"):
+        IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
+    assert not list(tmp_path.rglob("*"))
+
+
 class TestTheFetchRun:
     """The loop around that entry: which sites to fetch, where the file lands, what happens to
     one that fails."""

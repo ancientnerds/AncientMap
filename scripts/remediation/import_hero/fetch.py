@@ -259,6 +259,7 @@ def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
             f"(got {', '.join(sorted(answers)) or 'nothing'})"
         )
     dest = site_dest(root, site_id, commons_file)
+    original_url = str(metadata.get("original_url") or "")
     original_width = int(metadata.get("width") or 0)
     if dest.is_file():
         existing = stored_file(dest)
@@ -271,6 +272,20 @@ def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
                 "`download_image` keeps the aspect ratio, so a 1600 px fetch of it returns the same "
                 "box. This site needs a different picture, not a bigger one"
             )
+    if not original_url or original_width <= 0:
+        # Commons answers a page it does not have with no `imageinfo` at all, and the batch reader
+        # turns that into an entry whose fields are all None - indistinguishable from a file
+        # without an original until you look at the page. Measured 2026-10-06 with one API call
+        # over all 9 such refusals of the INSERT wave: every one answers `missing` (e.g.
+        # File:Thul Hairo Khan.jpg). The 2025 import links pictures Commons does not host, and
+        # the old message hid that behind "not an upload.wikimedia.org original: None".
+        raise FetchError(
+            f"{site_id}: the imageinfo answer for File:{commons_file} carries neither an "
+            f"original URL nor a size (original_url={metadata.get('original_url')!r}, "
+            f"width={metadata.get('width')!r}) - Commons hosts no file of this name (measured "
+            f"2026-10-06: the page answers `missing`), so the 2025 import links a picture that is "
+            f"not there. No fetch can deliver it"
+        )
     if 0 < original_width < HERO_MIN_WIDTH:
         raise FetchError(
             f"{site_id}: the Commons original of {commons_file!r} is {original_width} px wide, "
@@ -281,7 +296,7 @@ def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
     tmp = dest.with_name(f"{dest.name}.fetching")
     if tmp.exists():
         tmp.unlink()
-    result = DL.download_image(metadata.get("original_url"), tmp, original_width)
+    result = DL.download_image(original_url, tmp, original_width)
     os.replace(tmp, dest)
     return manifest_entry(site_id, commons_file, metadata, result)
 

@@ -542,12 +542,49 @@ end, and what it still refuses is 807 `local_file_too_small` + 469 `no_target_ro
 Applied 2026-10-06: the 807 `local_file_too_small` first (runs `-004`, `-005`: 310 sites fetched and
 accepted 310 of 310), then the INSERT wave (runs `-006`, `-007`, `-008`, above). After all of it the
 read of run `-008` counts **4,900 shown curated sites, 1,344 of them without a live hero, 0 sites
-with two**, 47,778 image rows and **583 live heroes still under 1600x900** - the remainder of this
-lane is the 498 `local_file_too_small` refusals, which need other pictures, and the 150 sites the
-owner keeps without a row. **54 sites whose live hero's thumbnail points somewhere else** are a
-different finding, and not this lane's: 32 carry a remote `upload.wikimedia.org` URL as
-`thumbnail_url` and 22 a `/data/…` path that names another file; none of them was written by a
-2026-10-06 wave.
+with two**, 47,778 image rows and **583 live heroes still under 1600x900**. **54 sites whose live
+hero's thumbnail points somewhere else** are a different finding, and not this lane's: 32 carry a
+remote `upload.wikimedia.org` URL as `thumbnail_url` and 22 a `/data/…` path that names another
+file; none of them was written by a 2026-10-06 wave.
+
+### 3.7.1 What is left, and why each class cannot be closed from here (measured 2026-10-06)
+
+"Without a live hero" is the stricter question than "shows nothing". `served_row()`
+(`ORDER BY is_hero DESC, is_lead DESC, sort_order` over the rows that are not excluded) is what the
+page actually serves, so a site with rows but no hero flag still shows its lead row. The four
+numbers that describe the finished state, over the 4,900 shown curated sites:
+
+| the page… | sites |
+|---|---:|
+| serves a gallery row | **3,578** |
+| serves only its `thumbnail_url` | 153 |
+| **serves nothing at all** | **1,169** |
+| shows two heroes at once | 0 |
+
+The 1,169 split by cause, and why no write closes them from here:
+
+* **852 carry no image row at all.** 150 of them are the owner's decision of 2026-10-05 (18:32) -
+  a site with only a `thumbnail_url` gets no gallery row made up out of nothing; the other 702
+  never had one either. Nothing to serve means a **new picture** is needed: that is the candidate
+  search (`import_claims`, P373 categories) and its vision stage, not this writer.
+* **317 have rows, and every one of them is excluded** (171 sites one row, 54 sites twenty). Those
+  exclusions are the vision lane's recorded decision (`remediation_change_log.test_id =
+  'WD2/served-image'`, run stamps `served-image-2026-09-30-*`, 2,072 rows over 354 sites). These are
+  exactly the sites rule `ih3` unhides when the import's picture *is* one of their rows - and after
+  the waves above it unhides not one of them, so for these 317 the import's picture is no row of
+  the site. Un-doing a model's judgement without a new judgement is not a thing this lane may do.
+* **The 270 refusals of the INSERT fetch, by class** (`FETCH_FAILURES.jsonl`, counted by pattern):
+  213 the Commons original is itself narrower than 1600 px (a fetch cannot deliver pixels the file
+  does not have), 15 without `author_url`, 12 without `license_url`, 11 panoramas 1600 px wide and
+  under 900 px high, 9 Commons hosts no file of that name at all (one API call over all nine
+  confirms every page answers `missing`, e.g. `File:Thul Hairo Khan.jpg`), 5 without `author_url`
+  and `license_url`, 3 whose name carries a character the served tree may not hold, 1 without author
+  and `author_url`, 1 an SVG. **Only the last three are our own rules**, and they would buy 4 sites
+  at the price of a naming convention no other site uses; the other 267 are facts about the files.
+
+The 583 live heroes under 1600x900 are the same story from the other side: their row holds the
+owner-linked picture, but the Commons original of that picture is narrower than the lane's floor.
+Both numbers are floors this lane set itself, and raising either is a decision, not a fix.
 
 ```bash
 PY=./.venv/Scripts/python.exe
