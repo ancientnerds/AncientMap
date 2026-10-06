@@ -1,7 +1,8 @@
-"""The import-hero lane's three commands: `plan`, `accept`, `remainder`.
+"""The import-hero lane's four commands: `plan`, `fetch`, `accept`, `remainder`.
 
 ```bash
 ./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py plan     --run-dir $R
+run.py fetch    --run-dir $R --root $OFFSITE
 ./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py accept   --run-dir $R
 ./.venv/Scripts/python.exe scripts/remediation/import_hero/run.py remainder --run-dir $R
 ```
@@ -9,6 +10,13 @@
 `plan` is read-only against production and writes only into the run directory: the read, the join
 and the chunks the shared writer (`gallery_audit.chunk_writer`) then applies, five steps each, in
 section 3.7 of `docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md`.
+
+`fetch` is the step that has to come first for the sites the plan refuses as
+`local_file_too_small`: it downloads the 1600 px derivative each of them needs and writes the
+`FETCHED.json` manifest that `plan --fetched` reads. It takes the same read and the same join,
+so it names the same sites, and it is resumable - `fetch.run_fetch` carries the manifest along
+after every file, because `download_image` opens with `O_EXCL`. Its `--root` is the offsite
+copy of the image tree; the VPS copy has to follow it, the two must not drift.
 
 `accept` is the other half: it reads production **again**, after the chunks landed, and asks the
 owner's three questions per planned site. It never reuses the plan's read - that one describes what
@@ -18,7 +26,7 @@ production looked like before, which is exactly what an acceptance cannot settle
 is right for a writer and useless as a completion number. This reports the empty plan and what it
 still refuses.
 
-This module is the lane's thin glue; the tested surface is `plan`, `read` and `verify` (like
+This module is the lane's thin glue; the tested surface is `plan`, `read`, `fetch` and `verify` (like
 `served_image/run.py`, whose commands are covered the same way).
 """
 
@@ -38,6 +46,7 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
 
 from served_image import state as ST  # noqa: E402
 
+from import_hero import fetch as IF  # noqa: E402
 from import_hero import plan as IH  # noqa: E402
 from import_hero import read as RD  # noqa: E402
 from import_hero import verify as IV  # noqa: E402
@@ -47,6 +56,8 @@ ACCEPTANCE_READ = "VERIFY_READ.json"
 ACCEPTANCE = "ACCEPTANCE.json"
 REMAINDER = "REMAINDER.json"
 CLAIMS = "IMPORT_CLAIMS.json"
+FETCHED = "FETCHED.json"
+FETCH_REFUSALS = "FETCH_REFUSALS.jsonl"
 
 
 def _print(value: Any) -> None:
@@ -102,6 +113,63 @@ def cmd_plan(
         "import_features": len(features),
         "shown_sites": len(state.sites),
         **summary,
+    }
+
+
+def cmd_fetch(
+    run: Path,
+    *,
+    source: Path = DEFAULT_IMPORT,
+    root: Path,
+    limit: int | None = None,
+    delay_s: float | None = None,
+) -> dict[str, Any]:
+    """The 1600 px files the `local_file_too_small` refusals need, and the manifest `plan --fetched`
+    reads. Reads production once, like `plan`, and writes only into the run directory and `root`.
+
+    The run directory is the same one the wave will be planned and applied in: one read, one join,
+    one set of site ids. A second `fetch` over it continues where the first stopped - the manifest
+    is the resume point, and the sites it carries are not fetched again.
+    """
+    data, sha = _read_once(run)
+    state = ST.load_read(run / RD.READ)
+    features = IH.read_import(source)
+    claims = IH.join_import(state, features)
+    run.mkdir(parents=True, exist_ok=True)
+    (run / CLAIMS).write_text(
+        json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    planned = IH.plan(state, claims, dimensions=RD.dimensions(data))
+    by_reason: dict[str, int] = {}
+    for refusal in planned.refusals:
+        by_reason[refusal.reason] = by_reason.get(refusal.reason, 0) + 1
+    targets = IF.plan_targets(claims, [r.as_json() for r in planned.refusals])
+    if limit is not None:
+        targets = targets[:limit]
+    manifest_path = run / FETCHED
+
+    def progress(site_id: str, entry: dict[str, str]) -> None:
+        print(
+            f"fetched {site_id} -> {entry['filename']} "
+            f"({entry['width']}x{entry['height']}, {entry['file_size_bytes']} bytes)",
+            flush=True,
+        )
+
+    outcome = IF.run_fetch(
+        targets,
+        root,
+        manifest_path,
+        failures_path=run / FETCH_REFUSALS,
+        delay_s=delay_s,
+        on_site=progress,
+    )
+    return {
+        "run_id": run.name,
+        "read_sha256": sha,
+        "read_at": state.read_at,
+        "offsite_root": str(root),
+        "refusals_of_the_plan": by_reason,
+        **outcome.as_json(),
     }
 
 
@@ -165,11 +233,20 @@ def _stamp(run: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # A Commons title carries every script of every site, and a Windows console encodes cp1252: one
+    # file named in Turkish or Georgian kills the run in the middle of the wave with a
+    # UnicodeEncodeError from a progress line (measured 2026-10-06, twice). The record is written
+    # before the line is printed, so nothing was lost - but a wave of 800 downloads is no place for
+    # a console to decide what may be printed. `backslashreplace` keeps every byte visible.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(prog="import_hero/run.py", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     commands: dict[str, argparse.ArgumentParser] = {}
     helps = {
         "plan": "read production, join the 2025 import, write the chunks (writes only into R)",
+        "fetch": "download the 1600 px file every `local_file_too_small` refusal needs -> FETCHED.json",
         "accept": "read production again and ask the three questions per planned site",
         "remainder": "what the lane would still write over this run's read, and what it refuses",
     }
@@ -179,8 +256,32 @@ def main(argv: list[str] | None = None) -> int:
     commands["plan"].add_argument("--import", dest="source", type=Path, default=DEFAULT_IMPORT)
     commands["plan"].add_argument("--sites-per-chunk", type=int, default=100)
     commands["plan"].add_argument("--fetched", type=Path, default=None)
+    commands["fetch"].add_argument("--import", dest="source", type=Path, default=DEFAULT_IMPORT)
+    commands["fetch"].add_argument(
+        "--root",
+        required=True,
+        type=Path,
+        help="the offsite copy of the image tree; the VPS copy has to follow it",
+    )
+    commands["fetch"].add_argument(
+        "--limit", type=int, default=None, help="only the first N targets (a pilot)"
+    )
+    commands["fetch"].add_argument(
+        "--delay", dest="delay_s", type=float, default=None, help="seconds between downloads"
+    )
     args = parser.parse_args(argv)
     try:
+        if args.command == "fetch":
+            _print(
+                cmd_fetch(
+                    args.run_dir,
+                    source=args.source,
+                    root=args.root,
+                    limit=args.limit,
+                    delay_s=args.delay_s,
+                )
+            )
+            return 0
         if args.command == "accept":
             return cmd_accept(args.run_dir)
         if args.command == "remainder":
@@ -193,7 +294,7 @@ def main(argv: list[str] | None = None) -> int:
                 fetched=args.fetched,
             )
         )
-    except (IH.ImportHeroError, ST.StateError, FileNotFoundError) as exc:
+    except (IH.ImportHeroError, IF.FetchError, ST.StateError, FileNotFoundError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 1
     return 0

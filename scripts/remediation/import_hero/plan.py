@@ -121,16 +121,30 @@ def join_import(
     state: ST.State, features: Sequence[Mapping[str, Any]]
 ) -> dict[str, dict[str, Any]]:
     """The import feature of every curated site, on the key the period lane proved: the source
-    URL first, the folded title second, first hit wins. Ambiguity is reported, not resolved."""
+    URL first, the folded title second, first hit wins. Ambiguity is reported, not resolved.
+
+    **An empty key is no key.** 49 curated sites carry no `source_url`, and 111 of the import's
+    5,995 features carry no `Source` (measured 2026-10-06); keying those under `""` put them in one
+    bucket, and a site without a URL inherited that bucket's first feature - the church
+    `Iglesia de San Antoni de l'Aldosa` in Cardona, claimed for sites in Ukraine, Peru, Sweden and
+    Australia alike. Nothing was written from it (the plan refuses such a site as `no_target_row`
+    before a claim can become a change), but the premise was wrong. A feature without a source and
+    a site without one are now both outside the URL arm, where the folded title decides - or, when
+    the title does not match either, no feature at all, which the plan reads as "the import links no
+    image" and leaves the site's own state standing.
+    """
     by_url: dict[str, list[Mapping[str, Any]]] = {}
     by_title: dict[str, list[Mapping[str, Any]]] = {}
     for feature in features:
-        by_url.setdefault(url_key(str(feature["source_url"])), []).append(feature)
+        key = url_key(str(feature["source_url"]))
+        if key:
+            by_url.setdefault(key, []).append(feature)
         by_title.setdefault(fold(str(feature["title"])), []).append(feature)
 
     out: dict[str, dict[str, Any]] = {}
     for sid, site in state.sites.items():
-        hits = by_url.get(url_key(str(site.get("source_url") or "")), [])
+        site_key = url_key(str(site.get("source_url") or ""))
+        hits = by_url.get(site_key, []) if site_key else []
         matched_on = "url"
         if not hits:
             hits = by_title.get(fold(str(site.get("name") or "")), [])

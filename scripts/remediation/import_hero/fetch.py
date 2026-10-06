@@ -21,17 +21,23 @@ pictures from (runbook 3.2), the VPS copy is what production serves, so a fetch 
 be followed into the second. That transfer is a separate, explicit step - nothing here writes to the
 VPS.
 
-One constraint on the caller: `download_image()` writes with `O_EXCL`, so a wave that is interrupted
-after some hundreds of files has left those files on disk and cannot be re-run over them; a fetch that
-must survive an interruption has to carry its manifest along as it goes, not at the end.
+One constraint on the caller, and it is why `run_fetch` exists next to `fetch_manifest`:
+`download_image()` writes with `O_EXCL`, so a wave that is interrupted after some hundreds of files has
+left those files on disk and cannot be re-run over them. `fetch_manifest` hands the whole wave over at
+the end - the right shape for a test, the wrong one for 800 downloads against a host that may drop the
+link. `run_fetch` writes `FETCHED.json` after every file (atomically, through a temporary file), skips
+what the manifest already carries and records a failed site by name for the next run to retry.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
+import re
 import time
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -58,15 +64,32 @@ class FetchError(ImportHeroError):
     """A download cannot become a manifest entry. Named, never repaired."""
 
 
+#: What a file name may not carry. Windows forbids `<>:"/\|?*` and the C0 controls, POSIX `/` and
+#: NUL; the offsite tree and the VPS tree both live on such a file system, so a title carrying one
+#: of these cannot be written at all. Production carries **no** row whose filename has one (measured
+#: 2026-10-06 over the read's 48,567 rows), so refusing these few keeps the one convention the pages
+#: already serve instead of adding a percent-encoded spelling for three sites.
+ILLEGAL_IN_NAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+
+
 def local_name(commons_file: str) -> str:
     """The file's local name: the Commons name verbatim, only the extension becomes `.webp`.
 
     Refuses a name with no extension - there is nothing to swap, and guessing `.webp` on a name
-    that has none would write a file the DB cannot name.
+    that has none would write a file the DB cannot name - and a name carrying a character the file
+    system refuses (`ILLEGAL_IN_NAME`), for the same reason: the row would name a file that cannot
+    exist. Three of the 807 refusals of run `import-hero-2026-10-05-002` are such titles
+    (measured 2026-10-06).
     """
     stem, dot, extension = commons_file.rpartition(".")
     if not dot or not stem or not extension:
         raise FetchError(f"{commons_file!r} has no extension to swap for .webp")
+    if ILLEGAL_IN_NAME.search(commons_file):
+        raise FetchError(
+            f"{commons_file!r} carries a character a file name may not have "
+            f"({', '.join(sorted(set(ILLEGAL_IN_NAME.findall(commons_file))))}) - the row would "
+            "name a file that cannot be written on the tree that serves it"
+        )
     return f"{stem}.webp"
 
 
@@ -155,8 +178,56 @@ def site_dest(root: Path, site_id: str, commons_file: str) -> Path:
     return Path(root) / site_id[:8] / local_name(commons_file)
 
 
+@dataclass(frozen=True)
+class StoredFile:
+    """What `download_image` reports back, read from the file itself instead.
+
+    A file on disk without an entry in the manifest is the state an interruption leaves behind, and
+    `O_EXCL` will not let the lane write over it. The entry it still needs - the pixels, the byte
+    count - is exactly what the file already states, so the step reads them back instead of asking
+    for a download that would be refused.
+    """
+
+    width: int
+    height: int
+    file_size: int
+
+
+def stored_file(dest: Path) -> StoredFile:
+    """The stored derivative's own size, from the file. A file that is not an image refuses by name."""
+    from PIL import Image, UnidentifiedImageError
+
+    dest = Path(dest)
+    try:
+        with Image.open(dest) as image:
+            width, height = image.size
+    except (UnidentifiedImageError, OSError) as exc:
+        raise FetchError(
+            f"{dest} is on disk but is not a picture ({exc}) - it refuses the download that would "
+            "replace it (`download_image` writes with O_EXCL), so it has to be looked at by hand"
+        ) from exc
+    return StoredFile(width=width, height=height, file_size=dest.stat().st_size)
+
+
 def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
     """One site: its `imageinfo` answer, its 1600 px derivative, and the manifest entry for both.
+
+    Four cases, decided before anything is written, because `download_image()` opens with `O_EXCL`
+    and refuses to replace a file - which is the file this wave came to replace:
+
+    * the stored file already reaches the hero minimum: it is measured and adopted. That is what
+      makes a second run over the same run directory a continuation instead of a collision, and it
+      is the case an interruption leaves behind (the file landed, the manifest entry did not).
+    * the stored file is 1600 px wide and under 900 px high: refused by name, without a download.
+      `download_image` keeps the original's aspect ratio, so a 1600 px fetch of a panorama returns
+      the very same box - 121 of the 807 refusals of run `import-hero-2026-10-05-002` are one.
+    * the Commons original is narrower than the hero minimum: refused by name. `imageinfo` states
+      its width before the download, and a fetch cannot deliver more pixels than the original has.
+    * anything else: the 1600 px derivative is fetched into a temporary name in the site's own
+      directory and swapped in with `os.replace`, then measured and refused by name if it still
+      falls short. The swap is atomic and the pixels are the same picture the row already showed, so
+      a reader never sees a missing or half-written file - only a larger copy of the same image
+      between the fetch and the wave that writes the row's new size.
 
     The file is written before the entry exists, so a manifest can never name a file that is not on
     disk; a download that fails refuses by name and leaves no entry behind. The downloader is
@@ -173,8 +244,30 @@ def fetch_site(site_id: str, commons_file: str, root: Path) -> dict[str, str]:
             f"(got {', '.join(sorted(answers)) or 'nothing'})"
         )
     dest = site_dest(root, site_id, commons_file)
+    original_width = int(metadata.get("width") or 0)
+    if dest.is_file():
+        existing = stored_file(dest)
+        if existing.width >= HERO_MIN_WIDTH and existing.height >= HERO_MIN_HEIGHT:
+            return manifest_entry(site_id, commons_file, metadata, existing)
+        if existing.width >= HERO_MIN_WIDTH:
+            raise FetchError(
+                f"{site_id}: the stored file is {existing.width}x{existing.height} - a panorama at "
+                f"least {HERO_MIN_WIDTH} px wide but under {HERO_MIN_HEIGHT} px high, and "
+                "`download_image` keeps the aspect ratio, so a 1600 px fetch of it returns the same "
+                "box. This site needs a different picture, not a bigger one"
+            )
+    if 0 < original_width < HERO_MIN_WIDTH:
+        raise FetchError(
+            f"{site_id}: the Commons original of {commons_file!r} is {original_width} px wide, "
+            f"under the {HERO_MIN_WIDTH} px this lane serves - a fetch cannot deliver more pixels "
+            "than the original holds"
+        )
     dest.parent.mkdir(parents=True, exist_ok=True)
-    result = DL.download_image(metadata.get("original_url"), dest, int(metadata.get("width") or 0))
+    tmp = dest.with_name(f"{dest.name}.fetching")
+    if tmp.exists():
+        tmp.unlink()
+    result = DL.download_image(metadata.get("original_url"), tmp, original_width)
+    os.replace(tmp, dest)
     return manifest_entry(site_id, commons_file, metadata, result)
 
 
@@ -226,3 +319,152 @@ def write_manifest(path: Path, manifest: Mapping[str, Mapping[str, str]]) -> str
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8", newline="\n")
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+# --------------------------------------------------------------------------- the resumable run
+@dataclass(frozen=True)
+class FetchRun:
+    """What one `run_fetch` did: how many targets it had, how many files it wrote, how many the
+    manifest already carried, and every site it refused with the downloader's own wording."""
+
+    targets: int
+    fetched: int
+    already: int
+    manifest_sha256: str
+    failures: list[tuple[str, str, str]]
+
+    def as_json(self) -> dict[str, Any]:
+        by_reason: dict[str, int] = {}
+        for _, _, why in self.failures:
+            key = why.split(":", 1)[0]
+            by_reason[key] = by_reason.get(key, 0) + 1
+        return {
+            "targets": self.targets,
+            "fetched": self.fetched,
+            "already_in_the_manifest": self.already,
+            "manifest_sha256": self.manifest_sha256,
+            "failed": len(self.failures),
+            "failures": by_reason,
+        }
+
+
+def load_manifest(path: Path) -> dict[str, dict[str, str]]:
+    """The manifest an interrupted fetch left behind, or an empty one.
+
+    A manifest that is not readable JSON is refused by name rather than treated as empty: a fetch
+    that starts again from nothing would re-download files `download_image`'s `O_EXCL` refuses to
+    overwrite, and the run would die on the first of them with a message about a lock.
+    """
+    path = Path(path)
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise FetchError(
+            f"{path} is not readable JSON ({exc}) - it is the record of the files already on disk, "
+            "so a fresh fetch over it would collide with `download_image`'s O_EXCL"
+        ) from exc
+    if not isinstance(data, dict):
+        raise FetchError(
+            f"{path} holds a {type(data).__name__}, not the {{site id: manifest entry}} mapping the "
+            "plan reads"
+        )
+    return {str(site): dict(entry) for site, entry in data.items()}
+
+
+def save_manifest(path: Path, manifest: Mapping[str, Mapping[str, str]]) -> str:
+    """`FETCHED.json`, replaced atomically after **every** site, and its sha256 returned.
+
+    This is the counterpart to `write_manifest`'s once-per-run rule, and the reason the module's own
+    docstring names: `download_image()` opens with `O_EXCL`, so a wave interrupted after some
+    hundred files has left those files on disk and cannot be run over them again. Carrying the
+    manifest along is what makes the second run a continuation and not a collision. The replacement
+    goes through a temporary file, so an interruption in the middle of a write cannot leave a
+    half-written manifest behind either.
+    """
+    text = json.dumps(manifest, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.tmp")
+    tmp.write_text(text, encoding="utf-8", newline="\n")
+    os.replace(tmp, path)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _append_refusal(path: Path, site_id: str, commons_file: str, why: str) -> None:
+    """One refusal per line, appended: a site that failed is retried by the next run, never skipped."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    line = json.dumps(
+        {"site_id": site_id, "commons_file": commons_file, "refusal": why},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    with path.open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(f"{line}\n")
+
+
+def run_fetch(
+    targets: Sequence[tuple[str, str]],
+    root: Path,
+    manifest_path: Path,
+    *,
+    failures_path: Path | None = None,
+    delay_s: float | None = None,
+    on_site: Any = None,
+) -> FetchRun:
+    """Fetch every target, carrying `FETCHED.json` along after each file, so the run can be continued.
+
+    `fetch_manifest` holds the whole wave in memory and hands it over at the end, which is the right
+    shape for a test and the wrong one for 800 downloads against a host that may drop the link. This
+    is the same loop with three differences, each forced by `O_EXCL`: a target the manifest already
+    carries is skipped (its file is on disk), a site that fails is recorded by name and left for the
+    next run, and the manifest is written the moment a file lands.
+
+    A run that ends with an empty manifest is refused outright, manifest and failures alike: the
+    plan would keep refusing every one of those sites as `local_file_too_small`.
+    """
+    from pipeline import wiki_image_downloader as DL
+
+    pace = DL.WIKIPEDIA_DELAY if delay_s is None else delay_s
+    manifest = load_manifest(manifest_path)
+    failures: list[tuple[str, str, str]] = []
+    fetched = 0
+    skipped = 0
+    digest = ""
+    for site_id, commons_file in targets:
+        if site_id in manifest:
+            skipped += 1
+            continue
+        try:
+            entry = fetch_site(site_id, commons_file, root)
+        except (FetchError, DL.DownloadError) as exc:
+            why = f"the fetch failed: {exc}"
+            failures.append((site_id, commons_file, why))
+            if failures_path is not None:
+                _append_refusal(failures_path, site_id, commons_file, why)
+            time.sleep(pace)
+            continue
+        manifest[site_id] = entry
+        digest = save_manifest(manifest_path, manifest)
+        fetched += 1
+        if on_site is not None:
+            on_site(site_id, entry)
+        time.sleep(pace)
+    if not manifest:
+        names = ", ".join(f"{sid} ({name})" for sid, name, _ in failures[:3])
+        raise FetchError(
+            f"no file of this wave could be fetched ({len(failures)} failed, first: {names}) - the "
+            f"plan would then keep refusing every one of them as `local_file_too_small`"
+        )
+    return FetchRun(
+        targets=len(targets),
+        fetched=fetched,
+        already=skipped,
+        manifest_sha256=digest
+        or hashlib.sha256(
+            json.dumps(manifest, ensure_ascii=False, indent=1, sort_keys=True).encode("utf-8")
+        ).hexdigest(),
+        failures=failures,
+    )

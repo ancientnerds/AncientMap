@@ -757,3 +757,329 @@ class TestTheFetchRun:
         assert path.is_file() and len(digest) == 64
         with pytest.raises(IF.FetchError, match="already"):
             IF.write_manifest(path, {THASOS: {"filename": "b.webp"}})
+
+
+class TestTheJoinRefusesAnEmptyKey:
+    """`url_key("")` is a key like any other, so a feature without a `Source` and a site without a
+    `source_url` used to meet in one bucket - and the site inherited the bucket's first feature.
+
+    Measured 2026-10-06: 49 curated sites carry no `source_url`, 111 of the import's 5,995 features
+    carry no `Source`, and the first of those is the church `Iglesia de San Antoni de l'Aldosa` in
+    Cardona - claimed for sites in Ukraine, Peru, Sweden and Australia alike. The plan refused them
+    all as `no_target_row`, so nothing was written; the premise was wrong all the same.
+    """
+
+    def _state(self, source_url: str, name: str = "Apolyanka") -> ST.State:
+        return ST.State(
+            sites={THASOS: {"id": THASOS, "name": name, "source_url": source_url}},
+            rows={},
+            retired=(),
+            read_at="2026-10-06T00:00:00Z",
+            sha256="0" * 64,
+        )
+
+    def _features(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "feature": 1,
+                "title": "Iglesia de San Antoni de l'Aldosa",
+                "source_url": "",
+                "image": "https://upload.wikimedia.org/wikipedia/commons/0/01/Iglesia.jpg",
+                "image_host": "upload.wikimedia.org",
+            },
+            {
+                "feature": 2,
+                "title": "Apolyanka",
+                "source_url": "https://en.wikipedia.org/wiki/Apolyanka",
+                "image": "https://upload.wikimedia.org/wikipedia/commons/1/1a/Apolyanka.jpg",
+                "image_host": "upload.wikimedia.org",
+            },
+        ]
+
+    def test_a_site_without_a_source_url_does_not_inherit_the_first_feature_without_one(
+        self,
+    ) -> None:
+        """The case as measured: no `source_url` on either side, and no title match either."""
+        claims = IH.join_import(self._state("", name="Kvitky"), self._features())
+        assert claims[THASOS]["image"] is None
+        assert claims[THASOS]["matched_on"] is None
+
+    def test_a_site_without_a_source_url_falls_back_to_its_own_title(self) -> None:
+        """The proven key still decides - a site with no URL but a title the import knows."""
+        claims = IH.join_import(self._state("   "), self._features())
+        assert claims[THASOS]["matched_on"] == "title"
+        assert claims[THASOS]["import_title"] == "Apolyanka"
+        assert claims[THASOS]["image"].endswith("Apolyanka.jpg")
+
+    def test_a_feature_without_a_source_url_never_becomes_a_url_hit(self) -> None:
+        """The other side of the same key: the bucket must not exist at all."""
+        features = [self._features()[0]]
+        claims = IH.join_import(self._state("https://en.wikipedia.org/wiki/Apolyanka"), features)
+        assert claims[THASOS]["image"] is None
+        assert claims[THASOS]["matched_on"] is None
+
+    def test_a_site_with_a_real_source_url_still_matches_it_first(self) -> None:
+        """The guard costs the proven arm nothing."""
+        features = [
+            {
+                "feature": 1,
+                "title": "Iglesia de San Antoni de l'Aldosa",
+                "source_url": "https://en.wikipedia.org/wiki/Apolyanka",
+                "image": "https://upload.wikimedia.org/wikipedia/commons/0/01/Iglesia.jpg",
+                "image_host": "upload.wikimedia.org",
+            },
+            {
+                "feature": 2,
+                "title": "Apolyanka",
+                "source_url": "https://en.wikipedia.org/wiki/Apolyanka",
+                "image": "https://upload.wikimedia.org/wikipedia/commons/1/1a/Apolyanka.jpg",
+                "image_host": "upload.wikimedia.org",
+            },
+        ]
+        claims = IH.join_import(self._state("https://en.wikipedia.org/wiki/Apolyanka"), features)
+        assert claims[THASOS]["matched_on"] == "url"
+        assert claims[THASOS]["image"].endswith("Iglesia.jpg")  # first hit wins, ambiguity kept
+
+
+def _write_webp(path: Path, size: tuple[int, int]) -> None:
+    """A real picture on disk - `stored_file` opens it, a stub that writes `RIFF` would not do."""
+    from PIL import Image
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", size, (11, 22, 33)).save(path, "WEBP", quality=80)
+
+
+def _image_size(path: Path) -> tuple[int, int]:
+    """The size on disk, read back the way `fetch.stored_file` reads it."""
+    from PIL import Image
+
+    with Image.open(path) as image:
+        return image.size
+
+
+def _no_download(monkeypatch) -> None:
+    """A Commons answer, and a download that fails the test if it is ever reached."""
+    from pipeline import wiki_image_downloader as DL
+
+    def metadata(titles: list[str]) -> dict[str, dict]:
+        return {title: dict(FETCH_META) for title in titles}
+
+    def download(url: str | None, dest: Path, width: int) -> _Result:
+        raise AssertionError(f"no download was expected, but one was asked for ({dest})")
+
+    monkeypatch.setattr(DL, "fetch_image_metadata_batch", metadata)
+    monkeypatch.setattr(DL, "download_image", download)
+
+
+class TestTheResumableFetchRun:
+    """`fetch_manifest` hands the whole wave over at the end; `run_fetch` carries the manifest along,
+    because `download_image` opens with `O_EXCL` and 800 downloads against a link that may drop are
+    not a single transaction. The step also has to *replace* the file the wave exists to replace."""
+
+    def _manifest(self, tmp_path: Path) -> Path:
+        return tmp_path / "FETCHED.json"
+
+    def test_the_manifest_is_written_after_every_file(self, tmp_path: Path, monkeypatch) -> None:
+        """Not at the end: an interruption after the first file has to leave the first file recorded."""
+        _stub_downloader(monkeypatch)
+        outcome = IF.run_fetch(
+            [(THASOS, FETCH_FILE), (HABU, FETCH_FILE)],
+            tmp_path,
+            self._manifest(tmp_path),
+            delay_s=0.0,
+        )
+        assert (outcome.fetched, outcome.already, outcome.failures) == (2, 0, [])
+        assert sorted(IF.load_manifest(self._manifest(tmp_path))) == sorted([THASOS, HABU])
+
+    def test_an_interrupted_run_continues_where_it_stopped(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """The second target dies after its file landed; the retry must not download it again -
+        `download_image` would raise on its own file, and the plan would never see the site."""
+        from pipeline import wiki_image_downloader as DL
+
+        def metadata(titles: list[str]) -> dict[str, dict]:
+            return {title: dict(FETCH_META) for title in titles}
+
+        calls: list[Path] = []
+
+        def download(url: str | None, dest: Path, width: int) -> _Result:
+            calls.append(dest)
+            if len(calls) == 2:
+                raise RuntimeError("the link dropped")
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(b"RIFF....WEBP")
+            return _Result()
+
+        monkeypatch.setattr(DL, "fetch_image_metadata_batch", metadata)
+        monkeypatch.setattr(DL, "download_image", download)
+        manifest = self._manifest(tmp_path)
+        with pytest.raises(RuntimeError):
+            IF.run_fetch(
+                [(THASOS, FETCH_FILE), (HABU, FETCH_FILE)], tmp_path, manifest, delay_s=0.0
+            )
+        assert sorted(IF.load_manifest(manifest)) == [THASOS]
+        calls.clear()
+        outcome = IF.run_fetch(
+            [(THASOS, FETCH_FILE), (HABU, FETCH_FILE)], tmp_path, manifest, delay_s=0.0
+        )
+        assert (outcome.fetched, outcome.already) == (1, 1)
+        # only the site the manifest did not carry was downloaded
+        assert calls == [tmp_path / HABU[:8] / f"{IF.local_name(FETCH_FILE)}.fetching"]
+
+    def test_a_failed_site_is_recorded_and_retried_by_the_next_run(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """A refusal is not a result: the site stays in the next run's work, never in the manifest."""
+        _stub_downloader(monkeypatch, fail_file="Broken_gate.jpg")
+        manifest = self._manifest(tmp_path)
+        refusals = tmp_path / "FETCH_REFUSALS.jsonl"
+        outcome = IF.run_fetch(
+            [(THASOS, FETCH_FILE), (SMALL, "Broken_gate.jpg")],
+            tmp_path,
+            manifest,
+            failures_path=refusals,
+            delay_s=0.0,
+        )
+        assert sorted(IF.load_manifest(manifest)) == [THASOS]
+        assert [f[0] for f in outcome.failures] == [SMALL]
+        assert SMALL in refusals.read_text(encoding="utf-8")
+        _stub_downloader(monkeypatch)
+        second = IF.run_fetch(
+            [(THASOS, FETCH_FILE), (SMALL, "Broken_gate.jpg")],
+            tmp_path,
+            manifest,
+            failures_path=refusals,
+            delay_s=0.0,
+        )
+        assert sorted(IF.load_manifest(manifest)) == sorted([THASOS, SMALL])
+        assert (second.fetched, second.already) == (1, 1)
+
+    def test_a_run_where_nothing_was_fetched_and_nothing_stands_is_refused(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """A manifest of zero rows would look like a finished fetch and leave the plan refusing
+        every site of the wave."""
+        _stub_downloader(monkeypatch, fail_file="Broken")
+        with pytest.raises(IF.FetchError, match="no file of this wave"):
+            IF.run_fetch(
+                [(SMALL, "Broken_gate.jpg")], tmp_path, self._manifest(tmp_path), delay_s=0.0
+            )
+
+    def test_the_manifest_is_replaced_atomically(self, tmp_path: Path) -> None:
+        path = self._manifest(tmp_path)
+        first = IF.save_manifest(path, {THASOS: {"filename": "a.webp"}})
+        assert len(first) == 64 and not path.with_name("FETCHED.json.tmp").exists()
+        second = IF.save_manifest(path, {THASOS: {"filename": "b.webp"}})
+        assert second != first
+        assert IF.load_manifest(path)[THASOS]["filename"] == "b.webp"
+
+    def test_a_manifest_that_is_not_readable_json_is_refused_by_name(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """Starting again from nothing would re-download files `O_EXCL` refuses to overwrite."""
+        _stub_downloader(monkeypatch)
+        path = self._manifest(tmp_path)
+        path.write_text("{halber", encoding="utf-8")
+        with pytest.raises(IF.FetchError, match="readable JSON"):
+            IF.run_fetch([(THASOS, FETCH_FILE)], tmp_path, path, delay_s=0.0)
+
+    def test_a_stored_file_that_already_reaches_the_minimum_is_adopted(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """The state an interruption leaves behind: the file landed, the entry did not. It is
+        measured, not downloaded again - the download is the one thing that would fail here."""
+        _no_download(monkeypatch)
+        dest = IF.site_dest(tmp_path, THASOS, FETCH_TITLE)
+        _write_webp(dest, (1600, 1200))
+        entry = IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
+        assert (entry["width"], entry["height"]) == ("1600", "1200")
+        assert entry["file_size_bytes"] == str(dest.stat().st_size)
+
+    def test_a_stored_panorama_is_refused_without_a_download(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """1600 px wide, under 900 px high: `download_image` keeps the aspect ratio, so the fetch
+        returns the same box. 121 of the 807 refusals of run -002 are exactly this."""
+        _no_download(monkeypatch)
+        _write_webp(IF.site_dest(tmp_path, THASOS, FETCH_TITLE), (1600, 812))
+        with pytest.raises(IF.FetchError, match="panorama"):
+            IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
+
+    def test_an_original_narrower_than_the_minimum_is_refused_without_a_download(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """`imageinfo` states the original's width before anything is downloaded, and a fetch
+        cannot deliver more pixels than the original holds."""
+        from pipeline import wiki_image_downloader as DL
+
+        def metadata(titles: list[str]) -> dict[str, dict]:
+            return {title: dict(FETCH_META, width="1200") for title in titles}
+
+        def download(url: str | None, dest: Path, width: int) -> _Result:
+            raise AssertionError("no download was expected, but one was asked for")
+
+        monkeypatch.setattr(DL, "fetch_image_metadata_batch", metadata)
+        monkeypatch.setattr(DL, "download_image", download)
+        with pytest.raises(IF.FetchError, match="1200 px wide"):
+            IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
+
+    def test_a_too_small_stored_file_is_replaced_by_the_download(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """The wave's own case: the site serves an 800 px copy and the fetch has to swap in the
+        1600 px one. `download_image` never replaces anything, so the swap is the lane's own."""
+        from pipeline import wiki_image_downloader as DL
+
+        def metadata(titles: list[str]) -> dict[str, dict]:
+            return {title: dict(FETCH_META) for title in titles}
+
+        def download(url: str | None, dest: Path, width: int) -> _Result:
+            _write_webp(dest, (1600, 1200))
+            return _Result(width=1600, height=1200, file_size=dest.stat().st_size)
+
+        monkeypatch.setattr(DL, "fetch_image_metadata_batch", metadata)
+        monkeypatch.setattr(DL, "download_image", download)
+        dest = IF.site_dest(tmp_path, THASOS, FETCH_TITLE)
+        _write_webp(dest, (800, 600))
+        entry = IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
+        assert (entry["width"], entry["height"]) == ("1600", "1200")
+        assert _image_size(dest) == (1600, 1200)
+        assert not dest.with_name(f"{dest.name}.fetching").exists()
+
+    def test_a_file_on_disk_that_is_not_a_picture_is_refused_by_name(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """Half a download from an interrupted run would otherwise be measured as a picture."""
+        _no_download(monkeypatch)
+        dest = IF.site_dest(tmp_path, THASOS, FETCH_TITLE)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"\x00\x01\x02 not a picture")
+        with pytest.raises(IF.FetchError, match="not a picture"):
+            IF.fetch_site(THASOS, FETCH_TITLE, tmp_path)
+
+    def test_a_name_the_file_system_refuses_is_refused_by_name(self) -> None:
+        """The offsite tree and the VPS tree both live on Windows volumes, where `"` cannot be in a
+        file name; production carries no row whose filename has one (measured 2026-10-06 over the
+        read's 48,567 rows), so three of the 807 refusals are named instead of renamed."""
+        with pytest.raises(IF.FetchError, match="may not have"):
+            IF.local_name('Makedonisches Grab Korinos "A" Dromos.jpg')
+
+    def test_a_target_whose_name_cannot_be_written_is_a_refusal_not_a_crash(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        """The first full run died on exactly this: `download_image` raised `OSError: [Errno 22]`
+        and took the other 750 sites of the wave with it."""
+        _stub_downloader(monkeypatch)
+        manifest = tmp_path / "FETCHED.json"
+        refusals = tmp_path / "FETCH_REFUSALS.jsonl"
+        outcome = IF.run_fetch(
+            [(THASOS, FETCH_FILE), (HABU, 'Piezas del Conjunto "Los Gemelos".jpg')],
+            tmp_path,
+            manifest,
+            failures_path=refusals,
+            delay_s=0.0,
+        )
+        assert sorted(IF.load_manifest(manifest)) == [THASOS]
+        assert [f[0] for f in outcome.failures] == [HABU]
+        assert "may not have" in refusals.read_text(encoding="utf-8")
