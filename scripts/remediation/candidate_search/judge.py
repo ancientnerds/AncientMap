@@ -216,6 +216,11 @@ def check_answer(answer: Mapping[str, Any], site: Mapping[str, Any]) -> list[str
     wanted = {c["file"] for c in site["candidates"]}
     if answer.get("site_id") != site["site_id"]:
         problems.append(f"site_id: {answer.get('site_id')!r} is not {site['site_id']!r}")
+    # The stamp is not decoration: a verdict without the model that made it cannot be audited, and
+    # the audit of a wrong picture is exactly what this stage exists for.
+    for key in ("answered_by", "model"):
+        if not str(answer.get(key) or "").strip():
+            problems.append(f"{key}: the answer does not name who judged, or with which model")
     verdicts = answer.get("verdicts")
     if not isinstance(verdicts, list):
         return problems + ["verdicts: no list"]
@@ -283,6 +288,8 @@ def import_answers(
                         (c["height"] for c in site["candidates"] if c["file"] == entry["file"]), 0
                     ),
                     "note": str(entry.get("note") or ""),
+                    "answered_by": str(answer.get("answered_by") or ""),
+                    "model": str(answer.get("model") or ""),
                 }
             )
     out.mkdir(parents=True, exist_ok=True)

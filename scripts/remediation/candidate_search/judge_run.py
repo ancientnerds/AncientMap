@@ -3,15 +3,15 @@ write-targets (the `depicts` verdicts the INSERT lane's fetch takes).
 
 ```bash
 $PY scripts/remediation/candidate_search/judge_run.py judge-export  --run-dir <run>
-$PY scripts/remediation/candidate_search/judge_run.py judge-import  --run-dir <run> --handoff <H>
+$PY scripts/remediation/candidate_search/judge_run.py judge-import  --run-dir <run>
 $PY scripts/remediation/candidate_search/judge_run.py write-targets --run-dir <run>
 ```
 
 `judge-export` downloads every candidate's Commons rendering into `<run>/pictures/` and writes one
-prompt per site into `<run>/<batch_id>/`, which is where the handoff reads it. An agent answers one
-JSON object per site; `judge-import` reads the recorded answers back from the handoff (each recorded
-under the name of the model that wrote it), checks every one of them and writes `VERDICTS.jsonl` plus
-the refusals.
+prompt per site into `<run>/<batch_id>/`, which is where the question lives. An agent writes its
+answer to `<run>/<batch_id>/<site_id>.answer.json` and **has to name itself and its model** there -
+`judge-import` refuses an answer without that stamp, because the audit of a wrong picture is what this
+stage exists for. `judge-import` checks every answer and writes `VERDICTS.jsonl` plus the refusals.
 
 After `write-targets`, the wave is an ordinary INSERT wave: `import_hero/run.py fetch` takes the
 `TARGETS.jsonl` pairs, and `insert-plan`, `insert_writer.py` and `insert-accept` are the same five
@@ -57,25 +57,22 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     ]
 
 
-def recorded(handoff: Path) -> dict[str, dict[str, Any]]:
-    """Every answer the handoff holds, keyed by the site it answers."""
-    out: dict[str, dict[str, Any]] = {}
-    manifest = handoff / "MANIFEST.jsonl"
-    if not manifest.is_file():
-        raise JudgeError(f"{manifest} does not exist - the handoff has recorded nothing yet")
-    for line in manifest.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        record = json.loads(line)
-        if record.get("stage") not in (None, "judge"):
-            continue
-        label = str(record.get("label") or "")
-        if not label:
-            continue
-        answer_path = handoff / f"{label}.answer.json"
-        if answer_path.is_file():
-            out[label] = json.loads(answer_path.read_text(encoding="utf-8"))
-    return out
+def recorded(out: Path) -> dict[str, dict[str, Any]]:
+    """Every answer the run's batch folders hold, keyed by the site it answers.
+
+    An answer is a `<run>/<batch_id>/<site_id>.answer.json` beside the question it answers, and it
+    has to name the agent and the model that judged - a verdict without that stamp is refused by
+    `judge.check_answer`, because the audit of a wrong picture is the point of this stage.
+    """
+    found: dict[str, dict[str, Any]] = {}
+    folders = sorted(p for p in out.glob("cand-*") if p.is_dir())
+    if not folders:
+        raise JudgeError(f"{out} holds no cand-* batch folder - run judge-export first")
+    for folder in folders:
+        for answer_path in sorted(folder.glob("*.answer.json")):
+            answer = json.loads(answer_path.read_text(encoding="utf-8"))
+            found[str(answer.get("site_id") or answer_path.stem)] = answer
+    return found
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -87,18 +84,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     for name in ("judge-export", "judge-import", "write-targets"):
         command = commands.add_parser(name)
         command.add_argument("--run-dir", type=Path, required=True)
-        if name == "judge-import":
-            command.add_argument("--handoff", type=Path, required=True)
         if name == "judge-export":
             command.add_argument("--images-per-batch", type=int, default=CJ.IMAGES_PER_BATCH)
             command.add_argument("--sites-per-batch", type=int, default=CJ.SITES_PER_BATCH)
+            command.add_argument(
+                "--limit",
+                type=int,
+                default=None,
+                help="only the first N sites with candidates - a pilot that measures the "
+                "judgement's precision over the run's real candidates",
+            )
     args = parser.parse_args(argv)
     try:
         if args.command == "judge-export":
             client = httpx.Client(timeout=60, follow_redirects=True, headers=HEADERS)
+            sites = read_jsonl(args.run_dir / CS.CANDIDATES)
+            if args.limit is not None:
+                sites = sites[: args.limit]
             summary = CJ.export(
                 args.run_dir,
-                read_jsonl(args.run_dir / CS.CANDIDATES),
+                sites,
                 client,
                 images_per_batch=args.images_per_batch,
                 sites_per_batch=args.sites_per_batch,
@@ -107,7 +112,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             sites = {
                 str(site["site_id"]): site for site in read_jsonl(args.run_dir / CS.CANDIDATES)
             }
-            summary = CJ.import_answers(args.run_dir, recorded(args.handoff), sites)
+            summary = CJ.import_answers(args.run_dir, recorded(args.run_dir), sites)
         else:
             summary = CJ.write_targets(args.run_dir, read_jsonl(args.run_dir / CJ.VERDICTS))
     except (JudgeError, OSError, ValueError) as exc:

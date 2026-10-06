@@ -49,6 +49,8 @@ def _answer(site: dict, verdicts: list[str], note: str = "") -> dict:
             for c, v in zip(site["candidates"], verdicts, strict=True)
         ],
         "note": "",
+        "answered_by": "mcode-judge-cand-0001",
+        "model": "MiniMax-M3.1-Flash-Preview",
     }
 
 
@@ -136,6 +138,27 @@ class TestTheAnswerShape:
         summary = CJ.import_answers(tmp_path / "run", {}, {"a": _site("a", ["x.jpg"])})
         assert summary["sites_refused"] == 1
         assert "no answer" in (tmp_path / "run" / CJ.REFUSED).read_text(encoding="utf-8")
+
+    def test_an_answer_without_the_model_stamp_is_refused(self, tmp_path: Path) -> None:
+        """A verdict nobody can attribute cannot be audited, and the audit of a wrong picture is
+        what this stage exists for."""
+        site = _site("a", ["x.jpg"])
+        answer = _answer(site, [CJ.DEPICTS])
+        answer["model"] = ""
+        summary = CJ.import_answers(tmp_path / "run", {"a": answer}, {"a": site})
+        assert summary["sites_refused"] == 1
+        assert "model" in (tmp_path / "run" / CJ.REFUSED).read_text(encoding="utf-8")
+
+    def test_a_kept_verdict_carries_the_agent_and_the_model_that_made_it(
+        self, tmp_path: Path
+    ) -> None:
+        site = _site("a", ["x.jpg"])
+        CJ.import_answers(tmp_path / "run", {"a": _answer(site, [CJ.DEPICTS])}, {"a": site})
+        row = json.loads(
+            (tmp_path / "run" / CJ.VERDICTS).read_text(encoding="utf-8").splitlines()[0]
+        )
+        assert row["model"] == "MiniMax-M3.1-Flash-Preview"
+        assert row["answered_by"] == "mcode-judge-cand-0001"
 
 
 class TestTheWriteSide:
