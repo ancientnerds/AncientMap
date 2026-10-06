@@ -7,7 +7,7 @@ import json
 import logging
 import re
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 # Article LLM calls use Opus with extended thinking and can run for several
@@ -213,6 +213,12 @@ def _cluster_related_items(
 
     clusters = result.get("clusters", [])
     reasoning = result.get("reasoning", "")
+    if not isinstance(clusters, list):
+        logger.warning(
+            "Clustering returned %s for 'clusters', keeping the items unclustered",
+            type(clusters).__name__,
+        )
+        return items
     if clusters:
         logger.info(f"Clustering found {len(clusters)} groups: {reasoning}")
 
@@ -220,6 +226,18 @@ def _cluster_related_items(
     runner_indices: set[int] = set()
 
     for cluster in clusters:
+        # A group is a list of item indices. The strict JSON schema says so, but
+        # the model returned a bare index where a group belongs on 2026-10-05
+        # and `for i in cluster` raised TypeError, which killed the weekly
+        # journal in three consecutive attempts. Validate the group's shape,
+        # not only the indices inside it.
+        if not isinstance(cluster, list):
+            logger.warning(
+                "Clustering returned %s where a group belongs, skipping it: %r",
+                type(cluster).__name__,
+                cluster,
+            )
+            continue
         # Validate indices (LLM may return strings instead of ints)
         valid = []
         for i in cluster:
@@ -1216,7 +1234,31 @@ def generate_weekly_article(
      12. store       — assemble final markdown, persist to DB
 
     Returns True if an article was created.
+
+    A crash writes its error into the article heartbeat before it propagates.
+    Nothing else does: without it a run that died mid-week left a heartbeat row
+    saying "ok" until the next deploy — on 2026-10-05 three attempts died in
+    _cluster_related_items, the fourth was killed by a deploy at 06:41 UTC, and
+    the dashboard showed a healthy pipeline throughout.
     """
+    t0_total = time.time()
+    step_data: dict = {}
+    try:
+        return _generate_weekly_article(settings, step_data, t0_total, week_override=week_override)
+    except Exception as exc:
+        _write_final_heartbeat(step_data, t0_total, error=f"{type(exc).__name__}: {exc}")
+        raise
+
+
+def _generate_weekly_article(
+    settings: LyraSettings,
+    step_data: dict,
+    t0_total: float,
+    *,
+    week_override: tuple[datetime, datetime] | None = None,
+) -> bool:
+    """Body of generate_weekly_article, split out so the caller can record a
+    crashed run's heartbeat (see there)."""
     if not settings.minimax_api_key:
         logger.error("No MiniMax API key configured — required for Theo research stages")
         return False
@@ -1225,9 +1267,6 @@ def generate_weekly_article(
     from pipeline.lyra.citation_verifier import verify_all_citations
     from pipeline.lyra.journal_assessor import assess_and_fix
     from pipeline.lyra.research_stages import ClusterResult, research_cluster
-
-    t0_total = time.time()
-    step_data: dict = {}
 
     if week_override:
         week_start, week_end = week_override
@@ -1448,8 +1487,34 @@ def generate_weekly_article(
     return True
 
 
+#: The journal opens on Monday 06:00 UTC …
+JOURNAL_SLOT_HOUR = 6
+#: … and stays open this many hours, so a run that dies after midnight still
+#: gets its retries. A journal run takes hours (6 h 49 min on 2026-10-05) and
+#: every deploy kills it, so a Monday-only window loses the week: on 2026-10-05
+#: the last attempt was killed by the 06:41 UTC deploy on Tuesday and nothing
+#: ever tried again.
+JOURNAL_GRACE_HOURS = 48
+
+
+def journal_slot(now: datetime | None = None) -> datetime:
+    """Monday 06:00 UTC of `now`'s week — when the journal for the week before opens."""
+    now = now or datetime.now(UTC)
+    return (now - timedelta(days=now.weekday())).replace(
+        hour=JOURNAL_SLOT_HOUR, minute=0, second=0, microsecond=0
+    )
+
+
+def journal_week_key(now: datetime | None = None) -> date:
+    """Monday of the week a journal generated right now would cover — the key the
+    attempt budget is spent against."""
+    week_start, _week_end = _get_completed_week_range(now)
+    return week_start.date()
+
+
 def should_generate_article(now: datetime | None = None) -> bool:
-    """Check if it's time to generate the weekly journal: Monday 06:00 UTC.
+    """Check if it's time to generate the weekly journal: from Monday 06:00 UTC,
+    for JOURNAL_GRACE_HOURS.
 
     Was Sunday 20:00 UTC until 2026-09-13. The MiniMax weekly token budget
     resets Monday 00:00 UTC, so the Sunday slot ran on whatever the week had
@@ -1460,6 +1525,12 @@ def should_generate_article(now: datetime | None = None) -> bool:
     last THEO_BATCH_MAX_DAYS_TO_RESET days before the reset), the run has an
     18-hour window instead of four, and Sunday's last news items make it into
     the journal instead of being cut off at 20:00.
+
+    The window ends 48 h after the slot because the run outlives Monday: a
+    crashed attempt is retried on Tuesday (see JOURNAL_GRACE_HOURS). The
+    attempt budget itself (journal_attempts) is what stops it from retrying
+    forever — the window only decides *when* a retry may happen.
     """
     now = now or datetime.now(UTC)
-    return now.weekday() == 0 and now.hour >= 6  # Monday 6 AM UTC
+    slot = journal_slot(now)
+    return slot <= now < slot + timedelta(hours=JOURNAL_GRACE_HOURS)

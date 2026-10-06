@@ -1121,7 +1121,9 @@ class TestTheFetchCommand:
         looked at it, so the very directory the refusal looks for was created first - and the fetch
         went on to read production instead. On the CI runner, which has no route to the VPS, that
         surfaced as the only red test of the push (run 37508910683); here it was green for the wrong
-        reason, refused by the missing import export, which says "does not exist" as well."""
+        reason, refused by the missing import export, which says "does not exist" as well.
+
+        The marker this test carried on main is gone with that fix, as 72b4eac asked for it."""
         missing = tmp_path / "no-such-run"
         code = IR.main(
             [

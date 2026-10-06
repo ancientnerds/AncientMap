@@ -163,6 +163,7 @@ class PipelineStatusResponse(BaseModel):
     status: str  # "online", "offline"
     last_heartbeat: str | None
     last_cycle_ok: bool
+    last_error: str | None = None
     total_elapsed: float | None
     steps: dict[str, PipelineStepData]
 
@@ -897,13 +898,32 @@ def get_pipeline_status(
     else:
         last_hb = row[0]
         cycle_status = row[1]
+        cycle_error = row[2]
         raw_step_data = row[3] or {}
 
         age_seconds = (datetime.now(UTC) - last_hb).total_seconds()
         # Online if heartbeat within 2 hours (news pipeline runs hourly)
         # Article pipeline runs weekly, so use 8 days
         max_age = 691200 if pipeline == "article" else 7200
-        is_online = age_seconds < max_age
+
+        # A journal run writes a step as "run" when it starts it and never
+        # rewrites it when it ends, so a leftover "run" means the process died
+        # mid-step — the row's own status stays "ok", because
+        # _write_article_heartbeat hardcodes it. That is what the 2026-10-05 run
+        # looked like for ten hours after a deploy killed it mid-cluster. The
+        # news pipeline is not checked: it legitimately holds one "run" step for
+        # the whole cycle it is in.
+        unfinished = (
+            sorted(
+                k
+                for k, v in raw_step_data.items()
+                if isinstance(v, dict) and v.get("status") == "run"
+            )
+            if pipeline == "article"
+            else []
+        )
+        stalled = bool(unfinished)
+        is_online = age_seconds < max_age and not stalled
 
         # Filter steps and extract total_elapsed
         total_elapsed = (
@@ -924,11 +944,19 @@ def get_pipeline_status(
                         error=v.get("error"),
                     )
 
+        last_error = cycle_error
+        if stalled and not last_error:
+            last_error = (
+                f"run stopped during: {', '.join(unfinished)} "
+                f"(heartbeat frozen at {last_hb.isoformat()})"
+            )
+
         result = PipelineStatusResponse(
             pipeline=pipeline,
             status="online" if is_online else "offline",
             last_heartbeat=last_hb.isoformat(),
-            last_cycle_ok=(cycle_status == "ok"),
+            last_cycle_ok=(cycle_status == "ok") and not stalled,
+            last_error=last_error,
             total_elapsed=total_elapsed,
             steps=steps,
         )

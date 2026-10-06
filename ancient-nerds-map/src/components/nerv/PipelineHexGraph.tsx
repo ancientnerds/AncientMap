@@ -211,6 +211,11 @@ export default function PipelineHexGraph({ pipeline, pollInterval = 60000 }: Pip
           </button>
         )}
         {error && <span className="phg-error">{error}</span>}
+        {!error && data?.last_error && (
+          <span className="phg-error" title={data.last_error}>
+            {data.last_error}
+          </span>
+        )}
       </div>
       {countdown && !replay.active && (
         <div className="phg-countdown">
