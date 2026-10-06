@@ -678,6 +678,30 @@ $PY scripts/remediation/candidate_search/run.py \
     --out output/remediation/candidate_search/candidates-2026-10-06 --limit 100   # a pilot
 ```
 
+**The judgement (`candidate_search/judge.py`) is the stage that decides.** One verdict per candidate -
+`depicts`, `region_or_type`, `other_site` - and **only `depicts` becomes a fetch target**
+(`write_targets`: one `(site_id, commons_file)` per site, the largest of them, which is exactly what
+the INSERT lane's `run_fetch` takes). The transport is the handoff the project already uses: the code
+writes the question, an agent **looks at the bytes** and answers one JSON object per site, the code
+checks the answer's shape and records it under the name of the model that wrote it. A verdict is
+never taken from the file name or from prior knowledge - the pilot's own miss list is why.
+
+Batches of 36 candidates packed **by site**, so a site is never split across two agents; a site with
+more candidates than a batch gets a batch of its own and the surplus is refused **by name**, because a
+candidate nobody looks at is one the site could have had. An answer that names a file nobody offered,
+judges one twice, leaves one unjudged or uses an unknown verdict lands in
+`CANDIDATE_VERDICT_REFUSALS.jsonl` with its reason.
+
+```bash
+$PY scripts/remediation/candidate_search/judge_run.py judge-export  --run-dir <run>          # images + questions
+$PY scripts/remediation/candidate_search/judge_run.py judge-import  --run-dir <run> --handoff <H>
+$PY scripts/remediation/candidate_search/judge_run.py write-targets --run-dir <run>          # depicts -> targets
+```
+
+After `write-targets` the wave is an ordinary INSERT wave: `import_hero/run.py fetch` takes the
+`TARGETS.jsonl` pairs, and `insert-plan`, `insert_writer.py` and `insert-accept` are the same five
+writer steps and the same acceptance every other write of this project used.
+
 ### 3.7.2 The floor the owner lowered (2026-10-06), and exactly what it released
 
 Owner decision, 2026-10-06: *"for these cases the existing picture becomes the hero"* - the size a
