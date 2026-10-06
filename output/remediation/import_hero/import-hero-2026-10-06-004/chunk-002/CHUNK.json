@@ -1,0 +1,22 @@
+{
+ "chunk": 2,
+ "confidence": "authoritative",
+ "label": "import-hero import-hero-2026-10-06-004 - the import image takes the hero flag",
+ "lane": "import-hero",
+ "may_empty": [
+  "5d8a914c-d69d-409c-9713-588113811da5",
+  "88c417e9-5131-401f-8187-1da8cc344b0f",
+  "97443726-74e9-40ac-b388-5daa15448ff1",
+  "9b3a51e8-25ee-4936-932a-af5e2fd48e01",
+  "9b3a978b-e3d2-4257-845e-a435d92bd535",
+  "a86f1885-cf64-4dfc-bbec-b388a3ae2ebf",
+  "a9a32ee2-bd62-4fe4-8515-0ccdda65a7ee",
+  "aa60e5f1-a3f5-4f27-b152-44ad38e72f54"
+ ],
+ "rollback_stamp": "import-hero-2026-10-06-004-002-rollback",
+ "rows": 684,
+ "run_stamp": "import-hero-2026-10-06-004-002",
+ "sites": 100,
+ "stamp": "import-hero-2026-10-06-004",
+ "test_id": "import-hero/owner-2026-10-05"
+}

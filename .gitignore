@@ -453,6 +453,8 @@ output/remediation/import_hero/*/
 !output/remediation/import_hero/import-hero-2026-10-05/
 !output/remediation/import_hero/import-hero-2026-10-05-002/
 !output/remediation/import_hero/import-hero-2026-10-05-003/
+!output/remediation/import_hero/import-hero-2026-10-06-004/
+!output/remediation/import_hero/import-hero-2026-10-06-005/
 output/remediation/import_hero/import-hero-2026-10-05/chunk-0*/
 !output/remediation/import_hero/import-hero-2026-10-05/chunk-001/
 !output/remediation/import_hero/import-hero-2026-10-05/chunk-001-reversal/
@@ -460,6 +462,9 @@ output/remediation/import_hero/import-hero-2026-10-05/chunk-0*/
 output/remediation/import_hero/*/READ.json
 output/remediation/import_hero/*/VERIFY_READ.json
 output/remediation/import_hero/*/IMPORT_CLAIMS.json
+# The pack is the transport of the wave's files, not its record: 152 MB of pictures that the
+# manifest names and the served tree holds. The manifest beside it is versioned.
+output/remediation/import_hero/*/FETCHED_WAVE.tar.gz
 # The site_external_ids repair (2026-09-22): hand-researched, not regenerable from any run, and not yet
 # applied - the plan, the statement, the undo and the evidence are versioned; the rehearsal keeps
 # nothing and is rendered again by `qid_repair.py render`.
