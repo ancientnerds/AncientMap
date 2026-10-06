@@ -619,6 +619,49 @@ import-hero lane refused it for and **what would close it**; the counts are in
 
 A count is a fact about today; that file is what the next campaign works from.
 
+### 3.7.3 The candidate search (2026-10-06): a name is what a picture-less site still has
+
+`no_picture_at_all` is the largest class of §3.7.1 and the only one nothing this lane wrote can
+close: 1,081 sites have no gallery row, no `thumbnail_url` and **no Wikidata item** (852 of them),
+so `vision.wanted_files` answers an empty candidate list for them - there is no P18 and no P373 to
+read. Owner decision 2026-10-06: build the search, let the model judge every candidate, and let the
+INSERT lane write only what it confirmed.
+
+`scripts/remediation/candidate_search/` (`search.py`, `run.py`) asks Commons two questions per site
+and keeps what reaches the floor:
+
+* `search(f"{name} filetype:bitmap")` - the file namespace. **`filetype:bitmap` is not a nicety**:
+  without it the same query answers scanned books (measured: all five hits for *Monte Lazzu* are
+  PDFs from a library digitisation project).
+* `search(f'intitle:"{name}" filetype:bitmap")` - the title form. A name with a comma or a qualifier
+  (*Wamanmarka, Lima*) matches nothing here; that site is then refused by name rather than searched
+  for something that merely resembles it.
+* `members(name)` - the category that carries the site's own name, kept because a category is named
+  after its site where a search only matches words. Measured nearly empty: **0 still pictures for 9
+  of 10** sites on the first sample (Cerna has a category, its two files are not pictures).
+
+**Measured, twice, before and after the code existed.** A 25-site sample of the class: 164 candidate
+pictures, **141 of them 800x300 or larger**, **13 of the 25 sites** carrying at least one. The pilot
+over the first 100 sites of the class (`CANDIDATE_SUMMARY.json`): **51 sites with candidates, 485
+candidates**, and 49 refused by name - 45 `no_candidate` (Commons names no file for them at all) and
+4 `all_too_small` (pictures exist, none reaches the floor).
+
+Two facts about that run that are worth more than the headline:
+
+* **`Commons.imageinfo` never returns a size.** It asks for `url|mime|size|sha1`, so 164 candidates
+  measured `0x0` until `Commons.sizes` asked again with `dimensions` in `iiprop`. A floor checked
+  against a size nobody asked for is no floor.
+* **A candidate is not a picture of the site.** The same sample answers a cat in Sidi Bou Said for
+  the site *Sidi Said* and a church in the Philippines for *Las Capellanías*. So the search decides
+  nothing about whether a candidate depicts its site - it only decides what is worth showing. That
+  is the judge's question, and only a `depicts` verdict reaches the fetch and the INSERT lane.
+
+```bash
+PY=./.venv/Scripts/python.exe
+$PY scripts/remediation/candidate_search/run.py \
+    --out output/remediation/candidate_search/candidates-2026-10-06 --limit 100   # a pilot
+```
+
 ### 3.7.2 The floor the owner lowered (2026-10-06), and exactly what it released
 
 Owner decision, 2026-10-06: *"for these cases the existing picture becomes the hero"* - the size a
