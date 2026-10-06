@@ -113,7 +113,9 @@ def _floor_of(run: Path, min_width: int | None, min_height: int | None) -> tuple
 
 
 def _write_floor(run: Path, floor: tuple[int, int]) -> None:
-    run.mkdir(parents=True, exist_ok=True)
+    """The floor into the run directory. It does not create that directory: a command that refuses
+    its run by name must reach the refusal without having written anything first, so `plan` and
+    `fetch` decide for themselves whether the run exists."""
     (run / FLOOR).write_text(
         json.dumps(
             {
@@ -156,6 +158,9 @@ def cmd_plan(
 ) -> dict[str, Any]:
     """The read, the join and the chunks. Nothing outside `run` is written."""
     served = _floor_of(run, floor[0] if floor else None, floor[1] if floor else None)
+    # `plan` is the command that starts a run, so it may create the directory - and it writes the
+    # floor before the read, so the read that follows is the one this floor was planned at.
+    run.mkdir(parents=True, exist_ok=True)
     _write_floor(run, served)
     data, sha = _read_once(run)
     state = ST.load_read(run / RD.READ)
@@ -208,8 +213,10 @@ def cmd_fetch(
     the wave's own path free.
     """
     served = _floor_of(run, floor[0] if floor else None, floor[1] if floor else None)
-    _write_floor(run, served)
     data, sha, claims, refusals = _wave_of(run, source, start=start, floor=served)
+    # after `_wave_of`, never before it: `_wave_of` refuses a run that does not exist by name, and
+    # writing the floor into it first would create the very directory that refusal looks for.
+    _write_floor(run, served)
     by_reason: dict[str, int] = {}
     for refusal in refusals:
         by_reason[str(refusal.get("reason"))] = by_reason.get(str(refusal.get("reason")), 0) + 1

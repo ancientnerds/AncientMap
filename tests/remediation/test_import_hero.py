@@ -1116,17 +1116,27 @@ class TestTheFetchCommand:
         assert not (run / IR.FETCHED).exists()
 
     def test_a_run_without_its_claims_is_refused_by_name(self, tmp_path: Path, capsys) -> None:
+        """The refusal has to name the run and cost nothing: no directory created, and production
+        never read. Measured 2026-10-06: `fetch` wrote the floor into the run before `_wave_of`
+        looked at it, so the very directory the refusal looks for was created first - and the fetch
+        went on to read production instead. On the CI runner, which has no route to the VPS, that
+        surfaced as the only red test of the push (run 37508910683); here it was green for the wrong
+        reason, refused by the missing import export, which says "does not exist" as well."""
+        missing = tmp_path / "no-such-run"
         code = IR.main(
             [
                 "fetch",
                 "--run-dir",
-                str(tmp_path / "no-such-run"),
+                str(missing),
                 "--root",
                 str(tmp_path / "images"),
             ]
         )
         assert code == 1
-        assert "does not exist" in capsys.readouterr().err
+        err = capsys.readouterr().err
+        assert f"{missing} does not exist" in err
+        assert "plan --run-dir" in err
+        assert not missing.exists()
 
 
 class TestTheJoinRefusesAnEmptyKey:
