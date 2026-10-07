@@ -15,6 +15,7 @@ from typing import cast
 from langchain_core.tools import tool
 from sqlalchemy import text
 
+from api.services.lyra_backends import CHAT_EFFORT, CHAT_THINKING, raise_on_refusal
 from pipeline.database import get_session
 from pipeline.lyra.site_search import escape_ilike
 from pipeline.lyra.site_search import search_sites as _search_sites
@@ -117,7 +118,7 @@ def _is_vague_query(query: str) -> bool:
 async def _expand_query(query: str, *, vague: bool = False) -> list[str]:
     """Generate 2-3 query variants to explore different phrasings.
 
-    Uses Haiku with a tiny prompt. Always returns the original query
+    Uses the chat model (Claude Haiku 5.5) with a tiny prompt. Always returns the original query
     as the first variant, plus 1-2 alternative phrasings.
 
     For non-English queries, generates English variants since the
@@ -139,14 +140,16 @@ async def _expand_query(query: str, *, vague: bool = False) -> list[str]:
             system=_EXPAND_VAGUE_SYSTEM if vague else _EXPAND_SYSTEM,
             messages=[{"role": "user", "content": query}],
             max_tokens=256,
-            temperature=0.1,
+            thinking=CHAT_THINKING,
             output_config={
+                "effort": CHAT_EFFORT,
                 "format": {
                     "type": "json_schema",
                     "schema": cast(dict, _DECOMPOSE_SCHEMA["json_schema"])["schema"],
-                }
+                },
             },
         )
+        raise_on_refusal(resp)
         raw = "".join(b.text for b in resp.content if hasattr(b, "text") and b.type == "text")
         if not raw.strip():
             return [query]
@@ -170,7 +173,7 @@ _escape_ilike = escape_ilike
 # Configuration
 # ---------------------------------------------------------------------------
 
-LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "claude-haiku-4-5-20251001")
+LLM_MODEL = os.getenv("LYRA_LLM_MODEL", "claude-haiku-5-5")
 
 
 # ---------------------------------------------------------------------------

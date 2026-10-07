@@ -32,7 +32,7 @@ def _fast_ctx() -> RequestContext:
     return RequestContext(
         backend_type="anthropic",
         model_tier="fast",
-        model_name="claude-haiku-4-5-20251001",
+        model_name="claude-haiku-5-5",
         embedding_backend="voyage",
         supports_thinking=False,
         supports_tools=True,
@@ -43,7 +43,7 @@ def _heavy_ctx() -> RequestContext:
     return RequestContext(
         backend_type="anthropic",
         model_tier="heavy",
-        model_name="claude-haiku-4-5-20251001",
+        model_name="claude-haiku-5-5",
         embedding_backend="voyage",
         supports_thinking=True,
         supports_tools=True,
@@ -54,7 +54,7 @@ def _premium_ctx() -> RequestContext:
     return RequestContext(
         backend_type="anthropic",
         model_tier="premium",
-        model_name="claude-haiku-4-5-20251001",
+        model_name="claude-haiku-5-5",
         embedding_backend="voyage",
         supports_thinking=True,
         supports_tools=True,
@@ -234,7 +234,7 @@ class TestPipelineEvents:
         init_events = [e for e in events if e.get("stage") == "pipeline_init"]
         assert len(init_events) == 1
         meta = init_events[0]["meta"]
-        assert meta["model"] == "claude-haiku-4-5-20251001"
+        assert meta["model"] == "claude-haiku-5-5"
         assert meta["tier"] == "heavy"
         assert meta["backend"] == "anthropic"
         assert meta["embedding"] == "Voyage-4"
@@ -613,3 +613,32 @@ class TestVisualizationGaps:
         assert len(TOOLS) == len(self.TOOL_NAMES_IN_REGISTRY), (
             f"Backend has {len(TOOLS)} tools, frontend registry has {len(self.TOOL_NAMES_IN_REGISTRY)}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Safety-classifier refusals (Claude Haiku 5.5)
+# ---------------------------------------------------------------------------
+
+
+class TestRefusal:
+    @pytest.mark.asyncio
+    async def test_refused_round_emits_refusal_text_once_and_finishes(self):
+        """A refusal is not retried: one call, Lyra's refusal text, normal done event."""
+        from api.services.lyra_agent import _REFUSAL_RESPONSE
+        from api.services.lyra_backends import LyraRefusal
+
+        mock_backend = MagicMock()
+        mock_backend.generate = AsyncMock(side_effect=LyraRefusal("general_harms"))
+
+        with (
+            patch("api.services.lyra_agent.get_backend", return_value=mock_backend),
+            patch("api.services.lyra_agent.set_request_context"),
+        ):
+            from api.services.lyra_agent import run_agent_stream
+
+            events = await _collect_events(run_agent_stream(message="hi", ctx=_fast_ctx()))
+
+        assert mock_backend.generate.await_count == 1
+        texts = [e["content"] for e in events if e.get("type") == "diffusion"]
+        assert texts == [_REFUSAL_RESPONSE]
+        assert any(e.get("type") == "done" for e in events)

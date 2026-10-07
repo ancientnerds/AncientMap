@@ -1307,11 +1307,11 @@ ESCALATION_SCHEMA:
       <div class="node node-llm">
         <div class="node-title">
           Multi-Model Agent Loop
-          <span class="badge badge-model">Haiku 4.5</span>
+          <span class="badge badge-model">Haiku 5.5</span>
         </div>
         <div class="node-desc">
           Streams tokens via <code>LLMBackend.stream()</code>. Up to 5 tool-call rounds.<br>
-          LLM intent classifier routes trivial messages (greetings) to skip retrieval. All requests use the Anthropic Haiku cloud backend.<br>
+          LLM intent classifier routes trivial messages (greetings) to skip retrieval. All requests use Claude Haiku 5.5 with thinking off and effort <code>low</code>; a safety-classifier refusal is answered once, never retried.<br>
           Final response formatted via <code>complete()</code> with <code>LYRA_RESPONSE_SCHEMA</code>.
         </div>
       </div>
@@ -1642,8 +1642,8 @@ ESCALATION_SCHEMA:
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--accent); font-weight: 700;">~1,120ms</div>
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">2x p50 (sites + news). Tool-triggered searches can hit all 5 collections.</div>
 
-    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">LLM first token (Haiku 4.5)</div>
-    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">~300ms</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">LLM first token (Haiku 5.5)</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">not re-measured</div>
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">After retrieval completes</div>
 
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text); font-weight: 700;">Total to first token</div>
@@ -1902,7 +1902,7 @@ ESCALATION_SCHEMA:
     <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Price / 1M tokens</div>
     <div style="background: var(--surface2); padding: 10px 14px; font-weight: 700; color: var(--accent); border-bottom: 1px solid var(--border);">Used For</div>
 
-    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Anthropic Haiku 4.5 / Sonnet 4.6</div>
+    <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text);">Anthropic Haiku 5.5 (chat) / Haiku 4.5, Sonnet 4.6 (pipeline)</div>
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--cyan);">See Anthropic pricing</div>
     <div style="background: var(--surface); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">All pipeline steps + RAG agent + news filter</div>
 
@@ -2138,8 +2138,8 @@ ESCALATION_SCHEMA:
     <div style="background: var(--surface2); padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--dim);">24 cycles/day. Anthropic Haiku/Sonnet. Prompt caching reduces further.</div>
 
     <div style="background: var(--surface); padding: 10px 14px; color: var(--text);">RAG cost</div>
-    <div style="background: var(--surface); padding: 10px 14px; color: var(--green); font-weight: 700;">~$0.002/q</div>
-    <div style="background: var(--surface); padding: 10px 14px; color: var(--dim);">~$6/mo at 100 queries/day. Anthropic Haiku 4.5.</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--green); font-weight: 700;">~$0.002&ndash;0.006/q</div>
+    <div style="background: var(--surface); padding: 10px 14px; color: var(--dim);">Claude Haiku 5.5, measured 2026-10-07: 13.8k in / 1.6k tokens out without web search, 38.5k / 4.8k with it. Voyage embeddings not included.</div>
   </div>
 </div>
 

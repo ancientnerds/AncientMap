@@ -15,7 +15,7 @@ a single person; no employees or contractors operate the AI systems.
 |---|---|---|
 | Lyra news pipeline | Generates news stories from YouTube transcripts | Anthropic Claude (Haiku/Sonnet/Opus) |
 | Lyra weekly journal | Weekly digest article generation | Anthropic Claude Opus |
-| Lyra chat | Interactive RAG assistant | Anthropic Claude + Voyage AI embeddings |
+| Lyra chat | Interactive RAG assistant | Anthropic Claude Haiku 5.5 + Voyage AI embeddings |
 | Theo research pipeline | Deep-research papers | MiniMax M3 |
 | Theo TTS | Paper narration audio | MiniMax speech-2.8-hd |
 | Radar site discovery | Site identification/enrichment | Claude + Mercury (Inception Labs) |

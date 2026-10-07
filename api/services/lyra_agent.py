@@ -30,7 +30,7 @@ from langchain_core.messages import (
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from api.services.lyra_backends import get_backend
+from api.services.lyra_backends import LyraRefusal, get_backend
 from api.services.lyra_prompts import (
     LYRA_SYSTEM_PROMPT,
     PROSE_PROMPT,
@@ -193,6 +193,14 @@ def _classify_intent(query: str) -> str:
     if words & _INTENT_EXPLORE_WORDS:
         return "explore"
     return "specific"  # default: treat as focused query
+
+
+# Shown when the model's safety classifier declines a request (LyraRefusal).
+# Asking again returns another refusal, so Lyra says so instead of retrying.
+_REFUSAL_RESPONSE = (
+    "🏺 I can't help with that one. Ask me about ancient sites, lost civilizations "
+    "or a new discovery instead!"
+)
 
 
 def _build_fallback_response(
@@ -1849,10 +1857,12 @@ async def run_agent_stream(
         # (empty content, content_filter_error / 400)
         result = None  # type: ignore[assignment, no-redef]
         _last_err: Exception | None = None
+        _refused = False
         for _attempt in range(3):
             try:
-                # Don't pass output_config when tools are offered —
-                # Haiku returns empty content when tools + output_config are combined.
+                # No JSON format when tools are offered: Haiku 4.5 returned
+                # empty content for tools + output_config, and Haiku 5.5 with
+                # thinking off can skip a needed tool call under a JSON format.
                 _p1_rformat: dict | None = LYRA_RESPONSE_SCHEMA
                 # On the first round with web_search enabled, give the
                 # model ONLY the web_search tool (no database tools) so
@@ -1861,8 +1871,6 @@ async def run_agent_stream(
                 # Database tools become available from round 1 onward.
                 _ws_only = web_search and _round == 0 and _offer_tools
                 if _offer_tools:
-                    # Haiku returns empty content when tools (client or
-                    # server) + output_config are combined.
                     _p1_rformat = None
                 if _ws_only:
                     logger.info("Round 0 web_search: offering ONLY web_search tool")
@@ -1888,6 +1896,9 @@ async def run_agent_stream(
                     ),
                 )
                 break
+            except LyraRefusal:
+                _refused = True
+                break
             except Exception as exc:
                 _last_err = exc
                 err_msg = str(exc).lower()
@@ -1907,6 +1918,11 @@ async def run_agent_stream(
                     # Exhausted retries on a retryable error — don't crash
                     break
                 raise
+
+        if _refused:
+            yield {"type": "diffusion", "content": _REFUSAL_RESPONSE}
+            _text_emitted = True
+            break
 
         if result is None:
             logger.error(f"LLM call failed after 3 attempts: {_last_err}")
@@ -2055,6 +2071,8 @@ async def run_agent_stream(
                         )
                         if so_data is not None:
                             _structured_output = so_data
+                    except LyraRefusal:
+                        collected_content = _REFUSAL_RESPONSE
                     except Exception as e:
                         logger.warning(f"Simple synthesis failed: {e}")
                         collected_content = clean_response_text(result["content"])
@@ -2555,6 +2573,11 @@ async def run_agent_stream(
 
                 if _s1_prose:
                     break
+            except LyraRefusal:
+                # Same exit as off-topic: emit the text, skip Stage 2.
+                _s1_off_topic = True
+                _s1_prose = _REFUSAL_RESPONSE
+                break
             except Exception as exc:
                 print(f"[S1] attempt {_s1_attempt + 1} failed: {exc}", flush=True)
             if _s1_attempt < 2:
@@ -2689,6 +2712,9 @@ async def run_agent_stream(
                         yield {"type": "diffusion", "content": text_out}
                         _synthesis_ok = True
                         break
+                except LyraRefusal:
+                    # Stage 1 prose was accepted; emit it without markers below.
+                    break
                 except Exception as exc:
                     print(f"[S2] attempt {_s2_attempt + 1} failed: {exc}", flush=True)
                 if _s2_attempt < 2:

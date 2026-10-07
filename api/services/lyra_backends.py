@@ -12,8 +12,9 @@ All backends normalize output to the same StreamEvent dicts:
 import json
 import logging
 from collections.abc import AsyncIterator
-from typing import Protocol
+from typing import Final, Protocol
 
+from anthropic.types import ThinkingConfigDisabledParam
 from langchain_core.messages import (
     AIMessage,
     BaseMessage,
@@ -104,8 +105,36 @@ def _langchain_messages_to_openai(messages: list) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# AnthropicBackend — Anthropic native SDK (Haiku 4.5 / Sonnet / Opus)
+# AnthropicBackend — Anthropic native SDK (Claude Haiku 5.5)
 # ---------------------------------------------------------------------------
+
+# Claude Haiku 5.5 thinks by default. The chat runs it without thinking, as it
+# ran on Haiku 4.5: the tool loop rebuilds assistant turns from LangChain
+# messages and cannot pass thinking blocks back, which a tool-use turn
+# requires. "low" is Anthropic's effort level for chat. Both were verified
+# against claude-haiku-5-5 on 2026-10-07 for every request shape below
+# (forced web_search, tool_choice any, structured output, citations).
+CHAT_THINKING: ThinkingConfigDisabledParam = {"type": "disabled"}
+CHAT_EFFORT: Final = "low"
+
+
+class LyraRefusal(Exception):
+    """The model's safety classifier declined the request (stop_reason "refusal").
+
+    Haiku 5.5 has no server-side fallback, and repeating the same request
+    usually returns another refusal, so callers must not retry it.
+    """
+
+    def __init__(self, category: str | None):
+        super().__init__(f"model declined the request (category: {category})")
+        self.category = category
+
+
+def raise_on_refusal(resp) -> None:
+    if resp.stop_reason == "refusal":
+        category = resp.stop_details.category if resp.stop_details else None
+        logger.warning(f"Lyra request declined by the model, category={category}")
+        raise LyraRefusal(category)
 
 
 class AnthropicBackend:
@@ -204,13 +233,17 @@ class AnthropicBackend:
             if t.get("type") == "function"
         ]
 
-    def _to_output_config(self, response_format: dict) -> dict:
-        """Convert OpenAI json_schema format to Anthropic output_config."""
-        # Input:  {"type": "json_schema", "json_schema": {"name": ..., "strict": True, "schema": {...}}}
-        # Output: {"format": {"type": "json_schema", "schema": {...}}}
-        return {
-            "format": {"type": "json_schema", "schema": response_format["json_schema"]["schema"]}
-        }
+    def _to_output_config(self, response_format: dict | None) -> dict:
+        """Build output_config: the chat's effort plus, if given, the JSON schema format."""
+        # response_format: {"type": "json_schema", "json_schema": {"name": ..., "strict": True, "schema": {...}}}
+        # Output: {"effort": "low", "format": {"type": "json_schema", "schema": {...}}}
+        config: dict = {"effort": CHAT_EFFORT}
+        if response_format:
+            config["format"] = {
+                "type": "json_schema",
+                "schema": response_format["json_schema"]["schema"],
+            }
+        return config
 
     async def generate(
         self,
@@ -271,11 +304,14 @@ class AnthropicBackend:
                 "model": self.model,
                 "messages": anthropic_msgs,
                 "max_tokens": max_tokens or self.max_tokens,
+                "thinking": CHAT_THINKING,
+                "output_config": self._to_output_config(None),
             }
             if system_text:
                 create_kwargs["system"] = system_text
 
             resp = await self._client.messages.create(**create_kwargs)
+            raise_on_refusal(resp)
             text = "".join(b.text for b in resp.content if hasattr(b, "text") and b.type == "text")
             return {
                 "content": text,
@@ -306,6 +342,8 @@ class AnthropicBackend:
             "model": self.model,
             "messages": anthropic_msgs,
             "max_tokens": max_tokens or self.max_tokens,
+            "thinking": CHAT_THINKING,
+            "output_config": self._to_output_config(response_format),
         }
         if system_text:
             create_kwargs["system"] = [
@@ -320,8 +358,6 @@ class AnthropicBackend:
             elif tool_choice:
                 # Force a specific tool by name (e.g. "web_search")
                 create_kwargs["tool_choice"] = {"type": "tool", "name": tool_choice}
-        if response_format:
-            create_kwargs["output_config"] = self._to_output_config(response_format)
 
         # Continuation loop for server-side tools (web search may trigger pause_turn)
         total_input = 0
@@ -347,6 +383,7 @@ class AnthropicBackend:
                 {"role": "assistant", "content": resp.content},
             ]
 
+        raise_on_refusal(resp)
         tool_calls_out: list[dict] = []
         text_out = ""
         web_citations: list[dict] = []  # unique URLs from web search results
@@ -433,6 +470,8 @@ class AnthropicBackend:
             "model": self.model,
             "messages": anthropic_msgs,
             "max_tokens": max_tokens or self.max_tokens,
+            "thinking": CHAT_THINKING,
+            "output_config": self._to_output_config(None),
         }
         if system_text:
             stream_kwargs["system"] = [
@@ -474,6 +513,7 @@ class AnthropicBackend:
                             "input": _input_tokens,
                             "output": event.usage.output_tokens,
                         }
+            raise_on_refusal(await stream.get_final_message())
 
     async def complete(self, messages: list, response_format: dict | None = None) -> dict:
         """Non-streaming structured output (used by judge scorer)."""
@@ -504,7 +544,7 @@ def get_backend(
     to another provider.
 
     Args:
-        model_name: The model to use (e.g. "claude-haiku-4-5-20251001").
+        model_name: The model to use (e.g. "claude-haiku-5-5").
         backend_type: Backend identifier (cache-key namespace only).
         max_tokens: Deprecated and ignored — pass max_tokens per call to
             generate()/stream() instead. Retained for signature
