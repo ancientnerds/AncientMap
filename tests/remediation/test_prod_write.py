@@ -163,3 +163,31 @@ def test_every_psql_json_reader_splits_at_lf_only(monkeypatch: pytest.MonkeyPatc
         A, "run_psql", lambda sql, **kw: subprocess.CompletedProcess([], 0, answer, "")
     )
     assert P.psql_json_reader()("SELECT 1") == [{"name": name}]
+
+
+def test_an_unreadable_psql_answer_is_a_failed_read_not_an_empty_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WB provenance lane s032, 2026-10-07: psql exited 0 and its answer held a line cut inside a
+    string. A bare `json.JSONDecodeError` escaped `--apply`'s post-COMMIT handler as a traceback,
+    after the write had landed. The reader names the failure instead - the type every caller on the
+    write path reads as "the read-back did not confirm the write" - and never skips the line, which
+    would have reported a short answer as an empty result."""
+    from mechanical import apply as A
+    from mechanical import plan as P
+
+    answers = [
+        ('{"column_name":"raw_data","value":"{"lane": ', ""),
+        ('{"column_name":"raw_data","value":"{}"}\nnot json at all\n', "a NOTICE reached stdout"),
+    ]
+    for answer, stderr in answers:
+        monkeypatch.setattr(
+            A,
+            "run_psql",
+            lambda sql, **kw: subprocess.CompletedProcess([], 0, answer, stderr),
+        )
+        with pytest.raises(P.PlanError) as raised:
+            P.psql_json_reader()("SELECT 1")
+        message = str(raised.value)
+        assert "is not JSON" in message and "the read failed" in message
+        assert "psql exited 0" in message

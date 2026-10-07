@@ -1384,12 +1384,35 @@ def _psql_reader() -> Any:
 
 def psql_json_reader() -> Callable[[str], list[dict[str, Any]]]:
     """Rows from production as JSON objects, one per line - a name may contain the `|` that
-    unaligned psql separates on, so the later lanes read `row_to_json` instead of splitting."""
+    unaligned psql separates on, so the later lanes read `row_to_json` instead of splitting.
+
+    A line that is not JSON is never skipped: `run_psql` has already raised for a non-zero exit,
+    so psql answered and this answer cannot be read. That is a failed read, and it is said as
+    one (`PlanError`), because every caller on the write path reads that as
+    `EXIT_COMMITTED_UNCONFIRMED` - "the write landed, its read-back did not confirm it" - and
+    settles the state from the journal. A bare `json.JSONDecodeError` told them nothing and
+    ended the run as a traceback after a COMMIT that had already landed (WB provenance lane s032,
+    2026-10-07). The message names psql's exit code and stderr, so a dropped channel is not
+    mistaken for a value psql printed in a shape `row_to_json` cannot produce.
+    """
     from mechanical import apply as apply_mod
 
     def read(sql: str) -> list[dict[str, Any]]:
         proc = apply_mod.run_psql(f"SELECT row_to_json(t) FROM ({sql}) t", rows=True)
-        return [json.loads(line) for line in jsonl_lines(proc.stdout) if line.strip()]
+        rows: list[dict[str, Any]] = []
+        for number, line in enumerate(jsonl_lines(proc.stdout), start=1):
+            if not line.strip():
+                continue
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                stderr = proc.stderr.strip()
+                raise PlanError(
+                    f"line {number} of psql's answer is not JSON ({exc}), and psql exited "
+                    f"{proc.returncode}{' with ' + stderr if stderr else ''}: the read failed, it "
+                    f"did not return fewer rows. Line: {line[:160]!r}"
+                ) from exc
+        return rows
 
     return read
 
@@ -1436,14 +1459,22 @@ def parse_tagged_export(text: str, kinds: Iterable[str]) -> tuple[dict[str, list
 
     A line of a kind the caller did not ask for is refused, and so is an export without exactly
     one snapshot line: psql stops at the first error, so a missing snapshot line is an export
-    that did not finish.
+    that did not finish. A line that is no JSON is refused the same way, and never skipped: like
+    `psql_json_reader`, it ends as the named failure its callers handle rather than as a bare
+    `json.JSONDecodeError` (2026-10-07).
     """
     rows: dict[str, list[dict]] = {kind: [] for kind in kinds}
     stamps: list[str] = []
-    for line in jsonl_lines(text):
+    for number, line in enumerate(jsonl_lines(text), start=1):
         if not line.strip():
             continue
-        payload = json.loads(line)
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise PlanError(
+                f"line {number} of the export is not JSON ({exc}), so it names no kind: the export "
+                f"cannot be read. Line: {line[:160]!r}"
+            ) from exc
         kind = payload.get("kind")
         if kind == SNAPSHOT_KIND:
             stamps.append(str(payload["row"]["exported_at"]))

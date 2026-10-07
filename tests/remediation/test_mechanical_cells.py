@@ -630,6 +630,17 @@ class TestTheTaggedExport:
         with pytest.raises(P.PlanError, match="one snapshot line, it has 2"):
             P.parse_tagged_export(self.SNAPSHOT + self.SNAPSHOT, ("site",))
 
+    def test_a_line_that_is_no_json_is_refused_like_a_line_of_another_kind(self) -> None:
+        """An export cut inside a string names no kind. It is refused as a `PlanError`, the type the
+        two refusals above already use, and it is never skipped into a shorter export (2026-10-07:
+        the same hole in `psql_json_reader` ended `--apply` as a traceback after its COMMIT)."""
+        with pytest.raises(P.PlanError, match="line 1 of the export is not JSON"):
+            P.parse_tagged_export('{"kind": "site", "row": {"a": 1', ("site",))
+        with pytest.raises(P.PlanError, match="line 2 of the export is not JSON"):
+            P.parse_tagged_export(
+                '{"kind": "site", "row": {"a": 1}}\npsql: FATAL: terminated\n', ("site",)
+            )
+
     def test_a_failed_export_is_refused_and_keeps_nothing(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:

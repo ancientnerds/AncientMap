@@ -1660,6 +1660,7 @@ class FakeProduction:
         *,
         landed: dict[str, int] | None = None,
         after: BaseException | None = None,
+        interests: list[str] | None = None,
     ) -> None:
         self.lane = lane
         self.counts = list(counts)
@@ -1667,6 +1668,10 @@ class FakeProduction:
         self.records = records
         self.landed = landed or {}
         self.after = after
+        #: What the JSON reader is answered with, one entry per read (the before and the after
+        #: write). Empty once they run out. A test that wants a read to fail sets its entry to the
+        #: malformed answer production gave on 2026-10-07.
+        self.interests = list(interests or [])
         self.readbacks = 0
         self.sent: list[str] = []
 
@@ -1700,6 +1705,10 @@ class FakeProduction:
             if self.readbacks == 2 and self.after is not None:
                 raise self.after
             return _done("")
+        if sql.startswith("SELECT row_to_json(t) FROM ("):
+            # `verify_interests`' own read: answered, not stubbed out, so the reader's parsing is
+            # on the write path in every test that reaches it.
+            return _done(self.interests.pop(0) if self.interests else "")
         raise AssertionError(f"unexpected statement: {sql[:80]!r}")
 
 
@@ -1787,7 +1796,8 @@ def applied(request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.
     lane = ALL_LANES[request.param]
     records, plan_path = lane_plan(tmp_path, lane)
     A.emit(records, tmp_path, lane, plan_path=plan_path)
-    monkeypatch.setattr(A, "verify_interests", lambda *a, **k: "")
+    # `verify_interests` is NOT stubbed: the real one reads production through the JSON reader, and
+    # stubbing it is what let a broken reader reach `--apply` as a traceback (2026-10-07).
     return Applied(lane, records, plan_path, tmp_path, monkeypatch)
 
 
@@ -1914,6 +1924,27 @@ class TestTheCommitState:
         assert applied.main() == A.EXIT_COMMITTED_UNCONFIRMED
         captured = capsys.readouterr()
         assert "COMMITTED BUT NOT CONFIRMED" in captured.out
+        assert "REFUSED" not in captured.err and "OUTCOME UNKNOWN" not in captured.err
+
+    def test_a_read_back_of_interest_psql_cannot_read_is_committed_but_unconfirmed(
+        self, applied: Applied, capsys: pytest.CaptureFixture
+    ) -> None:
+        """WB provenance lane s032, 2026-10-07: psql exited 0 past the COMMIT and the interests read
+        answered with a line cut inside a string. `psql_json_reader` raised a bare
+        `json.JSONDecodeError`, which the post-COMMIT handler does not catch, so the run ended as a
+        traceback and a landed write looked like a crash. It must end as the contract names it."""
+        applied.fake(
+            [0],
+            0,
+            interests=[
+                '{"column_name":"raw_data","value":"<NULL>","n":1}\n',
+                '{"column_name":"raw_data","value":"{"lane": ',
+            ],
+        )
+        assert applied.main() == A.EXIT_COMMITTED_UNCONFIRMED
+        captured = capsys.readouterr()
+        assert "COMMITTED BUT NOT CONFIRMED" in captured.out
+        assert "is not JSON" in captured.out and "psql exited 0" in captured.out
         assert "REFUSED" not in captured.err and "OUTCOME UNKNOWN" not in captured.err
 
     def test_a_journal_count_of_the_wrong_shape_is_refused(

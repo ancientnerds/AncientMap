@@ -13940,8 +13940,16 @@ non-curated rows.
    lane's own result ("Unterminated string starting at: line 1 column 35") *after* `psql` had
    exited 0 past its COMMIT, so the traceback reported a failed write for a write that had landed.
    The journal settled it (`run_stamp = wb-teaser-prov-s032`, 85 rows) and `--verify` confirmed the
-   state. **The read-back line the contract trusts therefore has a parsing defect that is still
-   open** — see the TODO below. Not a data problem: nothing was rewritten and no card was lost.
+   state. **Cause:** `psql_json_reader` parsed every line with a bare `json.loads`, so an answer it
+   could not read raised a `json.JSONDecodeError` — a type nobody on the write path catches: the
+   post-COMMIT handler reads a failed read as a `PlanError`, which is `EXIT_COMMITTED_UNCONFIRMED`.
+   **Fixed after the run (2026-10-07):** the reader names the line it cannot read, with psql's exit
+   code and stderr, and never skips it — an unreadable answer is a failed read, not a shorter row
+   set. The suite had not caught it because the `applied` fixture stubbed `verify_interests` out;
+   it no longer does, and
+   `test_a_read_back_of_interest_psql_cannot_read_is_committed_but_unconfirmed` pins the outcome for
+   every lane (it fails against the old code with the production traceback). Not a data problem:
+   nothing was rewritten and no card was lost.
 
 **Operational lesson, written to the project memory (`reference-wikimedia-ip-throttling-parallel-agents.md`):**
 four to five verifier agents fetching Wikipedia at once made the office IP edge-blocked — every
