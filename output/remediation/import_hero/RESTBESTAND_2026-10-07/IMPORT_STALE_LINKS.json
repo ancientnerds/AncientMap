@@ -1,0 +1,130 @@
+{
+ "measured_at": "2026-10-07",
+ "question": "the import links Commons answered 0x0 for in IMPORT_REMAINDER_SIZES.json: does Commons hold the file under another name",
+ "sites": 11,
+ "held_under_this_name": 2,
+ "not_held": 9,
+ "files": [
+  {
+   "site_id": "026dfe16-5509-47f2-bede-504b006d704d",
+   "name": "Rag-i-Bibi",
+   "import_link_name": "rag-i-bibi sasanian rock relief3WM.JPG",
+   "canonical_title": "Rag-i-bibi sasanian rock relief3WM.JPG",
+   "original": [
+    0,
+    0
+   ],
+   "search_hits": null
+  },
+  {
+   "site_id": "1d78a562-f1e1-4115-8172-9ef13c7dfe1b",
+   "name": "Sembel",
+   "import_link_name": "SembelExcavation.jpg",
+   "canonical_title": "SembelExcavation.jpg",
+   "original": [
+    0,
+    0
+   ],
+   "search_hits": null
+  },
+  {
+   "site_id": "21c68897-6da3-4cbc-abda-41e45a0c0f3c",
+   "name": "Burnt Mound in Fox Hollies Park",
+   "import_link_name": "Burnt mound in Fox Hollies Park 2.jpg",
+   "canonical_title": "Burnt mound in Fox Hollies Park 2.jpg",
+   "original": [
+    0,
+    0
+   ],
+   "search_hits": null
+  },
+  {
+   "site_id": "269e2820-acf1-4974-b75f-3c0460482ade",
+   "name": "Duraz Temple",
+   "import_link_name": "Diraz Temple Site.jpg",
+   "canonical_title": "Diraz Temple Site.jpg",
+   "original": [
+    0,
+    0
+   ],
+   "search_hits": null
+  },
+  {
+   "site_id": "6e2e27d0-f162-4a26-bd66-b7fc75554ce4",
+   "name": "Cusichaca River",
+   "import_link_name": "File:Llactapata.jpg",
+   "canonical_title": "Llactapata.jpg",
+   "original": [
+    1842,
+    1024
+   ],
+   "search_hits": null
+  },
+  {
+   "site_id": "7959bac1-48f2-4648-b9fa-7b23847cd894",
+   "name": "Q'asa Pata",
+   "import_link_name": "Q'asa Pata",
+   "canonical_title": "Q'asa Pata",
+   "original": [
+    0,
+    0
+   ],
+   "search_hits": null
+  },
+  {
+   "site_id": "8e625e19-eeb1-4813-8244-14ec448d7440",
+   "name": "Chactún",
+   "import_link_name": "flk14875677860.jpg",
+   "canonical_title": "Flk14875677860.jpg",
+   "original": [
+    0,
+    0
+   ],
+   "search_hits": null
+  },
+  {
+   "site_id": "a939e800-06e4-4719-a000-165e7f5efe92",
+   "name": "The Temple of Artemis",
+   "import_link_name": "File:Miniaturk 009.jpg",
+   "canonical_title": "Miniaturk 009.jpg",
+   "original": [
+    1024,
+    768
+   ],
+   "search_hits": null
+  },
+  {
+   "site_id": "c4d2251b-b64a-4615-a6f9-5a71ff6f3955",
+   "name": "Balcon de Montezuma",
+   "import_link_name": "Balcon de Moctezuma1.jpg",
+   "canonical_title": "Balcon de Moctezuma1.jpg",
+   "original": [
+    0,
+    0
+   ],
+   "search_hits": null
+  },
+  {
+   "site_id": "c4d4863e-2344-49aa-8699-457d71985c96",
+   "name": "Osiris Shaft",
+   "import_link_name": "8b6f5a7dc845a14d7ad8153bac972900.jpg",
+   "canonical_title": "8b6f5a7dc845a14d7ad8153bac972900.jpg",
+   "original": [
+    0,
+    0
+   ],
+   "search_hits": null
+  },
+  {
+   "site_id": "cd57f355-5041-4c86-8eb9-c570bb93dab8",
+   "name": "Aké (Yucatan)",
+   "import_link_name": "11-1024x768.jpg",
+   "canonical_title": "11-1024x768.jpg",
+   "original": [
+    0,
+    0
+   ],
+   "search_hits": null
+  }
+ ]
+}

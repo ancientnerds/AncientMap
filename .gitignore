@@ -474,6 +474,12 @@ output/remediation/import_hero/*/
 # -009 the floor wave: the owner lowered the size a local file must reach to 800x300 for the sites
 # that already have a picture (2026-10-06), and its `FLOOR.json` is the run's own record of that.
 !output/remediation/import_hero/import-hero-2026-10-06-009/
+# -010 of 2026-10-07 is a measurement, not a wave: the 49 sites the remainder calls `not_reached` were
+# seeded, read and planned, and the plan refused every one of them, so this run holds no chunk and its
+# record is its refusals - `PLAN_REFUSALS.jsonl` (the plan's, written before the raise) and
+# `SEED_REFUSALS.jsonl` (the seed's own). The 1.3 MB claim join and the 39 MB read stay out by the
+# rules below, as in every other run.
+!output/remediation/import_hero/import-hero-2026-10-07-010/
 # The INSERT waves of the candidate search (2026-10-06 and -07, `insert-2026-10-06-001` to
 # `insert-2026-10-07-008`): the plan, the chunk, its SQL both ways, the journal-bearing `reason`
 # and evidence source, and the acceptance over a named production read. A glob, because every

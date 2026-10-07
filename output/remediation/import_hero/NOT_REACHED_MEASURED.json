@@ -1,0 +1,10 @@
+{
+ "built_at": "2026-10-07",
+ "question": "the sites the 2026-06 inventory handed to the import lane rather than to the candidate search, and that no INSERT wave has been run over since",
+ "from": "RESTBESTAND_2026-10-07/RESTBESTAND_2026-10-07.jsonl, closer == 'not_reached'",
+ "sites": 49,
+ "classes": {
+  "every_row_excluded": 22,
+  "no_row_at_all": 27
+ }
+}

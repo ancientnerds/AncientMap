@@ -876,6 +876,43 @@ left them alone. So the floor released 37 rows, and the 9 sites it did not reach
 1 upscale refusals. `C:\tmp\floor_gap.py` reads this out of the runs' own `FETCH_FAILURES.jsonl` and
 `INSERT_REFUSALS.jsonl`; nothing here is estimated.
 
+#### The `never_fetched` group was never asked for a floor, and its measurement was wrong
+
+`IMPORT_FLOOR_800x300.json` answered the owner's floor question for **the 33 width refusals only**. The
+import lane's remainder has three groups, and the other two were not in that file: 14 sites whose file
+was already on the offsite tree, and 37 that were never fetched or refused for width. The second group
+is what `IMPORT_REMAINDER_SIZES.json` measures, and its measurement was **wrong for two of eleven**.
+
+**The root cause is a lookup, not a file.** `Commons.sizes()` keys its answer by the *canonical* file
+name - `canonical_file()` strips the `File:` prefix and normalises underscores and spacing - and the
+caller looked the answer up by the **raw** title the 2025 import carries. Two of the eleven links spell
+that raw title with the prefix, `File:Llactapata.jpg` and `File:Miniaturk 009.jpg`, so the lookup
+returned `None` and `or (0, 0)` turned *"not a key in my answer"* into *"Commons does not hold this
+file"*. The other nine, whose raw titles are bare names, were read correctly. Verified against the raw
+API, without the wrapper and without the cache: `Llactapata.jpg` is **1842x1024** and `Miniaturk 009.jpg`
+is **1024x768**. Both clear 800x300. Corrected measurement: **3** of the 37 clear 800x300, 25 stay
+below, and 9 are links Commons does not hold (`Sembel`, `Osiris Shaft`, `Rag-i-Bibi`, `Q'asa Pata`,
+`Balcon de Montezuma`, `Chactén`, `Duraz Temple`, `Aké`, `Burnt Mound in Fox Hollies Park` - all named
+in `IMPORT_STALE_LINKS.json`).
+
+**Those two are refused for a second reason, and it is the same reason for both.** Their import links
+are not `upload.wikimedia.org` URLs at all:
+
+```
+https://en.wikipedia.org/wiki/Cusichaca_River#/media/File:Llactapata.jpg
+https://en.wikipedia.org/wiki/Temple_of_Artemis#/media/File:Miniaturk_009.jpg
+```
+
+The lane accepts an `upload.wikimedia.org` link and refuses every other host as `unreadable_url`, which
+is the credit guard the decision of 2026-10-05 leans on. **The lane is left as it is, and the two sites
+stay empty**, on a measured basis (`WIKIPEDIA_MEDIA_FORM_PROBE.json`): the form appears **17** times
+over the 4,900 curated sites, and **15 of the 17 already serve a picture**, so it costs nothing
+elsewhere. Two sites do not justify weakening a host rule the owner set, and there is a reason to
+wait: on an en.wikipedia article `/media/File:X` renders the *local* file when one exists and the
+Commons file otherwise, so the name alone does not prove which image the curator saw. Both sites'
+rows already hold the Commons URL of that same file (`wiki_images.id=79238` for Cusichaca River), so
+the picture is one owner decision away.
+
 **What the twelve waves did to the §3.7.1 table**, the same script over the floor wave's read
 (`d0c3852a`, 2026-10-06T16:11:30Z) and over the last wave's **acceptance** read (`0b5d7da0`,
 2026-10-07T10:14:53Z) - the read after the commit, not the one the plan measured against:
@@ -929,8 +966,25 @@ plan read): **461** the search refused because Commons names no file for them at
 found candidates and the judge saw none of them as a picture of the site, **48** the judge confirmed a
 picture and the INSERT lane refused it (the 11 of the floor decision's 48 that a second refusal kept
 out, plus the 37 of the earlier waves' credit-rule and filename refusals), 25 `all_too_small` from the
-search, and **49** outside the candidate search's population. The classes are 723 `no_row_at_all` and
-229 `every_row_excluded`.
+search, and **49** outside the candidate search's population - the sites the 2026-10-06 inventory handed
+to the **import lane** rather than to the search, so no INSERT wave was ever run over them. The
+classes are 723 `no_row_at_all` and 229 `every_row_excluded`.
+
+**Those 49 are measured now too** (`import-hero-2026-10-07-010`, read `f30dcfa9` of 2026-10-07T11:32:24Z).
+The hero lane refuses **all 49 as `no_target_row`** - the import's file is no row of the site, so no
+hero promotion and no unhide can reach it; a row would have to be created, which is the INSERT lane.
+Seeded 37 of 49 from the import run's own claims (the other **12** the seed refuses as
+`unreadable_url`, a link it cannot read as a Commons file), and of those 37 the corrected measurement
+splits them: **25** below 800x300, **9** a file Commons does not hold, **2** the Wikipedia link form,
+**1** the credit rule. Nothing is writable and nothing was written.
+
+**Two gaps in the record, both found by running that wave and both closed here.** The seed's own
+refusals were returned and never written, so a site it dropped left no trace - `SEED_REFUSALS.jsonl`
+now holds them, apart from `IMPORT_HERO_REFUSALS.jsonl`, which `insert-plan` reads back as the lane's
+own. And `write_chunks` raised "the plan holds no row" **before** writing its refusals, so a wave that
+refuses every site lost the only result it had - it now writes `PLAN_REFUSALS.jsonl` first and names
+the file in the error. That is where this wave's 385 refusals live (378 `no_target_row`, 7
+`local_file_too_small`) out of the 4,900 curated sites the join covers.
 
 **That file was measured twice on this page.** It first named **989** sites, over the acceptance read
 `e0ca173a` of wave `-009`. The two floor waves then wrote 37 of them, and the list is regenerated over

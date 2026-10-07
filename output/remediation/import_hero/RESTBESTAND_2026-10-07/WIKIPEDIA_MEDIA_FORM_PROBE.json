@@ -1,0 +1,200 @@
+{
+ "measured_at": "2026-10-07",
+ "question": "the 2025 import links a picture as en.wikipedia.org/wiki/<article>#/media/File:<name> for a few sites; the lane refuses a link whose host is not upload.wikimedia.org, so what does that refusal cost",
+ "join": "IMPORT_CLAIMS.json of run import-hero-2026-10-07-010 (4,900 curated sites)",
+ "hosts": {
+  "upload.wikimedia.org": 3103,
+  "en.wikipedia.org": 18,
+  "www.megalithic.co.uk": 4,
+  "whc.unesco.org": 3,
+  "www.cais-soas.com": 1,
+  "sundayguardianlive.com": 1,
+  "www.mayaland.com": 1,
+  "live.staticflickr.com": 1,
+  "yucatanmagazin.wpenginepowered.com": 1,
+  "th-thumbnailer.cdn-si-edu.com": 1,
+  "media.tacdn.com": 1,
+  "mxcity.mx": 1,
+  "commons.wikimedia.org": 1,
+  "1.bp.blogspot.com": 1,
+  "www.buddhistdoor.net": 1,
+  "sailingstonetravel.b-cdn.net": 1,
+  "www.historyhit.com": 1,
+  "static.abc.es": 1,
+  "i0.wp.com": 1,
+  "www.locogringo.com": 1,
+  "dovevado.net": 1,
+  "www.mexicoescultura.com": 1,
+  "pages.vassar.edu": 1,
+  "www.zonaturistica.com": 1,
+  "programadestinosmexico.com": 1,
+  "hiddenincatours.com": 1,
+  "pbs.twimg.com": 1,
+  "imagenes.descubro.mx": 1,
+  "www.latinamericanstudies.org": 1
+ },
+ "media_form_sites": 17,
+ "already_serving": 15,
+ "still_shows_nothing": 2,
+ "verdict": "two sites. Fifteen of the seventeen already serve a picture, so the form costs nothing elsewhere; the lane's refusal of a non-upload host is a credit guard and two sites do not justify weakening it while the owner is away. Recorded, not changed.",
+ "why_not_changed": [
+  "on an en.wikipedia article /media/File:X renders the local file when one exists and the Commons file otherwise, so the name alone does not prove which image the curator saw",
+  "the fragment form needs a lane change to the host rule, which is the rule the credit decision of 2026-10-05 (17:43) leans on",
+  "both sites' rows already hold the Commons URL of the same file, so nothing is lost by waiting for the owner to decide the form"
+ ],
+ "sites": [
+  {
+   "site_id": "160da9ec-9bc4-4893-8066-dd3afb41c5b2",
+   "link": "https://en.wikipedia.org/wiki/Chacamarca_Historic_Sanctuary#/media/File:CHACAMARCA.jpg",
+   "file_in_fragment": "CHACAMARCA.jpg",
+   "name": "Chacamarca Historic Sanctuary",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "23eac293-7958-4250-9f63-5b9fc8493cee",
+   "link": "https://en.wikipedia.org/wiki/Plataea#/media/File:Plataea_battlefield.jpg",
+   "file_in_fragment": "Plataea battlefield.jpg",
+   "name": "Archaeological Site of Plataea",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "4541e162-c69b-49d8-a4db-04e66089e8fd",
+   "link": "https://en.wikipedia.org/wiki/Solnitsata#/media/File:Provadijska_Solnitsa_8.jpg",
+   "file_in_fragment": "Provadijska Solnitsa 8.jpg",
+   "name": "Solnitsata",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "45c83a06-69a6-46f3-bb7a-eea482b9767c",
+   "link": "https://en.wikipedia.org/wiki/Pergamon_Altar#/media/File:Berlin_-_Pergamonmuseum_-_Altar_01.jpg",
+   "file_in_fragment": "Berlin - Pergamonmuseum - Altar 01.jpg",
+   "name": "Pergamon Altar",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "4a9b3802-1067-4f6b-a144-4c2ffe9619a4",
+   "link": "https://en.wikipedia.org/wiki/Coricancha#/media/File:Coricancha_windows.jpg",
+   "file_in_fragment": "Coricancha windows.jpg",
+   "name": "Coricancha",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "5ea4b4c5-9a5d-492d-aa71-5458b78d07a0",
+   "link": "https://en.wikipedia.org/wiki/Beit_Guvrin-Maresha_National_Park#/media/File:Beit_Guvrin_1.JPG",
+   "file_in_fragment": "Beit Guvrin 1.JPG",
+   "name": "Beit Guvrin-Maresha National Park",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "6e2e27d0-f162-4a26-bd66-b7fc75554ce4",
+   "link": "https://en.wikipedia.org/wiki/Cusichaca_River#/media/File:Llactapata.jpg",
+   "file_in_fragment": "Llactapata.jpg",
+   "name": "Cusichaca River",
+   "still_shows_nothing": true,
+   "class": "every_row_excluded",
+   "what_would_close_it": "not_reached"
+  },
+  {
+   "site_id": "75dccc9d-fb68-40a9-aa2e-e58a47067580",
+   "link": "https://en.wikipedia.org/wiki/Elephanta_Caves#/media/File:ElephantaCaves4.jpg",
+   "file_in_fragment": "ElephantaCaves4.jpg",
+   "name": "Elephanta Caves",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "9b2cd3fd-9171-4862-a9a2-a2efe7aa4817",
+   "link": "https://en.wikipedia.org/wiki/Palenque#/media/File:Temple_of_the_Count_-_Palenque_Maya_Site,_Feb_2020.jpg",
+   "file_in_fragment": "Temple of the Count - Palenque Maya Site, Feb 2020.jpg",
+   "name": "Palenque",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "a52e274f-3e08-44b5-a03f-1d564fede9a2",
+   "link": "https://en.wikipedia.org/wiki/Dipylon#/media/File:1564_-_Keramikos_archaeological_area,_Athens_-_Dypilon_-_Photo_by_Giovanni_Dall'Orto,_Nov_12_2009_(1).jpg",
+   "file_in_fragment": "1564 - Keramikos archaeological area, Athens - Dypilon - Photo by Giovanni Dall'Orto, Nov 12 2009 (1).jpg",
+   "name": "Dipylon",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "a939e800-06e4-4719-a000-165e7f5efe92",
+   "link": "https://en.wikipedia.org/wiki/Temple_of_Artemis#/media/File:Miniaturk_009.jpg",
+   "file_in_fragment": "Miniaturk 009.jpg",
+   "name": "The Temple of Artemis",
+   "still_shows_nothing": true,
+   "class": "every_row_excluded",
+   "what_would_close_it": "not_reached"
+  },
+  {
+   "site_id": "e2f8cf43-f499-4363-8fcb-af93e79ea756",
+   "link": "https://en.wikipedia.org/wiki/Ancient_Corinth#/media/File:Reconstruction_of_ancient_Corinthos.jpg",
+   "file_in_fragment": "Reconstruction of ancient Corinthos.jpg",
+   "name": "Ancient Corinth",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "e60fc487-9fb9-4e37-b590-4a035e591c7e",
+   "link": "https://en.wikipedia.org/wiki/Temple_of_Artemis#/media/File:Miniaturk_009.jpg",
+   "file_in_fragment": "Miniaturk 009.jpg",
+   "name": "The Temple of Artemis",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "ec9daf3f-c6a6-4ada-8234-c667393b0e1e",
+   "link": "https://en.wikipedia.org/wiki/Allianoi#/media/File:Allianoi1.JPEG",
+   "file_in_fragment": "Allianoi1.JPEG",
+   "name": "Allianoi",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "f0a1dcca-8eb4-4c5a-b2ef-d90160d13d79",
+   "link": "https://en.wikipedia.org/wiki/Mes_Aynak#/media/File:Mes_Aynak_Jerome_Starkey.jpg",
+   "file_in_fragment": "Mes Aynak Jerome Starkey.jpg",
+   "name": "Mes Aynak",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "f4955fe7-d4e9-4de7-9812-0fc7e94c0620",
+   "link": "https://en.wikipedia.org/wiki/Unfinished_obelisk#/media/File:Assuan_07.jpg",
+   "file_in_fragment": "Assuan 07.jpg",
+   "name": "The Unfinished Obelisk",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  },
+  {
+   "site_id": "fbdc7958-5aa3-4197-89fa-77f2a84cc4c9",
+   "link": "https://en.wikipedia.org/wiki/Meidum#/media/File:Meidoum03.jpg",
+   "file_in_fragment": "Meidoum03.jpg",
+   "name": "Meidum Pyramid",
+   "still_shows_nothing": false,
+   "class": null,
+   "what_would_close_it": null
+  }
+ ]
+}

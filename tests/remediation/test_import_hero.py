@@ -628,6 +628,66 @@ class TestTheChunks:
                 dimensions=BIG,
             )
 
+    def test_a_plan_that_refuses_every_site_still_names_them(self, tmp_path: Path) -> None:
+        """A wave where nothing is writable is the one case where the refusals are the whole result.
+
+        Measured 2026-10-07, run `import-hero-2026-10-07-010`: 37 sites seeded, all 37 refused, and
+        the run could not say why any of them was - the refusals were written after the raise.
+        """
+        state = _state(tmp_path)
+        features = _import(
+            tmp_path,
+            [{"title": "Nothing", "url": "https://en.wikipedia.org/wiki/Nothing", "image": RUIN}],
+        )
+        out = tmp_path / "wave"
+        with pytest.raises(IH.ImportHeroError, match="no row") as caught:
+            IH.write_chunks(
+                out,
+                state,
+                IH.join_import(state, features),
+                run_stamp="import-hero-2026-10-05-003",
+                dimensions=BIG,
+            )
+        assert "no_target_row" in str(caught.value)
+        written = [
+            json.loads(line)
+            for line in (out / IH.PLAN_REFUSALS).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert written and written[0]["reason"] == "no_target_row"
+        assert written[0]["detail"]
+
+    def test_a_plan_that_refuses_every_site_keeps_the_seeded_record(self, tmp_path: Path) -> None:
+        """`IMPORT_HERO_REFUSALS.jsonl` is what a run prepared for the INSERT lane reads back."""
+        state = _state(tmp_path)
+        out = tmp_path / "wave"
+        out.mkdir(parents=True)
+        seeded = out / "IMPORT_HERO_REFUSALS.jsonl"
+        seeded.write_text(
+            json.dumps(
+                {
+                    "site_id": "11111111-1111-1111-1111-111111111111",
+                    "reason": "no_target_row",
+                    "detail": "seeded",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        features = _import(
+            tmp_path,
+            [{"title": "Nothing", "url": "https://en.wikipedia.org/wiki/Nothing", "image": RUIN}],
+        )
+        with pytest.raises(IH.ImportHeroError, match="no row"):
+            IH.write_chunks(
+                out,
+                state,
+                IH.join_import(state, features),
+                run_stamp="import-hero-2026-10-05-004",
+                dimensions=BIG,
+            )
+        assert "seeded" in seeded.read_text(encoding="utf-8")
+
     def test_a_site_that_already_serves_the_import_image_plans_nothing(
         self, tmp_path: Path
     ) -> None:

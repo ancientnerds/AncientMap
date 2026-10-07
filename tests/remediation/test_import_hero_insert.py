@@ -329,6 +329,50 @@ class TestSeedingAWaveFromAnImportRun:
         with pytest.raises(IN.ImportHeroError, match="claims"):
             IN.seed_from_import_run(empty, tmp_path / "run", [SITE_A])
 
+    def test_a_site_the_seed_refused_is_named_in_the_run(self, tmp_path: Path) -> None:
+        """A site the seed drops left no trace: the run showed its claims and its lane refusals only.
+
+        Measured 2026-10-07 over 49 sites: the seed took 37 and refused 12 by name
+        (`no_import_claim`, `unreadable_url`), and the run could not say which 12.
+        """
+        source = self._source(tmp_path)
+        run = tmp_path / "insert-2026-10-07-010"
+        IN.seed_from_import_run(source, run, [SITE_A, SITE_B, SITE_C])
+
+        refused = [
+            json.loads(line)
+            for line in (run / IN.SEED_REFUSALS).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert {r["site_id"] for r in refused} == {SITE_B, SITE_C}
+        assert {r["reason"] for r in refused} == {"no_import_claim"}
+
+    def test_the_lane_refusals_file_holds_no_seed_refusal(self, tmp_path: Path) -> None:
+        """`insert-plan` reads `IMPORT_HERO_REFUSALS.jsonl` back as the lane's own refusals."""
+        source = self._source(tmp_path)
+        run = tmp_path / "insert-2026-10-07-010"
+        IN.seed_from_import_run(source, run, [SITE_A, SITE_B])
+
+        lane = [
+            json.loads(line)
+            for line in (run / "IMPORT_HERO_REFUSALS.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        ]
+        assert [r["reason"] for r in lane] == ["no_target_row"]
+        assert SITE_B not in {r["site_id"] for r in lane}
+
+    def test_a_run_the_seed_took_every_site_of_carries_an_empty_seed_refusal_file(
+        self, tmp_path: Path
+    ) -> None:
+        source = self._source(tmp_path)
+        run = tmp_path / "insert-2026-10-07-011"
+        IN.seed_from_import_run(source, run, [SITE_A])
+        # The file is written whether or not anything landed in it: a missing file and an empty one
+        # read differently to the next person looking for what the seed refused.
+        assert (run / IN.SEED_REFUSALS).read_text(encoding="utf-8") == ""
+
 
 class TestTheStatement:
     def _sql(self, tmp_path: Path, **kwargs: Any) -> str:

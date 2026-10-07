@@ -2,20 +2,15 @@
  "measured_at": "2026-10-07",
  "question": "the import lane's remainder: the real size of every file the 2025 import links",
  "sites": 62,
- "on_offsite_tree": 7,
+ "on_offsite_tree": 14,
  "credit_rule": 5,
  "other_reason": 6,
- "measured": 44,
+ "measured": 37,
  "clears_lane_floor_1600x900": [],
  "clears_owner_floor_800x300_only": [
-  "House of the Knight",
-  "Clachtoll Broch",
-  "Hoyo Negro Cenote",
-  "Dead Woman's Ditch",
-  "Bhimashankar Buddhist Caves",
-  "Bhutalinga Buddhist Caves",
+  "Cusichaca River",
   "Obelisk of Thutmose I",
-  "Colima - Eastern Shaft Tomb"
+  "The Temple of Artemis"
  ],
  "below_800x300": [
   "Burley Wood",
@@ -240,20 +235,6 @@
    ]
   },
   {
-   "site_id": "58a5a5b2-735a-4fda-bf2d-52e723fd86bc",
-   "name": "House of the Knight",
-   "file": "Volubilis mosaic Bacchus and Ariadne.jpg",
-   "group": "width_half",
-   "original": [
-    1500,
-    1477
-   ],
-   "store_1600": [
-    1500,
-    1477
-   ]
-  },
-  {
    "site_id": "6148883a-659c-40c4-bcf4-ef086f860f40",
    "name": "Waddon Hill",
    "file": "Waddon Hill - geograph.org.uk - 1030076.jpg",
@@ -268,27 +249,17 @@
    ]
   },
   {
-   "site_id": "6c09f12a-a657-4395-8bc6-d3903f4eaa27",
-   "name": "Clachtoll Broch",
-   "file": "Clachtoll Broch 20090612 02.jpg",
-   "group": "width_half",
-   "original": [
-    800,
-    534
-   ],
-   "store_1600": [
-    800,
-    534
-   ]
-  },
-  {
    "site_id": "6e2e27d0-f162-4a26-bd66-b7fc75554ce4",
    "name": "Cusichaca River",
    "file": "File:Llactapata.jpg",
    "group": "never_fetched",
    "original": [
-    0,
-    0
+    1842,
+    1024
+   ],
+   "store_1600": [
+    1600,
+    889
    ]
   },
   {
@@ -316,34 +287,6 @@
    ]
   },
   {
-   "site_id": "82c9fb95-c776-4450-bb5c-93a70fdcb056",
-   "name": "Hoyo Negro Cenote",
-   "file": "Grand Cenote 20101006.jpg",
-   "group": "width_half",
-   "original": [
-    1286,
-    854
-   ],
-   "store_1600": [
-    1286,
-    854
-   ]
-  },
-  {
-   "site_id": "83893760-fcb6-4824-8ee9-7e1c6fc74852",
-   "name": "Dead Woman's Ditch",
-   "file": "Dead Womans Ditch (geograph 2880447).jpg",
-   "group": "width_half",
-   "original": [
-    1280,
-    856
-   ],
-   "store_1600": [
-    1280,
-    856
-   ]
-  },
-  {
    "site_id": "8747ac16-0730-4bdc-8afa-49c3d8d6819b",
    "name": "Stairhaven",
    "file": "Stairhaven broch - intramural stairs - geograph.org.uk - 590703.jpg",
@@ -355,20 +298,6 @@
    "store_1600": [
     480,
     640
-   ]
-  },
-  {
-   "site_id": "87d83a5b-d7a2-45dc-b8fd-1bed588bbeec",
-   "name": "Bhimashankar Buddhist Caves",
-   "file": "Bhutalinga caves chaitya.jpg",
-   "group": "width_half",
-   "original": [
-    1200,
-    1800
-   ],
-   "store_1600": [
-    1200,
-    1800
    ]
   },
   {
@@ -393,20 +322,6 @@
    "original": [
     0,
     0
-   ]
-  },
-  {
-   "site_id": "8ef3e56e-3dd8-4576-a5bf-eab965bcd0a7",
-   "name": "Bhutalinga Buddhist Caves",
-   "file": "Bhutalinga caves chaitya.jpg",
-   "group": "width_half",
-   "original": [
-    1200,
-    1800
-   ],
-   "store_1600": [
-    1200,
-    1800
    ]
   },
   {
@@ -438,27 +353,17 @@
    ]
   },
   {
-   "site_id": "a2704598-c3b7-4cbb-9fdc-4055c445cec1",
-   "name": "Colima - Eastern Shaft Tomb",
-   "file": "ShafttombMNAH.jpg",
-   "group": "width_half",
-   "original": [
-    1067,
-    709
-   ],
-   "store_1600": [
-    1067,
-    709
-   ]
-  },
-  {
    "site_id": "a939e800-06e4-4719-a000-165e7f5efe92",
    "name": "The Temple of Artemis",
    "file": "File:Miniaturk 009.jpg",
    "group": "never_fetched",
    "original": [
-    0,
-    0
+    1024,
+    768
+   ],
+   "store_1600": [
+    1024,
+    768
    ]
   },
   {

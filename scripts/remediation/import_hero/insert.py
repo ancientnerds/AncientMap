@@ -105,6 +105,10 @@ LANE_LABEL = "ih6"
 #: The line both statements end with, so `--rehearse` recognises the run the way the shared
 #: writer's does (`chunk_writer.READBACK_LABEL`).
 READBACK_LABEL = "journal rows for this run"
+#: The sites `seed_from_import_run` itself refused - no claim in the source run, a link that names no
+#: Commons file, a claim that conflicts with one the run already holds. Their own file, because
+#: `IMPORT_HERO_REFUSALS.jsonl` is what `insert-plan` reads back as the lane's refusals.
+SEED_REFUSALS = "SEED_REFUSALS.jsonl"
 
 
 @dataclass(frozen=True)
@@ -364,6 +368,17 @@ def seed_from_import_run(
     )
     out_refusals_path.write_text(
         "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in refusals),
+        encoding="utf-8",
+        newline="\n",
+    )
+    # The refusals of the seed itself go into their own file, and they have to: `IMPORT_HERO_
+    # REFUSALS.jsonl` above holds what the *lane* refused, and every refusal in it is read back by
+    # `insert-plan` as one. A site this seed dropped - no claim in the source run, a link that names
+    # no Commons file, a claim that conflicts - left no trace at all before this: the run showed its
+    # claims and its lane refusals and nothing about the sites it never took. Measured 2026-10-07 over
+    # 49 sites, of which the seed took 37 and refused 12 by name.
+    (insert_run / SEED_REFUSALS).write_text(
+        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in out_refusals),
         encoding="utf-8",
         newline="\n",
     )

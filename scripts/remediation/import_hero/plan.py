@@ -182,6 +182,22 @@ class Refusal:
         return {"site_id": self.site_id, "reason": self.reason, "detail": self.detail}
 
 
+#: Where a plan that refuses **every** site writes its refusals. Its own file, because
+#: `IMPORT_HERO_REFUSALS.jsonl` is what a run prepared for the INSERT lane reads back as the seeded
+#: record, and a plan that wrote over it would erase that.
+PLAN_REFUSALS = "PLAN_REFUSALS.jsonl"
+
+
+def _write_refusals(path: Path, refusals: Sequence[Refusal]) -> None:
+    path.write_text(
+        "".join(
+            json.dumps(r.as_json(), ensure_ascii=False, sort_keys=True) + "\n" for r in refusals
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
 def _target_row(
     state: ST.State, sid: str, image: str, fetch: Mapping[str, Any] | None = None
 ) -> tuple[dict[str, Any] | None, str | None]:
@@ -520,9 +536,22 @@ def write_chunks(
     """The chunks, the refusals and the counts. Nothing is written outside `out`."""
     planned = plan(state, claims, dimensions=dimensions, fetched=fetched, floor=floor)
     if not planned.changes:
+        # A wave that refuses every site is the one case where the refusals are the whole result,
+        # so they are written before this raises. They go into `PLAN_REFUSALS.jsonl` and not into
+        # `IMPORT_HERO_REFUSALS.jsonl`: that file is what a run prepared for the INSERT lane reads,
+        # and a plan that writes its own refusals over it would erase the seeded record. Measured
+        # 2026-10-07, run `import-hero-2026-10-07-010`: 37 sites seeded, all 37 refused, and the run
+        # could not say why any of them was.
+        out.mkdir(parents=True, exist_ok=True)
+        _write_refusals(out / PLAN_REFUSALS, planned.refusals)
+        by_reason = {
+            reason: sum(1 for r in planned.refusals if r.reason == reason)
+            for reason in sorted({r.reason for r in planned.refusals})
+        }
         raise ImportHeroError(
             "the plan holds no row: the join found no import image on a curated site, or every "
-            "candidate was refused"
+            f"candidate was refused. {len(planned.refusals)} site(s) are refused by name in "
+            f"{out / PLAN_REFUSALS}: {by_reason}"
         )
     lane = chunk_lane(run_stamp)
     written = emit_chunks(
