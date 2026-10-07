@@ -456,6 +456,47 @@ produced the bundle. The 2026-10-06 lesson already demanded exactly this and it 
 for the seed path — the test asserted `writer_for()`'s return value, which the seed path
 never exercised.
 
+### The correction needed two rounds, and the first three writes changed nothing
+
+With the owner's release (2026-10-07 13:21 UTC) three papers were corrected with
+`paper correct --republish`. Journal rows 130, 131 and 132 committed, every gate passed,
+every side effect ran — **and `research_model` stayed `MiniMax-M3` on all three.** Only the
+read-back said so; the outcome said nothing.
+
+The cause is one line in `_fresh_bundle`:
+
+```python
+raw = ws.require(ws.bundle, "run `paper bundle`")   # liest die Datei von der Platte
+```
+
+The name says *fresh* and the function builds nothing: it reads the last `bundle.json` from
+disk and only checks that its report still matches the draft. So the research record written
+into the dossier minutes earlier changed nothing, because the bundle carrying the stamp was
+built before it. **The write was correct, journalled and completely without effect** — the
+hardest kind of failure to notice, because every line of its own output said success.
+
+The lesson is not "run `paper bundle` first", which is the symptom. It is that a command
+named for a property it does not have will be read as if it had it, and a journalled write
+whose payload was stale looks exactly like an effective one in every log it prints. Two
+consequences, the first of which would have saved the three writes:
+
+1. **A republish must refuse a bundle older than the record it draws from.** The workspace
+   knows when `dossier.json.gz` was written; a `bundle.json` older than that cannot describe
+   that dossier, whatever its report matches.
+2. **The outcome of a stamp correction must name the value it wrote.** `correct()` returned
+   a slug and a journal id and said nothing about `research_model`, so proving that a stamp
+   changed needed a separate query afterwards.
+
+Journal rows 133, 134 and 135 are the three corrections that took, after `paper bundle` was
+re-run for each workspace. Measured after them: **0 of the 10 published papers carry a wrong
+stamp**, read from the database and then from the public API, where `ai_system` now reads
+`theo-research (MiniMax-M3.1-Flash-Preview) + MiniMax-M3.1-Flash-Preview (mcode)` on all
+three pages.
+
+`ai_system` is the second half of why this was worth doing. The public attribution line is
+built from the pair, so a paper researched and written entirely in one session announced a
+two-model provenance in which one of the models never touched it.
+
 ## Verification of the campaign close (2026-10-07 13:20 UTC)
 
 Read-only, after topic 10 went out and the owner stopped the campaign:
