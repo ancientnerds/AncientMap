@@ -1,0 +1,40 @@
+site_id: 3722c54c-716e-4a23-9877-d23c3ff1358b
+name: Arcadian Gate
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Messene Arkadisches Tor.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f9cc29954750817861f8559b00fd58e9
+- Reconstruction drawing of the Arcadian Gate from the fortification walls of Messene, Greece (01).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b0f7df87fcbae053446c496045ea1b3e
+- Reconstruction drawing of the Arcadian Gate from the fortification walls of Messene, Greece (02).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2f57cdc1053d97c758ef3854755ce40e
+- Messene Arcadian Gate from above.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2cbba6483b05e0e2769afa4b61d56639
+- Inside the Arcadian Gate on October 29, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\00475d1cf945b3140285881562416006
+- Messene City-walls Arcadian-Gate-T 20230925 145247.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b14d6c69091f5a873cb77b7817bebab1
+- Messene Arcadian Gate by Paul des Granges (1869) - crop.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\84521f1a52cab24b4f8a30a33461072e
+- Messene Arcadian Gate by Paul des Granges (1869).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8608dae08c3737256e17ab3a02239cb6
+- Remains of the Arcadian Gate (Ancient Messene) on October 29, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e377c464f7c11031a7f7c211f252ae38
+- Arcadian Gate.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\74fea3bec646976810a74316e244f60e
+- Arcadian gate.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\52a96574bba34602b87659cb7b0ad34f
+- View of the Arcadian Gate of Ancient Messene on October 29, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\106ef8e5aa680211e509baf2f2e9c6f5
+- Messene tower above Arcadian gate.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c98de9f4b59986800f277a67ed36fe41
+- Gezicht op de Arcadische poort, muren en torens 263 Messene View of the Arcadian gate & walls & towers without the city (titel op object), RP-F-00-5348-4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\018a14968cd88a9cabf3abdbf86cccda
+- Inside the Arcadian Gate (Ancient Messene) on October 29, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d52a4a1fb4af691023b81155abcf8b8
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

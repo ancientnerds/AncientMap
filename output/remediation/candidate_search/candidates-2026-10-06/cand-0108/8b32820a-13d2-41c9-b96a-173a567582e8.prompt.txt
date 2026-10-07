@@ -1,0 +1,35 @@
+site_id: 8b32820a-13d2-41c9-b96a-173a567582e8
+name: The Ruins of Cyrene
+country: Libya
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Cyrene Apollo temple.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45d213c679a71af2b50a8f5704888f9a
+- Ancient Glory of Cyrene-libya.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9f6473c84397ac1be83ce039f22cc51
+- Tolmeitha ruins.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4185e060451ea9ee31f090f7c1fca977
+- Antiquities of the Orient unveiled, containing a concise description of the remarkable ruins of King Solomon's temple, and store cities ,together with those of all the most ancient and renowned cities (14596000209).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a0d661c00e038f32dafdbce51b0e3eb5
+- 36 Monument to the gods.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\91926a84687c75609ca0e226a5a3cf5c
+- 23 Archeion from the SE.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f555177bcf083f227786ffa2b7fe6a4b
+- 48 T of Commodus 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e9997f9532eaf2952aaa957451da708
+- 48 T of Commodus 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ab8889cf2252feb4a638544afb44a9e
+- S Necr Tomb of Thanatos 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\209e7030892d081a90d1cd1a36e96966
+- S Necr Tomb of Thanatos 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1db7ed93e92c38627f067d36559b9b80
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

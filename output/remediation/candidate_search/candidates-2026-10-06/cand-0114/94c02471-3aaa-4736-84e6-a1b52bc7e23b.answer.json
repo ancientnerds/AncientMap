@@ -1,0 +1,8 @@
+{"site_id": "94c02471-3aaa-4736-84e6-a1b52bc7e23b",
+ "answered_by": "mcode-judge-cand-0114",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Eva arriving at South Beach.jpg", "verdict": "other_site", "note": "Historische Schwarzweissaufnahme eines Strandes mit Pferden, Wagen und Dampfschiff, beschriftet Waiting for the Boat"},
+  {"file": "Skämtbilden och dess historia i konsten (1910) (14764644442).jpg", "verdict": "other_site", "note": "Historische Karikatur mit Menschenmenge und Ringkaempfern vor Toren, Tristan und Isolde betitelt"}
+ ],
+ "note": ""}

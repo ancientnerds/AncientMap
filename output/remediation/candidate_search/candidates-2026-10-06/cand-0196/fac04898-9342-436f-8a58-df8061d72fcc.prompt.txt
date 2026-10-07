@@ -1,0 +1,43 @@
+site_id: fac04898-9342-436f-8a58-df8061d72fcc
+name: Río Azul
+country: Guatemala
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Muelle Lagoa Azul, Isla Grande, Río de Janeiro A74306920241125.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0796bc258eb51897c26f42ad4a25fddd
+- Río Azul, Huehuetenango.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b6b6172df83e981c406d20b6b40ea30a
+- Puente Río Azul, Huehuetenango.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62d72dd19177e5789040890bcb52e8e8
+- Río Azul, Huehuetenango - 50801025921.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c1f4fc42401963e223c459c30291e0af
+- Río Azul, Huehuetenango - 50801035016.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7709221953606c25bb681b843fb5f18c
+- Río Azul, Huehuetenango - 50801153952.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c55bb0587dbf202e1ca60505b4da1f4
+- Río Azul, Huehuetenango - 50801029126.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a8e868a214f14e45aec94cb11a2f3262
+- Rio Azul 1921 Louis Claes.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\578537a8c446f25a626e4b23efb4dd1e
+- Comunidad Río Azul (Dolores Hidalgo).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\23d6ebc79a09d958efa10a13d5237d79
+- Bandeira de Barra do Rio Azul.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a8f9c20f33a250b914b19a541c462c1
+- AZUL-PRYXBgig011024hbs 5674.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44606022a08123e71f5a17056fdb6ca1
+- Lago Azul no Rio Zêzere.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bdd8a11576674d8637c6c047547a3a7b
+- Puerta II - Río Azul, Municipio de Dolores Hidalgo, Guanajuato.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e6841b38276d2332b805cb002a7e42d
+- Sierra de Santa Rosa vista desde Río Azul, Dolores Hidalgo 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f63b0b52a6c8b1c97c1729627e8fb3b
+- Sierra de Santa Rosa vista desde Río Azul, Dolores Hidalgo 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff4f630926509afc394457601853aa92
+- Río azul de pecera.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c28fc88edca70f8e43ede07623bdc9d
+- Sierra de Santa Rosa vista desde Río Azul, Dolores Hidalgo 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a63827efa74d8f984cb04ea8e154b5fd
+- Río Azul.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd5f83a0ef9a800a877ce02596a8d283
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

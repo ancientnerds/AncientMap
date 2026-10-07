@@ -1,0 +1,29 @@
+site_id: 6763f7a6-45af-4b74-8ef6-2cbda7cdd0e8
+name: Anku
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Anku Pande.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dee2bc823855d0f15f7bf6e50343f608
+- Lipu tenpo nanpa ma - ma Anku en ma Tawan.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e5cd9201921ff056a6d6894381161e14
+- Plan des donations Gerard Herberts et Pieter Andreas datées respectivement du 7 Juin 1646 et du 16 janvier 1648, entre les rivières Oude Grogol et Anku, à Batavia - btv1b531027198.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd652620ef92c2ec9acd35c7568edbfe
+- Račun iz 1878.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\19d5f56276582617f96835796ce7625c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,13 @@
+{
+  "site_id": "e7ab9b35-e0bb-4fe4-a1cb-fbe5a17c63d6",
+  "answered_by": "mcode-judge-cand-0176",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Benediktekirche Hamburg 02.jpg", "verdict": "other_site", "note": "Moderne Hamburger Dansk Sømandskirche (Benediktekirke), nicht die dänische Dankirke."},
+    {"file": "Benediktekirche Hamburg 01.jpg", "verdict": "other_site", "note": "Moderne Hamburger Dansk Sømandskirche (Benediktekirke), nicht die dänische Dankirke."},
+    {"file": "Benediktekirken, Hamborg rhb 1.jpg", "verdict": "other_site", "note": "Moderne Hamburger Dansk Sømandskirche (Benediktekirke), nicht die dänische Dankirke."},
+    {"file": "Benediktekirche Hamburg 03.jpg", "verdict": "other_site", "note": "Moderne Hamburger Dansk Sømandskirche (Benediktekirke), nicht die dänische Dankirke."},
+    {"file": "Dänische Seemannskirche Hamburg.jpg", "verdict": "other_site", "note": "Moderne Hamburger Dansk Sømandskirche (Benediktekirke), nicht die dänische Dankirke."}
+  ],
+  "note": ""
+}

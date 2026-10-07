@@ -1,0 +1,37 @@
+site_id: 59addc11-6d49-46ad-ae86-608c00d56f85
+name: Nymphaeum (Illyria)
+country: Albania
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Nymphaeum (Perge).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b8e5606ce2623470c6816dcba35e2f95
+- Nymphaeum House of the Skeleton Herculaneum.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c54fe71d2a4ccc499af2ed40d9cabac6
+- Nymphaeum Ocriculum.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76e641bd9b8ea375e6d549ccf1161f26
+- Nymphaeum Petra Jordan1275.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4e6b032a670e868f5de6a5bed483b358
+- Olba nymphaeum 3506.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\954332d7a620faa16443005b2e6f0344
+- Amman Nymphaeum 0113.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7baee13791b5fe5f080c196dcb92db0c
+- Amman Nymphaeum 0111.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1f825ed5564a138e84095a5a397d2313
+- Nymphaeum 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9f5e517f2cc4e1c50d3add8d57b47783
+- Amman Nymphaeum 0138.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d28c0af4c4aed1593b47f4f8074aeb53
+- Nymphaeum, Palmyra (تدمر), Syria - Nymphaeum-Exedra - PHBZ024 2016 1040 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad730605856c85164dada1df06386e3d
+- Kaunos Nymphaeum 6703.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ab4b4db3e7beca416f5cbdafb7ff329
+- Jerash Nymphaeum 0891.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6eec926233f6d8fb74f33317ec3f63ae
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,52 @@
+site_id: ff53d37c-ab2b-4874-8ed8-a3336ccd12fc
+name: Maleme
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- German Military Cemetery at Maleme (GR) 2005 a View across the Memorial down to RWYs of Old RAF airport.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fa31afc8a4ba36b15d96d5f8d61e25b4
+- Maleme church.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d56859581024916ca3ab2cd709e2c7f4
+- German military cemetery in Maleme, Crete. Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45fd5bba830af0ea88e7a62421ce7752
+- German military cemetery in Maleme. Crete, Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\736deee31d4fb13cf0d8c5a6bfa86735
+- Gravestone on German military cemetery in Maleme. Crete, Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3786d0767d8fa4842afecd71d1ed0836
+- German war cemetery in Maleme. Crete, Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7b10e655bce2fa88a3b0499ae502e170
+- Tombstones on German military cemetery in Maleme. Crete, Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\18eb1a427dde6ab63edc8fb76c568002
+- KRETA Maleme 038.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6944e303716be750e2d69594c2be2523
+- Beach of Maleme-boky08-8548.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ea1402f145c14979fc6ed50ff027eb27
+- Maleme-street-boky08-8535.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d4af2c00da57dae4d01e9ac8f7a52d15
+- Maleme church, 2006.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d4965d935a31c888a7cdbef1b875cb10
+- Maleme F6A-04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2c7cec0308d25ef4ccdf5eaf23001c1b
+- Tholos tomb of Maleme 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad89494ef6ebfd43bba6a87f099cdbb9
+- Tholos tomb of Maleme 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1bcb5fb8f72bef2e91ad4d1b3c486575
+- Maleme F6A-40.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\809a45849ff762fb53eb02189a85fb64
+- Maleme Outcrop.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5b0f391346c4e5cb0cc56f74e48cb030
+- Maleme Dam surface.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\241ef6ccdab2ccfa12f758bd2e38365a
+- Tholos tomb of Maleme 27.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\550e95a63abe9f25fce6ce3c65176c5d
+- 101115-M-4471M-552 (5198864903).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f7edbbd2d6c69b1ad296d863e98d12c
+- 22nd MEU Marines strengthen ties with Greek military 110608-M-BC209-333.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77ccb8f012bc60595eac9d26bb885a58
+- 22nd MEU Marines strengthen ties with Greek military 110609-M-BC209-122.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d06e8f963bd4c96df01181b0ad599976
+- 22nd MEU Marines train with Greek Military 110606-M-BC209-046.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\69a3348afd76c08f8e252828e25d7f3e
+- 30 & 33 Squadron RAF Memorial - Tavronitis, Crete.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae420ec7c0cb25b3de306a041b94fa0c
+- Flickr - DVIDSHUB - 22nd Marine Expeditionary Unit conducts bilateral training with Greece (Image 6 of 19).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4ca26ee50c6e083788df07cc8d30870c
+- Sunrise in Maleme.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6a3c48a05f26fff5d62257f2be0f95d
+- USMC-100520-M-9156T-4243.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cca3a3d8ef73a9f275b6e82c50839d31
+- USMC-100520-M-9156T-4255.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\027d3b2b11e39eb4400b7b635a657e63
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

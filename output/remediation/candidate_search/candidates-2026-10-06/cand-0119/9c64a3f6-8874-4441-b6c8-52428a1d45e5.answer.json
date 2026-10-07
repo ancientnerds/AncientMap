@@ -1,0 +1,14 @@
+{"site_id": "9c64a3f6-8874-4441-b6c8-52428a1d45e5",
+ "answered_by": "mcode-judge-cand-0119",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Spirit Well Cave 1.jpg",
+   "verdict": "depicts",
+   "note": "Grosse Kalksteinhoehle mit Tropfsteinen und dunkler Oeffnung in der bewaldeten Karstwand."},
+  {"file": "Spirit Well Cave 3.jpg",
+   "verdict": "depicts",
+   "note": "Karstfelsen mit Tropfsteinen und hoher dunkler Hoehlenoeffnung im Dschungel, daneben ein Warnschild."},
+  {"file": "Spirit Well Cave 2.jpg",
+   "verdict": "depicts",
+   "note": "Grosse tropfsteinbehangte Hoehlenmundheit in der bewaldeten Karstwand, hoher Felsruecken darueber."}],
+ "note": ""}

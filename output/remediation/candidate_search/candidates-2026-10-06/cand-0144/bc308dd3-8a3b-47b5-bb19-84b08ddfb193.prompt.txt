@@ -1,0 +1,46 @@
+site_id: bc308dd3-8a3b-47b5-bb19-84b08ddfb193
+name: El Palenque
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Barmaid - El Fogón Norteño, Palenque, Chiapas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bffd84a930dccc5379edf5689aa3808e
+- Street Life - El Fogón Norteño, Palenque, Chiapas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c0aa1ca06aa45184386503bb396e05f1
+- Palenque - Maya site in Chiapas - 1977 - El Palacio 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\825cf1272a15c61492c90f6455178f71
+- Palenque - Maya site in Chiapas - 1977 - El Palacio 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50c7d4f7a9f3572e34f0c6e66ae828e2
+- Mask - El Palacio - Palenque Maya Site, Feb 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\600b77429c6871c670b67428ada4e44d
+- Palacio de Palenque 1986 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1ae04a9cc757ab8aea2f7d5c0d27ee5c
+- Palacio de Palenque 1986 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\16e642a4a1a50d4abf117dabdc83c1d0
+- Palenque Chiapas 1977 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d042774330a7c848e16463f162a1574
+- Visiting the Palace at Palenque 1981.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e0d62d150cf7a7494495edb350e7d74
+- Palacio de Palenque 1986 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9a7509897bb13b0fb60c0048fb871ee0
+- Palacio de Palenque 1986 16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\63f4167005fb40b9d22cb04287cd4108
+- Palacio de Palenque 1986 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b17d00216b52238b2dbbc91aa2e4c96
+- Entrando En El Palenque El Caballero Del Azor.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\33ff5aae83c25f4743046b3432d2e06a
+- Juan Manuel Blanes - Dos gauchos en el palenque.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\74f6b335ab2f024e37a9376b30541172
+- Dos gauchos en el palenque, sin marco.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e1a0408708cd3749a83c03a5c70d6713
+- Restaurant El Palenque Uribelarrea 02.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5553ffc97064bdda21a2b9764d548f24
+- Dos gauchos en el palenque, con marco.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0dcb7676db198370c0785114b0152ace
+- Restaurant El Palenque Uribelarrea 01.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ff18e339f065d0ec535932137390c8b
+- El palenque.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b5c6b284f933c9cff3889ad74599310d
+- El Palenque Verano 2017.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0efd768f20fc61b496d29e0e2a55d9c8
+- Vicepresidenta de la Asociación de Artesanas de Cruz Pampa, Yapatera, "El Palenque".jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\16045d64dc10ab99f3b5a23112512ac1
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

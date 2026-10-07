@@ -1,0 +1,14 @@
+{"site_id": "22bc5858-875a-4603-b94a-866aaf0a14e1", "answered_by": "mcode-judge-cand-0025", "model": "MiniMax-M3.1-Flash-Preview", "verdicts": [
+{"file": "Stratonicea-street.jpg", "verdict": "depicts", "note": "Antike Strasse zwischen Steinmauern mit Wegweiser (Hadrianstor, Inschriftenhalle, Latrinen) im Gelaende."},
+{"file": "Plan of Stratonikeia (cleaned up).jpg", "verdict": "region_or_type", "note": "Beschrifteter Grundrissplan der Stadtanlage mit Nummernlegende - Zeichnung/Karte, keine Ansicht der Ruinen."},
+{"file": "Stratonicea-gates.jpg", "verdict": "depicts", "note": "Torbereich mit aufgestellten Saeulen und Kapitaelen, Steinruinen und offene Grabungsflaeche."},
+{"file": "Stratonicea-streets-4.jpg", "verdict": "depicts", "note": "Antike Strasse mit Bruchsteinmaeuern, Lehmziegelresten und Hinweisschild (Tavanfiyat, Billa Evi)."},
+{"file": "Stratonicea Caria, Turkey (20671126782).jpg", "verdict": "depicts", "note": "Hohe antike Quadersteinmauer mit byzantinischem Mosaikband, moderne Dorfhaeuser dahinter."},
+{"file": "Stratonicea-gymnasium.jpg", "verdict": "depicts", "note": "Ausgrabungsfeld mit Saeulen, Kanaelen und beschrifteten Architekturbloecken der Gymnasiumruine."},
+{"file": "Stratonicea Caria, Turkey (20057808464).jpg", "verdict": "depicts", "note": "Grabungsgruben mit Saeulenschaften und gewölbten Steingewoelben, antike Bausubstanz vor Ort."},
+{"file": "Stratonicea Gymnasium in 2015 4048b.jpg", "verdict": "region_or_type", "note": "Informationsplakat mit Fliesstext, Grundriss und schwarzweissen Ausgrabungsfotos - Tafel, keine Ansicht der Ruinen."},
+{"file": "Stratonicea toilets in 2015 4212.jpg", "verdict": "depicts", "note": "Antike Latrinensteine mit Sitzen und Fussruecken im Ausgrabungsbereich der Site."},
+{"file": "Stratonicea village in 2015 4110.jpg", "verdict": "depicts", "note": "Marmorsaeulen, Kapitel und Architekturbloecke auf einer Wiese neben modernen Dorfhaeusern."},
+{"file": "Stratonicea-gymnasium-2.jpg", "verdict": "depicts", "note": "Marmorne Praefasungen, Saeulentrommeln und antike Pflasterung der Gymnasiumruine im Freien."},
+{"file": "Stratonicea Bouleteurion exterior in 2015 4126.jpg", "verdict": "depicts", "note": "Maechtige antike Aussenmauer aus Quadern mit Graffiti, direkt neben der Dorfstrasse."}
+], "note": ""}

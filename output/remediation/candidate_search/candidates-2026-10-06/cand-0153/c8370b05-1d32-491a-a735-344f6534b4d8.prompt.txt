@@ -1,0 +1,39 @@
+site_id: c8370b05-1d32-491a-a735-344f6534b4d8
+name: Ashley, Northamptonshire
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Medbourne Road, Ashley - geograph.org.uk - 6393444.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\74d0ee4a07f6eaa411ab72cdc728d348
+- Bridleway south-east of Ashley - geograph.org.uk - 7228046.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\782f75d35d7d6bcc890176178ab404aa
+- Ashley Court - geograph.org.uk - 6545415.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1a424e6d6750f00e4274a1ced7989c6d
+- Middleton Road in Ashley - geograph.org.uk - 3421539.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\63243ade150064b4bde41d17bf6383b6
+- The Old Rectory, Ashley - geograph.org.uk - 2354822.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4e6414b69a539a6ddc9281f0928890e8
+- Disused Railway Line Near Ashley - geograph.org.uk - 2352802.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2ce6aec9993e8445a3517a3264fd8c02
+- A clear bridleway through wheat - geograph.org.uk - 7228051.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4034eac745481229799abc1f9433be4
+- Along the Main Street of Ashley - geograph.org.uk - 3421591.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d47522e598f61b9f95aec5450a219872
+- Ashley village in the Welland Valley - geograph.org.uk - 3421932.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4450a533abb51df4417a54e3099a84c6
+- Ashley, with St Mary's church in the distance - geograph.org.uk - 6545419.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5bee39694b6fcc3aca1ada2994e64cc7
+- Bridleway across the fields - geograph.org.uk - 3421567.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4cf7e682ac8caaca8316e75927b6a7be
+- Bridleway crossing the River Welland - geograph.org.uk - 7571854.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cc70687b7f7b90bbfdca8d9f33160391
+- Bridleway leaving Brig Lane for Ashley - geograph.org.uk - 7227956.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47b1fd5642b865d3b8e17065c1beee68
+- Bridleway off Middleton Road - geograph.org.uk - 7228041.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1007a9ebac9816bd3d4680c1866468ad
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

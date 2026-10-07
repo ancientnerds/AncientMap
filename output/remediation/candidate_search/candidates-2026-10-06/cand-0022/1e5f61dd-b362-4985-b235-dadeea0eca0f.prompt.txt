@@ -1,0 +1,42 @@
+site_id: 1e5f61dd-b362-4985-b235-dadeea0eca0f
+name: Tichit
+country: Mauritania
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- تيشت (منظر علوي 1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e3ab9190fe7dbed6a5671cb34680d407
+- Tichit Architecture.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\457ca9b593d48af33e1b6db7825166e6
+- Tichit.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a7f51300ac862e4afba0902cd28ccc91
+- تيشت (منظر علوي 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d2996d88e181fbb75aad2832337e776c
+- واحة تيشيت.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2b9aeb6a22d680f576880856696e3cfc
+- Tichit date palms 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\31d18ec53f4688547adbf87afa8cabe5
+- Dhar Tichitt and Town.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b7ed3a7560cf8134bb916fc994009b7b
+- ساحة مسجد تشيشت.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\086a2c2717a5dc42eb7e6303fa36de82
+- Tichitt architecture.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\83781eaeb1f56d048f5da0bd4ceb7369
+- Antoine Tichit - US Oyonnax - Rugby club toulonnais, 28th September 2013.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\97c82c021b9aeea8c0cc14610f1b3d89
+- A door in Tichit.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\214a5bcd7e4390b943be0bdd4898b2d7
+- Castres Olympique - Présentation de l'équipe 2015-2016 - Antoine Tichit.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\11640e769993d02770e50bc32e6721a4
+- USO-ST - 20150306 - Antoine Tichit.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\beef4abb58b6b810c610121cf6c9d770
+- "Renseignements relatifs à la mort du major Laing fournis par un marchand maure de Tichit nommé el hadji Sidi Ahmed, venant de Tombouctou et actuellement à Saint-Louis", mars 1828, publié dans le... - btv1b10869428r (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d3a70ca91b94da126a897caf7f227dda
+- USO - RCT - 28-09-2013 - Stade Mathon - Christophe André et Antoine Tichit.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5c3ce706488c879587666e0e444b041
+- "Renseignements relatifs à la mort du major Laing fournis par un marchand maure de Tichit nommé el hadji Sidi Ahmed, venant de Tombouctou et actuellement à Saint-Louis", mars 1828, publié dans le... - btv1b10869428r (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5b2ab4cb60a8e1ac7d6c3ce6048ae9b8
+- USO-CAB - 20131130 - Antoine Tichit.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d3d60b54b699d35494a82d6f7bee3172
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

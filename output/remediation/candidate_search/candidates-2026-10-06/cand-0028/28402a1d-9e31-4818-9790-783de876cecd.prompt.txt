@@ -1,0 +1,37 @@
+site_id: 28402a1d-9e31-4818-9790-783de876cecd
+name: Isog
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- GWAPA ISOG 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad13b88b26aef9e2ffe0799a6170c7b3
+- GWAPA ISOG 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05eafc814c39ea6aad5be02b04bb19f1
+- GWAPA ISOG 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\437e3491eb99cb278e3f322bda3b8200
+- GWAPA ISOG 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1889d62faa1b7e56ad5221ea95b20d3c
+- GWAPA ISOG 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\39e7db84f3e88561ed22352625775744
+- GWAPA ISOG 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\51f99bbdd97319a20d40b9cf97683a9a
+- GWAPA ISOG 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\64c0c73e18bb721377aed2016fc752e5
+- GWAPA ISOG.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\37c218340cd7e84fbde08d35e0093f89
+- Akademika Pilyugina Street 0.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\93816b4c0765762cdd7ceb08d0f09f87
+- Atlas des mollusques (Pl. 27) (6436518477).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bef37ebce599bcfe58de3577af32bc96
+- Marques typographiques, ou, Recueil des monogrammes, chiffres, enseignes, emblèmes, devises, rébus et fleurons des libraires et imprimeurs qui ont exercé en France depuis l'introduction de (14597441697).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\854844039da1a672c8a174ede6a5a2ed
+- Marques typographiques, ou, Recueil des monogrammes, chiffres, enseignes, emblèmes, devises, rébus et fleurons des libraires et imprimeurs qui ont exercé en France depuis l'introduction de (14597491039).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cae8d349455b383ac69e60f7c4b1604e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

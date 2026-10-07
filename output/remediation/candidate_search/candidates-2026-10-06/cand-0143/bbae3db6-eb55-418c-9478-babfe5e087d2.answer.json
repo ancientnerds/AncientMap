@@ -1,0 +1,98 @@
+{
+  "site_id": "bbae3db6-eb55-418c-9478-babfe5e087d2",
+  "answered_by": "mcode-judge-cand-0143",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Vottovaara seid.jpg",
+      "verdict": "depicts",
+      "note": "Grosser Findling auf kleineren Stufensteinen im Wald, Person daneben: der typische Vottovaara-Megalith."
+    },
+    {
+      "file": "Rain on the lake. Vottovaara.jpg",
+      "verdict": "region_or_type",
+      "note": "Nur See mit bemoosten Findlingen und toten Fichten, keine als Site erkennbare Struktur."
+    },
+    {
+      "file": "Сердце Воттоваары. Heart of Mount Vottovaara.jpg",
+      "verdict": "depicts",
+      "note": "Aufgestellter grosser Findling, der auf kleinen Steinen liegt, mit Totholz im Gipfelwald."
+    },
+    {
+      "file": "Явление утра. The phenomenon of morning.jpg",
+      "verdict": "region_or_type",
+      "note": "Morgenhimmel ueber See und Felsfeld mit toten Baeumen, keine Site-Struktur im Bild."
+    },
+    {
+      "file": "Осень отступает.jpg",
+      "verdict": "region_or_type",
+      "note": "Verschneite Wald- und Seelandschaft mit Findlingen, keine Site-Struktur erkennbar."
+    },
+    {
+      "file": "Камень \"Череп динозавра\". Stone \" Dinosaur Skull\".jpg",
+      "verdict": "depicts",
+      "note": "Einzelner grosser Flecken-Findling als benannter Stein der Site, im Wald stehend."
+    },
+    {
+      "file": "В лесу Воттоваары.jpg",
+      "verdict": "region_or_type",
+      "note": "Waldlandschaft mit verdrehtem Totholz und einem Findling, keine Site-Struktur zu erkennen."
+    },
+    {
+      "file": "Воттоваара. Место силы. 02.jpg",
+      "verdict": "depicts",
+      "note": "Steinfeld des Gipfels mit einem flachen, herausragenden Steinblock in der Mitte."
+    },
+    {
+      "file": "\"Там, где закат засыпает...\".jpg",
+      "verdict": "region_or_type",
+      "note": "Person in roter Jacke bei Sonnenuntergang ueber dem See, keine Site-Struktur."
+    },
+    {
+      "file": "Вид с г. Воттоваара - panoramio - Andrei Humala.jpg",
+      "verdict": "region_or_type",
+      "note": "Weiter Fernblick ueber Waelder und Seen, Site nicht erkennbar."
+    },
+    {
+      "file": "Воттоваара. Место силы. 01.jpg",
+      "verdict": "region_or_type",
+      "note": "See mit Steinsaum im Herbst, reine Landschaft ohne erkennbare Site-Struktur."
+    },
+    {
+      "file": "\"...Запутался ветер в ловушках для снов разноцветных...\".jpg",
+      "verdict": "other_site",
+      "note": "Handgefertigter Traumfaenger am Ast ueber Fels: modernes Objekt, keine Site-Struktur."
+    },
+    {
+      "file": "\"В каждом крае свои шаманы\".jpg",
+      "verdict": "depicts",
+      "note": "Aufgestellter Stein auf einer Felsplatte mit eingeritzten spiralförmigen Felsbildern."
+    },
+    {
+      "file": "\"День ушёл за горизонт...\".jpg",
+      "verdict": "region_or_type",
+      "note": "Sehr dunkle Daemmerungsaufnahme ueber dem Wald, nichts von der Site erkennbar."
+    },
+    {
+      "file": "\"Ловец Снов\" на Воттовааре.jpg",
+      "verdict": "other_site",
+      "note": "Geflochtenes Sechseck aus Wolle an einem Ast: modernes Objekt, keine Site-Struktur."
+    },
+    {
+      "file": "'Fire' and 'Snow' - heather and deer moss.jpg",
+      "verdict": "region_or_type",
+      "note": "Nahaufnahme von Heide und Flechten auf Fels, nur Vegetation."
+    },
+    {
+      "file": "Spruce on stones.jpg",
+      "verdict": "region_or_type",
+      "note": "Fichte auf kahlen Felsplatten, weite Berglandschaft ohne Site-Struktur."
+    },
+    {
+      "file": "Болото на Воттовааре.jpg",
+      "verdict": "depicts",
+      "note": "Findlingsgruppe mit kleinem Bergsee auf dem Gipfel, die Steine der Site im Vordergrund."
+    }
+  ],
+  "note": ""
+}

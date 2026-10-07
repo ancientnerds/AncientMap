@@ -1,0 +1,12 @@
+{"site_id": "dc38ed07-f75e-4d92-b932-cd8275b35a09",
+ "answered_by": "mcode-judge-cand-0168",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Scrub on the western side of Clovelly Dykes - geograph.org.uk - 3641271.jpg",
+   "verdict": "region_or_type",
+   "note": "Landstrasse zwischen dichten Hecken und Buschwerk im Bluetenmeer; Wallelemente sind nicht erkennbar, nur Landschaft"},
+  {"file": "The Victoria history of the county of Devon; (1906) (20773958825).jpg",
+   "verdict": "depicts",
+   "note": "Handgezeichneter Plan des Eisenzeitlichen Erdwerks mit den Wallzuegen 'Dyke' und 'Dyke Green' bei Clovelly - die Site selbst"}
+ ],
+ "note": ""}

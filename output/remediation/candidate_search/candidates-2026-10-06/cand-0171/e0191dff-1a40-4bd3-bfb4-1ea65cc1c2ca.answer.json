@@ -1,0 +1,168 @@
+{
+  "site_id": "e0191dff-1a40-4bd3-bfb4-1ea65cc1c2ca",
+  "answered_by": "mcode-judge-cand-0171",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Tussen Hazerswoude Dorp en Alphen aan den Rijn, panorama foto3 2016-05-01 14.46.jpg",
+      "verdict": "region_or_type",
+      "note": "Rapsfeld auf der Strecke zwischen Hazerswoude und Alphen mit Gräben und Baumreihe; freie Landschaft ohne Ortsbebauung."
+    },
+    {
+      "file": "Alphen aan den Rijn-Koudekerk aan den Rijn, de Nederlands Hervormde kerk RM23797 IMG 0661 2022-03-27 15.24.jpg",
+      "verdict": "other_site",
+      "note": "Niederländisch-reformierte Kirche mit Turm und Chor; Aufnahme der Kirche des Nachbardorfs Koudekerk, nicht Alphen."
+    },
+    {
+      "file": "Alphen aan den Rijn, theater-cinema het Castellum foto4 2016-05-01 14.10.jpg",
+      "verdict": "depicts",
+      "note": "Fassade des Theaters/Cinemas Castellum mit Vorführtafeln und Schaufenstern; Gebäude in Alphen."
+    },
+    {
+      "file": "Alpen aan den Rijn, rotonde Raoul Wallenbergplein foto4 2016-05-01 13.50.jpg",
+      "verdict": "depicts",
+      "note": "Kreisverkehr am Raoul-Wallenbergplein mit Fahrbahn, Bäumen und Gebäuden ringsum; Ortslage in Alphen."
+    },
+    {
+      "file": "Alpen aan den Rijn, fietsenstalling bij het station foto4 2016-05-01 13.51.jpg",
+      "verdict": "depicts",
+      "note": "Fahrradparkhaus/-ständer mit überdachter Bahnsteighalle und Bahnsteig; Bahnhofsumgebung in Alphen."
+    },
+    {
+      "file": "Moluks monument in Alphen aan den Rijn 01.jpg",
+      "verdict": "depicts",
+      "note": "Moluks Denkmal mit schwarzem Obelisk und Gedenktafeln auf gepflegtem Platz mit Bäumen."
+    },
+    {
+      "file": "Moluks monument in Alphen aan den Rijn 02.jpg",
+      "verdict": "depicts",
+      "note": "Zweites Moluks Denkmal aus hellem Stein auf einem Platz mit Bank und Bewuchs; Objekt in Alphen."
+    },
+    {
+      "file": "Televisietoren Alphen aan den Rijn.jpg",
+      "verdict": "depicts",
+      "note": "Fernsehturm mit Gittermast und Antennenplattform, vor Stadtbebauung und Bäumen."
+    },
+    {
+      "file": "Street Art in Alphen aan den Rijn 11.jpg",
+      "verdict": "depicts",
+      "note": "Großflächiges Wandgemüde an einer Hauswand in der Ortsbebauung; Street Art in Alphen."
+    },
+    {
+      "file": "View of Alphen aan den Rijn (Molenaarsbrug) PK-1982-P-3.2.tif",
+      "verdict": "depicts",
+      "note": "Historische Zeichnung der Molenaarsbrug mit Fluss, Häuserzeile und Kirche; beschriftete Ansicht von Alphen."
+    },
+    {
+      "file": "Oude Rijn in Alphen aan den Rijn.jpg",
+      "verdict": "depicts",
+      "note": "Alte Rijn mit breitem Wasserlauf, Uferbäumen und angrenzenden Häusern; Fluss im Ort."
+    },
+    {
+      "file": "HUA-162516-Gezicht op het NS station Alphen aan den Rijn te Alphen aan den Rijn.jpg",
+      "verdict": "depicts",
+      "note": "Historische Aufnahme des NS-Bahnhofs mit Bahnsteigdach, Schild und Gleis; Bahnhof in Alphen."
+    },
+    {
+      "file": "Stolperstein für Siegmund Cohen (Alphen aan den Rijn).jpg",
+      "verdict": "region_or_type",
+      "note": "Nahaufnahme eines Stolpersteins mit Inschrift vor Pflasterfugen; Typ-Nahaufnahme ohne Ortsbezug."
+    },
+    {
+      "file": "Alphen aan den Rijn S 11 AH GM Hooftstr 125 Woonhuis 11042020.jpg",
+      "verdict": "depicts",
+      "note": "Wohnhaus in der GM Hooftstraat mit Backsteinfassade, Sprossenfenstern und Garten; Gebäude in Alphen."
+    },
+    {
+      "file": "Stolperstein für Mietje Cassier-Waterman (Alphen aan den Rijn).jpg",
+      "verdict": "region_or_type",
+      "note": "Nahaufnahme eines Stolpersteins im Pflaster mit Bildhauersignatur; Typ-Nahaufnahme ohne Ortsbezug."
+    },
+    {
+      "file": "HUA-150039-Gezicht op het N.S.-station Alphen aan den Rijn te Alphen aan den Rijn.jpg",
+      "verdict": "depicts",
+      "note": "Historische Bahnhofsaufnahme mit Empfangsgebäude, Bahnsteig und Signalen; Bahnhof in Alphen."
+    },
+    {
+      "file": "Stolperstein für Olga Cohen-Goudberg (Alphen aan den Rijn).jpg",
+      "verdict": "region_or_type",
+      "note": "Nahaufnahme eines Stolpersteins mit Inschrift neben einer Hauswand; Typ-Nahaufnahme ohne Ortsbezug."
+    },
+    {
+      "file": "Alphen aan den Rijn GM Hooftstraat 253-255.jpg",
+      "verdict": "depicts",
+      "note": "Doppelhaus an der GM Hooftstraat mit Ladenzeile und Schaufenstern; Häuserzeile in Alphen."
+    },
+    {
+      "file": "Zonnewijzer, detail - Alphen aan den Rijn - 20377005 - RCE.jpg",
+      "verdict": "depicts",
+      "note": "Detailaufnahme einer historischen Sonnenuhr mit Zifferblatt und Aufhängung; Objekt in Alphen."
+    },
+    {
+      "file": "Wierrookvat - Alphen aan den Rijn - 20373417 - RCE.jpg",
+      "verdict": "region_or_type",
+      "note": "Studiofoto eines Museums-Exponats (Gefäß mit Bürsten) vor neutralem Hintergrund; kein Ortsbezug."
+    },
+    {
+      "file": "'Alfen a.d. Rijn (Dorpstraat)', Objectnr PV PV72023.2.jpg",
+      "verdict": "depicts",
+      "note": "Ansichtskarte 'Alfen a. d. Rijn. - (Dorpstraat.)': Straßenzeile mit Häusern, Auto und Personen, Ortsbeschriftung im Bild."
+    },
+    {
+      "file": "'Alfen a.d. Rijn - Hooge Zijde', Objectnr PV PV72075.jpg",
+      "verdict": "depicts",
+      "note": "Ansichtskarte 'Alfen a. d. Rijn. - Hooge zijde.': Allee am Wasser mit Schulhaus und Kirchturm, Ortsbeschriftung im Bild."
+    },
+    {
+      "file": "'Alfen aan de Rijn', Objectnr PV PV71870A.8.jpg",
+      "verdict": "depicts",
+      "note": "Albenformat 'Alfen aan de Rijn.' mit zwei Fotografien: gotischer Kirchturm und Häuser am Flussufer."
+    },
+    {
+      "file": "'Alphen a,d Rijn, Hazeveld', Objectnr PV PV72062.1.jpg",
+      "verdict": "depicts",
+      "note": "Historische Aufnahme mit Beschriftung 'Alphen a/d Rijn, Hazeveld': Häuserzeile mit Läden, Fahrrädern und Backsteinturm."
+    },
+    {
+      "file": "'Alphen a,d Rijn, Lage Zijde', Objectnr PV PV71965A.3.jpg",
+      "verdict": "depicts",
+      "note": "Ansichtskarte 'ALPHEN a/d RYN, Lage Zijde.' mit Ladenzeile, Schaufenstern, Fahrrädern und Personen im Bild."
+    },
+    {
+      "file": "'Alphen a,d Rijn, Prins Hendrikstraat', Objectnr PV PV72039.5.jpg",
+      "verdict": "depicts",
+      "note": "Ansichtskarte 'ALPHEN a/d Rijn. Prins Hendrikstraat' mit Ladenzeilen, Kirchturm, Fahrrädern und Uhr am Mast."
+    },
+    {
+      "file": "'Alphen a,d Rijn, Watertoren', Objectnr PV PV71887A.2.jpg",
+      "verdict": "depicts",
+      "note": "Historische Aufnahme 'Alphen a/d. Rijn Watertoren': Wasserturm mit Zinnen neben Backsteingebäuden und Weg."
+    },
+    {
+      "file": "'Alphen a,d Rijn, Wilhelminastraat', Objectnr PV PV72070.2.jpg",
+      "verdict": "depicts",
+      "note": "Ansichtskarte 'Alphen a. d. Rijn. Wilhelminastraat' mit Wohn- und Geschäftshäusern, Fahrrädern und Altfahrzeug."
+    },
+    {
+      "file": "'Alphen a.d. Rijn - Gouwsluis', Objectnr PV PV71941.3.jpg",
+      "verdict": "depicts",
+      "note": "Ansicht 'Alphen a. d. Rijn - Gouwsluis': Kanal mit Schleuse, Booten und Häusern an beiden Ufern."
+    },
+    {
+      "file": "'Alphen a.d. Rijn, Dorpstraat', Objectnr PV PV72023.5.jpg",
+      "verdict": "depicts",
+      "note": "Ansichtskarte 'Alphen a. d. Rijn Dorpstraat' mit Ladenzeile, Fahrrädern und Personen zwischen Backsteinhäusern."
+    },
+    {
+      "file": "'Alphen a.d. Rijn, Gouwesluis l.z.', Objectnr PV PV71941.4.jpg",
+      "verdict": "depicts",
+      "note": "Ansicht 'Alphen a. d. Rijn Gouwesluis l. z.': großes Passagiersschiff am Schleusenportal mit Krananlage und Uferbäumen."
+    },
+    {
+      "file": "'Alphen a.d. Rijn, Gouwesluis', Objectnr PV PV71941.2.jpg",
+      "verdict": "depicts",
+      "note": "Ansicht 'Alphen a.d. Rijn Gouwesluis': stilles Kanalwasser mit Segelschiff, Uferhäusern und Baumreihe."
+    }
+  ],
+  "note": ""
+}

@@ -1,0 +1,36 @@
+site_id: 9977d351-4c1a-465f-8928-f84c3a67248f
+name: Han Underground City
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Gotomall Underground Shopping Mall at Midnight.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\543c37e8f0b0df14065b3220fae6d2c7
+- Gotomall Underground Shopping Mall at Midnight 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5cd83fe7e375d69ab600556b55a27de6
+- PipeLife sewage pipes to be placed underground, Amsterdam (2021) 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d8ad6fe5472f521c33b301bdc6dab4c0
+- PipeLife sewage pipes to be placed underground, Amsterdam (2021) 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f00107a5711d4ac7d503f4897b053b45
+- PipeLife sewage pipes to be placed underground, Amsterdam (2021) 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\26b11a453b9748d27f62d65a6281342e
+- PipeLife sewage pipes to be placed underground, Amsterdam (2021) 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3fef9d25e1f7df0850fa6d78c09651c7
+- PipeLife sewage pipes to be placed underground, Amsterdam (2021) 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9a615422a0ded2c2d50d8e6676076433
+- PipeLife sewage pipes to be placed underground, Amsterdam (2021) 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1425ce3baa8389c2e8dea7d992131b04
+- History of the Underground railroad as it was conducted by the Anti-slavery league; including many thrilling encounters between those aiding the slaves to escape and those trying to recapture them (14760838655).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a64ae112dd296fb56f22ee9acfc7626
+- Oxford Circus tile motif.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef2067bd4eda0063411dcf1a16b0e47f
+- Water waste pipelines at St. Vitusholt, Winschoten (2021) 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6001e273bcabf17e9e6f04b7f941b7d6
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

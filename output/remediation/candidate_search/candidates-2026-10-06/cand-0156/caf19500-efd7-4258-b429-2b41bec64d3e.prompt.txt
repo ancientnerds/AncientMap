@@ -1,0 +1,36 @@
+site_id: caf19500-efd7-4258-b429-2b41bec64d3e
+name: Temple of Atargatis
+country: Lebanon
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Dura-Europos archival photograph, YUAG negative number dura-c174~01 -object-id-1226.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9fbf3af0f8d3c938d8765d08f7b41b4d
+- Dura-Europos archival photograph, YUAG negative number dura-c177~01 -object-id-14278.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a90ddf43bf8cfe74206a9b97fb71cfd2
+- Dura-Europos archival photograph, YUAG negative number dura-h105a~01 -object-id-10599.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0aeb0357fbab068ff9d52c7c4659af59
+- H2 "Priest House".jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\964b88aaa5e9aae96def89d6230bbb26
+- Dura-Europos archival photograph, YUAG negative number dura-c4~01 -object-id-13558.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef7e48fcc52ef660aa3bc6a528740fb3
+- Atargatis Archaeological Museum Amman Citadel Jordan0818.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c60d59c864e605a4a517c7bd1281dbbc
+- Atargatis seated.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e88d87f17bbf60dac0d237edd2a7658c
+- Atargatis and Hadad.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\974c7a28b4a519b258f95f0f80a29006
+- Dura-Europos archival photograph, YUAG negative number dura-c64~01 -object-id-3934.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\acfdbbf6aa5c7e1d2e131ddeddfaad06
+- Dura-Europos archival photograph, YUAG negative number k424a -object-id-11116.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\739bdd3cc2031c8385c53fb464310fcd
+- Atargatis, Nabatean, c.100 AD, Jordan Archaeological Museum.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb3eec8bfd544d8edf7825f5b3338efc
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

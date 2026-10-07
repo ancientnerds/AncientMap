@@ -1,0 +1,32 @@
+site_id: 46da573c-31ab-4f88-85e3-56ecf56334be
+name: The Long Lane, Derbyshire
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Long Lane gates to Everton Cemetery.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de7229be6183cd1ea8b01c09cf142863
+- Unnamed Lane, The Stoop, Long Lane - geograph.org.uk - 3034957.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41e0cd40aa9b7b24a0f002c4b973e01d
+- Towards Long Lane from Osleston Lane - geograph.org.uk - 3913156.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b1063f1da6d972b297c8a6e220011f26
+- The Three Horse Shoes, Long Lane - geograph.org.uk - 3034905.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2283d87a750abd1745ca868a7459268e
+- Roman Road, Long Lane - geograph.org.uk - 3034914.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\40d0626b5c92c1709e2e9dbebe83cf06
+- Just off Long Lane - geograph.org.uk - 5580823.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ceea9b35753b1a9054103b5ba1324135
+- Long Lane heading to Longlane - geograph.org.uk - 2814522.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3576db651e5150dfdbe57f9b18086bee
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

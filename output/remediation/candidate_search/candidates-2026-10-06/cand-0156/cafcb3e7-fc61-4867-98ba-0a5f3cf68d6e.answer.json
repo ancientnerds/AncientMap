@@ -1,0 +1,18 @@
+{"site_id": "cafcb3e7-fc61-4867-98ba-0a5f3cf68d6e",
+ "answered_by": "mcode-judge-cand-0156",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Reliefkarte Irak.png",
+   "verdict": "region_or_type",
+   "note": "Schattierte Reliefkarte von Irak ohne jede Markierung der Site; reine Regionskarte."},
+  {"file": "Sumerian account of silver for the govenor.JPG",
+   "verdict": "region_or_type",
+   "note": "Keilinschrift-Tafel im Museum, nur mit der Nummer 18 beschriftet; Fundort Abu Salabikh nicht erkennbar."},
+  {"file": "Choga mami on near east precipitation map 1.png",
+   "verdict": "other_site",
+   "note": "Niederschlagskarte Vorderasiens mit rotem Punkt auf Choga-Mami, einer anderen Site."},
+  {"file": "Some sumerian city states with elevated sea level 1.png",
+   "verdict": "region_or_type",
+   "note": "Karte der sumerischen Stadtstaaten mit Nippur, Ur, Uruk u.a.; Abu Salabikh ist nicht ausgewiesen."}
+ ],
+ "note": ""}

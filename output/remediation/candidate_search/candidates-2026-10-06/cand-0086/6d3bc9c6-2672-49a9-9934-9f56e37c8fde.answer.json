@@ -1,0 +1,32 @@
+{
+  "site_id": "6d3bc9c6-2672-49a9-9934-9f56e37c8fde",
+  "answered_by": "mcode-judge-cand-0086",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Abingdon Campus Exterior1.jpg",
+     "verdict": "other_site",
+     "note": "Modernes College-Gebaeude mit rotem Abingdon-College-Schild und Parkplatz; keine Erdewerkspuren des Enclosures."},
+    {"file": "Jumelage avec Abingdon-on-Thames (Angleterre) le 16 juin 1962 (Colmar).jpg",
+     "verdict": "other_site",
+     "note": "Gerahmte kalligrafische Urkunde mit Wappen, Text zur Partnerschaft Colmar/Abingdon, datiert 1978; Dokument, keine Site."},
+    {"file": "Abingdon bridge.png",
+     "verdict": "other_site",
+     "note": "Mittelalterliche Steinbruecke mit mehreren Bogen, weissen Weinhaeusern und Boot auf dem Fluss; Bruecke, nicht das Enclosure."},
+    {"file": "Abingdon Bridge 06.jpg",
+     "verdict": "other_site",
+     "note": "Grosser Steinbogen mit Weinhaeusern und Laterne dahinter, vom Ufer aus; Brueckenbauwerk, nicht die Site."},
+    {"file": "Abingdon Bridge 04.jpg",
+     "verdict": "other_site",
+     "note": "Steinbruecke ueber den Fluss mit weissem Boot vorn und Pub The Nags Head auf der Bruecke; andere Site."},
+    {"file": "Abingdon Bridge 03.jpg",
+     "verdict": "other_site",
+     "note": "Weite Sicht auf die gemauerte Bruecke mit Boot im Vordergrund und Weinhaeuser auf dem Bauwerk."},
+    {"file": "Abingdon, Abingdon Road Bridge - geograph.org.uk - 8039847.jpg",
+     "verdict": "other_site",
+     "note": "Zweibogige Bruchsteinbruecke mit Eisengelaender, Sitzenden und modernem Wegweiser; Stadtbruecke."},
+    {"file": "Abingdon Bridge 05.jpg",
+     "verdict": "other_site",
+     "note": "Brueckenportal mit dem Pub The Nags Head und Ziegelspitzboegen ueber dem Wasser; Bruecke."}
+  ],
+  "note": ""
+}

@@ -1,0 +1,33 @@
+site_id: 8a87a57e-4e29-42e7-9dca-08f3c6c16539
+name: Dungeon Hill
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Dry Loch ^ Dungeon Hill - geograph.org.uk - 2931836.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec558f171e2b4fb01fc96766f156a125
+- Dry Loch ^ northern ridge of Dungeon Hill - geograph.org.uk - 2931818.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9dc6bd436cd9330a3d14fe38ead1f9b8
+- Dungeon Hills.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b2742a1da325ac0a29b619737abaaa1d
+- Hillside, Dungeon Hill - geograph.org.uk - 7184317.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b8d3708da905670947c8e0aca326dbfb
+- Chalk pits, Dungeon Hill - geograph.org.uk - 7546611.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f3c82016636b059d3f2982d1f32c128
+- Dungeon Hill - geograph.org.uk - 2931809.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6967c1d3f7be7ab2f9d50087636f356a
+- Terracettes on Dungeon Hill - geograph.org.uk - 7184095.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3d537d19d79769f0badc1c130c11b7d4
+- DungeonHill.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cc0f65842bf5d46386f2c32a9b5c9635
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

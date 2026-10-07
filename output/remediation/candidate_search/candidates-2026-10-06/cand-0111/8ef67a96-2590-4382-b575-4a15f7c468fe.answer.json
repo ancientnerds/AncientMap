@@ -1,0 +1,23 @@
+{
+  "site_id": "8ef67a96-2590-4382-b575-4a15f7c468fe",
+  "answered_by": "mcode-judge-cand-0111",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Cova Foradà (31255324071).jpg",
+      "verdict": "depicts",
+      "note": "Historische Schwarzweißaufnahme einer Glasplatte: freigelegte Bruchsteinmauern einer Grabung am Hang mit zwei Männern."
+    },
+    {
+      "file": "Vista de la Foradà des de la cova del Moro.JPG",
+      "verdict": "region_or_type",
+      "note": "Blick durch eine Felsöffnung auf zerklüftete Kalkberge und Heide; zeigt die Landschaft, nicht die Höhle."
+    },
+    {
+      "file": "Talla lítica, conjunt de la cova Foradà, Museu Arqueològic d'Oliva.JPG",
+      "verdict": "depicts",
+      "note": "Museumsvitrine mit lithischem Gerät (Klingen und Schabungen); Beschriftung im Bild nennt Conjunt de la Cova Foradà."
+    }
+  ],
+  "note": ""
+}

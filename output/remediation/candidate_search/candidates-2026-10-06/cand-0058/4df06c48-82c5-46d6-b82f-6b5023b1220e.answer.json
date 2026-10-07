@@ -1,0 +1,103 @@
+{
+  "site_id": "4df06c48-82c5-46d6-b82f-6b5023b1220e",
+  "answered_by": "mcode-judge-cand-0058",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "The entrance to the archaeological site of Mycenae on October 27, 2019.jpg",
+      "verdict": "region_or_type",
+      "note": "Warteschlange von Besuchern hinter Metallzaun am modernen Eingangs-/Kassenhaus, Baeume und Felsboden; im Hintergrund Meer und Berge, keine Ruinen erkennbar."
+    },
+    {
+      "file": "Mycenae - Archaeological site - 10.jpg",
+      "verdict": "depicts",
+      "note": "Zyklopische Stuetzmauern und Mauerreste auf dem Hang, Besucher auf dem Pfad darueber."
+    },
+    {
+      "file": "Mycenae - Archaeological site - 2.jpg",
+      "verdict": "depicts",
+      "note": "Maechtige Zyklopische Befestigungsmauern am Kamm des Huegels, Besucher auf den Wegen."
+    },
+    {
+      "file": "Mycenae - Archaeological site - 6.jpg",
+      "verdict": "depicts",
+      "note": "Steinpflaster und Zyklopische Mauern mit Absperrungen auf der Akropolis, Argolis-Ebene dahinter."
+    },
+    {
+      "file": "Mycenae - Archaeological site - 13.jpg",
+      "verdict": "depicts",
+      "note": "Grosse Besuchergruppe auf Steinpflaster zwischen Zyklopischen Mauern, Saulentrommel im Vordergrund."
+    },
+    {
+      "file": "Mycenae - Archaeological site - 11.jpg",
+      "verdict": "depicts",
+      "note": "Blick von der Akropolis auf Fundamente und Mauern, Parkplatz mit Bussen, Olivenhaine und Argolis-Ebene."
+    },
+    {
+      "file": "Mycenae - Archaeological site - 4.jpg",
+      "verdict": "depicts",
+      "note": "Zyklopische Befestigungsmauer am Grat zwischen zwei Huegeln, Olivenbaeume im Vordergrund."
+    },
+    {
+      "file": "Mycenae - Archaeological site - 1.jpg",
+      "verdict": "depicts",
+      "note": "Blick ueber Strasse und Zaun auf die langen Zyklopischen Mauern und Terrassen der Akropolis."
+    },
+    {
+      "file": "Mycenae - Archaeological site - 5.jpg",
+      "verdict": "depicts",
+      "note": "Grosse Zyklopische Quader der Befestigungsmauer, Besucher oben auf der Mauer, Pinien."
+    },
+    {
+      "file": "Mycenae - Archaeological site - 12.jpg",
+      "verdict": "depicts",
+      "note": "Steinfundamente und Mauerreste der Akropolis, Parkplatz mit Bussen, Ebene und Berge dahinter."
+    },
+    {
+      "file": "Mycenae - Archaeological site - 9.jpg",
+      "verdict": "depicts",
+      "note": "Runde Steinstruktur in Zyklopischer Mauer, Absperrungen, Parkplatz mit Bussen im Tal."
+    },
+    {
+      "file": "Mycenae - Archaeological site - 8.jpg",
+      "verdict": "depicts",
+      "note": "Zyklopische Steinraeume und Mauern auf der Akropolis, Besucher, Schutzdach, Olivenhaine dahinter."
+    },
+    {
+      "file": "The archaeological site of Mycenae from the parking lot on 26 March 2019.jpg",
+      "verdict": "depicts",
+      "note": "Panorama der Akropolis mit massiven Zyklopischen Befestigungsmauern, Parkplatz mit Autos davor."
+    },
+    {
+      "file": "View of the archaeological site of Mycenae and its parking lot from the acropolis of Mycenae.jpg",
+      "verdict": "depicts",
+      "note": "Blick von der Akropolis ueber Mauern und Fundamente zum Parkplatz, Olivenhaine und Ebene."
+    },
+    {
+      "file": "Entrance to the archaeological site of Mycenae.jpg",
+      "verdict": "depicts",
+      "note": "Zyklopisches Tor mit gewaltigem Deckstein und korbelfoermigem Entlastungsstein, Besucher."
+    },
+    {
+      "file": "The view from the entrance to the Tomb of Clytemnestra at the archaeological site of Mycenae.jpg",
+      "verdict": "region_or_type",
+      "note": "Nur Landschaft: Olivenbaeume, felsiger Hang, Argolischer Golf und Berge; keine Ruinen oder Strukturen."
+    },
+    {
+      "file": "The Argolic Gulf from the archaeological site of Mycenae on October 27, 2019.jpg",
+      "verdict": "depicts",
+      "note": "Ausgrabungsschnitte mit freigelegten Fundamenten und Absperrung im Vordergrund, Golf dahinter."
+    },
+    {
+      "file": "The Tholos Tomb of Clytemnestra at the archaeological site of Mycenae on 26 March 2019.jpg",
+      "verdict": "depicts",
+      "note": "Dromos der Tholosgruft: Quaderwaende, Tuer mit dreieckigem Korbeldreieck, Kiesweg."
+    },
+    {
+      "file": "The Lion Gate on 26 March 2019.jpg",
+      "verdict": "depicts",
+      "note": "Loewentor: Relief mit zwei einander zugewandten Loewen ueber dem verjuengten Zyklopischen Torbogen."
+    }
+  ],
+  "note": ""
+}

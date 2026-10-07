@@ -1,0 +1,14 @@
+{"site_id": "a791798d-8ed0-4134-bd0d-de1deaef99a1",
+ "answered_by": "mcode-judge-cand-0128",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Jason en Medea op bezoek bij Pelias op Iolcus, RP-P-H-H-853.jpg", "verdict": "other_site", "note": "Kupferstich-Einband mit mythologischer Figurenszene (Jason/Medea bei Pelias); mythologische Darstellung, keine Ruinen."},
+  {"file": "Jason and the Golden Fleece 17 The Argonauts returning to Iolcus PK-T-1979, PK-T-1978.tiff", "verdict": "other_site", "note": "Tafel mit mythischen Figuren und Schriftband 'Jason ... D'Iolce la ville'; allegorische Buchillustration, keine Ausgrabungsruine."},
+  {"file": "Agurten (December 2021).jpg", "verdict": "other_site", "note": "Farbfoto eines blonden Kindes mit Maske vor einer Betonwand; moderne Szene, keine Site."},
+  {"file": "Ancient Greek red-figure krater depicting Astydamia at the Louvre Museum.jpg", "verdict": "other_site", "note": "Rotfigurige Vasenmalerei im Museumsschrank (Astydamia-Darstellung); mythologisches Motiv, nicht Iolkos."},
+  {"file": "Jason and Pelias Fresco (49345325946).jpg", "verdict": "other_site", "note": "Wandfresco mit bemalten antikisierten Figuren (Koloquai und Ringer) auf Putz; mythologische Innenraumdekoration."},
+  {"file": "The golden fleece and the heroes who lived before Achilles (1921) (14743936056).jpg", "verdict": "other_site", "note": "Vasenillustration: Medea lenkt einen Drachenwagen mit fliegenden Pferden; Mythosbild ohne Ort."},
+  {"file": "The golden fleece and the heroes who lived before Achilles (1921) (14763705761).jpg", "verdict": "other_site", "note": "Liniezeichnung eines geflügelten Pferdes über Sternen, vom Wagen aus gespannt; reine Mythosillustration."},
+  {"file": "A classical dictionary of Greek and Roman biography...revised.. (1894) (14779978921).jpg", "verdict": "other_site", "note": "Zeichnung 'Medea (From a sarcophagus at Mantua)': mythologische Figurengruppe; erklärt unten als Sarkophag aus Mantua."}
+ ],
+ "note": ""}

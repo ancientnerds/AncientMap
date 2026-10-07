@@ -1,0 +1,38 @@
+{
+  "site_id": "8f5e0a0d-a4e5-4c7d-8c73-80695a6a5290",
+  "answered_by": "mcode-judge-cand-0111",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Kızlar kalesi (2).jpg",
+      "verdict": "depicts",
+      "note": "Substanzielle Burgruine: Bruchsteinmauer mit verputztem Innenraum am felsigen Hang; Mauern der Site im Bild."
+    },
+    {
+      "file": "Castle Güveloğlu 03.jpg",
+      "verdict": "region_or_type",
+      "note": "Bergstraße mit Leitpfosten und Felszacken im Hintergrund; Landschaft, keine Burganlage sichtbar."
+    },
+    {
+      "file": "Castle Güveloğlu 01.jpg",
+      "verdict": "region_or_type",
+      "note": "Kurvenreiche Straße mit Lastwagen und Felsgrat im Mittelgrund; Verkehrs- und Landschaftsansicht."
+    },
+    {
+      "file": "Castle Güveloğlu 02.jpg",
+      "verdict": "region_or_type",
+      "note": "Straßenkurve mit PKW, Leitplanke und bewaldetem Felsrücken; keine Burgruine im Bild."
+    },
+    {
+      "file": "Castle Güveloğlu 04.jpg",
+      "verdict": "region_or_type",
+      "note": "Panoramablick vom Straßenrand über Plantagen und Täler zu Bergen; reine Landschaft."
+    },
+    {
+      "file": "1pics.jpg",
+      "verdict": "region_or_type",
+      "note": "Niedrige Trockenmauer auf trockenem Hang mit herbstlichen Bäumen; nicht sicher als Burgruine erkennbar."
+    }
+  ],
+  "note": ""
+}

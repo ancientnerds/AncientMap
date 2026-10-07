@@ -1,0 +1,63 @@
+{
+ "site_id": "97a2bde9-0352-465a-94ca-745bcec77e7d",
+ "answered_by": "mcode-judge-cand-0115",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {
+   "file": "DobrovodyUman8.JPG",
+   "verdict": "region_or_type",
+   "note": "Ortsdurchfahrt durch Dobrovody mit Ortstafel ДОБРОВОДИ, modernen Strassen und Strommasten; Dorf, keine Site erkennbar."
+  },
+  {
+   "file": "DobrovodyUman7.JPG",
+   "verdict": "other_site",
+   "note": "Modernes oeffentliches Gebaeude mit Wellblechdach, Betontreppe und weissem Zaun; keine historischen Strukturen."
+  },
+  {
+   "file": "DobrovodyUman4.JPG",
+   "verdict": "other_site",
+   "note": "Grosse moderne Schul-/Dorbebauung mit Zackenfassade neben Wiese; modernes Dorf, keine Site."
+  },
+  {
+   "file": "DobrovodyUman2.JPG",
+   "verdict": "region_or_type",
+   "note": "Ortstafel-Stein mit Wappen, Dorfplan СХЕМА ДОБРОВОДИ und grosses Schild ДОБРОВОДИ; Dorf/Karte, keine Site."
+  },
+  {
+   "file": "DobrovodyUman1.JPG",
+   "verdict": "other_site",
+   "note": "Sowjetische Gedenkstele im Feld mit Namen РУДЕНКО МИКОЛАЙ; anderes Denkmal, keine Site."
+  },
+  {
+   "file": "DobrovodyUman9.JPG",
+   "verdict": "other_site",
+   "note": "Aelteres Backsteingebaeude am Flussufer neben einer Bruecke; moderne Ortsbebauung, keine Site."
+  },
+  {
+   "file": "RevuhaRiver1.JPG",
+   "verdict": "region_or_type",
+   "note": "Breiter Flusslauf mit Uferbäumen und Backsteingebaeude am linken Rand; Landschaft, keine Site."
+  },
+  {
+   "file": "Капличка Доброводи.jpg",
+   "verdict": "other_site",
+   "note": "Neue orthodoxe Dorfkapelle mit vergoldeter Zwiebelkuppel und Marienstatue in Gartenanlage; anderes Bauwerk."
+  },
+  {
+   "file": "Річка Гніздечна в Добриводах.jpg",
+   "verdict": "region_or_type",
+   "note": "Kleiner Fluss im Dorf mit Weiden, Gebuesch und Sciriljaushainen; Landschaft, keine Site."
+  },
+  {
+   "file": "Івана Купала, Уманщина.jpg",
+   "verdict": "other_site",
+   "note": "Zwo Maedchen in ukrainischer Festtracht mit Blumen unter einer Weide; Personenfoto, keine Site."
+  },
+  {
+   "file": "Пам'ятний хрест на околиці села Доброводи.jpg",
+   "verdict": "other_site",
+   "note": "Moderner Beton-Gedenkkreuz mit Eisenzaun unter Eichen am Dorfrand; Denkmal, keine Site."
+  }
+ ],
+ "note": ""
+}

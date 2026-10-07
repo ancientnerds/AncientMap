@@ -1,0 +1,36 @@
+site_id: 3b61e6c5-a06b-4239-bbd9-23edc83e2497
+name: Sarvaš
+country: Croatia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Sarvaš.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\10d9a387717dc62a0294d2ecff269d07
+- Moose in Grand Teton National Park 3 (8007698498).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\12c6dc49aff46fa4a7a3dd58e6642920
+- Sarva, Respublika Bashkortostan, Russia, 452446 - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\67c4838e54794ce2b3accb1ad82869a7
+- Река Сарва - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\341f399c116d418e79d96274c84cfb7e
+- Nurimanovsky District, Republic of Bashkortostan, Russia - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b091c00d0de89adf440392509f517b7e
+- Elk-telemark.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25d6f6ffd110da9ddaa69a2ab99e3a24
+- Река Сарва - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df92de4c34ad77ad98210ada6a793c0f
+- A male moose takes a rest in a field during a light rainshower.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3aff8afadf1aeafa446bc574bfcfc8ef
+- Marcelo Sarvas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a1df378e82088dbc500b8c9eb2cc135e
+- Amol Sarva.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\748130375df1f2cb0a804290ff426877
+- 190710 Szarvas második nap 1 (71).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\777a5721e0ece108f4844e3000810dd4
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

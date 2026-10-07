@@ -1,0 +1,37 @@
+site_id: b6ebcc56-b637-44ad-9250-de406a647169
+name: Örenyeri
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ani Örenyeri - 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9fffb96e8d5efcec8406227b1587833
+- Ani Örenyeri - Aras Nehri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd865010179ee4179bf3fb518d5bdec3
+- Arsameia Örenyeri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\03ce6a4278c5ea646dcbd1121feb5ca1
+- Filyos Tios Örenyeri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ecfbbdfacb7e7e04577e4b13b3c0ca51
+- Myra Antik Kenti-Örenyeri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ca63a09f1533dc3c59355b7a7cbfff8d
+- Pasolini-quotes-from-parlami-terra-1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7ed617667c52502894c35b20946fe26c
+- J22 223 verbrochene Kirchen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9902a46369983bac7d093a9c86aeb637
+- J22 196 Freilichtmuseum Göreme, verbrochene Kirche.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5b1f9e904732a71e6bb787c87fe75e09
+- J22 199 Mönchs- und Nonnenkloster.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3b6c0de62aaeadcd434d9af2fd536bf
+- J22 221 Verbrochene Kirche.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6867df137d98f4cb0c65326e2f613be2
+- Göreme Information Board.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3c103ddc58e2d0e7acddb66671a91665
+- AncientSite Andriake.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c4280287de54e7dd745a631a930915e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

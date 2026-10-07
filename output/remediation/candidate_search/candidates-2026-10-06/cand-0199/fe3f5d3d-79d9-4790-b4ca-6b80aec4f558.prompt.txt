@@ -1,0 +1,31 @@
+site_id: fe3f5d3d-79d9-4790-b4ca-6b80aec4f558
+name: Inka Mach'ay, Peru
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tambomachay, Cuzco, Perú, 2011-11-17 (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3db45e6add5d916a05d9e4666c073afa
+- Tambomachay, Cuzco, Perú, 2011-11-17 (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e842edee5a392ff2586ee55785cc0e9
+- Tambomachay, Cuzco, Perú, 2011-11-17 (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88693914225f6a6389891392fbc6f058
+- Tambomachay, Cuzco, Perú, 2011-11-17 (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d73bf927fa1f97effce06f5dfbcac89b
+- Centro arqueológico Tambomachay.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\06fe13ba7b8ab856beace971bfc738a8
+- Centro arqueologico Tambomachay.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\554f2862c6f4bb7524bf53853949b5e0
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

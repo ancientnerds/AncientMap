@@ -1,0 +1,37 @@
+site_id: 6880170a-df11-4dbf-8c6c-02aa4e39ec7b
+name: Clunia, Austria
+country: Austria
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Clunia 1996.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f17358b4aedb04ab14dc822f03010ca3
+- Clunia Sulpicis - Ancient Roman theatre of Clunia - Tagzania - 1775301335693.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\671b8f26e712865abacfa570d06ed1ee
+- Clunia-PM 17945.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\550179ebb2a60a924f9ae8d143b9d83d
+- Clunia-PM 17946.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9429ba54245666335a233c381d610830
+- Clunia-PM 17963.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\85f7fc1bbda48f31f979138cc9a8d67e
+- Teatre of Clunia and sorrounding views.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0de098dd60b3e173135b97dddc4e698f
+- Clunia-PM 17951.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad0ccda2f2094d0be3468d639715a3d8
+- Clunia Sulpicis - Ancient Roman theatre of Clunia - Tagzania - 1775301336081.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0756333813d17973c72ab481523f14a8
+- Burgos - Teatro Clunia 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c01b036bde524a08fc40d1cfa1efd644
+- Clunia, romain city.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b06b76800b31a8294c6d01f908e0e07b
+- Clunia, Roman Theater, Spring 2006.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1e7def7ad8c75dce9848a3ef198b795f
+- Clunia-PM 17955.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4bfbed07cea18aa87630bbb5595a03f9
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

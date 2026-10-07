@@ -1,0 +1,34 @@
+site_id: 39b42857-adb4-4cfc-ae7e-c3b2672bbc63
+name: Iulia Constantia Zilil
+country: Morocco
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Roman roads in Morocco, according to W. B. Harris (1897).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef90c216ac0728efd8b70e9f7461ffa4
+- Monnaie - Bronze, Maurétanie, Zilis - btv1b10323581s (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\770cd7053a42fe012c73817d9bb0c2c1
+- Monnaie - Bronze, Maurétanie, Zilis - btv1b10323581s (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dda3adc545c0f992053d0ecd1f1022ec
+- Monnaie - Bronze, Zilis, Maurétanie - btv1b113191479 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3eb39fcf42a3a36fcfa85e26168b9535
+- Monnaie - Bronze, Zilis, Maurétanie - btv1b113191479 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8b8c9b4b9612b07a086d0473d85a896b
+- Zili's Watchtowers.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad1da0d0f0fc1dcefef67545f3b62d06
+- CN Zili 0805 (48) (16592249054).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\153c362d70bc899ed762beb14abf81d4
+- Zili Village Yunhuan Lou 0016.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae5974346b81f7839dfc22a2e9d6a9a8
+- Diaolou Cluster in Zili Village (3483695171).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1fb17d5aff2cc175bb17a1ce4643b33c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

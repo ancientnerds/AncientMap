@@ -1,0 +1,21 @@
+{"site_id": "68e1b08b-3997-45bf-a5fe-7a6938279ce4",
+ "answered_by": "mcode-judge-cand-0084",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Terracotas from the Minoan Peak sanctuaries, 2000-1450 BC, AM Sitia, 258568.jpg",
+   "verdict": "region_or_type",
+   "note": "Museumsvitrine mit vielen Tonfiguren; der Wandtext nennt Petsophas und Juktas, nicht Modi."},
+  {"file": "Atsipades peak.jpg",
+   "verdict": "region_or_type",
+   "note": "Landschaftsblick über einen bewachsenen Kamm mit Felsgipfel; keine Strukturen, Gipfel nicht identifizierbar."},
+  {"file": "Juktas 6.JPG",
+   "verdict": "region_or_type",
+   "note": "Schwarzweißer schematischer Grundriss mit Nordpfeil und Buchstaben A–F, Planzeichnung ohne Beschriftung."},
+  {"file": "Petsophas Fundstücke 01.jpg",
+   "verdict": "region_or_type",
+   "note": "Museumsregal mit mehreren Tonfiguren auf Sockeln, Inventarnummer sichtbar, Herkunft nicht beschriftet."},
+  {"file": "Petsophas Gipfelheiligtum 17.jpg",
+   "verdict": "region_or_type",
+   "note": "Felsiges Gipfelplateau mit niedrigen Steinmauern und orangem Schild, Meer dahinter; Schildtext unlesbar."}
+ ],
+ "note": ""}

@@ -1,0 +1,16 @@
+{"site_id": "f15d2047-cd5a-4524-b39a-06ab10d77f36",
+ "answered_by": "Worker",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Seaton, down a long lane - geograph.org.uk - 3164379.jpg", "verdict": "region_or_type", "note": "Schmale asphaltierte Gasse zwischen Hecken hinab zur gepfluegten Feldflur, Verbotsschild fuer Fahrzeuge; keine Baenke sichtbar."},
+  {"file": "B3172 Seaton Down Hill - geograph.org.uk - 6219605.jpg", "verdict": "region_or_type", "note": "Ortseingang mit Mittelinsel und zwei Pollern, Strassenlaternen, Hausdachern und fahrendem Auto; moderne Strassenszene."},
+  {"file": "Path down Seaton valley - geograph.org.uk - 4167225.jpg", "verdict": "region_or_type", "note": "Kies- und Laubweg durch dichtes Laubholz mit hellen Sonnenflecken; reiner Waldpfad ohne Site-Bezug."},
+  {"file": "Down hill from Seaton - geograph.org.uk - 3164373.jpg", "verdict": "region_or_type", "note": "Landstrasse faellt ins gruene Tal, in der Ferne eine lange Reihe gemauerter Bogen (Viadukt); keine Baenke sichtbar."},
+  {"file": "Path down Seaton valley - geograph.org.uk - 4167239.jpg", "verdict": "region_or_type", "note": "Heller Waldpfad mit dichtem gruenen Laub, Farnen und Unterholz; nur Weg und Bewuchs."},
+  {"file": "Path down Seaton valley - geograph.org.uk - 4167240.jpg", "verdict": "region_or_type", "note": "Unbefestigter Forstweg zwischen Baumgruppen mit Farnen und Laubstreu, Sonnenflecken auf dem Weg."},
+  {"file": "B3172 Seaton Down Hill - geograph.org.uk - 6219616.jpg", "verdict": "region_or_type", "note": "Landstrasse mit Vorfahrt-achtung-Schild und Tankstelle am Rand, gruene Talaussicht dahinter; Ortsstrassenszene."},
+  {"file": "Holyford Coppice and Seaton Down - geograph.org.uk - 3078728.jpg", "verdict": "region_or_type", "note": "Weiter Blick ueber gruene Weiden mit weidenden Kuhen, bewaldete Senke und ferner Hoehenruecken mit Staedtchen."},
+  {"file": "Coin Hoard , Seaton Down (main clump) (FindID 635371).jpg", "verdict": "depicts", "note": "Korrodiertes Muenzpaket im Erdreich, in Schaumstoff gebettet, mit schwarz-weissem 10-cm-Massstab; Aufnahme eines Fundstuecks vom Ort."},
+  {"file": "Seaton Down Hoard, RAMM - geograph.org.uk - 6006673.jpg", "verdict": "depicts", "note": "Grosser Muenzhort in Museumsvitrine mit Etikett 'Konstantin und seine Familie, vermutlich um 350 abgelegt'; Fundstueck der Site."}
+ ],
+ "note": "Zwei Kandidaten zeigen den Muenzhort der Site (Fundortaufnahme und Museumsvitrine), acht nur Strassen, Waldwege, Weidelandschaft und Ortsbebauung; Baenke oder Grabhuegel sind in keinem Bild zu sehen."}

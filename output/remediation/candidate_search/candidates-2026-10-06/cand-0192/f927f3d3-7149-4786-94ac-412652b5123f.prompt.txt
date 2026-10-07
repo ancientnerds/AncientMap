@@ -1,0 +1,32 @@
+site_id: f927f3d3-7149-4786-94ac-412652b5123f
+name: Tomb of the Scene
+country: Iran
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Friar Lawrence and Juliet Discover the Bodies of Romeo and Paris (Romeo and Juliet, Act 5, scene 3) MET DP812397.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c9d7ab332ee1568f26713551b9bc2930
+- Benjamin Wilson (1721-1788) - David Garrick as Romeo at Juliet's Tomb (from Shakespeare's 'Romeo and Juliet') - 732148 - National Trust.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\39027059401bb6d0714259dd2c230242
+- Nina Kaptsova and Artem Ovcharenko in Bolshoi's Romeo and Juliet 2011.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8db6014563da2921cab6673e1008117
+- Harvard Theatre Collection - Romeo and Juliet, TCS 44.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d8b0b11135fda3fcda211bf85392711f
+- Romeo & Juliet - Classics of the Silent Screen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05e5647d1e632f1d73bdedad50fce921
+- HOWARD(1828-33) Shakspeare, Romeo and Juliet, vol5, p167.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7306dcc40eb1ef40d8a7d0eba37cd7d6
+- Adeline Oppenheim Guimard - Romeo and Juliet - 1900.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7ab93f627714c0bc5290dba4c9cecc3c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

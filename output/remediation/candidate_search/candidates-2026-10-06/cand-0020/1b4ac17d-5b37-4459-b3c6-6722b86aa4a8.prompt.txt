@@ -1,0 +1,37 @@
+site_id: 1b4ac17d-5b37-4459-b3c6-6722b86aa4a8
+name: Kharrab Shams
+country: Syria
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Kharrab Shams - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0590ad05f39bda014b296c6fc73d15b6
+- Kharrab Shams 4C church - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8ece4eddb1af7560d5446d5465b8e2f2
+- Kharrab Shams - panoramio - Raki Man.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\904e4b108389c1949a4d32ff98635fb0
+- Kharab Shams (خراب الشمس), Syria - Unidentified remains - PHBZ024 2016 6832 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1aeca8789c2c9e3e9cf5d86e4b5261ff
+- Kharab Shams (خراب الشمس), Syria - Corinthian capital - PHBZ024 2016 6837 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb4560a11fd2b3bb2c2e13a7b9ae5104
+- Kharab Shams (خراب الشمس), Syria - Corinthian capital - PHBZ024 2016 6836 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\162343b1209d026139fd104ec16176b8
+- Church, Kharab Shams (خراب الشمس), Syria - Triumphal arch - PHBZ024 2016 7573 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\687c2d623711e795d858237305e5380b
+- Church, Kharab Shams (خراب الشمس), Syria - Triumphal arch - PHBZ024 2016 7570 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\67b7765a1ff6740cdeed4834d8d8f5d9
+- Church, Kharab Shams (خراب الشمس) , Syria - South façade - PHBZ024 2016 6805 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c1baf7479d93b904806e90697967b10
+- Church, Kharab Shams (خراب الشمس), Syria - Triumphal arch - PHBZ024 2016 7574 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7d51eea6e56eebb227ad153b9c468a6
+- Church, Kharab Shams (خراب الشمس) , Syria - South façade - PHBZ024 2016 6804 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb07d8141371b2f46166d1cb3bedbcca
+- Church, Kharab Shams (خراب الشمس) , Syria - West façade - PHBZ024 2016 1763 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b55080670084caf16eb1c440cf65151c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

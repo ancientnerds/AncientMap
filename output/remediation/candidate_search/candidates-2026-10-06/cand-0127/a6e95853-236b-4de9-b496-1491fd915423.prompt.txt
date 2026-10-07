@@ -1,0 +1,37 @@
+site_id: a6e95853-236b-4de9-b496-1491fd915423
+name: Theimussa Ancient City
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Üçağız View of remains of Theimussa 0059.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\310e031e45366c690db0feea81e1ab1b
+- Üçağız View of remains of Theimussa 0040.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7af26ddccc716600a395ec25aff19110
+- Üçağız View of remains of Theimussa 0077.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b8ac3cd1398bc73be217a6a36cce810
+- Üçağız View of remains of Theimussa 0052.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e8d9bfe0cd6d7c5c00f3a5b2abec4283
+- Üçağız View of remains of Theimussa 0068.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc02d14b74b9b4ca0789fe27dc3ded8e
+- Üçağız View of remains of Theimussa 0066.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\687bdf9a94cb185b4bbba867b5aa75d2
+- Üçağız View of remains of Theimussa 0083.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\abe47b6b73749b84ffc8d982d9d35557
+- Üçağız View of remains of Theimussa 0063.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\397c5d0fe4d1dd80d6f2e1f94c045795
+- Üçağız View of remains of Theimussa 0054.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7129b3eaf72530247adac5612dd864fc
+- Üçağız View of remains of Theimussa 0081 panorama.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\36d77365fef5be04fe3bc42db70a54cd
+- Üçağız View of remains of Theimussa 0071 panorama.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ab26a6a7c0c7698e720f952e72a97ec5
+- Üçağız View of remains of Theimussa 0058.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eded4d563eab24f0fe07693392c6f410
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

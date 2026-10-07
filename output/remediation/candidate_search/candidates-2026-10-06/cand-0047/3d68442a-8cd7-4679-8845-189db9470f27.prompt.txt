@@ -1,0 +1,48 @@
+site_id: 3d68442a-8cd7-4679-8845-189db9470f27
+name: Toumba
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Toumba-Stadium7.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5075ba5c77da090af01fd82a71cfbfdb
+- View of Toumba from Gate-4.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b7df3e2e9f5f397cf83a002ea9c5c820
+- Toumba tou Skourou 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\786784ed2c57f1642bc37a23c18b3ca1
+- Toumba tou Skourou 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5000a64dc05c78c9dce278567e1f18d
+- Toumba tou Skourou 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c1acbe668c03d71dba5ca2a2f2bd3698
+- Toumba tou Skourou 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\976709840cffd5d1f58fee6220050f56
+- Toumba tou Skourou 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2187ac793acdbaf6ba11d8e558ddb195
+- Toumba tou Skourou 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f3451172ab61564303dd730fec790cfb
+- Toumba tou Skourou 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7b30c1c4d732c90ff283217b110c32b3
+- Toumba tou Skourou 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba9fc100ad8ae295f20dce6317373bf5
+- Toumba tou Skourou 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6a451957134c80daf4b0f64c264d66f3
+- Toumba tou Skourou 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\01bc79b2e0efc4a362dcb387c564ce25
+- IMG Neighbourhood in Toumba.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ac2353883ff275b1f4a4267c719a21d8
+- Konakry-La Forêt de Toumba.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e0cdb26b67ac6fdc35b00d77a61032ae
+- Le tableau d'une vache de Adamou Toumba du musée du cheval de gashiga.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9a66810af8d9d772615f26e4488a2a60
+- Œuvre de Adamou Toumba au musée du Cheval de Demsa.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4fbc8b1c0b5fade3529bea334f399d9
+- Saint John the Baptist Icon Toumba Monastery Restored.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f61b417114e0d982230e071be09ed04d
+- Saint Barbara Church in Ano Toumba, Thessaloniki.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f6f21b5f323c6ac0bc77c7d3764f0310
+- Elaiorema Toumbas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\54eb740c21e7806a7629c7efd2120741
+- GreekFreeDog Alien.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\55c8c44f3419dd6a783d776f9d2d24e8
+- Lofiskos, Toumpa excavation site.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6bf48425867490db509f18f9114fd51b
+- Παπάφειο Ορφανοτροφείο 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9d2283983bde38cf586957955968ddc
+- Πρώην Νοσοκομείο Λοιμωδών (αρχικά Νοσοκομείο «Βασίλισσα Μαργαρίτα»), (1893), Γρηγορίου Λαμπράκη 13, Θεσσαλονίκη.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\287c4cd3fc17cf5532840bb91c5c85f1
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

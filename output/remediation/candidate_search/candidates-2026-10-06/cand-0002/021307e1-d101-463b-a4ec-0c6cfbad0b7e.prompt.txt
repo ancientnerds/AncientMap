@@ -1,0 +1,37 @@
+site_id: 021307e1-d101-463b-a4ec-0c6cfbad0b7e
+name: Tombeau de Tin Hinan
+country: Algeria
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tin Hinan Tomb 15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\879a526d71799ed0303801844af2739b
+- Tin Hinan Tomb 19.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f876a42ad713e014c8d0229d1eafead8
+- Tin Hinan Tomb 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\65ce9656b5b2ad0818ae833fe9583ebc
+- Tin Hinan Tomb 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4cbff59844a90c8abea7497d8d5f110e
+- Tin Hinan Tomb 17.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d82fc6992504ddb2dc876007887fbe9a
+- Tin Hinan Tomb 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1945d2943aee5008845621e07f4bcff2
+- Tin Hinan Tomb 21.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\01c21b3358e19282fa1c985047934ef0
+- Tin Hinan Tomb 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\55f7d774fc419f5728770e77c6d5b1da
+- Tin Hinan Tomb 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9254b6f991a9e6d7c4b534ce55e9fe0
+- Tin Hinan Tomb 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0acfce664a25049dc809eef928046ddc
+- Tin Hinan Tomb 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a5f1db08475c1a807385eb9f1c558ef7
+- Tin Hinan Tomb 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5912231134bfaea8a4956368ec9f573a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

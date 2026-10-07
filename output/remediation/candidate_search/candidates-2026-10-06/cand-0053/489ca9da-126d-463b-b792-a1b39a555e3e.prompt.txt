@@ -1,0 +1,38 @@
+site_id: 489ca9da-126d-463b-b792-a1b39a555e3e
+name: Treva
+country: Germany
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- TREVA-15 (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b2fa8cd6e097f38dad512379471074b9
+- TREVA-15 (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1b7b5ca68e9c7f3cb68b39f796a7ebcc
+- TREVA-15 (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e869d461136f6fb743d0fd8927a9ed26
+- TREVA-15 (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e0568855bad2d537d2aca3079a71ed0
+- TREVA-15 (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\01cab45b2217825a2b46075832603bc3
+- TREVA-15 (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\52536a8580a83cb80e849d2fec091328
+- Treva B. Lindsey.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\80404c6d6cb6dc2f81bd00190dfe3f06
+- Treva B. Lindsey (cropped).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\020b067ff120618a4532269bc459dfa1
+- Treva House - geograph.org.uk - 6443142.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f7d7cc44d5c0bb24b06562a64f769bed
+- Riudellots, terra de Pau i Treva - P1120369.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9e9ae88d7d37618d0a8386f72c344e3
+- Portrait de Miss Treva, actrice, PH57131 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8de059b4761e3bfba9967834d5f62994
+- Portrait de Miss Treva, actrice, PH57131 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b13be02b007644a8b9445facf04de5ea
+- US Navy 030404-N-5862D-012 Master-at-Arms Seaman Treva Christian from San Diego, Calif., is a key member of the Naval Support Activity (NSA) Mid-South Police Force.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4cdd70929bd79d03aac22e2a1cc2850d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

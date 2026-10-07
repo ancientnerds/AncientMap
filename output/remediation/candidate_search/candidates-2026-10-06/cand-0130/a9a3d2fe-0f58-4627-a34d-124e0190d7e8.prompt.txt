@@ -1,0 +1,36 @@
+site_id: a9a3d2fe-0f58-4627-a34d-124e0190d7e8
+name: El Zotz
+country: Guatemala
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Temple 4 at Tikal from El Diablo at El Zotz.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef88c8c637f20b13d8561f750a1e029d
+- Chocolate cup depicting a mythic scene, Maya, El Zotz or vicinity, Guatemala, 650-800 AD, ceramic, polychrome slip - Princeton University Art Museum - DSC07151.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c97880caff0f3619015825ad060b1caa
+- Dumplings, Vienna (20180812 150651).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\90e9dfede6f704b47493284c6ee99223
+- Marcosticks-How to use chopsticks-standard grip-cool guides style.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc4e709724e7523e258539afc65f270e
+- Bday sake set.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0889e900027692723ec6540faf3aef57
+- Utensil box for chopsticks and spoons on a table at Han Kki restaurant.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\79039fde42a94de6b47f733fefb41bbf
+- Macrobiotic Food (4783164179).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d405d698377e2176614985753f92ecb3
+- Marcosticks-3D-printed Training chopsticks with ring finger helper enabling bent thumb.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4c4def880370ee3b34007518d1e6b8d4
+- Marcosticks-Forsaken pinky grip-using chopsticks.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a09a53467eb36c93a3da1a5cb31ad947
+- Marcosticks-Chopstick motion 1pt-Standard Grip-Mid posture.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2b2741a840a2e1db3c00f99425f14973
+- Marcosticks-Scissorhand grip-using chopsticks.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50f3359600c7daacfc59b6eee180778b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

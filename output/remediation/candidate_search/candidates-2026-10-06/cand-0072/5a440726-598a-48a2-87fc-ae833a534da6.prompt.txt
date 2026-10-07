@@ -1,0 +1,36 @@
+site_id: 5a440726-598a-48a2-87fc-ae833a534da6
+name: Breitenbach - Archaeological Site
+country: Germany
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Breitenbach am Herzberg Breitenbach Hauptstrasse 4-6 df.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3115a0a8bd29cab541d04c8b6b70cc09
+- Breitenbach am Herzberg Breitenbach Zum Herzberg 3 db.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\52c02343780d790e39e0e207e97e9ff8
+- Breitenbach am Herzberg Breitenbach Eichenstrasse 1 f.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\72e760f87422521d5f6fba752d2befae
+- Breitenbach am Herzberg Breitenbach Borngasse 8 df.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c4a46e23eb88c831ba2276c9946f5c9
+- Breitenbach am Herzberg Breitenbach Lindenbergstrasse 7 df.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\283480355896aee498e734fa5232b01c
+- Hessencourrierradweg Breitenbach, Hoofer Pforte.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4cb185a65e0a78919fba7474b176bcaf
+- Breitenbach (102).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\373f20b88d343a69b5bdf6cf4055db7a
+- Breitenbach (203).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\480c3c270689683e5c27b13c2e66138f
+- Breitenbach (101).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\39b9a9f783ffedb54536e5688deae9f3
+- Breitenbach am Herzberg Breitenbach Kirche d.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\78bbe52259d316f90dfe4475e3990a75
+- Breitenbach Bahnstrecke Leinefelde-Wulften Haltepunkt Breitenbach 2025 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d666110d9d36564b5a0c4c228cceb4d3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

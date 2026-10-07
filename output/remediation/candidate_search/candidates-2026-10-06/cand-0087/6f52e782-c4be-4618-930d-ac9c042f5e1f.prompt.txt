@@ -1,0 +1,34 @@
+site_id: 6f52e782-c4be-4618-930d-ac9c042f5e1f
+name: Charterhouse Camp
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Monestir de Porta Coeli.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6de9fb41224cb2d22ec174c8ce490512
+- Cartuja de Porta Coeli.Serra.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c656639271cf562cf345c93b8192349b
+- Cartuja Porta Coeli.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\12ac036b938900ad304e77f33b038fe1
+- Museo Sorolla - 00406 - Patio de San Juan de la Cartuja de Porta Coeli, Valencia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb67a5cf2c81d8eb8dec92098e5a7a3c
+- Sorolla-Patio-de-la-Cartuja-PortaCoeli.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\845fefad833dfa43044338202bc07dc7
+- 1900-01-13, Blanco y Negro, Presidencia del banquete de Porta Coeli.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0c7af9650543c18b039f4dd2fe665490
+- Rebalsadors PPA8513.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d6e0f0de9635836534c96eebc92a8f8a
+- Sant Bru d'Ignasi Vergara, Museu de la Ciutat de València.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\485e5f9f5f690d6673d71ead4b1326f0
+- Monasterio de Portacoeli, desde el sureste - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e811d95ad766adc12cdf92e3125aab9e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

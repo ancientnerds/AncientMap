@@ -1,0 +1,37 @@
+site_id: 29651376-c3fa-484e-b3bd-a6a64e97d0c6
+name: Gavur Kalesi
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- GavurkaleGötter2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e69d86aa9f97da45e173efea60cfa6fa
+- Gavurkale1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f20b4fe63d9217f38f9f4d4666e5eb65
+- Gavurkale2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6094f28bf64d767ce54c05ceceb22fdf
+- GavurkaleGöttin1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b67c1e2327c57dd51e9ce710968e2fdc
+- GavurkaleGrabkammer2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c912ac3b8c4fb8278257feeb2cbbdf97
+- GavurkaleFüße1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5103f28327a1e7aec0fbbf7ac7a5f093
+- Gavurkale4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94aed355c8cea68d3a83fa2e7c49254d
+- GavurkaleGötter1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4608e4e56b9b5c5e92dd7408a9b7f7c1
+- Gavurkale3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\20476daf7b17ce4ca6cc9f5c3f17b64d
+- GavurkaleGöttin2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\805cffd6b572fdfaa892bf678f664d12
+- GavurkaleFüße2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77532dc8ffedf9953a03257b6c0af700
+- GavurkaleGrabkammer1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a45245411af714be2f188af4f67e6eef
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,37 @@
+site_id: 02a9d200-6a8f-40aa-92a1-79182e38c822
+name: Las Capellanías
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- IGLESIA DE SAN JOSE DE CAPELLANIA (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a95e76a7f0789aad0708ebdf37206e9b
+- IGLESIA DE SAN JOSE DE CAPELLANIA (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e6785a3bf876106e1debe8351acbb83e
+- IGLESIA DE SAN JOSE DE CAPELLANIA (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aba47269f9ebcf8a542aa9a1b64677d2
+- IGLESIA DE SAN JOSE DE CAPELLANIA (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c2d7ca5ddf4e3aa7e4b10b00477df45b
+- IGLESIA DE SAN JOSE DE CAPELLANIA (7).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0f22a2a5355a4646bce26a839b433dc
+- Iglesia de San José de Capellania 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b95c56c4d8f5684779d055a68b25811
+- IGLESIA DE SAN JOSE DE CAPELLANIA (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\625f1b0359802f955828d96458a913be
+- IGLESIA DE SAN JOSE DE CAPELLANIA (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\54764e58f548dd443c361c11a8a9d319
+- Iglesia de San Jose de Capellania (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\405900c2a9a5a36b824293f808a3826e
+- Iglesia de san jose de capellania foto 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\138417de70c7544e78f6f9ffaaa3cfd1
+- Iglesia de San Jose de Capellania (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a4ecd500d7392643e033d98f252a8415
+- Iglesia de san jose de capellania foto 9.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1c01ffbb1861e0dd624f48e69f3e231c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

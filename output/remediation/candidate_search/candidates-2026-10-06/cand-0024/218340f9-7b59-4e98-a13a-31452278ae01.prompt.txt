@@ -1,0 +1,37 @@
+site_id: 218340f9-7b59-4e98-a13a-31452278ae01
+name: The Archaeological Site of Haidra
+country: Tunisia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Haidra Tunisie.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\234475df738ac818a9cdf05f3a662510
+- Colonne à Haidra.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f1e99bcbed70b898fe431caa96b87bb8
+- Citadelle de Haidra.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b72905d3e9f8b876ad90af06442bcef
+- Bardo Crepereia Innula.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\211af405de1d86a7857fb6b14bbe8e3c
+- Mausolée quadrangulaire.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f115b4524bf2ebb55a7cb65a01d46558
+- Salle couverte de grandes dalles situées au Sud u monastère.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2fd7296c2e212038626034a30053b8e3
+- Salle couverte de grandes dalles situées au Sud u monastère - 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e3d8d556bd15c87164d4cff8273c1d41
+- Haïdra (plan des ruines près de la route de Tebessa) - btv1b8458783m.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d1548bcb6b84ea91eb1e8dcd4414d3ba
+- Édifice dont la façade percée de 6 grandes fenêtres.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b91094e04f08b93083f21078e9b951e6
+- Édifice dont la façade percée de 5 grandes fenêtres.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\407638a2091e8a785b7eb68e1875f2f9
+- Région de Haïdra - Mausolée Hexagonal.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f878703e555c7b9ddb91400cc289249
+- Région de Haïdra - Mausolée Tétrastyle d'Ammaedara.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\75681f9cfaf9a9890a0df07f8b9773b0
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

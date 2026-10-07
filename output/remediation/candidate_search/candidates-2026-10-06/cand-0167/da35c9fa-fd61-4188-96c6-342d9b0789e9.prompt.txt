@@ -1,0 +1,36 @@
+site_id: da35c9fa-fd61-4188-96c6-342d9b0789e9
+name: Paso del Macho
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Parroquia Santa María De Guadalupe Paso Del Macho Veracruz México.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4d48ac2fb1fdfbee7dd0ad1c097c43f6
+- Parroquia Santa María de Guadalupe Paso Del Macho Veracruz.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cf8e91bf7c10eb23d7a4c2f9043d6560
+- 05Puente de Paso del Macho.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f03507ae7164000ac09a494b05e1e500
+- Parroquia Santa María de Guadalupe, Paso Del Macho.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5a0c9de61feb5426a01052c9c2a19121
+- Parroquia Santa María de Guadalupe Paso Del Macho.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c3640f88f95857ca0ed033d8e4f2cc2
+- Parroquia Santa María de Guadalupe Paso Del.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb70d6281dc24836395c56ab4138db31
+- RELOJ DEL PARQUE.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e1ee714dbe2af49a419d03ed6fa296a
+- Ferrocarril Mexicano locomotive crossing railroad bridge on the Maltrata Incline between Paso del Macho and Esperanza, Mexico (21657353280).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb7a089ed5d5e21fe47f18a92e08ce22
+- Ferrocarril Mexicano locomotive crossing railroad bridge on the Maltrata Incline between Paso del Macho and Esperanza, Mexico (21833528072).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d8e6f765454f197c96fefef717e04777
+- El fuerte Paso del macho.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4bf057e24b7cb8daf406d5ecb6485721
+- Presidenta de paso del macho.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5a571cc3fe31b6abe767d51a664a7b81
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

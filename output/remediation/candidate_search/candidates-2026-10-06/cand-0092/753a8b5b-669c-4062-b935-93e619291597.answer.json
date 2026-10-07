@@ -1,0 +1,68 @@
+{
+  "site_id": "753a8b5b-669c-4062-b935-93e619291597",
+  "answered_by": "mcode-judge-cand-0092",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Monnaie - Bronze, Thessalie, Gyrton - btv1b10441965g (2 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Museumsaufnahme einer grün patinierten Bronzemünze mit Reiterrelief auf weißem Grund; kein Gelände und kein Fundkontext sichtbar."
+    },
+    {
+      "file": "Monnaie - Bronze, Thessalie, Gyrton - btv1b10306748f (2 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Stark abgeprägtes Bronzemünzbild mit springendem Tier auf weißem Grund; nur ein Objektfoto, keine Site erkennbar."
+    },
+    {
+      "file": "Monnaie - Bronze, Gyrton, Thessalie - btv1b85723672 (2 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Dunkel oxidierte Bronzemünze mit flachem Relief auf weißem Grund; Herkunft Gyrton aus dem Bild nicht nachweisbar."
+    },
+    {
+      "file": "Monnaie - Bronze, Gyrton, Thessalie - btv1b8572366n (2 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Verkohlte Bronzemünze mit fast vollständig abgeschliffenem Relief; Objektfoto ohne Umgebung und ohne Fundkontext."
+    },
+    {
+      "file": "Monnaie - Bronze, Gyrton, Thessalie - btv1b85723657 (1 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Silbrig oxidierte Bronzemünze mit undeutlichem Reiterrelief auf weißem Grund; Münzaufnahme ohne Bezug zur Site im Bild."
+    },
+    {
+      "file": "Monnaie - Bronze, Gyrton, Thessalie - btv1b8572368g (2 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Grauschwarze, stark korrodierte Bronzemünze mit Resten eines Kopfreliefs; nur ein Objektfoto."
+    },
+    {
+      "file": "Monnaie - Dichalque, Bronze, Gyrton, Thessalie - btv1b113169479 (1 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Kupferige Bronzemünze mit Doppelgriff und fast unlesbarer Legende auf weißem Grund; kein Gelände der Site."
+    },
+    {
+      "file": "Monnaie - Bronze, Gyrton, Thessalie - btv1b8572364t (2 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Bronzemünze mit lesbarer Inschrift ΓΥΡΤΩΝ und springendem Pferd; Münzbild ohne Fundort, die Site selbst ist nicht im Bild."
+    },
+    {
+      "file": "Monnaie - Bronze, Gyrton, Thessalie - btv1b85723672 (1 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Silbergraue Bronzemünze mit Kopfrelief, Rand stark beschädigt; Objektfoto auf weißem Grund ohne Umgebung."
+    },
+    {
+      "file": "Monnaie - Bronze, Thessalie, Gyrton - btv1b10441957z (1 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Grün patinierte Bronzemünze mit flachem, kaum lesbarem Relief; keine Site und kein Ausgrabungsbefund sichtbar."
+    },
+    {
+      "file": "Monnaie - Bronze, Thessalie, Gyrton - btv1b10441957z (2 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Dieselbe grün oxidierte Münze in der zweiten Ansicht; reine Objektaufnahme ohne Fundkontext."
+    },
+    {
+      "file": "Monnaie - Bronze, Gyrton, Thessalie - btv1b8572368g (1 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Dunkelgraue Bronzemünze mit schwachem Relief und Korrosionskruste; kein Gelände, keine Struktur der Site."
+    }
+  ],
+  "note": "Alle zwölf Kandidaten sind Museumsaufnahmen von Münzen vor weißem Grund. Ein Bild zeigt die Inschrift ΓΥΡΤΩΝ, die Zuordnung zu Gyrton stammt aber aus dem Dateinamen und nicht aus einem sichtbaren Fundkontext; nach der Regel ein dort gefundenes Objekt wäre nur belegbar, wenn die Herkunft im Bild erkennbar ist. Gyrton bleibt ohne Bild."
+}

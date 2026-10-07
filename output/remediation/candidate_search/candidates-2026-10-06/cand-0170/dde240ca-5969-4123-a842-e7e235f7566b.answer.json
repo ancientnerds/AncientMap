@@ -1,0 +1,68 @@
+{
+  "site_id": "dde240ca-5969-4123-a842-e7e235f7566b",
+  "answered_by": "mcode-judge-cand-0170",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Wappen von Langweiler (Kreis Birkenfeld) am Ortseingang.jpg",
+      "verdict": "region_or_type",
+      "note": "Ortswappen an einem Holzportal mit gelber Ortstafel 'Langweiler'; zeigt den Ort, keine archaeologischen Befunde."
+    },
+    {
+      "file": "Informationstafel zum Köhlerdorf Langweiler (Idar-Oberstein).jpg",
+      "verdict": "region_or_type",
+      "note": "Zwei Informationstafeln im Schutzrahmen mit Text und Fotos zum Köhlerdorf; keine Grabungssituation sichtbar."
+    },
+    {
+      "file": "Blick auf Langweiler im Hunsrück.jpg",
+      "verdict": "region_or_type",
+      "note": "Ortsansicht vom Hang: Häuserzeile und Kirchturm vor bewaldetem Rücken; keine Ausgrabungsbefunde."
+    },
+    {
+      "file": "Blick auf Langweiler im Hunsrück II.jpg",
+      "verdict": "region_or_type",
+      "note": "Ortsansicht vom Hang mit bewachsener Hang-/Rodungsfläche im Vordergrund; keine Ausgrabungen erkennbar."
+    },
+    {
+      "file": "Blick auf Langweiler im Hunsrück, Zoom auf die Kirche.jpg",
+      "verdict": "region_or_type",
+      "note": "Vergrößerter Ausschnitt der Ortsansicht mit Pfarrkirche und Kirchturm; keine archäologischen Befunde."
+    },
+    {
+      "file": "Origineller Hinweis für Autofahrer in Langweiler II.jpg",
+      "verdict": "region_or_type",
+      "note": "Handgefertigtes Holzschild mit Wegweiser und Spruch 'Navi lügt! Schlechter Weg für PKW' im Wald; keine Befunde."
+    },
+    {
+      "file": "Blick auf die Steinbachtalsperre von Langweiler (Idar-Oberstein).jpg",
+      "verdict": "region_or_type",
+      "note": "Talsperre mit Staumauer und bewaldetem Tal im Hunsrück; Landschaftsansicht ohne Ausgrabungsbefunde."
+    },
+    {
+      "file": "Kath. Pfarrkirche St. Nicetius in Langweiler, erbaut 1856 - panoramio.jpg",
+      "verdict": "region_or_type",
+      "note": "Weiße Pfarrkirche mit spitzem Turm, daneben Friedhof mit Grabsteinen; Kirchengebäude, keine Ausgrabung."
+    },
+    {
+      "file": "Langweiler – von der Wildenburg aus gesehen - panoramio.jpg",
+      "verdict": "region_or_type",
+      "note": "Fernes Panorama des Ortes in einer Waldmulde mit umgebenden Wiesen; nur Siedlungsbild, keine Befunde."
+    },
+    {
+      "file": "Langweiler - panoramio.jpg",
+      "verdict": "region_or_type",
+      "note": "Breites Ortspanorama mit Häusern und Herbstbäumen vor bewaldetem Hunsrückrücken; keine Ausgrabungsbefunde."
+    },
+    {
+      "file": "Kriegerdenkmal Langweiler.jpg",
+      "verdict": "region_or_type",
+      "note": "Kriegerdenkmal aus Kalkstein mit Namenstafeln auf grüner Wiese; Denkmal, keine archäologischen Befunde."
+    },
+    {
+      "file": "Blick von der Wildenburg in Richtung Allenbach, Wirschweiler, Sensweiler und Langweiler - panoramio.jpg",
+      "verdict": "region_or_type",
+      "note": "Höhenaussicht über bewaldete Hunsrücktäler und Wiesen mit Anlage; der Ort selbst ist nicht sicher erkennbar."
+    }
+  ],
+  "note": ""
+}

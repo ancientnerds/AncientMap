@@ -1,0 +1,48 @@
+{
+  "site_id": "765bec0e-b003-467c-aee3-d142f184c66d",
+  "answered_by": "mcode-judge-cand-0092",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Pye Nest Road Footpath at Pye Nest Road, Sowerby Bridge - geograph.org.uk - 5873087.jpg",
+      "verdict": "region_or_type",
+      "note": "Kopfsteinfußweg an einer Bruchsteinmauer neben Autohandel mit Schild ROBERT WADE CARS; modernes Straßenbild, kein Bauwerk der Site."
+    },
+    {
+      "file": "Pye Nest Road, Halifax - geograph.org.uk - 2053128.jpg",
+      "verdict": "region_or_type",
+      "note": "Baumreiche Wohnstraße mit SLOW-Markierung, Reihenhaus und Kirchturm; Straßenschild nicht lesbar, Site nicht sicher zuordenbar."
+    },
+    {
+      "file": "Pye Nest Road, Halifax - geograph.org.uk - 2053118.jpg",
+      "verdict": "region_or_type",
+      "note": "Kreuzung mit Sandstein-Reihenhäusern, Lkw und Bergkulisse; allgemeines Ortsbild ohne Struktur der Site."
+    },
+    {
+      "file": "Pye Nest Road, Halifax - geograph.org.uk - 2053122.jpg",
+      "verdict": "region_or_type",
+      "note": "Breite Straße mit Baumsäulenreihe und weißen Giebelhäusern im Städtchen; allgemeines Ortsbild, Site nicht erkennbar."
+    },
+    {
+      "file": "Dormer bungalows, Pye Nest Road - geograph.org.uk - 3264235.jpg",
+      "verdict": "region_or_type",
+      "note": "Reihenhauszeile mit Bungalows, geparkten Autos und Gartenzäunen; moderne Wohnbebauung ohne Merkmal der Site."
+    },
+    {
+      "file": "Nos. 19 and 21 Pye Nest Road - geograph.org.uk - 5798153.jpg",
+      "verdict": "region_or_type",
+      "note": "Modernes Doppelhaus aus hellem Stein mit Hausnummer 21, Fensterläden und Blumenbeet; kein historisches Bauwerk."
+    },
+    {
+      "file": "Pye Nest Road Footpath at an entrance to Crow Wood park, Sowerby Bridge - geograph.org.uk - 5873112.jpg",
+      "verdict": "other_site",
+      "note": "Kopfsteinpfad mit lesbarem Schild Crow Wood Park an der Straße und Mauer; ein anderer, namentlich benannter Ort."
+    },
+    {
+      "file": "Barn clock repair shop, Pye Road, Heswall.JPG",
+      "verdict": "region_or_type",
+      "note": "Ladenfront in roter Sandsteinfassade mit Schild The Barn Mechanical Restoration und ADT-Warnlampe; Straßenschild nicht lesbar."
+    }
+  ],
+  "note": "Alle Kandidaten sind moderne Straßen- und Ortsbilder ohne historische Struktur; nur das Bild mit dem Schild Crow Wood Park lässt sich sicher einem anderen Ort zuordnen. Site bleibt ohne Bild."
+}

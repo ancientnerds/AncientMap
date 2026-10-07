@@ -1,0 +1,13 @@
+{
+  "site_id": "01cdc8e2-56b7-4c9d-b6d0-68c290a65e55",
+  "verdicts": [
+    {
+      "file": "Apazzu.jpg",
+      "verdict": "depicts",
+      "note": "Reihe aufrechter Menhiren aus Stein im trockenen Feld mit Buschwerk, Weiden und bewaldeten Huegeln dahinter - ein Megalithdenkmal vor Ort; welche Staette genau, ist am Bild nicht verifizierbar."
+    }
+  ],
+  "note": "",
+  "answered_by": "mcode-judge-cand-0001b",
+  "model": "MiniMax-M3.1-Flash-Preview"
+}

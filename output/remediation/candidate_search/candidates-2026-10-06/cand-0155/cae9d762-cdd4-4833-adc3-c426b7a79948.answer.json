@@ -1,0 +1,12 @@
+{"site_id": "cae9d762-cdd4-4833-adc3-c426b7a79948",
+ "answered_by": "mcode-judge-cand-0155",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "WELLSTED(1838) p2.971 THE READ SEA.jpg",
+   "verdict": "region_or_type",
+   "note": "Historische Karte der Küste des Roten Meeres (Arabien 1838) mit Ortsnamen; reine Kartenvorlage, keine Aufnahme der Site."},
+  {"file": "Oasis at Elim - panoramio.jpg",
+   "verdict": "region_or_type",
+   "note": "Oase mit Palmen und Felsgeröll, Reisegruppe im Vordergrund; Landschaft ohne Ruinen oder Strukturen der Site."}
+ ],
+ "note": ""}

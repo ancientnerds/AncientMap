@@ -1,0 +1,30 @@
+site_id: 4641bd18-a6d7-4f26-b895-e67f50af8e53
+name: Charax Spasinu
+country: Iraq
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Charax, attambelos, tetradracma, 55-65 dc ca.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b2a348a3be0c31eaa639c7483d3b868c
+- Arabs in Iraq.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fca7da097b45dbc03f0f5cf33d6ffd33
+- Coin of Hyspaosines, minted at Charax Spasinu in 129-8 BC.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5b433890fa65c4b4f3a4c71c825267cc
+- Coin of Hyspaosines, minted at Charax Spasinu in 126-5 BC.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8eb1a704f3eb15387a0312a6fda5b32e
+- MapHymiariteKingdom.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7b25a021df730e06130c9f09d0cba1c3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

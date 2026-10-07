@@ -1,0 +1,18 @@
+{"site_id": "69b83929-86e2-4a3e-8e0d-2418db5192ed",
+ "answered_by": "mcode-judge-cand-0084",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "View to Neu Königsaue (Aschersleben).jpg",
+   "verdict": "depicts",
+   "note": "Blick über ein grünes Feld auf einen Ort mit Dächern und Schornstein; die Site ist das Dorf selbst, Grabungsstrukturen sind nicht sichtbar."},
+  {"file": "Hausurne Neu Königsaue.jpg",
+   "verdict": "region_or_type",
+   "note": "Hausförmige Tonurne vor neutralem Hintergrund; weder Beschriftung noch Fundort im Bild lesbar."},
+  {"file": "Museum für Vor- und Frühgeschichte Berlin 100.jpg",
+   "verdict": "region_or_type",
+   "note": "Dieselbe hausförmige Tonurne in einer Museumsvitrine mit englischem Wandtext; Provenienz nicht erkennbar."},
+  {"file": "40pfg-koenigsaue.jpg",
+   "verdict": "other_site",
+   "note": "Bogen historischer Notgeldscheine (10 Pfennig, Königsaue) mit Schachbrett-Reklame, kein archäologischer Befund."}
+ ],
+ "note": ""}

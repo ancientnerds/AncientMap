@@ -1,0 +1,14 @@
+{"site_id": "28a8e565-a9c1-4a1d-90ee-d889b0c372db", "answered_by": "mcode-judge-cand-0030", "model": "MiniMax-M3.1-Flash-Preview", "verdicts": [
+{"file": "Château de Fontainebleau-Ulysse-20170625.jpg", "verdict": "other_site", "note": "Weisse Marmorstatue eines bekleideten Mannes auf einer Dachterrasse gegen Himmel; mehrere Statuen im Hintergrund."},
+{"file": "Château de Fontainebleau-Ulysse (Plan poitrine)-20170625.jpg", "verdict": "other_site", "note": "Nahaufnahme derselben weissen Marmorstatue vor einer Sandsteinfassade; Park des Schlosses Fontainebleau."},
+{"file": "Palace of Fontainebleau 002.jpg", "verdict": "other_site", "note": "Schwarzweissaufnahme des Ehrenhofs von Fontainebleau mit klassischer Statuenfigur auf hohem Sockel."},
+{"file": "Fontainebleau Château Diskuswerfer 529.jpg", "verdict": "other_site", "note": "Verwitterte Kalksteinfigur eines Diskuswerfers auf Sockel, Schlossdach und Kamine im Hintergrund."},
+{"file": "Fontainebleau Statue.JPG", "verdict": "other_site", "note": "Weisse Marmorstatue eines bemaentelten Maenners vor blauem Himmel, ohne Rueckblick auf das Gelaende."},
+{"file": "Ulysse chez Alcinoüs, roi des Phéaciens statue de Louis Petitot 2020-08-06.jpg", "verdict": "other_site", "note": "Bronzener Maskenkopf als Springbrunnen vor weisser Marmorwand; moderne Gartenplastik, keine griechische Site."},
+{"file": "Château de Fontainebleau 2011 (105).JPG", "verdict": "other_site", "note": "Statue auf hohem Sockel im Wasserbecken mit Springbrunnen, Besucher und Parkhecken; Schlossgarten."},
+{"file": "Château de Fontainebleau 2011 (104).JPG", "verdict": "other_site", "note": "Dunkle Bronzefigur mit Vogel auf dem Kopf vor Himmel; Gartenplastik des Schlosses."},
+{"file": "Château de Fontainebleau 2011 (103).JPG", "verdict": "other_site", "note": "Dieselbe dunkle Figur mit Vogel auf dem Kopf, daneben Nadelbaum; keine antiken Ruinen."},
+{"file": "Château de Fontainebleau 2011 (98).JPG", "verdict": "other_site", "note": "Weiter Kieshof mit Balustrade und kleiner Figur am Horizont; franzesischer Schlossgarten."},
+{"file": "Château de Fontainebleau-Griffon de La Fontaine-20170625.jpg", "verdict": "other_site", "note": "Bronzener Greifenkopf mit auslaufendem Wasser auf weissem Marmor; Brunnenplastik."},
+{"file": "Palais d'Ulysse Ithaque.JPG", "verdict": "region_or_type", "note": "Antike Steinruinen ausZyklopemauerwerk unter Olivenbaum mit ionischem Huegel dahinter; im Bild kein Merkmal, das die Site sicher belegt."}
+], "note": "Elf Kandidaten zeigen Statuen, Brunnen und Hoefe des Schlosses Fontainebleau in Frankreich - alles andere als eine griechische Site. Der eine Ruinen-Kandidat kann im Bild nicht sicher als Palais des Odysseus identifiziert werden."}

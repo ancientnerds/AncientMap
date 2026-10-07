@@ -1,0 +1,30 @@
+site_id: 68e1b08b-3997-45bf-a5fe-7a6938279ce4
+name: Minoan Modi
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Terracotas from the Minoan Peak sanctuaries, 2000-1450 BC, AM Sitia, 258568.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\605d237dd4734e6b9ed12514941cac49
+- Atsipades peak.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b41b1b06fa0a694fc28341d4a5f1ee09
+- Juktas 6.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9a067ad4e497c0740767440068bb5027
+- Petsophas Fundstücke 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0df0790f51baed0369da5a4139877d0e
+- Petsophas Gipfelheiligtum 17.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f2c379fdcf4f55194b287a34e7ac151
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

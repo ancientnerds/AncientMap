@@ -1,0 +1,51 @@
+site_id: bcefdb51-0003-46f4-806a-9bfca2b630e1
+name: Glassonby
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Pasture, Glassonby - geograph.org.uk - 6806199.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2cbe23a8e38ac11ba68704043fd9d336
+- Glassonby Lodge on west side of road at south end of Glassonby - geograph.org.uk - 6944608.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2297d629897b97be04c8f8c5490f8be9
+- Farmland near Glassonby - geograph.org.uk - 7124123.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9d97153594cbb526398be0f0b6763a27
+- Farmland, Glassonby - geograph.org.uk - 6806178.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47efa32e8c912fd11c6430e8a83f56e2
+- Leaving Glassonby - geograph.org.uk - 6827677.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41f3139aed570aabc5db07435c64dcfc
+- Pasture, Glassonby - geograph.org.uk - 6806187.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6da22c4f745c32ab92c02ed217536df4
+- Glassonby, The A686 - geograph.org.uk - 7569688.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d2798f05bcfcf69400f6b7d6e03dd3bb
+- Farmland, Glassonby - geograph.org.uk - 8020689.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\43e8478ea89ce6efb96764ce3d3f8ac5
+- Farmland, Glassonby - geograph.org.uk - 6806173.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e0aaa41655e6177a40c57853f60c57f
+- Road junction in Glassonby - geograph.org.uk - 8058395.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\19c2374636ee61f09bdbfe785f08b06d
+- Fingerpost and road junction, Glassonby - geograph.org.uk - 6827671.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\533395d8955e4a8cea8629e026f0e622
+- Parks View on south side of road at east end of Glassonby - geograph.org.uk - 6944466.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0d6091cbcd4187d676884cab855163ca
+- Glassonby village - geograph.org.uk - 4069689.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e5d27a4f3528eaf369abaeb39981adc
+- Walking towards the church at Glassonby - geograph.org.uk - 6493686.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8cf1db61418746836d3e162ae057bd26
+- A Methodist church in Glassonby.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b4bc87a6f39ab39d9b9874e4eb051d1
+- A cairn circle near Glassonby - geograph.org.uk - 7124116.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\90ac5b3fda595b5eb1804871fdb0a0d4
+- A view at sunset - geograph.org.uk - 7910293.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e4eeedafa8167d61c1764cdb6c00295
+- A view at sunset - geograph.org.uk - 7910296.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0be21c2b216508e85b65ddd7a49f5ff3
+- A view of Eden - geograph.org.uk - 5872556.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db24bdbae14224c5c6b90a2d0f774e56
+- A686 towards Alston - geograph.org.uk - 8375798.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\715489183a770c9fc4add9e2b2613dba
+- A686 towards Alston - geograph.org.uk - 8375803.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eead46f57d04533ecb7cfa1f3d4ddab7
+- A686 towards Melmerby - geograph.org.uk - 8375801.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6791f6ebe2bc6214af149375d6e46d48
+- Abandoned cottage by the A686 south east of Hartside Height - geograph.org.uk - 6275681.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a23c931cbf32141e9647ce020224678e
+- Across Eden Valley towards Solway Firth - geograph.org.uk - 1775011.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62db6f664c23c410c079d11cae075936
+- Aglionby Beck - geograph.org.uk - 6448179.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad2c495fae0d6bbc4218458367833a68
+- Aglionby Beck - geograph.org.uk - 6448183.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2ee90516636b591b995c325f72da3e45
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

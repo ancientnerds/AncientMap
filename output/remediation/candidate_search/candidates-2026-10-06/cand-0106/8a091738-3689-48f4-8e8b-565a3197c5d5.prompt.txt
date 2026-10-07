@@ -1,0 +1,33 @@
+site_id: 8a091738-3689-48f4-8e8b-565a3197c5d5
+name: Abdera, Spain
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Abdera - As of Tiberius.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\40cf84432174f73ba7057cc5c7ce84b2
+- Abdera triguttata Gyllenhal, 1810.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4b8bd868a0adced7df66e1d1e98604a4
+- Abdera Tetrobol Rv.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\78b0ad897ddf98e725cd0037a6026993
+- Abdera biflexuosa (Curtis, 1829).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\764d649a23ea070f6e8127381da47491
+- Abdera flexuosa larva Perris.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a611b38c1a4f674f62a50fee81d36257
+- Abdera flexuosa under.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9c8ba08228d354fd469c12d06790e1dd
+- Abdera flexuosa up.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4fcda88967206afdf01f157723ab9f71
+- Abdera flexuosa natur.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff42cd9d73ed5b102dbfb670add2a75f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

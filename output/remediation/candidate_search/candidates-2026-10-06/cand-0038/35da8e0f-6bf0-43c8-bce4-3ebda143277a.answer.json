@@ -1,0 +1,21 @@
+{"site_id": "35da8e0f-6bf0-43c8-bce4-3ebda143277a",
+ "answered_by": "mcode-judge-cand-0038",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Excentric Knives (El Palmar, Late Classic 600-800 AD) and Balance Weights (El Tigre - Itzamkanac, Classic Terminal 800-1000 AD).jpg",
+   "verdict": "region_or_type",
+   "note": "Museumsvitrine mit exzentrischen Obsidianmessern und Tongewichten. Das Schild im Bild teilt die Provenienz: 'EXCENTRICOS El Palmar' und 'PESAS DE BALANZA El Tigre-Itzamkanac'."},
+  {"file": "Giant Obsidian Knife ... El Tigre - Itzamkanac, Classic Terminal (800-1000 AD).jpg",
+   "verdict": "region_or_type",
+   "note": "Große Obsidianklinge hinter Glas an Halterung, Museumsschrank; im Bild keine Beschriftung und kein Bezug zur Site."},
+  {"file": "Offering of 131 Stone Knives ... El Tigre - Itzamkanac, Classic Terminal (800-1000 AD).jpg",
+   "verdict": "region_or_type",
+   "note": "Dreieckige Vitrine mit vielen behackten Steinspitzen hinter Glas; Museumsobjekt ohne sichtbaren Herkunfts- oder Sitebezug."},
+  {"file": "Offering Ceramic Box with Lid containing Excentric Flint Knives ... El Tigre - Itzamkanac, Classic Terminal (800-1000 AD).jpg",
+   "verdict": "depicts",
+   "note": "Keramikdose mit Deckel, umlagert von exzentrischen Feuersteinsplittern; das Vitrinenschild im Bild nennt 'CAJA DE OFRENDA ... El Tigre-Itzamkanac, Campeche'."},
+  {"file": "Rio El Tigre Estado Monagas.jpg",
+   "verdict": "region_or_type",
+   "note": "Breiter Fluss mit grünbewachsenem Ufer und flachem Wald im Hintergrund; reine Landschaft, keine Maya-Ruine, ohne Bezug zur Site."}
+ ],
+ "note": ""}

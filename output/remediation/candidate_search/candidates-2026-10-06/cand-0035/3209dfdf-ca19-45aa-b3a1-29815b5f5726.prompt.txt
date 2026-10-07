@@ -1,0 +1,31 @@
+site_id: 3209dfdf-ca19-45aa-b3a1-29815b5f5726
+name: Llanfihangel Din Sylwy
+country: Wales
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Eglwys Llanfihangel Din Sylwy.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7eee9c50ea32adc2b693eced643d6583
+- Llanfihangel Din-sylwy church - geograph.org.uk - 3902842.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\246e14cbb037ee7b0c9caf84df7fc4bd
+- Llanfihangel Din-sylwy church noticeboard - geograph.org.uk - 3902847.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b1b78d6809862ebe045b3911d46c23f7
+- St Michael's Church, Llanfihangel Din Sylwy.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\74961bf180ccfb26f8e85b6a3347aea3
+- St Michael's Church, Llanfihangel Din Sylwy - geograph.org.uk - 5405758.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\72a6d4e090df1fc425a47d1cafd8d3bf
+- Old well near St Michael's Church (Llanfihangel Din Sylwy), Llanddona - geograph.org.uk - 6133931.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d7165f42c342a3b1e2ad48b6ca6c9eeb
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,158 @@
+{
+  "site_id": "5f745388-3793-459b-b55f-90dbb5bfed78",
+  "answered_by": "mcode-judge-cand-0076",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Iznik Wall at Lefke Gate 8256.jpg",
+      "verdict": "depicts",
+      "note": "Runder Ziegelbastion auf marmornem Sockel, davor Bruchstein-Zinnenmauer und Weg im Torbereich."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 8255.jpg",
+      "verdict": "depicts",
+      "note": "Gleicher runder Ziegelbastion mit Marmorblock-Sockel zwischen Bruchsteinmauern, Innenraum des Tores."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 8269.jpg",
+      "verdict": "depicts",
+      "note": "Ziegelmauerwerk mit Türöffnung und Steintreppe im Inneren des Torbaus, Zinnenmauer rechts."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 8275.jpg",
+      "verdict": "depicts",
+      "note": "Großer Marmorbogen mit seitlichen Nischen zwischen Ziegelwänden, Blick durch das Tor in die Stadt."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 8253.jpg",
+      "verdict": "depicts",
+      "note": "Runder Ziegelturm neben einer marmorgerahmten Bogenpforte mit Inschriftstafel."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 1255.jpg",
+      "verdict": "depicts",
+      "note": "Ziegelmauer mit Gewölbebogen und Pflasterweg im Inneren des Torbezirks."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 1682.jpg",
+      "verdict": "depicts",
+      "note": "Blick von oben auf Ziegelgewölbe und Grundmauern des Tores, Dorf und Hügel dahinter."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 8276.jpg",
+      "verdict": "depicts",
+      "note": "Marmorbogen zwischen Ziegelmauern, dahinter ein zweiter Bogen und Besucher auf der Marmorstraße."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 1248.jpg",
+      "verdict": "depicts",
+      "note": "Bruchstein-Ziegelmauer mit marmorgerahmtem Durchgang und Ausgrabungsrand, Marmortrümmer davor."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 8252.jpg",
+      "verdict": "depicts",
+      "note": "Weitblick auf die Festungsmauer mit Rundtürmen und türkischer Flagge, Ziegel-Bruchstein-Mauerwerk."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 1681.jpg",
+      "verdict": "region_or_type",
+      "note": "Dorfstraße mit Friedhof links, niedriger Bruchsteinmauer rechts, Bäume und Hügel: das Tor selbst ist nicht zu erkennen."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 8257.jpg",
+      "verdict": "depicts",
+      "note": "Runder Ziegelbastion mit Marmorsockel und Bruchsteinmauer, typisches Mauerwerk der Toranlage."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 1254.jpg",
+      "verdict": "depicts",
+      "note": "Verwittertes Marmorrelief mit Figuren in die Ziegel-Bruchsteinmauer des Torbaus eingesetzt."
+    },
+    {
+      "file": "Iznik Wall at Lefke Gate 8258.jpg",
+      "verdict": "depicts",
+      "note": "Zwei runde Ziegeltürme mit Marmorsockel, dazwischen Bruchsteinmauer und Auto am Weg."
+    },
+    {
+      "file": "Iznik Lefke Gate 97 017.jpg",
+      "verdict": "depicts",
+      "note": "Abgeschliffenes Marmorrelief mit Figuren, an einer Pfeilertür in der Torwand eingelassen."
+    },
+    {
+      "file": "Iznik Wall from Lefke Gate to Istanbul Gate 8282.jpg",
+      "verdict": "depicts",
+      "note": "Verfallene Ziegel-Bruchstein-Mauer mit Schießscharten, Aufsicht von unten: Mauerwerk der Befestigung."
+    },
+    {
+      "file": "Lefke Gate (the eastern gate) with Roman triumphal arch dating to the 1st century AD, later part of Nicaea's Byzantine fortifications, Iznik, Turkey (26693100079).jpg",
+      "verdict": "depicts",
+      "note": "Außenansicht der Ziegel-Bruchstein-Festungsmauer mit drei Bögen und Rundtürmen, Straße davor."
+    },
+    {
+      "file": "Iznik Wall from Lefke Gate to Istanbul Gate 8277.jpg",
+      "verdict": "depicts",
+      "note": "Verzierte Marmorbausteine mit Flechtband und Rosette im Gras an der Stadtmauer liegend."
+    },
+    {
+      "file": "Iznik Wall from Yenişehir Gate to Lefke Gate 1667.jpg",
+      "verdict": "depicts",
+      "note": "Lange byzantinische Ziegel-Bruchstein-Stadtmauer rechts einer Dorfstraße mit Häusern und Holzscheiten."
+    },
+    {
+      "file": "Lefke Kapısı 2026-08-29 17.10.56 1789997646.jpeg",
+      "verdict": "depicts",
+      "note": "Durch einen Ziegelbogen auf den inneren Marmorbogen und die Marmorstraße mit Besuchern."
+    },
+    {
+      "file": "Lefke Kapısı 2026-08-29 17.10.57 1789997659.jpeg",
+      "verdict": "depicts",
+      "note": "Blick durch den Ziegelbogen ins Tor: Marmorbogen, Zinnenmauer, Besucher auf der Pflasterbahn."
+    },
+    {
+      "file": "Lefke Kapısı 2026-08-29 18.05.05 1789997687.jpeg",
+      "verdict": "depicts",
+      "note": "Rundtürme und marmorgerahmtes Tor von außen, Straßenschild mit 'Kapı', Marmortrümmer am Weg."
+    },
+    {
+      "file": "Lefke Kapısı 2026-08-29 18.05.20 1789997706.jpeg",
+      "verdict": "depicts",
+      "note": "Figurenrelief aus Marmor in die Ziegel-Bruchstein-Mauer der Toranlage eingelassen."
+    },
+    {
+      "file": "Lefke Kapısı 2026-08-29 18.05.24 1789997675.jpeg",
+      "verdict": "depicts",
+      "note": "Weiteres Marmorrelief mit Gewandfiguren, in die Wand des Tores eingebettet."
+    },
+    {
+      "file": "Lefke Kapısı 2026-08-29 18.05.30 1789997724.jpeg",
+      "verdict": "depicts",
+      "note": "Zwei Reliefplatten in der Eckkehle der Ziegel-Bruchstein-Mauer des Tores."
+    },
+    {
+      "file": "Lefke Kapısı 2026-08-29 18.06.09 1789997740.jpeg",
+      "verdict": "depicts",
+      "note": "Reich verzierter Marmorbalken mit Blattfries und Kranzgesims, in die Mauer des Tores eingesetzt."
+    },
+    {
+      "file": "İznik Kalesi, Lefke Kapısı 1, İznik, Bursa, Türkiye.jpg",
+      "verdict": "depicts",
+      "note": "Schild 'Lefke Kapı' vor dem marmorgerahmten Torbogen, Reliefs in der Wand, Besucher davor."
+    },
+    {
+      "file": "İznik Kalesi, Lefke Kapısı 2, İznik, Bursa, Türkiye.jpg",
+      "verdict": "depicts",
+      "note": "Innenraum des Tores: Ziegel-Bruchstein-Wände mit Bögen, Rasen und runder Turm mit Flagge."
+    },
+    {
+      "file": "İznik Kalesi, Lefke Kapısı 3, İznik, Bursa, Türkiye.jpg",
+      "verdict": "depicts",
+      "note": "Marmortriumphalbogen und Pflasterstraße zwischen Ziegelmauern im Tor, Besucher unterwegs."
+    },
+    {
+      "file": "İznik Kalesi, Lefke Kapısı 4, İznik, Bursa, Türkiye.jpg",
+      "verdict": "depicts",
+      "note": "Durch einen Ziegelbogen auf den Marmorbogen der Torstrasse gesehen, Zinnenmauer dahinter."
+    }
+  ],
+  "note": ""
+}

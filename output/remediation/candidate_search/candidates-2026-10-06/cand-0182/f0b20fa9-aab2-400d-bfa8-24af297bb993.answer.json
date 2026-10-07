@@ -1,0 +1,19 @@
+{"site_id": "f0b20fa9-aab2-400d-bfa8-24af297bb993",
+ "answered_by": "Worker",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Naxos Νάξος 2020-08-20 14 Chora.jpg", "verdict": "other_site", "note": "Weisses Cycladen-Dorf am Hang mit Kathedrale, alter Kastro-Mauer und griechischer Flagge; Stadtansicht einer anderen Insel."},
+  {"file": "Kastro, Thassos.JPG", "verdict": "other_site", "note": "Bergdorf auf kahlem Felshang mit Stein- und Weissbauten, Kiefernwald und Kastanien; Dorfansicht ohne Ausgrabung."},
+  {"file": "Kastro, Thasos.jpg", "verdict": "other_site", "note": "Gleiches Bergdorf: Trockenmauer, weisse Haeuser, Olivenbaeume und abgestellter Van vorn; keine Site-Struktur."},
+  {"file": "Restaurant Kostas, Kastro, Thasos.jpg", "verdict": "other_site", "note": "Moderne Gaststaettenterrasse: zwei Personen am Tisch, Gemalde an der Bruchsteinmauer, Speisekarte; keine Site."},
+  {"file": "9 Kastro C.jpg", "verdict": "other_site", "note": "Alte Farbaufnahme: steinerner Kirchturm mit Bogenfenster, Arkadenbau mit Ziegeldach und Zypresse, Schnee; Dorfarchivbild."},
+  {"file": "Kastro, Karner.JPG", "verdict": "other_site", "note": "Verwuestete Steinmauer mit offenem Eisentor und weisser Kapelle auf grasiger Felshalde; Ort nicht die zypriotische Site."},
+  {"file": "4 Kastro C.jpg", "verdict": "other_site", "note": "Alte Aufnahme einer verschneiten Karstlandschaft mit einzelnem steinernem Haus; Winteransicht ohne Ausgrabung."},
+  {"file": "Kastro-Thassos.JPG", "verdict": "other_site", "note": "Steinerne Umfassungsmauer und weisse Kapelle mit Steindach auf gruener Felshalde; Bergsiedlung einer anderen Insel."},
+  {"file": "8 Kastro C.jpg", "verdict": "other_site", "note": "Alte Aufnahme verfallener Steinhaeuser mit Bogenoeffnungen, kahlen Baeumen und Schneeresten; Dorfruine, keine Ausgrabung."},
+  {"file": "6 Kastro C.jpg", "verdict": "other_site", "note": "Alte Aufnahme: Gruppe steinerner Haeuser auf verschneitem Felsruecken mit Talblick; Siedlungsansicht ohne Site."},
+  {"file": "1 Kastro C.jpg", "verdict": "other_site", "note": "Altes Farbfoto: steinernes Wohnhaus mit Pyramidaldach, Trockenmauern und kahlem Baum; Dorfansicht ohne Ausgrabung."},
+  {"file": "7 Kastro C.jpg", "verdict": "other_site", "note": "Alte Aufnahme eines weiss verputzten Hauses mit Bogeneingang und eingestuerztem Dach, Schnee; Dorfansicht."},
+  {"file": "Epano Kastro, Naxos, 091500.jpg", "verdict": "region_or_type", "note": "Berglandschaft: kahler Felsgipfel mit Buschwerk und einer Mauerlinie auf der Kuppe; keine sicher erkennbare Site, Ort nicht identifizierbar."}
+ ],
+ "note": "Kein Kandidat zeigt die zypriotische Site Kastros: zwoelf zeigen auslaendische Orte (kykladische Stadt, Bergdoerfer mit griechischer Flagge, Gaststaette, alte Archivaufnahmen eines verschneiten Steindorfs), einer nur eine nicht identifizierbare Berglandschaft."}

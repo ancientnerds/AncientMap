@@ -1,0 +1,73 @@
+{
+  "site_id": "e5e74a71-b666-42a3-917b-cec6e80c81ca",
+  "verdicts": [
+    {
+      "file": "Altar of the Twelve Gods-.jpg",
+      "verdict": "depicts",
+      "note": "polygonale Steinmauer mit Infotafel und Ablauf"
+    },
+    {
+      "file": "Altar of the Twelve Gods 2.jpg",
+      "verdict": "depicts",
+      "note": "polygonale Mauer mit Tafel ALTAR OF THE TWELVE GODS"
+    },
+    {
+      "file": "Altar twelve gods Louvre Ma666.jpg",
+      "verdict": "depicts",
+      "note": "Originalaltar im Louvre mit zwoelf Goetterkoepfen und Reliefband"
+    },
+    {
+      "file": "Altar of the Twelve Gods.jpg",
+      "verdict": "depicts",
+      "note": "polygonale Mauer mit Infotafel"
+    },
+    {
+      "file": "Altar twelve gods cast.jpg",
+      "verdict": "depicts",
+      "note": "weisser Gipsabguss mit Goetterkoepfen und Reliefs"
+    },
+    {
+      "file": "Cylindrical altar of the twelve gods (Apollo).jpg",
+      "verdict": "depicts",
+      "note": "Altardetail mit Apollo-Figur und anliegenden Koepfen"
+    },
+    {
+      "file": "Cylindrical altar of the twelve gods (Zeus).jpg",
+      "verdict": "depicts",
+      "note": "Abgussdetail mit thronender Gottheit"
+    },
+    {
+      "file": "Cylindrical altar of the twelve gods (Poseidon).jpg",
+      "verdict": "depicts",
+      "note": "Abgussdetail mit thronendem Gott und Dreizack"
+    },
+    {
+      "file": "Ancient Greece Marble Cylindrical altar of the Twelve Gods, found near the Agora, 350-340 BC.jpg",
+      "verdict": "depicts",
+      "note": "runder Altar mit Reliefband und heller Gipsergaenzung"
+    },
+    {
+      "file": "Cylindrical altar of the twelve gods.jpg",
+      "verdict": "depicts",
+      "note": "Abgussdetail mit sitzender und stehender Gottheit"
+    },
+    {
+      "file": "Round Altar with Twelve Gods 03.jpg",
+      "verdict": "depicts",
+      "note": "Detail eines erhabenen maennlichen Altargottes"
+    },
+    {
+      "file": "Round Altar with Twelve Gods 02.jpg",
+      "verdict": "depicts",
+      "note": "Detail einer stehenden weiblichen Gottheit"
+    },
+    {
+      "file": "Portrait head of Demosthenes, found in the National Garden in Athens, Roman copy of and original by the sculptor Polyeuktos erected near the Altar of the Twelve Gods in the Ancient Agora in 280 BC, National Archaeological Museum of Ath.jpg",
+      "verdict": "other_site",
+      "note": "Marmorportraet auf Sockel; nicht der Altar"
+    }
+  ],
+  "note": "",
+  "answered_by": "mcode-judge-cand-0175",
+  "model": "MiniMax-M3.1-Flash-Preview"
+}

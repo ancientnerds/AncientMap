@@ -1,0 +1,68 @@
+{
+  "site_id": "e4b003f4-3f62-4689-9af9-4b7f120614af",
+  "verdicts": [
+    {
+      "file": "City of Rome during time of republic.jpg",
+      "verdict": "other_site",
+      "note": "antiker Stich von Rom mit Schiff, Bruecke und Portikusbauten"
+    },
+    {
+      "file": "Catamaran navalia 2016.jpg",
+      "verdict": "other_site",
+      "note": "modernes Katamaranmodell in einer Vitrine"
+    },
+    {
+      "file": "Formula 1 en navalia 2014 IFEVI Vigo.jpg",
+      "verdict": "other_site",
+      "note": "Formel-1-Auto in einer Messehalle"
+    },
+    {
+      "file": "Maqueta en feria Navalia Vigo 2014.jpg",
+      "verdict": "other_site",
+      "note": "Schiffmodell DEEP ORIENT in einer Vitrine"
+    },
+    {
+      "file": "Maqueta en Navalia 2014 astillero Barreras Vigo.jpg",
+      "verdict": "other_site",
+      "note": "Faehrschiffmodell BALEARIA in einer Vitrine"
+    },
+    {
+      "file": "Novalja Hafen.jpg",
+      "verdict": "other_site",
+      "note": "moderner Hafen mit Booten, Mole und Palmen"
+    },
+    {
+      "file": "Novalja Marktfrau.jpg",
+      "verdict": "other_site",
+      "note": "bronzene Marktfrauenskulptur in einer Einkaufsstrasse"
+    },
+    {
+      "file": "មូលដ្ឋានកងទ័ពជើងទឹក.jpg",
+      "verdict": "other_site",
+      "note": "kambodschanisches Schild NAVAL BASE in khmerischer Schrift"
+    },
+    {
+      "file": "Cambodia, Sihanoukville Province.jpg",
+      "verdict": "other_site",
+      "note": "kambodschanisches Tor mit rotem Dach und Palmen"
+    },
+    {
+      "file": "Haven te Rome Navalia (titel op object) Livre des edifices antiques romains (serietitel) Magesyn der Italiaense gebouwen (serietitel), RP-P-1957-653-96-2.jpg",
+      "verdict": "depicts",
+      "note": "historischer Stich mit der Beschriftung NAVALIA, Hafenbecken und monumentalem Portikusbau"
+    },
+    {
+      "file": "F1 en feria del sector naval de Vigo.jpg",
+      "verdict": "other_site",
+      "note": "Red-Bull-Formelwagen in einer Messehalle"
+    },
+    {
+      "file": "Maqueta bourbom ocean Stand metalships & Docks.jpg",
+      "verdict": "other_site",
+      "note": "Schiffmodell BOURBON OCEANTEAM 104 in einer Vitrine"
+    }
+  ],
+  "note": "",
+  "answered_by": "mcode-judge-cand-0174",
+  "model": "MiniMax-M3.1-Flash-Preview"
+}

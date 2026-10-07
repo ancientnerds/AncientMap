@@ -1,0 +1,35 @@
+site_id: 6e1bc7d5-624c-41c8-b69b-e64917ae5164
+name: Antik Barajı
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Presa romana - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff2f05c170276edefa2567d6207c031b
+- Barrage de l’Henchir Saïd.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db2eabb47fd5c73ecd7dc539dada948f
+- Plan du barrage de l'oued Hallouf.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e133d7b86810cfe357373b7fed08a2f6
+- Plan du barrage du Gier.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d8a7ddd722a5e8dd88445e7d19969355
+- Oued Essaboun Roman Dam (Oued Barqouq) Pavement.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\99432d014ed80bca18774c76667dd388
+- Roman dam at Cornalvo color corrected.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c92879f89b5d60472de3241da9a80a33
+- Proserpina dam - 1984.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\35bc6cfd20c05104bc85aa551bf37a0e
+- Muel - Presa romana 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e5ff8c624ce74ac90b4cce07d6de09f2
+- Muel - Presa romana 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a006d307f95fc276e6490eee65e8b8ca
+- Muel - Presa romana 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\565691a8aa71a51f1c464c000419f782
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

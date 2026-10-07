@@ -1,0 +1,36 @@
+site_id: 556ae8b8-dacf-4bad-ba3a-5b05551f1f99
+name: Temple of Artemis - Sardes
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Temple of Artemis in Sardes.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a3de160cf3e89a8f1afc7f5955a7d4e
+- Temple of Artemis in Sardes with the cranes used in excavations.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b908c3e59546ac3c209a34407db3861c
+- Artemis Tapınağı - Sardes Antik Kenti.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d48b6b41671a72c0d766fe4861136a32
+- Sardes 15 05 1989 Anstieg zum Bozdağ (Tmolos).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\03adf0341f7861c05e08ad01cd83eb85
+- Sardes Artemis Tapınağı 2022-02-13 16.35.58 1790843593.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cf193fe2ed5313c8bc139464053e7335
+- Sardes Artemis Tapınağı 2022-02-13 16.39.15 1790843612.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef46466e8a34c113ff0712e76b5c87d2
+- Sardes Artemis Tapınağı 2022-02-13 16.41.51 1790843642.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\09d7cd31fdb168d751b365efd89e52b3
+- Sardes Artemis Tapınağı 2026-07-04 21.32.38 1791020909.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b0553689a8226b9f3f6e3f26d72f3f26
+- Artemistempel Sardes.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\15801b2e187c7abf2c1c6c48557952ef
+- Temple de Cybèle, à Sardes - Asie Mineure - estampe - Girault de Prangey pinx.t ; E. Deshayes lith. - btv1b53185163w.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b255bc2ed7e8142e7e73ae3146d319f1
+- HildebrandtSardes.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\68690763426168af10edecd32389adbc
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

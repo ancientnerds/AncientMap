@@ -1,0 +1,36 @@
+site_id: 0a1ca287-1945-4b9d-bc6a-001bf2aa34c6
+name: Magasa, Crete
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Magasa - Fontana 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f2699879d5269d89ca9920abea7a6b57
+- Magasa - Fontana 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\24742a846ee19005a5a7db6cf98f282e
+- Magasa, veduta.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8e0c3d003f67164ecb9df7f07a50a6c1
+- Magasa - Scorcio 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cc08642f68be4e17e4af857122b4d313
+- Magasa - Municipio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17a524c77b61b2abe6ea7d3bd0d2f81a
+- Magasa - Fontana 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c831c51a06d9708296aa924b82c8b220
+- Magasa - Affresco su casa 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc5a35b1273ad89f2d93d7ba533b53df
+- Magasa - Scorcio 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c9000d526a4dc4425d94b441cade0c7
+- Magasa - Scorcio 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\90773d4a9881d1f138aac341aa11baee
+- Magasa - Insegna affrescata.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a0ff372e39ae55dd159e43637eb3ec10
+- Magasa - Vista 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c51c09ee5fd9b074023ca20b9385fd88
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

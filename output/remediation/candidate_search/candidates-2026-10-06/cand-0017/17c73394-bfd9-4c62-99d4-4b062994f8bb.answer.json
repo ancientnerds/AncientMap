@@ -1,0 +1,15 @@
+{"site_id": "17c73394-bfd9-4c62-99d4-4b062994f8bb",
+ "answered_by": "mcode-judge-cand-0017",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Pannonia secunda.png",
+   "verdict": "region_or_type",
+   "note": "Provinzkarte Pannonia Secunda im 4. Jh.; Bassianae erscheint nur als Punkt neben Sirmium, keine Ansicht der Site"},
+  {"file": "Roman cities Vojvodina-sr.png",
+   "verdict": "region_or_type",
+   "note": "Karte der roemischen Staedte in der Wojwodina mit slowenischem/kroatischem Text; Bassiana nur als beschrifteter Punkt"},
+  {"file": "Périgueux Vesunna Museum - Inschrift 5 Bassiana Viblina.jpg",
+   "verdict": "other_site",
+   "note": "Griechischer Inschriftenstein DM METIM IOV/IAXORIAE BAS/SIANAE VIBLINA im Museum Vesunna, Perigueux, Frankreich"}
+ ],
+ "note": "Zwei Karten und eine fremde Museumsinzschrift in Perigueux, Frankreich; keines zeigt die Site Bassianae."}

@@ -1,0 +1,37 @@
+site_id: 534c1035-fbfe-46fe-8127-a709d32dc1c7
+name: Leper Stone
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- The old loupin on and leper stone, Kilmaurs, East Ayrshire.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\208d74cf597285a2f4b08adebd644106
+- Llanrhidian - "Leper Stone" - geograph.org.uk - 6664481.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5070b12cc474241a144160de61d7ef0a
+- The Leper Stone, Llanrhidian - geograph.org.uk - 8394027.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5a19e32ac2b05335cd1a28efd8f9ec25
+- The Leper Stone, Llanrhidian Church - geograph.org.uk - 7397207.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\30effe667bfb84f32989bed381deb37d
+- Newport - Stone mosaic on foot underpass close to City Centre - geograph.org.uk - 3286031.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d869098bf14b5874b818d137e589af92
+- In leper-land - being a record of my tour of 7,000 miles among Indian lepers; including some notes on missions and an account of eleven days with Miss Mary Reed and her lepers (1901) (14591946770).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c875e43be2f0a6793329694dc999cb9
+- 2021 Old Stone Mill, Tuoro Park, Newport.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f616c04c7230c3fb743093afd5d339ee
+- Newport Tower - Newport RI (42728762545).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7493f5b71ca0ec8008e04a9c3a615fa9
+- Cambodia, Angkor Thom, Terrace of the Leper King, Reign of Jayavarman VII, - Apsaras - 1938.304 - Cleveland Museum of Art.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\441016ce7477876958de71eba137927b
+- The old loupin on stone, Kilmaurs, East Ayrshire.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c85c1bea170d06c4b0c22768199c20c4
+- "Surprise Valley Farm," Arthur Curtiss James property, Beacon Hill Road, Newport, Rhode Island. Stone buildings and stone fence LCCN00651319.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\18c3c3809e5f85e6d426b1bea098d379
+- "Surprise Valley Farm," Arthur Curtiss James property, Beacon Hill Road, Newport, Rhode Island. Stone buildings and stone fence LCCN00651319.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6008eadfd47d8171eadb0fd3f9051f61
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

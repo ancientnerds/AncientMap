@@ -1,0 +1,12 @@
+{"site_id": "a2b571fa-4aa3-4c23-b5f0-13c5552ce870",
+ "answered_by": "mcode-judge-cand-0124",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Urubambatown.jpg",
+   "verdict": "region_or_type",
+   "note": "Luftaufnahme des modernen Ortes Urubamba mit Strassennetz, Feldern und Bergen im Tal, keine Ruinen sichtbar"},
+  {"file": "Begraafplaats Urumbamba.jpg",
+   "verdict": "other_site",
+   "note": "Moderner Friedhof mit Grabsteinen, Kreuzen, Blumen und Ziegelmauern am Fuss des Berges"}
+ ],
+ "note": ""}

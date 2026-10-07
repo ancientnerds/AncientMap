@@ -1,0 +1,31 @@
+site_id: fcd0bf5d-100f-451f-99b9-7d3ecb4335ec
+name: Kukuli, Arequipa
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Valparaíso Cerro Abajo 2018 - Andreas Kukulis - 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fbb1505847965fada21c0365eb9865e4
+- Ñatita Domitila.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\478e7b4714651b40f8365a3bdc56feeb
+- Ñatita Sarita Valentina.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2941156041a3aea086ffad863a137a44
+- Ñatita Eduardo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\be1388fd2098704552ff3b900b437837
+- Ñatita Tomás.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\967bc8cc6fdbf70b547f1ff80c6977af
+- Todorova-Koukuli-Vajsov-Promachon-2007.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\68d3a4e2f45918a74691f8977536952d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

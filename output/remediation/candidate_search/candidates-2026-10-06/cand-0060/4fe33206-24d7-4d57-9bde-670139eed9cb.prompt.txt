@@ -1,0 +1,39 @@
+site_id: 4fe33206-24d7-4d57-9bde-670139eed9cb
+name: Hastings Hill
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Hastings, West Hill - geograph.org.uk - 3166110.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2f1cbaa65c3443f190ac1974b43bb954
+- Hastings, East Hill - geograph.org.uk - 3165465.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a3309b3186754764e17756eb9b184e1
+- Hastings, West Hill - geograph.org.uk - 3166103.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cefc9cdb79fd1649868c46be186f09df
+- Hastings, West Hill - geograph.org.uk - 3166132.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b86c9ffa7bdb333238d126eac5772b9b
+- Hastings, West Hill - geograph.org.uk - 3166923.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c49629edad58ab6430075947aea04c1b
+- Hastings, East Hill - geograph.org.uk - 3165399.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25c709ddd628130c7958449ae0469f60
+- Hastings, West Hill - geograph.org.uk - 3166116.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0bec3c7d9785d6c41ce68d24f52e81cc
+- Hastings, East Hill - geograph.org.uk - 3165400.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bf2fb08fa86d32822445a6574e1716df
+- Hastings, West Hill - geograph.org.uk - 3166131.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c9636f824aac30a14c8a103175d78e06
+- East Hill, Hastings - geograph.org.uk - 3177002.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f9c607a80b5db3457af6fcfaf91fe0a2
+- Hastings, West Hill - geograph.org.uk - 3166928.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7bbecb005ae9c49c44c47573e89c52e
+- View off Hastings Hill - geograph.org.uk - 6101553.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4fbf057dfdcf4183a6a3f46764804193
+- Farmland by Hastings Hill - geograph.org.uk - 7226181.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e56a581b74c96b6baded73bdcf7afacc
+- Hastings Hill House, Churchill - geograph.org.uk - 5879311.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4731492229ef37ed7acde125510b5713
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

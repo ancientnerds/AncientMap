@@ -1,0 +1,35 @@
+site_id: 8ece5123-5b53-4545-929d-0519137c13ea
+name: Rhodes Footbridge
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Footbridge over the M60 south of Rhodes - geograph.org.uk - 5119452.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3915558657c96d7b7b38ad53ba7f8051
+- Footbridge Over the River Goyt - geograph.org.uk - 3189243.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\33c0218b1405dc04c8c1bbbb2354d7fc
+- Hotel Evi - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a8b0ab83fdf3b2cc670bba84d89e6b05
+- Kallithea seaside - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4af8b9af5b9eaa97757f42d624741669
+- Rhodos Epta piges.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\71f7a4d376b51e78f5ecd19f6e730dbd
+- Bei den Sieben Quellen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3372a34c953b99b0cbd18108c7bcafa5
+- Petaloudes - Path along the valley - bridge ^ pond - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3b0f8221115b90bea6f11dc1838737af
+- Dolina motyli - panoramio (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7b72a67287dc7da48d1313b214c4c88a
+- Bridge to North Street Oxford - geograph.org.uk - 3373537.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\70fc620e8309cf7415e6d58aa94af93f
+- Castlefield Manchester - geograph.org.uk - 6758927.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\07d212141b12d3c6f70d9e84b6ecf219
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

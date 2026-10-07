@@ -1,0 +1,18 @@
+{"site_id": "f151db5d-5515-495e-ba5e-bde2a46c553a",
+ "answered_by": "Worker",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Housesteads Roman Fort 2014 16.jpg", "verdict": "other_site", "note": "Gepflasterter Steinwall zieht sich ueber gruene Hoehenkante, Baeumegruppe und Weideland dahinter; Hadrianswall-Mauerbau statt Buckton."},
+  {"file": "Housesteads Roman fort, looking south.jpg", "verdict": "other_site", "note": "Eckpunkt aus grosser Quadersteinmauer im Vordergrund, Blick ueber gruene Felder, Wald, Strasse und Huegel im Dunst."},
+  {"file": "Chesters Roman Fort, west gate 2007.jpg", "verdict": "other_site", "note": "Ausgegrabene niedrige Steinfundamente eines Torhauses in der Wiese, Pfahlzaun, Winterbaeume und Weide dahinter."},
+  {"file": "Housesteads Roman fort, looking east.jpg", "verdict": "other_site", "note": "Steinmauer auf der Grate, dahinter parallel laufende Erdwaelle im gruenen Tal und Kiefernwald."},
+  {"file": "Ambleside Roman Fort, Cumbria 23.jpg", "verdict": "other_site", "note": "Grasige Erdwaelle mit niedrigen Steinresten, Drahtzaun, kahle Baeume und ferne Bergkuppen im Lake District."},
+  {"file": "Ambleside Roman Fort, Cumbria 10.jpg", "verdict": "other_site", "note": "Rechteckige Steinfundamente im Rasen, Schafe auf der Weide, kahle Baumbestande und Bergkette im Hintergrund."},
+  {"file": "Ambleside Roman Fort, Cumbria 14.jpg", "verdict": "other_site", "note": "Niedrige Fundamentstreifen auf der Wiese, dahinter See, Baeume, Schafe und bewaldete Berge; nicht das Kastell von Buckton."},
+  {"file": "Ambleside Roman Fort, Cumbria 31.jpg", "verdict": "region_or_type", "note": "Mit Bruchsteinen ausgemauerte, wassergefuellte Grube im Rasen, vermutlich Brunnen oder Befestigungsdetail; Site nicht sicher zuzuordnen."},
+  {"file": "Ambleside Roman Fort, Cumbria 07.jpg", "verdict": "other_site", "note": "Mossige Steinmauerreste im Gras, Holzzaun mit Schafen, bewaldeter Kuppelberg und Berge dahinter."},
+  {"file": "Ambleside Roman Fort, Cumbria 17.jpg", "verdict": "other_site", "note": "Grosse flache Ausgrabungsflaeche aus Steinfundamenten, weisse Wohnhaeuser, Steinwall und Berge am Horizont."},
+  {"file": "Ambleside Roman Fort, Cumbria 06.jpg", "verdict": "other_site", "note": "Niedrige Mauerzuege im Rasen mit grasbedeckten Erdwaellen, Weide mit Schafen, kahle Baeume und Bergkette."},
+  {"file": "Ambleside Roman Fort, Cumbria 27.jpg", "verdict": "other_site", "note": "Grosse rechteckige Steinfundamentanlage mit inneren Teilungen, Scheune, Baumreihe und Bergkulisse im Hintergrund."}
+ ],
+ "note": "Kein Kandidat zeigt Buckton Roman Fort: elf zeigen Hadrianswall-Kastelle mit Berg- bzw. Seenlandschaft (Housesteads, Chesters, Ambleside), einer zeigt nur eine nicht sicher zuzuordnende Steingruebe."}

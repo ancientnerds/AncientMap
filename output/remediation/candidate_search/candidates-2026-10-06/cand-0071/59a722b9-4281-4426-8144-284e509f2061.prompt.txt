@@ -1,0 +1,47 @@
+site_id: 59a722b9-4281-4426-8144-284e509f2061
+name: Macedonian Tower
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Edirne Clock Tower - Macedonia Tower (13080324614).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df62386a18d224aafa5814f3c5e31775
+- Edirne Clock Tower - Macedonia Tower part.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\93f9847f10ae2fdfb68b4de402d0b3f9
+- Macedonian Tower in Edirne.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aeea50e398018ebe3025fe9bf61b397e
+- Edirne Clock Tower - Macedonia Tower (13080311284).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\324886f66fea3a0155e32cc172e6568b
+- Vodno Telecommunication Tower.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c7e1f7ebaaf580780b88147337a88020
+- Edirne Clock Tower - Macedonia Tower (13080016555).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\742f8cb32eaae84f56e038de44def93d
+- Edirne Clock Tower - Macedonia Tower (13080311284) (Colourised).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5136e4816cc1e3e53444bf6cb30605f5
+- Edirne Clock Tower - Macedonia Tower (13080324614) (Colourised).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f001b6a43abc08a4df2783d42de746fb
+- Edirne Clock Tower - Macedonia Tower (13080016555) (Colourised).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7dd7a8da298164dcd859fc7279d3f129
+- Edirne Roman Walls and Macedonian Tower 2388.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\842b026d16da76c740d0ab32b7f2770e
+- Edirne Roman Walls and Macedonian Tower 0210.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9dbb87a7478de170e1ac4d9020befce4
+- Edirne Roman Walls and Macedonian Tower 0208.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c795aac20ece552a66a582ae69ebf5a8
+- Edirne Roman Walls and Macedonian Tower 0211 Panorama.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6057e709708c72792b98943724f6bbd8
+- Macedonian Tower in Edirne with the surrounding archaeological site.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\99810fa1655138326f2435298a7df287
+- Macedonian Tower in Edirne with the Üç Şerefeli Mosque in the Background.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1cd56ef4aa4c104e4275ff18d614817b
+- Remains of a Macedonian tower on Philopappos Hill on April 19, 2021.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\61362d93f0299062d980dc996314aace
+- Remains of a Macedonian tower on Philopappos Hill on May 28, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b6520cbdb42897d8b1bfeecb23336023
+- Edirne Roman Walls and Tower 0202.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1554fd44038f847236b6591015f93d33
+- Edirne Roman Walls and Tower 0205.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4e759bc59b45fe81f439dc625e256c40
+- Edirne Roman Walls and Tower in 2003 4464.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5707a9aeb2b2765c0be94e5704b5a553
+- Edirne Roman Walls and Tower in 2003 4466.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f74fa0221fc949b611e64c739e07b4f8
+- Edirne Roman Walls and Tower in 2003 4470.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d6841c7e137ed96684c9c5a9709f988f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

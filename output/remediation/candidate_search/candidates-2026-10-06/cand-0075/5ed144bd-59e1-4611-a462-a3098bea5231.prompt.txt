@@ -1,0 +1,33 @@
+site_id: 5ed144bd-59e1-4611-a462-a3098bea5231
+name: Maria Reiche Museum
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- VW-Bus Wreck, Maria-Reiche-Museum near Nazca, Peru.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\15a3498879a15be405db3ce6675770bf
+- Maria Reiche Nazca.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2fefe286d77f268fd86b6c4772fe19a1
+- Hrob Maria Reiche - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\22143669a8535925cf43528ade67b32f
+- Zahrada a domek Maria Reiche - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cfcc3b798352572d29889a2ab1457e8d
+- Maria reiche (and his husband) tomb - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\21e05997087e80239935dbe7ff40cd7e
+- Panamericana Sur v bydlišti Maria Reiche - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d88876c5f417a3dc0736a78f1b0b0c30
+- NHM Front Gründungsinschrift 2024-12-02.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da4895baa9ea608536d851b0b93ba985
+- Panamericana-bei-nasca.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a463c9c4bd918aedea5961f665a163a2
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,46 @@
+site_id: f4188020-1870-4ba4-ad15-f162b33e1605
+name: Road Castle
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Gibraltar Lower Castle Road 10-20.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\267fed965d0f92691f8faf6dfe49fa22
+- Castle Peak Road - Lam Tei 17 2021.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b2391ab86898bc3864053fd363b3a286
+- Castle Peak Road - Lam Tei 16 2021.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7b6a51b78830a10f6286077c29b7c257
+- Castle Peak Road - Lam Tei 15 2021.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3499d49a001e5c38cf1a59ee565fd8ed
+- Castle Road (25APR23) (128).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\859a18d2f823264f18289ab920db0912
+- Castle Road (25APR23) (051).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a006000d3ec459b421127e61ad18516c
+- Castle Road (25APR23) (053).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c22ab60217aa8108e12ed1f93331d9f7
+- Castle Road (25APR23) (134).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f10226f74a496c9d6ef2c18a9846942d
+- Castle Road (25APR23) (034).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\345756305cafdb5cb1687d8b16782f6c
+- Castle Road (25APR23) (049).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5be80e31dd00dfd7867e4f1f6298879e
+- Castle Road (25APR23) (074).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\624af7c745d30410d28de3b65ea85262
+- Castle Peak Road - Castle Peak Bay near Sam Shing Estate in September 2023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8bdcaa4031128f820ccc2d74b7695c22
+- Castle Peak Road - Castle Peak Bay outside Sam Shing Estate in September 2023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\990a9cc7a5eae8e890ba3558f26fa4c4
+- Water Orton Road, Castle Bromwich - geograph.org.uk - 6933147.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\61113a1a106fc8bfa633c26a073972dd
+- Yeldham Road, Castle Hedingham - geograph.org.uk - 7747511.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c0fbb018dfcea7c9f95bd327cd179083
+- Narrow road, Castle Caldwell - geograph.org.uk - 7062485.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56da4bce76666b05c9907004c5772438
+- Poplars Drive off Chester Road, Castle Bromwich - geograph.org.uk - 6965428.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6fe5355792399b340b19cfd87675e99e
+- South Acre Road, Castle Acre - geograph.org.uk - 6321531.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6d9af9e5462c09c1f3d6fd48d9d2667a
+- Beechcroft Road, Castle Bromwich (1) - geograph.org.uk - 7162139.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e0ef862fc50558beaa8fac4f2845af0
+- Henley Road, Castle Hill - geograph.org.uk - 4963951.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e122407bd234bc6be9273b767dec66c2
+- Oakwell Road, Castle Douglas - geograph.org.uk - 5681918.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\186101a556cf8cfc96a619a3bf69ce69
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,57 @@
+site_id: e0191dff-1a40-4bd3-bfb4-1ea65cc1c2ca
+name: Alphen aan den Rijn
+country: Netherlands
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tussen Hazerswoude Dorp en Alphen aan den Rijn, panorama foto3 2016-05-01 14.46.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\87037e55bc9dd62ec32a075d2d134e3d
+- Alphen aan den Rijn-Koudekerk aan den Rijn, de Nederlands Hervormde kerk RM23797 IMG 0661 2022-03-27 15.24.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1491ad88944da32c73e5593dcbbd3b16
+- Alphen aan den Rijn, theater-cinema het Castellum foto4 2016-05-01 14.10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f29486760912b18095d0bdedc874e700
+- Alpen aan den Rijn, rotonde Raoul Wallenbergplein foto4 2016-05-01 13.50.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7cfa108df656903b5de28c7f1384fa95
+- Alpen aan den Rijn, fietsenstalling bij het station foto4 2016-05-01 13.51.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\620777aa84d6add47366c328ed58987a
+- Moluks monument in Alphen aan den Rijn 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5dac308ab2fdf67dad8be84691d1eca0
+- Moluks monument in Alphen aan den Rijn 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\361c95ec8d32e1543ad45f3a8890fd5d
+- Televisietoren Alphen aan den Rijn.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a784c3979f682bab204329ac5e3379be
+- Street Art in Alphen aan den Rijn 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3286d97e7a00266741d979e289bffb2
+- View of Alphen aan den Rijn (Molenaarsbrug) PK-1982-P-3.2.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94efde80a3e2a0d7fd0932c08582a2e8
+- Oude Rijn in Alphen aan den Rijn.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f45f778f2c67716e694d18036cd4fb06
+- HUA-162516-Gezicht op het NS station Alphen aan den Rijn te Alphen aan den Rijn.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\224639e3e7037fe5ab58af2034ba2906
+- Stolperstein für Siegmund Cohen (Alphen aan den Rijn).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1f12cfa3362650a3a944f5013ae74b48
+- Alphen aan den Rijn S 11 AH GM Hooftstr 125 Woonhuis 11042020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\afb0005526ae80312f3c7836496c85eb
+- Stolperstein für Mietje Cassier-Waterman (Alphen aan den Rijn).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e54d5e12030c086fc87a457d0cf7c41
+- HUA-150039-Gezicht op het N.S.-station Alphen aan den Rijn te Alphen aan den Rijn.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd94f8b4a858e50c3599a62243ec637f
+- Stolperstein für Olga Cohen-Goudberg (Alphen aan den Rijn).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\636628fb16e5e9e72c541b384fcb51af
+- Alphen aan den Rijn GM Hooftstraat 253-255.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\661f3b26fbaed4d75fb85bd01feb6ef7
+- Zonnewijzer, detail - Alphen aan den Rijn - 20377005 - RCE.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\849f0ba1110bcf857265062a23e47d3e
+- Wierrookvat - Alphen aan den Rijn - 20373417 - RCE.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\157d4f3dbb51dd8f906124c64115e0b0
+- 'Alfen a.d. Rijn (Dorpstraat)', Objectnr PV PV72023.2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e60f04a77d08f454c1df8ad6d76127e9
+- 'Alfen a.d. Rijn - Hooge Zijde', Objectnr PV PV72075.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4fdc1ce1f7da7ba5a8b0cb804a511e78
+- 'Alfen aan de Rijn', Objectnr PV PV71870A.8.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\632c68d45e4503ceb75c53932b2b3f21
+- 'Alphen a,d Rijn, Hazeveld', Objectnr PV PV72062.1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1df465205a1117fd16f9c9b8143e56a9
+- 'Alphen a,d Rijn, Lage Zijde', Objectnr PV PV71965A.3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4b01315f8172767fab9d0b104f607ecf
+- 'Alphen a,d Rijn, Prins Hendrikstraat', Objectnr PV PV72039.5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a75c3464c7d0e13d0bbd8207b64400ac
+- 'Alphen a,d Rijn, Watertoren', Objectnr PV PV71887A.2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7b9316572d5548d6fa2512b83d3db432
+- 'Alphen a,d Rijn, Wilhelminastraat', Objectnr PV PV72070.2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c6aabf1c1e3387de25306b39359d684
+- 'Alphen a.d. Rijn - Gouwsluis', Objectnr PV PV71941.3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\73f80fb6e9289402f7dd056e6a539502
+- 'Alphen a.d. Rijn, Dorpstraat', Objectnr PV PV72023.5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dae3097ac5d52970cbcb4c54aef032c9
+- 'Alphen a.d. Rijn, Gouwesluis l.z.', Objectnr PV PV71941.4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\42e64fbe8526cdb5d6554b6e273c0fe9
+- 'Alphen a.d. Rijn, Gouwesluis', Objectnr PV PV71941.2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\12598de1c96f7b665dac95b1814f7953
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

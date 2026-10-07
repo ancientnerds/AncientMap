@@ -1,0 +1,18 @@
+{"site_id": "9553ca4b-63bb-4aa9-bf83-7d3befaf023a",
+ "answered_by": "mcode-judge-cand-0114",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "St Albans Choir 2, Hertfordshire, UK - Diliff.jpg", "verdict": "other_site", "note": "Kircheninnenraum mit Bogen, bemalter Decke, Chorgestuehl und Orgel, keine Site"},
+  {"file": "St Albans Wallingford Screen 2, Hertfordshire, UK - Diliff.jpg", "verdict": "other_site", "note": "Kirchenaltar mit Heiligenfiguren und Kruzifix auf bunten Teppichen, Kircheninventar"},
+  {"file": "Colombo Street, St Albans, Christchurch, New Zealand.jpg", "verdict": "other_site", "note": "Vorstadtstrasse mit Colombo-Street-Schild, Autos und Radweg, moderne Szene in Neuseeland"},
+  {"file": "The Prae Wood Arms, St Albans - geograph.org.uk - 7340153.jpg", "verdict": "other_site", "note": "Parkplatz mit Autos und weissem Gebaeude zwischen alten Baeumen, modernes Gasthaus"},
+  {"file": "St Albans Church Copenhagen 2019.jpg", "verdict": "other_site", "note": "Steinkirche mit Turmspitze und Personen an einem klaren Wasserbecken, Kirche in Daenemark"},
+  {"file": "North block of St Albans School, St Albans, May 2023.jpg", "verdict": "other_site", "note": "Schulgebaeude aus Flintstein mit Zinnen und Parkplaetzen, modernes Schulhaus"},
+  {"file": "St Albans, Golders Green-1.jpg", "verdict": "other_site", "note": "Backsteinkirche mit grossem Turm neben Vorstadtstrassen und Autos, Londoner Kirche"},
+  {"file": "St Albans, Golders Green-2.jpg", "verdict": "other_site", "note": "Dieselbe Backsteinkirche von der anderen Strassenseite mit rotem Doppeldeckerbus"},
+  {"file": "Foundation stone on St Albans School Hall, St Albans, May 2023.jpg", "verdict": "other_site", "note": "Lateinische Grundsteinplakette in einer Flintsteinmauer eines Schulgebaeudes, Objekt einer anderen Site"},
+  {"file": "St Albans Church Copenhagen in distance.jpg", "verdict": "region_or_type", "note": "Teich mit Seerosen und Baeumen, Kirche nur in der Ferne, Landschaftsansicht"},
+  {"file": "St Albans Town Hall, St Albans, June 2023.jpg", "verdict": "other_site", "note": "Neoklassizistisches Rathaus mit Saeulen, Ampel und Strassenschild, modernes Stadthaus"},
+  {"file": "The Prae Wood Arms, St Albans (49023903927).jpg", "verdict": "other_site", "note": "Weisses Gasthaus mit der Aufschrift The Prae Wood Arms, modernes Pub-Gebaeude"}
+ ],
+ "note": ""}

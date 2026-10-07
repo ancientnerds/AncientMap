@@ -1,0 +1,12 @@
+{"site_id": "af860ca9-85af-4444-8f71-8e56282d7cb4",
+ "answered_by": "mcode-judge-cand-0133",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Houses in Myrtlebury Way, Exeter - geograph.org.uk - 6683013.jpg",
+   "verdict": "other_site",
+   "note": "Reihe moderner Reihenh\u00e4user mit Parkplatz, Z\u00e4unen und Rasen in einer Vorstadtstrasse - keine arch\u00e4ologischen Spuren."},
+  {"file": "Myrtlebury Way, new houses on edge of Exeter - geograph.org.uk - 6682690.jpg",
+   "verdict": "other_site",
+   "note": "Neue Reihenh\u00e4user am Rand von Exeter mit Lieferwagen, Laternenmast und Strassenbeleuchtung."}
+ ],
+ "note": ""}

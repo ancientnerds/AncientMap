@@ -1,0 +1,63 @@
+{
+  "site_id": "7d2ffdf7-cc41-4c96-8544-12941eff6c2d",
+  "answered_by": "mcode-judge-cand-0097",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Winnemucca Lake (213008212).jpg",
+      "verdict": "region_or_type",
+      "note": "Luftaufnahme aus dem Flugzeug: blaue Seeflaeche, trockenes Becken, Wipfel des Flugzeugs. Keine Felsbilder sichtbar."
+    },
+    {
+      "file": "Winnemucca Dry Lake, State Route 447 Between Pyramid Lake and Gerlach, Nevada (11128475283).jpg",
+      "verdict": "region_or_type",
+      "note": "Asphaltstrasse mit gelber Mittellinie laeuft durch trockene Seenebene zum weissen Salzsee, Berge dahinter. Keine Site-Struktur."
+    },
+    {
+      "file": "Tufa petroglyph site.jpg",
+      "verdict": "depicts",
+      "note": "Felsblock mit klar eingeritzten Petroglyphen (Figuren, Spiralen, Linien) unter blauem Himmel. Ist die Felsbild-Stelle selbst."
+    },
+    {
+      "file": "Winnemucca Dry Lake, State Route 447 Between Pyramid Lake and Gerlach, Nevada (11128348184).jpg",
+      "verdict": "region_or_type",
+      "note": "Blick ueber das Strassenbankett auf weisse Salzflaechen des trockenen Sees, Berge im Hintergrund. Keine Felsbilder erkennbar."
+    },
+    {
+      "file": "Winnemucca Dry Lake, State Route 447 Between Pyramid Lake and Gerlach, Nevada (11128273795).jpg",
+      "verdict": "region_or_type",
+      "note": "Weiter Blick ueber die trockene Seenebene zum hellen Salzsee, Bergkette dahinter. Reine Landschaft, keine Site."
+    },
+    {
+      "file": "Winnemucca Dry Lake, State Route 447 Between Pyramid Lake and Gerlach, Nevada (11128285875).jpg",
+      "verdict": "region_or_type",
+      "note": "Sagebrush-Ebene mit Streckzaeunen und breitem Bergmassiv im Hintergrund. Nichts von der Petroglyphen-Stelle zu sehen."
+    },
+    {
+      "file": "Winnemucca Dry Lake, State Route 447 Between Pyramid Lake and Gerlach, Nevada (11128321896).jpg",
+      "verdict": "region_or_type",
+      "note": "Strasse faellt zum Salzsee ab, Leitpfosten und Telefonmasten, Tufa-Felsen rechts am Rand. Keine eingekerbten Felsbilder erkennbar."
+    },
+    {
+      "file": "Winnemucca Lake, Alpine County.jpg",
+      "verdict": "region_or_type",
+      "note": "Alpine Berglandschaft mit bewaldetem See, Sandweg und Granitbrocken im Vordergrund. Keine Felsbilder erkennbar."
+    },
+    {
+      "file": "Tufa tower on the shore of Winnemucca Lake, Nevada. (to accompany) Geological history of Lake Lahontan - a quaternary lake of (IA dr tufa-tower-on-the-shore-of-winnemucca-lake-nevada-to-accompany-geologic-0866047).jpg",
+      "verdict": "region_or_type",
+      "note": "Gedruckte USGS-Tafel (Lake Lahontan Pl. XLII): gezeichnete Tufa-Felsen im Wuestenland. Illustration, keine Felsbilder."
+    },
+    {
+      "file": "Thinolite tufa (Quaternary; Pyramid Lake or Winnemucca Lake, north of Nixon, Nevada, USA) 4.jpg",
+      "verdict": "region_or_type",
+      "note": "Nahaufnahme eines Thinolit-Tufa-Gesteinsstuecks vor grauem Hintergrund. Gesteinsprobe, keine Site, keine Ritzungen."
+    },
+    {
+      "file": "Thinolite tufa (Quaternary; Pyramid Lake or Winnemucca Lake, north of Nixon, Nevada, USA) 7.jpg",
+      "verdict": "region_or_type",
+      "note": "Nahaufnahme eines Thinolit-Tufa-Gesteinsstuecks vor grauem Hintergrund. Gesteinsprobe, keine Site, keine Ritzungen."
+    }
+  ],
+  "note": "Nur 'Tufa petroglyph site.jpg' zeigt erkennbare Felsbilder; die uebrigen zehn zeigen Seenlandschaft, Strasse, Gesteinsproben oder eine USGS-Lithografie."
+}

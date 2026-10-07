@@ -1,0 +1,15 @@
+{
+ "candidates": 5809,
+ "floor": {
+  "min_height": 300,
+  "min_width": 800
+ },
+ "hits_per_query": 12,
+ "refusals": {
+  "all_too_small": 25,
+  "no_candidate": 461
+ },
+ "refused_sites": 486,
+ "sites": 1081,
+ "sites_with_candidates": 595
+}

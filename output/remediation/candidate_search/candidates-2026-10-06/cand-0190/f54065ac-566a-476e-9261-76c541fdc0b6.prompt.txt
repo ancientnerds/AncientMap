@@ -1,0 +1,33 @@
+site_id: f54065ac-566a-476e-9261-76c541fdc0b6
+name: Beadlam Roman Villa
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Roman, Spatula Handle (FindID 961456).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b0de07fad685cfca1e25bd6a0b6cb157
+- Roman (possibly), stone spindle whorl. (FindID 108420).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d913fe3f0b3d891d38c56a6fba56df7e
+- Roman (possibly), stone spindle whorl. (FindID 108420-90579).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c7e088a15c11f804f8fb2934efc90154
+- Horse and Rider (FindID 1013510-1120695).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6bac571c6e766c6c98b7af545b092089
+- Assemblage (FindID 1013510-1120692).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0ad314ff4bce8c02a5b4812764d8daf6
+- Bust (FindID 1013510-1120693).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\66ed7f2a5c62830589eea8164181a2a9
+- Plumb-bob (FindID 1013510-1120696).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f9c276d0831d286a645c9efbad8de8e0
+- Horse head (FindID 1013510-1120694).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd977f8a117e998aba4213aa2a67bd8a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

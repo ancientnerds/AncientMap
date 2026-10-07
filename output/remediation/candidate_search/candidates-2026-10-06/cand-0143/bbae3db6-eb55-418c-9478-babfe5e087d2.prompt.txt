@@ -1,0 +1,43 @@
+site_id: bbae3db6-eb55-418c-9478-babfe5e087d2
+name: Vottovaara
+country: Russia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Vottovaara seid.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0de6f2ee51176fe8faad14c5740f9b67
+- Rain on the lake. Vottovaara.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88e2146ab044bd891973456f066da2f8
+- Сердце Воттоваары. Heart of Mount Vottovaara.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\109e58339351ecdc213b0bba6869ad7c
+- Явление утра. The phenomenon of morning.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\050f3b4b39da73da2a970c4fe99f92c0
+- Осень отступает.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6123b0d9fb81a5053c126617cf99d90d
+- Камень "Череп динозавра". Stone " Dinosaur Skull".jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c2fe63228406bbad3280b87b32c530f8
+- В лесу Воттоваары.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\885200b9a4c3a1fa73e5eb41e9b024ff
+- Воттоваара. Место силы. 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ed0f9c74099d0554b4d17767738e3990
+- "Там, где закат засыпает...".jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc869ee7f7e09833b8328c37acc9e727
+- Вид с г. Воттоваара - panoramio - Andrei Humala.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f721942adc05741a600453fcc628d64b
+- Воттоваара. Место силы. 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8cf3598219c9cccfcc6d8ef90400bc4e
+- "...Запутался ветер в ловушках для снов разноцветных...".jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8f2621131c6953fc3f68d2907f61c5a
+- "В каждом крае свои шаманы".jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\176fb84d4cd7f3414625c40d017b4aca
+- "День ушёл за горизонт...".jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\92e7fb418c5ee0e7b9473a4693c2284a
+- "Ловец Снов" на Воттовааре.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df8ae468bdc060882ac98c2a22c92bc3
+- 'Fire' and 'Snow' - heather and deer moss.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\230855a2c1e2514f91d066cf171543f6
+- Spruce on stones.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c7ab5b7d895d09cc8465aac2bcfff41
+- Болото на Воттовааре.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\090a13fa933010da793c1d0e34220232
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

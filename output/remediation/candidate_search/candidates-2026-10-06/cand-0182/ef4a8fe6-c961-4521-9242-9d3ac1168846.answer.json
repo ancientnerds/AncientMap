@@ -1,0 +1,18 @@
+{"site_id": "ef4a8fe6-c961-4521-9242-9d3ac1168846",
+ "answered_by": "Worker",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Makthar mégalithes.jpg", "verdict": "depicts", "note": "Megalithische Steinkammer: Reihe aufrecht stehender Monolithe mit schweren Decksteinen, sandiger Boden, trockenes Grasland und Baeume dahinter."},
+  {"file": "Temple du Mizrach transformé en basilique Makthar 01.jpg", "verdict": "depicts", "note": "Freigelegte Steinmauern und Raumgrundrisse eines Ruinenfelds im Steppenland, dahinter flache Daecher moderner Tunesier Hausaeser."},
+  {"file": "Temple du Mizrach transformé en basilique Makthar 02.jpg", "verdict": "depicts", "note": "Freigelegte Grundrissmauern mit Steinplatten und liegenden Blöcken, gleiches trockenes Ruinenfeld, Hausaeser am Horizont."},
+  {"file": "Temple du Mizrach transformé en basilique Makthar 03.jpg", "verdict": "depicts", "note": "Ausgrabungsstruktur: niedrige Bruchsteinwände, liegende Saeulen und Schwellen im trockenen Gras, Siedlungsrand am Horizont."},
+  {"file": "Temple du Mizrach transformé en basilique Makthar 04.jpg", "verdict": "depicts", "note": "Weiterer Blick auf dasselbe freigelegte Mauerwerk mit Bodenplatten, umliegende Steppe und moderne Tunesier Hausaeser."},
+  {"file": "Les ruines de makthar ...au nord de l'arc.jpg", "verdict": "depicts", "note": "Dichte Reihen gestuerzter und stehender Saeulenstaende mit liegenden Saeulentrommeln auf gepflasterter Strasse, niedrige Steinmauer dahinter."},
+  {"file": "Makhtar Venus bain.jpg", "verdict": "depicts", "note": "Antikes Bodenmosaik auf weissem Grund: badende weibliche Figur mit Dienerinnen und Palme, Guilloche-Bordüre, in Innenraum ausgestellt."},
+  {"file": "Place publique devant arc de Makthar.jpg", "verdict": "depicts", "note": "Grosser gepflasterter Platz mit langen Reihen abgeschnittener Saeulenstaende, heruntergefallene Platten, trockene Steppe am Horizont."},
+  {"file": "Ruines de maisons de Makthar.jpg", "verdict": "depicts", "note": "Freigelegte Hausgrundrisse: niedrige Bruchsteinwuerfe, aufrechte Saeulenfragmente, schmaler Weg, Oliven und Getreidefeld dahinter."},
+  {"file": "Site archeologique .de Makthar.jpg", "verdict": "region_or_type", "note": "Ruine einer monumentalen Steinkirche mit zwei Tuermen und Bogenportalen vor gruener Huegellandschaft mit gelben Feldern; Site nicht sicher erkennbar."},
+  {"file": "Site. archeologique de Makthar.jpg", "verdict": "depicts", "note": "Grosser einzelner Bogen aus Quadersteinen mit Ziergiebel auf gepflastertem Platz, weitere Ruinenreste und Berge im Hintergrund."},
+  {"file": "Site archeologique de .Makthar.jpg", "verdict": "depicts", "note": "Innenraum einer grossen Monumentalruine: grosser Bogen aus Quadermauerwerk, Bruchsteinwaende, lange liegende Steinplatten auf dem Boden."}
+ ],
+ "note": "Elf Kandidaten zeigen Makthar selbst (Megalith, Tempelmauer/Ausgrabungsfeld, Saeulenfeld noerdlich des Bogens, Forum, Hausruinen, Triumphbogen, Innenraum, Venus-Mosaik); einer zeigt eine nicht sicher zuzuordnende Turmruine in gruener Huegellandschaft."}

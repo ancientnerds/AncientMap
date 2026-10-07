@@ -1,0 +1,48 @@
+{
+  "site_id": "8153d20b-c794-4c70-9269-7f20884d5149",
+  "answered_by": "mcode-judge-cand-0100",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Farmland, Woodbury Farm - geograph.org.uk - 6023711.jpg",
+      "verdict": "region_or_type",
+      "note": "Grüne Feld- und Wiesenfläche mit Bewuchs, Baumreihe und Himmel; reine Landschaft, kein Bauwerk und kein Befund sichtbar."
+    },
+    {
+      "file": "Arable field, West Woodbury - geograph.org.uk - 6023800.jpg",
+      "verdict": "region_or_type",
+      "note": "Weite bearbeitete Ackerfläche mit Feldrand und Hofgebäuden am Horizont; Landschaft, keine archäologischen Strukturen."
+    },
+    {
+      "file": "A3122 near Woodbury Farm - geograph.org.uk - 5953336.jpg",
+      "verdict": "other_site",
+      "note": "Moderne zweistreifige Landstraße mit Leitpfosten, PKW und Leitplanke; reine Verkehrsszene ohne Site-Bezug."
+    },
+    {
+      "file": "WOODBURY, Levi-Treasury (BEP engraved portrait).jpg",
+      "verdict": "other_site",
+      "note": "Gestochene Porträtplakette eines Mannes mit Hut im Profil; zeigt eine Person, keinen Ort und keine Landschaft."
+    },
+    {
+      "file": "Woodbury, Tennessee 5-23-2015.jpg",
+      "verdict": "other_site",
+      "note": "Moderne US-Straßenszene mit Läden, Werbeschildern und Schattenkreuzung; andere Stadt, andere Szene."
+    },
+    {
+      "file": "Woodbury , Woodbury Park - geograph.org.uk - 7247915.jpg",
+      "verdict": "other_site",
+      "note": "Grünanlage mit alten Bäumen und weiten Rasenflächen; erkennbar eine Parkanlage eines anderen Ortes, keine Bauten der Site."
+    },
+    {
+      "file": "Woodbury Reservoir, Woodbury, CT (54531430926).jpg",
+      "verdict": "other_site",
+      "note": "Stausee mit Wasser, Uferböschung und Wald im US-Bundesstaat Connecticut; anderes Land, keine Site."
+    },
+    {
+      "file": "Maison Woodbury-Matte.jpg",
+      "verdict": "other_site",
+      "note": "Nahaufnahme einer bemalten Holztafel mit der Aufschrift Woodbury-Matte; ein Schild bzw. Objekt, keine Ortsansicht."
+    }
+  ],
+  "note": ""
+}

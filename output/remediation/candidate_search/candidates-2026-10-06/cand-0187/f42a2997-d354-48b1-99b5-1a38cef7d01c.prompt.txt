@@ -1,0 +1,44 @@
+site_id: f42a2997-d354-48b1-99b5-1a38cef7d01c
+name: Tipu
+country: Belize
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tipu Sultan Mosque Dharmatala at Night.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\86c2e3ebecd81edacb680b1ec362c646
+- Tipu Sultan.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\27f1afc756d541cfe3461f244ef9edcb
+- Death-of-tipu-sultan 0.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\953fce57ccba89370eea5721c0e7bd66
+- TipuSultan1790.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f5eb653fb1e37171c951c31e2383772
+- Tipu Sultan Birth Place.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\04939aadddf51ad24837ef2aed5de548
+- Tipu Sultan Birth Place Name Board.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77919e3624eacf1668f1524265894353
+- Tipu death.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fdb4e00a9e26b0ac4dfb35eae6e11aea
+- Vellore Tipu Sultan Fort.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\06dad46c5d5cb33685c7c7ec8c66bd53
+- The Mausoleum of Tipu Sultan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\888b6c07f673ba41b2bd56b50eb60fbd
+- Gardens Tipu Summer Palace Srirangapatna Jan24 A7C 08975.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a315d62711ba5e77b95b87b2a59cb3ab
+- Entrance Tipu Summer Palace Srirangapatna Jan24 A7C 08972.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8790cf218eb335ae1f93c38eb7602eaf
+- Cannon Barrel Tipu Summer Palace Srirangapatna Jan24 A7C 08978.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c49e87b9cf8ce5c52419e1c37b23cc8
+- Plaque Tipu Summer Palace Srirangapatna Jan24 A7C 08977.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d77d0f26f41edb08afd815bf61b64c82
+- Information about Tipu Sultan at Tipu Sultan's Summer Palace 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1d8743be79f82af7c42c2ab32f2662eb
+- Information about Tipu Sultan at Tipu Sultan's Summer Palace 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\135e84fafa40748aef4b07f58b0d64dc
+- Birth place of Tipu Sultan in Devanahalli 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f41ebd9d713a3a2adcb46537cdebacf
+- Sunset clouds and Tipuana tipu foliage, 74 Sunbury St Geebung IMGP6040.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ea1b4d99b1a69ad9327993010bceb8fe
+- Stratus and Tipuana tipu at sunset 74 Sunbury St Geebung P1070244.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\016d6b4a669f58e16aa089c5e2b27c0c
+- Stairs in Tipu Sultan's Summer Palace 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4adf187e6a8c59a279133a48c3c74bc
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

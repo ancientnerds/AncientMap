@@ -1,0 +1,12 @@
+{"site_id": "5c6a72eb-0584-45d0-9fe7-fdfad15b632f",
+ "answered_by": "mcode-judge-cand-0074",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Hatay Altınözü Yunushanı Gelinler Dağı Nekropolü.jpg",
+   "verdict": "depicts",
+   "note": "Felsgräbernekropole: über den ganzen Hang in den Fels gehauene Grabbauten mit Bogenpforten und gefassten Terrassen — genau die Anlage der Site."},
+  {"file": "Lake in Hatay Altınözü Yunushanı Gelinler Dağı Nekropolü.jpg",
+   "verdict": "region_or_type",
+   "note": "Nur Landschaft: Felsplateau mit Gras und kleiner Wasserlache, die den Himmel spiegelt. Keine Grabbauten, keine Strukturen, nichts Erkennbares."}
+ ],
+ "note": ""}

@@ -1,0 +1,36 @@
+site_id: bdd4c703-8f60-419f-a2ef-d7181692d59f
+name: Chichén Viejo
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Chichen Viejo 1981 - 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\06ce5063a518a72a8c5c1e07baccd212
+- Chichen Viejo 1981 - 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\761063f7891fbc75369a9bfc969c2334
+- Chichen Viejo Atlantian Doorway.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a4d2492e1225edb183e2f1de3bc18489
+- Chichen Viejo 1981 - 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ed91e8dbc573e7b29398e3f12f08bd39
+- Chichen Viejo 1981 - View towards Caracol.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b21d6a52e507cea6eaa6f55c5232528b
+- Observatorio Chichen Viejo - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\074c2976ef5ac9f0a11ae4b0678dc941
+- Vista el Obsrvatorio de Chichen Viejo - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2107023fa000ce3e2191b5bac65a251e
+- Chichen Itza Cuatro dinteles.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\800a45973346a1acaaba285ef8f5051f
+- Temple in Old Chichen - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0db4fefa3ca7542ef303991809d78518
+- Chichen Itza CastilloViejo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\858e767ee397c81f451102009c8e6f0e
+- Utgrävningar i Teotihuacan (1932) - SMVK - 0307.f.0176.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b526d713480a3e2f904421d1bdb57f9d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

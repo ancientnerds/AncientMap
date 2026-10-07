@@ -1,0 +1,12 @@
+{"site_id": "1cef558f-8c07-494e-b32a-6bb5690934a7",
+ "answered_by": "mcode-judge-cand-0020",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Swarn Bhandar Caves.jpg",
+   "verdict": "depicts",
+   "note": "In den Fels geschnittener Eingang mit Treppenabgang und Gewölbe, davor gepflasterter Steinweg — Hoehlenbauwerk der Site, nicht nur Landschaft."},
+  {"file": "Inscription on swarn bhandar wall.jpg",
+   "verdict": "depicts",
+   "note": "In den Fels gehauenes Relief mit sitzenden Figuren in Nischen, darunter eine Reihe eingeritzter Zeichen — Felsbild der Site."}
+ ],
+ "note": ""}

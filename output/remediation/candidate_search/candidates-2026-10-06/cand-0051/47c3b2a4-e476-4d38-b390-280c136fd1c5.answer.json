@@ -1,0 +1,7 @@
+{"site_id": "47c3b2a4-e476-4d38-b390-280c136fd1c5",
+ "answered_by": "mcode-judge-cand-0051",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [{"file": "Vas amb representació del déu del Panís ballant, fundació La Ruta Maya, Guatemala.jpg",
+               "verdict": "region_or_type",
+               "note": "Museumsregal mit Nummer 4: zylindrisches Maya-Gefaess mit roter Figur in Vitrine; Herkunft Xultun im Bild nicht belegt."}],
+ "note": "Nur ein Museumsstueck ohne lesbaren Fundort-Nachweis, daher region_or_type statt depicts."}

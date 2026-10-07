@@ -1,0 +1,37 @@
+site_id: 9299ee5a-03c7-415b-a8d2-b8a7b8c71a7e
+name: Greenway Camp
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Camp Creek Greenway, Lilburn GA.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9e97ca950eff91bc5e12093a20ac279
+- Camp Creek Greenway planter, Lilburn GA.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c7e92b6f2d55a8afa7a501d7ec2b39d4
+- Camp Creek Greenway bench, Lilburn GA.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1c68997eac14947d67a37a86bb2b99fe
+- Camp Creek Greenway sign, Lilburn GA.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a30ad2105963da8e2753dab102d0c763
+- Camp Creek from Camp Creek Greenway, Lilburn GA.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da46f8869b86025040d2455477ea9f02
+- Camp Creek Greenway bridge, Lilburn GA.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b1121dcffe1256baea866a2f70574fd4
+- Chad Greenway TrainingCamp.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5e43ad866265264a2e0f715088146f85
+- Chad Greenway 2014 MV TC.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\232e6e039fa264ed199c5278b0d9511e
+- Oxwich Sky, Greenways Camp site - geograph.org.uk - 3572358.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\23f4400aee84350971e439e044e63751
+- 2024-09-10-Rastplatz am Greenway Lettland.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\257ea3ec74c4c20899660c56571425b6
+- 430-mile ride to honor injured service members ends at Camp Pendleton 121013-M-PF875-006.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6bc59ed065095d0ddc00e0c09355b055
+- Little Free Library, Lilburn GA.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bf61ef4e37deb1a7cecd2da0f9416821
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

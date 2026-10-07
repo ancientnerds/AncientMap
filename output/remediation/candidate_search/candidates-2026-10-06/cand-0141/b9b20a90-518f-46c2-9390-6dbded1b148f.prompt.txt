@@ -1,0 +1,37 @@
+site_id: b9b20a90-518f-46c2-9390-6dbded1b148f
+name: Rio Amarillo
+country: Honduras
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Lanzhou-rio-amarillo-d01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cf0db9594e074eec8725278221217b2f
+- Lanzhou-rio-amarillo-baita-shan-d04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b529fee8b4457f69fbb3b992bd0b2128
+- Lanzhou-rio-amarillo-baita-shan-d01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a4543c021e29695dcfed6bcd30e88bdb
+- Lanzhou-rio-amarillo-baita-shan-d02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25a08cbcf69892d6e2899269a0ddb68d
+- Lanzhou-rio-amarillo-baita-shan-d03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5446621dfa688c321f777477a7f5e6ca
+- Tingua de pico amarillo rio bogota.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd15c019154f273dc0e52c02a363c72a
+- Río Amarillo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3a1582b80ecb287b746db8c9872b4fa2
+- Amarillo Navalsauz.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b8bc520d2c75fac08137d703035b0436
+- Rio Arenillas amarillos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f344dddb13771e2c247c5d484c36a635
+- Guacamayo azul y amarillo (Ara ararauna).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\187f1576321cf4101f4308c6ad4b3424
+- Liquen amarillo 2009-10-12 RioFresnedas ValledeAlcudia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d7e2871a6ad33f5db822323f9507eb60
+- Crocodylus acutus mexico 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd9169e2d99cd2d5d79c7a5a06a7793e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

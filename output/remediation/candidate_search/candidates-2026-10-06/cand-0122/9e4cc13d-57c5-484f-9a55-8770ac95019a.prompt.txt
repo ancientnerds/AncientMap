@@ -1,0 +1,32 @@
+site_id: 9e4cc13d-57c5-484f-9a55-8770ac95019a
+name: Sanctuary of Pandion
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Osprey at Moccasin Lake Raptor Sanctuary in Moccasin Lake Nature Park, Clearwater, Florida, 19 March 2024.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1b8810afd2f613af2fb70b92be9547a0
+- Osprey enclosure at Moccasin Lake Raptor Sanctuary in Moccasin Lake Nature Park, Clearwater, Florida, 19 March 2024.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b27e2a2a6f99c956d43a38a3e780bbd
+- The osprey has landed (51102879597).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\737a02d2ac57d46c80cf3af855959427
+- Western osprey in flight (51101471183).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5bca19efc87fdffbbec140e4165709e3
+- Western osprey at sunset (51101010764).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b981f1c6bf7a0b71ee7fcb2fe4551473
+- Sea hawk up there (51102853524).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62d2b1ad3de50cb5571997be2e1e31b9
+- Osprey Bird.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff5a4e10167bf333f1b41bb2e3bb3d90
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

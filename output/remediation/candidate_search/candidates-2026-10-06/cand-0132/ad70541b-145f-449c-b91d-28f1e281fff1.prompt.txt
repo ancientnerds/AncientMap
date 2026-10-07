@@ -1,0 +1,37 @@
+site_id: ad70541b-145f-449c-b91d-28f1e281fff1
+name: Al-Musawwarat as-Sufra
+country: Sudan
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ansicht der Tempelruinen von Ben-Naga; Ansicht der Ruinen von Mesaurât E' Sofra (Musawwarat al-Sufrah Site) (NYPL b14291191-38000).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f319ee5a7af50368ece58565f2f118c
+- Ansicht der Tempelruinen von Ben-Naga; Ansicht der Ruinen von Mesaurât E' Sofra (Musawwarat al-Sufrah Site) (NYPL b14291191-38000).tiff  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\489f5e2eab835d5b3627fce3643ecfe7
+- Musawwarat.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\20527ce29965c1a4164bd0290987d547
+- Archaeological Sites of the Island of Meroe-114985.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9ce63e6a1e4a2817f921ec4be3cd2a99
+- Ansicht von Mesaurât im Wadi E'Sofra (Mu.sawwarat al-.Sufrah Site); Ansicht von Naga (NYPL b14291191-38002).tiff  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b04af7f3f24fa44c7f63dc81fa753af6
+- Aethiopen. Wadi E' Sofra (Mu.sawwarat al-.Sufrah Site). Nordwestlicher Tempel, Säulen (NYPL b14291191-44220).tiff  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17e79dfd0e0d8c3f7f93cae6877e8767
+- Aethiopen. Wadi E' Sofra (Mu.sawwarat al-.Sufrah Site). Nordöstlicher Tempel, Säulen (NYPL b14291191-44222).tiff  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df626faa877133b6d0fb9223510d5053
+- Aethiopen. Wadi E' Sofra (Mu.sawwarat al-.Sufrah Site). Nordöstlicher Tempel, Säulen (NYPL b14291191-44222).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3dc1f2173e8beeeb7988fa58ee096dfa
+- Grundplan der Gebäudeanlagen im Wadi E'Sofra (Mu.sawwarat al-.Sufrah Site) (NYPL b14291191-38003).tiff  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\925fc8f13858fbe1920eaba2a6cc5a24
+- Aethiopen. Wadi E' Sofra (Mu.sawwarat al-.Sufrah Site). Nordwestlicher Tempel, Säulen (NYPL b14291191-44220).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\79b457f576669178b8995ee65f855923
+- Aethiopen. Wadi E' Sofra (Mu.sawwarat al-.Sufrah Site). Südöstlicher Tempel, Säulen (NYPL b14291191-44223).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e97726085c6ee1656ce6e96898b551e2
+- Aethiopen. Wadi E' Sofra (Mu.sawwarat al-.Sufrah Site). Südöstlicher Tempel, Säulen (NYPL b14291191-44223).tiff  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\201471b0837201ec49a521befa706772
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

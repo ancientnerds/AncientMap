@@ -1,0 +1,30 @@
+site_id: 12aadb2a-b677-4750-91e3-bea81d76351b
+name: Balksbury
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Balksbury Road, Upper Clatford - geograph.org.uk - 5931560.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\70c1aeed3e8ac2ff06ed20652f0897b0
+- Light industry - Balksbury Hill - geograph.org.uk - 3369878.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f2ad1f1a6601350d8a84bacff5ba9247
+- Footpath sign off Balksbury Hill - geograph.org.uk - 3336626.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\63b7e56f9130f30e38118238e0a6f314
+- Balksbury Road, Upper Clatford - geograph.org.uk - 5931561.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\116c99e139c3df9d59118a384289bb84
+- Looking down Balksbury Hill into Upper Clatford - geograph.org.uk - 3336616.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2c6db454ff16924da02423f8f411ab3a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,37 @@
+site_id: 47396b3b-88aa-4d18-a7ac-8bec4154c19d
+name: Wilca
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Warsaw, 30 Wilca street.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d265038c215459e0f8ecc1d3a5cd6f8b
+- Rhinella arenarum on APM Monte Willca 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5a7b90bfae7a9bb2ee3f80c7f096031a
+- Sunset on APM Monte Willca 16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f3566172cd2daa46ae40d12d9bfe1a4
+- Latrodectus on APM Monte Willca 18.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\517b4addedec7e68e51503afa53d6844
+- Lycosidae on APM Monte Willca 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\86333ec192952887f9c48b691676c654
+- Lycosidae on APM Monte Willca 17.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44874be0975b1a355f302298a0909e92
+- Myiopsitta monachus on APM Monte Willca 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\525276bd3a72b9db391ef587222a6593
+- Neoraimondia herzogiana on APM Monte Willca 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bac84923870ccbb97becaff29700032e
+- Thectocercus acuticaudatus on APM Monte Willca 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\796537b622a634d468c664b15f398f95
+- Micronycterys yatesi on APM Monte Willca 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4d61486161b4bd50b8e8ee0bd919ed49
+- Tropidurus azurduyae on APM Monte Willca 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\352702de381b6a17c146414a69f3ae82
+- Rhionaeschna sp. APM Monte Willca 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dddbb34b144e3d652b568458bbd3c81e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

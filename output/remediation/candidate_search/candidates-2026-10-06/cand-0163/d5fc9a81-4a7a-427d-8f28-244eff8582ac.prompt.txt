@@ -1,0 +1,29 @@
+site_id: d5fc9a81-4a7a-427d-8f28-244eff8582ac
+name: Ancient Theatre of Thassos
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ancient theatre - Thassos - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c54b49eac6aebd929412ad5b2e908cae
+- Ancient Theater (Thasos).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4f4d2675d3779903cdf275134648758
+- Ancient theater, Limenas, Thassos. 1983. (40502068574).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4715ceb162e53f2f6326ac4c3d9b7739
+- Ο Λιμένας και το ρωμαϊκό Θέατρο στο νησί της Θάσου - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b37d6ec923aa748df46cc1cc7a87062b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

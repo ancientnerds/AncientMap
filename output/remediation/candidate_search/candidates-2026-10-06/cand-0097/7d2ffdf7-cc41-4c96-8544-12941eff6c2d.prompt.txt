@@ -1,0 +1,36 @@
+site_id: 7d2ffdf7-cc41-4c96-8544-12941eff6c2d
+name: Winnemucca Lake Petroglyphs
+country: USA
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Winnemucca Lake (213008212).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a977fd0fd3bc444f080119943f8fe6cb
+- Winnemucca Dry Lake, State Route 447 Between Pyramid Lake and Gerlach, Nevada (11128475283).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0734547dcf0433798d37e4efbc8a0d79
+- Tufa petroglyph site.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2556b8fb82afbd0de4918e8f6dce3111
+- Winnemucca Dry Lake, State Route 447 Between Pyramid Lake and Gerlach, Nevada (11128348184).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\780a0eb5197ad43b7d5aab3f05589e7e
+- Winnemucca Dry Lake, State Route 447 Between Pyramid Lake and Gerlach, Nevada (11128273795).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\127db56000ddf31e49adc3b0e427ceba
+- Winnemucca Dry Lake, State Route 447 Between Pyramid Lake and Gerlach, Nevada (11128285875).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\632812cd17446d1945c58a0c873160f3
+- Winnemucca Dry Lake, State Route 447 Between Pyramid Lake and Gerlach, Nevada (11128321896).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\60d458b51c43dd344c6452ca63701890
+- Winnemucca Lake, Alpine County.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8d08560ef91c5f8defa81795b80b37fe
+- Tufa tower on the shore of Winnemucca Lake, Nevada. (to accompany) Geological history of Lake Lahontan - a quaternary lake of (IA dr tufa-tower-on-the-shore-of-winnemucca-lake-nevada-to-accompany-geologic-0866047).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e28304146363c1a99b43c50cae1deaec
+- Thinolite tufa (Quaternary; Pyramid Lake or Winnemucca Lake, north of Nixon, Nevada, USA) 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4855425be3265857fa32342dcb3923ee
+- Thinolite tufa (Quaternary; Pyramid Lake or Winnemucca Lake, north of Nixon, Nevada, USA) 7.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec41cfa665cb3dfc0f700713f6807264
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

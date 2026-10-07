@@ -1,0 +1,39 @@
+site_id: 28b7b9c1-3901-4762-a71f-353d6ba8b513
+name: Roman Ridge
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- The Roman Ridge School.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dcba00dcb5b55cbfd05503fb05977b4e
+- Roman Ridge Shopping Center.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\719d71c6f0cc38422e9dc0bfe55081fe
+- Roman Ridge - geograph.org.uk - 7589327.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\72ce89faee2dbb851342529da51dab7b
+- Roman Ridge - geograph.org.uk - 4502783.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44248f742e56a5d350cbc1f08461bdee
+- Tree alongside Roman Ridge, south of Green Lane - geograph.org.uk - 6051676.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1f2dcaf5bdcd4435dce494dee409cbcb
+- Highfields farmland, east of Roman Ridge - geograph.org.uk - 6051587.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f48f7ae21810aac7621af54fe9fd7b6
+- Junction of Roman Ridge and Alwyn Avenue - geograph.org.uk - 6052172.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\837d68584432f782e1ae3e78cc340b30
+- Southern end of the Roman Ridge byway - geograph.org.uk - 6052141.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\70c5a545ab59590c334611a3ec609132
+- Farm track running west from Roman Ridge - geograph.org.uk - 6051596.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\58bb2a5fc868666a22cc475742bd6f2e
+- Iron figure guarding the path to Roman Ridge Dyke - geograph.org.uk - 4453702.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e0a7867907ea5a5103b28504201bf550
+- Footpath junction on Roman Ridge - geograph.org.uk - 6051572.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\81c07fa985f0c6549d286690769c9a16
+- Field on Roman Ridge - geograph.org.uk - 2301569.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\695441f7d4c2cef3e1831127ac13db48
+- Fields by Roman Ridge - geograph.org.uk - 8187089.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\587a0ee1e6020ceaf7f13f83dde64770
+- Farmland between Scawsby Lane and Roman Ridge - geograph.org.uk - 6051667.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d200d96964725df1e4abda6e30bbe69d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,37 @@
+site_id: 631de534-1de5-4dbc-ac03-ac5ee63eb84f
+name: Stobno, Lower Silesian Voivodeship
+country: Poland
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Stobno (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14b910a3a638e7614a96dc699d5e31ac
+- Stobno Dworzec1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\66469c39485b77e494d3ba2eadff9ebc
+- Stobno WC.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7446adf21fc29116fec6f1e97f51b774
+- Stobno przejazd kolejowy.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2069ddaf2ee75e04f6774400cc19c4f7
+- Stobno Szczecińskie (stacja kolejowa).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a351c545f6df90574ee8fc9173c60982
+- Stobno, street.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\900dab9e5d2ef9c87737bc7bebf50564
+- Stobno w gminie Kołbaskowo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\243ccb0930d5dcf9b075139321bef580
+- Stobno DworzecBudynek.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e2a8fe3606a3ca97ec12b55e05a5705
+- Stobno peron1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8e9e1a7cb0c87099ececdede058efa08
+- Nad Jeziorem Stobno w miejscowości... Stobno - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3d5dc6ed91a2695828a8559ced8c7e2
+- 2023-04 Stobno (04).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fbf6dc7ecba9f2086731d05d13e659c6
+- Stobno Tablica przystankowa.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e30c87f23556de013e18f172e3d7938
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

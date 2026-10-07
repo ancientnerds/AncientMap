@@ -1,0 +1,13 @@
+{
+  "site_id": "7895564a-2414-4bd5-a9c7-61e611f9159a",
+  "answered_by": "mcode-judge-cand-0093",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Air Mens Memorial St Edward's Leek.jpg",
+      "verdict": "other_site",
+      "note": "Holztafel mit Namenlisten und RAF-/Fliegeremblemen in rotem Sandstein; Gedenktafel des Air Forces Memorial, kein Lagerwall."
+    }
+  ],
+  "note": "Einziger Kandidat ist eine moderne Gedenktafel; das römische Lager ist nicht abgebildet."
+}

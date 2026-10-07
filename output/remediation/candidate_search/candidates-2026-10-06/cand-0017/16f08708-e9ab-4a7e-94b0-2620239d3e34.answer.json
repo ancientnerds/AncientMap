@@ -1,0 +1,9 @@
+{"site_id": "16f08708-e9ab-4a7e-94b0-2620239d3e34",
+ "answered_by": "mcode-judge-cand-0017",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "AcropolisatathensSitePlanPeripatos.PNG",
+   "verdict": "region_or_type",
+   "note": "Schematischer Lageplan mit 28 nummerierten Gebaeuden und Nordpfeil: Grundriss der Athener Akropolis, kein Befund von Arrephorion"}
+ ],
+ "note": "Einzelkandidat: eine Karte, keine Ansicht der Site."}

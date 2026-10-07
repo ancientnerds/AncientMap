@@ -1,0 +1,9 @@
+{
+  "site_id": "cdde5a6a-ab08-42ae-a3e7-ab1d0d2c0f20",
+  "answered_by": "mcode-judge-cand-0158",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Huntshaw Wood and surroundings (geograph 6334075).jpg", "verdict": "region_or_type", "note": "Felder, Wald und wenige Häuser; keine Burg oder Burgstruktur sichtbar."}
+  ],
+  "note": ""
+}

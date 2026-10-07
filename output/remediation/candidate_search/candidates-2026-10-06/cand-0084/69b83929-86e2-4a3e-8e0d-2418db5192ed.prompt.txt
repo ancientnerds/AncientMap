@@ -1,0 +1,29 @@
+site_id: 69b83929-86e2-4a3e-8e0d-2418db5192ed
+name: Königsaue
+country: Germany
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- View to Neu Königsaue (Aschersleben).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b2b7fdb94af62c50732d869ce077eddb
+- Hausurne Neu Königsaue.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8b2ba2e0d42de84dd738d071962074f3
+- Museum für Vor- und Frühgeschichte Berlin 100.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\34fbb822c65bc65867596bea9a3ac508
+- 40pfg-koenigsaue.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e230f8c77271d6345ccfa1ff9b6560d7
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

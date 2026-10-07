@@ -1,0 +1,12 @@
+{"site_id": "a6f66111-c0d1-4c01-a49a-eb2d476a33d0",
+ "answered_by": "mcode-judge-cand-0127",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Treasury of Athenians, Theseus and Minotaur, 500 BC, AM Delphi, 201404.jpg",
+   "verdict": "region_or_type",
+   "note": "Marmorrelief Theseus mit dem Minotauros an einer Museumswand; keine Beschriftung lesbar, Herkunft aus der Site im Bild nicht erkennbar"},
+  {"file": "Treasury of Athenians, Theseus and Minotaur, 500 BC, AM Delphi, 201406.jpg",
+   "verdict": "region_or_type",
+   "note": "Nahaufnahme desselben Museumsexponats, Kopf und Kopf des Ungeheuers; kein lesbarer Schild oder Hinweis auf die Site"}
+ ],
+ "note": ""}

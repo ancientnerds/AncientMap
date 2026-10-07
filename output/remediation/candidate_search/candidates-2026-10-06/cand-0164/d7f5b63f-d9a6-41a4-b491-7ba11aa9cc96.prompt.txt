@@ -1,0 +1,36 @@
+site_id: d7f5b63f-d9a6-41a4-b491-7ba11aa9cc96
+name: Menhirs of Sardinia
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Area archeologica di Pranu Muttedu 2025 009.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\832dd455decced21674978cfd8e9d9da
+- Area archeologica di Pranu Muttedu 2025 010.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9777996a92146ff594d128ce42c27740
+- Sardinien menhir vor tortoli.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2284feb83b696602a273e46a8c752da8
+- Borore - Menhir di Busola (06).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3cdad23d242a1e41f74e9119a8b6b3b8
+- Borore - Menhir di Busola (05).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f8ec40c1c6eebce4164c03d1788a55c
+- Borore - Menhir di Busola (04).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9d4716df9527fecfefa8a7314bda6bbc
+- Borore - Menhir di Busola (01).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9bcf6c37513548294c3e605abacee490
+- Borore - Menhir di Busola (08).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e5c6869004d7ed94200554ef13820f8
+- Borore - Menhir di Busola (02).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b0ff218f69eade9e6cc1e74b59c8130a
+- Borore - Menhir di Busola (07).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1839d0b138a21a8264c836d21f1ba49a
+- Borore - Menhir di Busola (03).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d49c31c340a28f5d096ad78c2af9974
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

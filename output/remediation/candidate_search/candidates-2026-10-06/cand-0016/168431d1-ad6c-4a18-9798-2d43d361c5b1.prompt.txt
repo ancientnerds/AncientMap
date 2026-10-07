@@ -1,0 +1,35 @@
+site_id: 168431d1-ad6c-4a18-9798-2d43d361c5b1
+name: Los Pinchudos
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- MAUSOLEO DE LOS PINCHUDOS-FIGURAS.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\852f4fb8107ec1d638978d1c3d6e1731
+- FIGURAS DEL MAUSOLEO LOS PINCHUDOS-JUANJUÍ.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\433a8dfcea2278d371aca9202c3826df
+- Pinchudo-Gran Pajaten.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f7cd68c531e035d188fd985b3d6a0daf
+- Los Pinchudos.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\664e192f8579249bd3630c0d5574440d
+- Figura los Pinchudos.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1997b4c30c36146ee01472a8baa1d0ee
+- Maqueta de Los Pinchudos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cc9cba60e69aa3424758ba5d53f1ba93
+- Figura del Mausoleo Los Pinchudos.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d8fe46649bd5135c5ec805db755a8024
+- FIGURAS DEL MAUSOLEO LOS PINCHUDOS.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\111d882025da793b279ec77952c37509
+- GRECAS DEL GRAN PAJATEN Y LOS PINCHUDOS.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\633ba454c06ac0aadf3dbaca198a21a1
+- Museo arqueologico y etnohistorico de pachiza.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5b01cd13d3b5d72af2a5447ad10409f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

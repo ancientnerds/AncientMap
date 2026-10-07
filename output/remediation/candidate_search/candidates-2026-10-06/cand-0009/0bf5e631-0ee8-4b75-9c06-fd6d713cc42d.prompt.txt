@@ -1,0 +1,36 @@
+site_id: 0bf5e631-0ee8-4b75-9c06-fd6d713cc42d
+name: Deriivka
+country: Ukraine
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Map Mirgorod Poltava 1752.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b94ff25afc77ba8106fde5da6c431010
+- Forest near Deriivka (2024-08-17) 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7f670392697c6f4ee819c6d6513cd199
+- Dnieper near Deriivka (2024-08-17) 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94e43c070f21cd9648972d8112a4b374
+- Dnieper near Deriivka (2024-08-17) 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\debd9dcac700dc7092ee88654f2879b5
+- Forest near Deriivka (2024-08-17) 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\87beaa58fecef96fdaac2ae808ae0496
+- Forest near Deriivka (2024-08-17) 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5fa4791a21c4d262f5c0c714a881927e
+- Forest near Deriivka (2024-08-17) 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fdac180fd1018e1b45a9930131753188
+- Forest near Deriivka (2024-08-17) 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a14554217b51d6c69228be352a353e70
+- Forest near Deriivka (2024-08-17) 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\152ce91bad4db274d2f3acbb4d673aec
+- Пам'ятний знак воїнам — землякам. Поховано 634 воїни.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae96f2d9a60d07b59755d51386f7bc47
+- Скоринін В.П.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e6542b8f806ebaad5ccbdf81e6f29d24
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

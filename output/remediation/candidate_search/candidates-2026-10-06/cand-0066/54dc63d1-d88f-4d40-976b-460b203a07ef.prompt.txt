@@ -1,0 +1,53 @@
+site_id: 54dc63d1-d88f-4d40-976b-460b203a07ef
+name: House of Orpheus
+country: Cyprus
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Casa di Orfeo (Pompeii) 2015 (18652418228).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4e07ceee93d3be546f0355cd0ffe0283
+- Casa di Orfeo 2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1d1bb9e1d1a6b1ba5067a6a09ec2ee88
+- Casa di Orfeo 1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f6c9a4f156b4153157033750655a9f04
+- Casa di Orfeo (Pompeii) (28458584473).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\262ab5f310494a834fb92581057cc35a
+- House of Orpheus (Pompeii) Inscription of poetry from peristyle.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a5bb2bdfd1cba94fb91e543a9bf72060
+- House of Orpheus (Pompeii) Inscriptions from herm and election slogans.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b7b18f4eeb5d040a64fb981098294b00
+- Watercolor of a herm from the House of Orpheus Pompeii by Geremia Discanno pub 1882.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cca930f65b43f0503183cb9504704e13
+- Floor Plan for the House of Orpheus Pompeii VI 14,20.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c948b348b8776d0d58c8cb8de684cdfd
+- House of Orpheus 1870s sketch drawing by Sydney Vacher of painted bird from zoccolo dado of triclinium (room y on Presuhn floor plan).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\372a6d380cd384ad228090680cde99b5
+- Cyprus-Paphos-Archaeological-Park-House-of-Orpheus-65458.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6ca9cdaea64cd0b96bb71b8cf025c3b
+- Cyprus-Paphos-Archaeological-Park-House-of-Orpheus-65603.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b69f12de6feae5ae9ac0496c0f61c4a1
+- The House of Orpheus Mosaic Volubilis Morocco - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f44ddbdc7d3863579010c1e1ce94ee9
+- Cyprus-Paphos-Archaeological-Park-House-of-Orpheus-70032.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f309db1a231005a725ccdeffde1cac0
+- Complete mural from the peristyle of the House of Orpheus in Pompeii by Geremia Discanno pub 1882.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b93788c0342efbe9331e74d4cb09427f
+- Mural in the peristyle of the House of Orpheus Pompeii by Geremia Discano pub 1877.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8e39cac241e756732e7f6a6a7922afb2
+- Frescoed wall from the House of Orpheus Pompeii by Geremia Discanno.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ed86de32a620d4c2d87383f7b7683389
+- Cyprus-Paphos-Archaeological-Park-House-of-Orpheus-70140.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d60e32f75130c829c3775c19ae05b334
+- Cyprus-Paphos-Archaeological-Park-House-of-Orpheus-65423.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14529f32f9c6ed640098d7a26cff0922
+- House of Orpheus, Archaelogical Park, Paphos 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\46ded96deb905c9cbd357bed3cb70a48
+- 20151117 Morocco 2379 Volubilis sRGB (24188271160).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9da12960f43acd2c38731682cd43b71
+- Marokko1982-097 hg.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\70e240d0f9da0bf3119a56f8a1062b30
+- Morocco - Mosaic floor, Volubilis.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af72b761d9c629c9bc5a65003c16ae56
+- ORPHE.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fe056bd9d78c23ebaf94d056c2409481
+- Roman mosaic in Volubilis 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cade9998ddbc450509c6f3f8098b0976
+- Roman mosaic in Volubilis.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3036dc991d113182dc3b3374c9ee89f6
+- The Orpheus Mosaic Volubilis Morocco - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b3d7f0c7e12f770d1352e88850416cc4
+- Volubilis city Morocco.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6f3a73d9a708bcd7565c03152c30a706
+- Volubilis(js)8.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f95db5be563cd6a8694daf1ec504b5e4
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

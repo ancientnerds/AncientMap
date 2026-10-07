@@ -1,0 +1,83 @@
+{
+  "site_id": "e473f682-8b9c-4d5c-b2cc-0ca24fcc06bc",
+  "verdicts": [
+    {
+      "file": "Across Burledge Hill - geograph.org.uk - 4856760.jpg",
+      "verdict": "region_or_type",
+      "note": "Wegweiser Public Footpath und Byway im Wald; Erdwerk nicht erkennbar"
+    },
+    {
+      "file": "Burledge Hill fort - geograph.org.uk - 4856777.jpg",
+      "verdict": "depicts",
+      "note": "deutlich sichtbarer Erdwerkwall mit Baeumen und Stangenzaun"
+    },
+    {
+      "file": "Ascending Burledge Hill - geograph.org.uk - 4868447.jpg",
+      "verdict": "region_or_type",
+      "note": "Gatter, kahle Baeume und Felder ohne erkennbares Wallprofil"
+    },
+    {
+      "file": "2012 , Barn on Burledge Hill - geograph.org.uk - 3102532.jpg",
+      "verdict": "other_site",
+      "note": "moderne Scheune mit schwarzen Siloballen und rostigem Tank"
+    },
+    {
+      "file": "2012 , Sheep on Burledge Hill - geograph.org.uk - 3102525.jpg",
+      "verdict": "region_or_type",
+      "note": "Schafe auf einer von Hecken begrenzten Wiese"
+    },
+    {
+      "file": "Scrub woodland on Burledge Hill - geograph.org.uk - 2665724.jpg",
+      "verdict": "region_or_type",
+      "note": "schlammiger Pfad durch dichtes Buschwerk, kein Wall erkennbar"
+    },
+    {
+      "file": "Burledge Hill Access Land - geograph.org.uk - 4868463.jpg",
+      "verdict": "region_or_type",
+      "note": "Infotafel Access Land mit Karte des Huegels, nicht die Anlage selbst"
+    },
+    {
+      "file": "Trig Point and view - Burledge Hill - geograph.org.uk - 5838977.jpg",
+      "verdict": "region_or_type",
+      "note": "Betonsockel eines Trigpunkts mit Blick ueber Wasser und Felder"
+    },
+    {
+      "file": "Vehicle barrier on Burledge Hill Byway - geograph.org.uk - 3468097.jpg",
+      "verdict": "region_or_type",
+      "note": "Metallschranke auf einem schlammigen Waldweg"
+    },
+    {
+      "file": "Trees on Burledge Hill fort - geograph.org.uk - 4856781.jpg",
+      "verdict": "depicts",
+      "note": "moosiger alter Wall mit Erdwerdboeschung unter alten Baeumen"
+    },
+    {
+      "file": "Farm track on Burledge Hill - geograph.org.uk - 2167254.jpg",
+      "verdict": "region_or_type",
+      "note": "schmaler Waldweg zwischen dichtem Gestraech"
+    },
+    {
+      "file": "Either way around Burledge Hill - geograph.org.uk - 4868485.jpg",
+      "verdict": "region_or_type",
+      "note": "gruener Wegmarkierungspfosten neben einem grasigen Pfad"
+    },
+    {
+      "file": "Trig pillar on Burledge Hill, North Somerset - geograph.org.uk - 1957627.jpg",
+      "verdict": "region_or_type",
+      "note": "grosser Beton-Trigpfeiler am Hang"
+    },
+    {
+      "file": "Scrub woodland on the North slope of Burledge Hill - geograph.org.uk - 2167763.jpg",
+      "verdict": "region_or_type",
+      "note": "Blick ueber Busch und Felder zum breiten Wasser"
+    },
+    {
+      "file": "Scrub woodland on the North side of Burledge Hill - geograph.org.uk - 2167764.jpg",
+      "verdict": "region_or_type",
+      "note": "dichte Hecken im Vordergrund, Wasser und Aeste im Tal"
+    }
+  ],
+  "note": "",
+  "answered_by": "mcode-judge-cand-0174",
+  "model": "MiniMax-M3.1-Flash-Preview"
+}

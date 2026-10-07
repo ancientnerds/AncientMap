@@ -1,0 +1,12 @@
+{"site_id": "54874f2a-164e-4956-b5d8-de8834348ce1",
+ "answered_by": "mcode-judge-cand-0065",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Απεσωκάρι, Κοίμηση της Θεοτόκου 5886.jpg",
+   "verdict": "region_or_type",
+   "note": "Moderne Dorfkirche aus Bruchstein mit Ziegeldach und Glockenturm; eine kirchliche Ortsszene, keine antiken Ruinen oder Ausgrabungsstrukturen sichtbar."},
+  {"file": "View over Apesokari village.jpg",
+   "verdict": "region_or_type",
+   "note": "Blick ueber Olivenfelder und ein Dorf mit niedrigen Haeusern auf Bergketten und Meer; reine Landschafts-/Ortsansicht, Site nicht erkennbar."}
+ ],
+ "note": ""}

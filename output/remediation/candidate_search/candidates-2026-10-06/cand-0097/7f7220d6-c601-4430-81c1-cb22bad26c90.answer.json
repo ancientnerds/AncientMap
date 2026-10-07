@@ -1,0 +1,14 @@
+{"site_id": "7f7220d6-c601-4430-81c1-cb22bad26c90",
+ "answered_by": "mcode-judge-cand-0097",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Harbury junction - geograph.org.uk - 6057529.jpg", "verdict": "region_or_type",
+   "note": "Strassenkreuzung mit Richtungszeichen 'Warwick & Shakespeare Country', Mais, Bushaltestelle und Hecke; Ortsansicht ohne Lagerstruktur"},
+  {"file": "Harbury Village Hall - geograph.org.uk - 3335609.jpg", "verdict": "region_or_type",
+   "note": "Backstein- und Steingebeude mit Schrägdach auf leerem Parkplatz, Rasen und winterlichem Baum - modernes Dorfgebäude"},
+  {"file": "Frances Road, Harbury - geograph.org.uk - 4415238.jpg", "verdict": "region_or_type",
+   "note": "Siedlungsstrasse mit Reihenhaeuserzeilen, parkenden Autos und Strassenschild FRANCES ROAD; moderne Wohnstrasse"},
+  {"file": "All Saints Church, Harbury 20250503 101423.jpg", "verdict": "other_site",
+   "note": "Dorfkirche aus Sandstein mit Turm, Zifferblatt und Kirchhofsgrabsteinen unter Blaetterdach - Kirche, nicht das roemische Lager"}
+ ],
+ "note": ""}

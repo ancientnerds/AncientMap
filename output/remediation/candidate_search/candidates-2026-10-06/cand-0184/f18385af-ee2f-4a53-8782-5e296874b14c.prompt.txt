@@ -1,0 +1,45 @@
+site_id: f18385af-ee2f-4a53-8782-5e296874b14c
+name: Soura
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Masjid in Soura.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\70d678fb99eee13680c793264f051642
+- Anchar Lake Near SKIMS MEDICAL COLLEGE SOURA SRINAGAR JK.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fa7086afb5f19e694e5082d5d9b9f2d0
+- Yannick Soura 2024.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b01b836a1ac487b68bec655409aa3645
+- Taxi stand of Soura, Srinagar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3fe3ab8dfd71627b10ba8aba748429ec
+- Soura Tribal.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a722b4d9f8b1431ecf7960db3673091
+- Soura 7369.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d177f84c1a3905653353f6db5934548d
+- Soura 7370.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\70170a3027d4bc41ac0dd8d9365db7f5
+- Soura 7377.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b84186f846a1f7364eb2713ed758676f
+- Soura 7378.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05da3afee1ebbb6c9669f0a97c7eb038
+- Soura 7375.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae393b8c1e27ac099a3ff6582c92be32
+- Soura 7388.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e27418279694cc237e59b881371b5a0
+- Soura 7379.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\82dcf783f507626990ad439b07d7299e
+- Soura Khatril.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8475381ad7554e7576ff79eca35d66ee
+- Soura 7373.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d742c552dfadba3a14f518b078586975
+- Soura 7368.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b5a0bfc05807ea90adae18167fefd9de
+- Soura 7374.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1c541e63e93206be302b5745a4e7f56d
+- Soura 7371.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\15741e71aea6933f35d6ea9ab5af7644
+- Brothers in sea beach by Soura Nath.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2013543eeded3616964f9c0934a19ee0
+- Soura 7380.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\19af64fec7cabaafa86a0713095eafed
+- Soura 7386.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f5a991d8f02c9dd7c172eeb552ae9f4
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

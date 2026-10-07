@@ -1,0 +1,11 @@
+{
+  "site_id": "71f6f6f1-0cc8-4e43-9f9f-89ae7a635ffa",
+  "answered_by": "mcode-judge-cand-0087",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Head of a warrior wearing boar tusk helmet carved of hippopotamus ivory from Phylaki, 1375-1300 BCE, Archaeological Museum of Chania (Crete).jpg",
+     "verdict": "depicts",
+     "note": "Vergoldeter Elfenbeinkriegerkopf mit Eberzahnhelm in der Museumsvitrine; die Beschriftung nennt Phylaki als Fundort."}
+  ],
+  "note": ""
+}

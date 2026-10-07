@@ -1,0 +1,48 @@
+site_id: b3ad3302-103a-4bbe-83a5-0f27d63ea8f4
+name: La Blanca
+country: Guatemala
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- La Blanca, Petén 7.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\774220bf018f6d238f319a32f1cdfb31
+- Iglesia de Nuestra Señora de La Blanca, Cardejón, España, 2012-09-01, DD 02.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ff55aa742fc5654c6e5aaad05fda045
+- Iglesia de LBI.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\92f47199825f0cc0c37b489b5f106bee
+- Santa María la Blanca - Arcos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\09edae13edad20ee6902a395185f80eb
+- Santa María la Blanca - Panorama.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6aecc1f947e7a420297104b97142bdf7
+- Sign-Santa-Maria-la-Blanca-synagogue-Toledo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c4485bc4b9e38f45e27e4499ce1cda10
+- Santa María la Blanca - Arcos Detalle.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7f48746c1323afadbe51d64162c95754
+- La Blanca graffiti 8.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3977301805bc0ef49d02415c6192bbf1
+- La Blanca, Petén 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f59a6aba4a3b9e533ac965837b6f9a0c
+- La Blanca, Petén 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b3c306a057669c2c44c6e6fd07bbae5d
+- La Blanca, Petén 16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d0b79fd3ec39c0c5b8b503c21d147e34
+- La Blanca graffiti 8 edit.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\52c9009e160a764ec8f15575a4d68c82
+- Iglesia de Nuestra Señora de La Blanca, Cardejón, España, 2012-09-01, DD 01.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45bc6a01d1764689acdc6b20320b8652
+- Detalle Templarios en Sepúlcro en la Iglesia de Santa María la Blanca.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47e9ffc3c1a42e87d327159fdc144e71
+- Iglesia de Nuestra Señora de la Blanca, Torrehermosa, Zaragoza, España, 2018-04-06, DD 32.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\06e368e03987f97c7f7be4f72862e74c
+- Santa María la Blanca, venera con dorado, Toledo, España, 2015.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a652f24d55df4a9f97a0602405d87a24
+- Interieur van de Santa María la Blanca in Toledo TOLEDO.- Vista interior de Sta. Maria la Blanca, antigna sinagoga. (titel op object), RP-F-F01098-U.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8a88af2be6c10f83b12c80235bc0ab2
+- Agoncillo - N. S. la Blanca 31.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\75c12599945e20fb83cbf22782175136
+- Exterior of Synagogue of Santa María la Blanca-2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cecb62a83ae6d4c59c50a7683f11fde5
+- Agoncillo - N. S. la Blanca 39.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\754847cdc50a97b04428d16e6d0101aa
+- La Blanca, Petén 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\be37edf28b53ebc4fdfe6845b11e1dd3
+- La Blanca, Petén 17.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e0fe16eb4d59be3502851a18de6a2c3
+- Santa María la Blanca, motivo geométrico, Toledo, España, 2015.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88017ab5caba192b82f2be7eceafb1fa
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

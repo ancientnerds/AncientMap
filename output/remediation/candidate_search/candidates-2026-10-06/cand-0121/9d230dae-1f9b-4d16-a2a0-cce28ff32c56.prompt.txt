@@ -1,0 +1,57 @@
+site_id: 9d230dae-1f9b-4d16-a2a0-cce28ff32c56
+name: Cetina
+country: Croatia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Cetina river.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\be0483b25c35c555c7e298a76253f83a
+- Cetina river near Sinj - location Despotuša - Croatia IMG 20210819 182955.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4c0cb5a5a72da2b81847b51c77b0f0d
+- Cetina river near Sinj - location Despotuša - Croatia IMG 20210819 192722.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f6a4a224c5f5959cf253b52dbc86f092
+- Night view of the city of Omiš with the river Cetina, Croatia, May 2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f002c5de9dfa27ef4c87a121e66fcd87
+- K00 075 Cetina, Unterlauf.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b6a91a897c0297657a2bd6cca21d9cd1
+- Vrelo Cetina.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d1f361c5391f79b01fab372602c5d29
+- Rafting Cetina 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2bb83c7dee02194835dc4c4e9ee2581b
+- The Eye of Cetina - cropped.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bf8977290a2f019fef0d6b1e001dab7b
+- Cetina river source.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\272929c805abb8054d361812e17049ff
+- Crkva sv. Spasa,Cetina 0187.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\90d6d0a14580caf6d013d14237453f34
+- Cetina (HR), Kirche "Hram Vaznesenja Gospodnjeg" -- 2022 -- 0222.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\808c36fc85570f91a89047f77e665d98
+- Cetina (HR), Quelle "Blue Eye" und Dinara -- 2022 -- 0042.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1de8dc8161fbd486d1b1d2b0f63f308d
+- Cetina (HR), Kirche "Hram Vaznesenja Gospodnjeg" -- 2022 -- 0218.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\419cbe08090f76bda71e9d9d23cf73b5
+- Cetina (HR), Kirche "Hram Vaznesenja Gospodnjeg" -- 2022 -- 0038.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a43765bf549cdfd19ee8bcdf055c4f48
+- Cetina (HR), Quelle „Blue Eye“ -- 2022 -- 0158.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76e1e5bbb29f4c12a129bef401ec49ce
+- Cetina u Omišu - kanjon.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b117aa0854bc837e16eb01d639e1e131
+- Rafting Cetina 18.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\83a641490db991164460c348400b04bb
+- Cetina 20200531 25.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d3283ced8079454eb6a4ff05ce1cdd67
+- HR-Omis-Cetina-Tor-3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3bf5bedc57cbd92b4a8a72a1c17add50
+- M-75 20 4 DBM-81 Cetina.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb9c121535382c42814850ecb8829f4b
+- Rafting Cetina 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d778e7339dc9c61e0ab3aacbcc87f6fb
+- Camino de las fuentecillas, Cetina - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eda92a620b623f767dc86f0699480f30
+- Camino de las fuentecillas, Cetina - panoramio (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c36b1c38a823266e674032f90bb7834f
+- Camino de las fuentecillas, Cetina - panoramio (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9392b186967684e03af4e9111a23eee6
+- Camino de las fuentecillas, Cetina - panoramio (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\93083dd4d81b4520717a7436f2f89643
+- Camino de las fuentecillas, Cetina - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\57fbb662487d4813a4f7d5a823eedac3
+- Camino de peña morena, Cetina - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\262060679db3190adc7d02106aa0e0cd
+- Camino de peña morena, Cetina - panoramio (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9ab146edf7b2a823d8281e83010ed7c6
+- Camino de peña morena, Cetina - panoramio (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7bc50ed5b2a9c2a55f081d2b2f5e7d11
+- Camino de peña morena, Cetina - panoramio (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd18cf1d35c495044e2e06898359d4a0
+- Camino de peña morena, Cetina - panoramio (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0869371b970902664a751def88a5cfc
+- Camino de peña morena, Cetina - panoramio (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b93655f765f540e7e532a6323d959e90
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

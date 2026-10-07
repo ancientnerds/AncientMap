@@ -1,0 +1,36 @@
+site_id: 9c3e1746-6da1-412c-aeb3-eb61cb3cafbb
+name: Qalagah
+country: Azerbaijan
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Qalagah (Shabran) in spring.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\edd2a558a1d8603bfa6077fa1578431b
+- Qalagah (Shabran) in spring (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d9208ac5cb93d50ad8abf9bcbb31f76
+- Gravestone in Qalagah village (Shabran).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec7cefbfdc4bddd8071ee2439877cafa
+- Qalagah kilsəsinin xarabalıqları.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44680f19ec298456bd7fd8ff4187a8b1
+- Qalagah kilsəsinin xarabalıqları 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e8d5d90827df6f17b9395090d0ae9e9
+- Qalagah (Shabran) in spring (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5bc67d40634e6fe6a285a4263e52ec7d
+- Qalagah kilsəsinin xarabalıqları 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2259a5d8cdfd7ae22d24827ee9a4cc4a
+- Qalagah kilsəsinin xarabalıqları 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\734b5d5ca4d5b9a608b702b5d4de853e
+- Qalagah kilsəsinin xarabalıqları 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3960e15ac0e95f551f2a09e55dea8a7c
+- Şeyx İbrahim əfəndinin Qələgah kəndindəki məzarı.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b1b6451b29b8adee84a78ebf46450521
+- ISS048-E-6823 - View of Azerbaijan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a767c1d3959ca5ad7cf3d0f21e00066a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

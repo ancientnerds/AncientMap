@@ -1,0 +1,45 @@
+site_id: 0415d29e-5239-40c6-ab1d-5b19e443336b
+name: Odigitria
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- S M Odigitria al Tritone - l'Odigitria all'altare P1080563.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b7bbaca7452fd5a00f31d09a48394c2a
+- San Fantin (Venice) miraculous icon of the Virgin.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\495a050a85875f422386286cd947beeb
+- Galata Kirche Panagia Odigitria Fassade.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f1be69026d39678062146540dfb24015
+- Galata Kirche Panagia Odigitria Innen Langhaus West.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eebfc65b3c35be16d7c889ee2577481e
+- Santa Cecilia (Rome) - Ceiling alt.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fddeccf09103d592f39adf2d3e293077
+- Galata Kirche Panagia Odigitria Innen Nördliches Querschiff.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7849fcb46ae0df80bb0a977e746e9a2
+- Galata Kirche Panagia Odigitria Innen Kuppel 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\090a8a600f6fd8cd2ce866cb2eabb920
+- Galata Kirche Panagia Odigitria Innen Gewölbe.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\747939822afc4c3039809a549dfad67b
+- Galata Kirche Panagia Odigitria Innen Ikonostase 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b2ce78d7ba6fa8850030b9f8ce468621
+- Galata Kirche Panagia Odigitria Innen Südliches Querschiff.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ccfbcc65ecfb1df1ab9ab6935c0ab405
+- Roma, chiesa di Santa Maria Odigitria - Organo a canne.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\85820a1358500b5ab45a7e68c226081b
+- S M Odigitria al Tritone - interno P1080560.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\09541bfa70d3481753ffa0845dd07c53
+- Santa Maria Odigitria (Barcellona Pozzo di Gotto) 23 12 2025 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9352a69636978c27c4855cea791f8f45
+- Santa Maria Odigitria (Barcellona Pozzo di Gotto) 23 12 2025 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\663136443ac461fb2ea2ce996eb593ca
+- Processione dell'Epifania Santa Maria Odigitria (Barcellona Pozzo di Gotto) 06 01 2024 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\63bab0cb25a33665f760a3b84900288d
+- Platanias, monastero di Gonia Odigitria 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\076cafea48329803c4d1da0e94290c45
+- Saint Mary Odigitria Icon in Dolno Drenoveni Kato Kranionas 19th Century.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a5f837bb31fd7b50a277a6694122e53a
+- Processione dell'Epifania Santa Maria Odigitria (Barcellona Pozzo di Gotto) 06 01 2024 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5a45096e540167b6b5c5456654b51c54
+- Santa Maria Odigitria (Barcellona Pozzo di Gotto) 06 01 2018 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9773dff308278c475f96f166b970d59
+- Processione dell'Epifania Santa Maria Odigitria (Barcellona Pozzo di Gotto) 06 01 2024 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\03f2f1026d7b462360658564e6e2473b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

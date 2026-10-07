@@ -1,0 +1,37 @@
+site_id: 1dfccf93-13b6-46cf-a719-8cfd1683e097
+name: Sagalassos Antoninler Çeşmesi
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Antoninler Cesmesi 2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e9e308acf395f91cf8f42a40fa5ca894
+- Antoninler Cesmesi 3.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\26e5a505167d162e0ba4f321976871b0
+- Antoninler Cesmesi 1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a2d24a85d40597309bad257eb133a2af
+- Antoninler çeşmesi.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d6c3b3bd846a56585a6ea999ce92b889
+- Sagalassos Antonine Fountain in 2012 2684.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2251e42cdf78ed99c173302a76f6e94d
+- Sagalassos Antonine Fountain in 2012 2715.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3157c85df03d57b1bdb479d14a014d8a
+- Sagalassos Antonine Fountain statue in 2012 2697.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d0caa9eb759b3f400a3b3cada1cb2d49
+- Sagalassos Antonine Fountain statue in 2012 2698.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1dab7448fc52f0ef52eb4d8bd458e33d
+- Sagalassos Antonine Fountain statue in 2012 2686.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\691d54325806cb9ca2010c30c193345f
+- Sagalassos Antonine Fountain statue in 2012 2606.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d2f4fde25fc22f6fa862670240c25ea5
+- Sagalassos Antonine Fountain statue in 2012 2688.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d48a8b6c37d8b2571c62f42877b4ee6c
+- Sagalassos Antonine Fountain aedicula roof in 2012 2706.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\32118ba36028a613c4631cd476e94231
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,13 @@
+{
+  "site_id": "75f8edbd-7b29-4e09-a72a-9dd5f03e5caf",
+  "answered_by": "mcode-judge-cand-0092",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Delphi Megarian wall and unidentified treasury (Bldg V).jpg",
+      "verdict": "region_or_type",
+      "note": "Quaderstufen einer langen Mauer auf felsigem Hang mit verstreuten Blöcken dahinter; kein Schatzhaus mit Säulen erkennbar."
+    }
+  ],
+  "note": "Einziger Kandidat: Delphi-Sakralbereich, aber ohne das Megarische Schatzhaus, das als kleiner dorischer Bau mit drei rekonstruierten Säulen erkennbar wäre. Falls der Datensatz auch die angrenzende Megarische Mauer meint, wäre das der einzige vertretbare depicts-Kandidat dieser Site; aus dem Bild allein ist er das nicht."
+}

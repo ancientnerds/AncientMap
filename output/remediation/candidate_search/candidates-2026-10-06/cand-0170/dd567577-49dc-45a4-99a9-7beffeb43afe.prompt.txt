@@ -1,0 +1,35 @@
+site_id: dd567577-49dc-45a4-99a9-7beffeb43afe
+name: Post Track
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- The Horsemen's Track Finishing post Mount Malepunyo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a20571269d3019bce1ffeca84fd388c3
+- Historic Track mural in Goshen post office.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\21a1d8667da628dbc44e6e1343c6a95b
+- The Horsemen's Track Post Parade ring.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d808d557d9d6aba565421a5ba674c5d5
+- Muddy track in Post Hill woods - geograph.org.uk - 5645137.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\170133a2f556fad838efdf4c70a3e011
+- Track and stream in Post Hill nature reserve, Leeds.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\067d145b3abe940840cce1d0ee30ffb0
+- 329 km BMO railway track post (common view).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c61345ae0f71903d34a8ad38a1565fb8
+- 329 km BMO railway track post (view to east).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9a44165844e53736b228f78df1d265cc
+- 329 km BMO railway track post (view to west).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ac9ac6a4ea8201c7fc8fd2ed2261e5f2
+- Philippine Jockey Club race track Post Parade ring inner tract.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\86f15e729bf322ffdde0f24d27c34cba
+- Déli station, post track buffer and MÁV-BKV tram connection track, 2019 Krisztinaváros.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7bca7b87c66f1520f0f2ce487248ce6a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

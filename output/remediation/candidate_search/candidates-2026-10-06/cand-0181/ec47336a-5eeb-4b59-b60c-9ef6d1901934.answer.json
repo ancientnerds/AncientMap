@@ -1,0 +1,12 @@
+{"site_id": "ec47336a-5eeb-4b59-b60c-9ef6d1901934",
+ "answered_by": "Worker",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Farley Green in the Surrey Hills - geograph.org.uk - 2903098.jpg", "verdict": "depicts", "note": "Ortsschild mit lesbarer Aufschrift FARLEY GREEN in the Surrey Hills an der Dorfstrasse mit Blueten und Waldrand."},
+  {"file": "The green at Farley Green - geograph.org.uk - 2599919.jpg", "verdict": "depicts", "note": "Die Dorfgruenflaeche selbst: Rasen mit Pfuetzen, Baumbestand, Strasse und Hausern am Rand."},
+  {"file": "Farley Green - geograph.org.uk - 6123743.jpg", "verdict": "depicts", "note": "Gruen mit Teich, Hecken, Haeusern und Gedenkfigur (Legion of Woods) auf der Wiese; die Site selbst."},
+  {"file": "Farley Green Pond - geograph.org.uk - 2903116.jpg", "verdict": "depicts", "note": "Teich am Dorfgruen mit Rohren, Bank, Bankett und Fachwerkhaus; Teich und Haus sind Site-Bestandteile."},
+  {"file": "Bridleway barrier west of Farley Green - geograph.org.uk - 2599923.jpg", "verdict": "region_or_type", "note": "Holztor als Wegsperre auf einem Waldweg zwischen Farnen; kein Merkmal, das Farley Green erkennbar macht."},
+  {"file": "Corner on Row Lane, Farley Green - geograph.org.uk - 4600608.jpg", "verdict": "region_or_type", "note": "Strassenecke im Dorf mit Wegweiser (ROW LANE lesbar); der zweite Arm ist nicht sicher lesbar, Site nicht eindeutig erkennbar."}
+ ],
+ "note": "Beim Bild Corner on Row Lane war die Aufschrift des Wegweisers nicht sicher lesbar, daher region_or_type. Die uebrigen fuenf zeigen Gruen, Teich oder Ortsschild der Site."}

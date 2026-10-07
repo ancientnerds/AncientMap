@@ -1,0 +1,37 @@
+site_id: 0b7f8fc6-0c2b-40c1-bfa2-f493afe1698a
+name: Centro Arqueológico de Chinchero
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Chinchero Cusco2 0.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\125363ec56e7b64b2a798c5fff1f1278
+- Site archéologique de Chinchero et Plaza de Chinchero en 2011.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25d6609a184e3251649eb47e448dd879
+- Chinchero Cusco.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f7871e04bcc7aa0fe50f6ce90c00d29
+- Chinchero Archaeological site - overview.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6fe35149781e395d6c0533dd4e2ab007
+- Chinchero ruins and mountains.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a614db13a0d629a7b961b7d5b6a410dc
+- Chinchero - 10252648194.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4d834cbe086ec51f4e746353b93074fb
+- Chinchero (4462634387).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c22ba5f9416a8f656eedfe176c04d4fc
+- Chinchero 3-0.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\72e7d22559a9a6204e5621db640d9091
+- Site archéologique de Chinchero.- Plaza de Chinchero Novembre 2011.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c9a8405f191dacb1ed95cc32bf159a2
+- Chinchero (4463387386).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc70c46e7806970c38b822d470f5081b
+- Chinchero (4463387402).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4ad385485d2f22e1dd8ae8684efcb9cd
+- Chinchero - 7863208540.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\381386515e7d078977a197254f3f69aa
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

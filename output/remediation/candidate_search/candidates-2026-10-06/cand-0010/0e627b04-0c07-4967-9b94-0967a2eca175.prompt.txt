@@ -1,0 +1,48 @@
+site_id: 0e627b04-0c07-4967-9b94-0967a2eca175
+name: Lakkos
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Αρχάνες 7928.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\062508ba1b808be9b4f8f89cb11c0752
+- Λάκκος Σερρών 6.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\649224807689034e2a23a953cd4aad81
+- Minoan funeral, AM Archanes, IMG 1318.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b2fda81bdaeb6ce477e1700626a248a8
+- Minoan small tripod, AM Archanes, IMG 1326.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aece61000b0c4ac64b34c1c4691a88cb
+- Cup from Palace in Archanes, double axes, 1600-1450 BC, AMH, 145039.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6eda9cc3d01db1705d5314cf71b4ddda
+- Archanes Crete Street.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa3d9e44c419c631e1a2c48dc41cf41f
+- Dimarcheio Archanes 9156126.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47fa2d86050547f181f2af08ddd48353
+- Fountain in Archanes 9156157.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6dff7366c65f78cc802d6bc96a23f1a5
+- Archanes, street, IMG 1332.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1aff4b8cf5415c1483d81a96285b2625
+- Archanes - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\adf48fa59b8331e994416e5e03fdb0d2
+- Archanes 915-6171.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d4001a274b06649bd37d16638a080453
+- Archanes - panoramio (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\391d8eb1c31ea90fe9570d939d413a81
+- Lakkos, Mavronors, Grevena, Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\04f89f3f2a9b1df411689844a76bfb0a
+- Waterfall in Tranos Lakkos Path.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\00e9de1c92798c13b03169b8fa531a9e
+- Περιοχή Κάτω Λάκκου Κεντρική Κάρπαθος - Kato Lakkos area at Central Karpathos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4118a0326a0d690e2f35c7092a18ea7a
+- Λάκκος Σερρών 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\53c586c024475ec87ba6ce0c5f3d91db
+- Λάκκος Σερρών 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d941cc29fb4f0d8f26e6733b74510402
+- Λάκκος Σερρών 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a2a2ebb1fbb7f46012179347f1a61c77
+- Λάκκος Σερρών 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c7bf4394acb1708e5bf77430b32f954
+- Λάκκος Σερρών 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4037f3080eb9a1e21890eb8633c9e113
+- Λάκκος Σερρών 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fbffec2a93ea1abaf957ecdbdfae1446
+- Λάκκος Σερρών 7.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd2340d5d7b45d955e63819e2a0885f1
+- Λάκκος Σερρών 9.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ccf3d6e8a1c758e219d756be0733c945
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

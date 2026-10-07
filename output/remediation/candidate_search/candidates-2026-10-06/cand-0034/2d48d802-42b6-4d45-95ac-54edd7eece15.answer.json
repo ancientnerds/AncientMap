@@ -1,0 +1,9 @@
+{"site_id": "2d48d802-42b6-4d45-95ac-54edd7eece15",
+ "answered_by": "mcode-judge-cand-0034",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Largin Woods - October 2014 - panoramio.jpg",
+   "verdict": "region_or_type",
+   "note": "Landschaft: bewaldetes Tal mit Baumplanzflur, gruene Huegel im Hintergrund - keine Burganlage sichtbar"}
+ ],
+ "note": ""}

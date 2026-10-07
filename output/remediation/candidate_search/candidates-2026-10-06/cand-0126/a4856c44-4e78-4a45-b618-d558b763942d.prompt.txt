@@ -1,0 +1,37 @@
+site_id: a4856c44-4e78-4a45-b618-d558b763942d
+name: Arroyo de Piedra
+country: Guatemala
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Arroyo de la Piedra at confluence with Arroyo Barranca.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\445682d96be3951531f1e930416068f7
+- Valverde-de-los-arroyos-pared-piedra-seca-septiembre-2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1f4fead49607874a70b42419b6b86335
+- Arroyo Piedra Lumbre - Flickr - aspidoscelis.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\516890f8cc42551687eda076da93cd04
+- Puente de piedra sobre el arroyo que baja de Samir a Domez - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5f2190105f28cc60e799232ab1284182
+- Arroyo desde la fuente de piedra del parque juan carlos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\abcf6f75a763377fafd224473eb0c570
+- Arroyo Casa de Piedra.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\89730e80fc81c3369f58803ccb4ca684
+- S01 971 Talbrücke Arroyo de las Piedras.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3c02183672fe79e8074f1d9fb70610f
+- Geko de las piedras, Arroyo Tres Cruces, Artigas, Uruguay, 2022.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4c0bcecc3d1f1fc64ef5506bc1c0ecd3
+- Via de agua del acueducto de Segovia en Colmenar del Arroyo - Madrid, Spain.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a0892863c904f3de5742461d2a400cff
+- Arroyo Piedras Blancas por D2000.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7f37772c0aaa75734fdaa60de84d689
+- Geko de las piedras 1, Arroyo Tres Cruces y ruta 4, Artigas, Uruguay 2022.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\30d977e8eb5e26ce5323f467e62eef09
+- M-puente-de-piedra-tanos-diciembre-2023-a.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db9e4b0941287ca334aad324461c0085
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,35 @@
+site_id: 097bd79b-a0d9-40d1-832d-c8a0671f7ab3
+name: Hathial
+country: Pakistan
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Hathor (Goddess).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3eda5cb479d4dae74571ec5bfc0906f3
+- Statue of Goddess Hathor.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44575b64c5eb78fe8707f63d28201d3c
+- Temple of Hathor, Reliefs, Dendera, Egypt.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e9180ac0ce6736e81360039026c57a47
+- Temple of Hathor, Reliefs 2, Dendera, Egypt.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cdd14585c9cdff49b603ed6c68682a91
+- Hathor istennő.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6091ffa6db27df5ce0bc0bd22069d427
+- Trajan offers to Hathor, Ihy & Harpokrates, Dendera.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5dccc0a4e094f9317d65d461695a65cb
+- Strumigenys hathor casent0005451 head 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9d50904265964d3ba75d9939274280f1
+- Head of Hathor.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25e50dc2b0363bbfd7176179d773caa0
+- Strumigenys hathor casent0005451 head 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b79fc1df43060c3e230e44c8615382e8
+- Strumigenys hathor casent0005986 head 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1b8168f19c6e6294bd4e8d40ce9519bd
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,39 @@
+site_id: 5d8a7c0e-3d54-497b-a9dc-5c9cbee82670
+name: Markušica
+country: Croatia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Markušica 1-Маркушица 1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4c17b285b04c8ab3c0519c431a0581a2
+- Markušica 2-Маркушица 2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7cf2315fd04db4d602bcf0d6d1a34cad
+- Markušica 8-Маркушица 8.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5944dd9877a9ebbdb31dd3a0d88ae9cc
+- Markušica 4-Маркушица 4.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d7c1f7f1be24ed65470f9404b914336c
+- Markušica 7-Маркушица 7.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\595cb5a57d38ffaf169c3fa4ef7a8707
+- Markušica, Crkva silaska duha svetoga na apostole, kod Z-1155, DSC 0014.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\258beda763a70c247db2fb5addc94913
+- Markušica 6-Маркушица 6.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\224b0b181c54b6ebb74eb0b4394c6126
+- Markušica 5-Маркушица 5.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a2f03a03987e50a559d1ca24a53ff367
+- Markušica, Crkva silaska duha svetoga na apostole, kod Z-1155, DSC 0017.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ded4a9eab7e2b65f9f36996efea7be55
+- Ivanjski vijenac-ивањски венац (Midsummer wreaths) Markušica 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\264c5d8e549149e29635bd991f0ad2b2
+- Markušica, Crkva silaska duha svetoga na apostole, kod Z-1155, DSC 0012.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e478b905e1afd7072c36687eeea70f85
+- Markušica.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b8b7a85b3180118d9302c859a9f6e5c4
+- Markušica 3-Маркушица 3.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\23c2256ee507164e8bc6a3984eb6d5db
+- Ivanjski vijenac-ивањски венац (Midsummer wreaths) Markušica 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e896829c74726e0bd3570cde0117ad0f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

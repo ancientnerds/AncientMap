@@ -1,0 +1,40 @@
+site_id: 9ffa8a42-7b0a-4cd3-8b4f-5cb16c916a97
+name: Ceccia
+country: France
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Casteddu di Ceccia 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ccf72c4b377e342f21496f8c66dc4f89
+- Casteddu di Ceccia 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\19cd807533e63cf54d19353850178d52
+- Casteddu di Ceccia 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1ac9b9875181dc2eddf2b69a7b8d1a80
+- Casteddu di Ceccia 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ea4268c6613d833119ddf03481a85cf
+- Casteddu di Ceccia 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9247414dfa265238ea5465ea89332a3
+- Casteddu di Ceccia 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\881072887b3a3e2fce57afba70087f8d
+- Casteddu di Ceccia 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45bb5067b4b1c8d01ef2b1049a1d02a4
+- Casteddu di Ceccia 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9f08c9122638b2c532456393cf0dbc0
+- Casteddu di Ceccia 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\502b6c745bdc0ed29d12252aa8a416c8
+- Casteddu di Ceccia 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8493bd9469cccf754b9b6c33923fd530
+- Ceccia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ca0e810a024055a0bfbc175b2298714d
+- Porto-Vecchio from Ceccia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2b85b675abd960a885b900a1b60b40eb
+- Site torréen de Tappa 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef3d8fd3c3d981311e806722d45369ef
+- Site torréen de Tappa 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5321d38fcfa5e3c8dcde8bafe7987154
+- Site torréen de Tappa 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c4bafb79ba83672c7aade686461ceeaf
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

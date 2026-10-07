@@ -1,0 +1,12 @@
+{"site_id": "54a9488b-698d-4c49-94a4-c50dd43847fe",
+ "answered_by": "mcode-judge-cand-0065",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Colha, zona maya (belize), vaso cefaloforo, periodo preclassico recente, 250 ac.-250 dc ca.jpg",
+   "verdict": "region_or_type",
+   "note": "Keramikgefass auf einem Museumsstativ gegen dunklen Hintergrund; nur ein Objekt, keine Ausgrabungssituation und keine lesbare Beschriftung im Bild."},
+  {"file": "Foto da autora extraída via escaneamento de uma de suas obras.jpg",
+   "verdict": "other_site",
+   "note": "Schwarzweiss-Portraet einer Frau mit der Aufschrift 'YAYNHA PEREIRA GOMES'; eine Person, nichts von der Site Colha."}
+ ],
+ "note": ""}

@@ -1,0 +1,30 @@
+site_id: 2d4eb24d-1348-4458-aa4a-68a9a50cd804
+name: Archaeological Site Tomb Agamemnon
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- View of the citadel of Mycenae from the Tomb of Agamemnon on 26 March 2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ca3cc6bccfa7fbfcec9580a6c60ecd2d
+- Agamemnon mask NAMA Athens Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6bc03e45f2ce815bd44bd9d2de35403a
+- View of the Tomb of Agamemnon and the Argolic plain from the top of the citadel of Mycenae on 26 March 2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cef8ad11d92b4ccc2a2f564a218cab8b
+- MaskOfAgamemnon.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a5d3fe378f39d877c493eaf2237f9ff
+- Doorway to an ancient tomb.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4a7c1577d8e5190c6b81b2f8bee1641
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

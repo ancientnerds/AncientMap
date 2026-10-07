@@ -1,0 +1,37 @@
+site_id: b0fed6c8-fd75-44e0-b57b-65ed6215f46d
+name: Kosenivka
+country: Ukraine
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Музей-садиба К.М.Дерев'янка.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9ce7d215a54a21474d30fedfe6ea8086
+- Косенівка3.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e135171f6f55457cd533e805613e1a7e
+- Косенівка2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4bb8fcc6184ee4d35debcb6c6690c338
+- Музей-садиба К.М.Дерев'янка2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77a6a9ec5a48bed2be782694736fc7c4
+- Косенівка4.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a1a73f6755679bf3ecd6358ae2f0523
+- Косенівка5.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7f411d528dd7f91878d3f2365755c703
+- Музей-садиба К.М.Дерев'янка3.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c8a05cd2923f667a4ac7dd1848b5bcc5
+- Косенівка1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6fc9d4627b7950f3b8dfc94c665596e4
+- Archaeological context of Kosenivka.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\620a3e5ff02b18905698c26d5fe852b0
+- Косенівка. Пам'ятник Т.Г. Шевченку.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\365fa18ce9125f5688393eff69fcbb84
+- Косенівка. Пам’ятний знак жертвам Голодомору.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7d22abddb26e90c2e2ba6a10dccaa0bb
+- Косенівка. Пам'ятник воїнам-односельцям.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\482fea0bbbbf216530e54befb2ed4bec
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

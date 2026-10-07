@@ -1,0 +1,12 @@
+{"site_id": "b71930be-a00f-44aa-acc0-496e80d3b949",
+ "answered_by": "mcode-judge-cand-0139",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Sidford - Moridunum.gif",
+   "verdict": "region_or_type",
+   "note": "Locatorkarte von England und Wales mit rotem Punkt 'Sidford' im Suedwesten - Karta, kein Bild der Site."},
+  {"file": "Devon UK relief location map.jpg",
+   "verdict": "region_or_type",
+   "note": "Reliefkarte von Devon mit Gemeindegrenzen und Einsatzkarte unten rechts - Verwaltungskarte der Region."}
+ ],
+ "note": "Beide Kandidaten sind Karten; keiner zeigt die Site Moridunum selbst."}

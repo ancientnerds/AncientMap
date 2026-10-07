@@ -1,0 +1,28 @@
+site_id: 8c54ae5f-16b5-4ac1-9ae7-0d6e0a3eb0a6
+name: Perge Sütunlu Cadde
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Perge - Sutunlu Cadde.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de6f1b2655015fff3f53268840232caa
+- Perge Helenistik Kapı Ve Ana Cadde.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba982497a2ee701b5add3b92c13fed09
+- Perge - Cesme.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e90f3a7a3ad4874e282fbb0ed1db2fee
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

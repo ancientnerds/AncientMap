@@ -1,0 +1,18 @@
+{"site_id": "6a8bc59c-77c3-4359-8f65-19f67ee0ac04",
+ "answered_by": "mcode-judge-cand-0085",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Ischiodon astales (10.3897-afrinvertebr.59.24461) Figure 2.jpg",
+   "verdict": "other_site",
+   "note": "Wissenschaftliche Tafel einer Schwebfliegenart mit Holotyp-Etikett und Fundort Madagascar; Insekt, kein Befund."},
+  {"file": "Ischiodon (10.3897-afrinvertebr.59.24461) Figure 3.jpg",
+   "verdict": "other_site",
+   "note": "Wissenschaftliche Abbildung derselben Fliegenart mit Paratyp-Etikett; kein archäologischer Zusammenhang."},
+  {"file": "Brescia - Chiesa di San Faustino in Riposo - 2025-09-27 09-30-33 001.jpg",
+   "verdict": "other_site",
+   "note": "Backsteinkuppel einer Kirche mit Kreuz davor und gemaltem Himmel; moderne Szene in Brescia."},
+  {"file": "End of the Trail, by James Earle Fraser.jpg",
+   "verdict": "other_site",
+   "note": "Schwarzweiß-Foto einer Bronzeskulptur (Reiter mit Speer) vor schwarzem Hintergrund; Museumskunst."}
+ ],
+ "note": ""}

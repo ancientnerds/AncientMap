@@ -1,0 +1,37 @@
+site_id: 8df1e714-b5bb-4d4b-846b-71cdf7cb3d21
+name: Tsitsamuri
+country: Georgia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tsitsamuri Monument 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0279fb1a15bb252ad7614fce024614e9
+- Tsitsamuri Monument 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14049f48f42637c2d0669f312f1369ce
+- Tsitsamuri Monument 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88932be0f5bd673f2e25c44d2aca8589
+- Tsitsamuri Monument 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7bc8c6f19264a691f7c6fe14e446ead8
+- Tsitsamuri Monument 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14b41c5f43b3f1f32cfafdf26e364449
+- Tsitsamuri Monument 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\394309cccd6c1a9183408b958705fe1a
+- Tsitsamuri Monument 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9ce0357db84926521e69b63274e29b64
+- Tsitsamuri Monument 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\22d35ed5a6d1fc08a6098e5f9e5bf6d1
+- Tsitsamuri Monument 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\117f67e1ab109deafb695141a9016dd5
+- Tsitsamuri Monument 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14dc728c01b60501557a80082f98f900
+- Tsitsamuri Monument 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25c58df0e010e5a53cb83bb5899429ec
+- Tsitsamuri, Georgia - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c98fa00404bf4f6b1376ed35de5928e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

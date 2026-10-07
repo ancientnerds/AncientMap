@@ -1,0 +1,4 @@
+{"site_id": "28d08d27-d959-42d0-922c-8e91c795d432", "answered_by": "mcode-judge-cand-0030", "model": "MiniMax-M3.1-Flash-Preview", "verdicts": [
+{"file": "Loebbecke Painter - RVAp 17-71a - man and warrior in naiskos - women and youths at tomb stele - Berlin AS 1984-42.jpg", "verdict": "region_or_type", "note": "Rotfigurige Volutenkrater in einer Museumsvitrine, weisse Wand und Nachbarvasen im Bild; Grab oder Ausgrabungsort nicht zu sehen."},
+{"file": "Findings from Grave IV (Grave Circle A) 6 (cropped).JPG", "verdict": "region_or_type", "note": "Goldener Siegelring in Makroaufnahme auf grauem Museumssteg; nur ein Objekt, weder Grab noch Grabungsfläche sichtbar."}
+], "note": "Beide Kandidaten sind Museumsobjektaufnahmen; die Site selbst (Grabhügel/-kreis) ist in keinem Bild erkennbar."}

@@ -1,0 +1,48 @@
+site_id: 4a0e1f79-aa9f-45f4-a978-6eb304b4a9ed
+name: Clayhanger, Devon
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Clayhanger - Village Lane (geograph 3920335).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b876dd2f9cbd8d078b256f543696f73c
+- Clayhanger - geograph.org.uk - 4927422.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0989af829adf4a70b0f787fe101514b1
+- Clayhanger , Grassy Field - geograph.org.uk - 3920323.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5432d7a7564956b5e269aa5c7c1ee1a
+- Clayhanger , Grassy Field ^ Gate - geograph.org.uk - 3920329.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8bb3a7e17a3fde399d0f61c3cb1f2cb8
+- Clayhanger Cottage - geograph.org.uk - 4985995.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\beea4deb7f8bc7abbbd1c8831350bfd9
+- Clayhanger , Houses ^ Lane - geograph.org.uk - 3920336.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e41fce7c4c9d720af54088009b9dc90
+- Clayhanger , Village Lane - geograph.org.uk - 3920334.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\95bfd6cc1079d746f4cb1389eb5dd258
+- Clayhanger , Village Scene - geograph.org.uk - 3920319.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62f83f8a7ce9ef8470c8f07ca8fb5427
+- Clayhanger, by Williams Farm - geograph.org.uk - 5751486.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2c1cb16f419aebb3e7d2b1785e76be3a
+- Clayhanger , Fleeds Farm - geograph.org.uk - 3920321.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c514e7cd994be246c014e2c34c31ce1
+- B3227 in Clayhanger Wood - geograph.org.uk - 4399624.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8994a80f1cb90f22c405c66eb8ddf391
+- St Peter's church, Clayhanger, Devon-geograph.org.uk-3920333.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e2e0b2df1a7c840c058e5ec0404955f0
+- A pair of trees at North Hele - geograph.org.uk - 6706168.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\755753c64ab3668b11a7162f829a40aa
+- A road sign saying "beware" - geograph.org.uk - 4399546.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6073677428a5349194f6702f10c7523e
+- About to enter Somerset - geograph.org.uk - 8326920.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aca33350c6752c76e06cbeedf1d08d4f
+- Access to Woodlands Farm - geograph.org.uk - 6706213.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\741c7ef9829681dac2a3d30abf64580b
+- Adjacent field gates on Combe Downs - geograph.org.uk - 6706178.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6eb5bbde250d8086d27af16fc448ebb9
+- B3227 by Leigh Wood - geograph.org.uk - 6706216.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bef6c1d27e46baa4d2f27fd7705895d6
+- B3227 junction for Lower Potters - geograph.org.uk - 4399622.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d02931c2bf899f431f3cc9a2b6135674
+- Bare winter tree by Stickle Path - geograph.org.uk - 6705402.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9cb45721eca0ffb2a59863855011249
+- Barn near Wellhayes Farm - geograph.org.uk - 4927858.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0ebca9a0e1a18ce9c30b466c39749255
+- Bonny Cross - geograph.org.uk - 4927381.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\600fcfef8ee3e180561aa5c2cac98098
+- Bonny Cross and telephone exchange - geograph.org.uk - 4399523.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\295c1e6850037849aa3a3f44af7c1c13
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

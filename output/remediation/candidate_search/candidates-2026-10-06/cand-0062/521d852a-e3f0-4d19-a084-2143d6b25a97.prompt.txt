@@ -1,0 +1,61 @@
+site_id: 521d852a-e3f0-4d19-a084-2143d6b25a97
+name: Ulia
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ulia kontxa.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41d7f2d6885defbcb4e56a296b09e7f2
+- Lacerta bilineata Ulia AV.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b900a411d151ebdf35ae89c47e9e6661
+- Lacerta bilineata 2 Ulia AV.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cac657bf9debedf926a4412637e0fa32
+- Lacerta bilineata 3 Ulia AV.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76e9fcebfc6cbdae0c7b107d2e74885f
+- Lacerta-juvenir Ulia AV.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7a6f1a5db3fcadc58d676a9227a3b25
+- Vista de Montemayor.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1edb769dca876b3df5acbcbecc4ba638
+- Ulia ondarretatik 0001.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\26440bc2b2112307379a65d6a61c8d19
+- Ulia ondarretatik 0002.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\520bef8921765c9fdaefdb35475c48cc
+- Ulia coast Donosti San Sebastian.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\acf8c4c32bf9ef259422cf9cda1e5368
+- Ulia bidea.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb79a5c03d4f437609f5974b39606d92
+- Ulia 0003.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dad75662e4b5941512bfc44f41c838d6
+- Ulia murgita 0001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c532b56b4cb49db94ebc50fdbe932dbc
+- Musika parkean ulia 2014 03.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc7c7ceb5894dd795d72c206f6b16c7d
+- Monnaie - As, Bronze, Ulia, Ibérie - btv1b10302039f (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4241604a80b20428059f08331e3fe4bd
+- Ulia mendia, landareak eta 19.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\278478fb6616365ffbc71221395d5a6b
+- Ulia mendia, landareak eta 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\59081625082fd099274474a8eae14697
+- Monnaie - As, Bronze, Ulia, Ibérie - btv1b10302035n (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\35f23f763fa27c327e05e483829a9840
+- Monnaie - As, Bronze, Ulia, Ibérie - btv1b103020346 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ffb8c41c720fe6e8d99999f5a658b42b
+- Ulia mendia, landareak eta 21.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f69c8cf7e1af58cb8275654a1f5ac28f
+- 1915 Saint Sebastien au mont Ulia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a8d027741c244538c4a6417c0647760e
+- Campo de Tiro de Ulia (1 de 1) - Fondo Marín-Kutxa Fototeka.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\59912419e5c632c22e49e9f03e0c725c
+- Ulia udazkenean 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4e72b856aa5cfd5d06ce56837d8b8ef4
+- Ulia talaia 010.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6eb88436c21b98ece56993e6c8d9a29d
+- San Sebastian, Espanha, inicio do Séc. XX, Desde Ulía, Arquivo de Villa Maria, Angra do Heroísmo, Açores..jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e31c6cb4c593f35ca5a58ccbbb4b3a34
+- 2016 ulia sunrise.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd6c4348f593fa7352c4570d752752b8
+- 2018 04 05 donostia 006.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e54aa7c718ab361d1c8989a0aef5bd6f
+- Acantilados del Monte Ulía, con el Faro de la Plata y el Jaizkibel de fondo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\83aedf34a899f78af96a6334f557d799
+- Acantilados del Monte Ulía.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1f3926bc93909e3bac46d3cf3be19ceb
+- Akuedukto Ulian.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e121df666646f41050a2c04f98c6efea
+- Antena ulia 001.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7ff8551b24e1eb04005ab4e6e15569a4
+- Astigar japoniarra ULB.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c644d9af6bc26fe1f86127b9abe1f75
+- Ategorrieta eskultura Donostian.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0988a28640d30f0b15ca542bd4cb775
+- Banner eguzki 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a4ac63b2c3e3e3b229da688abd862608
+- Campo de Tiro de Basollua (1 de 4) - Fondo Car-Kutxa Fototeka.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c10c886a7cbb780442771e0ff8838325
+- Campo de Tiro de Basollua (2 de 4) - Fondo Car-Kutxa Fototeka.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0721d959b3aa370290cabeaef9f86b7e
+- Campo de Tiro de Basollua (3 de 4) - Fondo Car-Kutxa Fototeka.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\514230809d11f13c3cf91f64a77ee992
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

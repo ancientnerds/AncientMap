@@ -1,0 +1,31 @@
+site_id: 768e341f-d9fa-4a3c-a4bf-27d099d7f6da
+name: Acidava
+country: Romania
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Part of Tabula Peutingeriana showing Western Moesia Inferior, Western Dacia and Macedonia.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3c8d0f4fbec29718751639e48b0fccab
+- Castrul roman Acidava de la Enosești - d083e6aac47849ac9ad250289534205c.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b71eb1e27812ac8bcaa7f6a2ff88ad1d
+- Limes6.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\592b2da7898f8dda3047f1f66c434e6e
+- Palestine in the TabulaPeutingeriana (cropped).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9040e44cce17d62d6667436c06175ff5
+- TabulaPeutingeriana (cropped, Austria section, roughly upper central Italy and Algeria).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9716a64a8316d8ddbe8f0df74013f792
+- TabulaPeutingeriana.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\907f88ff33edad7b6abc599e1278bd5f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

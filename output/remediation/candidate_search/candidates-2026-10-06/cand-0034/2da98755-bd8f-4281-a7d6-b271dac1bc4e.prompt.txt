@@ -1,0 +1,36 @@
+site_id: 2da98755-bd8f-4281-a7d6-b271dac1bc4e
+name: Zar Cave
+country: Azerbaijan
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Zar zari zar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\43016b016ed55660e369fd8b7e86fddf
+- Steyr Taborfriedhof Werndlgruft-9635.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\26fcc67d4e12a106644a4cd1a67fded5
+- Bayreuth Friedhof Sankt Georgen-20190324-RM-165954.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\edfe38ce5b8c2861f2f2efd719aacf8e
+- Lille cimetiere est tombe famille delebart mallet.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25182b53f3d1f3b348c015cf574d308f
+- Hem tombe leclercq.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\622f8602d15cac226d44e8d866132c1c
+- Hernalser friedhof engelmann schäfer 2021-11-03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b110ca38a2eb9c5254bf6bbb8e16e8d
+- Alter Friedhof am Steindamm (Ratzeburg) (9).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\52bc96d733c1e7e38f9324ae5241f291
+- Лютеранський цвинтар Житомир 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7d63ad35ccd0672393cbf0da0eba662a
+- Вільське кладовище 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1eba560ecb4f47a4b5b583a7e3a9d8e3
+- Єврейський цвинтар у Чернівцях на Зеленій вулиці.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\135e0516461ebbabdce03a3969fae657
+- 2022-06-05 Kloster St. Stephan Augsburg 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0abc9993e3b4d43ecdcc22346d9761d1
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

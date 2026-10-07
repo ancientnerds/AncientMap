@@ -1,0 +1,33 @@
+site_id: 3cb40a58-d0d1-4094-bb78-2398d60dbd5c
+name: Tomb of the Birds
+country: Egypt
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Netting Birds, Tomb of Khnumhotep MET 33.8.18 EGDP012980.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6d936fbe6e43dc3bc250c4ae73a7a27a
+- Bird on table tomb front panel.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\48fc27188859b675cacff9ca21f735e4
+- Netting Birds, Tomb of Khnumhotep MET 33.8.18 EGDP012985.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da393159df966f2d1ba649cc04edaf48
+- Nesting Birds, Tomb of Puyemre MET 102586.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\20ac95928c1e543b3dc91088dee38492
+- Birds flying around Tomb of Shah Rukn-e-Alam, Multan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\64d826e098dcf2079da35a77dc18887d
+- Birds at base of Tomb of Shah Rukn-e-Alam.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\53745725fe736fc0c3c0d9dbb0edc47a
+- Nesting Birds, Tomb of Puyemre MET 30.4.212 EGDP012993.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b84ecc44fe7137c110218f8220ec70ff
+- The tomb of Elizabeth Bird.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9abbc5ef6ce84c7f89bda0ac74aabafb
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

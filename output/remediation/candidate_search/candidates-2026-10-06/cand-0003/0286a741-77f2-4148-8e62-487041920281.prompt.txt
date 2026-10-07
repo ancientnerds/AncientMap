@@ -1,0 +1,31 @@
+site_id: 0286a741-77f2-4148-8e62-487041920281
+name: Cochapata
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Río Marañón desde Cochapata 03247.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd048de54bb23eb7713a3cfd1b59807b
+- 20250715 083810 - Laguna Cochapata en el camino inca.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05b9d9616862f7721fd2187b51e67952
+- 20250715 083548 - Laguna Cochapata en el camino inca.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\99bf98b6177b7c05e4bf1a1decc2134b
+- Dumapara, Nabón, Ecuador.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ee3b920de2a4f097803f70a34a90000b
+- Río Marañón 03296.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\48f9799a9ad4f31deeebd42ecaa18a82
+- Cañon del río Marañón 03232.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\97880e6a8f0001516952bdd8196cbf7e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

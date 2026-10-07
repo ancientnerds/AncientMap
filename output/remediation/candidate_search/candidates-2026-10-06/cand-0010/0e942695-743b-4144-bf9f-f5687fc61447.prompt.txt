@@ -1,0 +1,31 @@
+site_id: 0e942695-743b-4144-bf9f-f5687fc61447
+name: Court Hill, Sussex
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Gravett Court, Burgess Hill, Sussex - geograph.org.uk - 2543557.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0280ebdf6c6dadcaa6079305cfb02f2a
+- Field on Court Hill - geograph.org.uk - 5891800.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a74b34c239d0abe36bcb0fca6fd9e35e
+- Footpath on Court Hill - geograph.org.uk - 2086960.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4dddff825a8fc512c67175db0a5aff6
+- Peacock butterfly on Court Hill - geograph.org.uk - 1962304.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\58b19bb3585ae2d7ab40d04de49ea746
+- Woods on summit of Court Hill - geograph.org.uk - 5363112.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\26699f8e452eb65a94d40be022ebc698
+- Path beside field on Court Hill - geograph.org.uk - 5891797.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc98586f69edf4a2b7cac2687b6d7ec3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

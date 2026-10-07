@@ -1,0 +1,36 @@
+site_id: 0f785541-1f36-4dc8-9daa-3ebc5c540bd0
+name: Cataractonium
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Romano-British copper alloy ring (FindID 136791).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c6dc2890e73f0a3d9eae193dff9730d
+- Romano-British incomplete locking pin (side) (FindID 112733).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5229820f6cdc3b81579bf86f5f126a3e
+- Romano-British incomplete locking pin (FindID 112733).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce23dd8d4eb586ef6be8122a138abdc0
+- Public-012C8C, Roman lock bolt (FindID 990305).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ccfc583b8422b299ca584045f7b0be2
+- Roman copper alloy lock bolt (FindID 610662).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce3770bfa1dbcff360e9310c81ffdd91
+- Leeds City Museum 27 October 2023 (15).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f43741dea794b945b2b77fc3f262e081
+- Leeds City Museum 27 October 2023 (13).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b883a0f016716dc2ffa57ad82530440c
+- Roman lock bolt fragment (FindID 797140).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\869d3501267adaa75d7e156b20d2a15c
+- Roman lock bolt (FindID 586679).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\326e9763d5111b28c595f46b9aaedb19
+- BM-A182A9, Roman standard tip (FindID 652379).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f629027da65b7bc03b51199a3b0839e
+- Roman Lock Bolt (FindID 583187).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77e607f4c1a015978a7b9c5e0e38594b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

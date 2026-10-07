@@ -1,0 +1,37 @@
+site_id: c0e10d6e-fb0e-4e9c-a910-631da9e578ea
+name: Afrodit Tapınağı
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Temple of Aphrodite, Rhodes 2010.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cba46fecde9cbf4ef43dd7096c48702e
+- Temple of Aphrodite, Rhodes 2010 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b0313b2670150c4d1063ed455b4d2c8f
+- Temple of Aphrodite, Rhodes 2010 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\718923edf8b707a121934e4ef5d860b1
+- Temple of Aphrodite, Rhodes 2010 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b643fc807c4f1deab4f7311984295fb5
+- Temple of Aphrodite, Rhodes 2010 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8aa8d365e4f71b3115c7a023e5ca4fd2
+- Temple of Aphrodite, Rhodes 2010 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0ac0122f5e6148605c3d0ecd395c00d
+- Temple of Aphrodite, Rhodes 2010 7.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6fcf856758645070232da1ea97a1b70f
+- Temple of Aphrodite, Rhodes 2010 8.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7534cbc264194351558416a5d7ba97f3
+- Temple of Aphrodite, Rhodes 2010 9.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e065a92d4737a91b7c594330645daec7
+- Temple of Aphrodite, Rhodes 2010 6.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\987c50354a5cbae46d9d16d656dc8164
+- Temple of Aphrodite, Rhodes 2010 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\470f6f6ccfe851aeec75351e1bd1b5ed
+- Temple of Aphrodite artifacts, Rhodes 6.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bd6dfc3f501673d4c0566831870bfc21
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

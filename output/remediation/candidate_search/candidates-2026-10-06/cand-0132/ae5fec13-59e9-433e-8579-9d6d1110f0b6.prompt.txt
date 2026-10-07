@@ -1,0 +1,41 @@
+site_id: ae5fec13-59e9-433e-8579-9d6d1110f0b6
+name: Pautalia
+country: Bulgaria
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Pautalia-Livingston.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae7406dba4c36b00ee4514b6519839ff
+- Monnaie - Bronze, Thrace, Pautalia - btv1b10306685c (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\644653f09ecdd8bf452c2de52d3bcfb2
+- Monnaie - Bronze, Pautalia, Thrace, Caracalla - btv1b8587154k (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1a3a06f078f14bceb9d5457384f33f94
+- Monnaie - Bronze, Pautalia, Thrace, Marc Aurèle - btv1b8587092x (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c0d2037a096d98150d31b34a5eed7913
+- Monnaie - Bronze, Septime Sévère, Thrace, Pautalia - btv1b103107388 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e270ed027fa7e93fb302bee1f1eb388
+- Monnaie - Bronze, Pautalia, Thrace, Géta - btv1b8587182w (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d19ef8979eac53bf06031c18e78bd9a0
+- Monnaie - Bronze, Pautalia, Thrace, Géta - btv1b8587181g (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a93bebf7f6f77ba7854fcbdd3364baca
+- Monnaie - Bronze, Pautalia, Thrace, Caracalla - btv1b85871461 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\077e659026f47ba2092331b5ba7b61f7
+- Monnaie - Bronze, Pautalia, Thrace, Caracalla - btv1b8587163j (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5044cdd0e5ce8ebedccca0fdedfddce9
+- Monnaie - Bronze, Pautalia, Thrace, Géta - btv1b85871691 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2c8142073e192e0e17895961708dc1bc
+- Monnaie - Bronze, Pautalia, Thrace, Géta - btv1b8587174b (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce409a89b70a79c8244ef3f7283e4fd7
+- Monnaie - Bronze, Pautalia, Thrace, Marc Aurèle - btv1b8587092x (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\71be52bb0b87952a8c8464a47e32c225
+- Monnaie - Bronze, Pautalia, Thrace, Lucius Vérus - btv1b8587109r (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\18fa77c4aca3b20631acb2b03465e658
+- Monnaie - Bronze, Pautalia, Thrace, Septime Sévère - btv1b85871216 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\00c83c5920e636008a2415b81abb8777
+- Monnaie - Bronze, Pautalia, Thrace, Faustine II La Jeune - btv1b85871038 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\212bb3eb00e8c240720c278d16d3244b
+- Monnaie - Bronze, Pautalia, Thrace, Septime Sévère - btv1b8587122m (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\886cdf21eddff83ea31a18926fa45e80
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

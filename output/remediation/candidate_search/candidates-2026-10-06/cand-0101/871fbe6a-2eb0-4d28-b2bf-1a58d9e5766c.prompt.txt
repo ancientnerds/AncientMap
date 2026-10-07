@@ -1,0 +1,53 @@
+site_id: 871fbe6a-2eb0-4d28-b2bf-1a58d9e5766c
+name: Obzor
+country: Bulgaria
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Slavyanska street in Obzor, Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\28d789df31ff710d1e65d30e88931549
+- Seaside alley in Obzor, Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff3784e06ed702cb9b9904ceae3e3df9
+- Svoboda Square and clock tower in Obzor, Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5e30a224d9fe89bd9d439299c7b06658
+- Svoboda square in Obzor, Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8bc566980ab21033e50ea6dd4a8ffc68
+- Ivan Vazov street in Obzor, Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8b34d0947d2928ea61393654b775a2a1
+- Svoboda Square and fountains in Obzor, Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7bdd03979647f0cad90d0762783716fb
+- City hall of Obzor, Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\57c81280a953c15ddb1e95aaa02d3ea8
+- Kiril i Metodiy street in Obzor, Bulgaria 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\51e5efd826f94a8724f766ac6d217728
+- Church of Saint John the Baptist in Obzor, Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e3b2b0a15df6e606110a52ece7a3d6ca
+- Park along Kiril i Metodiy street in Obzor, Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\072178723de5939ad77c69aa2b05e689
+- Kiril i Metodiy street in Obzor, Bulgaria 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1514724ccda5d41ccf696e93c2be3029
+- Bulgaria Obzor street.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b05549d169340a4580739b9fdf6a9e1b
+- Právny obzor - ročník IV 1921 (retouched).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e651c38f0fbceee5d8a8649fda4c1da
+- 525 Obzor Sozopol DSC04192.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d78a0d0efa20f570d20196786f38a7b8
+- Jaroslav Krupka, Zedníci (Fotografický obzor, 1926).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c40e4d73445595eb805efa64d5c71307
+- Mosaic above the gate to Church of Saint John the Baptist in Obzor, Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f115f2a7bea512492da844863522ceb
+- Obzor (in front of the bus station).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c7988be0b4f6ee96bb31e43255c6bae
+- Book exchange box in front of Church of Saint John the Baptist in Obzor, Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a209e528a098f3985872dd09fad190d4
+- Uherské Hradiště, Obzor.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e5b5b8176e5d8ae2eda101777ecba87a
+- A view of Obzor (AP4H7255 1PP) (15914346110).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa245e1b9dafbfaa8ff028d722cc2641
+- At Obzor Resort in 2011.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e445b8236d2cae542e76f0ac63c07192
+- Bus station - panoramio (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dcead3bdd684059f71d6c1681ca6b9b6
+- Obzor view from Byala.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\141c1a4af07808efccc45476d0d7910b
+- Obzor2007 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c31ef5158a9e825c4ba2cdaa9a7a4e35
+- Obzor2007 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0796abc1dfb928a1b3a186c37918045b
+- Obzor2007 6.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c929ff04a773a76d4f3e1adcd6750012
+- Recycling box for the Caps for Future charity in Obzor, Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5a3804e2c4b0b6450b81b867a22806ba
+- Warning Sign "Children" in Obzor (AP4E7013 1PS) (28970439562).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9dd7fc3cf6684e014d04bb0628711f2b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,37 @@
+site_id: dde240ca-5969-4123-a842-e7e235f7566b
+name: Langweiler - Archaeological Site
+country: Germany
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Wappen von Langweiler (Kreis Birkenfeld) am Ortseingang.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb138685012ab21715a8e5a1d9c8d223
+- Informationstafel zum Köhlerdorf Langweiler (Idar-Oberstein).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e22e453204869d50a57c0c656681d0af
+- Blick auf Langweiler im Hunsrück.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b85969ee40129f1d4f751daf7d71c53b
+- Blick auf Langweiler im Hunsrück II.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cbf70066b39730b75730d272b80dfae0
+- Blick auf Langweiler im Hunsrück, Zoom auf die Kirche.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e17e35fb4ae3f82105ba9618e0c6e692
+- Origineller Hinweis für Autofahrer in Langweiler II.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dbf0c8ba277e6745761f9b611f0aa092
+- Blick auf die Steinbachtalsperre von Langweiler (Idar-Oberstein).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\39c40095bbadc90ef90d8e46e5824b59
+- Kath. Pfarrkirche St. Nicetius in Langweiler, erbaut 1856 - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd76b55e30c151b5d055a81fd39f3350
+- Langweiler – von der Wildenburg aus gesehen - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\692b3769fc09750f39008307f0f9bf34
+- Langweiler - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd7e018001e65e512c686c73226b4656
+- Kriegerdenkmal Langweiler.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56d9f43274fe41ed5abeb7f5073a87e4
+- Blick von der Wildenburg in Richtung Allenbach, Wirschweiler, Sensweiler und Langweiler - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f1e87dbd151a934c89bb99152f663007
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

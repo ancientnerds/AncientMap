@@ -1,0 +1,73 @@
+{
+  "site_id": "fcf4c04e-fd5a-43b3-881b-47802ea4f924",
+  "answered_by": "mcode-judge-cand-0198",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Ihuatzio1.jpg",
+      "verdict": "depicts",
+      "note": "Große zweifach gestufte Steinplattform aus Trockenmauerwerk, grünes Maisfeld davor; monumentale vorkoloniale Plattform der Site, kein Schild lesbar."
+    },
+    {
+      "file": "Ihuatzio banner.jpg",
+      "verdict": "region_or_type",
+      "note": "Sehr flaches Panorama einer Dorfgasse mit weißen/roten Häusern, Papiergirlanden und Graffiti; Dorftyp der Region, keine Site erkennbar."
+    },
+    {
+      "file": "Ruinas de Ihuatzio.jpg",
+      "verdict": "depicts",
+      "note": "Restaurierte, klar abgestufte Steinpyramide mit umlaufender niedriger Mauer auf Rasen, Berge dahinter: das monumentale Bauwerk der Site."
+    },
+    {
+      "file": "PatzcuaroLakeArea033.jpg",
+      "verdict": "region_or_type",
+      "note": "Hohe geschnitzte Holzfigur auf einem Sockel in einer Pflastergasse neben einem Laden; Dorfbild der Seenregion, keine Site."
+    },
+    {
+      "file": "PatzcuaroLakeArea004.jpg",
+      "verdict": "region_or_type",
+      "note": "Innenraum einer kleinen Kapelle mit blau-weißen Wänden, Altar, Heiligenstatue und spanischer Wandinschrift; Kapellentyp, keine Site."
+    },
+    {
+      "file": "PatzcuaroLakeArea030.jpg",
+      "verdict": "region_or_type",
+      "note": "Pflasterplatz mit großen Bäumen, weißen-roten Kolonialhäusern und kleiner Bühne; Dorfplatz der Seenregion ohne Ruinen."
+    },
+    {
+      "file": "PatzcuaroLakeArea008.jpg",
+      "verdict": "other_site",
+      "note": "Frau in Purépecha-Tracht backt Tortillas auf einem Holzfeuerherd in einer Ziegelküche; Person und Alltagsszene, keine Site."
+    },
+    {
+      "file": "PatzcuaroLakeArea002.jpg",
+      "verdict": "region_or_type",
+      "note": "Altarraum einer Kapelle mit blauen Wänden, Heiligenfigur, weißen Lilien und spanischer Inschrift; Kirchentyp, keine Site."
+    },
+    {
+      "file": "PatzcuaroLakeArea009.jpg",
+      "verdict": "other_site",
+      "note": "Gleiche Szene wie 008: Frau am Holzfeuerherd beim Backen von Tortillas; Person, keine archäologische Site."
+    },
+    {
+      "file": "PatzcuaroLakeArea031.jpg",
+      "verdict": "region_or_type",
+      "note": "Dorfstraße mit Kolonialhäusern, Ziegeldächern, Bäumen und Bank; Siedlungsbild der Seenregion, keine Site."
+    },
+    {
+      "file": "PatzcuaroLakeArea012.jpg",
+      "verdict": "region_or_type",
+      "note": "Pflastergasse zwischen weißen-roten Häusern mit Straßenlaterne, Graffiti und einem Schild 'Calle ...'; Dorfstraße ohne Site-Bezug."
+    },
+    {
+      "file": "PatzcuaroLakeArea013.jpg",
+      "verdict": "region_or_type",
+      "note": "Abwärts führende Pflastergasse mit Fahrradfahrer, Pick-up und weißen-roten Häusern; Dorfszene, keine Site."
+    },
+    {
+      "file": "Iglesia de San Francisco de Ihuatzio, Tzinzunzan, Michoacán.JPG",
+      "verdict": "region_or_type",
+      "note": "Innenraum der Dorfkirche mit Holzschuhbänken, Altar und Schmuck aus Luftballons, Tannengrün und Lametta; Sakralbau des Ortes, nicht die Site."
+    }
+  ],
+  "note": "Zwei Bilder zeigen das monumentale Steinbauwerk der Site (Ihuatzio1.jpg, Ruinas de Ihuatzio.jpg); die übrigen zeigen die Dorfkulisse und Kirchen der Region, zwei davon nur Personen beim Kochen."
+}

@@ -1,0 +1,73 @@
+{
+    "site_id":  "0a9380b3-247c-4564-b1da-0195ea84236f",
+    "answered_by":  "mcode-judge-cand-0007",
+    "model":  "MiniMax-M3.1-Flash-Preview",
+    "verdicts":  [
+                     {
+                         "file":  "Srpska pravoslavna crkva Orolik 2-Српска православна црква Оролик 2.JPG",
+                         "verdict":  "other_site",
+                         "note":  "White baroque Orthodox church with black onion spire and iron cross on a village lawn; a church building."
+                     },
+                     {
+                         "file":  "2023 European heat waves Storm Orolik, Croatia 01.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Sunflower field with flattened rows to a flat horizon; farmland landscape, nothing of a site."
+                     },
+                     {
+                         "file":  "Orolik Train station 01.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Modern passenger train at a platform under catenary beside a blue OROLIK sign; railway infrastructure."
+                     },
+                     {
+                         "file":  "Football field Orolik 01.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Football pitch with goal frames and a low clubhouse behind a ploughed field; a modern sports ground."
+                     },
+                     {
+                         "file":  "Train station Orolik 02.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Empty railway platforms with rails, lamps and glass shelters; a modern station, no remains."
+                     },
+                     {
+                         "file":  "Football field Orolik 02.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Backlit conifers with sun flare; a green dugout and a goal frame stand in the field behind. Rural scene only."
+                     },
+                     {
+                         "file":  "Spomenik NOB-u Orolik 01.jpg",
+                         "verdict":  "other_site",
+                         "note":  "White pedestal memorial with a bronze plaque listing names 1941-1945 under a tree; a modern war memorial."
+                     },
+                     {
+                         "file":  "Katolička crkva Orolik-Католичка црква Оролик.JPG",
+                         "verdict":  "other_site",
+                         "note":  "Red-brick church with square tower, pyramidal roof and gold cross behind a balustrade; a church building."
+                     },
+                     {
+                         "file":  "Ivanjski vijenac-ивањски венац (Midsummer wreaths) Orolik 02.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Two midsummer wreaths of dried grass and moss with flowers hanging on a metal gate; a folk decoration."
+                     },
+                     {
+                         "file":  "Ivanjski vijenac-ивањски венац (Midsummer wreaths) Orolik 01.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Green flower wreath with garlic and onion hanging on a metal gate by a letterbox; a folk decoration."
+                     },
+                     {
+                         "file":  "Srpska pravoslavna crkva Orolik 1-Српска православна црква Оролик 1.JPG",
+                         "verdict":  "other_site",
+                         "note":  "Side view of the white Orthodox church with tiled roof, bell tower and iron railing; a church building."
+                     },
+                     {
+                         "file":  "Elementary school Orolik.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Single-storey school building with a tiled roof and a white memorial plinth in front; a modern school."
+                     },
+                     {
+                         "file":  "Ivanjski vijenac-ивањски венац (Midsummer wreaths) Orolik 03.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Wreath of yellow flowers, sunflower, garlic and onion on a white wrought-iron fence; a folk decoration."
+                     }
+                 ],
+    "note":  ""
+}

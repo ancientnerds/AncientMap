@@ -1,0 +1,37 @@
+site_id: 54afc94b-b7e1-469c-9e54-9d838d101acf
+name: Al Farid - The Lonely Castle
+country: Saudi Arabia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Mada'in Saleh 2017.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae7baeca9c036eb3eb6d1167ea797bcc
+- Madain Saleh 2017 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7da2152a9cc1e2a144a8fd28a4df71de
+- Qasr al-Farid, Hegra (Madain Salih), 1st cent. CE, Saudi Arabia (24).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a652e43c46b3ac59235ae261f5582270
+- Qasr al-Farid, Hegra (Madain Salih), 1st cent. CE, Saudi Arabia (12).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\37b35518cc7eb3cd101a16c90ce9949b
+- Qasr al-Farid, Hegra (Madain Salih), 1st cent. CE, Saudi Arabia (25).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b94ea0c621ef9d6c9fa41228444c9f2
+- Qasr al-Farid, Hegra (Madain Salih), 1st cent. CE, Saudi Arabia (7).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f48315803e056437dc44161eb0e51f93
+- Qasr al-Farid, Hegra (Madain Salih), 1st cent. CE, Saudi Arabia (9).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f68909471cdbcd0ce71783ac10ff271a
+- Qasr al-Farid, Hegra (Madain Salih), 1st cent. CE, Saudi Arabia (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d549ec76331141fe9f7e1d2bc366a3b
+- Qasr al-Farid, Hegra (Madain Salih), 1st cent. CE, Saudi Arabia (23).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9458f5a395dcd0f7a42a464bad08c071
+- Qasr al-Farid, Hegra (Madain Salih), 1st cent. CE, Saudi Arabia (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\90980fd4cfca07682e794b2ca776125f
+- Qasr al-Farid, Hegra (Madain Salih), 1st cent. CE, Saudi Arabia (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05b44fcd76217748fc7e6e5d7c20d3dc
+- Qasr al-Farid, Hegra (Madain Salih), 1st cent. CE, Saudi Arabia (8).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\83594cab4e982eda1a595c3a58494443
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

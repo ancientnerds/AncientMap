@@ -1,0 +1,30 @@
+site_id: 54782fbd-0ba3-4673-941a-3f5cf1fc8290
+name: Welbeck Hill
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Welbeck Hill - geograph.org.uk - 5259012.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d17b9281005886be4c37b9476e0160a2
+- Bridleway to Welbeck Hill - geograph.org.uk - 2666139.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5973b086a26cb3b9d33f6486c01c9831
+- Bridleway below Welbeck Hill - geograph.org.uk - 5259009.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2c3c554a8fb097f348b1ea0092300f9a
+- Track and Footpath towards Welbeck Hill - geograph.org.uk - 4350053.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1683713b35c65f8de5e6435fbf344ac0
+- Welbeck Hill, Anglo Saxon Cemetery site, aerial 2022 - geograph.org.uk - 7144737.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\10b0fa2d5e3e950312d8e99b962d2b66
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

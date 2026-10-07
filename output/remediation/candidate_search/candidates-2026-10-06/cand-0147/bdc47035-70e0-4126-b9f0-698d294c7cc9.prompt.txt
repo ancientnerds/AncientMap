@@ -1,0 +1,33 @@
+site_id: bdc47035-70e0-4126-b9f0-698d294c7cc9
+name: Horncastle
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Horncastle, Lincolnshire, the 'King's Head' - geograph.org.uk - 5060765.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\882c4906597def7217da97ba12a052dd
+- Horncastle Farmers' Club, 8 The Market Place, Horncastle - geograph.org.uk - 6643783.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\21cc3d9dabc2ef16dc1c5ff1d9410e0a
+- Horncastle - St Mary's Church - geograph.org.uk - 7029397.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc71b3866b53184657ed58b5fb6eb255
+- River Bain, Horncastle - geograph.org.uk - 3261120.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9d6d14b8529b0c5bf043ef0e5863872
+- Horncastle Weir - geograph.org.uk - 2090424.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76a42fadd2662bcd40bd1a9c38263e10
+- Horncastle Arena, Christchurch, New Zealand 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f52cde30e97e1038861e1e62bc2baade
+- Horncastle Arena, Christchurch, New Zealand.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\46c9614c6ceafd032916ce5f7e882aea
+- Market Place, Horncastle - geograph.org.uk - 7422671.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1d93f1d015f8636cb34e107e36137bfa
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

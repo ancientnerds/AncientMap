@@ -1,0 +1,35 @@
+site_id: b7ce5331-6c35-46bb-ac93-fdccf2b208e0
+name: Caballo Muerto
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Sierra Del Caballo Muerto (4439122260).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fbc3cab4a4b47a3372e641afcc72e762
+- La Mente del Caballo Muerto .jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9fce3dbf47fe95f65fa4ad073bced975
+- Desfile de Dia de Muertos IMG 5599 (30456727490).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\57ded0c3be53daafef028e4ed0a921d4
+- Urna etrusca cineraria con el viaje de un difunto a caballo. MARQ.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1998afe412c952a12974351ed930cf97
+- Rapa das bestas de Sabucedo - A rapa das bestas de Sabucedo - Dedicatoria al compañero muerto (3701080434).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e2391b6267ce0cc35f3e6faa49f0734
+- 1906-06-02, Blanco y Negro, Los caballos de la carroza real muertos á consecuencia de la explosión de la bomba, Goñi.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8271be786adf0b004fa7c35e82e0e9ee
+- Tanta wawa y tanta de caballo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56434edbe9d5a29311295e8c09bc29b5
+- Near Aleman Draw - Flickr - aspidoscelis.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3d2994b610247e74c6f67567bb5501aa
+- Molino de Flores , Recorrido día de muertos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3d2267e77b10ea29fd2802474fa8722
+- Water resources of the Rio Grande Valley in New Mexico and their development (1907) (14772237472).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e106e52390c8a3dbe189fd295e0043c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

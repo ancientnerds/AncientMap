@@ -1,0 +1,45 @@
+site_id: 39896f94-30a7-4b94-8974-b880b83bdca4
+name: Blewbury
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Church End, Blewbury, Oxfordshire-geograph-1664550-by-Steve-Daniels.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\93e613cf1928b7426d2e65244f2d756c
+- Stocks, Blewbury, Oxfordshire - geograph.org.uk - 4521142.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bcd440aeae83a4679ed5a160c7a8c4e8
+- Church Street, Blewbury, Oxfordshire - geograph.org.uk - 4521060.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8cf7aee893184302c72dd8123ba2c3ed
+- Nottingham Fee Lane, Blewbury, Oxfordshire - geograph.org.uk - 4524191.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0dcbc05229c98379d89ebc0094eaf68c
+- Churn Hill beyond Blewbury, Oxfordshire - geograph.org.uk - 3464546.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5907206d02eec6efca8f35b7938b7e92
+- Nottyngham Fee House, Blewbury, Oxfordshire - geograph.org.uk - 4521046.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a4a4a32973c0ae686dff74cf155f648c
+- Church of St Michael, Blewbury, Oxfordshire - geograph.org.uk - 4521090.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9537cf19e0b0c7794f03e76b2bb571a
+- London Road, Blewbury - geograph.org.uk - 3456660.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2c9ea543b58299d11b0da3ff6a86cc30
+- Blewbury in the trees - geograph.org.uk - 8358248.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fa941f3dd8f4fb2988f86c7cc8c656c5
+- Blewbury Manor Stables - geograph.org.uk - 3272253.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f648cfb6676806a3996ef79bcc628572
+- The Altar at St Michael and All Angels Blewbury - geograph.org.uk - 4876285.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb3ce21d5572d583fcaf974740b717c9
+- Upton and Blewbury railway station (1976).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6a5063b60f2f173226c983a10426e7cd
+- Downland, Blewbury - geograph.org.uk - 7418164.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa12d08bcfa1e80e512b8cf57b771256
+- “The Cleve”, Blewbury - geograph.org.uk - 3456631.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\73aebcc34629411d156be8c8e60c887e
+- St Michael's Church in Blewbury - geograph.org.uk - 1664553.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\492fd6e79e51d1f59a2308d90d85c5a3
+- Thatched barn at Great Tree, Blewbury - geograph.org.uk - 5331171.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7733f69e6018098abdb9ab279028c374
+- 1902 Coronation seat - geograph.org.uk - 5330792.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0325eb3015d5f03b45b6b923b141a5e5
+- A bridge over the former Didcot, Newbury and Southampton Railway - geograph.org.uk - 3248595.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ccd7698e0054de9adc882917581def16
+- A bridge over the former Didcot, Newbury and Southampton Railway - geograph.org.uk - 3248599.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d23b76f7612a781c8a356860c956cb1c
+- A change of view - geograph.org.uk - 2793065.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9f2e1fa4d791653771667a4ea503c9e1
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

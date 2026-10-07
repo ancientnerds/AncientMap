@@ -1,0 +1,38 @@
+{
+  "site_id": "768e341f-d9fa-4a3c-a4bf-27d099d7f6da",
+  "answered_by": "mcode-judge-cand-0092",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Part of Tabula Peutingeriana showing Western Moesia Inferior, Western Dacia and Macedonia.png",
+      "verdict": "region_or_type",
+      "note": "Antike Straßenkarte mit den Aufschriften Dacia und Moesia; reine Karte, keine Anlage des Kastells sichtbar."
+    },
+    {
+      "file": "Castrul roman Acidava de la Enosești - d083e6aac47849ac9ad250289534205c.jpg",
+      "verdict": "region_or_type",
+      "note": "3D-Geländemodell eines beackerten Hügels mit Straße und Institutslogos; im Modell keine Mauerzüge oder Kastellstruktur erkennbar."
+    },
+    {
+      "file": "Limes6.png",
+      "verdict": "region_or_type",
+      "note": "Übersichtskarte Der Dakische Limes mit Legende, Lageliste und Wegen; reine Regionalkarte ohne Markierung der Site."
+    },
+    {
+      "file": "Palestine in the TabulaPeutingeriana (cropped).jpg",
+      "verdict": "other_site",
+      "note": "Kartenausschnitt der Tabula Peutingeriana mit Palästina, Ägypten und Arabia; vollständig fremdes Gebiet."
+    },
+    {
+      "file": "TabulaPeutingeriana (cropped, Austria section, roughly upper central Italy and Algeria).jpg",
+      "verdict": "other_site",
+      "note": "Kartenstreifen der Tabula Peutingeriana mit Noreicum, Oberitalien und Mauretania; nicht die Donaustrecke der Site."
+    },
+    {
+      "file": "TabulaPeutingeriana.jpg",
+      "verdict": "region_or_type",
+      "note": "Vollständige Tabula Peutingeriana als extrem langes Panorama der antiken Weltkarte; Kartenmaterial ohne Sites-Bezug."
+    }
+  ],
+  "note": "Alle sechs Kandidaten sind Karten oder ein 3D-Geländemodell; das Modell zeigt keine Kastellmauern, daher kein depicts. Acidava bleibt ohne Bild."
+}

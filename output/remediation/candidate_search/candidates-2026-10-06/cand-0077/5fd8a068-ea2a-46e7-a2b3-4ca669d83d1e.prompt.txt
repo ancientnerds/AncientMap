@@ -1,0 +1,55 @@
+site_id: 5fd8a068-ea2a-46e7-a2b3-4ca669d83d1e
+name: Roses, Girona
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Bucht von Roses, Spanien.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2c323d3b4efa0fdb0f42ee760b24d4c7
+- Roses mit Sporthafen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e1de4e4ed3f34b2951b60519fbf00ade
+- MTN25-0259c1-2013-Roses.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62ec555c920cb848ae2b35491dbef2cd
+- MTN25-0259c1-2002-Roses.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a44e4be27be22745b3c3bb3ee9756e9
+- Roses, Girona 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5199da17843d1e788962efdbd13f1076
+- Roses, Girona 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b587f1f2852b2a1cd0ef48ae64376f01
+- Roses, Girona 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\118471aaffd63981b51307480b02ca9d
+- Roses, Girona 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f651756da7594721abcf443a6705bb3
+- Roses, Girona 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a0033c10443643c9565f04ea7e8842bc
+- MTN25-0259c3-2013-Far de Roses.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4dd15eaebeca4e25e2d6491524bd6e5b
+- MTN25-0259c1-1980-Rosas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a08d7d2c4469c82a662cb1fb550e0ccc
+- Roses, Girona, Spain - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2b5af75b7d11e2b13062ab2bc225e2f6
+- "Grau Canellas". Roses (Girona) (15331960783).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da5a7a923d6ff32f7edf6bb7406c2a02
+- La Farola, vista desde el Castillo de la Trinidad. Roses (Girona) (15950918092).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02a20107ac39444e9362dd18e739ce7f
+- Roses, Girona, Spain - panoramio (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1f6bba665add187e6cdb7f4bd496ab41
+- 105 Voltes d'en Rosés (Girona).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d5fdcccb2f083dbc9107166658836a8b
+- 103 Edifici a les Voltes d'en Rosés (Girona).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd6b205b2ef8286c2cd2ccbf440b077a
+- 101 Voltes d'en Rosés (Girona).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8cbde14dee66baaf8330063e053293ae
+- 102 Voltes d'en Rosés (Girona).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cfcac5e4a799c18efb37e91632a4cbd7
+- 100 Carrer Mercaders i Voltes d'en Rosés (Girona).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4214ea6b6646b73d71803ec2b0b1c40e
+- Aiguamolls de l'Empordà i Golf de Roses.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a7653fba4cb66d81cbde2f749d67ecb0
+- El massís del Puig Rom.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c131c6b96d367446f72d7ccb5dc7d9b9
+- Estrella Damm Inedit.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d56ecdf85140bc56cae9527cbbb62a6d
+- Menhir del Mas Marès.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b1251d3ad80b0b6c170f4b4b6c08cbe3
+- Mylonite outcrop in Roses granodiorite.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f33f9b9416b2028d1ccf05f914edb34c
+- Osborne Stier 2014 09.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9a417d1b70a348b7db46912e774c50b
+- Port de Roses 2026.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f70fc90bd802e6bb526e23de21be6659
+- Puig Cabrit.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c499e749254e64f35edc202c9d18754e
+- Puig d-en Marès.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14c15e81c42405c4675f3d851dc528e4
+- Puig de l'Àliga (Roses) 2026.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2eb77b295742e5f653e610dfb560e3a5
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,37 @@
+site_id: fa59ed73-d877-48a6-89e2-1fb458c9a512
+name: Al-Ukhdud Archaeological Site
+country: Saudi Arabia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Site of al-Ukhdud, Najran (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\230d178b86b083f572c223aa72389b26
+- Site of al-Ukhdud, Najran (23).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\18e16f4c94ef84a6932160f066a701e1
+- Ancient site of al-Ukhdud, Najran, Saudi Arabia (12).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\26509cf7faf9bfc9b5bcaad6a749c156
+- Ancient site of al-Ukhdud, Najran, Saudi Arabia (26).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d271c173d06bbcf142c3fc5a6a9cb25
+- Ancient site of al-Ukhdud, Najran, Saudi Arabia (62).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f98ac30fd386eeb9ac6a8f9f9cc40b57
+- Site of al-Ukhdud, Najran (8).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8934e09f023c8aba8d54916fcb087db0
+- Ancient site of al-Ukhdud, Najran, Saudi Arabia (27).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0bbb194c075350db58023b48ec5a2fe6
+- Ancient site of al-Ukhdud, Najran, Saudi Arabia (28).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\778cbe95f2ea8841cf167680d4b8aa66
+- Ancient site of al-Ukhdud, Najran, Saudi Arabia (40).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c39244741e9e226100c67b18450d78b7
+- Ancient site of al-Ukhdud, Najran, Saudi Arabia (13).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3eeba9d8128a7f730f44c713853753cd
+- Site of al-Ukhdud, Najran (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d43e29eadddf1e180e7b012a2cfefaf4
+- Site of al-Ukhdud, Najran (20).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25a828a3c4f4bf50c0524185bf3a69db
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

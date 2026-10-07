@@ -1,0 +1,37 @@
+site_id: 02c9fcff-1d24-401b-913d-67becef3d50d
+name: Northwest Palace of Ashur-Nasir-Pal II
+country: Iraq
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- King Ashur-nasir-pal II and a Winged Genie - Room H, Northwest Palace, Nimrud (Kalhu), Iraq, Neo-Assyrian Period, reign of Ashur-nasir-pal II, c. 883-859 BC, alabaster - Brooklyn Museum - Brooklyn, NY - DSC08618.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fc8a48ed899704b7813e09a01f67ea7b
+- Sacred Tree - Room S, Northwest Palace, Nimrud (Kalhu), Iraq, Neo-Assyrian Period, reign of Ashur-nasir-pal II, c. 883-859 BC, alabaster - Brooklyn Museum - Brooklyn, NY - DSC08646.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce36438ba88f100d3e65db606167a121
+- Relief with Two Registers - Room I, Northwest Palace, Nimrud (Kalhu), Iraq, Neo-Assyrian Period, reign of Ashur-nasir-pal II, c. 883-859 BC, alabaster - Brooklyn Museum - Brooklyn, NY - DSC08608.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\83d572f86bdee69a8fcba7e90f71508d
+- Eagle-headed Genie - Room S, Northwest Palace, Nimrud (Kalhu), Iraq, Neo-Assyrian Period, reign of Ashur-nasir-pal II, c. 883-859 BC, alabaster - Brooklyn Museum - Brooklyn, NY - DSC08605.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc5c0e99c7bbfc646331ab9b2dc7e6a3
+- Human-headed Genie with Armlets - Room Z, Northwest Palace, Nimrud (Kalhu), Iraq, Neo-Assyrian Period, reign of Ashur-nasir-pal II, c. 883-859 BC, alabaster - Brooklyn Museum - Brooklyn, NY - DSC08611.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6afda84acdbc0352edc5035e6c89ef5d
+- Winged Genie Holding Sacred Pail - Room H, Northwest Palace, Nimrud (Kalhu), Iraq, Neo-Assyrian Period, reign of Ashur-nasir-pal II, c. 883-859 BC, alabaster - Brooklyn Museum - Brooklyn, NY - DSC08641.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\377b2db3eb24666a565726ebe393eed9
+- Winged Genie Wearing Fancy Bracelets - Room H, Northwest Palace, Nimrud (Kalhu), Iraq, Neo-Assyrian Period, reign of Ashur-nasir-pal II, c. 883-859 BC, alabaster - Brooklyn Museum - Brooklyn, NY - DSC08633.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7b15143e52f58c01b9dcc3391dda68aa
+- Winged Genie with Horned Helmet - Room L, Northwest Palace, Nimrud (Kalhu), Iraq, Neo-Assyrian Period, reign of Ashur-nasir-pal II, c. 883-859 BC, alabaster - Brooklyn Museum - Brooklyn, NY - DSC08621.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f109c9f73391fd7341e032d99cbcb1df
+- Human-headed Genie Sprinkling Pollen - Room T, Northwest Palace, Nimrud (Kalhu), Iraq, Neo-Assyrian Period, reign of Ashur-nasir-pal II, c. 883-859 BC, alabaster - Brooklyn Museum - Brooklyn, NY - DSC08626.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4e78e4611c2529584965129eef996854
+- Human-headed Genie with a Slender Body - Room L, Northwest Palace, Nimrud (Kalhu), Iraq, Neo-Assyrian Period, reign of Ashur-nasir-pal II, c. 883-859 BC, alabaster - Brooklyn Museum - Brooklyn, NY - DSC08614.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d76a16765ab9c3193ed6e8490928a2a9
+- Human-headed Geni Holding a Basket and Cone - Room T, Northwest Palace, Nimrud (Kalhu), Iraq, Neo-Assyrian Period, reign of Ashur-nasir-pal II, c. 883-859 BC, alabaster - Brooklyn Museum - Brooklyn, NY - DSC08629.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\91aeb63cc6fe01f21cf9223ff86f1af0
+- Eagle-Headed Genie Between Two Sacred Trees - Room F, Northwest Palace, Nimrud (Kalhu), Iraq, Neo-Assyrian Period, reign of Ashur-nasir-pal II, c. 883-859 BC, alabaster - Brooklyn Museum - Brooklyn, NY - DSC08638.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8ae2473801fe42c4c12e092b6f55cf5a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

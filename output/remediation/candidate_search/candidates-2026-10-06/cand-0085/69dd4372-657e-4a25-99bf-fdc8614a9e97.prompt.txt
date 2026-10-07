@@ -1,0 +1,33 @@
+site_id: 69dd4372-657e-4a25-99bf-fdc8614a9e97
+name: Peregonivka
+country: Ukraine
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Природа Перегонівки.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bf7829d972d90d640b038639117023bf
+- 2013 ДЕНЬ ЗАХИСТУ ДІТЕЙ.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\459a049f190511e5c67ba815bcf174cb
+- Дитсадок Сонечко.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af3c2c9bd9ada6e8831a3bc20acb783b
+- Президія зборів.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2ffb8a0f3f28ca4845f40d831413392d
+- Учасники самодіяльності.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0fe9e3e83cd206a08e1c5f82386ec4c7
+- Кращі шовководи колгоспу.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5cadc338e57a0c6bdc535742ee664538
+- Перевірка готовності до жнив.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f44a130a52b7ad985b88275845513355
+- Біленко лід.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a0bd9e52b476d0f0e01d8af71718e9b7
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

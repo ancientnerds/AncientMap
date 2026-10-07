@@ -1,0 +1,45 @@
+site_id: a24e51aa-ecb6-4ba4-8d14-5ccabaf4aa56
+name: The Water Temple
+country: Tunisia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Temple of the Emerald Buddha.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4c887d4fbcc98b75ac0c30c9da55143
+- Water reflection of Kinkaku-ji Temple a sunny day, Kyoto, Japan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\01bddda46026835215309d834a20a990
+- Founder's Hall gate of Higashi-Honganji Temple, with water reflection, Kyoto, Japan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce82dcc2902491cb87536165d57d4b77
+- Front view of the Water Temple of Zaghouan..JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9c9b3bbf1aa16a9da51a0c83cb898280
+- Right sided shot of the Water Temple of Zaghouan..JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b791f2365d342e61ee852912dd978a33
+- Right Arc of the Water Temple of Zaghouan.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\735d0f2cf379becbbe47465df0f32ea5
+- Sided view of Water Temple of Zaghouan.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8b52fc73c1ace4325578958d5c0923f9
+- Zaghouan Temple d'eau.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6f8802a188f284eefcfc1afa83ecf251
+- TempleEauxZaghouan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eea23de19f6160592ebbcc33ca7ad99e
+- The sacred spring at Zaghouan, a temple-like water reservoir built by Hadrian that served as the source of the Zaghouan Aqueduct, Tunisia - 52764708729.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\298d04297f5957ce67cc336b64770a2e
+- The sacred spring at Zaghouan, a temple-like water reservoir built by Hadrian that served as the source of the Zaghouan Aqueduct, Tunisia - 52764709734.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4c014127d72bac10fe63290e996cb7d0
+- The Water Temple in Zaghouane, Tunisia. 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eebb93b5778ac413443fd1bd3180256e
+- The water temple zaghouan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\962ee35dd770c9d53ecc3740d2251783
+- The Water Temple in Zaghouane, Tunisia. 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f92626a78b424b5dfdacfb5ea5388d94
+- The Water Temple in Zaghouane, Tunisia. 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b6fae9296bd38ea35b37a91508c2b5bd
+- The Water Temple in Zaghouane, Tunisia. 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\48868af78c2fabb9bee1fd335e75d405
+- The Water Temple in Zaghouane, Tunisia. 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\72f17640eeaccab6dac0369fe754a8f9
+- The Water Temple in Zaghouane, Tunisia. 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7a93dfcbd59470c6e8df398016ca9bd
+- The Water Temple in Zaghouane, Tunisia. 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\79952836d5f8f46b7549cc00d0ed324f
+- The Water Temple in Zaghouane, Tunisia. 15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6589e9314b4bdb5e05fe07da6f8bece1
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

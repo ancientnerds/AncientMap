@@ -1,0 +1,34 @@
+site_id: b8583e63-17c5-48b0-a4d1-018acaf608c1
+name: Meare Lake Village
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Prehistoric Lake villages near Oxenpill - geograph.org.uk - 7846074.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dddea8bf136fec1c949334cc9e863ade
+- Thorpeness, The Meare - geograph.org.uk - 7976702.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c2b1f479b9b8f9588d6229c861078ae0
+- Thorpeness, The Meare - geograph.org.uk - 7976696.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\822d63a071052df488ebbc639f053810
+- Thorpeness, The Meare - geograph.org.uk - 7583636.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\11bc3312900716a3c9c518cbcea4e359
+- Thorpeness, The Meare - geograph.org.uk - 7583633.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\18ae78c1f1829afab97722dbf83f0e0c
+- The Meare, Thorpeness - geograph.org.uk - 7028212.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7971edfabfa11c890cbdda68ac85866f
+- Canoeist on Thorpeness Meare - geograph.org.uk - 5895704.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\273de840e016f9918a4ecf69d8e5eddb
+- By Thorpeness Meare - feeding the swans - geograph.org.uk - 5895799.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3cd983e03481befe3e1c83b28ebefec7
+- Thorpeness, The Meare and someone's private seat to observe it from - geograph.org.uk - 7583668.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\849de63b8290bb97435cef9ab36052d6
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

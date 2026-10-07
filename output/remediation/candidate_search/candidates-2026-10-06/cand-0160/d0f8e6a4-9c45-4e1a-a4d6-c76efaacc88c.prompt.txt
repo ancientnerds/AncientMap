@@ -1,0 +1,35 @@
+site_id: d0f8e6a4-9c45-4e1a-a4d6-c76efaacc88c
+name: Pont Serme
+country: France
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Le Royaume d'Escosse divisé en deux Parties, subdivisées en Provinces etc. Dressé par le P. Coronelli Cosmographe de la Serme. (IA dr le-royaume-descosse-divis-en-deux-parties-subdivises-en-provinces-etc-14353021).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4017b3d28cdd3b2b4237d615b86b5571
+- L'Asie selon les Memoires les plus Nouveaux. Dressée par le P. Coronelli Cosmographe de la Serme. Republique de Venise. (IA dr lasie-selon-les-memoires-les-plus-nouveaux-dresse-par-le-p-coronelli-co-14353042).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76e6b9c97fad057efea0aa375343cdf7
+- Map of Caucasus 1690.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\deb202f9458085014930fa77751c5d13
+- Le Cours du Danube depuis sa source, Jusqu'a ses Embouchures ou sont partie de l'Empire d'Allemagne; et des Estats qui ont (IA dr le-cours-du-danube-depuis-sa-source-jusqua-ses-embouchures-ou-sont-partie-14353041).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2deb37df723c9a62cdee6e1df06e9d79
+- Partie Occidentale du Canada ou de la Nouvelle France ou sont les Nations des Ilinois, de Tracy, les Iroquois (IA dr partie-occidentale-du-canada-ou-de-la-nouvelle-france-ou-sont-les-nations-d-14353049).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e188a77939b1ca2673f31d89be125679
+- Le Royaume d'Angleterre divisé en plusieurs Parties, subdivisées en Comtez ou Shireries ou sont auss y remarquez les Royaumes (IA dr le-royaume-dangleterre-divis-en-plusieurs-parties-subdivises-en-comtez-14353020).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db0f9cad8a60f0788506dc5cd87acc23
+- L'Amerique Meridionale, ou la Partie Meridionale des Indes Occidentales. Dressée sur les Memoires les plus Nouveaux et (IA dr lamerique-meridionale-ou-la-partie-meridionale-des-indes-occidentales-dr-14353051).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7bef372f57a9a54259fec87df04eebdd
+- L'Amerique Septentrionale, ou la Partie Septentrionale des Indes Occidentales. Dressée sur les Memoires les plus Nouveaux. (IA dr lamerique-septentrionale-ou-la-partie-septentrionale-des-indes-occidental-14353046).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\06ecfd50f95b2ddfe94f749e33e486f5
+- Archipelague du Mexique ou sont les Isles de Cuba, Hispaniola, Jamaique, etc. Avec les Isles Lucayes, et les Isles Caribes (IA dr archipelague-du-mexique-ou-sont-les-isles-de-cuba-hispaniola-jamaique-et-14353047).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c875501f0f8a06f1c0f76f67b0074086
+- Le Royaume de Hongrie divisé en Haute et Basse Hongrie, avec l'Esclavonie, subdivisees en leurs Comtez. Par le P. Coronelli (IA dr le-royaume-de-hongrie-divis-en-haute-et-basse-hongrie-avec-lesclavonie-14353040).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7f412e1c7498987cff2f541de38b2f29
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,12 @@
+{"site_id": "cbfd3d2a-70f5-41f4-a3db-298b56040fea",
+ "answered_by": "mcode-judge-cand-0156",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Kastelle Nordbritannien.png",
+   "verdict": "region_or_type",
+   "note": "Ubersichtskarte der römischen Kastelle Nordbritanniens mit Legende; Vindomora nur als kleiner Punkt markiert."},
+  {"file": "Befundskizze Kastell Ebchester.png",
+   "verdict": "depicts",
+   "note": "Befundskizze mit rot eingezeichneten Mauerfundamenten des Kastells auf dem Ortsplan von Ebchester."}
+ ],
+ "note": ""}

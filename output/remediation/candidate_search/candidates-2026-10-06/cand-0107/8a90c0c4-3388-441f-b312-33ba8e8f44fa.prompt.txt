@@ -1,0 +1,47 @@
+site_id: 8a90c0c4-3388-441f-b312-33ba8e8f44fa
+name: Kvitky
+country: Ukraine
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- 9, Kvitky-Osnovianenka Street - Kharkiv.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\efd0957e3c908bf0e8d39aabbaa10e90
+- Kvitky-Osnovianenka Street, Lviv.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44d435d7f27a1e03a16980931cb166b8
+- 7b Kvitky-Osnovianenka Street, Lviv (02).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0b5d6fadc3348c1e78c82e44ab45469
+- 31 Kvitky-Osnovianenka Street, Lviv (01).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\69c18af9aa561cbe18b9797089e8f011
+- 7б Kvitky-Osnovianenka Street, Lviv (01).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\38fb6802a687c6cbcf2d70f84d4eae24
+- 38 Kvitky-Osnovianenka Street, Lviv (01).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\30fe0f9e05907191198a8b75b185bc29
+- 7b Kvitky-Osnovianenka Street, Lviv (03).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6da9fb61520fbeb6065ca8dcaf9d9b0
+- 12 Kvitky-Osnovianenka Street, Lviv (01).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a832c9479b5e19bae65686ab26277705
+- Lviv Kvitky Osnowianenka SAM 0861 46-101-0559.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\43aedd9ebc39375b784afc1ff274de6e
+- 22 Kvitky-Osnovianenka Street, Lviv (02).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f99c1105097305a4e5d14654c08dc319
+- 24 Kvitky-Osnovianenka Street, Lviv (02).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\80ea15440b3be2b6f32ec8d214a74d84
+- Lviv Kvitky Osnowianenka SAM 0862 46-101-0561.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c662ecd93a2457a4557555c34e57002
+- 5 Kvitky-Osnovianenka Street, Lviv (01).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d1f09d061c83763d58dfbd6e046d447
+- Lviv Kvitky Osnowianenka SAM 0884 46-101-0567.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d80c7a7e2f5cd1caa2921f582d3a383c
+- 27 Kvitky-Osnovianenka Street, Lviv (11).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c73c6156abac547c6b3c78cebe4d42c2
+- Kvítky.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5bbe621723b232e5b9cf397d9b1c9e48
+- 7a Kvitky-Osnovianenka Street, Lviv (02).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\517381c10de07141a7e8f0076a02abc3
+- 5 Kvitky-Osnovianenka Street, Lviv (02).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\718980f8339ebf5fed62493709f5f812
+- 7a Kvitky-Osnovianenka Street, Lviv (05).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1a4ecdffed64f6b73f139174e6a25edb
+- 18 Kvitky-Osnovianenka Street, Lviv (05).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\61349853e18d92aedd45a1a17340f96f
+- 29 Kvitky-Osnovianenka Street, Lviv (03).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\08c0e95bcce7f1d8d29486f04fae003c
+- 7a Kvitky-Osnovianenka Street, Lviv (06).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e6aa6443849dbbc41f77fe9b03bdb906
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

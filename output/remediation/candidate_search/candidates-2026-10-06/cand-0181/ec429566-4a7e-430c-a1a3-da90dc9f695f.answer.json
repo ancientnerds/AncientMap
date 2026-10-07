@@ -1,0 +1,18 @@
+{"site_id": "ec429566-4a7e-430c-a1a3-da90dc9f695f",
+ "answered_by": "Worker",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Arvalem, Rock Cut Caves.jpg", "verdict": "depicts", "note": "In den Lateritberg gehauene Fassade mit vergitterten Hoehlenoeffnungen, grasbedeckte Kuppe und Geländer; Site direkt gezeigt."},
+  {"file": "Arvalem Caves Goa.jpg", "verdict": "depicts", "note": "Felswand mit mehreren vergitterten Hoehlen, blauer ASI-Tafel mit der Aufschrift ARAVELAM CAVES an der Site."},
+  {"file": "Arvalem Caves.jpg", "verdict": "depicts", "note": "Beschriftete Kollage (Logo ARAVELAM CAVES SANKAL) mit Hoefelfassaden und Lingam im Innern; Felswand und Hoefel der Site."},
+  {"file": "Arvalem ASI board.JPG", "verdict": "depicts", "note": "Blaue Archaeological Survey of India-Tafel mit Ueberschrift ARAVELAM CAVES an der Felsenfassade montiert."},
+  {"file": "Arvalem Caves 1.jpg", "verdict": "depicts", "note": "Kollage der Hoefelfassade mit vergitterten Eingaengen, Lingam in der Nische und der ASI-Tafel an der Site."},
+  {"file": "Cave dwellings at Harvalem.jpg", "verdict": "depicts", "note": "Lange Reihe von in den Hang gehauenen, vergitterten Felswohnungen mit grasbedeckter Krone und Geländer."},
+  {"file": "Basilica of Bom Jesus vrvbgoa2k24 (40).jpg", "verdict": "other_site", "note": "Innenhof einer grossen Kolonialbasilika aus verwittertem Ziegelstein mit Portalen und Saeulen; nicht die Felshoehlen."},
+  {"file": "Basilica of Bom Jesus vrvbgoa2k24 (16).jpg", "verdict": "other_site", "note": "Kircheninnenraum mit goldenem Hochaltar, Bestaenke und Besuchern; ganze andere Site in Goa."},
+  {"file": "Basilica of Bom Jesus vrvbgoa2k24 (12).jpg", "verdict": "other_site", "note": "Aussenwand der Basilika mit klassischen Saeulen und purpurner Holztuer; keine Felsstruktur."},
+  {"file": "Basilica of Bom Jesus vrvbgoa2k24 (77).jpg", "verdict": "other_site", "note": "Massive Aussenmauer der Basilika mit Rundbogenfenstern, Balustrade und Kreuz; nicht Arvalem."},
+  {"file": "Basilica of Bom Jesus vrvbgoa2k24 (31).jpg", "verdict": "other_site", "note": "Barocke Fassade mit Rundfenstern, Saeulenordnung und Personen vor der Eingangstuer der Basilika."},
+  {"file": "Basilica of Bom Jesus vrvbgoa2k24 (41).jpg", "verdict": "other_site", "note": "Seitenschiff-Mauer der Basilika mit Dreiecksgiebeln ueber den Fenstern; offensichtlich eine gemauerte Kirche."}
+ ],
+ "note": "Die sechs Basilica-Aufnahmen zeigen eine andere Site (Goa); die sechs uebrigen zeigen die Felshoehlen von Arvalem selbst, teils mit ASI-Tafel."}

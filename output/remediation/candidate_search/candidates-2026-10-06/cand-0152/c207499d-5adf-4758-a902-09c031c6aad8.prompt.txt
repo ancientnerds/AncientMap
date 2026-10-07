@@ -1,0 +1,37 @@
+site_id: c207499d-5adf-4758-a902-09c031c6aad8
+name: Kot Bala
+country: Pakistan
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Balafon (Aly Keita) Unterfahrt 2010-03-11-001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9036aa898b1f07ec343e9c9d284197e6
+- Balafon Sacré.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05288f1adfc7841d1be881037ccd834f
+- Balafon-Bamougoum (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d7caf0e4f060ae0251c631dfe68c72bf
+- Balafon artisanale.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4d838940aa74cd26cf40bc3f381f6e5e
+- Balafon danse.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\34ba692153a1d2675d4242c949316686
+- DUn balafon 7.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9a2f653e4671af39d8df131c33feac2
+- Balafon-Afrique orientale (détail).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e85653de2bb5e4e36b37e18310c2379
+- Un balafon 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14dc07404b66fb29230467d4ff76d704
+- Balafon griot (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a85d3fed3a612003a8bafbff473c0be1
+- View of the Street and mountain of Bala Kot Kaghan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5e74ebe38de3e9b37a6817303a727340
+- Mamadou Diabate balafon player.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bcc07ffc443314874789b9aeed4609d6
+- Balafon-Bamougoum (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\913478546727049a5533713be0e9f4cc
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

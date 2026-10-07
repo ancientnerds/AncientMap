@@ -1,0 +1,37 @@
+site_id: 80a20be9-edef-45dc-9b97-a79c80eafdf3
+name: Monagrillo - Archaeological Site
+country: Panama
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Monagrillo un pintoresco pueblo de Panamá.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c276027f04804ca9068eebacdc24ee3
+- Arquitectura tradicional de Monagrillo desde hace muchos años.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94ba5de173f3885f9035cdab3c46e928
+- Arquitectura tradicional de Monagrillo de sus colores y diseños muy antiguos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a970725870020330c042036f507b04c
+- Monagrillo, la típica postal de un pueblo del interior de Panamá.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\64fbc5b8b501359bebc9651d49193f62
+- Iglesia de San Miguel en Monagrillo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\672243f26634f3b135a0090b5dc7f8e8
+- Plaza en Monagrillo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c23f2bb37fa873d0a9b569a2e01c045f
+- Antigua Iglesia de San Miguel Monagrillo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9687b5ed2f67df74f4940619b8abc6e6
+- Arquitectura Tradicional de Monagrillo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\768430781600e8b3b7129642cc7196ae
+- Iglesia San Miguel de Monagrillo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\29ab2d0d9123eb2a0b4eb0863deb206c
+- Antigua Capilla de San Miguel. Monagrillo.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc687c4f4573c54602547067a0479058
+- Arquitectura tradicional de Monagrillo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\08324e3404f474817133552520f66a3d
+- Monumento San Miguel.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f54b2cd8c1f9d6d7847069b9351a0f1
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

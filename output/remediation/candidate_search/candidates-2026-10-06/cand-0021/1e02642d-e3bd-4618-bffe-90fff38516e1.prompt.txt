@@ -1,0 +1,37 @@
+site_id: 1e02642d-e3bd-4618-bffe-90fff38516e1
+name: Kaljaja, Balovac
+country: Serbia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Kaljaja Prizren.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1a65a481b4942515533f254887076b49
+- Kaljaja – dodir neba.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bba4e886682c34f77eb2f7067fb53bbb
+- Kaljaja - Nebeska straža grada.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\86e33f007613964ec5d3ce7d5702ed90
+- Kaljaja u zagrljaju zalaska.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\95bd6f6e9955bbd0a12017a61e0affcd
+- Kaljaja – čuvar nad Prizrenom.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e6231d8ed6d6bb1177f1b4e16a6d67b3
+- Kaljaja.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e412a552e05ce5d1c42f0d2f964b2016
+- Prizrenska tvrđava.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff6941079cf12589988d21c8456cb5b1
+- Tvrđava Kaljaja.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f978d36504aa18652bc8972f448c4d57
+- Festung von Prizren.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fc3afaa1f48d23613f7a4839fd596a0e
+- Kreshnik Basha Photo 6.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9cf801e883ba999b95be445e70dd615d
+- Kreshnik Basha Photo 7.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\10092efbf65e4c8b105f0f9f4d2841ea
+- Kalaja e Prizrenit 2015.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9ab7929f9aec1e24af879c1c11665cfb
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

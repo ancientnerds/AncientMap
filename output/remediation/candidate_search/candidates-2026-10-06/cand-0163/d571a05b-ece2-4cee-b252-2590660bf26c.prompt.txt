@@ -1,0 +1,49 @@
+site_id: d571a05b-ece2-4cee-b252-2590660bf26c
+name: Perge Theatre
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Perge theatre orchestra in 2018 6056.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\04f0720ae984551a5f434bffb7c7f12d
+- Perge theatre in 2022.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9a6ff8a22855f7200b3365836d574f5
+- Panorama of Perge theatre.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e4166f40540a2946e16e9090fe96e29
+- Perge theatre march 2018 6078.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de31fedffe3947344573d43057b89d79
+- Perge theatre entrance in 2018 6011.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce975138873a7a64a5cecd005c96128a
+- Perge theatre corridor in 2018 6069.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4251d321da8311f67152aebe32462dd1
+- Perge theatre march 2018 Panorama 6072.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e5a493b902a0af6cd9c32ff15b21f80
+- Perge theatre march 2018 6024.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b137a5ed4ec84606d622d7027663bad7
+- Perge theatre entrance in 2018 6010.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\43646d626ace2fe78bb61c7713deae66
+- Perge theatre 2012 3817.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d756ec504bd6952cb7c9e1ea033e0bb9
+- Perge theatre information in 2018 6012.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd5868c44894b93affe304a2748d9b91
+- Perge theatre entrance in 2018 6013.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\91db6d6cde59519272344457f41e2873
+- Perge theatre in 2018 6088.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e17fcb9a778bfff79011f90b77d399c8
+- Antalya museum Frieze of frons pulpiti from Perge theatre 4883.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e0cea26c3c684f3bf87293686b0b363
+- Antalya Museum Frieze of frons pulpiti from Perge theatre 5039.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b6bdf4709d277a747f00e58b7d893ea
+- Antalya museum Frieze of frons pulpiti from Perge theatre 4899.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\68f71666de17d533c65c0224c376131e
+- Antalya museum Baitylos from Perge theatre 7131.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dacf951f1b46dce34dcff0535f267d3f
+- Antalya museum Marsyas from Perge theatre 3136.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fdac9a739aa5e8112f4ea8518a8106cd
+- Antalya museum Frieze of frons pulpiti from Perge theatre 4882.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b350ea3f5b5a8200e7d22010672b4901
+- Antalya Museum Frieze of frons pulpiti from Perge theatre 5046.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d17d3442ac68466d7c15e5563588c65
+- Antalya museum Frieze of frons pulpiti from Perge theatre 3314.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aaa1ba763005bcf90e639d619bf0424b
+- Antalya Museum Frieze of frons pulpiti from Perge theatre 5051.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f25f5823222f484c63c6b599b7153338
+- Antalya museum Marsyas from Perge theatre 3153.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\46a4275f69801f9837fd7b11e0431233
+- Antalya museum Frieze of frons pulpiti from Perge theatre 9707.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e546bbedf36778f9a3b9ff4f70f06349
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

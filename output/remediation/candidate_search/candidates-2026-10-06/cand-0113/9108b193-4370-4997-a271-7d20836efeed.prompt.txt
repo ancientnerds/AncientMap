@@ -1,0 +1,36 @@
+site_id: 9108b193-4370-4997-a271-7d20836efeed
+name: Museo de la Arquitectura Maya
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Estela 3 Itzimté Campeche Museo de Arquitectura Maya Baluarte de la Soledad.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e2bafba8d9e7d7cfd421e1fd34d67810
+- Ajuar funerario Calakmul Museo de Arquitectura Maya Baluarte de la Soledad.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e35e6f690cd13950ba1862433fa59ee2
+- Cartel en relieve para personas invidentes sobre máscara de Calakmul Museo de Arquitectura Maya Baluarte de la Soledad.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\82cf5fc84964c017a722e8677c43a0c1
+- Máscara maya de Jade Calakmul Museo de Arquitectura Maya Baluarte de la Soledad.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\729225544d87f8064f2764afcb538085
+- Mascarones del Dios Chaac de Estilo Puuc Museo de Arquitectura Maya Baluarte de la Soledad.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\855f3e955d398a7a197f62ae58b3800b
+- Museo de Arquitectura Maya, Campeche, Mexico - Corner Masks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\edc31b04bbe3dfd9e90ccc787f26b025
+- Tapa de bóveda con el dios K'awiil Dzibilnocac Campeche.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\43b4ee7a1cf84292721e3b45e1846fe6
+- Museo de Arquitectura Maya, Campeche, Mexico.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\84109a893bba3681aac4051f3cca2fb8
+- Funerary Goods found with the previous mask - Maya Museum Campeche.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\28cd77e148335871d3b3178b249ac851
+- Ceremonial Belt with Jade Beads and Plaques sewn on linen - Maya Museum Campeche.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c9ed3420d33fa1a5810a16378f743239
+- Breastplate, Necklace and Pectoral with Ik' sign (Jade Beads and Plaque sewn on linen) - Maya Museum Campeche.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\816690a022b0a4ddf6a47168c372e020
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,28 @@
+site_id: 3e7d6ad9-37c8-4899-9956-99088ff63c78
+name: Annaghmare Court Tomb
+country: Northern Ireland
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Achadh an Marbh-Annaghmare Court Tomb. Annaghmare TD, Crossmaglen - geograph.org.uk - 4172647.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3b06233bbbb32a7dd788000e68fd29c0
+- Visitors car park at Achadh an Marbh-Annaghmare Court Tomb - geograph.org.uk - 4172658.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\87038f998ab179d7b40e641a675986cc
+- Remnant of the cairn cover of the Achadh na Marbh Court Tomb, Annaghmare - geograph.org.uk - 4173489.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9c6ac4693e4a0bdbf20e2bbf7c0c09f6
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,36 @@
+site_id: b5899722-5118-41e0-8324-5da705ace4a2
+name: Conygar Hillfort
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Conygar Tower.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\82ebb85e556eaf665830fa138cec5893
+- Portbury , Portbury Wharf Nature Reserve - geograph.org.uk - 6498037.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fca0c3f1d44a3b47405c3102d1e89bd5
+- Portbury , Portbury House - geograph.org.uk - 6498056.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8aff9a00b1ba3746cdbf44e2fde0d0ef
+- Portbury , The Portbury Hundred A369 - geograph.org.uk - 6500607.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eaa43be6e95c9204fafdcc75f27cc9aa
+- Portbury MMB 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f7db6eefea2eefbfc55c3297fbc17b22
+- Portbury , The Portbury Hundred A369 - geograph.org.uk - 6500606.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\75fcf4847e26dd719eeecd1d810fefd6
+- Portbury MMB 03 M5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47bc58669945e09dc2ed3d3ea4dd511b
+- Portbury railway station MMB 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba7c4a362c1fe41217193d143c8486e6
+- Inside Conygar Tower, Dunster - geograph.org.uk - 4534615.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b568585e2f27be2f4d4266659506a462
+- Portbury MMB 01 M5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\32a3b3f1be47e0d15113f86243457f87
+- Portbury , Footpath - geograph.org.uk - 6497108.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ea24b060d986d46c0de4f9b4f9d01c4
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,43 @@
+site_id: b740c74a-83ce-4e01-a07c-87ab90574750
+name: Tres Islas
+country: Guatemala
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tres islas, Mazatlán, 4 de marzo de 2025.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\22748a91ea79238617e21c5bd71abe48
+- Tres islas, Mazatlán, 4 de marzo de 2025 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\68cd6e12f499323ca8890c09594ad926
+- Tres islas, Mazatlán, 4 de marzo de 2025 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e6bf4557750ed571895a6f5f4c9f3dc
+- Tres islas, Mazatlán, 4 de marzo de 2025 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c0955a9467ed09b79141d6098f7d286
+- Tres islas, Mazatlán, 13 de febrero de 2024.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2721b8a0423a7406c6367dc2f7d79b1b
+- Hotel Riu Palace Tres Islas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc8644cfc0edc170f4b149a5bc881f05
+- Tres notas sobre la isla de Pascua, p. 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6bd6a423784a71ac5726d18a87b643d4
+- Tres notas sobre la isla de Pascua, p. 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a54be12fc9ef3ed604c7397ff8fea676
+- Tres notas sobre la isla de Pascua, p. 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f7c25fbaa863f341f0f3d66d91392c81
+- Tres notas sobre la isla de Pascua, p. 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\21b96619ecdaed8f76695dd9179264c4
+- Tres notas sobre la isla de Pascua, p. 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\804841e2fb4c5fe8e7adde559320f484
+- Tres notas sobre la isla de Pascua, p. 19.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44893e243b9e07992d099ce8d5f25b8c
+- Tres Islas - Riu - Fuerteventura - 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8fb5873bdb7a3d237915c0031894c580
+- RIU Tres Islas Hotel (3086245842).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad93a566ccd2545a2bbda90a84e48e10
+- Tres Islas - Riu - Fuerteventura - 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7c1ca49d88adf710d9c97d0fe7a3ef3
+- Tres Islas - Riu - Fuerteventura - 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4b2542490046a9c7522bf52822fc2fd5
+- Tres Islas - Riu - Fuerteventura - 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5762bdd5f37300eefc4a08e28bd86360
+- Rio Caquetá en Verano Tres Islas PNN Cahuinari.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6efb9480c78b5cf010f5e0f1080f5b6f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

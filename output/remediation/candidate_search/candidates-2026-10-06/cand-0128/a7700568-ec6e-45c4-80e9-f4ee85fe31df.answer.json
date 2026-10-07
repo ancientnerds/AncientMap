@@ -1,0 +1,23 @@
+{"site_id": "a7700568-ec6e-45c4-80e9-f4ee85fe31df",
+ "answered_by": "mcode-judge-cand-0128",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Soğmatar from Urfa in 1997 124.jpg", "verdict": "region_or_type", "note": "Herde von Schafen auf kahler Felshochebene; reine Landschaft, keine Schnitzwerke oder Bauten sichtbar."},
+  {"file": "Soğmatar from Urfa in 1997 141.jpg", "verdict": "region_or_type", "note": "Moderne Steinhäuser, Strommasten, Bohrgerät und Autos auf der Hochebene; Siedlung, nicht der Felsheiligtum."},
+  {"file": "Soğmatar from Urfa in 1997 159.jpg", "verdict": "region_or_type", "note": "Weite kahle Kies- und Fels Ebene bis zu fernen Hügeln; reine Landschaftsaufnahme."},
+  {"file": "Soğmatar from Urfa in 1997 151.jpg", "verdict": "region_or_type", "note": "Felsblöcke im Vordergrund, Dorf unterhalb des Hangs; Landschaft mit Siedlung, keine Site-Struktur."},
+  {"file": "Soğmatar from Urfa in 1997 138.jpg", "verdict": "region_or_type", "note": "Weite Hügellandschaft über kahlem Fels; nichts als Gelände, keine Schnitzungen erkennbar."},
+  {"file": "Soğmatar from Urfa in 1997 158.jpg", "verdict": "region_or_type", "note": "Felshang und Geröllfeld mit verstreut liegenden Blöcken; Gelände ohne erkennbare Strukturen."},
+  {"file": "Soğmatar from Urfa in 1997 136.jpg", "verdict": "region_or_type", "note": "Kahle Hochebene mit flachen Steinreihen in Bögen; nicht sicher als Site zu erkennen, daher Region."},
+  {"file": "Soğmatar from Urfa in 1997 164.jpg", "verdict": "region_or_type", "note": "Steinreste und dunkle Höhlungen mit modernen Häusern dahinter; Dorfbereich, keine Felsreliefs."},
+  {"file": "Soğmatar from Urfa Carvings in 1997 146.jpg", "verdict": "depicts", "note": "Felswand mit behauenen Nischen und einer Relieffigur rechts im Stein; Felsbildwerk der Site."},
+  {"file": "Soğmatar from Urfa Carvings in 1997 144.jpg", "verdict": "depicts", "note": "Innenraum einer in den Fels gehauenen Kammer mit tiefen Reliefs an Wänden und Decke."},
+  {"file": "Soğmatar from Urfa in 1997 145.jpg", "verdict": "region_or_type", "note": "Menschen auf einer Felshalde mit Dorf im Hintergrund; Landschaft, keine erkennbare Felskunst."},
+  {"file": "Soğmatar from Urfa in 1997 135.jpg", "verdict": "region_or_type", "note": "Blick hinab auf Häuser und Strassen einer Siedlung auf der Ebene; Ort, nicht das Heiligtum."},
+  {"file": "Soğmatar Hb 29.05.2010 Pognon-Höhle, Felstempel Skulpturen 554.jpg", "verdict": "depicts", "note": "Innenwand einer Felskammer mit geritzten Figuren und tiefen Reliefnischen; Felsheiligtum."},
+  {"file": "Soğmatar Hb 29.05.2010 Pognon-Höhle, Felstempel Votivnische 556.jpg", "verdict": "depicts", "note": "Rechteckig in den Fels gehauene Votivnische mit bearbeiteten Wänden und Boden; Struktur des Felskultes."},
+  {"file": "Soğmatar Hb 29.05.2010 Pognon-Höhle, Felstempel Skulpturen 558.jpg", "verdict": "depicts", "note": "Felskammerwand mit mehreren anthropomorphen Reliefs; Figurenprogramm des Felsheiligtums."},
+  {"file": "Soğmatar from Urfa locals in 1997 137.jpg", "verdict": "other_site", "note": "Porträt dreier Mädchen in bunten Kleidern auf Felsen; Personenfoto, die Site ist nicht erkennbar."},
+  {"file": "Soğmatar from Urfa Carvings in 1997 150.jpg", "verdict": "depicts", "note": "Nahaufnahme eines behauenen Reliefs mit grossen Figuren und Nebenfiguren auf der Felsoberfläche."}
+ ],
+ "note": ""}

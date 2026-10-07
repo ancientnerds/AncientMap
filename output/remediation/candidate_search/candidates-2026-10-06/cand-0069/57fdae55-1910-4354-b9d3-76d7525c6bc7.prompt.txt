@@ -1,0 +1,36 @@
+site_id: 57fdae55-1910-4354-b9d3-76d7525c6bc7
+name: Shypyntsi
+country: Ukraine
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Церква Різдва Богородиці, 1812 рік.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25bfc417f439605ad37fcf707001606a
+- Shypyntsi-Map.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1f24cea19d9cf471e371ac998fd8c926
+- Церква, село Шипинці Кіцманського району.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4614dfeb8f32d88a107e0a7ced32e10
+- Храм Різдва Богородиці.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6fb1870a9ce559d4067b7ccdf69bed4f
+- Shypynci cerkva Rizdva.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\211161923ab45ae3170156c0501e72a6
+- Шипинці церква.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\965f80a612aab51a01da9300b4d94d5e
+- Церква Різдва Христовго.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7ccba98f5c865a70eda9bbecdb22dc3a
+- Шевченківський гай - panoramio (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f7981f48d561577aa7ade87f1110978
+- Шевченківський гай - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\09b9ece082ff4e50f14f1e2a6e028d5c
+- Музей народної архітектури та побуту у Львові. - panoramio (47).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cfb4da3e043449566909ab316950a3ad
+- Anax imperator female oviposition.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a92ac8744b0b6ac1050cebfadbca496a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

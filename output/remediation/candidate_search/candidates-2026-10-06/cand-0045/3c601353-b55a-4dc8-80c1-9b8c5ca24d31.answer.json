@@ -1,0 +1,20 @@
+{"site_id": "3c601353-b55a-4dc8-80c1-9b8c5ca24d31",
+ "answered_by": "mcode-judge-cand-0045",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Arna bipunctapex (42124644872).jpg", "verdict": "other_site",
+   "note": "Nahaufnahme eines gelben Schmetterlings und einer kleinen Raupe auf weissem Stoff; Insekt, keine Site."},
+  {"file": "Mercedes-Benz 0303-ARNA-hh.jpg", "verdict": "other_site",
+   "note": "Alter Mercedes-Benz-Bus mit ARNA-Beschriftung und Tafel TURVOGN auf einer Strasse mit Bergen und Farm; Fahrzeug."},
+  {"file": "Arna Egehan.jpg", "verdict": "other_site",
+   "note": "Basketballspieler im gelb-schwarzen Trikot mit Fenebalice-Banner in einer Halle mit Zuschauern; Person."},
+  {"file": "Arna gml.jpg", "verdict": "other_site",
+   "note": "Schwarze Dampflokomotive mit Personenwagen an einem Bahnhof in einem gruenen Alpental; Eisenbahn, keine Site."},
+  {"file": "Arna Bontemps (1939) - Original.tiff", "verdict": "other_site",
+   "note": "Schwarzweiss-Portraet eines Mannes im Sakko vor kariertem Hintergrund; Personenfoto von 1939."},
+  {"file": "Áslaug Arna Sigurbjörnsdóttir 2021.jpg", "verdict": "other_site",
+   "note": "Studio-Portraet einer blonden Frau im dunklen Blazer vor grauem Hintergrund; Personenfoto."},
+  {"file": "FLY ARNA LOGO.png", "verdict": "other_site",
+   "note": "Logo-Grafik FlyArna mit AIRHEX.COM-Wasserzeichen auf grauem Grund; Werbelogo."}
+ ],
+ "note": ""}

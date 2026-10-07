@@ -1,0 +1,58 @@
+{
+  "site_id": "dd567577-49dc-45a4-99a9-7beffeb43afe",
+  "answered_by": "mcode-judge-cand-0170",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "The Horsemen's Track Finishing post Mount Malepunyo.jpg",
+      "verdict": "other_site",
+      "note": "Finishpost auf einer Harness-Rennbahn in den Philippinen; Rennbahnanlage, nicht England."
+    },
+    {
+      "file": "Historic Track mural in Goshen post office.jpg",
+      "verdict": "other_site",
+      "note": "Wandgemälde an einem Postgebäude in Goshen (USA) mit Pferderennmotiv; anderes Land."
+    },
+    {
+      "file": "The Horsemen's Track Post Parade ring.jpg",
+      "verdict": "other_site",
+      "note": "Parade Ring einer Pferderennbahn mit Reitern und Pferden; tropische Rennbahnanlage, nicht England."
+    },
+    {
+      "file": "Muddy track in Post Hill woods - geograph.org.uk - 5645137.jpg",
+      "verdict": "region_or_type",
+      "note": "Schlammiger Waldweg zwischen Bäumen mit grasbewachsenem Wegrand; kein Post Track erkennbar."
+    },
+    {
+      "file": "Track and stream in Post Hill nature reserve, Leeds.jpg",
+      "verdict": "region_or_type",
+      "note": "Weg und Bachlauf im bewaldeten Gebiet mit Schilf und Ufern; Naturlandschaft, kein Post Track."
+    },
+    {
+      "file": "329 km BMO railway track post (common view).JPG",
+      "verdict": "other_site",
+      "note": "Kilometertafel 329 km an einer Bahnstrecke mit Oberleitung und Signalen; Bahnposten in Mitteleuropa."
+    },
+    {
+      "file": "329 km BMO railway track post (view to east).JPG",
+      "verdict": "other_site",
+      "note": "Gleis mit Kilometertafel 329 km, Weiche und Oberleitung; Bahnstrecke in Mitteleuropa, nicht England."
+    },
+    {
+      "file": "329 km BMO railway track post (view to west).JPG",
+      "verdict": "other_site",
+      "note": "Gleisseite mit Kilometerpfosten 329 km und Signalsystem; Bahnposten in Mitteleuropa."
+    },
+    {
+      "file": "Philippine Jockey Club race track Post Parade ring inner tract.jpg",
+      "verdict": "other_site",
+      "note": "Innerer Ring der Parade Ring der Philippine Jockey Club; Rennbahnanlage auf den Philippinen."
+    },
+    {
+      "file": "Déli station, post track buffer and MÁV-BKV tram connection track, 2019 Krisztinaváros.jpg",
+      "verdict": "other_site",
+      "note": "Bahnhof Déli in Budapest mit Bahnposten und Straßenbahnanschluss; ungarisches Bahnbild."
+    }
+  ],
+  "note": ""
+}

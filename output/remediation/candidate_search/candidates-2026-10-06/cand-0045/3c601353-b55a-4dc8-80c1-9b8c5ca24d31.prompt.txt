@@ -1,0 +1,32 @@
+site_id: 3c601353-b55a-4dc8-80c1-9b8c5ca24d31
+name: Arna, Greece
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Arna bipunctapex (42124644872).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\33a6ab1981f2b0c16a8200442362223c
+- Mercedes-Benz 0303-ARNA-hh.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\facd957e4d378962369154349b7a47f1
+- Arna Egehan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8583b15ee5efdf63c531611f4987a6ce
+- Arna gml.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\adc100c4eba90a1f6d290c91e23a2ed0
+- Arna Bontemps (1939) - Original.tiff  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\68987b88b7ee9d34669b3a9900c7d072
+- Áslaug Arna Sigurbjörnsdóttir 2021.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17fcf0efc2787dd9d79b010ca1bda6ff
+- FLY ARNA LOGO.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce58affcbe023140e5e005d3b79a954e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

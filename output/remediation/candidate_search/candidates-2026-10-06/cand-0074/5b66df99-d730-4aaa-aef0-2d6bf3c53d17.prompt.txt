@@ -1,0 +1,47 @@
+site_id: 5b66df99-d730-4aaa-aef0-2d6bf3c53d17
+name: Tapınak
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Templo de Garni, Armenia, 2016-10-02, DD 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d66a5afcf53e5fa791015d550b3e9de4
+- Temple of the Emerald Buddha.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4c887d4fbcc98b75ac0c30c9da55143
+- Hamandir Sahib (Golden Temple).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\405ab0774d9130532a7ceac312c493b8
+- Jerusalem-2013-Temple Mount-Dome of the Rock & Chain 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\24e0291800d94158e07a6181a4870a71
+- Bulguksa temple entrance gate stairs flower bed and blue sky in Gyeongju South Korea.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\87c8d4c0eab3f0238a6fe04d3464d6fb
+- Changhua Great Buddha Temple amk.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\69aa25b2d8fdda0ebe20bb6918398932
+- Khandoba temple Pune.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4a466505e5306a6cfd78b8dfc06207c1
+- Many colorful flowerpots in front of Bulguksa temple in Gyeongju South Korea.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6cf2bd83768b5d7a27e15157a10cc4a4
+- Open gate leaning to a courtyard of colorful paper lanterns at Bulguksa temple in Gyeongju South Korea.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9fe51bff23fb72ac0f7c828dfdc60839
+- Courtyard of colorful paper lanterns and shadow patterns at Bulguksa temple Gyeongju South Korea.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4aecc618055179667b889940fcf73781
+- Vat Pa Phai temple with a Buddhist monk, orange marigold, clouds and blue sky, in Luang Prabang.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9546122a40140b38f72916580d9d6c8
+- Peking Temple of Extreme Happiness-20131229-RM-120625.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c21fccbd67819db4161d708832004df4
+- Aizanoi Antik Kenti Tapınak 3.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1cc29ba64e48f02584246f4b47b77231
+- Kore tapınak.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8278f4b5f4feb22413fa37afba1ea6ec
+- Tapınak - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\34f45d9878055dc6cfe39e1b6546eeff
+- Knidos Yuvarlak Tapınak.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e8f4425bf50a2c8afe6952fdfdbfaeec
+- Aizanoi Antik Kenti Tapınak 2.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8666f1f18a4bd444c0b2befcfd90ebe0
+- Apollon tapınak sütunları.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6f27f2c823a06f4eca410052a2ddbce1
+- Assos Athena Tapınak Frizi (53022917258).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd0101cb64176733781b19a134676d72
+- Olimpos İyonik tapınak belki Marcus Aurelius adına inşa edilmiştir.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41b8234f53f2971154b2fcb1933127f4
+- Olimpos İyonik tapınak belki Marcus Aurelius adına inşa edilmiştir 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c7dbb791988afacf872e70f1fb2c70cb
+- Aizanoi Antik Kenti Tapınak 1.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e1acaed434975c43d35cbbea46da2c0
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,10 @@
+{"site_id": "3f9bdb7e-9739-47db-b323-1935cf6ea8d6",
+ "answered_by": "mcode-judge-cand-0048",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [{"file": "Colonne trajane 2-02.jpg",
+               "verdict": "other_site",
+               "note": "Photograph of a Trajan's Column relief: harbour scene with ships, oarsmen and buildings. The column stands in Rome, no Luni remains or exhibits shown."},
+              {"file": "058 Conrad Cichorius, Die Reliefs der Traianssäule, Tafel LVIII.jpg",
+               "verdict": "other_site",
+               "note": "Scanned book plate (plate no., pp. 209-210) reproducing a Trajan's Column relief on paper. Roman monument in Rome, unrelated to Luni."}],
+ "note": ""}

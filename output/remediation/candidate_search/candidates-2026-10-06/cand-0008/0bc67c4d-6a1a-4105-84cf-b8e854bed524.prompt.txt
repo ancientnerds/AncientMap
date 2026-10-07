@@ -1,0 +1,49 @@
+site_id: 0bc67c4d-6a1a-4105-84cf-b8e854bed524
+name: Conchalito
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ortofoto del Estero El Conchalito (Vuelo 3) 00287.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4118c23eb851237b532b7ca6580b69b2
+- Manglar rojo El Conchalito.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e552b468f8524dc0471b854e4c806087
+- Vista aérea del Estero El Conchalito 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1ff082a61d8b12ac984a53c5dd19af49
+- Vista aérea del Estero El Conchalito 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d94fa49e2fee6822be83c89b1416ae49
+- Vista aérea del Estero El Conchalito 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f2ffb5d4fd143e17048aaa6bf61b3771
+- Vista aérea del Estero El Conchalito 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\36da56a8c8bd04518edc1fa2e8bb0b2c
+- Vista aérea del Estero El Conchalito 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de765f7c2286c9e6ce5067f5c4b653c2
+- Vista aérea del Estero El Conchalito 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd751ffa79262f3cfc5a7dbe92588a55
+- Vista aérea del Estero El Conchalito 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\886c4a92f172ef63ea5b2c021a0c2d2c
+- Vista aérea del Estero El Conchalito 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\490396716ce6349c6e85ad062add0260
+- Vista aérea del Estero El Conchalito 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3d071669f6522f73fa35b76d155816c4
+- Vista aérea del Estero El Conchalito 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6000731446f0347eee099c1177c89e1
+- Ortofoto del Estero El Conchalito (Vuelo 2) 00390.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2ee8f2beee6b6dea882345ef2c500ff5
+- Ortofoto del Estero El Conchalito (Vuelo 1) 00217.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f87eb6de6135bba284d6dcb5b4fa6a56
+- Ortofoto del Estero El Conchalito (Vuelo 3) 00115.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a841b4b2fd527f9ab029c955063a6c7b
+- Ortofoto del Estero El Conchalito (Vuelo 1) 00744.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\798ad2fbceea921907bf681c0c9bbaa1
+- Ortofoto del Estero El Conchalito (Vuelo 3) 00268.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c851e9e7adcb99c116798c6c9a4efcc
+- Ortofoto del Estero El Conchalito (Vuelo 3) 00220.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\39e7fe5111a263fa7d6a3bee5aae39a8
+- Ortofoto del Estero El Conchalito (Vuelo 2) 00546.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f2b79be69485d600ab0ad870ab7cc94
+- Ortofoto del Estero El Conchalito (Vuelo 1) 00526.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f38b590acd606878a3520f868b32924c
+- Ortofoto del Estero El Conchalito (Vuelo 1) 00947.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c3baefef54e175355c8049f110e020a
+- Ortofoto del Estero El Conchalito (Vuelo 2) 00183.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a6b3af8b34f988b9f56271ad4598173
+- Ortofoto del Estero El Conchalito (Vuelo 1) 00154.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b195e1af4a332b9e436b759fd3958688
+- Ortofoto del Estero El Conchalito (Vuelo 1) 01007.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9f78f0dd91b1f95ac3cf7cdbc6a22d0b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

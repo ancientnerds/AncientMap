@@ -1,0 +1,38 @@
+{
+  "site_id": "86e1dff8-20ac-4d49-85d8-480ee0b9f3ed",
+  "answered_by": "mcode-judge-cand-0101",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Robin Hood's Bay - geograph.org.uk - 3631746.jpg",
+      "verdict": "other_site",
+      "note": "Blick über einen bewaldeten Talkessel mit Häusern zum Meer; eine Bucht an der Yorkshire-Küste, nicht der Ball."
+    },
+    {
+      "file": "Robin Hood's Ball, Wiltshire - geograph.org.uk - 7047625.jpg",
+      "verdict": "region_or_type",
+      "note": "Feuchtes, nebliges Feld mit Pfahlreihe und Weg durchs Gras; Landschaft, ein Hügel ist nicht sicher erkennbar."
+    },
+    {
+      "file": "Eustace Hale Ball 001.jpg",
+      "verdict": "other_site",
+      "note": "Schwarzweiß-Porträt eines Mannes im Anzug mit Brille vor gemustertem Vorhang; eine Person, kein Ort."
+    },
+    {
+      "file": "2106-21LastFlightof CaptainBall.jpg",
+      "verdict": "other_site",
+      "note": "Gemälde eines Flugzeugabsturzes mit Rauch und Trümmer auf offenem Feld; Gemälde, keine Geländedarstellung der Site."
+    },
+    {
+      "file": "Radio. Talents de chez nous BAnQ P48S1P23321.jpg",
+      "verdict": "other_site",
+      "note": "Plakat mit einem Mann am Mikrofon vor der Aufschrift La Farine und Robin Hood; Werbeplakat, kein Ort."
+    },
+    {
+      "file": "Liebig bike polo.jpg",
+      "verdict": "other_site",
+      "note": "Sammelkarte der Firma Liebig mit einer Radrennfahrerin vor large-Etiketten; Inserat, kein Ort."
+    }
+  ],
+  "note": "Nur das Foto des Feldes bei Robin Hood's Ball zeigt einen Landschaftsbezug; die anderen fünf zeigen Personen, ein Gemälde, ein Plakat und eine Karte."
+}

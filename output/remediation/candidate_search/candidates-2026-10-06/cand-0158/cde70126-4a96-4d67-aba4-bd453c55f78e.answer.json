@@ -1,0 +1,20 @@
+{
+  "site_id": "cde70126-4a96-4d67-aba4-bd453c55f78e",
+  "answered_by": "mcode-judge-cand-0158",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Fushan Steamer 02 20251209.jpg", "verdict": "other_site", "note": "Alter Laden mit Körben und Schaufenster; moderne Geschäftsszene."},
+    {"file": "Fushan Bay at night.jpg", "verdict": "other_site", "note": "Nächtliche Hafen-Skyline mit Lichtern und Wasser; moderne Stadtszene."},
+    {"file": "Fushan suburban park entrance signage.jpg", "verdict": "other_site", "note": "Modernes Parkschild am Eingang; keine archäologische Struktur."},
+    {"file": "Fushan Steamer 01 20251209.jpg", "verdict": "other_site", "note": "Alte Ladenfront mit Schaufenstern und Fassadenschildern; modernes Gebäude."},
+    {"file": "TRA Fushan station.JPG", "verdict": "other_site", "note": "Bahnstrecke mit Arbeitern und Bahnhofsgebäude; moderne Verkehrsanlage."},
+    {"file": "Fushan, Yantai, Shandong, China - panoramio.jpg", "verdict": "other_site", "note": "Moderne Stadtansicht von Yantai mit Gebäuden und Straßen; kein Fundort."},
+    {"file": "福山 Fushan - panoramio (1).jpg", "verdict": "other_site", "note": "Moderner Besucherweg mit chinesischer Wandbeschriftung; keine Site-Struktur."},
+    {"file": "Fushan, Yantai, Shandong, China - panoramio (3).jpg", "verdict": "other_site", "note": "Sandstrand mit Stadion und Stadt im Hintergrund; moderne Küstenszene."},
+    {"file": "Fushan, Yantai, Shandong, China - panoramio (6).jpg", "verdict": "other_site", "note": "Sandstrand mit Stadtbebauung im Hintergrund; keine Ausgrabungsreste."},
+    {"file": "Fushan, Yantai, Shandong, China - panoramio (5).jpg", "verdict": "other_site", "note": "Modernes Hochhaus in einer Grünanlage; städtische Szene."},
+    {"file": "2018台灣基督長老教會福山教會Fushan Wulai b.jpg", "verdict": "other_site", "note": "Moderne Kirche mit Fassade und Vordach; kirchliches Bauwerk."},
+    {"file": "Fushan Elementary School, Wulai District, New Taipei d.jpg", "verdict": "other_site", "note": "Moderne Schule mit Kind auf Fahrrad; Schulhofszene."}
+  ],
+  "note": ""
+}

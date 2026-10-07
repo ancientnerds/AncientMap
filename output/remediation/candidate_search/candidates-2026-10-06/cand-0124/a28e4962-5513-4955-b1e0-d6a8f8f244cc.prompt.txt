@@ -1,0 +1,36 @@
+site_id: a28e4962-5513-4955-b1e0-d6a8f8f244cc
+name: Lohra Megalithic Tomb
+country: Germany
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Comitatus Hohnstein nec non Dynastiarum Lohra et Klettenberg (Herrschaft Lohra).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e56d9e5ac1acd4ef6752ccb04839727
+- Lohra Ruine Bergfried.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\972c91b22b305666f4866cfff47a272e
+- Borg Lohra Innenhof.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef0dd53261dd79a40d53dfcb08feccbc
+- Wohnhaus - Lohra fm810565.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f5fb1f3cf0848846e8cd4cc745b1b8d
+- Fachwerkhaus Weipoltshausen (Lohra).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f41f8971d70ed3af3b5051d4fe44c03c
+- Lohra-Wappen Sm.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f1c7cbcc93cb97a1c169a223b936d26b
+- Lohra - Evangelische Kirche (047).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\79830de4d7d40a752795377d096fa0ba
+- Lohra-003.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2120143bc5be52afcd57bc82fccc5eed
+- Lohra - Lindenplatz (001).PNG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\875a43fc3d3e08c3954496a611170f21
+- Evangelische Pfarrkirche Lohra fm810560.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e995ffc6e93107e7888e6ba5655e679
+- Lohra - Evangelische Kirche (037).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4bbb57a56d4393a9cc7fdbe56cdf9311
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

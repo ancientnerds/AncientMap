@@ -1,0 +1,37 @@
+site_id: 03c54b35-5554-497f-b91e-a2a77f3325e1
+name: Acropolis of Alatri
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- San Sisto procession near the Acropolis of Alatri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb90ab7cf8fbf7f7d38f658747294008
+- Alatri - Porta Maggiore.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd200dda1e7db3ec6e73173b8847ebe8
+- Acropoli di Alatri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b8118a8f9cb8823357931695f63fb4a5
+- La Porta Maggiore - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8fcf7e6bccd8e2fcf93b6e3bbe32cb98
+- Porta S.Francesco dall'interno - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a4d6892e72502dc929ca180922f49d71
+- Le mura di Porta S.Pietro - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2bf135f28a49f0daa7caa74b285f5314
+- Porta Minore - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1c9687611113fb31c2f55dd871f7e8c9
+- Alatri - Le mura.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a68ddea0bbe49dd3f745eb5fa3c308b5
+- Il possente torrione - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3dba9ce1364204e3b28abffaf2fe2b55
+- Porta Minore vista da dentro - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1316620da240c4c834cb913db98f6b04
+- Portico Betilieno Alatri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7698e7d841fdf00168e6d9bc6396ed23
+- Acropoli di Alatri, pietre sparse ... una volta un tempio - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cad708207ded1435d740bf4d87615acc
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

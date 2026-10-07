@@ -1,0 +1,63 @@
+{
+    "site_id":  "0a1ca287-1945-4b9d-bc6a-001bf2aa34c6",
+    "answered_by":  "mcode-judge-cand-0007",
+    "model":  "MiniMax-M3.1-Flash-Preview",
+    "verdicts":  [
+                     {
+                         "file":  "Magasa - Fontana 03.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Stone fountain with metal spout in a cobbled square, bench and flower planter; a modern village fountain, not remains."
+                     },
+                     {
+                         "file":  "Magasa - Fontana 02.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Stone washing trough set into a wall with metal pipes, potted plants on the terrace above; a modern village laundrette."
+                     },
+                     {
+                         "file":  "Magasa, veduta.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Whole modern village seen across a green hillside, stone houses with tiled roofs; village view, no ruins."
+                     },
+                     {
+                         "file":  "Magasa - Scorcio 07.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Modern hillside village with a clock tower and stone houses against mountains; village view, no ruins visible."
+                     },
+                     {
+                         "file":  "Magasa - Municipio.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Yellow town hall with MUNICIPIO lettering, bell gable and flag above a cobbled lane; a civic building."
+                     },
+                     {
+                         "file":  "Magasa - Fontana 01.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Stone fountain with a tall pillar and rectangular basin on a cobbled square; a modern village fountain."
+                     },
+                     {
+                         "file":  "Magasa - Affresco su casa 01.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Faded religious wall paintings (Madonna with Child and saints) around a boarded window on a house; painted decoration."
+                     },
+                     {
+                         "file":  "Magasa - Scorcio 01.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Narrow cobbled street between stone houses with shutters and flower boxes; a village street scene."
+                     },
+                     {
+                         "file":  "Magasa - Scorcio 06.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Narrow lane with plastered houses, balconies full of geraniums, satellite dish and a cat; village street scene."
+                     },
+                     {
+                         "file":  "Magasa - Insegna affrescata.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Faded painted advertisement between two turquoise shutters on a rough house wall; a shop sign, not remains."
+                     },
+                     {
+                         "file":  "Magasa - Vista 02.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Distant elevated view of the whole village with tiled roofs in a forested mountain valley; landscape only."
+                     }
+                 ],
+    "note":  ""
+}

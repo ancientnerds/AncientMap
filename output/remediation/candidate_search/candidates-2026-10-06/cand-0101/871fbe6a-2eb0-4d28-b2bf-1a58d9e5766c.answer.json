@@ -1,0 +1,148 @@
+{
+  "site_id": "871fbe6a-2eb0-4d28-b2bf-1a58d9e5766c",
+  "answered_by": "mcode-judge-cand-0101",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Slavyanska street in Obzor, Bulgaria.jpg",
+      "verdict": "region_or_type",
+      "note": "Nachtaufnahme einer breiten Stadtstraße mit Zebrastreifen, Läden, Bäumen und Passanten; moderne Ortsansicht ohne antike Reste."
+    },
+    {
+      "file": "Seaside alley in Obzor, Bulgaria.jpg",
+      "verdict": "region_or_type",
+      "note": "Meerpromenade mit Strandliegen, Schirmen und Hotelterrassen, Meer im Hintergrund; moderne Küstenstadt, kein Befund."
+    },
+    {
+      "file": "Svoboda Square and clock tower in Obzor, Bulgaria.jpg",
+      "verdict": "region_or_type",
+      "note": "Nachtaufnahme eines Platzes mit Uhrenturm, Laternen, Marktständen und modernen Häusern; Stadtplatz, keine Ruine."
+    },
+    {
+      "file": "Svoboda square in Obzor, Bulgaria.jpg",
+      "verdict": "region_or_type",
+      "note": "Weiter Pflasterplatz mit Läden, Bäumen, Brunnen und vielen Passanten; allgemeine Stadtansicht."
+    },
+    {
+      "file": "Ivan Vazov street in Obzor, Bulgaria.jpg",
+      "verdict": "region_or_type",
+      "note": "Verkehrsberuhigte Straße mit Läden, Marktständen und Bäumen; moderne Fußgängerzone der Stadt."
+    },
+    {
+      "file": "Svoboda Square and fountains in Obzor, Bulgaria.jpg",
+      "verdict": "region_or_type",
+      "note": "Platz mit langem Springbrunnen, Bäumen und Laternen bei Nacht; moderne Stadtgestaltung ohne Site-Bezug."
+    },
+    {
+      "file": "City hall of Obzor, Bulgaria.jpg",
+      "verdict": "region_or_type",
+      "note": "Modernes Rathausgebäude mit bulgarischer Flagge und Aufschrift Обзор, Freitreppe davor; kein antikes Bauwerk."
+    },
+    {
+      "file": "Kiril i Metodiy street in Obzor, Bulgaria 01.jpg",
+      "verdict": "region_or_type",
+      "note": "Straße mit Hotel, Läden, Fahrradständern und Bäumen, Meer am Ende; moderne Ortsansicht."
+    },
+    {
+      "file": "Church of Saint John the Baptist in Obzor, Bulgaria.jpg",
+      "verdict": "region_or_type",
+      "note": "Heutige Kirche mit Satteldach, Glockenturm und Arkaden zwischen Zedern; modernes Bauwerk, keine Ruine."
+    },
+    {
+      "file": "Park along Kiril i Metodiy street in Obzor, Bulgaria.jpg",
+      "verdict": "region_or_type",
+      "note": "Stadtpark mit Rasen, Pinien, Restaurant und Kinderspielgeräten hinter einer Mauer; Grünfläche der Stadt."
+    },
+    {
+      "file": "Kiril i Metodiy street in Obzor, Bulgaria 02.jpg",
+      "verdict": "region_or_type",
+      "note": "Hofartige Straße mit Hotel, Läden, Blumenbeeten und Fahrradständern; moderne Stadtansicht."
+    },
+    {
+      "file": "Bulgaria Obzor street.jpg",
+      "verdict": "region_or_type",
+      "note": "Asphaltierte Nebenstraße mit verfallendem Haus, Kiefer, Mauern und geparkten Autos; Vorstadtbild ohne Site-Bezug."
+    },
+    {
+      "file": "Právny obzor - ročník IV 1921 (retouched).jpg",
+      "verdict": "other_site",
+      "note": "Titelseite der slowakischen Rechtszeitschrift Právny obzor mit Verlagsangaben Bratislava; Druckwerk, keine Ortsansicht."
+    },
+    {
+      "file": "525 Obzor Sozopol DSC04192.JPG",
+      "verdict": "other_site",
+      "note": "Blaues Schiff mit der Nummer 525 und bulgarischer Aufschrift am Kai im Hafen; Fahrzeug, keine Site."
+    },
+    {
+      "file": "Jaroslav Krupka, Zedníci (Fotografický obzor, 1926).jpg",
+      "verdict": "other_site",
+      "note": "Schwarzweiß-Aufnahme von Bergarbeitern in einer Grube aus einer tschechischen Zeitschrift; Aufnahme eines anderen Ortes."
+    },
+    {
+      "file": "Mosaic above the gate to Church of Saint John the Baptist in Obzor, Bulgaria.jpg",
+      "verdict": "region_or_type",
+      "note": "Mosaik mit Johannes dem Täufer über dem Tor der heutigen Kirche; Zier der modernen Kirche, keine Site-Struktur."
+    },
+    {
+      "file": "Obzor (in front of the bus station).jpg",
+      "verdict": "region_or_type",
+      "note": "Kreuzung mit Ampel, Verkehrsschildern und modernen Mehrfamilienhäusern; Stadtbild, kein antiker Befund."
+    },
+    {
+      "file": "Book exchange box in front of Church of Saint John the Baptist in Obzor, Bulgaria.jpg",
+      "verdict": "region_or_type",
+      "note": "Blauer Bücherschrank mit bulgarischer Aufschrift neben Bäumen, Wegen und Restaurantterrassen; Öffentliches Möbel im Stadtgrün."
+    },
+    {
+      "file": "Uherské Hradiště, Obzor.jpg",
+      "verdict": "other_site",
+      "note": "Modernes Verwaltungsgebäude im Plattenbaustil mit Parkplätzen, Bäumen und Lautsprechern; Stadtbild eines anderen Landes."
+    },
+    {
+      "file": "A view of Obzor (AP4H7255 1PP) (15914346110).jpg",
+      "verdict": "region_or_type",
+      "note": "Panoramablick vom Hang über Bäume auf die Bucht und Küstenlinie mit Stränden; Küstenlandschaft der Stadt."
+    },
+    {
+      "file": "At Obzor Resort in 2011.jpg",
+      "verdict": "region_or_type",
+      "note": "Blick vom Balkon eines Ferienhauses auf Strand mit Liegestühlen und Schirmen und aufs Meer; moderne Anlage."
+    },
+    {
+      "file": "Bus station - panoramio (6).jpg",
+      "verdict": "region_or_type",
+      "note": "Bushaltestelle mit Vordach, Zebrastreifen, Taxen und Apotheke gegenüber; moderne Verkehrsfläche der Stadt."
+    },
+    {
+      "file": "Obzor view from Byala.jpg",
+      "verdict": "region_or_type",
+      "note": "Weitwinkelblick vom Wald über das Meer auf die Stadt mit Strand und Hotelbauten; Küstenpanorama."
+    },
+    {
+      "file": "Obzor2007 3.jpg",
+      "verdict": "region_or_type",
+      "note": "Blick von einem Hügel auf rote Dächer der Stadt bis zum offenen Meer; Stadtansicht von Obzor."
+    },
+    {
+      "file": "Obzor2007 4.jpg",
+      "verdict": "region_or_type",
+      "note": "Südhangansicht mit Häusern zwischen Bäumen, Küste und Meer dahinter; Stadt- und Küstenlandschaft."
+    },
+    {
+      "file": "Obzor2007 6.JPG",
+      "verdict": "region_or_type",
+      "note": "Belebter Platz mit Caféterrassen, Palmen, Kopfsteinpflaster und steinernem Torbogen; moderne Stadtansicht."
+    },
+    {
+      "file": "Recycling box for the Caps for Future charity in Obzor, Bulgaria.jpg",
+      "verdict": "region_or_type",
+      "note": "Herzförmiger Sammelbehälter mit Deckel vor verputzter Mauer und Häusern; städtisches Objekt in der Straße."
+    },
+    {
+      "file": "Warning Sign \"Children\" in Obzor (AP4E7013 1PS) (28970439562).jpg",
+      "verdict": "other_site",
+      "note": "Isoliertes verrostetes Dreiecksschild mit Kinder-Silhouetten vor weißem Hintergrund; Schild ohne Orts- oder Regionsbezug."
+    }
+  ],
+  "note": "Alle aufgenommenen Obzor-Bilder zeigen die moderne bulgarische Küstenstadt; keine Aufnahme zeigt Ruinen oder Ausgrabungen der antiken Site."
+}

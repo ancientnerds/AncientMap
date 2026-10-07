@@ -1,0 +1,31 @@
+site_id: 86e1dff8-20ac-4d49-85d8-480ee0b9f3ed
+name: Robin Hood's Ball
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Robin Hood's Bay - geograph.org.uk - 3631746.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af7ece4daaa191067c74c365c091d411
+- Robin Hood's Ball, Wiltshire - geograph.org.uk - 7047625.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\46925531fbd5e88bc70200235fd97636
+- Eustace Hale Ball 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1e952d394164abf5a0575e186e36d532
+- 2106-21LastFlightof CaptainBall.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9ce6fc24640b63b4c41250eb4d162706
+- Radio. Talents de chez nous BAnQ P48S1P23321.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fe0b6adf059541145f21a3cdc82afc44
+- Liebig bike polo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\75d2045e66b6f419252e8b0debf24dfe
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

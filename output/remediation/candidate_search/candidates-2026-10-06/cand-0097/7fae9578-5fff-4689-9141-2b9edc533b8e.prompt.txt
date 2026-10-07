@@ -1,0 +1,33 @@
+site_id: 7fae9578-5fff-4689-9141-2b9edc533b8e
+name: Castlesteads, Greater Manchester
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Castlesteads - geograph.org.uk - 5564258.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\69ab963a603e951648eb52e2bf0b93fb
+- Roman Antiquities at Castlesteads in Cumberland Figure 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3c10d171ebcb1d8740a6ae9276da4870
+- Roman Antiquities at Castlesteads in Cumberland Figure 21.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\673dcae073fcfc624c955b89ee5d2a90
+- Roman Antiquities at Castlesteads in Cumberland Figure 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fca68e1631213c4c32f661f123c243c0
+- A6, Castlesteads - geograph.org.uk - 6421007.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e5e94011a965cfd962e105bea319162
+- Roman Antiquities at Castlesteads in Cumberland Figure 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a18d3de9ebf347ae74a5eceb256aa358
+- Roman Antiquities at Castlesteads in Cumberland Figure 17.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\116f6c1e8738e464a8eeee0468340a50
+- Roman Antiquities at Castlesteads in Cumberland Figure 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e18135b15904d5caad2440ccd330eb61
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

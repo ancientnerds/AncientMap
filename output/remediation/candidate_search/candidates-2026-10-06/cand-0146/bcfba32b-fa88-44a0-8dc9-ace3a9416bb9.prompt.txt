@@ -1,0 +1,35 @@
+site_id: bcfba32b-fa88-44a0-8dc9-ace3a9416bb9
+name: The Davidson Center
+country: Israel
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Wikimania 2011 Jerusalem (15).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\68cf77c3436ac4e0fcb312160309efa3
+- Jerusalem, Davidson center 3871.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c0219e79f42ac24874171f9a4d381e56
+- Saturn V Rocket - Davidson Center for Space Exploration.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c8f1ebc33648e45af90c931127cfd469
+- Rajesh Kasturirangan at Mind and Life.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc8970efd8419707fdf6076002093e12
+- Davidson Center for Space Exploration.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec8533385a3a9c7e58b9db76d683c408
+- Jazzy Davidson with the USC Trojans in 2026.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4edf84f8b681547e54f6a014758b73a
+- Davidson Center - Jerusalem Archaeological Park - The Western Wall overground 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4fc9e0a987ef7e3b275c1d1610d244e0
+- Harley-Davidson motorcycle Center Street downtown Rutland VT August 2025.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\57ea975794549e995748bfc0d492577d
+- Saturn V, Davidson Center for Space Exploration (Huntsville, Alabama, USA).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5696b1fe7edbd03b7726b0ddb635cae0
+- Sloan Music Center, Davidson College 2005.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05d743e3acda3dc7659f86c32073a957
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

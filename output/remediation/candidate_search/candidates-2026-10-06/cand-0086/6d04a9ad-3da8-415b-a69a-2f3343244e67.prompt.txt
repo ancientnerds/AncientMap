@@ -1,0 +1,37 @@
+site_id: 6d04a9ad-3da8-415b-a69a-2f3343244e67
+name: Castro of Monte Castelo
+country: Portugal
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Castelo de Castro Marim - Portugal (24577136036).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc73a51e4968289c8cff969b58bacdb9
+- Castelo de Castro Marim - Portugal (20562276414).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2c63feb0d91f99b8aa29a6f14cdd3b20
+- Castelo de Castro Marim - Portugal (25741727803).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1293e030a645e233428bc87df3cd1342
+- Castelo de Castro Marim - Portugal (24235503469).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\48236c46e07fd2e59a61cdc40bae7ad8
+- Castelo de Castro Marim - Portugal (19632447373).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41e4a98591120db00875cad89753794a
+- Interior do Castelo de Castro Marim - Portugal (22217710286).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc327d720648c3253f6f54c680ccdac9
+- Interior do Castelo de Castro Marim - Portugal (20253392155).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5f859fbf71e29c4820058dd5c23538f8
+- Castelo de Castelo Melhor - Portugal (51240859769).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\92135501ff2996de55edd550d7f302eb
+- Castelo de Castelo Melhor - Portugal (50766352682).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a85f1bd789a22eae956bd4f0d29a166f
+- Castelo de Castelo Melhor - Portugal (51090566656).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d0cb2b1fb62ab0070715abd73ce3db41
+- Castelo de Castelo Melhor - Portugal (51156311718).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\edfdab9036274b3b11f98fd45d8efd41
+- Castelo de Castelo Melhor - Portugal (51155410692).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb396f40eb2df5c8ade30351962653ea
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

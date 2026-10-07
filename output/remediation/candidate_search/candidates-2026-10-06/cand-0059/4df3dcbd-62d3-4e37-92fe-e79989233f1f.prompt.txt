@@ -1,0 +1,53 @@
+site_id: 4df3dcbd-62d3-4e37-92fe-e79989233f1f
+name: La Pintada
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Puentes en La Pintada 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17074adf53fa33b03fe76ad4acc6f5be
+- Farallones de La Pintada desde la vía Valparaíso - Caramanta 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\00bbc63f33b18e2092c55c4603cfd104
+- Farallones de La Pintada desde la vía Valparaíso - Caramanta 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ababdcb2a332d1d51ede260992c681ab
+- La Pintada, Antioquia 1999.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b159aef19c57ee5d94a6f17f55de9234
+- La Pintada-Estación de policía.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f5f9a2cf7f6b1583c03a616c770cef26
+- Río Cauca (La Pintada Antioquia - Colombia).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c2b502b2fc121ca7dffcd7614925397d
+- CO La Pintada 1011 (2) (17222488416).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\87e6e12bcc8d90c5008b3f0355904e30
+- CO La Pintada 1011 (1) (16628264713).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bf1805858d331bfa9a422e917b59ec2a
+- La Pintada-Parque Recreativo e Infantil Pueblo Nuevo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a666e881a465f0c2fc30dc5c394e3424
+- La Pintada, Atoyac de Álvarez - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3bc33e5c8779918c36dcd56a4fa790b7
+- Alberca, La pintada, Atoyac de Alvarez - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7996c4414ee6585399d8c6d651867b14
+- La Pintada, Atoyac de Álvarez, Gro. - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\29cee6f88ef18a740ba31192e8c74f24
+- Santa Cecilia-La Pintada 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02cdae89eb566f2e002fc5c6ad1346dc
+- Marsella - Vía a la Pintada - Flickr - Alejandro Bayer.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7a9ac55765c78c05b77b1d21fb0504ed
+- Santa Cecilia-La Pintada 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8fbc464632040099afe09334243cf932
+- Santa Cecilia-La Pintada 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\22689450f35c6feab2cc98e747d29962
+- Farallones de La Pintada - Flickr - Alejandro Bayer.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0eba9aabfa4da232e3c861be7793211
+- Marsella - Vía a la Pintada - Flickr - Alejandro Bayer (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e5854858a707a599abc98e252459ce57
+- Marsella - Vía a la Pintada - Flickr - Alejandro Bayer (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a478d29ef6d8c6d0813794bd8712653
+- Santa Cecilia-La Pintada 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\add07dac44d59a7fd6bbcfd02b556bff
+- Bubulcus ibis Garcita bueyera Cattle Egret (8856839181).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff0a3ae5876edf2b3e765bd79535ca09
+- Bubulcus ibis Garcita bueyera Cattle Egret (8857450378).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fdaf5621326b80094945689777b53514
+- Bubulcus ibis Garcita bueyera Cattle Egret (8883115036).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\679c5a822dbdc073dbb2172ce473bbb4
+- CO Chichigüí 1109 (1) (16628287873).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94c5d7c9f70e849cd75c853b24be74ec
+- CO Chichigüí 1109 (2) (16628287513).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7d9428e34f7d8820dfe35bd274e13480
+- CO Chichigüí 1109 (3) (17247938391).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02b3f3c8e62d239650348faad2fc5bdb
+- Colombia Ruta Nacional 25.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4b9b03573ef1ebebc62c1c709ca79b0e
+- Flag of La Pintada (Antioquia).svg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5b8949efa503bfa058c153af5d05ac15
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

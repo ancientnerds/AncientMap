@@ -1,0 +1,9 @@
+{
+  "site_id": "e6fed564-7213-4395-9814-1c24d0c08287",
+  "answered_by": "mcode-judge-cand-0176",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "ISS067-E-153818 - View of Greece - Kimolos - Polyegos - Pollonia (Milos) (cropped).jpg", "verdict": "region_or_type", "note": "Regionale Insel- und Küstenlandschaft (Kykladen); keineSite-Struktur von Prassa erkennbar."}
+  ],
+  "note": ""
+}

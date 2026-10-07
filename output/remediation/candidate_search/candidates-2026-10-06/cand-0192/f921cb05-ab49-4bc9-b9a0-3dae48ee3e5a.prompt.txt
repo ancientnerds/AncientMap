@@ -1,0 +1,37 @@
+site_id: f921cb05-ab49-4bc9-b9a0-3dae48ee3e5a
+name: Pucará, Puno
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Pucara(Iglesia de Santa Isabel de Pucará (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\80a320cb87ccf432ae00d6b611358fc7
+- Instalaciones del colegio Agro Industrial Pucará en 1998 16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1dc527e567d3f0a000d11ca3da18453f
+- Instalaciones del colegio Agro Industrial Pucará en 1998 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2500365b0c42dabf37767f5d8662c47e
+- Instalaciones del colegio Agro Industrial Pucará en 1998 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50a473da6cd0cca642b4a281c864191a
+- Instalaciones del colegio Agro Industrial Pucará en 1998 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\67541da9e7b349fed2ea32f5146fbdd4
+- Instalaciones del colegio Agro Industrial Pucará en 1998 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6dbe1fa19dbf79a202396d5c45b590e
+- Instalaciones del colegio Agro Industrial Pucará en 1998 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2ea34c975acd1910d01ede25e052c6e5
+- Instalaciones del colegio Agro Industrial Pucará en 1998 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a841152b042ecc24642f28d3f6830c3a
+- Instalaciones del colegio Agro Industrial Pucará en 1998 15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b943ec5bca5bb364b32fbb1fda9882d2
+- Instalaciones del colegio Agro Industrial Pucará en 1998 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8557bf440ea4aa615bfc6e0505f2637
+- Instalaciones del colegio Agro Industrial Pucará en 1998 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\920b073cab1ef8828bfb7f7c7aa3f57d
+- Instalaciones del colegio Agro Industrial Pucará en 1998 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\372c06934f4876d7bf0a86c8977af30a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

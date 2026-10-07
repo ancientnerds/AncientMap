@@ -1,0 +1,21 @@
+{"site_id": "4641bd18-a6d7-4f26-b895-e67f50af8e53",
+ "answered_by": "mcode-judge-cand-0050",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Charax, attambelos, tetradracma, 55-65 dc ca.JPG",
+   "verdict": "other_site",
+   "note": "Zwei Seiten einer geprägten Bronzemünze auf hellem Filz: Kopfporträt und sitzende Figur. Keine Ruine, kein Gelände."},
+  {"file": "Arabs in Iraq.png",
+   "verdict": "region_or_type",
+   "note": "Farbige Grenzkarte von Irak mit den Reichen Araba, Characene, Lakhmiden; Charax-Spasinu nur als Punkt am Golf beschriftet."},
+  {"file": "Coin of Hyspaosines, minted at Charax Spasinu in 129-8 BC.jpg",
+   "verdict": "other_site",
+   "note": "Schwarz-Weiss-Foto einer Münze: Kopf mit Diadem und thronender Gott mit Zepter, Schriftband. Nur ein numismatisches Objekt."},
+  {"file": "Coin of Hyspaosines, minted at Charax Spasinu in 126-5 BC.jpg",
+   "verdict": "other_site",
+   "note": "Zwei Seiten einer silbernen Münze, Kopf des Hyspaosines und sitzender Nike mit Legende BAΣIΛEΩΣ. Kein Ortbezug im Bild."},
+  {"file": "MapHymiariteKingdom.jpg",
+   "verdict": "region_or_type",
+   "note": "Handkarte der antiken Handelsrouten von Ägypten bis zum Golf; Charax Spasinu ist nur ein blauer Punkt auf der Landkarte."}
+ ],
+ "note": "Charax Spasinu: kein Kandidat zeigt Ruinen oder Gelände der Site; drei Muenzen und zwei Karten."}

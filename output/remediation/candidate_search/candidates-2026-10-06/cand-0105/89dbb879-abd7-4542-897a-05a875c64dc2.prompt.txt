@@ -1,0 +1,40 @@
+site_id: 89dbb879-abd7-4542-897a-05a875c64dc2
+name: Cierium
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Monnaie - Bronze, Kieros (Cierium), Thessalie - btv1b85723427 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d251cf2ddb24df62d4d7a05e2fb2163f
+- Monnaie - Bronze, Kieros (Cierium), Thessalie - btv1b8572339r (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ee3a1ea26e948cd91e7554c76a77274e
+- Monnaie - Bronze, Kieros (Cierium), Thessalie - btv1b8572345g (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0348a3dab42a3d28cbce5215be18930e
+- Monnaie - Bronze, Kieros (Cierium), Thessalie - btv1b85723427 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e629c6b7073f001a43a919f728d5a944
+- Monnaie - Bronze, Kieros (Cierium), Thessalie - btv1b8572340d (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ea5140241f97191e4f8ca66434017c6d
+- Monnaie - Obole, Argent, Kieros (Cierium), Thessalie - btv1b8572337x (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4193e67b8a341dd18bfd5d6d6f5f040e
+- Monnaie - Trihémiobole, Argent, Kieros (Cierium), Thessalie - btv1b8572336h (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ee517e99793d2264e6becca866dcd06c
+- Monnaie - Trihémiobole, Argent, Kieros (Cierium), Thessalie - btv1b11316946v (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6e462c01f05097332a3b0af115f5f65
+- Monnaie - Bronze, Kieros (Cierium), Thessalie - btv1b8572339r (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a7eea22b7fddff3aca8888263f76c742
+- Monnaie - Bronze, Kieros (Cierium), Thessalie - btv1b8572343n (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c6dab2c602c78df9fc3e15ad47ca3b4b
+- Monnaie - Bronze, Kieros (Cierium), Thessalie - btv1b8572341t (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5fa4287249a110aff938bfd2f5625953
+- Monnaie - Bronze, Kieros (Cierium), Thessalie - btv1b8572341t (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e45b5d63c070116183f317fc8774f95b
+- Monnaie - Obole, Argent, Thessalie, Kieros (Cierium) - btv1b10324244p (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b1033fee99dedc93d12204d4c27594f4
+- Monnaie - Statère, Argent, Kieros (Cierium), Thessalie - btv1b85723353 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a5125bb4bd5b1e212d92f1f398bab42a
+- Monnaie - Bronze, Kieros (Cierium), Thessalie - btv1b85723442 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0711d2bb0f9d0b47ed668080dc8ff929
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

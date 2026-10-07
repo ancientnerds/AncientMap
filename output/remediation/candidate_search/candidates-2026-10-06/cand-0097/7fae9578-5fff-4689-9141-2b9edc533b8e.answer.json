@@ -1,0 +1,22 @@
+{"site_id": "7fae9578-5fff-4689-9141-2b9edc533b8e",
+ "answered_by": "mcode-judge-cand-0097",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Castlesteads - geograph.org.uk - 5564258.jpg", "verdict": "region_or_type",
+   "note": "Grosses Herrenhaus in gruener Weide mit Schafen, Zaunpfosten und Baumbestand; Landschafts-/Gutsansicht ohne sichtbare Baustruktur"},
+  {"file": "Roman Antiquities at Castlesteads in Cumberland Figure 12.jpg", "verdict": "depicts",
+   "note": "Kupferstich (Fig. 12) eines runden Gefaesses mit Henkel und Fuellhorn-Motiv - gezeichnetes Altertum aus der Castlesteads-Fundreihe"},
+  {"file": "Roman Antiquities at Castlesteads in Cumberland Figure 21.jpg", "verdict": "depicts",
+   "note": "Kupferstich (Fig. 21) einer grossen beschrifteten Steintafel mit Dreizack-Emblem und Rosette - gezeichneter Fund aus der Reihe"},
+  {"file": "Roman Antiquities at Castlesteads in Cumberland Figure 13.jpg", "verdict": "depicts",
+   "note": "Kupferstich (Fig. 13) eines zerbrochenen beschrifteten Steins mit grober Kannelierung - gezeichneter Altertumsfund"},
+  {"file": "A6, Castlesteads - geograph.org.uk - 6421007.jpg", "verdict": "region_or_type",
+   "note": "Asphaltierte Landstrasse mit Bankett, Steinmauer, Baeumen und Stallgebäuden bei bedecktem Himmel; moderne Strassenansicht"},
+  {"file": "Roman Antiquities at Castlesteads in Cumberland Figure 14.jpg", "verdict": "depicts",
+   "note": "Kupferstich (Fig. 14) eines beschrifteten Steinfragments mit lateinischer Inschrift (IOB DEO ... FO) - gezeichneter Fund"},
+  {"file": "Roman Antiquities at Castlesteads in Cumberland Figure 17.jpg", "verdict": "depicts",
+   "note": "Kupferstich (Fig. 17) einer gespaltenen Inschriftstafel mit Resten von Buchstaben - gezeichneter Altertumsfund"},
+  {"file": "Roman Antiquities at Castlesteads in Cumberland Figure 06.jpg", "verdict": "depicts",
+   "note": "Kupferstich (Fig. 6) eines viereckigen Altarsteins mit kannelierten Ecken und eingravierter Figur - gezeichneter Fund"}
+ ],
+ "note": "Die sechs 'Roman Antiquities'-Bilder sind Kupferstiche gezeichneter Altertuemsfunde, keine Fotografien; ein Fundort laesst sich am Bild selbst nicht ablesen, die Zugehoerung stuetzt die durchgaengige Nummerierung und Motivfolge der Reihe."}

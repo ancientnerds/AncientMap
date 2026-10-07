@@ -1,0 +1,37 @@
+site_id: 2372d1b2-ce2b-4e66-8779-4d1ac95ba052
+name: Traditional Arts Museum
+country: Syria
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Glover Garden Nagasaki Japan87s3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c10a088bfa4ddfb551a1e12ae797d78
+- Ishikawa Prefectural Museum of Traditional Arts and Crafts.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ecc2387de0e24776e58334adaf67c9fe
+- Traditional Arts and Ethnology Centre Museum Entrance.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\087c7a028bc7f31777cfff27ccf25046
+- Lantern - Ishikawa Prefectural Museum of Traditional Arts and Crafts - Kanazawa, Japan - DSC09891.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c55e0eb65a9088d396a56fb8507394e3
+- Unknown - Ishikawa Prefectural Museum of Traditional Arts and Crafts - Kanazawa, Japan - DSC09884.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\58ee695c0332ce5768c78c527ddabdb6
+- Plate - Ishikawa Prefectural Museum of Traditional Arts and Crafts - Kanazawa, Japan - DSC09875.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02f7e4447258a16acf4baadae9e49586
+- Box - Ishikawa Prefectural Museum of Traditional Arts and Crafts - Kanazawa, Japan - DSC09933.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\be9e8988db1ca9af11c70f136885ff02
+- Unknown - Ishikawa Prefectural Museum of Traditional Arts and Crafts - Kanazawa, Japan - DSC09886.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8376898a3f00c2deda5a4f41f940d150
+- Unknown - Ishikawa Prefectural Museum of Traditional Arts and Crafts - Kanazawa, Japan - DSC09880.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da44da3507aec7ecd3b3c6cf240a35b7
+- Unidentified - Ishikawa Prefectural Museum of Traditional Arts and Crafts - Kanazawa, Japan - DSC09820.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\935b9642e3da42da5bd0519508c68acd
+- Plate - Ishikawa Prefectural Museum of Traditional Arts and Crafts - Kanazawa, Japan - DSC09871.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e5626c20d07fd880d4d564a6f10edcd
+- Plate - Ishikawa Prefectural Museum of Traditional Arts and Crafts - Kanazawa, Japan - DSC09869.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\587768f4431e44d83c6a22b06008be41
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

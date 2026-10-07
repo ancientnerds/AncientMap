@@ -1,0 +1,20 @@
+{
+  "site_id": "e8879fb9-adb0-48f3-8672-51923c57047d",
+  "answered_by": "mcode-judge-cand-0177",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Blaundos Antik Kenti - Uşak.jpg", "verdict": "depicts", "note": "Kultur- und Ruinenansicht der antiken Stadt mit sichtbaren Stadtstrukturen."},
+    {"file": "Blaundos Antik Kenti - Uşak 2.jpg", "verdict": "depicts", "note": "Kultur- und Ruinenansicht der antiken Stadt mit sichtbaren Stadtstrukturen."},
+    {"file": "Blaundos - 1.jpg", "verdict": "depicts", "note": "Ansicht von Ruinen und Stadtstrukturen der antiken Stadt."},
+    {"file": "Blaundus Ancient City.jpg", "verdict": "depicts", "note": "Stadtansicht mit sichtbaren antiken Ruinen und Gebäudestrukturen."},
+    {"file": "Blaundos.jpg", "verdict": "depicts", "note": "Ansicht von Ruinen bzw. Stadtstrukturen der antiken Stadt."},
+    {"file": "BlaundosFachwerk.jpg", "verdict": "depicts", "note": "Siedlungs- bzw. Ortsansicht im Umfeld mit antiken Stadtstrukturen."},
+    {"file": "Monnaie - Bronze, Blaundos, Lydie, Septime Sévère - btv1b8516847m (2 of 2).jpg", "verdict": "depicts", "note": "Bronzemünze mit am Rand lesbarer Legende „...ΑΝΔΟC“ (Βλάνδος) und figürlichem Revers."},
+    {"file": "Monnaie - Bronze, Blaundos, Lydie, Septime Sévère - btv1b85168466 (1 of 2).jpg", "verdict": "region_or_type", "note": "Abgenutzte Bronzemünze; Legende im Bild nicht sicher lesbar, Zuordnung zu Blaundos unsicher."},
+    {"file": "Monnaie - Bronze, Blaundos, Lydie, Septime Sévère - btv1b85168466 (2 of 2).jpg", "verdict": "region_or_type", "note": "Abgenutzte Bronzemünze; Legende im Bild nicht sicher lesbar, Zuordnung zu Blaundos unsicher."},
+    {"file": "Monnaie - Bronze, Blaundos, Lydie, Septime Sévère - btv1b8516847m (1 of 2).jpg", "verdict": "region_or_type", "note": "Abgenutzte Bronzemünze; Legende im Bild nicht sicher lesbar, Zuordnung zu Blaundos unsicher."},
+    {"file": "Blaundos Anıt.jpg", "verdict": "depicts", "note": "Sichtbares antikes Monument bzw. Ruinenstruktur der Stadt im Bild."},
+    {"file": "Monnaie - Bronze, Lydie, Blaundos - btv1b103127701 (1 of 2).jpg", "verdict": "region_or_type", "note": "Abgenutzte Bronzemünze; Legende im Bild nicht sicher lesbar, Zuordnung zu Blaundos unsicher."}
+  ],
+  "note": ""
+}

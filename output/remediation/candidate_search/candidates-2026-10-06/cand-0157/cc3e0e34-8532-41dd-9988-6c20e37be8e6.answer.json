@@ -1,0 +1,32 @@
+{
+  "site_id": "cc3e0e34-8532-41dd-9988-6c20e37be8e6",
+  "answered_by": "mcode-judge-cand-0157",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Santuário do Endovélico de Rocha da Mina - Portugal (26827752021).jpg", "verdict": "region_or_type", "note": "Granitfelsen und bewaldetes Hügelland; keine Anlage oder Struktur sichtbar."},
+    {"file": "Rocha da Mina (12).jpg", "verdict": "depicts", "note": "Freigelegte Trockenmauerfundamente und mehrere zusammenhängende Ruinenräume."},
+    {"file": "Rocha da Mina (3).jpg", "verdict": "depicts", "note": "Personen arbeiten mit Spaten in einer Felsspalte, Grabungsstelle sichtbar."},
+    {"file": "Rocha da Mina (2).jpg", "verdict": "region_or_type", "note": "Bachlauf zwischen Bäumen; keine archäologische Struktur erkennbar."},
+    {"file": "Rocha da Mina (6).jpg", "verdict": "depicts", "note": "Deutliche Reihen von Ritzungen und Einkerbungen in der Felsfläche."},
+    {"file": "Rocha da Mina (5).jpg", "verdict": "region_or_type", "note": "Granitfelszacken mit Baum; keine Anlage sichtbar."},
+    {"file": "Rocha da Mina (14).jpg", "verdict": "depicts", "note": "Freigelegte Trockenmauerfundamente direkt vor der Felswand."},
+    {"file": "Rocha da Mina (10).jpg", "verdict": "region_or_type", "note": "Felsgrate, Wald und Bach; keine Struktur erkennbar."},
+    {"file": "Rocha da Mina (1).jpg", "verdict": "region_or_type", "note": "Felsspalte mit schmalem Weg; keine archäologische Struktur."},
+    {"file": "Rocha da Mina (15).jpg", "verdict": "depicts", "note": "Großflächige Trockenmauerfundamente und Ruinenstrukturen."},
+    {"file": "Rocha da Mina (17).jpg", "verdict": "region_or_type", "note": "Felskamm und bewaldete Landschaft; keine Struktur sichtbar."},
+    {"file": "Rocha da Mina (13).jpg", "verdict": "region_or_type", "note": "Bewachsener Felshang mit Olivenbäumen; keine Struktur erkennbar."},
+    {"file": "Arredores da Rocha da Mina - Portugal (18577616873).jpg", "verdict": "region_or_type", "note": "Flacher Bachlauf zwischen dichtem Buschwerk; keine Anlage."},
+    {"file": "Santuário do Endovélico de Rocha da Mina - Portugal (26947400484).jpg", "verdict": "region_or_type", "note": "Granitfelswand mit Baum und bewaldetem Tal; keine Anlage sichtbar."},
+    {"file": "Arredores da Rocha da Mina - Portugal (28003165351).jpg", "verdict": "region_or_type", "note": "Moderner Holzsteg über einem Bach; keine archäologische Struktur."},
+    {"file": "Santuário do Endovélico de Rocha da Mina - Portugal (22175345625).jpg", "verdict": "region_or_type", "note": "Granitfelszacken mit Blick über ein bewaldetes Tal; keine Anlage."},
+    {"file": "Santuário do Endovélico de Rocha da Mina - Portugal (21554308733).jpg", "verdict": "region_or_type", "note": "Waldhang mit Felsrücken und Wanderweg; keine Struktur erkennbar."},
+    {"file": "Santuário do Endovélico de Rocha da Mina - Portugal (24209139869).jpg", "verdict": "region_or_type", "note": "Panorama von Fels über bewaldete Hügel; Site nicht erkennbar."},
+    {"file": "Santuário do Endovélico de Rocha da Mina - Portugal (21148350672).jpg", "verdict": "region_or_type", "note": "Granitfelsen über Bäumen; reine Landschaft."},
+    {"file": "Santuário do Endovélico de Rocha da Mina - Portugal (22906662994).jpg", "verdict": "region_or_type", "note": "Granitblockwerk mit Baum; keine archäologische Struktur."},
+    {"file": "Arredores da Rocha da Mina - Portugal (16845071177).jpg", "verdict": "region_or_type", "note": "Waldhang mit Bachlauf im Tal; keine Anlage sichtbar."},
+    {"file": "Santuário do Endovélico de Rocha da Mina - Portugal (22906669424).jpg", "verdict": "region_or_type", "note": "Felsspalte mit Granitwänden; keine Struktur erkennbar."},
+    {"file": "Rocha da Mina (9).jpg", "verdict": "region_or_type", "note": "Granitblöcke mit Bäumen; keine Anlage sichtbar."},
+    {"file": "Rocha da Mina (11).jpg", "verdict": "depicts", "note": "Personen auf und neben freigelegten Trockenmauerfundamenten."}
+  ],
+  "note": ""
+}

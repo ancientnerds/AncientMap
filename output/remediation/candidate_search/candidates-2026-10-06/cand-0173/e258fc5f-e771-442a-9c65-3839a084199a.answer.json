@@ -1,0 +1,123 @@
+{
+  "site_id": "e258fc5f-e771-442a-9c65-3839a084199a",
+  "verdicts": [
+    {
+      "file": "Pasl1i.jpg",
+      "verdict": "depicts",
+      "note": "antikes Quadermauergebaeude mit Gewoelbeoeffnung, dunkler Tuer und Schutt davor"
+    },
+    {
+      "file": "Pasli7.jpg",
+      "verdict": "depicts",
+      "note": "zerfallene antike Quadermauer mit herabgestuerzten Bloecken im trockenen Gras"
+    },
+    {
+      "file": "Pasli9.jpg",
+      "verdict": "depicts",
+      "note": "Mauerkrone aus grossen antiken Quadern ueber Buschwerk"
+    },
+    {
+      "file": "Pasl6.jpg",
+      "verdict": "depicts",
+      "note": "lange Quadermauer und zweigeschossiger antiker Bau mit sichtbarem Mauerprofil"
+    },
+    {
+      "file": "Pasl2.jpg",
+      "verdict": "depicts",
+      "note": "profiliertes antikes Mauerwerk mit dunkler Oeffnung und Bruchsteinen davor"
+    },
+    {
+      "file": "Pasli8.jpg",
+      "verdict": "depicts",
+      "note": "zwei antike Quadermauerreste, dazwischen dichtes Buschwerk"
+    },
+    {
+      "file": "Pasl5.jpg",
+      "verdict": "depicts",
+      "note": "Quadermauer mit rechteckiger Tueroeffnung und steinernen Pfosten"
+    },
+    {
+      "file": "Pasl4.jpg",
+      "verdict": "depicts",
+      "note": "fragmentiertes antikes Bogengewoelbe aus Keilsteinen, teilweise verschuettet"
+    },
+    {
+      "file": "Paslı trenler.jpg",
+      "verdict": "other_site",
+      "note": "rostige Dampflokomotive neben gelbem Eisenbahnwagen auf dem Gleis"
+    },
+    {
+      "file": "Pasl3.jpg",
+      "verdict": "depicts",
+      "note": "Quadermauerruine im Blockschutt, Minarett im Hintergrund"
+    },
+    {
+      "file": "Paslı trenleer.jpg",
+      "verdict": "other_site",
+      "note": "rostiger leerer Eisenbahnwagen auf dem Gleis"
+    },
+    {
+      "file": "Lahmacun, parsley and lemon in Ankara.jpg",
+      "verdict": "other_site",
+      "note": "Lahmacun-Flatbread mit Petersilie und Zitronenscheibe"
+    },
+    {
+      "file": "Erynnis tages - Paslı zıpzıp 01.jpg",
+      "verdict": "other_site",
+      "note": "dunkler Schmetterling mit offenen Fluegeln auf feuchtem Boden"
+    },
+    {
+      "file": "Erynnis tages - Paslı zıpzıp 15.jpg",
+      "verdict": "other_site",
+      "note": "brauner Schmetterling auf Kies"
+    },
+    {
+      "file": "İncekum'un sahilindeki paslı sahanlık 08.jpg",
+      "verdict": "other_site",
+      "note": "rostige Stahlkonstruktion am Meer"
+    },
+    {
+      "file": "Erynnis tages - Paslı zıpzıp 05.jpg",
+      "verdict": "other_site",
+      "note": "Schmetterling mit ausgebreiteten Fluegeln auf Blatt"
+    },
+    {
+      "file": "İncekum'un sahilindeki paslı sahanlık 11.jpg",
+      "verdict": "other_site",
+      "note": "rostige Stahltraeger an einer Steinmauer am Meer"
+    },
+    {
+      "file": "İncekum'un sahilindeki paslı sahanlık 13.jpg",
+      "verdict": "other_site",
+      "note": "rostiger Stahlbau am felsigen Kuestensaum"
+    },
+    {
+      "file": "Erynnis tages - Paslı zıpzıp 04.jpg",
+      "verdict": "other_site",
+      "note": "Schmetterling im Seitenprofil auf Stein"
+    },
+    {
+      "file": "Paslı trenler 5.jpg",
+      "verdict": "other_site",
+      "note": "rostige Holzbank, Handrad und Kette im Bahnwagen"
+    },
+    {
+      "file": "Erynnis tages - Paslı zıpzıp 12.jpg",
+      "verdict": "other_site",
+      "note": "Schmetterling auf gruenen Staengeln"
+    },
+    {
+      "file": "İncekum'un sahilindeki paslı sahanlık 01.jpg",
+      "verdict": "other_site",
+      "note": "rostiger Pier ueber einem Kiesstrand"
+    },
+    {
+      "file": "İncekum'un sahilindeki paslı sahanlık 04.jpg",
+      "verdict": "other_site",
+      "note": "rostige Stahltraeger an einer Betonmauer"
+    }
+  ],
+  "note": "",
+  "answered_by": "mcode-judge-cand-0173",
+  "model": "MiniMax-M3.1-Flash-Preview"
+}

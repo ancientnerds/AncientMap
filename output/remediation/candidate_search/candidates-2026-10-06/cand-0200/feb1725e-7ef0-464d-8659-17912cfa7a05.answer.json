@@ -1,0 +1,38 @@
+{
+  "site_id": "feb1725e-7ef0-464d-8659-17912cfa7a05",
+  "answered_by": "mcode-judge-cand-0200",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Mätning. Nitovikla - SMVK - C06293.tif",
+      "verdict": "depicts",
+      "note": "Schwarzweiß-Vermessungsfoto: Mann mit Messstab an der Fortmauer, dahinter Mauerkrone und beschriftete Inschrift."
+    },
+    {
+      "file": "Okänd. Nitovikla - SMVK - Csn001.tif",
+      "verdict": "other_site",
+      "note": "Frau mit Hut zeichnet auf dem Mauerwerk; die Person ist das Hauptmotiv, die Anlage nur Beiwerk."
+    },
+    {
+      "file": "Entrén. Nitovikla - SMVK - C01372.tif",
+      "verdict": "depicts",
+      "note": "Schwarzweißaufnahme der Fortruine: Mauerreste, Torbögen und Erdwerk über dem Gelände."
+    },
+    {
+      "file": "Fortet från nordväst. Nitovikla - SMVK - C01369.tif",
+      "verdict": "depicts",
+      "note": "Weitaufnahme des Forts von Nordwesten: Mauerkrone auf dem Hügel, bewachsene Böschungen ringsum."
+    },
+    {
+      "file": "Norra omfattningsmuren från väster. Nitovikla - SMVK - C01380.tif",
+      "verdict": "depicts",
+      "note": "Nähe der Umfassungsmauer: Trockenmauerwerk in Lagen mit Erdwerk und Resten von Buschwerk darauf."
+    },
+    {
+      "file": "Främmande på fortet. Erik Sjökvist ? Nitovikla. fråga - SMVK - C02547.tif",
+      "verdict": "other_site",
+      "note": "Fünf Männer in Hut und Hose posieren auf der Fortmauer; Personen sind Hauptmotiv, Mauerwerk nur Hintergrund."
+    }
+  ],
+  "note": "Vier Vermessungsfotos zeigen die Festung selbst (Mauerkrone, Torbögen, Umfassungsmauer, Messung an der Mauer); die beiden Aufnahmen mit Personen sind Porträts vor der Anlage."
+}

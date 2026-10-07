@@ -1,0 +1,46 @@
+site_id: 430a3857-be99-4701-91e1-82c5432f0f77
+name: Montana
+country: Guatemala
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Greetings from Montana, The Treasure State - Large Letter Postcard (4524258511).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cc28ed5442f75d1ae26d538dfee0b7a0
+- Bird Tail Divide, Montana 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c4d9c1e4ef5ba2028828ff40c2d971bc
+- Mont Blanc du Tacul depuis l'Aiguille du Midi.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f6bff6468d2f3ff84c91f7e745d79ba
+- Vintage Montana state flag.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\48b328a4d12f6dcdc22b129342e3e8b8
+- Montana metal mines and refineries.webp  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e1e812b1a007903577a6d3dced8a66fe
+- ISS028-E-12597 - View of Montana.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e3d1aa84c12db4bc96cd90b269b3815
+- Montana population pyramid.webp  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\797e06ad5d0d17b7a86a02992aef5b7b
+- Bird Tail Divide, Montana 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b2a66dc0e9f0a7bcfc6c0f383c352a27
+- Sphegina montana Syrphidae.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\46b371255f1d2de7111fb1c3519b55a4
+- Vista de Bergen desde la montaña Fløyen, Noruega, 2019-09-08, DD 27-31 PAN.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0cdc28e08f5c916c6eb6953feadf5eeb
+- Gorila de montaña (Gorilla beringei beringei), parque nacional de la Selva Impenetrable de Bwindi, Uganda, 2024-02-02, DD 80.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c26af0fcb008617002303503bb5e0de3
+- Hooded mountain tanager (Buthraupis montana cucullata) Caldas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5caa86e349f84a9e7808adb6a04a4c76
+- Montaña de la Fuente 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b704f5ebf429e9415165327ad0a23085
+- Eucomis montana (Ananas lelie). 06-08-2020 (d.j.b.) 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1e7b81f4b027b87c40187b86d5462717
+- Alpen Gelbling, Colias phicomone, Arnica montana 1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0cacfd650b56afbe3520186f48dfce83
+- Montaña del Selado - Caldera del Corazoncillo - Lanzarote.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c6dc2e39b47e13307e21b42ead3d2ef9
+- Gorila de montaña (Gorilla beringei beringei), parque nacional de la Selva Impenetrable de Bwindi, Uganda, 2024-02-02, DD 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6fe21363a75adf94c2a0e1bdda534b08
+- Gorila de montaña (Gorilla beringei beringei), parque nacional de la Selva Impenetrable de Bwindi, Uganda, 2024-02-02, DD 51.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\97711dd6d55ba93888aecafe09ab2915
+- Montana state capitol 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4d55a6831e9a7c57480c0cbec6e87135
+- Anthophora bimaculata - Jasione montana - Tallinn.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b7956a911d09091fb3d8ceca273ae89f
+- Lewis overthrust behind mule.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9a88fad05b83ad3cd52fad8c6c273229
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

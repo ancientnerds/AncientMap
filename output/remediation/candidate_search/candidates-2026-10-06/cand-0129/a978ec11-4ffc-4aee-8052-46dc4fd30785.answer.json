@@ -1,0 +1,15 @@
+{"site_id": "a978ec11-4ffc-4aee-8052-46dc4fd30785",
+ "answered_by": "mcode-judge-cand-0129",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Sadarak ELİTKORPUSU.jpg", "verdict": "other_site", "note": "Moderne Einkaufszentrale mit Kuppelschild 'Sədərək Ticaret Mərkəzi Elit'; moderne Szene, keine Ruine."},
+  {"file": "Sadarak ELİT.JPG", "verdict": "other_site", "note": "Innenraum eines modernen Einkaufszentrums mit Glashalle, Lichterketten, Shops und Menschen; keine Site."},
+  {"file": "Sadarak Houses.jpg", "verdict": "other_site", "note": "Panorama eines heutigen Dorfes aus Blechdächern, Strasse und Rauch vor Bergen; moderne Siedlung."},
+  {"file": "Sadarak Agri.jpg", "verdict": "other_site", "note": "Zwei Büffel auf einer Wiese vor einem schneebedeckten Doppelgipfel (Ararat); Agrarlandschaft eines anderen Landes."},
+  {"file": "Sadarak Heyderabad Night.png", "verdict": "other_site", "note": "Nachtaufnahme eines modernen, beleuchteten Dreigeschossers mit Strasse und Laternen; keine historische Site."},
+  {"file": "Sədərək Ticarət Mərkəzi 06.jpg", "verdict": "other_site", "note": "Parkplatz voller Autos vor einem blauen Handelsgebäude mit Werbetafeln; moderne Handelsszenе."},
+  {"file": "Sədərək və Binə ticarət mərkəzləri - panoramio.jpg", "verdict": "other_site", "note": "Pano von Autobahn und Handelszentrum mit bunten Dächern in einer weiten Senke; moderne Region, keine Site."},
+  {"file": "Sədərək Ticarət Mərkəzi 03.jpg", "verdict": "other_site", "note": "Nahaufnahme eines Kleideretiketts 'Made in Azerbaijan' in einer Kunststoffverpackung; Produktdetail."},
+  {"file": "Sədərək Ticarət Mərkəzi 02.jpg", "verdict": "other_site", "note": "Blick in einen überdachten Marktbunnel mit Kinderkleidung, aserbaidschanischer Flagge und Einkäufern; moderne Markthalle."}
+ ],
+ "note": ""}

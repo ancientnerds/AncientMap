@@ -1,0 +1,33 @@
+site_id: b0676488-4c32-4b8c-857c-eba8d6db4f59
+name: Wichqana
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Black worn leather jacket detail 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd4d5d40dc599c63ec29d2bed7e44959
+- ZipperCowHitch.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a595e13e09b316a07c2c646b68b9763e
+- Coil plastic and metal zippers.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9813cea4bef1d213cc8e3875e5118696
+- Plastic- and Nylonzipper.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\81567f893065120ccdc7bec4f4a6e013
+- Blue Bubble Back.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0c62e7a22d785fd6609433f7af476272
+- Sarcophagid fly Portrait.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7a5cf4e25a8afc34d164666db8abc9d3
+- Fly November 2007-10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d5f61748cfea0865f0e0d0df6241a4ff
+- Fly Agaric mushroom 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\00081940b919c0cbe67699c71a9e3e07
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

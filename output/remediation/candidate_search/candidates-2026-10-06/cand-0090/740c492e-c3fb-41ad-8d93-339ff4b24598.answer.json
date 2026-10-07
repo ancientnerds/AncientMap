@@ -1,0 +1,18 @@
+{"site_id": "740c492e-c3fb-41ad-8d93-339ff4b24598",
+ "answered_by": "mcode-judge-cand-0090",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "The buildings at Bosporthennis - geograph.org.uk - 7015086.jpg",
+   "verdict": "region_or_type",
+   "note": "Photo of stone farm buildings and a dirt track with a cyclist, coast behind; no earthwork, ruin or monument of the site visible."},
+  {"file": "The track on Bosporthennis Common - geograph.org.uk - 4622998.jpg",
+   "verdict": "region_or_type",
+   "note": "Gravel track through gorse-covered common with an information board; landscape only, nothing of the site itself visible."},
+  {"file": "A ford near Higher Bosporthennis - geograph.org.uk - 7997577.jpg",
+   "verdict": "region_or_type",
+   "note": "Stone ford crossing a stream on a path with a cyclist pushing a bike; gorse and scrub, no site features."},
+  {"file": "The Victoria history of the county of Cornwall (1906) (14777220672).jpg",
+   "verdict": "region_or_type",
+   "note": "Book plate: measured plan of a circular earthwork (two rampart bases, a grave), caption/site name not readable, cannot confirm it is Bosporthennis."}
+ ],
+ "note": ""}

@@ -1,0 +1,17 @@
+{"site_id": "3de5129d-3b47-470f-b3c5-a60344eda4dd",
+ "answered_by": "mcode-judge-cand-0047",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Aosta - Chiesa paleocristiana di San Lorenzo - 2023-09-11 15-13-03 001.jpg", "verdict": "depicts", "note": "Verputzter Kirchenbau mit Arkadenportikus und Saeulen, Info-Tafel an der Fassade, davor Auto und Abfallcontainer."},
+  {"file": "San Lorenzo in Lucina (Rome) - Interior HDR.jpg", "verdict": "other_site", "note": "Prunkvoller Barockraum mit Kruzifix, Golddekor und bemalten Gewölben — eine andere Kirche."},
+  {"file": "San Lorenzo (Turin) - Dome interior.jpg", "verdict": "other_site", "note": "Reich freskierte Kuppel mit Oculi, Fenstern und Deckenfresken — eine andere Kirche."},
+  {"file": "Facade monastery San Lorenzo de El Escorial Spain.jpg", "verdict": "other_site", "note": "Grosse herrschaftliche Steinfassade mit Kolonnen, Wappen und Innenhof, Kloster in Spanien."},
+  {"file": "Glory of Florentine Saints on the dome in San Lorenzo (Florence).jpg", "verdict": "other_site", "note": "Barocke Kuppelmalerei mit Heiligenfiguren und goldenem Stuck — eine andere Kirche."},
+  {"file": "St Lawrence church in Aosta (2).jpg", "verdict": "depicts", "note": "Dieselbe Kirche von der Portalseite mit Arkadenportikus, Holztuer und Hinweistafel an der Wand."},
+  {"file": "St Lawrence church in Aosta (1).jpg", "verdict": "depicts", "note": "Portal im Detail: Saulenportikus, Rundbogenfenster mit Gitter, geschnitzte Holztuer, Schild «Chiesa San Lorenzo»."},
+  {"file": "Chiesa di San Lorenzo a Vicenza - Interno - Cappella maggiore - Altare.jpg", "verdict": "other_site", "note": "Hochaltar mit Tabernakel, Marmoraltar und Kerzen vor Backsteinwänden und Gitterfenstern."},
+  {"file": "Chiesa San Lorenzo Vicenza - Interno - Arca Trevisano Volpe.jpg", "verdict": "other_site", "note": "Bemerkenswerte Steinplatte mit drei Wappen an einer Ziegelfassade — anderes Bauwerk."},
+  {"file": "Chiesa di San Lorenzo a Vicenza - Interno - Cappella della Madonna.jpg", "verdict": "other_site", "note": "Kapelle mit dunkler Holzrueckbank, Schrein, Wandmalereien und Messing-Altarleuchtern."},
+  {"file": "Chiesa di San Lorenzo - Voltino.jpg", "verdict": "other_site", "note": "Kirche mit verputzten Waenden, Saulenportikus und hohem Glockenturm mit Uhr — nicht die Site."}
+ ],
+ "note": ""}

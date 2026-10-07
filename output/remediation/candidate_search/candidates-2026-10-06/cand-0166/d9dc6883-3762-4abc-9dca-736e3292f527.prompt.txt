@@ -1,0 +1,57 @@
+site_id: d9dc6883-3762-4abc-9dca-736e3292f527
+name: Ebbsfleet Valley
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ebbsfleet Green, Ebbsfleet Valley (4).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb42dd4f1402c1daa9fa11ac053e8f49
+- Ebbsfleet Green, Ebbsfleet Valley (21).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e7a66e657f5ac58fb35bde0295483ec
+- Ebbsfleet Green, Ebbsfleet Valley (7).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\371b572082de1e9736750a8e33428a3c
+- Marston's Inns (Talbot Lane, Ebbsfleet Valley, Swanscombe DA10 1AZ) within Ebbsfleet Green, Ebbsfleet Valley (6).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0ce287956a7698d4a76a4c4ef6ee127f
+- Marston's Inns (Talbot Lane, Ebbsfleet Valley, Swanscombe DA10 1AZ) within Ebbsfleet Green, Ebbsfleet Valley (5).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\584be90de44873930fee124b307c7674
+- Architecture around Ebbsfleet Green, Ebbsfleet Valley, Kent.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2551297ccdf99c8a0ae1b3eb20e8661c
+- The architecture around Ebbsfleet Green - Ebbsfleet Valley, Kent.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d00b754649fa7ee0e2d96d433736511d
+- Ebbsfleet Green, Ebbsfleet Valley (5).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b69f0c3f3407bc90fdf54b27204c6117
+- Ebbsfleet Green, Ebbsfleet Valley (6).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8d039126d02a842963910289327ef0ff
+- Ebbsfleet Green, Ebbsfleet Valley (8).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\08151e85b58ae3347a663610674086b9
+- Architecture around Ebbsfleet Green - Ebbsfleet Valley (2).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d60447b6ebb4a40d3ae62f20135e200e
+- Marston's Inns (Talbot Lane, Ebbsfleet Valley, Swanscombe DA10 1AZ) within Ebbsfleet Green, Ebbsfleet Valley (7).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77357984a88615e59f548a1ca2f37a5c
+- Public footpath within Whitecliffe, Ebbsfleet Valley (9).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8a1a50045149311b773898319bda392a
+- Guidepost within Castle Hill, Ebbsfleet Valley.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae661150a4a45aaab35ddced40c373b1
+- Marston's Inns (Talbot Lane, Ebbsfleet Valley, Swanscombe DA10 1AZ) within Ebbsfleet Green, Ebbsfleet Valley (2).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df744e4e15f94e55bbdbba990c3bfd0d
+- Bicycle rack - Marston's Inns (Talbot Lane, Ebbsfleet Valley, Swanscombe DA10 1AZ) within Ebbsfleet Green, Ebbsfleet Valley.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\296fa8094a7e8ab34f85857c836b577c
+- The different architecture around Ebbsfleet Valley (19).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ee40920db11736302e7c406e9459c6b8
+- Parking for The Spring River (Talbot Lane, Ebbsfleet Valley, Swanscombe DA10 1AZ) within Ebbsfleet Green, Ebbsfleet Valley.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f2055dfaca51a1f07805946b2ca7ead6
+- Public footpath on Whitecliffe Road, Ebbsfleet Valley, Kent (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\22875a1ec7f6acee08db0430eb82a9b0
+- Public footpath on the A2260 - Ebbsfleet Valley, Kent.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8a10d7b3f223f951e56d4f56dd6cfe43
+- View of Tomalin Drive within Castle Hill, Ebbsfleet Valley (2).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef387595fa7c0c5341de4e633e09ea78
+- Road sign on the A2260 - Ebbsfleet Valley, Kent.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bb28accacc6c9af2001e66203977c245
+- "Erith Contractors Limited" vehicle parked at The Observatory car park in Ebbsfleet Valley.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b0124deeab7cd47fccebe79930bcfdc
+- "Gas Governor Station - N0014315-1" within Castle Hill, Ebbsfleet.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aba89d62e2406d6a4c32b74341b973f4
+- "Gas Valve Pressure MP" within Castle Hill, Ebbsfleet.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\28bee962656a942f4843ceaa0e0f0879
+- "Thank you for visiting" sign within Castle Hill, Ebbsfleet.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\616771e160d091ca0d7184d911426da3
+- "Tiltman Avenue" street sign, Greenhithe.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\087c48a0dc88a46563f6a10f689ec95e
+- "Whiting Avenue" street sign for Ebbsfleet Cross.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\37c562da2b276a6aff68d0ad019d27ae
+- A development within Ebbsfleet Valley, Kent (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\992417e2062c23e2e9c4c0093d1e65f3
+- A development within Ebbsfleet Valley, Kent (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8864481f740b4e7f071b1378e184431f
+- A development within Ebbsfleet Valley, Kent.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1b1aba30f6b7af3b1a296d45320af8b6
+- A Ebbsfleet Garden City community board within the seating area at Alkerden Heights, Alkerden in Ebbsfleet Valley, Kent.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5b5ee263e15e40584563abb0379f73cb
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

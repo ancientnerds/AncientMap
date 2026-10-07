@@ -1,0 +1,32 @@
+site_id: 791b7bc8-8015-4715-ae40-50452a4c6fb5
+name: Inkachaka
+country: Bolivia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Represa Incachaca, Bolívia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b500684f56dcfd26a640e2401ef6245f
+- Represa Incachaca, Bolívia02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8cdc3f5413dec48c7e407f8a35d1504e
+- Represa Incachaca, Bolívia04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\48cb025b1ec44e4206246451ff2bbc10
+- Represa Incachaca, Bolívia06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\574033aaa73a960316dea633bf78b33d
+- Represa Incachaca, Bolívia05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\36a3292659d8f6f6189e5c6637644ad7
+- Represa Incachaca, Bolívia03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4766b802628f043960be34c50eb2e44a
+- Represa Hampaturi La Paz.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0cc7c020f72807fc29e1bf2c6d030ca3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

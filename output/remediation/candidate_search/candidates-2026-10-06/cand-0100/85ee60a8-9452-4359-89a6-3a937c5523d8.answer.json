@@ -1,0 +1,68 @@
+{
+  "site_id": "85ee60a8-9452-4359-89a6-3a937c5523d8",
+  "answered_by": "mcode-judge-cand-0100",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Bela Reka 003.jpg",
+      "verdict": "other_site",
+      "note": "Moderner grauer Gedenkstein mit langen Namenslisten vor einem Haus; Kriegerdenkmal, keine archäologische Struktur der Site."
+    },
+    {
+      "file": "Selo Bela Reka kod Sapca.jpg",
+      "verdict": "region_or_type",
+      "note": "Asphaltierte Dorfstrasse mit Häusern, Zäunen und bewaldetem Hügel im Hintergrund; Ortsansicht ohne sichtbare Ruinen."
+    },
+    {
+      "file": "Bela Reka 004.jpg",
+      "verdict": "other_site",
+      "note": "Hoher moderner Gedenkstein mit Stern und vergoldeten Namen und Daten 1941–1944; Kriegerdenkmal, kein Site-Bauwerk."
+    },
+    {
+      "file": "Bela Reka 001.jpg",
+      "verdict": "region_or_type",
+      "note": "Modernes Dorfgebäude mit Balkon, Rampe, serbischer Flagge und Leitungsmasten; heutiges Dorfhaus, keine Site-Struktur."
+    },
+    {
+      "file": "Bela Reka 002.jpg",
+      "verdict": "region_or_type",
+      "note": "Einfamilienhaus mit Ziegeldach und Wiese im Vordergrund, Hügel dahinter; Dorflandschaft ohne Befund."
+    },
+    {
+      "file": "Bela Reka 005.jpg",
+      "verdict": "region_or_type",
+      "note": "Dorfstraße mit Häusern, Freisitz und Leitungsmasten, Bäume dahinter; moderne Ortsansicht, keine Ruinen sichtbar."
+    },
+    {
+      "file": "Donja Bela Reka 06.jpg",
+      "verdict": "region_or_type",
+      "note": "Gestapelte Stämme auf einem Waldabschnitt mit Laubwald und felsigem Hang; Naturlandschaft ohne Bauwerke."
+    },
+    {
+      "file": "Donja Bela Reka 07.jpg",
+      "verdict": "region_or_type",
+      "note": "Blick über Dächer und weiße Häuser eines Tales mit bewaldeten Hängen und Straße; Dorflandschaft, kein Site-Befund."
+    },
+    {
+      "file": "Gornja Bela Reka 05.jpg",
+      "verdict": "region_or_type",
+      "note": "Kleiner Bachlauf mit Kies und Uferbewuchs in grüner Landschaft; Naturmotiv ohne Site-Bezug."
+    },
+    {
+      "file": "Donja Bela Reka 03.jpg",
+      "verdict": "region_or_type",
+      "note": "Bewaldeter Hang mit verlassenen Gebäuden am oberen Rand und kleinem Steinbruch; Landschaft ohne sichtbare Site-Strukturen."
+    },
+    {
+      "file": "Donja Bela Reka 05.jpg",
+      "verdict": "region_or_type",
+      "note": "Straße mit abgelegenen Häusern und LKW am Hang eines bewalden Tales; Dorfszene ohne archäologischen Befund."
+    },
+    {
+      "file": "Gornja Bela Reka 01.jpg",
+      "verdict": "region_or_type",
+      "note": "Mehrstöckiges Haus mit Aussentreppe, Tischen und geparkten Autos, Waldhang dahinter; Gasthaus in einem Dorf."
+    }
+  ],
+  "note": "Kein Bild zeigt Ruinen oder Ausgrabungen; zwei zeigen moderne Kriegerdenkmäler (other_site), zehn moderne Dorf- und Landschaftsansichten."
+}

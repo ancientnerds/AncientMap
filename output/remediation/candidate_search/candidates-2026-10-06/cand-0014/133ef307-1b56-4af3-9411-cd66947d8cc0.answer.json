@@ -1,0 +1,22 @@
+{"site_id": "133ef307-1b56-4af3-9411-cd66947d8cc0",
+ "answered_by": "mcode-judge-cand-0014",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Berth Hill - geograph.org.uk - 5544249.jpg", "verdict": "region_or_type",
+   "note": "Gras- und Wiesenlandschaft mit bewaldeter Kuppe und Hochspannung; kein Hügelgraben oder Erdbau erkennbar."},
+  {"file": "Footpath below Berth Hill - geograph.org.uk - 5614884.jpg", "verdict": "region_or_type",
+   "note": "Wiesen mit Hecke, Baumen und Ferienpark im Hintergrund; reines Landschaftsbild ohne Site-Merkmal."},
+  {"file": "Walking alongside Berth Hill - geograph.org.uk - 5614872.jpg", "verdict": "region_or_type",
+   "note": "Graspfad zwischen Hecke und Baumen, dahinter Felder: Landschaft, keine Grabenstruktur sichtbar."},
+  {"file": "Grass field below Berth Hill - geograph.org.uk - 5614881.jpg", "verdict": "region_or_type",
+   "note": "Grasfeld am Waldrand mit Himmel; nichts, was die Site als Huegelanlage erkennen laesst."},
+  {"file": "Berrow Wood, Berth Hill and beyond - geograph.org.uk - 4268437.jpg", "verdict": "region_or_type",
+   "note": "Weiter Talblick ueber Streuobstwiesen und Nebel mit Bergen dahinter; Site nicht identifizierbar."},
+  {"file": "Gate on a footpath below Berth Hill - geograph.org.uk - 5614874.jpg", "verdict": "region_or_type",
+   "note": "Holztor an einem Pfad zwischen Baeumen: moderne Weg-Infrastruktur, keine Site-Struktur."},
+  {"file": "Emerging crop beside woodland, Berth Hill - geograph.org.uk - 6170938.jpg", "verdict": "region_or_type",
+   "note": "Geackerte Ackerflaeche an einem Waldrand mit einzelnen Baeumen; nur Feldflucht."},
+  {"file": "Sheep family on hill near Berth Farm - geograph.org.uk - 1863338.jpg", "verdict": "other_site",
+   "note": "Bergiges Weideland mit Felsausbiss, Kiefernwald, Schafen und Windraedern - eine voellig andere Landschaft."}
+ ],
+ "note": ""}

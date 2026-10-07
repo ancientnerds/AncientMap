@@ -1,0 +1,144 @@
+{
+  "site_id": "fa9441c6-255f-4fc3-aaba-8aa8b43759ac",
+  "answered_by": "worker: cand-0195",
+  "answered_model": "minimax-M3.1-Flash-Preview",
+  "model": "minimax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "c83dc36ae7985795c997024761f4e8cd",
+      "verdict": "depicts",
+      "note": "Felskirchen- und Hoelenanlage von Zelve, Tuffkegel mit Aushohlungen."
+    },
+    {
+      "file": "3578de0c90fceefb18aae53ca023d8a8",
+      "verdict": "depicts",
+      "note": "Panorama der Felskirchen und Hoelenraeume von Zelve."
+    },
+    {
+      "file": "096539d98c0726d90d80674babf74676",
+      "verdict": "depicts",
+      "note": "Historische Aufnahme der Felskirche mit Hoelhlraeumen."
+    },
+    {
+      "file": "77564e15e0416091d83a801c23d6840e",
+      "verdict": "depicts",
+      "note": "Felsmonolith mit behauenem Durchgang, umgeben von Baeumen."
+    },
+    {
+      "file": "da8bede98d09004c8a9a2eaff6a5cc57",
+      "verdict": "depicts",
+      "note": "Historische Aufnahme der in den Fels gehauenen Raeume von Zelve."
+    },
+    {
+      "file": "6ed070324858030ef475731ed0132c2a",
+      "verdict": "depicts",
+      "note": "In den Fels gehauene Kirche mit Nischen und Oeffnungen."
+    },
+    {
+      "file": "4a42db53033e6aafa7046217567d5815",
+      "verdict": "depicts",
+      "note": "Historische Aufnahme der Felskirchenanlage."
+    },
+    {
+      "file": "5435479e6b9004d1bbdd0e5ed2c66a3c",
+      "verdict": "region_or_type",
+      "note": "Interpretationsschild zum Felskloster, nicht die Anlage selbst."
+    },
+    {
+      "file": "cf6ddd6acd5dc6364507bb2773e8e1fd",
+      "verdict": "depicts",
+      "note": "Tuffkegel mit behauenen Hoehlen und Mauerresten."
+    },
+    {
+      "file": "44f79e7685573a09a2381215bcdf2a7a",
+      "verdict": "depicts",
+      "note": "Felswand mit Grottenoeffnungen und Ziegelmauerwerk."
+    },
+    {
+      "file": "db2aa9ea0e80fe1ccd4f65dd95d5733d",
+      "verdict": "depicts",
+      "note": "Felsformation mit ausgehauenen, bemalten Hoelen."
+    },
+    {
+      "file": "7667c82bac7c5383d0ffc6727ae93451",
+      "verdict": "depicts",
+      "note": "Felsschlucht mit Grottenoeffnungen und Geroell der Anlage."
+    },
+    {
+      "file": "432d0be9bf550048927e85d70f1cdd77",
+      "verdict": "depicts",
+      "note": "Weite Ansicht des Felskessels mit Höhlen und Museumsweg."
+    },
+    {
+      "file": "120203c20c93156b8b292112a4d5b520",
+      "verdict": "depicts",
+      "note": "Verschneites Zelve-Tal mit Felszellennischen und Wegweiser."
+    },
+    {
+      "file": "8c49416126c5aacf13f09796a06b31e7",
+      "verdict": "depicts",
+      "note": "Zelve-Kessel mit Felszellen, Treppen und Besuchern."
+    },
+    {
+      "file": "63e090ab9d0f0f3cf12762566d328417",
+      "verdict": "depicts",
+      "note": "Zelve-Kessel mit Felszellen und Museumsweg."
+    },
+    {
+      "file": "76576a5421c0904ce33164f36f602c00",
+      "verdict": "depicts",
+      "note": "Felswand mit ausgehauenen Zellen und Mauerwerk."
+    },
+    {
+      "file": "edc3c768c0168f1c00bba8f0f3c9f24f",
+      "verdict": "depicts",
+      "note": "Tiefe Felsschlucht mit Grotten und Holzzaun des Geländes."
+    },
+    {
+      "file": "77915bfdb4e66f8bbb9d451fe3f40fb4",
+      "verdict": "depicts",
+      "note": "Panorama des Zelve-Tals mit Felshöhlen und Besucherweg."
+    },
+    {
+      "file": "1ddf00269a913acf72e59a4a80dae2c9",
+      "verdict": "depicts",
+      "note": "Wanderweg durch das Zelve-Tal mit Felszellen beidseits."
+    },
+    {
+      "file": "e9dc5546707ea1779d76b4e78d1ccf12",
+      "verdict": "depicts",
+      "note": "Felskesselwand mit zahlreichen ausgehauenen Zellen."
+    },
+    {
+      "file": "6b32b003ec1fcc4d981011fdb6d8c0ae",
+      "verdict": "depicts",
+      "note": "Tuffkegel mit behauenen Höhlen und Wegen der Anlage."
+    },
+    {
+      "file": "a52b8528c3e8cc787b07dded9a96c262",
+      "verdict": "depicts",
+      "note": "Felskegel mit Höhlenzellen, wie bei Zelve."
+    },
+    {
+      "file": "da5d109dff6aa8bbc90658fed3ad73ff",
+      "verdict": "depicts",
+      "note": "Zelve-Schlucht mit Felshöhlen auf beiden Felswänden."
+    },
+    {
+      "file": "c444cb56a435a4653a4b118524044015",
+      "verdict": "depicts",
+      "note": "Felskegel mit Höhlenzellen und Steinmauern."
+    },
+    {
+      "file": "a25d2cb3cf2d80b0c01267fc20139f74",
+      "verdict": "depicts",
+      "note": "Zelve-Tal mit Höhlenzellen und Besuchern auf dem Weg."
+    },
+    {
+      "file": "4d64844554c855dcb41a7ea590e940d9",
+      "verdict": "depicts",
+      "note": "Zelve-Kessel mit Felszellen und Besuchergruppe."
+    }
+  ],
+  "note": ""
+}

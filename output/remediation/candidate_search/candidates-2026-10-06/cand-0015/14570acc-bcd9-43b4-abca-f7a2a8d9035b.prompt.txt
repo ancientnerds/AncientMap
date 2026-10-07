@@ -1,0 +1,33 @@
+site_id: 14570acc-bcd9-43b4-abca-f7a2a8d9035b
+name: South Street Barrow
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- South Barrow - geograph.org.uk - 4452967.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8868d6b4eaf0e0f317df84f7a5166a5c
+- Churchyard, South Barrow - geograph.org.uk - 4452970.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e6b5e30440111b5e208ff0269653699
+- St Peter, South Barrow - geograph.org.uk - 4452973.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9191e1a440ab2a0d79a12be0e7e8a59
+- Lane heading to South Barrow - geograph.org.uk - 7828606.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\969739cbeae4e757527f64454d6dc8c3
+- South Barrow, Nightingale Lane - geograph.org.uk - 7755842.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0bd80e6d7dc5812ba5ff8175b4b8deb4
+- Road between North and South Barrow - geograph.org.uk - 4452959.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9cc173ec6296bb339164acc90b92759d
+- 7 and 9 South Street and 1 Melton Road, Barrow-upon-Soar - geograph.org.uk - 5296732.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1eb10b2d234e0da00f126a8a12f39baa
+- Young woodland near North and South Barrow - geograph.org.uk - 4452956.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\01cf8a8592f26f276fca219d5c5d5620
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

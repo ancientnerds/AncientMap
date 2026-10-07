@@ -1,0 +1,12 @@
+{"site_id": "b10bc2a8-f979-4096-a3e2-2e9c88c814ef",
+ "answered_by": "mcode-judge-cand-0134",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Teaching Democracy in a Concentration Camp (essay) - DPLA - 147658828e07d99a6a17fc5765304d43 (page 11).jpg",
+   "verdict": "other_site",
+   "note": "Scan einer abgetippten Textseite (Essaysatz ueber Schulkinder im Lager), nur Papier und Schrift, keine Landschaft oder Struktur"},
+  {"file": "Teaching Democracy in a Concentration Camp (essay) - DPLA - 147658828e07d99a6a17fc5765304d43 (page 12).jpg",
+   "verdict": "other_site",
+   "note": "Wieder eine abgetippte Manuskriptseite mit Fliesstext, kein Ort und keine Luftbildarchaeologie erkennbar"}
+ ],
+ "note": ""}

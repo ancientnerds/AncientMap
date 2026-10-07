@@ -1,0 +1,37 @@
+site_id: eb379653-acb9-464d-af06-a0c15a7d6304
+name: Epidaurum
+country: Croatia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Cavtat sa vidikovca.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bb6744a9af2eb0aac3ee22b95160acdc
+- Cavtat 2025.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4ff72057fa2de3b590a1a2324e2a33c
+- Cavtat 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\13afba7ebf426e9df234b3dd8a50c2ed
+- Cavtat panorama.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\895288df1b28950594cc9099a17fb7d2
+- Cavtat - street.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25a7bdbd0dacc1ee28c40bc7a549b93a
+- Cavtat, Croacia, 2014-04-19, DD 11.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e25471d8b7fc14ca947c27ee1d69d657
+- Cavtat, Croacia, 2014-04-19, DD 12.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\297fef121371f753cd325a085953488c
+- Cavtat Banner.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a182a7a7748420c1b0a54fbd25c6876d
+- Cavtat, Croacia, 2014-04-19, DD 01.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7df06a7b04fc74b5eb5e6612beb4f40
+- Cavtat.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec2d09dd99f28946c39e1bfb9f595914
+- Boats of Cavtat, Cavtat, Croatia (Unsplash).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\55d7e165ec1789ed5887d62150b66ae4
+- Cavtat, Croacia, 2014-04-19, DD 02.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a22f6e85dc2692e399d82eff27d664df
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

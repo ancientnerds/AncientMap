@@ -1,0 +1,38 @@
+site_id: 6aa4c8de-3794-42fe-b68e-6b6ab77bd8ed
+name: Delphinion
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Delphinion Miletus 3D Reconstruction.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\744fe4c4ab06de487e4925a18ee85193
+- Altar for Apollo Delphinios offerings from his sanctuary, Miletus (Turkey), marble, 5th century BC 8587.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c79796d072852e53e39317f6ff5f9745
+- Miletus Delphinion in 2015 3355.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dffbb9189887a49de3f7044ff5e03e10
+- Remains of the Temple of Apollo Delphinius in Athens on July 18, 2021.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\989e57e86416cf4afafff4ac99d2b66c
+- The ruins of the Temple of Apollo Delphinius on July 23, 2022.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3fd13f3426a7248c232b46ab3ba10962
+- Temple of Apollo Delphinios Athens 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\67aaeb26f3c657195a96dc42eb765981
+- Temple of Apollo Delphinios Athens 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7359a51018331c95fa59e2dfc6da9600
+- Temple of Apollo at Delphi 2015.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de3808697af799dc70f8c3429cf48cc6
+- Miletus Delhpinion in 2007 4574.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\842948f46fa80156aeeff211d57cbb44
+- Miletus Delhpinion in 2007 4573.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\860db1b80009e35c947a0a0edbc61548
+- Miletus Delhpinion in 2007 4575.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\374525e9c132ff40349bb527dd035e1a
+- Miletus Delhpinion in 2007 4548.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e85f411a5b767f64c98192db7db38be1
+- Wiener Dioskurides Delphinion.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8175bbcb94477328cb13620b6cfc627a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

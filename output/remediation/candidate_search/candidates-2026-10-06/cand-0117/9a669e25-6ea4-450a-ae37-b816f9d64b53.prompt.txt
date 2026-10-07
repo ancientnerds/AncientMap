@@ -1,0 +1,30 @@
+site_id: 9a669e25-6ea4-450a-ae37-b816f9d64b53
+name: Gate of Zeus and Hera
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Thasos circuit wall Gate of Zeus and Hera relief.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\66ac1e2e64b2707fb50fcafb88db127e
+- Gate of Zeus and Hera.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8dafab36a2d110702c8d4a90d73c61c1
+- HERA Halle Nord in Hamburg-Bahrenfeld (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e37be5f7a129afbddeb9680c5baa727c
+- Akragas-sitemap-bjs.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7ec4d1b418deb656499d8b8916fffb1
+- 27. Hot Pink Feathers --- Carnaval San Francisco 2015 Parade 153 (17972992928).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de4a92b680794e7ba154026b6c538fe5
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

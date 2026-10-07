@@ -1,0 +1,35 @@
+site_id: 6c4d8b74-697a-46f7-a000-bf92b702f87a
+name: Windbury Head
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Windbury Head - geograph.org.uk - 5146823.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a7ce30bf1575e596edadcd6e743d8ca6
+- View to Windbury Head - geograph.org.uk - 5146842.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b6b770f584aabe7d7c5177721ce99f4f
+- View to Windbury Head - geograph.org.uk - 5146837.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\958fbc19149570439081f02d029b0367
+- Windbury Head across Mouthmill beach - geograph.org.uk - 8102698.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6362977057dc641349b31cc2e565283
+- Hartland Point (9615726706).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb7cb071a1be017c759b1eaeec27d14c
+- Hartland Point 01.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\21557f5ffbf4f0b945fd73e97179f806
+- Hartland Point Lighthouse (2830326168).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f32c5ca14b5c386c56deaea7752a7404
+- Hartland Point - geograph.org.uk - 1923956.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c39b33d6a314eeab00d280bbb2bd8280
+- Hartland Point to Lundy Island (9612489451).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\51a71cfe4ad1c4521e67d28fc3fa2d70
+- Hartland Point Devon GB.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f59877929d3985936a42bc4ad27baa0b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,37 @@
+site_id: 9d0a034a-c362-4f11-a437-76484f145981
+name: Petrovka Settlement
+country: Kazakhstan
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Petrovka, Kupinsky district.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8e1fa0bd364cd76f51a4c37712bb2e9e
+- Permskiy r-n, Permskiy kray, Russia - panoramio (472).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\227518524c892e90fcde449f74093705
+- Petrovka údolí.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d927f2b672cd37cfbae095248e299e4c
+- Studánka Petrovka c.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\95d93119b6ad1fb606a57f43df9f335d
+- Petrovka, 38.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\345aa513a13e1b3dcb97fe567638a991
+- Petrovka mapa.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bbe529edc1f511f7bbc9b6a19669f1c1
+- Studánka Petrovka a.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\40ab60db7f2cd17a27736db48b84665e
+- Studánka Petrovka b.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\55d1ffd79a8509fd76fc5819dd5fb311
+- Portinhoikka Petrovka Karjalankannas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e669b9d74704ddf1b8f2c6d4f6f25a93
+- Petrovka 17.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1e09f4846da698fcabc73654cbb013d4
+- Petrovka 8.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b54b99ae37c76dd6e5ea057fff826ec1
+- Petrovka 23.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e6b45ab7644968474d1507b0ce56701b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

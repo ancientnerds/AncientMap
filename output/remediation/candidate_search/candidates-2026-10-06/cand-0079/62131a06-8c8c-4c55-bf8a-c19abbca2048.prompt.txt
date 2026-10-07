@@ -1,0 +1,44 @@
+site_id: 62131a06-8c8c-4c55-bf8a-c19abbca2048
+name: Tepoztlan
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Montaje de Tepoztlán.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f7caff65ea4a5960a0f8fc3aa53bf51
+- Iglesia Tepoztlan años 40.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\370c6d8a96a7a0cc3cf6956c47ab69f5
+- Itacate de Tepoztlán 2022.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\64bc2503a5182534c9275434d6239ace
+- Vista de la ciudad de Tepoztlán desde la pirámide del Tepozteco.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2b05c024b707d3f9de4ac8effc37cafc
+- Joven baila brake dance en Tepoztlán.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ab5414dbe95bb59d63246a13b236cda1
+- Iglesia la Santísima Trinidad Tepoztlán por Silvia.webp  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f871587953887ed6788adbf88ab05497
+- Tepoztlan mountains2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e3942206613d1024f031c7382ab55cb
+- Tepoztlan (5074520967).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\99d719d4fd270ac3ac05c817b7d830d2
+- Amanecer en Tepoztlan (8690780635).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2da661aefaba236b728b8c2f448056d9
+- Montaña de Tepoztlan 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\270c5568e7a3130945f98775731480c3
+- Tepoztlan-Morelos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd51e4a05626a48d2dfd1388ea3e1f9f
+- Avenida del Tepozteco en Tepoztlán.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4361fef2eb032ceac31dde288531bf27
+- Calles típicas de Tepoztlán.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7ef80158e22fa0062e991ded94b2c50b
+- Tepoztlan Natasha Zadorozhnaya.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6953742af6c4c564e41d90e44abd5894
+- Artesanías de Tepoztlán.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e76e65024c841cbd41b6785e54506443
+- Tepoztlan Church Entry View (149015065).jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c49df064eb29fe1095f4eb1570cfcc8a
+- Saxofonista tocando en la calle del Tepozteco, Tepoztlán, Morelos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3cf47ffb69eb9b2233f3312acdc40ad1
+- Tepoztlan Temple Trail - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b14e9a8bd55a9b774472f64c79d416a3
+- Imágenes elaboradas colectivamente con semillas de arroz, frijol, maíz, garbanzo y lenteja para la fiesta de la Natividad de la Virgen (Tepoztlán, Morelos, México) del 8 de septiembre de cada año (foto 7 de 14).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\87e7d99bf0596ef35154b2da0f023d75
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

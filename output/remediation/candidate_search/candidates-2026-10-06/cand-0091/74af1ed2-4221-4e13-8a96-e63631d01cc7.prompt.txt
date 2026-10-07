@@ -1,0 +1,45 @@
+site_id: 74af1ed2-4221-4e13-8a96-e63631d01cc7
+name: Büyük Hamam
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Buyuk hamam dask.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b81c79cbfac15cf4d4a12bc28364bd6e
+- Büyük Hamam (St George of the Latins) (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\779f68926cb1af8bfb39a8b94b26b112
+- Büyük Hamam (St George of the Latins) (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\154092a39c0c972486f8067c7a47352a
+- Büyük Hamam, north Nicosia, Northern Cyprus.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5e0eda54d285be645392a57a3c506977
+- Büyük Hamam (St George of the Latins) (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\980060f76e36f76ec9f3d567cae2d592
+- Büyük Hamam (St George of the Latins) (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9f8ad1d86ed4b3ff84c6a8c3619f0df
+- Büyük Hamam (St George of the Latins) (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4aa03b429d1c1f7f9deed3a01b547118
+- Büyük Hamam (St George of the Latins) (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df2670531bc83f00f827190a9da0f7ce
+- Büyük Hamam (St George of the Latins) (8).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f92249938c845d9ce7ba47d66298c0d
+- Büyük Hamam (St George of the Latins) (7).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fc07122529eb7798c8556acc5b952376
+- 1143520-Büyük Hamam.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d0b05b550d4371fe31553107236f476
+- Entrance of Büyük Hamam.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17e31a1a3ad346f96845fb8305c46613
+- Beçin Büyük Hamam 5340.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b660d142d1b4bbb867cc060b00d68aa2
+- Beçin Kalesi 20 10 2000 Burg von Südwesten mit Büyük Hamam.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\98f022fe909bfcb3bf852c4ddcd60244
+- Beçin Büyük Hamam 5337.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\648ed18003386bf4b31d46ac407c0910
+- Beçin Büyük Hamam 5338.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\07a7c6fdb37401d68b39b1e992727c6f
+- Beçin Büyük Hamam 5333.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b851872123e7afc85049243bee638f0a
+- Beçin Büyük Hamam 5334.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\82c837fdeb830cd039fe7f58fb72f912
+- Beçin Büyük Hamam 5341.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2472011fa193a85c221ebd7230dfd1dc
+- Beçin Büyük Hamam 5336.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8c782388f361332a55d8af483fd8322
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

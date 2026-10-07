@@ -1,0 +1,37 @@
+site_id: f509d927-063b-4a03-b40a-624aadd6a2a4
+name: Noh Kah
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Mayan jade mask from La Rovirosa- Noh kah, Quintana Roo (MUSEO MAYA de CANCUN).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f672324d4910507b94b5e58ac1293a2
+- Mexican guitars and toys.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b81f8d64ada3194e61dd53bcac49564
+- Wooden bench swing and wicker hammocks on a bamboo footbridge in paddy fields a sunny day during the monsoon, Vang Vieng, Laos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cadb0b2dc99e59bd6b0481f59acdbe68
+- Porsche 904 GTS Minichamps (Seite).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b205c357d28f62c55408e5d92ee55b75
+- Distler-Lokomotive, um 1950 (Foto Sp).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9decde31eee7acfd08a9dd9e0b01f7b7
+- 004 2021 06 20 Babyausstattung.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd199556491250181c94199f1d8a0586
+- Plastic house.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2ba5dd94662c5c116f7c4081d7838aa6
+- Juist, Leihfahrrad -- 2014 -- 3713.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cc89f3008b31fa3966eb46bd93c94696
+- 14-05-28-LEGO-by-RalfR-061.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c44132ab7c287b4bda64257024c52f3c
+- Young Indian girls, Raisen district, Madhya Pradesh.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\988a14de959b5386ad2bad2a9b3eb56c
+- Bird whistle toy.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e0b3bd93f70e655b06f469d31614a860
+- Funchal (Madeira, Portugal), Rua de Santa Maria 97 -- 2025 -- 0874.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c6606bed5aae94648cceac58951ae26d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

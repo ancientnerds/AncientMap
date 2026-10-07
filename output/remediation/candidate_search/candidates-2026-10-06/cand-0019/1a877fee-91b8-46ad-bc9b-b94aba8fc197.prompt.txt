@@ -1,0 +1,33 @@
+site_id: 1a877fee-91b8-46ad-bc9b-b94aba8fc197
+name: Kenko, Puno
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Nara Kenko Land.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc2a71c7a1297d1b794c578ab4581108
+- NARA KENKO LAND.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\21f4df3f7c9647968d063eccf71dd7d5
+- Cp+2017 kenko tokina.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0659bbed4a574c41589ebd685e4d9064
+- The sign at Nara Kenko Land.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8dd95bd3c279d5e542896f7d49157dd
+- Obi san Kenko ji 201712mid 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af108ecff5c487e59611d91d1f3acdef
+- Obi san Kenko ji 201712mid 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\89accf7db085731a5e27311580460427
+- Painting of Yoshida Kenko by Utagawa Hiroshige.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\43b0688be4bae4f38fe5feb1959836c3
+- KENKO Mayonnaise Headoffice.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\127a881afbcf53aa6266a268648a8d14
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,40 @@
+site_id: e473f682-8b9c-4d5c-b2cc-0ca24fcc06bc
+name: Burledge Hill
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Across Burledge Hill - geograph.org.uk - 4856760.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c6651f890f94bd3e00cc08307d1bf20
+- Burledge Hill fort - geograph.org.uk - 4856777.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bcfb8812e5d8e1e500cc89688abab1c0
+- Ascending Burledge Hill - geograph.org.uk - 4868447.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fc8cc6c8b7bfa035c5ac166744acb2e2
+- 2012 , Barn on Burledge Hill - geograph.org.uk - 3102532.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9a61ac0a53a5901b245a7a554c683898
+- 2012 , Sheep on Burledge Hill - geograph.org.uk - 3102525.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\10aa6f30451144af8ece52f2f7d103bb
+- Scrub woodland on Burledge Hill - geograph.org.uk - 2665724.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3392f01b77d0dafd0510d544af279cda
+- Burledge Hill Access Land - geograph.org.uk - 4868463.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d7fa306bc21d8bfbf0407eb484e808fe
+- Trig Point and view - Burledge Hill - geograph.org.uk - 5838977.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e03a78d3cc26296e0de87ee9643919ea
+- Vehicle barrier on Burledge Hill Byway - geograph.org.uk - 3468097.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad18b34fc5290f81d464e37c27722456
+- Trees on Burledge Hill fort - geograph.org.uk - 4856781.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d3838452e551c38c572175755e00a6ba
+- Farm track on Burledge Hill - geograph.org.uk - 2167254.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ebf6d90554d792eef78f1231a56981e
+- Either way around Burledge Hill - geograph.org.uk - 4868485.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e0aa38c3226fd2c693c9b836cf2f0a15
+- Trig pillar on Burledge Hill, North Somerset - geograph.org.uk - 1957627.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f4ead7d5222759a7b2605df011b05c4
+- Scrub woodland on the North slope of Burledge Hill - geograph.org.uk - 2167763.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2719a09db393205d221b384428980580
+- Scrub woodland on the North side of Burledge Hill - geograph.org.uk - 2167764.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bff1c6f2b4cf64ad565cd541dbdb7da2
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

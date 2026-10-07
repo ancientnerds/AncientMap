@@ -1,0 +1,33 @@
+site_id: 8153d20b-c794-4c70-9269-7f20884d5149
+name: Woodbury, Stoke Fleming
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Farmland, Woodbury Farm - geograph.org.uk - 6023711.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\60a0ba69c4ebbb4c1b52991c7ed6a7f8
+- Arable field, West Woodbury - geograph.org.uk - 6023800.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45941b0b2972e7d6b42e05c27091ee1d
+- A3122 near Woodbury Farm - geograph.org.uk - 5953336.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\212a5f8b5762ecd9fb6ddfd475a0fc00
+- WOODBURY, Levi-Treasury (BEP engraved portrait).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5dd6384babf01198d2b42a80c49ce00
+- Woodbury, Tennessee 5-23-2015.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b5b553749f4c2a1d24f457093534aabb
+- Woodbury , Woodbury Park - geograph.org.uk - 7247915.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\18ec86928ad4b034c43e43dbdc26242b
+- Woodbury Reservoir, Woodbury, CT (54531430926).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25384eb5579c440a8f7a5db5f3be8dab
+- Maison Woodbury-Matte.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\885e92aec48adbb241fcd163cd0af7ab
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

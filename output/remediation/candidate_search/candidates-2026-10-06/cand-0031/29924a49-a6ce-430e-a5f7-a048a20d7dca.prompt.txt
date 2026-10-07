@@ -1,0 +1,29 @@
+site_id: 29924a49-a6ce-430e-a5f7-a048a20d7dca
+name: Qhunqhu Wankani
+country: Bolivia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ciudades tiahuanacotas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0cfa46beb13b8780cb62d35e885e1a28
+- Map of surrounding area of tiwanaku 1 1 1 1.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9bad45623de5acc77db48cc0b01adcb0
+- Tiwanaku sites location map 2 1 1 1.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d3b3581828e6817fb18c35a03290cfc
+- Tiwanaku sites location map 1 1 1 1.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3a6e14f9d835697e4832c7a56fc7b5fa
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

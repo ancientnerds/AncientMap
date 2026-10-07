@@ -1,0 +1,68 @@
+{
+  "site_id": "c207499d-5adf-4758-a902-09c031c6aad8",
+  "answered_by": "mcode-judge-cand-0152",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Balafon (Aly Keita) Unterfahrt 2010-03-11-001.jpg",
+      "verdict": "other_site",
+      "note": "Musiker mit grossem Balafon auf einer Buehne, Konzertfoto - kein Bezug zu Kot Bala sichtbar"
+    },
+    {
+      "file": "Balafon Sacré.png",
+      "verdict": "other_site",
+      "note": "Historische Aufnahme von drei Balafon-Spielern mit grossem Instrument, kein Ortsbezug zu Kot Bala"
+    },
+    {
+      "file": "Balafon-Bamougoum (2).jpg",
+      "verdict": "other_site",
+      "note": "Museumsexponat: Holzbrett mit Kalebassen und Schlaegel vor gruener Wand, reine Instrumenten-Doku"
+    },
+    {
+      "file": "Balafon artisanale.jpg",
+      "verdict": "other_site",
+      "note": "Unscharfes Handyfoto: Spieler auf einem grossen Xylophon/Balafon in einem Innenraum mit Zuschauern, kein Ortsbezug"
+    },
+    {
+      "file": "Balafon danse.jpg",
+      "verdict": "other_site",
+      "note": "Dorf- und Hofszene mit Kindern und Erwachsenen um ein liegendes Instrument, keine Site erkennbar"
+    },
+    {
+      "file": "DUn balafon 7.jpg",
+      "verdict": "other_site",
+      "note": "Nahaufnahme eines Museumsexponats mit Kalebassen, Saiten und Mikrofont, Instrumenten-Doku"
+    },
+    {
+      "file": "Balafon-Afrique orientale (détail).jpg",
+      "verdict": "other_site",
+      "note": "Detailaufnahme zweier Kalebassen mit Resonanzloechern, Seil und Holzlatten - nur Instrumentendetail"
+    },
+    {
+      "file": "Un balafon 2.jpg",
+      "verdict": "other_site",
+      "note": "Konzert- bzw. Studioaufnahme mit Spieler und grosser Instrumentaufnahme, kein Ortsbezug"
+    },
+    {
+      "file": "Balafon griot (1).jpg",
+      "verdict": "other_site",
+      "note": "Musiker im Freien auf dem Instrument vor einer Erdwand, generische Dorfansicht ohne Site"
+    },
+    {
+      "file": "View of the Street and mountain of Bala Kot Kaghan.jpg",
+      "verdict": "region_or_type",
+      "note": "Strasse mit Haeusern, Sendemast und verschneiten Bergen: reine Regions-/Landschaftsansicht, Site nicht erkennbar"
+    },
+    {
+      "file": "Mamadou Diabate balafon player.jpg",
+      "verdict": "other_site",
+      "note": "Buehnenauftritt eines Balafon-Spielers vor schwarzem Hintergrund, Portrait eines Musikers"
+    },
+    {
+      "file": "Balafon-Bamougoum (1).jpg",
+      "verdict": "other_site",
+      "note": "Museumsexponat mit langem gebogenem Hals, Kalebassenkuerbis und Schlaegeln vor gruener Wand"
+    }
+  ],
+  "note": ""
+}

@@ -1,0 +1,37 @@
+site_id: 753a8b5b-669c-4062-b935-93e619291597
+name: Gyrton, Thessaly
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Monnaie - Bronze, Thessalie, Gyrton - btv1b10441965g (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4248629514f6674edee0b31b8a7a509
+- Monnaie - Bronze, Thessalie, Gyrton - btv1b10306748f (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\00d8298ecd5060a45770babc315477f6
+- Monnaie - Bronze, Gyrton, Thessalie - btv1b85723672 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef5d8cf96920b1b8b5dcbfb66c4d7c3f
+- Monnaie - Bronze, Gyrton, Thessalie - btv1b8572366n (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d449223dc9d438236fb794716d3ed1f8
+- Monnaie - Bronze, Gyrton, Thessalie - btv1b85723657 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c0696a1e00064783e83613716518fb6
+- Monnaie - Bronze, Gyrton, Thessalie - btv1b8572368g (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7f5ba604b1669fb76ef676e81bee2da
+- Monnaie - Dichalque, Bronze, Gyrton, Thessalie - btv1b113169479 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\041995ffc429b64237649a971a7ab583
+- Monnaie - Bronze, Gyrton, Thessalie - btv1b8572364t (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a33c6659443b8d635fd5f03f48caa7c8
+- Monnaie - Bronze, Gyrton, Thessalie - btv1b85723672 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb65fd64f6cecf4e0f10e07a49467c6d
+- Monnaie - Bronze, Thessalie, Gyrton - btv1b10441957z (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45a21bc12e0df968dcd603f8cea429e3
+- Monnaie - Bronze, Thessalie, Gyrton - btv1b10441957z (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\28919ce09d7cddf3284eee91bbbaa6b0
+- Monnaie - Bronze, Gyrton, Thessalie - btv1b8572368g (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa8207dc70448dd226dec96e2844924a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

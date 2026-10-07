@@ -1,0 +1,42 @@
+site_id: b3180c5d-77b8-4144-a69c-8503ce6c06f4
+name: Kirkby Thore
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Farmland, Kirkby Thore - geograph.org.uk - 7346540.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\110d479a66c2065025758c2716a452aa
+- Footpath leading to Kirkby Thore - geograph.org.uk - 4717676.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fe0fd1e23f98d3c88fcdf3c98cdaefe7
+- Gypsum works, Kirkby Thore - geograph.org.uk - 7346528.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\054d686bdef42f4cf8b0da633a5124d7
+- The place to eat in Kirkby Thore - geograph.org.uk - 5738116.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\32006c71872ccf0f1a169fbdbad38641
+- Foresters Hall, Kirkby Thore - geograph.org.uk - 6902535.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4b384c1fe59cea9c3c7a1a4ec43cfadc
+- Town End, Kirkby Thore from the A66 - geograph.org.uk - 5591287.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b0bfd0485127f2aea1719cdcfd98713c
+- St Michael's Church, Kirkby Thore - geograph.org.uk - 1807151.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02ca2b7fc787ba56fc6a4987d855845d
+- Gypsum works, Kirkby Thore - geograph.org.uk - 4739833.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0004cacbd104b1a1ad477b0d7889fc01
+- Kirkby Thore from A66.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fbee33386ef9f13702e37aa7459dcd7d
+- Benchmark on Kirkby Thore County Primary School - geograph.org.uk - 4739930.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd550a7c702fc1eaa4df58d3f7e641b9
+- 'Meadow View', Main Street - geograph.org.uk - 4739440.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7b17ae37e52ffb2bd44d8b281ba8ae39
+- A66 at Lowmoor Row - geograph.org.uk - 6572540.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa618f3a252c040e0d55d54db180ee26
+- Arch in a wall, Kirkby Thore - geograph.org.uk - 6902580.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\98ada776ef2d9546fac45ff7caba8766
+- B. G. trains stop here (at Stamp Hill farm) - geograph.org.uk - 3933071.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\61435e7c6ed19ff31fda11b8704c9f0c
+- Benchmark on 'Meadow Bank', Main Street - geograph.org.uk - 4739338.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f824a8059c15b0a9cf1e77970f04371a
+- Benchmark on building at Spitals Farm - geograph.org.uk - 6391855.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\87f10d254b81fdca0ee822f80fbc5abf
+- Benchmark on No. 2 Eden View Cottages - geograph.org.uk - 6392631.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\98176420445ff101c1c6225182de7a6e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

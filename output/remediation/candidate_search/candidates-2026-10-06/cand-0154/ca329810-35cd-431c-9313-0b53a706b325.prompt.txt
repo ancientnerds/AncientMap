@@ -1,0 +1,44 @@
+site_id: ca329810-35cd-431c-9313-0b53a706b325
+name: Lagartero
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Nome Lagarteiro.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b20b2b27e7ccc6fa5515412408267534
+- Zona Arqueológica Lagartero, La Trinitaria, Chiapas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c82684fed15bbdec19bfaaf4f74db9a
+- Río Lagartero Chacaj, Nentón (50927990562).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4eee2d909ca01c61a7a6427936045c8f
+- Río Lagartero Chacaj, Nentón - 50927877406.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e9a39a8ab64a377309dcb724c8ba9e47
+- Río Lagartero Chacaj, Nentón - 50928002062.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8e015ce1eca781ce552437ae635665e9
+- Río Lagartero Chacaj, Nentón - 50927902786.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\abf6891a8783734481678a03e282bfb3
+- Río Lagartero Chacaj, Nentón - 50927897546.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94f0ebe3f4d21ecac00c75cc4f449067
+- Río Lagartero Chacaj, Nentón.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\32d4c0f3ad239d851f43d6ce473beffb
+- Río Lagartero Chacaj, Nentón - 50927848346.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aaf7d113d64fe88ef678ad65baf57e9b
+- Río Lagartero Chacaj, Nentón - 50927900236.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f270d34d219708f323138f319b2796d
+- Río Lagartero Chacaj, Nentón - 50927872296.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\329a3235c8e3e136952cf775bdc1525a
+- Río Lagartero Chacaj, Nentón - 50927184278.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\167d148f019b416ffca1702cf1112f80
+- Myiodynastes chrysocephalus Atrapamoscas lagartero Golden-crowned Flycatcher (7881691252).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b7ab6d8e24dccb18c01ab304dc7403b0
+- Myiodynastes chrysocephalus Atrapamoscas lagartero Golden-crowned Flycatcher (12978944593).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7f1aca862df89df3b6c5297ea8c7bc46
+- Harpagus bidentatus Gavilán lagartero Double-toothed Kite (juvenile) (7428123412).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e8aecce2deb9624157fafb4f9e05979
+- Río Lagartero Chacaj, Nentón - 50927857971.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\92df297f13ee7ea6db2038ca5830f9f5
+- Río Lagartero Chacaj, Nentón - 50927850831.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c223bcdb892b785884811d68da71ac1b
+- Río Lagartero Chacaj, Nentón - 50927843601.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\691336bd1538d87ddfb0b43f2790df51
+- Myiodynastes chrysocephalus (Atrapamoscas lagartero) (14013565856).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\818aeeb3eaaa945f1f1ea8ef638aedd6
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

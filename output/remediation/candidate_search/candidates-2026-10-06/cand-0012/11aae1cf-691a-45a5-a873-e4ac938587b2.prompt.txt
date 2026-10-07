@@ -1,0 +1,37 @@
+site_id: 11aae1cf-691a-45a5-a873-e4ac938587b2
+name: Öküzlü Ören Yeri
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- ÖküzlüHaus1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3986fb895f8301125a301c9e1b118705
+- Öküzlü 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1aa3606b56aabcb4bafb893b8b269e2c
+- A building in Öküzlü.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7f11c70c0513c83174f7706e934e7a41
+- ÖküzlüTür1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd1921ca533ce57fe3b0049d652a06e6
+- ÖküzlüTür2Sturz.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de15e6bb6094c806c105dd02bc4b82b3
+- ÖküzlüKirchePastophorien.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a0b4f0894ef7ac8e7a3783bbc967040b
+- ÖküzlüStraße.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d8cac26c765c9d36040db431b73919ea
+- ÖküzlüHaus2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4765f1e33b5b1ff2cee554f8f81f026
+- ÖküzlüTür2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff1141f2bdc0531321662b64a95b17e4
+- ÖküzlüSturz.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7893e4d4331f65b544cf44338d9f5c6f
+- ÖküzlüKircheBögen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\881c142db1003b3f35a3d72188577f4d
+- ÖküzlüHausSturz.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4b3ab1a50b69fd9ab5970cdcea8c34ca
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

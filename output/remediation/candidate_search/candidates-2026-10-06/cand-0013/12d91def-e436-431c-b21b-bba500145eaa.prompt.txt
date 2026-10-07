@@ -1,0 +1,43 @@
+site_id: 12d91def-e436-431c-b21b-bba500145eaa
+name: San Claudio
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- San Claudio (Oviedo, Asturias).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\957ed4b376a72ea4d485dc20d4b9a8d6
+- Estacion de San Claudio⁄San Cloyo (03).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0ace8a3e3e8bf1154e1980ac3e7621ed
+- Estacion de San Claudio⁄San Cloyo (01).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c74f17049086afb835dc7c86cf958d69
+- Estacion de San Claudio⁄San Cloyo (02).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5f7bd26c7fb78763415ba8d73ec82822
+- Estacion de San Claudio⁄San Cloyo (10).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4e189d4ee465783a5ca2c61c9e793adb
+- Estacion de San Claudio⁄San Cloyo (04).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\842048f943ae2b28889f5552acc01270
+- Estacion de San Claudio⁄San Cloyo (07).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9564cd6aeb4b62f726a4e58511767f4b
+- Estacion de San Claudio⁄San Cloyo (08).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a52384f230ba9d44483e18add541200c
+- Estacion de San Claudio⁄San Cloyo (09).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88d8311cb614b4a9e6ca5cf90b7b4ed9
+- Estacion de San Claudio⁄San Cloyo (05).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc4926bceeb63b1b7fc18c5280bfd20f
+- Estacion de San Claudio⁄San Cloyo (06).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3b6d0ca4bc7211446cea460dafb6d058
+- San Claudio (Spello).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\60d66fbf24b8241fa1e8b201bc90c3fc
+- Chiesa di San Claudio al Chienti, chiesa inferiore, san claudio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f75bd99abb4afb5a17708e44357228c7
+- Zamora - Iglesia de San Claudio de Olivares (Inscripción).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\53158e6009704ef90222c7da93db9f07
+- Chiesa di San Claudio al Chienti, chiesa inferiore 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9d9528211db7f064054158f026b2b6ac
+- Chiesa di San Claudio al Chienti, esterno 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\641055abaa4a51817316a1fbdee7eb8e
+- San Claudio al Chienti 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0d05e044ec2ddba14bca8cd2a4d39463
+- Zamora - Iglesia de San Claudio de Olivares (Portada).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6fa901b007bc1a9c1e6d6d0147aaf003
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

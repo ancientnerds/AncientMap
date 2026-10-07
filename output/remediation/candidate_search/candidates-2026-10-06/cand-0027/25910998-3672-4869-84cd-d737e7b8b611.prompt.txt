@@ -1,0 +1,38 @@
+site_id: 25910998-3672-4869-84cd-d737e7b8b611
+name: Ahu Nau Nau
+country: Chile
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Easter Island, Ahu Nau Nau (6691343477).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4c22668a0089ce83e79a804575ba09f1
+- Ahu Nau Nau, Anakena.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\42faf4027962890612e59ebffca29c53
+- Ahu Nau Nau.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc76324881895e4dbfeb76b3987d44c5
+- Ahu Nau Nau1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\18f184497e5fae240f2f1897e8567bbe
+- Ahu Nau Nau2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\deb0812f90e9e04ab7a43f54ae92af97
+- 196 Ahu Nau Nau.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\37acca557f4c42add5ca58370276aff4
+- Ahu Nau Nau - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0d57ac7c10fa95e11a102677e160983e
+- Ahu Nau Nau - Easter Island (5956407322).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50ad2f4a3299d003b8a40de66d572c55
+- AhuNauNau.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\edb29684fa0da4cbf3f0468c4cb9cb54
+- Ahu Anakena.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9738c404bd63a429222842a60dd9e6a2
+- "Culitos" de Moai, en Anakena (8245534985).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\435fabd672fdf85fae7a5f082dc3c1aa
+- Ahu Naunau.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2084296369da008a0c0a0800f68c1308
+- ANAKENA - EASTER ISLAND.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\532ddffcb47a0148f9aa3376eb0b7755
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,45 @@
+site_id: bf538bd9-912c-471a-964a-f94842e17491
+name: Temple of Zeus
+country: Libya
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- From Temple of Olympian Zeus to Lycabetus Athens Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\03b27248bbb92d95614d6c45afc2c5f6
+- Temple of Zeus - Cyrene.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\40bcef0bd68b36d411b9d3f1af3c19c3
+- Temple Of Olympian Zeus - Olympieion (retouched).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9850966332d70b37b98abd4f1cf7ff81
+- Evening columns Zeus temple Athens.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1293a2b538674faf47ebe289d87d05b8
+- Temple of Zeus (Gerasa, Jerash - Jordan) - معبد زيوس.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c92a85cd8bfc995169f0465a98f2f236
+- The Temple of Zeus, Jerash, 14 August 2013.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2cbbd7391b9519744f0cd00bd4944ced
+- Attica 06-13 Athens 25 Olympian Zeus Temple.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\74c1786df3c159f8a73083ce9096158a
+- Temple of Olympian Zeus, Athens, 20240531 1557 9823.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c0a0d6bf3f52a589e8cea02347d4158d
+- L'Olympieion (Athènes) (30776483926).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\015b4cba3a61fd4ec4e4ef5a9e9e2c12
+- CireneTempioZeus1999.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\07d8256f5beb7af79d662ad3e4c56ce3
+- Temple of Olympian Zeus Athens.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\06cb7e9ebc3ca980c1580440ad2b414a
+- Huge doric capital - Temple of Zeus - Valle dei Templi - Agrigento - Italy 2015.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\66186f77263d6965ffce9d7b11982e6c
+- Two columns, Temple of Zeus Olympian, Athens, Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5e16ae4c3ae5c9d72c622bf2261c5679
+- Three columns, Temple of Zeus Olympian, Athens, Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4440300400ba6f35f50f82a8c0a554d
+- Attica 06-13 Athens 39 View from Lycabettus - Temple of Zeus.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5cbc1423c63d717213dfc096c477c2ee
+- Temple of Zeus Olympian, Athens, Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5b605f4db889e5ad376156e42ac488dd
+- Temple of Zeus at Alba Fucens.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da03fd81a231af977d20c4fe5c221a4e
+- Temple of Zeus, Jerash, Jordan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5656857ba1c191c811dff967295d4a7d
+- View of the Temple of Zeus from Mount Lycabettus on January 30, 2022.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7890deac95bfea73ce73461d247a6a4c
+- Euromos Temple of Zeus from hills to north side in 2015 3444.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c13f1b989e8c898c692714f3cc5b0725
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,30 @@
+site_id: ebadc068-2bac-468f-9b3c-df5c12bf446f
+name: Sigwells
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Sigwells House - geograph.org.uk - 6787296.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3525d7a2a837916c625d88cf0d1484c0
+- Yard at Sigwells Farm - geograph.org.uk - 6787294.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd1d32780eae6f323ce04897f87213e6
+- Fields north of Sigwells - geograph.org.uk - 3366345.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db52a755ebdcbe154f901417c69e0606
+- Derelict building, Sigwells, Somerset.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aad1c72f4b2b1c884ba7082dc817bcae
+- Parrock Hill and Whitcombe Farm.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ecaef633bcb5088bc1ac719411a7f67c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

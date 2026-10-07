@@ -1,0 +1,38 @@
+site_id: 4ccebe8e-9f02-4188-b9f1-431108bbcd58
+name: Te Pito O Te Henua
+country: Chile
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Te Pito o te Henua.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e52bb14737239b7a47fba092fbe2404
+- Pupek světa - Te Pito o Te Henua - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0dbc64e6cc5f819885588db602f344cc
+- Ahu Te Pito Kura 2013.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c1a7f34c7bcdf96286884e1c85bed27e
+- Ahu Te Pito Te Kura.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\034efd53b8cd29d50c5c0311db687f01
+- Ulice Te Pito O Te Henua - Velikonoční ostrov, Hanga Roa - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3995458ac72c44c4496ec409ecfa3d03
+- Te Pito O Te Henua.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\70961bccfc4039e19bd063a9e6557904
+- Pismo s otoka Te Pito O Te Henua.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c24de4079a9d114733d53206b4d4566d
+- AhuTePitoKura.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b53d4ecbe053b4a427ebbb26e4418729
+- Rapa nui cyark.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e07b8b33c828bb8cb517f73f746c008d
+- Navel-of-the-World-2013.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\66f05f36fef70e81d3a0ef8eea9d244f
+- Isla de Pascua - 628 -.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76f0ef483dca58f1979a2da39d53cac8
+- Chile-03199 - Special Rock (49072671368).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c06730e4937507fb4e2ee6e00bc3b268
+- Chile-03200 - Special Rock (49073403317).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41478990521af712ebf4bcaff364265f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

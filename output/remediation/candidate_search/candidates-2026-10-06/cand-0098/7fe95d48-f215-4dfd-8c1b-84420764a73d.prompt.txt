@@ -1,0 +1,34 @@
+site_id: 7fe95d48-f215-4dfd-8c1b-84420764a73d
+name: Castle Head, Devon
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Queens Head, Castle Street, Tiverton - geograph.org.uk - 6220115.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4e71ecb92dfdd1361ac454404df38e2e
+- Queens Head pub, Castle Street, Tiverton - geograph.org.uk - 6220025.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9bb4b1baeaad4bf40c4fe71fa822c3e9
+- Devon and Cornwall notes and queries (1911) (14778287974).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\37a43849d9ce30860f389d2e35e150f4
+- Devon and Cornwall notes and queries (1911) (14757637346).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b79dda23d5c33a5d07175a668e291e11
+- Totnes Castle 57605 at Exeter St Davids.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b3a24452a391eb738178f1976a103517
+- GW Castle heads a stopper away from Teignmouth station - geograph.org.uk - 7708294.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd6171d2a58f97e5ae537b671ccf473a
+- South Devon and south Cornwall, with a full description of Dartmoor and the Isles of Scilly (1900) (14782281272).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e62865f661b581d092f5a271eb7e89b3
+- South Devon and south Cornwall, with a full description of Dartmoor and the Isles of Scilly (1900) (14759635476).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\475bd0c9ea6331e72849434b8c16f881
+- BampfieldQuarterings SirAmyasBampfield NorthMoltonChurch Devon.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c4da4fd42e60dd9ff32537278c608f17
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

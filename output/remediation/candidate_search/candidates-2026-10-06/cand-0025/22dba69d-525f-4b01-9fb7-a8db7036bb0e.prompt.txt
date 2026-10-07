@@ -1,0 +1,33 @@
+site_id: 22dba69d-525f-4b01-9fb7-a8db7036bb0e
+name: Hadzhidimitrovo
+country: Bulgaria
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Hadzhidimitrovo-VT-pear-monument.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02073d2b787e3b5fc5827751982e9f9e
+- Village hall, Hadzhidimitrovo, Veliko Tarnovo Province.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f426273449a5404c66648343c2d0a2a3
+- Bakery in Hadzhidimitrovo (village),Bulgaria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dcb82232e676d20a0a9acaf59e2f7c5d
+- School,Hadzhidimitrovo,Veliko Tarnovo Province.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ccb8aa8089949e70b5f8e24873507b52
+- Orthodox Church "St. Archangel Michael ",Hadzhidimitrovo,Veliko Tarnovo Province.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9fee7924aa02b09a3260b3592067244
+- Town hall of Hadzhidimitrovo - panoramio - mirovalchev.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\72f281d947a1691960c26dd70628103a
+- Hadzhidimitrovo-VT-monument.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7b08425cf401e3993af8e85330e716ae
+- Магаре от Хаджидимитрово - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\30dcf5b8e94b8e7af7cbb48f53e67ffd
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

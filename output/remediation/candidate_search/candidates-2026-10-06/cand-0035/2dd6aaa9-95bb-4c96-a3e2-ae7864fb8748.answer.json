@@ -1,0 +1,15 @@
+{"site_id": "2dd6aaa9-95bb-4c96-a3e2-ae7864fb8748",
+ "answered_by": "mcode-judge-cand-0035",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Peixe 38, Punta Moreiras 01-02a.jpg",
+   "verdict": "other_site",
+   "note": "Moderne Spray-Graffiti (gruen/rot, Jahreszahl 23) auf einer Betonwand; keineruinen, keine Landschaft von Peru."},
+  {"file": "Mapabalneario.jpg",
+   "verdict": "other_site",
+   "note": "Wikimedia-Karte von Galicien/Nordspanien (Pontevedra, Vigo) mit nummerierten Markern; kein Peru, keine Site."},
+  {"file": "Monte e Lagoa de Louro (7120617951).jpg",
+   "verdict": "other_site",
+   "note": "Duenen und Lagune am Atlantik mit Granitbergen, Linksbucht-Portugal; keine Baeude oder Gelbildung der Site."}
+ ],
+ "note": ""}

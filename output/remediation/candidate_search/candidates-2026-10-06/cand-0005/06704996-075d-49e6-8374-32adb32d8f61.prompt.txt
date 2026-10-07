@@ -1,0 +1,31 @@
+site_id: 06704996-075d-49e6-8374-32adb32d8f61
+name: Ruínas Romanas da Bobadela
+country: Portugal
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Forum Romano da Bobadela - Portugal (4338782584).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41584b03d0dc0f633876dafa6e973d31
+- Fórum Romano da Bobadela - Portugal (6250452711).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ebe33e86d58181a4734def7436ab827e
+- Forum Romano da Bobadela - Portugal (4056411192).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba0f2f2b92822fc70ddb9e8c4ff321d2
+- Fórum Romano da Bobadela - Portugal (6250969046).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ac3c5a77ee95e6fa3f9e61d0b1fd77a9
+- Forum Romano da Bobadela - Portugal (5531526019).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f5ca67d8d4df818e7c732ca9b5e35d4f
+- Forum Romano da Bobadela - Portugal (6845153068).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\567364a8f823bbe6ae65db0306385b6f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

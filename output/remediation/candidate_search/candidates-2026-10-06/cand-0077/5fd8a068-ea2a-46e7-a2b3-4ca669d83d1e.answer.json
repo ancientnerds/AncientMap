@@ -1,0 +1,158 @@
+{
+  "site_id": "5fd8a068-ea2a-46e7-a2b3-4ca669d83d1e",
+  "answered_by": "mcode-judge-cand-0077",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Bucht von Roses, Spanien.jpg",
+      "verdict": "region_or_type",
+      "note": "Cafeterrasse mit Stierfigur auf einem Holztisch im Vordergrund, dahinter die Bucht; keine Ruinen."
+    },
+    {
+      "file": "Roses mit Sporthafen.jpg",
+      "verdict": "region_or_type",
+      "note": "Panorama vom erhöhten Standpunkt über Stadt, Sporthafen und Berge; die Site selbst ist nicht erkennbar."
+    },
+    {
+      "file": "MTN25-0259c1-2013-Roses.jpg",
+      "verdict": "region_or_type",
+      "note": "Topografische Karte MTN25, Blatt Roses (1:25.000), reine Kartenabbildung."
+    },
+    {
+      "file": "MTN25-0259c1-2002-Roses.jpg",
+      "verdict": "region_or_type",
+      "note": "Topografische Karte MTN25, Blatt Roses (1:25.000), Kartenblatt."
+    },
+    {
+      "file": "Roses, Girona 04.jpg",
+      "verdict": "region_or_type",
+      "note": "Yachten im modernen Hafen, dahinter die bebauten Hügel der Stadt."
+    },
+    {
+      "file": "Roses, Girona 02.jpg",
+      "verdict": "region_or_type",
+      "note": "Hafenpromenade mit Palmen, Bänken und Segelbooten; moderne Szene ohne Ruinen."
+    },
+    {
+      "file": "Roses, Girona 05.jpg",
+      "verdict": "region_or_type",
+      "note": "Bucht mit Leuchtturm auf der Mole und Hotelreihe am gegenüberliegenden Ufer."
+    },
+    {
+      "file": "Roses, Girona 01.jpg",
+      "verdict": "region_or_type",
+      "note": "Blick über Hafen und Stadt auf den bebauten Berg mit Häuserzeilen."
+    },
+    {
+      "file": "Roses, Girona 03.jpg",
+      "verdict": "region_or_type",
+      "note": "Marina mit Segelbooten im Vordergrund, Stadt und Bergkette dahinter."
+    },
+    {
+      "file": "MTN25-0259c3-2013-Far de Roses.jpg",
+      "verdict": "region_or_type",
+      "note": "Topografische Karte, Blatt Far de Roses, als Kartenabbildung."
+    },
+    {
+      "file": "MTN25-0259c1-1980-Rosas.jpg",
+      "verdict": "region_or_type",
+      "note": "Alte topografische Karte MTN25, Blatt 259-I Rosas."
+    },
+    {
+      "file": "Roses, Girona, Spain - panoramio (1).jpg",
+      "verdict": "region_or_type",
+      "note": "Strandszene mit Palmen, Liegestuhl und Hotelreihe am Wasser; Badeseite, keine Site."
+    },
+    {
+      "file": "\"Grau Canellas\". Roses (Girona) (15331960783).jpg",
+      "verdict": "region_or_type",
+      "note": "Schwarzweiß-Historieaufnahme einer Bucht mit Bergen, zwei Häusern und Wracks am Strand."
+    },
+    {
+      "file": "La Farola, vista desde el Castillo de la Trinidad. Roses (Girona) (15950918092).jpg",
+      "verdict": "region_or_type",
+      "note": "Blick durch eine Steinfensternische auf die Bucht und das Farola-Gebäude; die Site selbst ist nicht zu sehen."
+    },
+    {
+      "file": "Roses, Girona, Spain - panoramio (2).jpg",
+      "verdict": "region_or_type",
+      "note": "Strand mit Palmen, Mülleimer und Badenden, Hotelzeile am Ufer."
+    },
+    {
+      "file": "105 Voltes d'en Rosés (Girona).JPG",
+      "verdict": "region_or_type",
+      "note": "Steinerne Arkadenstraße mit Café und Läden, Balkone; keine Ausgrabungsreste sichtbar."
+    },
+    {
+      "file": "103 Edifici a les Voltes d'en Rosés (Girona).JPG",
+      "verdict": "region_or_type",
+      "note": "Fassade eines Wohnhauses aus Quadermauerwerk mit Doppelfenster, Balkon und katalanischer Fahne."
+    },
+    {
+      "file": "101 Voltes d'en Rosés (Girona).JPG",
+      "verdict": "region_or_type",
+      "note": "Arkadengang mit Steintafeln und Barschild, zwei Gäste am Cafétisch."
+    },
+    {
+      "file": "102 Voltes d'en Rosés (Girona).JPG",
+      "verdict": "region_or_type",
+      "note": "Arkadenfassade mit Laternen und Cafétischen auf der Pflastergasse."
+    },
+    {
+      "file": "100 Carrer Mercaders i Voltes d'en Rosés (Girona).JPG",
+      "verdict": "region_or_type",
+      "note": "Enge Gasse mit katalanischen Fahnen und Wäsche, Arkade am Ende der Straße."
+    },
+    {
+      "file": "Aiguamolls de l'Empordà i Golf de Roses.jpg",
+      "verdict": "region_or_type",
+      "note": "Feuchtgebiete mit Schilf und Wasserflächen, dahinter Berge und Meer: reine Landschaft."
+    },
+    {
+      "file": "El massís del Puig Rom.jpg",
+      "verdict": "region_or_type",
+      "note": "Blick über Bucht und Strand auf den dicht bebauten Hügel, ein Gebäude auf dem Gipfel."
+    },
+    {
+      "file": "Estrella Damm Inedit.jpg",
+      "verdict": "other_site",
+      "note": "Flasche Estrella Damm dominant im Vordergrund vor Stadt und Bucht: ein Produktmotiv."
+    },
+    {
+      "file": "Menhir del Mas Marès.jpg",
+      "verdict": "other_site",
+      "note": "Aufgerichteter Menhir in einem Feld mit Reben und Schild: ein anderes Monument als die Site."
+    },
+    {
+      "file": "Mylonite outcrop in Roses granodiorite.jpg",
+      "verdict": "region_or_type",
+      "note": "Nahaufnahme eines verfalteten Gesteinsausbruchs neben einer Steinmauer; Natur, keine Site."
+    },
+    {
+      "file": "Osborne Stier 2014 09.JPG",
+      "verdict": "region_or_type",
+      "note": "Cafeterrasse mit Stierfigur auf Holztisch und Strandkorb, dahinter die Bucht; moderne Szene."
+    },
+    {
+      "file": "Port de Roses 2026.jpg",
+      "verdict": "region_or_type",
+      "note": "Schrägluftbild von Hafen, Mole und Stadt mit Bergen; keine antiken Reste erkennbar."
+    },
+    {
+      "file": "Puig Cabrit.jpg",
+      "verdict": "region_or_type",
+      "note": "Bewachsener Bergkegel unter blauem Himmel, reine Landschaft."
+    },
+    {
+      "file": "Puig d-en Marès.jpg",
+      "verdict": "region_or_type",
+      "note": "Kuppen und Hänge mit Pinien und Buschwerk; Landschaft ohne Bauwerke."
+    },
+    {
+      "file": "Puig de l'Àliga (Roses) 2026.jpg",
+      "verdict": "region_or_type",
+      "note": "Gipfel mit Steinmauer, Flagge und Infotafel, Ausblick über Küstenebene; keine Ruinen der Site."
+    }
+  ],
+  "note": ""
+}

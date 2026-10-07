@@ -1,0 +1,37 @@
+site_id: 7d24f980-7f63-4e6a-8bb1-1f83d16435f2
+name: Achilleion, Thessaly
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Corfu Achilleion R06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a5a9999f4d710f21ae25db3f43fb5009
+- Corfu Achilleion R05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3da1a9339befbe5699a0c983121f10c
+- Corfu Achilleion R10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6cd9ce0965e1d1b7793574b9ba7e2f30
+- Corfu Achilleion R11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\61e6bb7e40464e2f48762a42052ddf45
+- Palacio de Achilleion (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3694640c33e3e53c81369ca9833241a
+- Jardines de Achilleion (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\10ac7132fcee6785164472cc310d8f05
+- Corfu Achilleion R07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aded1082438ad2033db7ed84fdb5f7b6
+- 2013 Achilleion 2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62f2eb1ec586d02b1a9e90b4ad51d7ae
+- Corfu Achilleion R09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ca783ed85340842d65abc4884b4224d6
+- Jardines de Achilleion (9).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\246366d8fa29cca508332c56662fc8d9
+- Jardines de Achilleion (13).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a155540077838142e72c39ade6841a62
+- Achilleion (Corfu) - ceiling.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56a8ecdec38cd5b380f5fe5623587b1d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

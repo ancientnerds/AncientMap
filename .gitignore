@@ -474,6 +474,12 @@ output/remediation/import_hero/*/
 # -009 the floor wave: the owner lowered the size a local file must reach to 800x300 for the sites
 # that already have a picture (2026-10-06), and its `FLOOR.json` is the run's own record of that.
 !output/remediation/import_hero/import-hero-2026-10-06-009/
+# The INSERT waves of the candidate search (2026-10-06 and -07, `insert-2026-10-06-001` to
+# `insert-2026-10-07-008`): the plan, the chunk, its SQL both ways, the journal-bearing `reason`
+# and evidence source, and the acceptance over a named production read. A glob, because every
+# wave of this lane is that same evidence and naming eight of them by hand only means a ninth
+# that is silently ignored. The four big files stay out by the rules above.
+!output/remediation/import_hero/insert-*/
 output/remediation/import_hero/import-hero-2026-10-05/chunk-0*/
 !output/remediation/import_hero/import-hero-2026-10-05/chunk-001/
 !output/remediation/import_hero/import-hero-2026-10-05/chunk-001-reversal/
@@ -611,3 +617,14 @@ output/remediation/mechanical_dups/REHEARSAL.sql
 # answered handoff directory an agent writes into and which the next calibration replaces.
 output/remediation/mcode_driver/
 output/remediation/calibration/
+# The candidate search's judgement (2026-10-06, run `candidates-2026-10-06`): 595 sites carrying
+# 5,809 candidate pictures, one verdict each. `VERDICTS.jsonl` is that stage's whole output and
+# `TARGETS.jsonl` is what the INSERT lane fetched from; neither regenerates, because regenerating
+# means asking Commons again and looking at 5,756 pictures again. The 201 `cand-*` folders are the
+# audit trail beside it - one prompt per site and the answer of the agent that looked at it, under
+# the name of the model that wrote it. The 2.6 GB of downloaded renderings stay out: they are what
+# the agent looked at, not what it decided, and the decision names its file.
+!output/remediation/candidate_search/
+output/remediation/candidate_search/*/pictures/
+output/remediation/candidate_search/*/cache/
+output/remediation/candidate_search/pilotte-2026-10-06-100/

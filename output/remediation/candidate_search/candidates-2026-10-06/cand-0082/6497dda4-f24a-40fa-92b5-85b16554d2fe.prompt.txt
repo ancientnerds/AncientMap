@@ -1,0 +1,34 @@
+site_id: 6497dda4-f24a-40fa-92b5-85b16554d2fe
+name: Cloaca, Capri
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Bird sex - Two copulating ducks showing a corkscrew penis inserted in a cloaca in Don Det Laos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c0412f94352e7d32be32e9466ce123f5
+- Dunnocks cloaca pecking.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e0a3d3e508727cc97692aff887b8e398
+- Persistent Cloaca from medical illustration.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1cb55b9e41f8ab42e3d718e00d6405f6
+- Development of the cloaca different species.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a46639379e5b4ec9dfeb9c1701b2aed
+- The Mouth of the Cloaca Maxima (I) (4924744246).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\468ef490ca4cfd257fccb6661a3f718a
+- Tiber Embarkment Wall around an outlet of the Cloaca Maxima.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b550c425d2b3cfc80a5ab02a4d4cac28
+- Cloaca Maxima Schild Forum Romanum.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6d96aaff2faf4fb7ce0d4897732c52cb
+- The Cloaca Maxima, Rome Wellcome M0014582.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76f8c1b25234dacb8062a4d5b6602af4
+- Cloaca Maxima - (3070 ; A1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e139add7f3fbc98a89dbc77d0fedca43
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

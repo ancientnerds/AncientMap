@@ -1,0 +1,35 @@
+site_id: 94090aa6-490e-4b0b-8253-404391232b24
+name: Baking Pot
+country: Belize
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Baking Pot Ferry road Sep 2021.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\632048f53bde87d67c15912b0d5615b2
+- Pot burial, organic remains, baked clay - Museo Egizio, Turin S 15815 X p01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1a0299ae490aeda834a49f1d0fdbcf58
+- Pot burial, organic remains, baked clay - Museo Egizio, Turin S 15815 X p02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eef1646490c6aad76a5db6111f51cb91
+- Pitpans nearing Baking Pot on the Belize River, British Honduras.1923.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6d701c7ebe7e2fb9f5e6daceb40f3a58
+- Pot sherd with geometric pattern, baked clay - Museo Egizio, Turin S 19644 p01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d150d657c4d8c17bf1a2758e01c7cc1b
+- Pot sherd with geometric pattern, baked clay - Museo Egizio, Turin S 19644 p02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a4e1d60e1fecea9e480e267fa497fa10
+- Cooking pot with traces of burning on the bottom, baked clay - Museo Egizio Turin P 7813 p01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5f13bfdeef10e7e306ae78454c3d8e49
+- Cooking pot with traces of burning on the bottom, baked clay - Museo Egizio Turin P 7813 p02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de5d348ffdc2fe2d7c2672a6cd5c79bd
+- Bread in baking pan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a1776fc7ae313de10b1509103493ff0e
+- PikiWiki Israel 58305 baking pot.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a53778e8c9f835275cb4a1d8915f0d2
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

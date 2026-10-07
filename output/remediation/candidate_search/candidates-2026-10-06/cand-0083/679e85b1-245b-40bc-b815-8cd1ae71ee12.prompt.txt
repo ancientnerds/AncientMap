@@ -1,0 +1,39 @@
+site_id: 679e85b1-245b-40bc-b815-8cd1ae71ee12
+name: Kekova Island
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Kekova by Piri Reis.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\38370b2198cb884b2c73b2a8113f9009
+- Kekova island and Kalekoey village.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de544d16e79fdc9b99d9fbef64a5a7a1
+- 2023-11-05 Kekova Island 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02e39a60b0d54cd531921589c8380126
+- 2023-11-05 Kekova Island 17.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f10ecbf3c95961a4211b3a5b89b72ab8
+- 2023-11-05 Kekova Island 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8258fb6e1d79eec177b8c39f4aad2a85
+- 2023-11-05 Kekova Island 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c8b8e4b22c0970ae08989feae7c175d9
+- 2023-11-05 Kekova Island 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5db1b88c41e64d89a3eb0044cc262553
+- 2023-11-05 Kekova Island 19.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4935c30bc199fda0ac5c5f1a1b073a6a
+- 2023-11-05 Kekova Island 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\33d157b582d350d6c2ba9330f597beee
+- 2023-11-05 Kekova Island 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cbbdf43e3f17a491b38e5d996c542aec
+- 2023-11-05 Kekova Island 7.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aedd3a8fbb81f9ad6082166fb8b92a69
+- 2023-11-05 Kekova Island 16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f7b748135bd247138b691da71de6f1f6
+- Ruins on the Shores of Kekova Island - 2014.10 - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8795b10dc204ccb767de07a9744e4e4c
+- 2023-11-05 A view from Kaleköy to Kekova Island.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\27377391d4f858c136b3f56fed91d98b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

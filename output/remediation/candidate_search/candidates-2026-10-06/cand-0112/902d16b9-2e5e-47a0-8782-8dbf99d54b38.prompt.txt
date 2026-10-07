@@ -1,0 +1,37 @@
+site_id: 902d16b9-2e5e-47a0-8782-8dbf99d54b38
+name: Hadrianapolis Antik Kenti
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Hadrianapolis Ancient City 33.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17b10a930b7ebabf7f907ac29eb05296
+- Hadrianapolis Ancient City 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f33d1cc3be8015651b9d20732a136bf
+- Hadrianapolis Ancient City 66.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62f0f26598a7f167baef2a7422cf8c4a
+- Hadrianapolis Ancient City 34.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\64a6962d1ec098fbce53dfff92966855
+- Hadrianapolis Ancient City 26.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bbb1b279e60add07e80b188c469d05f0
+- Hadrianapolis Ancient City 42.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3bf352b1dee620c7bf3f6b5c6eb30f54
+- Hadrianapolis Ancient City 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8289c38263ab4cceae444dbf1da2c4a5
+- Hadrianapolis Ancient City 21.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02f05c6570ab252f00a12b9f405ae6a2
+- Hadrianapolis Ancient City 53.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ddb7bad35d4fd99a5ba562e78e0a3c5
+- Hadrianapolis Ancient City 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8b73e6cd2101a8ad1641552648685c8d
+- Hadrianapolis Ancient City 59.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bfff27fedd2ffa67ae70e4b6657134ee
+- Hadrianapolis Ancient City 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\932faa6bfd957082a68e568d15138a2d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

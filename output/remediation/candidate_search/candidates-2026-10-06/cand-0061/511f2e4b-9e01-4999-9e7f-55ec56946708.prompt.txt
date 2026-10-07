@@ -1,0 +1,36 @@
+site_id: 511f2e4b-9e01-4999-9e7f-55ec56946708
+name: Belbury Castle
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Castle Field and Castle Cottage, Sleaford - geograph.org.uk - 7876667.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bfa91905acc8792dc83e2474d339a36f
+- Tenczyn castle field (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\469e466234f267fb2eb234140d89ce54
+- Castle Field, Spofforth - geograph.org.uk - 8274395.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\99e7364e59d2c5e7301833bc09b8a160
+- In Castle Copse - geograph.org.uk - 5404428.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5bebd2dd46a4d5547a60d5d7eefc20e3
+- Castle Copse Cottage - geograph.org.uk - 1960430.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b972fadeefac70fd8d8f1d2961e83889
+- Castle Field looking down the mound seen from Spofforth Castle (4th August 2018).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c904ba4747e43b82556d48258c1fbb59
+- Kilmartin Carnasserie Castle field south of the castle.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d54f3423a4642154eae5040c21c57182
+- Thornbury Castle field - geograph.org.uk - 3968451.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d5733956f7f60ffcfef30719d82731b0
+- Childrens Fun Fair, Castle Field, Southsea 1 - 53684516346.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a71874d7d4031096f7c20c9f3d68c71a
+- New Castle IN Field House.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\39a4c1b40d6c3ca27e0bcbb3216cf889
+- Castle Copse Cottage (Hollybush) - geograph.org.uk - 6620026.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec61583d489d00c2ac4797bc9f81fb80
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

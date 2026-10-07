@@ -1,0 +1,47 @@
+site_id: 0d141532-586a-4a6f-bfa0-78186786402e
+name: Salapia
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ithomia salapia Ecuador.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\84ce3346219ac9875021ca90fe1ea74a
+- Salapia Glasswing (Ithomia salapia), Arvi Park, Colombia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4fadde552981fce68d3afc576053975d
+- Flickr - ggallice - Ithomia salapia derasa (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4da969ff27a7d71f00b2f8a9ffe4faa7
+- Flickr - ggallice - Ithomia salapia derasa.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a985e18d3592611feea51412b9a61a9a
+- Flickr - ggallice - Ithomia salapia v.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d64450de694aac367351d18b00e6b600
+- Flickr - ggallice - Ithomia salapia d.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c78be2a7303db41fa57768543735b50
+- Ithomia salapia (Nymphalidae Danainae Ithomiini) (31403956537).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\81e2714d4d453c12b28d231e9e419fbb
+- Ithomia salapia 416975783.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc08f8249a180d40f875b873251b59db
+- Ithomia salapia 248220370.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a20a1e5b50b25fb7035261337741e946
+- Ithomia salapia 11774016.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ed7733f3f30de6d91de85940b9c64e40
+- Ithomia salapia imported from iNaturalist photo 341907160 on 17 January 2024.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05b4bc80e0cc521b0f6b8c358b86a89b
+- Monnaie - Bronze, Salapia, Apulie - btv1b8597737d (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4244dd65477235d3c6ac384b37a4dc0b
+- Monnaie - Bronze, Salapia, Apulie - btv1b8597730h (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d2c285bb2214944215f8d7eaa0da8d91
+- Monnaie - Bronze, Salapia, Apulie - btv1b8597732b (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\338039e56fab4d106fbd50eed90f9612
+- Monnaie - Bronze, Salapia, Apulie - btv1b85977360 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb9da051a8c17bb58df9089ad819cfad
+- Monnaie - Bronze, Salapia, Apulie - btv1b85977271 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\904036edde028109d72f2f54099b13fc
+- Monnaie - Bronze, Salapia, Apulie - btv1b8597731x (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\46bdc5bd5ca9a7b880e51e72d4069dbc
+- Monnaie - Bronze, Apulie, Salapia - btv1b103099163 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\abc006c5f28d3b0f9e5b564fdbacb770
+- Monnaie - Bronze, Salapia, Apulie - btv1b8597732b (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dbce8b1283f99a915ee5724c3ef6ad54
+- Monnaie - Bronze, Salapia, Apulie - btv1b8597735k (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c304eda36867a1af22d990f63871a243
+- Monnaie - Bronze, Salapia, Apulie - btv1b8597728f (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8e76d5919ebd9fec02b8a38cebf24448
+- Magna grecia, monete di salapia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f72190af1387fbc307052e2c38c497d4
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

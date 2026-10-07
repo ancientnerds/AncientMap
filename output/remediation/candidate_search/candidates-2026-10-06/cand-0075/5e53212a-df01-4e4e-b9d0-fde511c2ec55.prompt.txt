@@ -1,0 +1,32 @@
+site_id: 5e53212a-df01-4e4e-b9d0-fde511c2ec55
+name: Gilwern Hill, Powys
+country: Wales
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Gilwern Hill - geograph.org.uk - 5852807.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4b51919acec0771bd468a0db4b8291e2
+- Gilwern Hill - geograph.org.uk - 4142783.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cfbb4e895a929d0ccbe06e4e5ae956a2
+- View to Gilwern Hill - geograph.org.uk - 3135560.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e25b62cb84967477cd5fa6dc0b909776
+- Track on Gilwern Hill - geograph.org.uk - 6504081.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\728b27055ade722caaffb0cc6e284be8
+- Track on Gilwern Hill - geograph.org.uk - 3128707.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c158b8430a68393d3f9a418417795a6d
+- Cairn on Gilwern Hill - geograph.org.uk - 3130614.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\20c9cc998ca13399c11321e8e4983e30
+- Sheep on Gilwern Hill - geograph.org.uk - 4980180.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8e2ae180b9fba28f377347aeae7addc1
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

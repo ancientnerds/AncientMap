@@ -1,0 +1,37 @@
+site_id: 2c2eaf7a-0c07-460c-8893-9a0443f8f9d4
+name: Ljuljaci
+country: Serbia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ljuljaci, Knić 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\74598ddb3004548aa7656331300da27e
+- Ljuljaci, Knić 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f5652ab560809319f44c0d524d522b68
+- Ljuljaci, Knić 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2080f071e5de8e60b93fe81620256783
+- Ljuljaci, Knić 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef7d0fd1b7ef26687059572a64bfc712
+- Ljuljaci, Knić 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e47217574600ac9ae3e02aa5cdd6a66e
+- Ljuljaci, Knić 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88842a928b41576ebdf22a960114b454
+- An old farmhouse in the village of Ljuljaci, Serbia (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\159a4eb3f8bf7f858706c408787bcbeb
+- An old farmhouse in the village of Ljuljaci, Serbia (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0febac95b9d6fd72a3ae20eb222093f3
+- An old farmhouse in the village of Ljuljaci, Serbia (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e3c4201098f55e62e405d77457dcabf9
+- An old farmhouse in the village of Ljuljaci, Serbia (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\84a108e274ba19748a2d2f121955025e
+- An old farmhouse in the village of Ljuljaci, Serbia (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17c2b6e89d85b72af92cbeecdbdee5fc
+- An old farmhouse in the village of Ljuljaci, Serbia (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c94e0a48e970029914c36d3d8cb15c7
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

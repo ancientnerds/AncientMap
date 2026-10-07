@@ -1,0 +1,41 @@
+site_id: c5d05e95-f6a3-454f-85ba-6ebb4736b7bb
+name: Arch of Augustus
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Arch of Augustus in Aosta (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7eff5c87a107d4b57e5882ad8042e3e5
+- Arco Augusto Aosta.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a38a60aa0e01dee62e19ab8afabf086
+- Arch of Augustus in Aosta (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5286af7266e3ad7841dd72eb6345adc4
+- Arch of Augustus in Aosta (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\051f63819161e73440e5be9cf7abe0fc
+- Arch of Augustus in Aosta (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a888aeb73894278d738a7a8781a8a66
+- Arch of Augustus in Aosta (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9393d5777b10494b7827c1ae3ec27976
+- Arch of Augustus in Aosta (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\802bc153b014a1840248a5b6c9a847ad
+- Arco di Augusto 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4a9a7d45d4d4a08ad2ce173e70cdf644
+- Arco di Augusto 2 Aosta.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8a6ec7583e38c61e007966b657e849c3
+- Arco di augusto di sera.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7fc8aa15955ceffcc0922ea03fa6aaa1
+- Arch of Augustus, Aosta by Henry Seward, 1807.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9aea9494088d105f42dddf0c3fe1d82f
+- ARCH OF AUGUSTUS AOSTA.קשת אוגוסטוס אאוסטה.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\145c82534e69e18c92675fbcdd1bfa18
+- Arch-of-Augustus Susa (Piedmont) Plan.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f36f52fcfbffed5348ddeb59e2d8cee9
+- Arch of Augustus in Susa (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c6f039c75b530580414774c533e97b4f
+- Arch of Augustus in Susa (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8994c23fe619344beb046ff7e50ce0bd
+- Arch-of-Augustus Susa (Piedmont) West-Frieze Detail.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f74fff8def5f6739dcc13a516e1cc5b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

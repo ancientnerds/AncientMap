@@ -1,0 +1,14 @@
+{"site_id": "996e0b32-f8ca-4d04-8900-ed937b729269",
+ "answered_by": "mcode-judge-cand-0116",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Apidima 1 Facial Reconstruction.jpg",
+   "verdict": "depicts",
+   "note": "Bleistift-Rekonstruktion eines Kopfes mit Haarreif und Zahlenkette, handschriftlich 'Apidima 1 Homo sapiens Greece 210,000 years ago' - der Fund der Site, kein Foto der Hoehle."},
+  {"file": "Peloponnisos-b2.png",
+   "verdict": "region_or_type",
+   "note": "Hypsometrische Reliefkarte der gesamten Peloponnes in Gruen/Orange; keine Hoehle und kein Marker darauf."},
+  {"file": "Limeni Mani.jpg",
+   "verdict": "region_or_type",
+   "note": "Luftaufnahme eines Kuestendorfs mit Mani-Towerhaeusern unter nacktem Kalksteinhang, Boote im Meer; keine Hoehle erkennbar."}],
+ "note": ""}

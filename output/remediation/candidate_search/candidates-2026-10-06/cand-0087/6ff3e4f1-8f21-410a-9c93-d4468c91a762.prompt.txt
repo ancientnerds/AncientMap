@@ -1,0 +1,37 @@
+site_id: 6ff3e4f1-8f21-410a-9c93-d4468c91a762
+name: Blick Mead
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- 2023-09-18 Bristol Temple Meads 01.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0dcc6db3c003294a5b42d9c7bdd114f8
+- 2023-09-13 Bristol Temple Meads 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd388435abff20586176e48d7ab68b12
+- Lake M ead07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3dd0f0e615c7166691b0858af20e6666
+- Lake Mead09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4a7d0356a7cbbc60a3ad790e8e95f628
+- Lake Mead08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6f3622463665eb6b5b28a61d40ccb781
+- Lake Mead05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2daa78bebb6fe903eab555f2cfb00495
+- Lake Mead01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5e9161eb796843180573da0c2fde939
+- Lake Mead02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7431bc6fd6e887cdeab33e194bc6bf8d
+- Hoover Dam, Nevada (Arizona-Nevada, USA), Staumauer -- 2012 -- 6102.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17353d530ef9ae7fe18f2f9d265a6047
+- Hoover Dam, Nevada (Arizona-Nevada, USA) -- 2012 -- 6129.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ddc650f18b938ce1ec9bf6946bb4e9cf
+- Lake Powell.Staudamm.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a4d40b7e4c90884da4822b9b3f98eff3
+- PanitzschAueblick.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4e0570fe33e71acf4a0b35a964bfb24e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

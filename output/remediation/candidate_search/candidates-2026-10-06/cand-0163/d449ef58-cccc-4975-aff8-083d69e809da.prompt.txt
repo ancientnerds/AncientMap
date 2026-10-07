@@ -1,0 +1,31 @@
+site_id: d449ef58-cccc-4975-aff8-083d69e809da
+name: Church Hill, West Sussex
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Gateway Baptist Church, Burgess Hill, Sussex - geograph.org.uk - 2553505.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af2bd92341f6a31158ffb40b6e7aa8ae
+- St.Wilfrid's Roman Catholic Church, Burgess Hill, Sussex - geograph.org.uk - 2548142.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\16491c620f42301f0958964a723141a3
+- St.Wilfrid's Roman Catholic Church, Burgess Hill, Sussex - geograph.org.uk - 2548147.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d994bf0a5d3f3a37a6671174e44bb8c6
+- Church of St Andrew, Nuthurst, West Sussex - James Tuder Nelthorpe church restoration stone.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2f2b26c555cd187eb8bc15a1dec15008
+- Footpath and seat on Mill Hill, Shoreham, West Sussex - geograph.org.uk - 1805370.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d85a176788b8d53648ed1aba1c2f27ab
+- Church of St Andrew, Nuthurst, West Sussex - L. T. Wylie and M. Hayes CWGC gravestones.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4b792df809dea3645cf1494bb2bef65
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

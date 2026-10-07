@@ -1,0 +1,15 @@
+{"site_id": "dc9fd8fe-77ad-439d-8374-2b5563c00b15",
+ "answered_by": "mcode-judge-cand-0168",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "SFO TreasureIsland Wide.jpg",
+   "verdict": "other_site",
+   "note": "Weitwinkelaufnahme der Skyline von San Francisco ueber die Bucht - moderne Szene, kein Turm"},
+  {"file": "Mammy 'mongst the wild nations of Europe (1904) (14597787278).jpg",
+   "verdict": "other_site",
+   "note": "Illustrierte Szene mit mehreren Personen in historischer Kleidung vor einem Gebaeude - kein Turm"},
+  {"file": "Italy from the Alps to Mount Etna (1877) (14776406042).jpg",
+   "verdict": "other_site",
+   "note": "Stahlstich einer italienischen Stadt mit Kirche, Kloster und Hafen im Hintergrund - anderer Ort"}
+ ],
+ "note": ""}

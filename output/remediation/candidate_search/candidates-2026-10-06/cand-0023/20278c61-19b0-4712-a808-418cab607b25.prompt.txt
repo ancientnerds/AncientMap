@@ -1,0 +1,36 @@
+site_id: 20278c61-19b0-4712-a808-418cab607b25
+name: Cossington, Kent
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Great Cossington Farm - geograph.org.uk - 6797854.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d969bb8806ea210586fa6ee7631496aa
+- Great Cossington Farm Oast - geograph.org.uk - 6803139.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\89741c9be4d5af33386f8c534485ee0c
+- Great Cossington Farm Oast - geograph.org.uk - 6803131.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2452c2af113e7df1e536d1e34239ecb0
+- Great Cossington Farm Oast - geograph.org.uk - 6803207.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d6f85a43ba38e62c45bd3e1b41f0ddc2
+- Cossington Road, Canterbury - geograph.org.uk - 4436701.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0ba484ed96057d18cbcdd8c55a6bd766
+- Cossington Road, Walderslade - geograph.org.uk - 4282664.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e6c6d3997b13f354e5ffef600fb927b
+- Cossington Road, Walderslade - geograph.org.uk - 4282672.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f4341c98b6ad206dba137e4378b4da3b
+- Little Cossington Farm - geograph.org.uk - 6803134.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\34c64854ff9b47abc506365a73fe4b52
+- Fly Tipping, Cossington Fields - geograph.org.uk - 2894216.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b1355d1fcf9f7563de514ec18330a461
+- Little Cossington Farm - geograph.org.uk - 3737788.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\03f13b1dadf64ffca87bfeb5e0ada650
+- Cossington Road, Walderslade - geograph.org.uk - 4282662.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\387557ccce1830f8b414f622316d2817
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

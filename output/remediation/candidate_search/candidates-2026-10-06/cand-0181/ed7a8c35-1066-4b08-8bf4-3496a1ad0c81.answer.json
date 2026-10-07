@@ -1,0 +1,15 @@
+{"site_id": "ed7a8c35-1066-4b08-8bf4-3496a1ad0c81",
+ "answered_by": "Worker",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Paisajes de Santa Cruz Tayata. - panoramio.jpg", "verdict": "region_or_type", "note": "Brachfeld mit Wellblechhuetten, Baum und bewaldetem Huegel; Dorf-/Landschaftsansicht ohne Baehne oder Ruinen."},
+  {"file": "Atardecer en Santa Cruz Tayata - panoramio.jpg", "verdict": "region_or_type", "note": "Sonnenuntergang ueber bewaldeten Huegeln, alles im Dunkelsilhouett; reine Landschaft, Site nicht erkennbar."},
+  {"file": "Paisajes de Santa Cruz Tayata - panoramio.jpg", "verdict": "region_or_type", "note": "Dorfstrasse mit weissem Kleinwagen, Wellblechschuppen und Bergen; Alltagsszene der Region ohne Site."},
+  {"file": "Paisajes de Santa Cruz Tayata - panoramio (2).jpg", "verdict": "region_or_type", "note": "Breiter Erdweg mit Holzmast, Agaven und Bergen, Haus mit Ziegeldaechern; Landschaftsansicht."},
+  {"file": "Paisajes de Santa Cruz Tayata - panoramio (1).jpg", "verdict": "region_or_type", "note": "Erdstrasse mit Nebengebaeude, Stauden und zerstoerten Bergen; Siedlungs-/Gegendansicht, keine Site-Struktur."},
+  {"file": "Atardecer en Santa Cruz Tayata - panoramio (2).jpg", "verdict": "region_or_type", "note": "Abendhimmel ueber Huegelkette, Land dunkel; nur Landschaft, nichts Sitespezifisches erkennbar."},
+  {"file": "Paisajes de Santa Cruz Tayata - panoramio (3).jpg", "verdict": "region_or_type", "note": "Sonnenuntergang ueber bewaldetem Huegel mit orange Wolken; reine Himmels- und Landschaftsaufnahme."},
+  {"file": "Atardecer en Santa Cruz Tayata - panoramio (1).jpg", "verdict": "region_or_type", "note": "Sonnenuntergang hinter Baumkronen, Dorf nur als dunkle Silhouette; Region ohne erkennbare Site."},
+  {"file": "Tequio San Juan Achiutla y Santa Catarina Tayata 2025.jpg", "verdict": "other_site", "note": "Grosse Gruppe von Menschen mit Hueten auf einem Waldpfad; Personenwanderung, keine Site-Struktur oder Ausgrabung sichtbar."}
+ ],
+ "note": "Kein Kandidat zeigt Baenke oder Ruinen der praehispanischen Site Tayata; acht zeigen nur die oaxacanische Dorflandschaft, einer nur eine Personengruppe."}

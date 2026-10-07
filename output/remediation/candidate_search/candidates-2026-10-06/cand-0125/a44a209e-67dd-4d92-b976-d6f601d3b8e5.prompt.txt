@@ -1,0 +1,39 @@
+site_id: a44a209e-67dd-4d92-b976-d6f601d3b8e5
+name: Chapel of Osiris
+country: Egypt
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Chapel of Osiris Heqadjet in Karnak 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7828b9891828817c4a0e9294955c0872
+- Chapel of Osiris Heqadjet in Karnak 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\82a50bdcbb3f700deff69ad89fde9334
+- Chapel of Osiris Heqadjet in Karnak 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\772058e62a68b212d9821c0e568b30d7
+- Chapel of Osiris Heqadjet in Karnak 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7d4e7de7857535efa34a6619682151b5
+- Chapel of Osiris Heqadjet in Karnak 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62f6d7ee817a4c9bbb32fea82a802af2
+- Chapel of Osiris Heqadjet in Karnak 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b785c063647eac70e5d60835c06fbbad
+- Chapel of Osiris Heqadjet in Karnak 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\04ca05b6c2aa84a736a8a99437153a5c
+- Chapel of Osiris Heqadjet in Karnak 15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\509a35d35da99db71c6fe4673bca009f
+- Chapel of Osiris Heqadjet in Karnak 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9a00aa2d304f17584f0e56b16c49f8a
+- Chapel of Osiris Heqadjet in Karnak 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\03cfd6ebc0cdedf20cba17c0925b3741
+- Chapel of Osiris Heqadjet in Karnak 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b680ed637b565556904eea68a58dc6a7
+- Chapel of Osiris Heqadjet in Karnak 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\82e66aabcabd05f0eac1d252d9757844
+- Various gods in the Chapel of Osiris at Dendera.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8bf57094e608c5ee0d1e26d3d9ecea33
+- Chapel of Osiris Heqadjet in Karnak 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cdaca2ba97e00b0d7e6965e419309307
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

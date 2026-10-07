@@ -1,0 +1,13 @@
+{
+  "site_id": "86cc95dc-f784-43c8-b31c-a68cade567c2",
+  "answered_by": "mcode-judge-cand-0100",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Tomb Jinnah.jpg",
+      "verdict": "other_site",
+      "note": "Modernes weißes Grabmal mit großer Kuppel und Minaretten in Parklandschaft; keine Ruinen oder Strukturen der Site sichtbar."
+    }
+  ],
+  "note": ""
+}

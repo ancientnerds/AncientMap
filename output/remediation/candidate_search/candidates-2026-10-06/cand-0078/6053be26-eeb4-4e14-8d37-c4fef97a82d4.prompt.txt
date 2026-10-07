@@ -1,0 +1,37 @@
+site_id: 6053be26-eeb4-4e14-8d37-c4fef97a82d4
+name: Chalai, Thessaly
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Chalais Cloître.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\28f8adeb044ddd23f2c5ada80931cd36
+- Chalais 16 Gare&voies 2013.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\20ea82b354accd1a473baf0767939900
+- Chalais 16 Chapelle ND Vitraux Dagrand 2013.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d8c15e02fb622c012cce6015f5443f6e
+- Chalais 16 Pont sur la Tude&marché 2013.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2762f49bfc5d90d20457c886cfd94ab0
+- Chalais-16 Église St-Martial Portail 2014.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45e1df5de884b5a61f1d119384ea87f8
+- Chalais St-Christophe 2012.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50f0462a26a5288ab1746c89999ba9a4
+- Chalais 16 St-Martial façade arcature droite 2013.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bee2fb08d981641ece1c4451d50511d9
+- Chalais 16 Château pont-levis 2013.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7390a75c1f9b4e6316a761eb68e4ccac
+- Chalais 16 Voies &quai 2013b.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\efef2116738e31b1ac63185685bef7bc
+- Brie-sous-Chalais 16 Église façade 2013b.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f3b8208d3de0fd2aeb226d2f7eeb7890
+- Chalais 16 Façades 2012.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb6ca13df0cb56b0c19896e67873afc8
+- Téléphérique Chalais-Vercorin à Chalais.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\29012bb49cc2bbdaf4fd0be999cf9a13
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

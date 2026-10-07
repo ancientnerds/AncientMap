@@ -1,0 +1,12 @@
+{"site_id": "58dd6a0b-4c70-4eee-824f-a270800ef886",
+ "answered_by": "mcode-judge-cand-0070",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Tunel żeglowny w Starych Jabłonkach.jpg",
+   "verdict": "other_site",
+   "note": "Kanal-Schleusentor aus Stein unter einer Strassenbruecke, gruenes Wasser im Kanal; eine Kanal-Unterfuehrung, keine Hoehle."},
+  {"file": "Tunel kolejowy na linii nr 291.jpg",
+   "verdict": "other_site",
+   "note": "Grüne Huegel mit einer Bahnlinie und einem kleinen Bahnportal; Landschaft mit Bahn, keine Hoehle."}
+ ],
+ "note": ""}

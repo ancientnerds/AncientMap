@@ -1,0 +1,36 @@
+site_id: af071bf2-f99f-4bf3-84d6-67093c74e5dd
+name: Oakmere Hill Fort
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Oakmere House 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c960c97e4d510137c4f7ed594104f821
+- Oakmere House 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\854670a08265c716879accd677390eff
+- Oakmere House (Rear).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d94b44ca8ac50b9b28952acb38bd07d9
+- Oakmere House 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1ac407dc65edcf516e07f674ef284973
+- Oakmere House 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\92ebcd67b5a38460ab7a5675aba3474a
+- Oakmere House 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\16bf7510c4cf13a8825a14ffe3ab5120
+- Oakmere Hall 7a.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb997033e51e2024473da3a0fd26f8d6
+- Oakmere House (Front).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c24c7997bd0213658cd53bae846b7529
+- Oakmere Park entrance, Potters Bar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b96fe83df4a519c2bca809161a3e3c94
+- Map Oakmere House 1866.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c30fd2c5ccbc8f99c19af7eeb34dbf38
+- Oakmere Hall 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cdd3b71f78534a31d599e6760b433d5f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

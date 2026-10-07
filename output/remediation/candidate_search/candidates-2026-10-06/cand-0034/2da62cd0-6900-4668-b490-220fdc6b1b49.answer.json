@@ -1,0 +1,12 @@
+{"site_id": "2da62cd0-6900-4668-b490-220fdc6b1b49",
+ "answered_by": "mcode-judge-cand-0034",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "The Victoria history of the county of Cornwall (1906) (14590965339).jpg",
+   "verdict": "other_site",
+   "note": "Vermessungsplan 1902 mit nummerierten Steinen, beschriftet 'STRIPPLE STONES / BLISLAND' - anderer Kreis"},
+  {"file": "The Victoria history of the county of Cornwall (1906) (14777646505).jpg",
+   "verdict": "region_or_type",
+   "note": "Handgezeichneter Grabungsplan 'SECTION A-B' (Lewis 1891-4) einer rechteckigen Stein-Einfassung; kein Site-Name lesbar"}
+ ],
+ "note": ""}

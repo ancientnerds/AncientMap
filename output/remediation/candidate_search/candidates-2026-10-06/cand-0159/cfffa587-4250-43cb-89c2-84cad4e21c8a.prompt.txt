@@ -1,0 +1,36 @@
+site_id: cfffa587-4250-43cb-89c2-84cad4e21c8a
+name: Whetstones Stone Circle
+country: Wales
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Over the Whetstones (Apache Peak).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3414ae0a229663b1bf0a1bd9100b4edb
+- Knives, whetstones - 12-13c - Yaroslavl museum-preserve.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6924336d66fdbcef10b0bc4f10e3e49d
+- The Whetstone.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e2f8e086a237fbac6e741707c578b12
+- The whetstone outside the Griffin Public House, Whetstone - geograph.org.uk - 3840139.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0637286c4e868a26e131509edce8ef71
+- Shang Whetstones (10180138145).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ea252ea8569d38c001c7a0400f3a5338
+- Neolithic Whetstones (41005927670).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e3e88ceb98175ad241da3a982983804
+- Neolithic Whetstones (42828182101).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\220ae9ceb169d7497ae09c63ce6fc486
+- Kasumi whetstone.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05e11600f084f0f6f3ee3e22331befd5
+- Whetstone Brook in Whetstone - geograph.org.uk - 5272381.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9c31315905cdfc22d8811a2424a668a3
+- Three Horseshoes at Whetstone pub.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cbc9daf3bf5f7920c8d5834d7048f818
+- Undate stone whetstones (FindID 498190).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c68a6881f7d0ffe1f7c87bd91191d34d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

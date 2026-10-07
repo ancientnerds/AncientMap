@@ -1,0 +1,35 @@
+site_id: cfdbdb6f-7420-49f2-9f19-8922851ddc24
+name: Kinichná
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Dzibanche Maya temples.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\91fcbcfcd639c30aab20fa01e0ec77d8
+- Dzibanche1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4502ea8703bd53a3fdb176c2cb2d1e81
+- Kinichna (14179461330).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f01357af79e51bc482d74a498304b581
+- Dzibanche straight.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2dff8db281b72c8af2753b8fbc6d63d7
+- Dzibanche from distance.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b8eeda1f23a02a72c71b1030764b3b6d
+- Dzibanche general view another.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b703eaf454cc1b696905aae3da1aa5c7
+- Dzibanche Cormoranes5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f8fb3052dd1467660fa2721826f9732
+- Dzibanche Buhos2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\575357a761b9813a788a3f48c60c010e
+- Dzibanche fragment.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\22dc5a0a33c4132028d77abd24eb9748
+- Kinichná, Acrópolis.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc002002be212ba5bd2d793a84eed6fe
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

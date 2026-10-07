@@ -1,0 +1,20 @@
+{
+  "site_id": "ccb5fcce-35d3-463a-bb98-0cfc09918465",
+  "answered_by": "mcode-judge-cand-0157",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Castro de Ciragata - Parada, Bragança - 12.jpg", "verdict": "region_or_type", "note": "Weites Landschaftspanorama mit Hügeln und Feldern; keine Befestigung erkennbar."},
+    {"file": "Castro de Ciragata - Parada, Bragança - 16.jpg", "verdict": "region_or_type", "note": "Granitblöcke und Gebüsch; keine Mauer oder Struktur sichtbar."},
+    {"file": "Castro de Ciragata - Parada, Bragança - 10.jpg", "verdict": "region_or_type", "note": "Schotterhang mit Geröll; keine archäologische Struktur."},
+    {"file": "Castro de Ciragata - Parada, Bragança - 08.jpg", "verdict": "region_or_type", "note": "Weg durch Buschwerk; keine Wallanlage erkennbar."},
+    {"file": "Castro de Ciragata - Parada, Bragança - 17.jpg", "verdict": "region_or_type", "note": "Schotterhang mit Ausblick ins Tal; keine Struktur sichtbar."},
+    {"file": "Castro de Ciragata - Parada, Bragança - 05.jpg", "verdict": "region_or_type", "note": "Felsblöcke mit Buschwerk; keine Befestigungsanlage."},
+    {"file": "Castro de Ciragata - Parada, Bragança - 11.jpg", "verdict": "region_or_type", "note": "Felshang mit Schotter; keine archäologische Struktur erkennbar."},
+    {"file": "Castro de Ciragata - Parada, Bragança - 13.jpg", "verdict": "region_or_type", "note": "Regionalpanorama mit Feldern und Bergen; Site nicht erkennbar."},
+    {"file": "Castro de Ciragata - Parada, Bragança - 21.jpg", "verdict": "region_or_type", "note": "Schotterhang mit Gebüsch; keine Struktur sichtbar."},
+    {"file": "Castro de Ciragata - Parada, Bragança - 07.jpg", "verdict": "region_or_type", "note": "Schotterweg durch Buschwerk; keine Befestigung erkennbar."},
+    {"file": "Castro de Ciragata - Parada, Bragança - 15.jpg", "verdict": "region_or_type", "note": "Geröllhang mit Steinen; keine archäologische Struktur."},
+    {"file": "Castro de Ciragata - Parada, Bragança - 14.jpg", "verdict": "region_or_type", "note": "Felder, Straße, Haus und Berge; reine Regionalansicht."}
+  ],
+  "note": ""
+}
