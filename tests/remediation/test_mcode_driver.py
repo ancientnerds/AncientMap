@@ -38,8 +38,18 @@ import json, os, sys
 Path = __import__("pathlib").Path
 argv = sys.argv[1:]
 prompt = sys.stdin.read()
-Path(os.environ["FAKE_LOG"]).open("a", encoding="utf-8").write(
-    json.dumps({"argv": argv, "prompt": prompt}) + "\\n")
+# One `os.write` on a descriptor opened O_APPEND, not a buffered `open("a").write(...)`: the
+# driver runs a window of batches at once, so two of these processes append to the same file,
+# and a buffered append loses one of them under load. Measured 2026-10-07 in the pre-push gate
+# of commit 47da191: `test_a_stopped_batch_does_not_start_the_batches_queued_behind_it`
+# asserted two execs and found one, while the same test passed 6/6 in isolation and the whole
+# suite had been green minutes earlier. A single write at the end of the file is atomic.
+_line = (json.dumps({"argv": argv, "prompt": prompt}) + "\\n").encode("utf-8")
+_fd = os.open(os.environ["FAKE_LOG"], os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o644)
+try:
+    os.write(_fd, _line)
+finally:
+    os.close(_fd)
 payload = {"ok": True, "label": os.environ.get("FAKE_LABEL", "batch"), "steps": 1}
 if os.environ.get("FAKE_FAIL"):
     sys.stderr.write("boom\\n")
