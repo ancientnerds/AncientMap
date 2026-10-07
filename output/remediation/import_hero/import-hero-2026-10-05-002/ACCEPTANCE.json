@@ -1,0 +1,30 @@
+{
+ "chunks": [
+  "chunk-001",
+  "chunk-002",
+  "chunk-003",
+  "chunk-004",
+  "chunk-005",
+  "chunk-006",
+  "chunk-007",
+  "chunk-008",
+  "chunk-009",
+  "chunk-010",
+  "chunk-011",
+  "chunk-012",
+  "chunk-013",
+  "chunk-014",
+  "chunk-015",
+  "chunk-016"
+ ],
+ "ok": true,
+ "one_hero": 1555,
+ "problems": [],
+ "read_at": "2026-10-05T18:14:08Z",
+ "read_sha256": "c38c89fbf132a3836f5dea59eddd9ea36f8e555525ec1141b33e83d6593e0036",
+ "run_id": "import-hero-2026-10-05-002",
+ "served_the_import": 1555,
+ "shown_sites": 4900,
+ "sites": 1555,
+ "thumbnail_follows": 1555
+}

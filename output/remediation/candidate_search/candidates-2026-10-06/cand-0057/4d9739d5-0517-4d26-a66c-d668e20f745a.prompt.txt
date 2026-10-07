@@ -1,0 +1,47 @@
+site_id: 4d9739d5-0517-4d26-a66c-d668e20f745a
+name: Cuello
+country: Belize
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Posible autorretrato del pintor Alonso Sánchez Coello (Museo del Prado).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5b5ea9b9d0fe017e6059fad9258a9ddf
+- Sevilla en el siglo XVI, detalle, (Alonso Sánchez Coello).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f3aa6b1c8227ca05842d888bc683c33d
+- Antonio Pérez (Alonso Sánchez Coello).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\27dbadd8cad4e1bb4046a8d0ab7c1434
+- San Basilio y San Atanasio, Alonso Sánchez Coello.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d3d3ec1e42b19e5906f79efad899dbd
+- San Jerónimo y San Agustín, Alonso Sánchez Coello.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ffcf1a204746989dc0b51f5ba509c7b9
+- Alonso-Sánchez-Coello.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a80a5c5221674d4952aba777cbd349e
+- Daniel Cuello 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7edf4f2d0bc5840f852ce6215fbbeb17
+- Alonso Sánchez Coello 007.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c266f17f7242ac7b98a7511f1f51256d
+- Alonso Sánchez Coello Anne of Austria (Hunterian, Glasgow) large.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e344bb6f5718331abcd46530329f22a5
+- Sánchez coello (atribuido)-jacometrezzo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5a2bdcad61c3f4ac3feba9828b719877
+- Portrait of Philip II of Spain (Alonso Sánchez Coello).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3ad0e46d0b65a49f4ec3c46b884f17e6
+- Cisne de cuello negro - A740080.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c6c3c3cddbb065df01ec29c3b751cf4
+- Cisne de cuello negro - A740079.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f82175dea95cec5d7e91e1388fe7c60
+- Cisne de cuello negro 202602.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\267c3fd2e7c2f98c2afebbde064adb05
+- Cisne de cuello negro 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ede0925f8aac84ddbe989d3eab95adad
+- Avestruz de cuello azul (Struthio camelus australis), cabo de Buena Esparanza, Sudáfrica, 2018-07-23, DD 87.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8d41ca11c87ec4a89cdbc27894db0346
+- Avestruz de cuello azul (Struthio camelus australis), cabo de Buena Esparanza, Sudáfrica, 2018-07-23, DD 86.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\777a00d1ad1aace1659ec645cb3b3296
+- Cropped Amb Federico Cuello Presents Credentials to King Albert II - Brussels 16 2 2005.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c18cd2670cfd74e1305aaebaf05512ea
+- Escuela 180 Elina Cuello.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e0e164a676fa5999cbd585c393e9589
+- Emil Cuello 2019-06-22 (cropped).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b93f20dd79615a15e03b942c663c7ae
+- Escultura la noia d ela malvasia de Ramon Cuello de 2005 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3c82f2baf75cfec92dd4c712103a6f7b
+- Emil Cuello 2019-06-22.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6edea8b57d29745e3c68865db1d6a30a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

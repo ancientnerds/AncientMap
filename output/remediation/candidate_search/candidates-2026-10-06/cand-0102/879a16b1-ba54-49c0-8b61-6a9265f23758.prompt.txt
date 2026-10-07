@@ -1,0 +1,36 @@
+site_id: 879a16b1-ba54-49c0-8b61-6a9265f23758
+name: Gate of Hercules
+country: Croatia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Croatia Pula Hercules Gate BW 2014-10-11 12-34-16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\faa28f0640df35dcd2fdd86d23d51935
+- Angel Gates, Portmerion - view from E.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4df407202418edd8f080e094833bb3a0
+- 4857 Portmerion, Angel Gates (Hercules Gate) Penrhyndeudraeth 20240531 0350.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d1f98b3a157ac36c364aff121e1d5da2
+- 4857 Portmeirion, Angel Gates (Hercules Gate) Penrhyndeudraeth 20240531 0446.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6acf99b3d7d4dec08347364570f0f02c
+- 4857 Portmerion, Angel Gates (Hercules Gate) Penrhyndeudraeth 20240531 0351.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e129e6170076bbc9c9a1584f3b5c4b4
+- Hercules gate.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\51d44c2139b027e6094cd8837b3eef70
+- Gate of Hercules, head of Hercules and his club, Colonia Pietas Iulia Pola Pollentia Herculanea, Histria (10419374503).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cfc9a4fcaed1fdc26a8d297550c9a9f6
+- Gate of Hercules, Colonia Pietas Iulia Pola Pollentia Herculanea, Histria (10419230796).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce45fdc4ac7e422fc3a3e92d998019fd
+- Gate of Hercules, Colonia Pietas Iulia Pola Pollentia Herculanea, Histria (10419190984).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b09973b45ffa5c38ffd6d3c302b14f9f
+- Gate of Hercules, Colonia Pietas Iulia Pola Pollentia Herculanea, Histria (10419211935).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ea793a0d452c3b785fe3af6b8fa907d5
+- Gate of Hercules (13952318691).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e2d9bb04515b7310b1d77915c852e215
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

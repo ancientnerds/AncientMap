@@ -1,0 +1,34 @@
+site_id: 37d54e47-00e9-4647-82c8-3ee56814692d
+name: San Jose de Moro
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Vista del Campo del Moro (Museo de Historia de Madrid).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\08e66070e155191173dcc81501e66235
+- Vista del Campo del Moro. Museo de Historia de Madrid (cropped).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb7fa741c65a7438476dcfedd7708e4d
+- 1-Torrebaja ermita-sanJosé (2006)-1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a58e298783799fe28ed74b0afbe76a54
+- 1-Torrebaja ermita-sanJosé (2015)-2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9702a0fb54dce4e4fd7c497d2aafeae1
+- Vista del Campo del Moro. Museo de Historia de Madrid.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ffea81fe2c6a166540b81407b0b3d44a
+- USA-San Jose-Oak Hill Memorial Park-Grave of Albert Raphael DeMoro.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b724f314565b41963678bcfb1d36d9f6
+- Centro Educacional San Luis - Segundo piso.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\82d9404039d493c80e5afd4a30be2a1a
+- José Lillo dirigiendo a 1200 músicos en las fiestas de moros y cristianos de la localidad de San Vicente del Raspeig durante su homenaje en 2008..jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4b53945f7719e43fe85589a818783c35
+- 1853, Recuerdos y bellezas de España, Castilla la Nueva, tomo I, Esterior de la capilla de San Isidro en la parroquia de San Andrés, Madrid.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9248c5b7e3df804842092abb2ba1984f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

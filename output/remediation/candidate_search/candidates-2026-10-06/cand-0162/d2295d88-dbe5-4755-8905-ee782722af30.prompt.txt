@@ -1,0 +1,36 @@
+site_id: d2295d88-dbe5-4755-8905-ee782722af30
+name: Lycia Rock Tombs
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- William James Müller (1812-1845) - A Rock Tomb, Lycia - 1896.3 - Manchester Art Gallery.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\efe3b65a3fa974049aed950fb748a692
+- This amphitheatre is situated next to the Lycian rock tombs @ Myra Turkie. It is interesting to see as it is quite well preserved and the largest in Lycia. It is associated with ancient history.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\12506e580b2f1149d6b598194ea1424e
+- Rock tombs at Myra - Fellows Charles Sir - 1847.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4ac189328806d3d74f90b3607884352b
+- Lycian tombs at Xanthos - Fellows Charles Sir - 1847.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce17ead5872e5b41bb925f2994f3384c
+- Lycian rock-cut tomb, dating from 4th century BC, Xanthos, Lycia, Turkey (8825222744).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\093e2ec671d6e0d8409a190406ef7548
+- Rock tomb at Myra - Fellows Charles Sir - 1847.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\22dcb5ad5de395a094851e636d567c41
+- Lycia. Bas-reliefs.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af7dcc321cbff19d5bfa395dded359b5
+- Ruins of Pinara, Ancient Lycian city, Lycia, Turkey.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\34955122b11c5a8c1660b200c6b258e4
+- The rock tombs of ancient Myra, carved into the cliffs of Demre, Turkey.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9887af22f8478f3fa3e9e1c6166ffa11
+- This amphitheatre @ Myra Turkie is situated next to the Lycian rock tombs. It is interesting to see as it is quite well preserved and the largest in Lycia. It is associated with ancient history.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f067accb63be6e387d42af845512fc2c
+- Ruins of Pinara, Ancient Lycian city, Lycia, Turkey 15 48 48 982000.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c0e658ef606b1a4015fc899ed2a45f8f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

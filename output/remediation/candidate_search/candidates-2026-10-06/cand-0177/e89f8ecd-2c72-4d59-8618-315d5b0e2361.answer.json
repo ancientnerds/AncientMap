@@ -1,0 +1,20 @@
+{
+  "site_id": "e89f8ecd-2c72-4d59-8618-315d5b0e2361",
+  "answered_by": "mcode-judge-cand-0177",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Olmedo - Monte Baranta (05).JPG", "verdict": "depicts", "note": "Steinstrukturen und Wege der megalithischen Anlage sichtbar."},
+    {"file": "Olmedo - Monte Baranta (03).JPG", "verdict": "depicts", "note": "Steinstrukturen und Wege der megalithischen Anlage sichtbar."},
+    {"file": "Olmedo - Monte Baranta (13).JPG", "verdict": "depicts", "note": "Steinstrukturen und Wege der megalithischen Anlage sichtbar."},
+    {"file": "Olmedo - Monte Baranta (10).JPG", "verdict": "depicts", "note": "Steinstrukturen und Wege der megalithischen Anlage sichtbar."},
+    {"file": "Olmedo - Monte Baranta (07).JPG", "verdict": "depicts", "note": "Steinstrukturen und Wege der megalithischen Anlage sichtbar."},
+    {"file": "Olmedo - Monte Baranta (14).JPG", "verdict": "depicts", "note": "Steinstrukturen und Wege der megalithischen Anlage sichtbar."},
+    {"file": "Olmedo - Monte Baranta (09).JPG", "verdict": "depicts", "note": "Steinstrukturen und Wege der megalithischen Anlage sichtbar."},
+    {"file": "Olmedo - Monte Baranta (02).JPG", "verdict": "depicts", "note": "Steinstrukturen und Wege der megalithischen Anlage sichtbar."},
+    {"file": "Olmedo - Monte Baranta (12).JPG", "verdict": "depicts", "note": "Steinstrukturen und Wege der megalithischen Anlage sichtbar."},
+    {"file": "Olmedo - Monte Baranta (11).JPG", "verdict": "depicts", "note": "Steinstrukturen und Wege der megalithischen Anlage sichtbar."},
+    {"file": "Olmedo - Monte Baranta (01).JPG", "verdict": "depicts", "note": "Steinstrukturen und Wege der megalithischen Anlage sichtbar."},
+    {"file": "Olmedo - Monte Baranta (06).JPG", "verdict": "depicts", "note": "Steinstrukturen und Wege der megalithischen Anlage sichtbar."}
+  ],
+  "note": ""
+}

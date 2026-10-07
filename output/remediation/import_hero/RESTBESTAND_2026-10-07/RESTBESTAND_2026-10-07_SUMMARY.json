@@ -1,0 +1,20 @@
+{
+ "classes": {
+  "every_row_excluded": 229,
+  "no_row_at_all": 723
+ },
+ "measured_at": "2026-10-07",
+ "note": "every one carries scope_status IS DISTINCT FROM 'retired' and thumbnail_url IS NULL; a site with any live row serves its lead row and is not here. Counted on the acceptance read of the last INSERT wave, not on a plan read.",
+ "question": "shown curated sites whose page serves no image at all",
+ "read": "VERIFY_READ.json of run insert-2026-10-07-011",
+ "read_at": "2026-10-07T10:14:53Z",
+ "read_sha256": "0b5d7da03c3ade56ca0b8ce776591768b2caa06029c1692c3493bb90db56a22c",
+ "sites": 952,
+ "what_would_close_it": {
+  "insert_refused": 48,
+  "judged_no_depicts": 369,
+  "not_reached": 49,
+  "search_all_too_small": 25,
+  "search_no_candidate": 461
+ }
+}

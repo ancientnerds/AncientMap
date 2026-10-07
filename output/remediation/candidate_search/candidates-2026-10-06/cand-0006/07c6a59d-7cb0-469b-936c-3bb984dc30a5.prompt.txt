@@ -1,0 +1,35 @@
+site_id: 07c6a59d-7cb0-469b-936c-3bb984dc30a5
+name: Getic Burial Complex
+country: Bulgaria
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Painting; 'L'inhumation precipitee', by A. J. Wiertz Wellcome L0010253.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4b9cfa94e3d1fd693113505fee334071
+- Hallopora multitabulata fossil bryozoan (Ordovician; Frankfort, Illinois, USA).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ca39de0ad227f21c43822dd49d25832
+- Fistulipora neglecta fossil bryozoan (Silurian; near Waldron, Indiana, USA) (15209549272).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b1b92a7982736676adaf5d3aecccc2d8
+- Bryozoan (reconstructed colony) (Cincinnatian Series, Upper Ordovician; vicinity of Cincinnati, Ohio, USA) 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aee30ac02380fc374b2c2770128a6d83
+- Bryozoan (reconstructed colony) (Cincinnatian Series, Upper Ordovician; vicinity of Cincinnati, Ohio, USA) 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c1d3a4e488257c268d1fa38163af16b8
+- Semicoscinium tenuiceps (fossil bryozoan) (Lockport Dolomite, Middle Silurian; Rockford Stone Company Quarry, Rockford, Ohio, USA).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\546e9403c235655161f4ee1871b53745
+- Trepostome bryozoan (Kope Formation, Upper Ordovician; Rt. 9 roadcut near Alexandria, Kentucky, USA) 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\026c56832d88dd9f737a2db8e615585f
+- Trepostome bryozoan (Kope Formation, Upper Ordovician; Rt. 9 roadcut near Alexandria, Kentucky, USA) 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8902a2073eec71502994c750c25f2b7e
+- Bryozoan (Corryville Member, McMillan Formation, Upper Ordovician; Flemingsburg South roadcut, Fleming County, Kentucky, USA) 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8164461a776cf866861e0fad38c7a26b
+- Bryozoan (Corryville Member, McMillan Formation, Upper Ordovician; Flemingsburg South roadcut, Fleming County, Kentucky, USA) 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aef8c04db8e072bb3ce8df456c0c6688
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

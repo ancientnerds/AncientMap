@@ -1,0 +1,21 @@
+{"site_id": "b2db3feb-e9a8-490b-a0ec-f0549f17d389",
+ "answered_by": "mcode-judge-cand-0135",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Attack at Bejucal town by the forces of Maximo Gom\u00e9z, 13-14 January 1896.jpg",
+   "verdict": "other_site",
+   "note": "Farbige Druckgrafik einer Gefechtsszene: bewaffnete Maenner stuermen aus einem Gebaeude auf eine Ebene"},
+  {"file": "Bejucal (Cuban municipal map).png",
+   "verdict": "region_or_type",
+   "note": "Karte der langen schmalen Insel Kuba mit Gemeindegliederung und gelb hervorgehobenem Bereich, reine Karte"},
+  {"file": "Tren suburbano en Bejucal.jpg",
+   "verdict": "other_site",
+   "note": "Tuerkisblauer Triebwagen 4232 am Bahnsteig mit gewölbtem Bahnsteigdach, Reisende mit Gepaeck"},
+  {"file": "Bejucal municipio 1940.png",
+   "verdict": "region_or_type",
+   "note": "Verwaltungskarte Kubas mit rot hervorgehobenem Municipio und Uebersichtskarte als Einsatz"},
+  {"file": "Bejucal (Cuba) - DPLA - d43bbf4cb3b486df2c5aed665f934879.jpg",
+   "verdict": "region_or_type",
+   "note": "Topografische Militaerkarte 1:50.000 'BEJUCAL, CUBA' mit Koordinatengitter und Ortsnamen, reine Karte"}
+ ],
+ "note": ""}

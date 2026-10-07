@@ -1,0 +1,37 @@
+site_id: f0bcab22-b5ea-43e1-ace1-c9adc5d6e0db
+name: Baltalı Kapı
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Milas Baltalı Kapı 4967.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a5baa0f1f2569fff0d1dd6807433bf4a
+- Milas Baltalı Kapı 037.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d23b95030130bbca1a6d6c3c8eac6c95
+- Milas Baltalı Kapı 038.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f404e12e4bec09edeadf9196e0efe5aa
+- Milas Baltalı Kapı 4956.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c51042fe425964535badde9591c2c408
+- Milas Baltalı Kapı 4958.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9d3bd35e1821e5fd6d04af35f825dbbe
+- Milas Baltalı Kapı 4949.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\67f03715be46ac30dc5cb8d58c2a1ca9
+- Milas Baltalı Kapı 4950.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3529f4ca690c6e13cf70e9f06a0279d2
+- Milas Baltalı Kapı 4955.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a69dec32b1722505fb287dccc3ebc8e8
+- Milas Baltalı Kapı 4957.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a437e11dd36b6f8590d747cb277e0268
+- A Gate at Mylasa - Pococke Richard - 1745.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de86f59b4a65435b87b4117098fb8550
+- Milas 4951.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\74e338f6327aacfaeb0509036e58c345
+- Milas 4952.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bb4c000f396f555e36428f13ccfde9aa
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

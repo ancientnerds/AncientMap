@@ -1,0 +1,37 @@
+site_id: b42c7181-73fa-48c8-8916-a6fe7b4b74b1
+name: Kerbatch
+country: Republic of The Gambia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Kerr Batch stone circle2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7020b721864c046eadd1c4e89400aba1
+- Kerr Batch stone circle1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f81aab25c3915099d689b7a6a0765698
+- UNESCO Wassu Stone Circles (3686692687).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df7db41745828028e41da5a24e0cf8cc
+- UNESCO Wassu Stone Circles (3687503134).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5bb553cf2ef30b2324d9030d661d1dce
+- UNESCO Wassu Stone Circles (3686696953).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2cd43648b124875b0be526ab94312998
+- UNESCO Wassu Stone Circles (3686699785).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4d34f8d02638c6c9848efb3bcc686c55
+- UNESCO Wassu Stone Circles (3687494306).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ea089e13de6de76452f1b054bba35c15
+- UNESCO Wassu Stone Circles (3686693325).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b1f124e942bb3efedcd3bc5700c5fdc0
+- UNESCO Wassu Stone Circles (3686696329).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\99f84396f6f3b0b2af863b3378b39683
+- UNESCO Wassu Stone Circles (3687501476).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec5bdd6ec1417286f40771837a5b6538
+- UNESCO Wassu Stone Circles (3687500494).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\36cc8dde95ac9771c8a65be3f15dd00e
+- UNESCO Wassu Stone Circles (3687502738).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6706989c46aa2007ef6b24e335a6570b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

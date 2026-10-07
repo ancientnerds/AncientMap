@@ -1,0 +1,29 @@
+site_id: 643fcd04-bed6-4bf0-8362-75ebb0544e1c
+name: Qullqapampa
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Colcabamba.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56bc484a18cb6c92c31768401d2d6fed
+- Colcabamba-Huaraz.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bde6c501c7d21092f7bcae43cbde7e62
+- ISS020-E-11799 - View of Peru.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\673413b8a0c3867bb477679177d8e26f
+- Dioscorea tayacajensis R Knuth nmnhbotany 2146100 NMNH-00603930-000001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\094d57d1ac6b1aeebad205ea68d287e5
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

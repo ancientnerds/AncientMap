@@ -1,0 +1,35 @@
+site_id: 74c060c0-0099-4efb-a59c-5967e7f9712a
+name: Castles Camp
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Castle Camps, Castle Meadow - geograph.org.uk - 7581611.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\520782ed3d7578833618c5390a683f85
+- The road from Castle Camps to Camps End - geograph.org.uk - 3936755.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\be6f9a7e501fe21b0d546991ad26e1e0
+- The edge of Castle Camps - geograph.org.uk - 3479732.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bae6416aa46a4cc5096ccd88ff933878
+- "The Cottage", Castle Camps - geograph.org.uk - 5574754.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bf96c5b6af5f95e3a522d11015616272
+- The Cock, Castle Camps - geograph.org.uk - 5574769.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d059f3c7588f319f2d609278d42ef19
+- The Green, Castle Camps - geograph.org.uk - 3480876.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\613177900a5110c01409914fab537ccb
+- Roadworks in Castle Camps - geograph.org.uk - 6801876.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\72d1d756fe2a8e74c5c1ff77a8015b64
+- Castle Camps, a bend in the path - geograph.org.uk - 3479895.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d2ca10f72c27f553db11d59c49c4a95d
+- Footpath to Castle Camps - geograph.org.uk - 3479962.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62ba2e8f9b0bdf7e207df1696c910a26
+- Castle Camps, the edge of the village - geograph.org.uk - 3480639.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8fe7229c69b7e3d201cd062c555b3561
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,14 @@
+{
+ "may_empty_sites": 0,
+ "planned_rows": 0,
+ "planned_sites": 0,
+ "read_at": "2026-10-05T17:46:09Z",
+ "read_sha256": "ea0debf3e474e6fc18e659c54e3bb76b4526a5b7b18b3ba82b8eb3538795646e",
+ "refusals": {
+  "local_file_too_small": 807,
+  "no_target_row": 469
+ },
+ "refused_sites": 1276,
+ "run_id": "import-hero-2026-10-05-003",
+ "sites_with_an_import_image": 3142
+}

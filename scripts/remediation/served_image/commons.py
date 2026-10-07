@@ -316,6 +316,77 @@ class Commons:
             self._save("imageinfo", cached)
         return {f: cached[f] for f in wanted}
 
+    def sizes(self, files: Iterable[str]) -> dict[str, tuple[int, int]]:
+        """Each file's own `width x height`, or `(0, 0)` for one Commons does not hold.
+
+        `imageinfo` asks for `url|mime|size|sha1` and so **never** returns a size: the API sends
+        the pixel dimensions only with `dimensions` in `iiprop`. Measured 2026-10-06 while the
+        candidate search was being built - 164 candidates, every one of them 0x0 until this method
+        asked again.
+        """
+        cached = self._load("sizes")
+        wanted = sorted({canonical_file(f) for f in files})
+        todo = [f for f in wanted if f not in cached]
+        for start in range(0, len(todo), TITLES_PER_QUERY):
+            batch = todo[start : start + TITLES_PER_QUERY]
+            body = self.api(
+                {
+                    "action": "query",
+                    "prop": "imageinfo",
+                    "iiprop": "size|dimensions",
+                    "redirects": 1,
+                    "titles": "|".join(f"File:{f}" for f in batch),
+                }
+            )
+            query = body.get("query") or {}
+            mapping = {
+                e["from"]: e["to"]
+                for e in (query.get("normalized") or []) + (query.get("redirects") or [])
+            }
+            pages = {p["title"]: p for p in query.get("pages") or []}
+            for name in batch:
+                page = pages.get(dereference(f"File:{name}", mapping))
+                if page is None:
+                    raise CommonsError(f"Commons answered no imageinfo for File:{name}")
+                if page.get("missing") or not page.get("imageinfo"):
+                    cached[name] = [0, 0]
+                    continue
+                cached[name] = [
+                    int(page["imageinfo"][0].get("width") or 0),
+                    int(page["imageinfo"][0].get("height") or 0),
+                ]
+            self._save("sizes", cached)
+        return {f: (int(cached[f][0]), int(cached[f][1])) for f in wanted}
+
+    def search(self, term: str, limit: int) -> list[str]:
+        """The first `limit` files of a full-text search (file namespace, title form).
+
+        The caller owns the query's shape - `filetype:bitmap` and `intitle:` are CirrusSearch
+        operators, not this method's business. An empty search is a valid answer: a term that
+        matches nothing returns `[]`, and the cache says so (`hits: []`), so a resumed run does not
+        ask again.
+        """
+        key = f"{term}\t{limit}"
+        cached = self._load("search")
+        entry = cached.get(key)
+        if entry is None or entry["limit"] < limit:
+            body = self.api(
+                {
+                    "action": "query",
+                    "list": "search",
+                    "srsearch": term,
+                    "srnamespace": "6",
+                    "srlimit": limit,
+                }
+            )
+            found = [
+                canonical_file(h["title"]) for h in (body.get("query") or {}).get("search") or []
+            ]
+            entry = {"limit": limit, "files": found}
+            cached[key] = entry
+            self._save("search", cached)
+        return list(entry["files"])[:limit]
+
     def download(self, url: str) -> Path:
         """The bytes behind a URL, kept once under `files/<sha256 of the URL>`."""
         if not is_public_http_url(url):

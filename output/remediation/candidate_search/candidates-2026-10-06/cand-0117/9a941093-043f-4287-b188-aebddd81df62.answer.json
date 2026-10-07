@@ -1,0 +1,8 @@
+{"site_id": "9a941093-043f-4287-b188-aebddd81df62",
+ "answered_by": "mcode-judge-cand-0117",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "PentreIfanRecon.jpg",
+   "verdict": "region_or_type",
+   "note": "3D-Rekonstruktionszeichnung eines generischen Kammergrabenhuegels mit Orthostaten und Decksteinen in gruener Landschaft - der Typ, nicht die Site."}],
+ "note": ""}

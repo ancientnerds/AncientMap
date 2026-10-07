@@ -1,0 +1,31 @@
+site_id: 5860ecf2-57f8-44e6-93a1-0f6b5d6994e1
+name: Isla Palenque
+country: Panama
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Las Glorias Nacionales, 1852 1003089 (4013194365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\79277db8ac3eebef91dabd6bd464d4b1
+- Mexico - panoramio (8).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6340b7ec2d4bb7cef474bd15192a25a
+- Holbox, Q.R., Mexico - panoramio (8).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cf01b5d9ccad3983b93a79179fd03f06
+- Holbox, Q.R., Mexico - panoramio (9).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c47383ff75ffe372e294116cf0cb1689
+- Best Annual Music Festivals in Panama (53748860425).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\84fd9dc144e02fdd62d6b12b49c09717
+- The archaeological use and distribution of Mollusca in the Maya lowlands (1969) (19564178389).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ab23e20364f4a8d765e2b4c73c674b3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

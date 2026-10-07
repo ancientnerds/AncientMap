@@ -1,0 +1,36 @@
+site_id: d074c899-cdcb-48db-9207-1ebea88ce927
+name: Tripiti - Archaeological Site
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tripiti beach – Tripiti memorial - 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fe8487d7048cb692671277dbe7535cfa
+- Church of Panagia Tripiti the Life Giving Spring in Aigio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6bbc42416f197dd7c76f946594fcb5ba
+- Tripiti beach – Agios Nikolaos - 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\018b14d6b89a3a8f9170415695fab7bd
+- Tripiti beach – 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6e151ff3631361e206d16fd084f14af
+- Tripiti beach – 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ddc0bff395d9c3e12399acb725afed17
+- Tripiti beach – Profitis Ilias - 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\95f985a037b2dda2d0ba4a722b61506b
+- Tripiti beach – Agios Nikolaos - 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\987a39d2fd59c392609e653723828c1b
+- Tripiti beach – Agios Nikolaos - 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d458ebaaa086fdfaac13aebf94cb052f
+- Aegion - Church of Panagia Tripiti - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c4f757ad85fc47d8cd1bcb6e6ae0fc3
+- Gavdos, Tripiti Beach.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7f003145d24106e7ccc952a02fa786a9
+- Tripiti South Gavdos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3a3aec080db3e060588325f9461e7a42
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

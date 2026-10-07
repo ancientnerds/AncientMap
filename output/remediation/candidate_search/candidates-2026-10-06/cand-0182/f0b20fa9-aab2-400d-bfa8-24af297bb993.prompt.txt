@@ -1,0 +1,38 @@
+site_id: f0b20fa9-aab2-400d-bfa8-24af297bb993
+name: Kastros
+country: Cyprus
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Naxos Νάξος 2020-08-20 14 Chora.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2264106a25e6d3b0da55698c83409897
+- Kastro, Thassos.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bb79540f18cea957b6e737bd8abf7684
+- Kastro, Thasos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\53993ee7612cbdcfb38bd20a21f4903b
+- Restaurant Kostas, Kastro, Thasos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\43fc711cb8d2302e700d6f7a032d315d
+- 9 Kastro C.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7412de0fa60ef4859d9b2f931542828b
+- Kastro, Karner.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d8d7415e3d710bd347add1ec8d4754a
+- 4 Kastro C.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b6c24e2734ce4ea9a3cb0295d6ac16a
+- Kastro-Thassos.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bb5121d75468ac8da6c001f85dd2c803
+- 8 Kastro C.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\366ca9935f5a5a7ec8b4fd991d66fe3f
+- 6 Kastro C.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dba6ef1dd38fe42412415c64291f3af9
+- 1 Kastro C.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6953cf2fd116d92da254c600251a2018
+- 7 Kastro C.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\396db0d4cb05999ed384757a2c7a3d62
+- Epano Kastro, Naxos, 091500.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8a4eb66e28c540a027e0a3bbd0213b00
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

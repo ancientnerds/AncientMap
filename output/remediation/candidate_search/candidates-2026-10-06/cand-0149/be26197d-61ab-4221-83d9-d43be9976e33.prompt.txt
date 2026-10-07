@@ -1,0 +1,37 @@
+site_id: be26197d-61ab-4221-83d9-d43be9976e33
+name: Eretria, Thessaly
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Pottery kiln archmus Eretria 19558.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b32dfc7c183fa8780a39389fe5bd016f
+- Ferry embankment Eretria Euboea Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\830feb259e9c1c46a7af2a4eb864150e
+- Nikon stele archmus Eretria 674.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\00c4de225ff294d30c6f6c957e5aef9f
+- Landscape Eretria Euboea Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9a8a22a1eaad29b4ce39e6c879a797c7
+- Mountains, Eretria, Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc749c128e3fab3dc5b7bdf0b41d4b74
+- Red boat Eretria Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c708e8c193d70646b94f20ef456a3847
+- Nemo boat Eretria Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4fbc0c97f9b8b68c9ca29df10acc511b
+- Blue fishing boat harbour Eretria Euboea Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec8dd8c1c1d89caa0709136de24f101c
+- Cliffs over Eretria Euboea Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e9ea228fd8355774ae3ce28d3fd5fdb6
+- Islands of Eretria Euboea Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fe4f1cd082b100395ed99fc92dc08119
+- Eretria Harbour ferry chain Euboea Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb0a15faa0290710a146d0efd7a7091b
+- Pièce pressoir archmus Eretria Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\659c9c4fdd5877a7ca8b977620c3d262
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,35 @@
+site_id: f15d2047-cd5a-4524-b39a-06ab10d77f36
+name: Seaton Down
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Seaton, down a long lane - geograph.org.uk - 3164379.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f042eb11788e1822f49c3ccbd3a9cad
+- B3172 Seaton Down Hill - geograph.org.uk - 6219605.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb33b02e111e4cb6db51bf27083118d1
+- Path down Seaton valley - geograph.org.uk - 4167225.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\39f4562c4fbe8f1eb0ed516da18c7d1a
+- Down hill from Seaton - geograph.org.uk - 3164373.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1cdd0577f4fc6acd0a06f4bed04d8b40
+- Path down Seaton valley - geograph.org.uk - 4167239.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c3d0ffc264a478353ac3f6caa47e04f6
+- Path down Seaton valley - geograph.org.uk - 4167240.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b787933bf78bf025f6bd3e04da6af68f
+- B3172 Seaton Down Hill - geograph.org.uk - 6219616.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd1a8d73d180a80b480657319afe5f0e
+- Holyford Coppice and Seaton Down - geograph.org.uk - 3078728.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ecb5fed43c3a245dba15dc1e09a2b31e
+- Coin Hoard , Seaton Down (main clump) (FindID 635371).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45a9f7cf4cdb921ab8097b34773efc9f
+- Seaton Down Hoard, RAMM - geograph.org.uk - 6006673.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\83a46e8dad7c79a072595aa4e0b50cac
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

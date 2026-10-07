@@ -1,0 +1,40 @@
+site_id: 3315cd99-84ed-4e95-b743-fe75fb4c7654
+name: Torre de Almofala
+country: Portugal
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Torre de la Almofala, Toledo (6243955202).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2cfbbb048b79df714fa7f9bdf4684cfa
+- Toledo - Muralla - Torreón 02.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\125a249ecebe55c2529c9e461e792957
+- Torre de Almofala (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa7d03cb25cec2afc6d250f9c392d1ad
+- Torre de Almofala (8).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\63c4ee2adcb4cd20226359445b57cafa
+- Torre de Almofala (13).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ea07ff5b646ea085481f3fe71f639d0
+- Torre de Almofala (9).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94320e8d4baa0a09f765addae6b34077
+- Torre de Almofala (7).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e3ba3fcbac01efee68a5a29e05137b5
+- Torre de Almofala (10).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cf74ba73907ad9180ab825c310d55680
+- Torre de Almofala (15).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\763c9556ab0b7586134f94bcee55db4a
+- Torre de Almofala (16).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0857afa9eac4baf7f7377856dbf4bbe
+- Torre de Almofala (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\59320510755422ab9270baba9d9e69df
+- Torre de Almofala (14).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f61be1e17bda809174163aa9e5644ed9
+- Torre de Almofala (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\659dc57653dd70cb182c5b37681cf3d2
+- Torre de Almofala (11).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9bc8e7470352593dcf97c933a2d679a
+- Torre de Almofala (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ab1f2dca87e3276099b76a7aa3c2cb4
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

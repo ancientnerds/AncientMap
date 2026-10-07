@@ -1,0 +1,45 @@
+site_id: bdbce80c-eee9-4842-800a-1cf3e440c500
+name: El Porvenir
+country: Guatemala
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- El Porvenir 1920.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e44a93405fb7fb4d7cf0bd136575155
+- Atardecer en el Porvenir, Capital de Guna Yala.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bf098cc1408b2601673a39db9ebc2136
+- El porvenir equipo 1925.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\91839e3de5900c7ed3b4966fc69e2ad0
+- El Porvenir.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4faf83b3e2e7c160a2761884fa72a887
+- Bandera el porvenir.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0d58bdacc26d8820ef1a37c672c13301
+- Isla El Porvenir.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df87ab3db3eae04ab026c80285ee7678
+- El porvenir ESTACIÓN.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\79de65f13e6a6670963b03a231befa47
+- Deposito el porvenir.57.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a8032c96d9fbf2fdfff977bf98fc994
+- El porvenir estancia.20.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7562b321ff36284fe095b106cd4da3b7
+- Colonia El Porvenir en Querétaro.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b81bfb4f4b7cc7005c401e1dde9cb6a
+- El Porvenir de la Industria, Córdoba 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c6cd14e11a025fbb62c72476d9d9edd0
+- Verbena del Jardín de Bolsillo en la Colonia El Porvenir en Querétaro.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f53d54f244850f89a99319eb6e44c928
+- Bloques de pisos (El Porvenir).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e5e2a88e42d91b87d5b813a666fd86a4
+- El Porvenir de la Industria, Córdoba 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0414358ed7dc91d9a1bd904c4ff1e747
+- Jardín de Bolsillo en la Colonia El Porvenir en Querétaro 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d6a539535f1daeb64599ca43d0e5081f
+- Casa (El Porvenir).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e84ff0b4d1e9f077a9dd595e3c0c3d8
+- Flag El Porvenir.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\296b05d2db14c1a97827d7c25b18bd14
+- Camino vecinal que lleva a la Escuela Nº 343 Paraje El Porvenir - Aula Satélite (Capioví, Misiones).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d57680f9622d1826206c1e39c4808b32
+- Flag (5).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3a3f056cc8f551d0f0222c84d414a68d
+- Sanlorenzo vs elporvenir en la b 1982.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b6ec1c0e8771b1528b4e389ea9f930b3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

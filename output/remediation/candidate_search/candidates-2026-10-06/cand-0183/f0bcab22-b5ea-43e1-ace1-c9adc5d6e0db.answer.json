@@ -1,0 +1,18 @@
+{"site_id": "f0bcab22-b5ea-43e1-ace1-c9adc5d6e0db",
+ "answered_by": "Worker",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Milas Baltalı Kapı 4967.jpg", "verdict": "depicts", "note": "Nahaufnahme des Marmorbogens: einzelne Keilsteine, im oberen Block ein graviertes Kreuz."},
+  {"file": "Milas Baltalı Kapı 037.jpg", "verdict": "depicts", "note": "Marmorbogen des antiken Tors mit Bruchsteinmauer, Graffiti an den Pfeilern, Strommast und zwei Jungen auf der Strasse."},
+  {"file": "Milas Baltalı Kapı 038.jpg", "verdict": "depicts", "note": "Torbogen mit Wegweiser 'BAL.TALI KAPI', zwei Maedchen davor, Altbau mit Holzbalkon und Schornstein."},
+  {"file": "Milas Baltalı Kapı 4956.jpg", "verdict": "depicts", "note": "Bogen von unten gegen blauen Himmel, Akanthuskapitaelle und Palmenwedel im Mauerkron sichtbar."},
+  {"file": "Milas Baltalı Kapı 4958.jpg", "verdict": "depicts", "note": "Bogenunterseite vor Wolken, zwei Akanthuskapitaele an den Pfeilern, Mauerkrone mit gruenem Bewuchs."},
+  {"file": "Milas Baltalı Kapı 4949.jpg", "verdict": "depicts", "note": "Ganzes Tor mit Bruchsteinfluegelmauern, weisse Standbildfigur am rechten Pfeiler, Strasse und Berge dahinter."},
+  {"file": "Milas Baltalı Kapı 4950.jpg", "verdict": "depicts", "note": "Tor mit Akanthuskapitaellen, weisse Statuette mit Speer und Schild davor, Altbau mit Holzbalkon im Bogen."},
+  {"file": "Milas Baltalı Kapı 4955.jpg", "verdict": "depicts", "note": "Blick durch den Torbogen in die Dorfstrasse mit Fussgaengern; antike gravierte Zahlen auf dem Marmorpfeiler."},
+  {"file": "Milas Baltalı Kapı 4957.jpg", "verdict": "depicts", "note": "Bogenlaibung von unten mit graviertem Kreuz im Stein, helle Kiesgruende hinter der Kurve."},
+  {"file": "A Gate at Mylasa - Pococke Richard - 1745.jpg", "verdict": "depicts", "note": "Kupferstich 'A GATE at MYLASA' von 1745: gezeichnetes Stadttor mit Saeulen, Grundriss und Massstab; historische Darstellung."},
+  {"file": "Milas 4951.jpg", "verdict": "depicts", "note": "Nahaufnahme der weissen Standbildfigur mit Speer und Rundschild vor der Bruchsteinmauer des antiken Tors."},
+  {"file": "Milas 4952.jpg", "verdict": "depicts", "note": "Detail der Statuette am Tor: Kopf, gepanzerte Schulter und Speerschaft vor hellgrauem Himmel."}
+ ],
+ "note": "Alle zwoelf Kandidaten zeigen Baltali Kapi selbst: elf Fotografien des Marmorbogens, seiner Bruchsteinfluegelmauern und der davorstehenden Statuette, dazu ein Kupferstich von 1745 mit dem Tor und seinen Saeulendetails."}

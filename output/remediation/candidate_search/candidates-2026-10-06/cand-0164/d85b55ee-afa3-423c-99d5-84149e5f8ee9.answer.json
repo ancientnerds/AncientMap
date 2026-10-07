@@ -1,0 +1,18 @@
+{"site_id": "d85b55ee-afa3-423c-99d5-84149e5f8ee9",
+ "answered_by": "mcode-judge-cand-0164",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Marble headless torso of a statuette of Artemis, from the Long Stoa, late Hellenistic period, Archaeological Museum of Sikyon, Greece (13945670140).jpg",
+   "verdict": "region_or_type",
+   "note": "Kopf- und armloser Marmortorso einer bekleideten Figur im Museum; kein sichtbarer Bezug zur Makra Stoa."},
+  {"file": "The Piraeus and the Long Walls of Athens.jpg",
+   "verdict": "other_site",
+   "note": "Historisches Rekonstruktionsbild vom Hafen Piraeus mit den Langen Mauern Athens und Schiffen im Vordergrund."},
+  {"file": "The Church of the Holy Trinity (Piraeus) on May 16, 2021.jpg",
+   "verdict": "other_site",
+   "note": "Moderne Kirche in Piraeus mit Strassenschildern, Baumen und Strassenbahnleitungen, moderne Szene."},
+  {"file": "Ulluco.jpg",
+   "verdict": "other_site",
+   "note": "Fotografie von Ulluco-Knollen auf weissem Hintergrund, voellig ohne Ortsbezug."}
+ ],
+ "note": ""}

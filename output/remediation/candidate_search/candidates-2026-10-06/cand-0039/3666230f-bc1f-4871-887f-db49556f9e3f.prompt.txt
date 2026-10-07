@@ -1,0 +1,37 @@
+site_id: 3666230f-bc1f-4871-887f-db49556f9e3f
+name: Sita Gufa
+country: India
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Sita Gufa, Nashik 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e579a667523ba43eb4e25eae44099153
+- Sita Gufa, Nashik 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b6f39532acc64024150124ce6fc99ea4
+- Sita Gufa, Nashik 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e5f475e3b9d96d9be8780d6b05ffd54
+- Sita Gufa, Nashik 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\999c790a161e6f11615325c17d4f3a3c
+- Sita Gufa, Nashik 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a11c5b5a27acd9952243502f594824b2
+- Sita Gufa, Nashik 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77313c3e5d8be45553361b8328b3e4e8
+- Sita Gufa, Nashik 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c4dabbd6e07b5d3a3c8c317649384f08
+- Sita Gumpha.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a457e8e9cca32243652ff5da51480431
+- Sita Gunfa,Panchavati,Nashik,Maharashtra - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\66ec480b2b87a8cf1da86f0c73d9b72b
+- 0010622 Ramgarh hills Puta Sitabhengra and Jogimara Caves Chattisgarh 022.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9346969630f2343da8631b84f4c61eb
+- 0010622 Ramgarh hills Puta Sitabhengra and Jogimara Caves Chattisgarh 018.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce9d2c051264d1f8b0b65a28c20ccf53
+- 0010622 Ramgarh hills Puta Sitabhengra and Jogimara Caves Chattisgarh 248.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd8bfc6606a8e1894ab1697074d1e992
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

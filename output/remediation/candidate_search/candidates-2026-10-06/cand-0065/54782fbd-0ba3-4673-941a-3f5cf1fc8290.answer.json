@@ -1,0 +1,21 @@
+{"site_id": "54782fbd-0ba3-4673-941a-3f5cf1fc8290",
+ "answered_by": "mcode-judge-cand-0065",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Welbeck Hill - geograph.org.uk - 5259012.jpg",
+   "verdict": "region_or_type",
+   "note": "Grasfeld mit sanft huegeligem Horizont und einzelnen Baeumen; keine Gruenbeulen, Gruben oder Struktur der Site erkennbar, reines Landschaftsbild."},
+  {"file": "Bridleway to Welbeck Hill - geograph.org.uk - 2666139.jpg",
+   "verdict": "region_or_type",
+   "note": "Wiese mit Weidegatter und Schild 'PLEASE DO NOT PARK IN FRONT OF THESE GATES', bewaldete Huegelkuppe dahinter; nichts Site-spezifisch erkennbar."},
+  {"file": "Bridleway below Welbeck Hill - geograph.org.uk - 5259009.jpg",
+   "verdict": "region_or_type",
+   "note": "Fahrweg zwischen Acker und umgebrochener Flaeche, ueberwachsener Hain am Horizont; Landschaft ohne Ruinen, Graben oder Markierung der Site."},
+  {"file": "Track and Footpath towards Welbeck Hill - geograph.org.uk - 4350053.jpg",
+   "verdict": "region_or_type",
+   "note": "Offene Felder mit Weg, Schild 'PUBLIC FOOTPATH' und Weidegatter; keine Grabstruktur oder Ausgrabung sichtbar, nur Feldszene."},
+  {"file": "Welbeck Hill, Anglo Saxon Cemetery site, aerial 2022 - geograph.org.uk - 7144737.jpg",
+   "verdict": "region_or_type",
+   "note": "Luftaufnahme von Feldern mit Landstrasse und fahrenden Autos; aus der Luft keine Gruenbeulen oder Ausgrabungsspuren des Friedhofs erkennbar."}
+ ],
+ "note": ""}

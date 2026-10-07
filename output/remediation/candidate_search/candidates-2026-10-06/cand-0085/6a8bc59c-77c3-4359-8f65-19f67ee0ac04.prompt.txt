@@ -1,0 +1,29 @@
+site_id: 6a8bc59c-77c3-4359-8f65-19f67ee0ac04
+name: Astale
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ischiodon astales (10.3897-afrinvertebr.59.24461) Figure 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\30a46cff72ae48bb65d5db84f4fdc149
+- Ischiodon (10.3897-afrinvertebr.59.24461) Figure 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a009a90e750d7389808ed6d1636169c
+- Brescia - Chiesa di San Faustino in Riposo - 2025-09-27 09-30-33 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\00a7a715aa322beca63b56aed8de7dbe
+- End of the Trail, by James Earle Fraser.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\845baa24eb5cf8cec4d72aae5b0c6c5f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

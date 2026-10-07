@@ -125,11 +125,11 @@ Return JSON only, no prose:
 
 """ + _VERDICT_TERMS.replace("{", "{{").replace("}", "}}")
 
-REPLACE_PROMPT_ID = "served-replace-v1"
+REPLACE_PROMPT_ID = "served-replace-v2"
 REPLACE_PROMPT = (
-    """The main image of the archaeological site "{name}" ({site_type}, {country}; latitude {lat}, longitude {lon}) was judged not to show the site: {verdict} - {shows}
+    """{opening}
 The site's Wikidata item: {qid}
-Choose its replacement among these candidates, each a file in the handoff directory:
+Choose among these candidates, each a file in the handoff directory:
 
 {candidates}
 
@@ -143,7 +143,7 @@ Every candidate gets one of "depicts", "region_or_type", "other_site":
 """
     + _VERDICT_TERMS.replace("{", "{{").replace("}", "}}")
     + """
-pick: a candidate you called depicts that is the best main image of the site - a clear photograph of its remains before a drawing, a plan or an object. If any G candidate depicts the site, pick a G candidate: only the gallery's pictures can become the page's image. Pick a W candidate only when no G candidate depicts the site. null only when you called no candidate depicts."""
+pick: a candidate you called depicts that is the best main image of the site - a clear photograph of its remains before a drawing, a plan or an object. {gallery_rule} null only when you called no candidate depicts."""
 )
 
 
@@ -274,19 +274,38 @@ class ReplaceQuestion:
     lon: float
     qid: str | None
     served: Mapping[str, Any]
-    verdict: str
-    shows: str
-    candidates: tuple[Candidate, ...]
+    verdict: str | None = None
+    shows: str | None = None
+    candidates: tuple[Candidate, ...] = ()
+    #: The site served no image, so there is no check verdict to report: the question asks about
+    #: the files its own Wikidata item claims, and there is no gallery to pick from.
+    no_served: bool = False
 
     def prompt(self) -> str:
+        if self.no_served:
+            opening = (
+                f'The archaeological site "{self.name}" ({self.site_type}, {self.country}; latitude '
+                f"{self.lat}, longitude {self.lon}) serves no image at all. Its own Wikidata item "
+                "claims one; these are the files that claim offers:"
+            )
+            gallery_rule = (
+                "This site has no picture of its own, so every candidate is a W file: pick a W "
+                "candidate you called depicts, or null."
+            )
+        else:
+            opening = (
+                f'The main image of the archaeological site "{self.name}" ({self.site_type}, '
+                f"{self.country}; latitude {self.lat}, longitude {self.lon}) was judged not to show "
+                f"the site: {self.verdict} - {self.shows}"
+            )
+            gallery_rule = (
+                "If any G candidate depicts the site, pick a G candidate: only the gallery's "
+                "pictures can become the page's image. Pick a W candidate only when no G candidate "
+                "depicts the site."
+            )
         return REPLACE_PROMPT.format(
-            name=self.name,
-            site_type=self.site_type,
-            country=self.country,
-            lat=self.lat,
-            lon=self.lon,
-            verdict=self.verdict,
-            shows=self.shows,
+            opening=opening,
+            gallery_rule=gallery_rule,
             qid=_qid_line(self.qid),
             candidates="\n".join(c.line() for c in self.candidates),
             labels=", ".join(f'"{c.label}": "..."' for c in self.candidates),
@@ -364,12 +383,21 @@ def parse_replace(text: str, question: ReplaceQuestion) -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------ files
 def verify_precheck(run: Path) -> None:
-    """The run's PRECHECK.jsonl is the one the check stage was exported from."""
-    record = json.loads((run / EXPORT_CHECK).read_text(encoding="utf-8"))
+    """The run's PRECHECK.jsonl is the one a stage was exported from.
+
+    A stage pins it in its own export record, and every later stage refuses a run whose
+    PRECHECK.jsonl is not that one. A claim-only run has no check stage, so its replace export
+    pins it. The first export of a run has nothing to compare against - its record is written
+    from the file itself, so the pin starts there.
+    """
+    pinned = next((name for name in (EXPORT_CHECK, EXPORT_REPLACE) if (run / name).exists()), None)
+    if pinned is None:
+        return
+    record = json.loads((run / pinned).read_text(encoding="utf-8"))
     if ST.file_sha256(run / PC.PRECHECK_FILE) != record["precheck_sha256"]:
         raise ST.StateError(
-            f"{run / PC.PRECHECK_FILE} is not the pre-check the check stage was exported from "
-            "- the lane runs again in a new run directory"
+            f"{run / PC.PRECHECK_FILE} is not the pre-check a stage was exported from "
+            f"({pinned}) - the lane runs again in a new run directory"
         )
 
 
@@ -485,6 +513,31 @@ def export_check(
 
 
 # ------------------------------------------------------------------------------ export: replace
+def wanted_files(
+    precheck: Mapping[str, Any], harvest: PC.Harvest, commons: Commons
+) -> list[tuple[str, str]]:
+    """The files the site's own Wikidata item claims: its image (P18) and the files of its Commons
+    categories (P373), each with the reason it was wanted.
+
+    One reader for three callers: `candidates_for` offers them to a site whose served image
+    failed, `export_replace` asks about them for a site that serves **no** image - which the check
+    stage never sees, so without this its item's files would never be looked at - and
+    `no_image_report` reads it to tell a claim that names a file from one whose category names
+    none.
+    """
+    qid = precheck["qid"]
+    if not qid:
+        return []
+    entity = harvest.entity(qid)
+    wanted: list[tuple[str, str]] = []
+    for name in PC.p18_files(entity):
+        wanted.append((name, "the site's Wikidata image (P18)"))
+    for category in PC.p373_categories(entity):
+        for name in commons.members(category, MEMBERS_CAP):
+            wanted.append((name, f'in the site\'s Commons category "{category}" (P373)'))
+    return wanted
+
+
 def candidates_for(
     state: ST.State,
     precheck: Mapping[str, Any],
@@ -505,18 +558,9 @@ def candidates_for(
     gallery = [r for r in rows if int(r["id"]) != served.get("image_id")]
     known = {ST.file_of_row(r) for r in rows} | {served.get("file")}
     known.discard(None)
-    wanted: list[tuple[str, str]] = []
-    qid = precheck["qid"]
-    if qid:
-        entity = harvest.entity(qid)
-        for name in PC.p18_files(entity):
-            wanted.append((name, "the site's Wikidata image (P18)"))
-        for category in PC.p373_categories(entity):
-            for name in commons.members(category, MEMBERS_CAP):
-                wanted.append((name, f'in the site\'s Commons category "{category}" (P373)'))
     seen: set[str] = set()
     files: list[tuple[str, str]] = []
-    for name, why in wanted:
+    for name, why in wanted_files(precheck, harvest, commons):
         if name not in known and name not in seen:
             seen.add(name)
             files.append((name, why))
@@ -551,19 +595,42 @@ def export_replace(
     pictures: Pictures,
     *,
     images_per_batch: int = REPLACE_IMAGES_PER_BATCH,
+    claimed_only: bool = False,
 ) -> dict[str, Any]:
-    """Every served image the check did not call `depicts`, with its candidates. A `W` rendering
-    Commons does not serve is `unavailable` (`UNFETCHABLE`); a gallery file that cannot be read
-    stops the export, as in the check stage."""
+    """Every served image the check did not call `depicts`, with its candidates - and every site
+    that serves **no** image while its own Wikidata item claims one, with that claim's files: the
+    check stage never sees a site without a served image, so this is the only place its claim can
+    be examined. A `W` rendering Commons does not serve is `unavailable` (`UNFETCHABLE`); a gallery
+    file that cannot be read stops the export, as in the check stage.
+
+    `claimed_only` exports just the claim population, for a run that does not re-judge the served
+    images (the 2026-09-30 run already judged and delivered them). It is refused while a judged
+    image failed, and the record then carries no `check_sha256`, so the plan can never read it as a
+    full replace export."""
     verify_precheck(run)
-    checks = read_jsonl(run / CHECK)
+    if claimed_only and (run / CHECK).exists():
+        # A claim-only export names no failed image, so the plan would hold every served image as
+        # judged and clear nothing - the sites the check rejected would be planned as "no image".
+        failed = [c for c in read_jsonl(run / CHECK) if c["verdict"] != DEPICTS]
+        if failed:
+            raise ST.StateError(
+                f"{len(failed)} served image(s) were judged and did not show their site: this run "
+                "must export the failed images too, not the claimed files alone"
+            )
+    checks = [] if claimed_only else read_jsonl(run / CHECK)
     failed = [c for c in checks if c["verdict"] != DEPICTS]
+    claimed = [
+        sid
+        for sid, pre in prechecks.items()
+        if pre["status"] == PC.NO_IMAGE and wanted_files(pre, harvest, pictures.commons)
+    ]
+    asked: list[tuple[str, Mapping[str, Any] | None]] = [(str(c["site_id"]), c) for c in failed]
+    asked += [(sid, None) for sid in claimed]
     questions: list[ReplaceQuestion] = []
     without: list[dict[str, Any]] = []
     not_shown: dict[str, list[dict[str, Any]]] = {}
     batch, in_batch = 1, 0
-    for check in failed:
-        sid = str(check["site_id"])
+    for sid, check in asked:
         precheck = prechecks[sid]
         found, unavailable = candidates_for(state, precheck, harvest, pictures.commons)
         shown: list[tuple[dict[str, Any], bytes]] = []
@@ -607,16 +674,17 @@ def export_replace(
             **_site_fields(site),
             qid=precheck["qid"],
             served=precheck["served"],
-            verdict=check["verdict"],
-            shows=check["shows"],
+            verdict=check["verdict"] if check is not None else None,
+            shows=check["shows"] if check is not None else None,
             candidates=tuple(candidates),
+            no_served=check is None,
         )
         OH.export(
             handoff,
             batch_id=question.batch_id,
             stage=STAGE_REPLACE,
             label=sid,
-            field="served_image",
+            field="claimed_file" if check is None else "served_image",
             prompt=question.prompt(),
         )
         questions.append(question)
@@ -629,10 +697,16 @@ def export_replace(
     summary = {
         "handoff": str(handoff),
         "prompt_id": REPLACE_PROMPT_ID,
+        "claimed_only": claimed_only,
         "failed": len(failed),
+        "claimed": len(claimed),
         "questions": len(questions),
         "questions_sha256": digest,
-        "check_sha256": ST.file_sha256(run / CHECK),
+        "check_sha256": None if claimed_only else ST.file_sha256(run / CHECK),
+        "precheck_sha256": ST.file_sha256(run / PC.PRECHECK_FILE),
+        #: Every site that serves no image while its item claims a file: the plan refuses to run
+        # while one of them is unanswered, and a report of the no-image remainder reads this list.
+        "claimed_sites": claimed,
         "without_candidates": without,
         "unavailable": not_shown,
         "batches": batches,
@@ -640,6 +714,7 @@ def export_replace(
     ST.write_text_once(run / EXPORT_REPLACE, ST.json_text(summary))
     return {
         "failed": len(failed),
+        "claimed": len(claimed),
         "questions": len(questions),
         "without_candidates": len(without),
         "batches": len(batches),
@@ -683,7 +758,15 @@ def check_answer(run: Path, handoff: Path, batch_id: str, label: str, text: str)
     return None
 
 
-BRIEF = """You are Opus agent {batch} of the served-image check ({what}). You answer {count} \
+#: The model the answering agents of this lane run as. Owner decision 2026-10-03: Claude Code was
+#: replaced by MiniMax Code, so the vision answers carry `opus_handoff.MINIMAX_MODEL` from now on;
+#: the answers of 2026-09-30 keep their Sonnet stamp and stay valid.
+ANSWER_MODEL = "MiniMax-M3.1-Flash-Preview"
+#: The population of a claim-only run: the sites that serve nothing while their Wikidata item
+#: claims a file. The sites that serve an image were judged by the 2026-09-30 run and delivered;
+#: this plan may not touch them, and says so instead of claiming them for its own.
+CLAIMED_ONLY = "claimed-only"
+BRIEF = """You are agent {batch} of the served-image check ({what}), running as {answer_model}. You answer {count} \
 question(s), each about another archaeological site. Answer each one on its own.
 
 Read ONLY your own files: {handoff}/{batch}/MANIFEST.jsonl lists your questions, one JSON line \
@@ -704,7 +787,7 @@ For each question:
 5. Record it - an answer is written once:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
 --batch-id {batch} --stage {stage} --label <label> --answered-by {batch} \
---model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5> \
+--model <the model id you run as: {answer_model}> \
 --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.
@@ -725,12 +808,14 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
         batch=batch_id,
         what="does each main image show its site?"
         if stage == STAGE_CHECK
-        else "which candidate replaces a main image that does not show its site?",
+        else "which candidate must serve a site that needs one: a main image that does not show "
+        "its site, or a site that serves no image at all",
         count=len(labels),
         handoff=shown,
         scratch=f"{shown}-scratch/{batch_id}",
         run=_shown(run),
         stage=stage,
+        answer_model=ANSWER_MODEL,
     )
 
 

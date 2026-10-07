@@ -1,0 +1,58 @@
+{
+  "site_id": "8ece5123-5b53-4545-929d-0519137c13ea",
+  "answered_by": "mcode-judge-cand-0110",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Footbridge over the M60 south of Rhodes - geograph.org.uk - 5119452.jpg",
+      "verdict": "other_site",
+      "note": "Betonfußbrücke mit Metallgeländer an einer Autobahnböschung, Schilder und Ampeln; Szene in England, nicht Griechenland."
+    },
+    {
+      "file": "Footbridge Over the River Goyt - geograph.org.uk - 3189243.jpg",
+      "verdict": "other_site",
+      "note": "Grüne Fachwerk-Fußbrücke über einen schnell fließenden Fluss mit Menschen und Bäumen; britisches Landschaftsbild."
+    },
+    {
+      "file": "Hotel Evi - panoramio.jpg",
+      "verdict": "other_site",
+      "note": "Hotelanlage mit Pool, Liegestühlen und einem kleinen weißen Ziersteg über dem Wasser; moderne Resortszene."
+    },
+    {
+      "file": "Kallithea seaside - panoramio (1).jpg",
+      "verdict": "other_site",
+      "note": "Felsige Badebucht mit Holzsteg und Badenden, Meer und Küste sichtbar; Strandplatz, keine Fußbrücke der Site."
+    },
+    {
+      "file": "Rhodos Epta piges.jpg",
+      "verdict": "depicts",
+      "note": "Holzfußbrücke mit Geländer über einem Bach in bewaldeter Schlucht, dahinter Kaffeehaus; Fußbrücke auf Rhodos im Bild."
+    },
+    {
+      "file": "Bei den Sieben Quellen.jpg",
+      "verdict": "depicts",
+      "note": "Große Holzfußbrücke mit Querstreben über die Schlucht der Sieben Quellen, Steinmauer und Bäume; Brücke selbst im Bild."
+    },
+    {
+      "file": "Petaloudes - Path along the valley - bridge ^ pond - panoramio.jpg",
+      "verdict": "depicts",
+      "note": "Holzfußbrücke auf Steinpfeilern über einem grünen Teich mit Seerosen, Bambus und Felswand; Brücke im Vordergrund."
+    },
+    {
+      "file": "Dolina motyli - panoramio (3).jpg",
+      "verdict": "depicts",
+      "note": "Rustikale Holzstege mit Geländer über einem Becken in üppiger Schlucht; Fußbrückenanlage auf Rhodos sichtbar."
+    },
+    {
+      "file": "Bridge to North Street Oxford - geograph.org.uk - 3373537.jpg",
+      "verdict": "other_site",
+      "note": "Schwarzweißaufnahme einer modernen Fußbrücke mit Geländer vor einem Backsteinhaus und PKW; Szene in England."
+    },
+    {
+      "file": "Castlefield Manchester - geograph.org.uk - 6758927.jpg",
+      "verdict": "other_site",
+      "note": "Weiße Bogenfußbrücke über einen Kanal mit Hausbooten, Backsteinlagern und Eisenbahnbrücke; Manchester, nicht Rhodos."
+    }
+  ],
+  "note": ""
+}

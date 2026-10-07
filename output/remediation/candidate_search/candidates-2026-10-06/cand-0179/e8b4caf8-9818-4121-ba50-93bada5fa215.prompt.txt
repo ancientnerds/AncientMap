@@ -1,0 +1,56 @@
+site_id: e8b4caf8-9818-4121-ba50-93bada5fa215
+name: Karaburma
+country: Serbia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Karaburma 0331 vila-zvonik.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9708c5a72bbfddb9a9f7ae2a674cf43a
+- Karaburma 0302 Sbarbaro-Benito.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\433d2c0e5e68190a726a596c4488243b
+- Karaburma 0280 Benito-Stipčević.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cc5e5241afd193fc4b782f04e30c41f5
+- Karaburma 0311 križ.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\46cff35a1a5efa480ba9e832a6560c2f
+- Karaburma 0287 pravoslavni-pop.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\273ecae6adb22e2c826db322fa4ca225
+- Karaburma 0321 kapela-slika.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\126c1f23717581bb6fdbe9fc9b7c926a
+- Karaburma 0298 Sbarbaro-Tápai.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\358f06588b86be5c2432241f9d7918d5
+- Karaburma 0310 vila-Milivoj-Živanović.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\061615076a312d4ce174a321fd5f1dab
+- Karaburma 0300 predsednik-Firez priest.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ac3d7954fc9b14ed220d23b24ad16dfe
+- Karaburma 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\721966d43276024c2001acfc575939e9
+- Karaburma 0297 Rojc-Sbarbaro-Tapai.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\09fd3fd0362a279f0cd08fb585d50cd9
+- Karaburma 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8e4311866a67b8ffe544dddfef9bcb8a
+- Karaburma 0232 Borča-Firez.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c35419aa92d8d4fae944e917627fd687
+- Karaburma 0220 Lojze-Snoj Eugenio-Sbarbaro.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1f50577fcfec3354e4391c21ba9ea740
+- Karaburma 0226 Erős-Tratnjek.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c6bc02eed036df937505886acc6d0b9a
+- Karaburma.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef6906abc15f64ed9834c0b6282d3b3c
+- Karaburma 0197 Krista-Ljekaj Janez-Jelen-SDB.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\665493340e6384a63535c66c1539a365
+- Karaburma 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\067e49eeb2e22e31a0795c5f8a1fe8e5
+- Karaburma 0110 zvonar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b1b6d502c695645bae97867d5c0bd7c
+- Karaburma-6363 Toblerone.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\261481a4c5eddda55c5c88e192b6f06b
+- Karaburma 0160 Tri-registrske-oznake.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\48f80304f7d9d817d09bb6c43d6a14a2
+- Bg-1976 Karaburma-Slanačkiput.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa765b6883e15c3f6b2c61e988b7461c
+- Dunav sa Karaburme - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\13c0a05adde22e8c84988c18db15c4b8
+- Karaburma 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\500fe3cc46a4bf23e577d489c648d4dd
+- Karaburma 0163 ograja-park-vila.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\35b7b38a771e8db4602675f2471232d5
+- Karaburma 0166 mali-sestri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d0ac97b565a1b1610e036e79448ff461
+- Karaburma 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c0d3fad3c502f1f2f31923396b77865e
+- Karaburma 0218 Zajec-Sbarbaro.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e829bdb27990da29df4c925b3ce07e84
+- Karaburma 0219 Snoj-Sbarbaro-Frančiškan-Benito-Pavla.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad0d85abfbf41f91d70278188e1c1d86
+- Karaburma 0221 paroh Marko-Čolić.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d2a62e015c8e3afa9762b819c962e07
+- Karaburma 0286 Zajec-Snoj-Benito-Sbarbaro.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fa3c0c2f542c9da61691a42967a870a7
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

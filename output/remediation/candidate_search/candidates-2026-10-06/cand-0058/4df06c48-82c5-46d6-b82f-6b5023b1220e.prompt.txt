@@ -1,0 +1,44 @@
+site_id: 4df06c48-82c5-46d6-b82f-6b5023b1220e
+name: Archaeological Site of Mycenae
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- The entrance to the archaeological site of Mycenae on October 27, 2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d93463f3e20ce23a260424c1cc05cd51
+- Mycenae - Archaeological site - 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a1b615c339087cd6dda2d6f41df00f1
+- Mycenae - Archaeological site - 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2155695f285e293de85fb9dcb355841d
+- Mycenae - Archaeological site - 6.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9fe7ff453b81c06ea8063fb76d2098b
+- Mycenae - Archaeological site - 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c34e33ac9907286b312cf8233c124009
+- Mycenae - Archaeological site - 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b189974a7d3ab27097aa68c0b4cfa52c
+- Mycenae - Archaeological site - 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c805bed04f46030f41e7053927526c8
+- Mycenae - Archaeological site - 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02b90b1852bccb8dc8879116c7fa8ab7
+- Mycenae - Archaeological site - 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\01523b5761b90c25aa6fa75f4bf28bb2
+- Mycenae - Archaeological site - 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0c228874c5d5734fc51fd465dd0022f2
+- Mycenae - Archaeological site - 9.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af6e04a4505ddbd88c88b28c355e542e
+- Mycenae - Archaeological site - 8.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\024f39509b20ce72d67a0f3d00fc49f4
+- The archaeological site of Mycenae from the parking lot on 26 March 2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\87ab227d90eb557de67ff21be884cf63
+- View of the archaeological site of Mycenae and its parking lot from the acropolis of Mycenae.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\045dfb6569d2da0626c584671616aea7
+- Entrance to the archaeological site of Mycenae.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f4e9abc1bec78f9a44ee7d229ea84cb4
+- The view from the entrance to the Tomb of Clytemnestra at the archaeological site of Mycenae.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\97be8d047027d97df06996b4d2673443
+- The Argolic Gulf from the archaeological site of Mycenae on October 27, 2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef7bd1c0de3325e1ac086c9dafa5ed11
+- The Tholos Tomb of Clytemnestra at the archaeological site of Mycenae on 26 March 2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd91610e559ccde5740c2c3e9f1c73a9
+- The Lion Gate on 26 March 2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\997370c934fca7d80f0b85a22050aaf9
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

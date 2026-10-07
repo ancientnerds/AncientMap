@@ -1,0 +1,99 @@
+{
+    "site_id":  "fac04898-9342-436f-8a58-df8061d72fcc",
+    "answered_by":  "worker: cand-0196",
+    "model":  "MiniMax-M3.1-Flash-Preview",
+    "answered_model":  "MiniMax-M3.1-Flash-Preview",
+    "verdicts":  [
+                     {
+                         "file":  "Muelle Lagoa Azul, Isla Grande, Río de Janeiro A74306920241125.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Tropisches Stranddorf mit Holzsteg und Palmen, offensichtlich nicht die Site."
+                     },
+                     {
+                         "file":  "Río Azul, Huehuetenango.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Flusslauf mit Steinmauer und Baeumen am Ort, keine archaeologischen Reste."
+                     },
+                     {
+                         "file":  "Puente Río Azul, Huehuetenango.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Moderne Betonbruecke mit Auto und Strasse."
+                     },
+                     {
+                         "file":  "Río Azul, Huehuetenango - 50801025921.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Breiter Fluss zwischen Baeumen, reine Landschaft."
+                     },
+                     {
+                         "file":  "Río Azul, Huehuetenango - 50801035016.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Fluss mit Steinen und Uferbewsachsung, keine Site-Merkmale."
+                     },
+                     {
+                         "file":  "Río Azul, Huehuetenango - 50801153952.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Flusslauf mit Baeumen, nur Landschaft."
+                     },
+                     {
+                         "file":  "Río Azul, Huehuetenango - 50801029126.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Fluss in bewaldeter Ebene, keine Ruinen sichtbar."
+                     },
+                     {
+                         "file":  "Rio Azul 1921 Louis Claes.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Historisches Dampfschiff mit Signalflaggen, unberuehrt von der Site."
+                     },
+                     {
+                         "file":  "Comunidad Río Azul (Dolores Hidalgo).jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Trockene Savannenlandschaft mit Akazien und entfernter Kirche, keine Site."
+                     },
+                     {
+                         "file":  "Bandeira de Barra do Rio Azul.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Grafik einer Kommunalflagge mit Wappen, kein Foto der Site."
+                     },
+                     {
+                         "file":  "AZUL-PRYXBgig011024hbs 5674.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Passagierflugzeug der Airline Azul im Flug."
+                     },
+                     {
+                         "file":  "Lago Azul no Rio Zêzere.JPG",
+                         "verdict":  "region_or_type",
+                         "note":  "Stausee mit bewaldeten Hügeln und Bruecke, reine Landschaft."
+                     },
+                     {
+                         "file":  "Puerta II - Río Azul, Municipio de Dolores Hidalgo, Guanajuato.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Moderne Dorfhausfassade aus Stein mit Holztuer und Ziegeldach."
+                     },
+                     {
+                         "file":  "Sierra de Santa Rosa vista desde Río Azul, Dolores Hidalgo 4.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Maisfeld und Baeume vor Bergen, keine Site-Strukturen."
+                     },
+                     {
+                         "file":  "Sierra de Santa Rosa vista desde Río Azul, Dolores Hidalgo 2.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Unbefestigter Landweg mit Zaun und Huegeln, nur Landschaft."
+                     },
+                     {
+                         "file":  "Río azul de pecera.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Tuerkisfarbener Felssee in Schlucht, Naturlandschaft."
+                     },
+                     {
+                         "file":  "Sierra de Santa Rosa vista desde Río Azul, Dolores Hidalgo 1.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Weite Huegellandschaft mit Himmel, keine Site erkennbar."
+                     },
+                     {
+                         "file":  "Río Azul.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Klarer Felsfluss mit Baumbewuchs, reine Landschaft."
+                     }
+                 ],
+    "note":  ""
+}

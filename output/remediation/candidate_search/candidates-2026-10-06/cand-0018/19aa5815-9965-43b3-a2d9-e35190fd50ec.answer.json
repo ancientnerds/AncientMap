@@ -1,0 +1,12 @@
+{"site_id": "19aa5815-9965-43b3-a2d9-e35190fd50ec",
+ "answered_by": "mcode-judge-cand-0018",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Ar\u00edbalo chachapoyas - Inca.jpg",
+   "verdict": "region_or_type",
+   "note": "Studioaufnahme eines bemalten Keramik-Ar\u00edbalos mit zwei Henkeln vor blauem Hintergrund; kein Gel\u00e4nde, keine Bauwerke, keine Gran Saposoa erkennbar."},
+  {"file": "GRAN SAPOSOA.png",
+   "verdict": "other_site",
+   "note": "Rein grafisch: roter Zickzack-Fries mit grauem Rahmen und drei schwarzen Kreuzformen auf weissem Grund; keine Landschaft, keine Ruine, keine Kartensicht."}
+ ],
+ "note": ""}

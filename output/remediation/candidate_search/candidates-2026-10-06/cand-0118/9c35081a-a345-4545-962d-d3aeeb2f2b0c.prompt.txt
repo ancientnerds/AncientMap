@@ -1,0 +1,51 @@
+site_id: 9c35081a-a345-4545-962d-d3aeeb2f2b0c
+name: Gilching
+country: Germany
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Gilching Ortszentrum.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45c42ad0e0bd2d26ad5322a3b7f35279
+- Saharastaub über Gilching am 15. März 2022.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9cef15e437ae55ab335175d4273e2f8
+- Öff. Bücherschrank Gilching - 2022-05-23 - 521b.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\40f4ce80940cc48ebf48251b7aa12d37
+- Öff. Bücherschrank Gilching - 2022-05-23 - 520c.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4ac5767120f83fcc83b00d9696f994d7
+- St. Vitus Gilching 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2782d2cc49087f5610238c05e8b1ec23
+- St. Vitus Gilching 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef168eea45cbefdb9fe3f4ad0a0bdefb
+- St. Vitus Gilching 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d7c0b17f90b6654f422225f0c011a7ac
+- Gilching map.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\36404c3d1e1db1f4c779ab2e26f2dbf8
+- Gilching Altdorf 097.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\817bc87fdcf71c9fcea2c4003596de99
+- Gilching Altdorf 096.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6021a6f21b08358f0568375d63560534
+- Gilching Maibaum.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f7300cc96ee4dafdcd31b14db1d8c062
+- Arnoldus Grundschule (Gilching).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\092201be72b10540291303c05d262fcb
+- S8 zwischen Geisenbrunn und Gilching-Argelsried 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd13bdef4e7ea8a70d68550f8c6e9449
+- S8 zwischen Geisenbrunn und Gilching-Argelsried 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\13ad3299183ac3aec64c398ab2e9b0ed
+- Am Zehentstadel 2 Gilching.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4a091399cb60941c5c5f21c11294172
+- Gilching Säule 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb42ce536ed67e8458fbdcba493aacb4
+- Bauernhaus in der Weßlinger Straße 6 in Gilching.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ab644d4f34c3752730edf09ea0988d1f
+- Gilching St. Vitus 435.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a942a5b08238fe24b3ba6b75d925e0dc
+- Gilching St. Vitus 434.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0d3f3145bd571229233ce8a4b0724c56
+- Wiesmath 1 (Gilching) 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df960bb236c54e90d07b720d6a768242
+- Sankt Gilgen 2 (Gilching) 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4a33aacc2d8ac5aa480f444b5212d755
+- St. Vitus (Gilching) Orgelempore.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a5ec261084d7c19740942517820b2150
+- St. Vitus (Gilching) Madonna Detail.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1badff44a92a81f8e77df09808a33161
+- Wegkapelle (Gilching Obb) Ausstattung 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50aac1d827f9614e2f9d0d38e03e1500
+- Bildstock Jais Weiher.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e21bd1234759030ab7a29dd89c64dae5
+- Gilching mit Bergen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\97db50820d395d8818f10221db1a4c6e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

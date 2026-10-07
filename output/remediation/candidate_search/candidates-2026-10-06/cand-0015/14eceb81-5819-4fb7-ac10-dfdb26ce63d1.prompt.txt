@@ -1,0 +1,34 @@
+site_id: 14eceb81-5819-4fb7-ac10-dfdb26ce63d1
+name: Backwell Hillfort
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Nailsea and Backwell railway station MMB 42.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b27c2ebfabfa629aa60ea86a3cff5f77
+- Nailsea and Backwell railway station MMB 44 150281.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\059ec4ed2ca496f9779e449ad9f90a8b
+- Backwell MMB 03 Lake.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\53fc2016abdf276ed5885cc61a5e033c
+- Backwell MMB 02 Lake.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6a67059cc0782ad60611b683dc952cf0
+- Thatched cottage in Backwell Hill Road, Backwell - geograph.org.uk - 3719323.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e54e59df0408a300f52373fefc1e90d
+- Backwell Motors bodyshop, Backwell - geograph.org.uk - 3963692.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3ffc505e907d960605cf6c8d990bceda
+- Backwell House.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7f76249f450757fd2df689f8b75e6b6f
+- Backwell Lake and waterfowl, Backwell - geograph.org.uk - 5011395.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a416825a6f5a36a83b1475aa098e1741
+- Backwell Motors and Equicraft of Backwell - geograph.org.uk - 5011342.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a47abffef9743198465ab61609c97cab
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

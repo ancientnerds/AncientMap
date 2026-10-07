@@ -1,0 +1,41 @@
+site_id: 47e69f36-27eb-4f43-be08-b99edb0a1b19
+name: Temple of Nabu
+country: Iraq
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Temple of Nabu, Palmira, HPIM3168.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5db79850af2ef0a4b59b4e121e00d77b
+- Temple of Nabu, Palmira, HPIM3168 deriv.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\71ce4abde3574caa1747dfca940ec01d
+- Statue from the Nabu Temple - Khorsabad - Oriental Institute Museum, University of Chicago - DSC07557.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\681252bc9d9d1e9283525e94da9b9ea2
+- Statue from the Nabu Temple - Oriental Institute Museum, University of Chicago - DSC07493.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\716d089d08fcc5c066af5d7b04a031b7
+- Bronze bands - Nabu Temple, Khorsabad - Oriental Institute Museum, University of Chicago - DSC07568.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ea4d1dfb187a175c85ca79e3726ec92f
+- Bronze bands - Nabu Temple, Khorsabad - Oriental Institute Museum, University of Chicago - DSC07570.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e557a10dfd657fabfe40b1165ef3d90
+- Attendant God from the Temple of Nabu at Nimrud, Mesopotamia (detail).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a7274d83703f4bb8af1b5b2364bc61d4
+- Rovine del tempio del santuario di Nabu di Palmira.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bf40bc100893e740c4607df784427771
+- Iron wheels with bronze hubs - Nabu Temple, Palace of Sargon II, Khorsabad, Neo-Assyrian period, 721-705 BC - Oriental Institute Museum, University of Chicago - DSC07574.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb5a11fefbb741e59b27fefdb77eeb96
+- Attendant God from the Temple of Nabu at Nimrud, Mesopotamia..JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\afb1e904049d2744e077eedd03371511
+- Stamped mud-brick from the ziggurat and temple of Nabu at Borsippa, Iraq, 6th century BC.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b319be77824394bdc290515681fb7fde
+- Modern cement covering ancient bricks at the upper surface of the ziggurat and temple of Nabu, Borsippa, Iraq.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4d79d7d8c1d75897900dd214b917af69
+- Ruins around the ziggurat and temple of Nabu at Borsippa, Iraq.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e4ef685fd3fb2d3ed32d7c875259f9a
+- Detail of a stone monument of Shamash-shum-ukin as a basket-bearer. 668-655 BCE. From the temple of Nabu at Borsippa, Iraq and is currently housed in the British Museum.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f96005ad4b8a407c4ef9e902dceed1c2
+- Original tiles at the upper surface of the ziggurat and temple of Nabu at Borsippa, Iraq.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af4c3a73260fb5f9f6b1232f99fae5ed
+- The upper part of the so-called Tongue Tower of the ziggurat and temple of Nabu at Borsippa, Iraq.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\31c72d22376e2ab6a633d126506e134d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

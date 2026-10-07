@@ -1,0 +1,37 @@
+site_id: ac47b022-0aee-44d7-8fbf-87797a6a2589
+name: Ruinas Romanas de Mérida
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ruinas romanas en Mérida.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\42566e8d93166ae0bbcb2db178a99129
+- Ruinas romanas en el centro de Mérida.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6df69b110e0747fd03002991adc907e0
+- Ruinas romanas en los jardines romanos de Mérida.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8244b32eb45ef2354ff25cd145ec92fd
+- Ninfa (50432207391).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a19d5c5a9abc032ab44b2e3847901897
+- Estação Arqueológica de Mesas de Castelinho - Portugal (52446819722).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7ac1f44abca2a61f0fb5860fe1669255
+- Estação Arqueológica de Mesas de Castelinho - Portugal (52354416826).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\220a1c51c551017082fcda48f43ba269
+- Estação Arqueológica de Mesas de Castelinho - Portugal (52354844850).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\35cbc0613a764010a0a3b19efe0be9f2
+- Estação Arqueológica de Mesas de Castelinho - Portugal (52499482476).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b692ff4d2dea1f36a0615ff68547689
+- Estação Arqueológica de Mesas de Castelinho - Portugal (52354735879).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aec036bb1e3d077dea53f7eb8a598a8e
+- Estação Arqueológica de Mesas de Castelinho - Portugal (52498996582).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f9578e2fffa68d067f67877e807bb8c7
+- Estação Arqueológica de Mesas de Castelinho - Portugal (52403786349).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2f7d93b5011e874a4d5f102637dd7751
+- Estação Arqueológica de Mesas de Castelinho - Portugal (52447784980).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4751d802c00ea4d2192ceaa8f5eef1c2
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

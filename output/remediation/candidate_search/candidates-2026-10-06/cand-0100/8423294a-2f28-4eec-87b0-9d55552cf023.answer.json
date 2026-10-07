@@ -1,0 +1,63 @@
+{
+  "site_id": "8423294a-2f28-4eec-87b0-9d55552cf023",
+  "answered_by": "mcode-judge-cand-0100",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Monnaie - Bronze, Sicile, Hybla Magna - btv1b10310301c (1 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Isolierte Aufnahme einer antiken Bronzemünze; kein Ort und kein darstellbarer Bezug zur Site im Bild."
+    },
+    {
+      "file": "Monnaie - Bronze, Hybla Magna, Sicile - btv1b11316116k (2 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Isolierte Aufnahme einer antiken Bronzemünze; kein Ort und kein darstellbarer Bezug zur Site im Bild."
+    },
+    {
+      "file": "Monnaie - Bronze, Hybla Magna, Sicile - btv1b8599865p (1 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Isolierte Aufnahme einer antiken Bronzemünze; kein Ort und kein darstellbarer Bezug zur Site im Bild."
+    },
+    {
+      "file": "Monnaie - Bronze, Sicile, Hybla Magna - btv1b10310301c (2 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Isolierte Aufnahme der Gegenseite einer antiken Bronzemünze; kein Ort und kein Bezug zur Site im Bild."
+    },
+    {
+      "file": "Monnaie - Bronze, Hybla Magna, Sicile - btv1b11316116k (1 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Isolierte Aufnahme einer antiken Bronzemünze; kein Ort und kein darstellbarer Bezug zur Site im Bild."
+    },
+    {
+      "file": "Monnaie - Bronze, Hybla Magna, Sicile - btv1b8599863v (2 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Isolierte Aufnahme der Gegenseite einer antiken Bronzemünze; kein Ort und kein Bezug zur Site im Bild."
+    },
+    {
+      "file": "Monnaie - Bronze, Sicile, Hybla Magna - btv1b10310300x (1 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Isolierte Aufnahme einer antiken Bronzemünze; kein Ort und kein darstellbarer Bezug zur Site im Bild."
+    },
+    {
+      "file": "Monnaie - Bronze, Hybla Magna, Sicile - btv1b85998648 (2 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Isolierte Aufnahme der Gegenseite einer antiken Bronzemünze; kein Ort und kein Bezug zur Site im Bild."
+    },
+    {
+      "file": "Monnaie - Bronze, Hybla Magna, Sicile - btv1b85998648 (1 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Isolierte Aufnahme einer antiken Bronzemünze; kein Ort und kein darstellbarer Bezug zur Site im Bild."
+    },
+    {
+      "file": "Monnaie - Bronze, Sicile, Hybla Magna - btv1b10310300x (2 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Isolierte Aufnahme der Gegenseite einer antiken Bronzemünze; kein Ort und kein Bezug zur Site im Bild."
+    },
+    {
+      "file": "Monnaie - Bronze, Hybla Magna, Sicile - btv1b8599863v (1 of 2).jpg",
+      "verdict": "other_site",
+      "note": "Isolierte Aufnahme einer antiken Bronzemünze; kein Ort und kein darstellbarer Bezug zur Site im Bild."
+    }
+  ],
+  "note": "Alle 11 Bilder sind isolierte Münzabbildungen von Hybla Magna, nicht von Hybla Gereatis; eine Münze ist laut Vorgabe ein Beispiel für other_site."
+}

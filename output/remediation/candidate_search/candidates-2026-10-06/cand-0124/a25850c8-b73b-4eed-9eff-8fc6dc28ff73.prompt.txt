@@ -1,0 +1,46 @@
+site_id: a25850c8-b73b-4eed-9eff-8fc6dc28ff73
+name: Louisville
+country: Belize
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Charlie Daniels at Louisville Waterfront Park, Kentucky, April 29, 2009.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9767ff34edddba850ca560c7e950e206
+- Louisville montage.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17a9d81ba5cc8c5058effbb050fd2899
+- Louisville WorldFest 2024.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e13996850acbcb1977662514a8499b11
+- Greenville Triumph V Louisville City 2024.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd16921d49958252e2e2670db37a0428
+- LouisvilleCOLibrary.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\294d666c9a02793e089b902b36c5a6d6
+- Greetings from Louisville, Kentucky - Large Letter Postcard (5728460102).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f64cebeb5a7b5ff5c2cf456cfe8ae77e
+- Louisville mississippi.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a987a783a24792c62a49c6753b28ac75
+- Greetings from Louisville, Kentucky - Large Letter Postcard (9426058915).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\871cea0dd512fc7ba929a30f275c32eb
+- Greetings from Louisville, Kentucky, Gateway to the South - Large Letter Postcard (4480750397).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\43c1de14d22baca843a0d89e3ff18eaf
+- Louisville Hotel, Louisville, KY. (NBY 429576).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ac7ce7b898a2da930433802c4ec534cd
+- EB9 Louisville - plan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bd23b36763ad016173328c8171138328
+- American vine snake at Louisville Zoo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47cc5aa81b414eeb9fee2c909021ef3f
+- I-71 (Southbound) between Cincinnati and Louisville.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\85a6acdbaa989cdfdcfb4bc96dcb19d4
+- Belle Louisville in Louisville, Kentucky (48431882616).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\940c77299e9eb7934d3c78a2f3e6ba16
+- Rand, McNally & Co.'s indexed atlas of the world map of Louisville. Rand, McNally & Co's New business atlas map of Louisville (IA dr rand-mcnally-cos-indexed-atlas-of-the-world-map-of-louisville-rand-m-00564057).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e8ec66a02bcf1013e3dd82d7e21de945
+- Louisville Bats - Louisville Slugger Field (51282014273).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\175ae30518fae7c732d7ce51938eb4b5
+- Louisville Bats - Louisville Slugger Field (51281838611).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\18d17a0f4006ebad01910c5491313d34
+- University of Louisville Medical Department and Louisville Male High School in 1892 detail, from- Sanborn Fire Insurance Map from Louisville, Jefferson County, Kentucky. LOC sanborn03204 001-12 (cropped).tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ea146caa90b943001502d3b46e76533
+- Louisville Bats - Louisville Slugger Field (51282015388).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff066a98d685efad9b4250c076a7272e
+- Main Street, Louisville, Kentucky Near Louisville Slugger Museum and Factory (97660823).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a16e511a6009178c078a5b616582b830
+- Steamboat Belle of Louisville at Clark Bridge Louisville Kentucky USA Ohio River mile 604 August 1987 file 87h103.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d4591da97590bfe6100131873d6094b2
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

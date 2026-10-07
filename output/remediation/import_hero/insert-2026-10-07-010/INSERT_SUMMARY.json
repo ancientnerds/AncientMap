@@ -1,0 +1,11 @@
+{
+ "chunks": 1,
+ "planned_rows": 30,
+ "planned_sites": 30,
+ "refusals": {
+  "already_holds_the_file": 154,
+  "not_fetched": 42
+ },
+ "refused_sites": 196,
+ "run_id": "insert-2026-10-07-010"
+}

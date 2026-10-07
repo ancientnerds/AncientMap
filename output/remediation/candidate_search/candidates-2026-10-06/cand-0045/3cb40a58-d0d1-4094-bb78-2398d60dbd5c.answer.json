@@ -1,0 +1,22 @@
+{"site_id": "3cb40a58-d0d1-4094-bb78-2398d60dbd5c",
+ "answered_by": "mcode-judge-cand-0045",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Netting Birds, Tomb of Khnumhotep MET 33.8.18 EGDP012980.jpg", "verdict": "other_site",
+   "note": "Bemalte Fayence- bzw. Wandmalerei mit Vogeln aus dem Grab des Chnumhotep, Met-Objekt 33.8.18; anderes Grab in Beni Hasan."},
+  {"file": "Bird on table tomb front panel.jpg", "verdict": "region_or_type",
+   "note": "Verwittertes Kalksteinrelief eines Vogels auf einer Opfertafel ohne jeden Architekturkontext; aus dem Bild nicht sicher feststellbar, dass es aus diesem Grab stammt."},
+  {"file": "Netting Birds, Tomb of Khnumhotep MET 33.8.18 EGDP012985.jpg", "verdict": "other_site",
+   "note": "Met-Aufnahme einer bemalten Wandmalerei: Mann mit Bogen neben einem Vogelnetz; Grab des Chnumhotep, ein anderes Grab."},
+  {"file": "Nesting Birds, Tomb of Puyemre MET 102586.jpg", "verdict": "other_site",
+   "note": "Schwarzweissaufnahme einer zerbrochenen bemalten Putzplatte mit Vogeln und Faltern, Met-Plakette 1936; Objekt aus dem Grab des Puyemre."},
+  {"file": "Birds flying around Tomb of Shah Rukn-e-Alam, Multan.jpg", "verdict": "other_site",
+   "note": "Kuppel eines sufischen Schreins in Multan, Pakistan, mit blauen Kachelfliesen und fliegenden Tauben; anderes Land, andere Site."},
+  {"file": "Birds at base of Tomb of Shah Rukn-e-Alam.jpg", "verdict": "other_site",
+   "note": "Hunderte Tauben auf Schotter vor einer langen Backsteinmauer in Multan, Pakistan; andere Site."},
+  {"file": "Nesting Birds, Tomb of Puyemre MET 30.4.212 EGDP012993.jpg", "verdict": "other_site",
+   "note": "Bemalte Putzscholle mit Vogeln und Schmetterlingen auf weissem Grund; Grab des Puyemre bei Deir el-Bahari, ein anderes Grab."},
+  {"file": "The tomb of Elizabeth Bird.jpg", "verdict": "other_site",
+   "note": "Verwitterte Grabplatte mit der Inschrift In Memory of Elizabeth Bird, London March 1800 in einer Kirche; moderne Personengrabschrift."}
+ ],
+ "note": ""}

@@ -1,0 +1,58 @@
+site_id: 285a2a92-7213-48ca-b4d9-fd157697e096
+name: Heerlen
+country: Netherlands
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Hoogbouw ABP Heerlen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6a25e06fb216e296743e04e5ac91b256
+- Heerlen 2024 Van Grunsvenplein.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a55a90392ec51d3cf786b79249dc4a7
+- Heerlen-Ziekenhuis.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae0091bade5ea4e2737fe1da913fea21
+- APG Heerlen Laagbouw (Groot Kantoor II).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a67fea52064a8306ce67f790a0bb7377
+- World Trade Center Heerlen-Aachen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\564f1f035760dd3af3951145b0e79062
+- Sculptures in Heerlen 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\881244e48f9357b75d05702a4f5a0d97
+- Thermenmuseum Heerlen in 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\212dc108b39ff4fce8dddaa85b98d1ec
+- Torenflats Vrieheide, Heerlen Noord.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77f6e8c3ac818dfb1ea457ef82635a96
+- 2021 Murals Code Black in Heerlen, The Netherlands met Our heroes (2021) en Synthesis (2016).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5cbd55feaed04fcdc8ecfeb428694b4e
+- Sint-Annakerk Heerlen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1ea2a4c647edf77f7091b72598e764e5
+- Overzicht - Heerlen - 20357572 - RCE.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9f0c9b3dc3ffbe29ff79c62978c2a72
+- Glaspaleis musicschool.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9a0227903955531700e6e1a852ecc1b
+- Heerlen, zuidoost ingang Station Heerlen IMG 2449 2026-08-09 10.22.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8d275f598b986552c74595c9801b1db4
+- Veolia in Heerlen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\952372f27f412096e7b6ae348ab6f12e
+- Heerlen, zicht op de noord-uitgang van het Stationsplein IMG 2286 2026-07-06 15.15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\42160c295fb26868316ff319cfe2f85a
+- Heerlen, sculptuur De Druppel ontworpen door Ivon Dummen IMG 2251 2026-07-06 14.43.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0972bdffad298a9790c7b52bad11c71f
+- Heerlen, villa complex aan de Johannes XXIIIsingel IMG 2238 2026-07-06 14.02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\89e034ea6bc1b5bbc7571b662bb76336
+- Heerlen, muurschuldering bij restaurant Sushi Maestro IMG 2466 2026-08-10 13.06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\174afb6dd324f9a7ddf77df4c60629d3
+- 20100103 Kasteel Hoensbroek gemeente Heerlen 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3cc5389126d6ad108cd8c2caf5a69dc
+- Geologie van Heerlen en omgeving-P.W. Bosch-Schelmentoren en St. Pancratiuskerk te Heerlen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6d497878aceec93d74204622c6f6e181
+- Heerlen-mural Heerlen Heron (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9593651fb6d41714c086ba9bd5cec91
+- Heerlen-Corio Center Heerlen (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6be03b83d4efd9f7dbadc2e97ad57c8d
+- Heerlen-mural Creed by INTI (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\89273c88d5e6a00ccb205d9289474e3f
+- Heerlen, rotonde Kruisstraat-Coriovallumstraat.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8a073b7567ee03b6dbeb93471448d78a
+- 2012 Bouw Maan Kwartier Heerlen - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e1bf54a98274fb9574df9bab7d0da85
+- 75 jaar Scouting Kapelaan Berix - Van tent tot piramide - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e10a18a0b72deb75982e5b2c278874c
+- Abstract Werk Chocolate Hills.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\61d968a2f71513bd02d4f6b128eb23d8
+- CD20 skelet in Heerlen.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\37c0a75b30ab9d2a4db54c735fcf2ec9
+- City line Heerlen - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\444e97445e43134b5cbec20174768720
+- De Ingenieur vol 039 no 001 Schakelschema onderstation Heerlen van de Limburgsche Tramweg-Maatschappij.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a996770f68ac71448c5722b54a9ec53b
+- Dik pak sneeuw Wieldersstraat - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7dd67e1982e59ad0f77a8caa4b4942b
+- Dudoklaan Heerlen - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7094c369e7ff4a8c049e167c8fcd6ad4
+- Heerlen banner.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\078d6525ce8026248f36742ecc6c217d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

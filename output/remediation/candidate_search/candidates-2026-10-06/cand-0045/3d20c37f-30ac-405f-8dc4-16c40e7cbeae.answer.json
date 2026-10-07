@@ -1,0 +1,18 @@
+{"site_id": "3d20c37f-30ac-405f-8dc4-16c40e7cbeae",
+ "answered_by": "mcode-judge-cand-0045",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Ariconium Place, 2 - geograph.org.uk - 6230783.jpg", "verdict": "region_or_type",
+   "note": "Neue Wohnhaeuser, Strassenbaustelle mit Bauzaun und Strassenlaternen an einer modernen Strasse; Siedlungsansicht ohne roemische Reste."},
+  {"file": "Ariconium Place, 4 - geograph.org.uk - 6230796.jpg", "verdict": "region_or_type",
+   "note": "Gruene Wiese im Vordergrund, dahinter Reihe moderner Haeuser mit Baugeruest und bewaldete Huegel; Siedlung ohne Site."},
+  {"file": "Ariconium Place, 1 - geograph.org.uk - 6230781.jpg", "verdict": "region_or_type",
+   "note": "Reihenhauszeile mit roten Daechern, FreemanHomes-Fahne und Werbetafel an Kreuzung; moderne Siedlung, keine Site."},
+  {"file": "Ariconium Place, 3 - geograph.org.uk - 6230787.jpg", "verdict": "region_or_type",
+   "note": "Baustelle mit umfassendem Geruest und Radlader im wahrenden Neubaugebiet neben neuen Reihenhuesern; keine roemischen Strukturen."},
+  {"file": "The 2014 Ariconium Tug-of-War final - geograph.org.uk - 4145684.jpg", "verdict": "other_site",
+   "note": "Viele Personen beim Seilziehen auf einer Wiese, Autos und Zelte im Hintergrund; Veranstaltung, keine Site."},
+  {"file": "Ariconium Place, Weston under Penyard - geograph.org.uk - 8373238.jpg", "verdict": "region_or_type",
+   "note": "Landstrasse mit Ortsschild ARICONIUM PLACE, modernen Haeusern und Waldsilhouette; Dorfstrasse ohne roemische Reste."}
+ ],
+ "note": ""}

@@ -1,0 +1,13 @@
+{
+  "site_id": "fee01523-1686-437c-97ef-9e3566fba1c3",
+  "answered_by": "mcode-judge-cand-0200",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Y Foel Chwern - geograph.org.uk - 6494728.jpg",
+      "verdict": "depicts",
+      "note": "Reihen aus Trockenmauerwerk mit Balken und dunklen Eingängen in einer bewaldeten Schlucht, dazwischen ein Pfad."
+    }
+  ],
+  "note": "Das einzige Bild zeigt die aus Mauern und Felswänden gebauten Strukturen in der Waldschlucht; kein Schild lesbar."
+}

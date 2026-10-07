@@ -1,0 +1,28 @@
+site_id: dc9fd8fe-77ad-439d-8374-2b5563c00b15
+name: Cicerone Tower
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- SFO TreasureIsland Wide.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5fd735ba6d700df79c27725e6b0c0003
+- Mammy 'mongst the wild nations of Europe (1904) (14597787278).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88f39a54b7aa10ed216a9fae530ff303
+- Italy from the Alps to Mount Etna (1877) (14776406042).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e42cad71cdcdbcdc131758102f1f4b1c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

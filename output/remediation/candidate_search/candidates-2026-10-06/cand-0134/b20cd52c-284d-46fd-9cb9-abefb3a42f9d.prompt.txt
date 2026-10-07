@@ -1,0 +1,37 @@
+site_id: b20cd52c-284d-46fd-9cb9-abefb3a42f9d
+name: Paradeisos Archaeological Site
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- A@a Nestos river 2 near paradeisos greece - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\26d95476d1d828f5b05b83bcb959ecc6
+- Frammenti di pitture parietali di giardini (paradeisos), da moritola di forcona, I secolo ac-III dc ca.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d4f85872d86693484c3371afc423e56a
+- Early Byzantine (6th century) mosaic floor in the Great Basilica, conceived as a single field representing the Heavens (paradeisos), Heraclea Lyncestis, Republic of Macedonia (7451378410) (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\623a023b0991cf2becfc4171477ef40a
+- Early Byzantine (6th century) mosaic floor in the Great Basilica, conceived as a single field representing the Heavens (paradeisos), Heraclea Lyncestis, Republic of Macedonia (7451391578) (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\011d57ef3f09d711a8c0cf98af3dab7d
+- Early Byzantine (6th century) mosaic floor in the Great Basilica, conceived as a single field representing the Heavens (paradeisos), Heraclea Lyncestis, Republic of Macedonia (7450911698) (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c62a6c2d678d7a78a9a0da1d3d1347c1
+- Early Byzantine (6th century) mosaic floor in the Great Basilica, conceived as a single field representing the Heavens (paradeisos), Heraclea Lyncestis, Republic of Macedonia (7451387218) (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd25482673131e5237789b2358d4881d
+- Early Byzantine (6th century) mosaic floor in the Great Basilica, conceived as a single field representing the Heavens (paradeisos), Heraclea Lyncestis, Republic of Macedonia (7451395416) (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8e790aecdedaf58d23d52c598ca77bd5
+- The 100m2 early Byzantine (6th century) mosaic floor in the Great Basilica, conceived as a single field representing the Heavens (paradeisos), Heraclea Lyncestis, Republic of Macedonia (7451546372).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d8f11a8485d2f54e52db647c5e50be2e
+- Agios Andreas Paradeisos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6306008b5a351ba16cecb873e0989b6
+- Monokatoikies-maroussi.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\846a3272a27b4a735c64527339401604
+- Puy Notre Dame Amiens.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1256e57fe7801b895e09323ca80f86c1
+- Triptyque de la Dormition de la Vierge, PPP4893.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\335d774bb80bb0d354bfe6db25f89e99
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,37 @@
+site_id: 52583420-ea5f-42ae-933c-4872c54e0676
+name: Sitio Sierra
+country: Panama
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Sierra de Guadarrama 1977 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0eb0ea1b79284485f3aff9e0ab0c8111
+- 01342jfHilltop San Mateo Sitio Bitbit Lorenzo River Bridge Norzagaray Bulacan villagesfvf 02.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8bdc8160e1898a4c60693df112f5e0e0
+- 01359jfHilltop San Mateo Sitio Bitbit Lorenzo River Bridge Norzagaray Bulacan villagesfvf 08.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7fee1beee17def4199c2cfaf28da6466
+- 01316jfHilltop San Mateo Sitio Bitbit Lorenzo River Bridge Norzagaray Bulacan villagesfvf 11.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ed37da3dfe0d0b12a60edb12ace076f0
+- 01342jfHilltop San Mateo Sitio Bitbit Lorenzo River Bridge Norzagaray Bulacan villagesfvf 09.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\622c2ea36c4cd7cc473ea3211f6746e8
+- 01342jfHilltop San Mateo Sitio Bitbit Lorenzo River Bridge Norzagaray Bulacan villagesfvf 11.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7505ec39c9384fe895170dc795dead99
+- 01327jfHilltop San Mateo Sitio Bitbit Lorenzo River Bridge Norzagaray Bulacan villagesfvf 11.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d2ee1dd358b19efb51785f774cca9ee
+- 01327jfHilltop San Mateo Sitio Bitbit Lorenzo River Bridge Norzagaray Bulacan villagesfvf 04.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\95ad40fa2c070628e947bafd30e11649
+- 01316jfHilltop San Mateo Sitio Bitbit Lorenzo River Bridge Norzagaray Bulacan villagesfvf 17.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eaba811f229ea3f356f8a284d613d36d
+- 01327jfHilltop San Mateo Sitio Bitbit Lorenzo River Bridge Norzagaray Bulacan villagesfvf 07.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2cb2fe0b0a5ef7e5cc42a2b9b554e36e
+- 01342jfHilltop San Mateo Sitio Bitbit Lorenzo River Bridge Norzagaray Bulacan villagesfvf 03.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7cdcbbd829408cd245d7f4561a3d1413
+- 01359jfHilltop San Mateo Sitio Bitbit Lorenzo River Bridge Norzagaray Bulacan villagesfvf 07.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\796641518fb1cfcbb3b221a060f8550f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

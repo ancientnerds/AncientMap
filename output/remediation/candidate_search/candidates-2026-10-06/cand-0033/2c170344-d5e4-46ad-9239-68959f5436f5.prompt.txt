@@ -1,0 +1,43 @@
+site_id: 2c170344-d5e4-46ad-9239-68959f5436f5
+name: Svileuva
+country: Serbia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Crkva Sv. Stefana, Svileuva 002.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c50a5d3496a2d196f943a9b618786296
+- Svileuva 004.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b93f44775382236c05a1df6d727ce969
+- Svileuva 002.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd7514bf8f63f9117e493f2341b86dc3
+- Svileuva 007.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5444d38f600b8e5488b35bae807a4450
+- Svileuva 008.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\15aac5d084e702111be69b7b8d5c79c9
+- Svileuva 006.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5f7fba13dfbbda18f37b05925cf9f713
+- Svileuva 005.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9cf43f07410094daad15d66843b27b6c
+- Svileuva 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\613095623d2d2dfacf5305cef80a2beb
+- Svileuva 003.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\83d90c7ff35f3316dd79fe19319c01ac
+- Crkva Sv. Stefana, Svileuva 003.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\21c04799e1703d45a8ca76bba89101cc
+- Crkva Sv. Stefana, Svileuva 026.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\48ccb3b6ee793ebd1af6966994103076
+- Crkva Sv. Stefana, Svileuva 012.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af655d6355eb5f90a07131c79d07cbe4
+- Crkva Sv. Stefana, Svileuva 015.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6cd62b684dc7f5a3c9c26e30f374bc0f
+- Crkva Sv. Stefana, Svileuva 006.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\37e7360b122607e712fe8e2841ecce64
+- Crkva Sv. Stefana, Svileuva 018.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2baa68c29a2954926add12455f003246
+- Crkva Sv. Stefana, Svileuva 016.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2f05376662b1852b959f67481bb8e4a2
+- Crkva Sv. Stefana, Svileuva 021.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e0b2cb87bb5457b83c385912ad17ae8b
+- Crkva Sv. Stefana, Svileuva 020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d5461d1676c9251244f27ff8ab8c2fff
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

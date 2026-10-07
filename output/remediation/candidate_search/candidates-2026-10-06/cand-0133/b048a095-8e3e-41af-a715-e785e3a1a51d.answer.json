@@ -1,0 +1,12 @@
+{"site_id": "b048a095-8e3e-41af-a715-e785e3a1a51d",
+ "answered_by": "mcode-judge-cand-0133",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "West prospect of Gloucester by Kip, c.1725..jpg",
+   "verdict": "other_site",
+   "note": "Kupferstich-Panorama von Gloucester mit Stadt, Fluss und Dammbr\u00fccke, datiert um 1725 - Stadtansicht, nicht die Strasse."},
+  {"file": "Transactions of the Bristol and Gloucestershire Archaeological Society (1903) (14592225530).jpg",
+   "verdict": "depicts",
+   "note": "Schwarzweissfoto des ausgehobenen Strassengrabenverlaufs bei Radstock nach der Grabung; die Bildunterschrift nennt die Fosse."}
+ ],
+ "note": ""}

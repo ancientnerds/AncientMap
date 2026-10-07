@@ -1,0 +1,36 @@
+site_id: 20f12dcd-f2a7-4014-9dce-160c90b27749
+name: Pyrri
+country: Croatia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Alpheios - Pyrris Arkadias.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a9971f7927eba2da55e40f9a2638b37
+- Cemetery in Pyrris Arkadias.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14319878642599feb4df8eca0e97ebc6
+- School in Pyrris Arkadias.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\39ee58aa41663c75c70f23b6f58f432b
+- Playground in Pyrris Arkadias.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c15dff4a6649772d9d492d1b67d2fb43
+- Alpheios - Pyrris Arkadias 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c7178fcb4b15c8f66b89a3a43498c321
+- Alpheios - Pyrris Arkadias 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9ac453a7368e049997f3ecf78a948a2a
+- Sundial in Pyrris Arkadias 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6eed5451280b07cb008cf4a9683dfd00
+- Sundial in Pyrris Arkadias 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e555b5941f668ce2accd6c7ae8c40438
+- Saint Dimitrios' Church in Pyrris Arkadias.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\93f227e6a556ef264f588636084b6d7f
+- Saint Mais Thanasis' Church in Pyrris Arkadias 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f89314848a37bdb511cfeb4834f52fd6
+- Saint Mais Thanasis' Church in Pyrris Arkadias 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4c22e4d1c1fae63e01ae40ac3ff0b5db
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

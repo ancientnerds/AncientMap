@@ -1,0 +1,41 @@
+site_id: ccf1b82b-6822-40ba-adf3-07913b155b7b
+name: Privlaka, Vukovar-Syrmia County
+country: Croatia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\718f05ba1bbe8b6a8d3b941660bcb47b
+- Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\905587b7e9b92172c25253020fea1339
+- Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5e601d34c653a0f8d92d75cde0c70448
+- Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\52bac9661aa5b531287a3731a0b0b128
+- Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6539ae27df13e95ffc8ac90d8cea2d1d
+- Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b3906ff29301dc3946bee0bce66511b3
+- Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a678e6f11af0026e2fdb1d6cc0d36793
+- Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c720423b0c6d0c2bc85aa24d1158e43
+- Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8ed0b42d0332f452dd1b383836e28a6c
+- Привлака-Privlaka.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc1371d046d8dac906c0d169f9ee825c
+- Privlaka Slawonien.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f04c8f7001ee8ea27bd8a7c5ac76fbd3
+- Privlaka - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\855c5e165d8e858210220bd998ceaf5a
+- Day of the Uprising of the People of Croatia (Srb uprising) 30th Anniversary Monument in Privlaka 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd0bdd8cc7dbf36480df2847eafe725d
+- Day of the Uprising of the People of Croatia (Srb uprising) 30th Anniversary Monument in Privlaka 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47bc7b8de922db08ef4a20848484e861
+- Day of the Uprising of the People of Croatia (Srb uprising) 30th Anniversary Monument in Privlaka 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\535d270da2038358242174acfcc1aa41
+- Day of the Uprising of the People of Croatia (Srb uprising) 30th Anniversary Monument in Privlaka 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\911856a276a2afa6781ab16109f5fb1a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

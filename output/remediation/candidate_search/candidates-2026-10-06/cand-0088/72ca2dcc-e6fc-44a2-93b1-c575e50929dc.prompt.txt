@@ -1,0 +1,41 @@
+site_id: 72ca2dcc-e6fc-44a2-93b1-c575e50929dc
+name: Olympe
+country: Albania
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Montauban - Olympe de Gouges theater.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd369c323b8a033b157fe80a04b8a95c
+- Olympe and Flore Chauveau by Theophile Hamel, 1851-1852.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\61d20c5864c8b51bb290afb839567056
+- Citation Olympe de Gouges 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\698e7cbf0b7867b77c6fe3b0f616523e
+- Citation Olympe de Gouges 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0c45acc98d67c104f5202b482e184b46
+- Citation Olympe de Gouges 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\745090251c0d9b9fd01b468c94e61cf2
+- Olympe de Gouges 0168.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b3a356543613c2ea4f600e745346ba0b
+- Citation Olympe de Gouges 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e6bd7bba25f3483c9d9e90e4a3c6554
+- Olympe de Gouges 19178.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f2497dbf2ebf3051b5bdf6c4be8f2b2
+- Olympe de Gouges - portrait.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f375147c2da0f6c94fe159c677027451
+- Olympe de GOuges assemblée 16866.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cdb2816576040f9f7c12857bacd09617
+- Clermont-Ferrand - Square Olympe de Gouges - Fontaine d'Amboise - Partie centrale.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4631f709a52756f5af8c542e63381aa3
+- Plaque Allée Gisèle Halimi Allée Olympe Gouges Allée Olympe Gouges - Clichy (FR92) - 2023-07-08 - 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b642e029a37a710fcbce0da11b9a39de
+- Charleville-Mézières-FR-08-passerelle du mont-Olympe-03.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dbb6987f03f649723192b54c99c02c83
+- Vue sur Charleville-Mézières du plateau du Mont-Olympe.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\32f0093370c16d65a7411561fcc8eb16
+- May07 Olympe de Gouges.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\786f383d54c4ed27418c973f2ccf5b81
+- Plaque Allée Gisèle Halimi Allée Olympe Gouges Allée Olympe Gouges - Clichy (FR92) - 2023-07-08 - 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb276ea23d11ab5060cfdc858b828a03
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

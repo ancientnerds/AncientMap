@@ -1,0 +1,68 @@
+{
+    "site_id":  "b0fed6c8-fd75-44e0-b57b-65ed6215f46d",
+    "answered_by":  "mcode-judge-cand-0133",
+    "model":  "MiniMax-M3.1-Flash-Preview",
+    "verdicts":  [
+                     {
+                         "file":  "Музей-садиба К.М.Дерев\u0027янка.JPG",
+                         "verdict":  "other_site",
+                         "note":  "Weiße Museumhaus mit grünem Blechdach, Aussentreppe und Eingangstür - modernes Gebäude."
+                     },
+                     {
+                         "file":  "Косенівка3.JPG",
+                         "verdict":  "other_site",
+                         "note":  "Hochkreuz aus Beton mit Soldatenstatue und Gedenkwand voller Namen sowie Jahreszahlen 1941 und 1945 - Kriegsdenkmal."
+                     },
+                     {
+                         "file":  "Косенівка2.JPG",
+                         "verdict":  "other_site",
+                         "note":  "Büste Lenins auf grauem Granitsockel mit cyrillischer Inschrift."
+                     },
+                     {
+                         "file":  "Музей-садиба К.М.Дерев\u0027янка2.JPG",
+                         "verdict":  "other_site",
+                         "note":  "Weiße Haus mit grüner Blechdeckung, Aussentreppe, Geländer und Gartenzaun - Museumsgelände."
+                     },
+                     {
+                         "file":  "Косенівка4.JPG",
+                         "verdict":  "other_site",
+                         "note":  "Zwei Grabsteine: einer nennt eine sowjetische Parteiorganisation der Provinz Koseniwka, der andere eine Offiziersfamilie 1890-1950."
+                     },
+                     {
+                         "file":  "Косенівка5.JPG",
+                         "verdict":  "other_site",
+                         "note":  "Zwei Grabsteine einer Offiziersfamilie 1899-1944 und eines Komsomol-Sekretärs mit Porträtmedaillons."
+                     },
+                     {
+                         "file":  "Музей-садиба К.М.Дерев\u0027янка3.JPG",
+                         "verdict":  "other_site",
+                         "note":  "Weiße Museumhaus mit grünem Zinkdach, Galerie und Gartentreppe sowie Tafel an der Hauswand."
+                     },
+                     {
+                         "file":  "Косенівка1.JPG",
+                         "verdict":  "other_site",
+                         "note":  "Backsteinbau mit Gedenkinformation im Vordergrund zu einer 50-Jahr-Unfeier der Kolchos."
+                     },
+                     {
+                         "file":  "Archaeological context of Kosenivka.png",
+                         "verdict":  "depicts",
+                         "note":  "Wissenschaftliche Abbildung: A Karte mit markiertem Ort Koseniwka, B Geländeansicht, C gegenschnittener Grabungsschacht mit Profil und Funden."
+                     },
+                     {
+                         "file":  "Косенівка. Пам\u0027ятник Т.Г. Шевченку.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Granitdenkmal mit Brustbild und beschrifteter Gedenktafel auf einem Platz zwischen Bäumen."
+                     },
+                     {
+                         "file":  "Косенівка. Пам’ятний знак жертвам Голодомору.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Steinblock mit schwarzem Kreuz und Inschrift zum Gedenken an die Opfer des Hungersjahres 1933 in der Ukraine."
+                     },
+                     {
+                         "file":  "Косенівка. Пам\u0027ятник воїнам-односельцям.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Hochkreuz aus Beton mit Soldatenstatue und Gedenkwand mit Namen - Kriegsdenkmal auf einem Platz."
+                     }
+                 ],
+    "note":  ""
+}

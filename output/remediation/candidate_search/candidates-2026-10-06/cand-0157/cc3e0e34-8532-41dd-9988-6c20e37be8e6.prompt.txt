@@ -1,0 +1,49 @@
+site_id: cc3e0e34-8532-41dd-9988-6c20e37be8e6
+name: Rocha da Mina
+country: Portugal
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Santuário do Endovélico de Rocha da Mina - Portugal (26827752021).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\69c272e36d937d8bfa4fef37bced1290
+- Rocha da Mina (12).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2f08ad87b7688e22399a0a044163d0a9
+- Rocha da Mina (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\944761295888961a6ff6c7800ab0f753
+- Rocha da Mina (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db0ee8d1f3902a5c066e8cc0dc744764
+- Rocha da Mina (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\959e2ab792b7fda337aeecace6e631e2
+- Rocha da Mina (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e895052af5ec3a1636be146abac74eb1
+- Rocha da Mina (14).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0bcb2706a2c01fbb02111eb978598bb
+- Rocha da Mina (10).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a7adbe483d24d63248a7b0e46ab265f3
+- Rocha da Mina (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8dac9676264ed248e78b2f53079ebecf
+- Rocha da Mina (15).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ed0a3041ee90c15ff24181d8ee846890
+- Rocha da Mina (17).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\24c9d504599bb27ff8a3d94b8c0d6f6d
+- Rocha da Mina (13).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b7c60f779e96b2fbbacbc29b00e8e03e
+- Arredores da Rocha da Mina - Portugal (18577616873).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\672495ce8e8884d6695d683a19f4ebe8
+- Santuário do Endovélico de Rocha da Mina - Portugal (26947400484).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad11542175c2e34afeece24ddb30fb62
+- Arredores da Rocha da Mina - Portugal (28003165351).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da003eb317caa4e7014c90aad17284e1
+- Santuário do Endovélico de Rocha da Mina - Portugal (22175345625).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f3ab7301391f70765dbabbb8d82b39df
+- Santuário do Endovélico de Rocha da Mina - Portugal (21554308733).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f46a0e08882e4c9fbcb0ffe5af7dd181
+- Santuário do Endovélico de Rocha da Mina - Portugal (24209139869).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c9b4055de199670cdf659b4e24df918d
+- Santuário do Endovélico de Rocha da Mina - Portugal (21148350672).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b36cc1c813fc8f9a7d3f81e18bf18739
+- Santuário do Endovélico de Rocha da Mina - Portugal (22906662994).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\29c8eda29bc06c76a9351cdf4aab1e44
+- Arredores da Rocha da Mina - Portugal (16845071177).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8a38a536c111ce431737b18b1e89768b
+- Santuário do Endovélico de Rocha da Mina - Portugal (22906669424).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec57358c2dda3d8db3e53ef5980fc9a5
+- Rocha da Mina (9).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\11552c203c78212ccac7bb003058a9f7
+- Rocha da Mina (11).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4745ae9fc6808172663d76031b165ac
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

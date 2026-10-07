@@ -1,0 +1,21 @@
+{"site_id": "2d4eb24d-1348-4458-aa4a-68a9a50cd804",
+ "answered_by": "mcode-judge-cand-0034",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "View of the citadel of Mycenae from the Tomb of Agamemnon on 26 March 2019.jpg",
+   "verdict": "other_site",
+   "note": "Fernsicht auf die zyklopische Mauer der Zitadelle auf dem Hügel, kein Tholos-Grab im Bild"},
+  {"file": "Agamemnon mask NAMA Athens Greece.jpg",
+   "verdict": "region_or_type",
+   "note": "Goldene Totenmaske flach vor dunklem Museumshintergrund, rein ausgestelltes Objekt"},
+  {"file": "View of the Tomb of Agamemnon and the Argolic plain from the top of the citadel of Mycenae on 26 March 2019.jpg",
+   "verdict": "region_or_type",
+   "note": "Blick ueber die Ebene vom Bergkamm, Vordergrund Holzpodest und Trockenmauer; kein Grab erkennbar"},
+  {"file": "MaskOfAgamemnon.jpg",
+   "verdict": "region_or_type",
+   "note": "Goldmaske als Museumsaufnahme vor dunklem Hintergrund, kein Ortbezug"},
+  {"file": "Doorway to an ancient tomb.jpg",
+   "verdict": "region_or_type",
+   "note": "Innenraum einer mykenischen Tholos mit Gewölbe und Tageslicht-Tuer, Besucher; welches Grab nicht bestimmbar"}
+ ],
+ "note": ""}

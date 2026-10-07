@@ -1,0 +1,37 @@
+site_id: e89f8ecd-2c72-4d59-8618-315d5b0e2361
+name: Monte Baranta Megalithic Complex
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Olmedo - Monte Baranta (05).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b88cafd3d3b09eb321e5b5f7443b3c26
+- Olmedo - Monte Baranta (03).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1eed7d5a6e3bba8ce747d404a3ef0894
+- Olmedo - Monte Baranta (13).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c6fb6724b8c397552107ed7186049b1b
+- Olmedo - Monte Baranta (10).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7856af1022ec053bd5ea5a2c57f63caa
+- Olmedo - Monte Baranta (07).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44cd2fc9ac3fc4f02fb8911c42fa2db9
+- Olmedo - Monte Baranta (14).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6095f665fd5b10a0e22d6bdd9c78dabe
+- Olmedo - Monte Baranta (09).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\89e38bb67cb0fe23b08d542eb26e12cb
+- Olmedo - Monte Baranta (02).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a2e19bfaa84d5789eecef50dd742c9ab
+- Olmedo - Monte Baranta (12).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2dddb4eedb36e9128c687e318f3df1ec
+- Olmedo - Monte Baranta (11).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f9400e03892bf43798d85c5cdb129ae6
+- Olmedo - Monte Baranta (01).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2377ae2132ab11948161d0ddc7499b41
+- Olmedo - Monte Baranta (06).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4bda611a3316ec1ed117efb589a778ab
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

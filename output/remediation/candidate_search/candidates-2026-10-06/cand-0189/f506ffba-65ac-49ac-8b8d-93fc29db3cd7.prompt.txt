@@ -1,0 +1,34 @@
+site_id: f506ffba-65ac-49ac-8b8d-93fc29db3cd7
+name: Nakovanj
+country: Croatia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Blacksmith at work02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\883358b1b18d51cf7e40ab6e67d67808
+- PANOrama Nakovane 01813 1826stitch-cyl-autocr.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\81f65034225de5f55cdd193be6d0a29b
+- Münster, St.-Paulus-Dom, Chorumgang -- 2019 -- 3839.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\08244a85ac86b6b486d698811777220e
+- Anvil 2 (PSF).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2fcac80032a24520b3ad0085b1dffff2
+- Anvil, drawplate - 12-14c - Smolensk Historical Museum.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6fc32dede4863f0f81417b5a79f48011
+- Anvil, 5 kg in a jewellery workshop.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e5691f5259e431bdd6a36aa4dd296c36
+- Donja Nakovana 0183 D.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a661de5578fd57effd28b8902477375d
+- Anvil shaped cumulus panorama edit.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0d180a3fab1e34dafb7c7638660d3efe
+- Münster, St.-Paulus-Dom, Chorumgang -- 2019 -- 3841.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e986189513901ebd43f6ad27b338e5c1
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

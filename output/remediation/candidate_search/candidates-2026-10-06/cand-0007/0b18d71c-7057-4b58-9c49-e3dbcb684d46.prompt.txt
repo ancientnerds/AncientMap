@@ -1,0 +1,37 @@
+site_id: 0b18d71c-7057-4b58-9c49-e3dbcb684d46
+name: Hellenistic House
+country: Cyprus
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- The Hellenistic house, Rusellae, Etruria, Italy (43188322195).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\528aae250d730be9ab55d41d19742213
+- Priene Hellenistic houses 2007 4267.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8ff3c45380b23b6f154c595ace9d0471
+- Amphipolis Hellenistic house Room A.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fc5eac134699109841455705603da595
+- Priene Hellenistic houses 2007 4800.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\07321182eb041e11a64a696832a4090e
+- Priene Hellenistic houses 2007 4271.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af7331a3a2d2ced8d619aac72ed0b33d
+- Priene Hellenistic houses 2007 4269.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\227a8d7ed918b2379ab0aad47c5c88f7
+- Priene Hellenistic houses 2007 4275.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ab7037f0879e59e5169bee6a75b2ca35
+- Priene Hellenistic houses 2007 4276.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a99284a1df607afde26e90e1f99964b5
+- Priene Hellenistic houses 2007 4230.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5be1480337a9d6f723f544e2ce1200e2
+- Priene Hellenistic houses 2007 4270.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7881641019e71a0351fbf8b0d800a7fb
+- Priene Hellenistic houses 2007 4273.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d2ba0b956918845dfb592627b2cad51c
+- Priene Hellenistic houses 2007 4266.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cfc9f1a9825a78d71924fa56e5df346d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,48 @@
+{
+  "site_id": "752fc778-3443-43b9-9a4b-065fab448fd8",
+  "answered_by": "mcode-judge-cand-0092",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Rushy meadow, The Larches - geograph.org.uk - 6871056.jpg",
+      "verdict": "region_or_type",
+      "note": "Wiese mit modernem Einfamilienhaus, Gartenzaun und Weide im Hintergrund; kein historisches Bauwerk, Site nicht erkennbar."
+    },
+    {
+      "file": "The Larches, 22 Larch Road, Cambridge, MA - IMG 4274.JPG",
+      "verdict": "other_site",
+      "note": "Weißes Kolonialhaus mit schwarzen Läden und vier Schornsteinen, Schnee und SUV in der Einfahrt: Wohnhaus in einem anderen Land."
+    },
+    {
+      "file": "The Larches, 22 Larch Road, Cambridge, MA - IMG 4278.JPG",
+      "verdict": "other_site",
+      "note": "Dasselbe weiße Haus von der Straßenseite mit weißem Lattenzaun, Kastanienbaum und Schnee; amerikanische Vorstadt."
+    },
+    {
+      "file": "The Larches, 22 Larch Road, Cambridge, MA - IMG 4272.JPG",
+      "verdict": "other_site",
+      "note": "Weißes Zweifamilienhaus am weißen Tor mit Torpfeilern, einer trägt die Nummer 22; keine walisische Site."
+    },
+    {
+      "file": "The Larches, 22 Larch Road, Cambridge, MA - IMG 4277.JPG",
+      "verdict": "other_site",
+      "note": "Weißer Torpfeiler mit Ananas-Finale vor Lattenzaun und Steinmauer; Bauteil desselben modernen Hauses, nicht die Site."
+    },
+    {
+      "file": "The Larches, 22 Larch Road, Cambridge, MA - IMG 4273.JPG",
+      "verdict": "other_site",
+      "note": "Weißes Haus mit Laden, Spaliersäulen und weißem Lattenzaun, geschnittenem Nadelbaum; amerikanisches Wohnhaus."
+    },
+    {
+      "file": "Larches changing colour on Shorn Cliff - geograph.org.uk - 2301187.jpg",
+      "verdict": "other_site",
+      "note": "Verfallener gotischer Steinbogen einer anderen Ruine, Blick auf herbstliche Bäume; kein Larches-Gebäude, Ort nicht bestimmbar."
+    },
+    {
+      "file": "Japanese Larch Larix kaempferi Cone 2000px.jpg",
+      "verdict": "other_site",
+      "note": "Nahaufnahme eines Lärchenzapfens vor unscharfem Wald; Pflanzenfoto ohne Bauwerk oder Umgebung der Site."
+    }
+  ],
+  "note": "Kein Kandidat zeigt The Larches in Monmouthshire: fünf Bilder zeigen ein modernes Haus in Cambridge, Massachusetts, eines eine Wiese, eines eine fremde gotische Ruine, eines einen Baumzapfen."
+}

@@ -1,0 +1,33 @@
+site_id: da4f66f6-683b-4655-a694-279361b05529
+name: Cade's Road
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- 2019-11-30-Marienallee Dahlem-7978.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3d44aaa6c1f1ad5ac71de7bbca9d39d9
+- Cade Hill Road - geograph.org.uk - 5396331.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\510e01afe925051ae5064c074b466222
+- Kingsnorth Road junction with Cade Road - geograph.org.uk - 8115721.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\add7cf8ff003c31246bd9caa905d1d30
+- Cade Hill Road - geograph.org.uk - 5396353.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9a271a0d2188e108bec06be307fcb7c6
+- United Church Cade Road - geograph.org.uk - 8115720.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6092bf147d5871d8dad7a101c02d5a77
+- Oast House on Church Street at Cade Street - geograph.org.uk - 2885366.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9ef9346af1d020e39e4d54f6faf75283
+- Houses on Halley Road near Cade Street - geograph.org.uk - 2885319.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\088736deda9ef5ea14b790f7e5e169bf
+- Cade's Cove Visitor Information Center.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\81feaaed983d18d2b0c3a2ccad7c645a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,52 @@
+site_id: 12e0a51b-54c4-4d30-abcb-7ef995ccd49f
+name: Wayna Tawqaray
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Sitio arqueológico Wayna Tawqaray 23.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d78e8ec0cad455784d4eeaf2a797408f
+- Plano del sitio arqueológico de Wayna Tawqaray.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c2e214fcbae74ded8c7023452fe343f
+- Sitio arqueológico Wayna Tawqaray 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50a4222488ee65e676b896992675f136
+- Sitio arqueológico Wayna Tawqaray 31.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44150d2dcc1806efd9b377c9fcb28991
+- Sitio arqueológico Wayna Tawqaray 19.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\040808f954d267d420b9128c050220a1
+- Sitio arqueológico Wayna Tawqaray 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\009bd9abbee0a54da3833586ae493348
+- Sitio arqueológico Wayna Tawqaray 26.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c6cc1bd68490da68e025df1d1fee2baa
+- Sitio arqueológico Wayna Tawqaray 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9f1806839fd65aeaa5710ab03afc5396
+- Sitio arqueológico Wayna Tawqaray 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\63c7c0f6cdea7af55c0a9327fac2ddb3
+- Sitio arqueológico Wayna Tawqaray 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5aadb0293c499fbf1faccdddad7b4725
+- Sitio arqueológico Wayna Tawqaray 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5a83438b9bb94fb8400b41b24e3f573b
+- Sitio arqueológico Wayna Tawqaray 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b804762aa0d107cf64fa24cdf378b38
+- Qolqas sector B sitio Arqueológico de Wayna Tawqaray.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c51f5cde2fec5a32f112477ceb64876d
+- Sistema de recirculación de aire en las qolqas de Wayna Tawqaray.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6968207831abbde8b47d4c65bc7f08a8
+- Wayna tawqaray archaeological site 15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5fb3ce591e2d85fb7a1a5420dc538c8e
+- Wayna Tawqaray 2024 - 41.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1815cd1a9da54df124608d2c21dba587
+- Wayna Tawqaray 2024 - 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\557ddcf85bb962029e48a6fa16ab4627
+- Wayna Tawqaray 2024 - 34.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\09a0c0e6055f6557120d884968a971a0
+- Ingeniería hidráulica en Wayna Tawqaray.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\454169ba29250c7ab509fea4ab737a74
+- Ingreso al sitio arqueológico Wayna Tawqaray.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c88e0c341fe7fc6c944fcb32fbb1a39b
+- Lloq'e - Sitio Arqueológico de Wayna Tawqaray.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8664bbce3cac132ede30544e9e9790c1
+- Lupinus aridulus (Q'era) Waynataukaray, 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ed660d019ed2ba8b060869bb44df4152
+- Lupinus aridulus (Q'era) Waynataukaray, 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dfaf0f6a14e5e5fdd4c6e305a967de69
+- Lupinus aridulus (Q'era) Waynataukaray, 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d1f960c7fbcccb829c6cc80e2ec54880
+- Lupinus aridulus (Q'era) Waynataukaray, 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9c6fee582455cfbbbe15e9da0b57967
+- Q'euña - Sitio arqueológico de Wayna Tawqaray.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\35b10a4f1bc84b9bf086cf5ccd9e5d75
+- Ruta de acceso al sitio arqueológico de Wayna Tawqaray.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2fda9c000b0b1cbea075ff1aefdfe75c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

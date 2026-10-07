@@ -1,0 +1,46 @@
+site_id: 8ee50417-7d0d-416f-b3b9-6e1971d7004b
+name: Ojo de Agua
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Mexibus Ojo de Agua 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c7f2edee75dda43d6a467eebdfc598a
+- Mexibus Ojo de Agua 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\34f1a129668f5c1c51d9289ef4654854
+- Ojo de Agua (Mexibús L1A) 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e1215a434e3fb51078339b45ee17a9f
+- Ojo de Agua (Mexibús L1) 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6624bf674e8da5ef13f8a6d90427de71
+- ETRAM Ojo de Agua (2024) 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa3506a6e03a91cbf3cf9b296dc52ac7
+- ETRAM Ojo de Agua (2024) 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d27ba5c36c0cdf2bdf9ac6afa95053f2
+- Ojo de Agua Tlacotepec (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\16de58aa45aea3087731c480d2a0f618
+- Ojo de Agua Tlacotepec (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7faedcb5d451f85e62c2a1974502b7bb
+- Terminal ojo de agua.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\172a4b80efe72b702527b8009acf1845
+- Ojo de Agua Beach in Alta Guajira 2023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef3c3c54a0371fc4d04a47e425a45b45
+- Ojo De Agua De Pastores Letrero.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0546bcc211b1b329882326ef31402701
+- Iglesia Catolica de Ojo de Agua..jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6f7d5c1754d6062c75d5b4cc746cac17
+- Iglesia del Santo Cristo del Ojo de Agua, Saltillo, Coahuila- Santo Cristo del Ojo de Agua church (22328215123).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\739114aa2c38af680f8ec7795463ff20
+- Entrada al Ojo de Agua, En la Iglesia del Ojo de Agua, en Saltiillo Coahuila - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\59d95598df0bf5df50a9ea27bcd47955
+- Aguas cristalinas Venero del Ojo de Agua, Iglesia del Ojo de Agua Saltillo Coahuila - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f7a1c25cf05e3de9fcb538003226c3b
+- Lugar Donde se encuentra el Ojo de Agua, En la Iglesia del Santo Cristo del Ojo de Agua, en Saltillo Coahuila - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\37fb4eb2e1c5f73dba869f799aef271b
+- Esta es la entrada al venero del ojo de agua, En la Iglesia del Ojo de Agua, Saltillo Coahuila - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5f98a9c107627afe3556881c66ce20b8
+- Dentro del ojo de agua, En la iglesia del ojo de Agua, Saltillo Coahuila - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50f19925f5c13fe1a1351e12cd3add53
+- Viacrucis de Viernes Santo 2022 en Colonia Ojo de Agua Santa, Orizaba 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c960d52ca6d2ff38bd8ad0e92a8ced67
+- Villa ojo de agua - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fee61cd3fb204e0ddf2489a511d5759d
+- Ojo de Agua "La soledad". - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\06651a8ca97974fdac3f72ec5ad6cad7
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

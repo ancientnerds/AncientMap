@@ -1,0 +1,10 @@
+{
+ "chunk": 1,
+ "digest": "cb1a359f2b80f62baf5404187988f8b7ce055df683c5be172ecfb6cec8a07324",
+ "lane": "import-hero/insert",
+ "min_height": 300,
+ "min_width": 800,
+ "rows": 30,
+ "run_id": "insert-2026-10-07-010",
+ "sites": 30
+}

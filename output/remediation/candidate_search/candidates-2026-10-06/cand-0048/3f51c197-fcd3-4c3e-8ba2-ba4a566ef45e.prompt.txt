@@ -1,0 +1,35 @@
+site_id: 3f51c197-fcd3-4c3e-8ba2-ba4a566ef45e
+name: Foxholes, Hertford
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Foxholes Avenue, Hertford - geograph.org.uk - 6119958.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d0b09a99b1b0e622c0a6c3520cd8ea8
+- Foxholes roundabout on the A414, Hertford - geograph.org.uk - 2992975.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bb17824b8d82be290b07fb60303197d6
+- Foxholes Bottom - geograph.org.uk - 2724710.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\283b9220349ffcdc7fdd160de3821ab6
+- Foxholes village - geograph.org.uk - 5784043.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c403b47894935f3d964ced19e9fcfe46
+- Road towards Foxholes - geograph.org.uk - 7606437.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7679e23c8e397d9f42e74bc2da9f887c
+- The Wolds near Foxholes - geograph.org.uk - 5915434.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c966c69cfd682c2c793d14177b379fa2
+- B1249 through Foxholes - geograph.org.uk - 5052893.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\32d44e91ffa5a5f86ba609319da4102a
+- Minor road at Foxholes - geograph.org.uk - 6811807.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ca68ec9f1c35ae6c531023b48ebbcbd2
+- B1249 south of Foxholes - geograph.org.uk - 7606443.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\267529302c78bba80fea26d9412c3950
+- Farmland east of Foxholes - geograph.org.uk - 2724714.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2c6450f33aedb3728ad32297013e8b87
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,108 @@
+{
+  "site_id": "77c8e01e-c8c8-4667-99f2-e36c81d6c0f8",
+  "answered_by": "mcode-judge-cand-0093",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Salona - Roman wall.JPG",
+      "verdict": "other_site",
+      "note": "Römische Mauerkette am felsigen Hang unter einem großen kahlen Karstgebirge, Pinien und Macchia: dalmatinische Küstenlandschaft."
+    },
+    {
+      "file": "Arco da muralla romana de Zaragoza España Z19.jpg",
+      "verdict": "other_site",
+      "note": "Ziegelgewölbter Bogen in einer Bruchsteinmauer, spanische Stadtbebauung und Bäume dahinter; Ort nicht der der Site."
+    },
+    {
+      "file": "Zaragoza Ancient Roman wall seen from the south.jpg",
+      "verdict": "other_site",
+      "note": "Mauerreste mit Ziegelbogen auf einem Stadtplatz, Zypressen und maurischem Ziegelturm dahinter; spanische Stadt."
+    },
+    {
+      "file": "Roman Walls and Tower 0209.jpg",
+      "verdict": "other_site",
+      "note": "Runder Turm aus abwechselnden Ziegel- und Steinlagen mit Arkaden und Kreuz, Minaretten dahinter; Bauwerk einer islamischen Stadt."
+    },
+    {
+      "file": "Ancient Roman walls of Lugo 07.jpg",
+      "verdict": "other_site",
+      "note": "Hohe Schiefermauer mit diagonalem Steg und Holzbänken an der Außenseite; Lugo, Spanien."
+    },
+    {
+      "file": "Ancient Roman walls of Lugo 04.jpg",
+      "verdict": "other_site",
+      "note": "Reihe Schiefer-Rundtürme auf grüner Wiese, Stadtbebauung am Horizont; Lugo, Spanien."
+    },
+    {
+      "file": "Murallas romanas de Zaragoza.jpg",
+      "verdict": "other_site",
+      "note": "Römischer Mauerbogen mit Ziegelturm und Zypressen auf einem Pflasterplatz; spanische Stadt."
+    },
+    {
+      "file": "Lugo 2023 - Roman Walls.jpg",
+      "verdict": "other_site",
+      "note": "Schiefermauer mit vier Rundtürmen auf Rasen, Mauerkrone mit Gräsern; Lugo, Spanien."
+    },
+    {
+      "file": "Ancient Roman walls of Lugo 06.jpg",
+      "verdict": "other_site",
+      "note": "Schiefermauer mit Rundturm und aufgesetzter Mauerkrone auf Rasen; Lugo, Spanien."
+    },
+    {
+      "file": "Ancient Roman walls of Lugo 03.jpg",
+      "verdict": "other_site",
+      "note": "Wallgang auf Schiefermauer über der Stadt, Galerie mit Graffiti und Spaziergängern; Lugo, Spanien."
+    },
+    {
+      "file": "Ancient Roman walls of Lugo 05.jpg",
+      "verdict": "other_site",
+      "note": "Schiefermauer mit Türmen und Galerien, darunter Straße mit Lkw und Wohnblocks; Lugo, Spanien."
+    },
+    {
+      "file": "Ancient Roman walls of Lugo 08.jpg",
+      "verdict": "other_site",
+      "note": "Schiefermauer mit Rundturm und schwarzen Laternenpfosten auf dem Wallweg; Lugo, Spanien."
+    },
+    {
+      "file": "Atuatuca Tungrorum - modern Tongres - Roman Walls (51233815743).jpg",
+      "verdict": "other_site",
+      "note": "Rote Mohnblume mit Regentropfen vor einer Bruchsteinmauer; Pflanzenfoto ohne Mauerwerk oder Ortsbezug."
+    },
+    {
+      "file": "Atuatuca Tungrorum - modern Tongres - Roman Walls (51233630203).jpg",
+      "verdict": "region_or_type",
+      "note": "Lange Bruchsteinmauer in einer Wiese neben einer Straße mit Infostele; Ort aus dem Bild nicht bestimmbar."
+    },
+    {
+      "file": "Atuatuca Tungrorum - modern Tongres - Roman Walls (51232901067).jpg",
+      "verdict": "region_or_type",
+      "note": "Lange Bruchstein- und Flintmauer mit Gehweg und Ziegelhäusern dahinter; Ort aus dem Bild nicht bestimmbar."
+    },
+    {
+      "file": "View from Roman Walls in Lugo, Spain.jpg",
+      "verdict": "other_site",
+      "note": "Blick über den Schieferwall auf die Stadt mit barocker Kirche und Kopfsteinpflaster; Lugo, Spanien."
+    },
+    {
+      "file": "Atuatuca Tungrorum - modern Tongres - Roman Walls (51233815828).jpg",
+      "verdict": "other_site",
+      "note": "Mohnblüten als Silhouette vor grauem Himmel über Schotter; Pflanzenfoto ohne jede Mauer."
+    },
+    {
+      "file": "Ancient Roman tower in Roman walls of Aosta.JPG",
+      "verdict": "region_or_type",
+      "note": "Niedriger Bruchsteinrest in einer Parkanlage mit Plattenweg und 1960er-Wohnhaus; kein Turm, Ort nicht bestimmbar."
+    },
+    {
+      "file": "Ancient Roman tower in Roman walls of Aosta 2.JPG",
+      "verdict": "region_or_type",
+      "note": "Ähnlicher niedriger Mauerabschnitt mit Alpenkette dahinter; kein identifizierbarer Ort und kein Turm der Site."
+    },
+    {
+      "file": "Ancient Roman walls of Lugo 01.jpg",
+      "verdict": "other_site",
+      "note": "Schieferwall mit Kapelle und Stadt dahinter, Person am Rand; Lugo, Spanien."
+    }
+  ],
+  "note": "Kein Kandidat zeigt die Site sicher: zehn Bilder zeigen den Schieferwall von Lugo, zwei die Ziegelbögen von Zaragoza, eines Salona, eines einen Rundturm mit Minaretten, zwei Mohnblüten. Fünf zeigen nur eine Mauer, deren Ort nicht bestimmbar ist; darunter die zwei Aosta-Dateien, die im Bild lediglich niedrige Bruchsteinreste zeigen. Site bleibt ohne Bild."
+}

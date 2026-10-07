@@ -1,0 +1,31 @@
+site_id: 48a6d6b8-7224-4edf-b20c-a6fba056d8fa
+name: Pentre Camp
+country: Wales
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Pentre Camp Hill Fort, Llangyniew (geograph 2963273).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd61e4019babbaa7dcdeccd253112341
+- Pen y Castell - geograph.org.uk - 2050848.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\83a6399a0cff1d6bb99211325e0e7513
+- Pen y Castell - geograph.org.uk - 2050921.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bbf26b303a67533abd68ce20c40cab4f
+- Pen y Castell - geograph.org.uk - 5469342.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\340657cd6a1cf01d1ed8108d013f3bfa
+- Pen y Castell - geograph.org.uk - 2050676.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1b7fdd0d3a0dad1b078443ddba8c98fd
+- Pen y Castell - geograph.org.uk - 2050934.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5eb19e3ef51bcaf61690f5085687d481
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

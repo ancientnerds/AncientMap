@@ -1,0 +1,526 @@
+{
+ "measured_at": "2026-10-07",
+ "question": "the import lane's remainder: the real size of every file the 2025 import links",
+ "sites": 62,
+ "on_offsite_tree": 14,
+ "credit_rule": 5,
+ "other_reason": 6,
+ "measured": 37,
+ "clears_lane_floor_1600x900": [],
+ "clears_owner_floor_800x300_only": [
+  "Cusichaca River",
+  "Obelisk of Thutmose I",
+  "The Temple of Artemis"
+ ],
+ "below_800x300": [
+  "Burley Wood",
+  "Beeley Moor",
+  "Goldsborough, Scarborough",
+  "East Myne",
+  "Shinewater",
+  "Pyramid of Hetepheres I",
+  "Bartinney Castle",
+  "Wandlebury Hill",
+  "Scholes Coppice",
+  "St Laurence School - Roman Villa",
+  "Welshbury Hill",
+  "Waddon Hill",
+  "Ashleys Copse",
+  "Stairhaven",
+  "Bremridge Wood",
+  "Clausentum",
+  "Dolmens of Sardinia",
+  "Shipton Hill Settlement",
+  "Harrow Way",
+  "Stockland Castle",
+  "Sallachy Broch",
+  "Fiskerton Log Boat",
+  "West Woods",
+  "Lagentium",
+  "Appleby Logboat"
+ ],
+ "files": [
+  {
+   "site_id": "026dfe16-5509-47f2-bede-504b006d704d",
+   "name": "Rag-i-Bibi",
+   "file": "rag-i-bibi sasanian rock relief3WM.JPG",
+   "group": "never_fetched",
+   "original": [
+    0,
+    0
+   ]
+  },
+  {
+   "site_id": "050ff0e8-d181-4b9a-8c1b-9a5f1a5d48bb",
+   "name": "Burley Wood",
+   "file": "Burley Wood - geograph.org.uk - 249589.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  },
+  {
+   "site_id": "0de3da9b-5aeb-45a2-8f72-31ac1ad74a13",
+   "name": "Beeley Moor",
+   "file": "Beeley Moor. - geograph.org.uk - 125323.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    481
+   ],
+   "store_1600": [
+    640,
+    481
+   ]
+  },
+  {
+   "site_id": "18911cb2-dff1-4d14-9110-de55c40706c0",
+   "name": "Goldsborough, Scarborough",
+   "file": "Fox and Hounds - geograph.org.uk - 218035.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    384
+   ],
+   "store_1600": [
+    640,
+    384
+   ]
+  },
+  {
+   "site_id": "1cce02f8-8133-4c7a-aa65-b770587bc389",
+   "name": "East Myne",
+   "file": "East Myne - geograph.org.uk - 2614105.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  },
+  {
+   "site_id": "1d78a562-f1e1-4115-8172-9ef13c7dfe1b",
+   "name": "Sembel",
+   "file": "SembelExcavation.jpg",
+   "group": "never_fetched",
+   "original": [
+    0,
+    0
+   ]
+  },
+  {
+   "site_id": "1eaf26d7-d381-4796-ad1c-605833ec077a",
+   "name": "Shinewater",
+   "file": "Shinewater Lake - geograph.org.uk - 178980.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    479
+   ],
+   "store_1600": [
+    640,
+    479
+   ]
+  },
+  {
+   "site_id": "21c68897-6da3-4cbc-abda-41e45a0c0f3c",
+   "name": "Burnt Mound in Fox Hollies Park",
+   "file": "Burnt mound in Fox Hollies Park 2.jpg",
+   "group": "never_fetched",
+   "original": [
+    0,
+    0
+   ]
+  },
+  {
+   "site_id": "269e2820-acf1-4974-b75f-3c0460482ade",
+   "name": "Duraz Temple",
+   "file": "Diraz Temple Site.jpg",
+   "group": "never_fetched",
+   "original": [
+    0,
+    0
+   ]
+  },
+  {
+   "site_id": "2fc65539-6b0f-4073-9db3-76dadc408cc8",
+   "name": "Pyramid of Hetepheres I",
+   "file": "Queen Pyramid of Hetepheres (G1a).jpg",
+   "group": "width_half",
+   "original": [
+    254,
+    147
+   ],
+   "store_1600": [
+    254,
+    147
+   ]
+  },
+  {
+   "site_id": "300c7075-942d-447e-a3eb-cce1fcd5d3a0",
+   "name": "Bartinney Castle",
+   "file": "Trig point within Bartine Castle, Bartinney Downs - geograph.org.uk - 40934.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  },
+  {
+   "site_id": "3bb2d9e1-7e77-4582-8b28-92ab27133a9a",
+   "name": "Wandlebury Hill",
+   "file": "Footpath in the iron age fort ditch, Wandlebury Ring - geograph.org.uk - 718463.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  },
+  {
+   "site_id": "3db38675-ded2-42a9-968f-b22744e5faff",
+   "name": "Scholes Coppice",
+   "file": "Trees in Scholes Coppice - geograph.org.uk - 1724989.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  },
+  {
+   "site_id": "44cf60cc-9ced-49af-acc5-9922cc3d6f38",
+   "name": "St Laurence School - Roman Villa",
+   "file": "Roman Villa Bradford on Avon - geograph.org.uk - 299345.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  },
+  {
+   "site_id": "57acda9c-ea62-47b0-be94-a5ac7be9ac3a",
+   "name": "Welshbury Hill",
+   "file": "Slopes of Welshbury Hill - geograph.org.uk - 691886.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  },
+  {
+   "site_id": "6148883a-659c-40c4-bcf4-ef086f860f40",
+   "name": "Waddon Hill",
+   "file": "Waddon Hill - geograph.org.uk - 1030076.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    426
+   ],
+   "store_1600": [
+    640,
+    426
+   ]
+  },
+  {
+   "site_id": "6e2e27d0-f162-4a26-bd66-b7fc75554ce4",
+   "name": "Cusichaca River",
+   "file": "File:Llactapata.jpg",
+   "group": "never_fetched",
+   "original": [
+    1842,
+    1024
+   ],
+   "store_1600": [
+    1600,
+    889
+   ]
+  },
+  {
+   "site_id": "7959bac1-48f2-4648-b9fa-7b23847cd894",
+   "name": "Q'asa Pata",
+   "file": "Q'asa Pata",
+   "group": "never_fetched",
+   "original": [
+    0,
+    0
+   ]
+  },
+  {
+   "site_id": "8293113e-b266-40c9-8aa5-dd683886e0ea",
+   "name": "Ashleys Copse",
+   "file": "Haynes Garage, nr Lopcombe Corner on A30 - geograph.org.uk - 195757.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    427
+   ],
+   "store_1600": [
+    640,
+    427
+   ]
+  },
+  {
+   "site_id": "8747ac16-0730-4bdc-8afa-49c3d8d6819b",
+   "name": "Stairhaven",
+   "file": "Stairhaven broch - intramural stairs - geograph.org.uk - 590703.jpg",
+   "group": "width_half",
+   "original": [
+    480,
+    640
+   ],
+   "store_1600": [
+    480,
+    640
+   ]
+  },
+  {
+   "site_id": "8b1abd85-fc57-40d7-a4c6-c987d4d0bc29",
+   "name": "Bremridge Wood",
+   "file": "Bremridge Wood - geograph.org.uk - 576455.jpg",
+   "group": "width_half",
+   "original": [
+    480,
+    640
+   ],
+   "store_1600": [
+    480,
+    640
+   ]
+  },
+  {
+   "site_id": "8e625e19-eeb1-4813-8244-14ec448d7440",
+   "name": "Chactún",
+   "file": "flk14875677860.jpg",
+   "group": "never_fetched",
+   "original": [
+    0,
+    0
+   ]
+  },
+  {
+   "site_id": "9b1fc275-41fd-4fbd-b88c-b4e05eb0b29d",
+   "name": "Obelisk of Thutmose I",
+   "file": "Egypte 123a.jpg",
+   "group": "width_half",
+   "original": [
+    1216,
+    1676
+   ],
+   "store_1600": [
+    1216,
+    1676
+   ]
+  },
+  {
+   "site_id": "9dbff73b-6505-430a-9b75-8630df8b451c",
+   "name": "Clausentum",
+   "file": "River Itchen, Bitterne Manor - geograph.org.uk - 26956.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  },
+  {
+   "site_id": "a939e800-06e4-4719-a000-165e7f5efe92",
+   "name": "The Temple of Artemis",
+   "file": "File:Miniaturk 009.jpg",
+   "group": "never_fetched",
+   "original": [
+    1024,
+    768
+   ],
+   "store_1600": [
+    1024,
+    768
+   ]
+  },
+  {
+   "site_id": "b0b49640-6fb4-4cb1-b875-01dc81298e34",
+   "name": "Dolmens of Sardinia",
+   "file": "Mores02.jpg",
+   "group": "width_half",
+   "original": [
+    768,
+    1024
+   ],
+   "store_1600": [
+    768,
+    1024
+   ]
+  },
+  {
+   "site_id": "b306aff1-60d0-4d34-85e3-fe206911dc65",
+   "name": "Shipton Hill Settlement",
+   "file": "Lynch Farm - geograph.org.uk - 528113.jpg",
+   "group": "width_half",
+   "original": [
+    623,
+    493
+   ],
+   "store_1600": [
+    623,
+    493
+   ]
+  },
+  {
+   "site_id": "c06cb387-e065-4bcd-bbbe-a6b9d1a4082d",
+   "name": "Harrow Way",
+   "file": "Farmland near Overton - geograph.org.uk - 808424.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  },
+  {
+   "site_id": "c4d2251b-b64a-4615-a6f9-5a71ff6f3955",
+   "name": "Balcon de Montezuma",
+   "file": "Balcon de Moctezuma1.jpg",
+   "group": "never_fetched",
+   "original": [
+    0,
+    0
+   ]
+  },
+  {
+   "site_id": "c4d4863e-2344-49aa-8699-457d71985c96",
+   "name": "Osiris Shaft",
+   "file": "8b6f5a7dc845a14d7ad8153bac972900.jpg",
+   "group": "never_fetched",
+   "original": [
+    0,
+    0
+   ]
+  },
+  {
+   "site_id": "cd57f355-5041-4c86-8eb9-c570bb93dab8",
+   "name": "Aké (Yucatan)",
+   "file": "11-1024x768.jpg",
+   "group": "never_fetched",
+   "original": [
+    0,
+    0
+   ]
+  },
+  {
+   "site_id": "ce9c68cf-97b7-4ef2-8301-0a3907d2608d",
+   "name": "Stockland Castle",
+   "file": "Stockland, by Stockland Great Castle - geograph.org.uk - 226370.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    427
+   ],
+   "store_1600": [
+    640,
+    427
+   ]
+  },
+  {
+   "site_id": "e6f2a294-6c1d-4607-8f2c-ee6ee8614518",
+   "name": "Sallachy Broch",
+   "file": "Sallachy Broch - geograph.org.uk - 1050622.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  },
+  {
+   "site_id": "e765ff49-b186-4cf0-b32a-94a3aa453de9",
+   "name": "Fiskerton Log Boat",
+   "file": "Usher Gallery and Spring Flowers - geograph.org.uk - 153938.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    427
+   ],
+   "store_1600": [
+    640,
+    427
+   ]
+  },
+  {
+   "site_id": "e7e82839-72a2-466c-93ee-7292571e8506",
+   "name": "West Woods",
+   "file": "Trees and bluebells, West Woods, near Marlborough - geograph.org.uk - 409983.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  },
+  {
+   "site_id": "ec4f5013-86b2-45a2-af61-d69b8f863d74",
+   "name": "Lagentium",
+   "file": "Castleford Legions - geograph.org.uk - 393608.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  },
+  {
+   "site_id": "f336bdb9-c53b-4eed-91d2-353e9e1b4566",
+   "name": "Appleby Logboat",
+   "file": "North Lincolnshire Museum, Scunthorpe - geograph.org.uk - 43807.jpg",
+   "group": "width_half",
+   "original": [
+    640,
+    480
+   ],
+   "store_1600": [
+    640,
+    480
+   ]
+  }
+ ]
+}

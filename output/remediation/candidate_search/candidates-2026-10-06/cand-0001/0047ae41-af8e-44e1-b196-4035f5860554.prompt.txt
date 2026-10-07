@@ -1,0 +1,37 @@
+site_id: 0047ae41-af8e-44e1-b196-4035f5860554
+name: Gonnus
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Γόννοι - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2045c806a497dc94e199012280d916db
+- Tanaica Montes y Gonnus Mons (THEMIS Day).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3b25caab21d81f65b9c83c4f81357040
+- USGS-Mars-MC-3-ArcadiaRegion-mola.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\caddae85dfdd8a0ad5e093931ac80861
+- Gonnus Mons.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd297f9f3b53769d7cbe17b1bbf153d2
+- Gonnoi, Greece - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\940c83d34ae5346b84c707709510ccb5
+- Gonnus dans les défilés de Tempé - Stackelberg Otto Magnus Baron De - 1830.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0d3aa4bd1099af2cd6e72e874e51950a
+- Monnaie - Bronze, Gonnus, Thessalie - btv1b8572363d (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f60c1986883512fe731155468760664d
+- Monnaie - Bronze, Gonnus, Thessalie - btv1b85723620 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cc37fa5abd9759d628e76c42d5f96fed
+- Monnaie - Bronze, Gonnus, Thessalie - btv1b85723620 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4af6c786e50006845845532c93eed51
+- Monnaie - Bronze, Gonnus, Thessalie - btv1b8572363d (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\517b783a17217b64d15505aeb9eebafe
+- Votive epigram for Artemis - Ηelly, Gonnoi II, p. 189-190, n°173.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44f1f8b6579d9cfc4623131d41f7e092
+- Arte greca, rilievo votivo con il riconoscimento di ulisse da parte di euriclea, IV secolo ac., da gonnoi in tessaglia (atene, man).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\04557ac054bf3be34fbe3174b0966683
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

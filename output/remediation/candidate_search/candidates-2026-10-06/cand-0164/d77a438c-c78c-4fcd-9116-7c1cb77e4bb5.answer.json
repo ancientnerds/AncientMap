@@ -1,0 +1,18 @@
+{"site_id": "d77a438c-c78c-4fcd-9116-7c1cb77e4bb5",
+ "answered_by": "mcode-judge-cand-0164",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Pheia haemapera - Carlos Alexandre Mattos Raposo - 489285494.jpeg",
+   "verdict": "other_site",
+   "note": "Makroaufnahme eines Schmetterlings mit roten Augenflecken auf einem gruenen Blatt; kein Ort, keine Ruine."},
+  {"file": "Cycladic type figurines, 3rd millennium BC, region Elis, AM Olympia, Olym04.jpg",
+   "verdict": "region_or_type",
+   "note": "Drei Marmorfiguren kykladischen Typs in einer Museumsvitrine; keine Anlage von Pheia erkennbar."},
+  {"file": "Pundikokastro - Perilla Francesco - 1929.jpg",
+   "verdict": "other_site",
+   "note": "Tuschezeichnung von 1929 mit der Aufschrift PUNDIKOKASTRO: Berghang mit Zypressen, nicht Pheia."},
+  {"file": "Illustrations of typical specimens of Lepidoptera Heterocera in the collection of the British Museum (Pl. XVII) (6441540449).jpg",
+   "verdict": "other_site",
+   "note": "Zoologische Tafel mit nummerierten Schmetterlingen aus dem British Museum, kein Ortsbezug."}
+ ],
+ "note": ""}

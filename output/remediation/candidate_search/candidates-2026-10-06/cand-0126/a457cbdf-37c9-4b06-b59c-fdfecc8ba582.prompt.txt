@@ -1,0 +1,37 @@
+site_id: a457cbdf-37c9-4b06-b59c-fdfecc8ba582
+name: Museo de Sitio Wari
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Museo de Sitio de Wari Willka 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4c99a7e59846180755bfedaa547699b0
+- Museo de Sitio de Wari Willka 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\753ed2ec1a2a74bac52f9b194148bb8e
+- Museo de Sitio de Wari Willka 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5a1ceb7a729796f2753ff9dcfa9ee3fc
+- Museo de Sitio de Wari Willka 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\09bd508331a9caf74c79d7164409329b
+- Museo de Sitio de Wari Willka 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\091abd6a83622c783cd27f5b20887114
+- Museo de Sitio de Wari Willka 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba1c38936976345700181558dcca21a8
+- Museo de Sitio de Wari Willka 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88c7cf062f835a144a5b05b203f0aed6
+- Cerámica wari en el museo de sitio de Willkawain.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec8b5f667d4baad1c28b815642c2a227
+- Museo de sitio Pachacamac 20220402 141443 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\516bb1afbc0ec3cb93a065074f12f06d
+- Museo de sitio Pachacamac 20220402 141443 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c0ea307e2f47a4c94b2d81021fd653a
+- Cerámica del museo de Pachacamac parte 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\871135123634fea4dbdf54c411b5374f
+- Múmia Wari (358880474).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7134f801f95aaac868e852870865a0e9
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

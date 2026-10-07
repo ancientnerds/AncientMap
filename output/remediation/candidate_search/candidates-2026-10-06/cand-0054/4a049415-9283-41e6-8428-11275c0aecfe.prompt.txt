@@ -1,0 +1,48 @@
+site_id: 4a049415-9283-41e6-8428-11275c0aecfe
+name: Funerary Temple
+country: Syria
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ruweiha funerary temple 8700.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\528dd661681f3e8be5b93f1373830750
+- Ruweiha funerary temple 8694.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4e3cfdb51c67ad6d0f9b13604805bfa7
+- Ruweiha funerary temple 8692.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cf0182bd6cbcc6652b49ed13c18f5538
+- Ruweiha funerary temple 8697.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e36bbf8fd2bdd615285f31b8ed1fbc8
+- Ruweiha funerary temple 8695.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0408bef3cdc6a5f0e05a5ac30a112467
+- Ruweiha funerary temple 8698.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e731ad1442c12f1468437ef1f5132c40
+- Schiaparelli's excavations - Giza, Sphynx and funerary temple of Khafre, Sphynx and funerary temple of Khafre, 1903, photo 1 of 2 - Archivio fotografico Museo Egizio, Turin C00548.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7a60402954c4ad00019deb0582a8c2fe
+- Ruweiha funerary temple 8699.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ffda05c5652d3c99d67a49cb3490a71
+- Ruweiha funerary temple 8693.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0bd6a83eb4e216b048daf79d621ebe1b
+- Ruweiha other funerary temple 8721.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0c34b0077427ed57b598b8588231ae45
+- Palmyra Funerary Temple nr 86 0070.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c19956d7a94178a407dc4c196a322981
+- Palmyra Funerary Temple nr. 86 0071.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2218c354393633ac2f8848aa59b77e6f
+- Funerary Temple, Palmyra (تدمر), Syria - Zenobia’s Wall near the Funerary Temple - PHBZ024 2016 1103 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cdd0eb5ce13e42bdddbc63db2af29d37
+- Funerary Temple, Palmyra (تدمر), Syria - Funerary Temple - PHBZ024 2016 1089 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c178a930251535036cea1e096f3bb56
+- Funerary Temple, Palmyra (تدمر), Syria - Zenobia’s Wall near the Funerary Temple - PHBZ024 2016 1104 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\24da263c3e233a7fdad7756e42042819
+- Funerary Temple, Palmyra (تدمر), Syria - Funerary Temple - PHBZ024 2016 1091 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6d09644d26e2bcd928bcbcbfb059f1d5
+- Giza, Sphynx and funerary temple of Khafre, Sphynx and funerary temple of Khafre, photo 2 of 2 - Archivio fotografico Museo Egizio, Turin - Museo di antropologia UniTo MAFM 0246.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e15fa49efdd7233f4763324f6c9ac5b1
+- Funerary Temple, Palmyra (تدمر), Syria - Zenobia’s Wall near the Funerary Temple - PHBZ024 2016 1102 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de107065086340f68acc526b4d6c2e45
+- Funerary Temple, Palmyra (تدمر), Syria - Funerary Temple - PHBZ024 2016 1090 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0247582636d46b6450449d326ba3a84f
+- Palmyra to side of Funerary Temple nr. 86 0072.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0ad51234140782f93c8d8f55d5af7729
+- Funerary Temple, Palmyra (تدمر), Syria - Architectural fragment - PHBZ024 2016 1100 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db729b72a6ace54d0f74519929085ec1
+- Funerary Temple, Palmyra (تدمر), Syria - View from southeast - PHBZ024 2016 1082 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ffe79e6e4b74b451f322792a2d15569
+- Funerary Temple, Palmyra (تدمر), Syria - Architectural fragment - PHBZ024 2016 1093 - Dumbarton Oaks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\920e6681ad4f1ae8b96a634b08ddafb8
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

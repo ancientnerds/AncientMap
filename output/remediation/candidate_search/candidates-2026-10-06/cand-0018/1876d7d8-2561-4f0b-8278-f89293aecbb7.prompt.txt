@@ -1,0 +1,39 @@
+site_id: 1876d7d8-2561-4f0b-8278-f89293aecbb7
+name: Lee Wood
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- NLeeWood,2011.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4783ca81e54a03b9722364b423702757
+- Mary Lee Berners-Lee (née Woods).png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e3b1bf04ef683e7bfd509710ec424f63
+- Mary Lee Woods and Conway Berners-Lee in 2013.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f7caa81578c4874727cfb8fb7f8dc2d
+- Lee Abbey from Cuddycleave Wood - geograph.org.uk - 5688509.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\407e8a843ab8a2ddd2b9babeec593d2f
+- Lee Wood - geograph.org.uk - 4226422.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9159bda434bc38291ff490af4f56be12
+- Lee Wood - geograph.org.uk - 6989268.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba138c28bf715cd690ce4bc1c9e51937
+- From Cuddycleave Wood - Lee Abbey, North Devon - geograph.org.uk - 3841623.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a8eec0e7cada9f8ea4da4521f80860b6
+- Woodland by Lee Wood - geograph.org.uk - 7505823.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\796088089a676e0e23b17e8055d03fba
+- Leicestershire Round path through John's Lee Wood - geograph.org.uk - 6775096.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a77b0e60e09973a6ba99a85c1222576c
+- Hebden Bridge, Lee Wood Road - geograph.org.uk - 4010783.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\03c514f09d6c180bd9438652708d69b8
+- Heptonstall Road north of Lee Wood Road junction - geograph.org.uk - 6544038.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\818b289e770784cab1d44f18126a9280
+- Footpath from Field Head to John's Lee Wood - geograph.org.uk - 4890237.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f2d09bc01278a548e464cf0e705d1168
+- Path into Lower Lee Wood - geograph.org.uk - 4610780.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c0d83db6ef9f441994efecd23ff093a
+- Junction of Heptonstall Road and Lee Wood Road - geograph.org.uk - 5574908.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\75ceeda4e802b4a865450486968a974a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

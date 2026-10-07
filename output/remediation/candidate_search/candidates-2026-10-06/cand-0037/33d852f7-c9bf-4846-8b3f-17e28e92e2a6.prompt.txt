@@ -1,0 +1,36 @@
+site_id: 33d852f7-c9bf-4846-8b3f-17e28e92e2a6
+name: Pellana
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- 2017-05-12 Kalyvia Thorikou.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b363e04ca1a8ebffc60a44cb54555141
+- Subfluvial-karst-springs Pellana-basin Peloponnese.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\84ce3099cdecb94069a2167049987746
+- Human Chromosomes-November 2025-1st Kalyvia High School.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\229bad6acea13f701bea4cd466a83453
+- MM III-LMI lamp from Kalyvia - Herakleion AM 182.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fa8a81f9269183606c28ad3d0b9893b0
+- LM II stone vase in the form of a triton shell from Kalyvia - Herakleion AM 177.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5eab34831a9ca2b331bd47cbc0dbcb4b
+- LM IIIA dark on light ware tall alabastron from Kalyvia - confronted aquatic birds - Herakleion AM.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a1b8ef506369231b525b00212b904d49
+- LM IIIA dark on light ware tall alabastron from Kalyvia - birds with fish - Herakleion AM.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\28184fb39e7681566365ee543d68ff80
+- Modern concrete buildings near Kalívia - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d545609cd3c215b2901ef12f2ac0a4ea
+- Valonia oak and Tree spurge near Kalívia - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0cb6eb6df3566d7caf30a25100da7341
+- Kalívia - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f68b763f49928850e19fae25f0c2936b
+- A garden wall with beautiful colored marble near Kalívia - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6113d3bbfe71e19be40f1abae14270a4
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

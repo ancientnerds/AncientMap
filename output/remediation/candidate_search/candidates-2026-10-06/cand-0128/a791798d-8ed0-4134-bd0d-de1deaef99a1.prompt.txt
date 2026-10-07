@@ -1,0 +1,33 @@
+site_id: a791798d-8ed0-4134-bd0d-de1deaef99a1
+name: Iolcus
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Jason en Medea op bezoek bij Pelias op Iolcus, RP-P-H-H-853.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5388b2ffabde224b6ba6bfcf66ae20a4
+- Jason and the Golden Fleece 17 The Argonauts returning to Iolcus PK-T-1979, PK-T-1978.tiff  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e193f9419e0e834b5cf0869c142a4fc
+- Agurten (December 2021).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8b91bacc715b2086d2a41ad0f0e66b33
+- Ancient Greek red-figure krater depicting Astydamia at the Louvre Museum.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c16ec9c59418a47317b2644b8eef2c15
+- Jason and Pelias Fresco (49345325946).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b7e7532cce6c3e38590982ea2ccb69ac
+- The golden fleece and the heroes who lived before Achilles (1921) (14743936056).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c9d532dcdf897ae8f1abf679c27b5757
+- The golden fleece and the heroes who lived before Achilles (1921) (14763705761).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d966671b69c96a874c4023f9719f570
+- A classical dictionary of Greek and Roman biography...revised.. (1894) (14779978921).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e878fdd56aa56a162e6771c91796c4f2
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

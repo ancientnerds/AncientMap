@@ -1,0 +1,37 @@
+site_id: e4b003f4-3f62-4689-9af9-4b7f120614af
+name: Navalia
+country: Germany
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- City of Rome during time of republic.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5fae66156be533ac78af3c7b81e48a48
+- Catamaran navalia 2016.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b55229348f70e8910273aca19cf1cf38
+- Formula 1 en navalia 2014 IFEVI Vigo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\84407fb2f5d8665788926bca662a5a79
+- Maqueta en feria Navalia Vigo 2014.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c7736a94af51847150e9759b246a70ed
+- Maqueta en Navalia 2014 astillero Barreras Vigo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\80dda8450367da8a56226e24475d6e64
+- Novalja Hafen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1feda9e67c147cbc9574aa357c57b791
+- Novalja Marktfrau.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c57cc6ff913365b643fe3e41b2289ad
+- មូលដ្ឋានកងទ័ពជើងទឹក.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb6b9dfa0b22e7b566df79267821cc72
+- Cambodia, Sihanoukville Province.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\009b06fbdc364285f513ca639686ec6f
+- Haven te Rome Navalia (titel op object) Livre des edifices antiques romains (serietitel) Magesyn der Italiaense gebouwen (serietitel), RP-P-1957-653-96-2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f025a91ce44e250507b044cf658eecd
+- F1 en feria del sector naval de Vigo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b7b784d9d248a2f66a02620483716906
+- Maqueta bourbom ocean Stand metalships & Docks.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0218a0bd6662e6d2bf01473ca9b2d6b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

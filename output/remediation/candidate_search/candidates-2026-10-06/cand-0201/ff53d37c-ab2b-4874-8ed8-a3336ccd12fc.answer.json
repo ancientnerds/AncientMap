@@ -1,0 +1,143 @@
+{
+  "site_id": "ff53d37c-ab2b-4874-8ed8-a3336ccd12fc",
+  "answered_by": "mcode-judge-cand-0201",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "German Military Cemetery at Maleme (GR) 2005 a View across the Memorial down to RWYs of Old RAF airport.jpg",
+      "verdict": "other_site",
+      "note": "Kriegsgrabfriedhof: Rasen mit liegenden Grabplatten, drei grauen Kreuzen, großes Metallkreuz und Mauer, dahinter Küste."
+    },
+    {
+      "file": "Maleme church.jpg",
+      "verdict": "region_or_type",
+      "note": "Weiße Dorfkirche mit zwei Glockentürmen, Zwiebelhauben und Palmen im Vorgarten; keine antike Struktur."
+    },
+    {
+      "file": "German military cemetery in Maleme, Crete. Greece.jpg",
+      "verdict": "other_site",
+      "note": "Kriegsgrabfriedhof mit Olivenbaum, grauen Kreuzen, Grabplatten mit Namen und Steinschneidemauer am Meer."
+    },
+    {
+      "file": "German military cemetery in Maleme. Crete, Greece.jpg",
+      "verdict": "other_site",
+      "note": "Reihen grauer Kreuzsteine auf dem Rasen der Kriegsgrabstätte, dahinter Einfriedung und Konifern."
+    },
+    {
+      "file": "Gravestone on German military cemetery in Maleme. Crete, Greece.jpg",
+      "verdict": "other_site",
+      "note": "Graue Grabplatte mit zwei Namen und Daten, im Bodendecker des Friedhofs liegend."
+    },
+    {
+      "file": "German war cemetery in Maleme. Crete, Greece.jpg",
+      "verdict": "other_site",
+      "note": "Baum und drei Kreuzsteine auf dem Rasen, dahinter Mauer und Meer; Anlage des Kriegsfriedhofs."
+    },
+    {
+      "file": "Tombstones on German military cemetery in Maleme. Crete, Greece.jpg",
+      "verdict": "other_site",
+      "note": "Nachahmung in Stein gehaltene Kreuzsteine in Dreiergruppen im Blumenrasen der Kriegsgrabstätte."
+    },
+    {
+      "file": "KRETA Maleme 038.JPG",
+      "verdict": "region_or_type",
+      "note": "Moderne Dorfstraße mit Häusern, Bäumen und einem Mann auf dem Fahrrad; Ortsbild ohne antike Strukturen."
+    },
+    {
+      "file": "Beach of Maleme-boky08-8548.jpg",
+      "verdict": "region_or_type",
+      "note": "Kieselstrand mit flachem Meer und kahlen Bergen im Hintergrund; reine Küstenlandschaft."
+    },
+    {
+      "file": "Maleme-street-boky08-8535.jpg",
+      "verdict": "region_or_type",
+      "note": "Geschäftige Ortsstraße mit geparkten Autos, griechischen Schildern und Läden; modernes Dorf."
+    },
+    {
+      "file": "Maleme church, 2006.jpg",
+      "verdict": "region_or_type",
+      "note": "Dorfkirche mit zwei Glockentürmen und Arkadenvorhalle, davor Palmen und Geländer; Ort, nicht Site."
+    },
+    {
+      "file": "Maleme F6A-04.jpg",
+      "verdict": "other_site",
+      "note": "Freigelagertes Fluggerät auf einem Gelände: mehrere Strahlflugzeuge, eine Rakete auf einem Podest und Terrain."
+    },
+    {
+      "file": "Tholos tomb of Maleme 09.jpg",
+      "verdict": "depicts",
+      "note": "Nahaufnahme des Mauerwerks der Anlage: roh behauene und verputzte Steinblöcke in Lagen."
+    },
+    {
+      "file": "Tholos tomb of Maleme 12.jpg",
+      "verdict": "depicts",
+      "note": "Mauer aus unregelmäßig geschichteten Steinblöcken mit Fehlstellen und Zwickelmörtel; Wand der Anlage."
+    },
+    {
+      "file": "Maleme F6A-40.jpg",
+      "verdict": "other_site",
+      "note": "Bemaltes Wappen eines modernen Verbands auf einem Schild am Zaun, mit Stierkopf und Blitzen in Blau und Rot."
+    },
+    {
+      "file": "Maleme Outcrop.jpg",
+      "verdict": "region_or_type",
+      "note": "Felsblockfeld mit abgerundeten Blöcken, Buschwerk und Schutzhütte; Gelände ohne Bauten."
+    },
+    {
+      "file": "Maleme Dam surface.jpg",
+      "verdict": "region_or_type",
+      "note": "Stille Wasserfläche mit bewaldeten Felsbergen und Uferbäumen; Landschaftsansicht ohne Strukturen."
+    },
+    {
+      "file": "Tholos tomb of Maleme 27.jpg",
+      "verdict": "depicts",
+      "note": "Innenraum der Anlage: Kammer aus geschichteten Steinwänden, Deckplatten aus Schiefer und fester Lehmfußboden."
+    },
+    {
+      "file": "101115-M-4471M-552 (5198864903).jpg",
+      "verdict": "other_site",
+      "note": "Vier bewaffnete Soldaten im Anmarsch über ein Feld; moderne militärische Szene."
+    },
+    {
+      "file": "22nd MEU Marines strengthen ties with Greek military 110608-M-BC209-333.jpg",
+      "verdict": "other_site",
+      "note": "Soldaten in Tarnuniform um ein Messgerät auf trockenem Gelände; moderne Übungsszene."
+    },
+    {
+      "file": "22nd MEU Marines strengthen ties with Greek military 110609-M-BC209-122.jpg",
+      "verdict": "other_site",
+      "note": "Nahaufnahme eines Soldaten mit Zielgerät und Gewehr; Personen und moderne Ausrüstung."
+    },
+    {
+      "file": "22nd MEU Marines train with Greek Military 110606-M-BC209-046.jpg",
+      "verdict": "other_site",
+      "note": "Soldaten knien vor einer Tafel mit der Aufschrift BATTLE OF MALEME; moderne Briefingsszene am Meer."
+    },
+    {
+      "file": "30 & 33 Squadron RAF Memorial - Tavronitis, Crete.jpg",
+      "verdict": "other_site",
+      "note": "Steinernes Denkmal mit Kreuz und vier Namensplatten, Kranz davor; eine Gedenkstätte an anderem Ort."
+    },
+    {
+      "file": "Flickr - DVIDSHUB - 22nd Marine Expeditionary Unit conducts bilateral training with Greece (Image 6 of 19).jpg",
+      "verdict": "other_site",
+      "note": "Marineinfanteristen in der Hocke mit angelegten Gewehren im trockenen Gelände; moderne Szene."
+    },
+    {
+      "file": "Sunrise in Maleme.jpg",
+      "verdict": "region_or_type",
+      "note": "Sonnenaufgang über Meer, Küstenlinie und verschneiten Bergen; reine Landschaftsansicht."
+    },
+    {
+      "file": "USMC-100520-M-9156T-4243.jpg",
+      "verdict": "other_site",
+      "note": "Soldat mit grünem Barett neben einem leichten Mörser und einer orangefarbenen Zahl 5; moderne Szene."
+    },
+    {
+      "file": "USMC-100520-M-9156T-4255.jpg",
+      "verdict": "other_site",
+      "note": "Zwei Soldaten, einer mit bandagierter Hand, unter einem Holzdach; moderne Szene mit Personen."
+    }
+  ],
+  "note": "Nur drei Aufnahmen zeigen die Anlage selbst (Tholos-Mauerwerk und Innenraum). Sechs Bilder zeigen den deutschen Kriegsgrabfriedhof und weitere den RAF-Gedenkstein oder moderne Militärübungen, also andere Orte; acht sind Dorf, Kirche, Strand, Felsfeld und Sonnenaufgang."
+}

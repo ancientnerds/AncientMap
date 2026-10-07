@@ -12,6 +12,8 @@ export interface PipelineStatus {
   status: 'online' | 'offline';
   last_heartbeat: string | null;
   last_cycle_ok: boolean;
+  /** Why the last run failed, or why it stopped. Null when it did not. */
+  last_error: string | null;
   total_elapsed: number | null;
   steps: Record<string, StepData>;
 }

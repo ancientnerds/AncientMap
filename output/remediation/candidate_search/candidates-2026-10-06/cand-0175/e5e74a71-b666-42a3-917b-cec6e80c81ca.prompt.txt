@@ -1,0 +1,38 @@
+site_id: e5e74a71-b666-42a3-917b-cec6e80c81ca
+name: Altar of the Twelve Gods
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Altar of the Twelve Gods-.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d3909d2cb7e3287ccae42c8d31ead993
+- Altar of the Twelve Gods 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\482daf1d9f271b797b702cfbf158b983
+- Altar twelve gods Louvre Ma666.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d20e5b41e9435751b759001874147f35
+- Altar of the Twelve Gods.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bbdc28163a13c04e21a3d6b8cd95b24f
+- Altar twelve gods cast.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7fb818bef41dcd5b142b7761e5938705
+- Cylindrical altar of the twelve gods (Apollo).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\30b71cf0428724eb643960c71196aecb
+- Cylindrical altar of the twelve gods (Zeus).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\53d12be5a7ba110cd840d88381f74b0d
+- Cylindrical altar of the twelve gods (Poseidon).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c1588562b5c8d8a36b9a1d48917eb2fe
+- Ancient Greece Marble Cylindrical altar of the Twelve Gods, found near the Agora, 350-340 BC.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\13540f515ef75308c3e2f28a654e414f
+- Cylindrical altar of the twelve gods.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\37362dbf7ac26c80de52ccfe4e7bd651
+- Round Altar with Twelve Gods 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\facc7a580eefef895023febbe5801a9c
+- Round Altar with Twelve Gods 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\874c1924bf5882bca65ecab2f6694d52
+- Portrait head of Demosthenes, found in the National Garden in Athens, Roman copy of and original by the sculptor Polyeuktos erected near the Altar of the Twelve Gods in the Ancient Agora in 280 BC, National Archaeological Museum of Ath.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77287af4b8ec47688d3a9c660edd1e8a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

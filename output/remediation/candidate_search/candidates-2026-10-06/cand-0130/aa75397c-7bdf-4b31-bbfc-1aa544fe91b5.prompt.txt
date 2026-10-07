@@ -1,0 +1,37 @@
+site_id: aa75397c-7bdf-4b31-bbfc-1aa544fe91b5
+name: Ancient Theatre of Philippi
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ancient theatre - Philippi.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb9beac48a1117bb5adb6ecb41226bd1
+- Philippi - 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a354f62f6670231980eabe97364349e1
+- Philippi - 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7aa75e82113811a5f781b07d6ad27e67
+- Ancient Theatre, built by Philip II in the 4th century BC and later reconstructed by the Romans, Philippi (7272297822).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb9e6fad56d7f87904875ab2914f1cba
+- Ancient Theater, Philippi Archaeological Site, June 2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41798b3e42f151e3a5b83c44bc2cf784
+- Archaeological site of Philippi BW 2017-10-05 13-35-57.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2dc4d6c90d0ee14e1dd433cb54f42ace
+- Archaeological site of Philippi BW 2017-10-05 13-34-03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f659b6cdbad7037e942adf32f1649784
+- Archaeological site of Philippi BW 2017-10-05 13-33-23.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\efcee34da515a0d59f3dc77486f6fa3d
+- Archaeological site of Philippi BW 2017-10-05 13-33-46.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6d7855946872934f02c5125a6289c656
+- Archaeological site of Philippi BW 2017-10-05 13-39-47.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9d12b9141603d550a63fdd136fd5511d
+- Archaeological site of Philippi BW 2017-10-05 13-36-31 stitch.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47f2a492155cff37b228ae7114f55f06
+- Archaeological site of Philippi BW 2017-10-05 13-40-03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f6ef1c69ce18b37b620b00892e2c107d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

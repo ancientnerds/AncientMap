@@ -1,0 +1,44 @@
+site_id: a85d081b-f87c-49fe-937e-3a13ce212d48
+name: Aqueduc Romain
+country: Algeria
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Aqueduc de Vieu.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2334cf67604fcd8e76a8895fb73da5a6
+- Aqueduc romain Ségovie détail Spain.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a590b2815968eec8bcb78de89bb78d41
+- Aqueduc romain Briord 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dfc277fb4a49a6fbcb6ba0cc693cba27
+- Aqueduc romain Briord 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f1fc7937ebe137b3f81f876158f55297
+- Aqueduc romain Briord 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\92d13c1618fa3fef5784b79541ee50c8
+- Aqueduc romain Briord 6.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b19317e6e27590fdbe20c76400dbd4df
+- Aqueduc romain Briord 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b38ef2fc6d9675478c266d52679133b7
+- Aqueduc romain Briord 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f005dd98b2198267c7f2ac2682e81c45
+- Carhaix-Plouguer (29) Aqueduc romain 04.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce792dc6af19ee67147f71967d5396ab
+- Carhaix-Plouguer (29) Aqueduc romain 03.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\abe46017a99d113d8bd49f5e323899fd
+- Carhaix-Plouguer (29) Aqueduc romain 01.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df01b51333af3e685084f28eddf6668a
+- Aqueduc gallo-romain traverse Malakoff Aix-en-Provence.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\79072dfc67c2ab99cd8c35b55ad4db96
+- Ansignan Aqueduc romain AL05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cbbd4f03b39ae021d0c8038124564137
+- Ansignan Aqueduc romain AL01.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\65c03b4720a6e086d96684ec78cc28d9
+- Ansignan Aqueduc romain AL40.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1659bab94e05a0f95fa0234729222301
+- Aqueduc romain de Mettet - 02.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ace2a0b31384a701186dc0c503f7b280
+- Algérie.Cherchell.Aqueduc Romain.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0f63a0b06ca82e1b8984cdffd7f485e
+- Ansignan Aqueduc romain AL13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e253303c67e30e1361bbe36949cd27e
+- Ansignan Aqueduc romain AL09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\adf060e719c290abb388ffd99805fdee
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

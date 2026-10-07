@@ -1,0 +1,12 @@
+{"site_id": "c70f123f-bf31-4408-8204-1b8ef717e0dd",
+ "answered_by": "mcode-judge-cand-0153",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Piddington Roman Villa.jpg",
+   "verdict": "region_or_type",
+   "note": "Nahaufnahme einer gemeisselten Inschrift (MVSEVM / THE VILLA OF TIBERVS CLAVDIVS SEVERVS). Museumsdokument, kein Grundriss und keine Site sichtbar."},
+  {"file": "Post medieval or modern furniture fitting (FindID 779575).jpg",
+   "verdict": "region_or_type",
+   "note": "Vier gruen corrodierte Metallfragmente auf weissem Grund mit cm-Massstab, sauber isoliert fotografiert. Fundstueck ohne erkennbaren Standort."}
+ ],
+ "note": ""}

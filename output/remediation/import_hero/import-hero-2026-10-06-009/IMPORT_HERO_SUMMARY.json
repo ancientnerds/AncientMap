@@ -1,0 +1,18 @@
+{
+ "chunks": 3,
+ "floor": {
+  "min_height": 300,
+  "min_width": 800
+ },
+ "may_empty_sites": 38,
+ "planned_rows": 727,
+ "planned_sites": 243,
+ "read_sha256": "f55139301fd8e2d515ad5cf47b98d784b84771affc80c595a7d4981ef6af331f",
+ "refusals": {
+  "local_file_too_small": 7,
+  "no_target_row": 392
+ },
+ "refused_sites": 399,
+ "run_stamp": "import-hero-2026-10-06-009",
+ "sites_with_an_import_image": 3153
+}

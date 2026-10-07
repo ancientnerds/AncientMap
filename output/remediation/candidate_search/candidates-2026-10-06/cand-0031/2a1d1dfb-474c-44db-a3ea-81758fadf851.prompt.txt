@@ -1,0 +1,35 @@
+site_id: 2a1d1dfb-474c-44db-a3ea-81758fadf851
+name: Huichún
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Fang Huichun Chinese Pharmacy in Hangzhou.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cacce1c48a3db70a6d979b698e0e5761
+- Hefang Street 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7f76061cb20a1d8cde4754477123517b
+- Hunchun Yanhe Xijie.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\286b3f2b3750a4077969d9390f2377ae
+- 巡道工出品 photo by Xundaogong 珲春国际公路客运站 - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b9c282f60888c556ab832391b628fe6
+- Fanghuichuntang 20230716 133004 BURST001 COVER.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e6aeeaf2ecf1c150fe9229effd0b73dd
+- Wild rejuvenation herb.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d21c176c1d74e9acd5a4a9bbedb823ee
+- Wild rejuvenation grass.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a5c310c438649886102d48aed25f025
+- 渤海時代の温特赫部城跡.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae4bca33989bf1150df316a6ad00b43b
+- ロシア製かばん.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b8248e2ed9d6f59aeba0d2bf51efca06
+- 琿春市政府庁舎.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\814ab17203b878932ba614aa31bcdc1d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

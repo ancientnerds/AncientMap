@@ -1,0 +1,31 @@
+site_id: d0e007ba-24cd-4929-b135-0b907397e531
+name: Long Low, Wetton
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Long, Low and Sleek (4760931765).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\06f349e0f40c167e75f8ea0d65ca9c5f
+- Factory, crane, and long, low vessel, on the Danube.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec821e3b5d4fca89f48feccf11da50e9
+- Long, Low Purple Lacquer Table with Objects MET DP807517.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fc94e5616a30cb83b1a9a4d849e3d5ac
+- Long low farm building at Leaston - geograph.org.uk - 4389520.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3618358b2a6bb90083cbd24722c41c5
+- Long low barn alongside the Ure - geograph.org.uk - 2344202.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\793639f60baa23f60d757bae59da3748
+- A long, low farm building at Barntown - geograph.org.uk - 3626439.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e7a24bd51d5e61f2bd8a5ee2448c93b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

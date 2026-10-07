@@ -1,0 +1,14 @@
+{
+    "site_id":  "fac932af-fd71-4fca-93a7-508c6fbf5546",
+    "answered_by":  "worker: cand-0196",
+    "model":  "MiniMax-M3.1-Flash-Preview",
+    "answered_model":  "MiniMax-M3.1-Flash-Preview",
+    "verdicts":  [
+                     {
+                         "file":  "En route; a descriptive automobile tour through nine countries and over nineteen great passes of Europe (1908) (14583171587).jpg",
+                         "verdict":  "other_site",
+                         "note":  "Buchtafel eines Hufeisenbogen-Innenraums, kein antikes Aquae ductus."
+                     }
+                 ],
+    "note":  ""
+}

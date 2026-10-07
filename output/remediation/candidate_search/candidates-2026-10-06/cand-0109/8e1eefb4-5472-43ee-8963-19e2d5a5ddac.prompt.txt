@@ -1,0 +1,44 @@
+site_id: 8e1eefb4-5472-43ee-8963-19e2d5a5ddac
+name: Neapolis Archaeological Park
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Acanthus Flowering in Neapolis Archaeological Park, Siracusa.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17fb8bf79595ce722441605ab64049e9
+- Building inside Neapolis Archaeological Park, Siracusa, Sicily.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e213a17b24b05d0601fbc501d5429d4
+- Neapolis Archaeological Park in Syracuse, arrival, 121533.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c301ac121a5cb8079cf3dcddb2b81878
+- Neapolis Archaeological Park in Syracuse, arrival, 121531.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d01b5fe78f3345f869ee4ed45604467f
+- Neapolis Archaeological Park in Syracuse, arrival, 121532.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5585b35ceb71162e0c19ea3ca2d132ee
+- Neapolis Archaeological Park in Syracuse, arrival, 121530.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f062c002589d7314156da2481150c409
+- Neapolis Archaeological Park in Syracuse, arrival, 121534.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77df0b68df1ca4947bc5d7e8b9d85e6f
+- Zona archeologica di Siracusa - veduta aerea.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e218bb9580536ed0a2b289bd7cd8a550
+- "Im Parco Archeologico della Neapolis befinden sich Bauwerke der antiken Stadt" 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1fb9c24270f30214996247f180aa9fdc
+- "Im Parco Archeologico della Neapolis befinden sich Bauwerke der antiken Stadt" 20.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e5f209ad0174a077a5ca90853555ed43
+- "Im Parco Archeologico della Neapolis befinden sich Bauwerke der antiken Stadt" 35.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\03d1951913a6a122e9c57df4f772581b
+- "Im Parco Archeologico della Neapolis befinden sich Bauwerke der antiken Stadt" 15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1147dd86d58af975136430ff57ba3a67
+- Quarries over Paradise, Neapolis Archaeological Park of Syracuse, 121535.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\68884fc6d8ef2a86f9cbef81be02e277
+- Nymphaeum, Neapolis Archaeological Park of Syracuse, 121550.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f4535924079a94bebdfddfe5f41da78
+- Latomia dei Cordari, Neapolis Archaeological Park of Syracuse, 121581.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\78b0ee227d197a76f7a42ebd48951e6f
+- Latomia dei Cordari, Neapolis Archaeological Park of Syracuse, 121583.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7dccaf96955cf79706f8fefb88f3796b
+- Quarries over Paradise, Neapolis Archaeological Park of Syracuse, 121536.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3a6634664cfb4a4032cf94c3275aa9d
+- Latomia dei Cordari, Neapolis Archaeological Park of Syracuse, 121582.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d34289682bb81e92b5781f1166251ce8
+- Nymphaeum, Neapolis Archaeological Park of Syracuse, 121554.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cabe11f1a962f046ecd384e7cd2ca903
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

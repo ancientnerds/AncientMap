@@ -1,0 +1,37 @@
+site_id: 7ee94c43-3a26-44db-8dee-bd7829b5a171
+name: Castro of Castelo Velho
+country: Portugal
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Castelo Velho 01 castro by-dpc.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02fee5222483c9079079a91ac3d53b50
+- Castelo Velho 02 castro by-dpc.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6a70037cce3ddc127e9978ad63c52afb
+- Castelo Velho 03 castro by-dpc.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e312ee250deb252c8dbe3601eeeb1385
+- Castelo Velho de Freixo de Numão - Portugal (50801841192).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76edafe6fa3dc272730ee7ff922ab83e
+- Castelo Velho de Freixo de Numão - Portugal (51384409676).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\edc1279979699b72acf35b86e253c478
+- Castelo Velho de Freixo de Numão - Portugal (51385422080).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f932a43dadd9c36bb1812d59b92a2f18
+- Castelo Velho de Freixo de Numão - Portugal (50801840337).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce103dff22b08359298aeaa2b3776aab
+- Castelo Velho de Freixo de Numão - Portugal (50801840612).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6bcfee33ae40ab71a13caf8fd1e9d5ae
+- Castelo Velho de Freixo de Numão - Portugal (51514472173).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05a4ebe8789b5056f384d48ae97d2eb0
+- Castelo Velho de Freixo de Numão - Portugal (50801724111).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fca0c79b0d334983f187e7843118c729
+- Castelo Velho de Freixo de Numão - Portugal (50801724606).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\51dae4532c270366287ec1b96c92d443
+- Castelo Velho de Freixo de Numão - Portugal (50801725461).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\43bb821fdaae5c47c7ae5c6b0b0d4abe
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

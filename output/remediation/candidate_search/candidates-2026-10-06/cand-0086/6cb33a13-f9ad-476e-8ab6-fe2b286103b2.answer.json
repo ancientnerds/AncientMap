@@ -1,0 +1,14 @@
+{
+  "site_id": "6cb33a13-f9ad-476e-8ab6-fe2b286103b2",
+  "answered_by": "mcode-judge-cand-0086",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Antioch in Pisidia Theatre 2965.jpg",
+     "verdict": "other_site",
+     "note": "Grosses Theater mit halbkreisfoermigem Sitzbau auf freier Hochebene, Dorf und Seenbecken dahinter; nicht Sagalassos."},
+    {"file": "Antioch in Pisidia Theatre 2963.jpg",
+     "verdict": "other_site",
+     "note": "Halbkreisfoermige Sitzreihen aus Stein auf einem grünen Hang, davor Stufenfundamente; anderes Theater."}
+  ],
+  "note": ""
+}

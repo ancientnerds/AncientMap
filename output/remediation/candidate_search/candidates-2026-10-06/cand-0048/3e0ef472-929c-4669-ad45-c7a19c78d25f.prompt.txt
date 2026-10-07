@@ -1,0 +1,35 @@
+site_id: 3e0ef472-929c-4669-ad45-c7a19c78d25f
+name: Lower Swat Valley
+country: Pakistan
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Bahrain of Swat Valley, Pakistan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de85368dc8a6e3aa62f13cede18f6b32
+- Balo Kale Stupa Swat Valley Pakistan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d5b26d65151c1f23f234c8f786e729ad
+- The remains of the Hindu Shahi Tower next to Amlukdara Stupa, Swat Valley Pakistan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ddb815294b260cd606722d417c05c411
+- Malam Jabba Top Swat valley.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8ff4513db8551d40928d78b944a9c6b6
+- Dome of the Amluk Dara Stupa, Swat Valley, Pakistan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d7fa50c594b0c422993eaceca90ebe8a
+- Spingal Sar (Lower - Lake).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec2268f2e7bbf0b698887e9e382d43d7
+- Spingal Sar (Lower Lake).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5eceb1392f6686c07df3dc19237d7edd
+- Beautiful-view-of-thana-bypass.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ccd746895ea3f3ad051c9bd398f620c1
+- The Chitral campaign - a narrative of events in Chitral, Swat, and Bajour (1895) (14778483291).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da2d7cbacafbe09fe93d3c7560c89e20
+- DIR SAWAT.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\12ee64c10f44d497605216c9e1509cd5
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

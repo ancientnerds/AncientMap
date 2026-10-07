@@ -1,0 +1,48 @@
+site_id: 4b8583a1-da7c-4bf9-a702-05298be4227c
+name: Roma Tiyatrosu
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Roman Theatre in Orange 2008.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb55125b8221d6f3f1d2dac3fb545d9a
+- Palmyre - théâtre pano.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d7918b00ee2d9c9527e280f412af100
+- Le Théâtre Antique d'Orange, 2007.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a2d17600951ace91cf783d0427966e11
+- Ancient Roman theatre in Mérida 2023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c9c3a1b272bb46e586d1e7670e969bd5
+- Teatro romano de Mérida. España-2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bffecf54894200ed1e683eb1c0d93567
+- Roman Theatre in Verona (57325).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e20e27538e4851b090e3b59809de457d
+- Roman Theatre in Verona (68418).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\193ae45c580d68f5719557ff70fd8237
+- Roman Theatre Philippopolis.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5f13916cb8069ab0d4963149a7e5efad
+- Roman Theatre in Verona (80406).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\266aa8002a29f5dfb1b54667d2115dbd
+- Roman Theatre in Verona.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\abc4f281c74072890c2a044a34925441
+- Roman Theatre in Verona (65410).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0d486439fa74ec31b34ebb1222def2ba
+- Roman Theatre in Verona (99356).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e827535ec844c2c0907a287bc4cf592
+- Ankara Roma Tiyatrosu - Restorasyon süreci (20.08.2023) 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f4ecf3004d76149aa7ea10b2b391af8
+- Ankara Roma Tiyatrosu - Restorasyon süreci (20.08.2023) 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0432d554e4eea7104b57029499394cd3
+- Ankara Roma Tiyatrosu - Restorasyon süreci (20.08.2023) 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ccfb34fdb3fc65ce06accc2687bd45f0
+- Ankara Roma Tiyatrosu - Restorasyon süreci (20.08.2023) 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af4993c12e15f8bc7f14ccd66b0be655
+- Ankara Roma Tiyatrosu - Restorasyon süreci (20.08.2023) 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb40a915b400342ce8e66d345f348cd5
+- Ankara Roma Tiyatrosu.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3d0320299f4a916af6edfb1b33d4f3b1
+- İznik Roma Tiyatrosu .jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0c8867aed984c5ad1884f56b3a456c2c
+- Ankara Roma Tiyatrosu - Restorasyon süreci (20.08.2023) 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8699c38e9a7a5689304546b98f67f63
+- Ankara Roma Tiyatrosu - Restorasyon süreci (20.08.2023) 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7551e893c10632fb5c74fcbeea6cbb7d
+- Ankara Roma Tiyatrosu, Ulus, Altındağ.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\272497a4504bec813b2b62de7b599698
+- Ankara Roma Tiyatrosu - Restorasyon süreci (20.08.2023) 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17adb4d05314f4e10f548e1a2ea365a3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

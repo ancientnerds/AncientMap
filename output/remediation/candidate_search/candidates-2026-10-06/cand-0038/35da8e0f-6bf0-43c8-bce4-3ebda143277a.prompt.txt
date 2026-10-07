@@ -1,0 +1,30 @@
+site_id: 35da8e0f-6bf0-43c8-bce4-3ebda143277a
+name: El Tigre (Campeche)
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Excentric Knives (El Palmar, Late Classic 600-800 AD) and Balance Weights (El Tigre - Itzamkanac, Classic Terminal 800-1000 AD).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fc1f9c9f4847993c26228652452c1154
+- Giant Obsidian Knife ... El Tigre - Itzamkanac, Classic Terminal (800-1000 AD).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76dfe4ee6163b2919fc4f7a6dfc23b65
+- Offering of 131 Stone Knives ... El Tigre - Itzamkanac, Classic Terminal (800-1000 AD).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ee6e34448bb44344a471e25b99bc63d6
+- Offering Ceramic Box with Lid containing Excentric Flint Knives ... El Tigre - Itzamkanac, Classic Terminal (800-1000 AD).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5bcdab40b99752efa2425e0251e4e509
+- Rio El Tigre Estado Monagas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3ba3e3a3ca4566a82b5c74afa4019a8e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

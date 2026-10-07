@@ -1,0 +1,43 @@
+site_id: b3aacfb1-87e7-448e-b6a3-1c394670aad3
+name: Pod
+country: Bosnia and Herzegovina
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- POD2ByPhilKonstantin.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\91bcf6e888d8ba8d5acc5e3a765f4a6e
+- Równia pod Śnieżką (2019).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b24839866b0cf666589bfecd93588f2d
+- Avis-deces-charles-hemricourt-de-grunne.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6d2409fe44cb1ba182357e2b13f3a854
+- Log Pod Mangrtom und Rombon 10032015 0593.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0c97c1ea83faf55bc33bb66656d905a5
+- Sonny Sandoval of POD performing.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7ebd4fa85490116ecdf5d9aea8176cb8
+- Bystřice pod Hostýnem - Pod Kaštany - View North on Zámek Bystřice pod Hostýnem.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6f7443acbe059a45b0756efd6583c49d
+- 009 Pod of Spinner dolphins swimming in the Indian ocean Photo by Giles Laurent.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f3312e2c8d43030973b5211b9617a784
+- PODByPhilKonstantin.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\43c1067ca1880db8f927896e2b80b4ff
+- Hippo pod edit.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e6024873e333aa886b58a63a7f4f5dbf
+- The main pod of the CN Tower.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d5a03a2d1e9500cb39f9d60e21476c0b
+- Wisła wczesnym ranem poniżej zapory w Łączanach pod Krakowem, 20250105 0832 6930.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc67f4a3476563018f9e64c000fb9cdd
+- Wisła pod Ochodzą w województwie małopolskim, 20231119 0706 2690.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e645006ec2c45d04f42438973cc985ad
+- Wisła wczesnym ranem poniżej zapory w Łączanach pod Krakowem, 20250105 0836 6943.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc485782ccd49925725f387c9a8e2a7c
+- 2018 Schronisko PTTK Pod Łabskim Szczytem 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e190369a43608fb7563655e47d8b612
+- 2018 Zajazd Pod Kukułką w Rzeczce 6.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ca319f3cde8b67aa4d839406b7ebd03c
+- 2018 Zajazd Pod Kukułką w Rzeczce 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7033866317df11c1c8938d88d503e33f
+- 2018 Schronisko PTTK Pod Łabskim Szczytem 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\abb0a5c73a011b21e050ababd2752589
+- 2018 Zajazd Pod Kukułką w Rzeczce 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\324cf76b5c47bae901dd680eca829a48
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

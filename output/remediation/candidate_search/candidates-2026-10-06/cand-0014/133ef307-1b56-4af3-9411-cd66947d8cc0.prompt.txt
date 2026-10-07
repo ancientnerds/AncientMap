@@ -1,0 +1,33 @@
+site_id: 133ef307-1b56-4af3-9411-cd66947d8cc0
+name: Berth Hill
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Berth Hill - geograph.org.uk - 5544249.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fcbeddba3f89770e3f5ff241212398a5
+- Footpath below Berth Hill - geograph.org.uk - 5614884.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d3f051b8dc58ff76d9e3b2de9c7a1d89
+- Walking alongside Berth Hill - geograph.org.uk - 5614872.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5715e29fcef109723db041baf1b00ba2
+- Grass field below Berth Hill - geograph.org.uk - 5614881.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c4b7542eb744bc5d23d18fbeb37855e
+- Berrow Wood, Berth Hill and beyond - geograph.org.uk - 4268437.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bbee9789b1e1851ad9264051e071b508
+- Gate on a footpath below Berth Hill - geograph.org.uk - 5614874.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6dbe33ae320d695c6bfd83d136f8980e
+- Emerging crop beside woodland, Berth Hill - geograph.org.uk - 6170938.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\95d9005530d6f5427d394c80611a5bca
+- Sheep family on hill near Berth Farm - geograph.org.uk - 1863338.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bde509660c68e56ec40e572ff944046a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,32 @@
+site_id: a80b06cb-b249-4f98-b9dd-e4bede83b2db
+name: Picken's Hole
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Thomas Boone Pickens.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c3a4bdcc88cf654e47be0a059c12c011
+- Letter, 12 September 1862, page 2 of 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\54cb40748c2aaeeec737b011aa1699e2
+- Missionary travels and researches in South Africa - including a sketch of sixteen years' residence in the interior of Africa, and a journey from the Cape of Good Hope to Loanda, on the west coast, (14597877377).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a5715b1c7259e0e7a70f45cb53688d0f
+- Missionary travels and researches in South Africa - including a sketch of sixteen years' residence in the interior of Africa, and a journey from the Cape of Good Hope to Loanda, on the west coast, (14782052034).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5e99ad71e3a11d4dd993db41df94386
+- Missionary travels and researches in South Africa - including a sketch of sixteen years' residence in the interior of Africa, and a journey from the Cape of Good Hope to Loanda, on the west coast, (14784393095).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8eff26b7c49fcefe77899cb3c59dc996
+- The boys of '61; or, Four years of fighting. Personal observation with the army and navy, from the first battle of Bull run to the fall of Richmond (1884) (14589776177).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5381f41276f0d98ae71333d6d1852722
+- Some People With Severe Depression - People With Mental Illnesses Who Enrich Or Have Enriched Our Lives (22741192277).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a14ce9c119239b3c6bcf8ef55cec6ebd
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

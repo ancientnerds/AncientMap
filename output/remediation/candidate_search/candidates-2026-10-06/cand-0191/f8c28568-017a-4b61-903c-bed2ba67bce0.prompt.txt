@@ -1,0 +1,35 @@
+site_id: f8c28568-017a-4b61-903c-bed2ba67bce0
+name: Madera Caves
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- TROY-TROJAN-HORSE-LATCHED-KNOWLEDGE.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b111fafd352a60a933341cac37454ae3
+- La Destruction de Troye la Grant, translatée de latin en françois et mise par personnages. Cy sensuit lystoire de la des, LDUT397(1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\31b6809d64f7ddf5d6fc483c52d5f5e5
+- The Trojans Bring the Wooden Horse into Their City MET DP854948.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\816c302e20c9d6dafc764101fb7d8cdc
+- Dish MET LC-59 23 2-001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62aaa40550f2ae675084c600f36ce65e
+- Mykonos Pithos 2240 (Trojan Horse detail).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1844bcb3e6fdc0f9578fe35a123a72a9
+- IndoGreeksTrojanHorse.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bd0c3e26513cd2b3b9da44b71954f448
+- The trojan horse.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff1018bd7a3d66d97c51ec127d9be1df
+- Roman fresco depicting the arrival of the Trojan horse before the gates of Troy found in the House of Cipius Pamphilus Felix (Pompeii VII 6,38).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e299850ad26cea4ef02ad321d4b02c2c
+- Trojan horse on Corinthian aryballos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56b4af07ccc6d0ea89257d25080d7b03
+- Trojan horse Çanakkale.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2db962a665a02bb703553e09fec0ee64
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

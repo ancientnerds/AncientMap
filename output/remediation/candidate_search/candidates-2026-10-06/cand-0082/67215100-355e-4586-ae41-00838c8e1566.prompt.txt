@@ -1,0 +1,34 @@
+site_id: 67215100-355e-4586-ae41-00838c8e1566
+name: Temple of Diana, Cefalù, Sicily
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Crupi, Giovanni (1861-1925) - n. 1173 - Cefalù - Palermo - Edifizio greco (Tempio di Diana) - Cm 23x17 - Delcampe.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b2db74a337a09dd1433514e6a12f0f83
+- Crupi, Giovanni (1861-1925) - n. 1165 - Cefalù - Palermo - Edifizio greco (Tempio di Diana) - Cm 23x17 - Delcampe.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56d08e09beddff8073b882cce45e8bff
+- Crupi, Giovanni (1861-1925) - n. 1172 - Cefalù - Palermo - Edifizio greco (Tempio di Diana) - Cm 23x17 - Delcampe.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14ba1ffbf31417f49351f860452f4c8e
+- Crupi, Giovanni (1861-1925) - n. 1169 - Cefalù - Palermo - Edifizio greco - Cm 23x17 - Delcampe.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec1b1aa114c58cd5e6dfa0572a45b233
+- Tempel van Diana-Cefalu.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\943c724d3b9a572c2d852881318525e9
+- Tempio di Diana-Cefalú.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d68aa6f64e7c413144b571c926035074
+- Sea houses viewed from the sea, Cefalu, Sicily, Italy (9452625422).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bfc063f1e0d92e5e87d9fe77d117928d
+- Cefalu sea viewed, Sicily, Italy (9449830531).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\655a09ed313905e00ee195aa03f71d59
+- Castle of Cefalú, Sicily, Italy (9449681929).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3be71061c7e3c1285d92dee0c8437987
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

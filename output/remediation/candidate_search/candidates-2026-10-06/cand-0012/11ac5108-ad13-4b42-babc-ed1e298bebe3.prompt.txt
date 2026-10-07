@@ -1,0 +1,46 @@
+site_id: 11ac5108-ad13-4b42-babc-ed1e298bebe3
+name: Templo del Sol
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Templo del sol(zona norte).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3c3f1a1f9ffc739af8a858074e0c9853
+- Entrada a monumento 'Templo Del Sol' -2025-.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\038d03d8c8ecc1d8dae359da6df8b818
+- Vista situada en tierra del monumento 'Templo Del Sol' -2025-.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3b2c32a1679a8a25867a27221a65d96a
+- Templo del sol, Pachacamac.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d2f3ce9586665f150756780c9b629521
+- Templo del Sol (escala).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4a906dc923a0fa4baefb810254b0815d
+- Templo del sol - Pachacamac.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bfb72462722ef203cf78fea12504e9be
+- Templo del Sol 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4262b73e00ed0ac4d5afc0e561a6aafd
+- Templo del Sol, Pachacamac.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f3417f153a9929bdd79a3489afdcfa6
+- TEMPLO DEL SOL 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c88f7e6f67582e9eb080727338497e8b
+- Templo del Sol 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db1a9501f471220d563b7f5dbccb63aa
+- Entrada templo del sol Pachacamac.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\36179016a0c8c12a9729e957db5fe5cd
+- Entrada lateral del Templo del Sol 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c3bae262d8998cad1facb6cdeca9475
+- Pachacamac Templo del Sol 2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f2bea085267989551aa6d872fd637b88
+- Templo del Sol- Pachacamac 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f25fc875fa1094d23112a7fa2bc1dc15
+- Exteriores del Templo del Sol.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae00b9e92df0a4f440b23d818bcf839a
+- Letrero templo del sol.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d792b1d0e452f30f3033a3cec7f11055
+- Entrada al Templo del Sol.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\282474559210abc1807c991eeabd6ed1
+- Pachacámac - Templo del Sol 20130720-1549.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1bd360bfa4e96fbd63e5005f9aae8a14
+- Maqueta hecha con impresión 3D del 'Templo Del Sol' -2025-.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d64252fdf5bc9e0460c9a5d0fdb6c3cb
+- Templo del Sol.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6a503ec5fc88edea4c767327b3d51241
+- Templo del Sol en Pachacamac.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b701dc6b05430e5b4c35a9ea2fd09fba
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,55 @@
+site_id: 5f745388-3793-459b-b55f-90dbb5bfed78
+name: Lefke Gate
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Iznik Wall at Lefke Gate 8256.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f9a11dfe9564fb5fd4817bab6649bb0
+- Iznik Wall at Lefke Gate 8255.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\54365ebedd5894e3068cf33513ac739a
+- Iznik Wall at Lefke Gate 8269.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2f72ca9a009e5382226de5a45cbdb5d0
+- Iznik Wall at Lefke Gate 8275.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b5a404c79fedb567b5170c0b148c661b
+- Iznik Wall at Lefke Gate 8253.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1fb41bc0eb9ff2355ac2c48e4e3c6d70
+- Iznik Wall at Lefke Gate 1255.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c9c7b2fe41a5c9398ead883d147faa66
+- Iznik Wall at Lefke Gate 1682.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d27c9312129d8514dc4bb1864f2c454
+- Iznik Wall at Lefke Gate 8276.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44f036d4fc3ce5d3a24bea7c86ce0f69
+- Iznik Wall at Lefke Gate 1248.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b4ea957ee3ad231a7b043f1b3b63911
+- Iznik Wall at Lefke Gate 8252.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\20b13be665eeb35183797408ac871378
+- Iznik Wall at Lefke Gate 1681.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02550d7e685763179e28f13374e45761
+- Iznik Wall at Lefke Gate 8257.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e024303644dc9b427e8328873aefd958
+- Iznik Wall at Lefke Gate 1254.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b4ea0652d4107f57ecec6b416ce6f68
+- Iznik Wall at Lefke Gate 8258.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c8dba51c710252d4c6f56d35c86d529
+- Iznik Lefke Gate 97 017.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c0fdb403218c8e7504da00c9759a5bd
+- Iznik Wall from Lefke Gate to Istanbul Gate 8282.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77c1a7dab41ae135846bc611674c20fa
+- Lefke Gate (the eastern gate) with Roman triumphal arch dating to the 1st century AD, later part of Nicaea's Byzantine fortifications, Iznik, Turkey (26693100079).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c0e62d74bd919726e34fae8d68b594b2
+- Iznik Wall from Lefke Gate to Istanbul Gate 8277.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\24633e63b52eebc6093c81783acb09ff
+- Iznik Wall from Yenişehir Gate to Lefke Gate 1667.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ec01935095f4de7d3508aa7c89f9963
+- Lefke Kapısı 2026-08-29 17.10.56 1789997646.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b1c8bd6876577fedb01f184c19aac15e
+- Lefke Kapısı 2026-08-29 17.10.57 1789997659.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e62cc1f779a2fb84caadea93009522f
+- Lefke Kapısı 2026-08-29 18.05.05 1789997687.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d959e7d9d6837a0884a9c4504afe1c5c
+- Lefke Kapısı 2026-08-29 18.05.20 1789997706.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\633d21bbb97f911ad147deee8f6451e0
+- Lefke Kapısı 2026-08-29 18.05.24 1789997675.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\46651d0361d06835f8c6f4db44659ef8
+- Lefke Kapısı 2026-08-29 18.05.30 1789997724.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb30d4ca25a56b96ca77004d1d4c83d5
+- Lefke Kapısı 2026-08-29 18.06.09 1789997740.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3111eea255f1c8423b0cfb76d9c4a3a5
+- İznik Kalesi, Lefke Kapısı 1, İznik, Bursa, Türkiye.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\86d98b51efeef274ce9dffa3ca4eb171
+- İznik Kalesi, Lefke Kapısı 2, İznik, Bursa, Türkiye.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5fcf01c801879c22c627ed24076764a2
+- İznik Kalesi, Lefke Kapısı 3, İznik, Bursa, Türkiye.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\253695ecc57b40241002040e174e3900
+- İznik Kalesi, Lefke Kapısı 4, İznik, Bursa, Türkiye.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0ab57afe9070fcfc52a6a9d5354b6089
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

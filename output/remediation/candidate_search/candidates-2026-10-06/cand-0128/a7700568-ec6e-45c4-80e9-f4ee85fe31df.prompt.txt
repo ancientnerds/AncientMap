@@ -1,0 +1,42 @@
+site_id: a7700568-ec6e-45c4-80e9-f4ee85fe31df
+name: Soğmatar
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Soğmatar from Urfa in 1997 124.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5aa979e51aa71a86e736e6c1a29b8fc8
+- Soğmatar from Urfa in 1997 141.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8297f01d89e31cbe2edd243b7b5e126b
+- Soğmatar from Urfa in 1997 159.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1d2803ece7035f11b9ebfb46fbbe64c0
+- Soğmatar from Urfa in 1997 151.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9f5b353df95cc51575196ecab9682485
+- Soğmatar from Urfa in 1997 138.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41bf6ebc403b5e711ce23594da3d7028
+- Soğmatar from Urfa in 1997 158.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\80dd2f20f6312acea4b13b5480077616
+- Soğmatar from Urfa in 1997 136.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9557abc4a989335929d5cd7b9fcff09b
+- Soğmatar from Urfa in 1997 164.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\55ab0111e98834518c5cbe7f27fd61e8
+- Soğmatar from Urfa Carvings in 1997 146.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\70aa4459ba4fa36b5a5ceb98d93d8695
+- Soğmatar from Urfa Carvings in 1997 144.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\51eb3c91004550bb8894515c4e7dc2e3
+- Soğmatar from Urfa in 1997 145.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\709b1c1d7c6afc9092ca0d817c8aafc8
+- Soğmatar from Urfa in 1997 135.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\319257a664d2cefe7fcfa8c7f1a849e6
+- Soğmatar Hb 29.05.2010 Pognon-Höhle, Felstempel Skulpturen 554.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1194fef636c5b9d83f13adac33bd787b
+- Soğmatar Hb 29.05.2010 Pognon-Höhle, Felstempel Votivnische 556.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\489718fc8748f726c86c96fb554b9a5c
+- Soğmatar Hb 29.05.2010 Pognon-Höhle, Felstempel Skulpturen 558.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\de59793afa066b4e641f5fb29062adfc
+- Soğmatar from Urfa locals in 1997 137.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\935102ffb84f625147b72b3790a0558d
+- Soğmatar from Urfa Carvings in 1997 150.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\16e310b5e157172d8b4d6e6314aeaf36
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

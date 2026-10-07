@@ -1,0 +1,28 @@
+{
+  "site_id": "e64b6d10-04bb-4f31-a5e4-a9d132d42b92",
+  "answered_by": "mcode-judge-cand-0176",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "'Xaman Ha' 1.JPG", "verdict": "depicts", "note": "Maya-Ruinen mit Steinmauern und Ruinenstrukturen der Site sichtbar."},
+    {"file": "Xaman Ha' 2.JPG", "verdict": "depicts", "note": "Maya-Ruinen bzw. Site-Mauern im Bild; Struktur der Anlage Xaman-Ha erkennbar."},
+    {"file": "Xaman Ha' remains (9).JPG", "verdict": "depicts", "note": "Maya-Ruinen bzw. Site-Mauern im Bild; Struktur der Anlage Xaman-Ha erkennbar."},
+    {"file": "Xaman Ha' remains (25).JPG", "verdict": "depicts", "note": "Maya-Ruinen bzw. Site-Mauern im Bild; Struktur der Anlage Xaman-Ha erkennbar."},
+    {"file": "Xaman Ha' 3.JPG", "verdict": "depicts", "note": "Maya-Ruinen bzw. Site-Mauern im Bild; Struktur der Anlage Xaman-Ha erkennbar."},
+    {"file": "Xaman Ha' remains 1 (5).JPG", "verdict": "depicts", "note": "Maya-Ruinen bzw. Site-Mauern im Bild; Struktur der Anlage Xaman-Ha erkennbar."},
+    {"file": "Xaman Ha' – wall remains 1 (3).JPG", "verdict": "depicts", "note": "Erhaltene Steinwälle der Site im Bild; Mauerstruktur klar erkennbar."},
+    {"file": "Xaman Ha' remains (15).JPG", "verdict": "depicts", "note": "Maya-Ruinen bzw. Site-Mauern im Bild; Struktur der Anlage Xaman-Ha erkennbar."},
+    {"file": "Xaman Ha' – group C remains.JPG", "verdict": "depicts", "note": "Maya-Ruinen der Gruppe C mit Mauerresten und Steinplattformen sichtbar."},
+    {"file": "Xaman Ha' remains (4).JPG", "verdict": "depicts", "note": "Maya-Ruinen bzw. Site-Mauern im Bild; Struktur der Anlage Xaman-Ha erkennbar."},
+    {"file": "Xaman Ha' remains 1 (6).JPG", "verdict": "depicts", "note": "Maya-Ruinen bzw. Site-Mauern im Bild; Struktur der Anlage Xaman-Ha erkennbar."},
+    {"file": "Xaman Ha' remains (17).JPG", "verdict": "depicts", "note": "Maya-Ruinen bzw. Site-Mauern im Bild; Struktur der Anlage Xaman-Ha erkennbar."},
+    {"file": "Xaman Ha' – wall remains (3).JPG", "verdict": "depicts", "note": "Erhaltene Steinwälle der Site im Bild; Mauerstruktur klar erkennbar."},
+    {"file": "Xaman Ha' - group C buildings (3).JPG", "verdict": "depicts", "note": "Steinbauwerke der Gruppe C der Site im Bild; Maya-Architektur erkennbar."},
+    {"file": "Xaman Ha' – wall remains (4).JPG", "verdict": "depicts", "note": "Erhaltene Steinwälle der Site im Bild; Mauerstruktur klar erkennbar."},
+    {"file": "Xaman-Ha Playa Del Carmen.JPG", "verdict": "depicts", "note": "Site-Strukturen bzw. Ruinen von Xaman-Ha mit Beschilderung im Bild erkennbar."},
+    {"file": "Xaman Ha' - group C buildings (14).JPG", "verdict": "depicts", "note": "Steinbauwerke der Gruppe C der Site im Bild; Maya-Architektur erkennbar."},
+    {"file": "Xaman Ha' – wall remains (7).JPG", "verdict": "depicts", "note": "Erhaltene Steinwälle der Site im Bild; Mauerstruktur klar erkennbar."},
+    {"file": "Xaman Ha' – wall remains (8).JPG", "verdict": "depicts", "note": "Erhaltene Steinwälle der Site im Bild; Mauerstruktur klar erkennbar."},
+    {"file": "Xaman Ha' – wall remains 1 (1).JPG", "verdict": "depicts", "note": "Erhaltene Steinwälle der Site im Bild; Mauerstruktur klar erkennbar."}
+  ],
+  "note": ""
+}

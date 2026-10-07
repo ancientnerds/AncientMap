@@ -1,0 +1,44 @@
+site_id: ba0866bd-4186-4722-8e4d-ea67e228062b
+name: Apliki
+country: Cyprus
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- A@a apliki village from palechori dam 1 cy - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e2c2dde04df8fea8a043eb51886272c9
+- A@a apliki village cyprus - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14e5acbb08561d23d8dd4956e0676d03
+- A@a Apliki village Nicosia Cyprus - panoramio (7).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae4e3a3aeebdc6631937a7e21f8a0d3b
+- A@a Apliki village Nicosia Cyprus - panoramio (8).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9be0a5f76eb02ea11d532b90fc4493fe
+- A@a Apliki village Nicosia Cyprus - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1ba01f7330016795529bf09bdb964297
+- A@a Apliki village Nicosia Cyprus - panoramio (18).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dfb30a8f9375140de05231e12e79521b
+- A@a Apliki village Nicosia Cyprus - panoramio (13).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\28dd190039b045895d4a5e2ccaecdf1e
+- A@a Apliki village Nicosia Cyprus - panoramio (14).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d93b9a4e2f6d32f8608f85c1ce1a7a47
+- A@a Apliki village Nicosia Cyprus - panoramio (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a7b38018aef200af6edcfc89ab78044c
+- A@a Apliki village Nicosia Cyprus - panoramio (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a78e84b2c03e6f725ebf35a2e8cadb02
+- A@a Apliki village Nicosia Cyprus - panoramio (9).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e4172ffd7b60fc7a18cb964377668e2
+- A@a Apliki village Nicosia Cyprus - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ddac4ebd65954c3999c40549e57a6482
+- A@a Apliki village Nicosia Cyprus - panoramio (15).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5e62de99d437727f1e5cfeee356b7651
+- A@a Apliki village Nicosia Cyprus - panoramio (17).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\605ef937acfbb0a4daacb721b1579d76
+- A@a Apliki village Nicosia Cyprus - panoramio (11).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\afb629af693ef19fd2e745e1e9ed0598
+- A@a Apliki village Nicosia Cyprus - panoramio (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\22cecfbdad49fe8780334dd136008ed1
+- A@a apliki village from palechori dam 2 cy - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\18534ee01866813229c82c1fc69365b5
+- A@a Apliki village Nicosia Cyprus - panoramio (10).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f5a69819d8c3df32172d63a8ae461cb4
+- A@a Apliki village Nicosia Cyprus - panoramio (16).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9fdfa8ac672f560cfefce37766470a6a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

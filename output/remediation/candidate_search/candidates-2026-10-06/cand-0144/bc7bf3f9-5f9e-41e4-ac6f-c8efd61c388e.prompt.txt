@@ -1,0 +1,37 @@
+site_id: bc7bf3f9-5f9e-41e4-ac6f-c8efd61c388e
+name: Larger Gate of the Aurelian Walls of Rome
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Portas0.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd40a04dbbaf197d809bb6ed63ef3b0b
+- Temple of Bel, Palmyra, Syria - 7.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1a9f3a4bb9e5bbe4511a9b082c3d9fd0
+- Temple of Bel, Palmyra, Syria - 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ea0e205665f661e0874a009fe8ced35
+- Temple of Bel, Palmyra, Syria - 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5238d29daed95364f27d5e4529ce0a56
+- Temple of Bel, Palmyra, Syria - 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e46789e6c2a1c355f4ded8c35c6ace6a
+- Column bracket, Palmyra, Syria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a05eba88b3f4ddf5e45e459d2936d72a
+- Palmyra, Syria - 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb156c41431021cbc77904bb99d9f344
+- Tourist camels, Palmyra, Syria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\511f8fabb7af34d5630b590bdf7a2e21
+- Palmyra, Syria and Ibn Maan Citadel (Fakhr al-Din al-Maani).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\57b94b7a45b66ecaa95fa97566bc5c7c
+- Corinthian capitol, Palmyra, Syria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0ddbb2805f304c08b045a157062418e7
+- Palmyra, Syria - 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fa9c55fb269593b940cd1a24617a8b04
+- Palmyra, Syria - 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\980962d69cf3837df9f2d738234d6fd5
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

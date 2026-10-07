@@ -1,0 +1,33 @@
+site_id: 482a2a89-7c40-4f4d-a411-ab99de88b701
+name: Mulri Hills
+country: Pakistan
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tomb Jinnah.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1a5c6435a41bcecf34dfb02348077b66
+- The ferns of British India (PLATE CXXXIX) (8530327001).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9237d61703053e906e793dc78888abd
+- Theatrum orbis terrarum (1570) (14781657885).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6852f87b68458990e2e20aff1f3e41b3
+- Image from page 156 of "Emblemi di Q. Orazio Flacco" (1777).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1710c8d415a951fef12d074a056ccda8
+- Philothei symbola christiana - quibus idea hominis christiani exprimitur (1677) (14560418749).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7629dadbd893f2d61344c89b7cd700ce
+- Pictura loquens; sive Heroicarum tabularum Hadriani Schoonebeeck enarratio et explicatio (1695) (14779249574).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b6514742ef40c93ea09c736cfe1bffb
+- Conradi Gesneri medici Tigurini Historiae animalium liber IV (14948978043).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0bad840b90c02487937a5b66d2a09e3d
+- Conradi Gesneri medici Tigurini Historiae animalium liber IV (15382622509).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\efc271a9b1e04f840133ba01128b5ba7
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

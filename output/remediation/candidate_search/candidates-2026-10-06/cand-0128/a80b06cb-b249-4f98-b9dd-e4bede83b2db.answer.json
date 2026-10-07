@@ -1,0 +1,13 @@
+{"site_id": "a80b06cb-b249-4f98-b9dd-e4bede83b2db",
+ "answered_by": "mcode-judge-cand-0128",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Thomas Boone Pickens.jpg", "verdict": "other_site", "note": "Farbfoto eines älteren Mannes im Anzug in einem Ledersessel vor schwarzem Vorhang; keine Höhle, keine Küste."},
+  {"file": "Letter, 12 September 1862, page 2 of 4.jpg", "verdict": "other_site", "note": "Scan eines handschriftlichen Briefes von 1862 (Kriegsbericht, Regiment, Schiffsreparatur); nur Papier und Schrift."},
+  {"file": "Missionary travels and researches in South Africa - including a sketch of sixteen years' residence in the interior of Africa, and a journey from the Cape of Good Hope to Loanda, on the west coast, (14597877377).jpg", "verdict": "other_site", "note": "Stahlstich 'Drawn by Ford': afrikanische Eingeborene beim Fischen und Ernten in einem Sumpf; nicht England."},
+  {"file": "Missionary travels and researches in South Africa - including a sketch of sixteen years' residence in the interior of Africa, and a journey from the Cape of Good Hope to Loanda, on the west coast, (14782052034).jpg", "verdict": "other_site", "note": "Stahlstich einer afrikanischen Siedlung: Palmen, Hütten, sitzende und stehende Eingeborene; keine Site."},
+  {"file": "Missionary travels and researches in South Africa - including a sketch of sixteen years' residence in the interior of Africa, and a journey from the Cape of Good Hope to Loanda, on the west coast, (14784393095).jpg", "verdict": "other_site", "note": "Stahlstich eines Löwen, der einen Büffel reißt, in afrikanischem Grasland; Tierjagdszene."},
+  {"file": "The boys of '61; or, Four years of fighting. Personal observation with the army and navy, from the first battle of Bull run to the fall of Richmond (1884) (14589776177).jpg", "verdict": "other_site", "note": "Zeitungsillustration 'Charleston Mercury, November 9, 1860': Strasse in Charleston mit US-Flaggen und Soldaten; Amerika."},
+  {"file": "Some People With Severe Depression - People With Mental Illnesses Who Enrich Or Have Enriched Our Lives (22741192277).jpg", "verdict": "other_site", "note": "Foto eines Plakats der NAMI Southern Arizona mit Namen berühmter Personen; Inserat, keine Landschaft."}
+ ],
+ "note": ""}

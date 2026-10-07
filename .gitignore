@@ -436,6 +436,81 @@ output/remediation/fields/wd4/*
 output/remediation/fields/wd4/write/*/*/REHEARSAL.sql
 # The read-only measurements behind the runbook's section 5 (counts and coverage only).
 !output/remediation/fields/measurements/
+# WD2/IH, the 2025 import's linked image as the site's hero (owner decision 2026-10-05, 17:43;
+# runbook docs/procedures/WD2_SERVED_IMAGE_AND_SCOPE.md section 3.7): versioned like every other
+# write lane - every chunk's plan, statement and undo, the refusals, the summary and the
+# acceptance record. Two reasons keep the rest local. The production reads (39 MB each) and the
+# join built from them (1.3 MB) are rebuilt by the read step alone, and the plan already carries
+# the import URL each row moved to, so the read cannot be the only proof of anything. And the
+# pilot's rollback rehearsal leaves nothing on disk at all (`rehearsal_of` renders it in memory),
+# so there is no rehearsal file to version - the reason the other lanes carry that rule.
+# Run 001 is versioned only where it wrote: the pilot chunk and the two reversal chunks that took
+# it back. Its other 15 chunks were planned and never applied; run 002 planned them again.
+# The directory negation must come before the file rules; git does not descend into an excluded
+# directory.
+!output/remediation/import_hero/
+output/remediation/import_hero/*/
+!output/remediation/import_hero/import-hero-2026-10-05/
+!output/remediation/import_hero/import-hero-2026-10-05-002/
+!output/remediation/import_hero/import-hero-2026-10-05-003/
+# The 1600 px fetch pilot (2026-10-06): five targets, one file fetched, four refused by name, and
+# the read-only pre-flight over all 807 targets that counted the wave at 312 fetchable. The
+# evidence of the wave's first live step, not regenerable - the pre-flight asks Commons again.
+!output/remediation/import_hero/pilot-5/
+# The fetch of all 807 targets (2026-10-06): 315 files, 534 refusals with their reason. The run's
+# own records - the manifest a later `plan --fetched` reads, and the refusal list that names every
+# site it did not serve.
+!output/remediation/import_hero/fetch-all-807/
+# The 2026-10-06 waves: -004/-005 the 310 fetched heroes, -006 the closing read that plans nothing
+# left to write (and, from the same run, the INSERT wave's 87 rows with its chunks and acceptance),
+# -007 the three sites whose stored row holds the file under another slug, -008 its thumbnail
+# correction. The read and the claims stay out (the two `*/READ.json` and `*/IMPORT_CLAIMS.json`
+# rules above).
+!output/remediation/import_hero/import-hero-2026-10-06-004/
+!output/remediation/import_hero/import-hero-2026-10-06-005/
+!output/remediation/import_hero/import-hero-2026-10-06-006/
+!output/remediation/import_hero/import-hero-2026-10-06-007/
+!output/remediation/import_hero/import-hero-2026-10-06-008/
+# -009 the floor wave: the owner lowered the size a local file must reach to 800x300 for the sites
+# that already have a picture (2026-10-06), and its `FLOOR.json` is the run's own record of that.
+!output/remediation/import_hero/import-hero-2026-10-06-009/
+# -010 of 2026-10-07 is a measurement, not a wave: the 49 sites the remainder calls `not_reached` were
+# seeded, read and planned, and the plan refused every one of them, so this run holds no chunk and its
+# record is its refusals - `PLAN_REFUSALS.jsonl` (the plan's, written before the raise) and
+# `SEED_REFUSALS.jsonl` (the seed's own). The 1.3 MB claim join and the 39 MB read stay out by the
+# rules below, as in every other run.
+!output/remediation/import_hero/import-hero-2026-10-07-010/
+# The INSERT waves of the candidate search (2026-10-06 and -07, `insert-2026-10-06-001` to
+# `insert-2026-10-07-008`): the plan, the chunk, its SQL both ways, the journal-bearing `reason`
+# and evidence source, and the acceptance over a named production read. A glob, because every
+# wave of this lane is that same evidence and naming eight of them by hand only means a ninth
+# that is silently ignored. The four big files stay out by the rules above.
+!output/remediation/import_hero/insert-*/
+output/remediation/import_hero/import-hero-2026-10-05/chunk-0*/
+!output/remediation/import_hero/import-hero-2026-10-05/chunk-001/
+!output/remediation/import_hero/import-hero-2026-10-05/chunk-001-reversal/
+!output/remediation/import_hero/import-hero-2026-10-05/chunk-001-reversal-rest/
+output/remediation/import_hero/*/READ.json
+output/remediation/import_hero/*/VERIFY_READ.json
+output/remediation/import_hero/*/IMPORT_CLAIMS.json
+# The pack is the transport of the wave's files, not its record: 152 MB of pictures that the
+# manifest names and the served tree holds. The manifest beside it is versioned.
+output/remediation/import_hero/*/FETCHED_WAVE.tar.gz
+# The handoff list of 2026-10-06: every shown curated site whose page serves no image, one line
+# each, with the class, what the 2025 import links and what would close it. 1,169 sites, 590 KB -
+# this is the worklist the next campaign (or the owner's decision) starts from, so it is versioned
+# next to the runs it was measured against.
+!output/remediation/import_hero/RESTBESTAND_2026-10-06.jsonl
+!output/remediation/import_hero/RESTBESTAND_2026-10-06_SUMMARY.json
+# The same list, remeasured after the candidate search's twelve INSERT waves (2026-10-07): 952 sites,
+# each with one measured reason - what the search refused and why, what the judge saw, or what the
+# INSERT lane refused it for. `IMPORT_REMAINDER_SIZES.json` is what the owner's floor question
+# needed on the import side: the real size of every file the 2025 import links for those sites, asked
+# of Commons because a width-refusal names no height. A count is a fact about today; this is the
+# file the next campaign starts from. (The first measurement of this list named 989, over the read of
+# wave -009; the two floor waves wrote 37 of them and it was regenerated over the read after their
+# commits - 989 - 37 = 952.)
+!output/remediation/import_hero/RESTBESTAND_2026-10-07/
 # The site_external_ids repair (2026-09-22): hand-researched, not regenerable from any run, and not yet
 # applied - the plan, the statement, the undo and the evidence are versioned; the rehearsal keeps
 # nothing and is rendered again by `qid_repair.py render`.
@@ -557,3 +632,14 @@ output/remediation/mechanical_dups/REHEARSAL.sql
 # answered handoff directory an agent writes into and which the next calibration replaces.
 output/remediation/mcode_driver/
 output/remediation/calibration/
+# The candidate search's judgement (2026-10-06, run `candidates-2026-10-06`): 595 sites carrying
+# 5,809 candidate pictures, one verdict each. `VERDICTS.jsonl` is that stage's whole output and
+# `TARGETS.jsonl` is what the INSERT lane fetched from; neither regenerates, because regenerating
+# means asking Commons again and looking at 5,756 pictures again. The 201 `cand-*` folders are the
+# audit trail beside it - one prompt per site and the answer of the agent that looked at it, under
+# the name of the model that wrote it. The 2.6 GB of downloaded renderings stay out: they are what
+# the agent looked at, not what it decided, and the decision names its file.
+!output/remediation/candidate_search/
+output/remediation/candidate_search/*/pictures/
+output/remediation/candidate_search/*/cache/
+output/remediation/candidate_search/pilotte-2026-10-06-100/

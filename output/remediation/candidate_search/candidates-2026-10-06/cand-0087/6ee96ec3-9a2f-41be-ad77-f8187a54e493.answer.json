@@ -1,0 +1,14 @@
+{
+  "site_id": "6ee96ec3-9a2f-41be-ad77-f8187a54e493",
+  "answered_by": "mcode-judge-cand-0087",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Cylindrical funerary altar (Rhodes) 01.jpg",
+     "verdict": "depicts",
+     "note": "Cylindrischer Marmoraltar mit Stierprotome und Girlandenrelief vor Blockwand; das kleine Museumsschild daneben verweist auf Lartos."},
+    {"file": "Cylindrical funerary altar (Rhodes) 02.jpg",
+     "verdict": "depicts",
+     "note": "Cylindrischer Grabaltar mit Stierkopf und Guirlandenrelief; das Wandschild nennt Lartos bei Rhodos, ist aber klein und nur teilweise lesbar."}
+  ],
+  "note": ""
+}

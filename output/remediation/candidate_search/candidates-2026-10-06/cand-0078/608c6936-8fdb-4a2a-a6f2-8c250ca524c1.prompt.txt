@@ -1,0 +1,34 @@
+site_id: 608c6936-8fdb-4a2a-a6f2-8c250ca524c1
+name: Blacker's Hill
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Cloudy countryside (Unsplash).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\69ecd61645fe2165250475627b85de37
+- Black Hill (Peak District).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\78f126b6df108fc3c5be0f430b2f80e4
+- USS Bunker Hill hit by two Kamikazes.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9c06730eaa1e583cf1d75f03b98525b
+- Black Hills AR7S41000802040.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\84c3d957c474aeaeec4be2ca82a2599d
+- Waterworks Museum - defunct Chestnut Hill Pumping Station (85495s)bw.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\869af9806c789bd9dbfac70dd5e5cb71
+- Black Hill, California.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0138be619e339d5384b38710d0736c06
+- Black Hills Sunset.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94d54bd79d13b6c397044fadea1822bf
+- Black-hills-rushmore.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\59b59e90e52883692a4f01a09836325a
+- 20200902 Black Hill pool.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c183d4945b52294d147d1ac20cac8d4d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

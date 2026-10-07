@@ -1,0 +1,47 @@
+site_id: fc337c87-1194-4407-b440-2b91f93dbdc7
+name: Zafarraya
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Zafarraya 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\60db761daa111ad54722f770597edb39
+- Iglesia de la Inmaculada Concepción, en Zafarraya (Granada).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\594fd15368493dcd1c2e30583045a76b
+- MTN25-1040c1-1985-Zafarraya.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\426f3507f0178583efeb22185539bb35
+- MTN25-1040c1-2001-Zafarraya.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\227cc3635ce36caddc5d836a442b9813
+- MTN25-1040c1-2011-Zafarraya.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6d7ea2c5bf5b90677f1382dfca9e924
+- Zafarraya.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4103f6b92b8d8fbf1eca8f098cda58e
+- La Viñuela, view from the hotel "La Viñuela" to the mountains "Boquete de Zafarraya"-2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b8bce5309e89891dc432de60b7544314
+- Boquete de Zafarraya (8646689038).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f6ca9dac183ccbf98eb1b795de7fac3b
+- Boquete de Zafarraya (8646702660).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f9f6fa3c63a7c85e7ec1617baa14975f
+- Boquete de Zafarraya (8646676054).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\52858e1595fe74712dbc537368926101
+- Boquete de Zafarraya (8645621523).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b910646ba1d6d28125acfcb9a5d59b8e
+- Boquete de Zafarraya-caminosdemalaga-01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56cd5c07c0d95d88062da3e620378be8
+- La Viñuela, view from the hotel "La Viñuela" to the mountains "Boquete de Zafarraya".jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d949ee477554b312a77047a7dd7ae9dd
+- Ventas de Zafarraya, en Alhama de Granada (Granada, España).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\22274e1b51de058e2ffe338724d2a9ff
+- Rincón de los Reinas (Zafarraya), landscape, picture 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\81fbbcfdcc329a85094f71d2d0b4625f
+- Boiler old locomotive in Ventas de Zafarraya.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f68acbf55a2fa60995b7a35cb4831861
+- IAPH-Paisaje del Paso de Zafarraya-70 0004719.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1cb0fbf5a7a3beda476b93d2790a67a3
+- Bagnères-de-Bigorre - Musée du marbre 31.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db34b9c7021c34198a260cfa132fe3d7
+- Iglesiainmaculada.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7408e9fa1b8423cfeee9d8b696b0baf5
+- Ruinaszafarraya.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a998779b0c3ecdd030a1c5dff32c01d3
+- Zafarrayaiglesia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a245d164a565e83694bbe003ccfa3e1f
+- Zafarrayamontaña.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9d7c78d2cb2c2a77a5ed8acd6928cb0
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

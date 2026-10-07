@@ -1,0 +1,35 @@
+site_id: e7c2dc58-a477-41c6-ad83-02fea34c8d56
+name: Pyre of Heracles
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Herakles pyre Coustou Louvre MR1809.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7ff2e57bc289407062062eaee87fe177
+- Hercules Burning Himself on the Pyre in the Presence of His Friend Philoctetes, 1782 Ivan Akimovich Akimov.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1b8faf1614cbb681376a1b1678466cf9
+- Hercules Sitting on a Burning Pyre on Mt. Eta by Gilles Rousselet.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\60af77919fcea2c70313a8af23b50d94
+- Hans Sebald Beham (German, 1500-1550) - The Labors of Hercules, Hercules on his Pyre - 1950.470 - Cleveland Museum of Art.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\85d3caf2b65dea34312739714a49155d
+- Hercules Burning Himself on the Pyre in the Presence of His Friend Philoctetes, 1782 Ivan Akimovich Akimov Academy of Fine Arts, St. Petersburg.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\18de8417f08c0c64188a9a18886deb5f
+- Hércules en la pira.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bbd2c09bd2545994a926671958442983
+- Dood van Hercules op brandstapel en Philoctetes Nessi veste rabidvs se combvrit Hercvles Philocrasses (titel op object) Werken van Hercules (serietitel), RP-P-OB-10.817.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e04f688b8ee1d028265be5bdfa0e51f7
+- Hercules op de brandstapel, RP-P-OB-22.091(V).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ed764c4a209f80cad1398794b22dde0e
+- Apotheose van Hercules Metamorfosen van Ovidius (serietitel), RP-P-OB-15.957.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0ab3a218a9ba4254191a5c0d1e79c9dd
+- Dood van Hercules op brandstapel en Philoctetes Nessi veste rabidvs se combvrit Hercvles Philocrasses (titel op object) Werken van Hercules (serietitel), RP-P-H-Z-25.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3583501b9ad19a22eb50d4e424e7e0e8
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

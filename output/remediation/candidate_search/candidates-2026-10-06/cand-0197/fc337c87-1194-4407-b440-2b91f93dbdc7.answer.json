@@ -1,0 +1,118 @@
+{
+  "site_id": "fc337c87-1194-4407-b440-2b91f93dbdc7",
+  "answered_by": "worker: cand-0197",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Zafarraya 3.jpg",
+      "verdict": "region_or_type",
+      "note": "Luftbild des Ortes Zafarraya mit Pfeil und Beschriftung, Felder und Bergkessel; Megalithanlage nicht erkennbar."
+    },
+    {
+      "file": "Iglesia de la Inmaculada Concepción, en Zafarraya (Granada).jpg",
+      "verdict": "region_or_type",
+      "note": "Moderne Dorfkirche mit Ziegelturm und Glocke in einer Strasse mit parkenden Autos; kein antiker Bau."
+    },
+    {
+      "file": "MTN25-1040c1-1985-Zafarraya.jpg",
+      "verdict": "region_or_type",
+      "note": "Topografische Karte MTN25 1:25000 Zafarraya, reine Kartenansicht mit Hoehenlinien und Legende."
+    },
+    {
+      "file": "MTN25-1040c1-2001-Zafarraya.jpg",
+      "verdict": "region_or_type",
+      "note": "Zweite Ausgabe derselben topographic nationalen Karte 1:25000 Zafarraya; nur Kartenblatt."
+    },
+    {
+      "file": "MTN25-1040c1-2011-Zafarraya.jpg",
+      "verdict": "region_or_type",
+      "note": "Dritte Ausgabe derselben topographic nationalen Karte 1:25000 Zafarraya; nur Kartenblatt."
+    },
+    {
+      "file": "Zafarraya.JPG",
+      "verdict": "region_or_type",
+      "note": "Ortsschild ZAFARRAYA an einer weissen Hauswand, Dorfstrasse mit Kirche und Radfahrer."
+    },
+    {
+      "file": "La Viñuela, view from the hotel \"La Viñuela\" to the mountains \"Boquete de Zafarraya\"-2.jpg",
+      "verdict": "region_or_type",
+      "note": "Blick ueber Palmen und Gartenhecken auf die bewaldeten Berge; reine Landschaftsansicht."
+    },
+    {
+      "file": "Boquete de Zafarraya (8646689038).jpg",
+      "verdict": "region_or_type",
+      "note": "Verlassenes Farmhaus mit Ziegeldach und Trockenmauern auf gruener Wiese, Berge dahinter."
+    },
+    {
+      "file": "Boquete de Zafarraya (8646702660).jpg",
+      "verdict": "region_or_type",
+      "note": "Bergkette mit bewirtschafteten Terrassenflaechen und Felsbaendern, davor Weide und Wegrand."
+    },
+    {
+      "file": "Boquete de Zafarraya (8646676054).jpg",
+      "verdict": "region_or_type",
+      "note": "Ortsschild VENTAS DE ZAFARRAYA und PROVINCIA DE GRANADA an der Landstrasse neben Felslandschaft."
+    },
+    {
+      "file": "Boquete de Zafarraya (8645621523).jpg",
+      "verdict": "region_or_type",
+      "note": "Unbefestigter Feldweg durch bluehende Wildblumen mit Bergen im Hintergrund; reine Landschaft."
+    },
+    {
+      "file": "Boquete de Zafarraya-caminosdemalaga-01.jpg",
+      "verdict": "region_or_type",
+      "note": "Bergstrasse zwischen kahlen Kalkgebirgen mit Pinien; keine Bauwerke oder Anlagen sichtbar."
+    },
+    {
+      "file": "La Viñuela, view from the hotel \"La Viñuela\" to the mountains \"Boquete de Zafarraya\".jpg",
+      "verdict": "region_or_type",
+      "note": "Fernblick ueber bewaldete Hügel mit verstreuten Haeusern und Kalkgebirge im Hintergrund."
+    },
+    {
+      "file": "Ventas de Zafarraya, en Alhama de Granada (Granada, España).jpg",
+      "verdict": "region_or_type",
+      "note": "Landstrasse mit altem Baum, Feldern und einer Ortschaft mit weissen Hausern am Fuss des Gebirges."
+    },
+    {
+      "file": "Rincón de los Reinas (Zafarraya), landscape, picture 1.jpg",
+      "verdict": "region_or_type",
+      "note": "Felsiger bewaldeter Huegel mit Wegrand und Maschendrahtzaun; keine Site erkennbar."
+    },
+    {
+      "file": "Boiler old locomotive in Ventas de Zafarraya.jpg",
+      "verdict": "other_site",
+      "note": "Schwarzer gusseiserner Dampfkessel in einem modernen Innenraum mit Fliesen, Stuehlen und Obstkisten."
+    },
+    {
+      "file": "IAPH-Paisaje del Paso de Zafarraya-70 0004719.tif",
+      "verdict": "region_or_type",
+      "note": "Berglandschaft mit Landstrasse, Olivenbaeumen und hellen Kalkgipfeln; reine Landschaftsansicht."
+    },
+    {
+      "file": "Bagnères-de-Bigorre - Musée du marbre 31.jpg",
+      "verdict": "other_site",
+      "note": "Makroaufnahme von rot-weissem Marmor mit Bruchkanten und gelben Adern; Gestein, keine Site."
+    },
+    {
+      "file": "Iglesiainmaculada.JPG",
+      "verdict": "region_or_type",
+      "note": "Dorfkirche mit Backsteinturm und gruenem Ziegeldach hinter einem Springbrunnen auf dem Kirchplatz."
+    },
+    {
+      "file": "Ruinaszafarraya.JPG",
+      "verdict": "other_site",
+      "note": "Zerfallene Backsteinbogenruine mit Putzresten und Ziegelgewoelb; passt nicht zur Megalithanlage."
+    },
+    {
+      "file": "Zafarrayaiglesia.jpg",
+      "verdict": "region_or_type",
+      "note": "Kirche mit Ziegelturm und Glocke ueber dem Dorf, Parkplaetze und Bergkette im Hintergrund."
+    },
+    {
+      "file": "Zafarrayamontaña.JPG",
+      "verdict": "region_or_type",
+      "note": "Fernblick auf den Ort in der gruenen Senke, Ackerflaechen davor, Nebelberg ueber der Sierra."
+    }
+  ],
+  "note": "Kein Kandidat zeigt die Megalithanlage von Zafarraya: es sind Karten, Landschaften, Orts- und Kirchenbilder sowie drei ortsfremde Objektaufnahmen."
+}

@@ -1,0 +1,37 @@
+site_id: fe4edbed-be84-4b80-b5de-62ab3e4c88ef
+name: A Figa
+country: France
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Fig (Ficus carica) fruit halved.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ab41d5f2d68f9aadd1c95059058d9428
+- Premis ARC 2025 - Figa Flawas - 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a035006a09df0a7e1e3df93217ca07a2
+- Gömörfüge07.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94e08a823583270f4d150a859e7cc0d0
+- Ciconia ciconia nests Figa 2a 20140720.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\12583d955b3142a7c2a8bb0c12654376
+- Josephinische Landaufnahme pg065.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1acb10c73f777ac8427777ecc2f4aa04
+- Josephinische Landaufnahme pg054.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b26b43a9c136b9730220711d79317f41
+- Figa-Talamanca, Alessandro 1968 (re-scanned C, as-is; headshot).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cc4c5d24d5a0dafa8d414b125a58d12b
+- "Figa z Makiem" Restaurant, Sanok (2013).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4712543507b6cd5d79ee98612d72de09
+- Figa 23 Slovakia 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\38166f9e5dbd73e5dfd1349251570ccf
+- Ciconia ciconia nests Figa 1a 20130721.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\967ec24ee2514cfbcc123e520384d3c3
+- Figa 23 Slovakia 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\115287fe92685574581aafdd32dbe42b
+- Figa 23 Slovakia 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3c02f56620a9593ddfe59a40d025458
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

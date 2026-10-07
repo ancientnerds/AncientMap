@@ -1,0 +1,37 @@
+site_id: 5ac30362-6c6f-412b-857b-3ec51df81f66
+name: Home Tombs
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tomb of Homer.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb54d1c6020f7c9ff2ebe90232e2e915
+- Tomb of Homer 130386.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9af3594bd928bd80bec2aca3f71bb5bd
+- Tomb of Homer 130401.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5807789f71e2bee59460ead3296e17aa
+- Tomb of Homer 130384.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6de2dc403adcd3b5bdce61bdfbb3460f
+- Tomb of Homer 130397.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e827bc7582f5f30fbd4c1841dd055210
+- Tomb of Homer 13M980.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8ea3b33917b25bba2f4272977ce6e5f
+- Tomb of Homer 130396.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0bbea29611ef574d212830514c699b8d
+- Tomb of Homer 130403.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b0ff9da82827607da939af219b173907
+- Tomb of Homer 130379.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a843a37c4cc17eeab22d2d1ac77fe747
+- Tomb of Homer 13M957.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1eaa5e5f768075ade33f92507704aa3e
+- Tomb of Homer 130380.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b1523aefd29895826e814203b957a01
+- Tomb of Homer 130383.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e2d3ecf09f1946e1e12ebf5bcd45e95a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

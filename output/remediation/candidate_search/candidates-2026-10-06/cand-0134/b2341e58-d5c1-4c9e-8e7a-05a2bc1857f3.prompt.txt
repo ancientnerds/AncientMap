@@ -1,0 +1,37 @@
+site_id: b2341e58-d5c1-4c9e-8e7a-05a2bc1857f3
+name: South Lodge Camp
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Mosetlha Bush Camp & Eco Lodge, North West, South Africa (20506969106).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2af35ea3e15f0c8465e10aec716dc45e
+- Mosetlha Bush Camp & Eco Lodge, Madikwe Game Reserve, North West, South Africa (20533062135).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff8103a94464134e9c412e5d489ea49f
+- Mosetlha Bush Camp & Eco Lodge, Madikwe Game Reserve, North West, South Africa (20510956562).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b73a1c5661502feb9bc6055ad4798fa
+- Mosetlha Bush Camp & Eco Lodge, Madikwe Game Reserve, North West, South Africa (20526042351).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\410f421b9bf8fa964cc5387bc3503766
+- Mosetlha Bush Camp & Eco Lodge, Madikwe Game Reserve, North West, South Africa (20524586201).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\534f49a830d0304b669d92095d164abf
+- New Camp Walker Lodge provides more space for military families in South Korea (8863181).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d493ca0e7b4ec152d7f7a8eaa63e4364
+- Mosetlha Bush Camp & Eco Lodge, Madikwe Game Reserve, North West, South Africa (20345098728).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\84c8fdf2f96c88e28c8b0408d459b77e
+- Mosetlha Bush Camp & Eco Lodge, Madikwe Game Reserve, North West, South Africa (20537200541).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45073d55c05a30dca067ec17fe0bebeb
+- Mosetlha Bush Camp & Eco Lodge, Madikwe Game Reserve, North West, South Africa (20507470356).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c2909582b883ed7e838179c5266e4770
+- Mosetlha Bush Camp & Eco Lodge, Madikwe Game Reserve, North West, South Africa (19909661884).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\28ea524b7c13ff9c8bc4bd648c118ce2
+- Mosetlha Bush Camp & Eco Lodge, Madikwe Game Reserve, North West, South Africa (20531190695).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7315595138a390d817350a66c786d91
+- Mosetlha Bush Camp & Eco Lodge, Madikwe Game Reserve, North West, South Africa (20493214246).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\106492f4df73e607431e5cc3958cd7fe
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

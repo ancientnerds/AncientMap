@@ -1,0 +1,44 @@
+site_id: 81112e4f-9b95-4dcf-be7b-0c62b9580c19
+name: Blennerhasset and Torpenhow
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Farm Building, Torpenhow Hall - geograph.org.uk - 6909209.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8daf4805af9db9143714916cdcac08c3
+- Flush Bracket Benchmark, Torpenhow Hall - geograph.org.uk - 6909218.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\480f0baf24947a6ac22411aa5a68abdc
+- Fields north of Torpenhow - geograph.org.uk - 3591956.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\371f7d066065f98cabe7a1f3882a7e40
+- Torpenhow village - geograph.org.uk - 3591969.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d3fdacd536835fc1a4c2a8252e83c683
+- Country near Torpenhow - geograph.org.uk - 3592136.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ebdc385f7e0b11f9fbeff18f31136a4e
+- Torpenhow, St. Michael's Church, Norman window - geograph.org.uk - 6234357.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d144ba9abbbe6cf924d504d843a211ba
+- Torpenhow, St. Michael's Church, The font - geograph.org.uk - 6234325.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9094b8061b2518eb2cb30942550e69c
+- Torpenhow, St. Michael's Church, The chancel - geograph.org.uk - 6234319.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6172e90ddddedec27b49a2b06ae1a01
+- Torpenhow, St. Michael's Church, South western aspect - geograph.org.uk - 6234358.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e2e5ed162d480ffc2f44094e0816aa3b
+- Torpenhow, St. Michael's Church, Nave arches - geograph.org.uk - 6234309.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0aa922b95ad0a612706b24d76ea001fb
+- Torpenhow, St. Michael's Church, Norman chancel arch detail - geograph.org.uk - 6234343.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a97c6485c4c51612f0914cfee60270d9
+- Barn at east end of Torpenhow - geograph.org.uk - 4611958.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\978c1a879cfa3156b109f0496004edc9
+- A595 at Low Woodnook - geograph.org.uk - 6005115.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8bc6e8fc21684d66e963916a221a08ec
+- A595 junction at Low Woodnock - geograph.org.uk - 3279225.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\433cd60a86df9cdfe6189aa05f8e3dbf
+- Benchmark on top of gatepost on SW side of rural road NW of Whitrigg - geograph.org.uk - 7939029.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\632d685daba6939ac67f13b5f98da97c
+- Binsey from the Whitrigg Ireby Road - geograph.org.uk - 3346374.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c9816ddacb7e03ce771baff4e236fd93
+- Bird House Farm - geograph.org.uk - 2945442.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c90e3e2f4a3aa6c7160ac2f0b139c709
+- Blennerhasset, a one horse township - geograph.org.uk - 4981492.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b34509da5ed1d24ec02b4a50636f9f4f
+- Cockshot Beck running through Cockshot Wood - geograph.org.uk - 3311993.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e761360d08634cef69deabc847d34529
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

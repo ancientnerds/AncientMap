@@ -1,0 +1,12 @@
+{"site_id": "2101b2c7-9dd5-4dbf-b140-9c24ae364da8",
+ "answered_by": "mcode-judge-cand-0024",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Coppa Nevigata (northern Apulia). Map and Aerial photo of the archaeological site, excavations 1983–2015.png",
+   "verdict": "depicts",
+   "note": "Orthophoto der Grabungsgruben mit Bloecken, Mauerresten und Locator-Karte 'Coppa Nevigata'; die Ausgrabung selbst."},
+  {"file": "Bronze weaponry from south-eastern Italy Bronze Age contexts.png",
+   "verdict": "region_or_type",
+   "note": "Nummerierte Typologietafel mit 19 Bronzeschwertern und -beilen Sueditaliens, ohne Ortsbezug."}
+ ],
+ "note": ""}

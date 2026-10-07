@@ -1,0 +1,18 @@
+{
+  "site_id": "8442fc68-e408-4b2f-9aad-a5f42139685e",
+  "answered_by": "mcode-judge-cand-0100",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Harappan elephant figurine - Dabarkot - BM.jpg",
+      "verdict": "depicts",
+      "note": "Tierfigurine aus gebranntem Ton in einer Museumsvitrine, Harappa-typisch; als ausgegrabenes Fundstück gewertet, Provenienz im Bild nicht belegbar."
+    },
+    {
+      "file": "British Museum (48931018368).jpg",
+      "verdict": "depicts",
+      "note": "Dieselbe kleine tierische Tonfigurine hinter Glas mit Etikett; als Fundstück der Harappa-Kultur gewertet, Provenienz aus dem Bild nicht prüfbar."
+    }
+  ],
+  "note": ""
+}

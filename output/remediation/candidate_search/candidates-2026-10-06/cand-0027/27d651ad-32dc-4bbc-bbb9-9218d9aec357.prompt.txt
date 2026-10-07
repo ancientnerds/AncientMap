@@ -1,0 +1,34 @@
+site_id: 27d651ad-32dc-4bbc-bbb9-9218d9aec357
+name: Berry Castle, Black Dog
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Francis Towne Berry Pomeroy Castle in the County of Devon.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c8e9bf4c0431c390f760d6d5bc79f520
+- Berry Castle Lodge - geograph.org.uk - 6869539.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8aebd9a9ef9dff37f5894f338ea9f1ff
+- Towards Berry Castle Lodge - geograph.org.uk - 6377407.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f958347bf52b3192974506d81053d730
+- Road at Berry Castle Lodge - geograph.org.uk - 7513457.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\806e4b5dd0dbdf3dcecc572aef5b4ffd
+- Pheasants near Berry Castle Lodge - geograph.org.uk - 8173830.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5004b1531fc43eb6dd6e654684f5eeb8
+- Berry Castle Wood - geograph.org.uk - 3722548.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d514d4e171a855bd0ee681dc2518a99
+- Gateway, above Berry Castle Combe - geograph.org.uk - 3722562.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\69b74c7f19d00fb63540e1c1b23d7d8b
+- Muddy start to the path to Berry Castle - geograph.org.uk - 3282759.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a8ec1463fcdf7efb60ec2caaf703ce7
+- Berry Castle, August 1810 - Arch-deacon Robert Hurrell Froude - 184 1992 2.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\48af3c862076b0502d82fffe8e1171bf
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,37 @@
+site_id: 95b33efa-d5eb-4cb8-ab61-746b3822762a
+name: Temple of Baalshamin
+country: Syria
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Temple of Baal-Shamin, Palmyra.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41f8a667b6cf2db40c96181433c6d280
+- Syria Palmyra temple Baalshamin in 1981.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f29f0e41c9598232036559ce01b9f6fd
+- Reconstruction drawing of the Temple of Baalshamin, Palmyra, Syria (02).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4b5df09b55e28c5a3325ea71d23eaad8
+- Reconstruction drawing of the Temple of Baalshamin, Palmyra, Syria (01).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fe5e331b96a55f21bb7a3c1eb155d85f
+- The Temple of Baalshamin, Palmyra, Syria 02AM3152.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f7effce043164da8005edbf59d5ee571
+- Temple of Baalshamin, Louis Vignes, 1864.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\32f3374f75726aa3c8b9e3568eb59a2f
+- Temple of Baalshamin in Palmyra by Robert Wood, 1753.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a2a85cce297e287e741de224d803f23d
+- Temple of Baalshamin, Jean-Baptiste Liénard after Louis-François Cassas.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b754bbdc1bfa0d23ef1edbe58ac7c7f1
+- Temple of Baalshamin, plan and reconstruction, Pierre-Nicolas Ransonnette after Louis-François Cassas.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4963304a5109b796cb509e7faa3e2911
+- Baal shamin temple02(js).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\99963b71edb66a51aa9c03b83268ac40
+- Temple of Baalshamin, Louis Vignes, 1864. Albumen print. 8.8 x 11.4 in. (22.5 x 29 cm). The Getty Research Institute, 2015.R.15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2799d427bd3768d5bef3342458b587fe
+- Syria Palmyra temple of Baalshamin.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f25c97e903003c216ac4d46985de2c7c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

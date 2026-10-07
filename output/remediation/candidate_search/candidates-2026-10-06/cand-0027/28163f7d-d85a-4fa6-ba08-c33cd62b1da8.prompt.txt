@@ -1,0 +1,35 @@
+site_id: 28163f7d-d85a-4fa6-ba08-c33cd62b1da8
+name: Llaqtapata
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Inca Trail Patallacta 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6bc6dc84e9bf86a8a1c0445ebd257ec3
+- Camino-inca-dia1-llactapata-c01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ac48d8560f0307290a37d8f997046f22
+- Inca Trail Patallacta 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a5fc7f9ed5534d011b89c3a43c21f71f
+- Inca Trail Patallacta 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c422230944b771782e124c0b6ce4547d
+- Inca Trail Patallacta 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f9c336d4e3f08aefed5b5898e75b982d
+- Patallacta from Inca Trail.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6acf2a8d38dafd19dc25bbd602562775
+- Llactapata.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5818200e9f14aff7b758c68221a19901
+- Patallacta Terraces.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\33db27d86710bc894c34e337f94c15a6
+- Patallacta.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af2ff4e97a469568c18d268f37e78932
+- Inca Trail Altitude Graph.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\89977958b9289220c24852259dc9369a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

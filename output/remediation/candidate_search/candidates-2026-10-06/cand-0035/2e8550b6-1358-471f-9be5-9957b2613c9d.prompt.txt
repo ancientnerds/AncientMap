@@ -1,0 +1,31 @@
+site_id: 2e8550b6-1358-471f-9be5-9957b2613c9d
+name: Mynydd Maendy
+country: Wales
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Mynydd Maendy - geograph.org.uk - 6301011.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50e570dc823e070fa06c60b57d75c32e
+- Mynydd Maendy - geograph.org.uk - 4557946.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5a63626b2e0edb5cd371a7c1e9d676d2
+- Path on Mynydd Maendy - geograph.org.uk - 4299019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\561703ab941958712ac62eb4af8df619
+- Sheep on Mynydd Maendy - geograph.org.uk - 4299006.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b59b2538cb208d6b6e646fc2434b5072
+- Boundary Stone on Mynydd Maendy - geograph.org.uk - 6680985.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9de91601e827e1f6e2dfd7643589930
+- Path on Mynydd Maendy - geograph.org.uk - 4298997.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f475810838af18853903fb74b27eac49
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

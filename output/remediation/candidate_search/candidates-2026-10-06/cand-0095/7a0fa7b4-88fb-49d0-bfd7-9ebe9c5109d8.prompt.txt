@@ -1,0 +1,29 @@
+site_id: 7a0fa7b4-88fb-49d0-bfd7-9ebe9c5109d8
+name: Turunçova
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Gülmez dağı turunçova www.turuncelektrik.com 0242 852 1988 - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\08aabd7d62c728db7fea20d8f51b3e51
+- Dalgıç pompa - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\60a4a440f1cb9ab956fb665b164a4238
+- Tersten yıkamalı filitre sistemleri - panoramio (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b548a894592e200d476d124aa78b6c66
+- Heryare dalgıç pomapa - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bca28b57ad39bb7de8affb6d16ed8671
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

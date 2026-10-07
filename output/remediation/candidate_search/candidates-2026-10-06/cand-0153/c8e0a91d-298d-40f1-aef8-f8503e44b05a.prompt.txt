@@ -1,0 +1,32 @@
+site_id: c8e0a91d-298d-40f1-aef8-f8503e44b05a
+name: Fen Causeway
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Fen Causeway - geograph.org.uk - 2211183.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a79c8bc91b4da33abe8b5b60d0fe126
+- On Fen Causeway - geograph.org.uk - 5629759.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\22bb2d926da60b3b255fffaaea427b6b
+- Fen Causeway - geograph.org.uk - 4293022.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b93559430ea9e48201fe001fef781845
+- Fen Causeway - geograph.org.uk - 6007364.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\777a37698e5794a024776ca1aba9e4c4
+- Fen Causeway - geograph.org.uk - 6007078.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3dc60afdd1b196f687fd6379460f96b6
+- The Fen Causeway in Cambridge - geograph.org.uk - 4993988.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\953d96bdd537b0b6d8dead40cb76fc74
+- Fen Causeway underpass, Cambridge - geograph.org.uk - 5275920.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\57b12edb6834c2bc25298b8251032bae
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

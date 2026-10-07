@@ -1,0 +1,46 @@
+site_id: 351a3b2e-3492-4b92-adf0-700269fb06c7
+name: Torralba d'en Salort
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Torralba d'en Salort (29504023974).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d14bcf34fb7bdf4a4ae5f8f2c53ae710
+- Torralba d'en Salort (30047996471).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a55714fc25686aed78f0578ab884de1a
+- Torralba d'en Salort (29836859620).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4ab3b0ab44cc512dd01a8d8549122899
+- Torralba d'en Salort (29837015760).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1ed07d4ae67da0d89a6bd6f52ff9b868
+- Torralba d'en Salort (29836849150).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8b5c6f2584b94423fd64b84bd9ac8a3f
+- Torralba d'en Salort (29837010290).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\54c3d8f3e03cf2b16c91a847bd9cdbf8
+- Torralba d'en Salort (29503912744).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5b3578b6d3db8ca0e79773d5deaa8474
+- Torralba d'en Salort (30097381406).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d1666fe0d0eab1d64471a27dac10183b
+- Taula de Torralba D´en Salort, Menorca, Illes Ballears, Spain.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\90ee7d749faad4e0b87ff7faacf7ec05
+- Taula de Torralba Gran ó Torralba d'en Salort.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da8c45fe74b8ca8a540b781f06bd5413
+- Taula (Torralba d´en Salord).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\60ab99f53c22d70443d07dc538285336
+- Menorca 02 (1590194675).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\80e258555861e9703377de54dfd9a0d8
+- Hypostylonsaal.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\78df58c50565a5a6c27ce223609bdc9c
+- Menorca 02 (1590189255).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d4d43f1a29b44043b477b0f22d2b6618
+- Menorca 02 (1590193149).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\23624280f14741ec6b6f4f8b4cc7ddc2
+- Pedra seca a Torralba de Salord.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4893dee482191d2c7e6ca3b89aab92dc
+- Talaiot Torralba 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c40a3aef4a80b0d311cc0d1b8bcf7720
+- Taula de Torralba de Salord (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2786f32394b0eae111724e2c436b359f
+- Taula de Torralba de Salord (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4d2a004bd257b82368e1b95cefbd9237
+- Taula de Torralba de Salord.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\585ff96e40c9e270c115b67a8ecfc6b3
+- Taula de Torralba D´en Salor, Menorca.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7ac175aafb251033bb211658b0b7fe9d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

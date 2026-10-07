@@ -1,0 +1,37 @@
+site_id: 9ba3bc23-ac5b-489a-9038-bc65a5784e35
+name: Termessos Tiyatrosu
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Termessos Antik Tiyatrosu 2026-03-23 14.57.48 1791024617.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\888b364ce93ab67364cfbb2b3b70ef5a
+- Termessos Antik Tiyatrosu 2026-05-16 16.47.16 1791098163.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9d482642d6114752fb9eac3a5224a5a9
+- Theatre in Termessos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e162b33ca5ad7363f5be3ac805360c2
+- Termessos Antik Tiyatrosu.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db3924acaf96fd8a59e7fbb70a3f2004
+- Termessos - Theater.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec9127df13083571e6323f307d7711ec
+- Termessos - Theatre - 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dcc6a1d396e3bdf0de523267db9b4530
+- Termessos Theatre at or from south side 3682.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b3afeb2f0537116d75136fd59121e10f
+- TermessosTheater1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b6cf0d48834eddd4b6773d4b7e0f3a91
+- Termessos Theatre at or from south side 3666.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\83add55b096d83cfbb6dc8b08b920967
+- Termessos Theatre at or from south side 7218.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\90ef46f5e9215af38ff9783228934f44
+- Termessos Theatre at or from south side 3663.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4918758c5e0e3fd54d7318e824bf87b8
+- Termessos Theatre at or from south side 3676.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\369d79eddaf2d356269de6b1aa324283
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

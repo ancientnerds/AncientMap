@@ -1,0 +1,30 @@
+site_id: d2dd6e95-7f9a-4d6c-bd8e-a00f39d1f1f5
+name: Allahdino
+country: Pakistan
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tomb Jinnah.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1a5c6435a41bcecf34dfb02348077b66
+- Harappan Sorath map 1.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6a06b2f929fcb70746a9070aafe57fca
+- Harappan gujarat map 2 1 1 1.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\213c240e5eef458abbd3e3a803f5b8f5
+- Prabhas patan ceramics map 1 1 1 1.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fa5872bd796166244b65d9fe71ee8d6d
+- Harappan gujarat 3 1 1 1.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7aa62fd6aa06fe488a249d7d6d44f741
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

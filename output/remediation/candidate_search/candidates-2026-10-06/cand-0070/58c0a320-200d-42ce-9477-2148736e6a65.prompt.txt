@@ -1,0 +1,46 @@
+site_id: 58c0a320-200d-42ce-9477-2148736e6a65
+name: Su Kemeri
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Pont du Gard BLS.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db01c38a27abcbcdbee4c7a3ee536deb
+- Hadrianus Bozdoğan Kemeri 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fa59af6b266ea5ef3641f370126c9e86
+- Bozdoğan Kemeri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d647408923ae48ba9c00c3d18d7264ee
+- Valens Aqueduct and Gazanfer Aga Madrasah.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94461b049c7c95ccff133ee0b54a9ab3
+- Su kemeri (yakın).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\66e4ad4cee7258b548f71ee74b596d86
+- Su kemeri (uzak).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\134cfd5b5ec8d52b9f3d9022ae3bb828
+- Bozdoğan Kemeri Su Borusu Detayı.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56938fa2790893fbabb1c31189ad2d1d
+- Valens Aqueduct-.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\20946e51d6750355942940f3f019ff3d
+- Bozdoğan Su Kemeri - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec600501a0d227bfe3342843268be54f
+- Valens Su Kemeri (04032026).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\60cf448fc47e3b0feead77e5a8ded9d9
+- AqueductofValensIstanbul.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\692c0051c56a81adf60cb926537ade69
+- Aspendos Su Kemeri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\710928016632df215b886f9c5162f996
+- Kuruköprü Su Kemeri -2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\421b922f5dc5fe4a6a5fb3fedce89fd6
+- Roman aqueduct . Roma Su Kemeri 01.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56c833636f4da1f7061dcbd93bd52279
+- Roma Su Kemeri - Segovia - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\717ebab269fa3ffeee8bfdb7c236dd00
+- Phaselis Su Kemeri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd6a90c672988dfd220c84f6a7fa31ea
+- Su kemeri - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e120227b0ef2048d4280808031dcf90f
+- Kdz eregli su kemeri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fdc897ca5c1bf667af9f5efb3d3c8ab2
+- Kdz. Ereğli tarihi su kemeri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\30124f3a92d3f5b50a8ac6698bc0e0b3
+- BOZDOĞAN SU KEMERİ 2025-10-27 at 12.05.56 (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bdc827fe23a28fca196a5a9b191a5480
+- Roma döneminden bir su kemeri.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6201ce522b4bf82267d5f14362f94451
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

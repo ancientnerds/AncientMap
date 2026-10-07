@@ -1,0 +1,32 @@
+site_id: 138007c5-f824-446e-84ad-cf44e7cfde76
+name: Nashtifan Windmills
+country: Iran
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Nashtifan Windmills.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\865c6d43a548643d1ec8c8e400170ade
+- Nashtifan windmills jb16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76f16595d256b2f917d9715a9df849a1
+- Nashtifan windmills jb3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e3de9b8717685bc6f7c60202d1e5b83e
+- Nashtifan windmills jb1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\29d5741ad473d0f9c5ad87eba73598c7
+- Nashtifan windmills jb9.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8e3e82de28295672dd200bd79dcb57d6
+- Nashtifan windmills jb2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\730ac5fbe50a596c857bba41b7eb65d2
+- Nashtifan windmills jb8.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d48d156163d2feb3965170d318caf27d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

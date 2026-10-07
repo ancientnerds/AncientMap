@@ -1,0 +1,36 @@
+site_id: 6933ea78-a024-455d-981e-fe4c09dfad75
+name: Fasıllar Monument
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Fasillar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b41a6b26957c9b2e92c3b67ee1f1cf5c
+- FasillarAnkara2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\588e1c30333f8ed5406b136030cb9f05
+- Museum of Anatolian Civilizations Hittite Replica of the Fasıllar Monument in 1990's 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\73f79665cc9796e9248ebe65c344327a
+- Museum of Anatolian Civilizations Hittite Replica of the Fasıllar Monument in 2004 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\696d2bc9257fc8d33eb12228e5d9dc2e
+- Ankara Muzeum B19-45.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\382609a58f8c04db0741c9320c96cc25
+- Ankara Muzeum B20-27.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\34280916f7d0afa3f1334021ab428bdb
+- Turkey-1535 (2215840405) (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8566447f93c4d41133cd6aa3b58975c5
+- Turkey-1535 (2215840405).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e5e8155b349a56f5b0f04d2e477918a
+- 20180108 Anatolian 2559 (39120324854).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\52a1151d523618d1f58a2556ea3d4cb3
+- 20180108 Anatolian 2557 (39829606041).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\06e1af52453b1b1db577cb966046d064
+- Turkey. Hittite. horse (1036769804).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\989a4a38dfaa690e6b00533bc1aa5816
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -18,6 +18,17 @@ One rule per outcome (O6: "Belegt ersetzen, sonst leeren"), each site decided on
   stage) and takes the hero flag off it; `wd2-thumb` sets `thumbnail_url` to the rendering of the
   confirmed Commons file the replacement stage picked (`W`) - the bytes the agent was shown - else
   to NULL. The site then serves no image on its page.
+* **no image** - the site serves nothing and nothing this run found depicts it: nothing moves. The
+  measured reason is the answer's `basis` in `REPLACE.jsonl`, and no row moves, so no journal row
+  is written for it.
+* **unjudged** - the site serves an image and this run did not judge it: the population of a
+  claim-only plan, which examines the claims of the sites that serve nothing and leaves the rest
+  as the delivered run left them. The plan says "unjudged" instead of claiming a verdict it never
+  made, and moves nothing.
+* **claimed** - the site serves nothing while its own Wikidata item claims a file (P18/P373), and
+  the replacement stage called a claimed file `depicts`: `wd2-thumb` sets `thumbnail_url` to the
+  rendering the agent was shown, which is the whole write - the popup and the detail page read
+  `thumbnail_url` first, and the site has no image row to move.
 
 A site that serves nothing is left as it is. Every change carries the verdicts it rests on.
 
@@ -65,6 +76,13 @@ EXPECTED = "EXPECTED.jsonl"
 SUMMARY = "PLAN_SUMMARY.json"
 
 CONFIRMED, REPLACED, CLEARED, NOTHING = "confirmed", "replaced", "cleared", "no image"
+#: The site serves nothing, its own Wikidata item claims a file, and the replacement stage called a
+#: claimed file `depicts`: it now serves that file. Not `cleared` - that outcome means the site was
+#: emptied, and the goal's report tells the two apart.
+CLAIMED = "claimed"
+#: The site serves an image and this run did not judge it: a claim-only plan leaves it alone and
+#: says so, rather than leaving the cell unnamed or claiming a verdict it never made.
+UNJUDGED = "unjudged"
 
 
 def lane_for(run: Path) -> CW.Lane:
@@ -153,6 +171,41 @@ def _thumb(
     return [CW.Change("unified_sites", "thumbnail_url", sid, sid, old, new, rule, reason, evidence)]
 
 
+def _claimed(site: Mapping[str, Any], rep: Mapping[str, Any] | None, *, asked: bool) -> SitePlan:
+    """A site that serves no image, asked about the files its own Wikidata item claims.
+
+    There is no gallery row to exclude and no hero to move, so the whole write is `wd2-thumb`:
+    the popup and the detail page read `thumbnail_url` first (`useGalleryData.ts`,
+    `siteApi.ts`), so the confirmed file's rendering is what the site then serves. A pick of
+    nothing keeps the outcome `no image` - the measured reason is the answer's `basis` in
+    `REPLACE.jsonl`, and no row moves, so no journal row is written for it.
+    """
+    sid = str(site["id"])
+    thumb = site.get("thumbnail_url") or None
+    if rep is None:
+        if asked:
+            raise ST.StateError(
+                f"{sid}: asked about the files its item claims and has no replacement answer"
+            )
+        return SitePlan(sid, NOTHING, None, thumb)
+    shown = {c["label"]: c for c in rep["candidates_shown"]}
+    pick = rep["pick"]
+    if pick is None:
+        return SitePlan(sid, NOTHING, None, thumb)
+    chosen = shown[pick]
+    if chosen["kind"] != V.COMMONS_CANDIDATE:
+        raise ST.StateError(
+            f"{sid}: picked {pick}, a gallery file, but the site serves no gallery file"
+        )
+    new = str(chosen["url"])
+    reason = (
+        f"the site served no image; the Commons file {chosen['file']!r}, which its own Wikidata "
+        f"item claims, depicts it"
+    )
+    evidence = [_evidence_replace(rep, pick)]
+    return SitePlan(sid, CLAIMED, None, new, _thumb(site, new, RULE_THUMB, reason, evidence))
+
+
 def decide_site(
     site: Mapping[str, Any],
     rows: Sequence[Mapping[str, Any]],
@@ -161,14 +214,19 @@ def decide_site(
     rep: Mapping[str, Any] | None,
     *,
     population: str,
+    asked: bool = False,
 ) -> SitePlan:
     sid = str(site["id"])
     served = pre["served"]
     thumb = site.get("thumbnail_url") or None
     if pre["status"] == PC.NO_IMAGE:
-        return SitePlan(sid, NOTHING, None, thumb)
+        return _claimed(site, rep, asked=asked)
     live = ST.live_rows(rows)
     if check is None:
+        if population == V.CLAIMED_ONLY:
+            # This run judged the claims of the sites that serve nothing, nothing else: the site
+            # keeps what it serves, unexamined here. A verdict of its own would be a lie.
+            return SitePlan(sid, UNJUDGED, served.get("image_id"), thumb, ())
         if population != V.UNCONFIRMED_ONLY or pre["status"] not in PC.CONFIRMED:
             raise ST.StateError(f"{sid}: the served image has no check answer")
         evidence = [_evidence_precheck(pre)]
@@ -345,28 +403,69 @@ def _by_site(rows: Sequence[Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
     return out
 
 
+def _claims_a_file(prechecks: Mapping[str, Mapping[str, Any]]) -> bool:
+    """Whether any site that serves no image has a Wikidata item - the only state `export-replace`
+    can settle, because the pre-check stops at "serves no image" and never reads the item.
+
+    The plan refuses to run without that export, so a claim can never be skipped unnoticed: the
+    export names the sites that really claim a file (`claimed_sites`) and this gate cannot tell
+    them apart from the ones that claim nothing.
+    """
+    return any(pre["status"] == PC.NO_IMAGE and pre["qid"] for pre in prechecks.values())
+
+
 def build(run: Path) -> tuple[list[SitePlan], dict[str, Any]]:
     state = ST.load_read(run / "READ.json")
-    record = json.loads((run / V.EXPORT_CHECK).read_text(encoding="utf-8"))
-    if record["read_sha256"] != state.sha256:
-        raise ST.StateError("CHECK was exported from another READ.json - re-run the lane")
     V.verify_precheck(run)
     prechecks = PC.load_prechecks(run / PC.PRECHECK_FILE)
-    population = record["population"]
-    checks = _by_site(V.read_jsonl(run / V.CHECK))
+    if (run / V.EXPORT_CHECK).exists():
+        record = json.loads((run / V.EXPORT_CHECK).read_text(encoding="utf-8"))
+        if record["read_sha256"] != state.sha256:
+            raise ST.StateError("CHECK was exported from another READ.json - re-run the lane")
+        population = record["population"]
+        checks = _by_site(V.read_jsonl(run / V.CHECK))
+    else:
+        # A claim-only run: the served images were judged by the 2026-09-30 run and delivered, so
+        # this plan may not touch them and must say that instead of claiming them as its own.
+        population = V.CLAIMED_ONLY
+        checks = {}
     failed = [c for c in checks.values() if c["verdict"] != V.DEPICTS]
     replaces: dict[str, Mapping[str, Any]] = {}
-    if failed:
+    claimed: set[str] = set()
+    without: set[str] = set()
+    if failed or _claims_a_file(prechecks):
         replace_record = json.loads((run / V.EXPORT_REPLACE).read_text(encoding="utf-8"))
-        if replace_record["check_sha256"] != ST.file_sha256(run / V.CHECK):
+        if not replace_record["claimed_only"] and replace_record["check_sha256"] != ST.file_sha256(
+            run / V.CHECK
+        ):
             raise ST.StateError("REPLACE was exported from another CHECK.jsonl")
+        if replace_record["claimed_only"] and failed:
+            raise ST.StateError(
+                f"the replace export covered the claimed files only, but {len(failed)} served "
+                "image(s) were judged and did not show their site"
+            )
+        if not replace_record["claimed_only"] and population == V.CLAIMED_ONLY:
+            raise ST.StateError(
+                "the replace export judged the served images, but this run has no check stage"
+            )
         without = {w["site_id"] for w in replace_record["without_candidates"]}
+        claimed = set(replace_record["claimed_sites"])
         replaces = (
-            dict(_by_site(V.read_jsonl(run / V.REPLACE))) if replace_record["questions"] else {}
+            dict(_by_site(V.read_jsonl(run / V.REPLACE)))
+            if replace_record["questions"] and (run / V.REPLACE).exists()
+            else {}
         )
         missing = {c["site_id"] for c in failed} - without - set(replaces)
         if missing:
             raise ST.StateError(f"{len(missing)} failed image(s) have no replacement answer")
+        # A site that serves no image while its item claims a file: without this the plan would
+        # plan it as "no image" and the claim would never be examined - the lane's blind spot.
+        unexamined = claimed - without - set(replaces)
+        if unexamined:
+            raise ST.StateError(
+                f"{len(unexamined)} site(s) that serve no image were asked about the files their "
+                "Wikidata item claims and have no replacement answer"
+            )
     plans = [
         decide_site(
             state.sites[sid],
@@ -375,6 +474,7 @@ def build(run: Path) -> tuple[list[SitePlan], dict[str, Any]]:
             checks.get(sid),
             replaces.get(sid),
             population=population,
+            asked=sid in claimed,
         )
         for sid in state.site_ids()
         if sid in prechecks

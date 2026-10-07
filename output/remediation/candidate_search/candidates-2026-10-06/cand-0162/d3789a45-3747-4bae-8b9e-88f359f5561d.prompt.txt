@@ -1,0 +1,36 @@
+site_id: d3789a45-3747-4bae-8b9e-88f359f5561d
+name: Stone Circles at Odry
+country: Poland
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- POL Odry Kamienne Kręgi Gotów 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\343331b0219dd6165792642970e1c99b
+- Odry cmentarzysko widok ogólny 02.07.10 p.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\767bea097587cac9425aef5e7d43178f
+- Poland Odry - stone ring.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\085d7b970a5e48f8faef8df05c6358d0
+- POL Odry Kamienne Kręgi Gotów 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d1662bed1010bf309c90eb4303e69c29
+- POL Odry Kamienne Kręgi Gotów 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7a12f244e4691aba0e0cd78b48d0513a
+- Odry z drona.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb9de797014543f6ad38e93a2debd190
+- POL Odry Kamienne Kręgi Gotów 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df696eb97cc4a6c7b0477bb002563f6b
+- Odry kręgi 02.07.10 p.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b2908bc7cac38f4bc7592e20d340a3cb
+- Odry krąg V fragment2 02.07.10 p.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dccb4f193b8feffe22dbe17764f02ebc
+- Odry krąg IV kamień2 02.07.10 p.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45345453e7f1eefeadc65f9f81bd1cd8
+- Odry krąg V stella 02.07.10 p.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d0ad60e1b7892678395140f34975e476
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

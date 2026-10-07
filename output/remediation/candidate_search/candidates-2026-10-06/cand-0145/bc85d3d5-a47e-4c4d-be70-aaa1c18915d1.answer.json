@@ -1,0 +1,68 @@
+{
+  "site_id": "bc85d3d5-a47e-4c4d-be70-aaa1c18915d1",
+  "answered_by": "mcode-judge-cand-0145",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Crkvine 0593.jpg",
+      "verdict": "depicts",
+      "note": "Niedrige Trockenmauern des Kirchenruinen-Grundes mit Holz- und Steinkreuz auf dem Gipfel."
+    },
+    {
+      "file": "Crkvine 0601.jpg",
+      "verdict": "depicts",
+      "note": "Trockenmauer des Ruinengrundes mit Holzkreuz davor, Detailaufnahme der Site."
+    },
+    {
+      "file": "Crkvine 0584.jpg",
+      "verdict": "depicts",
+      "note": "Ruinenmauer mit hoelzernem Glockenrahmen und beschriftetem Holzgrabstein."
+    },
+    {
+      "file": "Crkvine 0301.jpg",
+      "verdict": "region_or_type",
+      "note": "Weiter Blick ueber den gruenen Kamm, die Ausgrabungsflaeche nur am linken Rand klein erkennbar."
+    },
+    {
+      "file": "Crkvine 0482.jpg",
+      "verdict": "region_or_type",
+      "note": "Ferne Panoramaaufnahme des Kammes, die Site nur als kleiner Fleck auf dem Grat."
+    },
+    {
+      "file": "Crkvine 0454.jpg",
+      "verdict": "depicts",
+      "note": "Freigelegte Fundamentmauern des Kirchengrundes auf dem Kamm neben der Holzhutte."
+    },
+    {
+      "file": "Crkvine 0566.jpg",
+      "verdict": "depicts",
+      "note": "Ausgegrabene Grundmauern der Kirchenruine mit Hutte und einer Person auf dem Gipfel."
+    },
+    {
+      "file": "Crkvine 0556.jpg",
+      "verdict": "depicts",
+      "note": "Ruinenmauern mit Kreuz und Glockenrahmen auf dem gruenen Kamm der Site."
+    },
+    {
+      "file": "Crkvine 0510.jpg",
+      "verdict": "depicts",
+      "note": "Fundamentgruben und Mauerreste der Site von oben gesehen, Holzhutte daneben."
+    },
+    {
+      "file": "Crkvine 0559.jpg",
+      "verdict": "depicts",
+      "note": "Glocke mit kyrillischer Inschrift vor der Ruinenmauer und dem Kreuz der Site."
+    },
+    {
+      "file": "Crkvine 0285.jpg",
+      "verdict": "depicts",
+      "note": "Grabungsgelaende mit vielen Besuchern, Quad und Holzhutte auf dem Kamm."
+    },
+    {
+      "file": "Crkvine 0279.jpg",
+      "verdict": "region_or_type",
+      "note": "Nur gruener Hang mit Weg und Felsen, keine Mauer oder Struktur der Site sichtbar."
+    }
+  ],
+  "note": ""
+}

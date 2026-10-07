@@ -1,0 +1,4 @@
+{"site_id": "23098ff4-34c5-4071-8298-97e16d7bae84", "answered_by": "mcode-judge-cand-0025", "model": "MiniMax-M3.1-Flash-Preview", "verdicts": [
+{"file": "Camino-inca-dia1-c01.jpg", "verdict": "region_or_type", "note": "Andenlandschaft mit moderner Fussgaengerbruecke ueber den Fluss und Wanderern, keine Ruinen der Site im Bild."},
+{"file": "Quriwayrachina.jpg", "verdict": "depicts", "note": "Inka-Terrassen und Steinruinen am Talhang ueber dem Urubamba-Tal mit Aeckern; Site als Terrassenanlage erkennbar."}
+], "note": ""}

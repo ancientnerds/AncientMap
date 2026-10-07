@@ -1,0 +1,32 @@
+site_id: a9f3224a-798f-43ab-b3ea-41be12a41074
+name: Ajvide Settlement
+country: Sweden
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- John Ajvide Lindqvist.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\27cbd7f4b9b5361fe6ab1f073cea9135
+- John Ajvide Lindqvist 2008.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\556ff596e56bf5c7627586a29d7b472e
+- John Ajvide Lindqvist 2024, P1280441.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a61092192ca57bad1842609299391589
+- John Ajvide Lindqvist 2008 (cropped).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8cc9f6007876db61804b7876f925f5a0
+- John Ajvide Lindqvist at Göteborg Book Fair 2017.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7927e3ae2737e22cac7583cdd7319315
+- Excursion to Stora Karlsö.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\616bcb708a92ba84c4c6f495934443cd
+- Excursion to Stora Karlsö (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fe6f4133b3e575f81cdbbe07b5424084
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

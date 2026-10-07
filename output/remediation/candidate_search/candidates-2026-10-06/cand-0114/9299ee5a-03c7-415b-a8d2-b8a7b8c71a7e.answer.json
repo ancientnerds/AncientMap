@@ -1,0 +1,18 @@
+{"site_id": "9299ee5a-03c7-415b-a8d2-b8a7b8c71a7e",
+ "answered_by": "mcode-judge-cand-0114",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Camp Creek Greenway, Lilburn GA.jpg", "verdict": "other_site", "note": "Asphaltierter Weg mit kurz geschnittenem Rasen und Wald, moderne US-Parkanlage, keine historischen Spuren"},
+  {"file": "Camp Creek Greenway planter, Lilburn GA.jpg", "verdict": "other_site", "note": "Weg mit Bluetenbeet, Bank und Pick-up im Park, moderne US-Szene"},
+  {"file": "Camp Creek Greenway bench, Lilburn GA.jpg", "verdict": "other_site", "note": "Holzsteg und Parkbaenke an einem Weg, moderne Einrichtung, keine Site"},
+  {"file": "Camp Creek Greenway sign, Lilburn GA.jpg", "verdict": "other_site", "note": "Schild Camp Creek Greenway / Lions Club Park Trailhead mit Vorstadt im Hintergrund, USA"},
+  {"file": "Camp Creek from Camp Creek Greenway, Lilburn GA.jpg", "verdict": "other_site", "note": "Holzrampe unter einer Betonbruecke ueber einen Bach, moderne US-Infrastruktur"},
+  {"file": "Camp Creek Greenway bridge, Lilburn GA.jpg", "verdict": "other_site", "note": "Schotterweg mit Holzsteg und Gelender durch gruene Parklandschaft, modern"},
+  {"file": "Chad Greenway TrainingCamp.jpg", "verdict": "other_site", "note": "Footballspieler im Trikot mit Helm auf dem Sportfeld, Person statt Site"},
+  {"file": "Chad Greenway 2014 MV TC.jpg", "verdict": "other_site", "note": "Amerikanische Footballmannschaft beim Training auf dem Rasen, Personen"},
+  {"file": "Oxwich Sky, Greenways Camp site - geograph.org.uk - 3572358.jpg", "verdict": "region_or_type", "note": "Weite Wiese mit Bergen und Wolken, reine Landschaftsaufnahme ohne erkennbare Site"},
+  {"file": "2024-09-10-Rastplatz am Greenway Lettland.jpg", "verdict": "other_site", "note": "Rastplatz mit Schotterweg, Bank, Holzlager und Radfahrern, moderne Szene in Lettland"},
+  {"file": "430-mile ride to honor injured service members ends at Camp Pendleton 121013-M-PF875-006.jpg", "verdict": "other_site", "note": "Zwei Personen in Ride-430-Trikots vor Fahrradern, moderne Veranstaltung"},
+  {"file": "Little Free Library, Lilburn GA.jpg", "verdict": "other_site", "note": "Buecherschrank Little Free Library mit Buechern am Waldrand, moderne Einrichtung"}
+ ],
+ "note": ""}

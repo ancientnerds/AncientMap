@@ -1,0 +1,35 @@
+site_id: 7cabe5b9-0710-4205-a52a-55f3b4003896
+name: Early Roman House
+country: Cyprus
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Drawing of Roman Bath in the Strand 1841.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b0af0e876f7f160d953fde1d86f266d6
+- Roman Baths, Strand Lane.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\202c01af5a74a752d20df8197b88333a
+- "Roman" Bath, Strand Lane (geograph 4684370).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05ab354f11dbe05f09322fbc45aeab96
+- Strand Lane Bath.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\959d537a72b73915de00a56df075729b
+- Strand Lane, off the Strand (geograph 4586093).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2ac442c9af03018e59ec48d78ebed223
+- Roman Town House, Dorchester.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\23ce933ad1bf6e3d82a7a29d9c0f3c1d
+- Roman Town House, Dorchester - 48700462956.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\26a2bb3c7d26d1c55a3337f02c7a369a
+- Roman Town House, Dorchester - 48700123133.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7dfeb996d0952d97b7b86e5b63452dd3
+- Roman Town House, Dorchester - 48700633337.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\69815e2bb3e63c0c884f220a8dae29c6
+- Roman Town House, Dorchester - 48700633942.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d5cad097db8a359e86989e00228665a5
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

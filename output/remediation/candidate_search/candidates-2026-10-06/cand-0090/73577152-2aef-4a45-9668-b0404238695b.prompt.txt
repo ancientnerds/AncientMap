@@ -1,0 +1,49 @@
+site_id: 73577152-2aef-4a45-9668-b0404238695b
+name: Halae
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Neolithic, clay female figurines, NAMA 8009, NAMA 8010, 225564.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0dab547f7d3d954f9c59c78fef2da15e
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (239 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\971774e3a2ab58f848c1932989a2cd82
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (207 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f3a40cab1fafa25ad785009a56f733cb
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (290 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b72d76bc4552c0aed62169072d96f274
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (205 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bde556cfe4d53cd2624e87b1807a4b7a
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (018 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\84556147afbacf0f2f262582d00718bf
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (301 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0aa2f868eb1767c42e374edb85dbd4d7
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (142 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb5f6b23e26fe5c18de901f1f9c2bd3c
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (157 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a172e91a2b4c40fe6cad0c5bec0e17b8
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (359 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc7d75a8fba55ad6c05ee82d69a90f5e
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (069 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56098f6e8c4b7713b16f12e744e1bec7
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (341 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\323cd67f7a35a9b9cb0cdd7e43eb6132
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (232 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4bad90544a2502d7677c78700b330bf5
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (314 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14e6b9e25ffb038a23866dd7eacfeb76
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (216 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8eabd50fa882ac3a4cf297f787dbd230
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (120 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6fae654215688485e3f4c1b0794f13af
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (122 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af13016cd6b6aaf44e2d7006019f5268
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (178 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5f27407c7ea561f8d8f18ccd63ce5c4b
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (346 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\35c5973d23a1aac9b34f4462c7232a4e
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (025 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\03ee7664736aef76ae736cd1e7654325
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (030 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f8078574cae73a2d44d2f302adf6348
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (105 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\276180513bae81a6dae789d844939845
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (109 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae325d3ed375ef58b31ec44f802b26a9
+- Missae quatuor novae quaternis, quinis, pluribusque ; vocibus concinendae. Compositae a Christophoro Satzl, regii Parthenonis Halae ad Oenum Sacellano musicaeque ; praefecto... - btv1b9062447c (037 of 365).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\35ca077278bb7bf0a009cd1f3af02406
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

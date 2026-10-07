@@ -832,6 +832,45 @@ the last WC step: `$C read ...`, then `cli.population(rows, excluded=set(), earl
 carrying a WC key without a description `stale-keys` (a broken state of another lane: never asked), a
 retired one `retired`.
 
+### 12.1a The first WN run, measured (2026-10-06, `runs/wn-2026-10-06`)
+
+The population measured on 2026-10-06 18:25 CEST: **26 curated, not retired sites with a blank
+description** (the 27th is a retired one). The whole chain, mcode for every stage:
+
+| stage | measured |
+|---|---|
+| population, pilot `export --wn --pilot 20 --seed …` | 26 sites, 4 batches of 5 |
+| write round, 4 agents, `mcode-write-wn-NNNN` | 20 answers, **86 sentences** |
+| `import` (fetches all 29 quoted pages itself) | 86 KEEP, 0 dropped, 1 site without sentences |
+| `verify` (4 agents, `mcode-verify-verify-NNNN`) | 19 sites, **81 SUPPORTED, 5 WRONG**, 0 incoherent |
+| `verify2` (5 sites a dropped sentence touched) | 16 SUPPORTED, 2 WRONG, 2 cleared, 3 verified |
+| `build --first-batch 4325` | 15 sites kept whole, 3 cleared, **75 sentences** |
+| `judge` (4 independent agents) | **passed**: 0 WRONG, 0 unsupported (share 0.0), 0 incoherent; 6 `drop_wrong` |
+| gate, batch `p4wc-4325` | 34 rows / 17 sites, written and accepted as step 12, **0 deviations** |
+
+The five WRONG sentences the verification found were real defects, not formatting: *Paro*'s height
+(75 t against 82 t), an excavation year (1972 against 1976), two Nyons distances. The judge confirmed
+none of the 75 kept sentences.
+
+**The gate's plan chain is not every earlier plan** - it is every plan *the apply root holds*, and
+only those whose judge passed. `pilot-2026-09-27` and `-27b` are pilots whose judges did not pass
+(`RESULT.json: passed false`), so their outcomes were never written and their plans are **not** in the
+root: naming them makes the gate refuse the whole chain (*"its outcomes are never written"*). The
+chain that works starts at `pilot-2026-09-27c` (`passed true`), then the two mass runs.
+
+**Run the acceptance from the checkout that has `main`.** `verify_writes4.py` reads
+`phase4.model4.AI_SYSTEMS`, and the allow-list of AI disclosures grew with the owner's model decisions
+(`AI_SYSTEM`, the combined Claude+MiniMax string, since 2026-10-03). A checkout behind that commit
+sees every re-checked row as a deviation - 209 of them on 2026-10-06, all of them historical rows, none
+of them this run. The same command from the current checkout reports `0 deviation(s)`.
+
+**What the lane wrote around it.** Writing the last 822 planned rows of the 2026-09-27 campaigns also
+applied **19 sites' `WC/description-clear`** - a site the earlier checker had emptied, written today
+because that batch had never landed. So the number of curated sites without a description went 26 →
+**28**: 17 filled by this run, 9 left empty by the lane's own verdict (1 site the research could not
+source, 3 cleared by verification, 5 by the judge), and 19 cleared by the earlier campaign. Every one
+of the 28 has a journal row saying so; none of them is a lost write.
+
 ### 12.2 The write round
 
 `export --wn` records `kind: wn` and exports **round 1 as the write round** (stage `write`, batches

@@ -1,0 +1,37 @@
+site_id: f91af2e3-60fc-4c63-9622-05c4e3f4b1cd
+name: Poggioreale, Naples
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Napoli poggioreale 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\437bdbbddaeecd75428e480f43fb4e5a
+- Napoli poggioreale 1 sign.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\434158e5570ee3c8ee7a58e52ab8dbb7
+- Domenico Tarsitani's tomb, Cimitero di Poggioreale, Naples, Italy (1).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d59ebab689fa8f9932288f666a1d2d88
+- Napoli poggioreale dimarzo 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8979069ca2749c3ea42ca61df45dafaa
+- Napoli poggioreale sancio 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cdd816d8e1a1b16b9ed499ca7a7de34c
+- Napoli poggioreale garofalo 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f396aecdceac8fe086b211217c88867f
+- Napoli poggioreale lombardi 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8ad69d89088bc260d2b1a44b454b1cb0
+- Napoli poggioreale rocco 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa90b1225f74178c5ea809104d55a62f
+- Napoli poggioreale monaco 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0c180dfb4558fb32d214f323003c225f
+- Napoli poggioreale ruggiero 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c45b966a8450f7dfeafebe0355a21a93
+- Napoli poggioreale salvidio 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f14f3d758f3b07f7f2f3f360ee87045
+- Napoli poggioreale ruggiero 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0bdcd7d182fd0f22443d6dab38e03c7c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

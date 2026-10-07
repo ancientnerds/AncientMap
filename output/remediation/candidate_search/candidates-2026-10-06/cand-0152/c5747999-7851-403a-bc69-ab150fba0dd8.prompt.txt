@@ -1,0 +1,28 @@
+site_id: c5747999-7851-403a-bc69-ab150fba0dd8
+name: Partiscum (Castra)
+country: Hungary
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Szegedi vár XVII. század.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a42c46a34965df3a8fdd9def86bd9f09
+- Limes6.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\592b2da7898f8dda3047f1f66c434e6e
+- Limes5.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\236a343d360fb76f7309854b38a27667
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

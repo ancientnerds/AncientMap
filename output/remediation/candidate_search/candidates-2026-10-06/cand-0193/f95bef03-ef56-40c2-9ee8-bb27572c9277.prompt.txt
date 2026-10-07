@@ -1,0 +1,55 @@
+site_id: f95bef03-ef56-40c2-9ee8-bb27572c9277
+name: Starčevo
+country: Serbia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Hram svetog Velikomučenika Pantelejmona Starčevo 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d5162eef0f674a252357b63390216fad
+- Hram svetog Velikomučenika Pantelejmona Starčevo 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7080e012b6d0744812cbde074930e53
+- Hram svetog Velikomučenika Pantelejmona Starčevo 16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5baff64a55e0bd0d38d9559291a55589
+- Hram svetog Velikomučenika Pantelejmona Starčevo 35.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3ab32da3ee7f12dd5a275a635f37116a
+- Hram svetog Velikomučenika Pantelejmona Starčevo 22.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\73e1574ddf33b4d01d0bcec3b58504b6
+- Hram svetog Velikomučenika Pantelejmona Starčevo 36.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\99e8d755b1b24c13ea772fc367cd7724
+- Hram svetog Velikomučenika Pantelejmona Starčevo 31.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4c3f291a86cc914d5263e3f1610195dd
+- Hram svetog Velikomučenika Pantelejmona Starčevo 15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8f94f4d6a3fe2a4dfb399377dec9974
+- Hram svetog Velikomučenika Pantelejmona Starčevo 23.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8874606bf82656ef581f80d133f27c50
+- Hram svetog Velikomučenika Pantelejmona Starčevo 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b87157febdff4ae98685a89bb1497d77
+- Hram svetog Velikomučenika Pantelejmona Starčevo 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\505b22db3ba1555c91c29fa46452106a
+- Dom kulture 29. novembar Starčevo 6.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56021bd4c27c5b6108390c6ff7a6c0d1
+- Starčevo-Grad, Glačane sekire, kamen, Starčevačka kultura, neolit 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2890bee3df53fb08fcdec1fc1107d016
+- OŠ Vuk Stefanović Karadžić Starčevo 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f1873534c7c601ae6aa37148fc62554
+- Stadion FK Borac Starčevo.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b2c2d6d8e52386256946f9e98d3a388
+- Arheološko nalazište Starčevo 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b654dc82a28ffac2eb82fac38febc4f
+- Starčevo-Grad, Glačane sekire, kamen, Starčevačka kultura, neolit 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\701613f4f684ed5de94cbc0598150c45
+- Stadion FK Borac Starčevo 2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4f153eb253fc9147b09ecc047e65bf6f
+- Ambulanta Starcevo (Pancevo) 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cac176c6d717e48310ac7b463398b356
+- Banat Josephinische Landaufnahme pg151.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\768699c9dce8fdd6cf7810455d78bd7a
+- Dom kulture 29. novembar Starčevo 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c2c081cbbba4e090563f3c17ce61790
+- Dom kulture 29. novembar Starčevo 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0039e818df69528640863e7445fed732
+- Dom kulture 29. novembar Starčevo 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\75961e1f30cfec7006416e716a354110
+- Dom kulture 29. novembar Starčevo 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aed8b4f53fd5e1e52a6ddf7109748430
+- Dom kulture 29. novembar Starčevo 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a88630db879aa81b56281f2b1fd4d4c9
+- Dom kulture 29. novembar Starčevo 15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad7142158714d680a514d30b9d6f52a2
+- Dom kulture 29. novembar Starčevo 16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\09b15ee780586e10c189c7693aae4f4c
+- Dom kulture 29. novembar Starčevo 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d2d643e123088581cad19e94145f2d8a
+- Dom kulture 29. novembar Starčevo 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a02165a308b878f0800f1709eec6e96f
+- Dom kulture 29. novembar Starčevo 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f6a6ce2ea32701175920b4d920b925e0
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

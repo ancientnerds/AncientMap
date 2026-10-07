@@ -1,0 +1,33 @@
+{
+  "site_id": "fd42ae8f-5d57-4764-9d0e-5020eaf3eb13",
+  "answered_by": "mcode-judge-cand-0198",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Barry Troglodyte 3.jpg",
+      "verdict": "depicts",
+      "note": "Trockensteinbehausungen mit Ziegeldächern in eine Kalksteinfelswand eingebaut, Trockenmauern und Kastanienbäume davor: die Höhlenwohnungen selbst."
+    },
+    {
+      "file": "Barry Troglodyte 2.jpg",
+      "verdict": "depicts",
+      "note": "Trockenmauer mit Kastanien, dahinter eine verputzte Höhlenfassade mit Tür und Fenster in der Felswand; Teilstück des Troglodytenorts."
+    },
+    {
+      "file": "Barry Troglodyte 4.jpg",
+      "verdict": "depicts",
+      "note": "Reihen von Trockenmauer-Fassaden mit Bogenöffnungen und gewölbten Höhlenräumen in einem felsigen Hang; Bauten der Site."
+    },
+    {
+      "file": "Bollène Potager semi-maçonné du village troglodyte de Barry.JPG",
+      "verdict": "depicts",
+      "note": "Schwarzweiß-Aufnahme eines alten Grabungsfotos: Trockenmauerfundamente in einer offenen Baugrube, das Mauerwerk der Site."
+    },
+    {
+      "file": "Barry Troglodyte.jpg",
+      "verdict": "depicts",
+      "note": "Bogenförmige Höhlenöffnungen und gemauerte Wölbungen in einer Felswand mit Bewuchs; die Wohnhöhlen des Troglodytenorts unmittelbar."
+    }
+  ],
+  "note": "Alle fünf Kandidaten zeigen Mauerwerk, Höhlenöffnungen oder Grabungsbefunde des Troglodytenorts selbst."
+}

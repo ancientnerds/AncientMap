@@ -1,0 +1,28 @@
+{
+  "site_id": "01c36727-31bd-45ae-9908-5c7043403cd2",
+  "verdicts": [
+    {
+      "file": "Merida - Anthropological museum - Flickr - S. Rae.jpg",
+      "verdict": "region_or_type",
+      "note": "Historisches Palaisgebaeude mit hellem Putz, Palmen und Hecken; kein Schild, kein Ausstellungsinhalt - Identitaet als Museo Antropologico am Bild nicht sicher lesbar."
+    },
+    {
+      "file": "Palacio Canton, M\u00e9rida, Yucat\u00e1n, Junio 2024.jpg",
+      "verdict": "other_site",
+      "note": "Heller Sandsteinbau im franzoesisch-begischen Stil mit Mansarddach, Wappen, Eisenzaun und Plattenbaeumen; keine Yucatan- oder Maya-Merkmale."
+    },
+    {
+      "file": "The American Museum journal (c1900-(1918)) (17972200708).jpg",
+      "verdict": "other_site",
+      "note": "Historische Schwarzweiss-Aufnahme um 1900: offene Strohhutte mit Personen und Stangen, ethno-grafische Szene, kein Museum und keine Ausgrabung."
+    },
+    {
+      "file": "Chaak Vessel, Mayapan, Post Classic, 1250-1450 AD.jpg",
+      "verdict": "other_site",
+      "note": "Tonfigur mit Deckel, Menschenantlitz und Rueselnase auf einem Museumssockel vor nackter Wand; Herkunftsort am Bild nicht ablesbar, Gefaess einer anderen Maya-Site."
+    }
+  ],
+  "note": "",
+  "answered_by": "mcode-judge-cand-0001b",
+  "model": "MiniMax-M3.1-Flash-Preview"
+}

@@ -1,0 +1,32 @@
+site_id: c9358837-e3ee-4daa-aedc-34e45afa1692
+name: Combs Ditch
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Drainage Ditch - geograph.org.uk - 2234990.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\743c200f98cf3344203554a0923a648b
+- Timimoun 36.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bad72e76ebb07133acd734d291e26ca1
+- Timimoun 35.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e0a631955e51f7fe69033a79cb0d0f1
+- Celosia argentea-- the Silver Cock's Comb (29194480514).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8825d66a6ce31a2de91b37d224ddf025
+- TBM-3W on HMCS Magnificent (CVL 21).jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a1e3c3afd67962fc6bd347822e1d9af0
+- HMCS Magnificent flight deck aft with Avengers.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6d9dc163246cb8cd2f368ed8ed6144bc
+- HMCS Magnificent flight deck forward with Avengers.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2174d97eba78244723d9c6c7141ca7db
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

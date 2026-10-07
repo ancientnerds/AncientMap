@@ -1,0 +1,68 @@
+{
+  "site_id": "bc7bf3f9-5f9e-41e4-ac6f-c8efd61c388e",
+  "answered_by": "mcode-judge-cand-0144",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Portas0.JPG",
+      "verdict": "other_site",
+      "note": "Konstantinsbogen in Rom mit Inschriftenattika und drei Boegen, nicht das Aurelianstor."
+    },
+    {
+      "file": "Temple of Bel, Palmyra, Syria - 7.jpg",
+      "verdict": "other_site",
+      "note": "Kassettierte Gewölbedecke des Bel-Tempels in Palmyra, Syrien."
+    },
+    {
+      "file": "Temple of Bel, Palmyra, Syria - 5.jpg",
+      "verdict": "other_site",
+      "note": "Blick zwischen zwei Saeulen auf die Ruinen des Bel-Tempels, Palmyra."
+    },
+    {
+      "file": "Temple of Bel, Palmyra, Syria - 4.jpg",
+      "verdict": "other_site",
+      "note": "Gewölbter Bogen mit Kassetten und korinthischer Saeule, Bel-Tempel in Palmyra."
+    },
+    {
+      "file": "Temple of Bel, Palmyra, Syria - 3.jpg",
+      "verdict": "other_site",
+      "note": "Lange Saeulenreihe mit korinthischen Kapitellen im Bel-Tempel, Palmyra."
+    },
+    {
+      "file": "Column bracket, Palmyra, Syria.jpg",
+      "verdict": "other_site",
+      "note": "Konsolen und Wandgliederung in hellem Sandstein, Palmyra, Syrien."
+    },
+    {
+      "file": "Palmyra, Syria - 4.jpg",
+      "verdict": "other_site",
+      "note": "Grosses Wagenrad-Bogentor der Kolonnadenstrasse in Palmyra, Syrien."
+    },
+    {
+      "file": "Tourist camels, Palmyra, Syria.jpg",
+      "verdict": "other_site",
+      "note": "Drei Kamele in roten Decken vor einer Ruinenmauer, Palmyra, Syrien."
+    },
+    {
+      "file": "Palmyra, Syria and Ibn Maan Citadel (Fakhr al-Din al-Maani).jpg",
+      "verdict": "other_site",
+      "note": "Saulenstrasse mit Zitadelle auf dem Huegel, Palmyra, Syrien."
+    },
+    {
+      "file": "Corinthian capitol, Palmyra, Syria.jpg",
+      "verdict": "other_site",
+      "note": "Korinthisches Kapitell aus hellem Kalkstein, Palmyra, Syrien."
+    },
+    {
+      "file": "Palmyra, Syria - 2.jpg",
+      "verdict": "other_site",
+      "note": "Weitblick ueber das Ruinenfeld der Kolonnadenstrasse, Palmyra, Syrien."
+    },
+    {
+      "file": "Palmyra, Syria - 3.jpg",
+      "verdict": "other_site",
+      "note": "Ruinenfeld vor den Baeumen Palmyras, Kolonnadenstrasse, Syrien."
+    }
+  ],
+  "note": ""
+}

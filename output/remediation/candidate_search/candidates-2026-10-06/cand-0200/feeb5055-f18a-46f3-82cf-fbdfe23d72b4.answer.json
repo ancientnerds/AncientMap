@@ -1,0 +1,38 @@
+{
+  "site_id": "feeb5055-f18a-46f3-82cf-fbdfe23d72b4",
+  "answered_by": "mcode-judge-cand-0200",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Kanichi Kashimura 1.JPG",
+      "verdict": "other_site",
+      "note": "Schwarzweiß-Porträt eines uniformierten, dekorierten Mannes mit Medaillen; eine Person."
+    },
+    {
+      "file": "Otake Kanichi 1902.jpg",
+      "verdict": "other_site",
+      "note": "Alte Zeitungsdruckaufnahme eines Mannes mit Bart im kimonoartigen Gewand; eine Person."
+    },
+    {
+      "file": "Fish 'Kanichi', no. 14 Wellcome L0019910.jpg",
+      "verdict": "other_site",
+      "note": "Gezeichnete Tafel eines Fisches mit handschriftlicher Beschriftung; ein zoologisches Blatt."
+    },
+    {
+      "file": "Placa Busto Kanichi Sato.jpg",
+      "verdict": "other_site",
+      "note": "Bronzetafel mit der Aufschrift KANICHI SATO / EDUCADOR COM SABEDORIA E AMOR an einer verputzten Wand."
+    },
+    {
+      "file": "Hotel Kanichi.JPG",
+      "verdict": "other_site",
+      "note": "Modernes Hochhaus mit Balkonen und vertikaler Aufschrift in japanischer Schrift am blauen Himmel."
+    },
+    {
+      "file": "Placa Busto Kanichi Sato - Piscina.jpg",
+      "verdict": "other_site",
+      "note": "Bronzetafel mit der Inschrift PISCINA ... SEMI-OLIMPICA DE SAO PAULO, offenbar ein Denkmal in Brasilien."
+    }
+  ],
+  "note": "Alle sechs Bilder sind Personen, Gedenktafeln und moderne Gebäude; keine Ansicht der archäologischen Site."
+}

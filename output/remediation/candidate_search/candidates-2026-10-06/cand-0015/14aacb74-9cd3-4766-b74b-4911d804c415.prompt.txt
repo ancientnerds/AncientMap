@@ -1,0 +1,31 @@
+site_id: 14aacb74-9cd3-4766-b74b-4911d804c415
+name: Welsh Road
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Fingerpost at Walden Drive to Welsh Road footpath.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d1f222484e16c84c3bbb8b1f0c76227c
+- Welsh Road lock and cottage - geograph.org.uk - 7279320.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb885c9460b53e57c1856da41cbc7f0d
+- Welsh Road Lock-Grand Union Canal - geograph.org.uk - 4137334.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c51d0cd0b2845dea40d2c0b5dfe245a2
+- Welsh Road Lock Cottage and its lock - geograph.org.uk - 8044454.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0ce36016a15caadbfae8c270659e24d3
+- Welsh Road Bridge, Grand Union Canal - geograph.org.uk - 6667005.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\63216b8afbe118e84fe768ad703179e7
+- Grand Union Canal west of Welsh Road lock and bridge - geograph.org.uk - 6879271.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c6869e0e597b375f26225dfb1a05d21
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

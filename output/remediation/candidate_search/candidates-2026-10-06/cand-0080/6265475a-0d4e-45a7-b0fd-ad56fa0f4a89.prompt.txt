@@ -1,0 +1,45 @@
+site_id: 6265475a-0d4e-45a7-b0fd-ad56fa0f4a89
+name: Lamay
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Lamay District Peru- Church.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e20ce66a5df1f04bd355167fcd3f72bc
+- Lamay District Peru- View from Church.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\23f196caefbcafaa41d2412a80180704
+- Lamay District Peru- old bridge over Urubamba River from new bridge.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eee70f8d8f7953da6b4ef0f8c1dc247c
+- Lamay District Peru- mercado outside.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4551963f3f3c0f4e8222f69a5192498
+- Lamay District Peru- town mercado.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3c76ab1cbf6541638cf287b38050e2e6
+- Huchuy Qosqo Stevage.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\38940f4cdadb3ca2ef47dc8f7ac565cf
+- Río Vilcanota en el distrito de Lamay, Calca.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\979f396ee94aad570b3a0df0c2593db2
+- 2023 Liouciou Township J.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e45c5dde571225b821a1773f35db52e7
+- Boat Nearby Lamay Island.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\052f3d3894fec7f86882101b78e44196
+- A Goat in Lamay Island.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\40f36ad960975746e1945c8596de8334
+- Feamle Flower of Barringtonia asiatica, Lamay Island.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9cff18fc1f18ad1b2e4839545ec15e1e
+- "Please Purchase Ticket" Title of Beautiful Maiden Cave, Lamay Island.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b94b0321f347579146168bc916f06489
+- Bat Cave of Beautiful Maiden Cave, Lamay Island 04.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb247bc9fe00813923b915c7bcce1449
+- Vues de l'île de Lamay et de Formose - btv1b53229249x.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e26f9fdc4ea2a04461347bc61d73e541
+- Yixiantian in Shanzhugou, Lamay Island 01.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\07e14044a709616a52e1d223c0aee9de
+- Beautiful Maiden Cave, Lamay Island 01.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b53c85e73b22f5c7098a849b95b9f5d
+- Trees of Beautiful Maiden Cave, Lamay Island 01.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\854379f476d3898654bcf5e36a2ccc3b
+- A smiling old woman at Lamay Island 20100503.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8424c5b8d256eec50546297b6ff5668
+- Leonotis nepetifolia en Lamay.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\edd153ab35298d4283edaa32026fbc0c
+- Vase Rock, Lamay Island 2015-10-09 (cropped).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b76ade9ff54463784f244d0e9768a12a
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

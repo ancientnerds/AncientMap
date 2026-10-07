@@ -1,0 +1,32 @@
+site_id: 1a85971c-56a9-411e-bfa9-eda3004219a5
+name: Daepyeong
+country: South Korea
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Daepyeong-dong BRT station platforms.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7606c39dd16c97b30da84e85554a8393
+- Daepyeong-dong BRT Station Entrance.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1d174e86702299944e3412ec68358205
+- Jejuolle Route 9.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b2420b9b353d09950a84efb4ec18b54d
+- Jinju-map.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f67d25a10ecd378e069ea5a7bab07171
+- Main Terminal Building in Sejong City.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bb148e5469ed4060baf140ac96957aa6
+- Korea-Bronze.age-Jinju-Pot-01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7538715ae092af74050425bff98ba402
+- Korea.Bronze Age-Jinju-Pot-02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\85183c89959d670f9cc11da95ebb594f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

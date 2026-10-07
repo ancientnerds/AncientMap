@@ -1,0 +1,37 @@
+site_id: 28a8e565-a9c1-4a1d-90ee-d889b0c372db
+name: Odysseus Palace
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Château de Fontainebleau-Ulysse-20170625.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\527dde5991b53c79b9660b5db1e296b9
+- Château de Fontainebleau-Ulysse (Plan poitrine)-20170625.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e3b8739c697df76adb91533da336b82
+- Palace of Fontainebleau 002.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd5e85e76e8a67a91a3e9ff7bf664dd1
+- Fontainebleau Château Diskuswerfer 529.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e8e008214e812e476bf7f3e82ada5de8
+- Fontainebleau Statue.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\24e43980588beeb6c2f6e3700efc898c
+- Ulysse chez Alcinoüs, roi des Phéaciens statue de Louis Petitot 2020-08-06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\67683cc265b669427d1ca4172b4a96a8
+- Château de Fontainebleau 2011 (105).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f093499745885a460e0ec0895fcb7ed4
+- Château de Fontainebleau 2011 (104).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\716293d8f65aa826233e7063664c5f00
+- Château de Fontainebleau 2011 (103).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4150df32e69628ca5836a789305f4f9
+- Château de Fontainebleau 2011 (98).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2660a07f5f5eae88632ddd37d3c84272
+- Château de Fontainebleau-Griffon de La Fontaine-20170625.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4b05af634ae40d58b09cc09477b642f3
+- Palais d'Ulysse Ithaque.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ab93fcc3fa77b8468c9690d8b79f4568
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

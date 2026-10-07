@@ -1,0 +1,29 @@
+site_id: d85b55ee-afa3-423c-99d5-84149e5f8ee9
+name: Makra Stoa
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Marble headless torso of a statuette of Artemis, from the Long Stoa, late Hellenistic period, Archaeological Museum of Sikyon, Greece (13945670140).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\03fa8ed6a246d44e9e2ca20202d18e5e
+- The Piraeus and the Long Walls of Athens.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41b3484a4d75fb9cbc3481405cf8e1c0
+- The Church of the Holy Trinity (Piraeus) on May 16, 2021.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e179b2553fe11a08fa50b35a7f192eb2
+- Ulluco.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5498d8cc2faf6570151c932bd6c418b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

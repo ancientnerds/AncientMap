@@ -1,0 +1,37 @@
+site_id: dcb2b187-5d69-4824-bb7a-d098ba39231c
+name: Berry Castle, Somerset
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Berry Castle Wood - geograph.org.uk - 3722548.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d514d4e171a855bd0ee681dc2518a99
+- Gateway, above Berry Castle Combe - geograph.org.uk - 3722562.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\69b74c7f19d00fb63540e1c1b23d7d8b
+- Berry Pomeroy Castle - 33305840172.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e20a6c294b51b9c075ce200670ea2351
+- Berry Pomeroy Castle - 33305837982.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4ff2b820fc9c3b9d2bf5eebe933df0f6
+- Berry Pomeroy Castle - 32618458824.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\86fc34990b1253275dff936b2dbb368c
+- Berry Pomeroy Castle - 33421271096.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a41c152f1d06c68a375209af578b2aa
+- Berry Pomeroy Castle - 33333813011.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5dec07997a7ccfc9e0a67a805c2e9c2d
+- Berry Pomeroy Castle - 32618456074.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\21f4d7c45978d10b472f19a8a485b19e
+- Berry Pomeroy Castle - 32618454824.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e4f0927ebace33a1ab13f6488e43249
+- Berry Pomeroy Castle - 33305836902.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b9b0cd18c9dae086e36d82c70b56386
+- Berry Pomeroy Castle - 33305839132.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2f23fbe07ec234ee710f52f5ec638453
+- Berry Pomeroy Castle - 33305842322.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\265b467573f770e2bc3383c0fb4bc547
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

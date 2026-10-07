@@ -1,0 +1,37 @@
+site_id: 43c12659-d785-44da-ab9b-e0e5fedee349
+name: Molloko
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Chullpas de Molloko en Puno, Perú.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9f1506f29604d72c55c7bf5989e80237
+- Fotorecorrido de las Chullpas de Molloko 49.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\947d6c05c0fc12d757baf8132474e3d6
+- Fotorecorrido de las Chullpas de Molloko 28.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\afd13a62b5248a6a7c638724cbae07ad
+- Fotorecorrido de las Chullpas de Molloko 34.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c672743466fcffe11df8eb4c51b60264
+- Fotorecorrido de las Chullpas de Molloko 45.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\38f1a265e9a838923100ba70c03a9105
+- Fotorecorrido de las Chullpas de Molloko 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a1285ddd9ac5829c7f78639dd3bff5a8
+- Fotorecorrido de las Chullpas de Molloko 33.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\60a8a5ad22c9c532ebb3ceb82a7af2ad
+- Fotorecorrido de las Chullpas de Molloko 31.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aca99efb4db1acaa9651be5af47992e9
+- Fotorecorrido de las Chullpas de Molloko 17.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17deb746a2cd97abdaa466e9eeabe14a
+- Fotorecorrido de las Chullpas de Molloko 39.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3433618ed4fdb135600f519fa0694445
+- Fotorecorrido de las Chullpas de Molloko 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\caaee99d3214f8e1bb7c784c3c8c66e1
+- Fotorecorrido de las Chullpas de Molloko 47.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4fad9011d42ea332eb9f0828ddf4b4ad
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

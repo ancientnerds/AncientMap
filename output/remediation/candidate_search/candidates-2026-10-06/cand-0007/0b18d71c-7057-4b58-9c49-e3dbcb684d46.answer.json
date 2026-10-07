@@ -1,0 +1,68 @@
+{
+    "site_id":  "0b18d71c-7057-4b58-9c49-e3dbcb684d46",
+    "answered_by":  "mcode-judge-cand-0007",
+    "model":  "MiniMax-M3.1-Flash-Preview",
+    "verdicts":  [
+                     {
+                         "file":  "The Hellenistic house, Rusellae, Etruria, Italy (43188322195).jpg",
+                         "verdict":  "other_site",
+                         "note":  "Excavated stone foundations and a red-plastered wall under a modern canopy; a different excavation, not the Cypriot house."
+                     },
+                     {
+                         "file":  "Priene Hellenistic houses 2007 4267.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Pine wood with low stone foundations, wall lines and a stone slab floor; not the Cypriot house."
+                     },
+                     {
+                         "file":  "Amphipolis Hellenistic house Room A.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Buried room with red and ochre painted walls, diamond panels and a carved stone well; not the Cypriot house."
+                     },
+                     {
+                         "file":  "Priene Hellenistic houses 2007 4800.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Wide view of stone foundations and stepped walls in a pine wood with a column stump; not the Cypriot house."
+                     },
+                     {
+                         "file":  "Priene Hellenistic houses 2007 4271.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Rocky rubble slope with loose stones and a stony path through pines on the hillside; not the Cypriot house."
+                     },
+                     {
+                         "file":  "Priene Hellenistic houses 2007 4269.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Low dry-stone walls and scattered blocks on a pine-covered hillside, valley behind; not the Cypriot house."
+                     },
+                     {
+                         "file":  "Priene Hellenistic houses 2007 4275.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Large ashlar blocks, a paved stone street and a doorway wall among pines; not the Cypriot house."
+                     },
+                     {
+                         "file":  "Priene Hellenistic houses 2007 4276.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Paved stone floors, column bases and low walls in a pine wood; not the Cypriot house."
+                     },
+                     {
+                         "file":  "Priene Hellenistic houses 2007 4230.jpg",
+                         "verdict":  "other_site",
+                         "note":  "House foundations with grass-covered walls and the valley plain visible beyond the pines; not the Cypriot house."
+                     },
+                     {
+                         "file":  "Priene Hellenistic houses 2007 4270.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Foundations and a pit cut into the ground with low walls, valley and hills behind; not the Cypriot house."
+                     },
+                     {
+                         "file":  "Priene Hellenistic houses 2007 4273.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Long stone retaining wall and scattered column drums among pines; not the Cypriot house."
+                     },
+                     {
+                         "file":  "Priene Hellenistic houses 2007 4266.jpg",
+                         "verdict":  "other_site",
+                         "note":  "Field of scattered blocks and low wall lines under pines with a large boulder; not the Cypriot house."
+                     }
+                 ],
+    "note":  ""
+}

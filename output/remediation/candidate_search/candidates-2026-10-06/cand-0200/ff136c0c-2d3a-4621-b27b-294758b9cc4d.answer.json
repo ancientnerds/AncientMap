@@ -1,0 +1,38 @@
+{
+  "site_id": "ff136c0c-2d3a-4621-b27b-294758b9cc4d",
+  "answered_by": "mcode-judge-cand-0200",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Treasure of Cyrene 1.jpg",
+      "verdict": "depicts",
+      "note": "Antike Steinblöcke und Fundamentlagen im Gras, dahinter eine abgestützte Abgrabungsmauer aus gebrochenen Steinen."
+    },
+    {
+      "file": "Treasure of Cyrene.jpg",
+      "verdict": "depicts",
+      "note": "Weiterer Blick auf das Ausgrabungsfeld: liegende Blockreihen im Gras und hölzerne Abstützungen an der Mauer dahinter."
+    },
+    {
+      "file": "Treasures of Olympia 02.jpg",
+      "verdict": "other_site",
+      "note": "Grünes Gelände mit Fundamenten, Olivenbäumen und bewaldeten Bergen; keine trockene Hochebene wie bei Kyrene."
+    },
+    {
+      "file": "Top down aerial of the archaeological site of Olympia, Greece (51222351617).jpg",
+      "verdict": "other_site",
+      "note": "Luftaufnahme einer ausgedehnten grünen Ruinenlandschaft mit Tempelgrundrissen und Olivenhainen; nicht die aride Site."
+    },
+    {
+      "file": "Top down aerial of Ancient Olympia in Greece (51224134415).jpg",
+      "verdict": "other_site",
+      "note": "Weite Luftaufnahme mit Sportplatz, Baumreihen und grünen Feldern; eine ganz andere, bewachsene Ebene."
+    },
+    {
+      "file": "Roman Propylea, Shahhat, Libya.jpg",
+      "verdict": "depicts",
+      "note": "Kleiner Steintempel mit Giebel, Holztür und Freitreppe zwischen Quadermauern und einer Säule in trockener Steinlandschaft."
+    }
+  ],
+  "note": "Drei Bilder zeigen Ruinenstrukturen in einer trockenen Steinlandschaft (zwei Grabungsfelder und einen kleinen Tempelbau); drei Aufnahmen zeigen ein grünes, bewaldetes Ruinengelände eines anderen Ortes."
+}

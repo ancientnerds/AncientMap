@@ -1,0 +1,21 @@
+{"site_id": "2dceb336-e4a4-4a99-9f88-00c83aaa0088",
+ "answered_by": "mcode-judge-cand-0034",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Copan Maya site Honduras, 1976 01.jpg",
+   "verdict": "other_site",
+   "note": "Sela-Skulptur mit Vollbildprofil in abgestecktem Parkrasen, groesste Maya-Parkanlage - nicht Rastrojon"},
+  {"file": "Ruinas de Copán, Honduras 1980 01.jpg",
+   "verdict": "region_or_type",
+   "note": "Ausgeblichene, unscharfe Nahaufnahme von Steinstufen und Mauerwerk; keine Site identifizierbar"},
+  {"file": "Maya Corn God sculpture from Copan, photographed at the Museum of Mankind, London, 1974.jpg",
+   "verdict": "region_or_type",
+   "note": "Skulptur hinter Museumsvitrine mit Deckenspot und Besucher - Museum, nicht der Ort im Freien"},
+  {"file": "Pieza Maya.jpg",
+   "verdict": "region_or_type",
+   "note": "Steinfragment auf weissem Ausstellungsregal vor grauer Wand, reines Objekt ohne Geländebezug"},
+  {"file": "CopanIfrog80.jpg",
+   "verdict": "other_site",
+   "note": "Sela mit Besucher davor, umzaeunter Parkplatz mit weiteren Stelen und Mauer - andere Site"}
+ ],
+ "note": ""}

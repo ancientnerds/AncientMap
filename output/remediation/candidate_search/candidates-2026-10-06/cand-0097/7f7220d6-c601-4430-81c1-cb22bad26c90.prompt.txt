@@ -1,0 +1,29 @@
+site_id: 7f7220d6-c601-4430-81c1-cb22bad26c90
+name: Horse Pool Camp
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Harbury junction - geograph.org.uk - 6057529.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9e9144abfddcc9eae0aec652e5cde35
+- Harbury Village Hall - geograph.org.uk - 3335609.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\10c055002f33ee516bf5fdf947421ec2
+- Frances Road, Harbury - geograph.org.uk - 4415238.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41c8a39561fc2b1665e20136a84c317e
+- All Saints Church, Harbury 20250503 101423.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\320a4e5c27ce24a8056aeae74a3b3fb6
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

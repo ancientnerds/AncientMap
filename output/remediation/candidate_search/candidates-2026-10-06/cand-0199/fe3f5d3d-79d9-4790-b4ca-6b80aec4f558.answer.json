@@ -1,0 +1,38 @@
+{
+  "site_id": "fe3f5d3d-79d9-4790-b4ca-6b80aec4f558",
+  "answered_by": "mcode-judge-cand-0199",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Tambomachay, Cuzco, Perú, 2011-11-17 (2).jpg",
+      "verdict": "depicts",
+      "note": "Gestufte Steinmauer mit einer Reihe rechteckiger Nischen und Wasseraustritten in ein Becken: die Inkawasserleitung der Site."
+    },
+    {
+      "file": "Tambomachay, Cuzco, Perú, 2011-11-17 (3).jpg",
+      "verdict": "depicts",
+      "note": "Breite Panoramaansicht der Nutzwasseranlage: obere Nischenreihe, mehrere Quellsteine mit fließendem Wasser, Steinbecken."
+    },
+    {
+      "file": "Tambomachay, Cuzco, Perú, 2011-11-17 (4).jpg",
+      "verdict": "depicts",
+      "note": "Detail der Nutzwasseranlage mit drei Auslaufsteinen, Wasserbecken und dahinter ansteigenden Steinmauern; Anlage der Site."
+    },
+    {
+      "file": "Tambomachay, Cuzco, Perú, 2011-11-17 (1).jpg",
+      "verdict": "depicts",
+      "note": "Nahaufnahme eines modernen Tierkopf-Auslasses vor der Steinquellmauer, dahinter die Auslaufsteine der Nutzwasseranlage."
+    },
+    {
+      "file": "Centro arqueológico Tambomachay.jpg",
+      "verdict": "depicts",
+      "note": "Gegenüberliegende Reihen gemauerter Wände mit je vier Nischen und einem mittigen Kanalschacht; das Bauwerk der Site."
+    },
+    {
+      "file": "Centro arqueologico Tambomachay.jpg",
+      "verdict": "depicts",
+      "note": "Blick von oben auf die halbkreisförmig angeordneten Steinmauern mit Nischen, Zisternenöffnung und Besuchergruppen im Gelände."
+    }
+  ],
+  "note": "Alle sechs Bilder zeigen die Nutzwasseranlage von Tambomachay selbst: Mauern mit Nischenreihen, Auslaufsteine, Becken und Zisternenöffnung."
+}

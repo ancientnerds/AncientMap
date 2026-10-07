@@ -1,0 +1,37 @@
+site_id: 803f8912-22af-46a8-82e3-bde675d8e5f3
+name: Selinunte Archaeological Park
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Selinunte A.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ccf57921bc8b1d3aee04aeaf504e088d
+- Tempel E Säulen Selinunt 2023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b006bc34560a7360d10ebcbf3af47419
+- "Im Nebel der Geschichte?" - Der Archäologische Park Selinunt. 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8b131411bd764809f59e2c9f1ab695d
+- "Im Nebel der Geschichte?" - Der Archäologische Park Selinunt. 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b5a350de8143aca649f194011e8a1552
+- "Im Nebel der Geschichte?" - Der Archäologische Park Selinunt. 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4450548a5a447cdcfac1d4a6ad57592e
+- "Im Nebel der Geschichte?" - Der Archäologische Park Selinunt. 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f6c74de4d41472f709593adf5fedae22
+- "Im Nebel der Geschichte?" - Der Archäologische Park Selinunt. 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d4694a251978c3ba027aeedd07748d38
+- "Im Nebel der Geschichte?" - Der Archäologische Park Selinunt. 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76bebb81706a712b20bd1abbff04cc68
+- "Im Nebel der Geschichte?" - Der Archäologische Park Selinunt. 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b940000b2bce1d12cce1c7e4dcef8770
+- " Die meisten Funde sind im Archäologischen Regionalmuseum Palermo" 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0bd8856d43d50df50a7202f5c5480c2d
+- " Die meisten Funde sind im Archäologischen Regionalmuseum Palermo" 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba24c043c52006bf3a04d8baed3243a3
+- " Die meisten Funde sind im Archäologischen Regionalmuseum Palermo" 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e025021ac31121e5f4fd098739dfde0
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

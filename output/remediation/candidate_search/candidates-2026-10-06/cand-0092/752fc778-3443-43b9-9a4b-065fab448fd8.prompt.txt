@@ -1,0 +1,33 @@
+site_id: 752fc778-3443-43b9-9a4b-065fab448fd8
+name: The Larches, Monmouthshire
+country: Wales
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Rushy meadow, The Larches - geograph.org.uk - 6871056.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8bee3cdd45e10d23c9ee760d1d24b47f
+- The Larches, 22 Larch Road, Cambridge, MA - IMG 4274.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9c443392b00f65877d9a541657863169
+- The Larches, 22 Larch Road, Cambridge, MA - IMG 4278.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3ae306982dfcfc9f228e61f9226756fd
+- The Larches, 22 Larch Road, Cambridge, MA - IMG 4272.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f494ac83fcf380fe06c1bfb5191df98e
+- The Larches, 22 Larch Road, Cambridge, MA - IMG 4277.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1a1c664d5716c38345aa224c5e9db12c
+- The Larches, 22 Larch Road, Cambridge, MA - IMG 4273.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af5139632093379952e75ea4b3326345
+- Larches changing colour on Shorn Cliff - geograph.org.uk - 2301187.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a40903a26c3ecd6f1718598f21c0ecf2
+- Japanese Larch Larix kaempferi Cone 2000px.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc2fd85aeea4d6a9151c91ee6521da4e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

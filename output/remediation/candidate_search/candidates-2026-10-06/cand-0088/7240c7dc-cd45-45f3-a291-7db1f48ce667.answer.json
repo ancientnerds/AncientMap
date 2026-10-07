@@ -1,0 +1,12 @@
+{"site_id": "7240c7dc-cd45-45f3-a291-7db1f48ce667",
+ "answered_by": "mcode-judge-cand-0088",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [{"file": "Poken Kancha 04.jpg", "verdict": "other_site",
+              "note": "Inkastreter Steinverband am Hang; Schild im Bild nennt SITIO ARQUEOLOGICO POKENKANCHA, also ein anderes Areal als Qhapaq Kancha"},
+             {"file": "Poken Kancha 02.jpg", "verdict": "other_site",
+              "note": "Gleiche Steinmauer in einer Strasse, Schild im Bild: SITIO ARQUEOLOGICO POKENKANCHA; nicht Qhapaq Kancha"},
+             {"file": "Poken Kancha 03.jpg", "verdict": "other_site",
+              "note": "Steinmauer mit Kopfsteinmauerwerk und Schild POKENKANCHA im Bild; andere archaeologische Site als Qhapaq Kancha"},
+             {"file": "Poken Kancha 01.jpg", "verdict": "other_site",
+              "note": "Inka-Mauerwerk neben modernen Haeusern, Schild SITIO ARQUEOLOGICO POKENKANCHA im Bild; nicht Qhapaq Kancha"}],
+ "note": ""}

@@ -1,0 +1,37 @@
+site_id: f151db5d-5515-495e-ba5e-bde2a46c553a
+name: Buckton Roman Fort
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Housesteads Roman Fort 2014 16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9025dd25c6abb72f3b9319dcd982ed7
+- Housesteads Roman fort, looking south.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb4edb120a825c089233685fee386e1a
+- Chesters Roman Fort, west gate 2007.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c654452a5d6fc5baa1d6f619fee1d792
+- Housesteads Roman fort, looking east.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\852556159c3909577c6ae75138120a13
+- Ambleside Roman Fort, Cumbria 23.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e45fa66dd261286a7a10e4d6db4ccf3b
+- Ambleside Roman Fort, Cumbria 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f7c21e0d70a1df80120bf224b2c568dd
+- Ambleside Roman Fort, Cumbria 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\61de5bf79cfb6318726713e4aecf82c2
+- Ambleside Roman Fort, Cumbria 31.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e789cfb126c44ebb6d3e49ade1a3afc7
+- Ambleside Roman Fort, Cumbria 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3fef0b571880c6f35fe159723190c3d1
+- Ambleside Roman Fort, Cumbria 17.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4c27d996928ee030537c3a5bdd7ae3b
+- Ambleside Roman Fort, Cumbria 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e292e9ac05337007afa66727eef6b5cd
+- Ambleside Roman Fort, Cumbria 27.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\132c0871d2cc69907a85ade66b76d848
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

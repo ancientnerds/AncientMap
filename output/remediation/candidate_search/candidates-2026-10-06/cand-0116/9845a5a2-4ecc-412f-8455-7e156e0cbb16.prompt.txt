@@ -1,0 +1,44 @@
+site_id: 9845a5a2-4ecc-412f-8455-7e156e0cbb16
+name: Choquequirao Puquio
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Machu Choquequirao Puquio, Saqsaywaman (34).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4a737f1e2cfd1895ff933220c23dd7b5
+- Machu Choquequirao Puquio, Saqsaywaman (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9c35deb15976486a8616df3a9ae1e4f6
+- Machu Choquequirao Puquio, Saqsaywaman (28).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a530b91c67b932422b0f3181962b5189
+- Machu Choquequirao Puquio, Saqsaywaman (36).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4edadadcda43f14bf1219a9d4266e57
+- Machu Choquequirao Puquio, Saqsaywaman (22).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d92f1c68a4e4ea7cb3a04bb186ddf540
+- Machu Choquequirao Puquio, Saqsaywaman (8).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7d24c6fdfa9a38af209100c25987d3bf
+- Machu Choquequirao Puquio, Saqsaywaman (38).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ee847895ef3c601977ca654107912fbd
+- Machu Choquequirao Puquio, Saqsaywaman (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f2847d122025d22afe5ee39cb4b93662
+- Machu Choquequirao Puquio, Saqsaywaman (26).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ac83ddfe0261a47177ef7c223bde180b
+- Machu Choquequirao Puquio, Saqsaywaman (14).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e5d9a6db545922931a94293ac057e76
+- Machu Choquequirao Puquio, Saqsaywaman (25).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d6b092d9ff0a4f0d0307ac5624f42da5
+- Machu Choquequirao Puquio, Saqsaywaman (9).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0bf641c4a1b33fa0737d9aaf1c499e55
+- Sitio Arqueológico de Machu Choquequirao Puquio, septiembre, 2026 66.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3fc38c65ae25baa1eb3d801b7dd44ef9
+- Sitio Arqueológico de Machu Choquequirao Puquio, septiembre, 2026 33.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5bc0e015864d825fac05aaae8c2709fa
+- Sitio Arqueológico de Machu Choquequirao Puquio, septiembre, 2026 20.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ead591e63645da7b93ce06f756ecb5cd
+- Sitio Arqueológico de Machu Choquequirao Puquio, septiembre, 2026 58.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4d9ac8b29ce9a7f0b510e887ef37e474
+- Machu Choquequirao Puquio Archaeological Site in Cusco 34.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e7f451da72bdcd27ce48e2644fe199d
+- Sitio Arqueológico de Machu Choquequirao Puquio, septiembre, 2026 47.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\78d7c4088765bb32c79533c36b9c046b
+- Sitio Arqueológico de Machu Choquequirao Puquio, septiembre, 2026 50.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9c2c1a086c1ff60e15fed1b1031e80d0
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

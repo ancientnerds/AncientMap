@@ -1,0 +1,37 @@
+site_id: acec1746-35a0-4d0e-be03-1d240bad074c
+name: El Temblor
+country: Guatemala
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- La fuerza ante el temblor (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\12154bf992b2366592fbf4d35f4bd6d7
+- La fuerza ante el temblor (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4227b0f3bfff37fae328befc128bd97
+- La fuerza ante el temblor (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\824012c0f1631af8045638cdccbccc87
+- 25950 12D Temblor de 1985 (33370906621).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\507b716030baccd27036f527fdaee588
+- La fuerza ante el temblor.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47ba4ea49a0b4012384786cccd8025a5
+- Ruinas del temblor.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3963b100c4ee1c935fcb04c7648899e9
+- El Angel, el molino, el caracol del faro, estampas rurales y de cuentos, estampas de un Leon y una Leona, estampas del Faro; (1921) (14764046105).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d00751596ab2e61d21b26b228e42d51f
+- Sun - August 1, 2010.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8d7e4d1c7fbd17944675c841abb1742d
+- 1985 Mexico Earthquake - Building collapsed.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc22fae485cc0d5b2a02219dab0c96ea
+- Sismo 1985 Ciudad de México 35.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8a3b0053f3bc3cc741aa92430d925b5c
+- 1985 Events montage 16-grid version.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e82267603aea4791e37d09cc622c7053
+- 1985 Events Collage.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ac66aedbd5ddec2331314774a1cd80e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

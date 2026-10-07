@@ -1,0 +1,37 @@
+site_id: 85ee60a8-9452-4359-89a6-3a937c5523d8
+name: Bela Reka, Šabac
+country: Serbia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Bela Reka 003.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ff5c769320b12f1532ba0c594eed413
+- Selo Bela Reka kod Sapca.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e63cc7f9626fe9ceac2e9604f90acecb
+- Bela Reka 004.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f3e374a44a21f3cca3a9eebf745d6738
+- Bela Reka 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f4c48021bc6b49d394365d26947306f5
+- Bela Reka 002.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db4cc54599b8ae22c56d3791a2934ada
+- Bela Reka 005.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd538a93f9d1aa1567b3bd35ceeca25c
+- Donja Bela Reka 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\95e4d8c8f5d9a651deb7944bfe677e88
+- Donja Bela Reka 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\37f5db25199bd9ee188ab297e01c6b54
+- Gornja Bela Reka 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f28e48940d76944a5f7ab854a62f8e7
+- Donja Bela Reka 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3cde45da11d9e4408dbedc2079a00dd3
+- Donja Bela Reka 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0bde237fd29458b11ef361c50c2875ba
+- Gornja Bela Reka 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6eb663eb5018cbdb84c662500cb02d71
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,49 @@
+site_id: 89f1d2b7-2579-4c33-82b3-8b58d7857c53
+name: Acci
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Monnaie - As, bronze, Colonia Iulia Gemella Acci, Ibérie, Auguste - btv1b10302344r (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47148f6369b9232132d110c8c74db149
+- Monnaie - As, bronze, Colonia Iulia Gemella Acci, Ibérie, Auguste - btv1b103023992 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0470650d4811d72fa6bc202b8161872
+- Monnaie - As, bronze, Colonia Iulia Gemella Acci, Ibérie, Auguste - btv1b103023439 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0dbf55c3fc562d89d23a450a20e23f0e
+- Monnaie - As, bronze, Colonia Iulia Gemella Acci, Ibérie, Auguste - btv1b10302342v (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8ce77e919a98ed78cc02871309e9f3b6
+- Monnaie - As, bronze, Colonia Iulia Gemella Acci, Ibérie, Auguste - btv1b10302344r (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\65ac2809b5d64107db777088131605d3
+- Monnaie - As, bronze, Colonia Iulia Gemella Acci, Ibérie, Auguste - btv1b103023992 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\141306d99de314d29e138193b7550cf5
+- Monnaie - As, bronze, Colonia Iulia Gemella Acci, Ibérie, Caligula - btv1b103023384 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\95218285889fc80afb19f56f7151e83b
+- Monnaie - Dupondius, bronze, Colonia Iulia Gemella Acci, Ibérie, Tibère - btv1b103023367 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e8ddb8c6d3835abd2dd9d5f39253604
+- Monnaie - As, bronze, Colonia Iulia Gemella Acci, Ibérie, Caligula - btv1b10302340z (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6d816fc0561097bab7aefb303038cc71
+- Monnaie - As, bronze, Colonia Iulia Gemella Acci, Ibérie, Caligula - btv1b10302339k (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ea85e405c71f24d347262b586ce27483
+- Monnaie - As, bronze, Colonia Iulia Gemella Acci, Ibérie, Auguste - btv1b103023439 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3ebceed44b1ebecfccb686582dccaca5
+- Monnaie - As, bronze, Colonia Iulia Gemella Acci, Ibérie, Auguste - btv1b10302342v (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a2619d90a15bd679f1ea8a06f900404f
+- Giovanni Acci.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e7e0c811d04d28fd0fcccf0888fa2cf
+- Monnaie - Semis, bronze, Colonia Iulia Gemella Acci, Ibérie, Caligula - btv1b10302341d (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\555837ccea07a47a4c59e99dd6035b22
+- Monnaie - As, bronze, Acci, Ibérie, Auguste - btv1b84816598 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\80f6d627779aa6270ba9029e905ff918
+- Monnaie - As, bronze, Acci, Ibérie, Auguste - btv1b8481662r (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dd7546d520e7e83b4b549400373816f5
+- Monnaie - As, bronze, Acci, Ibérie, Caligula - btv1b8481678m (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\72ae8e7bd1c33c09e3ce26ade25e0e8f
+- Autoritratto, Giovanni Acci.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\905a332b4d171efacf1c645ef494162b
+- Monnaie - As, bronze, Colonia Iulia Gemella Acci, Ibérie, Auguste - btv1b10302398m (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02ee9345f8296fef4edf12ea8b9579f8
+- Monnaie - As, bronze, Acci, Ibérie, Auguste - btv1b84816650 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\23602d87220f79b925054bd25a290990
+- Monnaie - As, bronze, Acci, Ibérie, Auguste - btv1b84816598 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba809a680dd508de2e583e43635b2926
+- Monnaie - Dupondius, bronze, Iulia Gemella Acci, Ibérie, Tibère - btv1b8482681d (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9c5f89490b90d6ff541e213c6106d388
+- Monnaie - Semis, bronze, Acci, Ibérie, Auguste - btv1b8481664k (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\887f7e4ba976cd836d2e6150e63f4610
+- Guadix. Catedral. Inscripción.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb884c16b44712998c97e2ff8dfd2947
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

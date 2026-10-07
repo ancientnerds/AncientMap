@@ -1,0 +1,17 @@
+{"site_id": "95af4ca2-80d9-4b18-81d9-05c8477213cb",
+ "answered_by": "mcode-judge-cand-0115",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Dīwān Lughāt al-Turk (original).jpg", "verdict": "region_or_type", "note": "Handschriftseite mit kreisfoermiger arabischer Karte und Beschriftungen, eine Karte"},
+  {"file": "Diwan P1190964.JPG", "verdict": "region_or_type", "note": "Wandinnenseite mit geschnitztem Stuckornament und Kalligrafieband, Innenausstattung ohne erkennbare Site"},
+  {"file": "Diwan P1190965.JPG", "verdict": "region_or_type", "note": "Innenraum mit Mosaikboden, Marmorverkleidung und Bogenfenstern; Besucher an der Tuer, Site nicht erkennbar"},
+  {"file": "Diwan P1190963.JPG", "verdict": "region_or_type", "note": "Nahaufnahme eines geometrischen Mosaikbodens mit Rankenbordüre, Innenausstattung ohne erkennbare Site"},
+  {"file": "Diwan P1190960.JPG", "verdict": "region_or_type", "note": "Mosaikband mit Rankenmuster unter steinerner Gesimsleiste, Innenausstattung ohne erkennbare Site"},
+  {"file": "XUAR Museum Diwan Lughat al Turk 2.jpg", "verdict": "other_site", "note": "Museumsvitrine mit drei arabischen Buechern und chinesischer/englischer Beschilderung, Museumsexponat"},
+  {"file": "XUAR Museum Diwan Lughat al Turk 1.jpg", "verdict": "other_site", "note": "Gleiche Vitrine mit Compendium of the Turkish Dialect-Buechern und Audioguide-Nummern, Museumsexponat"},
+  {"file": "Mahmud al-Kashgari map.jpg", "verdict": "region_or_type", "note": "Kreisfoermige historische arabische Karte mit rot markierten Orten, eine Karte"},
+  {"file": "Diwan al Duq.jpg", "verdict": "other_site", "note": "Bogenfenster mit Eisengitter und Schild Former Building of the First Post Office in Amman 1924, Gebaeude in Amman"},
+  {"file": "Diwan Al Amir.jpg", "verdict": "other_site", "note": "Modernes blaues Hotel-/Buerogebäude mit Bergen im Hintergrund und Strassenlampen, moderne Szene"},
+  {"file": "Fonds André Raymond (1925-2011) - Tunisie - Porte Bab al Diwan des remparts de Sfax (MédiHAL 4053336).jpg", "verdict": "other_site", "note": "Zinnenbekroenetes Tor mit Ziegelbau in Sfax, Tunesien, historische Stadtmauer eines anderen Landes"}
+ ],
+ "note": ""}

@@ -1,0 +1,47 @@
+site_id: 62b23da1-7a44-4827-8bdd-bd03ac3157a5
+name: Dalj
+country: Croatia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Katolička crkva u Dalju.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\356dc055d3f45be4bff532beef450e97
+- Rodna kuća Milutina Milankovića.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fdf2dd34f143d30f76901336349f3be1
+- Dalj-Даљ 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\803769690d100c4975e5f6a0f2e51f63
+- Serbian Orthodox Church in Dalj 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76471fee5f3a860f8738bbe0653948d1
+- Serbian Orthodox Church in Dalj 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\67203645884dccc925d6628ffc76b588
+- Dalj - Dampffähre zwischen Gombos–Erdőd die Auffahrt eines Lastzuges (Verlag Jos. Krausz, Dalj).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0d0c26a0005b499c2ac61b0ca837b7a1
+- Dalj-Даљ 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5cf25826619d275bcae1f587aeb5e3bb
+- Dalj,katolička crkva.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9de2be2307cff7374ab968a4fd48b09e
+- Dalj-Даљ 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2fb43dceb5ed1f77e3903d91cad98773
+- Dalj-Даљ 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ab1ba35f885f60ae4755ce62dd168ca5
+- Dalj Street sign.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\35417d21aea931964f7a94f859064ec6
+- Elementary school in Dalj-Даљ.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f16082c38abc26af37d680587585d4f2
+- Bista Božidara Maslarića, Dalj.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4775bd744ae9ac7dc7471b9b1126b163
+- Manastir u Dalj planini-Манастир у Даљској планини 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\beea4182894319fe92a2ccf6ce09cae0
+- HŽ Slavonski Brod-Vinkovci-Dalj Line Historic Engine.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\510aeb2eeec2393a9fe57a7c020ed9da
+- Vas pat dalj.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2938ed9930e5927282bf372f86a4223c
+- Dalj - Trajekt Gombos - Personenzug (Verlag Jos. Krausz).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\484841bf940744f2e16c2e8476b0148b
+- Dalj Srpski crkveni dom.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\46febdf4cb642adc1d35f1004c49f030
+- Dalj-Даљ 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3ab4aea1365dfd8cc542fe9587cd3c18
+- 12.05.11 Dalj 7122016 and 2044011 (50714179418).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2698184d7bbdfe84411d26386dd37f03
+- 2011-08-17 13-33-48 Croatia Komletinci.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5670f70166ec90df54c6c5a5f15f90d6
+- Dalj - Dampffähre zwischen Gombos–Erdőd au der Donau (Gesamtansicht, retuschiert).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7b622a930a39aeeb6806998452408edb
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

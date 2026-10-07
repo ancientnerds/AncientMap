@@ -1,0 +1,10 @@
+{"site_id": "d3dde28f-ad70-41ce-b5b4-6bb943aebbee",
+ "answered_by": "mcode-judge-cand-0162",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [{"file": "Nether Largie Mid Cairn.jpg",
+               "verdict": "depicts",
+               "note": "Steinbau mit querliegenden Decksteinen auf Moorboden, umgeben von weiteren Cairns im Kilmartin Glen."},
+              {"file": "NetherLargieMid1.jpg",
+               "verdict": "depicts",
+               "note": "Mittelsteiner der Serie: grosser Cairn aus Findlingssteinen mit zentralem Kammerbau im offenen Glen."}],
+ "note": ""}

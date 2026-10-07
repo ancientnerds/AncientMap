@@ -1,0 +1,43 @@
+site_id: 72f50344-3b9f-4390-929c-78d72d7a6e01
+name: Banc Du
+country: Wales
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Sheep on Banc Du - geograph.org.uk - 1754023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\46c6606b6dc6845b26f3b8bbd88701fb
+- Farmsteads south of Bwlch-gwynt - geograph.org.uk - 1754019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e3e8f58ab1f7e652c94676f965eb7a5b
+- Banc du Geyser Panorama MODIS.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f3da1a2a08af545bf13919501eb6622e
+- Crêtes du banc du Marchand (Parc national des Ecrins, Hautes-Alpes, France) DSC 0824.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4625919549e3541d044384152a8d6971
+- Le banc du secret de Lea Vivot 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\929480ef408207b19ed036313c599664
+- Le banc du secret de Lea Vivot 16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3214f2786b3890578c2aacdc6fdf7580
+- Le banc du secret de Lea Vivot 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\089e2ecb85648f92b0293246e442ec0b
+- Le banc du secret de Lea Vivot 15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6385d3f5ceff1dec05fa3bb86cf43321
+- Le banc du secret de Lea Vivot 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8746e3058f158d438609b7262df02a9e
+- Le banc du secret de Lea Vivot 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef97435cb6697ffde64b6313255196f2
+- Le banc du secret de Lea Vivot 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\07d564a298796205964157636af0bd82
+- Le banc du secret de Lea Vivot 14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c9cd38e4990ce8709f37170f0c0b6fa
+- Cerrig ar rostir ger Banc Du - Stones on moorland near Banc Du - geograph.org.uk - 7905287.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\01a1a9f2c0de19110b2c526ce75c1cad
+- Le Banc du Peyron et le Chaperon depuis le col du Cendrié.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0ffa844300f93bcb3e51335b63b98ee3
+- Le banc du secret de Lea Vivot 19.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\69e8d1450ff216932d1d8bcf472b54ca
+- Le banc du secret de Lea Vivot 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76a8a34359006763263ae0b77f63670e
+- Le banc du secret de Lea Vivot 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1163570ee00543bea503964987614742
+- Banc du Peyron depuis la Motte-en-Champsaur, 34.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\152718d5ccd7f84f6d09c23215d0de9b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

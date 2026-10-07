@@ -1,0 +1,28 @@
+{
+ "chunk": 2,
+ "confidence": "authoritative",
+ "label": "import-hero import-hero-2026-10-06-009 - the import image takes the hero flag",
+ "lane": "import-hero",
+ "may_empty": [
+  "7b8f41e0-5e48-4247-8fc4-33863cb2af59",
+  "7c762fd9-2ec5-4d25-a67b-f391837257af",
+  "8d403814-0068-4383-a553-17b0170336d0",
+  "9085faef-619a-4d87-bd91-1f33780fe58f",
+  "94fc8fb4-4792-418c-bee0-65c3ec4b8a71",
+  "99685d28-2f4f-409e-9f18-04a1215a04d1",
+  "9f611d23-894b-45e0-ad29-a692e6d46241",
+  "a3deb43a-0b7c-4b5c-b06a-432fa08bebac",
+  "afa52222-ee6e-4b90-aae8-3078dae3ae71",
+  "b394e9cc-950d-45f6-9506-947b61692668",
+  "b4357b01-a483-4b2b-b667-68e0a6e6f500",
+  "c053a09d-ff4f-4277-9776-5c246cdfca79",
+  "c8af8070-bdd2-46a4-b651-a87fadb09bfe",
+  "cdd84f55-f2c9-41a9-8f15-72e6e3f4e69d"
+ ],
+ "rollback_stamp": "import-hero-2026-10-06-009-002-rollback",
+ "rows": 299,
+ "run_stamp": "import-hero-2026-10-06-009-002",
+ "sites": 100,
+ "stamp": "import-hero-2026-10-06-009",
+ "test_id": "import-hero/owner-2026-10-05"
+}

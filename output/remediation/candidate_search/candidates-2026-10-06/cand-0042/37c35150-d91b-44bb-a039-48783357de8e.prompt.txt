@@ -1,0 +1,56 @@
+site_id: 37c35150-d91b-44bb-a039-48783357de8e
+name: Kosmaj
+country: Serbia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Spomen kosturnica na Belom Kamenu, Kosmaj.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\26576c53bc210ff5db84a7c807aeadf5
+- Kosmaj1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d34322c004629feada5911908e6f29b8
+- Kosmaj spomenik2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db3e96c7879d2dfed1e58efae10f82e7
+- Kosmaj forest 15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\446bac8519b239d9cc6a87acb641ccec
+- Kosmaj forest 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\67b933666d7a101418e0b378c70d0ec8
+- Kosmaj forest 8.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7678a667350b73f83db474111b84a63e
+- Kosmaj meadow 6.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\79fd0e6498d05d138c08bd46f076e476
+- Kosmaj forest 9.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9b6c59415812fd1be4d4ead63fa46c7
+- Kosmaj vineyard 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ed57886f03443803610610dd8aed879
+- Kosmaj vineyard 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af40151f5422117753d892a6f3ca6c7b
+- Kosmaj forest 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f9e3766704eead7c8bde3adc39e0ce4
+- Kosmaj meadow 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56a59a0e101abf92d9c6cac953a1f76f
+- Kosmaj.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\be6be16e8e7d00cdb93b91d58bde5ab5
+- Kosmaj tabla Tito.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff0a532599eb7e3671455261306ba63b
+- Plagionotus floralis FV Kosmaj 2018.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c3b535b39311da43d01a0de9d59738b
+- Pseudovadonia livida FV Kosmaj 2018.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd1f2436e3258e0ab6766993cc656908
+- JDŽ 801 Kosmaj.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d3cf45ab9d22b4a3fa0863363cf787a8
+- Narodni univerzitet Trstenik - radio aparat, oko 1970. godina, model Kosmaj.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\340f526a79080cca0205fdeb86eca3e9
+- World War I memorial on Kosmaj 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f94b3b8363baa5d481f31e7f1da239b3
+- Launch party of the 'Kosmaj' (14541308305).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\735a7639608d268fda481cec1151eaf4
+- Kosmaj 004.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0777fe49439e3a0b857bbc6948dfb0b6
+- Abandoned building on Kosmaj.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\653ce3893671ef60ddece8d4162d2c42
+- Daždevnjak, zaštićena vrsta, slika 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7899d8bd44eabd5d8d9c38b63bcc428e
+- Daždevnjak, zaštićena vrsta, slika 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\927a123d271e900020b225a2b4bd887f
+- Daždevnjak, zaštićena vrsta, slika 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5124c65f4db6c88d33476ef4c400f510
+- Daždevnjak, zaštićena vrsta, slika 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0894d4f79dc8b39bae11291c259aecea
+- Daždevnjak, zaštićena vrsta, slika 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\53f42432b0cd56d293ba34c932ad1b44
+- Kosmaj 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8ce5f2e36659e992239a47169c4ef524
+- Kosmaj 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\75bd5350e50327ab6734c748270c1b34
+- Kosmaj 2015 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2cb47adbcf9acd22d05089a75ec22843
+- Kosmaj forest 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\384d992f83fc22a122d3a90ea2ba7cac
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

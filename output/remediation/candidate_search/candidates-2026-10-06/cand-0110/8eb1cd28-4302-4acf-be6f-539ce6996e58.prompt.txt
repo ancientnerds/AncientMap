@@ -1,0 +1,32 @@
+site_id: 8eb1cd28-4302-4acf-be6f-539ce6996e58
+name: Kentisbury Down
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Kentisbury , Down Lane - geograph.org.uk - 7518635.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\488a6c7c9df1445c0c6f034ef9df0d57
+- Crop Mark near Higher Week Farm, Kentisbury Down, aerial (3) - geograph.org.uk - 5958880.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e0ae9ceecd3f029a2a3ea21f0d804ad
+- Crop Mark on field near Higher Week Farm, Kentisbury Down, aerial 2018 - geograph.org.uk - 5958877.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\26ffa5a84c629ec54dd589f3f48aa499
+- Crop mark near Higher Week Farm, Kentisbury Down, aerial 2018 (2) - geograph.org.uk - 5954847.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\67b6525e88274a497f687591c1363d46
+- Hay dispensers on Kentisbury Down - geograph-4399700.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c7daf7812d8b3b1f942d5a0cd4ee0a5
+- Down Lane - geograph.org.uk - 4399708.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5c71ad5b5b8ec0bd9b6fe3b1db3d3df
+- Farmland, west of Down Lane - geograph.org.uk - 4399688.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\61a692aee9770fbbd5541d7cef12cf86
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

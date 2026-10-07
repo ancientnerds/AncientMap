@@ -1,0 +1,45 @@
+site_id: e64b6d10-04bb-4f31-a5e4-a9d132d42b92
+name: Xaman-Ha
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- 'Xaman Ha' 1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\22f41a66ebe2fe308b89201450b999a4
+- Xaman Ha' 2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\986b1368f30cf525eaa060cdf1c67b0a
+- Xaman Ha' remains (9).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aece1da8ea9548414d2a2a7943b89df8
+- Xaman Ha' remains (25).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\045f96d25cc5aad652eb781bb213f8d4
+- Xaman Ha' 3.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6f6701ecec9a4af22a5bd4a0abb3f5ed
+- Xaman Ha' remains 1 (5).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e481d255d34a8a1bc5c440f526c64d5
+- Xaman Ha' – wall remains 1 (3).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f235e491e57239a35359dd7d698141f
+- Xaman Ha' remains (15).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\22792afef547c4aae1d9abb8d981c40b
+- Xaman Ha' – group C remains.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0eb1a8540e29cd50857db91456f2cc26
+- Xaman Ha' remains (4).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\87444e75b6ba0f6e9b21eae007f45153
+- Xaman Ha' remains 1 (6).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9244e92dac04f9e27955a1483f9fb7ec
+- Xaman Ha' remains (17).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\483d24ea1d68aa4a85b49b3ba7163a21
+- Xaman Ha' – wall remains (3).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f113f1047ff3c6e9d2ac3fdcc7d1cc0
+- Xaman Ha' - group C buildings (3).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e0372cd09e265a56d2b9402a2bf058b0
+- Xaman Ha' – wall remains (4).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\267a40fbcc39de8fb08ef79c3cf13aef
+- Xaman-Ha Playa Del Carmen.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f093dbdea5ef8df888e82c669c5394bf
+- Xaman Ha' - group C buildings (14).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e2c984f65a76903efa3f07163c36b96c
+- Xaman Ha' – wall remains (7).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e6290d88df0fc7829d9fd925aca61e0b
+- Xaman Ha' – wall remains (8).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cc57ad496ca5d313dd5599418b2d473f
+- Xaman Ha' – wall remains 1 (1).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c37399b974dc79e19b03921dce59c04d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

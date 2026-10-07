@@ -1,0 +1,37 @@
+site_id: 540f24d5-bf3d-40b8-81f7-349d5107fd24
+name: Stina, Ukraine
+country: Ukraine
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Stina sign.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ccedd025e24bd28039164f6b1d032061
+- 05-239-0014 Stina SAM 6428.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c955901ec7446d73bec829cfe11360e
+- 05-239-9003 Stina SAM 6170.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec73d251bdf6f7ca12021d5b80789398
+- 05-239-0050 Stina SAM 6463.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\92c8175a9bce892bed06b275ec6a0448
+- 05-239-0050 Stina tomb SAM 6462.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1cf9bce61cf85e1ac39de8f9718f6e2c
+- 05-239-0051 Stina SAM 6476.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0e4ef04867c4b851e13b5530f76c290
+- 05-239-0015 Stina SAM 6408.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cc1f3d00f791a1ee9cd6ba8beb02d997
+- 05-239-9003 Stina SAM 6176.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\49e2da8da557abb2bc2dcd26cd5cb1a6
+- 05-239-0016 Stina cementery SAM 6374.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45baab1d18ef8b44499f54e0ca484b22
+- 05-239-0051 Stina memorial SAM 6474.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b3616624492478a9e0891b70b503ef13
+- 05-239-0013 Stina SAM 6434.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6532cecdbd7be6f0bf4e57de2a0bef6f
+- 05-239-0014 Stina belltower SAM 6415.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ebfe76a607ac6da07cc6440f9f007d8
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

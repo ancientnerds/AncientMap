@@ -1,0 +1,35 @@
+site_id: 09895c88-e3d8-4ad2-b23e-eef85097ab6e
+name: Bradley Hill Fort
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Remains of Iron Age fort, Kinnoull Hill Perth, Scotland.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5bac98d394e2ec9663dbf9e9b0e9c502
+- Remains of Iron Age fort, Kinnoull Hill Perth, Scotland (8925504470).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7ecb09fbaed0169d83d41c8f069ae78a
+- Remains of Iron Age fort, Kinnoull Hill Perth, Scotland (8925547398).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e202ed2a81472e4881ba78e931a974a3
+- Remains of Iron Age fort, Kinnoull Hill Perth, Scotland (8925512172).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\68859f020c8b27e4ac076fadea850f54
+- Remains of Iron Age fort, Kinnoull Hill Perth, Scotland (8924946239).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5b19e42f20ba55c5e80d5eb86d4b761
+- Remains of Iron Age fort, Kinnoull Hill Perth, Scotland (8924906301).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd45dbbeb4913bbfc28899586d7b5879
+- California's only National Guard armored unit displays their might during maneuvers at Fort Irwin's National Training Center 111105-A-GM826-022.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c72cdaf634d01f9fc2f16d50104d2baa
+- Jayne Bricknell and Michael Bradley camping in a garden at Pentre Isa, Old Colwyn (1537789).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1f19448bfb8bfd102c18b3d4b0bbf02f
+- Jayne Bricknell and Michael Bradley camping in a garden at Pentre Isa, Old Colwyn (1537790).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0cce59a8ac464c2dfd5d8cb102f3e93d
+- Jayne Bricknell and Michael Bradley camping in a garden at Pentre Isa, Old Colwyn (1537791).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\677e656b68a4e202eab45212f69f40c3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

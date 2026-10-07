@@ -1,0 +1,60 @@
+site_id: e8acbde6-7c73-409f-a4cb-6bb47736f4c7
+name: Merano
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Meran, Panorama (Blick vom Pulverturm).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\57d9fa9dd82d954040e1ffbefd2a9ec1
+- Blick über Meran nach Nordwesten.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\53be8f893ec9bb1064dcf62229b55e10
+- Merano Liberty.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c304128e51840968c1f6f336eeea497c
+- Merano Street Photography by Giovanni Ussi 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e3fde7565824933b63003ebcbf93411e
+- Merano Passirio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eea6f7c4cab1244b042ce8547d7e1ad6
+- Merano Street Photography by Giovanni Ussi 38.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\63bc9431402b5abee977a682bd633697
+- Merano Street Photography by Giovanni Ussi 32.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa140b42da6dc080092dc637aca4f113
+- Merano Street Photography by Giovanni Ussi 50.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17206da2bce3da9c089567c42cbe50dd
+- Merano Street Photography by Giovanni Ussi 37.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cadfc7708dcd65b287653db59681e809
+- Merano Street Photography by Giovanni Ussi 34.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af4cd9afca13ae2384bc2833ec73a99a
+- Merano Street Photography by Giovanni Ussi 16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\be6eafa0be6c9ec1cd9e3f241b540115
+- Merano Street Photography by Giovanni Ussi 29.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e908674fb606e3385545bc5a42245bcf
+- Meran-Merano.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\299bcbdb4c82e3a948c6c39cb4f9ee36
+- Giovanni Ussi in Merano BZ Italy portrait.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\413174f3aa9c85ea68ebbcd85b5e0b0d
+- Merano Street Photography by Giovanni Ussi 39.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1bf5a4b47142fe876c0aabc4add714e3
+- Stolperstein für Giovanna Gregori (Merano).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e1180e56b7a80b429027b31efa61722
+- AFFRESCO MERANO 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8544cd7cd9e04987e81a8fcb4db2057c
+- ARCHITETTURA MERANO (76).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\581c83930aca040de89cc6a519ba5c00
+- Gezicht op Merano, Italië Merano (titel op object), RP-F-F09305.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5a6a7b960b104f3e0f739a04762fc09a
+- ARCHITETTURA MERANO (80).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f9e7d971f1772ba9920cd3dfc316b711
+- ARCHITETTURA MERANO 20.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c7038dba45dfd95e70c6a440ab2774b
+- ARCHITETTURA MERANO 39.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f02bdc555dbe6559384a74f82e7d3865
+- ARCHITETTURA MERANO 28.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5e8f6f82126baa807185645627ad53f3
+- Map of comune of Merano (autonomous province of Bolzano, region Trentino-Alto Adige-Südtirol, Italy).svg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c09330dd5132c4e9952ee4dcece63b1
+- 070406-10 Tal Meran Bozen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e6c8d76679bb7af3bae15bf86863b33
+- 19. Tiroler Feuerwehr-Gautag Meran Sept 7-9, 1894.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8a16c074cea26ee27c64e2635e8e51d0
+- 2008 0707 30030 Meran D0084.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e7c3637a333fa3283a31376bb1ba98c
+- 2008 0707 30035 Meran D0109.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2aa808c0053c54d255488641f6f8d21f
+- 2008 0707 30036 Meran R0028.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\64229081187d922dd4066518bca4d1f1
+- 2008 0707 30038 Meran D0107.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e8a6ff08de6dcbc81b7fd071f66f238
+- 2008 0707 30042 Meran D0085.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\80ac6c13eddfb970d377359dce24f7ec
+- 2008 0707 30210 Meran R0029.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b5fc825b5e89c0e4b2664f1ff8b4c646
+- 2008 0707 30500 Meran R0034.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e35765060710592c63dc7aeb8b90c366
+- 2008 0707 30510 Meran R0031.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7fd72e19439acb5938f534603d5f66fb
+- 2008 0707 30610 Meran R0070.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f7062d07b35b5d35865b7ff308be3c14
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

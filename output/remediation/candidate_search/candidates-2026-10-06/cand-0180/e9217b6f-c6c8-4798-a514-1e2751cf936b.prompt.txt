@@ -1,0 +1,44 @@
+site_id: e9217b6f-c6c8-4798-a514-1e2751cf936b
+name: Long Burgh Long Barrow
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Long Burgh long barrow, Alfriston 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\27c05897cc12f43527f4da0b607f62d4
+- Long Burgh long barrow, Alfriston 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e4a3bffa54e6705ecda3a65cd4e69f7
+- Long Burgh long barrow, Alfriston 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5fb6cf36584268568507a57293821b97
+- Long Burgh long barrow, Alfriston 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\09dfa2de7f2b6833a1a41e76dcee4189
+- Long Burgh long barrow, Alfriston 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f418cc430bafb4312676531c76d40107
+- Long Burgh long barrow, Alfriston 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7f6e8bff9970542b39e437e097b41446
+- Long Burgh long barrow, Alfriston 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1697e854360b72636805796ecf716136
+- Long Burgh long barrow, Alfriston 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\302f6092a41b8428a5dc93e59923f912
+- Long Burgh long barrow, Alfriston 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2602f88e20f25b3daf0808c4a022c186
+- Long Burgh long barrow, Alfriston 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cbc77a66396509a944beaa910a72036e
+- Long Burgh long barrow, Alfriston 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e79e6f3275479bf303ecef3ea57b81ec
+- Long Burgh long barrow, Alfriston 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8151305ccf40cf30e54714c05a9ce2e4
+- Northeast Facing View along the Long Burgh Long Barrow.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cfaba06422713ddd0acf3f693304462a
+- Southern Slope of Long Burgh Long Barrow.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\204a8d5ec10f80eaba6da6225a27e475
+- View of Windover Hill from Long Burgh Long Barrow.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d37ae925ce51e629311ea376dd9095dd
+- Indent on the Eastern Side of the Long Burgh Long Barrow.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\afd446fda6359a35a51ab3390121f05b
+- Eastern Side of the Long Burgh Long Barrow.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\91f4a3d042e16afe5be8903d9be58099
+- Evidence for Animal Burrowing on Long Burgh Long Barrow.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a845536f5199b773a5ff589dd13d3b9a
+- Long Burgh Barrow, above Alfriston.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c34d003c235e689b93626f11d98e18e4
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

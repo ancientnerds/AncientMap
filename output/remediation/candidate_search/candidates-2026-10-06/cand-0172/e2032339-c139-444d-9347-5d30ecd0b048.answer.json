@@ -1,0 +1,13 @@
+{
+  "site_id": "e2032339-c139-444d-9347-5d30ecd0b048",
+  "answered_by": "mcode-judge-cand-0172",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Viran Kapı.jpg",
+      "verdict": "depicts",
+      "note": "Verfallener gemauerter Torbogen (Viran Kapı) über der Stadt, im Hintergrund Minarett und Häuser von Şanlıurfa."
+    }
+  ],
+  "note": ""
+}

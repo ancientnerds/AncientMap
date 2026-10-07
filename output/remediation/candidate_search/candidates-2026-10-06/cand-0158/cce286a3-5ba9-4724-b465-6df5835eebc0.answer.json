@@ -1,0 +1,14 @@
+{
+  "site_id": "cce286a3-5ba9-4724-b465-6df5835eebc0",
+  "answered_by": "mcode-judge-cand-0158",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Inside Ivington Camp - geograph.org.uk - 5573482.jpg", "verdict": "depicts", "note": "Grasfläche im Inneren mit erkennbarem Erdwerk und Böschungsrand."},
+    {"file": "Ramparts, Ivington Camp - geograph.org.uk - 5573487.jpg", "verdict": "depicts", "note": "Waldhang mit deutlicher Wallböschung des Erdwerks."},
+    {"file": "Entrance, Ivington Camp - geograph.org.uk - 5573589.jpg", "verdict": "depicts", "note": "Zugangsweg mit Zäunen und Wallböschung im Hang."},
+    {"file": "Inside Ivington Camp - geograph.org.uk - 5573483.jpg", "verdict": "depicts", "note": "Wiese mit Graben und Erdwerkskante im Inneren des Camps."},
+    {"file": "Ivington Camp - geograph.org.uk - 5573477.jpg", "verdict": "depicts", "note": "Weideflächen mit gestuften Wallterrassen des Erdwerks."},
+    {"file": "Between the ramparts, Ivington Camp - geograph.org.uk - 5573592.jpg", "verdict": "depicts", "note": "Bewaldeter Wallabschnitt zwischen zwei Rampenabschnitten sichtbar."}
+  ],
+  "note": ""
+}

@@ -1,0 +1,36 @@
+site_id: e59e7ff4-2392-4365-ab67-2b7fc0d90472
+name: Margarita Tomb
+country: Honduras
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tomb Queen Margarita I side view Roskilde cathedral Denmark.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5710939c129c2edc515d03db14eda2fc
+- Tomb of Margarita Chebysheva.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\29a7ff12b2673b1b04be0e9526af30bf
+- Margarita Arcangeli.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2245de88a167afefe9914aaddc0ebcbb
+- Cemiterio de Negreira - Margarita Chapela e José Ángel Lesta.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45fa738287bb9ebd96fa583e447b6bd4
+- Tomb in Cementery San Juan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b103a1d98f3ca0d03ee73f4dbf3e412d
+- Tomb in San Juan Bautista Cemetery.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b991e42c6dc3f4a7b8dc35b5bb7c3ed
+- Tomb in San Juan Bautista Cemetery 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3a5b187284b2fd7f51d8c6497be6cd9c
+- Tomb in San Juan Bautista Cemetery 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb4e49b318bc834e0dd6be59b6aefa58
+- Tumba de Margarita Fernández `La Lega´en cementerio de Horche (Guadalajara).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\273fed0def932d2a207d829e205872ba
+- Covelo, chiesa di San Giacomo Maggiore - Lapide Giacomo e Margarita Pooli.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aea835fd474d33b2410d713520f603cb
+- Juarez Tomb, City of Mexico. (15532496839).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9bd60b581e748686298028aeeb8f319c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

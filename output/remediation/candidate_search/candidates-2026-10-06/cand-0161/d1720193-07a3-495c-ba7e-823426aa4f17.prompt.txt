@@ -1,0 +1,54 @@
+site_id: d1720193-07a3-495c-ba7e-823426aa4f17
+name: Quiahuiztlan
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Quiahuiztlan0010.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\516eff5b2a2b2ce5fdd3a3f1a938b8c4
+- Quiahuiztlan en Cerro de los Metates.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8e06f2d0ca8d094ab5701a83e3f2cb70
+- ZA155 Quiahuiztlan 2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\36d370009abe32e2c6dfb286c14300a4
+- ZA155 Quiahuiztlan 1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f41af9ba358db6c204d348b6a06456ab
+- Quiahuiztlan en Cerro de los Metates (Composition).jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\20e5cf659b7c331bb52c9aa23944c467
+- Quiahuiztlan en una montaña.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1b63277eb0665735818d05295c810801
+- View from Quiahuiztlan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0c394a2647203bd9ce5574e8e5ee1921
+- Sign at Quiahuiztlan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\596b631b6ba4d6bf8736797f33c222ed
+- Quiahuiztlan, tombs (20693486681).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b40145210a9b959445337f52f43f1e4
+- Quiahuiztlán - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d493fef78ebed02acf4aabe5551977ac
+- Playa Villa Rica desde Quiahuiztlan.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\188b13fc745e7d0dfa4e0ed3773252e0
+- Quiahuiztlan, tombs (20499994119).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\07dc6f376d6c0fe150c8e81128af88e0
+- Tombs at Quiahuiztlan Archaeological Site - Veracruz - Mexico - 01 (15873862497).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\561893633bbe18148c638aa64cf87690
+- Quiahuiztlan Archaeological Site - Veracruz - Mexico - 05 (16057710431).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\737e532c1005225c0fb3264e0ffc5b00
+- Quiahuiztlán (36).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45978d9fce8393b52bcd4d8922bbef34
+- Quiahuiztlán (14).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9a88e1c0e0b8e9c1c802381bec8b3f26
+- Quiahuiztlán (21).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e0af10afac4d4947ee149b34ed582bd3
+- Quiahuiztlán (59).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d8ea726b2d74130eb47d04b90ade853e
+- Quiahuiztlan desde el cerro de los metates.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d7a5ce9427b44d5fd5b644a693fd356b
+- Ricardo Arcaraz en Cerro de los Metates - Quiahuiztlán.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff32b7aabba0d4bf2b3681a6c94a8819
+- Tombs at Quiahuiztlan Archaeological Site - Veracruz - Mexico - 02 (15437329484).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0d0e6383d555e1ec0c805a0535052eac
+- Cerro de los Metates.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5baff416d8d3f90a1846ef9a97ec38d6
+- El cerro de los metates.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c999de361c866090f8dcab0a2bfcc318
+- HillCerroDeLosMetatesAtVeracruzMexico.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\506f5afe15fe3e8a80cc850a8068b219
+- La vista subiendo a Quiahuiztlan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d21ac12152999e131255844e8e6b7d64
+- Playa Villa Rica desde Quiahuiztlan01.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a1d09de2652c6687785d5f2679e96754
+- Quiahuiztlan0002.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4fd7ca802d219aea6862b63e30108184
+- Quiahuiztlan0003.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\881b59b077cf365a2c5906ea9f9430f1
+- Quiahuiztlan0004.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fd722317108923423b69ed9ee5f4ea71
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

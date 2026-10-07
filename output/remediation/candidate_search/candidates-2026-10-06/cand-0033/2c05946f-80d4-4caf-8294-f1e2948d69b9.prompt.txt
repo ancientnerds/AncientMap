@@ -1,0 +1,43 @@
+site_id: 2c05946f-80d4-4caf-8294-f1e2948d69b9
+name: Atella
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Mura di Atella (Porta San Michele).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4131aabca875228b8f0ea267285112fa
+- Monnaie - Quadrunx, Bronze, Atella, Campanie - btv1b85971343 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f089bbfae9fc72abf11778e25952ee9a
+- Monnaie - Once, Bronze, Atella, Campanie - btv1b11315220b (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e2abdaa5b728d5a998b892ac8468b139
+- Atella Monte Vulture.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\37c7d124c7c9bb735583a7730b084057
+- Settembre 21 2019 Atella (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\afe620f72e7db365222dbf50994e0350
+- Rionero-Atella-Ripacandida.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7251f2bed2d707291c22fde881dd2fc8
+- Stazione di Rionero-Atella-Ripacandida.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c3b88c0d6bd69719f693dbb9904f5b9c
+- Atella cemetery 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\687683c53a89b82d9ad26b4655117ad6
+- Atella cemetery 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5a573cde0afcb25d091be0a67aae32cd
+- Atella cemetery 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c20594e95c184fd482bff431e22c29f
+- Sarcofago di Atella, II sec. d.C. (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05c8ef5953daa99e5536da0c812b462b
+- Settembre 21 2019 Atella (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c0b30181a1bad3a84a2246023bc3037e
+- Sarcofago di Atella e sarcofago di Rapolla.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dfb38094e327db1391a3180a93900b44
+- Photo Apulian aqueduct on Atella torrent 1955 - Touring Club Italiano 1.3208.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c1711985b9c92c45c50662b55a0061ac
+- Settembre 21 2019 Atella (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f71307304846ecc4786b7aa929bbb64b
+- Monnaie - Once, Bronze, Atella, Campanie - btv1b11315221s (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a2e07f78ad20db7b9d1fb9ee05543e79
+- Vico Michelangelo Atella BNPZ.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fe680d347d3eb2730fa20849226100dc
+- Duomo S.Maria ad Nives Atella.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\33ef3553c1dbe5dfda83c1688c172af6
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

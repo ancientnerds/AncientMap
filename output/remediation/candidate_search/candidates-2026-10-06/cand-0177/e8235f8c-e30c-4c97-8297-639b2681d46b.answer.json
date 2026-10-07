@@ -1,0 +1,9 @@
+{
+  "site_id": "e8235f8c-e30c-4c97-8297-639b2681d46b",
+  "answered_by": "mcode-judge-cand-0177",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Åsli-Vasshalsen 9066.jpg", "verdict": "depicts", "note": "Felsbilder am Felshang der Site sichtbar; Felsritzungen als Site-Typ klar erkennbar."}
+  ],
+  "note": ""
+}

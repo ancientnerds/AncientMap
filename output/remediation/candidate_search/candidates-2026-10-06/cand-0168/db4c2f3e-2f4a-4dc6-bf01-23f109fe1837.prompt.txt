@@ -1,0 +1,46 @@
+site_id: db4c2f3e-2f4a-4dc6-bf01-23f109fe1837
+name: Kaya mezarları
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Greco-Roman Rock Graves, Kyrenia, TRNC 2025.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aaebb97f74e49802ef375e58a51f8173
+- Greco-Roman Rock Graves 3, Kyrenia, TRNC 2025.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3630ac2837689303930123255791f858
+- Greco-Roman Rock Graves 1, Kyrenia, TRNC 2025.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba80b1fda70043118a2b6d72357ced09
+- Çanakçı rock tombs side 6824.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25af7a0e147dc3c7ec56989c47a4a5e0
+- Çanakçı rock tombs Mersin Province.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8d59e3aad802b87796256f6a4f20de10
+- Çanakçı rock tombs grave chamber 6828.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\15704b2892e81ad1d4f67e314e3691bb
+- Çanakçı rock tombs side in 2015 6784.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb8dad8134e42e704b5cf034dedba6a1
+- Çanakçı rock tombs side in 2015 6787.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\32a8915725b0c6d656d2516957d05b6d
+- Çanakçı rock tombs side 6807.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d8689b6251fdefe6789c5118c74b7f6
+- Çanakçı rock tombs side 6803.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ed9fa11fa063741710fdbbbf3cdf8e8
+- Çanakçı.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\74c2e505e90fd09b6e1f411a6826303b
+- Çanakçı rock tombs side detail 6819.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\059b8a6f5e7138ab450350db35ba8823
+- Myra Kral Kaya Mezarları.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\72bedf707f923f0edabdabe859e5a5db
+- Amintas Kaya Mezarları.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c6774e8b24e4b7d75eebbb692dd235a0
+- Tarihi Myra Kaya Mezarları.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0351e5bc3fe7f9de784c5230df512067
+- Bafa Gölünde Kaya Mezarları.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f2f4d7a2b31a355fecabc9940fa283aa
+- Lmyrna Kaya Mezarları.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cce9d6367f51a948317493ec96c8fa3a
+- Kral Kaya Mezarları, Amasya.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\02092f9562ec9291e971ec883b4de7a1
+- Dalyan, Kaunos Kaya Mezarları.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8300d3d6f3fcb734b6bacc154399a333
+- Kral Kaya Mezarları, Amasya 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3059892ea938dab98fab894d7b5498df
+- Kaunos Kaya Mezarları.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9e1a6c1c29474538507b7da244096a2c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

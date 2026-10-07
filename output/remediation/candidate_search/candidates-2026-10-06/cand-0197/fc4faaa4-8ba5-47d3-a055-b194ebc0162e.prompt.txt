@@ -1,0 +1,36 @@
+site_id: fc4faaa4-8ba5-47d3-a055-b194ebc0162e
+name: Saba in Ancient Sites
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Barran Temple.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c6debcb14d8e0d6ca69b692a45352cc
+- Historic of belqeys city2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ddc4bfc1d044509d94dcf43b8981b836
+- Barran Temple (cropped).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88a6d2da30875c67a91baa8cd77d6594
+- Ancient Ma'rib 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f69487309ba180bd0e9296b75663d00f
+- Jemen1988-022 hg.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6dd2395c0a1791e64b8bb34c184062ee
+- Historic City of Esfarayen 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9bccb1a6596767556e5e38aaa11d5bfc
+- Historic City of Esfarayen 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b15327b6f2de8c47803c6b87fca5647
+- SAVE 20181007 225614.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2e92c8e8c2e25668cb7026a11bf14398
+- Historic City of Esfarayen 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2fc8b1569ca6c5243ff5dceb0fb254a3
+- History of city.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d94149a33915234c94868c333398edb9
+- History of Iran.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ee66bbc89312bd253203a63a7bd34241
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

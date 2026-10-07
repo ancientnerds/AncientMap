@@ -1,0 +1,33 @@
+site_id: 7279cb69-c5d2-4b9b-b307-96ef43164e7f
+name: Crantit Chambered Cairn
+country: Scotland
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Crantit House - geograph.org.uk - 3619606.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa55833d047b00baf12d899b96773b09
+- Crantit Trail - geograph.org.uk - 7558802.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\033dc5b616579dbc44f15671eacbc173
+- Ditch by Crantit Trail - geograph.org.uk - 7560035.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b06f3746df3b6bdcf6e132d4e70d3a89
+- Road to Crantit Cottages - geograph.org.uk - 3619614.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f603e68be4c383959c55f37d083f9b86
+- Fields overlooking Crantit - geograph.org.uk - 3619630.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76ed589856363f3791548d5354b82add
+- Crantit Trail towards Kirkwall - geograph.org.uk - 7558931.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\83cd634fd2d9e7a786ff8fbb7b2385bf
+- A history of British birds. By the Rev. F.O. Morris (1862) (14770754443).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\96d3a970824a98edb9cd9db5a802e191
+- A history of British birds. By the Rev. F.O. Morris (1862) (14748545794).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\92977807dceeec10909abb0b7f8218e9
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

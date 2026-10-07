@@ -1,0 +1,35 @@
+site_id: f1ec1e6c-f23c-40a9-ac6e-293965a8bd60
+name: Leptis Magna Museum
+country: Libya
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Jocks in the Museum at Leptis Magna Art.IWMARTLD2931.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\16dbfa48a804569a2ff9fdbd5c988fdf
+- Leptis Magna bilingual inscription, Delaporte 1806.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4102ebf626c61ddc011cb15c1183937b
+- Begin of archaeological excavations in the Goodchild Trench at Leptis Magna. In the background is the village of Al Khums (Homs).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\20a80f33900122367059481b10bf43dc
+- Capitello del portico foro di Leptis Magna.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1b7d08e6ff96dd9af6a13b522d5681d0
+- Istanbul Archaeology Museum Statue of Athena Roman Period copy of 5th C BCE Leptis Magna 3612.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f7e7cbe8ddf87705dfc42b74c377e1f
+- Istanbul Archaeology Museum Statue of Athena Roman Period copy of 5th C BCE Leptis Magna 3611.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14dbf9eb23753e1c7fef3b694a19c2d2
+- Istanbul Archaeology Museum Statue of Athena Roman Period copy of 5th C BCE Leptis Magna 3610.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a1417b4f3527b5b2d0dfefdbcc59c81
+- Villa of the Nile Mosaic fishermen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b2801ca1363bb6cdbc4338104841b51
+- 61 Museum.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c8c3a52272a5a19d1ba43a64d5c84a1d
+- Qasr ad-Duirat 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f7cc0d52823052af4bf22575326b216e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

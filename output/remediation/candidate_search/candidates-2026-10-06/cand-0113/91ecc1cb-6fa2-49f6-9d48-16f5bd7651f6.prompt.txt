@@ -1,0 +1,38 @@
+site_id: 91ecc1cb-6fa2-49f6-9d48-16f5bd7651f6
+name: Tabasqueno
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Zapateo tabasqueño 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2ec90aedcd4966c48d4cf0f191c5e550
+- Zapateo tabasqueño 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a8fe278f13db50230ba0fe12d2e3ce1
+- Zapateo tabasqueño 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\92d1308bdabf6039dc7b4e0a233c1756
+- Tabasqueño2005-4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7629e8c71e37f159493fbbed7458927f
+- Tabasqueño 2003.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5e0ca4682be3afbdbdf23e39b7047c0
+- Tabasqueño 1986.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\edc1c25b849c5ed7cdc33606a623add5
+- Centro Ballet de Tamulté de las Sabanas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4db721e68717489b58ed9b29d15c4694
+- Tabasco Ballet de Centla.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e28714b86a901137dbbd676c55b6494f
+- Tabasco Compañía folclórica de Villahermosa.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5fbd3c62df60ca794c31f7c64f38a954
+- Cunduacán Ballet municipal.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3107342781742f32c1c2b72645f48d3
+- Tabasqueño2005-2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af954574c4212c0b430dc2830f949662
+- Molienda de maíz para pozol tabasqueño.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3d7f9a56e4891f1dc771ff6a9589b7a6
+- Ilustración sobre pozol tabasqueño.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c371266165624c7e673c68a3da175034
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

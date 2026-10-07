@@ -1,0 +1,45 @@
+site_id: 77c8e01e-c8c8-4667-99f2-e36c81d6c0f8
+name: Roman Walls
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Salona - Roman wall.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94917b7f7f858eef2c6f37ce5bb5c810
+- Arco da muralla romana de Zaragoza España Z19.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f2bd670fc73bc1b75ca765ede104a884
+- Zaragoza Ancient Roman wall seen from the south.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ef17c6321cf332b24de73be9287dcf1
+- Roman Walls and Tower 0209.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\48986b5005edecf28ff428848cd724e9
+- Ancient Roman walls of Lugo 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f71cd6a7aa58caed33b1b5b4c5d32e71
+- Ancient Roman walls of Lugo 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4d438ddbeff2455c5f8f37e9018e758b
+- Murallas romanas de Zaragoza.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c6d342a81a8751d9a102dffd67b96fac
+- Lugo 2023 - Roman Walls.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f1308d0241e9d0a90319594fef96e9d
+- Ancient Roman walls of Lugo 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b10e01d6a39f13150b58f8f7f8b2ffb3
+- Ancient Roman walls of Lugo 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8e04e5b47816249a3b34457d351a14b4
+- Ancient Roman walls of Lugo 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\57c58f7886b0e60e566ad5adc758c5dd
+- Ancient Roman walls of Lugo 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c9cc4b261214d362ae4561d7f3078f00
+- Atuatuca Tungrorum - modern Tongres - Roman Walls (51233815743).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7767b774e5e3aa4855affbcc0ae3b556
+- Atuatuca Tungrorum - modern Tongres - Roman Walls (51233630203).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44c4b7a14c22caebf3dcd9711bd7fb61
+- Atuatuca Tungrorum - modern Tongres - Roman Walls (51232901067).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8a3deb6f82252b9e14813b7fa4ce154
+- View from Roman Walls in Lugo, Spain.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e6747a6f73522d9369a8f7580fd587b
+- Atuatuca Tungrorum - modern Tongres - Roman Walls (51233815828).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b600b912d50ba725dfcae1bea62ab973
+- Ancient Roman tower in Roman walls of Aosta.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7fd34a27791ecd83a8af3f58e181ec3d
+- Ancient Roman tower in Roman walls of Aosta 2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec44b76eeb70b39f6de1058b34a13b92
+- Ancient Roman walls of Lugo 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\437aeee736765f49858cf43816ccb17b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

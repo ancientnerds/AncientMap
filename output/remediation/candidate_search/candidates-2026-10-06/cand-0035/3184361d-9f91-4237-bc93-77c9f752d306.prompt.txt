@@ -1,0 +1,36 @@
+site_id: 3184361d-9f91-4237-bc93-77c9f752d306
+name: Daidala
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Rose, Daidala, バラ, ダイダラ, (15772509290).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6aa5743793f8dd3460ef43a42754a7bd
+- Fragment of a relief pithos, sphinxes, Daidalic, Kanellopoulos Museum, 225140.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\062071f25f45b13c34a081aa21201401
+- Relief pottery, 7th century BC. Kanellopoulos Museum, 225137.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa559e8ff588b36aa40f7fe49adb64a9
+- Dionysos chez Icarios - Musée du Louvre AGER Ma 1606 ; MR 719 ; N 1375-edit.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e896fce3bdb8fe978afd3a5fabcfd450
+- Ikaria by Igor Mitoraj in Siracusa 2025 BHO-144613.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\127afae31028ab411cd0fb66b49d9023
+- Fall of Icarus Blondel decoration Louvre INV2624.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb85b3870a8dec2d4a61e5fea91267a5
+- Icarus III by Michael Ayrton, RAF Museum 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ab977a19277694d96fc4e41a06e58cf7
+- Icarus falling bas-relief (c. 1964) by Tom Taylor for Brevet Club, Christchurch (New Zealand) in 2026.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4110f4df09d9fc5274b213dc1de8e66d
+- (Les vaisseaux de mer ) (...)Huys Frans btv1b10021282k 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\15df9abe1d816d1bf65be633e9aa8b2c
+- Icarus III by Michael Ayrton, RAF Museum 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\867c043e64faa730b969bdf242d8f2f1
+- Daedalus and Icarus MKL Bd. 4 1890 (132198258).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\818f647b8007707c6158d21084361100
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

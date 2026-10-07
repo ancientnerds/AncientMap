@@ -1,0 +1,14 @@
+{
+ "chunks": 1,
+ "may_empty_sites": 0,
+ "planned_rows": 3,
+ "planned_sites": 3,
+ "read_sha256": "f4381aeb1e01de5c6242441b86bb40684322ade28dfbc1eb8a9447b93c80fa07",
+ "refusals": {
+  "local_file_too_small": 498,
+  "no_target_row": 386
+ },
+ "refused_sites": 884,
+ "run_stamp": "import-hero-2026-10-06-008",
+ "sites_with_an_import_image": 3153
+}

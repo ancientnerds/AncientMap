@@ -1,0 +1,38 @@
+site_id: fcf4c04e-fd5a-43b3-881b-47802ea4f924
+name: Ihuatzio
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Ihuatzio1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce1b4b12a8e9aea07953526fc56ec402
+- Ihuatzio banner.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e1a098d9188eabda42f15d726eea7df1
+- Ruinas de Ihuatzio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\84a059b3c776a9b068a1327918f6917a
+- PatzcuaroLakeArea033.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\907a16e1ae985773e3dadf8c05712040
+- PatzcuaroLakeArea004.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0fb878047ba66ef89055d00251bef8f4
+- PatzcuaroLakeArea030.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a2f20ce9ef94f88c878d6a00236bbe86
+- PatzcuaroLakeArea008.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7589d34964ecf33be5aa3e177155a129
+- PatzcuaroLakeArea002.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f288074063b9bcf9ca609630406e9013
+- PatzcuaroLakeArea009.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62d2bfca414436ce8b9faf1de07adb66
+- PatzcuaroLakeArea031.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d09cc537dafa49e23ad88fbab1dbb5a3
+- PatzcuaroLakeArea012.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2f913be2098119220b3728aa3efbe5fb
+- PatzcuaroLakeArea013.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fdb7d0886cbe871b244fb99e5d105fca
+- Iglesia de San Francisco de Ihuatzio, Tzinzunzan, Michoacán.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\73b53f766bee79a52b56b9b3c3971648
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

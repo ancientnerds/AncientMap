@@ -1,0 +1,39 @@
+site_id: 1ac1779a-749a-4726-a671-d49a3d1b16e2
+name: Vescia
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Père-Lachaise - Division 13 - Vescia 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\63f8f17744886208f4101d768e3f40b7
+- Karte Gemeinde Vezia 2008.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e845d7910be65caa22562f3e434bb24f
+- Karte Gemeinde Vezia 2007.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a0f66234e2c9f9e4221254694d7a8b1b
+- 1997-09, Vezia (Lugano).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\08fb1e8680aa92e871c3b02d364a5ed5
+- ETH-BIB-Vezia-LBS H1-025375.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5f9e79a317cf6570a18cf004fbc1a401
+- Karte Gemeinde Vezia.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\443a9cf0c7d93472301c354bcf931279
+- 1997-08, Vezia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a8c649015f526fbbf8112206361f8c96
+- Milestone Vezia-Cureglia-Vaglio-Tesserete Km 4 (02).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\437715938df57183b0784181f63e4496
+- Milestone Vezia-Cureglia-Vaglio-Tesserete Km 4 (03).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d5f114c2c91f0b0e116c388b12e238ee
+- Milestone Vezia-Cureglia-Vaglio-Tesserete Km 4 (06).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b8fa37eaddfd421dddc0dc684728e6da
+- Milestone Vezia-Cureglia-Vaglio-Tesserete Km 4 (09).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\948f2331c3dde16bc8021d4ff6dd1eec
+- Milestone Vezia-Cureglia-Vaglio-Tesserete Km 4 (07).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e9f1b0ba11369b55b06045d841953f1
+- Copper alloy vescia seal matrix dating to the late medieval period (image from finder, unedited). (FindID 987892-1087862).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f68fcf9e7aaedb41af2394099989162a
+- Copper alloy vescia seal matrix dating to the late medieval period c. 1400-1500. (FindID 987892-1087861).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b0dc697dda02c2f7c6770cfcf841f753
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

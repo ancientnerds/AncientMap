@@ -1,0 +1,43 @@
+site_id: 78dcb136-e26a-4653-b586-6b75dd96ccb4
+name: Mersinaki
+country: Cyprus
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Basthuset. Mersinaki - SMVK - C04119.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dbcdbdddfb27cf839c694ed7312e6464
+- Jordprofil. Mersinaki - SMVK - C02787.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c44623a50747d5ce294ca0681ec53e3a
+- Arbetsbild. Mersinaki - SMVK - C02762.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d1c11d599fd8b85ce89ada464efaba85
+- Arbetsbild. Mersinaki - SMVK - C02789.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3a63e0682ebed99db6af99d1787164d0
+- Lazaros. Mersinaki - SMVK - C06802.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d73a51c1b36b7f756d365366b98d5caf
+- Jordprofil. Mersinaki - SMVK - C02764.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6647b7809ef0d2296639e8071b21cec
+- Utsikt mot Vouni från utgrävningen. Mersinaki. SMVK - C02770.tiff  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d46551915332cedd57249171c1c753aa
+- Hellenistiska huset från väster. Mersinaki - SMVK - C03093.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f09260f65496521873a05b3f178446e
+- Four terracotta sculptures from Mersinaki.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\243d5871c364eb7060731e7946dfc1e5
+- Grop H 14-15 efter utgrävningen. Mersinaki - SMVK - C02784.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd700c586f47bd272351ba4185ffbc93
+- Lifesize male statue wearing chiton from Mersinaki.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bbde6b215d1b41ea5f0d98865935a002
+- Statyer i J 18-19. Mersinaki. staty - SMVK - C02793.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c66c35ff64c67cf6780337ee7632bcf8
+- Utställning på Liljevalchs Konsthall 1933. Mersinaki rummet. Stockholm. utställning. Sverige - SMVK - C06240.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ccd64eead55f7682d47737bf24f7480e
+- Fynd in situ i grop H 14-15. Mersinaki - SMVK - C02782.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e47c841b82df8cec5a4b9f6fa95593c
+- Utsikt mot Vouni från tältet Mersinaki. Galini - SMVK - C02790.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9fa37aa5aeaef109958de5e6b00a45a3
+- Utställning på Liljevalchs Konsthall 1933. Mersinaki rummet. Stockholm. utställning. Sverige - SMVK - C06241.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\40428c469d2ba790de093e0cf394f84d
+- Head of a young male, limestone, Turkey 01.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a7f3aeb1ebe6474f42d74a715735ca1b
+- Head of a young male, limestone, Turkey 02.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c32d17e2a328b7073f2b9a5ade35e915
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

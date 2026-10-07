@@ -1,0 +1,38 @@
+{
+  "site_id": "fcd0bf5d-100f-451f-99b9-7d3ecb4335ec",
+  "answered_by": "mcode-judge-cand-0198",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Valparaíso Cerro Abajo 2018 - Andreas Kukulis - 01.jpg",
+      "verdict": "other_site",
+      "note": "Straßenszene in Chile: Mountainbiker, Polizeisperren, Graffiti und Schilder 'Calle Sin Salida'; moderne Szene, nichts von Kukuli in Peru."
+    },
+    {
+      "file": "Ñatita Domitila.jpg",
+      "verdict": "other_site",
+      "note": "Mit Papierblüten und Namensschild 'Domitil...' geschmückter menschlicher Schädel in violettem Ausstellungslicht; Person, keine Site."
+    },
+    {
+      "file": "Ñatita Sarita Valentina.jpg",
+      "verdict": "other_site",
+      "note": "In ein Handtuch gewickelter, geschmückter Schädel mit Namensschild 'Sarita Valentina' neben Spielzeug; keine archäologische Site."
+    },
+    {
+      "file": "Ñatita Eduardo.jpg",
+      "verdict": "other_site",
+      "note": "Geschmückter menschlicher Schädel mit Blattkränzchen und Namensschild 'Eduardo', in violettem Ausstellungslicht gezeigt."
+    },
+    {
+      "file": "Ñatita Tomás.jpg",
+      "verdict": "other_site",
+      "note": "Geschmückter Schädel mit langem Haar und Namensschild 'Tomás', purpurn beleuchtete Ausstellungsfläche; keine Site."
+    },
+    {
+      "file": "Todorova-Koukuli-Vajsov-Promachon-2007.jpg",
+      "verdict": "other_site",
+      "note": "Drei Museumsgäste vor einer Tafel zur neolithischen Siedlung Promachon-Topolnitsa in Bulgarien; dokumentiert eine andere Site."
+    }
+  ],
+  "note": "Kein Bild zeigt Kukuli (Arequipa, Peru): die Auswahl enthält einen Ort aus Chile, vier geschmückte Schädel aus einer modernen Ausstellung und eine Museumstafel zu einer bulgarischen Site."
+}

@@ -1,0 +1,68 @@
+{
+  "site_id": "fe4edbed-be84-4b80-b5de-62ab3e4c88ef",
+  "answered_by": "mcode-judge-cand-0200",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Fig (Ficus carica) fruit halved.jpg",
+      "verdict": "other_site",
+      "note": "Aufgeschnittene Feige auf weißem Teller als Studioaufnahme; eine Frucht, kein Bauwerk oder Befund."
+    },
+    {
+      "file": "Premis ARC 2025 - Figa Flawas - 01.jpg",
+      "verdict": "other_site",
+      "note": "Zwei junge Männer posieren vor einem bedruckten Veranstaltungsbackdrop mit dem Schriftzug PREMIS ARC 2025."
+    },
+    {
+      "file": "Gömörfüge07.JPG",
+      "verdict": "other_site",
+      "note": "Modernes Gemeindegebäude mit Putz, Sprossenfenstern und der Aufschrift POS auf der Fassade."
+    },
+    {
+      "file": "Ciconia ciconia nests Figa 2a 20140720.jpg",
+      "verdict": "other_site",
+      "note": "Storchennest auf einem Betonmast über einer Dorfstraße, umgeben von Leitungen und Bäumen."
+    },
+    {
+      "file": "Josephinische Landaufnahme pg065.jpg",
+      "verdict": "other_site",
+      "note": "Kartenblatt einer alten geographischen Landesaufnahme mit Ortsnamen und Flusslauf, keine Ansicht des Ortes."
+    },
+    {
+      "file": "Josephinische Landaufnahme pg054.jpg",
+      "verdict": "other_site",
+      "note": "Weiteres Blatt derselben alten Kartenaufnahme mit Ortsnamen und Gebirgsdarstellung."
+    },
+    {
+      "file": "Figa-Talamanca, Alessandro 1968 (re-scanned C, as-is; headshot).jpg",
+      "verdict": "other_site",
+      "note": "Kopf-Foto eines jungen Mannes vor neutralem Hintergrund; eine Person, kein Ortsbezug."
+    },
+    {
+      "file": "\"Figa z Makiem\" Restaurant, Sanok (2013).jpg",
+      "verdict": "other_site",
+      "note": "Restaurantinterieur mit Holzmöbeln, Gardinen und lampen; Innenraum eines Gasthauses."
+    },
+    {
+      "file": "Figa 23 Slovakia 4.jpg",
+      "verdict": "other_site",
+      "note": "Slowakische Ortsstraßenszene mit Häuserzeile und Ortstafel, keine historische Struktur."
+    },
+    {
+      "file": "Ciconia ciconia nests Figa 1a 20130721.JPG",
+      "verdict": "other_site",
+      "note": "Storchennest mit Jungtieren auf einem Betonmast vor blauem Himmel, davor Stromleitungen."
+    },
+    {
+      "file": "Figa 23 Slovakia 3.jpg",
+      "verdict": "other_site",
+      "note": "Weitere slowakische Straßen- und Ortstafelszene mit Fahrzeug und Häusern, ohne historische Bauten."
+    },
+    {
+      "file": "Figa 23 Slovakia 1.jpg",
+      "verdict": "other_site",
+      "note": "Ortseingangssituation in der Slowakei mit Straßenschild und modernen Häusern."
+    }
+  ],
+  "note": "Kein Bild zeigt die Site: Aufnahmen aus der Slowakei (Ortsstraßen, Storchennester, Posthaus), zwei alte Kartenblätter, eine Feigenfrucht, ein Kopf-Foto und ein Restaurantinterieur."
+}

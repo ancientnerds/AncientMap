@@ -1,0 +1,43 @@
+site_id: 9001cee0-cda8-4309-917f-c0bece02e5e6
+name: Ancient Roman Theatre
+country: Egypt
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Roman Theatre in Orange 2008.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb55125b8221d6f3f1d2dac3fb545d9a
+- Palmyre - théâtre pano.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d7918b00ee2d9c9527e280f412af100
+- Teatro romano de Mérida. España-2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bffecf54894200ed1e683eb1c0d93567
+- Ancient Roman theatre (Lecce) 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3279e081cb9fd180791062e45b2f6b9f
+- Ancient Roman theatre (Lecce) 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b6cc9894caac262de95e3aaa6b6575d0
+- Ancient Roman theatre (Lecce) 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d224db5972db985347e35157cdfa5f98
+- Ancient Roman theatre (Tipasa) 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ca946967fc2af6e7ac1cb10ecbe9937b
+- Spolia at the stage - Ancient Roman Theatre - Taormina - Italy 2015.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4bb883202b1faceec7a2ea22ab24f8a
+- Ancient Roman theatre (Sabratha).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dfa2979e5dad7904b920afc547634ca4
+- Teatro romano - Cividate Camuno (Foto Luca Giarelli).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3271e640e3592c4424a95569b70f3723
+- Ancient Roman theatre, Hierapolis.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c9c34b16388adc4e3c6edb5c5ff28b90
+- Roman Theatre in Verona (57325).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e20e27538e4851b090e3b59809de457d
+- Ancient Roman theatre in Brescia (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1ecc5438378143bb0607fe6d1a18a569
+- Ancient Roman theatre (Chieti).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dc3efc4f37bc368da6e2c84ce7717f78
+- Ancient Roman Theatre in Beit She'an.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2978e680bbc5b6eb3ff08681e6d2a9b9
+- Ancient Roman theatre (Chieti) 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c66911b0a90660b722b46a614de8004f
+- Nightly Ancient Roman theatre, Plovdiv, Bulgaria 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bd4d585a4de947e16e31fcf86536dac4
+- Ancient Roman theatre (Chieti) - interiors 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9c210dd090490eff95f54888fdaafd77
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

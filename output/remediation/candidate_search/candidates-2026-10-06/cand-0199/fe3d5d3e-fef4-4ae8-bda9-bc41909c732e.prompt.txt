@@ -1,0 +1,44 @@
+site_id: fe3d5d3e-fef4-4ae8-bda9-bc41909c732e
+name: Tempio di Poseidone
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tempio di Poseidone - South view.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8cd90f1148681a42fbbcc2b3cff67786
+- Colonne Doriche Tempio di Poseidone Taranto.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a56d29733b27f8df0a3710288cc94b0d
+- Taranto Tempio di Poseidone.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff6f2518940faac1603fc0c70a9d7ff2
+- Taranto - Tempio di Poseidone - 2025-09-28 20-18-26 001.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\82cccc7cf6d1fdc94aed97a0501115c2
+- Taranto - tempio di Poseidone - 2026-09-20 19-29-43 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\580a920c7709afbc701902e7e2bc7e94
+- Tempio di Poseidone Taranto.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\182a1f64843f9072d0d1f4470a5c456d
+- Taranto - Tempio di Poseidone - 2025-09-29 23-22-37 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\96fcfda604039cad2a8d833f63ce949f
+- Taranto - Tempio di Poseidone - 2023-09-29 14-23-05 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6f82da87349244cd1c9d3f85416936b1
+- Taranto - Tempio di Poseidone - 2023-09-29 19-50-15 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e861d79bda8cd50e0fe540dc306b2b22
+- Taranto - Tempio di Poseidone - 2024-09-18 14-21-34 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\87cebf01911380f2985b2b6b5407029e
+- Tempio di Poseidone - tramonto.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\954fa1b73270795d62c00a4e4fc6d9fb
+- Tempio di Poseidone e cielo.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\23edc33470cf7541e3d3eea43a6c370d
+- Statua di kouros, dall'esterno del tempio di poseidone a sounion, 600 ac ca., n. 2720, 03 retro.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e9616a3491e1030a95a96db7e9659555
+- Interno2 tempio di Poseidone.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62c18f073635272005e61d2df8e2af0e
+- Tempio di Poseidone.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\555efc625808e838cfd310f820391901
+- Torso di kouros, dall'esterno del tempio di poseidone a sounion, 600 ac ca., n. 3645, 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a809334430babf16ffdca551253d59ff
+- Base di statua di kouros, con piedi in posizione di andatura, 600 ad ca, dal tempio di poseidone a sounios.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0180bc789ae984a87afbb0ad4a33f4f5
+- Statua di kouros, dall'esterno del tempio di poseidone a sounion, 600 ac ca., n. 2720, 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d44085e8d190a566e18535a7f12184d8
+- Donna seduta, forse una dea o una ninfa, dal frontone del tempio di poseidone a sounion, 440-430 ac ca., n. 3410.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f141ca98d287fb6a9d12a86d76125182
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

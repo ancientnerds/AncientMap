@@ -1,0 +1,49 @@
+site_id: 881f7aef-1b97-44e7-b41f-34636751e690
+name: The Prison of Socrates
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Prison of Socrates, Athens, 20240601 1107 0073.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\151ee3df245db5bc013e34330d84fd02
+- Legendary Prison of Socrates, Athens, 080543.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3845c1e12d074e5864c1a67928723fc2
+- Legendary Prison of Socrates, Athens, 080544.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47d0fdb49d114c08fff6ff5dad5b0ce1
+- Fylakes Sokratous 7234124.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\098205cdd19933b8e089fe8bfc3cb6ba
+- Legendary Prison of Socrates, Athens, 080545.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e028938a8a19e05a477821d48c7c3f8d
+- Athens - Prison of Socrates 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ee368bc08d81fed1066484c938bd3a3e
+- Athens - Prison of Socrates 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba7c90894be7b1b279bdd5c317af775d
+- Athens Socrates' prison 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50414950e73e3ffd7b99e27f4309761f
+- Athens Socrates' prison 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e057d46f50f4d7b94fb4f6d622e713b9
+- The so-called Prison of Socrates on Philopappos Hill (Hill of the Muses) on August 17, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aad3932368ccc1a8097e6c7985d8152d
+- Excavations in the Rock at Athens, commonly called the Prison of Socrates - Hughes Thomas Smart - 1820.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4a3a656b3905597e8631983a050d9135
+- Prison of Socrates.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6b280306ace7c72e288c7a363394b31
+- The prison of Socrates, Athens, Greece - DPLA - 77d420fc8a03cdde2ba8efdca91fba78 (page 1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\472623db06756415c5d5f0778fc19acb
+- The prison of Socrates, Athens, Greece - DPLA - 8fffaa369b969f1ab1e5ed16117cc9c7 (page 1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e6d1b2ecc746fa1f9ae52d9db08124a
+- The Prison of Socrates.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d572b92815e83700250839b734b771c
+- The prison of Socrates, Athens, Greece - DPLA - e6c1f27cad649a78f8108431f4429c2e (page 1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dbcd5de5703b5f109bdcfc4c568d1d0b
+- The prison of Socrates, Athens, Greece - DPLA - aad67241d692a48dcbee8d4b36cdc93f (page 1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\16d6db92acc4cce0d436b9043c05e80b
+- The prison of Socrates, Athens, Greece - DPLA - 5e825b02f5b88db57495bcef3bb650c4 (page 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1aa1fe92c3630883887edd00f4b2082b
+- The prison of Socrates, Athens, Greece - DPLA - f83a49fac17c7af3be8a5a730c5654d9 (page 1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1c03748754a0beb3936aec71ab13b60d
+- The prison of Socrates, Athens, Greece - DPLA - a3c603e83a35c40a15ab531acbbdbee1 (page 1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\459641809593a51881d7f349abb07fff
+- The prison of Socrates, Athens, Greece - DPLA - a85b09a9dffbd2bbadf53461cd4844a4 (page 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1e3c85f196bc920c6775365b208caea5
+- The prison of Socrates, Athens, Greece - DPLA - d784012fca30f553092e5a85be46844e (page 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\efd0febc8f391105a216a0ffa903b104
+- The prison of Socrates, Athens, Greece - DPLA - a2fe6614377184b9b19ffb4e44a809d4 (page 1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\57425ee7e8830781a869ecbc7470f4a3
+- The prison of Socrates, Athens, Greece - DPLA - 67d1ff9e45c44fcc2a1e815aaf07ce00 (page 1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f52fde6ba00bd52a099945ccf016055f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

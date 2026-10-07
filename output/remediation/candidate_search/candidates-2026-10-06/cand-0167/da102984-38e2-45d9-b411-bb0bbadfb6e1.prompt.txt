@@ -1,0 +1,37 @@
+site_id: da102984-38e2-45d9-b411-bb0bbadfb6e1
+name: Troullos
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Troullos Sifniot Pottery2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb6ff059e6e7333d7723945ce9fa1731
+- Troullos Sifniot Pottery1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\39a08959e3a6dce5516ea19d96e0d4b8
+- Sifniot Pottery Troullos 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7f43abf3adb22c9411beb3c7c4aec0d5
+- 1900s Platys Gialos Pottery Troullos 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3cb5ea5ace95bb7b16575f87434667f
+- Lemonis Sifniot Pottery Troullos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7a29c8e56dfd25335fef4125f2b5f48a
+- Old metal objects from Sifnos Troullos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af27db8d4943b0b3ce0f050b07951936
+- Kopela Style Sifniot Pottery 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\59fcc61bea7fa062d013c55924834e3b
+- Sifniot Ceramic Statuette of Eleftherios Venizelos.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\46e814450e5a0e4d0656ad7bd00d2b1b
+- Kopela Style Sifniot Pottery 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d065656a721ca0b51418d0d83ae1fd64
+- HiramiAmhetPasaMosque20071010 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b3836a748ed5bb9caa654767506d68a
+- HiramiAmhetPasaMosque20071010 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\befaeba1324da7d202ac855adf9c3979
+- Podotas Sifniot Pottery 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1bd9e2290ccea7534d42318126ca46b0
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

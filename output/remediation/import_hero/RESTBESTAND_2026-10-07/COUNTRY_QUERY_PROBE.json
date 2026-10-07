@@ -1,0 +1,14 @@
+{
+ "measured_at": "2026-10-07",
+ "question": "does a country-augmented query raise the recall of the candidate search?",
+ "sample": 40,
+ "sampled_from": "the 461 sites the search refused as no_candidate, still showing nothing",
+ "extra_forms": [
+  "\"{name}\" {country} filetype:bitmap",
+  "{name} {country} filetype:bitmap",
+  "intitle:\"{name}\" {country} filetype:bitmap"
+ ],
+ "sites_with_a_new_candidate": 0,
+ "recall_added": 0.0,
+ "sites": []
+}

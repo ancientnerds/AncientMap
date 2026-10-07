@@ -1,0 +1,31 @@
+site_id: ff136c0c-2d3a-4621-b27b-294758b9cc4d
+name: Treasury of Cyrene
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Treasure of Cyrene 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a1ec5669e44dc91b3f91967116d04928
+- Treasure of Cyrene.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\daf6a74fccd75069dd4354c01e496823
+- Treasures of Olympia 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d7b8faac8c7f044aaadacef700b9bdfd
+- Top down aerial of the archaeological site of Olympia, Greece (51222351617).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\79cde8a9027534772cf738dd947352d8
+- Top down aerial of Ancient Olympia in Greece (51224134415).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5cc42615555e210afcc9ab9bdd166f1f
+- Roman Propylea, Shahhat, Libya.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9528e330a3c3d9d7fc47e62791e49807
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

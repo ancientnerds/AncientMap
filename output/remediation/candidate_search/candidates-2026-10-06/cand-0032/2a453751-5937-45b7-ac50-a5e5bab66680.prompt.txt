@@ -1,0 +1,42 @@
+site_id: 2a453751-5937-45b7-ac50-a5e5bab66680
+name: The Knave
+country: Wales
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Knave of Hearts Mother Goose2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6d991977e5e7e9adec6994a3f9913e00
+- The Knave of Hearts Hewson1680.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\972f0a24ceb427e94fc46f55080be9ac
+- Knave of Hearts Mother Goose.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c44c324eaeb694e81fed493484dbec47
+- Knave of Hearts Mother Goose2.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ab74111df48a83b543623f0263f4fc46
+- Knave of Hearts Mother Goose1.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba4697da14d01ff38286acdb6ba91f38
+- The knave of hearts (BM J,1.161).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f012aaa2a1117dabcdb2162e6f21ed4
+- The knave of hearts (BM 1868,0808.5561).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\27c4421574ffedac41646ac5bdd87756
+- Cavalier Knave of Hearts.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\739d0ca7193354b81a33256051f8521f
+- Opera- Arlecchino by Busoni - Cover of score.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\52631824e71e5817fbeeca5fd731296b
+- Remains of a fort above The Knave - geograph.org.uk - 5006892.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5508a6ec7de620fee5c8a8dc10ad7e03
+- The Knave - geograph.org.uk - 2271680.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dcfae634b01fe61f171479107c28c5d9
+- The Knave in silhouette - geograph.org.uk - 7895072.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e7f4d08c5e3ee62909d4befee8475cb
+- The Knave - geograph.org.uk - 7016403.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\07da9126f4476ddbc104632ce579d303
+- Albrecht-Durer-Peasants-roof-the-Church-Choir-while-the-Knave-isnt.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\95472580a9adb76ff97f039ae04af937
+- Banco to the knave. (BM 1868,0808.4823).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8773dd669185e3ece10d521d2ef55924
+- All fours-important state of the game-the knave about to be lost LCCN2008661283.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\08d9841955bf4ceed143169c4a9cabf7
+- The Knave of Clubs (6847598356).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fbac4c3287a362a009dc6379d999f454
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,36 @@
+site_id: f4a3f373-d1c2-4e4c-a1ea-875809fa90b0
+name: Las Sepulturas
+country: Honduras
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- 1898, Las sepulturas de los hombres ilustres en los cementerios de Madrid, Quintana.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f6171288dba9d0cb5f65cbc301f97666
+- 1898, Las sepulturas de los hombres ilustres en los cementerios de Madrid, Quintana (cropped).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\63c557d8e05d410cd2fc71b9062f748a
+- 1898, Las sepulturas de los hombres ilustres en los cementerios de Madrid, Rodríguez Cao.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c92b48c10f6032ca21fefa9822594e8
+- Baccio Bandinelli - Proyecto para las sepulturas de León X y Clemente VII. - Google Art Project.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad664266cd88e6f4923540ad874a6320
+- Madrid, Iglesia de las Trinitarias Descalzas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\003e903c4856455b0ba349f873c7783c
+- Jarrito funerario Las Merchanas1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae93add8c40321bdcd4fa1c4ace01d75
+- Jarrito funerario Las Merchanas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a2f6ddd6c9ebbab9d3e0b9fdb59006d8
+- Sepulturas de Julián Sanz del Río, Francisco Giner de los Ríos, Manuel Bartolomé Cossío, Alberto Jiménez Fraud y Fernando de Castro en el Cementerio Civil de Madrid(20-8-2022)bis.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba71c103407d60f50989c616871ad51f
+- "Tratado de las obras del famoso don Diego de Mendoça, coronista que fue del rey nuestro señor." - btv1b100335674 (070 of 305).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b281003cf71358becd74d3b2a567e558
+- "Tratado de las obras del famoso don Diego de Mendoça, coronista que fue del rey nuestro señor." - btv1b100335674 (074 of 305).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fdc6cdf5de33816a31f621a84cc2acef
+- "Tratado de las obras del famoso don Diego de Mendoça, coronista que fue del rey nuestro señor." - btv1b100335674 (005 of 305).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dee721332f5a1a0f3907a73d862e3be8
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

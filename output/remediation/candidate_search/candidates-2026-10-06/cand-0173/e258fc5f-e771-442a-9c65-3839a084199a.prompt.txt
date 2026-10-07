@@ -1,0 +1,48 @@
+site_id: e258fc5f-e771-442a-9c65-3839a084199a
+name: Pasli
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Pasl1i.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e0fa1f6ae5d6bb3ae46b2851459db5d6
+- Pasli7.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a7264809e4cdfc83b2be12cc81612ede
+- Pasli9.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\99970019d893a0b6a0163538760d6a91
+- Pasl6.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e334a4fe0e4ada5945ce7017128d16d3
+- Pasl2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b7d05069eeca0feb391d0cd57ae5dd81
+- Pasli8.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dfbdf18e18d9cfd5fe53825afa2bbae1
+- Pasl5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a4d4b81f77cc3026b0c361a06a41849b
+- Pasl4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bde2136734ec64d0d65e6cba854411b0
+- Paslı trenler.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba43dbff626387a914c2c593891fddac
+- Pasl3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\24650615b7d06446b5f3fed13d752114
+- Paslı trenleer.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\810dc75c7bc5bd19588a78531da373bb
+- Lahmacun, parsley and lemon in Ankara.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e62969b280c608944462ef04e2e1ff4
+- Erynnis tages - Paslı zıpzıp 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c0f69120f0e0de693359b316597bf3a
+- Erynnis tages - Paslı zıpzıp 15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c7a75b9357a23ed1245ef5373a59bb59
+- İncekum'un sahilindeki paslı sahanlık 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fc5c1dd4d5798791e0c6d354456dc15c
+- Erynnis tages - Paslı zıpzıp 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\90567c58e0aff32840b8a068a3cc4af3
+- İncekum'un sahilindeki paslı sahanlık 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c0b293446064817300eab241e6c4d2b3
+- İncekum'un sahilindeki paslı sahanlık 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db5c23bafa7e66d76db60706e2d1b298
+- Erynnis tages - Paslı zıpzıp 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c58b61e83f7c65477f5b3220cf49e2d
+- Paslı trenler 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c24d7d71c69eb004876b3499a31782e0
+- Erynnis tages - Paslı zıpzıp 12.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\deed5a1f4246225f7ad124abc4b6766d
+- İncekum'un sahilindeki paslı sahanlık 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1c5a0111dca2a5f1fb117fa248136765
+- İncekum'un sahilindeki paslı sahanlık 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1a8ef413d2086ee8db176642d9e318a3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

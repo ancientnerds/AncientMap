@@ -1,0 +1,103 @@
+{
+  "site_id": "e046b573-d1cc-454c-94f9-01f5fd51e233",
+  "answered_by": "mcode-judge-cand-0172",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Unlikely Lincolnshire nature reserves (1), roadside verges, south of Ancaster - geograph.org.uk - 2161719.jpg",
+      "verdict": "region_or_type",
+      "note": "Landstraße mit gelben Randlinien, Hecken und Wiesen südlich des Ortes; freie Landschaft ohne Ortsmerkmale."
+    },
+    {
+      "file": "Goldholme Limestone Quarry (Ancaster limestone), Ancaster, aerial 2020 - geograph.org.uk - 6608207.jpg",
+      "verdict": "depicts",
+      "note": "Luftbild des Kalksteinbruchs mit Abbausohlen und Maschinen, rechts die Häuser von Ancaster am Ortsrand."
+    },
+    {
+      "file": "Ancaster - geograph.org.uk - 7297126.jpg",
+      "verdict": "depicts",
+      "note": "Dorfstraße mit Kalksteinhäusern, Schornsteinen und Mauern im Zentrum; Ortsansicht von Ancaster."
+    },
+    {
+      "file": "Ancaster station - geograph.org.uk - 6137749.jpg",
+      "verdict": "depicts",
+      "note": "Bahnhof mit Bahnsteigen, Gleisen und Stationsschild 'Ancaster'; Bahnhöfe in Ancaster."
+    },
+    {
+      "file": "Ancaster station - geograph.org.uk - 5498281.jpg",
+      "verdict": "depicts",
+      "note": "Bahnsteig mit einfahrendem Triebzug, Stationsschild 'ANCASTER' und Gleisen; Bahnhof in Ancaster."
+    },
+    {
+      "file": "Ancaster station - geograph.org.uk - 5498296.jpg",
+      "verdict": "depicts",
+      "note": "Gegenblick über die Bahnsteige mit großem Stationsschild ANCASTER und Signal; Bahnhof in Ancaster."
+    },
+    {
+      "file": "Church Lane, Ancaster - geograph.org.uk - 6222274.jpg",
+      "verdict": "depicts",
+      "note": "Asphaltierter Dorfweg mit alter Kalkstein-Stützmauer und Efeu, daneben Weide; Ortssituation in Ancaster."
+    },
+    {
+      "file": "Ancaster railway station, Lincolnshire, 1983 - geograph.org.uk - 3951963.jpg",
+      "verdict": "depicts",
+      "note": "Historische Aufnahme der Bahnsteige mit Stellwerk, Wartehäuschen und Backsteingebäuden; Bahnhof Ancaster."
+    },
+    {
+      "file": "Ancaster Valley in winter - geograph.org.uk - 3301713.jpg",
+      "verdict": "region_or_type",
+      "note": "Verschneites Tal mit vereisten Bäumen und Hang; reine Winterlandschaft ohne Ortsbezug."
+    },
+    {
+      "file": "The Railway Inn, Ancaster - geograph.org.uk - 7296998.jpg",
+      "verdict": "depicts",
+      "note": "Steinhaus mit Gasthofschild 'The Railway Inn', davor Straße, Lieferwagen und Fahrräder; Gebäude in Ancaster."
+    },
+    {
+      "file": "A Chieftain tank at Ancaster, Lincolnshire, England.jpg",
+      "verdict": "region_or_type",
+      "note": "Kampfpanzer auf grüner Wiese, ohne Gebäude oder Beschilderung; kein Ortsbezug erkennbar."
+    },
+    {
+      "file": "St Martin's Church, Ancaster, Lincolnshire - geograph.org.uk - 2129665.jpg",
+      "verdict": "depicts",
+      "note": "Pfarrkirche mit spitzem Kalksteinturm, Maßwerkfenstern und Friedhof mit alten Grabsteinen."
+    },
+    {
+      "file": "St Martin's Church, Ancaster, Lincolnshire - geograph.org.uk - 2129689.jpg",
+      "verdict": "depicts",
+      "note": "Innenraum der Pfarrkirche mit Säulenarkaden, Gestühl, Chorbaldachin und Buntenfenstern."
+    },
+    {
+      "file": "A fine albino wisteria - geograph.org.uk - 5786315.jpg",
+      "verdict": "depicts",
+      "note": "Weiße Wisteria an der Kalksteinfassade eines Dorfauses mit Sprossenfenstern und Haustür; Ortsbild in Ancaster."
+    },
+    {
+      "file": "A tank at Ancaster Karting - geograph.org.uk - 2995457.jpg",
+      "verdict": "region_or_type",
+      "note": "Karting-Anlage mit Werbeschildern, Fahnen und Panzerattrappe auf Wiese; kein Ortsbezug erkennbar."
+    },
+    {
+      "file": "A Tump - geograph.org.uk - 5346010.jpg",
+      "verdict": "region_or_type",
+      "note": "Erhöhte, baumbestandene Fläche mit Rasen und Koniferen; Landschaftsbild ohne Ortsmerkmale."
+    },
+    {
+      "file": "A153 Willoughby Road - geograph.org.uk - 4786844.jpg",
+      "verdict": "region_or_type",
+      "note": "Landstraße mit Baumreihe, Ackerflächen und Fahrbahnmarkierung; Verkehrs- und Landschaftsbild."
+    },
+    {
+      "file": "A513 Willoughby Road ^2 - geograph.org.uk - 4786848.jpg",
+      "verdict": "region_or_type",
+      "note": "Straße mit Alleebaumreihe, Gehwegen und bewaldeten Grundstücken; keine Ortsansicht erkennbar."
+    },
+    {
+      "file": "Across the lake - geograph.org.uk - 5346016.jpg",
+      "verdict": "region_or_type",
+      "note": "See mit Enten, Schilf und Uferbäumen; Naturlandschaft ohne erkennbaren Ortsbezug."
+    }
+  ],
+  "note": ""
+}

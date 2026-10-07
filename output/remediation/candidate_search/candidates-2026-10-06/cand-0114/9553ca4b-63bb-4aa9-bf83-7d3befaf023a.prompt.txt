@@ -1,0 +1,37 @@
+site_id: 9553ca4b-63bb-4aa9-bf83-7d3befaf023a
+name: Verlamion
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- St Albans Choir 2, Hertfordshire, UK - Diliff.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a1ef153c7e79d977c5735586a0cc9bd3
+- St Albans Wallingford Screen 2, Hertfordshire, UK - Diliff.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\466baa37b6b642ee3544d45b756dc966
+- Colombo Street, St Albans, Christchurch, New Zealand.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4e9c0b4753008563f675b50653902958
+- The Prae Wood Arms, St Albans - geograph.org.uk - 7340153.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1539f097a27652e4de0539145a40ca88
+- St Albans Church Copenhagen 2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9a5272ce097b43319d27624b4a86edec
+- North block of St Albans School, St Albans, May 2023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f3477c41b1dff644f78128aa7c0a4a82
+- St Albans, Golders Green-1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bd0629a4925c8a920d0fc5b5b53ecda5
+- St Albans, Golders Green-2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f2abc1f9ebbc6d416c41899aa102eb7
+- Foundation stone on St Albans School Hall, St Albans, May 2023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1ff2732149b39e69338088cb17dc6618
+- St Albans Church Copenhagen in distance.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\71f2e67e388dc44cea007d701d1edc0e
+- St Albans Town Hall, St Albans, June 2023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6531461233f6c7fa138650c985d8d3c0
+- The Prae Wood Arms, St Albans (49023903927).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ca600fe8b64fa776d2a03a615d0079e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

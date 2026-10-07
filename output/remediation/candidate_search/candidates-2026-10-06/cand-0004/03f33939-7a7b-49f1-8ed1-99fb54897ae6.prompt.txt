@@ -1,0 +1,33 @@
+site_id: 03f33939-7a7b-49f1-8ed1-99fb54897ae6
+name: Babylonian Theatre
+country: Iraq
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- The-elephant-in-the babylonian-court-Kodak-t.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae02de4b204f91c0f49e7ac4bd2ba007
+- The Babylonian Theater.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae463f9f1cd71dba10576eb6375c6702
+- Drawing, Stage Design, Hall in a Babylonian Palace for the Opera "Ciro in Babylonia" by Gioacchino Rossini, 1818–19 (CH 18359655).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db466cf97dca24c2e4cb0368db67827a
+- The ancient history of the Egyptians, Carthaginians, Assyrians, Babylonians, Medes and Persians, Grecians and Macedonians. Translated from the French. 11th ed., rev., corr. and illus. with a set of (14781501544).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bb4b86f7cf386f3e891f17fdd98f37af
+- Palmyra, Syria - 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fa9c55fb269593b940cd1a24617a8b04
+- Verdi - Nabucco - The temple scene (La Scala revival of 1913) - The Victrola book of the opera.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\68cc8e9defca465b49afba87ad387d29
+- Encyclopedia of antiquities - and elements of archaeology, classical and mediæval (1843) (14576831427).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5905fb9e9068d71366815d6c77cdca6b
+- The lake of Tiberias, looking towards Hermon. David Roberts. 1855.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\780405689db074ea904702a927393a28
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

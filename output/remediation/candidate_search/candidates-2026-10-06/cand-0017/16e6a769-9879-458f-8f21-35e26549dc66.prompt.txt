@@ -1,0 +1,36 @@
+site_id: 16e6a769-9879-458f-8f21-35e26549dc66
+name: Metropolis, Thessaly
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Metropolis, Sluseholmen, Copenhagen.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e17397f05369c217c8c055d45104122
+- Dome metropolis Athens, Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b7755855f1284748ea758e416263b2c
+- Main door Metropolis Athens Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2b92a4d5fcb4b3e4b394936717e8d2b7
+- Alstom Metropolis C751C - Interior View.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\467b787c928cf5973d073033f68a1b21
+- Metropolis (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f373999dbca0ceb6796d5dd88a257d2c
+- Metropolis Plaza Void view 2015.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8976a1d9ece2ec500a3f719abba561f8
+- Metropolis Plaza (shopping centre).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1d8a0d58a32872c2976431a1a77cd93e
+- Sheung Shui Metropolis Plaza.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7ed01902df7d3ae7848d14929e150ef
+- Madrid Spain Metropolis-Building-01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e64c3fccafac60830f1b9b45752f924
+- Metropolis Building.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fac8ffff7ce38658a0f2c1e42363db3b
+- Cinestar Metropolis, Frankfurt, South view 20211016 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c1c4b034c3862cc908d6bc2e1fd98a28
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

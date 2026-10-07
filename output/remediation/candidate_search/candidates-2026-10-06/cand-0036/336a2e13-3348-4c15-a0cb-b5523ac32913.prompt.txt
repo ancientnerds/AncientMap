@@ -1,0 +1,36 @@
+site_id: 336a2e13-3348-4c15-a0cb-b5523ac32913
+name: Margus - City
+country: Serbia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Margum ausgrabung 2011 (1).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\98efbb4e40cede3c238c70dad1589e8c
+- Margus Tsahkna kõneleb ÜRO jätkusuutliku arengu eesmärkide (SDG) digipäeval, 17.09.2021 (53197251056).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88f9ed49ddbca2b637359d4d5361a04e
+- Margus Tsahkna kõneleb ÜRO jätkusuutliku arengu eesmärkide (SDG) digipäeval, 17.09.2021 (53197251041).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\edb1c9f58f4b71eca9d69cb616ae9e62
+- Margus Tsahkna kõneleb ÜRO jätkusuutliku arengu eesmärkide (SDG) digipäeval, 17.09.2021 (53197588450).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7d633fa47a9c94d2ed8204fd83df1f6
+- Margus Tsahkna kõneleb ÜRO jätkusuutliku arengu eesmärkide (SDG) digipäeval, 17.09.2021 (53197378562).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\217d0d2209f8fd6c91736b15defce34e
+- Margus Murakas - Mitsubishi Lancer.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a2111008d592e775de46774f1c5eeec
+- Margus Tsahkna kõneleb ÜRO jätkusuutliku arengu eesmärkide (SDG) digipäeval, 17.09.2021 (53197383332).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8cacf234111454d45648cb8b04fe9c97
+- Julianna Margulies at the 2009 Tribeca Film Festival.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4da8cf373584a42a430c05d950a437ff
+- Margus Ulst.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\59d956aec7829f99659273503f75ace7
+- Margus Meinart.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\adba3f64e2cc98ee5967a59174e81349
+- Margus Reinsalu-Foto.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d8df545d57dc5c05541e288320d7a92c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

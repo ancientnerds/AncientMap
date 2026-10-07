@@ -1,0 +1,33 @@
+{
+  "site_id": "01dee6c5-2bcd-4fe7-9126-755ea3c7a3f7",
+  "verdicts": [
+    {
+      "file": "\u0398\u03c5\u03bc\u03ac\u03c1\u03b9 \u03b1\u03bd\u03b8\u03b9\u03c3\u03bc\u03ad\u03bd\u03bf (thyme) 04.jpg",
+      "verdict": "region_or_type",
+      "note": "Bluehende Thymianstraeucher auf Duenen, dahinter Sandstrand, Meer und Bergkette: reine Kuestenlandschaft, keine Ruinen und keine Unterwasserstrukturen sichtbar."
+    },
+    {
+      "file": "Peloponnisos-b2.png",
+      "verdict": "region_or_type",
+      "note": "Relief-/Hoehenkarte des Peloponnes mit Flussnetz, Golfen und Inseln; reine Regionalkarte ohne Markierung oder Motiv der Site."
+    },
+    {
+      "file": "\u0398\u03c5\u03bc\u03ac\u03c1\u03b9 \u03b1\u03bd\u03b8\u03b9\u03c3\u03bc\u03ad\u03bd\u03bf (thyme) 03.jpg",
+      "verdict": "other_site",
+      "note": "Nahaufnahme eines bluehenden Thymianpolsters mit Schmetterlingen: Pflanzenfoto, weder Bauwerke noch Ausgrabungen noch erkennbare Umgebung der Site."
+    },
+    {
+      "file": "\u0398\u03c5\u03bc\u03ac\u03c1\u03b9 \u03b1\u03bd\u03b8\u03b9\u03c3\u03bc\u03ad\u03bd\u03bf (thyme) 02.jpg",
+      "verdict": "other_site",
+      "note": "Nahaufnahme eines bluehenden Thymianpolsters zwischen Duenengras: Pflanzenfoto, weder Bauwerke noch Ausgrabungen noch erkennbare Umgebung der Site."
+    },
+    {
+      "file": "\u0398\u03c5\u03bc\u03ac\u03c1\u03b9 \u03b1\u03bd\u03b8\u03b9\u03c3\u03bc\u03ad\u03bd\u03bf (thyme) 01.jpg",
+      "verdict": "other_site",
+      "note": "Nahaufnahme von Thymian mit Schmetterlingen, im Hintergrund ein Streifen Meer: Pflanzenfoto ohne Bauwerke, Ausgrabungen oder Site-Motiv."
+    }
+  ],
+  "note": "",
+  "answered_by": "mcode-judge-cand-0001b",
+  "model": "MiniMax-M3.1-Flash-Preview"
+}

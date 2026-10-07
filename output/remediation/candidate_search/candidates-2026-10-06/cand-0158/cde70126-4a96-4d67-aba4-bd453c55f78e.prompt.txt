@@ -1,0 +1,37 @@
+site_id: cde70126-4a96-4d67-aba4-bd453c55f78e
+name: Fushan Archaeological Site
+country: Taiwan
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Fushan Steamer 02 20251209.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1f4c2a51d76fd26711c312aaeab7d6d7
+- Fushan Bay at night.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a2c08a41d01ddb6136a73064b7c47a86
+- Fushan suburban park entrance signage.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0529692bbe62feef77f827b08e9fe1e1
+- Fushan Steamer 01 20251209.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9cd0234ac49b1c441c67472263a8db64
+- TRA Fushan station.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\24fa8be55bb6692f9475136362baf4c5
+- Fushan, Yantai, Shandong, China - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47e74c2779f61f1cd856f6a1dfa11629
+- 福山 Fushan - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\26f46f059d36d974a168df1124c0b639
+- Fushan, Yantai, Shandong, China - panoramio (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b67c9cbb1d80a977601e61f2d7f5028e
+- Fushan, Yantai, Shandong, China - panoramio (6).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\38f9d0102067f49cb7ae8a77101d8a48
+- Fushan, Yantai, Shandong, China - panoramio (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f373ba879985fbb1e5eab69c47f03983
+- 2018台灣基督長老教會福山教會Fushan Wulai b.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\37cc35c1c940c405c1193766591f5c34
+- Fushan Elementary School, Wulai District, New Taipei d.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\be60768754864bd0aebcdfc9d6853fdd
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

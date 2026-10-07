@@ -1,0 +1,36 @@
+site_id: f3fa78cb-e363-43e8-971e-954d4e9f9b27
+name: Whelpley Hill
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- White Hill, Whelpley Hill - geograph.org.uk - 4654492.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\85e635ea14511ba16561e697515db1a0
+- White Hill, Whelpley Hill - geograph.org.uk - 4654480.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ace431bd4b16803a3f28a283f002d9fc
+- Grove Lane, Whelpley Hill - geograph.org.uk - 4654046.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\edb4fc543d42b22db2decd2b85310d13
+- Spencers Farm, Whelpley Hill - geograph.org.uk - 4674147.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\55d558febf72aa72fd10185c3ff5052f
+- Barn on White Hill, Whelpley Hill - geograph.org.uk - 4654433.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1312150acf5d2c42e0dc407a4c95868f
+- Field by White Hill, Whelpley Hill - geograph.org.uk - 4654481.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aa013d355f9d446e7ef388ff15f0a3bb
+- Path off Whelpley Hill - geograph.org.uk - 4674148.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f2e175e6af3f1bc7579d68a74ff573b3
+- Coronation Hall, Whelpley Hill - geograph.org.uk - 4654420.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\893ab7ca2ad9a95c95c01bf66e45fad6
+- Path off Grove Lane, Whelpley Hill - geograph.org.uk - 4654036.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\412ea15d42bf55ec44cab054b1086856
+- Field at Sale's Farm, Whelpley Hill - geograph.org.uk - 4654040.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\95191c5a611de3321f1e529d8c617b8b
+- Field at Sale's Farm, Whelpley Hill - geograph.org.uk - 4654031.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fa273922ab3d5cb8ef978ed30b82cc3b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

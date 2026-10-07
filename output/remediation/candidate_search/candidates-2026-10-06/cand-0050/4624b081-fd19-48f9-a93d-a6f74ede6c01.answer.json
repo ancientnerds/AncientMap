@@ -1,0 +1,12 @@
+{"site_id": "4624b081-fd19-48f9-a93d-a6f74ede6c01",
+ "answered_by": "mcode-judge-cand-0050",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "The Temple of Apollo in Corinth.jpg",
+   "verdict": "other_site",
+   "note": "Sieben dorische Saeulen mit Architrav auf Stylobat, gruener Hügel, flaches Land. Griechischer Tempel, nicht die maltesische Site."},
+  {"file": "Τα ερείπια του Ναού του Απόλλωνα στην Αρχαία Κόρινθο.jpg",
+   "verdict": "other_site",
+   "note": "Antike Tempelruinen mit aufrecht stehenden Saeulen, Zypressen und Bergkette, steinernes Fundament: Dorischer Tempel in Griechenland."}
+ ],
+ "note": "Beide Kandidaten zeigen den Apollon-Tempel in Korinth (Griechenland), nicht Melite auf Malta."}

@@ -1,0 +1,37 @@
+site_id: d8cae4fd-fcca-4187-9194-e89fa474bb49
+name: Son Oleza
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Abric de Son Matge1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8ed16283e29285b17b64a4994bb594a2
+- Abric de Son Matge 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d911126bd4b7a8e252260c850dd1ab40
+- Abric de Son Matge (des de la carretera de Valldemossa).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9d1c5e17ef56365b8c066ac2c90f8095
+- Valldemossa. Son Matge. Cases.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\573033cc30b57b99bb6157e07189cfff
+- Horts.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\84f22a098b958ca4bba82bdd10fca5fd
+- Jardins altamira.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\718fb861623577b6c7370afb4f03a02c
+- Las teresianas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ac76323066c1893b56682b99aab369ed
+- Turo de Monterols.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7c101d7ce564b63adc456281981cbd39
+- Jardines cecilia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a0b8dc10364c0742f5e6b49298f3f9c8
+- Edificio muntaner sert.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d5a157882069348d2bc9d9d036e14a67
+- Casa sagnier.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bea6edcd6ba22c5411fd5adc57169fa2
+- Sostenibilitat.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14afacb13e718cfb0a941a7493e098fd
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

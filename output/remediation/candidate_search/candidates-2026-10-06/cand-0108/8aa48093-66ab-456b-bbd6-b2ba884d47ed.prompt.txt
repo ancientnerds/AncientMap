@@ -1,0 +1,37 @@
+site_id: 8aa48093-66ab-456b-bbd6-b2ba884d47ed
+name: Cival
+country: Guatemala
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Tikal6.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\456bc499c29285322b0163355cf6b73b
+- Cap, Cival, museu Nacional d'Arqueologia i Etnologia de Guatemala.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b648f315369953a5479a4d8a94fc949c
+- Cival kitsz 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\278490295963818617b9117ba7f46b8e
+- Yucatan Mexico Feb 2004 - Juzgado Mixto de lo Cival y Familiar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7159bcc149ea5b8b24ffbe607c3f0c4
+- Oeuvres de Henri Cival. 4, Amour et vitriol - romance - paroles et musique de Henri Cival - bpt6k1167683k (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\01a0b0b016ce456655696a6da3f2a9a1
+- Oeuvres de Henri Cival. 4, Amour et vitriol - romance - paroles et musique de Henri Cival - bpt6k1167683k (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b04ef830af5272e9f51bdd235177c451
+- Oeuvres de Henri Cival. 5, Le banni de **51 - romance (pour ténor léger) - paroles et musique de Henri Cival - bpt6k1176160t (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a448d10303cdd0537c71c4722d1d5b99
+- Oeuvres de Henri Cival. 5, Le banni de **51 - romance (pour ténor léger) - paroles et musique de Henri Cival - bpt6k1176160t (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\179692f6221b7005cef8d351268b7918
+- L'Algérienne - chant patriotique - paroles et musique de Henri Cival - bpt6k1164565c (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1021e7f82b4beba573e8d5a06f77be33
+- L'Algérienne - chant patriotique - paroles et musique de Henri Cival - bpt6k1164565c (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\758e3d81bcddf816b605a16ccfc22ddc
+- Torrent des Gravières (versant raviné sur la rive gauche du torrent près de la pointe de Cival) - Hallauer - btv1b10700631j.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0f2b4fee561399f04001f30dcaff639
+- Cival.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\893247c9f20aa08eaa3df065e42223ff
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

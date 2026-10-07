@@ -1,0 +1,43 @@
+{
+  "site_id": "8eb1cd28-4302-4acf-be6f-539ce6996e58",
+  "answered_by": "mcode-judge-cand-0110",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Kentisbury , Down Lane - geograph.org.uk - 7518635.jpg",
+      "verdict": "region_or_type",
+      "note": "Asphaltierte Landstraße zwischen hohen Hecken, Bäumen und Wiese; reines Landschaftsbild ohne Bauwerk oder Befund."
+    },
+    {
+      "file": "Crop Mark near Higher Week Farm, Kentisbury Down, aerial (3) - geograph.org.uk - 5958880.jpg",
+      "verdict": "region_or_type",
+      "note": "Luftaufnahme eines Ackerfelds mit heckengesäumten Grenzen und schwachen Bodenmarken; Site nicht erkennbar."
+    },
+    {
+      "file": "Crop Mark on field near Higher Week Farm, Kentisbury Down, aerial 2018 - geograph.org.uk - 5958877.jpg",
+      "verdict": "region_or_type",
+      "note": "Schräge Luftaufnahme von Feldflächen und Heckenreihen, kaum Marken erkennbar; Landschaft, keine Site."
+    },
+    {
+      "file": "Crop mark near Higher Week Farm, Kentisbury Down, aerial 2018 (2) - geograph.org.uk - 5954847.jpg",
+      "verdict": "region_or_type",
+      "note": "Weite Luftaufnahme von Feldland, Hecken und einem Dorf am Horizont; keine archäologische Struktur sichtbar."
+    },
+    {
+      "file": "Hay dispensers on Kentisbury Down - geograph-4399700.jpg",
+      "verdict": "region_or_type",
+      "note": "Zwei moderne Futtersilagen mit Heu auf einer Weide, dahinter bewaldete Hügel; landschaftliches Bild."
+    },
+    {
+      "file": "Down Lane - geograph.org.uk - 4399708.jpg",
+      "verdict": "region_or_type",
+      "note": "Schlammiger Feldweg zwischen Hecken mit Gatter und Bäumen; nur Wege- und Landschaftsansicht."
+    },
+    {
+      "file": "Farmland, west of Down Lane - geograph.org.uk - 4399688.jpg",
+      "verdict": "region_or_type",
+      "note": "Geackerte Fläche im Vordergrund, Baumreihen und ferne Downs; reine Landschaft ohne Site-Bezug."
+    }
+  ],
+  "note": ""
+}

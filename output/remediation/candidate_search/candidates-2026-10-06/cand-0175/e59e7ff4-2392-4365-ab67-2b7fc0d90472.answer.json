@@ -1,0 +1,63 @@
+{
+  "site_id": "e59e7ff4-2392-4365-ab67-2b7fc0d90472",
+  "verdicts": [
+    {
+      "file": "Tomb Queen Margarita I side view Roskilde cathedral Denmark.jpg",
+      "verdict": "other_site",
+      "note": "goldverziertes Epitaph einer Koenigin mit Heiligenfiguren"
+    },
+    {
+      "file": "Tomb of Margarita Chebysheva.jpg",
+      "verdict": "other_site",
+      "note": "polnischer Grabstein mit kyrillischer Inschrift einer anderen Margarita"
+    },
+    {
+      "file": "Margarita Arcangeli.jpg",
+      "verdict": "other_site",
+      "note": "roemische Inschriftentafel fuer eine andere Margarita Arcangeli"
+    },
+    {
+      "file": "Cemiterio de Negreira - Margarita Chapela e José Ángel Lesta.jpg",
+      "verdict": "other_site",
+      "note": "spanische Doppelgrabplatte mit Blumen und Namen"
+    },
+    {
+      "file": "Tomb in Cementery San Juan.jpg",
+      "verdict": "other_site",
+      "note": "ovale Jesus-und-Kind-Reliefplakette an einem Grab"
+    },
+    {
+      "file": "Tomb in San Juan Bautista Cemetery.jpg",
+      "verdict": "other_site",
+      "note": "Metallschild mit dem Namen APOLONIA CASTANEDA DE BOADA"
+    },
+    {
+      "file": "Tomb in San Juan Bautista Cemetery 2.jpg",
+      "verdict": "other_site",
+      "note": "Namensschild PASCUALA RODRIGUEZ am Grabkreuz"
+    },
+    {
+      "file": "Tomb in San Juan Bautista Cemetery 3.jpg",
+      "verdict": "other_site",
+      "note": "weisses Friedhofsrelief mit Kind und Engel"
+    },
+    {
+      "file": "Tumba de Margarita Fernández `La Lega´en cementerio de Horche (Guadalajara).jpg",
+      "verdict": "other_site",
+      "note": "modernes Grab PERPETUA auf einem spanischen Friedhof"
+    },
+    {
+      "file": "Covelo, chiesa di San Giacomo Maggiore - Lapide Giacomo e Margarita Pooli.jpg",
+      "verdict": "other_site",
+      "note": "italienische Gedenktafel fuer Giacomo Poli und seine Mutter Margarita"
+    },
+    {
+      "file": "Juarez Tomb, City of Mexico. (15532496839).jpg",
+      "verdict": "other_site",
+      "note": "historisches Foto eines reich geschmuetzten Grabmals in Mexiko"
+    }
+  ],
+  "note": "",
+  "answered_by": "mcode-judge-cand-0175",
+  "model": "MiniMax-M3.1-Flash-Preview"
+}

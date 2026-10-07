@@ -1,0 +1,35 @@
+site_id: 810d09d7-37a5-443b-84de-e1101e44e855
+name: Usnu, Huánuco
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Choquequirao Usnu.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ebeaefe6904493456a962a39aba4043f
+- Choquequirao as seen from Usnu.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\67d2cbfc4ad806b01f3b6bdca985b578
+- Choquequirao Lower Plaza & usnu.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c2da560bbfd996cd5228aafa8f5f032
+- Lamium 544664.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4663d083843b921725efeae2fb9854ac
+- Ingapirca01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b02712aea9bdd39ffc590b7ffe3a55fa
+- Choquequirao ventana.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3cff64ceeb099e6c420fae39d12da0d1
+- Choquequirao Sector V, IV, y VIII.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9d1c67d8b370d5eb9ed858cd880220b4
+- Anatomija disajnih puteva novorodjence i dijete-bs.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\16bff9d28213e9a4afd30ac9017fb60a
+- Ayacucho54719.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7dba294476e32d0cfe7bcfe6755ffed3
+- Fasti Mariani cum illustrium diuorum imaginib. and elogijs prope DC. in singulos anni menses diésq SS. natales distributis (1630) (14722820476).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\27cbdc1a75f4f23682c3a9ca6f1292ac
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

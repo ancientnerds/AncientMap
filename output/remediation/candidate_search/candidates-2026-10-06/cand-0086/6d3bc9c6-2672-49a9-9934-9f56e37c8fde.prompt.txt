@@ -1,0 +1,33 @@
+site_id: 6d3bc9c6-2672-49a9-9934-9f56e37c8fde
+name: Abingdon - Causewayed Enclosure
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Abingdon Campus Exterior1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce660aa753f0cc70eb9cedca5f625b6d
+- Jumelage avec Abingdon-on-Thames (Angleterre) le 16 juin 1962 (Colmar).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\54767763f00c4f53837e0a7459289a4d
+- Abingdon bridge.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5716e77a060f01e1ef539be3b785c826
+- Abingdon Bridge 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec1aa765c1fa55deaed89ca20e7d60ed
+- Abingdon Bridge 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df72fc57a3f81f407f5b10fcf2cf8c6c
+- Abingdon Bridge 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b8211caec8ea1fd58c9692d63799be26
+- Abingdon, Abingdon Road Bridge - geograph.org.uk - 8039847.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7b40fec800f61b6adf009ac158a39249
+- Abingdon Bridge 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c3c1f98031f8a5f0283f7e2c0b9eb02c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

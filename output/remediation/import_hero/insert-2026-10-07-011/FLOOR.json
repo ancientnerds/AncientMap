@@ -1,0 +1,5 @@
+{
+ "min_height": 300,
+ "min_width": 800,
+ "note": "the size a local file must reach for this run; the lane's own is 1600x900, and the owner's lowered floor is 800x300 (owner decision 2026-10-06, \"for these cases the existing picture becomes the hero\")"
+}

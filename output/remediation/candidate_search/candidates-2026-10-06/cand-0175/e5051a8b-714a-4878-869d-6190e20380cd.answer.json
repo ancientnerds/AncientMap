@@ -1,0 +1,63 @@
+{
+  "site_id": "e5051a8b-714a-4878-869d-6190e20380cd",
+  "verdicts": [
+    {
+      "file": "Grim's Ditch, Middlesex - geograph-2387972.jpg",
+      "verdict": "depicts",
+      "note": "tiefe, langgestreckte Senke mit steilen bewaldeten Boeschungen und Weg im Grund"
+    },
+    {
+      "file": "Grim's Ditch - geograph.org.uk - 6632742.jpg",
+      "verdict": "region_or_type",
+      "note": "Waldmulde mit Pfuetze zwischen Boeschungen; Grabenprofil nicht sicher erkennbar"
+    },
+    {
+      "file": "Grim's Ditch - geograph.org.uk - 6631369.jpg",
+      "verdict": "region_or_type",
+      "note": "Pfad neben einem Teich im kahlen Laubwald, kein Erdwerk sichtbar"
+    },
+    {
+      "file": "Grim's Ditch - geograph.org.uk - 6631360.jpg",
+      "verdict": "region_or_type",
+      "note": "breiter stiller Teich im Wald mit Laub am Ufer"
+    },
+    {
+      "file": "Pond on Grim's Ditch - geograph.org.uk - 6632772.jpg",
+      "verdict": "region_or_type",
+      "note": "gruener Teich mit niedriger moosiger Mauer und Kiesweg; kein altes Erdwerk erkennbar"
+    },
+    {
+      "file": "Decrepit bridge, Grim's Ditch - geograph.org.uk - 6632758.jpg",
+      "verdict": "region_or_type",
+      "note": "moosiger Truemmerschutt einer verfallenen Bruecke neben Teich und Weg"
+    },
+    {
+      "file": "Water in Grim's Ditch, in the grounds of Grim's Dyke Hotel - geograph.org.uk - 7626147.jpg",
+      "verdict": "region_or_type",
+      "note": "Waldteich mit umgestuerzten Staemmen und Hotelgelaende dahinter"
+    },
+    {
+      "file": "Track near Grim's Ditch - geograph.org.uk - 5989505.jpg",
+      "verdict": "region_or_type",
+      "note": "asphaltierter Weg zwischen Wiese und Hecke mit geparktem Auto; kein Graben sichtbar"
+    },
+    {
+      "file": "Western or outer bank, Grim's Ditch - geograph.org.uk - 6631239.jpg",
+      "verdict": "region_or_type",
+      "note": "steiler bewaldeter Hang ueber Laubstreu; Wall und Grabenprofil nicht sicher erkennbar"
+    },
+    {
+      "file": "Path along western or outer bank, Grim's Ditch - geograph.org.uk - 6631253.jpg",
+      "verdict": "region_or_type",
+      "note": "schmaler Pfad im Laubwald neben einer aufgeworfenen Boeschung"
+    },
+    {
+      "file": "Grim's Ditch, Middlesex, view facing south.jpg",
+      "verdict": "region_or_type",
+      "note": "offene Wiese mit Blick ueber Baumkronen und ferne Stadt; kein Erdwerk erkennbar"
+    }
+  ],
+  "note": "",
+  "answered_by": "mcode-judge-cand-0175",
+  "model": "MiniMax-M3.1-Flash-Preview"
+}

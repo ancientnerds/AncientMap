@@ -1,0 +1,33 @@
+site_id: 64137ead-762b-4621-a59c-5c7395ef4826
+name: Pukara, Coporaque
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Eglise Santa Isabel à Pukara (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c3ce87bbf5783c2e8626f106a6c136c
+- Eglise Santa Isabel à Pukara (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\726b1c9404b48f2445b87abadeaacbae
+- Pukara Huaihuarani.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b714e263dc3063477d2acc9fe931963b
+- Pukara de Tilcara.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c8dadce0e3d3237548f66df54f2176bb
+- Pukara Saxamar 1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c162845416e52acbbf229d8cea656d75
+- Ruinas, Pukara de Chena.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cf2ac2a6e2ea1ca5da0125edada15ea8
+- Pukara de Quitor.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8d9bdbaa41abd23baf08895c80b8cec1
+- Ruine Puka Pukara .jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0de7cf45d51983f03a0b7ca49dbc4d51
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

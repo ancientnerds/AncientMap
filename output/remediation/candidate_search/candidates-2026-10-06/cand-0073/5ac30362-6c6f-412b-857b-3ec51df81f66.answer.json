@@ -1,0 +1,68 @@
+{
+  "site_id": "5ac30362-6c6f-412b-857b-3ec51df81f66",
+  "answered_by": "mcode-judge-cand-0073",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Tomb of Homer.JPG",
+      "verdict": "other_site",
+      "note": "Steinbau mit Deckstein auf zwei Pfeilern, beschriftete Platte, Trockenmauern und Steinpyramiden auf einem Meereskap; eigenes benanntes Monument."
+    },
+    {
+      "file": "Tomb of Homer 130386.jpg",
+      "verdict": "other_site",
+      "note": "Weg zwischen Trockenmauern und vielen aufgestapelten Steinpyramiden, dahinter das Meer; der Steinkomplex einer anderen Site."
+    },
+    {
+      "file": "Tomb of Homer 130401.jpg",
+      "verdict": "region_or_type",
+      "note": "Weites Meerespanorama mit ferner Kuestenlinie; nur kleine Steinpyramiden am unteren Bildrand, kein Bauwerk erkennbar."
+    },
+    {
+      "file": "Tomb of Homer 130384.jpg",
+      "verdict": "other_site",
+      "note": "Steinkammer mit Deckstein auf zwei Pfeilern, Bruchstuecke weisser Marmorstuecke im Inneren, Trockenmauern ringsum."
+    },
+    {
+      "file": "Tomb of Homer 130397.jpg",
+      "verdict": "other_site",
+      "note": "Nahaufnahme von Trockenmauern aus Schiefer mit Pfeilern und Deckstein, dahinter die offene Kammer; gleicher anderer Komplex."
+    },
+    {
+      "file": "Tomb of Homer 13M980.jpg",
+      "verdict": "other_site",
+      "note": "Pflasterweg aus Platten und eine Reihe beschrifteter weisser Marmorsaeulen auf einem Huegel; ein Memorial, nicht die Site."
+    },
+    {
+      "file": "Tomb of Homer 130396.jpg",
+      "verdict": "other_site",
+      "note": "Bearbeiteter Steinblock in einer Nische zwischen Schiefermauern, Kritzeleien an der Wand; Detailaufnahme desselben Komplexes."
+    },
+    {
+      "file": "Tomb of Homer 130403.jpg",
+      "verdict": "other_site",
+      "note": "Pflasterweg mit Trockensteinbrueung als Bruestung ueber der Steilkueste, Meer und Tafelberg in der Ferne; Ortsebene dieser Site."
+    },
+    {
+      "file": "Tomb of Homer 130379.jpg",
+      "verdict": "other_site",
+      "note": "Weg durch Buschwerk auf einen Huegel, oben viele gestapelte Steinpyramiden und Trockenmauern, rechts das Meer."
+    },
+    {
+      "file": "Tomb of Homer 13M957.jpg",
+      "verdict": "region_or_type",
+      "note": "Meerespanorama entlang der felsigen Kueste mit Schriftspuren am Fels; nur Landschaft, am Rand eine kleine Steinpyramide."
+    },
+    {
+      "file": "Tomb of Homer 130380.jpg",
+      "verdict": "other_site",
+      "note": "Huegelkuppe dicht ueberwachsen mit Stapelsteinen und Trockenmauern, im Vordergrund Buschwerk."
+    },
+    {
+      "file": "Tomb of Homer 130383.jpg",
+      "verdict": "other_site",
+      "note": "Reihe von Trockenmauern und Steinpyramiden mit der Kammer (Deckstein auf Pfeilern) dazwischen, kahle Berge dahinter."
+    }
+  ],
+  "note": "Alle Bilder zeigen denselben beschrifteten Steinkomplex auf einem Meereskap, nicht die Site 'Home Tombs'. Nicht sicher lesbar: keines - alle zwölf wurden klar angezeigt."
+}

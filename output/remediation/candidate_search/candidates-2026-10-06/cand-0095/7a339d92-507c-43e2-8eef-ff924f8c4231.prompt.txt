@@ -1,0 +1,38 @@
+site_id: 7a339d92-507c-43e2-8eef-ff924f8c4231
+name: Muyu Muyu
+country: Peru
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- VM 5303 Muyu Town - Shen Nong pillar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44609fc86f422d9bb6f56a1cc4e05c92
+- VM 5289 Muyu slopes.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c590a9cac80b8a12585ad0161e3cba75
+- VM 5316 Muyu Town.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b53dedfcd79728c2dc4dbae785aa717b
+- VM 5331 Muyu town north.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cdb23608167368ec1fa4395a55e902c4
+- VM 5290 Muyu slopes.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c30e76d659ec7ce1cce125657fb2a32c
+- VM 5315 Muyu Town.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\291d8a2fa9cc2908ff513d7ad1926ecc
+- Muyu-main-street-evening-5236.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\987b16fa9bb5e30ddaca88eb82d5c91d
+- VM 5274 Muyu hills old farm shed.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3a81908ef5b10536609aeaa2f0dc402c
+- VM 5323 Muyu Town Supervisor car.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b30eb21041e8e3688e72df7a7327735b
+- VM 5314 Muyu Town.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da9117a92baa49ae8e05d29d44619d0c
+- VM 5243 Muyu fields.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4118e35448bf27f21fae58e37d9523bd
+- VM 5297 Muyu slopes.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fdc650613a822c43ae0d0fd254bc96e4
+- Franz Valverde, La Guitarra Muyu-Muyu de Bolivia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e9f62b70b0f8fc0d88e548700b8c3eb3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

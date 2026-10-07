@@ -1,0 +1,35 @@
+site_id: 6cf0f76b-6f95-411c-b94b-7a1133429ea6
+name: Drakelow Hillfort
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Skyline across hill fort near Drakelow, Worcestershire - geograph.org.uk - 1755246.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b528539628885219ed1bcdefe5afae4d
+- Drakelow Lane at Drakelow - geograph.org.uk - 6762068.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bfe9e0ccd0fba6ddcae13b150ab8b078
+- Drakelow Lane at Drakelow - geograph.org.uk - 6762083.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec0ff2f6405348ab3abf73662c9b9e34
+- Drakelow Tunnels Open day Tours (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc4ab6b98c9fe919888103b72fb19553
+- Drakelow Tunnels Open day Tours (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8bac7380ab9a21b362c1dfca9ce8b1e9
+- Drakelow Tunnels Open day Tours (5).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aef4015d1e8515ff99205e1ec0b2abb4
+- Cormorants at Drakelow - geograph.org.uk - 5687781.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d8907c8e3c26aa4b8b1500cccad06bc3
+- Drakelow Tunnels Open day Tours (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9690ef98015bb194b43aae87bf50a86d
+- Drakelow Tunnels Open day Tours (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a0dd58be05b028c365bb89d98dd45d26
+- Drakelow Tunnel Entrance (5212588820).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4390bae78fc6d584ead947920a89d5b6
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

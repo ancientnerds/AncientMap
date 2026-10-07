@@ -1,0 +1,36 @@
+site_id: 8423294a-2f28-4eec-87b0-9d55552cf023
+name: Hybla Gereatis
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Monnaie - Bronze, Sicile, Hybla Magna - btv1b10310301c (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ae32a014412442e8ef364816972c59d1
+- Monnaie - Bronze, Hybla Magna, Sicile - btv1b11316116k (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b403d74afe245ec24406c7b0ab56c154
+- Monnaie - Bronze, Hybla Magna, Sicile - btv1b8599865p (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f211c68152bcf4ce0bbf8d892ae1b3f5
+- Monnaie - Bronze, Sicile, Hybla Magna - btv1b10310301c (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\12d5cc802310aa8ebb3e3481fa7691e9
+- Monnaie - Bronze, Hybla Magna, Sicile - btv1b11316116k (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\caadca09c5eb34c80e847806b6d511a7
+- Monnaie - Bronze, Hybla Magna, Sicile - btv1b8599863v (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7301955a86f871523002c1a9b3d5584
+- Monnaie - Bronze, Sicile, Hybla Magna - btv1b10310300x (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0e3abd9c2a897488085891ab54e9bb42
+- Monnaie - Bronze, Hybla Magna, Sicile - btv1b85998648 (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\312938b9a198cca9940ca0941451e49f
+- Monnaie - Bronze, Hybla Magna, Sicile - btv1b85998648 (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\873fdf5317e4f703aa76ce5b6e5315c8
+- Monnaie - Bronze, Sicile, Hybla Magna - btv1b10310300x (2 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\78b9ae84e7415bcffca465fbb9124ba3
+- Monnaie - Bronze, Hybla Magna, Sicile - btv1b8599863v (1 of 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2cd6349c0450d535017711f829d87843
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

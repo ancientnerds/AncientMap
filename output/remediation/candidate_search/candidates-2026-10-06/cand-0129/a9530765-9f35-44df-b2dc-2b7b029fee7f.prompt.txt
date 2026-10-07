@@ -1,0 +1,33 @@
+site_id: a9530765-9f35-44df-b2dc-2b7b029fee7f
+name: Bone Cave, Tasmania
+country: Australia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Bone Cave with Mossy Walls.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\106ba5643c6049cea373d79c4cc16422
+- Big bone cave saltpeter vat.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\286a778df2d3ed5a938ab91d03a35678
+- The Valley Below the Bone Caves.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e2fd8cb665a508df41764021c828397b
+- On the contents of a bone cave in the island of Anguilla (West Indies) BHL23857110.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a17b70c61d088cd9283dcb0a9be18981
+- On the contents of a bone cave in the island of Anguilla (West Indies) BHL23857120.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e6e86ed3870fc3bd041f920d53e863a7
+- On the contents of a bone cave in the island of Anguilla (West Indies) BHL23857063.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1d21e600200fce51f68da9b57b11ffc0
+- On the contents of a bone cave in the island of Anguilla (West Indies) BHL23857112.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d4eda8fbb272a323a5710b250240a8ad
+- On the contents of a bone cave in the island of Anguilla (West Indies) BHL23857108.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e7c92b0951d975b39cfab5df2bab7db2
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

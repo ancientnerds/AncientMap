@@ -1,0 +1,53 @@
+site_id: 36bcd304-458f-4727-95f1-716b73d87676
+name: Xcambo
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Xcambo, Yucatán, ruinas Mayas 2016 - 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce5709f140b142dfb693e03f3b9de589
+- Xcambo, Yucatán, ruinas Mayas 2016 - 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4912c9c55fc56a108db42561f91bb831
+- Xcambo, Yucatán, ruinas Mayas 2016 - 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\41e9e667e162af85e07b4e0e41e1178a
+- Xcambo, Yucatán, ruinas Mayas 2016 - 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\35f41c64ae301753bcfe90872f5d1a4b
+- Xcambo, Yucatán, ruinas Mayas 2016 - 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\70195aaac819fa1ffea6afc069642b46
+- Xcambo, Yucatán, ruinas Mayas 2016 - 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25d41e24ccc75bff9ef912cf85ef2f99
+- Xcambo, Yucatán, ruinas Mayas 2016 - 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2c15cfa846964024e7c1a01de0eed1b2
+- Xcambo, Yucatán, ruinas Mayas 2016 - 10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6f2b605b3eb38c4d65b6a016bc81b2a
+- Xcambo, Yucatán, ruinas Mayas 2016 - 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\79c1c6286ede9fb28fe37eee58eb7695
+- Xcambo, Yucatán, ruinas Mayas 2016 - 09.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\99a65d32064f3a5b92b7acbf695ed2cf
+- Xcambo, Yucatán, ruinas Mayas 2016 - 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6692f5f081576b4146624b5a08e031b1
+- Xcambó.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\251e0de5d65ed27bc3492adde1c5d321
+- Xcambó, Yucatán (22).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\48f90bf410c2315bddbdbd562302285c
+- Xcambó, Yucatán (11).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f23269a51916fe75b6d4ac7500dbc76
+- Xcambó, Yucatán (02).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\642a07f9014d50e301f7f3f9e12587fe
+- Locals work at the ruins site - Xcambó,Yucatan, Mexico.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44899e0866c938ce8b01c21af0cb6a82
+- Maya ruins at Xcambó Yucatan December 2024 - 4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\458984ebdbc0ddcc8d8fa6786941d6f7
+- Xcambó, Yucatán (13).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0ed9dbb647965c373bfd099860beb53
+- Xcambó, Yucatán (26).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d871fa98f6e77c73a3e695abaa3d41d
+- Maya ruins at Xcambó Yucatan December 2024 - 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7679bf381c003a5854ccaf0b35201d30
+- Xcambó, Yucatán (05).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6eaca2a1010561880dee30edcfa16123
+- Maya ruins at Xcambó Yucatan December 2024 - 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4fd4b5b6af602f79e013aedcfa24d54a
+- Maya ruins at Xcambó Yucatan December 2024 - 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\35ca5285088616914a42b8a4df93f5cb
+- Maya ruins at Xcambó Yucatan December 2024 - Black Spiny-tailed Iguana.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6c74c08acb4853a0279b2e8376c83df
+- Maya ruins near Chixculub - Thatch roof church.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6f4f619273188b460ef106838c2ea7de
+- Maya ruins near Chixculub 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2ea8895bdfa6ad6fc2280498b9c21ddd
+- Maya ruins near Chixculub 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c15798ff71ef32116e132e9eda9c0d27
+- Maya ruins near Chixculub 7.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ee8663a751b8ed1261ff39449c555cef
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

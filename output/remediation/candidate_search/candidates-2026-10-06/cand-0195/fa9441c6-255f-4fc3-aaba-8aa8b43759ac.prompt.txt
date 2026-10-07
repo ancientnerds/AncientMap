@@ -1,0 +1,52 @@
+site_id: fa9441c6-255f-4fc3-aaba-8aa8b43759ac
+name: Zelve Open Air Museum
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Zelve Monastery, Cappadocia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c83dc36ae7985795c997024761f4e8cd
+- Zelve Open Air Museum - 2014.10 - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3578de0c90fceefb18aae53ca023d8a8
+- Zelve Monastery 1945.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\096539d98c0726d90d80674babf74676
+- Zelve open air museum - Monolith through the Trees - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77564e15e0416091d83a801c23d6840e
+- Zelve Monastery 1943.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da8bede98d09004c8a9a2eaff6a5cc57
+- Church in Zelve Open Air Museum - 2014.10 - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ed070324858030ef475731ed0132c2a
+- Zelve Monastery 1941.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4a42db53033e6aafa7046217567d5815
+- Zelve Monastery 1942.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5435479e6b9004d1bbdd0e5ed2c66a3c
+- Zelve Monastery 3527.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cf6ddd6acd5dc6364507bb2773e8e1fd
+- Zelve Monastery 1944.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\44f79e7685573a09a2381215bcdf2a7a
+- Zelve Monastery 1940.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db2aa9ea0e80fe1ccd4f65dd95d5733d
+- Zelve Monastery remains 1946.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7667c82bac7c5383d0ffc6727ae93451
+- Zelve Open Air Museum v4.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\432d0be9bf550048927e85d70f1cdd77
+- ZELVE OPEN AIR MUSEUM.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\120203c20c93156b8b292112a4d5b520
+- Zelve Open Air Museum v3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c49416126c5aacf13f09796a06b31e7
+- Zelve Open Air Museum v2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\63e090ab9d0f0f3cf12762566d328417
+- Zelve Open Air Museum v1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76576a5421c0904ce33164f36f602c00
+- 50500 Aktepe-Avanos-Nevşehir, Turkey - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\edc3c768c0168f1c00bba8f0f3c9f24f
+- Capadocia, panorámicas (1998) 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77915bfdb4e66f8bbb9d451fe3f40fb4
+- Cappadocia Zelva Wikimedia Commons 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1ddf00269a913acf72e59a4a80dae2c9
+- Cappadocia Zelva Wikimedia Commons 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e9dc5546707ea1779d76b4e78d1ccf12
+- Cappadocia Zelva Wikimedia Commons 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b32b003ec1fcc4d981011fdb6d8c0ae
+- Cappadocia Zelve (7144826355).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a52b8528c3e8cc787b07dded9a96c262
+- Kapadokya Zelve.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da5d109dff6aa8bbc90658fed3ad73ff
+- Valle di Zelve - panoramio - Geobia7 (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c444cb56a435a4653a4b118524044015
+- Valle di Zelve - panoramio - Geobia7 (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a25d2cb3cf2d80b0c01267fc20139f74
+- Valle di Zelve - panoramio - Geobia7 (4).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4d64844554c855dcb41a7ea590e940d9
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

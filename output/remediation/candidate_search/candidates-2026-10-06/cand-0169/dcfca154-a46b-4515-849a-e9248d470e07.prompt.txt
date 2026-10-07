@@ -1,0 +1,38 @@
+site_id: dcfca154-a46b-4515-849a-e9248d470e07
+name: Trajan Arch
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Arch of Trajan (Timgad).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d34fd79cab8782236e6a117b86bae68b
+- Arch of Trajan (Benevento) 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd267e1b326064b86d78e54fe99f7c79
+- Arch of Trajan (Benevento) 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\31e0bab5701f49d1296de90503c6440e
+- Arch of Trajan (Benevento) 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\13b5fe480b819ffd78326553dcc1711c
+- Arch of Trajan (Benevento) 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\07a79d9c84f8d5a6ff4a324b88c6353c
+- Arch of Trajan (Benevento) 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\689eecf10ae582508732095ff5213a01
+- Makthar arc Trajan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\702d1a7972c3262298c6340edb7d641e
+- Arc de triomphe de Trajan 5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3cb0ea7aeb3869c0c522bb2f662c19d5
+- Arc de triomphe de Trajan 6.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0a97e56b5b06661122e4aff1a950d924
+- Arc de Trajan, Makthar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d225d841db989ce7d7f87d40b14bb453
+- Arc de triomphe de Trajan 3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\387c0f30e7fcaf4326b5965b144c424b
+- Trajan Arch of Timgad.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8d21ea220eca7d0c064564ccc371b168
+- Trajan arch and Fascinum reliefs in Timgad.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f3292bf8986c332406fb21ce4f164110
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

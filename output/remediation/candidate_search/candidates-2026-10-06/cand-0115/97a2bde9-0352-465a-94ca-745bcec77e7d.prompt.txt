@@ -1,0 +1,36 @@
+site_id: 97a2bde9-0352-465a-94ca-745bcec77e7d
+name: Dobrovody
+country: Ukraine
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- DobrovodyUman8.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\86b44e5448fcc8b4b9ec66ddd7292cb5
+- DobrovodyUman7.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ebd2497a33e4f6cb597be81fefd1d41b
+- DobrovodyUman4.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\57306b85c4a6926f4c61098cd0843d41
+- DobrovodyUman2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\963598b6776f4c82c56e14a3fbf5522c
+- DobrovodyUman1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cbf3a5e30cd51e7af137ee09ac48d2f2
+- DobrovodyUman9.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f302799dc873d05065574ef5486757d
+- RevuhaRiver1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\248bac59e847f528614c9a433f1d9f96
+- Капличка Доброводи.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14efdb630f9e590c69606a4c75dd43c4
+- Річка Гніздечна в Добриводах.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9bec302316c9cacdd9ba18c0bf5d8d85
+- Івана Купала, Уманщина.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f3ef6a27a63ea0dffdf9de7bb0bb5e54
+- Пам'ятний хрест на околиці села Доброводи.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e04532a0ab298727dcb5d3e5a53d4de
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

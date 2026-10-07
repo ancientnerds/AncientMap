@@ -1,0 +1,37 @@
+site_id: a2df90a7-df37-483b-b899-f0623f2e61b1
+name: Archaeological Site Temple of Dionysus
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- The ruins of the Later Temple of Dionysus Eleuthereus on March 12, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\61990dacf014dcbaec75b39f7ed486cf
+- Heiligtum des Dionysos (Yria) 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\352ae94407cf3c7d5a87b82f85f17000
+- Yria, Naxos, Dionysus temple, 247840.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8fa43f5aefadf95289fc442af1d38ce7
+- Yria, Naxos, well, 247842.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76bf2e1e84040ca151179c3299959a5f
+- Yria, Naxos, Estiatorion, 247843.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8ded4fbf5197f67e2f10328a81bb054f
+- Yria, Naxos, Dionysus temple 101965.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\60a70b964ef31f974e3b9021956ea3bc
+- Yria, Naxos, Dionysus temple, Altar, 247844.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\75ce3197e5fb8448a93a212d8b85530a
+- Yria, Naxos, Dionysus temple, adyton, hearth, 247841.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e67a8e1b4223e0d44f711152ad430b91
+- Heiligtum des Dionysos (Yria) 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\23b4af641f9d406ea7495d4a2a70e60a
+- The Archaic Temple of Dionysus Elefthereus on September 25, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f477e94e9063747af4c69cd930724ba5
+- Remains of the Archaic Temple of Dionysus Elefthereus on September 25, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1498f520acaeec1b2aa2b122ac03fc7e
+- The Later Temple of Dionysus Eleuthereus on March 12, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce992b274533c45b0d4c10f840c796d6
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

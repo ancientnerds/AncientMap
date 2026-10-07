@@ -1,0 +1,39 @@
+site_id: 3d5ee71b-22cf-4781-9432-e4f275543a7d
+name: Jaw Hill
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Jaw Hill House, Batley Road, Jaw Hill, Kirkhamgate - geograph.org.uk - 8392908.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\74afc0bde1f5a4280997db7049ffa524
+- Paddock, Jaw Hill - geograph.org.uk - 6410468.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\210c0d753d1bf0ef714ec95e83fed1c4
+- Batley Road, Jaw Hill, Kirkhamgate - geograph.org.uk - 8392930.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d091d4e24280077fb1dbf69a3e8da986
+- Houses on Batley Road, Jaw Hill - geograph.org.uk - 6410471.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\63334e3e91e146181c3c00a4b20b349b
+- "Raw milk" sign for Red Lodge Farm, Batley Road, Jaw Hill, Kirkhamgate - geograph.org.uk - 8392931.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da555346bb7d9f990a8b229649a168a9
+- Bus stop on Batley Road, Jaw Hill - geograph.org.uk - 6410472.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1903c1e18bba147ad55cd34db6a90272
+- The entrance to Kirkhamgate Water Treatment Works and Red Lodge Farm, Batley Road, Jaw Hill, Kirkhamgate - geograph.org.uk - 8392934.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ebd74e708bf856d25e7cf87f2b0a1bc5
+- View from Batley Road at Jaw Hill, West Ardsley - geograph.org.uk - 1929813.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\675a21240f2b0e8e9c10cfa1584682de
+- The entrance to Kirkhamgate Water Treatment Works and Red Lodge Farm, Batley Road, Jaw Hill, Kirkhamgate - geograph.org.uk - 8392938.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\93ce001cc6f1986b739f70d132527c45
+- Kirkhamgate Water Treatment Works, Batley Road, Jaw Hill, Kirkhamgate - geograph.org.uk - 8392909.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\888090a1f4d6467c000702793ce61158
+- Caravan site, Batley Road, Kirkhamgate - geograph.org.uk - 8392945.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\30b9c1091a8dc2623cea220bc27af412
+- Footpath heading for Bushy Beck Bridge - geograph.org.uk - 8146894.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a03ed51c1de0d2541b779528e319e212
+- The M1 seen from Batley Road, Kirkhamgate - geograph.org.uk - 8392952.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\60df5d74cdef57313585ecf327d1ed76
+- Three Boroughs Bridge on the Hey Beck - geograph.org.uk - 6819396.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dfdee7919240637e3193375a776fabad
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

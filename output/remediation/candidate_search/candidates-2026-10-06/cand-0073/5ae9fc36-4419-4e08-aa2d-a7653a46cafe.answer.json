@@ -1,0 +1,38 @@
+{
+  "site_id": "5ae9fc36-4419-4e08-aa2d-a7653a46cafe",
+  "answered_by": "mcode-judge-cand-0073",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Panorama Cotahuasi.jpg",
+      "verdict": "region_or_type",
+      "note": "Panorama eines Talbodens mit Siedlung und bewaesserten Feldern zwischen trockenen Bergen; keine Ruinen, Ausgrabungen oder Strukturen der Site sichtbar."
+    },
+    {
+      "file": "Graciela Huinao, 2016 Di-Verso.jpg",
+      "verdict": "other_site",
+      "note": "Innenraumportraet einer Frau mit Brille, die vor einem Mikrofon aus einem Buch vorliest; weder Site noch Landschaft Perus im Bild."
+    },
+    {
+      "file": "Graciela Huinao, 2016 Di-Verso (cropped).jpg",
+      "verdict": "other_site",
+      "note": "Nahaufnahme derselben Frau am Mikrofon, Buch und Jacke sichtbar; Personenportraet ohne jeden Bezug zur Site."
+    },
+    {
+      "file": "Huinao, Graciela -FILSA 2015 11 08 fRF02.JPG",
+      "verdict": "other_site",
+      "note": "Portraet einer Frau mit Mikrofon und dunklem Kleid vor beschriftetem Hintergrund; Personenportraet, keine Site."
+    },
+    {
+      "file": "Huinao, Graciela -FILSA 2015 11 08 fRF01.JPG",
+      "verdict": "other_site",
+      "note": "Portraet derselben Frau mit Mikrofon, Hand am Arm, schwarzer Stoff im Hintergrund; Personenportraet ohne Sitebezug."
+    },
+    {
+      "file": "Loncon, Huinao, Teiguel, Huaiquilaf -FILSA 2015 11 08 fRF01.jpg",
+      "verdict": "other_site",
+      "note": "Pressepanel im Innenraum: vier Personen mit Namensschildern und Mikrofonen vor FILSA-Banner; moderne Szene, keine Site."
+    }
+  ],
+  "note": "Nur Landschaft und Personenbilder gefunden, keine Aufnahme der Site selbst. Ein Bild konnte nicht sicher gelesen werden: keines - alle sechs wurden klar angezeigt."
+}

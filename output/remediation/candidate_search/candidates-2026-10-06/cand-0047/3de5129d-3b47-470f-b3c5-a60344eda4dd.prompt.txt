@@ -1,0 +1,36 @@
+site_id: 3de5129d-3b47-470f-b3c5-a60344eda4dd
+name: Chiesa Paleocristiana di San Lorenzo-
+country: Italy
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Aosta - Chiesa paleocristiana di San Lorenzo - 2023-09-11 15-13-03 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d91c8c6edbf33a6d3b61a9a72c98adf4
+- San Lorenzo in Lucina (Rome) - Interior HDR.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\587030beef663cb30e977d3856bfea19
+- San Lorenzo (Turin) - Dome interior.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\019bd105089ac6e83b19dff660b5ed6e
+- Facade monastery San Lorenzo de El Escorial Spain.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5336c181f6a4e2463f351bfca33c700
+- Glory of Florentine Saints on the dome in San Lorenzo (Florence).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\14bf557ff969d3c20648785d8e149e42
+- St Lawrence church in Aosta (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d1c647c7e8ae1db5c1e1ccaa398e122a
+- St Lawrence church in Aosta (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4a079ac419db3f91e8f7262280791a27
+- Chiesa di San Lorenzo a Vicenza - Interno - Cappella maggiore - Altare.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88f77ce263525d3c883aae3a8aaf69b8
+- Chiesa San Lorenzo Vicenza - Interno - Arca Trevisano Volpe.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2038f5ebd9c192b831bcc681bddb7859
+- Chiesa di San Lorenzo a Vicenza - Interno - Cappella della Madonna.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9a15634e2c8b34ba269007a6736fdad0
+- Chiesa di San Lorenzo - Voltino.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c1e7a73993a965772e0381ec9ef7af1f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,37 @@
+site_id: 79f94fa1-4d25-4181-a0da-3fa7d794bdbc
+name: Corycus, Crete
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Korykos Landburg14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1c64e5b93f05e1a6c13ac088e3c2cb3c
+- Korykos Landburg37.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0a513c4203a2a4a279461343c5b1617
+- Korykos land castle Main castle 3235.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\aeeb727a86a54f74801eec77e23447dd
+- Korykos Zisterne01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88e4395d94f301f5b3e39b1cce6c8cf9
+- Korykos Querschiffbasilika01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76cfa071814f4452d7f87d51e2c52234
+- Korykos Landburg Nordkirche06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d986d5ca1aefaba45d1168702aa5408d
+- Korykos Landburg15.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6a26b373b190136ceb8763731aa4e95c
+- Korykos Grabeskirche01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4de3e7d2056afae7c98af1c9b1831da
+- Korykos Landburg Nordkirche07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6562ebaf61e499ec42dd16ba9e13eb84
+- Korykos Grabeskirche18.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c2c11daf68ad18198ee83b0bfe3ebf7a
+- Korykos Landburg Nordkirche04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\982c3fe6328f1bbc338ad7fda745822d
+- Korykos Landburg Nordkirche03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\32aa6c3f6f9b27eb4d5a707ab4e8aa10
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

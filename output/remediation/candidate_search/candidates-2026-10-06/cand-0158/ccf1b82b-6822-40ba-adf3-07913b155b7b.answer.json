@@ -1,0 +1,24 @@
+{
+  "site_id": "ccf1b82b-6822-40ba-adf3-07913b155b7b",
+  "answered_by": "mcode-judge-cand-0158",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 06.jpg", "verdict": "other_site", "note": "Weiße Barockkirche mit Turm; modernes Kirchengebäude, keine archäologische Site."},
+    {"file": "Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 02.jpg", "verdict": "other_site", "note": "Moderne Backsteinkirche mit Spitzturm; kein antikes Mauerwerk erkennbar."},
+    {"file": "Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 07.jpg", "verdict": "other_site", "note": "Weiße Kirche mit Vorplatz; modernes Bauwerk ohne Ruinencharakter."},
+    {"file": "Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 03.jpg", "verdict": "other_site", "note": "Moderne Backsteinkirche mit Satteldach; keine Ausgrabungsstruktur sichtbar."},
+    {"file": "Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 09.jpg", "verdict": "other_site", "note": "Konkretes altes Dorfhaus mit Fachwerk und Dach; Wohngebäude, keine Site."},
+    {"file": "Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 01.jpg", "verdict": "other_site", "note": "Altes Dorfhaus mit Fensterläden und Hof; modernes Wohngebäude."},
+    {"file": "Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 08.jpg", "verdict": "region_or_type", "note": "Allgemeine Dorfstraße mit Kreuzung und Fahrzeugen; kein archäologisches Merkmal."},
+    {"file": "Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 05.jpg", "verdict": "other_site", "note": "Konkretes gelbes Gebäude mit Fassade und Dach; moderne Ortsbebauung."},
+    {"file": "Privlaka-Привлака (Vukovar-Syrmia County, Croatia) 04.jpg", "verdict": "other_site", "note": "Gelbe Häuserfassade mit Fensterladen; modernes Wohnhaus."},
+    {"file": "Привлака-Privlaka.JPG", "verdict": "other_site", "note": "Barockkirche mit Turm und Friedhofsmauer; kirchliches Bauwerk."},
+    {"file": "Privlaka Slawonien.jpg", "verdict": "region_or_type", "note": "Karte mit markiertem Gebiet in Slowonien; Kartenansicht statt Foto der Site."},
+    {"file": "Privlaka - panoramio (1).jpg", "verdict": "region_or_type", "note": "Allgemeine Dorf- und Straßenansicht; kein archäologisches Merkmal erkennbar."},
+    {"file": "Day of the Uprising of the People of Croatia (Srb uprising) 30th Anniversary Monument in Privlaka 01.jpg", "verdict": "other_site", "note": "Moderner Gedenkstein in Dorfansicht; keine antike Struktur."},
+    {"file": "Day of the Uprising of the People of Croatia (Srb uprising) 30th Anniversary Monument in Privlaka 02.jpg", "verdict": "other_site", "note": "Gedenkstein mit Inschrift und Figur; modernes Denkmal."},
+    {"file": "Day of the Uprising of the People of Croatia (Srb uprising) 30th Anniversary Monument in Privlaka 03.jpg", "verdict": "other_site", "note": "Reliefseite des Gedenksteins; moderne Bildhauerarbeit ohne Site-Bezug."},
+    {"file": "Day of the Uprising of the People of Croatia (Srb uprising) 30th Anniversary Monument in Privlaka 04.jpg", "verdict": "other_site", "note": "Reliefseite vor einem Wohnhaus; moderne Szene."}
+  ],
+  "note": ""
+}

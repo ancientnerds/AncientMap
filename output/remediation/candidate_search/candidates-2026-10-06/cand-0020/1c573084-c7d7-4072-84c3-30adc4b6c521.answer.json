@@ -1,0 +1,18 @@
+{"site_id": "1c573084-c7d7-4072-84c3-30adc4b6c521",
+ "answered_by": "mcode-judge-cand-0020",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Rosia-Sureanu.JPG",
+   "verdict": "region_or_type",
+   "note": "Kalksteinwand einer bewaldeten Schlucht mit Himmel und Straeuchern — reine Landschaft, keine Spur von Hoehlen, Festung oder Ausgrabungen."},
+  {"file": "RO HD Ținutul Pădurenilor 1.JPG",
+   "verdict": "region_or_type",
+   "note": "Gruenes Wiesental mit bewaldeten Huegeln und einem Bach im Tal — Landschaftsansicht, keine Mauer oder Struktur erkennbar."},
+  {"file": "Vegetatie Sureanu.JPG",
+   "verdict": "region_or_type",
+   "note": "Wiesenbluetten und Graeser im Vordergrund, bewaldete Kalkrippen dahinter — Vegetationsaufnahme ohne Site-Bezug."},
+  {"file": "Cheile Rosia-Muntii Sureanu.JPG",
+   "verdict": "region_or_type",
+   "note": "Blick aus einer Hoehlenoeffnung auf eine bewaldete Kalkwand und Himmel — Karstlandschaft, keine Struktur der Site."}
+ ],
+ "note": ""}

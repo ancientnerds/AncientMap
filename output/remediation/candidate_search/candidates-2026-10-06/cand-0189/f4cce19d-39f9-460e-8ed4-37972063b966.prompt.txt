@@ -1,0 +1,45 @@
+site_id: f4cce19d-39f9-460e-8ed4-37972063b966
+name: Temple of Apollo
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Sunrise apollo side.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8b136a1db6546ecb258428ca41b23d29
+- Temple of Apollo - Tempio di Apollo, Pompeii (5139).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76d0dc8184fdcd97523006efee081ea4
+- Side Apollo Temple Portrait.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\623aae26199135f2b2c7a1266be91ed1
+- Temple Apollo Side Boat.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8646ce9205241bb5b53100268d99ecd3
+- Temple Apollo Side Wide.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d0edd7a27b0d65335011aaff6d95afb
+- Temple of Apollo (Pompeii) 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0919400877f1257ef46eb2ecf81356ff
+- Temple of Apollo (Pompeii) 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d303e421ec71b65e0aef2e858e2137ad
+- Temple of Apollo (Pompeii) 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e19b8e36f60527ff18fb4ead1b802d3
+- Korinth BW 2017-10-10 10-55-28.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\01a1c08ca93fe2a1ffb8ee5aa226aa50
+- Temple of Apollo (Pompeii) 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8351fe7927d2397b8ca18acbf077e4e8
+- Temple of Apollo, Cyrene (50144963856).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff03cd512725a60619ac84502bf5bd6f
+- Cyrene Apollo temple.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\45d213c679a71af2b50a8f5704888f9a
+- Temple of Apollo, Rhodes 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\59f94747c37db6510d6d60593f269e31
+- Temple of Apollo, Didyma 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\faeabcff883a6b5e48d6a9b3dbe9d297
+- Temple of Apollo, Didyma - Columns 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f5f20693d93c2b6b530155425fc3f540
+- Temple of Apollo, Didyma 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd7a5617aaaf2c52a08fa7e9db9862d6
+- Temple of Apollo Aegina Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e0123f702cf16301d9f2b288249d6d01
+- Temple of Apollo in Delphi - columns 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ad3124c9c3cc21301c2ee9ecbcb3cebf
+- Temple of Apollo in Delphi - columns 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd8e00e9abd5aababe8430c1aad38c3b
+- Temple of Apollo, Didyma - Columns 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\792da2ae3a54479889e4a144f610e7ff
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

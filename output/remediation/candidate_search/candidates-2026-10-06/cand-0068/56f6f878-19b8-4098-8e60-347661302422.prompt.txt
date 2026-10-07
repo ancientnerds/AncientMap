@@ -1,0 +1,46 @@
+site_id: 56f6f878-19b8-4098-8e60-347661302422
+name: Kinal
+country: Guatemala
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Kin Town Office.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ebcb9555fcedcdda3864b890f445c716
+- JKT48 Kinal (24164307780).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\12e1e63f736f9b317bf5e8bb08f833f4
+- JKT48 Kinal (24164323120).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bdaa9809461246ff86f432134b8a869b
+- Devi Kinal Putri (22959712684).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f6e31113cb9849843f277dcb2db0815
+- Devi Kinal Putri (23479379482).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0fe34257ff4f7d865e7585fdb900afb4
+- Devi Kinal Putri (22960778003).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c6652806bcfe9642a0d392e6b1d1f3b2
+- Devi Kinal Putri (23219790429).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cccf4e3eed9dee30f18ec04482d8a3ce
+- Devi Kinal Putri (22959251484).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\767dc39ddc28a3b51e72c1ff278fb96a
+- Devi Kinal Putri (23292024220).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\91b52b2bb22c6d12b21db252aff70c62
+- Devi Kinal Putri (22959344414).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bd2edf0d50d3d6d29d48e21cf459d553
+- Devi Kinal Putri (23561873266).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1ba0d259c0684d591dccb7247ef76d0c
+- JKT48 Kinal (24377440861).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\81547936409322003f4e68129c3c38b0
+- JKT48 Devi Kinal Putri (22645433068).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9f6fbceb8e45c29e0010a3e17d229482
+- Jessica Veranda & Devi Kinal Putrri (23505595391).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1a5a0c1e882084d1d8c9b05b030f5d3a
+- Devi Kinal Putri - 22671788229.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d4c885d82d8f2ce41e5c66454c210d1d
+- Jessica Veranda & Devi Kinal Putrri (23561436726).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3edcac7128e6fd3e8a79687c20a5f3ed
+- JKT48 Devi Kinal Putri (23050626762).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a187b6319b6335c30d0a78b67094efb0
+- Jessica Veranda & Devi Kinal Putrri (23291926290).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\65b7c80064d87d0367c9f81522187e76
+- JKT48 Devi Kinal Putri (22645875898).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\193c808aec35c9e855be6f0d740628d9
+- Devi kinal putri jkt48 IMG 1074 (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0df32da3a4d1f9bbc7d3c0042f50c73
+- Jessica Veranda & Devi Kinal Putrri (23478837942).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0197b7121581d9836ecb39df0ce2eb21
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

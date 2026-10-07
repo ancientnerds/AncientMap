@@ -1,0 +1,37 @@
+site_id: 248be59c-06f7-453b-9062-9e254c9da942
+name: Site Archéologique de Glanum
+country: France
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Glanum-Voie romaine-19710810.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3303cba6d283b03d86059b0fa4340132
+- Glanum-Temple-19710810.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a627839fd88988bfe56640f1ef45c84f
+- St Remy Glanum vue7.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f1a43e5ab691f3e0d7aea29d33abaca9
+- Glanum escalier source sacrée.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\42e30dfeb5683e5570c27155bd09ccdf
+- St Remy Glanum vue17.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ce9ba783da72cd1a55b3126fbd5a61e
+- St Remy Glanum vue10.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6c5d23598555cb3d9ddc51b6de3e8890
+- St Remy Glanum vue8.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\623b4b4972f5aa84b063444f1252fc0d
+- St Remy Glanum vue3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec87d48201c897408d16de4bf0d7fc23
+- 1-Site de Glanum Arrêté 27-07-1998.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bbb6be66413349ddc15621f3eccf8178
+- Glanum entrée sud.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7bbf74fa6d717e37bb07e3726dfab3d9
+- GLA - Archaeological site of Glanum, Saint-Remy-de-Provence, France, 2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\223466260eb4e07382f9ea80563f58a1
+- St Remy Glanum rue.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9f915282fcb5fdd242cea908c9970f1e
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

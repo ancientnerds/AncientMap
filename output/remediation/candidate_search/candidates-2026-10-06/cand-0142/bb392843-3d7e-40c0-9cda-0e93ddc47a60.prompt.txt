@@ -1,0 +1,36 @@
+site_id: bb392843-3d7e-40c0-9cda-0e93ddc47a60
+name: Apollo Temple, Portara
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Temple of Apollo, Chora, Naxos, Greece julesvernex2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af02445562ee2d7f17e34a6bc3c6fb17
+- Temple of Apollo, Chora, Naxos, Greece julesvernex2-2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fa619ca2bc87e2c7137147ddc73e251f
+- Temple of Apollo, Chora, Naxos, Greece julesvernex2-3.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7a41ec67f1936b9c06258c02d1b6c824
+- Naxos Νάξος Chora evening 2020-08-20 09 sunset Portara Πορτάρα.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\639e176f37fbe38935c6cff19cc4a865
+- Portara Naxos 31.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8fd5cac51531ac0d5ecda478762714f
+- Gate of Temple of Apollo, Palatia, Naxos Town, 530 BC, 13M056.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8d668e9f7498bda1b98e7079329ddb78
+- Temple of Apollo, Palatia, Naxos, 530 BC, 144171.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9356e4cff2b1e4bbd0954bcb3f5bb27c
+- "Die Geschichte der Portara reicht bis in das 6. Jahrhundert v. Chr. zurück".jpg 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ccbf84e682b4ab53c7363d57aeb8c16e
+- "Die Geschichte der Portara reicht bis in das 6. Jahrhundert v. Chr. zurück".jpg 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a5230c4fe54dcbae47ea815d7e848355
+- Portara, Naxos, Greece.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f00f767f9c3f6d2058b2fef4003670b4
+- Temple of Delian Apollo, 530 BC, Naxos, 010, 119631.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\610a5c030f02cce043a29a94421fd646
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

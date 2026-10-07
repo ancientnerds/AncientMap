@@ -1,0 +1,43 @@
+site_id: bdd92d68-2715-4dfe-a956-e2f3a5b77465
+name: La Milpa
+country: Belize
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Chapulín de la milpa (Sphenarium purpurascens) en Guanajuato.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4d593fb6f84bedce0fc74e1d825d46e
+- Chapulín de la milpa (Sphenarium purpurascens).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\13accad82d0b06ae926ec8edad4af83e
+- Por la milpa.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6235661896bec1c68b0e2d68b97fbcb3
+- Inauguración de FARO Milpa Alta - Miacatlán -i---i- (32750549372).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bfb990b33adcb33c72c3d43493fccf0a
+- Inauguración de FARO Milpa Alta - Miacatlán -i---i- (32750549382).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2dd96a53db39f50aad067585d19000b5
+- Iglesia de la Azunción, Milpa Alta.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ac704d10fdf4ae90884e447c6538cd4e
+- Inauguración de FARO Milpa Alta - Miacatlán -i---i- (32750559412).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\905bca410137d6571b8b5ac2ec33bd1f
+- Milpa seca.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\455cf7b3217de615c3907e6980dc8cb6
+- Entrada Milpa Alta.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0414129c33607117125886f6a9e01bec
+- Inauguración de FARO Milpa Alta - Miacatlán -i---i- (32523974730).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1284577de29e3f1fbeb6e082b6531e3b
+- Camino hacia la milpa.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e97daee7055baf740f0c04ae1e52c44e
+- Maices en la milpa.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\23b988c492442f3f296d3a8688eb8dc2
+- Chapulín de la milpa (Sphenarium purpurascens), close-up.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\83f3083381b17c70737238d95b5e9fe0
+- Schéma de principe de la milpa, la culture associée, maïs haricot citrouille.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\66982f0620937c1eb511caa8dfe6be1f
+- Sopa de la milpa Caldillo verde con granos de elote, quelites,chips de tortilla y quesillo (42113796875).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cc91446f491e41f7293d7b9c371c927c
+- Mating - Sphenarium purpurascens (chapulín de la milpa).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a1e337a76a5254906a610e44539ffbf7
+- En la milpa.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\64b2837fdaf33a0ea12992be4ad3943f
+- Sphenarium purpurascens (chapulín de la milpa).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1370eac66ec8a458140ec8b776b241ef
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

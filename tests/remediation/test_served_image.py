@@ -27,10 +27,14 @@ import opus_handoff as OH  # noqa: E402
 import research_web  # noqa: E402
 from gallery_audit import chunk_writer as CW  # noqa: E402
 from served_image import commons as C  # noqa: E402
+from served_image import mcode_driver as D  # noqa: E402
+from served_image import no_image_report as NR  # noqa: E402
 from served_image import plan as PL  # noqa: E402
 from served_image import precheck as PC  # noqa: E402
 from served_image import state as ST  # noqa: E402
 from served_image import vision as V  # noqa: E402
+
+from pipeline.studio import mcode  # noqa: E402
 
 THASOS = "33d2d754-e50a-4305-beff-87d2ad2c0227"
 HABU = "0088c7e5-4a78-4b89-945d-3d5c787818e5"
@@ -621,7 +625,7 @@ class TestTheAnswers:
     def test_the_frozen_prompts(self) -> None:
         """Changing a prompt makes every answer stale: re-pin only with a new prompt id."""
         assert V.CHECK_PROMPT_ID == "served-check-v1"
-        assert V.REPLACE_PROMPT_ID == "served-replace-v1"
+        assert V.REPLACE_PROMPT_ID == "served-replace-v2"
         assert V.prompt_sha256(V.CHECK_PROMPT) == CHECK_PIN
         assert V.prompt_sha256(V.REPLACE_PROMPT) == REPLACE_PIN
 
@@ -688,7 +692,10 @@ class TestTheAnswers:
 
 
 CHECK_PIN = "a96ac7880303e3855c634ee5afb006f23eb04e215029f299d79f9bb61d25497b"
-REPLACE_PIN = "65e0c88b131f8f4ffbdaae491fc0d7209dcce13d4ec127d22edcf8718a9079b7"
+#: v1 (65e0c88b...) asked only about a served image the check rejected; the 2026-09-30 run's
+#: answers and their recorded prompt hashes carry it, in that run's own files. v2 adds the opening
+#: for a site that serves no image, where there is no verdict to report and no gallery to pick.
+REPLACE_PIN = "a570ebaa2ba32e03fd41caf6ed4d7fb2b93b715d2f7dd9037806b85f4adada86"
 
 
 # ================================================================================ the stages
@@ -729,6 +736,14 @@ GATE_INFO = {
     "title": "Thasos gate.jpg",
     "url": "https://upload.wikimedia.org/wikipedia/commons/1/12/Thasos_gate.jpg",
     "render_url": "https://thumb.wikimedia.org/1280px-Thasos_gate.jpg",
+    "mime": "image/jpeg",
+}
+#: A Commons file an item claims as its image (P18) for a site that serves none.
+RUIN_INFO = {
+    "status": C.OK,
+    "title": "Ruin.jpg",
+    "url": "https://upload.wikimedia.org/wikipedia/commons/9/9a/Ruin.jpg",
+    "render_url": "https://thumb.wikimedia.org/1280px-Ruin.jpg",
     "mime": "image/jpeg",
 }
 
@@ -800,15 +815,163 @@ class TestTheStages:
     def _full(
         self, tmp_path: Path, verdicts: dict[str, str], model: str = OH.OPUS_MODEL, **setup: Any
     ) -> tuple[Path, Any]:
-        run, handoff, pictures = _setup(
-            tmp_path, gone={"https://example.org/relief.jpg": "404"}, **setup
-        )
+        return _full_run(tmp_path, verdicts, model, **setup)
+
+    def test_a_site_that_serves_nothing_is_asked_about_the_files_its_item_claims(
+        self, tmp_path: Path
+    ) -> None:
+        """A site with no image is never in the check stage, so without this its Wikidata item's
+        P18/P373 files are never looked at - the gap that leaves an addressable site unserved."""
+        run, pictures = self._full(tmp_path, {HABU: V.DEPICTS, THASOS: V.DEPICTS, BARE: V.DEPICTS})
+        _claim(pictures, tmp_path)
         state = ST.load_read(run / "READ.json")
         pre = PC.load_prechecks(run / "PRECHECK.jsonl")
-        V.export_check(run, handoff, state, pre, pictures)
-        _answer_all(handoff, V.STAGE_CHECK, {sid: _check(v) for sid, v in verdicts.items()}, model)
-        V.import_stage(run, V.STAGE_CHECK)
-        return run, pictures
+        got = V.export_replace(
+            run, tmp_path / "ho", state, pre, PC.load_harvest(tmp_path / "harvest"), pictures
+        )
+        assert got["claimed"] == 1 and got["questions"] == 1
+        [question] = V.read_jsonl(run / V.QUESTIONS_REPLACE)
+        assert question["site_id"] == NOTHING
+        assert [c["label"] for c in question["candidates"]] == ["W1"]
+        assert question["candidates"][0]["url"] == RUIN_INFO["render_url"]
+        # the prompt must not state a verdict nobody gave
+        prompt = V.ReplaceQuestion.from_json(question).prompt()
+        assert "serves no image" in prompt and "was judged" not in prompt
+
+    def test_a_site_that_serves_nothing_and_claims_nothing_is_not_asked(
+        self, tmp_path: Path
+    ) -> None:
+        run, pictures = self._full(tmp_path, {HABU: V.DEPICTS, THASOS: V.DEPICTS, BARE: V.DEPICTS})
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        got = V.export_replace(
+            run, tmp_path / "ho", state, pre, PC.load_harvest(tmp_path / "harvest"), pictures
+        )
+        assert got["claimed"] == 0 and got["questions"] == 0
+
+    def test_the_plan_refuses_while_a_claimed_site_is_unanswered(self, tmp_path: Path) -> None:
+        run, pictures = self._full(tmp_path, {HABU: V.DEPICTS, THASOS: V.DEPICTS, BARE: V.DEPICTS})
+        _claim(pictures, tmp_path)
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        V.export_replace(
+            run, tmp_path / "ho", state, pre, PC.load_harvest(tmp_path / "harvest"), pictures
+        )
+        with pytest.raises(ST.StateError, match="no replacement answer"):
+            PL.write_plan(run)
+
+    def test_a_claimed_file_reaches_the_plan_through_the_whole_stage(self, tmp_path: Path) -> None:
+        run, pictures = self._full(tmp_path, {HABU: V.DEPICTS, THASOS: V.DEPICTS, BARE: V.DEPICTS})
+        _claim(pictures, tmp_path)
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        handoff = tmp_path / "handoff-replace"
+        V.export_replace(run, handoff, state, pre, PC.load_harvest(tmp_path / "harvest"), pictures)
+        _answer_all(
+            handoff,
+            V.STAGE_REPLACE,
+            {
+                NOTHING: json.dumps(
+                    {"candidates": {"W1": "depicts"}, "pick": "W1", "basis": "the ruin"}
+                )
+            },
+        )
+        V.import_stage(run, V.STAGE_REPLACE)
+        PL.write_plan(run)
+        expected = {
+            e["site_id"]: e
+            for e in map(json.loads, (run / "chunks" / "EXPECTED.jsonl").read_text().splitlines())
+        }
+        assert expected[NOTHING] == {
+            "site_id": NOTHING,
+            "outcome": "claimed",
+            "served_image_id": None,
+            "thumbnail_url": RUIN_INFO["render_url"],
+            "chunk": 1,
+        }
+        # the site has no image row, so no gallery row moves
+        [row] = V.read_jsonl(run / V.REPLACE)
+        assert row["site_id"] == NOTHING and row["pick"] == "W1"
+
+    def test_the_brief_of_a_claim_batch_names_the_model_and_the_case(self, tmp_path: Path) -> None:
+        run, pictures = self._full(tmp_path, {HABU: V.DEPICTS, THASOS: V.DEPICTS, BARE: V.DEPICTS})
+        _claim(pictures, tmp_path)
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        handoff = tmp_path / "handoff-replace"
+        V.export_replace(run, handoff, state, pre, PC.load_harvest(tmp_path / "harvest"), pictures)
+        text = V.brief(run, handoff, "replace-001")
+        assert f"running as {V.ANSWER_MODEL}" in text
+        assert "a site that serves no image at all" in text
+        assert "You are Opus agent" not in text
+
+    def test_the_claim_export_stands_alone_without_the_check_stage(self, tmp_path: Path) -> None:
+        """A run that only closes the goal's gap needs no check stage: the 2026-09-30 run already
+        judged the served images and is in production. The record must say so, and the plan must
+        leave every site that serves an image exactly as it is."""
+        run, _, pictures = _setup(tmp_path, gone={"https://example.org/relief.jpg": "404"})
+        _claim(pictures, tmp_path)
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        got = V.export_replace(
+            run,
+            tmp_path / "ho",
+            state,
+            pre,
+            PC.load_harvest(tmp_path / "harvest"),
+            pictures,
+            claimed_only=True,
+        )
+        assert got == {
+            "failed": 0,
+            "claimed": 1,
+            "questions": 1,
+            "without_candidates": 0,
+            "batches": 1,
+        }
+        record = json.loads((run / V.EXPORT_REPLACE).read_text(encoding="utf-8"))
+        assert record["claimed_only"] is True and record["check_sha256"] is None
+        handoff = tmp_path / "ho"
+        _answer_all(
+            handoff,
+            V.STAGE_REPLACE,
+            {
+                NOTHING: json.dumps(
+                    {"candidates": {"W1": "depicts"}, "pick": "W1", "basis": "the ruin"}
+                )
+            },
+        )
+        V.import_stage(run, V.STAGE_REPLACE)
+        PL.write_plan(run)
+        [row] = V.read_jsonl(run / V.REPLACE)
+        assert row["site_id"] == NOTHING and row["prompt_sha256"] == V.prompt_sha256(
+            V.ReplaceQuestion.from_json([*V.read_jsonl(run / V.QUESTIONS_REPLACE)][0]).prompt()
+        )
+        # every site that serves an image is left exactly as it is, and says so
+        plans, summary = PL.build(run)
+        assert [p.site_id for p in plans if p.changes] == [NOTHING]
+        assert all(p.outcome == PL.UNJUDGED for p in plans if p.site_id != NOTHING)
+        assert summary["population"] == V.CLAIMED_ONLY
+
+    def test_the_claim_export_is_refused_while_a_check_failed(self, tmp_path: Path) -> None:
+        """A run whose served images were judged and failed must export the failures too - a
+        claim-only export would plan those sites as "no image" and empty them."""
+        run, pictures = self._full(
+            tmp_path, {HABU: V.DEPICTS, THASOS: V.REGION_OR_TYPE, BARE: V.DEPICTS}
+        )
+        _claim(pictures, tmp_path)
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        with pytest.raises(ST.StateError, match="export the failed images too"):
+            V.export_replace(
+                run,
+                tmp_path / "ho",
+                state,
+                pre,
+                PC.load_harvest(tmp_path / "harvest"),
+                pictures,
+                claimed_only=True,
+            )
 
     def test_the_import_records_every_answer_and_the_unfetchable(self, tmp_path: Path) -> None:
         run, _ = self._full(
@@ -923,8 +1086,9 @@ class TestTheStages:
         text = V.brief(run, handoff, "check-001")
         assert "--stage served-check" in text and "Read tool" in text and "4 question(s)" in text
         assert (
-            "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in text
-        )  # an agent names the model it runs as (owner decision 2026-10-01)
+            "--model <the model id you run as: MiniMax-M3.1-Flash-Preview>" in text
+        )  # an agent names the model it runs as (owner decisions 2026-10-01 and 2026-10-03)
+        assert "You are Opus agent" not in text  # the answering agents are MiniMax ones now
 
     def test_the_candidates_of_a_failed_image(self, tmp_path: Path) -> None:
         """G: the other live rows in page order; W: P18 and P373 files the gallery lacks, each once,
@@ -1079,7 +1243,13 @@ class TestTheStages:
         )
         # Thasos: G1, G2, W1; Klopot: no other row, no P18/P373 file -> no candidates;
         # the hotlink site: no item -> no candidates
-        assert got == {"failed": 3, "questions": 1, "without_candidates": 2, "batches": 1}
+        assert got == {
+            "failed": 3,
+            "claimed": 0,
+            "questions": 1,
+            "without_candidates": 2,
+            "batches": 1,
+        }
         answer = json.dumps(
             {
                 "candidates": {"G1": "depicts", "G2": "other_site", "W1": "depicts"},
@@ -1125,6 +1295,18 @@ def _setup_commons() -> FakeCommons:
 
 
 # ================================================================================ the plan
+def _claim(pictures: Any, root: Path, file: str = "Ruin.jpg") -> None:
+    """Give the site that serves nothing (Q3) an image claim, and Commons an answer about it.
+
+    The fixture's Q3 names no file, which is the 688+307 sites' measured case. The goal's
+    population is the opposite: a site with no image whose own Wikidata item names one.
+    """
+    (root / "harvest" / "entities" / "Q3.json").write_text(
+        json.dumps(entity("Q3", p18=[file])), encoding="utf-8"
+    )
+    pictures.commons.info[file] = RUIN_INFO | {"title": file}
+
+
 def _pre(sid: str, status: str, served: ST.Served) -> dict[str, Any]:
     return {
         "site_id": sid,
@@ -1299,6 +1481,101 @@ class TestThePlan:
             (BARE, "thumbnail_url", None),
         }
 
+    def test_a_claimed_file_serves_a_site_that_had_no_image(self, tmp_path: Path) -> None:
+        """A site with no image row can only serve a Commons file: the popup and the detail page
+        read `thumbnail_url` first, so the claimed file's rendering is the whole write."""
+        state = _thasos_state(tmp_path)
+        shown = [
+            {
+                "label": "W1",
+                "kind": V.COMMONS_CANDIDATE,
+                "image_id": None,
+                "file": "Ruin.jpg",
+                "url": RUIN_INFO["render_url"],
+            }
+        ]
+        plan = PL.decide_site(
+            state.sites[NOTHING],
+            state.rows.get(NOTHING, ()),
+            _pre(NOTHING, PC.NO_IMAGE, ST.served_of(state.sites[NOTHING], ())),
+            None,
+            _replaced("W1", {"W1": "depicts"}, shown),
+            population=V.ALL,
+        )  # fmt: skip
+        [change] = plan.changes
+        assert (change.column, change.old_value, change.new_value, change.rule) == (
+            "thumbnail_url",
+            None,
+            RUIN_INFO["render_url"],
+            PL.RULE_THUMB,
+        )
+        assert plan.outcome == PL.CLAIMED and not plan.may_empty
+        assert change.evidence[-1]["verdict"] == V.DEPICTS
+        CW.validate_change(change)
+
+    def test_a_claimed_site_nothing_depicts_keeps_serving_no_image(self, tmp_path: Path) -> None:
+        state = _thasos_state(tmp_path)
+        shown = [
+            {
+                "label": "W1",
+                "kind": V.COMMONS_CANDIDATE,
+                "image_id": None,
+                "file": "Ruin.jpg",
+                "url": RUIN_INFO["render_url"],
+            }
+        ]
+        plan = PL.decide_site(
+            state.sites[NOTHING],
+            state.rows.get(NOTHING, ()),
+            _pre(NOTHING, PC.NO_IMAGE, ST.served_of(state.sites[NOTHING], ())),
+            None,
+            _replaced(None, {"W1": "region_or_type"}, shown),
+            population=V.ALL,
+        )  # fmt: skip
+        assert plan.outcome == PL.NOTHING and plan.changes == [] and plan.thumbnail_url is None
+
+    def test_a_claimed_site_the_export_asked_and_nobody_answered_is_refused(
+        self, tmp_path: Path
+    ) -> None:
+        state = _thasos_state(tmp_path)
+        with pytest.raises(ST.StateError, match="no replacement answer"):
+            PL.decide_site(
+                state.sites[NOTHING],
+                state.rows.get(NOTHING, ()),
+                _pre(NOTHING, PC.NO_IMAGE, ST.served_of(state.sites[NOTHING], ())),
+                None,
+                None,
+                population=V.ALL,
+                asked=True,
+            )  # fmt: skip
+
+    def test_a_site_with_no_image_row_cannot_pick_a_gallery_file(self, tmp_path: Path) -> None:
+        state = _thasos_state(tmp_path)
+        shown = [
+            {"label": "G1", "kind": V.GALLERY_CANDIDATE, "image_id": 2, "file": "a", "url": None}
+        ]
+        with pytest.raises(ST.StateError, match="serves no gallery file"):
+            PL.decide_site(
+                state.sites[NOTHING],
+                state.rows.get(NOTHING, ()),
+                _pre(NOTHING, PC.NO_IMAGE, ST.served_of(state.sites[NOTHING], ())),
+                None,
+                _replaced("G1", {"G1": "depicts"}, shown),
+                population=V.ALL,
+            )  # fmt: skip
+
+    def test_a_site_that_claims_nothing_is_left_alone(self, tmp_path: Path) -> None:
+        state = _thasos_state(tmp_path)
+        plan = PL.decide_site(
+            state.sites[NOTHING],
+            state.rows.get(NOTHING, ()),
+            _pre(NOTHING, PC.NO_IMAGE, ST.served_of(state.sites[NOTHING], ())),
+            None,
+            None,
+            population=V.ALL,
+        )  # fmt: skip
+        assert plan.outcome == PL.NOTHING and plan.changes == []
+
     def test_a_live_row_nobody_judged_is_never_excluded(self, tmp_path: Path) -> None:
         state = _thasos_state(tmp_path)
         served = ST.served_of(state.sites[THASOS], state.rows[THASOS])
@@ -1314,6 +1591,111 @@ class TestThePlan:
         )
         with pytest.raises(ST.StateError, match="not a run directory"):
             PL.lane_for(tmp_path / "run")
+
+
+def _full_run(
+    tmp_path: Path, verdicts: dict[str, str], model: str = OH.OPUS_MODEL, **setup: Any
+) -> tuple[Path, Any]:
+    """A run through the check stage: the read, the pre-check, the export, the answers, the import."""
+    run, handoff, pictures = _setup(
+        tmp_path, gone={"https://example.org/relief.jpg": "404"}, **setup
+    )
+    state = ST.load_read(run / "READ.json")
+    pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+    V.export_check(run, handoff, state, pre, pictures)
+    _answer_all(handoff, V.STAGE_CHECK, {sid: _check(v) for sid, v in verdicts.items()}, model)
+    V.import_stage(run, V.STAGE_CHECK)
+    return run, pictures
+
+
+# ================================================================================== the driver
+class TestTheMcodeDriver:
+    """One `mcode exec` run per question. No run here: the run is the CLI's, and this tests what
+    the driver does with what a run produced - the prompt, the stamp, the record, the skip."""
+
+    def _handoff(self, tmp_path: Path) -> tuple[Path, Path]:
+        """A run whose check rejected one served image, so the replacement stage has one question."""
+        run, pictures = _full_run(
+            tmp_path, {HABU: V.DEPICTS, THASOS: V.REGION_OR_TYPE, BARE: V.DEPICTS}
+        )
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        handoff = tmp_path / "ho"
+        V.export_replace(run, handoff, state, pre, PC.load_harvest(tmp_path / "harvest"), pictures)
+        return run, handoff
+
+    def _answer(self, job: Any, verdicts: dict[str, str], pick: str | None) -> str:
+        return json.dumps({"candidates": verdicts, "pick": pick, "basis": "the gate itself"})
+
+    def test_the_prompt_names_the_question_the_pictures_and_the_answer_file(
+        self, tmp_path: Path
+    ) -> None:
+        run, handoff = self._handoff(tmp_path)
+        [job] = D.jobs(run, handoff)
+        text = D.answer_prompt(job, D.check_command(run, handoff, job))
+        assert job.prompt_path.as_posix() in text
+        assert job.answer_path.as_posix() in text
+        assert f"run as {V.ANSWER_MODEL}" in text
+        assert "check-answer" in text and job.label in text
+        assert not job.answer_path.exists()
+        # the answer belongs beside the handoff, never inside the repository
+        assert D.ROOT not in job.answer_path.parents
+
+    def test_a_model_the_handoff_does_not_know_is_refused(self) -> None:
+        with pytest.raises(ST.StateError, match="no key of opus_handoff.ANSWER_MODELS"):
+            D.stamp_of("gpt-5.2")
+
+    def test_the_answer_is_recorded_with_the_stamp_of_the_model_that_wrote_it(
+        self, tmp_path: Path
+    ) -> None:
+        run, handoff = self._handoff(tmp_path)
+        [job] = D.jobs(run, handoff)
+        gallery = [c.label for c in job.question.candidates if c.kind == V.GALLERY_CANDIDATE]
+        given = {c.label: V.OTHER_SITE for c in job.question.candidates}
+        given[gallery[0]] = V.DEPICTS
+        got = D.record(job, handoff, self._answer(job, given, gallery[0]), mcode.MODEL)
+        assert got == {"label": job.label, "wrote": True, "pick": gallery[0]}
+        answer = OH.read_answer(
+            handoff,
+            batch_id=job.batch_id,
+            stage=job.stage,
+            label=job.label,
+            prompt=job.prompt_path.read_bytes().decode("utf-8"),
+        )
+        assert answer.model == OH.MINIMAX_MODEL
+        assert answer.answered_by == f"mcode/{job.label[:8]}"
+        # the question is answered now, so a second run does not ask it again
+        assert D.jobs(run, handoff) == []
+        assert D.jobs(run, handoff, labels=[job.label]) == []
+
+    def test_an_answer_the_lane_refuses_is_not_recorded(self, tmp_path: Path) -> None:
+        run, handoff = self._handoff(tmp_path)
+        [job] = D.jobs(run, handoff)
+        labels = [c.label for c in job.question.candidates]
+        with pytest.raises(V.AnswerError):
+            D.record(
+                job,
+                handoff,
+                self._answer(job, dict.fromkeys(labels, "yes"), None),
+                mcode.MODEL,
+            )
+        assert D.jobs(run, handoff) == [job]
+
+    def test_a_commons_pick_is_refused_while_a_gallery_file_depicts(self, tmp_path: Path) -> None:
+        """The lane's own rule, reached through the driver: only the gallery can become a page's
+        image, so a W pick beside a G candidate called `depicts` is refused, not recorded."""
+        run, handoff = self._handoff(tmp_path)
+        [job] = D.jobs(run, handoff)
+        commons = [c.label for c in job.question.candidates if c.kind == V.COMMONS_CANDIDATE]
+        gallery = [c.label for c in job.question.candidates if c.kind == V.GALLERY_CANDIDATE]
+        if not commons or not gallery:
+            pytest.skip("this question has no Commons file beside a gallery file")
+        given = {c.label: V.REGION_OR_TYPE for c in job.question.candidates}
+        given[commons[0]] = V.DEPICTS
+        given[gallery[0]] = V.DEPICTS
+        with pytest.raises(V.AnswerError, match="G candidates"):
+            D.record(job, handoff, self._answer(job, given, commons[0]), mcode.MODEL)
+        assert D.jobs(run, handoff) == [job]
 
 
 class TestTheAcceptance:
@@ -1389,3 +1771,212 @@ class TestThePictures:
         pictures = V.Pictures(_Images(page), _Download())  # type: ignore[arg-type]
         with pytest.raises(C.Unfetchable, match="serves no image"):
             pictures.url("https://en.wikipedia.org/wiki/Q%27asa_Pata")
+
+
+# ======================================================================== the no-image report
+CLAIMED_SITE = "1f0d4b8f-5a11-4a6e-9a6a-0f0d4b8f5a11"
+NO_ITEM_SITE = "2f0d4b8f-5a11-4a6e-9a6a-0f0d4b8f5a22"
+EMPTY_CATEGORY_SITE = "3f0d4b8f-5a11-4a6e-9a6a-0f0d4b8f5a33"
+#: A P373 category whose members are no still picture, next to one that is: the site claims a file,
+#: the run exported a picture and named the sound it could not serve.
+NO_PICTURE = [
+    {
+        "file": "Priene cooking.webm",
+        "why": 'in the site\'s Commons category "Priene" (P373)',
+        "status": V.NOT_A_PICTURE,
+        "detail": "video/webm",
+    }
+]
+
+
+class TestTheNoImageReport:
+    """The goal's clause that no model gate can block: every curated site that serves no image,
+    with the reason measured for that site - a row per site, not a number, not an open point."""
+
+    def _run(self, tmp_path: Path, *, claiming: bool = False, empty_claim: bool = False) -> Path:
+        """A read of four shown sites and one retired: Thasos serves a gallery row its item vouches
+        for, Ahu Akivi serves nothing and its item claims nothing, a settlement serves nothing and
+        has no item at all. With `claiming` a site that serves nothing while its item's category
+        lists a file, with `empty_claim` one whose category lists none."""
+        run = tmp_path / "served-image-2026-10-05"
+        data = read_fixture()
+        shown = [
+            site(THASOS, "Archaeological Site of Ancient Thasos", None),
+            site(NOTHING, "Ahu Akivi", None),
+            site(NO_ITEM_SITE, "Settlement without an item", None),
+        ]
+        qids: dict[str, str | None] = {THASOS: "Q2", NOTHING: "Q3", NO_ITEM_SITE: None}
+        entities = [entity("Q2", p18=["Thasos.jpg"]), entity("Q3")]
+        if claiming:
+            shown.append(site(CLAIMED_SITE, "Ruin of Priene", None))
+            qids[CLAIMED_SITE] = "Q5"
+            entities.append(entity("Q5", p373=["Priene"]))
+        if empty_claim:
+            shown.append(site(EMPTY_CATEGORY_SITE, "Quriwayrachina", None))
+            qids[EMPTY_CATEGORY_SITE] = "Q6"
+            entities.append(entity("Q6", p373=["Quriwayrachina, La Convecion"]))
+        data["sites"] = shown
+        data["images"] = [row(1, THASOS, "Thasos.jpg", hero=True, lead=True)]
+        data["retired"] = [RETIRED_SITE]
+        state = write_read(run, data)
+        write_harvest(tmp_path / "harvest", qids, entities)
+        PC.write_prechecks(
+            run / PC.PRECHECK_FILE,
+            PC.run_precheck(state, PC.load_harvest(tmp_path / "harvest"), FakeCommons()),
+        )
+        return run
+
+    def _commons(self) -> FakeCommons:
+        """Commons that lists one file in "Priene" and nothing in every other category - the
+        measured state of the four sites whose P373 category names no file."""
+        return FakeCommons(members={"Priene": ["Ruin.jpg"]})
+
+    def _export(
+        self,
+        run: Path,
+        *,
+        claimed: list[str],
+        asked: list[str],
+        unavailable: dict[str, list[dict[str, Any]]] | None = None,
+        precheck_sha256: str | None = None,
+    ) -> None:
+        ST.write_text_once(
+            run / V.EXPORT_REPLACE,
+            ST.json_text(
+                {
+                    "precheck_sha256": precheck_sha256 or ST.file_sha256(run / PC.PRECHECK_FILE),
+                    "prompt_id": V.REPLACE_PROMPT_ID,
+                    "questions_sha256": "0" * 64,
+                    "claimed_sites": list(claimed),
+                    "batches": {"replace-001": list(asked)} if asked else {},
+                    "without_candidates": [],
+                    "unavailable": unavailable or {},
+                }
+            ),
+        )
+
+    def _report(self, tmp_path: Path, run: Path) -> dict[str, dict[str, Any]]:
+        NR.write_report(run, tmp_path / "harvest", self._commons())
+        return {r["site_id"]: r for r in V.read_jsonl(run / NR.REPORT_FILE)}
+
+    def test_a_site_that_serves_nothing_and_claims_nothing_is_reported_as_having_no_claim(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._run(tmp_path)
+        got = self._report(tmp_path, run)[NOTHING]
+        assert got["reason"] == NR.NO_CLAIM
+        assert got["claim"] == {"p18": [], "p373": []}
+        assert got["serves_image"] is False
+
+    def test_a_site_that_serves_nothing_without_an_item_is_reported_as_such(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._run(tmp_path)
+        got = self._report(tmp_path, run)[NO_ITEM_SITE]
+        assert got["reason"] == NR.NO_ITEM
+        assert got["qid"] is None
+
+    def test_a_claiming_site_the_export_asks_about_is_reported_as_open(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._run(tmp_path, claiming=True)
+        self._export(run, claimed=[CLAIMED_SITE], asked=[CLAIMED_SITE])
+        got = self._report(tmp_path, run)[CLAIMED_SITE]
+        assert got["reason"] == NR.CLAIMED_OPEN
+        assert got["claim"] == {"p18": [], "p373": ["Priene"]}
+        assert got["export"]["candidates"] == 1
+
+    def test_a_claiming_site_whose_every_file_is_no_picture_is_reported_as_such(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._run(tmp_path, claiming=True)
+        self._export(run, claimed=[CLAIMED_SITE], asked=[], unavailable={CLAIMED_SITE: NO_PICTURE})
+        got = self._report(tmp_path, run)[CLAIMED_SITE]
+        assert got["reason"] == NR.CLAIMED_NO_PICTURE
+        assert got["export"] == {"candidates": 0, "unavailable": NO_PICTURE}
+
+    def test_an_open_site_keeps_the_files_the_export_could_not_serve(self, tmp_path: Path) -> None:
+        run = self._run(tmp_path, claiming=True)
+        self._export(
+            run,
+            claimed=[CLAIMED_SITE],
+            asked=[CLAIMED_SITE],
+            unavailable={CLAIMED_SITE: NO_PICTURE},
+        )
+        got = self._report(tmp_path, run)[CLAIMED_SITE]
+        assert got["reason"] == NR.CLAIMED_OPEN
+        assert got["export"]["unavailable"] == NO_PICTURE
+
+    def test_a_claiming_site_whose_category_names_no_file_is_reported_without_an_export(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._run(tmp_path, empty_claim=True)
+        got = self._report(tmp_path, run)[EMPTY_CATEGORY_SITE]
+        assert got["reason"] == NR.CLAIMED_NO_FILE
+        assert got["export"] is None
+        assert "Quriwayrachina, La Convecion" in got["detail"]
+
+    def test_a_claim_with_no_file_named_does_not_ask_for_an_export(self, tmp_path: Path) -> None:
+        run = self._run(tmp_path, empty_claim=True)
+        summary = NR.write_report(run, tmp_path / "harvest", self._commons())
+        assert summary["export_replace_sha256"] is None
+
+    def test_the_retired_sites_are_reported_as_retired(self, tmp_path: Path) -> None:
+        run = self._run(tmp_path)
+        assert self._report(tmp_path, run)[RETIRED_SITE]["reason"] == NR.RETIRED
+
+    def test_a_site_that_serves_an_image_is_not_in_the_report(self, tmp_path: Path) -> None:
+        run = self._run(tmp_path)
+        assert THASOS not in self._report(tmp_path, run)
+
+    def test_the_counts_close_over_every_curated_site(self, tmp_path: Path) -> None:
+        run = self._run(tmp_path, claiming=True, empty_claim=True)
+        self._export(run, claimed=[CLAIMED_SITE], asked=[CLAIMED_SITE])
+        summary = NR.write_report(run, tmp_path / "harvest", self._commons())
+        counts = summary["counts"]
+        assert counts["curated"] == counts["shown"] + counts["retired"]
+        assert counts["shown"] == counts["confirmed"] + counts["unconfirmed"] + counts["no_image"]
+        assert counts["no_image"] == sum(counts["reasons"][r] for r in NR.NO_IMAGE_REASONS)
+        assert (counts["curated"], counts["shown"], counts["no_image"]) == (6, 5, 4)
+        assert summary["addressable_remainder"] == 1
+
+    def test_it_refuses_a_claiming_site_the_export_does_not_cover(self, tmp_path: Path) -> None:
+        run = self._run(tmp_path, claiming=True)
+        self._export(run, claimed=[], asked=[])
+        with pytest.raises(ST.StateError, match=CLAIMED_SITE):
+            NR.write_report(run, tmp_path / "harvest", self._commons())
+
+    def test_it_refuses_a_precheck_the_export_was_not_run_on(self, tmp_path: Path) -> None:
+        run = self._run(tmp_path, claiming=True)
+        self._export(run, claimed=[CLAIMED_SITE], asked=[CLAIMED_SITE], precheck_sha256="0" * 64)
+        with pytest.raises(ST.StateError, match="pre-check"):
+            NR.write_report(run, tmp_path / "harvest", self._commons())
+
+    def test_it_refuses_an_export_that_asks_about_a_site_serving_an_image(
+        self, tmp_path: Path
+    ) -> None:
+        run = self._run(tmp_path, claiming=True)
+        self._export(run, claimed=[CLAIMED_SITE], asked=[CLAIMED_SITE, THASOS])
+        with pytest.raises(ST.StateError, match=THASOS):
+            NR.write_report(run, tmp_path / "harvest", self._commons())
+
+    def test_it_refuses_without_a_replace_export(self, tmp_path: Path) -> None:
+        run = self._run(tmp_path, claiming=True)
+        with pytest.raises(ST.StateError, match="export-replace"):
+            NR.write_report(run, tmp_path / "harvest", self._commons())
+
+    def test_it_refuses_a_site_the_read_holds_without_a_precheck_row(self, tmp_path: Path) -> None:
+        run = self._run(tmp_path)
+        path = run / PC.PRECHECK_FILE
+        rows = [line for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        path.unlink()
+        path.write_text("\n".join(rows[1:]) + "\n", encoding="utf-8")
+        with pytest.raises(ST.StateError, match="pre-check row"):
+            NR.write_report(run, tmp_path / "harvest", self._commons())
+
+    def test_the_report_is_written_once(self, tmp_path: Path) -> None:
+        run = self._run(tmp_path, claiming=True)
+        self._export(run, claimed=[CLAIMED_SITE], asked=[CLAIMED_SITE])
+        NR.write_report(run, tmp_path / "harvest", self._commons())
+        with pytest.raises(ST.StateError, match="never replaced"):
+            NR.write_report(run, tmp_path / "harvest", self._commons())

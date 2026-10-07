@@ -7,10 +7,13 @@ Owner decisions of 2026-09-26, binding:
   only by an image a vision check confirmed; otherwise the site serves no image.
 * **O7** "Ja, Ozeanien wie Amerika": Oceania is in scope through 1500 AD, like the Americas (E3).
 
-Every model judgement is an Opus agent answering through `scripts/remediation/opus_handoff.py`;
-no pipeline code calls a model. Every production write is journalled (`remediation_change_log`
-through `apply_remediation_change()`) by an existing writer, in steps of at most 100 sites, each
-accepted with 0 deviations before the next.
+Every model judgement is an agent answering through `scripts/remediation/opus_handoff.py`;
+no pipeline code calls a model. Since the owner's decision of 2026-10-03 the answering agents
+are MiniMax ones (`MiniMax-M3.1-Flash-Preview`, stamped
+`minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent)`); the answers of 2026-09-30 carry
+their Sonnet stamp and stay valid. Every production write is journalled
+(`remediation_change_log` through `apply_remediation_change()`) by an existing writer, in steps of
+at most 100 sites, each accepted with 0 deviations before the next.
 
 All commands run from the repository root with the repo venv (`./.venv/Scripts/python.exe`,
 abbreviated `$PY`) and `PYTHONIOENCODING=utf-8`. Output directories under `output/remediation/`
@@ -246,6 +249,11 @@ check** (`export-check --population all`, the default). `--population unconfirme
 design, kept as an explicit choice only. The pre-check's status travels with each decision as
 evidence.
 
+A site that serves **no** image is `no-image` and its item is never read: the pre-check stops there,
+so the claim of such a site is not in `PRECHECK.jsonl` at all. `export-replace` reads it itself
+(`wanted_files`) and asks about those files, which is the only place a claim of a site without an
+image can be examined; the no-image report of section 3.5 reads the same claim for the same reason.
+
 **This departs from the specification, which sends only the images the pre-check does not
 confirm, and needs the orchestrator's (or the owner's) sign-off before the run**, recorded in
 AUDIT_LOG: `all` checks about 4,084 served images (about 341 check batches of 12), `unconfirmed`
@@ -253,7 +261,7 @@ about 1,184 (about 99 batches) - measured populations of section 5. Without the 
 `export-check --population unconfirmed`: the plan then keeps a pre-check CONFIRMED image unchecked
 (`plan.py`, `decide_site`).
 
-### 3.3 The two Opus stages
+### 3.3 The two vision stages
 
 * **served-check** (12 images per batch agent): `depicts` (the site itself, its remains, a drawing
   or reconstruction of it, or an object found there), `region_or_type` (region, landscape, town, a
@@ -287,7 +295,9 @@ about 1,184 (about 99 batches) - measured populations of section 5. Without the 
 | confirmed | the check says `depicts` | `thumbnail_url` := the served row's local file if it names anything else (`wd2-align`); a repaired thumbnail := the rendering of its file the check was shown (`wd2-thumb`) |
 | replaced | a `G` pick | hero flag off the old hero, onto the pick (`wd2-hero`); thumbnail := the pick's local file (`wd2-align`); every live row judged `other_site` - the served one by the check, a `G` by the replacement stage - excluded (`wd2-exclude`); a `region_or_type` row stays in the gallery |
 | cleared | no `G` depicts | every live row (each judged: the served one by the check, the rest as candidates) excluded and unheroed (`wd2-exclude`); thumbnail := the confirmed `W` file's rendering the agent was shown, else NULL (`wd2-thumb`) |
-| no image | the site serves nothing | nothing |
+| no image | the site serves nothing | nothing; the measured reason is the answer's `basis` in `REPLACE.jsonl` |
+| claimed | the site serves nothing, its item claims a file (P18/P373) and a claimed file was called `depicts` | thumbnail := the rendering the agent was shown (`wd2-thumb`) - the whole write, the site has no image row to move |
+| unjudged | a claim-only plan, the site serves an image this run did not judge | nothing; the site keeps what the delivered run left it |
 
 A live row nobody judged is never excluded (the plan refuses). Chunks of at most 100 sites; a
 cleared site is named in its chunk as one that may lose its last live image.
@@ -316,15 +326,46 @@ $PY $S brief --run-dir $R --handoff $H-check --batch-id B    # the agent's full 
 $PY scripts/remediation/opus_handoff.py validate --dir $H-check
 $PY $S import-check --run-dir $R                # -> CHECK.jsonl (unfetchable thumbnails included)
 $PY $S export-replace --run-dir $R --handoff $H-replace   # prints "questions": N
+#   --claimed-only instead exports only the sites that serve no image while their Wikidata item
+#   claims a file: for a run that does not re-judge the served images (they were judged and
+#   delivered on 2026-09-30). It is refused while a judged image failed, its record carries no
+#   check_sha256, and the plan then leaves every site that serves an image as "unjudged".
 #   only when N > 0 (with N = 0 no handoff exists; import-replace says so and `plan` goes on):
 #   per batch: brief / check-answer / answer as above, then validate --dir $H-replace, and
 $PY $S import-replace --run-dir $R              # -> REPLACE.jsonl
+$PY $S no-image-report --run-dir $R             # -> NO_IMAGE_REPORT.jsonl, NO_IMAGE_SUMMARY.json
 $PY $S plan --run-dir $R                        # -> chunks/chunk-NNN, EXPECTED.jsonl, PLAN_SUMMARY.json
 ```
 
 `EXPORT_REPLACE.json` names, per site, every Wikidata file that was not shown (`unavailable`:
 `missing`, `not a picture` with its MIME type, or `unfetchable` with the refusal) and every failed
 image without a candidate (`without_candidates`) - those sites are cleared.
+
+### 3.6 The no-image report (`no_image_report.py`) - one measured reason per site
+
+The goal asks for the no-image remainder to be reported **per site with its measured reason**, not
+left open. This is the one clause no vision model can block, and it writes nothing outside the run
+directory. A row per curated site that serves no image, plus one per retired curated site, with the
+claim it was decided on, the state the export recorded for that claim, and a `detail` sentence in
+words. `NO_IMAGE_SUMMARY.json` carries the counts that close over the read
+(`curated = shown + retired`, `shown = confirmed + unconfirmed + no_image`) and
+`addressable_remainder`, the number the goal counts down.
+
+The five reasons, in the order they are decided: `no-wikidata-item` (the pre-check found no item),
+`no-image-claim` (the item holds no P18 and no P373), `claimed-no-file-named` (the item names a P373
+category and the category lists no file - `wanted_files` is the one reader, so such a site is
+invisible to `export-replace`, which asks only about named files), `claimed-awaiting-vision-check`
+(the claim named a file and the run exported candidates) and `claimed-no-file-is-a-picture` (every
+named file is no still picture). Retired curated sites carry `retired`.
+
+It refuses by name instead of counting: a claiming site the export does not list, a site the
+export asks about that does not serve nothing, an export pinned to another pre-check, a shown site
+without a pre-check row. The export is read exactly when a claim names a file.
+
+Measured on production 2026-10-05 (run `served-image-2026-10-05`): of 5,004 curated sites 104 are
+retired, 3,661 serve an image (2,722 the item vouches for, 939 it does not) and 1,239 serve nothing
+- 307 without a Wikidata item, 688 with an item that claims no image, 4 whose category names no
+file, 240 open. `claimed-no-file-is-a-picture` is reachable but measured 0.
 
 Per chunk, in order, each accepted with 0 deviations before the next:
 
@@ -384,6 +425,705 @@ come from the `--write` run that is applied (`card_stats.py`'s docstring).
 After the chunks: the globe reads the static export, so the new thumbnails show with the next WF
 export; the page and the hub read the database at once.
 
+### 3.7 The import-hero lane (WD2/IH) - the 2025 import's own link becomes the hero
+
+Owner decision 2026-10-05, 17:43: the hand-linked image of the 2025 import comes back as the site's
+hero. Not a fresh match against Wikidata - *that* picture, the one the owner linked himself.
+
+`scripts/remediation/import_hero/` (`read`, `plan`, `verify`). One source, and it is the only
+surviving copy of that hand-linked image:
+
+```
+data/raw/ancient_nerds/ancient_nerds_original.geojson   # 2025-12-18, 5,995 features, field Images
+```
+
+The loader wrote that field into `unified_sites.thumbnail_url` (`pipeline/unified_loader.py:1200`);
+the remediation since replaced, demoted or hid most of those rows. The join (`plan.join_import`)
+matches on the source URL first and on the folded title second - the same rule the period lane's
+join proved - and carries the ambiguity as a flag instead of picking one.
+
+**The five rules** (`plan.plan`, one `Change` each):
+
+| rule | what it moves |
+|---|---|
+| `ih1` | the hero flag onto the row of the file the import links |
+| `ih2` | the flag off the row that held it |
+| `ih3` | an excluded row of that file becomes visible (the site's *first* picture) |
+| `ih4` | `thumbnail_url` onto the row that now shows the hero |
+| `ih5` | the row's `title`, `author`, `license`, `license_url`, `original_url`, `commons_page_url` and the file's size - all of them name the same file, so a row can never credit one picture while showing another |
+
+`ih5` is why the shared writer's `WRITABLE` carries `title`, `license` and `license_url`: a fetch
+that wrote the pixels but no attribution would leave a row crediting its previous file.
+`PAGE_COLUMNS` (`pipeline/utils/public_sites.py`) is untouched - a test binds that set to the exact
+SELECT the page renders.
+
+**Two refusals, both named per site** in `IMPORT_HERO_REFUSALS.jsonl`:
+
+* `local_file_too_small` - the row exists but its local derivative is under 1600x900. The plan takes
+  a `fetched` manifest of 1600 px downloads (`import_hero/fetch.py` builds one entry per site: the
+  eleven `FETCH_COLUMNS`, refused by name when the download does not carry all of them); without one,
+  the site is refused rather than promoted onto a picture too small to show. Measured 2026-10-05:
+  380 of the 807 already serve their import file and only lack the flag, 427 must replace the file
+  first. The local name follows the owner's decision of that day: **the Commons name verbatim, only
+  the extension becomes `.webp`** - production holds two conventions (26,027 rows named after a
+  readable title, 18,746 after the Commons name), and the name is public, so the wave picks one
+  instead of adding a third. The file lands in the offsite copy of the image tree, which this lane
+  reads as the picture (section 3.2), and the VPS copy has to follow it - the two must not drift.
+* `no_target_row` - no row of that site holds the file. 133 of them have no row at all and 59 link
+  no Commons file, so no row can be named; those two groups are the owner's `thumbnail_url` decision,
+  not gallery rows. The remaining 410 need an INSERT, which this writer does not do
+  (`chunk_writer.lint_statement` refuses INSERT; `apply_remediation_change()` is UPDATE-only).
+
+**The INSERT wave, applied 2026-10-06** (runs `-006`, `-007`, `-008`). Measured on the read
+`9a5c3b28…` (4,900 shown sites, 47,691 image rows):
+
+* **The fetch: 417 targets, 147 files, 270 refusals by name.** The 476 `no_target_row` sites split
+  into 150 that carry no image row at all (the owner's decision of 2026-10-05, 18:32 — 57 of them
+  were downloaded before the insert plan refused them, because the fetch's target rule is coarser
+  than the insert plan's), 236 whose file never arrived, and 90 that got a row. All 147 files were
+  verified against their manifest on the offsite tree, packed, transferred and verified again inside
+  the api container: **147/147, 0 missing, 0 size mismatches**, the served tree at **50,239 `.webp`**.
+* **The wave: 87 rows over 2 chunks, 1,376 journal rows**, both chunks through the five steps of
+  section 3.6 (`insert_writer.py`, the shared writer's five commands over a statement that creates
+  a row), acceptance `ok: true`, **87/87 on all three questions** (read `13bb095a…`).
+* **Three sites needed no row at all.** `no_target_row` compared the *title in the import's link*
+  with the stored row's name, and Commons' upload slugs differ from the file's title for reasons of
+  its own: `The_East_Facade_pf_the_Parthenon…` (a typo in the import) for `…_of_the_…`,
+  `East_Terrace_(4961323529).jpg` for `Mount_Nemrut_-_East_Terrace_(4961323529).jpg`, and one title
+  that gained `zyklopenhaftes`. All three sites *hold* the file - the fetch resolved the link to the
+  same `original_url`. So `plan._target_row` now matches on the resolved upload URL when the fetch
+  has one, which is the same key the unique constraint `(site_id, original_url)` holds, and the
+  insert plan refuses such a site as `already_holds_the_file`. The three got the hero lane's `ih1` +
+  `ih4` instead (run `-007`).
+* **A rule that had to be corrected because the acceptance refused it:** `ih4` took the *fetched*
+  file name whenever a fetch existed, even where `ih5` never rewrote the row. On those three sites
+  that pointed the thumbnail at a file nobody had ever fetched. The thumbnail now names the row the
+  site serves, and takes the fetched name only where the wave renames that row (run `-008`, 3 rows,
+  acceptance `ok: true`). The acceptance learned the same identity: with the fetch manifest it
+  accepts a served row by its upload URL instead of the slug in the import's link.
+
+**Three columns the fetch does not carry, measured on production 2026-10-06:** `wiki_images`
+declares `is_lead`, `sort_order` and `source_type` NOT NULL without a default, so the insert
+statement has to write them. `sort_order` is derived (the next free number of that site), `is_lead`
+stays false (the import's link is the owner's picture, not a measured lead image) and `source_type`
+is `wikimedia`, which 49,683 of the 49,691 curated rows carry. The journal therefore carries
+**fourteen** rows per inserted site, not eleven.
+
+**A site whose every row is hidden today** is named `may_empty` in its chunk header
+(`Planned.may_empty`), not excluded from the wave: unhiding the row gives it its *first* picture,
+which is not a hero move, and a reversal that restores "no image" is a faithful undo the writer's
+guard would otherwise refuse (measured 2026-10-05: 35 of 1,555 sites, and the pilot's 3 of 100 that
+made `--rehearse-rollback` stop). The guard stays strict; the exception is on the record.
+
+**What the wave is proven at, in four layers** (measured 2026-10-06): the acceptance's 87 of 87 on
+a fresh read; 147 of 147 files verified against their manifest inside the api container; **87 of 87
+files over HTTP - `200`, the manifest's exact `Content-Length`, `image/webp`, including the 78 whose
+file name carries a space**; and 8 of 8 sampled site pages naming the inserted file. The last layer
+is the one that catches what the container check cannot: a name nginx refuses or a URL a browser
+mangles. The canonical page form is the one `sitemap-sites.xml` lists,
+`/sites/<country slug>/<name slug>-<site_id[:8]>`; `sitemap-sites.xml` holds exactly 4,900 URLs, the
+shown curated sites.
+
+**The acceptance** (`import_hero/verify.py`) asks production, never the plan: for every site of the
+wave's chunks, does the page serve the file the import links, does the thumbnail name that row, and
+is there exactly one live hero row. It writes `ACCEPTANCE.json` and names every site that fails a
+question. `served_image/run.py accept` is the other acceptance and asks a different question
+("does production equal this lane's `EXPECTED.jsonl`"); the import-hero lane writes the shared
+writer's `PLAN.jsonl` and no `EXPECTED.jsonl`, and its question is the owner's - is *this* picture
+the one on the page.
+
+```bash
+PY=./.venv/Scripts/python.exe
+R=output/remediation/import_hero/import-hero-2026-10-05-002
+IH=scripts/remediation/import_hero
+# 1. read production (read-only) -> READ.json, and the join -> IMPORT_CLAIMS.json
+# 2. plan (read-only, writes only into the run directory) -> chunk-001..016/,
+#    IMPORT_HERO_REFUSALS.jsonl, IMPORT_HERO_SUMMARY.json
+# 3. per chunk, the writer's five steps in section 3.6's order, each accepted with 0 deviations
+# 4. acceptance over all chunks -> ACCEPTANCE.json
+```
+
+Applied 2026-10-05 (`c4976a9`, `b5aa98c`): 1,555 sites, 4,642 rows, 16 chunks, 35 `may_empty`,
+1,555 of 1,555 on all three acceptance questions (read `0e62aea4…`, 2026-10-05T17:58:27Z). Replanning
+the same lane over a fresh read yields **0 rows** (`REMAINDER.json`, run `-003`) - the lane is at its
+end, and what it still refuses is 807 `local_file_too_small` + 469 `no_target_row`, both by name.
+
+Applied 2026-10-06: the 807 `local_file_too_small` first (runs `-004`, `-005`: 310 sites fetched and
+accepted 310 of 310), then the INSERT wave (runs `-006`, `-007`, `-008`, above). After all of it the
+read of run `-008` counts **4,900 shown curated sites, 1,344 of them without a live hero, 0 sites
+with two**, 47,778 image rows and **583 live heroes still under 1600x900** (552 after this wave: 31
+of them lost the flag to a fetched 1600 px row). Both of those counts move again in §3.7.2, where the
+owner lowered the floor for 243 sites.
+
+**The thumbnail question, asked properly** (2026-10-06): of the shown curated sites with a live
+hero, **all 3,556 name the served row** - the T1 rule holds everywhere it is visible. A first
+measurement without the `scope_status IS DISTINCT FROM 'retired'` filter reported "54 sites whose
+live hero's thumbnail points somewhere else" (32 remote `upload.wikimedia.org` URLs, 22 a local
+path naming another file); **all 54 are `retired`**, which the site does not render. A number that
+reads like a defect and is not one usually means a filter is missing, not that the database is
+wrong.
+
+### 3.7.1 What is left, and why each class cannot be closed from here (measured 2026-10-06)
+
+"Without a live hero" is the stricter question than "shows nothing". `served_row()`
+(`ORDER BY is_hero DESC, is_lead DESC, sort_order` over the rows that are not excluded) is what the
+page actually serves, so a site with rows but no hero flag still shows its lead row. The four
+numbers that describe the finished state, over the 4,900 shown curated sites:
+
+| the page… | sites |
+|---|---:|
+| serves a gallery row | **3,578** |
+| serves only its `thumbnail_url` | 153 |
+| **serves nothing at all** | **1,169** |
+| shows two heroes at once | 0 |
+
+(Before the floor wave of §3.7.2; after it, measured with the same script over the same question:
+3,616 / 140 / 1,144 / 0.)
+
+The 1,169 split by cause, and why no write closes them from here:
+
+* **852 carry no image row at all.** 150 of them are the owner's decision of 2026-10-05 (18:32) -
+  a site with only a `thumbnail_url` gets no gallery row made up out of nothing; the other 702
+  never had one either. Nothing to serve means a **new picture** is needed: that is the candidate
+  search (`import_claims`, P373 categories) and its vision stage, not this writer.
+* **317 have rows, and every one of them is excluded** (171 sites one row, 54 sites twenty). Those
+  exclusions are the vision lane's recorded decision (`remediation_change_log.test_id =
+  'WD2/served-image'`, run stamps `served-image-2026-09-30-*`, 2,072 rows over 354 sites). These are
+  exactly the sites rule `ih3` unhides when the import's picture *is* one of their rows - and after
+  the waves above it unhides not one of them, so for these 317 the import's picture is no row of
+  the site. Un-doing a model's judgement without a new judgement is not a thing this lane may do.
+* **The 270 refusals of the INSERT fetch, by class** (`FETCH_FAILURES.jsonl`, counted by pattern):
+  213 the Commons original is itself narrower than 1600 px (a fetch cannot deliver pixels the file
+  does not have), 15 without `author_url`, 12 without `license_url`, 11 panoramas 1600 px wide and
+  under 900 px high, 9 Commons hosts no file of that name at all (one API call over all nine
+  confirms every page answers `missing`, e.g. `File:Thul Hairo Khan.jpg`), 5 without `author_url`
+  and `license_url`, 3 whose name carries a character the served tree may not hold, 1 without author
+  and `author_url`, 1 an SVG. **Only the last three are our own rules**, and they would buy 4 sites
+  at the price of a naming convention no other site uses; the other 267 are facts about the files.
+
+The 583 live heroes under 1600x900 are the same story from the other side: their row holds the
+owner-linked picture, but the Commons original of that picture is narrower than the lane's floor.
+Both numbers are floors this lane set itself, and raising either is a decision, not a fix.
+
+**The list behind those numbers**: `output/remediation/import_hero/RESTBESTAND_2026-10-06.jsonl`,
+1,169 lines, one per site, with its class, the rows it has, what the 2025 import links, what the
+import-hero lane refused it for and **what would close it**; the counts are in
+`RESTBESTAND_2026-10-06_SUMMARY.json`. The four closers, measured per site and not assumed:
+
+| what would close it | sites |
+|---|---:|
+| `no_picture_at_all` - the import links nothing, and none of these carries a wikidata id | **1,081** |
+| `import_picture_is_no_row` - the import links a picture that is no row of the site | 36 |
+| `import_picture_never_fetched` - such a picture, refused by the fetch (`FETCH_FAILURES.jsonl`) | 26 |
+| `import_picture_too_small` - the picture is a row, but its local file is under 1600x900 | 26 |
+
+A count is a fact about today; that file is what the next campaign works from.
+
+### 3.7.3 The candidate search (2026-10-06): a name is what a picture-less site still has
+
+`no_picture_at_all` is the largest class of §3.7.1 and the only one nothing this lane wrote can
+close: 1,081 sites have no gallery row, no `thumbnail_url` and **no Wikidata item** (852 of them),
+so `vision.wanted_files` answers an empty candidate list for them - there is no P18 and no P373 to
+read. Owner decision 2026-10-06: build the search, let the model judge every candidate, and let the
+INSERT lane write only what it confirmed.
+
+`scripts/remediation/candidate_search/` (`search.py`, `run.py`) asks Commons two questions per site
+and keeps what reaches the floor:
+
+* `search(f"{name} filetype:bitmap")` - the file namespace. **`filetype:bitmap` is not a nicety**:
+  without it the same query answers scanned books (measured: all five hits for *Monte Lazzu* are
+  PDFs from a library digitisation project).
+* `search(f'intitle:"{name}" filetype:bitmap")` - the title form. A name with a comma or a qualifier
+  (*Wamanmarka, Lima*) matches nothing here; that site is then refused by name rather than searched
+  for something that merely resembles it.
+* `members(name)` - the category that carries the site's own name, kept because a category is named
+  after its site where a search only matches words. Measured nearly empty: **0 still pictures for 9
+  of 10** sites on the first sample (Cerna has a category, its two files are not pictures).
+
+**Measured, twice, before and after the code existed.** A 25-site sample of the class: 164 candidate
+pictures, **141 of them 800x300 or larger**, **13 of the 25 sites** carrying at least one. The pilot
+over the first 100 sites of the class (`CANDIDATE_SUMMARY.json`): **51 sites with candidates, 485
+candidates**, and 49 refused by name - 45 `no_candidate` (Commons names no file for them at all) and
+4 `all_too_small` (pictures exist, none reaches the floor).
+
+Two facts about that run that are worth more than the headline:
+
+* **`Commons.imageinfo` never returns a size.** It asks for `url|mime|size|sha1`, so 164 candidates
+  measured `0x0` until `Commons.sizes` asked again with `dimensions` in `iiprop`. A floor checked
+  against a size nobody asked for is no floor.
+* **A candidate is not a picture of the site.** The same sample answers a cat in Sidi Bou Said for
+  the site *Sidi Said* and a church in the Philippines for *Las Capellanías*. So the search decides
+  nothing about whether a candidate depicts its site - it only decides what is worth showing. That
+  is the judge's question, and only a `depicts` verdict reaches the fetch and the INSERT lane.
+
+**The judge's answer to that question, measured on the pilot's first three sites** (23 candidates,
+one verdict each, `VERDICTS_PILOT.jsonl`): **3 `depicts`, 7 `region_or_type`, 13 `other_site`** - a
+precision of **13 %**, and **1 site in 3** with at least one picture of itself. The misses are not
+near misses: for *Gonnus* the search returned **three pictures of Mars** (`Gonnus Mons`, the USGS
+Arcadia MOLA maps), four bronze coins, a 1830 steel engraving and the modern village; for *Cerna,
+Croatia* graves of a different Cerna in Bucharest, a barracks in Brno and a ski slope in Slovakia;
+for *Smythapark* a farm, a field path and a treehouse.
+
+**The same question, measured over the run's real candidates, is better than the pilot.** The full
+search (`CANDIDATE_SUMMARY.json`): of the 1,081 sites, **595 carry candidates (55 %) and 5,809
+candidate images reach the floor**; 486 sites are refused by name - 461 `no_candidate` (Commons names
+no file for them at all) and 25 `all_too_small`. The first 8 sites of the judgement export (65
+candidate images, one verdict each): **12 `depicts`, 18 `region_or_type`, 35 `other_site`** - a
+precision of **18 %**, and **2 sites in 8** with a picture of themselves (*Apazzu*, and eleven
+photographs of the *Tombeau de Tin Hanan*). Read across the class, the round is worth about **1,050
+confirmed images over roughly 150 of the 1,081 sites** - one site in seven.
+
+One judgement call to keep in view: the three `depicts` of the first pilot were **objects found at the
+site** (a votive inscription, an Athenian relief "from Gonnoi"), which the vision rule counts as
+depicting. Whether a museum object is the right picture for a site page is a question that rule does
+not answer; a drawing, a plan or a reconstruction of the site would be, an inscription kept in a
+museum is a different thing.
+
+```bash
+PY=./.venv/Scripts/python.exe
+$PY scripts/remediation/candidate_search/run.py \
+    --out output/remediation/candidate_search/candidates-2026-10-06 --limit 100   # a pilot
+```
+
+**The judgement (`candidate_search/judge.py`) is the stage that decides.** One verdict per candidate -
+`depicts`, `region_or_type`, `other_site` - and **only `depicts` becomes a fetch target**
+(`write_targets`: one `(site_id, commons_file)` per site, the largest of them, which is exactly what
+the INSERT lane's `run_fetch` takes). The transport is the handoff the project already uses: the code
+writes the question, an agent **looks at the bytes** and answers one JSON object per site, the code
+checks the answer's shape and records it under the name of the model that wrote it. A verdict is
+never taken from the file name or from prior knowledge - the pilot's own miss list is why.
+
+Batches of 36 candidates packed **by site**, so a site is never split across two agents; a site with
+more candidates than a batch gets a batch of its own and the surplus is refused **by name**, because a
+candidate nobody looks at is one the site could have had. An answer that names a file nobody offered,
+judges one twice, leaves one unjudged or uses an unknown verdict lands in
+`CANDIDATE_VERDICT_REFUSALS.jsonl` with its reason.
+
+```bash
+$PY scripts/remediation/candidate_search/judge_run.py judge-export  --run-dir <run>          # images + questions
+$PY scripts/remediation/candidate_search/judge_run.py judge-import  --run-dir <run>          # the batch folders' answers -> VERDICTS
+```
+
+`judge-import` reads every `<run>/<batch_id>/<site_id>.answer.json` beside the question it answers,
+so an agent that never wrote a file is not half-answered - it is `not_answered` by name. The full
+wave is below, after the row rule.
+
+**What the judgement measured, over the run's own first 24 sites** (190 candidates, one verdict
+each, run `candidates-2026-10-06`, read `b053ac17`): **55 `depicts`, 84 `other_site`, 51
+`region_or_type`** - a precision of **29 %**, and **9 of 24 sites** with at least one picture of
+itself. The eight-site pilot read 18 % and one site in four; the misses are not near misses either
+(*Gonnus* returned three pictures of Mars, *Cochapata* two Mars-maps and a view of a lagoon).
+
+**The export paces itself, and the `PACE` it defined was dead.** `judge_run.py` declared
+`PACE = 1.0` and never read it: the export's client was a bare `httpx.Client`, so the renderings
+went out back to back. The pilot's 190 images hid that; the full run asks for **5,809**, and
+Wikimedia's robot policy asks for serial requests. The failure would have been quiet - a `HTTP 429`
+is a non-200, `judge.download` records it as a **refused candidate**, and the site loses a picture
+it could have had, by name, for a reason that was never about the picture. `PacedDownloads` is
+`Commons` itself with the search stage's pacing; only the refusal handling differs, because here a
+non-200 is an answer rather than an exception. **And `judge-export` writes its prompts only after
+it has downloaded every candidate** - the batch folders grow in one step at the end, so a run's
+first questions cannot be answered before its last picture is on disk.
+
+**The full judgement, measured (2026-10-07, owner decision "Volllauf über alle 595 Sites").** The run is
+**closed**: all **595** sites answered across the 201 batches, **5,739** candidates judged one verdict
+each - **1,497 `depicts`, 1,676 `region_or_type`, 2,566 `other_site`**, a precision of **26.1 %** - and
+**226 of the 595 sites carry at least one picture of themselves**. Six sites are refused in
+`CANDIDATE_VERDICT_REFUSALS.jsonl`, all six of them `shape`: a site with more candidates than a batch
+gets a batch of its own and the surplus is refused by name, because a candidate nobody looks at is one
+the site could have had.
+
+Read across the class, the round is worth about **226 confirmed images over 226 of the 1,081 sites** -
+one site in five of the ones Commons names anything at all. The precision did not improve over the
+pilot (13 % over 3 sites, 18 % over 8, 29 % over 24, **26 %** over all 595): the misses are not near
+misses and never were - *Gonnus* returned three pictures of Mars, *A Figa* twelve word-match images of
+nothing. What improves with the run is the absolute number of sites served, which is what the owner
+asked for.
+
+### The INSERT waves
+
+**The INSERT wave of a candidate run needed three things the runbook claimed and the code did not
+have.** `TARGETS.jsonl` is a judgement's result; the INSERT lane reads two other files, and until
+2026-10-06 only the 2025 import wrote them:
+
+* `judge_run.py insert-claims --run-dir <candidate run> --insert-run <INSERT run>` writes
+  `IMPORT_CLAIMS.json` (the URL of the file the judge chose - the fetch reads the Commons file out
+  of it) and the `no_target_row` refusal that names the site. Without it the fetch finds no import
+  picture in the claims and refuses the wave by name. Claims are **merged, never replaced**: a
+  second claim for one site is refused by name instead of overwriting the first.
+* `import_hero/run.py read --run-dir <INSERT run>` writes that run's `READ.json`, **once** - the
+  import lane gets it from `fetch --start`, which would also have fetched the import's own 417
+  targets, so a prepared wave has no other way to get one.
+* The row's journalled `reason` and evidence `source` are read **out of the refusal** that named
+  the site. Nothing in a candidate wave came from the 2025 import, and a journal row signed with the
+  import's name is not an audit.
+
+**The row rule, and what it had to be measured against.** `insert.plan` refused all nine targets as
+`no_row_at_all`: *"the owner decided on 2026-10-05 (18:32) that such a site keeps its
+`thumbnail_url` and gets no gallery row"*. That reason holds where a `thumbnail_url` exists. The
+candidate search's population is the other class: **1,144 of the 4,900 shown sites have neither a
+row nor a `thumbnail_url`**, so they show nothing at all (measured on `b053ac17`). **Owner decision
+2026-10-06:** those get their first row; the 150 sites that keep a thumbnail_url of their own are
+untouched, and their refusal keeps the old wording and its date.
+
+**The five writer steps exclude each other.** `insert_writer.py` takes one of `--check`, `--rehearse`,
+`--apply`, `--readback`, `--rehearse-rollback` and names the others as not allowed with it, so the runbook
+used to print all five on one line - a command that cannot run (`error: argument --rehearse: not allowed
+with argument --check`, exit 2). They are five calls, in that order, each one green before the next.
+
+```bash
+$PY scripts/remediation/candidate_search/judge_run.py judge-export   --run-dir <run>          # images + questions
+$PY scripts/remediation/candidate_search/judge_run.py judge-import   --run-dir <run>          # answers -> VERDICTS
+$PY scripts/remediation/candidate_search/judge_run.py write-targets  --run-dir <run>          # depicts -> TARGETS
+$PY scripts/remediation/candidate_search/judge_run.py insert-claims  --run-dir <run> --insert-run $I
+$PY $IH/run.py read          --run-dir $I
+$PY $IH/run.py fetch         --run-dir $I --root $OFFSITE --target insert
+$PY $IH/run.py insert-plan   --run-dir $I
+for step in --check --rehearse --apply --readback --rehearse-rollback; do
+    $PY $IH/insert_writer.py $I/chunk-001 $step        # one at a time, they exclude each other
+done
+$PY $IH/run.py insert-accept --run-dir $I
+```
+
+**A wave whose file is the 2025 import's, not the judge's**, adds one step in front:
+
+```bash
+$PY $IH/run.py insert-seed --run-dir $I --from-run <the import run> --sites <a file of site ids>
+```
+
+**Applied 2026-10-06, run `insert-2026-10-06-001` (the first wave of this lane's candidate
+search):** 9 targets, **7 files fetched**, 2 refused by name by the credit rule of 2026-10-05
+(17:43) - `Apazzu` carries no `author_url`, `King's apartments Apadana Susa` no `license_url`. One
+chunk, **7 rows over 7 sites, 105 journal rows**, all five writer steps green (`plan = journal =
+data`, 105 rows, both ways). Acceptance **`ok: true`** on the read `d86789d3` (2026-10-06T20:51:54Z):
+7 sites, one hero each, the thumbnail follows the row. The 7 files were verified **byte-exact on
+the offsite tree, after the transfer, and inside the api container** (0 missing, 0 size mismatches;
+the served tree at 50,246 `.webp`), and all **7/7 live API answers point at the new file and serve
+its recorded byte count**. The two refusals are named in `FETCH_FAILURES.jsonl` and in the plan's
+`INSERT_REFUSALS.jsonl` - neither site gets a picture from this wave.
+
+**Then the lane ran to the end of its targets, one wave at a time.** Every wave is the same eight steps
+and every wave is versioned (`output/remediation/import_hero/insert-*`), so the table is read out of the
+runs and not out of a report:
+
+| run | fetched | rows over sites | journal rows | acceptance | production read |
+|---|---:|---:|---:|---|---|
+| `insert-2026-10-06-001` | 7 | 7 | 105 | `ok: true` | `d86789d3` |
+| `insert-2026-10-07-001` | 17 | 10 | 150 | `ok: true` | `55114423` |
+| `insert-2026-10-07-002` | 29 | 11 | 165 | `ok: true` | `bd4338e6` |
+| `insert-2026-10-07-003` | 34 | 5 | 75 | `ok: true` | `2d21d79c` |
+| `insert-2026-10-07-004` | 41 | 6 | 90 | `ok: true` | `e4a5fb6d` |
+| `insert-2026-10-07-005` | 84 | 41 | 615 | `ok: true` | `b1bcea27` |
+| `insert-2026-10-07-006` | 117 | 33 | 495 | `ok: true` | `439b7ea8` |
+| `insert-2026-10-07-007` | 142 | 25 | 375 | `ok: true` | `08a9ceb3` |
+| `insert-2026-10-07-008` | 152 | 10 | 150 | `ok: true` | `2b5d53d7` |
+| `insert-2026-10-07-009` | 7 | 7 | 105 | `ok: true` | `e0ca173a` |
+
+**The tenth wave is a different one, and it needed a fourth transition.** The first nine took their
+file from the judge's `depicts` verdict; this one takes it from the **2025 import's own link**. Seven
+sites show nothing although the import links a picture of them and that file was already on the
+offsite tree - refused by the 2026-10-06 row decision only because the insert plan had nothing to read:
+`fetch --target insert` reads `IMPORT_CLAIMS.json` and `IMPORT_HERO_REFUSALS.jsonl` **out of the run
+directory**, and only the 2025 import ever wrote them, into its own runs, over its own target list.
+`insert-seed --from-run <import run> --sites <file>` copies the two records out of the run that
+recorded them, for the sites named and only those (`import_hero/insert.py:seed_from_import_run`). It
+seeds a site **only** if that run refused it as `no_target_row`: every other refusal means the import's
+file was refused for another reason - too small, no credit, no rendering - and copying its claim into a
+wave would turn that refusal into a written row. Claims are merged, never replaced, and the refusal
+carries a `source` and an `evidence_source` naming the run the claim came out of, because the row is
+journalled with both and this wave did not ask for that file - the import did.
+
+Seven rows, **105 journal rows**, 0 refusals in the plan, all five writer steps green, acceptance
+**`ok: true`** on the read `e0ca173a` (2026-10-07T08:52:33Z), and **7/7 live** with the exact byte
+count. The served tree did not grow - it stayed at **50,389 `.webp`**: those seven files were already
+served, and what was missing was the row that pointed at them.
+
+**192 sites that showed nothing at all now serve a hero of their own**, each acceptance green on a fresh
+read of production and each file verified byte-exact on the offsite tree, after the transfer and inside
+the api container. The chain cleans itself: a wave re-offers every target the run knows, and a site that
+was already written comes back as `already_holds_the_file` rather than being written twice.
+
+**What the lane's own floor costs this lane, counted.** Over the nine candidate waves the fetch refused
+**74 distinct sites** by name:
+
+| reason | sites | what it is |
+|---|---:|---|
+| the 1600x900 floor | **40** | 25 refused for width (originals 800x600 to 1474x999), 15 for height (stored 1600x474 to 1600x899) |
+| the credit rule of 2026-10-05 (17:43) | 26 | no `author_url` (23) or no `license_url` (3) |
+| a name the filesystem refuses | 4 | `"` in the Commons title; the lane's rule is the Commons name verbatim |
+| a file type with no thumbnail rule | 4 | `.tif`, which the naming rule does not cover |
+
+**Every one of the 40 floor refusals would clear 800x300.** Read out of the candidate run's own
+imageinfo and the fetch's own message: the smallest width among them is **800 px**, the smallest height
+**474 px**, the largest height 2,560 px, and **none of the 40 is below 800x300** - not one is a strip.
+
+**The import lane's remainder is the same question with a smaller answer, and it is measured**
+(`RESTBESTAND_2026-10-07/`). Of the 62 sites that show nothing although the 2025 import links them:
+**7** are written by wave `-009` above, **8** clear 800x300 but not 1600x900, **25 are genuinely too
+small** (640x480 geograph.org.uk thumbnails, 480x640, one 254x147 - below 800x300 whatever is
+decided), **5** are refused by the credit rule and **6** for another reason (four link no
+`upload.wikimedia.org` file at all, one carries a `"` in its name, one is 1600x780).
+
+**The owner's floor decision released 40 + 8 = 48 target sites and wrote 37 rows.** The two numbers are
+not the same, and the difference is measured rather than estimated: **11 of the 48 carry a second,
+independent refusal** that the floor does not touch - **8 at the credit rule of 2026-10-05 (17:43)**
+(Tomb of Macridy Bey, Coppa Nevigata, Calf of Eday Cairns, Beckfoot, Museo de la Arquitectura Maya,
+Aqueduc Romain, Huayuri, Obelisk of Thutmose I), which this decision does not reopen; **1 at the lane's
+own upscale guard** (`Qasr Qaroun Temple`: *"arrived 2560 px wide, wider than the 1152 px original"*, a
+picture the fetch will not enlarge into); and **2 as `already_holds_the_file`** (Villar de Domingo
+García, Merano), which are not a loss at all - those two already serve that file, which is why the plan
+left them alone. So the floor released 37 rows, and the 9 sites it did not reach are 8 credit-rule and
+1 upscale refusals. `C:\tmp\floor_gap.py` reads this out of the runs' own `FETCH_FAILURES.jsonl` and
+`INSERT_REFUSALS.jsonl`; nothing here is estimated.
+
+#### The `never_fetched` group was never asked for a floor, and its measurement was wrong
+
+`IMPORT_FLOOR_800x300.json` answered the owner's floor question for **the 33 width refusals only**. The
+import lane's remainder has three groups, and the other two were not in that file: 14 sites whose file
+was already on the offsite tree, and 37 that were never fetched or refused for width. The second group
+is what `IMPORT_REMAINDER_SIZES.json` measures, and its measurement was **wrong for two of eleven**.
+
+**The root cause is a lookup, not a file.** `Commons.sizes()` keys its answer by the *canonical* file
+name - `canonical_file()` strips the `File:` prefix and normalises underscores and spacing - and the
+caller looked the answer up by the **raw** title the 2025 import carries. Two of the eleven links spell
+that raw title with the prefix, `File:Llactapata.jpg` and `File:Miniaturk 009.jpg`, so the lookup
+returned `None` and `or (0, 0)` turned *"not a key in my answer"* into *"Commons does not hold this
+file"*. The other nine, whose raw titles are bare names, were read correctly. Verified against the raw
+API, without the wrapper and without the cache: `Llactapata.jpg` is **1842x1024** and `Miniaturk 009.jpg`
+is **1024x768**. Both clear 800x300. Corrected measurement: **3** of the 37 clear 800x300, 25 stay
+below, and 9 are links Commons does not hold (`Sembel`, `Osiris Shaft`, `Rag-i-Bibi`, `Q'asa Pata`,
+`Balcon de Montezuma`, `Chactén`, `Duraz Temple`, `Aké`, `Burnt Mound in Fox Hollies Park` - all named
+in `IMPORT_STALE_LINKS.json`).
+
+**Those two are refused for a second reason, and it is the same reason for both.** Their import links
+are not `upload.wikimedia.org` URLs at all:
+
+```
+https://en.wikipedia.org/wiki/Cusichaca_River#/media/File:Llactapata.jpg
+https://en.wikipedia.org/wiki/Temple_of_Artemis#/media/File:Miniaturk_009.jpg
+```
+
+The lane accepts an `upload.wikimedia.org` link and refuses every other host as `unreadable_url`, which
+is the credit guard the decision of 2026-10-05 leans on. **The lane is left as it is, and the two sites
+stay empty**, on a measured basis (`WIKIPEDIA_MEDIA_FORM_PROBE.json`): the form appears **17** times
+over the 4,900 curated sites, and **15 of the 17 already serve a picture**, so it costs nothing
+elsewhere. Two sites do not justify weakening a host rule the owner set, and there is a reason to
+wait: on an en.wikipedia article `/media/File:X` renders the *local* file when one exists and the
+Commons file otherwise, so the name alone does not prove which image the curator saw. Both sites'
+rows already hold the Commons URL of that same file (`wiki_images.id=79238` for Cusichaca River), so
+the picture is one owner decision away.
+
+**What the twelve waves did to the §3.7.1 table**, the same script over the floor wave's read
+(`d0c3852a`, 2026-10-06T16:11:30Z) and over the last wave's **acceptance** read (`0b5d7da0`,
+2026-10-07T10:14:53Z) - the read after the commit, not the one the plan measured against:
+
+| over the 4,900 shown curated sites | before | after |
+|---|---:|---:|
+| serves a gallery row | 3,578 | **3,808** |
+| serves only its `thumbnail_url` | 152 | 140 |
+| **serves nothing at all** | 1,170 | **952** |
+| shows two heroes at once | 0 | 0 |
+| live hero under 1600x900 | 552 | 809 |
+| live hero under **800x300** | 22 | **19** |
+
+230 sites gained a served row in that window: **192 of them are this lane's waves** (every one of the
+192 serves in the acceptance read - 0 written sites failed to), and 38 belong to another lane that wrote
+in the same window. The floor wave's own baseline above is reproduced exactly from the same script, so
+the two columns are comparable.
+
+**The two floor waves (2026-10-07, runs `-010` and `-011`).** The owner released the lowered floor for
+the sites that show nothing ("alle offenen punkte nach empfehlung freigegeben", 2026-10-06, AFK), so
+both waves carry a `FLOOR.json` of `800x300` and the floor is written into the target lists
+(`FLOOR_RELEASE_CANDIDATE.json`, 40 sites, `FLOOR_RELEASE_IMPORT.json`, 8) with the owner's words in
+their `owner` field. Wave `-010`: 226 claims, the read `e16c2658`, the fetch at 800x300 returned **184
+fetched and 42 refused**, and the plan wrote **30 rows over 450 journal rows** (154 `already_holds_the_
+file`, 42 `not_fetched`). Wave `-011`: 8 seeded from the import run, read `ff6ef5ae`, **7 fetched and 1
+refused**, **7 rows over 105 journal rows**. All five writer steps green on both, acceptance **`ok: true`**
+on `ad068f99` and `0b5d7da0`, **37/37 live** with the exact byte count, and the 191 packed files verified
+in the api container (0 missing, 0 size mismatches; the served tree 50,389 -> **50,428 `.webp`**).
+
+**The rehearsal of wave `-010` failed on its own plan, and the reason is in the floor.** `--rehearse`
+answered `EXIT 7` with 30 rows inserted and the reversal unable to remove them: `insert.py:637` wrote
+guard 3 of `APPLY.sql` from the constants `HERO_MIN_WIDTH`/`HERO_MIN_HEIGHT` (1600x900) while every
+other step of the same run - the fetch, the plan, `CHUNK.json` - took the floor as a parameter. The chunk
+therefore refused to roll back the very rows it had just written, because their files are 800x300 and the
+guard asked for 1600x900. **The floor is now a run parameter down to the last number of the statement**:
+`render_apply(..., floor=)`, `InsertChunk.floor`, `chunks_of(..., floor=)`, `write_chunks(..., floor=)`,
+`min_width`/`min_height` in `CHUNK.json`, and `cmd_insert_plan` reading `_floor_of(run, None, None)`.
+
+**The writer had the same gap in two places, and `--check` found it before the apply.** `load_chunk`
+rebuilt the chunk without the floor and `check_delivered` re-rendered the statement from that rebuild, so
+the comparison was 800x300 against 1600x900 and could never be equal: *"APPLY.sql is not the statement
+its plan renders - edited or stale; refusing to send"*. Both take the floor from the chunk's own
+`CHUNK.json`; a chunk written before that key existed (waves 1-10) served the lane's own floor, so the
+absent key means exactly that. Seven tests carry this (three in `TestTheRunServesItsOwnFloor`, four in
+`TestTheWriterChecksAtTheRunsOwnFloor`), including the one that says a statement edited *at* a lowered
+floor is still refused.
+
+**What is left, measured per site** (`RESTBESTAND_2026-10-07/RESTBESTAND_2026-10-07.jsonl`, **952**
+sites, one measured reason each, counted on the acceptance read `0b5d7da0` of wave `-011` and not on a
+plan read): **461** the search refused because Commons names no file for them at all, **369** the search
+found candidates and the judge saw none of them as a picture of the site, **48** the judge confirmed a
+picture and the INSERT lane refused it (the 11 of the floor decision's 48 that a second refusal kept
+out, plus the 37 of the earlier waves' credit-rule and filename refusals), 25 `all_too_small` from the
+search, and **49** outside the candidate search's population - the sites the 2026-10-06 inventory handed
+to the **import lane** rather than to the search, so no INSERT wave was ever run over them. The
+classes are 723 `no_row_at_all` and 229 `every_row_excluded`.
+
+**Those 49 are measured now too** (`import-hero-2026-10-07-010`, read `f30dcfa9` of 2026-10-07T11:32:24Z).
+The hero lane refuses **all 49 as `no_target_row`** - the import's file is no row of the site, so no
+hero promotion and no unhide can reach it; a row would have to be created, which is the INSERT lane.
+Seeded 37 of 49 from the import run's own claims (the other **12** the seed refuses as
+`unreadable_url`, a link it cannot read as a Commons file), and of those 37 the corrected measurement
+splits them: **25** below 800x300, **9** a file Commons does not hold, **2** the Wikipedia link form,
+**1** the credit rule. Nothing is writable and nothing was written.
+
+**Two gaps in the record, both found by running that wave and both closed here.** The seed's own
+refusals were returned and never written, so a site it dropped left no trace - `SEED_REFUSALS.jsonl`
+now holds them, apart from `IMPORT_HERO_REFUSALS.jsonl`, which `insert-plan` reads back as the lane's
+own. And `write_chunks` raised "the plan holds no row" **before** writing its refusals, so a wave that
+refuses every site lost the only result it had - it now writes `PLAN_REFUSALS.jsonl` first and names
+the file in the error. That is where this wave's 385 refusals live (378 `no_target_row`, 7
+`local_file_too_small`) out of the 4,900 curated sites the join covers.
+
+**That file was measured twice on this page.** It first named **989** sites, over the acceptance read
+`e0ca173a` of wave `-009`. The two floor waves then wrote 37 of them, and the list is regenerated over
+the read after their commits: 989 - 37 = **952**, and 989 - 952 reproduces the 37 rows exactly.
+
+**The owner lowered the floor of §3.7.2 twice, and both decisions have been carried out.** The first
+was for the sites that *already have* a picture; the second (2026-10-06, "alle offenen punkte nach
+empfehlung freigegeben") was for the sites that show **nothing**, this lane's whole population, at
+800x300. What the measurements settle is that **800x300 costs nothing in quality here** - of the 48
+sites it named, not one is a strip, and 37 of them now serve their page.
+
+**And this lane is closed.** The judgement answered **595 of 595** sites and `TARGETS.jsonl` names 226
+of them; every one of the 226 is now written, refused by name, or already written by an earlier wave.
+There is no target left in `candidates-2026-10-06` that an INSERT wave has not been run over, and the
+owner's floor decision is no longer open.
+
+**The largest class left, 461 sites, was measured twice before anyone spends an hour on it** - both
+probes are in `RESTBESTAND_2026-10-07/` and both are negative in a way that closes a door:
+
+* `COUNTRY_QUERY_PROBE.json`: the lane asks `name filetype:bitmap`, `intitle:"name" filetype:bitmap` and
+  the category of that name. A fourth form that adds the **country** (`"name" country filetype:bitmap`
+  and two variants), on a **40-site sample of the 461**, brings a new, large-enough picture for **0 of
+  40**. The refusal is therefore not a query-form problem: Commons answers nothing for these names under
+  any of them.
+* `BARE_NAME_PROBE.json`: the 461 carry **English descriptive names** - *Al Sanea Tomb*, *Appolonia
+  Temple Ruins*, *Arzachena Archaeological Park*, *Apolyanka* - where Commons files the place under its
+  own name. **70 of the 461** carry such a descriptor at all; on a **25-site sample of those 70**, asking
+  for the bare name brings candidates for **13** (52 %). That is a real gain in candidates and a poor
+  gain in pictures: *Cochabamba Archaeological Site* answers **23 pictures of the city**, *Al Hajar
+  Burial Mound Field* **14 of the mountain**. The judge would reject them as `region_or_type`, which is
+  exactly the failure it exists for - so the route costs several hundred model judgements for a
+  double-digit number of sites, and the descriptor list that produces the bare name is crude enough to
+  hand it the wrong place (*Cloggs Cave* -> *Cloggs*, *Braughing - Roman Town* -> *Braughing - Roman*).
+
+So this class is not a bug to fix but **a name the curated data does not carry**. Closing it needs the
+local name per site - research over 461 sites, and a decision about whether that is worth it. The
+honest summary of the whole remainder: **952 sites still show nothing, and none of them has a confirmed
+picture that a decision is standing between it and its page** - every one of the 48 the floor decision
+named is either written (37) or held by a refusal that floor was never the right lever for (11).
+
+### 3.7.2 The floor the owner lowered (2026-10-06), and exactly what it released
+
+Owner decision, 2026-10-06: *"for these cases the existing picture becomes the hero"* - the size a
+local file must reach comes down for the sites that already have a picture. **The floor is a run
+parameter, not a second constant**: `run.py plan|fetch --min-width W --min-height H`, written into the
+run directory as `FLOOR.json` and read back by every later step of that run, because a plan at one
+size and a fetch at another would refuse exactly what the other accepted (`_floor_of`, `run.py`).
+
+The pair is measured, not chosen: of the sites the lane refused as `local_file_too_small`, **every
+one holds a row of at least 800 px width and none below**, and the smallest of their heights is
+337 px (800x600 and taller for the rest). So 800 px of width clears all of them and no width below
+800 would, and the height has to travel with it - hence **800x300**.
+
+Run `-009` (`FLOOR.json`, `IMPORT_HERO_SUMMARY.json`, `ACCEPTANCE.json`, `chunk-001..003`):
+
+* planned **243 sites / 727 rows** in 3 chunks, applied with the five writer steps each
+  (299 + 299 + 129 rows), **accepted 243/243/243/243** on the fresh read `d0c3852a…`
+  (2026-10-06T16:16:41Z), 0 problems, and **243/243 serve the file over HTTP with the exact
+  `file_size_bytes` of their row** (23 of those names carry non-ASCII characters and need URL
+  quoting before a request leaves the process - that is a fact about the check, not the site).
+* What the floor actually released, counted per promoted row: **131 at 800 px width, 111 at 1600 px,
+  1 at 1599 px**. The 112 sixteen-hundred-wide rows were refused only by the *height* half - they are
+  1600x600 up to 1600x899, not small pictures. A floor of width alone would have left them stuck
+  behind a rule whose own purpose is to keep strip images out.
+* **The lane's own floor is empty**: replanning the same read at 1600x900 yields **0 rows / 0 sites**,
+  and **every one of the 243 was refused at 1600x900 as `local_file_too_small`** - 0 exceptions. The
+  wave is the whole remainder of the hero lane, not a selection from it.
+* **Still refused at the owner's floor, by name**: 7 sites, all of them 800 px wide and **177-298 px
+  high** (row ids 60884, 73893, 76407, 83714, 93021, 99542, 102572). A 800x177 strip is not a
+  picture of a site, and the owner named a width; the height is this lane's own rule and it stops
+  there.
+
+Effect on the numbers of §3.7.1, the same script over the wave's two reads (a row counts as served
+when it is neither `is_excluded` nor `scope_status = 'retired'`; both columns total 1,284 sites
+without a served row, the §3.7.1 table's 153 + 1,169 total 1,322 - one site sits on the other side of
+the bucket boundary there, so the two are not to be subtracted):
+
+| over the 4,900 shown curated sites | read `-009` | read after `-009` |
+|---|---:|---:|
+| serves a gallery row | 3,578 | **3,616** |
+| serves only its `thumbnail_url` | 152 | 140 |
+| **serves nothing at all** | 1,170 | **1,144** |
+| shows two heroes at once | 0 | 0 |
+| live hero under 1600x900 | 552 | 772 |
+| live hero under **800x300** | 22 | **19** |
+
+The hero count under the lane's own floor *rises*, and that is the point: 243 heroes now point at the
+picture the 2025 import hand-linked, 131 of them the 800 px derivative. Under the owner's floor it
+falls. Of the rest inventory this wave closed **26 of 26 `import_picture_too_small`** and 12 more
+that already had a row (`ih3` unhides the only row of a site that showed nothing). Untouched, because
+they need a new picture rather than a lower bar: **1,081 `no_picture_at_all`**, 36
+`import_picture_is_no_row` and 26 `import_picture_never_fetched` for the INSERT lane.
+
+#### The same floor, for the sites that show nothing (owner decision 2026-10-06)
+
+The decision above lowers the floor for sites that *already have* a picture. The INSERT lane's
+population is the opposite: sites whose page serves **no image at all**, which need a row created before
+any size can matter. Owner decision 2026-10-06, in the same conversation: *"alle offenen punkte nach
+empfehlung freigegeben"* - every open point is released as recommended. The recommendation was that the
+same 800x300 apply here, and it is applied: the two target lists
+(`FLOOR_RELEASE_CANDIDATE.json`, 40 sites, `FLOOR_RELEASE_IMPORT.json`, 8) carry the floor and the
+owner's words, and both waves write a `FLOOR.json` of 800x300 exactly like wave `-009` above.
+
+48 target sites, **37 rows written**, and the 11-site difference is named in §3.7.3. Nothing else about
+the lane changed: the credit rule of 2026-10-05 (17:43), the upscale guard and the filename rule all
+still refuse by name, and 800x300 releases no strip on either side - the smallest of the 48 is 800 px
+wide and 474 px high.
+
+```bash
+PY=./.venv/Scripts/python.exe
+IH=scripts/remediation/import_hero
+CW=scripts/remediation/gallery_audit/chunk_writer.py
+R=output/remediation/import_hero/import-hero-2026-10-06-009
+$PY $IH/run.py plan --run-dir $R --min-width 800 --min-height 300
+for C in $R/chunk-001 $R/chunk-002 $R/chunk-003; do
+    for step in --check --rehearse --apply --readback --rehearse-rollback; do
+        $PY $CW $C $step                        # one at a time, they exclude each other
+    done
+done
+$PY $IH/run.py accept --run-dir $R
+```
+
+```bash
+PY=./.venv/Scripts/python.exe
+R=output/remediation/import_hero/import-hero-2026-10-06-006
+IH=scripts/remediation/import_hero
+# the INSERT wave: the fetch (resumable), the plan, the writer, the acceptance
+$PY $IH/run.py fetch         --run-dir $R --root $OFFSITE --target insert --start
+$PY $IH/run.py insert-plan   --run-dir $R
+for step in --check --rehearse --apply --readback --rehearse-rollback; do
+    $PY $IH/insert_writer.py $R/chunk-001 $step   # one at a time, they exclude each other
+done
+$PY $IH/run.py insert-accept --run-dir $R
+```
+
+**The static export is not part of this.** A hero or licence change dates the rendered page
+(`pipeline/utils/public_sites.py`), so the globe shows the previous picture until the next export
+run; the page and the hub read the database at once and already show the new one.
+
 ---
 
 ## 4. Tests and the mutation sweep
@@ -392,6 +1132,19 @@ export; the page and the hub read the database at once.
   check export), Commons (what a picture is, no rendering taken for the original), both stages,
   the thumbnail repair, the candidates (still pictures, unserved renderings listed), the plan
   (other sites out of a replaced gallery), the acceptance.
+* `tests/remediation/test_import_hero.py` - the import is read with its keys, the join (URL first,
+  folded title second, ambiguity kept), every rule `ih1`-`ih5`, both refusals by name, the fetch
+  manifest's whole `imageinfo` answer, `may_empty` (a site that shows nothing today is named, a site
+  with a live image never is), the chunk writer's five steps, and the acceptance's three questions
+  including the thumbnail that names the old row and the hidden row that a thumbnail alone does not
+  excuse.
+* `tests/remediation/test_import_hero_insert.py` - the insert plan's refusals (`no_row_at_all`,
+  `not_fetched`, `already_holds_the_file`), the statement's five guards and three invariants, the
+  journal read back from the row it created, the reversal's DELETE naming the triple the lane wrote,
+  the lint's two shapes, and the acceptance.
+* `tests/remediation/test_import_hero_slug_match.py` - a Commons slug that differs from the file's
+  title: the plan finds the row through the resolved upload URL, the insert plan refuses it by name,
+  `ih4` names the row the site serves, and the acceptance takes the same identity.
 * `tests/remediation/test_scope_review.py` - the funnel, the answers (a site carries no quotes,
   the copies of Wikipedia), the rounds (in order, never empty, three asks at one premise, a moved
   entry asked again) and their quote check, the plan's guards (the latest answer decides), the

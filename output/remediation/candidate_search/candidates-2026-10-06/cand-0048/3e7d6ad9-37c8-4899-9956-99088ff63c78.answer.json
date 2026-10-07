@@ -1,0 +1,13 @@
+{"site_id": "3e7d6ad9-37c8-4899-9956-99088ff63c78",
+ "answered_by": "mcode-judge-cand-0048",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [{"file": "Achadh an Marbh-Annaghmare Court Tomb. Annaghmare TD, Crossmaglen - geograph.org.uk - 4172647.jpg",
+               "verdict": "depicts",
+               "note": "Kerbed cairn with large upright orthostats on a grassy mound between conifers: the court tomb's own megalithic structure."},
+              {"file": "Visitors car park at Achadh an Marbh-Annaghmare Court Tomb - geograph.org.uk - 4172658.jpg",
+               "verdict": "depicts",
+               "note": "Site car park and green gate in the foreground; the tomb's stone cairn is clearly visible on the rise behind the gate."},
+              {"file": "Remnant of the cairn cover of the Achadh na Marbh Court Tomb, Annaghmare - geograph.org.uk - 4173489.jpg",
+               "verdict": "depicts",
+               "note": "Scattered kerb stones and cairn remains strewn over a grassy mound beside a woodland path: the tomb's own surviving remains."}],
+ "note": ""}

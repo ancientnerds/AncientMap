@@ -1,0 +1,45 @@
+site_id: c1ab9ac7-d0cb-46b3-9d7c-3d6c19be5a48
+name: El Cedral
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- El Cedral, Cozumel, Quintana Roo, Mexico Mayo 2021 - 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9ffb0ff145e989302cc756ecb98ebd0
+- El Cedral, Cozumel, Quintana Roo, Mexico Mayo 2021 - 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8786142c148e5eef678431a677fc504a
+- El Cedral, Cozumel, Quintana Roo, Mexico, Mayo 2021 - Pre-Columbian stone building.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1e2d4ba057c21dc3b440d09423427342
+- Leaving El Cedral, Cozumel, Quintana Roo, Mexico May 2021 - Archway - 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1da618708df2c01c97dd548516d6ef13
+- Overgrown Mayan Ruin at El Cedral - Cozumel - Mexico.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50dd2078ae1f97824ad41b30194ca472
+- Architectural Detail - El Cedral - Cozumel - Mexico.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ec881e3242a03cdac471757b240ba160
+- Original Mayan Calendar Stone - El Cedral - Cozumel - Mexico.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\131253c6819834a449c727aded34f56c
+- Man Works with Machete - El Cedral - Cozumel - Mexico.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\34cce56f5e274966768b8c6fbbf37629
+- Church Facade and Bunting - El Cedral - Cozumel - Mexico.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f1cc83c7258b8b4dcabf0be656bb64a7
+- El Cedral, Cozumel, Quintana Roo, Mexico, Mayo 2021 - Piedras.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e1a83c6f296130b1888b92e073fe12ed
+- Mayan Temple Next to Catholic Church - El Cedral - Cozumel - Mexico.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b34a3e9489797a48d3489a4fd11a8be
+- Church Cross from Early Spanish Conquest - El Cedral - Cozumel - Mexico.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9ce61120c5ccc5968db5a1f871f0456e
+- Presa El Cedral. 13.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ef997a5617cf83744385651907abeda7
+- Presa El Cedral. 11.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2b67cc69e770ecfeb8e3a8c131968f67
+- Presa El Cedral. 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7ac85a1c52eab033f1ac9754366b4c74
+- Presa El Cedral. 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\95946ff3e887a85ee71d191eee04fb4d
+- Hato El Cedral.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bbfa2f72483e1d991cc0312929a5e6d5
+- Hato El Cedral Llanos de Venezuela 2015-02-06 17.16.46.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\97f373569d2c963a6755fe5e9a256fa2
+- El Cedral, Cozumel, Quintana Roo, Mexico Mayo 2021 - 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f698989518a2cceb32a9f8ad44a39a48
+- Leaving El Cedral, Cozumel, Quintana Roo, Mexico May 2021 - Archway - 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\163cc70579a69717b2cca2dba746a5e0
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

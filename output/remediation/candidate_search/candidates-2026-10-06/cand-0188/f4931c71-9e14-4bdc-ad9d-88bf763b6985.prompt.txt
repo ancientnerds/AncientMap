@@ -1,0 +1,45 @@
+site_id: f4931c71-9e14-4bdc-ad9d-88bf763b6985
+name: El Salt
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- ElSalt.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a14d5a93b18d58ecd6b4fb2180186c85
+- Piles of Salt Salar de Uyuni Bolivia Luca Galuzzi 2006 a.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5836041679bda247a9caae181fe1a16
+- El Mallaha salt lake1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7d9744cbc0f36b5f20e29c30c88090ab
+- El Mallaha salt lake2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fc9bbf6b0161d9a4d20f5a14ce92c55c
+- El Salt d'Alcoi.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\47b38e646f484349c20e23202dd12f6e
+- Salt Lake (Sebkhra) of Oum El Bouaghi, Algeria.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\611142da02056db8327cc02108c1472d
+- Wieliczka, Jana Matejki; Kopalnia soli- kierat konny węgierski; A-580; 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6f9a72b1d72ebfffcd197ec52539ed16
+- CHO - Cracked salt crust at Chott el Djerid, Tunisia, 2023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\719bcd3daac27f03e71828c6730da0e7
+- CHO - Salt pan at sunset in Chott el Djerid, Tunisia, 2023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2855d03c72a26f34da36a0a5c8639406
+- CHO - Salt mound and hole at Chott el Djerid, Tunisia, 2023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\be034b0719d18d7ae4d212ba33160bb3
+- CHO - Visitors on the salt flats of Chott el Djerid, Tunisia, 2023.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f2febff1e070414d6f58a9927aefaff4
+- El salt del Cavall (Llucena).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\25138fc7dbce457dccecc7f490c30b15
+- Jardí de Brutinel. El Salt..JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da9e3851686023105060fd2d5b8bd139
+- Roques i el salt de la Novia, Navaixes.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\06bb22cedb722819bea6d58de33999bd
+- Tardor (el Salt) - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c16fda7c893be2e97e8044dea39c6fbd
+- Cami a El Salt - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50d8d15110967639e3d285923633d03a
+- Tavertet - La balma de les corts sota el Salt de Moli-bernat.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ab4856fdbcb5b5e8b586196f96ce236
+- El Salt de la Novia de Navaixes.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8b333ed804465f3d9c36c0aaaf7f26da
+- Bigues i Riells. Bigues. El Salt de la Núvia 2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd0648067dacac1b560778ae6e5e9200
+- Riu El Salt - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c015edd72339a89b0c3d54dea88c257c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,113 @@
+{
+  "site_id": "bc308dd3-8a3b-47b5-bb19-84b08ddfb193",
+  "answered_by": "mcode-judge-cand-0144",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Barmaid - El Fogón Norteño, Palenque, Chiapas.jpg",
+      "verdict": "other_site",
+      "note": "Bar mit Tresen, Gläsern, Flaschen und Barkeeperin: moderne Szene in einem Restaurant."
+    },
+    {
+      "file": "Street Life - El Fogón Norteño, Palenque, Chiapas.jpg",
+      "verdict": "other_site",
+      "note": "Belebte Strasse mit Autos, Läden und Passanten, moderne Stadtansicht ohne Site."
+    },
+    {
+      "file": "Palenque - Maya site in Chiapas - 1977 - El Palacio 02.jpg",
+      "verdict": "region_or_type",
+      "note": "Maya-Ruinen von El Palacio, Aufnahme 1977; dass dies die Site 'El Palenque' ist, laesst das Bild nicht erkennen."
+    },
+    {
+      "file": "Palenque - Maya site in Chiapas - 1977 - El Palacio 01.jpg",
+      "verdict": "region_or_type",
+      "note": "Maya-Palastruinen mit Kolonnaden und Wald; Site-Zuordnung 'El Palenque' nicht belegbar."
+    },
+    {
+      "file": "Mask - El Palacio - Palenque Maya Site, Feb 2020.jpg",
+      "verdict": "region_or_type",
+      "note": "Steinernes Maskenrelief in Mauerwerk; wohl El Palacio, Identitaet mit 'El Palenque' unklar."
+    },
+    {
+      "file": "Palacio de Palenque 1986 02.jpg",
+      "verdict": "region_or_type",
+      "note": "Bemaltes Stuckrelief-Fragment in einer Mauer; Zuordnung zur Site 'El Palenque' unsicher."
+    },
+    {
+      "file": "Palacio de Palenque 1986 09.jpg",
+      "verdict": "region_or_type",
+      "note": "Grosses zerbrochenes Maya-Maskenrelief aus Stein; Site-Zuordnung 'El Palenque' unsicher."
+    },
+    {
+      "file": "Palenque Chiapas 1977 06.jpg",
+      "verdict": "region_or_type",
+      "note": "Breite Tempelterrasse mit Turm und Dachriegel; dass es 'El Palenque' ist, ist am Bild nicht belegt."
+    },
+    {
+      "file": "Visiting the Palace at Palenque 1981.jpg",
+      "verdict": "other_site",
+      "note": "Zwei junge Frauen sitzen an einer Mauer, Personen im Vordergrund, Aufnahme 1981."
+    },
+    {
+      "file": "Palacio de Palenque 1986 06.jpg",
+      "verdict": "region_or_type",
+      "note": "Verblasste, kaum erkennbare bemalte Reliefs im Putz; Zuordnung zur Site unsicher."
+    },
+    {
+      "file": "Palacio de Palenque 1986 16.jpg",
+      "verdict": "region_or_type",
+      "note": "Maya-Gebaeuderuinen mit Stufen und Urwald; ob dies 'El Palenque' ist, ist nicht feststellbar."
+    },
+    {
+      "file": "Palacio de Palenque 1986 14.jpg",
+      "verdict": "region_or_type",
+      "note": "Steinernes Maya-Gesichtsrelief mit Federmotiv; Site-Zuordnung 'El Palenque' unsicher."
+    },
+    {
+      "file": "Entrando En El Palenque El Caballero Del Azor.jpg",
+      "verdict": "other_site",
+      "note": "Stichillustration eines Ritters zu Pferd vor einem Viehgehege, spanisches Buchbild."
+    },
+    {
+      "file": "Juan Manuel Blanes - Dos gauchos en el palenque.png",
+      "verdict": "other_site",
+      "note": "Gemaelde zweier Gauchos mit Pferden an einem Zaun, suedamerikanische Szene."
+    },
+    {
+      "file": "Dos gauchos en el palenque, sin marco.jpg",
+      "verdict": "other_site",
+      "note": "Dasselbe Gaucho-Gemaelde ohne Rahmen: keine Ruine, keine mexikanische Site."
+    },
+    {
+      "file": "Restaurant El Palenque Uribelarrea 02.JPG",
+      "verdict": "other_site",
+      "note": "Restaurantfassade mit argentinischer Flagge und Schild 'El Palenque', Argentinien."
+    },
+    {
+      "file": "Dos gauchos en el palenque, con marco.jpg",
+      "verdict": "other_site",
+      "note": "Gerahmtes Gaucho-Gemaelde an einer Wand, Gemälde statt Site."
+    },
+    {
+      "file": "Restaurant El Palenque Uribelarrea 01.JPG",
+      "verdict": "other_site",
+      "note": "Restaurantinnenraum mit Tischen, Stühlen und Gaesten, moderne Szene."
+    },
+    {
+      "file": "El palenque.jpg",
+      "verdict": "region_or_type",
+      "note": "Trockene Huegellandschaft mit Buschwerk und einem Mast, keine Site-Struktur erkennbar."
+    },
+    {
+      "file": "El Palenque Verano 2017.jpg",
+      "verdict": "region_or_type",
+      "note": "Weite Huegellandschaft mit totem Holz, reine Landschaft ohne Site-Struktur."
+    },
+    {
+      "file": "Vicepresidenta de la Asociación de Artesanas de Cruz Pampa, Yapatera, \"El Palenque\".jpg",
+      "verdict": "other_site",
+      "note": "Portraet einer Handwerkerin mit Kopfbedeckung an einem Tisch mit Ton, Person im Vordergrund."
+    }
+  ],
+  "note": ""
+}

@@ -1,0 +1,44 @@
+site_id: e046b573-d1cc-454c-94f9-01f5fd51e233
+name: Ancaster, Lincolnshire
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Unlikely Lincolnshire nature reserves (1), roadside verges, south of Ancaster - geograph.org.uk - 2161719.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b6ede6c31c3104b50c22724590bde25e
+- Goldholme Limestone Quarry (Ancaster limestone), Ancaster, aerial 2020 - geograph.org.uk - 6608207.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\70e11ebde0d0c5fdf3653df1bc0883c4
+- Ancaster - geograph.org.uk - 7297126.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c459d9bd1ef0b0749e41c4115d8fc3de
+- Ancaster station - geograph.org.uk - 6137749.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c99c4c0c921b4396200cd5fc47f7a0a8
+- Ancaster station - geograph.org.uk - 5498281.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6a094a4ca63f32c3ff12ccab301af206
+- Ancaster station - geograph.org.uk - 5498296.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\075fdfbcdb82dd1646253710ba152549
+- Church Lane, Ancaster - geograph.org.uk - 6222274.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8482b21fd0e7d69002085b22021bba9a
+- Ancaster railway station, Lincolnshire, 1983 - geograph.org.uk - 3951963.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f365d4d24b27b47669520694f6aeec11
+- Ancaster Valley in winter - geograph.org.uk - 3301713.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\73633f4f123adf99962690cf9206df54
+- The Railway Inn, Ancaster - geograph.org.uk - 7296998.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\27ab747a79ac13916382d94d7756cd7a
+- A Chieftain tank at Ancaster, Lincolnshire, England.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b5cd3b0e622a96017d942335ea1a17e6
+- St Martin's Church, Ancaster, Lincolnshire - geograph.org.uk - 2129665.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4db9dd82d2a5ebf68687ce03f7a08337
+- St Martin's Church, Ancaster, Lincolnshire - geograph.org.uk - 2129689.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff3e9da1ef88ea6ffe8cc268e92086e9
+- A fine albino wisteria - geograph.org.uk - 5786315.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7281bf7fe42ede71d0a00db1aeb4aa27
+- A tank at Ancaster Karting - geograph.org.uk - 2995457.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9101aae61495c2164c7b6995fa851095
+- A Tump - geograph.org.uk - 5346010.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5da0a6f95252c308a9faff25b5f1863
+- A153 Willoughby Road - geograph.org.uk - 4786844.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0dc03f4f81b2cf4cfcc3ebc8aabdf24a
+- A513 Willoughby Road ^2 - geograph.org.uk - 4786848.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\03d03cb5da6174b54b5aaf343c01c2f0
+- Across the lake - geograph.org.uk - 5346016.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\855d96425da8794ceda77d81027a0b4f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

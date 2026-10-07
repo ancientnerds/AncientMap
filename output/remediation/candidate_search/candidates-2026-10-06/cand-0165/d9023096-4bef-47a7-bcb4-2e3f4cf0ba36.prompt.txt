@@ -1,0 +1,33 @@
+site_id: d9023096-4bef-47a7-bcb4-2e3f4cf0ba36
+name: Roman Villa of Quinta da Bolacha
+country: Portugal
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Villa Romana da Quinta da Bolacha 004.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\daab886b4c82d351f5fa6864c67bb7c4
+- Villa Romana da Quinta da Bolacha 006.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\53af1b786d9b547fd615777251c6b3d6
+- Villa Romana da Quinta da Bolacha 002.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5001a045fa8a350590991e8162447419
+- Villa Romana da Quinta da Bolacha 003.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c5cb2963904838bb4ca78896b2875def
+- Villa Romana da Quinta da Bolacha 008.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\13be99c50b3fda3149d8c9285a18edba
+- Villa Romana da Quinta da Bolacha 005.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a9b92f9c256577a6d26b5e66d5b8f357
+- Villa Romana da Quinta da Bolacha 007.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\972482d4876a97f1a28223f41c4246de
+- Villa Romana da Quinta da Bolacha.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9c5969746b0ba11a293f6a46297da4be
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

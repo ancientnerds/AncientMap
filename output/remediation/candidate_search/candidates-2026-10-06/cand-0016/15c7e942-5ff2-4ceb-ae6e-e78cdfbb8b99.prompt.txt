@@ -1,0 +1,37 @@
+site_id: 15c7e942-5ff2-4ceb-ae6e-e78cdfbb8b99
+name: Korikos Antik Kenti
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Korykos Zisterne01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\88e4395d94f301f5b3e39b1cce6c8cf9
+- Fortressarmenians5.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff54e23805ad0680b6bea08eeefe0318
+- Korykos Nekropole16.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d58428ae0b0082ff4284ef215bc393f3
+- Korykos Plan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a1118410ebc92e8da1575d52c37558c8
+- Korykos Stadtmauer 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0d00dfa04f40c9230f50b902c57233ef
+- Land castle of Korykos from Necropolis I 3849.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a629fca32d2dd44ab496eebab16ffdb2
+- Korykos Hafenanlage01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\53afbcee2f9a683336a8a59dd68c3452
+- Korykos Hafenanlage02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba582d76aaf5081ef6b102ec3c000dab
+- Korykos Stadtmauer 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b16ff2a99abff946d32ff2ab5f41c29
+- Land castle of Korykos from Necropolis I 6991.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e2aa3c2aabd30f5b65b4d8d806c78d98
+- Korykos Landburg14.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1c64e5b93f05e1a6c13ac088e3c2cb3c
+- Korykos Landburg37.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f0a513c4203a2a4a279461343c5b1617
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

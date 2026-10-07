@@ -1,0 +1,36 @@
+site_id: 95af4ca2-80d9-4b18-81d9-05c8477213cb
+name: Al Diwan
+country: Saudi Arabia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Dīwān Lughāt al-Turk (original).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\65525d00199cff8d4f22f773fd9e591b
+- Diwan P1190964.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9be83c0a5a9758a9e22c1b0308295dd
+- Diwan P1190965.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\261c9a8f909ec8d0eed7a26037018088
+- Diwan P1190963.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d54759bc4e9811406a2c14321c773dce
+- Diwan P1190960.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3c24e85d2a5c5e71a38833cfc5c7f4ef
+- XUAR Museum Diwan Lughat al Turk 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc863cd18cfed0e206589c042670a4c2
+- XUAR Museum Diwan Lughat al Turk 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\03989f73edc3c4782aefeac666cdf354
+- Mahmud al-Kashgari map.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\125e61e51eb865b0c8542c54ba366151
+- Diwan al Duq.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\080d5cf507e402e5e150128764b793fb
+- Diwan Al Amir.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\949fa4ba28d7843b7b6971719b305070
+- Fonds André Raymond (1925-2011) - Tunisie - Porte Bab al Diwan des remparts de Sfax (MédiHAL 4053336).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a28eac43622441f5e19f7502162199ad
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

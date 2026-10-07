@@ -1,0 +1,31 @@
+site_id: feb1725e-7ef0-464d-8659-17912cfa7a05
+name: Nitovikla
+country: Cyprus
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Mätning. Nitovikla - SMVK - C06293.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f1e0eaaa79174771b714c2fe0067499e
+- Okänd. Nitovikla - SMVK - Csn001.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\813b8d6e1b4d7a5965e684534962a485
+- Entrén. Nitovikla - SMVK - C01372.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bddc7aeedf2182220a221c310ae16ca3
+- Fortet från nordväst. Nitovikla - SMVK - C01369.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\98eca8ffa3a240d6ba099781807da738
+- Norra omfattningsmuren från väster. Nitovikla - SMVK - C01380.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cd18b3cd0002c0b2e135b7d5dba2451b
+- Främmande på fortet. Erik Sjökvist ? Nitovikla. fråga - SMVK - C02547.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\90becf40b834cd1c9a855c92e9b916b3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

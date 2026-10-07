@@ -1,0 +1,29 @@
+site_id: 01c36727-31bd-45ae-9908-5c7043403cd2
+name: Mérida Anthropological Museum
+country: Mexico
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Merida - Anthropological museum - Flickr - S. Rae.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a1891204f46ac7305c5fdd7bd1fafb99
+- Palacio Canton, Mérida, Yucatán, Junio 2024.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\09719dfaa2c8c8716a9b6190f2bc4de3
+- The American Museum journal (c1900-(1918)) (17972200708).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\517270f2a9e719130da6c6cbd66b8dd2
+- Chaak Vessel, Mayapan, Post Classic, 1250-1450 AD.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\90b4b946cc8bddfd744ef0e1f248e1ba
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,113 @@
+{
+  "site_id": "8ee50417-7d0d-416f-b3b9-6e1971d7004b",
+  "answered_by": "mcode-judge-cand-0111",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Mexibus Ojo de Agua 03.jpg",
+      "verdict": "other_site",
+      "note": "Moderner Busbahnhof mit grünem Mexibús-Bus, Bahnsteigdächern und Fahrgästen; Verkehrsszene, keine Site."
+    },
+    {
+      "file": "Mexibus Ojo de Agua 01.jpg",
+      "verdict": "other_site",
+      "note": "Überdachter Busterminal mit vielen Kleinbussen und PKW auf dem Vorplatz; moderne Szene."
+    },
+    {
+      "file": "Ojo de Agua (Mexibús L1A) 1.jpg",
+      "verdict": "other_site",
+      "note": "Bahnsteig mit Drehsperren, Fahrgästen und Kiosk; moderner Busbahnhof, kein Natur- oder Kulturbereich."
+    },
+    {
+      "file": "Ojo de Agua (Mexibús L1) 1.jpg",
+      "verdict": "other_site",
+      "note": "Bahnsteigdach mit Edomex-Bus und Menschen an der Terminalwand; moderne Verkehrsszene."
+    },
+    {
+      "file": "ETRAM Ojo de Agua (2024) 1.jpg",
+      "verdict": "other_site",
+      "note": "Reihen geparkter Kleinbusse unter einem langen Terminaldach; moderne Szene, kein archäologischer Bezug."
+    },
+    {
+      "file": "ETRAM Ojo de Agua (2024) 2.jpg",
+      "verdict": "other_site",
+      "note": "Bushaltestellenanlage mit Kleinbussen, Vordächern und Bettlern; moderne Szene."
+    },
+    {
+      "file": "Ojo de Agua Tlacotepec (1).jpg",
+      "verdict": "region_or_type",
+      "note": "Klarer türkisfarbener Quellteich mit Steinplatten am Grund, Bäumen und Schrein; eine Quelle, Site nicht sicher zuzuordnen."
+    },
+    {
+      "file": "Ojo de Agua Tlacotepec (2).jpg",
+      "verdict": "region_or_type",
+      "note": "Großer Quellteich in einer Parkanlage mit Badendem, Uferpromenade und Bäumen; Typ Quelle, keine erkennbare Site."
+    },
+    {
+      "file": "Terminal ojo de agua.jpg",
+      "verdict": "other_site",
+      "note": "Überdachter Bahnsteig mit uniformierten Polizisten und Fahrgästen; moderne Terminalszene."
+    },
+    {
+      "file": "Ojo de Agua Beach in Alta Guajira 2023.jpg",
+      "verdict": "region_or_type",
+      "note": "Wüstenstrand mit Klippen und Meer, Sand und Brandung; reine Küstenlandschaft ohne Site."
+    },
+    {
+      "file": "Ojo De Agua De Pastores Letrero.jpg",
+      "verdict": "other_site",
+      "note": "Verrostetes Schild mit der Aufschrift OJO DE AGUA DE PASTORES in einer Wiese; nur ein Ortsschild."
+    },
+    {
+      "file": "Iglesia Catolica de Ojo de Agua..jpg",
+      "verdict": "other_site",
+      "note": "Weiße katholische Kirche mit Glockenturm und Kreuz, Laternen und Bäumen davor; ein Kirchengebäude."
+    },
+    {
+      "file": "Iglesia del Santo Cristo del Ojo de Agua, Saltillo, Coahuila- Santo Cristo del Ojo de Agua church (22328215123).jpg",
+      "verdict": "other_site",
+      "note": "Kirchenanlage mit Steinbogen, Treppen, Kuppeln und Glockentürmen auf dem Hügel; zeigt die Kirche."
+    },
+    {
+      "file": "Entrada al Ojo de Agua, En la Iglesia del Ojo de Agua, en Saltiillo Coahuila - panoramio.jpg",
+      "verdict": "region_or_type",
+      "note": "Eingangsbereich am Kirchengelände mit Mauer und Tor sowie Kirche dahinter; Zugang zu einer Quelle, Site nicht sicher."
+    },
+    {
+      "file": "Aguas cristalinas Venero del Ojo de Agua, Iglesia del Ojo de Agua Saltillo Coahuila - panoramio.jpg",
+      "verdict": "region_or_type",
+      "note": "Kristallklares Wasser über Steinen in einer Felsnische; eine Quelle, nicht eindeutig die geführte Site."
+    },
+    {
+      "file": "Lugar Donde se encuentra el Ojo de Agua, En la Iglesia del Santo Cristo del Ojo de Agua, en Saltillo Coahuila - panoramio.jpg",
+      "verdict": "other_site",
+      "note": "Steinmauer mit Gedenktafel und Holztür, dahinter ein kleiner Turm; ein Gebäude und eine Plaque, kein Quellbereich."
+    },
+    {
+      "file": "Esta es la entrada al venero del ojo de agua, En la Iglesia del Ojo de Agua, Saltillo Coahuila - panoramio.jpg",
+      "verdict": "region_or_type",
+      "note": "Felsige Höhle mit Wasser, Glühbirnen und Kabeln; eine Quellgrotte, nicht eindeutig als Site erkennbar."
+    },
+    {
+      "file": "Dentro del ojo de agua, En la iglesia del ojo de Agua, Saltillo Coahuila - panoramio.jpg",
+      "verdict": "region_or_type",
+      "note": "Innenraum einer Kapelle mit Kreuzfigur, Votivbildern und Felsöffnung; moderner Wallfahrtsraum, keine Site."
+    },
+    {
+      "file": "Viacrucis de Viernes Santo 2022 en Colonia Ojo de Agua Santa, Orizaba 09.jpg",
+      "verdict": "other_site",
+      "note": "Kircheninnenraum mit Altar, Kreuz, Bankreihen und betender Person; moderne Gottesdienstszene."
+    },
+    {
+      "file": "Villa ojo de agua - panoramio.jpg",
+      "verdict": "region_or_type",
+      "note": "Straße eines kleinen Ortes mit Einfachhäusern, Bäumen und Strommasten; Ortsbild, keine Site."
+    },
+    {
+      "file": "Ojo de Agua \"La soledad\". - panoramio.jpg",
+      "verdict": "region_or_type",
+      "note": "Dunkles Pferd auf nasser Wiese mit kleinem Bachlauf und Acker dahinter; ländliche Landschaft, keine Site."
+    }
+  ],
+  "note": ""
+}

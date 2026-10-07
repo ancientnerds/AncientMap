@@ -1,0 +1,33 @@
+site_id: 0386a5a3-8842-4da8-ba7c-13e5fbcb46a0
+name: Alb Limes
+country: Germany
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Alb-Limes bei Gerstetten-Gussenstadt.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb284a2bb6d9704fb50b8014e506682e
+- Grabungsplan des Legionslager Albing nach den Befunden von 1904-1905 .png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\26e95a342c851ac99418529a26f3bbe5
+- Steinlese Westerheim Schwaebische-Alb.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b74e1ab288f469f3a76ff97997e0d8f6
+- 600px Dungi roșu cu alb și un fotbalist în vernil.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5701e90357d392bc1c3f14e1b8d87411
+- 600px Dungi negru și alb cu un fotbalist în vernil.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1009d8cbba32206cc16be03215093926
+- Limes3.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e2a1b030d37cb5a5c7d0e3c7bac645a0
+- The Old Lime - panoramio (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\77ff4c5890673f6977e0e6525fe820b6
+- Three drink cans made by Peter Mertes.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9f1f5e08b33e248e8955aaff617d51d9
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

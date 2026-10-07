@@ -1,0 +1,40 @@
+site_id: 38a93ff8-af94-41d3-bc8a-7a60e529440a
+name: Camlet Way
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Camlet Way, Hadley Wood - geograph.org.uk - 4944703.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5f9a868e3acf13e115e58f8eb2dab3cb
+- Camlet Way, Hadley Wood - geograph.org.uk - 4940082.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\899c443c32d4e56bf2fceae5d592a670
+- Camlet Way, Hadley Wood - geograph.org.uk - 4940072.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7a0f9ea44cabc7c330244fcfc6351669
+- Camlet Way in Hadley Wood.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\687f875e4a0469f247d830ab98be463c
+- Camlet Way, Hadley Wood (3).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\df6b7adaf0d03465ebfd5fbcdeb3596b
+- Camlet Way, Hadley Wood.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\07729f6f6d44cb4a3bb6a18d7a464879
+- Camlet Way, Monken Hadley - geograph.org.uk - 8213377.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b19a20da7bfc9492eaec291699bc926e
+- Camlet Way, Hadley Wood (2).JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c12ad5ea0eca8a4334f946c99d48ff5e
+- Camlet Way, Hadley Wood 8 August 2015 03.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5c5c390eca1d711f3f4c701a850c0949
+- Camlet Way, Hadley Wood 8 August 2015 05.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bd83f1e0134eed46cdbef37c7392588c
+- Wood Edge, 47 Camlet Way, Hadley Wood.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a69371403f6e1a3401ce81bec4e2ddeb
+- Fenton House, Camlet Way 01.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9b10bcc12557227dd41809f976d0d46c
+- 1 Camlet Way - geograph.org.uk - 8206729.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f7f83c3cb04a7e853d31f909dd88ca45
+- Camlet Way, Hadley Wood - geograph.org.uk - 1746851.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1ccdd7a4a24fc9bb51625e11ad87afeb
+- Camlet Way and Beech Hill, Hadley Wood.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e6b0353c112fd34bf56d723facb9ee10
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

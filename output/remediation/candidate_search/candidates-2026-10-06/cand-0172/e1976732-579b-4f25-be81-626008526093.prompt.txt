@@ -1,0 +1,39 @@
+site_id: e1976732-579b-4f25-be81-626008526093
+name: Athena Tapınağı
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Athena Tapınağı (Priene) 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3bb6249c87b85ab22a87d828c1fbdf1c
+- Athena Tapınağı (Priene) 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a4a7d0d54c158b74473ef85e75157f73
+- Athena Tapınağı (Priene) 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6d9e3d8662b0de39593a75b365f3a976
+- Athena Tapınağı (Priene) 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2d4c8c88a396678b094b1c73f997b914
+- Athena Tapınağı (Priene) 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ee8a2164bb10444148f450e0141e887e
+- Athena Tapınağı (Priene) 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db9f1d2984ae5d70d44491e847245fb0
+- Athena Tapınağı (Priene) 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a2100bc9601987da2dfc99766dc9ec4c
+- Athena Tapınağı (Priene) 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\100957b7f8328f03f4bbb4a23e0d2e7e
+- Athena Tapınağı (Priene) 2026-05-25 15.49.40 1783237383.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7736b89f5fe75e3f7ff2db3e9b732a29
+- Athena Tapınağı (Assos) 2026-09-14 20.42.31 1789476913.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8428a34d1bf9512c7ff96603943e71ae
+- Athena Tapınağı (Assos) 2026-09-14 20.42.31 1789476906.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\263870e0d9d1c4c03e019b4fde49db6e
+- Herakleia Athena Tapınağı.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dcd14ba7b48fbed9a18a3225084b49ab
+- Athena Tapınağı.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b3a593d70b7ff233e779bfcdc9404208
+- Athena Tapınağı (Assos) 2026-09-14 10.27.42 1790849984.jpeg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\68cce33babaaf00e9002326c80b16cf2
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

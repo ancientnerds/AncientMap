@@ -1,0 +1,14 @@
+{
+    "site_id":  "faf09f30-a927-4d6b-9fd9-14e1ab1b7c81",
+    "answered_by":  "worker: cand-0196",
+    "model":  "MiniMax-M3.1-Flash-Preview",
+    "answered_model":  "MiniMax-M3.1-Flash-Preview",
+    "verdicts":  [
+                     {
+                         "file":  "Tesalia.png",
+                         "verdict":  "region_or_type",
+                         "note":  "Karte von Thessalien mit Ortsmarken und Golfen, nur Karte der Region."
+                     }
+                 ],
+    "note":  ""
+}

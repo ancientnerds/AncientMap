@@ -1,0 +1,35 @@
+site_id: 4df5f7bf-8b73-4602-9d6e-dab158203820
+name: Chocolá
+country: Guatemala
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Cocoa Powder and Chocolate on Marble Background.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2a4886cbb90572eac1d5e4f60d87bf54
+- Bûche de Noël chocolat framboise maison.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1639276ab75807105c6635180f8035de
+- Chris Chocola.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\57d9a4cefdb83c368e92a3197f319e17
+- Rocky Mountain chocolates.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb76579a1786efa883a8e59401c4ba96
+- 2023 Kostki czekolady E.Wedel (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9097b187bea5fcecf4ad3b10390af4ea
+- Cosplayer of Chocola, Nekopara at CH1 20160220a.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e424da3ae3ac745bf09b09ec03a5bef
+- Sedona ChocolaTree (36536576561).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1e222f5b32911e926896133d3ee508c1
+- Sedona ChocolaTree (35840111044).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8bd011f9c6cf6eedd3c9710071426797
+- Sedona ChocolaTree (36536593541).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5ff134a0ef0aa3ff2102585fb7e5ca0a
+- ChocolaTree Organic Eatery (14700426148).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e2a079db3578482a0ec9bf9eb836e30c
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

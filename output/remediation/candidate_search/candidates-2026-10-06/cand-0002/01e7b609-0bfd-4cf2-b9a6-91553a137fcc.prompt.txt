@@ -1,0 +1,45 @@
+site_id: 01e7b609-0bfd-4cf2-b9a6-91553a137fcc
+name: Sidi Said
+country: Morocco
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Sidi Bou Said Roundabout Fountain 2010.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e3595c0141636826ca1732636b5e3333
+- Barrage Sidi Said Maachou.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e61a9f084b64a3ffc2a977152b6c3765
+- Sidi Bou Said, Tunis Governorate, Tunisia 2024 - Chocolate.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a28d87eaeff4adacf71c48d49509ab4d
+- Sidi Bou Said 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5d9feab45ae10da77c5b3d98e3c67e1f
+- Malfouf ready to eat, Sidi Bou Said Tunisia, 2024.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\108535e5dd7f401f163ab8358529afc8
+- Sidi Bou Said, Tunis Governorate, Tunisia 2024 - Arrow sign.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\be7a5545dd410d322a3ba67fda9c819c
+- Sidi-Bou-Said La place principale.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0b1226d7fbf393e6112e3dff912de910
+- Malfouf preparation- Sidi Bou Said, Tunis Governorate, Tunisia 2024.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b037724f25b55173d6e6517289e62a4f
+- Sidi Bou Said, Tunis Governorate, Tunisia January 2024 - Flowers and lot.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9ef48a8c4acda62b1f755cc7bee29b9a
+- Dar el annabi sidi bou said tunisie.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b67309cac738bf1ec3f1c806a3ca792e
+- Sidi Bou Said, Tunis Governorate, Tunisia 2024 - Original Hot Dog Restaurant.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\691a3fac13d29c5c474f921b17a90a70
+- Sidi Bou Said, Tunis Governorate, Tunisia 2024 - Original Hot Dog Sign.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b9bec19414621886cae2101ff272e9ac
+- Cimetière ; Marabout de Sidi Saïd - Marabout de Sidi Saïd - Meknès - Médiathèque de l'architecture et du patrimoine - AP62T080526.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc3afaba5a4f6774e79cb38e74054000
+- La rue Sidi-Saïd-el-Ouatichi de la médina - A65438S.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3fcb51719057b0654f80f553c15cd77a
+- Sidi Said Skoura - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a897e396bfa3e9df3a2111bd9d6e50c3
+- La rue Sidi-Saïd-el-Ouatichi de la médina - A65439S.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\db6717138d39ca11b554374a416f75eb
+- El Harche from Sidi Said Skoura - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e70be7f5450fe11654f91de098132a9a
+- Walid Sidi-Saïd (22e Maghreb des Livres, Paris, 13 et 14 février 2016).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\53b9595cfc5c6c221dd5644f6c775313
+- Map by the US Army Map Service - Sheet 29-10-2b Sidi Said Maachou - morocco 50k - txu-oclc-6589697-29-10-2b.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bf7397a6c6ff6c90259ce5b462e52e65
+- Sidi Said Mostaganem Face Mairie.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9af537354cad6d5b059bde2c278bac44
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

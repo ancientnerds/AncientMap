@@ -1,0 +1,39 @@
+site_id: c04b9633-ab16-45bf-b36b-18f83096f46f
+name: Kahta Castle
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Yeni-Kale (15).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bf7daf14949142ee4d1e9cebd00f65c4
+- Yeni-Kale (21).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\17210a3677bb5d3c232be167cd7ea0ca
+- Yeni-Kale (17).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2b6d9ed47adfdb7d06bd85068ed8af08
+- Yeni-Kale (02).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f848bf0fdf8b512cb64f1ad25a9f3a63
+- Yeni-Kale (23).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f60786a7ff2009b3eade703f83fcfb4
+- Yeni-Kale (06).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1e5b0aa2817d570b7df64816bcec651f
+- Yeni-Kale (19).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4eaaeb42520ac3e6f0616722cdad57e1
+- Yeni-Kale (09).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94490d5ef58281ff757bb1721c7e3e78
+- Yeni-Kale (03).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cebe9e86bb64e8cee50ca717dbeda8e6
+- Yeni-Kale (22).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\04c471cf5e461cb9f2a0add3d12e8c7b
+- Yeni-Kale (24).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6a9c6398b92bd27a75d2a999cd13ecc0
+- Yeni-Kale (20).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8853e3943560bf7240482de4305488c4
+- Kahta-castle.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\76c951b356357b8c87f141bc8a0cc7df
+- 1F5A2142 kopya.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba2f968cafa3bcace3867d31849f13be
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

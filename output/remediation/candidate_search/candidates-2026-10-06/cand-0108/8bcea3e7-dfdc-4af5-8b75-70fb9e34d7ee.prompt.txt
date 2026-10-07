@@ -1,0 +1,29 @@
+site_id: 8bcea3e7-dfdc-4af5-8b75-70fb9e34d7ee
+name: Berbati Valley
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Pottery from Cult place at the Berbati tholos, AM of Nafplio, 202294.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b2ba9e2d87a9595ba5147553b202b1b6
+- Findings from Pyrgouthi, 550-650 AD, AM of Nafplio, 202324.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4a69eff47e5e96a7e1fa1cb3b6ce037
+- Findings from Pyrgouthi, 550-650 AD, AM of Nafplio, 202325.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7d5dbcf264e43bf3a2283f2980669390
+- Mount Profitis Ilias (Mykines) - 7.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\28e52151885e5fd8a722add8c69b49b3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

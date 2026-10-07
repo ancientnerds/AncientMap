@@ -1,0 +1,37 @@
+site_id: ef4a8fe6-c961-4521-9242-9d3ac1168846
+name: Archaeological site Makthar
+country: Tunisia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Makthar mégalithes.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\73f40da50558a517dd9d9b5188bfa5ac
+- Temple du Mizrach transformé en basilique Makthar 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d9f071bee88b50300c2b4d30705fec3d
+- Temple du Mizrach transformé en basilique Makthar 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ceca88c2f491d1f26e1739dc9fbd3a60
+- Temple du Mizrach transformé en basilique Makthar 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff0733a83ecdcc48d3c2a90e4315fb0c
+- Temple du Mizrach transformé en basilique Makthar 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c014eecb67bbf899ca87eec5370820b9
+- Les ruines de makthar ...au nord de l'arc.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d3f56efd92449bd8bc5d6d535709e5c5
+- Makhtar Venus bain.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94390e9f98b1beba4046ea3db576e7e9
+- Place publique devant arc de Makthar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\922cd081835c2c67a0ee9beeb84f984b
+- Ruines de maisons de Makthar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b04a780c90f546344e3ee045da804f7e
+- Site archeologique .de Makthar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cff7f2b2356a3e687c142921a1af768e
+- Site. archeologique de Makthar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c4c2994ec39fea0401a4eed628332884
+- Site archeologique de .Makthar.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2bd980b663ff247f263048663122b542
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

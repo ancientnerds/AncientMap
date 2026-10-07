@@ -1,0 +1,9 @@
+{"site_id": "d8e43401-673e-4f9a-902b-90959d10cf93",
+ "answered_by": "mcode-judge-cand-0164",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Sarhua.jpg",
+   "verdict": "region_or_type",
+   "note": "Weitblick ueber ein Andendorf in einem Bergtal mit Terrassenfeldern und Bergen; Millka nicht sicher erkennbar."}
+ ],
+ "note": ""}

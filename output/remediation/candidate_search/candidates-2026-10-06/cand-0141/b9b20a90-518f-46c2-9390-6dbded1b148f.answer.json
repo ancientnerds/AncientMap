@@ -1,0 +1,14 @@
+{"site_id": "b9b20a90-518f-46c2-9390-6dbded1b148f", "answered_by": "mcode-judge-cand-0141", "model": "MiniMax-M3.1-Flash-Preview", "verdicts": [
+{"file": "Lanzhou-rio-amarillo-d01.jpg", "verdict": "other_site", "note": "Breiter schlammiger Fluss mit Stadtbebauung, Kabelseilbahn-Gondeln und chinesischen Gebaeuden am steil bewaldeten Ufer; keine Site erkennbar."},
+{"file": "Lanzhou-rio-amarillo-baita-shan-d04.jpg", "verdict": "other_site", "note": "Blick aus einem chinesischen Holz-Pavillon mit gruenem Tisch ueber eine moderne Hochhausstadt und einen breiten Fluss; Bergkette dahinter."},
+{"file": "Lanzhou-rio-amarillo-baita-shan-d01.jpg", "verdict": "other_site", "note": "Stahlbruecke mit Fussgaengern ueber schlammigen Fluss, dahinter chinesische Stadt und ein chinesischer Tempel auf bewaldetem Hang."},
+{"file": "Lanzhou-rio-amarillo-baita-shan-d02.jpg", "verdict": "other_site", "note": "Vom Tempelberg mit gruenen Kuppeln, Turm und chinesischem Dach ueber den Fluss auf eine moderne chinesische Hochhausstadt geblickt."},
+{"file": "Lanzhou-rio-amarillo-baita-shan-d03.jpg", "verdict": "other_site", "note": "Chinesischer Gartenpavillon mit Ziegeldach und Treppen auf gruenem Huegel, Blick ueber den Fluss auf eine Hochhausstadt mit Bruecke."},
+{"file": "Tingua de pico amarillo rio bogota.jpg", "verdict": "other_site", "note": "Schwarzer Enter-Vogel schwimmt zwischen schwimmenden Wasserpflanzen; nur ein Tier, keine Site sichtbar."},
+{"file": "Río Amarillo.jpg", "verdict": "other_site", "note": "Vergletschertes Hochgebirge hinter einem Kiesfluss in bewaldetem Tal; keine Bauwerke, Ausgrabungen oder Felsbilder sichtbar."},
+{"file": "Amarillo Navalsauz.jpg", "verdict": "region_or_type", "note": "Bergige Wiesenlandschaft mit herbstlich gelb-orange belaubten Baeumen und felsigem Gipfel im Hintergrund; Site nicht erkennbar."},
+{"file": "Rio Arenillas amarillos.jpg", "verdict": "region_or_type", "note": "Klarer Flusslauf zwischen gelb-braunen Straeuchern, Steine und Schilf am Ufer; reine Landschaft ohne erkennbare Site."},
+{"file": "Guacamayo azul y amarillo (Ara ararauna).jpg", "verdict": "other_site", "note": "Blau-gelber Ara steht auf Erdboden neben einem Holzbalken und gruenem Bewuchs; Tierportrait ohne Site-Bezug."},
+{"file": "Liquen amarillo 2009-10-12 RioFresnedas ValledeAlcudia.jpg", "verdict": "other_site", "note": "Nahaufnahme gelbgruener Flechten und eines behaarten Stengels auf grauem Gestein; botanische Aufnahme ohne Site."},
+{"file": "Crocodylus acutus mexico 01.jpg", "verdict": "other_site", "note": "Zwei Krokodile schwimmen im Wasser, gepanzerte Koepfe und Ruecken mit Schuppen sichtbar; Tiere ohne Site-Bezug."}
+], "note": ""}

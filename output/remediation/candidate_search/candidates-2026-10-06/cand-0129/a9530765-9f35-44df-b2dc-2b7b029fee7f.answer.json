@@ -1,0 +1,14 @@
+{"site_id": "a9530765-9f35-44df-b2dc-2b7b029fee7f",
+ "answered_by": "mcode-judge-cand-0129",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Bone Cave with Mossy Walls.jpg", "verdict": "region_or_type", "note": "Höhleninneres mit Moos an den Wänden und Tageslichtaustritt auf einen Hang; allgemeine Höhle, nichts identifiziert die tasmanische Site."},
+  {"file": "Big bone cave saltpeter vat.jpg", "verdict": "region_or_type", "note": "Dunkle Höhle mit einer alten Holzkonstruktion über einer Grube; ein Bergbauwerk in einer nicht bestimmbaren Höhle."},
+  {"file": "The Valley Below the Bone Caves.jpg", "verdict": "region_or_type", "note": "Weite Heide- und Berglandschaft mit einem kleinen Tümpel und Klippen; nur die Landschaft unterhalb, keine Höhle."},
+  {"file": "On the contents of a bone cave in the island of Anguilla (West Indies) BHL23857110.jpg", "verdict": "other_site", "note": "Buchtafel mit nummerierten Knochenfunden (Amblyrhiza) aus einer Höhle auf Anguilla, Karibik; anderes Land und anderes Thema."},
+  {"file": "On the contents of a bone cave in the island of Anguilla (West Indies) BHL23857120.jpg", "verdict": "other_site", "note": "Leeres Bibliotheksblatt mit Aufklebern und Inventarnummern (Smithsonian, University of California); Buchseite ohne Bildinhalt."},
+  {"file": "On the contents of a bone cave in the island of Anguilla (West Indies) BHL23857063.jpg", "verdict": "other_site", "note": "Leere Buchseite mit dem Stempel 'Library of the University of California, Smithsonian Institution'; reine Scanseite."},
+  {"file": "On the contents of a bone cave in the island of Anguilla (West Indies) BHL23857112.jpg", "verdict": "other_site", "note": "Wissenschaftliche Tafel (PLATE IV) mit vielen beschrifteten Knochenfunden; Anguilla-Material, nicht Tasmanien."},
+  {"file": "On the contents of a bone cave in the island of Anguilla (West Indies) BHL23857108.jpg", "verdict": "other_site", "note": "Wissenschaftliche Tafel (PLATE II) mit Zähnen und Kieferknochen (Amblyrhiza quadrans); andere Fundstelle."}
+ ],
+ "note": ""}

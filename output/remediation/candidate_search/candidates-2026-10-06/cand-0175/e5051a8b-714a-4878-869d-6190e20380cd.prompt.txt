@@ -1,0 +1,36 @@
+site_id: e5051a8b-714a-4878-869d-6190e20380cd
+name: Grim's Ditch, Harrow
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Grim's Ditch, Middlesex - geograph-2387972.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\829f1f40d95ec74dcd2ee43624505f1a
+- Grim's Ditch - geograph.org.uk - 6632742.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1a907a815000c3da624645f13f9812f1
+- Grim's Ditch - geograph.org.uk - 6631369.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\24bcd3f906724c946aaf924edb041ecb
+- Grim's Ditch - geograph.org.uk - 6631360.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1c1e1feb59104117a269e453831f2b72
+- Pond on Grim's Ditch - geograph.org.uk - 6632772.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2fcc5702efc03d2dec8d2f14485cb6c4
+- Decrepit bridge, Grim's Ditch - geograph.org.uk - 6632758.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\087528b81d3ee00d37ccde6c42da0c79
+- Water in Grim's Ditch, in the grounds of Grim's Dyke Hotel - geograph.org.uk - 7626147.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af1ce40fda9f73153470ce86ff82316b
+- Track near Grim's Ditch - geograph.org.uk - 5989505.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a5fcdd6a98cc581c3d82e187b1a3d230
+- Western or outer bank, Grim's Ditch - geograph.org.uk - 6631239.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\387908c6c3d8c05972c16560650a9126
+- Path along western or outer bank, Grim's Ditch - geograph.org.uk - 6631253.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\afde1ca0600084c6444163bf4605760f
+- Grim's Ditch, Middlesex, view facing south.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\06bab00f723203a025c26d25e9214950
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

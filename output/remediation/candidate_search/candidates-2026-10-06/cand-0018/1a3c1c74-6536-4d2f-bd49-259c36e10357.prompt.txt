@@ -1,0 +1,43 @@
+site_id: 1a3c1c74-6536-4d2f-bd49-259c36e10357
+name: Stapari
+country: Serbia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Stapari 001.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9288d93b39b6e48de3d902a3b81e6efe
+- Stapari 002.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\61d4f533e7bae2a177e1267e37792570
+- Stapari 005.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\46ab76824373c702557dd8082713f7b3
+- Stapari 003.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4a5b0e961f583cb1ce0c303050a91bbe
+- Stapari 004.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\31a27170191b54b43760f9feb3bcbbbe
+- Stapari, crkva 018.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\56389d51e0bc8119c7b56ced0dfaf967
+- Stapari, crkva 017.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cceea4dbb057e80fc07eb523a599771d
+- Stapari, crkva 008.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3b9dfac14740154aa1180a36f65091c0
+- Stapari, crkva 015.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\39175b2bfc54638b231f5f87bf074738
+- Stapari, crkva 011.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a6e7ffc0831086b3dcf1c003e0059854
+- Stapari, crkva 014.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62c987ed80ad971244aa70ab8ac5f3c1
+- Stapari, crkva 010.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e34a4c82843a196608ffdd45af744c15
+- Stapari, crkva 019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7985fe41006263eb34b81cd8896ade64
+- Stapari, crkva 006.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bf7dec3fedaccef9cdf52f5af22b01e2
+- Stapari, crkva 002.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c75d169b566bf77d53ae5c1e4df486b8
+- Stapari, crkva 005.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\fb0dbe8987e43f3dae3ae481fd9024e7
+- Stapari, crkva 013.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\64baaa335c079794eb3c37b570fba049
+- I fotografija je radioaktivna - panoramio.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c12e81edc53cb0d05b791c74705a4d31
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

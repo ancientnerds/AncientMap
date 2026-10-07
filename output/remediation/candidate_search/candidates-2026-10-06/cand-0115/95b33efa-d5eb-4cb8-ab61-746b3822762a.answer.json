@@ -1,0 +1,18 @@
+{"site_id": "95b33efa-d5eb-4cb8-ab61-746b3822762a",
+ "answered_by": "mcode-judge-cand-0115",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Temple of Baal-Shamin, Palmyra.jpg", "verdict": "depicts", "note": "Erhaltener antiker Tempel mit vier korinthischen Saeulen im Prostyl, umgeben von Ruinenfeldern und Wueste"},
+  {"file": "Syria Palmyra temple Baalshamin in 1981.jpg", "verdict": "depicts", "note": "Historisches Diasitiv mit dem Tempel und reihenweise liegenden korinthischen Kapitellen im Vordergrund"},
+  {"file": "Reconstruction drawing of the Temple of Baalshamin, Palmyra, Syria (02).jpg", "verdict": "depicts", "note": "Bauliche Rekonstruktionszeichnung des Tempels mit Saeulenreihe, Treppe und Loewenstatue auf dem Postament"},
+  {"file": "Reconstruction drawing of the Temple of Baalshamin, Palmyra, Syria (01).jpg", "verdict": "depicts", "note": "Rekonstruktionszeichnung des Tempelpronaos mit Giebel, Saeulen, Treppe und zwei Loewen"},
+  {"file": "The Temple of Baalshamin, Palmyra, Syria 02AM3152.jpg", "verdict": "depicts", "note": "Tempelbau in der Wuestenlandschaft mit Kamel vor dem Podium"},
+  {"file": "Temple of Baalshamin, Louis Vignes, 1864.tif", "verdict": "depicts", "note": "Historische Fotografie des Tempels mit Saeulenportikus und Architrav in der Wueste"},
+  {"file": "Temple of Baalshamin in Palmyra by Robert Wood, 1753.png", "verdict": "depicts", "note": "Historischer Kupferstich von Palmyra mit dem Tempel links und der langen Kolonnade"},
+  {"file": "Temple of Baalshamin, Jean-Baptiste Liénard after Louis-François Cassas.tif", "verdict": "depicts", "note": "Kupferstich des Tempels mit Saeulenportikus, Bassen und liegenden Blocken im Vordergrund"},
+  {"file": "Temple of Baalshamin, plan and reconstruction, Pierre-Nicolas Ransonnette after Louis-François Cassas.tif", "verdict": "depicts", "note": "Plan und Rekonstruktionsansicht des Tempels: Grundriss mit Saeulenstellung und Ansicht mit Statuen"},
+  {"file": "Baal shamin temple02(js).jpg", "verdict": "region_or_type", "note": "Tempelinnenraum mit halbrunden Exedren zwischen kannelierten Saeulen und einem Baum; Architektur weicht vom rekonstruierten Prostylbau ab, Site nicht sicher zuordenbar"},
+  {"file": "Temple of Baalshamin, Louis Vignes, 1864. Albumen print. 8.8 x 11.4 in. (22.5 x 29 cm). The Getty Research Institute, 2015.R.15.jpg", "verdict": "depicts", "note": "Historische Fotografie des Tempels mit Saeulenportikus und gebrochenem Architrav, Ruinen drumherum"},
+  {"file": "Syria Palmyra temple of Baalshamin.jpg", "verdict": "depicts", "note": "Weitlaeufige Ruinenebene von Palmyra mit dem Tempel in der Mitte, beschriftet mit dem Tempel"}
+ ],
+ "note": ""}

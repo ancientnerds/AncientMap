@@ -1,0 +1,37 @@
+site_id: f29afd0d-6fb8-4405-bee8-c1b17a6989e3
+name: San Estevan
+country: Belize
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- San Estevan Del Rey Mision Church.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\015f888ecea71fe468393a1a241941c0
+- San Estevan Del Rey MIssion Church, Acoma Pueblo, NM USA (1629-1642).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a27ac4a4aab80b480c8874d96bc3899c
+- Feast day at San Estevan del Rey Mission, Acoma Pueblo, New Mexico LCCN97518884.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e12ae803dbdd8c16ec732dac4e78e194
+- Feast day at San Estevan del Rey Mission, Acoma Pueblo, New Mexico LCCN97518884.tif  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8926cd05f5137f12fa8260002a06124b
+- The San Estévan del Rey Mission (53828511066).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d0d555f5587d703ec9d18059d7a8e017
+- Exterior of the San Estévan del Rey Mission (53827593177).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4418a7693a7e64f96a89b741a4c1d9bd
+- Procession of San Estevan - Acoma LACMA AC1997.271.53.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2352842c873af0e2e5e20ebf5e1afbfa
+- Side wall and tower with cross, "Church, Acoma Pueblo. (National Historic Landmark, New Mexico)" (Misicn de San Estevan - NARA - 519835.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bb8bb27c94bb98c15e83000899a99736
+- DSC San Esteban Del Rey Mission Church, Acoma, New Mexico.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\409e927c69ae5c782b47a89fe1e22a1f
+- DSC 1317 San Esteban DelRey Mission Church, Acoma, New Mexico.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9997134bea49c3f21ac5216be5450485
+- Gozos a la invencion del protomartyr San Estevan, patron de la villa de Sallent - btv1b10661783t.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\38e9f334bfb9ab5fdf15a27592dc4162
+- Side wall and tower with cross, "Church, Acoma Pueblo. (National Historic Landmark, New Mexico)" (Misicn de San Estevan - NARA - 519835.TIF  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ac2b4a035dbdb80d16f2e39d7b3f61bf
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

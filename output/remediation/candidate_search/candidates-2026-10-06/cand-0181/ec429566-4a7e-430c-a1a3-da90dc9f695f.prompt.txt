@@ -1,0 +1,37 @@
+site_id: ec429566-4a7e-430c-a1a3-da90dc9f695f
+name: Arvalem Caves
+country: India
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Arvalem, Rock Cut Caves.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1730eb625993bab5c3d18c8bacc935d7
+- Arvalem Caves Goa.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\48fde32cf1afabe15eb2ba735e9bd4f2
+- Arvalem Caves.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d67234335861ba5934897419e595fc98
+- Arvalem ASI board.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ebd14662589045da71321a4c302dd69b
+- Arvalem Caves 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\65858f8c01c9b4b6dc322a60560b9b34
+- Cave dwellings at Harvalem.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce2255659563cfa9125488d5eaac2f26
+- Basilica of Bom Jesus vrvbgoa2k24 (40).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b21843552598d67d630ac561cdc00f12
+- Basilica of Bom Jesus vrvbgoa2k24 (16).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5759dda3435d476842601a42b3febaac
+- Basilica of Bom Jesus vrvbgoa2k24 (12).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e70546d4b0fd1aea5f8e05b0cc1ddc6
+- Basilica of Bom Jesus vrvbgoa2k24 (77).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b7f154c24b27b621f5ac78074f6d2e7a
+- Basilica of Bom Jesus vrvbgoa2k24 (31).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c528d1d69b862bd439b82b8d95e41cd4
+- Basilica of Bom Jesus vrvbgoa2k24 (41).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8a717f4c0486136f2e70e2bc3f8b52cf
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

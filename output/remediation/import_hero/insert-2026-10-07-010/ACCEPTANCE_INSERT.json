@@ -1,0 +1,15 @@
+{
+ "chunks": [
+  "chunk-001"
+ ],
+ "ok": true,
+ "one_hero": 30,
+ "problems": [],
+ "read_at": "2026-10-07T10:12:23Z",
+ "read_sha256": "ad068f99ac35e2cfb400227b965076ceea09f94be1aa6aeb308b9296e47fe0b2",
+ "run_id": "insert-2026-10-07-010",
+ "served_the_import": 30,
+ "shown_sites": 4900,
+ "sites": 30,
+ "thumbnail_follows": 30
+}

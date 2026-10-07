@@ -1,0 +1,32 @@
+site_id: 0f7c84f4-7364-434d-b003-706c8d7a3275
+name: Alampra
+country: Cyprus
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Agia Marina church, Alampra 2024.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4432a50d4e1a2c2fc462a688d2384d33
+- Alampra Nicosia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\af9d68050bb64af4020cffba3576d20a
+- IMG Street in Alampra, Nicosia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2fc33df5efd595b9b9239cf3bf3133ff
+- IMG Old house in Alampra Cyprus.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9402f0d160ec282dfce37a2b19b389ec
+- IMG Alampra Nicosia.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\70f68b172efe13bf715f98e0f9c9c273
+- NicosiaDistrictAlampra.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4e518cf0b7e3f64e9cec89be132a63da
+- Alampra.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d6212275603367ccbe3dcf973454fbcb
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

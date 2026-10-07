@@ -1,0 +1,78 @@
+{
+  "site_id": "e1976732-579b-4f25-be81-626008526093",
+  "answered_by": "mcode-judge-cand-0172",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Athena Tapınağı (Priene) 06.jpg",
+      "verdict": "depicts",
+      "note": "Umgestürzte antike Säulen und Kapitellreste am bewaldeten Felshang; Ruinen eines Tempels in Türkei."
+    },
+    {
+      "file": "Athena Tapınağı (Priene) 08.jpg",
+      "verdict": "depicts",
+      "note": "Liegende Säulentrommeln und Mauerzüge zwischen Fels und Bewuchs am Hang; antike Tempelruine."
+    },
+    {
+      "file": "Athena Tapınağı (Priene) 02.jpg",
+      "verdict": "depicts",
+      "note": "Gestoürzte ionische Säulen im Hangbewuchs, dazwischen Gesteinsblöcke; antike Ruinenanlage."
+    },
+    {
+      "file": "Athena Tapınağı (Priene) 04.jpg",
+      "verdict": "depicts",
+      "note": "Reihen umgestürzter Säulen am bewaldeten Hang mit Kapitellen und Sockeln; Tempelruine in Türkei."
+    },
+    {
+      "file": "Athena Tapınağı (Priene) 05.jpg",
+      "verdict": "depicts",
+      "note": "Säulenfragmente und Mauerreste am felsigen, bewachsenen Hang; antike Tempelanlage."
+    },
+    {
+      "file": "Athena Tapınağı (Priene) 07.jpg",
+      "verdict": "depicts",
+      "note": "Lange Reihe gestürzter Säulen zwischen Felsgestein und Buschwerk; antike Ruinen am Hang."
+    },
+    {
+      "file": "Athena Tapınağı (Priene) 01.jpg",
+      "verdict": "depicts",
+      "note": "Gestürzte Säulen und Architruvreste am bewaldeten Hang mit Blick ins Tal; antike Tempelruine."
+    },
+    {
+      "file": "Athena Tapınağı (Priene) 03.jpg",
+      "verdict": "depicts",
+      "note": "Umgestürzte Säulen in Hangbewuchs neben Felsblöcken und Mauerfundament; antike Ruinen in Türkei."
+    },
+    {
+      "file": "Athena Tapınağı (Priene) 2026-05-25 15.49.40 1783237383.jpeg",
+      "verdict": "depicts",
+      "note": "Säulenreste des antiken Tempels am bewaldeten Felshang, teilweise von Erde umschlossen; Ruinenanlage."
+    },
+    {
+      "file": "Athena Tapınağı (Assos) 2026-09-14 20.42.31 1789476913.jpeg",
+      "verdict": "depicts",
+      "note": "Säulen der antiken Akropolis mit Blick aufs Meer und auf felsige Halbinsel; Athentempel-Ruinen in Türkei."
+    },
+    {
+      "file": "Athena Tapınağı (Assos) 2026-09-14 20.42.31 1789476906.jpeg",
+      "verdict": "depicts",
+      "note": "Zweite Aufnahme der Akropolis: Säulenreihen über der Küste mit Meerblick; antike Tempelruine."
+    },
+    {
+      "file": "Herakleia Athena Tapınağı.jpg",
+      "verdict": "other_site",
+      "note": "Gemauerte Turm- und Torruine auf felsiger Küste ohne Säulen; keine Athena-Tempelruine erkennbar."
+    },
+    {
+      "file": "Athena Tapınağı.jpg",
+      "verdict": "depicts",
+      "note": "Säulen der antiken Akropolis mit Blick aufs Meer und auf die umliegende Küstenlandschaft."
+    },
+    {
+      "file": "Athena Tapınağı (Assos) 2026-09-14 10.27.42 1790849984.jpeg",
+      "verdict": "depicts",
+      "note": "Aufnahme der Akropolis mit Säulen, Meer im Hintergrund und byzantinischer Mauer; antike Tempelruine."
+    }
+  ],
+  "note": ""
+}

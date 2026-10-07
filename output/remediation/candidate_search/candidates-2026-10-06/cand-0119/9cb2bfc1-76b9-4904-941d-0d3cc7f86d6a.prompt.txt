@@ -1,0 +1,36 @@
+site_id: 9cb2bfc1-76b9-4904-941d-0d3cc7f86d6a
+name: Rapidum
+country: Algeria
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Bembidion rapidum P1600355a.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d1fb587831effd5b3302a21d57064a7e
+- Bembidion rapidum P1600357a.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\75a02cd34d194731f5a39617f91bd86b
+- Bembidion rapidum P1400602a.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\066c31cc0b20643da35428ee87fd1f0d
+- Rapidum castellum.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a3272266439abd055a510021dd7dc4b6
+- Rapidum civita.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8bc79d9c7710effd859bce3d785e303d
+- Rapidum evolution.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dfa2b9b1a4e690df7498fce5e3b4817c
+- Rapidum chabassiere1869a.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\61686935455f85f5ad8c74a63b0fb570
+- Rapidum chabassiere1869b.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\617fcbf30db79f808297e445115862b4
+- Rapidum chabassiere1869c.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ba4a40192c11fad76b47c70ec0923b25
+- Isometrie3drapidum.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\05f035db68eccfcbb9881969873109f8
+- (حائط3 (ر ابيدوم.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4111c97d25f594789977826a10ce486d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

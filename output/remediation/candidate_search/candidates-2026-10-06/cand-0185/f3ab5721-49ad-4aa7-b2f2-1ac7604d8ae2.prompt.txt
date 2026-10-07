@@ -1,0 +1,32 @@
+site_id: f3ab5721-49ad-4aa7-b2f2-1ac7604d8ae2
+name: Stone of the Guanches
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- MNH - Polierstein.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\23759acc6735d40812c73891bf8b9d51
+- At Candelaria, Tenerife 2022 080.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bb349a964b63befa733c203820c76f79
+- Parque Arqueológico Belmaco 2020 094.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\67adf42341dbd3fca746216ba9d0021c
+- Parque Arqueológico Belmaco 2020 089.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3080e93c0a6de8a2938aa55b1e9e6367
+- MNH - Zanata-Stein.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c058fd8a55a137b66ff4acdb0ca07791
+- Tile mural in Municipal Park, Santa Cruz, Tenerife, Battle of Acentejo (366528348).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5f8ca28910ee434f7e747ab7e551b88a
+- Arbol de Piedra.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8c3d95ea48af708669c135554f27e44d
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

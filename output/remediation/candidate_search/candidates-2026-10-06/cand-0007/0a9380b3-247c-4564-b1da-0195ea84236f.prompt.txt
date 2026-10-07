@@ -1,0 +1,38 @@
+site_id: 0a9380b3-247c-4564-b1da-0195ea84236f
+name: Orolik
+country: Croatia
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Srpska pravoslavna crkva Orolik 2-Српска православна црква Оролик 2.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bdb0bc4eb1e283798cb95b11cc315919
+- 2023 European heat waves Storm Orolik, Croatia 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\dec87b63858fd898dbdfd805426b66d7
+- Orolik Train station 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\62b490f9653bf79a7e081b8d0027e1cc
+- Football field Orolik 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e1ee90ecddc661f3b4721624295b67be
+- Train station Orolik 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\87d6eadcf3bc49429e20214618140233
+- Football field Orolik 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c9ddf8763f4eb4fd7bb12098e1ae18fe
+- Spomenik NOB-u Orolik 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d39f1222e922cdfb0eea798a4782f065
+- Katolička crkva Orolik-Католичка црква Оролик.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b60b2a63a3be79a23f199fd6a02578d
+- Ivanjski vijenac-ивањски венац (Midsummer wreaths) Orolik 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce0168445d62c9e90592e6ee4ad2840a
+- Ivanjski vijenac-ивањски венац (Midsummer wreaths) Orolik 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\66ae29c2513670cdccaa74595fe4905d
+- Srpska pravoslavna crkva Orolik 1-Српска православна црква Оролик 1.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f5eb795725718a7b708440abdc462c30
+- Elementary school Orolik.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7b8911488d95db7c0f957a56632004c7
+- Ivanjski vijenac-ивањски венац (Midsummer wreaths) Orolik 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\38123e52608ecbeb11a9e4ee5cfdf142
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

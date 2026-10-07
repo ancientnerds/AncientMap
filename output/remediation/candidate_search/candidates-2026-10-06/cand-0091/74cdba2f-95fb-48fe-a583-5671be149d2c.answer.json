@@ -1,0 +1,12 @@
+{"site_id": "74cdba2f-95fb-48fe-a583-5671be149d2c",
+ "answered_by": "mcode-judge-cand-0091",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Ultimi ruderi chiesa di S.Pietro (necropoli etrusca di Norchia) - panoramio.jpg",
+   "verdict": "other_site",
+   "note": "Ruins of a masonry church: brick/stone walls, a rounded apse, narrow arched window openings. No rock-cut Etruscan tomb or necropolis visible."},
+  {"file": "Ruderi castello dei De Vico (necropoli etrusca di Norchia) - panoramio.jpg",
+   "verdict": "region_or_type",
+   "note": "Overgrown green hill seen through branches with a few bare masonry fragments at the top; no tombs, so the Etruscan necropolis is not recognisable."}
+ ],
+ "note": ""}

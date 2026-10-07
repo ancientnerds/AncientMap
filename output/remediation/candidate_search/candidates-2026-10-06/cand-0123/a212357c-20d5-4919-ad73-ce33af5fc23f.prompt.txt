@@ -1,0 +1,37 @@
+site_id: a212357c-20d5-4919-ad73-ce33af5fc23f
+name: Miletus Ancient Theatre
+country: Türkiye
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Miletus - Ancient Greek theatre 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6bb64ef43c1938589126fc4faf9a4f53
+- Miletus - Ancient Greek theatre 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\55f274aa21558e9eb0688c0a2a294a5a
+- Miletus - Ancient Greek theatre 05.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8e588838635f2a80f9bf5579457bd5f
+- Miletus - Ancient Greek theatre 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\c4f0390e19c2e9c8e618772286b81a30
+- Miletus - Ancient Greek theatre 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3f8923acf8706d333a1d9ecedc9c346f
+- Miletus - Ancient Greek theatre 07.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e385c0d932c57ca7abc05d5f12069a57
+- Miletus - Ancient Greek theatre 06.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\981572da527846bc0ae760b5d531a93e
+- Miletus - Ancient Greek theatre 08.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ff536cc923a0293594a1dfdc172e58ca
+- Ancient Greek theatre in Miletus (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f986a10aceadff3147d6b25e5fe7dd37
+- Ancient Greek theatre in Miletus (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\28b53dca8cd5771a0e3ed725efdb86a1
+- Miletus theatre 03.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a59f80f3c603efc9d1e5f74e6bc9461a
+- Miletus theatre 04.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\da6017b1a384e5040ed4355440a85a58
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,36 @@
+site_id: 4c3d31bc-8f57-44e5-988b-4bb0e3d3d516
+name: Kinver Edge Hillfort
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Kinver - Kinver Edge Hillfort - 20240905154955.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\60eb7484a6c35ed1940e82c3abaadaf6
+- Earthworks at Kinver Edge Hillfort - geograph.org.uk - 7359414.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a80bcd1cec621568f1f5589b841ce161
+- Kinver - Kinver Edge Hillfort - 20240905155250.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e6d41bc7295569028266ab8112fc70a5
+- Inside the Kinver Edge Hillfort - geograph.org.uk - 7359423.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a7211ca15bb44ad0782705a99ed2805d
+- Earthworks at Kinver Edge Hillfort - geograph.org.uk - 7359408.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ce226f0de4221afcbb442dea3b752f9c
+- Kinver - Kinver Edge Hillfort - 20250103114403.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\914ba8f6a54d4bb9bd6d23c6b9f84647
+- Kinver Edge in Staffordshire - geograph.org.uk - 5958824.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\94609e1904ff1d6d331d25da2dfd8e5d
+- Heathland on Kinver Edge in Staffordshire - geograph.org.uk - 5958797.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6ff7e9476f470dfb6730b6a7977146c9
+- Heathland and footpath on Kinver Edge in Staffordshire - geograph.org.uk - 5958810.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\73ebf9f43fe93270e9920ac9cdd923f3
+- Waymarked path on Kinver Edge in Staffordshire - geograph.org.uk - 5958405.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\12dd0f5daf29211a8b10e4b640d992e0
+- Waymarked path on Kinver Edge in Staffordshire - geograph.org.uk - 5958413.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\acb20681365e026e6242b450fe25e8df
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

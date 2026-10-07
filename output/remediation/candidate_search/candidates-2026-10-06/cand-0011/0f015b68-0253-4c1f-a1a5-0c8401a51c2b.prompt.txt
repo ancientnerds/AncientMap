@@ -1,0 +1,33 @@
+site_id: 0f015b68-0253-4c1f-a1a5-0c8401a51c2b
+name: Almsworthy Common
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- West Somerset - Exmoor - Almsworthy Common (geograph 3988567).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0f30a6050f35a63854e21ef34104f73e
+- West Somerset - Exmoor - Almsworthy Common (geograph 3988564).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\8f1b2571eafb1823dac5f7130df9ce20
+- West Somerset - Exmoor - Almsworthy Common (geograph 3988573).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\32ec61e19c15e00d853f6fa042022a70
+- West Somerset - Exmoor - Almsworthy Common (geograph 3988572).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\614c7bbaf1d0d795c8e84f27850b2bcd
+- Almsworthy Common.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\9c47289f0d1ca6a98beac204b7de1105
+- Almsworthy Common - geograph.org.uk - 6398591.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\42e769fdd7bd707371273c07bedb8915
+- Track on Almsworthy Common - geograph.org.uk - 3823472.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\248800580bf3e5eb68111e20ad20a972
+- Road across Almsworthy Common - geograph.org.uk - 6398593.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b4b2c9b5af262d7fbaa8eb0af7221144
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

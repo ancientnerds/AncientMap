@@ -1,0 +1,40 @@
+site_id: 89be3bc4-f58c-4641-b56d-fb76041392f8
+name: Beckfoot
+country: England
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Beach-side house at Beckfoot in Cumbria - geograph.org.uk - 1945917.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\2f866c976ad1f2862b7d5c961ceacbaf
+- Beckfoot, Cumbria - geograph.org.uk - 4455151.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a5eba0a586198137979cfa955086cb9f
+- Fells Overlooking Beckfoot, Cumbria - geograph.org.uk - 3127806.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\600b6473cd4e02cae4d1bd4a936c9c64
+- Beckfoot, Cumbria, Roman Cremation (FindID 88295).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7694d12f0866954153c8a9c233ab7358
+- Beckfoot, Cumbria, Cremated Bones (FindID 88296).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc54562bb10bfb8ade9b621e163072f7
+- Beckfoot Railway Station, Cumbria (geograph 3127861).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\985424eaabb60b89fca030fe86c77b34
+- Beckfoot (48925175638).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\50eddeb0596aecd93cfa4a91a0b79a34
+- Beckfoot Farm roadbridge over Barbon Beck - geograph.org.uk - 4210662.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\952b597b55ef1b9726ef8f553238c627
+- Ford at Beckfoot Farm (geograph 4251848).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cb06ae550d9ae979c8f952ef7faadace
+- Quaker Burial Ground, Beckfoot - geograph.org.uk - 5362175.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d5cef3c02b9d479b2dacd89e06c11bee
+- Beckfoot Oakbank School, Keighley - geograph.org.uk - 6648725.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f268832ac997d32402b8152b86e7281a
+- Beckfoot ^ Bingley Tennis Club, Beckfoot Lane - geograph.org.uk - 4323643.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\ed5022aab1452e4b92e35ded24b54ef6
+- Templar Cottage, Beckfoot Farmhouse and Beckfoot Cottage.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e4364d01fb2d56bd47b597b1132c9fba
+- Approaching Beckfoot - geograph.org.uk - 4650560.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a23e493c379532dc6eecc8605535a9a3
+- A path leading to Wolsty Farm - geograph.org.uk - 3124201.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\30a22b81396e0e64926967397f86dcdf
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

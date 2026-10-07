@@ -228,9 +228,11 @@ Promotion threshold: **55** (requires coords + passes date cutoff).
 
 ### Weekly Article (`article_generator.py`)
 
-Generates a magazine-quality weekly digest from the top-scoring news items. Runs Sunday evenings (20:00 UTC). The pipeline has 6 steps:
+Generates a magazine-quality weekly digest from the top-scoring news items. The window opens **Monday 06:00 UTC** and stays open 48 h (`should_generate_article()`; it was Sunday 20:00 UTC until 2026-09-13, then Monday-only until 2026-10-06 — a run takes hours and every deploy kills it, so a Monday-only window loses the week). The window covers the week that just ended. The pipeline has 6 steps:
 
-**0. Cluster** (Sonnet 4.6, structured output) — LLM groups items covering the same discovery/event (`prompts/article_cluster.txt`). For each cluster: highest-significance item wins, unique facts from runner-ups merge into its `merged_sources`, winner gets +1 significance boost (capped at 10), runner-ups are removed from the pool. This collapses 3 items about the same excavation into 1 richer item with multi-source citations. Falls back to no clustering on LLM failure.
+**Attempt budget** — each attempt is spent from `lyra_journal_attempts` (`pipeline/lyra/journal_attempts.py`, migration 0028), keyed by the **covered** week, before the run starts: 8 attempts, 30 min apart. It lives in the database because an in-memory counter was reset by every deploy (2026-10-05: eight deploys on the Monday, each restarting the run at "attempt 1/3"). The budget is spent by *deploys* as much as by failures — a killed run has already booked its attempt, and three attempts were gone within two hours on 2026-10-06 before the number was raised. A crash records its error in the `lyra-article` heartbeat row, and a run killed mid-step leaves a step in state `run` — `/api/news/pipeline-status?pipeline=article` reads that as a stall instead of "ok".
+
+**0. Cluster** (Sonnet 4.6, structured output) — LLM groups items covering the same discovery/event (`prompts/article_cluster.txt`). For each cluster: highest-significance item wins, unique facts from runner-ups merge into its `merged_sources`, winner gets +1 significance boost (capped at 10), runner-ups are removed from the pool. This collapses 3 items about the same excavation into 1 richer item with multi-source citations. Falls back to no clustering on LLM failure, and skips a group the model returned in the wrong shape (a bare index instead of a list — that cost the 2026-10-05 week three attempts).
 
 **1. Select** — Diversity-penalized greedy selection (max 25 items). Repeats from the same video or category get significance penalties so fresh sources rise.
 

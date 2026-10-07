@@ -1,0 +1,40 @@
+site_id: b51b2f98-a99a-4742-ac2a-28df400dae47
+name: Villar de Domingo García
+country: Spain
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Villar de Domingo García, Cuenca, España, 2017-01-03, DD 110.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a78d5495f6a6dc57846b6bd214d40777
+- Villar de Domingo García f.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\99e9d1ab78531b5109e634cd491f3ddf
+- Villar de Domingo García a.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\b47b8dbfb20da2532c4b98f9f44bfcd7
+- Villar de Domingo García c.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\5e24f8a740220e1a5d1359a9440400be
+- Villar de Domingo García b.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6b378e038c036764e1f38d10d165a073
+- Villar de Domingo García d.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6a621bc3ad49e28d6c0263875c856c5b
+- Karte Gemeinde Villar de Domingo García 2022.png  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\e0c7a60072a8836f2ae65372005f99cf
+- Villar de Domingo García (29481184892).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\bc7a09eb9665d87493eae1d82148d06b
+- Villar de Domingo García (28965569984).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6cfe49147aa60ef0d3d8d85eeda6c0e6
+- Villar de Domingo García (28965572374).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\edc75f9a86acf5e2507799df2067b64b
+- Granero de Villar de Domingo García 02.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\593591718b8eae9886bcdfd3b45d959b
+- Iglesia de Nuestra Señora de la Asunción, Villar de Domingo García 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d4a62db2bf2c0178cda33765a48b7a12
+- Casa consistorial de Villar de Domingo García 01.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\7e13472a917fb5705247355edd3566bb
+- Ermita Santo Cristo de la Calzada, Villar de Domingo García.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\1f1ceedbd67f90c9de78c645915893eb
+- VDG vieja placa de parada de bus.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\43eab1756f74372fb7c164ba4f5f3178
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

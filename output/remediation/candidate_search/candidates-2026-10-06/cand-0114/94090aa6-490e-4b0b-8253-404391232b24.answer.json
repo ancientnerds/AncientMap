@@ -1,0 +1,16 @@
+{"site_id": "94090aa6-490e-4b0b-8253-404391232b24",
+ "answered_by": "mcode-judge-cand-0114",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [
+  {"file": "Baking Pot Ferry road Sep 2021.jpg", "verdict": "other_site", "note": "Landstrasse mit Telefonmasten, Palmen und Holzschild im Gras, moderne Dorfszene ohne Site"},
+  {"file": "Pot burial, organic remains, baked clay - Museo Egizio, Turin S 15815 X p01.jpg", "verdict": "other_site", "note": "Schaedel und Skelettknochen in gebrannter Tonurne, aegyptischer Grabfund"},
+  {"file": "Pot burial, organic remains, baked clay - Museo Egizio, Turin S 15815 X p02.jpg", "verdict": "other_site", "note": "Leere gebrannte Tonurne vor neutralem Studiountergrund, Museumsexponat"},
+  {"file": "Pitpans nearing Baking Pot on the Belize River, British Honduras.1923.tif", "verdict": "region_or_type", "note": "Stark verrauschte historische Flussaufnahme mit Booten und Uferwald, nur Landschaft"},
+  {"file": "Pot sherd with geometric pattern, baked clay - Museo Egizio, Turin S 19644 p01.jpg", "verdict": "other_site", "note": "Incrustierter Tonscherbe mit geometrischem Muster vor Studiountergrund"},
+  {"file": "Pot sherd with geometric pattern, baked clay - Museo Egizio, Turin S 19644 p02.jpg", "verdict": "other_site", "note": "Tonscherbe mit Farbskala und Etikett Suppl. 19644, Museumsdokumentation"},
+  {"file": "Cooking pot with traces of burning on the bottom, baked clay - Museo Egizio Turin P 7813 p01.jpg", "verdict": "other_site", "note": "Gebrannter Topf mit verkohlter Unterseite auf Acrylsockel, Museumsexponat"},
+  {"file": "Cooking pot with traces of burning on the bottom, baked clay - Museo Egizio Turin P 7813 p02.jpg", "verdict": "other_site", "note": "Topf mit Farbskala und Etikett Provv. 07813, dokumentierte Museumaufnahme"},
+  {"file": "Bread in baking pan.jpg", "verdict": "other_site", "note": "Frisch gebackenes Brot in Metall-Backform auf einer Arbeitsflaeche, moderne Kueche"},
+  {"file": "PikiWiki Israel 58305 baking pot.jpg", "verdict": "other_site", "note": "Aluminium-Kochtopf mit Deckel auf Spiritusbrenner, moderne Kuechenszene"}
+ ],
+ "note": ""}

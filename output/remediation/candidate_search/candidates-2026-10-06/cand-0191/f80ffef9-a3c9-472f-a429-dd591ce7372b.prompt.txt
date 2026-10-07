@@ -1,0 +1,40 @@
+site_id: f80ffef9-a3c9-472f-a429-dd591ce7372b
+name: Tomb of Leonidas
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Sparta Tomb of Leonidas 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\222c48986792920bb6096123477c06ca
+- Sparta Tomb of Leonidas 1.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\19d3435dde47fe3ae7e9df0e124dbe0a
+- ModernSparta.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\f8a5a0a39b3248a3eff3ddf756786472
+- Leonidaion a Olímpia.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3654da3abf1e2e64c84079f1fb20e9fe
+- Olympia Leonidaion Therme.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\abd4c87ca89b930fdeffae877a91b57c
+- Thermes du Leonidaion (vue générale).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\cade0d0e37b44d1db6bf19f06b3f65d3
+- View of the Leonidaion in Olympia on October 14, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\d56e21b2bb7564ee5ccbcf7ee7f15ef9
+- Leonidaion Thermae on October 14, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\40c4587e405ac8306e825d9a82e439fe
+- The ruins of the Leonidaion in Olympia on October 14, 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6145856c6325509698a2580380a78d9d
+- Remains of the Leonidaion in Olympia on 14 October 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6f9189f43f7989a2a082b162e2e335fd
+- The thermae of the Leonidaion on 14 October 2020.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0852bb251aabcf0baab50fa5de520a02
+- View of modern Sparta, Mount Taygetus and the Eurotas from the Menelaion on 15 May 2019.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\01bdea3dfe96e16f8a9dc7664fabbcbb
+- Sparta - Tomb of Leonidas - DPLA - ebe507a1efd1897f87666db7538e3435 (page 1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\6e2a0037229c6a128d5635ffe7c751d6
+- Sparta - Tomb of Leonidas - DPLA - ebe507a1efd1897f87666db7538e3435 (page 2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\527c3b2d31c8665d3166927d06465dc7
+- Leónidas I.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a8a3ead5c6fcbbca39d648c4b196ea4b
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

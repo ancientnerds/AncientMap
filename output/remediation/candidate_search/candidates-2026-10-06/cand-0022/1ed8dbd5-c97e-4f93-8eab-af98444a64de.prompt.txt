@@ -1,0 +1,33 @@
+site_id: 1ed8dbd5-c97e-4f93-8eab-af98444a64de
+name: Desfina
+country: Greece
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Apopsi Desfinas.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\eb86a3c887736ed0dc78dadfef817045
+- EisodosDesfinas.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\3e7884255608270322f4831c568a6e47
+- Easter lamb in Desfina.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0ff137913ec95f768d19e7a4bad1ae8d
+- Traditional street in Desfina.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4b26d73483d3e5aad8098c5180a3b602
+- Desfina aggiorgis.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4435f7be3d1d2d870434d130d905a76f
+- New monastery in Desfina.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\a1f09b0cd900480fca199372e1f0e738
+- Traditional house in Desfina.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\75d09e383ae20f4e5d1b77486b52f28c
+- Agxaralampos.JPG  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4545ce621b8ad89ea858a36696a986b3
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

@@ -1,0 +1,19 @@
+{
+  "site_id": "e84cfda2-96f8-46f8-86ec-1d0c9d62ed1a",
+  "answered_by": "mcode-judge-cand-0177",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {"file": "Naz mitrou-long-1.jpg", "verdict": "other_site", "note": "Personenporträt; kein Bezug zu Ruinen oder Ausgrabungen der Site Mitrou."},
+    {"file": "Naz Mitrou-Long-2.jpg", "verdict": "other_site", "note": "Personenporträt; kein Bezug zu Ruinen oder Ausgrabungen der Site Mitrou."},
+    {"file": "Giannis Mitrou-2 (28863135814).jpg", "verdict": "other_site", "note": "Personenaufnahme; kein archäologischer Bezug zur Site Mitrou erkennbar."},
+    {"file": "ISU vs Nevada (33370202301).jpg", "verdict": "other_site", "note": "Basketballspiel in einer Halle; keine antike Struktur der Site Mitrou."},
+    {"file": "ISU vs Nevada (33457515176).jpg", "verdict": "other_site", "note": "Basketballspiel in einer Halle; keine antike Struktur der Site Mitrou."},
+    {"file": "ISU vs Nevada (33370199751).jpg", "verdict": "other_site", "note": "Basketballspiel in einer Halle; keine antike Struktur der Site Mitrou."},
+    {"file": "ISU vs Nevada (33457519736).jpg", "verdict": "other_site", "note": "Basketballspiel in einer Halle; keine antike Struktur der Site Mitrou."},
+    {"file": "ISU vs Nevada (33342357602).jpg", "verdict": "other_site", "note": "Basketballspiel in einer Halle; keine antike Struktur der Site Mitrou."},
+    {"file": "ISU vs Nevada (33457497166).jpg", "verdict": "other_site", "note": "Basketballspiel in einer Halle; keine antike Struktur der Site Mitrou."},
+    {"file": "ISU vs Nevada (33457527216).jpg", "verdict": "other_site", "note": "Basketballspiel in einer Halle; keine antike Struktur der Site Mitrou."},
+    {"file": "Erb rodu Kunštátu.JPG", "verdict": "other_site", "note": "Modernes Interieur eines Sportraums; keine antike Struktur der Site Mitrou."}
+  ],
+  "note": ""
+}

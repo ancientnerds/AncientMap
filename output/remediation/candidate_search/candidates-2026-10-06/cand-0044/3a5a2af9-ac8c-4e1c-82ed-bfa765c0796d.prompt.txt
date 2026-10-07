@@ -1,0 +1,30 @@
+site_id: 3a5a2af9-ac8c-4e1c-82ed-bfa765c0796d
+name: Xələc, Nakhchivan
+country: Azerbaijan
+
+Zeige jedes Bild unter diesem Pfad und entscheide fuer jedes genau eines:
+
+- `depicts`: das Bild zeigt die Site selbst - ihre Ruinen, Strukturen, Ausgrabungen,
+  Felsbilder oder eine Umgebung, in der die Site erkennbar ist; oder ein dort gefundenes
+  Objekt.
+- `region_or_type`: das Bild zeigt nur die Region oder den Typ (Landschaft, Dorf, Museum, Karte),
+  nicht die Site.
+- `other_site`: das Bild zeigt eine andere Site oder etwas ganz anderes (eine Person, eine
+  Muenze, ein anderes Land, eine moderne Szene).
+
+Trage dein Urteil nicht aus dem Dateinamen oder deinem Vorwissen ab: eine Datei namens
+"Cerna, Dunare.JPG" ist nicht die Site Cerna in Kroatien, wenn das Bild etwas anderes zeigt.
+Bilde nichts aus: wenn du ein Bild nicht sicher lesen kannst, nimm
+`region_or_type` und schreibe das in die Notiz.
+
+- Xələc, Salyan.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\770bddee37dacdad9e6f019d7528132d
+- Xələc, Salyan - 2.jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\4d1769e7901fc1ee55f182226a4169b8
+- Xələc (Qafan) kənd məscidi (1).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\32fb7c321659d7cfd0f7fb41b2b95306
+- Xələc (Qafan) kənd məscidi (2).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\0546b73363bf314e885c2906f918a666
+- Xələc (Qafan) kənd məscidi (3).jpg  ->  output\remediation\candidate_search\candidates-2026-10-06\pictures\58362a9177f4bdfa56f9097886129a7f
+
+Antworte mit genau einem JSON-Objekt (UTF-8, keine Codezaeune) auf stdout:
+
+{"site_id": "...", "verdicts": [{"file": "...", "verdict": "depicts",
+ "note": "woran du das im Bild siehst, max 200 Zeichen"}], "note": ""}
+

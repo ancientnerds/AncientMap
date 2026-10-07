@@ -1,0 +1,10 @@
+{"site_id": "723dad90-4cd2-42ca-a8d1-9cf8fe11f1f0",
+ "answered_by": "mcode-judge-cand-0088",
+ "model": "MiniMax-M3.1-Flash-Preview",
+ "verdicts": [{"file": "National anthem of Ukraine.jpg", "verdict": "other_site",
+              "note": "Maedchen in ukrainischer Volkskleidung mit Sonnenblumenkranz und ukrainischem Liedblatt in den Haenden; keine Site in Peru"},
+             {"file": "Museo Nacional de Etnografía y Folklore 136.jpg", "verdict": "region_or_type",
+              "note": "Museumsvitrine: Tonkopf mit Scheibe und goldene Tupu-Nadeln, Etikett Placa cefalica, Ica/Peru. Ausstellungsstueck, keine Site"},
+             {"file": "With thoughts to the future.jpg", "verdict": "other_site",
+              "note": "Maedchen in ukrainischer Tracht mit Sonnenblumenkranz haelt ein Blatt; ukrainische Volksszene ohne Bezug zu Peru"}],
+ "note": ""}

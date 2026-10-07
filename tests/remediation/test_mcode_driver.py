@@ -38,8 +38,18 @@ import json, os, sys
 Path = __import__("pathlib").Path
 argv = sys.argv[1:]
 prompt = sys.stdin.read()
-Path(os.environ["FAKE_LOG"]).open("a", encoding="utf-8").write(
-    json.dumps({"argv": argv, "prompt": prompt}) + "\\n")
+# One `os.write` on a descriptor opened O_APPEND, not a buffered `open("a").write(...)`: the
+# driver runs a window of batches at once, so two of these processes append to the same file,
+# and a buffered append loses one of them under load. Measured 2026-10-07 in the pre-push gate
+# of commit 47da191: `test_a_stopped_batch_does_not_start_the_batches_queued_behind_it`
+# asserted two execs and found one, while the same test passed 6/6 in isolation and the whole
+# suite had been green minutes earlier. A single write at the end of the file is atomic.
+_line = (json.dumps({"argv": argv, "prompt": prompt}) + "\\n").encode("utf-8")
+_fd = os.open(os.environ["FAKE_LOG"], os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o644)
+try:
+    os.write(_fd, _line)
+finally:
+    os.close(_fd)
 payload = {"ok": True, "label": os.environ.get("FAKE_LABEL", "batch"), "steps": 1}
 if os.environ.get("FAKE_FAIL"):
     sys.stderr.write("boom\\n")
@@ -70,16 +80,41 @@ def fake_mcode(tmp_path: Path, **env: str) -> tuple[Path, dict[str, str]]:
     """The fake on disk and the environment a driver run needs to find it.
 
     Windows runs a command through its extension, so the fake is a `.cmd` next to the real script
-    (that is also how `mcode` itself is shimmed here) rather than an extensionless file.
+    (that is also how `mcode` itself is shimmed here) rather than an extensionless file. A POSIX
+    runner cannot execute a `.cmd` at all - the Linux CI job failed nine of these tests with
+    `PermissionError` (measured 2026-10-05, run 37237861755) - so elsewhere the shim is the script
+    itself, with a shebang and the execute bit.
     """
     script = tmp_path / "fake_mcode.py"
     script.write_text(FAKE, encoding="utf-8")
-    binary = tmp_path / "fake-mcode.cmd"
-    binary.write_text(f'@echo off\r\n"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
+    if os.name == "nt":
+        binary = tmp_path / "fake-mcode.cmd"
+        binary.write_text(f'@echo off\r\n"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
+    else:
+        binary = tmp_path / "fake-mcode"
+        binary.write_text(f"#!{sys.executable}\n{FAKE}", encoding="utf-8", newline="\n")
+        binary.chmod(0o755)
     log = tmp_path / "argv.jsonl"
     full = {"PATH": str(tmp_path) + os.pathsep + os.environ["PATH"], "FAKE_LOG": str(log)}
     full.update(env)
     return binary, full
+
+
+def test_the_fake_is_runnable_on_this_platform(tmp_path: Path) -> None:
+    """The CI runner is Linux, and a `.cmd` cannot be executed there.
+
+    Measured 2026-10-05 on the runner of `main` (19f1870, run 37237861755): nine tests failed
+    with `PermissionError: [Errno 13] Permission denied: '.../fake-mcode.cmd'`, all of them the
+    ones that run a batch. Locally they pass, because Windows runs a command through its
+    extension - so the shim is a `.cmd` there and an executable shebang script elsewhere.
+    """
+    binary, _ = fake_mcode(tmp_path)
+    if os.name == "nt":
+        assert binary.suffix == ".cmd"
+        return
+    assert binary.suffix == ""
+    assert binary.read_bytes().startswith(b"#!")
+    assert os.access(binary, os.X_OK)
 
 
 @pytest.fixture(autouse=True)
