@@ -299,11 +299,30 @@ def cmd_finish(args: argparse.Namespace) -> int:
 # --- ledger -------------------------------------------------------------------
 
 
-def _iterations(ws: PaperWorkspace) -> int:
-    """How many times the gates have run on this workspace, from its own history."""
+def _iterations(ws: PaperWorkspace) -> int | None:
+    """How many times the gates have run here, or None when nothing recorded it.
+
+    `None` is the honest answer for a workspace with no `checks.jsonl`, and it is not
+    the same answer as `0`. The campaigns of 2026-10-06 and 07 ran the gates from the
+    studio CLI rather than through this driver, so six of the ten published papers
+    carry no history at all; a counter that answered `0` for them would put a paper
+    that went through eleven check cycles in the ledger as one that went through
+    none, and would read as the campaign limit being met. A missing record is
+    reported as a missing record.
+    """
     if not ws.checks.exists():
-        return 0
+        return None
     return sum(1 for line in ws.checks.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
+def _iterations_cell(ws: PaperWorkspace) -> str:
+    """The `iterations` cell: a count, or `nicht gemessen` where the count is unknown.
+
+    `0` is not an acceptable cell. No paper reaches a bundle without the gates having
+    run at least once, so a zero here can only be a lost record.
+    """
+    count = _iterations(ws)
+    return "nicht gemessen" if count is None else str(count)
 
 
 def _record_check(ws: PaperWorkspace, result: dict[str, Any]) -> int:
@@ -364,7 +383,7 @@ def _ledger_row(index: int, rid: str) -> str | None:
     support = _count_issues(ws).get("support", {})
     passed = "yes" if report.get("passed") else "no"
     return (
-        f"| {index} | `{rid}` | {_topic_of(ws)} | {_iterations(ws)} | {passed} | "
+        f"| {index} | `{rid}` | {_topic_of(ws)} | {_iterations_cell(ws)} | {passed} | "
         f"{_failing_gates(report)} | {support.get('total', 0)} | "
         f"{'yes' if ws.bundle.exists() else 'no'} | |"
     )
@@ -447,7 +466,20 @@ def cmd_ledger(_args: argparse.Namespace) -> int:
         LEDGER_HEADER + "\n".join(rows + foreign) + ("\n" if rows or foreign else ""),
         encoding="utf-8",
     )
-    _print({"rows": len(rows), "kept_foreign_rows": len(foreign), "ledger": str(LEDGER)})
+    unmeasured = [
+        rid
+        for rid in dict.fromkeys(state.get("pulled") or [])
+        if _iterations(workspace(rid)) is None
+    ]
+    _print(
+        {
+            "rows": len(rows),
+            "kept_foreign_rows": len(foreign),
+            "ledger": str(LEDGER),
+            "iterations_not_measured": len(unmeasured),
+            "iterations_not_measured_ids": unmeasured,
+        }
+    )
     return 0
 
 

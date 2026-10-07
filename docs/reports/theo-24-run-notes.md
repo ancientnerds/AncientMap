@@ -350,3 +350,131 @@ anchors and the claim tasks are rebuilt after `images-import`, not before it. Th
 that held is: `number`, `evidence`, `claims`, `images-export`, `images-import`, then
 `number`, `evidence`, `claims`, `check`. Skipping the second pass is what produced a
 green-looking paper whose evidence gate turned red the moment the pictures were in.
+
+## The campaign's own limit was not met, and the ledger could not see it (found 2026-10-07 13:20 UTC)
+
+The goal set **at most two check iterations per paper** and made a third one a chain
+failure. Measured on 2026-10-07 from the workspaces' own `checks.jsonl`, the four papers
+whose history survived record **6, 6, 5 and 11** gate runs. Paper 4 (the Kybalion
+provenance) needed eleven. The other six published papers — 5 through 10, including
+topic 10 — have **no `checks.jsonl` at all**, so their count is not zero, it is unknown;
+topic 10 went through eighteen text repair rounds before it was green, by the working
+notes of that run. **The limit was exceeded on every paper that can be counted, and
+probably on all ten.**
+
+Two separate failures produced that, and both are the ledger's, not the papers'.
+
+**The counter was written by one of the two paths that run the gates.** `_record_check`
+is called by `check` and by `finish` *inside this driver*. From 2026-10-06 onward the
+gates were run through the studio CLI (`paper check`, `paper number`, `paper bundle`),
+which never writes `checks.jsonl`. So the campaign's limit counter stopped counting on
+the day the work changed path — while the work kept going. The rule that the campaign was
+supposed to enforce on itself went blind at exactly the point where the behaviour needed
+watching.
+
+**A missing record read as a count of zero.** `_iterations` returned `0` for a workspace
+without a history file, and the ledger wrote that `0` into the `iterations` column. A
+paper that went through eleven cycles appeared in the table as one that went through none,
+and a campaign of eleven-cycle papers appeared to sit comfortably inside a limit of two.
+The verification of 2026-10-07 found this because it counted the files directly instead of
+reading the summary the campaign had written about itself.
+
+Changes, both at the cause:
+
+- **`_iterations` returns `int | None`**, and `None` renders as `nicht gemessen` in the
+  ledger. No paper reaches a bundle without the gates having run at least once, so a `0` in
+  that column can only ever be a lost record; the cell now says so instead of inventing a
+  number that reads like a result.
+- **`ledger` reports what it could not measure**: `iterations_not_measured` with the ids,
+  so the gap is in the command's own output and not only in a table somebody has to
+  question later.
+
+The lesson repeats the one from run 3, and it is the same sentence: **the ledger lost a
+topic and would not say so.** Run 3 fixed the *topic list* (`paper24_state.json`), and run
+4 moved the *count* into the workspace so the state file could not disturb it. What neither
+fix covered is that a second, uncoordinated path existed which ran the same gates without
+recording anything. A counter measures the writes that go through it, and nobody had asked
+whether all the writes do. The next driver that owns a limit must fail when its counter
+cannot see one of the paths that can break the limit — not when the count is merely wrong.
+
+What it costs to state plainly: the claim "the campaign held to two iterations per paper"
+was never true, and it should never have been made. The ten papers are published, green,
+and verified live; the limit that was supposed to keep the chain honest was not enforced,
+and the artefact that would have shown it was itself reporting the missing data as success.
+
+### The stamp went backwards on three papers after the correction of 2026-10-06
+
+The correction of 2026-10-06 fixed `research_model` on journal rows 119–122. The verification
+of 2026-10-07 found three published papers carrying the old value again:
+
+| journal | slug | `writer.model` | `writer.research_model` |
+|---|---|---|---|
+| 125 | `the-watched-pot-and-the-willing-mind` | `MiniMax-M3.1-Flash-Preview` | `MiniMax-M3` |
+| 127 | `the-loosened-mind-and-what-it-reports` | `MiniMax-M3.1-Flash-Preview` | `MiniMax-M3` |
+| 129 | `quartz-granite-and-the-hard-ceiling-on-tuned-stone` | `MiniMax-M3.1-Flash-Preview` | `MiniMax-M3` |
+
+No Theo worker ran and none could have: `THEO_WORKER_DISABLED=1` since 2026-09-26, and the
+publish rows 125, 127 and 129 are `mcode` publishes from this campaign's own sessions. The
+papers are correctly attributed — nobody researched them on `MiniMax-M3`. The
+`research_model` field is the one value in the pair that has no writer of its own here: the
+research and the text were both produced by the session, and `bundle.writer_for()` falls back
+to the dossier's researcher, which these seeded dossiers do not carry, so the module constant
+(`MiniMax-M3`) is what lands. `model` is right because the bundle sets it from the session;
+`research_model` is wrong for the same reason the first four were.
+
+**The correction of 2026-10-06 was applied by hand, to the four papers that existed then.**
+The fix in `bundle.writer_for()` was supposed to make it impossible, and it does — for a
+paper bundled from a dossier that names its researcher. Those three were bundled from
+research files that carry no `researcher` field at all. Measured on disk, six of the ten
+campaign research files name the session model and four do not:
+
+| research dir | topic | `researcher` |
+|---|---|---|
+| `yd`, `rockart`, `kybalion`, `plasma`, `nocomm`, `quantobs` | 1–6 | present, names `MiniMax-M3.1-Flash-Preview` |
+| `ego`, `zeno`, `will` | 7, 8, 9 | absent |
+| `quartz` | 10 | absent |
+
+So `writer_for()` took its documented fallback — the module constant `MiniMax-M3` — on
+exactly the papers whose research file was incomplete. The fallback is correct behaviour for
+a dossier that genuinely names nobody, and it is the wrong behaviour for a *seed* dossier,
+which is by construction a session's own work and therefore always has a researcher. **The
+gap is in the seed, not in the reader**: `paper24_seed.py` passes
+`research.researcher` through at line 246 and honours an empty string rather than refusing
+it, so a research file that forgot the field produced a dossier that looks like a pipeline
+run.
+
+The fix belongs in the seed: a seeded workspace whose research file names no researcher
+should be refused, the same way the seed already refuses a source without text or a claim
+citing an unknown source id. Everything the seed writes is supposed to describe a run that
+happened in this session, and "nobody did this research" is not one of the states it can
+produce. `writer_for()`'s constant stays as the fallback for a real dossier from a real
+Theo run.
+
+**The lesson: a fix that was verified on four paths and left five untouched is not a fix, it
+is a correction.** The stamped field has to be asserted on the bytes of the path that
+produced the bundle. The 2026-10-06 lesson already demanded exactly this and it was not done
+for the seed path — the test asserted `writer_for()`'s return value, which the seed path
+never exercised.
+
+## Verification of the campaign close (2026-10-07 13:20 UTC)
+
+Read-only, after topic 10 went out and the owner stopped the campaign:
+
+- **10 papers published**, journal rows 115–129, one `publish` per paper, each with its own
+  `bundle_sha256`. Topic 10 is row 129.
+- **`research_requests`**: all ten `status = 'completed'`, `is_public = true`, slug set.
+- **Live page of topic 10** answers HTTP 200 with the full text, all closing sections and
+  **no `verified:no` marker**; 10 of 10 image URLs answer HTTP 200 and were confirmed as
+  JPEG by their first bytes.
+- **Twelve topics remain `queued`** and were not touched: `35090cb9`, `e3c4950b`, `b9713d8f`,
+  `925f3887`, `66f439fb`, `a86db42a`, `4b08117b`, `75c3731d`, `5b018384`, `536f3f41`,
+  `39eb9e0f`, `238147d2`. The two `paused` rows (`afe7c26a`, `20091a97`) were not touched.
+- **The owner's stop instruction is not in this repository.** It came through the session on
+  2026-10-07 ("nach diesem paper aufhören bitte, nach der veröffentlichung") and no artefact
+  of this campaign records it, because nothing in the driver writes an owner's decision. The
+  session log is the only place it exists. Stating it here is a note written after the fact,
+  not evidence that was there at the time — which is exactly the gap that made the claim
+  unfalsifiable from the repo.
+- **Eleven chain commits sit on `feat/2026-10-04-paper-image-floor` and none is on
+  `origin/main`.** The fixes recorded above are therefore local only until that branch is
+  pushed.

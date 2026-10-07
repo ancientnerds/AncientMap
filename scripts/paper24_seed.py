@@ -202,6 +202,18 @@ def build_dossier(research: dict[str, Any], request_id: str) -> dict[str, Any]:
     for key in _LIST_KEYS + ("question",):
         _require(key in research, f"the research file lacks {key!r}")
     request_id = config.check_request_id(request_id)
+    # A seeded dossier describes research this session did, so the model that did it is
+    # a fact about the file, not an optional field. An empty value reaches the writer
+    # stamp as `manifest.research.researcher == ""`, `writer_for()` takes its pipeline
+    # fallback there, and the paper is published naming a model nobody used to research
+    # it — which happened on three papers of the campaign of 2026-10-06/07 (topics 7, 8
+    # and 10). Refused here rather than repaired: a research file that forgot to say who
+    # did the work is the writer's file to complete, and guessing would write a stamp.
+    _require(
+        bool(str(research.get("researcher") or "").strip()),
+        "the research file lacks a 'researcher': name the model that did the research, "
+        "so the paper's writer stamp cannot fall back to the pipeline's model",
+    )
     question = _text(research["question"], "question")
     sources, texts, archive = _sources(research["sources"])
     known = {s["id"] for s in sources}

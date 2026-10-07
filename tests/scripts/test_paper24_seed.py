@@ -152,6 +152,9 @@ def test_manifest_counts_the_file_and_names_the_provenance(monkeypatch, tmp_path
         (lambda r: r.update(sources=[]), "carries no sources"),
         (lambda r: r.update(claims=[]), "carries no claim"),
         (lambda r: r.update(angles=[]), "carries no angle"),
+        (lambda r: r.update(researcher=""), "researcher"),
+        (lambda r: r.update(researcher="   "), "researcher"),
+        (lambda r: r.pop("researcher"), "researcher"),
     ],
 )
 def test_a_bad_research_file_writes_nothing(monkeypatch, tmp_path, mutate, message):

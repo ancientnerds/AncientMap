@@ -148,7 +148,8 @@ def test_the_ledger_refuses_a_list_that_lost_a_topic(monkeypatch, tmp_path, caps
     monkeypatch.setattr(driver, "LEDGER", ledger)
     lost = "cccccccc-0000-0000-0000-000000000001"
     ledger.write_text(
-        driver.LEDGER_HEADER + f"| 1 | `{lost}` | A topic the driver lost | 1 | yes | - | 0 | yes | |\n",
+        driver.LEDGER_HEADER
+        + f"| 1 | `{lost}` | A topic the driver lost | 1 | yes | - | 0 | yes | |\n",
         encoding="utf-8",
     )
     ws = driver._ws("bbbbbbbb-0000-0000-0000-000000000001")
@@ -161,6 +162,43 @@ def test_the_ledger_refuses_a_list_that_lost_a_topic(monkeypatch, tmp_path, caps
     err = capsys.readouterr().err
     assert "claimed twice" in err and lost in err
     assert ledger.read_text(encoding="utf-8") == before, "the table must not be written"
+
+
+def test_the_ledger_says_a_missing_history_is_not_zero_iterations(monkeypatch, tmp_path, capsys):
+    """A workspace with no `checks.jsonl` had its gates run by another writer.
+
+    Six of the ten published papers were checked through the studio CLI rather than
+    through this driver, so they carry no history file. Counting that as `0` put
+    papers that went through many cycles into the ledger as ones that went through
+    none, and read as the campaign limit of two being met. The cell says the count is
+    unknown, and the command names the ids it could not measure.
+    """
+    driver = _load()
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    monkeypatch.setattr(driver, "LEDGER", tmp_path / "ledger.md")
+    ws = driver._ws("bbbbbbbb-0000-0000-0000-000000000009")
+    ws.root.mkdir(parents=True)
+    ws.dossier_gz.write_bytes(fx.dossier_gz_bytes())
+    ws.check_report.write_text(json.dumps({"passed": True, "gates": []}), encoding="utf-8")
+    ws.bundle.write_text("{}", encoding="utf-8")
+    assert not ws.checks.exists()
+    driver._save({"pulled": [ws.request_id], "bundled": []})
+
+    assert driver._iterations(ws) is None
+    assert driver._iterations_cell(ws) == "nicht gemessen"
+
+    assert driver.main(["ledger"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["iterations_not_measured"] == 1, out
+    assert out["iterations_not_measured_ids"] == [ws.request_id], out
+
+    table = (tmp_path / "ledger.md").read_text(encoding="utf-8")
+    cells = [cell.strip() for cell in table.splitlines()[2].split("|")]
+    assert cells[4] == "nicht gemessen", cells
+    assert cells[4] != "0", cells
+    # the paper is still recorded as what it is: green and bundled
+    assert cells[5] == "yes", cells
+    assert cells[8] == "yes", cells
 
 
 def test_the_driver_cannot_reach_a_publish_call():
