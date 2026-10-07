@@ -351,6 +351,51 @@ that held is: `number`, `evidence`, `claims`, `images-export`, `images-import`, 
 `number`, `evidence`, `claims`, `check`. Skipping the second pass is what produced a
 green-looking paper whose evidence gate turned red the moment the pictures were in.
 
+## Runs 6 to 10 (2026-10-06 and 07), recorded 2026-10-07 from the journals and workspaces
+
+These five runs have no section of their own. What is written here was read back from the
+journal (`theo_paper_publications` rows 126–129), from each workspace's `check_report.json`,
+and from the correction journal (130–135) — not from the working memory of the run.
+
+| # | slug | published | what the run was |
+|---|---|---|---|
+| 6 | `the-witness-only-channel-and-what-physics-allows` | row 126 | no-communication theorem against remote viewing |
+| 7 | `the-watched-pot-and-the-willing-mind` | row 125 | the observer's stake in what it measures |
+| 8 | `the-loosened-mind-and-what-it-reports` | row 127 | attention as a measure of what is permitted to be known |
+| 9 | `wanting-creates-and-wanting-contaminates` | row 128 | two opposed doctrines of mind reaching reality |
+| 10 | `quartz-granite-and-the-hard-ceiling-on-tuned-stone` | row 129 | piezoelectric tuning and its material ceiling |
+
+All five: `check_report.json` green, bundle written, published, side effects run
+(indexnow, qdrant, api cache). None of the five has a `checks.jsonl`, so their gate-run
+count is unknown — see the section below.
+
+**The claim chain of runs 6–10 was longer than any earlier run.** Topic 10 went through
+eighteen text repair rounds before it was green, spread over four session workers in
+parallel, each handed a slice of the claim tasks with the full source texts and the rule
+that a sentence without numbers must stand verbatim in the source. The load-bearing rules
+that came out of it, in the order they mattered:
+
+- **A marker chain per sentence, one entry each.** Every paragraph over fifty characters
+  needs at least one `[S:<12 hex>]` marker; the gate follows the chain sentence by sentence
+  and stops at the first sentence whose support cannot be located.
+- **Units are written byte-identical to the source.** `°C` instead of "degrees Celsius",
+  `24,000 kg/cm²` tight where the source has it tight and `24,500 kg/cm²` with the space
+  where it has the space, U+2009 thin space in `8 km` and `96 seconds`. The comparison is
+  byte-wise, so a unit spelled differently is a finding even when the number is right.
+- **`locate_support` searches two source sentences.** A number that lives in the second
+  sentence after the matching one is outside the window and counts as unsupported.
+- **`accepted.json` is never checked against the prompt hash.** Any text patch invalidates
+  the `prompt_sha256` of the paragraphs it touched, and the affected task has to be
+  re-imported by hand; the gate will not catch that for you.
+- **A placed picture must be `meaningful`, not `weak`**, or the picture gate refuses the
+  paper.
+
+**What would have been cheaper.** Four of the five rules above could have been read off the
+gate's own message instead of being rediscovered over eighteen rounds: the gate names the
+rule (`located_sentence`, `number_exact`) and the exact value it could not match. The chain
+had a diagnostics command the runs did not use — the repair rounds should have been driven
+by that output from the first failing run, not by reading the report and inferring.
+
 ## The campaign's own limit was not met, and the ledger could not see it (found 2026-10-07 13:20 UTC)
 
 The goal set **at most two check iterations per paper** and made a third one a chain

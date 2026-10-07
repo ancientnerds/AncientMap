@@ -352,6 +352,10 @@ LEDGER_HEADER = (
     "|---|---|---|---|---|---|---|---|---|\n"
 )
 
+#: How many cells a ledger row has. `chain change` is the last of them, and the header
+#: above is the only place that number is written down.
+LEDGER_CHAIN_CHANGE_COLUMN_CELLS = len(LEDGER_HEADER.split("\n")[0].strip().strip("|").split("|"))
+
 
 def _failing_gates(report: dict[str, Any]) -> str:
     """The gate names that were red, `quality` left out.
@@ -370,7 +374,24 @@ def _failing_gates(report: dict[str, Any]) -> str:
     return ", ".join(names) if names else "-"
 
 
-def _ledger_row(index: int, rid: str) -> str | None:
+def _kept_chain_change(existing: list[str], rid: str) -> str:
+    """The `chain change` cell this table already carries for `rid`.
+
+    The driver measures what happened; which defect of a paper changed the chain is a
+    judgement recorded in the run notes, and rewriting the table must not throw it away.
+    Without this, every `ledger` run emptied the column and the campaign's lessons went
+    back to being prose next to the table instead of beside the numbers they belong to.
+    """
+    for line in existing:
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) != LEDGER_CHAIN_CHANGE_COLUMN_CELLS:
+            continue
+        if cells[1].strip("`") == rid:
+            return cells[LEDGER_CHAIN_CHANGE_COLUMN_CELLS - 1]
+    return ""
+
+
+def _ledger_row(index: int, rid: str, existing: list[str] | None = None) -> str | None:
     """The markdown row for one workspace, or None if it has no report yet.
 
     Re-running the command replaces a row instead of appending a second one: the
@@ -382,10 +403,11 @@ def _ledger_row(index: int, rid: str) -> str | None:
     report = json.loads(ws.check_report.read_text(encoding="utf-8"))
     support = _count_issues(ws).get("support", {})
     passed = "yes" if report.get("passed") else "no"
+    chain = _kept_chain_change(existing or [], rid)
     return (
         f"| {index} | `{rid}` | {_topic_of(ws)} | {_iterations_cell(ws)} | {passed} | "
         f"{_failing_gates(report)} | {support.get('total', 0)} | "
-        f"{'yes' if ws.bundle.exists() else 'no'} | |"
+        f"{'yes' if ws.bundle.exists() else 'no'} | {chain} |"
     )
 
 
@@ -445,14 +467,14 @@ def cmd_ledger(_args: argparse.Namespace) -> int:
     """
     state = _state()
     rows: list[str] = []
+    previous = LEDGER.read_text(encoding="utf-8").splitlines() if LEDGER.exists() else []
     # In registration order, not sorted: the `#` column is the campaign's running
     # number, so a paper finished second is paper 2 however its uuid sorts.
     for rid in dict.fromkeys(state.get("pulled") or []):
-        row = _ledger_row(len(rows) + 1, rid)
+        row = _ledger_row(len(rows) + 1, rid, previous)
         if row is not None:
             rows.append(row)
     owned = [f"`{rid}`" for rid in state.get("pulled") or []]
-    previous = LEDGER.read_text(encoding="utf-8").splitlines() if LEDGER.exists() else []
     foreign = [
         line
         for line in previous

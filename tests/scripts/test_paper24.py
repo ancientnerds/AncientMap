@@ -210,6 +210,50 @@ def test_the_ledger_says_a_missing_history_is_not_zero_iterations(monkeypatch, t
     assert cells[8] == "yes", cells
 
 
+def test_the_ledger_keeps_a_chain_change_it_cannot_measure(monkeypatch, tmp_path, capsys):
+    """The `chain change` column survives a rewrite of every other cell.
+
+    Which defect of a paper changed the chain is a judgement from the run notes; the
+    driver measures what happened and cannot derive it. Rewriting the table used to end
+    the row with an empty cell, so every `ledger` run threw the column away and the
+    campaign's lessons were prose beside the table instead of numbers beside the prose.
+    """
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    driver = _load()
+    monkeypatch.setattr(driver, "LEDGER", tmp_path / "ledger.md")
+    ws = driver._ws("bbbbbbbb-0000-0000-0000-000000000010")
+    ws.root.mkdir(parents=True)
+    ws.dossier_gz.write_bytes(fx.dossier_gz_bytes())
+    ws.check_report.write_text(json.dumps({"passed": True, "gates": []}), encoding="utf-8")
+    ws.bundle.write_text("{}", encoding="utf-8")
+    driver._save({"pulled": [ws.request_id], "bundled": [ws.request_id]})
+
+    def cell(text: str, index: int) -> str:
+        for line in text.splitlines():
+            if line.startswith("| 1 |"):
+                return [c.strip() for c in line.strip().strip("|").split("|")][index]
+        raise AssertionError(text)
+
+    ledger = tmp_path / "ledger.md"
+    assert driver.main(["ledger"]) == 0
+    assert cell(ledger.read_text(encoding="utf-8"), 8) == "", "a fresh table starts empty"
+
+    # the notes now name the defect of this run
+    rows = ledger.read_text(encoding="utf-8").splitlines()
+    rows[2] = rows[2].rstrip()[:-1].rstrip() + " run 10: 18 repair rounds (notes) |"
+    ledger.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    assert cell(ledger.read_text(encoding="utf-8"), 8) == "run 10: 18 repair rounds (notes)"
+
+    # a rewrite that changes a measured cell keeps the judgement
+    ws.checks.write_text('{"passed": false}\n{"passed": true}\n', encoding="utf-8")
+    ws.check_report.write_text(json.dumps({"passed": False, "gates": []}), encoding="utf-8")
+    assert driver.main(["ledger"]) == 0
+    text = ledger.read_text(encoding="utf-8")
+    assert cell(text, 3) == "2", "the measured column was updated"
+    assert cell(text, 4) == "no", "the measured column was updated"
+    assert cell(text, 8) == "run 10: 18 repair rounds (notes)", "the judgement was kept"
+
+
 def test_the_driver_cannot_reach_a_publish_call():
     """The campaign stops at `bundle`. A publish call in here would be the one write
     the owner ruled out, and it would read as a mechanical step. The check is on the
