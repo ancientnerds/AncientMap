@@ -1,0 +1,10 @@
+{
+ "chunks": 1,
+ "planned_rows": 7,
+ "planned_sites": 7,
+ "refusals": {
+  "not_fetched": 1
+ },
+ "refused_sites": 1,
+ "run_id": "insert-2026-10-07-011"
+}

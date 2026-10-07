@@ -80,7 +80,20 @@ def load_chunk(directory: Path) -> IN.InsertChunk:
         raise InsertChunkError(
             f"{directory / 'CHUNK.json'} claims {header['rows']} row(s), the file holds {len(rows)}"
         )
-    chunk = IN.InsertChunk(stamp=header["run_id"], number=int(header["chunk"]), inserts=rows)
+    chunk = IN.InsertChunk(
+        stamp=header["run_id"],
+        number=int(header["chunk"]),
+        inserts=rows,
+        # The floor this chunk serves, as its plan recorded it: the writer rebuilds the chunk and
+        # re-renders its statement to compare against the file, so a rebuild at the lane's own floor
+        # would refuse the very file the plan wrote (measured 2026-10-07, wave
+        # `insert-2026-10-07-010`). A chunk written before the floor was recorded in `CHUNK.json`
+        # served the lane's own floor, so the absent key means exactly that and nothing else.
+        floor=(
+            int(header.get("min_width", IN.HERO_MIN_WIDTH)),
+            int(header.get("min_height", IN.HERO_MIN_HEIGHT)),
+        ),
+    )
     if chunk.run_stamp != f"{header['run_id']}-{int(header['chunk']):03d}":
         raise InsertChunkError(f"{directory}: the run stamp {chunk.run_stamp!r} is not numbered")
     if header["digest"] != chunk.digest:
@@ -105,7 +118,7 @@ def check_delivered(directory: Path) -> IN.InsertChunk:
                 f"{path} is not pinned to this plan (plan sha256 {chunk.digest})"
             )
         rendered = (
-            IN.render_apply(chunk.inserts, chunk.run_stamp, digest=chunk.digest)
+            IN.render_apply(chunk.inserts, chunk.run_stamp, digest=chunk.digest, floor=chunk.floor)
             if kind == "apply"
             else IN.render_rollback(chunk.inserts, chunk.run_stamp, digest=chunk.digest)
         )

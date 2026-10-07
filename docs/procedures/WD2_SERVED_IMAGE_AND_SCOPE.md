@@ -838,7 +838,7 @@ Seven rows, **105 journal rows**, 0 refusals in the plan, all five writer steps 
 count. The served tree did not grow - it stayed at **50,389 `.webp`**: those seven files were already
 served, and what was missing was the row that pointed at them.
 
-**155 sites that showed nothing at all now serve a hero of their own**, each acceptance green on a fresh
+**192 sites that showed nothing at all now serve a hero of their own**, each acceptance green on a fresh
 read of production and each file verified byte-exact on the offsite tree, after the transfer and inside
 the api container. The chain cleans itself: a wave re-offers every target the run knows, and a site that
 was already written comes back as `already_holds_the_file` rather than being written twice.
@@ -862,44 +862,90 @@ imageinfo and the fetch's own message: the smallest width among them is **800 px
 **7** are written by wave `-009` above, **8** clear 800x300 but not 1600x900, **25 are genuinely too
 small** (640x480 geograph.org.uk thumbnails, 480x640, one 254x147 - below 800x300 whatever is
 decided), **5** are refused by the credit rule and **6** for another reason (four link no
-`upload.wikimedia.org` file at all, one carries a `"` in its name, one is 1600x780). So the owner's
-floor decision releases **40 + 8 = 48 sites**, and it would release no strip on either side.
+`upload.wikimedia.org` file at all, one carries a `"` in its name, one is 1600x780).
 
-**What the ten waves did to the §3.7.1 table**, the same script over the floor wave's read
-(`d0c3852a`, 2026-10-06T16:11:30Z) and over the last wave's **acceptance** read (`e0ca173a`,
-2026-10-07T08:52:33Z) - the read after the commit, not the one the plan measured against:
+**The owner's floor decision released 40 + 8 = 48 target sites and wrote 37 rows.** The two numbers are
+not the same, and the difference is measured rather than estimated: **11 of the 48 carry a second,
+independent refusal** that the floor does not touch - **8 at the credit rule of 2026-10-05 (17:43)**
+(Tomb of Macridy Bey, Coppa Nevigata, Calf of Eday Cairns, Beckfoot, Museo de la Arquitectura Maya,
+Aqueduc Romain, Huayuri, Obelisk of Thutmose I), which this decision does not reopen; **1 at the lane's
+own upscale guard** (`Qasr Qaroun Temple`: *"arrived 2560 px wide, wider than the 1152 px original"*, a
+picture the fetch will not enlarge into); and **2 as `already_holds_the_file`** (Villar de Domingo
+García, Merano), which are not a loss at all - those two already serve that file, which is why the plan
+left them alone. So the floor released 37 rows, and the 9 sites it did not reach are 8 credit-rule and
+1 upscale refusals. `C:\tmp\floor_gap.py` reads this out of the runs' own `FETCH_FAILURES.jsonl` and
+`INSERT_REFUSALS.jsonl`; nothing here is estimated.
+
+**What the twelve waves did to the §3.7.1 table**, the same script over the floor wave's read
+(`d0c3852a`, 2026-10-06T16:11:30Z) and over the last wave's **acceptance** read (`0b5d7da0`,
+2026-10-07T10:14:53Z) - the read after the commit, not the one the plan measured against:
 
 | over the 4,900 shown curated sites | before | after |
 |---|---:|---:|
-| serves a gallery row | 3,578 | **3,771** |
+| serves a gallery row | 3,578 | **3,808** |
 | serves only its `thumbnail_url` | 152 | 140 |
-| **serves nothing at all** | 1,170 | **989** |
+| **serves nothing at all** | 1,170 | **952** |
 | shows two heroes at once | 0 | 0 |
-| live hero under 1600x900 | 552 | 772 |
+| live hero under 1600x900 | 552 | 809 |
 | live hero under **800x300** | 22 | **19** |
 
-193 sites gained a served row in that window: **155 of them are this lane's waves** (every one of the
-155 serves in the acceptance read - 0 written sites failed to), and 38 belong to another lane that wrote
+230 sites gained a served row in that window: **192 of them are this lane's waves** (every one of the
+192 serves in the acceptance read - 0 written sites failed to), and 38 belong to another lane that wrote
 in the same window. The floor wave's own baseline above is reproduced exactly from the same script, so
 the two columns are comparable.
 
-**What is left, measured per site** (`RESTBESTAND_2026-10-07/RESTBESTAND_2026-10-07.jsonl`, 989 sites,
-one measured reason each): **461** the search refused because Commons names no file for them at all,
-**369** the search found candidates and the judge saw none of them as a picture of the site, **78** the
-judge confirmed a picture and the INSERT lane refused it (48 of those are the floor decision above), 25
-`all_too_small` from the search, and **63** outside the candidate search's population - the two classes
-the import lane owns, which the tenth wave closed as far as the pictures on disk allow.
+**The two floor waves (2026-10-07, runs `-010` and `-011`).** The owner released the lowered floor for
+the sites that show nothing ("alle offenen punkte nach empfehlung freigegeben", 2026-10-06, AFK), so
+both waves carry a `FLOOR.json` of `800x300` and the floor is written into the target lists
+(`FLOOR_RELEASE_CANDIDATE.json`, 40 sites, `FLOOR_RELEASE_IMPORT.json`, 8) with the owner's words in
+their `owner` field. Wave `-010`: 226 claims, the read `e16c2658`, the fetch at 800x300 returned **184
+fetched and 42 refused**, and the plan wrote **30 rows over 450 journal rows** (154 `already_holds_the_
+file`, 42 `not_fetched`). Wave `-011`: 8 seeded from the import run, read `ff6ef5ae`, **7 fetched and 1
+refused**, **7 rows over 105 journal rows**. All five writer steps green on both, acceptance **`ok: true`**
+on `ad068f99` and `0b5d7da0`, **37/37 live** with the exact byte count, and the 191 packed files verified
+in the api container (0 missing, 0 size mismatches; the served tree 50,389 -> **50,428 `.webp`**).
 
-The owner lowered the floor of §3.7.2 for the sites that *already have* a picture; it has never been
-decided for the sites that show **nothing**, which is this lane's whole population. That decision is
-the owner's and is still open; what the measurements above settle is that **800x300 costs nothing in
-quality here** - it would release 48 sites that already carry a confirmed picture, and not one of the
-48 is a strip.
+**The rehearsal of wave `-010` failed on its own plan, and the reason is in the floor.** `--rehearse`
+answered `EXIT 7` with 30 rows inserted and the reversal unable to remove them: `insert.py:637` wrote
+guard 3 of `APPLY.sql` from the constants `HERO_MIN_WIDTH`/`HERO_MIN_HEIGHT` (1600x900) while every
+other step of the same run - the fetch, the plan, `CHUNK.json` - took the floor as a parameter. The chunk
+therefore refused to roll back the very rows it had just written, because their files are 800x300 and the
+guard asked for 1600x900. **The floor is now a run parameter down to the last number of the statement**:
+`render_apply(..., floor=)`, `InsertChunk.floor`, `chunks_of(..., floor=)`, `write_chunks(..., floor=)`,
+`min_width`/`min_height` in `CHUNK.json`, and `cmd_insert_plan` reading `_floor_of(run, None, None)`.
+
+**The writer had the same gap in two places, and `--check` found it before the apply.** `load_chunk`
+rebuilt the chunk without the floor and `check_delivered` re-rendered the statement from that rebuild, so
+the comparison was 800x300 against 1600x900 and could never be equal: *"APPLY.sql is not the statement
+its plan renders - edited or stale; refusing to send"*. Both take the floor from the chunk's own
+`CHUNK.json`; a chunk written before that key existed (waves 1-10) served the lane's own floor, so the
+absent key means exactly that. Seven tests carry this (three in `TestTheRunServesItsOwnFloor`, four in
+`TestTheWriterChecksAtTheRunsOwnFloor`), including the one that says a statement edited *at* a lowered
+floor is still refused.
+
+**What is left, measured per site** (`RESTBESTAND_2026-10-07/RESTBESTAND_2026-10-07.jsonl`, **952**
+sites, one measured reason each, counted on the acceptance read `0b5d7da0` of wave `-011` and not on a
+plan read): **461** the search refused because Commons names no file for them at all, **369** the search
+found candidates and the judge saw none of them as a picture of the site, **48** the judge confirmed a
+picture and the INSERT lane refused it (the 11 of the floor decision's 48 that a second refusal kept
+out, plus the 37 of the earlier waves' credit-rule and filename refusals), 25 `all_too_small` from the
+search, and **49** outside the candidate search's population. The classes are 723 `no_row_at_all` and
+229 `every_row_excluded`.
+
+**That file was measured twice on this page.** It first named **989** sites, over the acceptance read
+`e0ca173a` of wave `-009`. The two floor waves then wrote 37 of them, and the list is regenerated over
+the read after their commits: 989 - 37 = **952**, and 989 - 952 reproduces the 37 rows exactly.
+
+**The owner lowered the floor of §3.7.2 twice, and both decisions have been carried out.** The first
+was for the sites that *already have* a picture; the second (2026-10-06, "alle offenen punkte nach
+empfehlung freigegeben") was for the sites that show **nothing**, this lane's whole population, at
+800x300. What the measurements settle is that **800x300 costs nothing in quality here** - of the 48
+sites it named, not one is a strip, and 37 of them now serve their page.
 
 **And this lane is closed.** The judgement answered **595 of 595** sites and `TARGETS.jsonl` names 226
 of them; every one of the 226 is now written, refused by name, or already written by an earlier wave.
-There is no target left in `candidates-2026-10-06` that an INSERT wave has not been run over. What
-remains for this class is the owner's floor decision above, not more fetching.
+There is no target left in `candidates-2026-10-06` that an INSERT wave has not been run over, and the
+owner's floor decision is no longer open.
 
 **The largest class left, 461 sites, was measured twice before anyone spends an hour on it** - both
 probes are in `RESTBESTAND_2026-10-07/` and both are negative in a way that closes a door:
@@ -921,8 +967,9 @@ probes are in `RESTBESTAND_2026-10-07/` and both are negative in a way that clos
 
 So this class is not a bug to fix but **a name the curated data does not carry**. Closing it needs the
 local name per site - research over 461 sites, and a decision about whether that is worth it. The
-honest summary of the whole remainder: **989 sites still show nothing, and 48 of them have a confirmed
-picture that only the owner's floor decision stands between them and their page.**
+honest summary of the whole remainder: **952 sites still show nothing, and none of them has a confirmed
+picture that a decision is standing between it and its page** - every one of the 48 the floor decision
+named is either written (37) or held by a refusal that floor was never the right lever for (11).
 
 ### 3.7.2 The floor the owner lowered (2026-10-06), and exactly what it released
 
@@ -977,6 +1024,21 @@ that already had a row (`ih3` unhides the only row of a site that showed nothing
 they need a new picture rather than a lower bar: **1,081 `no_picture_at_all`**, 36
 `import_picture_is_no_row` and 26 `import_picture_never_fetched` for the INSERT lane.
 
+#### The same floor, for the sites that show nothing (owner decision 2026-10-06)
+
+The decision above lowers the floor for sites that *already have* a picture. The INSERT lane's
+population is the opposite: sites whose page serves **no image at all**, which need a row created before
+any size can matter. Owner decision 2026-10-06, in the same conversation: *"alle offenen punkte nach
+empfehlung freigegeben"* - every open point is released as recommended. The recommendation was that the
+same 800x300 apply here, and it is applied: the two target lists
+(`FLOOR_RELEASE_CANDIDATE.json`, 40 sites, `FLOOR_RELEASE_IMPORT.json`, 8) carry the floor and the
+owner's words, and both waves write a `FLOOR.json` of 800x300 exactly like wave `-009` above.
+
+48 target sites, **37 rows written**, and the 11-site difference is named in §3.7.3. Nothing else about
+the lane changed: the credit rule of 2026-10-05 (17:43), the upscale guard and the filename rule all
+still refuse by name, and 800x300 releases no strip on either side - the smallest of the 48 is 800 px
+wide and 474 px high.
+
 ```bash
 PY=./.venv/Scripts/python.exe
 IH=scripts/remediation/import_hero
@@ -984,7 +1046,9 @@ CW=scripts/remediation/gallery_audit/chunk_writer.py
 R=output/remediation/import_hero/import-hero-2026-10-06-009
 $PY $IH/run.py plan --run-dir $R --min-width 800 --min-height 300
 for C in $R/chunk-001 $R/chunk-002 $R/chunk-003; do
-    $PY $CW $C --check --rehearse --apply --readback --rehearse-rollback
+    for step in --check --rehearse --apply --readback --rehearse-rollback; do
+        $PY $CW $C $step                        # one at a time, they exclude each other
+    done
 done
 $PY $IH/run.py accept --run-dir $R
 ```
@@ -996,7 +1060,9 @@ IH=scripts/remediation/import_hero
 # the INSERT wave: the fetch (resumable), the plan, the writer, the acceptance
 $PY $IH/run.py fetch         --run-dir $R --root $OFFSITE --target insert --start
 $PY $IH/run.py insert-plan   --run-dir $R
-$PY $IH/insert_writer.py $R/chunk-001 --check --rehearse --apply --readback --rehearse-rollback
+for step in --check --rehearse --apply --readback --rehearse-rollback; do
+    $PY $IH/insert_writer.py $R/chunk-001 $step   # one at a time, they exclude each other
+done
 $PY $IH/run.py insert-accept --run-dir $R
 ```
 

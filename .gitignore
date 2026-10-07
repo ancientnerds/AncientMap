@@ -496,12 +496,14 @@ output/remediation/import_hero/*/FETCHED_WAVE.tar.gz
 # next to the runs it was measured against.
 !output/remediation/import_hero/RESTBESTAND_2026-10-06.jsonl
 !output/remediation/import_hero/RESTBESTAND_2026-10-06_SUMMARY.json
-# The same list, remeasured after the candidate search's ten INSERT waves (2026-10-07): 989 sites,
+# The same list, remeasured after the candidate search's twelve INSERT waves (2026-10-07): 952 sites,
 # each with one measured reason - what the search refused and why, what the judge saw, or what the
-# INSERT lane refused it for. `IMPORT_REMAINDER_SIZES.json` is what the owner's open floor question
-# needs on the import side: the real size of every file the 2025 import links for those sites, asked
+# INSERT lane refused it for. `IMPORT_REMAINDER_SIZES.json` is what the owner's floor question
+# needed on the import side: the real size of every file the 2025 import links for those sites, asked
 # of Commons because a width-refusal names no height. A count is a fact about today; this is the
-# file the next campaign starts from.
+# file the next campaign starts from. (The first measurement of this list named 989, over the read of
+# wave -009; the two floor waves wrote 37 of them and it was regenerated over the read after their
+# commits - 989 - 37 = 952.)
 !output/remediation/import_hero/RESTBESTAND_2026-10-07/
 # The site_external_ids repair (2026-09-22): hand-researched, not regenerable from any run, and not yet
 # applied - the plan, the statement, the undo and the evidence are versioned; the rehearsal keeps

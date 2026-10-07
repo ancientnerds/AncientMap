@@ -1,0 +1,17 @@
+{
+ "floor": {
+  "min_height": 300,
+  "min_width": 800
+ },
+ "may_empty_sites": 0,
+ "planned_rows": 0,
+ "planned_sites": 0,
+ "read_at": "2026-10-07T09:55:39Z",
+ "read_sha256": "ff6ef5ae7c5ead0bdce5ebb12966798d4378d27d9b5b2b203212ba4162b97e03",
+ "refusals": {
+  "no_target_row": 8
+ },
+ "refused_sites": 8,
+ "run_id": "insert-2026-10-07-011",
+ "sites_with_an_import_image": 8
+}

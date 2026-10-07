@@ -413,7 +413,7 @@ class TestTheStatement:
         sql = self._sql(tmp_path)
         assert "are not ancient_nerds sites" in sql
         assert "already holds this file" in sql
-        assert "under the %x% this lane serves" in sql
+        assert "under the %x% this run serves" in sql
         assert "the row that held the flag for site" in sql
         assert "the thumbnail of site" in sql
 
@@ -438,6 +438,112 @@ class TestTheStatement:
         )
         assert f"pin: {header['digest']}" in sql
         assert digest is None
+
+
+class TestTheRunServesItsOwnFloor:
+    """The chunk's guard is written from the run's own floor, not from the lane's constant.
+
+    Measured 2026-10-07, wave `insert-2026-10-07-010`: `insert.py:637` wrote guard 3 from
+    `HERO_MIN_WIDTH`/`HERO_MIN_HEIGHT` (1600x900) although every other step of the same run took the
+    floor as a parameter. The rehearsal of a wave at the owner's 800x300 therefore failed on its own
+    plan: 30 rows it had accepted were refused by the guard of the chunk it had just written.
+    """
+
+    def _chunk(self, tmp_path: Path, **kwargs: Any) -> tuple[str, dict[str, Any]]:
+        state = _state(rows={SITE_A: [_row(7, SITE_A, hero=True)]}, thumbs={SITE_A: "/x/hero.webp"})
+        planned = IN.plan(state, [_refusal(SITE_A)], fetched=_fetched(SITE_A))
+        chunks = IN.write_chunks(planned, tmp_path / "run", per_chunk=50, **kwargs)
+        directory = tmp_path / "run" / f"chunk-{chunks[0].number:03d}"
+        sql = (directory / "APPLY.sql").read_text(encoding="utf-8")
+        header = json.loads((directory / "CHUNK.json").read_text(encoding="utf-8"))
+        return sql, header
+
+    def test_the_guard_is_written_from_the_floor_the_run_serves(self, tmp_path: Path) -> None:
+        sql, header = self._chunk(tmp_path, floor=(800, 300))
+        assert "IF r.width < 800 OR r.height < 300 THEN" in sql
+        assert "r.width, r.height, 800, 300;" in sql
+        assert f'"min_width": {800}' in json.dumps(header)
+        assert f'"min_height": {300}' in json.dumps(header)
+
+    def test_a_run_without_a_lowered_floor_keeps_the_lane_s_own(self, tmp_path: Path) -> None:
+        sql, header = self._chunk(tmp_path)
+        assert f"IF r.width < {IN.HERO_MIN_WIDTH} OR r.height < {IN.HERO_MIN_HEIGHT} THEN" in sql
+        assert header["min_width"] == IN.HERO_MIN_WIDTH
+        assert header["min_height"] == IN.HERO_MIN_HEIGHT
+
+    def test_the_guard_of_a_lowered_run_never_names_the_lane_s_own_floor(
+        self, tmp_path: Path
+    ) -> None:
+        sql, _ = self._chunk(tmp_path, floor=(800, 300))
+        block = sql.split("guard 3", 1)[1].split("END IF;", 1)[0]
+        assert str(IN.HERO_MIN_WIDTH) not in block
+        assert str(IN.HERO_MIN_HEIGHT) not in block
+
+
+class TestTheWriterChecksAtTheRunsOwnFloor:
+    """The writer rebuilds the chunk and re-renders its statement to compare against the file.
+
+    Measured 2026-10-07, wave `insert-2026-10-07-010`: after the plan rendered guard 3 from the run's
+    floor, `--check` refused the very file that plan had written with `APPLY.sql is not the statement
+    its plan renders`. The rebuild dropped the floor, so the re-render was the lane's own 1600x900 and
+    the two could never be equal. Both halves - the rebuild in `load_chunk` and the re-render in
+    `check_delivered` - now take the floor from the chunk's own `CHUNK.json`.
+    """
+
+    def _written(self, tmp_path: Path, **kwargs: Any) -> Path:
+        state = _state(rows={SITE_A: [_row(7, SITE_A, hero=True)]}, thumbs={SITE_A: "/x/hero.webp"})
+        planned = IN.plan(state, [_refusal(SITE_A)], fetched=_fetched(SITE_A))
+        IN.write_chunks(planned, tmp_path / "run", per_chunk=50, **kwargs)
+        return tmp_path / "run" / "chunk-001"
+
+    def test_the_check_accepts_a_chunk_written_at_a_lowered_floor(self, tmp_path: Path) -> None:
+        from import_hero import insert_writer as IW
+
+        directory = self._written(tmp_path, floor=(800, 300))
+        chunk = IW.check_delivered(directory)
+        assert chunk.floor == (800, 300)
+        assert chunk.inserts[0].values["width"] == "1600"  # the row's own size, never the floor
+
+    def test_the_check_accepts_a_chunk_written_at_the_lane_s_own_floor(
+        self, tmp_path: Path
+    ) -> None:
+        from import_hero import insert_writer as IW
+
+        assert IW.check_delivered(self._written(tmp_path)).floor == (
+            IN.HERO_MIN_WIDTH,
+            IN.HERO_MIN_HEIGHT,
+        )
+
+    def test_a_chunk_written_before_the_floor_was_recorded_serves_the_lane_s_own(
+        self, tmp_path: Path
+    ) -> None:
+        # Waves 1-10 wrote no `min_width`/`min_height`: their guard was rendered from the constant,
+        # so the absent key means the lane's own floor and not a guess at a newer one.
+        from import_hero import insert_writer as IW
+
+        directory = self._written(tmp_path)
+        header_path = directory / "CHUNK.json"
+        header = json.loads(header_path.read_text(encoding="utf-8"))
+        del header["min_width"], header["min_height"]
+        header_path.write_text(json.dumps(header, indent=1), encoding="utf-8")
+        assert IW.check_delivered(directory).floor == (
+            IN.HERO_MIN_WIDTH,
+            IN.HERO_MIN_HEIGHT,
+        )
+
+    def test_the_check_still_refuses_a_statement_edited_at_a_lowered_floor(
+        self, tmp_path: Path
+    ) -> None:
+        from import_hero import insert_writer as IW
+
+        directory = self._written(tmp_path, floor=(800, 300))
+        path = directory / "APPLY.sql"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("IF r.width < 800", "IF r.width < 1600"),
+            encoding="utf-8",
+        )
+        with pytest.raises(IW.InsertChunkError, match="not the statement its plan renders"):
+            IW.check_delivered(directory)
 
 
 class TestTheReversal:

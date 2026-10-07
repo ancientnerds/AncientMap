@@ -441,14 +441,19 @@ def cmd_insert_plan(
         )
     manifest_path = fetched or (run / FETCHED)
     state = ST.load_read(read_path)
+    # The floor is the run's own, from its FLOOR.json: the chunk's guard is written from it, so a plan
+    # at the owner's lowered floor and a guard at the lane's own would refuse each other's rows.
+    floor = _floor_of(run, None, None)
     planned = IN.plan(state, _load_jsonl(run / REFUSALS), fetched=_load(manifest_path))
-    chunks = IN.write_chunks(planned, run, per_chunk=rows_per_chunk)
+    chunks = IN.write_chunks(planned, run, per_chunk=rows_per_chunk, floor=floor)
     return {
         "run_id": run.name,
         "read_sha256": state.sha256,
         "fetched_manifest": manifest_path.name,
         "chunks": len(chunks),
         "stamps": [chunk.run_stamp for chunk in chunks],
+        "min_width": floor[0],
+        "min_height": floor[1],
         "journal_rows": sum(row.journal_rows for chunk in chunks for row in chunk.inserts),
         **planned.as_json(),
     }
