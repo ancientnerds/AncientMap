@@ -1,24 +1,24 @@
 {
-  "site_id": "fab3989d-2c06-40cc-9d22-c7fb58e5e94f",
-  "answered_by": "worker: cand-0195",
-  "answered_model": "minimax-M3.1-Flash-Preview",
-  "model": "minimax-M3.1-Flash-Preview",
-  "verdicts": [
-    {
-      "file": "98edb49eb0ae7b96298bc08fd4f7be77",
-      "verdict": "region_or_type",
-      "note": "Aussenaufnahme eines bewachsenen Kalkfelsens ohne sichtbaren Hoehleneingang."
-    },
-    {
-      "file": "2662bc7a90ebb2ea478c4c0a6d52130f",
-      "verdict": "depicts",
-      "note": "Hoeleninterieur mit Felswänden und Geroell."
-    },
-    {
-      "file": "0adb4f0e7a0e705c24c749bd73b197ee",
-      "verdict": "depicts",
-      "note": "Hoeleninterieur mit Tropfsteinen und Geroell."
-    }
-  ],
-  "note": ""
+    "site_id":  "fab3989d-2c06-40cc-9d22-c7fb58e5e94f",
+    "answered_by":  "worker: cand-0195",
+    "model":  "MiniMax-M3.1-Flash-Preview",
+    "answered_model":  "MiniMax-M3.1-Flash-Preview",
+    "verdicts":  [
+                     {
+                         "file":  "Gruta do Gentio II.jpg",
+                         "verdict":  "region_or_type",
+                         "note":  "Aussenaufnahme eines bewachsenen Kalkfelsens ohne sichtbaren Hoehleneingang."
+                     },
+                     {
+                         "file":  "Gruta do Gentio II - Visão Interna.jpg",
+                         "verdict":  "depicts",
+                         "note":  "Hoeleninterieur mit Felswänden und Geroell."
+                     },
+                     {
+                         "file":  "Gruta do Gentio II - Visão Interna 2.jpg",
+                         "verdict":  "depicts",
+                         "note":  "Hoeleninterieur mit Tropfsteinen und Geroell."
+                     }
+                 ],
+    "note":  ""
 }

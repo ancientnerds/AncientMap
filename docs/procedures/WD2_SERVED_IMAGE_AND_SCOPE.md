@@ -725,6 +725,23 @@ non-200 is an answer rather than an exception. **And `judge-export` writes its p
 it has downloaded every candidate** - the batch folders grow in one step at the end, so a run's
 first questions cannot be answered before its last picture is on disk.
 
+**The full judgement, measured (2026-10-07, owner decision "Volllauf über alle 595 Sites").** The run is
+**closed**: all **595** sites answered across the 201 batches, **5,739** candidates judged one verdict
+each - **1,497 `depicts`, 1,676 `region_or_type`, 2,566 `other_site`**, a precision of **26.1 %** - and
+**226 of the 595 sites carry at least one picture of themselves**. Six sites are refused in
+`CANDIDATE_VERDICT_REFUSALS.jsonl`, all six of them `shape`: a site with more candidates than a batch
+gets a batch of its own and the surplus is refused by name, because a candidate nobody looks at is one
+the site could have had.
+
+Read across the class, the round is worth about **226 confirmed images over 226 of the 1,081 sites** -
+one site in five of the ones Commons names anything at all. The precision did not improve over the
+pilot (13 % over 3 sites, 18 % over 8, 29 % over 24, **26 %** over all 595): the misses are not near
+misses and never were - *Gonnus* returned three pictures of Mars, *A Figa* twelve word-match images of
+nothing. What improves with the run is the absolute number of sites served, which is what the owner
+asked for.
+
+### The INSERT waves
+
 **The INSERT wave of a candidate run needed three things the runbook claimed and the code did not
 have.** `TARGETS.jsonl` is a judgement's result; the INSERT lane reads two other files, and until
 2026-10-06 only the 2025 import wrote them:
@@ -793,50 +810,56 @@ runs and not out of a report:
 | `insert-2026-10-07-005` | 84 | 41 | 615 | `ok: true` | `b1bcea27` |
 | `insert-2026-10-07-006` | 117 | 33 | 495 | `ok: true` | `439b7ea8` |
 | `insert-2026-10-07-007` | 142 | 25 | 375 | `ok: true` | `08a9ceb3` |
+| `insert-2026-10-07-008` | 152 | 10 | 150 | `ok: true` | `2b5d53d7` |
 
-**138 sites that showed nothing at all now serve a hero of their own**, each acceptance green on a fresh
+**148 sites that showed nothing at all now serve a hero of their own**, each acceptance green on a fresh
 read of production and each file verified byte-exact on the offsite tree, after the transfer and inside
 the api container. The chain cleans itself: a wave re-offers every target the run knows, and a site that
-was already written comes back as `already_holds_the_file` (7, 18, 29, 35, 43, 84, 117 across the seven
-waves) rather than being written twice. The served tree grew from 50,246 `.webp` to **50,379** - the 142
-files of the last wave plus the 25 that were new, because the rest the served tree already held.
+was already written comes back as `already_holds_the_file` (7, 18, 29, 35, 43, 84, 117, 142 across the
+nine waves) rather than being written twice. The served tree grew from 50,246 `.webp` to **50,389** -
+the 152 files of the last wave plus the 10 that were new, because the rest the served tree already held.
 
-**What the lane's own floor costs this lane, counted.** Over those eight waves the fetch refused **67
+**What the lane's own floor costs this lane, counted.** Over those nine waves the fetch refused **74
 distinct sites** by name:
 
 | reason | sites | what it is |
 |---|---:|---|
-| the 1600x900 floor | **37** | 24 refused for width (originals 800x600 to 1474x999), 13 for height (stored 1600x474 to 1600x899) |
-| the credit rule of 2026-10-05 (17:43) | 23 | no `author_url` (20) or no `license_url` (3) |
+| the 1600x900 floor | **40** | 25 refused for width (originals 800x600 to 1474x999), 15 for height (stored 1600x474 to 1600x899) |
+| the credit rule of 2026-10-05 (17:43) | 26 | no `author_url` (23) or no `license_url` (3) |
 | a name the filesystem refuses | 4 | `"` in the Commons title; the lane's rule is the Commons name verbatim |
-| a file type with no thumbnail rule | 3 | `.tif`, which the naming rule does not cover |
+| a file type with no thumbnail rule | 4 | `.tif`, which the naming rule does not cover |
 
-**Every one of the 37 floor refusals would clear 800x300.** Read out of the candidate run's own
+**Every one of the 40 floor refusals would clear 800x300.** Read out of the candidate run's own
 imageinfo and the fetch's own message: the smallest width among them is **800 px**, the smallest height
-**474 px**, the largest height 2,560 px, and **none of the 37 is below 800x300** - not one is a strip.
+**474 px**, the largest height 2,560 px, and **none of the 40 is below 800x300** - not one is a strip.
 The owner's floor of §3.7.2 was lowered for the sites that *already have* a picture; it has never been
 decided for the sites that show **nothing**, which is this lane's whole population. That decision is the
 owner's and is still open; what the measurement above settles is that **800x300 costs nothing in quality
-here** - it would release 37 sites that already carry a model-confirmed picture of themselves, and not
-one of the 37 would be small.
+here** - it would release 40 sites that already carry a model-confirmed picture of themselves, and not
+one of the 40 would be small.
 
-**What the eight waves did to the §3.7.1 table**, the same script over the floor wave's read
-(`d0c3852a`, 2026-10-06T16:11:30Z) and over the last wave's **acceptance** read (`08a9ceb3`,
-2026-10-07T07:11:07Z) - the read after the commit, not the one the plan measured against:
+**What the nine waves did to the §3.7.1 table**, the same script over the floor wave's read
+(`d0c3852a`, 2026-10-06T16:11:30Z) and over the last wave's **acceptance** read (`2b5d53d7`,
+2026-10-07T08:06:05Z) - the read after the commit, not the one the plan measured against:
 
 | over the 4,900 shown curated sites | before | after |
 |---|---:|---:|
-| serves a gallery row | 3,578 | **3,754** |
+| serves a gallery row | 3,578 | **3,764** |
 | serves only its `thumbnail_url` | 152 | 140 |
-| **serves nothing at all** | 1,170 | **1,006** |
+| **serves nothing at all** | 1,170 | **996** |
 | shows two heroes at once | 0 | 0 |
 | live hero under 1600x900 | 552 | 772 |
 | live hero under **800x300** | 22 | **19** |
 
-176 sites gained a served row in that window: **138 of them are this lane's waves** (every one of the
-138 serves in the acceptance read - 0 written sites failed to), and 38 belong to another lane that wrote
+186 sites gained a served row in that window: **148 of them are this lane's waves** (every one of the
+148 serves in the acceptance read - 0 written sites failed to), and 38 belong to another lane that wrote
 in the same window. The floor wave's own baseline above is reproduced exactly from the same script, so
 the two columns are comparable.
+
+**And this lane is closed.** The judgement answered **595 of 595** sites and `TARGETS.jsonl` names 226
+of them; every one of the 226 is now written, refused by name, or already written by an earlier wave.
+There is no target left in `candidates-2026-10-06` that an INSERT wave has not been run over. What
+remains for this class is the owner's floor decision above, not more fetching.
 
 ### 3.7.2 The floor the owner lowered (2026-10-06), and exactly what it released
 

@@ -1,0 +1,63 @@
+{
+  "site_id": "fc4faaa4-8ba5-47d3-a055-b194ebc0162e",
+  "answered_by": "worker: cand-0197",
+  "model": "MiniMax-M3.1-Flash-Preview",
+  "verdicts": [
+    {
+      "file": "Barran Temple.jpg",
+      "verdict": "other_site",
+      "note": "Freigelegter antiker Tempelkomplex aus Blocksteinmauerwerk mit sechs Saeulen auf gestuftem Podium, gruene Felder drumherum."
+    },
+    {
+      "file": "Historic of belqeys city2.jpg",
+      "verdict": "other_site",
+      "note": "Nachtaufnahme einer zinnenbewehrten Lehmziegel-Burg mit Milchstrasse dahinter; keine antike Site."
+    },
+    {
+      "file": "Barran Temple (cropped).jpg",
+      "verdict": "other_site",
+      "note": "Nahaufnahme desselben Saulentempels mit fuenf hohen Saeulen auf Treppenpodium und Metallklammern."
+    },
+    {
+      "file": "Ancient Ma'rib 01.jpg",
+      "verdict": "other_site",
+      "note": "Lehmziegelstadt auf einem Huegel mit zinnenbekroenten Turmen in trockener Hochlandschaft."
+    },
+    {
+      "file": "Jemen1988-022 hg.jpg",
+      "verdict": "other_site",
+      "note": "Gescannte Altaufnahme einer Talsperre aus Beton und Stein in felsigem Gelände; keine Site."
+    },
+    {
+      "file": "Historic City of Esfarayen 05.jpg",
+      "verdict": "other_site",
+      "note": "Verwitterter Lehmziegelruinenkomplex mit Ziegelbogen und Fensteroeffnungen unter hellem Himmel."
+    },
+    {
+      "file": "Historic City of Esfarayen 10.jpg",
+      "verdict": "other_site",
+      "note": "Lehmziegelbau mit Holzbalkendecken, tiefen Fensteren und Zinnen; iranische Wuestenarchitektur."
+    },
+    {
+      "file": "SAVE 20181007 225614.jpg",
+      "verdict": "other_site",
+      "note": "Lange eingefallene Lehmziegel-Befestigungsmauer mit Zinnen in einer sandigen Wuestenebene."
+    },
+    {
+      "file": "Historic City of Esfarayen 04.jpg",
+      "verdict": "other_site",
+      "note": "Zerfallene Lehmziegelmauer mit Zinnen und Backsteinverband ueber verkruesteten Lehmkegeln."
+    },
+    {
+      "file": "History of city.jpg",
+      "verdict": "other_site",
+      "note": "Langgestreckte Lehmziegelruine mit Pfeileroeffnungen und Holzbalkendach in einer Wuestensenke."
+    },
+    {
+      "file": "History of Iran.jpg",
+      "verdict": "other_site",
+      "note": "Lehmziegel-Zitadelle mit modernem Leiter und smallem Putzbau davor; keine antike Site."
+    }
+  ],
+  "note": "Der Datensatz nennt die Site in Tuerkiye; alle Kandidaten zeigen Monumente in Jemen oder Iran, daher durchgehend other_site."
+}
