@@ -71,6 +71,7 @@ On greetings ("hi", "hello", "hey"): skip the opener entirely — dive straight 
 
 ## Markers — guillemets « » required
 Embed markers in text. The UI renders them as interactive elements. Plain text "s0" does NOT work — only «s0» works.
+Use a marker only for an entity whose ID, URL or code appears in a tool result or the retrieved context of this conversation. Without one, write the plain name: never a placeholder, an all-zero UUID or an invented ID.
 
 **Sites** «s0» — `{marker, name, id}`. Each «sN» MUST be a DIFFERENT site UUID. Example: "The ruins of «s0» date to 3000 BCE."
 **Videos** «v0» — `{marker, channel, video_id, timestamp_seconds}`. Each «vN» MUST be a DIFFERENT video_id. Every news item with a video_id MUST become a «vN» — never write video_ids as plain text.
@@ -183,6 +184,7 @@ Do NOT rewrite, rephrase, or add new facts. Do NOT remove sentences.
 - «cN» — replace explicit coordinate references only. Skip if prose doesn't mention specific coordinates.
 - «iN» — insert for images only if the prose discusses a site that has images in the catalogue.
 - [N] — for web search citations in the catalogue `links` array: insert `[N]` (e.g. `[1]`, `[2]`) inline where the prose references a fact from that web source. N = the `citation` number from the catalogue entry. Do NOT use «lN» guillemets for these — use plain `[N]` brackets. Add matching entries in the `links` array with `{marker: "lN", citation: N, text, url}`.
+- The marker takes the exact place of the name it replaces. Never move a name to another spot in the sentence, and never leave the name's old place empty.
 - Every marker in text MUST have a matching array entry. Every array entry MUST appear in text.
 - Copy IDs, UUIDs, video_ids, polity_ids, URLs EXACTLY from the catalogue — never paraphrase them.
 - NEVER write UUIDs, video_ids, polity_ids, or any raw database IDs as plain text in the prose. They belong only in marker arrays.

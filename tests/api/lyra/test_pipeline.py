@@ -642,3 +642,36 @@ class TestRefusal:
         texts = [e["content"] for e in events if e.get("type") == "diffusion"]
         assert texts == [_REFUSAL_RESPONSE]
         assert any(e.get("type") == "done" for e in events)
+
+
+class TestStrictMarkers:
+    """Pass 2 must not emit a sentence whose entity name went with a stripped marker."""
+
+    _RAW = json.dumps({"text": "Nobody says how «s0» was rediscovered.", "on_topic": True})
+
+    def test_lenient_parse_strips_the_marker_and_its_name(self):
+        from api.services.lyra_agent import _parse_structured_output
+
+        text, _, _ = _parse_structured_output(self._RAW, check_on_topic=False)
+        assert text == "Nobody says how was rediscovered."
+
+    def test_strict_parse_rejects_an_unresolved_marker(self):
+        from api.services.lyra_agent import _parse_structured_output
+
+        with pytest.raises(ValueError, match="Annotation dropped text"):
+            _parse_structured_output(self._RAW, check_on_topic=False, strict_markers=True)
+
+    def test_strict_parse_accepts_a_resolved_marker(self):
+        from api.services.lyra_agent import _parse_structured_output
+
+        raw = json.dumps(
+            {
+                "text": "Nobody says how «s0» was rediscovered.",
+                "on_topic": True,
+                "sites": [
+                    {"marker": "s0", "name": "Petra", "id": "a06a95d0-35b4-44bb-a0c1-716cbf972b19"}
+                ],
+            }
+        )
+        text, _, _ = _parse_structured_output(raw, check_on_topic=False, strict_markers=True)
+        assert "[Petra](site:a06a95d0-35b4-44bb-a0c1-716cbf972b19) was rediscovered" in text

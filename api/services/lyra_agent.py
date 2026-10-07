@@ -550,6 +550,7 @@ def _build_entities_catalogue(
 def _parse_structured_output(
     raw_content: str,
     check_on_topic: bool = True,
+    strict_markers: bool = False,
 ) -> tuple[str, dict[str, Any] | None, bool]:
     """Parse structured JSON and return (text, structured_data, off_topic).
 
@@ -561,6 +562,11 @@ def _parse_structured_output(
     Args:
         check_on_topic: If False, ignore on_topic=false in the JSON (used for
             Pass 2 annotation mode, which should never trigger deflection).
+        strict_markers: Raise ValueError when a marker in the text has no
+            array entry. expand_markers strips such a marker, and with it the
+            name it replaced ("how «s0» was" → "how was"). Pass 2 annotation
+            sets this: its caller then retries and finally emits the Pass 1
+            prose instead of a sentence with a hole in it.
     """
     parsed = json.loads(raw_content)
 
@@ -586,6 +592,10 @@ def _parse_structured_output(
     expanded, validation_issues = expand_markers(parsed)
     if validation_issues:
         logger.warning(f"Structured output issues: {validation_issues}")
+    if strict_markers:
+        unresolved = [i for i in validation_issues if i.startswith("Unresolved marker")]
+        if unresolved:
+            raise ValueError(f"Annotation dropped text with its markers: {unresolved}")
     cleaned = clean_response_text(expanded)
     if not cleaned.strip():
         raise ValueError("Structured output text empty after cleaning")
@@ -2647,7 +2657,7 @@ async def run_agent_stream(
                     total_output_tokens += result["usage"]["output"]
                     # Stage 2 is annotation mode — never deflect based on on_topic
                     text_out, so_data, _ = _parse_structured_output(
-                        result["content"], check_on_topic=False
+                        result["content"], check_on_topic=False, strict_markers=True
                     )
                     if so_data is not None and _valid_video_ids:
                         text_out, so_data = _filter_hallucinated_videos(
