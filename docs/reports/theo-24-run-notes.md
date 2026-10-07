@@ -501,21 +501,16 @@ two-model provenance in which one of the models never touched it.
 
 Read-only, after topic 10 went out and the owner stopped the campaign:
 
-- **10 papers published**, journal rows 115–129, one `publish` per paper, each with its own
-  `bundle_sha256`. Topic 10 is row 129.
-- **`research_requests`**: all ten `status = 'completed'`, `is_public = true`, slug set.
-- **Live page of topic 10** answers HTTP 200 with the full text, all closing sections and
-  **no `verified:no` marker**; 10 of 10 image URLs answer HTTP 200 and were confirmed as
-  JPEG by their first bytes.
-- **Twelve topics remain `queued`** and were not touched: `35090cb9`, `e3c4950b`, `b9713d8f`,
-  `925f3887`, `66f439fb`, `a86db42a`, `4b08117b`, `75c3731d`, `5b018384`, `536f3f41`,
-  `39eb9e0f`, `238147d2`. The two `paused` rows (`afe7c26a`, `20091a97`) were not touched.
 - **The owner's stop instruction is not in this repository.** It came through the session on
-  2026-10-07 ("nach diesem paper aufhören bitte, nach der veröffentlichung") and no artefact
-  of this campaign records it, because nothing in the driver writes an owner's decision. The
-  session log is the only place it exists. Stating it here is a note written after the fact,
-  not evidence that was there at the time — which is exactly the gap that made the claim
-  unfalsifiable from the repo.
-- **Eleven chain commits sit on `feat/2026-10-04-paper-image-floor` and none is on
-  `origin/main`.** The fixes recorded above are therefore local only until that branch is
-  pushed.
+  2026-10-07 ("nach diesem paper aufhören bitte, nach der veröffentlichung") and no
+  artefact of this campaign records it, because nothing in the driver writes an owner's
+  decision. The session log is the only place it exists. Stating it here is a note written
+  after the fact, not evidence that was there at the time — which is exactly the gap that
+  made the claim unfalsifiable from the repo.
+- **The chain commits reached `main` on 2026-10-07 with the owner's release**, together
+  with 58 commits from the parallel database campaign that had moved ahead in the meantime.
+  The merge was not automatic: `origin/main` had moved 58 commits forward, and one of them
+  changed the same test this branch had rewritten. Both versions were kept — the
+  `STUDIO_ASSETS` rule from `origin/main` and the sharper count assertion from this branch —
+  and the test of 13:24 was written to obey that rule, because a test that sets the
+  workspace *after* the driver loads reads and writes the owner's real campaign state.
