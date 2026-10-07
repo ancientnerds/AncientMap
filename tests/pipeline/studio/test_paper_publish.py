@@ -79,6 +79,26 @@ def _as_published(ws):
     return b
 
 
+def test_the_research_model_names_who_did_the_research():
+    """A stamp that names another model is a false claim on a public page (owner rule:
+    model stamps must be true). The papers of the current campaign were researched and
+    written in the mcode session, and the constant still named the pipeline's model, so
+    the dossier's own researcher decides."""
+    session = bundle.writer_for(
+        {"manifest": {"research": {"researcher": "MiniMax-M3.1-Flash-Preview (mcode session)"}}}
+    )
+    assert session["research_model"] == "MiniMax-M3.1-Flash-Preview"
+    assert session["model"] == bundle.WRITER["model"], "the writing model stays as it is"
+    # a dossier from a Theo run carries that worker's name, and nothing else changes
+    worker = bundle.writer_for({"manifest": {"research": {"researcher": "MiniMax-M3"}}})
+    assert worker["research_model"] == "MiniMax-M3"
+    assert worker["tool"] == bundle.WRITER["tool"]
+    # no name to read: the constant stands, it is never invented
+    assert bundle.writer_for({}) == bundle.WRITER
+    assert bundle.writer_for(None) == bundle.WRITER
+    assert bundle.writer_for({"manifest": {"research": {"researcher": ""}}}) == bundle.WRITER
+
+
 def test_bundle_carries_the_published_snapshot(checked):
     b = bundle.write_bundle(checked)
     assert set(b) == {"version", "request_id", "writer", "result"}
@@ -184,7 +204,9 @@ def test_publish_uploads_then_dry_runs_then_applies(monkeypatch, checked):
     record = publish.publish(checked, dry_run=False)
     # every image of the paper is uploaded: the house draft has one per section
     assert fake.uploads[0][0] == fx.REQ
-    assert len(fake.uploads[0][1]) == len(json.loads(checked.bundle.read_text(encoding="utf-8"))["result"]["probative_images"])
+    assert len(fake.uploads[0][1]) == len(
+        json.loads(checked.bundle.read_text(encoding="utf-8"))["result"]["probative_images"]
+    )
     assert [c[1] for c in fake.calls] == [["--dry-run"], ["--apply"]]
     assert fake.calls[0][2] == checked.bundle.read_bytes()
     assert record["apply"]["url"] == "https://ancientnerds.com/research/the-megaliths"
@@ -502,6 +524,26 @@ def test_correct_republish_sends_the_checked_result(monkeypatch, checked):
     assert fake.uploads == [(fx.REQ, bundle.upload_names(b["result"]))]
     assert record["apply"]["side_effects"]["notify"] == {"discord": False}
     assert checked.published_bundle.read_bytes() == checked.bundle.read_bytes()
+
+
+def test_a_republish_envelope_carries_the_bundles_own_writer(monkeypatch, tmp_path):
+    """The envelope's writer is the bundle's own writer, not the module constant.
+    theo_publish's shape gate compares the two ("result.writer differs from the bundle's
+    writer"), so a constant sent next to a bundle whose dossier named another researcher is
+    refused: that is what blocked the four campaign papers, all researched in the session."""
+    data = fx.dossier_dict()
+    data["manifest"]["research"]["researcher"] = "MiniMax-M3.1-Flash-Preview (mcode session)"
+    ws = fx.complete_workspace(tmp_path, dossier=data)
+    assert gates.run_check(ws)["passed"]
+    b = bundle.write_bundle(ws)
+    assert b["writer"]["research_model"] != bundle.WRITER["research_model"]
+    applied = {"ok": True, "journal_id": 9, "side_effects": EFFECTS}
+    fake = FakeRemote([(0, {"ok": True}), (0, applied)])
+    _patch(monkeypatch, fake)
+    publish.correct(ws, [{"date": "2026-10-02", "text": "Writer stamp corrected."}], republish=True)
+    sent = json.loads(fake.calls[1][2])
+    assert sent["writer"] == sent["result"]["writer"] == b["writer"]
+    assert sent["writer"]["research_model"] == "MiniMax-M3.1-Flash-Preview"
 
 
 def test_the_first_republish_of_a_rewrite_names_the_fresh_run(monkeypatch, checked):

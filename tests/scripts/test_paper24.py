@@ -6,10 +6,16 @@ break that quietly, and none of them would raise.
 
 1. `scan` has to work with an empty campaign (no dossier, no workspace, no report)
    and still answer. It is the step a human runs to find out what to do next.
-2. The iteration counter comes from the reports on disk, not from a counter the
-   driver keeps: a driver that loses its own state must not restart the count.
+2. The iteration counter is the workspace's own check history, not a counter the
+   driver keeps in its state file: a state file that is lost, shared or written by a
+   foreign id must not restart a paper's count.
 3. The read-only boundary is a claim this module makes in prose. It is checked here
    by reading the module: `publish` must not appear in it at all.
+4. The ledger refuses to write a table whose campaign numbers collide, because a kept
+   row that collides is a lost topic, not a foreign campaign.
+5. A workspace with no check history reports its iteration count as unmeasured, never
+   as zero: the six papers of 2026-10-06/07 were checked through the studio CLI, which
+   writes no `checks.jsonl`, and a `0` in that column reads like a result.
 
 `STUDIO_ASSETS` is set **before** `_load()` in every test that needs a workspace,
 because the driver resolves it at import time. Set afterwards, the module keeps the
@@ -74,41 +80,52 @@ def test_scan_sorts_dossiers_that_have_not_been_taken_yet(monkeypatch, tmp_path,
     assert [r["request_id"] for r in ready] == sorted(r["request_id"] for r in ready)
 
 
-def test_the_iteration_count_comes_from_the_reports_on_disk(monkeypatch, tmp_path, capsys):
+def test_the_iteration_count_outlives_any_rewrite_of_the_driver_state(
+    monkeypatch, tmp_path, capsys
+):
+    """The count is the campaign's own limit ("at most two iterations per paper"), so
+    it is read from the workspace, not from the state file. Two gate runs, then the
+    state file is rewritten by something else: the ledger still says 2."""
     monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
     driver = _load()
     monkeypatch.setattr(driver, "LEDGER", tmp_path / "ledger.md")
     ws = driver._ws("bbbbbbbb-0000-0000-0000-000000000001")
     ws.root.mkdir(parents=True)
     ws.dossier_gz.write_bytes(fx.dossier_gz_bytes())
-    ws.check_report.write_text(
-        json.dumps(
+    failed = {
+        "passed": False,
+        "gates": [
             {
+                "name": "support",
                 "passed": False,
-                "gates": [
-                    {
-                        "name": "support",
-                        "passed": False,
-                        "detail": {
-                            "issues": [
-                                {"rule": "located_sentence"},
-                                {"rule": "located_sentence"},
-                                {"rule": "number_exact"},
-                            ]
-                        },
-                    }
-                ],
+                "detail": {
+                    "issues": [
+                        {"rule": "located_sentence"},
+                        {"rule": "located_sentence"},
+                        {"rule": "number_exact"},
+                    ]
+                },
             }
-        ),
-        encoding="utf-8",
-    )
-    driver._save({"pulled": [ws.request_id], "checked": {ws.request_id: 2}, "bundled": []})
+        ],
+    }
+    green = {"passed": True, "gates": []}
+    ws.check_report.write_text(json.dumps(failed), encoding="utf-8")
+    assert driver._record_check(ws, failed) == 1
+    ws.check_report.write_text(json.dumps(green), encoding="utf-8")
+    assert driver._record_check(ws, green) == 2
+    # another writer owns the state file and knows nothing about the count
+    driver._save({"pulled": [ws.request_id], "bundled": []})
     assert driver.main(["ledger"]) == 0
     assert json.loads(capsys.readouterr().out)["rows"] == 1
     table = (tmp_path / "ledger.md").read_text(encoding="utf-8")
-    assert f"`{ws.request_id}`" in table
-    assert "| 1 |" in table
-    assert "| 2 | no | 3 | no |" in table  # iterations, green, support findings, bundle
+    cells = [cell.strip() for cell in table.splitlines()[2].split("|")]
+    assert cells[1] == "1", cells  # the campaign number
+    assert cells[2] == f"`{ws.request_id}`", cells
+    assert cells[4] == "2", cells  # iterations
+    assert cells[5] == "yes", cells  # green
+    assert cells[6] == "-", cells  # rote Gates
+    assert cells[7] == "0", cells  # support findings: the report on disk is green
+    assert cells[8] == "no", cells  # bundle
     # the topic cell is the dossier's question, on one line and without a pipe
     assert "How were the Baalbek megaliths moved?" in table
 
@@ -121,13 +138,120 @@ def test_the_ledger_replaces_a_row_instead_of_appending_a_second(monkeypatch, tm
     ws.root.mkdir(parents=True)
     ws.dossier_gz.write_bytes(fx.dossier_gz_bytes())
     ws.check_report.write_text(json.dumps({"passed": True, "gates": []}), encoding="utf-8")
-    driver._save({"pulled": [ws.request_id], "checked": {ws.request_id: 1}, "bundled": []})
+    driver._save({"pulled": [ws.request_id], "bundled": []})
     assert driver.main(["ledger"]) == 0
     assert driver.main(["ledger"]) == 0
     table = (tmp_path / "ledger.md").read_text(encoding="utf-8")
     # header + separator + exactly one data row, no matter how often it is rewritten
     assert table.count(ws.request_id) == 1
     assert len(table.strip().splitlines()) == 3
+
+
+def test_the_ledger_refuses_a_list_that_lost_a_topic(monkeypatch, tmp_path, capsys):
+    """A kept row whose campaign number the rewritten rows also claim is a lost topic,
+    not a foreign campaign. Writing the table would renumber the campaign silently, so
+    the command stops and says which number and which id collide."""
+    driver = _load()
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    ledger = tmp_path / "ledger.md"
+    monkeypatch.setattr(driver, "LEDGER", ledger)
+    lost = "cccccccc-0000-0000-0000-000000000001"
+    ledger.write_text(
+        driver.LEDGER_HEADER
+        + f"| 1 | `{lost}` | A topic the driver lost | 1 | yes | - | 0 | yes | |\n",
+        encoding="utf-8",
+    )
+    ws = driver._ws("bbbbbbbb-0000-0000-0000-000000000001")
+    ws.root.mkdir(parents=True)
+    ws.dossier_gz.write_bytes(fx.dossier_gz_bytes())
+    ws.check_report.write_text(json.dumps({"passed": True, "gates": []}), encoding="utf-8")
+    driver._save({"pulled": [ws.request_id], "bundled": []})
+    before = ledger.read_text(encoding="utf-8")
+    assert driver.main(["ledger"]) == 2
+    err = capsys.readouterr().err
+    assert "claimed twice" in err and lost in err
+    assert ledger.read_text(encoding="utf-8") == before, "the table must not be written"
+
+
+def test_the_ledger_says_a_missing_history_is_not_zero_iterations(monkeypatch, tmp_path, capsys):
+    """A workspace with no `checks.jsonl` had its gates run by another writer.
+
+    Six of the ten published papers were checked through the studio CLI rather than
+    through this driver, so they carry no history file. Counting that as `0` put
+    papers that went through many cycles into the ledger as ones that went through
+    none, and read as the campaign limit of two being met. The cell says the count is
+    unknown, and the command names the ids it could not measure.
+    """
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    driver = _load()
+    monkeypatch.setattr(driver, "LEDGER", tmp_path / "ledger.md")
+    ws = driver._ws("bbbbbbbb-0000-0000-0000-000000000009")
+    ws.root.mkdir(parents=True)
+    ws.dossier_gz.write_bytes(fx.dossier_gz_bytes())
+    ws.check_report.write_text(json.dumps({"passed": True, "gates": []}), encoding="utf-8")
+    ws.bundle.write_text("{}", encoding="utf-8")
+    assert not ws.checks.exists()
+    driver._save({"pulled": [ws.request_id], "bundled": []})
+
+    assert driver._iterations(ws) is None
+    assert driver._iterations_cell(ws) == "nicht gemessen"
+
+    assert driver.main(["ledger"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["iterations_not_measured"] == 1, out
+    assert out["iterations_not_measured_ids"] == [ws.request_id], out
+
+    table = (tmp_path / "ledger.md").read_text(encoding="utf-8")
+    cells = [cell.strip() for cell in table.splitlines()[2].split("|")]
+    assert cells[4] == "nicht gemessen", cells
+    assert cells[4] != "0", cells
+    # the paper is still recorded as what it is: green and bundled
+    assert cells[5] == "yes", cells
+    assert cells[8] == "yes", cells
+
+
+def test_the_ledger_keeps_a_chain_change_it_cannot_measure(monkeypatch, tmp_path, capsys):
+    """The `chain change` column survives a rewrite of every other cell.
+
+    Which defect of a paper changed the chain is a judgement from the run notes; the
+    driver measures what happened and cannot derive it. Rewriting the table used to end
+    the row with an empty cell, so every `ledger` run threw the column away and the
+    campaign's lessons were prose beside the table instead of numbers beside the prose.
+    """
+    monkeypatch.setenv("STUDIO_ASSETS", str(tmp_path))
+    driver = _load()
+    monkeypatch.setattr(driver, "LEDGER", tmp_path / "ledger.md")
+    ws = driver._ws("bbbbbbbb-0000-0000-0000-000000000010")
+    ws.root.mkdir(parents=True)
+    ws.dossier_gz.write_bytes(fx.dossier_gz_bytes())
+    ws.check_report.write_text(json.dumps({"passed": True, "gates": []}), encoding="utf-8")
+    ws.bundle.write_text("{}", encoding="utf-8")
+    driver._save({"pulled": [ws.request_id], "bundled": [ws.request_id]})
+
+    def cell(text: str, index: int) -> str:
+        for line in text.splitlines():
+            if line.startswith("| 1 |"):
+                return [c.strip() for c in line.strip().strip("|").split("|")][index]
+        raise AssertionError(text)
+
+    ledger = tmp_path / "ledger.md"
+    assert driver.main(["ledger"]) == 0
+    assert cell(ledger.read_text(encoding="utf-8"), 8) == "", "a fresh table starts empty"
+
+    # the notes now name the defect of this run
+    rows = ledger.read_text(encoding="utf-8").splitlines()
+    rows[2] = rows[2].rstrip()[:-1].rstrip() + " run 10: 18 repair rounds (notes) |"
+    ledger.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    assert cell(ledger.read_text(encoding="utf-8"), 8) == "run 10: 18 repair rounds (notes)"
+
+    # a rewrite that changes a measured cell keeps the judgement
+    ws.checks.write_text('{"passed": false}\n{"passed": true}\n', encoding="utf-8")
+    ws.check_report.write_text(json.dumps({"passed": False, "gates": []}), encoding="utf-8")
+    assert driver.main(["ledger"]) == 0
+    text = ledger.read_text(encoding="utf-8")
+    assert cell(text, 3) == "2", "the measured column was updated"
+    assert cell(text, 4) == "no", "the measured column was updated"
+    assert cell(text, 8) == "run 10: 18 repair rounds (notes)", "the judgement was kept"
 
 
 def test_the_driver_cannot_reach_a_publish_call():

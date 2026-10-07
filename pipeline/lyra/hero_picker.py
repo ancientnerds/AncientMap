@@ -124,6 +124,9 @@ class HeroCandidate:
     reason: str
     eligible: bool = True
     is_evidence: bool = True
+    #: a readable size that is not portrait, or an unreadable one. See
+    #: `_score_entry` - orientation is a tier, not a bonus (owner 2026-10-06).
+    is_landscape: bool = True
 
 
 def _tokenize(text: str) -> set[str]:
@@ -170,6 +173,21 @@ def _dimensions(web_path: str) -> tuple[int, int]:
         return (0, 0)
 
 
+def _entry_dimensions(entry: dict) -> tuple[int, int]:
+    """(width, height) of an image entry, measured by the caller or on disk.
+
+    The studio measures every candidate it accepts and stores the size in
+    `selected.json`; the images themselves live in the workspace, not under
+    the repo's `public/data`, so reading the file alone would report (0, 0)
+    there and lose the aspect ratio. (0, 0) when neither source knows.
+    """
+    width = entry.get("width")
+    height = entry.get("height")
+    if isinstance(width, int) and isinstance(height, int) and width > 0 and height > 0:
+        return (width, height)
+    return _dimensions(entry.get("web_path", "") or "")
+
+
 def _cand_from_entry(entry: dict) -> ImageCandidate:
     return ImageCandidate(
         url=entry.get("source_url", "") or "",
@@ -200,8 +218,13 @@ def _score_entry(
     lead_overlap = len(lead_tokens & meta_tokens)
     relevance = (overlap + lead_overlap) * 3.0
 
-    # Aspect ratio: prefer landscape.
-    width, height = _dimensions(entry.get("web_path", "") or "")
+    # Aspect ratio: prefer landscape. The dimensions come from the entry when
+    # it carries them - the studio measures every candidate it accepts and
+    # stores the size in selected.json - and only otherwise from the file.
+    # Reading the file alone loses the aspect ratio wherever the images do
+    # not sit under the repo's public/data, which is the case on the studio
+    # workstation: the bonus silently fell to 0 and a portrait could win.
+    width, height = _entry_dimensions(entry)
     ratio = (width / height) if height else 0.0
     if ratio >= 1.6:
         aspect_bonus = 2.5
@@ -227,16 +250,29 @@ def _score_entry(
     # Unknown dimensions (Pillow missing, file not on this host) stay
     # eligible: a size we cannot read is not evidence of a small image.
     eligible = width == 0 or width >= HERO_MIN_WIDTH
+    # Orientation is a tier, like the width floor and not like the aspect
+    # bonus: a banner is a landscape strip, so a portrait photograph of a
+    # person must never outrank a landscape image of the same paper
+    # (owner, 2026-10-06). An unreadable size stays in the landscape tier,
+    # so a paper whose images are all portrait keeps its hero instead of
+    # losing its banner.
+    is_landscape = width == 0 or width >= height
     # Papers embedded before the two-tier split carry no `verified` key;
     # absent means evidence, so legacy sets are not all demoted.
     is_evidence = bool(entry.get("verified", True))
     reason = (
         f"overlap={overlap} aspect={ratio:.2f} w={width} pos={position_index} "
-        f"src={entry.get('source_name', '?')} writer={int(writer_bonus > 0)}"
+        f"src={entry.get('source_name', '?')} writer={int(writer_bonus > 0)} "
+        f"{'landscape' if is_landscape else 'PORTRAIT'}"
         f"{'' if eligible else ' BELOW-MIN-WIDTH'}"
     )
     return HeroCandidate(
-        entry=entry, score=score, reason=reason, eligible=eligible, is_evidence=is_evidence
+        entry=entry,
+        score=score,
+        reason=reason,
+        eligible=eligible,
+        is_evidence=is_evidence,
+        is_landscape=is_landscape,
     )
 
 
@@ -266,11 +302,15 @@ def pick_hero_image(
 
     # Every image wide enough to be a banner outranks every one that isn't,
     # regardless of score. Sorting rather than filtering keeps a paper whose
-    # images are ALL small from losing its hero entirely.
+    # images are ALL small from losing its hero entirely. Orientation works
+    # the same way: every landscape image outranks every portrait one.
     # Evidence outranks illustration outranks undersized. A banner presents
     # the paper: an image the judge would not call a depiction of any claim
     # must not be the first thing a reader sees.
-    ranked.sort(key=lambda c: (c.eligible, c.is_evidence, c.score), reverse=True)
+    ranked.sort(
+        key=lambda c: (c.eligible, c.is_landscape, c.is_evidence, c.score),
+        reverse=True,
+    )
     best = ranked[0]
 
     logger.info(
