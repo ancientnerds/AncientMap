@@ -13966,5 +13966,33 @@ page and its popup for every card; the CC BY-SA 4.0 attribution line stays, incl
 the YouTube shorts note, the news-video banner and the Theo paper notice stay. And the cards stay
 plain factual prose: an evocative tone is not part of what the checker judges.
 
-**Not done, owed:** 5.5 (the API re-imports the card file on boot; no push was made, and
-CARD_DESCRIPTIONS.md 5.4 forbids a deploy to `main` until 5.5 is done).
+**Step 5.5 done, owner released the sitting on 2026-10-07 at 23:1x CEST.** The card file was
+rendered from production (`teaser.py card-file --steps 32-34`, WRITE_EXIT=0): **4826 cards, 167
+keys changed, 27 removed** - the sitting's 167 in, the 27 `card-clear-no-description` sites out.
+`card_json.py --check` answered `RESULT: 0 deviation(s)` before the push and again after the
+deploy. The push lock (`C:\PythonProjects\AncientMap\.git\main-push.lock`) was taken before it, and
+the branch first merged `origin/main` (the 17 paper24/studio/lyra commits touch no file of lane WB
+and not the card file, so the merge was conflict-free).
+
+Pushed as `e1c4cbb` ("Lane WB steps 32-34: the card file regenerated from production") together with
+the sitting's evidence: the three `ACCEPTED/step-0NN.json` and each step's `PLAN.md`,
+`SKIPPED.jsonl`, `prov/` and `card/`. The pre-push hook ran all its main gates green and CI's seven
+gates with them; **Deploy to Production** finished 21:35Z.
+
+After the deploy, as 5.5 orders:
+
+- both API containers restarted with the new file (`StartedAt` 21:35:18Z / 21:35:26Z, against
+  14:25:30Z / 14:25:42Z before the write - unchanged in between, so no restart ever re-imported the
+  old cards over the new ones without a journal),
+- **0** `[STARTUP] Card description overwritten` lines in both containers; the boot line reads
+  *"[STARTUP] Card descriptions already up to date (4826 checked)"* - the file and the database
+  agreed, so the boot wrote nothing,
+- `card_json.py --check` `RESULT: 0 deviation(s)`,
+- `accept --step 32`, `--step 33`, `--step 34`: each `RESULT: 0 deviation(s)`, ACCEPT_EXIT=0,
+- `http://localhost:8000/` on the VPS reports `commit: e1c4cbb8`.
+
+**Still owed, not done here:** the nine `DESCRIPTION_DEFECTS.jsonl` entries are lane WC's work, and
+the two content questions this run parked with a default instead of an answer - Tebessa's martyrdom
+year (304 / 305; the English Wikipedia contradicts itself between its city and basilica article) and
+whether a card may carry a claim without a hedge that every source hedges (Helorus, Kition,
+Uçan ağıl).
