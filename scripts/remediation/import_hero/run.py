@@ -507,6 +507,37 @@ def _stamp(run: Path) -> str:
     return run.name
 
 
+def _read_site_list(path: Path) -> list[str]:
+    """The site ids a `--sites` file names: a JSON array of them, or one per line.
+
+    One shape per line and one array, because the two things an operator has are a selection made by
+    hand and a list a measurement wrote. Blank lines and `#` comments are skipped; a file that names
+    no site is refused by name rather than seeding an empty wave.
+    """
+    if not path.is_file():
+        raise IH.ImportHeroError(f"{path} does not exist - it is the list of sites to seed")
+    text = path.read_text(encoding="utf-8")
+    if text.lstrip().startswith("["):
+        listed = json.loads(text)
+        if not isinstance(listed, list):
+            raise IH.ImportHeroError(f"{path} is not a JSON array of site ids")
+        out = [str(item).strip() for item in listed]
+    else:
+        out = [
+            line.strip()
+            for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+    if not out:
+        raise IH.ImportHeroError(f"{path} names no site")
+    return out
+
+
+def cmd_insert_seed(run: Path, source_run: Path, sites: Sequence[str]) -> dict[str, Any]:
+    """The INSERT wave's claims and refusals, out of the import run that recorded them."""
+    return IN.seed_from_import_run(source_run, run, sites)
+
+
 def main(argv: list[str] | None = None) -> int:
     # A Commons title carries every script of every site, and a Windows console encodes cp1252: one
     # file named in Turkish or Georgian kills the run in the middle of the wave with a
@@ -527,10 +558,27 @@ def main(argv: list[str] | None = None) -> int:
         "accept": "read production again and ask the three questions per planned site",
         "remainder": "what the lane would still write over this run's read, and what it refuses",
         "read": "read production once into READ.json, for a run that is prepared rather than fetched",
+        "insert-seed": "write IMPORT_CLAIMS.json and IMPORT_HERO_REFUSALS.jsonl out of an import run, for the sites named",
     }
     for name, help_text in helps.items():
         commands[name] = sub.add_parser(name, help=help_text)
         commands[name].add_argument("--run-dir", required=True, type=Path)
+    commands["insert-seed"].add_argument(
+        "--from-run",
+        dest="source_run",
+        type=Path,
+        required=True,
+        help="the import run whose claims and refusals are copied (it refused them as no_target_row)",
+    )
+    commands["insert-seed"].add_argument(
+        "--sites",
+        type=Path,
+        required=True,
+        help=(
+            "a file of site ids: one per line, or a JSON array of them; only these are "
+            "seeded, and a site the source run refused for another reason is refused by name"
+        ),
+    )
     commands["plan"].add_argument("--import", dest="source", type=Path, default=DEFAULT_IMPORT)
     commands["plan"].add_argument("--sites-per-chunk", type=int, default=100)
     commands["plan"].add_argument("--fetched", type=Path, default=None)
@@ -624,6 +672,9 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "insert-accept":
             return cmd_insert_accept(args.run_dir)
+        if args.command == "insert-seed":
+            _print(cmd_insert_seed(args.run_dir, args.source_run, _read_site_list(args.sites)))
+            return 0
         if args.command == "accept":
             return cmd_accept(args.run_dir, fetched=args.fetched)
         if args.command == "remainder":

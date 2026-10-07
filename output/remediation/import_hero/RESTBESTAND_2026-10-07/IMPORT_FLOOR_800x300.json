@@ -1,0 +1,122 @@
+{
+ "measured_at": "2026-10-07",
+ "question": "the import lane's remainder, refused at the 1600 px width: what would 800x300 clear",
+ "width_refusals": 33,
+ "clears_800x300": 8,
+ "stays_below_800x300": 25,
+ "no_size_on_record": 0,
+ "files": [
+  {
+   "site_id": "58a5a5b2-735a-4fda-bf2d-52e723fd86bc",
+   "name": "House of the Knight",
+   "original": [
+    1500,
+    1477
+   ],
+   "store_1600": [
+    1500,
+    1477
+   ],
+   "refused_at_width": 1500,
+   "clears_800x300": true
+  },
+  {
+   "site_id": "6c09f12a-a657-4395-8bc6-d3903f4eaa27",
+   "name": "Clachtoll Broch",
+   "original": [
+    800,
+    534
+   ],
+   "store_1600": [
+    800,
+    534
+   ],
+   "refused_at_width": 800,
+   "clears_800x300": true
+  },
+  {
+   "site_id": "82c9fb95-c776-4450-bb5c-93a70fdcb056",
+   "name": "Hoyo Negro Cenote",
+   "original": [
+    1286,
+    854
+   ],
+   "store_1600": [
+    1286,
+    854
+   ],
+   "refused_at_width": 1286,
+   "clears_800x300": true
+  },
+  {
+   "site_id": "83893760-fcb6-4824-8ee9-7e1c6fc74852",
+   "name": "Dead Woman's Ditch",
+   "original": [
+    1280,
+    856
+   ],
+   "store_1600": [
+    1280,
+    856
+   ],
+   "refused_at_width": 1280,
+   "clears_800x300": true
+  },
+  {
+   "site_id": "87d83a5b-d7a2-45dc-b8fd-1bed588bbeec",
+   "name": "Bhimashankar Buddhist Caves",
+   "original": [
+    1200,
+    1800
+   ],
+   "store_1600": [
+    1200,
+    1800
+   ],
+   "refused_at_width": 1200,
+   "clears_800x300": true
+  },
+  {
+   "site_id": "8ef3e56e-3dd8-4576-a5bf-eab965bcd0a7",
+   "name": "Bhutalinga Buddhist Caves",
+   "original": [
+    1200,
+    1800
+   ],
+   "store_1600": [
+    1200,
+    1800
+   ],
+   "refused_at_width": 1200,
+   "clears_800x300": true
+  },
+  {
+   "site_id": "9b1fc275-41fd-4fbd-b88c-b4e05eb0b29d",
+   "name": "Obelisk of Thutmose I",
+   "original": [
+    1216,
+    1676
+   ],
+   "store_1600": [
+    1216,
+    1676
+   ],
+   "refused_at_width": 1216,
+   "clears_800x300": true
+  },
+  {
+   "site_id": "a2704598-c3b7-4cbb-9fdc-4055c445cec1",
+   "name": "Colima - Eastern Shaft Tomb",
+   "original": [
+    1067,
+    709
+   ],
+   "store_1600": [
+    1067,
+    709
+   ],
+   "refused_at_width": 1067,
+   "clears_800x300": true
+  }
+ ]
+}

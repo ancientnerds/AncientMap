@@ -785,6 +785,12 @@ done
 $PY $IH/run.py insert-accept --run-dir $I
 ```
 
+**A wave whose file is the 2025 import's, not the judge's**, adds one step in front:
+
+```bash
+$PY $IH/run.py insert-seed --run-dir $I --from-run <the import run> --sites <a file of site ids>
+```
+
 **Applied 2026-10-06, run `insert-2026-10-06-001` (the first wave of this lane's candidate
 search):** 9 targets, **7 files fetched**, 2 refused by name by the credit rule of 2026-10-05
 (17:43) - `Apazzu` carries no `author_url`, `King's apartments Apadana Susa` no `license_url`. One
@@ -811,16 +817,34 @@ runs and not out of a report:
 | `insert-2026-10-07-006` | 117 | 33 | 495 | `ok: true` | `439b7ea8` |
 | `insert-2026-10-07-007` | 142 | 25 | 375 | `ok: true` | `08a9ceb3` |
 | `insert-2026-10-07-008` | 152 | 10 | 150 | `ok: true` | `2b5d53d7` |
+| `insert-2026-10-07-009` | 7 | 7 | 105 | `ok: true` | `e0ca173a` |
 
-**148 sites that showed nothing at all now serve a hero of their own**, each acceptance green on a fresh
+**The tenth wave is a different one, and it needed a fourth transition.** The first nine took their
+file from the judge's `depicts` verdict; this one takes it from the **2025 import's own link**. Seven
+sites show nothing although the import links a picture of them and that file was already on the
+offsite tree - refused by the 2026-10-06 row decision only because the insert plan had nothing to read:
+`fetch --target insert` reads `IMPORT_CLAIMS.json` and `IMPORT_HERO_REFUSALS.jsonl` **out of the run
+directory**, and only the 2025 import ever wrote them, into its own runs, over its own target list.
+`insert-seed --from-run <import run> --sites <file>` copies the two records out of the run that
+recorded them, for the sites named and only those (`import_hero/insert.py:seed_from_import_run`). It
+seeds a site **only** if that run refused it as `no_target_row`: every other refusal means the import's
+file was refused for another reason - too small, no credit, no rendering - and copying its claim into a
+wave would turn that refusal into a written row. Claims are merged, never replaced, and the refusal
+carries a `source` and an `evidence_source` naming the run the claim came out of, because the row is
+journalled with both and this wave did not ask for that file - the import did.
+
+Seven rows, **105 journal rows**, 0 refusals in the plan, all five writer steps green, acceptance
+**`ok: true`** on the read `e0ca173a` (2026-10-07T08:52:33Z), and **7/7 live** with the exact byte
+count. The served tree did not grow - it stayed at **50,389 `.webp`**: those seven files were already
+served, and what was missing was the row that pointed at them.
+
+**155 sites that showed nothing at all now serve a hero of their own**, each acceptance green on a fresh
 read of production and each file verified byte-exact on the offsite tree, after the transfer and inside
 the api container. The chain cleans itself: a wave re-offers every target the run knows, and a site that
-was already written comes back as `already_holds_the_file` (7, 18, 29, 35, 43, 84, 117, 142 across the
-nine waves) rather than being written twice. The served tree grew from 50,246 `.webp` to **50,389** -
-the 152 files of the last wave plus the 10 that were new, because the rest the served tree already held.
+was already written comes back as `already_holds_the_file` rather than being written twice.
 
-**What the lane's own floor costs this lane, counted.** Over those nine waves the fetch refused **74
-distinct sites** by name:
+**What the lane's own floor costs this lane, counted.** Over the nine candidate waves the fetch refused
+**74 distinct sites** by name:
 
 | reason | sites | what it is |
 |---|---:|---|
@@ -832,29 +856,45 @@ distinct sites** by name:
 **Every one of the 40 floor refusals would clear 800x300.** Read out of the candidate run's own
 imageinfo and the fetch's own message: the smallest width among them is **800 px**, the smallest height
 **474 px**, the largest height 2,560 px, and **none of the 40 is below 800x300** - not one is a strip.
-The owner's floor of §3.7.2 was lowered for the sites that *already have* a picture; it has never been
-decided for the sites that show **nothing**, which is this lane's whole population. That decision is the
-owner's and is still open; what the measurement above settles is that **800x300 costs nothing in quality
-here** - it would release 40 sites that already carry a model-confirmed picture of themselves, and not
-one of the 40 would be small.
 
-**What the nine waves did to the §3.7.1 table**, the same script over the floor wave's read
-(`d0c3852a`, 2026-10-06T16:11:30Z) and over the last wave's **acceptance** read (`2b5d53d7`,
-2026-10-07T08:06:05Z) - the read after the commit, not the one the plan measured against:
+**The import lane's remainder is the same question with a smaller answer, and it is measured**
+(`RESTBESTAND_2026-10-07/`). Of the 62 sites that show nothing although the 2025 import links them:
+**7** are written by wave `-009` above, **8** clear 800x300 but not 1600x900, **25 are genuinely too
+small** (640x480 geograph.org.uk thumbnails, 480x640, one 254x147 - below 800x300 whatever is
+decided), **5** are refused by the credit rule and **6** for another reason (four link no
+`upload.wikimedia.org` file at all, one carries a `"` in its name, one is 1600x780). So the owner's
+floor decision releases **40 + 8 = 48 sites**, and it would release no strip on either side.
+
+**What the ten waves did to the §3.7.1 table**, the same script over the floor wave's read
+(`d0c3852a`, 2026-10-06T16:11:30Z) and over the last wave's **acceptance** read (`e0ca173a`,
+2026-10-07T08:52:33Z) - the read after the commit, not the one the plan measured against:
 
 | over the 4,900 shown curated sites | before | after |
 |---|---:|---:|
-| serves a gallery row | 3,578 | **3,764** |
+| serves a gallery row | 3,578 | **3,771** |
 | serves only its `thumbnail_url` | 152 | 140 |
-| **serves nothing at all** | 1,170 | **996** |
+| **serves nothing at all** | 1,170 | **989** |
 | shows two heroes at once | 0 | 0 |
 | live hero under 1600x900 | 552 | 772 |
 | live hero under **800x300** | 22 | **19** |
 
-186 sites gained a served row in that window: **148 of them are this lane's waves** (every one of the
-148 serves in the acceptance read - 0 written sites failed to), and 38 belong to another lane that wrote
+193 sites gained a served row in that window: **155 of them are this lane's waves** (every one of the
+155 serves in the acceptance read - 0 written sites failed to), and 38 belong to another lane that wrote
 in the same window. The floor wave's own baseline above is reproduced exactly from the same script, so
 the two columns are comparable.
+
+**What is left, measured per site** (`RESTBESTAND_2026-10-07/RESTBESTAND_2026-10-07.jsonl`, 989 sites,
+one measured reason each): **461** the search refused because Commons names no file for them at all,
+**369** the search found candidates and the judge saw none of them as a picture of the site, **78** the
+judge confirmed a picture and the INSERT lane refused it (48 of those are the floor decision above), 25
+`all_too_small` from the search, and **63** outside the candidate search's population - the two classes
+the import lane owns, which the tenth wave closed as far as the pictures on disk allow.
+
+The owner lowered the floor of §3.7.2 for the sites that *already have* a picture; it has never been
+decided for the sites that show **nothing**, which is this lane's whole population. That decision is
+the owner's and is still open; what the measurements above settle is that **800x300 costs nothing in
+quality here** - it would release 48 sites that already carry a confirmed picture, and not one of the
+48 is a strip.
 
 **And this lane is closed.** The judgement answered **595 of 595** sites and `TARGETS.jsonl` names 226
 of them; every one of the 226 is now written, refused by name, or already written by an earlier wave.

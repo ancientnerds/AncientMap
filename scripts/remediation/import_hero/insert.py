@@ -216,6 +216,167 @@ def _shows_a_picture_of_its_own(site: Mapping[str, Any]) -> bool:
     return bool(str(site.get("thumbnail_url") or "").strip())
 
 
+def seed_from_import_run(
+    source_run: Path,
+    insert_run: Path,
+    sites: Sequence[str],
+) -> dict[str, Any]:
+    """This INSERT wave's own two records, taken out of an import run for the sites named.
+
+    `fetch --target insert` reads `IMPORT_CLAIMS.json` and `IMPORT_HERO_REFUSALS.jsonl` out of the run
+    directory, and `insert-plan` reads the refusals. The 2025 import wrote both - but into its own run
+    directories, over its own target list. So a wave over the sites that show nothing although the
+    import links a picture has nothing to read, and would end in an empty plan with no refusal naming
+    anything. This writes the two records from the run that has them, for the sites the caller names.
+
+    **Only sites the source run refused as `no_target_row` are seeded.** Every other refusal of that
+    run means the import's file was refused for another reason - too small, no credit, no rendering -
+    and copying its claim into a wave would turn that refusal into a written row.
+
+    Claims are **merged, never replaced**, exactly as `candidate_search.judge.insert_claims` does it:
+    a site this run already claims keeps its URL, and a second claim for one site is refused by name
+    rather than silently overwriting the first. The refusal carries a `source` and an
+    `evidence_source` that name the run the claim came out of, because the row this produces is
+    journalled with both and they must not read as if the 2025 import had asked for it in this wave.
+    """
+    claims_path = source_run / "IMPORT_CLAIMS.json"
+    refusals_path = source_run / "IMPORT_HERO_REFUSALS.jsonl"
+    if not claims_path.is_file():
+        raise ImportHeroError(
+            f"{claims_path} does not exist - the source run has no claims to seed from"
+        )
+    if not refusals_path.is_file():
+        raise ImportHeroError(
+            f"{refusals_path} does not exist - the source run has no refusals to seed from"
+        )
+
+    source_claims = json.loads(claims_path.read_text(encoding="utf-8"))
+    source_refusals = {
+        str(row.get("site_id") or ""): row
+        for row in (
+            json.loads(line)
+            for line in refusals_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        )
+    }
+
+    out_claims_path = insert_run / "IMPORT_CLAIMS.json"
+    out_refusals_path = insert_run / "IMPORT_HERO_REFUSALS.jsonl"
+    claims: dict[str, Any] = (
+        json.loads(out_claims_path.read_text(encoding="utf-8")) if out_claims_path.is_file() else {}
+    )
+    refusals: list[dict[str, Any]] = (
+        [
+            json.loads(line)
+            for line in out_refusals_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        if out_refusals_path.is_file()
+        else []
+    )
+    refused_sites = {str(row.get("site_id") or "") for row in refusals}
+
+    seeded = 0
+    out_refusals: list[dict[str, str]] = []
+    for site_id in sites:
+        site_id = str(site_id).strip()
+        if not site_id:
+            continue
+        claim = source_claims.get(site_id)
+        if claim is None:
+            out_refusals.append(
+                {
+                    "site_id": site_id,
+                    "reason": "no_import_claim",
+                    "detail": (
+                        f"{site_id}: {source_run.name} records no claim for this site, so the wave "
+                        f"has no picture to fetch for it"
+                    ),
+                }
+            )
+            continue
+        refusal = source_refusals.get(site_id)
+        if refusal is None or str(refusal.get("reason")) != "no_target_row":
+            reason = (refusal or {}).get("reason") or "not_refused"
+            out_refusals.append(
+                {
+                    "site_id": site_id,
+                    "reason": "not_a_candidate",
+                    "detail": (
+                        f"{site_id}: {source_run.name} refused this site as {reason!r}, not as "
+                        f"'no_target_row'; only a site whose rows hold no file of the import can "
+                        f"gain one here"
+                    ),
+                }
+            )
+            continue
+        url = str(claim.get("image") or "")
+        if ST.file_of_url(url) is None:
+            out_refusals.append(
+                {
+                    "site_id": site_id,
+                    "reason": "unreadable_url",
+                    "detail": f"{site_id}: {url!r} names no Commons file",
+                }
+            )
+            continue
+        if site_id in claims:
+            if str(claims[site_id].get("image") or "") != url:
+                out_refusals.append(
+                    {
+                        "site_id": site_id,
+                        "reason": "claim_conflict",
+                        "detail": (
+                            f"{site_id}: the run already claims "
+                            f"{claims[site_id].get('image')!r}, {source_run.name} brings {url!r}"
+                        ),
+                    }
+                )
+            continue
+
+        claims[site_id] = dict(claim)
+        if site_id not in refused_sites:
+            refusals.append(
+                {
+                    "site_id": site_id,
+                    "reason": "no_target_row",
+                    "detail": (
+                        f"the 2025 import links {url!r} for this site and no row of it holds the "
+                        f"file: {refusal.get('detail') or ''}".strip()
+                    ),
+                    "source": (
+                        f"the 2025 import's own link for this site, recorded as {url!r} in "
+                        f"{source_run.name}/IMPORT_CLAIMS.json; the site showed nothing at all - no "
+                        "gallery row and no thumbnail_url (owner decision 2026-10-06)"
+                    ),
+                    "evidence_source": (
+                        f"the import run {source_run.name}, which refused this site as "
+                        "'no_target_row' because its rows hold no file of the import"
+                    ),
+                }
+            )
+            refused_sites.add(site_id)
+        seeded += 1
+
+    insert_run.mkdir(parents=True, exist_ok=True)
+    out_claims_path.write_text(
+        json.dumps(claims, ensure_ascii=False, indent=1, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    out_refusals_path.write_text(
+        "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in refusals),
+        encoding="utf-8",
+        newline="\n",
+    )
+    return {
+        "source_run": str(source_run),
+        "insert_run": str(insert_run),
+        "sites_seeded": seeded,
+        "claims_total": len(claims),
+        "refusals_total": len(refusals),
+        "refused_sites": out_refusals,
+    }
+
+
 def plan(
     state: ST.State,
     refusals: Sequence[Mapping[str, Any]],

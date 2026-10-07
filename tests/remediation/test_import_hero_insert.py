@@ -229,6 +229,107 @@ class TestThePlanOfTheInsertWave:
             )
 
 
+class TestSeedingAWaveFromAnImportRun:
+    """`fetch --target insert` reads the claims and the refusals out of the run directory, and only the
+    2025 import wrote them - into its own run directories, over its own target list. A wave over the
+    sites that show nothing although the import links a picture therefore has nothing to read until
+    this copies those two records out of the run that refused them."""
+
+    def _source(self, tmp_path: Path, **kwargs: Any) -> Path:
+        refusals = kwargs.pop(
+            "refusals",
+            [{"site_id": SITE_A, "reason": "no_target_row", "detail": "its rows hold no file"}],
+        )
+        claims = kwargs.pop("claims", {SITE_A: {"image": ORIGINAL, "import_title": "Herakleia"}})
+        source = tmp_path / "import-hero-2026-10-06-009"
+        source.mkdir(parents=True, exist_ok=True)
+        (source / "IMPORT_CLAIMS.json").write_text(
+            json.dumps(claims, ensure_ascii=False), encoding="utf-8"
+        )
+        (source / "IMPORT_HERO_REFUSALS.jsonl").write_text(
+            "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in refusals),
+            encoding="utf-8",
+            newline="\n",
+        )
+        return source
+
+    def test_a_no_target_row_site_gets_the_claims_claim_and_a_refusal(self, tmp_path: Path) -> None:
+        source = self._source(tmp_path)
+        run = tmp_path / "insert-2026-10-07-009"
+        out = IN.seed_from_import_run(source, run, [SITE_A])
+
+        assert out["sites_seeded"] == 1 and not out["refused_sites"]
+        claims = json.loads((run / "IMPORT_CLAIMS.json").read_text(encoding="utf-8"))
+        assert claims[SITE_A]["image"] == ORIGINAL
+        refusals = [
+            json.loads(line)
+            for line in (run / "IMPORT_HERO_REFUSALS.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        ]
+        assert [r["reason"] for r in refusals] == ["no_target_row"]
+        # The row this produces is journalled with this refusal's own words, and they have to name
+        # the run the claim came out of - the wave did not ask for this file, the import did.
+        assert "no_target_row" == refusals[0]["reason"]
+        assert source.name in refusals[0]["source"]
+        assert source.name in refusals[0]["evidence_source"]
+
+    def test_a_site_the_import_refused_for_another_reason_is_refused_by_name(
+        self, tmp_path: Path
+    ) -> None:
+        """Seeding its claim would turn `local_file_too_small` into a written row."""
+        source = self._source(
+            tmp_path,
+            refusals=[{"site_id": SITE_A, "reason": "local_file_too_small", "detail": "640x480"}],
+        )
+        out = IN.seed_from_import_run(source, tmp_path / "run", [SITE_A])
+
+        assert out["sites_seeded"] == 0
+        assert [r["reason"] for r in out["refused_sites"]] == ["not_a_candidate"]
+        assert "local_file_too_small" in out["refused_sites"][0]["detail"]
+
+    def test_a_site_without_a_claim_in_the_source_run_is_refused_by_name(
+        self, tmp_path: Path
+    ) -> None:
+        source = self._source(tmp_path, refusals=[])
+        out = IN.seed_from_import_run(source, tmp_path / "run", [SITE_B])
+
+        assert out["sites_seeded"] == 0
+        assert [r["reason"] for r in out["refused_sites"]] == ["no_import_claim"]
+
+    def test_a_second_claim_for_one_site_is_refused_and_never_overwrites(
+        self, tmp_path: Path
+    ) -> None:
+        other = "https://upload.wikimedia.org/wikipedia/commons/9/9a/Other.jpg"
+        source = self._source(
+            tmp_path,
+            claims={SITE_A: {"image": other, "import_title": "x"}, SITE_C: {"image": ORIGINAL}},
+            refusals=[
+                {"site_id": SITE_A, "reason": "no_target_row", "detail": ""},
+                {"site_id": SITE_C, "reason": "no_target_row", "detail": ""},
+            ],
+        )
+        run = tmp_path / "run"
+        run.mkdir()
+        (run / "IMPORT_CLAIMS.json").write_text(
+            json.dumps({SITE_A: {"image": ORIGINAL}}), encoding="utf-8"
+        )
+        out = IN.seed_from_import_run(source, run, [SITE_A, SITE_C])
+
+        assert [r["reason"] for r in out["refused_sites"]] == ["claim_conflict"]
+        assert out["sites_seeded"] == 1
+        claims = json.loads((run / "IMPORT_CLAIMS.json").read_text(encoding="utf-8"))
+        assert claims[SITE_A]["image"] == ORIGINAL, "the first claim stands"
+        assert claims[SITE_C]["image"] == ORIGINAL
+
+    def test_a_run_without_a_claims_file_is_refused_by_name(self, tmp_path: Path) -> None:
+        empty = tmp_path / "empty"
+        empty.mkdir()
+        with pytest.raises(IN.ImportHeroError, match="claims"):
+            IN.seed_from_import_run(empty, tmp_path / "run", [SITE_A])
+
+
 class TestTheStatement:
     def _sql(self, tmp_path: Path, **kwargs: Any) -> str:
         state = _state(rows={SITE_A: [_row(7, SITE_A, hero=True)]}, thumbs={SITE_A: "/x/hero.webp"})
