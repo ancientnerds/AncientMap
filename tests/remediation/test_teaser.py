@@ -1,6 +1,6 @@
 """Lane WB, the handoff side: the card contract, the answer shapes, the prompts and the run.
 
-Everything here is DB-less and model-less: production is a fixture export, the Opus agents are
+Everything here is DB-less and model-less: production is a fixture export, the answering agents are
 answers written through `opus_handoff.write_answer`, the brand fonts are `phase4_cases`'
 `fake_card_fit`, the web is an `httpx.MockTransport`. Each rule is asserted by the refusal it
 produces, so removing it turns its test red (`mechanical/mutation_sweep.py "teaser:"`).
@@ -849,10 +849,13 @@ class TestTheRun:
         handoff = tmp_path / "handoff-write"
         R.export_stage(run, "write", handoff)
         text = R.brief(run, handoff, "write-001")
-        assert "Opus writer write-001" in text and "--answered-by teaser-write-001" in text
-        assert (
-            "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in text
-        )  # an agent names the model it runs as (owner decision 2026-10-01)
+        assert "writer write-001" in text and "--answered-by teaser-write-001" in text
+        # The brief offers every model id the recorder accepts, built from ANSWER_MODELS: an agent
+        # names the model it runs as (owner decision 2026-10-01), and the list may not be narrower
+        # than the models in use (MiniMax joined 2026-10-03, this lane still offered only the two
+        # Claude ids on 2026-10-07 and told an agent to stamp a model that wrote nothing).
+        assert all(model_id in text for model_id in OH.ANSWER_MODELS)
+        assert text.count("Opus") == 0  # the answering agents are not Opus ones
         assert "handoff-write-scratch/write-001/<label>.json" in text
         assert "no web research" in text
         assert 'Skip every question whose "answer_path"' in text
@@ -1571,9 +1574,9 @@ class TestTheVerification:
         handoff = tmp_path / "handoff-verify"
         R.export_stage(run, "verify", handoff)
         text = R.brief(run, handoff, "verify-001")
-        assert "Opus verifier verify-001" in text and "sources on the web" in text
+        assert "verifier verify-001" in text and "sources on the web" in text
         assert "--answered-by teaser-verify-001" in text and "verified or judged" in text
-        assert "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in text
+        assert all(model_id in text for model_id in OH.ANSWER_MODELS)
 
     def test_the_judge_lists_the_central_claim_first(self) -> None:
         prompt = P.judge_prompt("Skara Brae", "Scotland", T.GOOD[T.SKARA])

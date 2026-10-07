@@ -2,7 +2,7 @@
 
 Owner decisions O2-O4 and O10 of 2026-09-26 (`output/remediation/FINISH_PLAN_2026-09-26.md`); the
 contract and the whole runbook are `docs/procedures/CARD_DESCRIPTIONS.md`. No model is called here:
-every card is written by one Opus agent and checked by another, each answering one batch through the
+every card is written by one agent and checked by another, each answering one batch through the
 handoff directory (`scripts/remediation/opus_handoff.py`). Production is only read (`select`). The
 write is `scripts/remediation/mechanical/teaser.py` (plan) and `mechanical/apply.py` (journalled).
 
@@ -14,7 +14,7 @@ write is `scripts/remediation/mechanical/teaser.py` (plan) and `mechanical/apply
     $T brief --run R --handoff $H-write --batch-id B       the instruction of batch B's agent
         (the agent drafts, runs `check-answer` until it is clean, and records with
         `opus_handoff.py answer --answered-by teaser-B`)
-    opus_handoff.py validate --dir $H-write                every answer in, in shape, by Opus
+    opus_handoff.py validate --dir $H-write                every answer in, in shape
     $T import --run R --stage write                        parse, mechanical checks: STAGE-write
     ... the same for check, rewrite1, check1, rewrite2, check2, verify, rewrite-v, check-v, verify2
         (a stage nobody is due for is skipped: `export` says so; the import of a verify stage
@@ -1108,24 +1108,31 @@ def check_answer(
     return {"ok": True, "problems": [], "verdict": parsed["verdict"]}
 
 
+#: The model ids the recorder accepts, as the brief lists them: an agent names the one it actually
+#: runs as, and the list is built from `opus_handoff.ANSWER_MODELS` so it can never offer an id the
+#: recorder would refuse. The brief must never name a narrower set than the one the owner runs (fixed
+#: 2026-10-07: this lane still offered only the two Claude ids after MiniMax Code replaced Claude
+#: Code on 2026-10-03, so an agent was told to stamp a model that had written nothing).
+MODEL_IDS = " or ".join(OH.ANSWER_MODELS)
+
 _BRIEF_HEAD = {
     "writer": (
-        "You are Opus writer {batch} of lane WB (teaser cards). You write {count} card(s), each for "
+        "You are writer {batch} of lane WB (teaser cards). You write {count} card(s), each for "
         "another site. Write each one on its own, as if it were the only one. Everything a card may "
         "say is in its prompt: no web research, no memory of the site."
     ),
     "checker": (
-        "You are Opus checker {batch} of lane WB (teaser cards). You check {count} card(s) written "
+        "You are checker {batch} of lane WB (teaser cards). You check {count} card(s) written "
         "by another agent, each for another site. Check each one on its own, only against the "
         "sentences in its prompt - not against what you know about the site."
     ),
     "verifier": (
-        "You are Opus verifier {batch} of lane WB (teaser cards). You check {count} card(s) "
+        "You are verifier {batch} of lane WB (teaser cards). You check {count} card(s) "
         "written and checked by other agents against sources on the web, each on its own. Every "
         "verdict rests on a page you opened and quote."
     ),
     "judge": (
-        "You are Opus judge {batch} of the lane-WB pilot. You check {count} card(s) against "
+        "You are judge {batch} of the lane-WB pilot. You check {count} card(s) against "
         "sources on the web, each on its own. Every verdict rests on a page you opened and quote."
     ),
 }
@@ -1154,7 +1161,8 @@ For each other question:
 5. Record it - an answer is written once:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
 --batch-id {batch} --stage {stage} --label <label> --answered-by {agent} \
---model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5> \
+--model <the model id you run as, exactly as your own system prompt names you: \
+{MODEL_IDS}> \
 --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.
@@ -1212,7 +1220,7 @@ def _kind(stage: str) -> str:
 
 
 def brief(run: Path, handoff: Path, batch_id: str) -> str:
-    """The instruction of the Opus agent that answers one batch."""
+    """The instruction of the agent that answers one batch."""
     record = _round_of_handoff(run, handoff)
     if batch_id not in record["batches"]:
         raise RunError(f"{batch_id} is no batch of {handoff}")
@@ -1226,6 +1234,7 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
         batch=batch_id,
         stage=stage,
         agent=agent_name(batch_id),
+        MODEL_IDS=MODEL_IDS,
         handoff=shown,
         scratch=f"{shown}-scratch/{batch_id}",
         run=_shown(run),

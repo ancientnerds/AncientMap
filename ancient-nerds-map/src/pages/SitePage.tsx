@@ -114,13 +114,13 @@ function SiteRecord({ site }: { site: SiteRoute }) {
             <CitationText text={p} citations={site.description_citations} />
           </p>
         ))}
-        {/* The same disclosure the popup shows (EU AI Act Art. 50, CC BY-SA 4.0):
-            crawlers and no-JS readers see the page's text with its attribution. */}
+        {/* The same attribution line the popup shows (CC BY-SA 4.0): crawlers and
+            no-JS readers see the page's text with its source. Owner decision
+            2026-10-07: no AI notice here any more. */}
         {paragraphs.length > 0 && (
           <DescriptionDisclosure
             ai={site.description_ai}
             attribution={site.description_attribution}
-            cardAi={site.card_ai}
           />
         )}
       </div>

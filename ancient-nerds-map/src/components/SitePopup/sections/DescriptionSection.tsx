@@ -27,7 +27,6 @@ export function DescriptionSection({
   descriptionCitations,
   descriptionAi,
   descriptionAttribution,
-  cardAi,
 }: DescriptionSectionProps) {
   const [showCitations, setShowCitations] = useState(false)
   const [showMoreInfo, setShowMoreInfo] = useState(false)
@@ -93,12 +92,12 @@ export function DescriptionSection({
         <>
           {descriptionContent}
 
-          {/* EU AI Act Art. 50 and CC BY-SA 4.0: graded by the text's provenance */}
+          {/* CC BY-SA 4.0 attribution of an adapted description (owner decision 2026-10-07:
+              no AI notice here any more - the card carries only its text) */}
           {description && (
             <DescriptionDisclosure
               ai={descriptionAi}
               attribution={descriptionAttribution}
-              cardAi={cardAi}
             />
           )}
 

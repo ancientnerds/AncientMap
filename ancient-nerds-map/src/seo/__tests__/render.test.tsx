@@ -240,15 +240,16 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
     expect(html).not.toContain('Loading site details')
   })
 
-  describe('the description disclosure follows its provenance, in both directions', () => {
+  describe('the description attribution follows its provenance, in both directions', () => {
     // The premise of the test this replaces ("curated site records carry NO Art. 50 notice,
     // they are human-curated", from tests/pipeline/test_ai_act_notices.py) ended with the
     // 2026-09 remediation: an AI system now selects (lanes W, S) or writes (lanes T, R and the
-    // legacy lane L) the descriptions, and raw_data._description_provenance records which.
-    // So the rule is stricter, and pinned both ways: the AiFootnote appears if and only if
-    // ai === 'generated'; the attribution line if and only if the lane is W, S or T (the
-    // server sends an attribution exactly for those, api/services/description_provenance.py);
-    // and a description without provenance for its text carries no notice at all.
+    // legacy lane L) the descriptions, and raw_data._description_provenance records which. From
+    // 2026-09-26 that carried an AiFootnote on this page; owner decision of 2026-10-07 removed
+    // it again, for every card of the site: a card carries only its text. The attribution line
+    // stays and is still pinned both ways - the server sends one exactly for lanes W, S and T
+    // (api/services/description_provenance.py), and a description without provenance for its
+    // text carries no line at all.
     const permalink = 'https://en.wikipedia.org/w/index.php?title=G%C3%B6bekli_Tepe&oldid=1234567'
     const attribution = (changes: string) => ({
       title: 'Göbekli Tepe',
@@ -259,22 +260,22 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
       revisionDate: '2026-09-01',
     })
     const cases = [
-      { lane: 'none', ai: null, attribution: null, footnote: false, line: false },
-      { lane: 'W', ai: 'selected', attribution: attribution('sentences selected and shortened'), footnote: false, line: true },
-      { lane: 'S', ai: 'selected', attribution: attribution('sentences selected and shortened'), footnote: false, line: true },
-      { lane: 'T', ai: 'generated', attribution: attribution('translated'), footnote: true, line: true },
-      { lane: 'R', ai: 'generated', attribution: null, footnote: true, line: false },
-      { lane: 'L', ai: 'generated', attribution: null, footnote: true, line: false },
+      { lane: 'none', ai: null, attribution: null, line: false },
+      { lane: 'W', ai: 'selected', attribution: attribution('sentences selected and shortened'), line: true },
+      { lane: 'S', ai: 'selected', attribution: attribution('sentences selected and shortened'), line: true },
+      { lane: 'T', ai: 'generated', attribution: attribution('translated'), line: true },
+      { lane: 'R', ai: 'generated', attribution: null, line: false },
+      { lane: 'L', ai: 'generated', attribution: null, line: false },
     ] as const
 
     for (const c of cases) {
-      it(`lane ${c.lane}: footnote ${c.footnote ? 'yes' : 'no'}, attribution line ${c.line ? 'yes' : 'no'}`, () => {
+      it(`lane ${c.lane}: no AI notice, attribution line ${c.line ? 'yes' : 'no'}`, () => {
         const page = renderRoute({
           ...FIXTURES.site,
           description_ai: c.ai,
           description_attribution: c.attribution,
         })
-        expect(page.includes('data-ai-generated="true"')).toBe(c.footnote)
+        expect(page.includes('data-ai-generated="true"')).toBe(false)
         expect(page.includes('data-description-attribution="true"')).toBe(c.line)
         if (c.attribution) {
           expect(page).toContain(`href="${permalink.replace(/&/g, '&amp;')}"`)
@@ -290,35 +291,26 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
       expect(html).not.toContain('data-description-attribution')
     })
 
-    // Lane WB (owner decision O10, 2026-09-26): a teaser card is AI-generated. The card lives on
-    // the SiteCard, which only carries data-card-ai; the visible notice is the page's AiFootnote -
-    // once, also where the description is AI-generated itself.
+    // Lane WB (owner decision O10, 2026-09-26) marked a teaser card AI-generated, and the page
+    // showed an AiFootnote for it - once, also where the description was AI-generated itself.
+    // Owner decision 2026-10-07: that notice is gone for every card of the site. The card keeps
+    // its machine-readable mark; the page and the popup say nothing.
     const cardCases = [
       { lane: 'W', ai: 'selected', attribution: attribution('sentences selected and shortened') },
       { lane: 'L', ai: 'generated', attribution: null },
       { lane: 'none', ai: null, attribution: null },
     ] as const
     for (const c of cardCases) {
-      it(`a teaser card on a lane-${c.lane} page: exactly one AI footnote`, () => {
+      it(`a teaser card on a lane-${c.lane} page: no AI notice`, () => {
         const page = renderRoute({
           ...FIXTURES.site,
           description_ai: c.ai,
           description_attribution: c.attribution,
           card_ai: 'generated',
         })
-        expect(page.split('data-ai-generated="true"').length - 1).toBe(1)
+        expect(page).not.toContain('data-ai-generated')
       })
     }
-
-    it('a card without teaser provenance adds no footnote', () => {
-      const page = renderRoute({
-        ...FIXTURES.site,
-        description_ai: 'selected',
-        description_attribution: attribution('sentences selected and shortened'),
-        card_ai: null,
-      })
-      expect(page).not.toContain('data-ai-generated')
-    })
   })
 
   it('Fußnotenmarker werden im Crawler-Body zu Quellen-Links aufgelöst', () => {

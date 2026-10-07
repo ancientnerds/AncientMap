@@ -13892,3 +13892,71 @@ fill moves the same derived cells; the next wave recomputes from the inputs as t
 what the runbook's undo note describes. Measured 2026-10-04 00:18: the field round is at 71 of its 78
 open batches.
 
+## 2026-10-07 — lane WB run `wb-cardgap-2026-10-07` written (steps 32-34)
+
+The gap run: the 318 curated sites without a card description, of which 177 had a current
+description. All ten stages ran (`write`, `check`, `rewrite1`, `check1`, `rewrite2`, `check2`,
+`verify`, `rewrite-v`, `check-v`, `verify2`), every answer written by a fresh agent that had
+answered no other batch of the run.
+
+**Counts per reason** (`run.py outcomes`, 204 outcomes, sha256 `48af414f`):
+accepted **167**, cleared 37 — `no-description` 27, `failed-after-verify-rewrite` 4,
+`unproven-after-verify` 4, `contradicted-after-verify` 1, `name-undrawable` 1.
+Accepted at attempt 1/2/3/4: 137/26/4/0. VERIFIED at the first verification 154, after the
+rewrite 13.
+
+**Unproven share:** the accepted cards' final verifications carry **1036 claims, 23 without a
+proving quote (2.2%)**, none of them a central claim.
+
+**DESCRIPTION_DEFECTS.jsonl: 9 lines**, for lane WC (the descriptions' own lane): Wamanmarka's
+etymology ("population of eagles" against "falcon, village"), Tanqa Tanqa's four figures (3,974 m
+against 3,973; ~30 ha between 20 and 50; "circular houses" where the sources say oval, square
+and rectangular — "circular" describes the chullpas; AD 1000-1450 against 1200-1500), Wain's Hill
+(univallate against bivallate), Niaux (14 km of passages is the Niaux-Lombrives **plus the
+unconnected Sabart**, the cave itself is 4,000 m), Tebessa (305 against 304 — the English Wikipedia
+contradicts itself between its city and basilica articles), the `Table des Marchand` article title
+missing its final s, and two further cards the verifiers narrowed to what the sources carry.
+
+**The write** (CARD_DESCRIPTIONS.md 5.4), three steps, each two journalled lanes, provenance first
+and card second, every cell journalled and rehearsed for rollback before it was applied:
+step 32 (98 cards, 85 provenances, 2 skipped), step 33 (92 cards, 78 provenances, 8 skipped),
+step 34 (4 and 4). **All three accepted with `RESULT: 0 deviation(s)`**, and
+`plan --step 35` now answers *"every outcome is planned"*.
+
+Live after the write (read back from production, `--verify` on `teaser-card-s034`): 5004 curated
+sites, **4826 with a card** (4686 before: +140 new, −27 cleared by `card-clear-no-description`),
+**2830 carrying a teaser provenance** (2663 before, +167), **0** provenances that do not hash their
+live card, **0** stale teaser cards, **0** Phase-5 card keys that do not hash, **0** journal rows on
+non-curated rows.
+
+**Two defects of the tooling itself, fixed on the way (not pushed):**
+
+1. `scripts/remediation/teaser/run.py` offered only `claude-sonnet-5-5` and `claude-opus-5-5` as
+   `--model` values in every batch brief and named the answering agents "You are Opus" — false
+   since MiniMax Code replaced Claude Code on 2026-10-03, and in front of ~180 answers. The list is
+   now built from `opus_handoff.ANSWER_MODELS`, so it can never offer an id the recorder refuses.
+   `tests/remediation/test_teaser.py` pins both ways (177 tests, ruff clean).
+2. `apply.py`'s post-write `verify_interests` crashed with a `JSONDecodeError` on the provenance
+   lane's own result ("Unterminated string starting at: line 1 column 35") *after* `psql` had
+   exited 0 past its COMMIT, so the traceback reported a failed write for a write that had landed.
+   The journal settled it (`run_stamp = wb-teaser-prov-s032`, 85 rows) and `--verify` confirmed the
+   state. **The read-back line the contract trusts therefore has a parsing defect that is still
+   open** — see the TODO below. Not a data problem: nothing was rewritten and no card was lost.
+
+**Operational lesson, written to the project memory (`reference-wikimedia-ip-throttling-parallel-agents.md`):**
+four to five verifier agents fetching Wikipedia at once made the office IP edge-blocked — every
+cache miss answered 403 and every comma-containing URL 404'd, so the affected pages read as
+"does not exist". That produced **nine false `UNVERIFIABLE` findings across five cards** (Quriwayrachina,
+El Baúl, Llactan, Padah-Lin, Desfina); the `rewrite-v` writer re-sourced all of them and confirmed
+the claims. Max 2-3 agents at a time, and an `UNVERIFIABLE` caused by HTTP 403/429 is never a finding:
+test the URL with `curl` first. Every general search engine is blocked from this machine as well —
+work from direct institutional URLs and Wikipedia's search API.
+
+**Owner decisions of 2026-10-07 recorded here:** the AI notice (`AiFootnote`) is gone from the site's
+page and its popup for every card; the CC BY-SA 4.0 attribution line stays, including its
+"by an AI system" clause, because it is a licence duty of the adapted text rather than an AI notice;
+the YouTube shorts note, the news-video banner and the Theo paper notice stay. And the cards stay
+plain factual prose: an evocative tone is not part of what the checker judges.
+
+**Not done, owed:** 5.5 (the API re-imports the card file on boot; no push was made, and
+CARD_DESCRIPTIONS.md 5.4 forbids a deploy to `main` until 5.5 is done).
