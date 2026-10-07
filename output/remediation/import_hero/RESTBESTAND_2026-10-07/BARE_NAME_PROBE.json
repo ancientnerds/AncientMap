@@ -1,0 +1,164 @@
+{
+ "measured_at": "2026-10-07",
+ "question": "is the no_candidate refusal a name problem? ask Commons for the bare place name",
+ "the_class": 461,
+ "sites_whose_name_carries_an_english_descriptor": 70,
+ "sample": 25,
+ "bare_name_brings_a_picture": 13,
+ "bare_name_brings_nothing": 12,
+ "hits": [
+  {
+   "site_id": "7191058f-3722-49ac-abcf-2d25e68f580c",
+   "name": "Al Hajar Burial Mound Field",
+   "bare": "Al Hajar",
+   "country": "Bahrain",
+   "kept": 14
+  },
+  {
+   "site_id": "af8e0293-7e40-45db-986b-b2382e5bc272",
+   "name": "Al Sanea Tomb",
+   "bare": "Al Sanea",
+   "country": "Saudi Arabia",
+   "kept": 1
+  },
+  {
+   "site_id": "1d25e910-a12c-41a1-a7c9-caf4aa769fde",
+   "name": "Al-Dafi Site",
+   "bare": "Al-Dafi",
+   "country": "Saudi Arabia",
+   "kept": 3
+  },
+  {
+   "site_id": "3f170e16-175a-4e4c-9717-1f0e32d05e8e",
+   "name": "Appolonia Temple Ruins",
+   "bare": "Appolonia",
+   "country": "Türkiye",
+   "kept": 15
+  },
+  {
+   "site_id": "ec87f52c-4fd5-4be1-9754-494de52afb91",
+   "name": "Arzachena Archaeological Park",
+   "bare": "Arzachena",
+   "country": "Italy",
+   "kept": 14
+  },
+  {
+   "site_id": "2a486734-8365-4c1e-93b2-f1c2f092789e",
+   "name": "Aslantepe Ruins",
+   "bare": "Aslantepe",
+   "country": "Türkiye",
+   "kept": 16
+  },
+  {
+   "site_id": "a9c5d1bf-b6d0-4486-a507-8dddfdc57a02",
+   "name": "Ağbulaq Necropolis",
+   "bare": "Ağbulaq",
+   "country": "Azerbaijan",
+   "kept": 6
+  },
+  {
+   "site_id": "ea159045-9163-41c2-9026-71edd41683ec",
+   "name": "Blaškovina Archaeological Site",
+   "bare": "Blaškovina",
+   "country": "Serbia",
+   "kept": 12
+  },
+  {
+   "site_id": "29f84776-1d97-4e09-ad40-95ea6e2d7247",
+   "name": "Box Gully Archaeological Site",
+   "bare": "Box Gully",
+   "country": "Australia",
+   "kept": 10
+  },
+  {
+   "site_id": "ad9470d2-0225-4dec-b6a3-b4135df95403",
+   "name": "Braughing - Roman Town",
+   "bare": "Braughing - Roman",
+   "country": "England",
+   "kept": 6
+  },
+  {
+   "site_id": "4caf5522-6a45-44b4-bba0-e98186c081f1",
+   "name": "Broadbury Castle",
+   "bare": "Broadbury",
+   "country": "England",
+   "kept": 6
+  },
+  {
+   "site_id": "0fc900b2-23a7-4664-ac47-0bce2852babf",
+   "name": "Cloggs Cave",
+   "bare": "Cloggs",
+   "country": "Australia",
+   "kept": 11
+  },
+  {
+   "site_id": "300d302c-f6fd-4688-b21a-a8189bf53995",
+   "name": "Cochabamba Archaeological Site",
+   "bare": "Cochabamba",
+   "country": "Peru",
+   "kept": 23
+  }
+ ],
+ "nothing": [
+  {
+   "name": "Ain Hirsha Roman Temple",
+   "bare": "Ain Hirsha Roman",
+   "country": "Lebanon"
+  },
+  {
+   "name": "Alogonia - Town",
+   "bare": "Alogonia",
+   "country": "Greece"
+  },
+  {
+   "name": "Apollon Symintheion Ruins",
+   "bare": "Apollon Symintheion",
+   "country": "Türkiye"
+  },
+  {
+   "name": "Bahrain’s Dilmun Burial Mounds - Janabiyah Burial Field",
+   "bare": "Bahrain’s Dilmun Burial Mounds - Janabiyah",
+   "country": "Bahrain"
+  },
+  {
+   "name": "Bakka Roman Temple",
+   "bare": "Bakka Roman",
+   "country": "Lebanon"
+  },
+  {
+   "name": "Ballinran Court Tomb",
+   "bare": "Ballinran Court",
+   "country": "Northern Ireland"
+  },
+  {
+   "name": "Catholme Ceremonial Complex",
+   "bare": "Catholme Ceremonial",
+   "country": "England"
+  },
+  {
+   "name": "Cerro Pátapo Ruins",
+   "bare": "Cerro Pátapo",
+   "country": "Peru"
+  },
+  {
+   "name": "Chongam-ri Earthen Castle",
+   "bare": "Chongam-ri Earthen",
+   "country": "North Korea"
+  },
+  {
+   "name": "Copalita Eco-Archaeological Park",
+   "bare": "Copalita Eco-Archaeological",
+   "country": "Mexico"
+  },
+  {
+   "name": "Cras  Round Cairn",
+   "bare": "Cras Round Cairn",
+   "country": "Wales"
+  },
+  {
+   "name": "Cras -  Round Cairn to North of",
+   "bare": "Cras - Round Cairn to North of",
+   "country": "Wales"
+  }
+ ]
+}

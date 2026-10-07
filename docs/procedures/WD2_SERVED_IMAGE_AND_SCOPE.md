@@ -901,6 +901,29 @@ of them; every one of the 226 is now written, refused by name, or already writte
 There is no target left in `candidates-2026-10-06` that an INSERT wave has not been run over. What
 remains for this class is the owner's floor decision above, not more fetching.
 
+**The largest class left, 461 sites, was measured twice before anyone spends an hour on it** - both
+probes are in `RESTBESTAND_2026-10-07/` and both are negative in a way that closes a door:
+
+* `COUNTRY_QUERY_PROBE.json`: the lane asks `name filetype:bitmap`, `intitle:"name" filetype:bitmap` and
+  the category of that name. A fourth form that adds the **country** (`"name" country filetype:bitmap`
+  and two variants), on a **40-site sample of the 461**, brings a new, large-enough picture for **0 of
+  40**. The refusal is therefore not a query-form problem: Commons answers nothing for these names under
+  any of them.
+* `BARE_NAME_PROBE.json`: the 461 carry **English descriptive names** - *Al Sanea Tomb*, *Appolonia
+  Temple Ruins*, *Arzachena Archaeological Park*, *Apolyanka* - where Commons files the place under its
+  own name. **70 of the 461** carry such a descriptor at all; on a **25-site sample of those 70**, asking
+  for the bare name brings candidates for **13** (52 %). That is a real gain in candidates and a poor
+  gain in pictures: *Cochabamba Archaeological Site* answers **23 pictures of the city**, *Al Hajar
+  Burial Mound Field* **14 of the mountain**. The judge would reject them as `region_or_type`, which is
+  exactly the failure it exists for - so the route costs several hundred model judgements for a
+  double-digit number of sites, and the descriptor list that produces the bare name is crude enough to
+  hand it the wrong place (*Cloggs Cave* -> *Cloggs*, *Braughing - Roman Town* -> *Braughing - Roman*).
+
+So this class is not a bug to fix but **a name the curated data does not carry**. Closing it needs the
+local name per site - research over 461 sites, and a decision about whether that is worth it. The
+honest summary of the whole remainder: **989 sites still show nothing, and 48 of them have a confirmed
+picture that only the owner's floor decision stands between them and their page.**
+
 ### 3.7.2 The floor the owner lowered (2026-10-06), and exactly what it released
 
 Owner decision, 2026-10-06: *"for these cases the existing picture becomes the hero"* - the size a
