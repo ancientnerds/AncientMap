@@ -40,8 +40,7 @@ site already has, in the classes `fact` (up to 3, only for a thin text), `disput
 most 220 characters), read in that order. Each sentence is a write answer's (`_written`: 25 to 400
 characters, one sentence that stands alone, no citation marker, no run of 12 words of its quotes) and
 none repeats a sentence the text has (the same words, or a run of 12 words of it); the added text is
-at most 450 characters, and the whole text splits back into the old sentences and the new ones. No
-sentence at all is an answer: the site is left as it is.
+at most 450 characters. No sentence at all is an answer: the site is left as it is.
 
 **A judge answer** (`parse_judge`) is `{site_id, kept, dropped, coherent, note}`: one verdict per kept
 sentence (`SUPPORTED`, `UNSUPPORTED`, `WRONG` - a quote needed) and per dropped one (`DROP_OK`,
@@ -468,8 +467,7 @@ def parse_enrich(
     no sentence, or sentences of the classes `wc4.ENRICH_CLASSES` in that order - at most `max_facts`
     facts, both positions of a dispute or neither (`dispute`: the site has a brief; without one none),
     at most one open question - each a write answer's sentence (`_written`) that repeats no existing
-    one, together at most `MAX_ADDED_CHARS`, the hook at most `MAX_HOOK_CHARS`, and the old and the new
-    sentences together splitting back into exactly themselves."""
+    one, together at most `MAX_ADDED_CHARS`, the hook at most `MAX_HOOK_CHARS`."""
     data = load_object(text, WRITE_KEYS)
     if data["site_id"] != site_id:
         raise AnswerError(f"the answer names site {data['site_id']!r}, the question {site_id}")
@@ -532,15 +530,6 @@ def parse_enrich(
     added = sum(len(t) for t in texts)
     if added > MAX_ADDED_CHARS:
         raise AnswerError(f"{added} characters added; at most {MAX_ADDED_CHARS}")
-    try:
-        again = wc4.checked_sentences(" ".join([*existing, *texts]))
-    except wc4.WcError as exc:
-        raise AnswerError(f"the old and the new sentences together: {exc}") from None
-    if again != (*existing, *texts):
-        raise AnswerError(
-            "the description and the sentences do not split back into themselves as one text - "
-            "rephrase the one that ends on an abbreviation or runs into the next"
-        )
     return EnrichAnswer(tuple(written), note)
 
 

@@ -645,6 +645,13 @@ VERDICT_KEYS = frozenset({"k", "n", "verdict", "quotes", "note", "quotes_found",
 _RECORD_KEYS = frozenset({"status", "before", "rounds", "kept"})
 
 
+def agent_name(answered_by: str) -> str:
+    """The agent's own name in an `answered_by`: an answer recorded with `opus_handoff.py answer
+    --role` is `<role>:<agent>` (a plain name has no colon), and two answers are one agent's when the
+    agent is - a role does not make a writer another agent than the verifier that borrowed its name."""
+    return answered_by.partition(":")[2] if ":" in answered_by else answered_by
+
+
 def kept_numbers(decisions: Sequence[Decision]) -> list[int]:
     """The numbers of the kept sentences, in order."""
     return [decision.n for decision in decisions if decision.kept]
@@ -1521,8 +1528,8 @@ def verification_problems(evidence: Mapping[str, Any], description: str | None) 
         )
     elif verified and expected["rounds"][-1]["text_sha256"] != M.text_sha256(str(description)):
         problems.append("the description is not the text the last verifier confirmed")
-    checkers = {attempt["answered_by"] for attempt in evidence["answers"]}
-    names = [r["answered_by"] for r in expected["rounds"]]
+    checkers = {agent_name(attempt["answered_by"]) for attempt in evidence["answers"]}
+    names = [agent_name(r["answered_by"]) for r in expected["rounds"]]
     for name in names:
         if name in checkers:
             problems.append(

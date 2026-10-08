@@ -366,7 +366,11 @@ def test_the_provenance_key_is_the_writers_own():
     from phase4 import model4
 
     assert model4.PROVENANCE_KEY == DP.PROVENANCE_KEY
-    assert {lane.value for lane in model4.LANE_CHANGES} - {"R"} == DP.ATTRIBUTION_LANES
+    # lane E (the enrichment, model4.EnrichedProvenance) is no assigned lane but keeps the attribution
+    assert {lane.value for lane in model4.LANE_CHANGES} - {"R"} == (
+        DP.ATTRIBUTION_LANES - {model4.Lane.E.value}
+    )
+    assert model4.Lane.E.value == DP.ENRICHMENT_LANE in DP.ATTRIBUTION_LANES
     assert {mark.value for mark in model4.AiMark} == DP.AI_MARKS
 
 

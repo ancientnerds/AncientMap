@@ -614,9 +614,12 @@ def _read_disputes(
 ) -> dict[str, dict[str, Any]]:
     """The adjudicated dispute briefs (`DISPUTES.jsonl` of `disputes.py`, one per site) of an
     enrichment: each is a well-formed brief (`enrich.dispute_record_problems`) of a site this run
-    asks, made for the text the read holds (`desc_sha256` is the stored description's sha256 - a
-    text that moved since is not the one the dispute was found in), and no site has two."""
-    live = {row["id"]: row["description_sha256"] for row in rows}
+    asks, and no site has two. The sentences that state one position as fact must be gone: a brief
+    made for the text this read holds (`desc_sha256`) names none to repair, one made for an earlier
+    text (the repair pass `defect-sites` fed from `DISPUTE_DEFECTS.jsonl` changed it) must not find
+    its asserting sentences in the text any more. The page then names both positions; it never says
+    the one while it appends the other."""
+    live = {row["id"]: row for row in rows}
     wanted = {entry["site_id"] for entry in asked}
     briefs: dict[str, dict[str, Any]] = {}
     for number, record in enumerate(read_jsonl(path), start=1):
@@ -626,13 +629,22 @@ def _read_disputes(
         site_id = record["site_id"]
         if site_id not in wanted:
             raise WcRunError(f"{path}:{number}: {site_id} is no site this run asks")
-        if live[site_id] != record["desc_sha256"]:
-            raise WcRunError(
-                f"{path}:{number}: the dispute of {site_id} was found in another text than the "
-                "one the read holds - run disputes.py again on this read"
-            )
         if site_id in briefs:
             raise WcRunError(f"{path}:{number}: {site_id} has two dispute briefs")
+        row = live[site_id]
+        text = wc4.strip_markers(row["description"] or "")
+        standing = [
+            item["sentence"]
+            for item in record["asserting"]
+            if row["description_sha256"] == record["desc_sha256"]
+            or wc4.strip_markers(item["text"]) in text
+        ]
+        if standing:
+            raise WcRunError(
+                f"{path}:{number}: sentence(s) {standing} of {site_id} state a position of the "
+                "dispute as fact and are still in the text - run the repair pass (defect-sites "
+                "over DISPUTE_DEFECTS.jsonl, a wc-list run) and read again first"
+            )
         briefs[site_id] = record
     return briefs
 
@@ -1872,8 +1884,11 @@ def cmd_verify_import(
         answer = OH.read_answer(handoff, batch_id=batch_id, stage=stage, label=label, prompt=prompt)
         if kind == KIND_ENRICH:
             E.require_role(answer, E.VERIFIER_ROLE, f"{batch_id}/{label}")
-        others = site.checkers | {given["answered_by"] for given in earlier.get(label, [])}
-        if answer.answered_by in others:
+        others = {
+            wc4.agent_name(name)
+            for name in site.checkers | {given["answered_by"] for given in earlier.get(label, [])}
+        }
+        if wc4.agent_name(answer.answered_by) in others:
             raise WcRunError(
                 f"{batch_id}/{label}: {answer.answered_by} checked or verified this site before - "
                 "a verification is an independent agent's; have the batch answered again by a new "
@@ -2079,11 +2094,11 @@ def cmd_judge_import(
     sites = read_sites(run)
     run_of = run_kind(run)
     workers = {
-        attempt["answered_by"]
+        wc4.agent_name(attempt["answered_by"])
         for final in finals.values()
         for attempt in final["evidence"]["answers"]
     } | {
-        r["answered_by"]
+        wc4.agent_name(r["answered_by"])
         for final in finals.values()
         for r in final["evidence"][wc4.VERIFICATION_KEY]["rounds"]
     }
@@ -2122,7 +2137,7 @@ def cmd_judge_import(
                 "site_id": label,
                 "batch_id": batch_id,
                 "answered_by": answer.answered_by,
-                "independent": answer.answered_by not in workers,
+                "independent": wc4.agent_name(answer.answered_by) not in workers,
                 "coherent": parsed.coherent,
                 "note": parsed.note,
                 "items": rows,

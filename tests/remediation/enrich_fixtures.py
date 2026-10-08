@@ -219,24 +219,18 @@ def judge_enriched(
     return cli.cmd_judge_import(run, handoff, client=pages_client(), pace=0.0)
 
 
-def build_enrich_run(
+def start_enrich_run(
     root: Path,
     rows: Sequence[Mapping[str, Any]],
-    answers: Mapping[str, str],
     *,
     sites: Sequence[str] | None = None,
     name: str = "enrich-test",
     pilot: bool = True,
-    judged: bool = True,
-    first_batch: int = WC4.FIRST_BATCH,
     after: Sequence[Path] = (),
     disputes: Path | None = None,
-    verdicts: Mapping[str, Sequence[str]] | None = None,
-    invented: Sequence[str] = (),
 ) -> tuple[Path, Path]:
-    """A lane-E run end to end: read, export the listed sites (a pilot that draws every asked site,
-    or a chunk), write answers, import, verify, build; a pilot is judged and passes unless `judged`
-    is false. Returns the run directory and its gate plan (`WC4.jsonl`)."""
+    """Read and export a lane-E run: the listed sites (a pilot that draws every asked site, or a
+    chunk), round 1 exported. Returns the run directory and the round's handoff."""
     from phase3.run import read_jsonl
     from wc import cli
 
@@ -258,6 +252,32 @@ def build_enrich_run(
         run, handoff, batch_size=5, exclude=None, after=list(after), sites=listing, enrich=True,
         disputes=disputes, **draw,
     )  # fmt: skip
+    return run, handoff
+
+
+def build_enrich_run(
+    root: Path,
+    rows: Sequence[Mapping[str, Any]],
+    answers: Mapping[str, str],
+    *,
+    sites: Sequence[str] | None = None,
+    name: str = "enrich-test",
+    pilot: bool = True,
+    judged: bool = True,
+    first_batch: int = WC4.FIRST_BATCH,
+    after: Sequence[Path] = (),
+    disputes: Path | None = None,
+    verdicts: Mapping[str, Sequence[str]] | None = None,
+    invented: Sequence[str] = (),
+) -> tuple[Path, Path]:
+    """A lane-E run end to end: read, export the listed sites (a pilot that draws every asked site,
+    or a chunk), write answers, import, verify, build; a pilot is judged and passes unless `judged`
+    is false. Returns the run directory and its gate plan (`WC4.jsonl`)."""
+    from wc import cli
+
+    run, handoff = start_enrich_run(
+        root, rows, sites=sites, name=name, pilot=pilot, after=after, disputes=disputes
+    )
     record_enriched(handoff, answers)
     cli.cmd_import(run, handoff, client=pages_client(), pace=0.0)
     verify_enriched(run, root / "handoff" / f"{name}-verify", verdicts=verdicts)
@@ -288,3 +308,43 @@ def web_pair(tmp_path: Path) -> tuple[str, dict[str, Any]]:
     outcome = outcomes[batches[0].batch_id][WX.SITE_N]
     assert outcome.description is not None and outcome.raw_data is not None
     return outcome.description, outcome.raw_data
+
+
+def standard_rows(tmp_path: Path) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """The four sites every test of the lane starts from: a Phase-4 text (lane W), a checked March
+    text (lane L, with its check record), a lane-N text, and a second Phase-4 text for which the agent
+    finds nothing to append - with the answers of the enrich round."""
+    l_text, l_raw = checked_march_pair(tmp_path / "l")
+    n_text, n_raw = web_pair(tmp_path / "n")
+    rows = [
+        p4_row(SITE_W),
+        FX.row(SITE_L, l_text, raw_data=l_raw, name="Tarxien L"),
+        FX.row(SITE_N, n_text, raw_data=n_raw, name="Tarxien N"),
+        p4_row(SITE_NONE, name="Tarxien none"),
+    ]
+    answers = {
+        SITE_W: good(SITE_W),
+        SITE_L: good(SITE_L),
+        SITE_N: good(SITE_N),
+        SITE_NONE: nothing(SITE_NONE),
+    }
+    return rows, answers
+
+
+def built(tmp_path: Path) -> dict[str, Any]:
+    """The standard scenario run end to end (a judged pilot): the rows, the run directory, the plan
+    and the plan's outcomes by site."""
+    from phase4 import write4 as W4
+
+    rows, answers = standard_rows(tmp_path)
+    run, plan = build_enrich_run(tmp_path / "run", rows, answers)
+    batches, outcomes = W4.load_wc_plan([plan])
+    return {
+        "root": tmp_path / "run",
+        "rows": rows,
+        "answers": answers,
+        "run": run,
+        "plan": plan,
+        "batch": batches[0],
+        "outcomes": outcomes[batches[0].batch_id],
+    }

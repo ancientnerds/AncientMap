@@ -759,9 +759,9 @@ def _enriched_problems(
     old provenance whole - attribution, sources, the verbatim spans - and adds the appended sentences
     to `added`: the provenance it leaves is exactly that, derived again from the old `raw_data` and
     the evidence, whose disclosure is the one the models that answered give."""
-    decisions, quotes = wc4.decisions_of(evidence)
-    base = wc4.base_of(evidence)
     try:
+        decisions, quotes = wc4.decisions_of(evidence)
+        base = wc4.base_of(evidence)
         expected = wc4.enriched_provenance(
             old,
             wc4.compose(decisions, quotes, base=base),

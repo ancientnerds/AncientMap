@@ -66,6 +66,9 @@ DISPUTE_KEYS = frozenset(
     }
 )  # fmt: skip
 POSITION_KEYS = frozenset({"claim", "holders", "sources"})
+#: One sentence of the description that states a position as fact (`asserts`: 'a' or 'b'), with its
+#: words, so that a later text can be shown not to hold it any more (`cli._read_disputes`).
+ASSERTING_KEYS = frozenset({"sentence", "asserts", "text"})
 SOURCE_KEYS = frozenset({"url", "title", "quote"})
 DISPUTE_VERDICT = "dispute"
 
@@ -190,6 +193,22 @@ def dispute_record_problems(record: Any) -> list[str]:
                 not isinstance(source[key], str) or not source[key].strip() for key in SOURCE_KEYS
             ):
                 problems.append(f"{side}: a source has an empty field")
+    asserting = record["asserting"]
+    if not isinstance(asserting, list):
+        problems.append("asserting is not a list")
+    else:
+        for item in asserting:
+            if (
+                not isinstance(item, dict)
+                or set(item) != ASSERTING_KEYS
+                or isinstance(item["sentence"], bool)
+                or not isinstance(item["sentence"], int)
+                or item["sentence"] < 1
+                or item["asserts"] not in ("a", "b")
+                or not isinstance(item["text"], str)
+                or not item["text"].strip()
+            ):
+                problems.append(f"an asserting entry is not {sorted(ASSERTING_KEYS)}: {item!r}")
     return problems
 
 
