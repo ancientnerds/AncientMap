@@ -226,9 +226,11 @@ def card_pin_and_mark(row: Mapping) -> tuple[str | None, str | None, str | None]
     row's provenance.
 
     A lane-WB teaser provenance (`pipeline.utils.card_provenance`) is the card's only statement
-    once it exists: its hash while the description is the one the card was checked against (a
-    stale card is not narrated), and `generated` while it hashes the card. Without it, the Phase-5
-    card key of `_description_provenance` pins the card as before, and no AI note is claimed.
+    once it exists: its hash while the card is a version-3 card (contract shorts-v1) that is
+    `shorts_ready` and the description is the one it was checked against (a stale card, and a
+    version-2 card that names its site, are not narrated), and `generated` while it hashes the
+    card. Without it, the Phase-5 card key of `_description_provenance` pins the card as before,
+    and no AI note is claimed.
     """
     if row["card_provenance"] is None:
         return row["card_text_sha256"], None, None

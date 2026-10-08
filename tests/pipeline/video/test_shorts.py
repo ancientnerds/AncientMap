@@ -833,21 +833,23 @@ def test_s13_the_export_reads_the_hash_from_the_card_provenance():
     assert "s.raw_data -> '_card_provenance' AS card_provenance" in sql
 
 
-def _teaser_row(**over):
+def _teaser_row(version: int = 3, shorts_ready: bool = True, **over):
+    """A site row whose card has a teaser provenance: version 3 (contract shorts-v1) by default,
+    the one a Short may narrate; version 2 names its site and is marked but never pinned."""
     from pipeline.utils import card_provenance as CP
 
     description = "Machu Picchu is a 15th-century Inca citadel at 2,430 metres."
     row = dict(_EXPORT_ROW, description=description, card_description=CARD)
-    row["card_provenance"] = CP.build(
-        run="wb-test",
-        ai_system=AI_SYSTEM_OPUS_ONLY,
-        card=CARD,
-        description=description,
-        stage="check",
-        checker="teaser-check-b001",
-        checked_at="2026-09-26T12:00:00+00:00",
-        claims=[{"claim": "a 15th-century Inca citadel", "support": ["S1"]}],
-        verify={
+    fields = {
+        "run": "wb-test",
+        "ai_system": AI_SYSTEM_OPUS_ONLY,
+        "card": CARD,
+        "description": description,
+        "stage": "check",
+        "checker": "teaser-check-b001",
+        "checked_at": "2026-09-26T12:00:00+00:00",
+        "claims": [{"claim": "a 15th-century Inca citadel", "support": ["S1"]}],
+        "verify": {
             "verdict": "VERIFIED",
             "stage": "verify",
             "by": "teaser-verify-001",
@@ -856,19 +858,46 @@ def _teaser_row(**over):
             "unproven": 0,
             "text_sha256": CP.text_sha256(CARD),
         },
-        web_facts=[],
-    )
+        "web_facts": [],
+    }
+    if version == 2:
+        row["card_provenance"] = CP.build(**fields)
+    else:
+        stamp = "anthropic/claude-opus-5-5 (Claude Code agent)"
+        row["card_provenance"] = CP.build_v3(
+            **fields,
+            models={"write": stamp, "rate": stamp, "check": stamp, "verify": stamp},
+            hook={"type": "object", "rating": 4, "variant": 1},
+            anchors=["Inca citadel"] if shorts_ready else [],
+            reserve=["S2"] if shorts_ready else None,
+            shorts_ready=shorts_ready,
+        )
     return {**row, **over}
 
 
 def test_s13_a_teaser_card_is_pinned_by_its_own_provenance_and_marked_generated():
     """Lane WB: the teaser provenance is the card's only statement - its hash (not the Phase-5
-    key, which the lane nulls) goes to S13, and the AI note is claimed for the card."""
+    key, which the lane nulls) goes to S13, and the AI note is claimed for the card. Only a
+    version-3 card that is `shorts_ready` has a pin (owner decision D1, contract shorts-v1)."""
     site = assemble_site(_teaser_row(card_text_sha256="f" * 64), [])
     assert site["card_text_sha256"] == CARD_SHA
     assert site["card_ai"] == "generated"
     checks = {c.name: c.ok for c in evaluate(_measurements(**card_trace(site)))}
     assert checks["card_traced"] is True
+
+
+def test_s13_a_version_2_card_names_its_site_and_is_marked_but_never_pinned():
+    site = assemble_site(_teaser_row(version=2, card_text_sha256="f" * 64), [])
+    assert site["card_text_sha256"] is None
+    assert site["card_ai"] == "generated"
+    failed = [c for c in evaluate(_measurements(**card_trace(site))) if not c.ok]
+    assert [c.name for c in failed] == ["card_traced"]
+
+
+def test_s13_a_version_3_card_that_is_not_shorts_ready_is_not_pinned():
+    site = assemble_site(_teaser_row(shorts_ready=False), [])
+    assert site["card_text_sha256"] is None
+    assert site["card_ai"] == "generated"
 
 
 def test_the_export_carries_the_ai_system_of_a_marked_card_and_none_for_the_rest():
