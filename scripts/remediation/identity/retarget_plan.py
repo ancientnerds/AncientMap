@@ -61,16 +61,6 @@ LINK_STEP = 1
 LINK_KINDS = ("wikidata_qid", "enwiki_title")
 RULE_NAME = "d13-retarget-name"
 FINDING_TEST_ID = "D13/retarget-name"
-#: The skips that leave a site's stored links as the question found them.
-SKIP_LINKS = (
-    "gone",
-    "not-curated",
-    "retired",
-    "changed-since-the-question",
-    "links-not-one-each",
-    "item-carried-by-another-site",
-    "item-planned-for-another-site",
-)
 
 #: The chain, in order. A stage may start on a site only when every stage before it is done.
 CHAIN = ("links", "name", "alias", "point_type", "description", "gallery", "period", "card")

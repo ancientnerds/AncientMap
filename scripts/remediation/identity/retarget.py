@@ -368,7 +368,10 @@ def _period(ctx: Mapping[str, Any]) -> str:
 
 def _why_lines(ctx: Mapping[str, Any]) -> str:
     why = ctx["why"]
-    lines = [f"  - funnel tier {why['tier']}"]
+    if why["tier"] == "calibration":
+        lines = ["  - a calibration case: decide as for any record"]
+    else:
+        lines = [f"  - funnel tier {why['tier']}"]
     if why["p31_modern"]:
         lines.append(
             f"  - its Wikidata item is an instance of: {', '.join(why['p31'])} "

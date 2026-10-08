@@ -168,8 +168,20 @@ class Round:
         return [sid for batch in self.batches.values() for sid in batch]
 
 
+def _round_of(record: Mapping[str, Any]) -> Round:
+    """A round from its record. A calibration run's record (`mcode_driver.register_calibration_run`)
+    numbers its round (`round: 1`) instead of naming it and carries the copy's own keys."""
+    return Round(
+        name=record["name"] if "name" in record else f"r{record['round']}",
+        handoff=record["handoff"],
+        exported_at=record["exported_at"],
+        batches=record["batches"],
+        earlier=record["earlier"] if "earlier" in record else {},
+    )
+
+
 def load_rounds(out: Path) -> list[Round]:
-    return [Round(**r) for r in _read_jsonl(out / ROUNDS_FILE)]
+    return [_round_of(r) for r in _read_jsonl(out / ROUNDS_FILE)]
 
 
 def find_round(out: Path, name: str) -> Round:
@@ -329,7 +341,8 @@ For each question:
 3. Write your answer - only the JSON object the prompt specifies - to a new UTF-8 file of your own:
    {scratch}/<label>.json
 4. Check its shape (nothing is fetched and your verdict is not judged):
-   {python} {run} --lane {lane} check-answer --stage {stage} --round {round} --batch-id {batch} \
+   {python} {run} --lane {lane} check-answer --stage {stage} --stage-dir {stage_dir} \
+--round {round} --batch-id {batch} \
 --label <label> --text-file {scratch}/<label>.json
    It prints the problem, if any: fix the shape, never the finding.
 5. Record it - an answer is written once, under your role:
@@ -356,6 +369,7 @@ def brief(out: Path, spec: StageSpec, round_name: str, batch_id: str) -> str:
         handoff=record.handoff,
         scratch=f"{record.handoff}-scratch/{batch_id}",
         guidance=("\n" + spec.guidance + "\n") if spec.guidance else "",
+        stage_dir=out.resolve().as_posix(),
         python="./.venv/Scripts/python.exe",
         run="scripts/remediation/identity/run.py",
         handoff_tool="scripts/remediation/opus_handoff.py",

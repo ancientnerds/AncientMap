@@ -130,7 +130,10 @@ class TestTheBriefAndTheShapeCheck:
         text = R.brief(out, SPEC, "r1", "r1-b01")
         assert "running as the role web_verifier" in text
         assert "--role web_verifier --model claude-sonnet-5-5" in text
-        assert "--lane toy check-answer --stage toy-web --round r1 --batch-id r1-b01" in text
+        assert (
+            f"--lane toy check-answer --stage toy-web --stage-dir {out.resolve().as_posix()} "
+            "--round r1 --batch-id r1-b01"
+        ) in text
         assert "Be careful." in text
         assert "read the site's Wikipedia text from that cache first" in text
         assert "a 403 or 429 is a refusal of the server, never a finding" in text

@@ -273,10 +273,13 @@ QUESTIONS = {
 
 
 def _period(ctx: Mapping[str, Any]) -> str:
-    start, end = ctx["period_start"], ctx["period_end"]
-    if start is None:
-        return f"no start ({ctx['period_name']})"
-    return f"{start}" + (f" to {end}" if end else "") + f" ({ctx['period_name']})"
+    start, end, name = ctx["period_start"], ctx["period_end"], ctx["period_name"]
+    when = "no start" if start is None else f"{start}" + (f" to {end}" if end else "")
+    return when + (f" ({name})" if name else "")
+
+
+def _date_text(ctx: Mapping[str, Any]) -> str:
+    return "none (the entry has no date)" if ctx["date_used"] is None else str(ctx["date_used"])
 
 
 def _writes(ctx: Mapping[str, Any]) -> str:
@@ -305,6 +308,7 @@ def _why(ctx: Mapping[str, Any]) -> str:
         "pending": "  - an earlier scope review left it pending: "
         f"{ctx['scope_reason'] or 'no reason recorded'}",
         "hadrians_wall_path": "  - a footpath opened in 2003 with no scope decision",
+        "calibration": "  - a calibration case: decide as for any entry of the window",
     }
     lines = [texts[g] for g in ctx["groups"]]
     if ctx["museum_question"]:
@@ -342,7 +346,7 @@ def render_web(ctx: Mapping[str, Any], earlier: str | None = None) -> str:
         cutoff_note=(
             "Americas and Oceania: 1500 AD" if cutoff == 1500 else "the rest of the world: 500 AD"
         ),
-        date_used=ctx["date_used"],
+        date_used=_date_text(ctx),
         museum_note=(
             "the entry is a Museum that exhibits ancient material (scope rule d): quote a page that "
             "says what it exhibits. It stays (in_scope)."
@@ -527,7 +531,7 @@ def render_recheck(ctx: Mapping[str, Any], earlier: str | None = None) -> str:
         cache=cache_section(ctx),
         region=ctx["region"],
         cutoff=ctx["cutoff"],
-        date_used=ctx["date_used"],
+        date_used=_date_text(ctx),
         origin_note=(
             "it was written by a withdrawn field wave"
             if ctx["recheck_d10"]

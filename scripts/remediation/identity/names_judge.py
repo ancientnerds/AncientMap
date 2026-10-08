@@ -896,9 +896,12 @@ def spoken_spec() -> StageSpec:
 
 
 def spoken_rows(
-    rule: Sequence[Mapping[str, Any]], model: Mapping[str, Mapping[str, Any]]
+    rule: Sequence[Mapping[str, Any]],
+    model: Mapping[str, Mapping[str, Any]],
+    asked: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    """Every spoken name to write, by site: the rule-made ones and the decided model `SPEAK`s."""
+    """Every spoken name to write, by site: the rule-made ones and the decided model `SPEAK`s, each
+    with the name it was made from (`asked` holds the contexts the model was asked with)."""
     out = {
         r["id"]: {
             "name": r["name"],
@@ -911,7 +914,7 @@ def spoken_rows(
     for sid, d in sorted(model.items()):
         if d["status"] == DECIDED and d["data"]["verdict"] == SPEAK:
             out[sid] = {
-                "name": None,
+                "name": asked[sid]["name"],
                 "spoken": d["data"]["spoken"],
                 "source": f"model:{d['answered_by']}",
                 "why": f"{d['data']['why']} (from the attested form {d['data']['from_form']!r})",
@@ -948,14 +951,14 @@ def build_spoken(
     for sid in sorted(rows):
         row, now = rows[sid], live.get(sid)
 
-        def skip(reason: str, note: str, _sid: str = sid, _name: str = row["name"] or "") -> None:
+        def skip(reason: str, note: str, _sid: str = sid, _name: str = row["name"]) -> None:
             plan.skipped.append({"site_id": _sid, "name": _name, "reason": reason, "note": note})
 
         if now is None:
             skip("gone", "the site is no longer in unified_sites")
         elif now["source_id"] != "ancient_nerds" or now["scope_status"] == "retired":
             skip("not-live", f"{now['source_id']} row, scope {now['scope_status']!r}")
-        elif row["name"] is not None and now["name"] != row["name"]:
+        elif now["name"] != row["name"]:
             skip(
                 "name-moved",
                 f"the name is {now['name']!r} now, the spoken name was made from {row['name']!r}",

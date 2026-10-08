@@ -10,6 +10,7 @@ the plans, the read-back and the chain - never a model.
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -562,3 +563,52 @@ class TestTheRetargetLane:
             "x",
         )
         assert code == 1 and "card waits for point_type" in err
+
+
+# ------------------------------------------------------------------------------ the names lane
+class TestTheNamesLane:
+    def test_the_clean_name_export_can_leave_out_the_records_d13_has_not_left_alone(
+        self, tree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        from identity import common
+        from identity import names_judge as NJ
+
+        from tests.remediation import test_identity_b_names as TN
+
+        run = tree / "identity"
+        seen: dict[str, Any] = {}
+
+        def fake(
+            run_: Path, root: Path | None = None, exclude: Any = (), rule_made: bool = False
+        ) -> list[R.Question]:
+            seen["exclude"] = sorted(exclude)
+            return [R.Question(TN.DOLMEN, TN.context())]
+
+        monkeypatch.setattr(NJ, "clean_questions", fake)
+        export = ["--lane", "names", "export", "--stage", "name-clean-web"]
+        code, _, err = run_json(
+            tree, capsys, *export, "--handoff", str(tree / "h0"), "--exclude-retarget"
+        )
+        assert code == 1 and "run `--lane retarget result` first" in err
+
+        (run / "retarget").mkdir()
+        common.write_jsonl(
+            run / "retarget" / "RESULT.jsonl",
+            [{"site_id": "a", "state": "keep", "verdict": "KEEP"},
+             {"site_id": "b", "state": "confirmed", "verdict": "RETARGET"},
+             {"site_id": "c", "state": "held", "verdict": None}],
+        )  # fmt: skip
+        code, out, _ = run_json(
+            tree, capsys, *export, "--handoff", str(tree / "h1"), "--exclude-retarget"
+        )
+        assert code == 0 and out["sites"] == 1 and seen["exclude"] == ["b", "c"]
+        (tree / "identity" / "names" / "name-clean-web" / "ROUNDS.jsonl").unlink()
+        shutil.rmtree(tree / "identity" / "names" / "name-clean-web" / "contexts")
+        code, _, _ = run_json(tree, capsys, *export, "--handoff", str(tree / "h2"))
+        assert code == 0 and seen["exclude"] == []
+
+    def test_a_names_command_needs_its_kind(
+        self, tree: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        code, _, err = run_json(tree, capsys, "--lane", "names", "result")
+        assert code == 1 and "needs --kind clean or --kind spoken" in err

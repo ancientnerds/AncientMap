@@ -42,7 +42,9 @@ probe-guards, apply, read-back, rehearse-rollback.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
+import re
 import sys
 from collections import Counter
 from collections.abc import Callable, Sequence
@@ -62,7 +64,7 @@ from gallery_audit import chunk_writer as CW  # noqa: E402
 from l5.links import StepError  # noqa: E402
 from mechanical import apply as A  # noqa: E402
 from mechanical import plan as MP  # noqa: E402
-from mechanical.identity_lanes import name_lane, spoken_lane  # noqa: E402
+from mechanical.identity_lanes import WAVE, name_lane, spoken_lane  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
 from identity import (  # noqa: E402  # noqa: E402
@@ -130,8 +132,10 @@ def stage_def(args: argparse.Namespace, run: Path) -> StageDef:
             lambda: scope_judge.recheck_questions(_asked(web), R.decisions_by_site(web)),
         )
     if (lane, stage) == (names_judge.LANE, names_judge.CLEAN_WEB):
+        skip = retarget_exclusions(run) if getattr(args, "exclude_retarget", False) else ()
         return StageDef(
-            names_judge.clean_spec(), lambda: names_judge.clean_questions(run, root=root)
+            names_judge.clean_spec(),
+            lambda: names_judge.clean_questions(run, root=root, exclude=skip),
         )
     if (lane, stage) == (names_judge.LANE, names_judge.CLEAN_RECHECK):
         web = R.stage_dir(run, names_judge.clean_spec())
@@ -148,6 +152,15 @@ def stage_def(args: argparse.Namespace, run: Path) -> StageDef:
             names_judge.spoken_spec(), lambda: names_judge.spoken_questions(run, root=root)
         )
     raise UsageError(f"no stage {stage!r} in lane {lane!r}")
+
+
+def retarget_exclusions(run: Path) -> list[str]:
+    """The sites the D13 re-targets have not left alone: a record that is to be re-targeted, retired
+    or merged (or whose verdict is still open) takes its name from that lane, not from D23."""
+    path = retarget_plan.lane_dir(run) / "RESULT.jsonl"
+    if not path.exists():
+        raise UsageError(f"{path} does not exist: run `--lane retarget result` first")
+    return [r["site_id"] for r in common.read_jsonl(path) if r["state"] != retarget.FINAL_KEEP]
 
 
 def _asked(stage_dir: Path) -> list[Question]:
@@ -180,7 +193,11 @@ def _pick(questions: list[Question], args: argparse.Namespace) -> list[Question]
 def cmd_stage(args: argparse.Namespace, run: Path) -> int:
     definition = stage_def(args, run)
     spec = definition.spec
-    out = R.stage_dir(run, spec)
+    if args.as_role:
+        # a gold labelling answers the stage's prompts as another role (the pilot judge): the
+        # brief names that role and its model, and the answers are recorded under it
+        spec = dataclasses.replace(spec, role=args.as_role)
+    out = args.stage_dir or R.stage_dir(run, spec)
     command = args.command
     if command == "export":
         if R.load_rounds(out):
@@ -493,7 +510,8 @@ def cmd_names(args: argparse.Namespace, run: Path) -> int:
     elif kind == "spoken":
         lane_dir = run / names_judge.LANE / "spoken"
         model = R.decisions_by_site(R.stage_dir(run, names_judge.spoken_spec()))
-        rows = names_judge.spoken_rows(names_judge.rule_spoken(run), model)
+        asked = R.load_contexts(R.stage_dir(run, names_judge.spoken_spec()))
+        rows = names_judge.spoken_rows(names_judge.rule_spoken(run), model, asked)
         if command == "result":
             counts = dict(Counter(row["source"].split(":")[0] for row in rows.values()))
             none = sum(
@@ -533,6 +551,15 @@ def cmd_names(args: argparse.Namespace, run: Path) -> int:
 
 
 # ------------------------------------------------------------------------------------ the parser
+def wave_label(text: str) -> str:
+    """`--wave`: a label every lane of the package resolves (`2026-10-12`, `2026-10-12b`)."""
+    if re.fullmatch(WAVE, text) is None:
+        raise argparse.ArgumentTypeError(
+            f"{text!r} is not a wave label like 2026-10-12 or 2026-10-12b"
+        )
+    return text
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -550,6 +577,18 @@ def build_parser() -> argparse.ArgumentParser:
     def stage_command(name: str, help_: str) -> argparse.ArgumentParser:
         cmd = sub.add_parser(name, help=help_)
         cmd.add_argument("--stage", required=True)
+        cmd.add_argument(
+            "--stage-dir",
+            type=Path,
+            default=None,
+            help="where the stage keeps its rounds (default: <run dir>/<lane>/<stage>; a "
+            "calibration run keeps its own)",
+        )
+        cmd.add_argument(
+            "--as-role",
+            default=None,
+            help="answer as this role instead of the stage's (the pilot judge's gold labelling)",
+        )
         return cmd
 
     for name in ("export", "export-reask"):
@@ -558,6 +597,11 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "export":
             cmd.add_argument("--pilot", type=int, default=0)
             cmd.add_argument("--sites-file", type=Path, default=None)
+            cmd.add_argument(
+                "--exclude-retarget",
+                action="store_true",
+                help="name-clean-web: leave out the records D13 re-targets, retires, merges or holds",
+            )
     for name in ("brief", "check-answer"):
         cmd = stage_command(name, "the agent's brief / the shape of one answer")
         cmd.add_argument("--round", required=True)
@@ -577,7 +621,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("result", help="the stage results and the lists the other lanes read")
     for name in ("wave", "plan", "plan-links", "plan-names", "verify", "handoffs", "step"):
         cmd = sub.add_parser(name)
-        cmd.add_argument("--wave", required=True)
+        cmd.add_argument("--wave", required=True, type=wave_label)
         if name == "wave":
             cmd.add_argument("--limit", type=int, default=waves.SITES_PER_WAVE)
     sub.choices["step"].add_argument(
@@ -586,7 +630,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub.choices["step"].add_argument("--step", type=int, default=retarget_plan.LINK_STEP)
     chain = sub.add_parser("chain-done", help="record that a stage landed for the wave's sites")
-    chain.add_argument("--wave", required=True)
+    chain.add_argument("--wave", required=True, type=wave_label)
     chain.add_argument("--stage-name", required=True, choices=list(retarget_plan.CHAIN))
     chain.add_argument("--stamp", required=True)
     chain.add_argument("--sites", nargs="*", default=[])

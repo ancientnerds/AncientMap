@@ -664,16 +664,17 @@ class TestTheSpokenPlan:
         model = {MENHIR: {"status": R.DECIDED, "answered_by": "web_verifier:r1-b01",
                           "data": {"verdict": "SPEAK", "spoken": "Camp de Cesar Menhir",
                                    "from_form": "Camp de César Menhir", "why": "Respelled."}}}  # fmt: skip
-        return NJ.spoken_rows(rule, model)
+        return NJ.spoken_rows(rule, model, {MENHIR: spoken_ctx()})
 
     def test_rule_made_and_model_made_names_are_rows(self) -> None:
         rows = self.rows()
         assert rows["a"]["spoken"] == "Tiverton" and rows["a"]["source"] == "rule:name"
         assert rows[MENHIR]["source"] == "model:web_verifier:r1-b01"
+        assert rows[MENHIR]["name"] == "Menhir du Camp de César", "the name it was made from"
         none = {MENHIR: {"status": R.DECIDED, "answered_by": "w", "data": {"verdict": "NONE"}}}
-        assert NJ.spoken_rows([], none) == {}
+        assert NJ.spoken_rows([], none, {MENHIR: spoken_ctx()}) == {}
         held = {MENHIR: {"status": R.HELD, "answered_by": "w", "data": {"verdict": "SPEAK"}}}
-        assert NJ.spoken_rows([], held) == {}
+        assert NJ.spoken_rows([], held, {MENHIR: spoken_ctx()}) == {}
 
     def test_a_null_spoken_name_is_filled_on_the_premise_of_the_name(self) -> None:
         live = {
@@ -703,14 +704,14 @@ class TestTheSpokenPlan:
     def test_a_site_that_moved_or_is_set_is_skipped(
         self, live: dict[str, Any] | None, reason: str
     ) -> None:
-        rows = {MENHIR: self.rows()[MENHIR] | {"name": "Menhir du Camp de César"}}
+        rows = {MENHIR: self.rows()[MENHIR]}
         plan = NJ.build_spoken(rows, {} if live is None else {MENHIR: live})
         assert plan.changes == [] and [s["reason"] for s in plan.skipped] == [reason]
 
     def test_a_spoken_name_equal_to_the_name_is_not_written(self) -> None:
         rows = {
             MENHIR: {
-                "name": None,
+                "name": "Menhir du Camp de César",
                 "spoken": "Menhir du Camp de César",
                 "source": "model:x",
                 "why": "w",
