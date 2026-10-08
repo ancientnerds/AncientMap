@@ -61,7 +61,7 @@ report rather than dropped:
 | `unified_sites.country` | `pipeline/lyra/data_patches.py:48-61` (`fix_countries`) | that UPDATE is guarded `source_id = 'lyra' AND country IS NULL` | **writable**: no `ancient_nerds` row is re-derived |
 | `unified_sites.period_start` | `pipeline/lyra/data_patches.py:64-78` (`backfill_periods`) | guarded `source_id = 'lyra' AND period_start IS NULL` | **writable**, same reason |
 | `unified_sites.description` | none | text regeneration is Phase 5 | **report-only**, refused |
-| `card_stats.card_description` | `api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions`, every API boot | an upsert from `public/data/card_descriptions.json` | **report-only**, refused |
+| `card_stats.card_description` | card lane (own plan, journal, provenance); no boot producer since D25 | none | **report-only**, refused |
 | `unified_sites.name_normalized` | `pipeline/lyra/orchestrator.py::_run_migrations` (its `name_normalized` UPDATE) | `left(lower(unaccent(value)), 500)`, which no offline check can evaluate | **cannot be reached here**: `snapshot_plan.FIELD_STORED_IN` has no table for the column, so the plan refuses it as `no-table-mapping`. If that mapping ever grows the column, this table has to grow with it - a branch keyed on `unaccent` would be code no test could reach |
 
 The `site_type` check calls `model.site_type_fixed_point`, i.e. the boot producer's own function, so

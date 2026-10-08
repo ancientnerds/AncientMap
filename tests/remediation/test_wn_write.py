@@ -226,7 +226,7 @@ def test_the_plan_loader_refuses_an_outcome_that_leaves_a_wn_site_empty(
         # no provenance at all: the AI mark is required, not only checked where present
         (lambda r, raw: {k: v for k, v in raw.items() if k != M.PROVENANCE_KEY}, "AI disclosure"),
         # lane N's provenance of another text
-        (lambda r, raw: {**raw, M.PROVENANCE_KEY: M.WebProvenance(desc_sha256="a" * 64).to_dict()},
+        (lambda r, raw: {**raw, M.PROVENANCE_KEY: M.WebProvenance(desc_sha256="a" * 64, ai_system=M.AI_SYSTEM).to_dict()},
          "provenance's desc_sha256|AI disclosure"),
     ],
 )  # fmt: skip

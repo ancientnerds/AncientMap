@@ -846,7 +846,7 @@ def test_the_evidence_recheck_takes_the_written_disclosure_of_its_time(tmp_path:
     outcome = WC4.WcOutcome.from_dict(
         json.loads(plan.read_text("utf-8").splitlines()[0])["outcomes"][0]
     )
-    assert outcome.raw_data[WC4.CHECK_KEY]["checker"] == M.AI_SYSTEM_CLAUDE_ONLY
+    assert outcome.raw_data[WC4.CHECK_KEY]["checker"] == M.AI_SYSTEM_CLAUDE
 
     def with_checker(name: str) -> dict:
         raw = json.loads(json.dumps(outcome.raw_data))

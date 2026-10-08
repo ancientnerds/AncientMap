@@ -97,6 +97,25 @@ def test_sites_only_and_no_library_leave_their_files_out(tmp_path, exporter):
     assert not any(t.startswith(("content/", "library/", "links.json")) for t in sites_only)
 
 
+def test_a_writable_file_in_an_unwritable_directory_is_refused_before_anything_is_written(
+    tmp_path, exporter, monkeypatch
+):
+    """`save_json` writes `<name>.tmp` beside the file and renames it over it, which needs the
+    directory: a uid-1000 file inside a root-owned directory would otherwise fail half-way."""
+    module, _ = exporter
+    (tmp_path / "sites" / "details").mkdir(parents=True)
+    (tmp_path / "sources.json").write_text("old", encoding="utf-8")
+    (tmp_path / "sites" / "index.json").write_text("old", encoding="utf-8")
+    _unwritable(monkeypatch, module, tmp_path / "sites")
+    with pytest.raises(PermissionError) as exc:
+        module.StaticExporter(tmp_path).export_all(sites_only=True)
+    message = str(exc.value)
+    assert str(tmp_path / "sites") in message
+    assert str(tmp_path / "sources.json") not in message
+    assert (tmp_path / "sources.json").read_text(encoding="utf-8") == "old"
+    assert not (tmp_path / "hubs.snapshot.json").exists()
+
+
 def test_every_unwritable_target_is_named_before_anything_is_written(
     tmp_path, exporter, monkeypatch
 ):

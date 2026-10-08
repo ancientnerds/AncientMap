@@ -928,7 +928,6 @@ def cmd_import(
             "label": label,
             "answered_by": answer.answered_by,
             "answered_at": answer.answered_at,
-            "model": answer.model,
             "prompt_sha256": line["prompt_sha256"],
             "answer_sha256": M.text_sha256(answer.text),
             "problem": None,
@@ -1121,18 +1120,23 @@ class Checked:
         return {attempt["answered_by"] for attempt in self.attempts}
 
 
-def disclosure_of(checked: Checked, verifier_stamps: Iterable[str]) -> str:
+def answer_stamp(handoff: str, batch_id: str, stage: str, label: str) -> str:
+    """The model stamp of one answer: the `model` of its write-once answer file in the round's
+    handoff directory (`handoff` as the round recorded it, repo-relative or absolute) - the one
+    source of who answered, for a round imported before 2026-10-08 as for a later one."""
+    path = REPO / handoff / OH.answer_relpath(batch_id, stage, label)
+    return json.loads(path.read_text(encoding="utf-8"))["model"]
+
+
+def disclosure_of(checked: Checked, verifier_stamps: Iterable[str], kind: str = KIND_WC) -> str:
     """The AI disclosure of a site's new write, derived from the models that answered it: every
-    check or write attempt and every verification round (`model4.ai_system_for`, owner decision D6).
-    An attempt imported before 2026-10-08 kept no stamp: refused, never guessed."""
-    stamps = []
-    for attempt in checked.attempts:
-        if "model" not in attempt:
-            raise WcRunError(
-                f"{checked.entry['site_id']}: round {attempt['round']} names no model (imported "
-                "before the stamp was kept): the AI disclosure cannot be derived from it"
-            )
-        stamps.append(attempt["model"])
+    check or write attempt (its answer file's stamp) and every verification round
+    (`model4.ai_system_for`, owner decision D6)."""
+    stage = WRITE_STAGE if kind == KIND_WN else STAGE
+    stamps = [
+        answer_stamp(attempt["handoff"], attempt["batch_id"], stage, attempt["label"])
+        for attempt in checked.attempts
+    ]
     return M.ai_system_for([*stamps, *verifier_stamps])
 
 
@@ -1166,7 +1170,7 @@ def outcome_of(
     listed = kind != KIND_WC
     decisions, verification = wc4.apply_verification(checked.decisions, checked.quotes, rounds)
     composed = wc4.compose(decisions, checked.quotes)
-    ai_system = disclosure_of(checked, verifier_stamps)
+    ai_system = disclosure_of(checked, verifier_stamps, kind)
     check = (
         None
         if composed.description is None
@@ -1447,9 +1451,11 @@ def _verify_round_of(run: Path, handoff: Path) -> dict[str, Any]:
     raise WcRunError(f"{handoff} is no verification round of {run}")
 
 
-def _verified_rows(run: Path, before: int | None = None) -> Iterable[tuple[int, dict]]:
+def _verified_rows(
+    run: Path, before: int | None = None
+) -> Iterable[tuple[dict[str, Any], dict[str, Any]]]:
     """Every row of every imported verification round (below round `before`, when given), as
-    `(round, row)` in round order. A round exported and not imported stops the command."""
+    `(round record, row)` in round order. A round exported and not imported stops the command."""
     for record in _verify_rounds(run):
         if before is not None and record["round"] >= before:
             break
@@ -1460,31 +1466,27 @@ def _verified_rows(run: Path, before: int | None = None) -> Iterable[tuple[int, 
                 "not imported"
             )
         for row in read_jsonl(path):
-            yield record["round"], row
+            yield record, row
 
 
 def _verification_inputs(run: Path, *, before: int | None = None) -> dict[str, list[dict]]:
     """Per site, its record of every imported verification round (below round `before`, when
     given), in round order - what `wc4.run_verification` reads: the round's own keys, without the
-    row's `site_id` and the `model` stamp."""
+    row's `site_id`."""
     inputs: dict[str, list[dict]] = {}
     for _, row in _verified_rows(run, before):
-        given = {key: value for key, value in row.items() if key not in ("site_id", "model")}
+        given = {key: value for key, value in row.items() if key != "site_id"}
         inputs.setdefault(row["site_id"], []).append(given)
     return inputs
 
 
 def _verification_stamps(run: Path) -> dict[str, list[str]]:
-    """Per site, the stamp of the model that answered each verification round, in round order. A
-    round imported before 2026-10-08 kept no stamp, and the disclosure is never guessed."""
+    """Per site, the stamp of the model that answered each verification round, in round order,
+    read from the round's answer file (`answer_stamp`)."""
     stamps: dict[str, list[str]] = {}
-    for number, row in _verified_rows(run):
-        if "model" not in row:
-            raise WcRunError(
-                f"{run}: verification round {number} names no model for {row['site_id']} (imported "
-                "before the stamp was kept): the AI disclosure cannot be derived from it"
-            )
-        stamps.setdefault(row["site_id"], []).append(row["model"])
+    for record, row in _verified_rows(run):
+        stamp = answer_stamp(record["handoff"], row["batch_id"], record["stage"], row["site_id"])
+        stamps.setdefault(row["site_id"], []).append(stamp)
     return stamps
 
 
@@ -1743,8 +1745,7 @@ def cmd_verify_import(
             site.decisions, site.quotes, [*earlier.get(label, []), given]
         )
         states["due for verify2" if status is None else status.value] += 1
-        # the stamp is the row's own key, like `site_id`: the round stays `wc4.ROUND_KEYS` exactly
-        rows.append({"site_id": label, **given, "model": answer.model})
+        rows.append({"site_id": label, **given})
     RF.write_jsonl(out, rows)
     return {
         "round": number,

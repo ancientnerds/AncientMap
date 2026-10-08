@@ -1,9 +1,10 @@
 """Lane WC and WN: the AI disclosure of a new write is derived from the models that answered
 (owner decision D6, 2026-10-08), not named by a constant.
 
-`wc/cli.py build` reads the stamp of every check or write answer (`ANSWERS.jsonl`, key `model`) and
-of every verification answer (`VERIFIED.jsonl`, key `model`) and passes the disclosure
-`model4.ai_system_for` derives to the check record, the evidence and the provenance. Nothing here
+`wc/cli.py build` reads the stamp of every check, write and verification answer from that answer's
+own write-once file in the round's handoff directory (`answer_stamp`; `ANSWERS.jsonl` and
+`VERIFIED.jsonl` keep no copy, so a round imported before the stamp existed builds too) and passes
+the disclosure `model4.ai_system_for` derives to the check record, the evidence and the provenance. Nothing here
 opens a socket, calls a model or touches a database.
 """
 
@@ -55,8 +56,8 @@ def _disclosures(outcome: WC4.WcOutcome) -> set[str]:
 @pytest.mark.parametrize(
     ("writer", "verifier", "expected"),
     [
-        (OH.SONNET_MODEL, OH.OPUS_MODEL, M.AI_SYSTEM_CLAUDE_ONLY),
-        (OH.HAIKU_MODEL, OH.SONNET_MODEL, M.AI_SYSTEM_CLAUDE_ONLY),
+        (OH.SONNET_MODEL, OH.OPUS_MODEL, M.AI_SYSTEM_CLAUDE),
+        (OH.HAIKU_MODEL, OH.SONNET_MODEL, M.AI_SYSTEM_CLAUDE_HAIKU),
         (OH.MINIMAX_MODEL, OH.OPUS_MODEL, M.AI_SYSTEM),
         (OH.SONNET_MODEL, OH.MINIMAX_MODEL, M.AI_SYSTEM),
     ],
@@ -70,11 +71,16 @@ def test_the_provenance_the_check_record_and_the_evidence_name_the_derived_discl
     # the gate's own invariants accept the derived disclosure, whichever it is
     assert WC4.wc_problems(outcome.description, outcome.raw_data, marking="none") == []
     assert WC4.evidence_problems(outcome.evidence, outcome.description, outcome.raw_data) == []
-    # and the stamps are in the run's own files, where the derivation read them
+    # the stamps are read from the answer files, and the run's own records keep no copy of them
     (answers,) = read_jsonl(run / "round-1" / "ANSWERS.jsonl")
-    assert answers["model"] == writer
+    assert "model" not in answers
     (verified,) = read_jsonl(run / "verify" / "round-1" / "VERIFIED.jsonl")
-    assert verified["model"] == verifier
+    assert "model" not in verified
+    assert (
+        cli.answer_stamp(answers["handoff"], answers["batch_id"], cli.WRITE_STAGE, answers["label"])
+        == writer
+    )
+    assert cli._verification_stamps(run) == {verified["site_id"]: [verifier]}
 
 
 def test_the_verified_row_keeps_the_stamp_beside_the_round_not_inside_it(tmp_path: Path) -> None:
@@ -91,39 +97,49 @@ def _checked(*attempts: dict) -> cli.Checked:
     return cli.Checked({"site_id": "s"}, {}, list(attempts), [], {})
 
 
-def _attempt(round_no: int = 1, **extra: str) -> dict:
-    return {"round": round_no, "answered_by": f"agent-{round_no}", **extra}
+def _answered(tmp_path: Path, round_no: int, model: str, stage: str = cli.STAGE) -> dict:
+    """A check attempt as `ANSWERS.jsonl` keeps it - no `model` key - and the answer file it names."""
+    batch, label = f"wc-000{round_no}", "s"
+    path = tmp_path / "handoff" / f"r{round_no}" / OH.answer_relpath(batch, stage, label)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"model": model}), encoding="utf-8")
+    return {
+        "round": round_no,
+        "handoff": (tmp_path / "handoff" / f"r{round_no}").as_posix(),
+        "batch_id": batch,
+        "label": label,
+        "answered_by": f"agent-{round_no}",
+    }
 
 
-def test_disclosure_of_reads_every_check_round_and_every_verifier() -> None:
-    checked = _checked(_attempt(1, model=OH.SONNET_MODEL), _attempt(2, model=OH.OPUS_MODEL))
-    assert cli.disclosure_of(checked, [OH.HAIKU_MODEL]) == M.AI_SYSTEM_CLAUDE_ONLY
+def test_disclosure_of_reads_every_check_round_and_every_verifier(tmp_path: Path) -> None:
+    checked = _checked(
+        _answered(tmp_path, 1, OH.SONNET_MODEL), _answered(tmp_path, 2, OH.OPUS_MODEL)
+    )
+    assert cli.disclosure_of(checked, [OH.OPUS_MODEL]) == M.AI_SYSTEM_CLAUDE
+    assert cli.disclosure_of(checked, [OH.HAIKU_MODEL]) == M.AI_SYSTEM_CLAUDE_HAIKU
     assert cli.disclosure_of(checked, [OH.MINIMAX_MODEL]) == M.AI_SYSTEM
     minimax_in_round_two = _checked(
-        _attempt(1, model=OH.SONNET_MODEL), _attempt(2, model=OH.MINIMAX_MODEL)
+        _answered(tmp_path, 3, OH.SONNET_MODEL), _answered(tmp_path, 4, OH.MINIMAX_MODEL)
     )
     assert cli.disclosure_of(minimax_in_round_two, []) == M.AI_SYSTEM
 
 
-def test_disclosure_of_refuses_an_attempt_imported_before_the_stamp_was_kept() -> None:
-    """A round imported before 2026-10-08 kept no `model`: nothing says who answered, and the
-    disclosure is not guessed (the in-flight MiniMax runs are exactly the case that matters)."""
-    checked = _checked(_attempt(1, model=OH.SONNET_MODEL), _attempt(2))
-    with pytest.raises(cli.WcRunError, match="round 2.*model"):
-        cli.disclosure_of(checked, [OH.OPUS_MODEL])
-
-
-def test_a_verification_round_imported_before_the_stamp_was_kept_is_refused(
+def test_a_round_imported_before_the_stamp_was_kept_builds_from_its_answer_files(
     tmp_path: Path,
 ) -> None:
-    run, _ = _built(tmp_path)
-    path = run / "verify" / "round-1" / "VERIFIED.jsonl"
-    rows = read_jsonl(path)
-    for row in rows:
-        del row["model"]
-    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
-    with pytest.raises(cli.WcRunError, match="verification round 1.*model"):
-        cli._verification_stamps(run)
+    """Every check round on disk before 2026-10-08 (pilot-27 to mass-05) has attempts without a
+    `model` key; the write-once answer files hold the stamps, so such a round discloses from them."""
+    attempt = _answered(tmp_path, 1, OH.OPUS_MODEL)
+    assert "model" not in attempt
+    assert cli.disclosure_of(_checked(attempt), [OH.SONNET_MODEL]) == M.AI_SYSTEM_CLAUDE
+
+
+def test_a_write_round_is_read_at_the_write_stage(tmp_path: Path) -> None:
+    attempt = _answered(tmp_path, 1, OH.MINIMAX_MODEL, stage=cli.WRITE_STAGE)
+    assert cli.disclosure_of(_checked(attempt), [OH.OPUS_MODEL], cli.KIND_WN) == M.AI_SYSTEM
+    with pytest.raises(FileNotFoundError):
+        cli.disclosure_of(_checked(attempt), [OH.OPUS_MODEL], cli.KIND_WC)
 
 
 # ------------------------------------------------------------------- the provenance helpers

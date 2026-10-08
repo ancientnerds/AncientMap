@@ -22,7 +22,7 @@ DIGEST = M.text_sha256("A text.")
 
 
 def test_the_record_is_exactly_its_six_keys_and_round_trips() -> None:
-    record = M.WebProvenance(desc_sha256=DIGEST)
+    record = M.WebProvenance(desc_sha256=DIGEST, ai_system=M.AI_SYSTEM)
     data = record.to_dict()
     assert data == {
         "v": 1, "lane": "N", "ai": "generated", "ai_system": M.AI_SYSTEM,
@@ -46,7 +46,7 @@ def test_the_record_is_exactly_its_six_keys_and_round_trips() -> None:
     ],
 )
 def test_every_field_of_the_record_is_held(change: dict, message: str) -> None:
-    data = {**M.WebProvenance(desc_sha256=DIGEST).to_dict(), **change}
+    data = {**M.WebProvenance(desc_sha256=DIGEST, ai_system=M.AI_SYSTEM).to_dict(), **change}
     with pytest.raises(ValueError, match=message):
         M.WebProvenance.from_dict(data)
 
@@ -54,14 +54,14 @@ def test_every_field_of_the_record_is_held(change: dict, message: str) -> None:
 @pytest.mark.parametrize("system", sorted(M.AI_SYSTEMS))
 def test_every_disclosure_a_validator_accepts_is_a_valid_web_disclosure(system: str) -> None:
     """Owner decision D6 (2026-10-08): the record checks membership in `AI_SYSTEMS`, not equality
-    with `AI_SYSTEM`, so a Claude-only write (`AI_SYSTEM_CLAUDE_ONLY`) validates and so do the 17+
+    with `AI_SYSTEM`, so a Claude-only write (`AI_SYSTEM_CLAUDE_HAIKU`) validates and so do the 17+
     WN provenances in production, which carry the combined string."""
     record = M.WebProvenance(desc_sha256=DIGEST, ai_system=system)
     assert M.WebProvenance.from_dict(record.to_dict()) == record
 
 
 def test_an_unknown_or_missing_key_is_refused() -> None:
-    data = M.WebProvenance(desc_sha256=DIGEST).to_dict()
+    data = M.WebProvenance(desc_sha256=DIGEST, ai_system=M.AI_SYSTEM).to_dict()
     with pytest.raises(ValueError):
         M.WebProvenance.from_dict({**data, "card": None})
     with pytest.raises(ValueError):
@@ -71,7 +71,7 @@ def test_an_unknown_or_missing_key_is_refused() -> None:
 def test_the_dispatch_by_lane_reads_each_shape_and_lane_n_is_never_assigned() -> None:
     legacy = M.LegacyProvenance(desc_sha256=DIGEST).to_dict()
     assert isinstance(M.provenance_from_dict(legacy), M.LegacyProvenance)
-    assert isinstance(M.provenance_from_dict(M.WebProvenance(desc_sha256=DIGEST).to_dict()),
+    assert isinstance(M.provenance_from_dict(M.WebProvenance(desc_sha256=DIGEST, ai_system=M.AI_SYSTEM).to_dict()),
                       M.WebProvenance)  # fmt: skip
     assert M.Lane.N not in M.ASSIGNED_LANES and M.Lane.N not in M.LANE_AI
     assert M.Lane.N not in M.LANE_CHANGES  # no attribution: not a full lane (cli.FULL_LANES)

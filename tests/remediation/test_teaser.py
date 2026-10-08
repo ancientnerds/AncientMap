@@ -704,12 +704,8 @@ class TestTheRun:
             assert provenance["desc_sha256"] == T.sha(T.DESCRIPTIONS[row["site_id"]])
             assert provenance["check"]["by"].startswith("teaser-check-")
             # `outcome_rows` derives the disclosure from the models that answered (owner decision
-            # D6, 2026-10-08): every answer here was Opus's, so the Claude-only string
-            assert provenance["ai_system"] == (
-                "Claude Opus, Claude Sonnet and Claude Haiku (Anthropic): anthropic/claude-opus-5-5, "
-                "anthropic/claude-sonnet-5-5 and anthropic/claude-haiku-5-5 (Claude Code agents), "
-                "an-sites-remediation-2026-10"
-            )
+            # D6, 2026-10-08): every answer here was Opus's, so Haiku is not named
+            assert provenance["ai_system"] == M.AI_SYSTEM_CLAUDE
             assert provenance["verify"] == {
                 "verdict": "VERIFIED",
                 "stage": "verify",
@@ -738,7 +734,7 @@ class TestTheRun:
     @pytest.mark.parametrize(
         ("write", "check", "verify", "expected"),
         [
-            (OH.SONNET_MODEL, OH.OPUS_MODEL, OH.HAIKU_MODEL, M.AI_SYSTEM_CLAUDE_ONLY),
+            (OH.SONNET_MODEL, OH.OPUS_MODEL, OH.HAIKU_MODEL, M.AI_SYSTEM_CLAUDE_HAIKU),
             (OH.MINIMAX_MODEL, OH.OPUS_MODEL, OH.OPUS_MODEL, M.AI_SYSTEM),
             (OH.OPUS_MODEL, OH.MINIMAX_MODEL, OH.OPUS_MODEL, M.AI_SYSTEM),
             (OH.OPUS_MODEL, OH.OPUS_MODEL, OH.MINIMAX_MODEL, M.AI_SYSTEM),

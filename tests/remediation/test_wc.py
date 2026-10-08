@@ -1134,7 +1134,7 @@ def test_the_gate_plan_holds_every_outcome_with_its_evidence_and_the_invariants(
     a = WC4.WcOutcome.from_dict(record["outcomes"][0])
     assert a.description.endswith("in 1915 [1] [2].")  # the museum is [2], quoted first
     evidence = a.evidence
-    assert evidence["checked"] == FX.TEXT_A and evidence["checker"] == M.AI_SYSTEM_CLAUDE_ONLY
+    assert evidence["checked"] == FX.TEXT_A and evidence["checker"] == M.AI_SYSTEM_CLAUDE
     assert evidence["kept"] == 3 and evidence["of"] == 3
     assert evidence["sentences"][2]["quotes"][0]["verified"] is True
     assert evidence["answers"][0]["answered_by"] == "opus-check-wc-0001"

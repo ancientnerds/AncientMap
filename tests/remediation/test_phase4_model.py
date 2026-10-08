@@ -446,7 +446,7 @@ def test_the_disclosed_ai_systems_are_the_claude_ones_and_the_combined_one() -> 
     Owner decision 2026-10-03: MiniMax Code writes from now on, so a NEW write discloses the two
     families in one string (`AI_SYSTEM`, `AI_SYSTEM_CLAUDE`); both written strings stay accepted.
     Owner decision D6, 2026-10-08: Claude only again (Opus, Sonnet, Haiku), disclosed by a fourth
-    string, `AI_SYSTEM_CLAUDE_ONLY`; `AI_SYSTEM` is NOT rebound (production holds it, 17+ WN
+    string, `AI_SYSTEM_CLAUDE_HAIKU`, for a write a Haiku answer is stored in; `AI_SYSTEM` is NOT rebound (production holds it, 17+ WN
     provenances and the pinned consumers carry it)."""
     assert M.AI_SYSTEM_OPUS == (
         "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
@@ -461,13 +461,13 @@ def test_the_disclosed_ai_systems_are_the_claude_ones_and_the_combined_one() -> 
         "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
         "an-sites-remediation-2026-09"
     )
-    assert M.AI_SYSTEM_CLAUDE_ONLY == (
+    assert M.AI_SYSTEM_CLAUDE_HAIKU == (
         "Claude Opus, Claude Sonnet and Claude Haiku (Anthropic): anthropic/claude-opus-5-5, "
         "anthropic/claude-sonnet-5-5 and anthropic/claude-haiku-5-5 (Claude Code agents), "
         "an-sites-remediation-2026-10"
     )
     assert M.AI_SYSTEMS == frozenset(
-        {M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE, M.AI_SYSTEM, M.AI_SYSTEM_CLAUDE_ONLY}
+        {M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE, M.AI_SYSTEM, M.AI_SYSTEM_CLAUDE_HAIKU}
     )
     assert M.AI_SYSTEM_OPUS == f"Claude Opus (Anthropic): {MS.MODEL}, an-sites-remediation-2026-09"
     assert MS.MODEL == "anthropic/claude-opus-5-5 (Claude Code agent)"
@@ -490,8 +490,8 @@ def test_the_combined_disclosure_names_the_writing_models_their_makers_and_nothi
     )
 
 
-def test_the_claude_only_disclosure_names_its_models_their_maker_and_no_minimax() -> None:
-    text = M.AI_SYSTEM_CLAUDE_ONLY
+def test_the_haiku_disclosure_names_its_models_their_maker_and_no_minimax() -> None:
+    text = M.AI_SYSTEM_CLAUDE_HAIKU
     for stamp in (OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL):
         assert stamp.split(" (")[0] in text
     assert "(Anthropic)" in text and "minimax" not in text.lower()
@@ -499,16 +499,21 @@ def test_the_claude_only_disclosure_names_its_models_their_maker_and_no_minimax(
 
 
 def test_ai_system_for_derives_the_disclosure_from_the_models_that_answered() -> None:
-    """A set of Claude models discloses the Claude-only string; one MiniMax stamp among them keeps
-    the combined string, because the text then rests on a MiniMax judgement."""
-    assert M.ai_system_for([OH.OPUS_MODEL]) == M.AI_SYSTEM_CLAUDE_ONLY
+    """Opus and/or Sonnet disclose `AI_SYSTEM_CLAUDE`; Haiku is named only when a Haiku answer is
+    stored in the write (it runs the image prefilter and the operators, no text); one MiniMax stamp
+    among them keeps the combined string, because the text then rests on a MiniMax judgement."""
+    assert M.ai_system_for([OH.OPUS_MODEL]) == M.AI_SYSTEM_CLAUDE
+    assert M.ai_system_for([OH.SONNET_MODEL]) == M.AI_SYSTEM_CLAUDE
+    assert M.ai_system_for({OH.OPUS_MODEL, OH.SONNET_MODEL}) == M.AI_SYSTEM_CLAUDE
+    assert M.ai_system_for(iter([OH.SONNET_MODEL, OH.SONNET_MODEL])) == M.AI_SYSTEM_CLAUDE
+    assert M.ai_system_for([OH.HAIKU_MODEL]) == M.AI_SYSTEM_CLAUDE_HAIKU
     assert (
-        M.ai_system_for({OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL}) == M.AI_SYSTEM_CLAUDE_ONLY
+        M.ai_system_for({OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL})
+        == M.AI_SYSTEM_CLAUDE_HAIKU
     )
-    assert M.ai_system_for(iter([OH.HAIKU_MODEL, OH.HAIKU_MODEL])) == M.AI_SYSTEM_CLAUDE_ONLY
     assert M.ai_system_for([OH.OPUS_MODEL, OH.MINIMAX_MODEL]) == M.AI_SYSTEM
+    assert M.ai_system_for([OH.HAIKU_MODEL, OH.MINIMAX_MODEL]) == M.AI_SYSTEM
     assert M.ai_system_for([OH.MINIMAX_MODEL]) == M.AI_SYSTEM
-    assert M.ai_system_for([OH.SONNET_MODEL]) in M.AI_SYSTEMS
 
 
 @pytest.mark.parametrize(

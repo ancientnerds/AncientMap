@@ -396,9 +396,7 @@ def test_the_text_cites_the_pages_of_its_verified_quotes_and_carries_lane_ns_pro
     assert raw is not None and set(raw) == {M.CITATIONS_KEY, WC4.CHECK_KEY, M.PROVENANCE_KEY}
     assert [(c["n"], c["url"]) for c in raw[M.CITATIONS_KEY]] == [(1, FX.WIKI), (2, FX.MUSEUM)]
     provenance = raw[M.PROVENANCE_KEY]
-    claude_only = (
-        M.AI_SYSTEM_CLAUDE_ONLY
-    )  # the writer is Sonnet, the verifier Opus (D6, 2026-10-08)
+    claude_only = M.AI_SYSTEM_CLAUDE  # the writer is Sonnet, the verifier Opus (D6, 2026-10-08)
     assert (
         provenance
         == M.WebProvenance(

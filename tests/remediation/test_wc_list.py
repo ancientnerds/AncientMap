@@ -253,7 +253,7 @@ def test_a_phase4_text_keeps_its_kept_sentences_and_its_provenance_filtered_to_t
     old = M.Provenance.from_dict(WX.p4_site_raw()[M.PROVENANCE_KEY])
     new = M.Provenance.from_dict(outcome.raw_data[M.PROVENANCE_KEY])
     assert new == dataclasses.replace(
-        old, ai_system=M.AI_SYSTEM_CLAUDE_ONLY, sentences=(old.sentences[0], old.sentences[2]),
+        old, ai_system=M.AI_SYSTEM_CLAUDE, sentences=(old.sentences[0], old.sentences[2]),
         card=None,
         desc_sha256=M.text_sha256(outcome.description),
     )  # fmt: skip
@@ -329,15 +329,15 @@ def _two_source_provenance() -> M.Provenance:
 def test_filtering_a_provenance_follows_the_kept_sentences_and_their_sources() -> None:
     old = _two_source_provenance()
     kept = WC4.filtered_provenance(
-        old, [1, 3], of=3, description="A new text.", ai_system=M.AI_SYSTEM_CLAUDE_ONLY
+        old, [1, 3], of=3, description="A new text.", ai_system=M.AI_SYSTEM_CLAUDE_HAIKU
     )
     assert [s.src for s in kept.sentences] == ["W", "T.de"] and len(kept.sources) == 2
     only_w = WC4.filtered_provenance(
-        old, [1, 2], of=3, description="A new text.", ai_system=M.AI_SYSTEM_CLAUDE_ONLY
+        old, [1, 2], of=3, description="A new text.", ai_system=M.AI_SYSTEM_CLAUDE_HAIKU
     )
     assert [s.id for s in only_w.sources] == ["W"] and M.Provenance.from_dict(only_w.to_dict())
     # the new write's disclosure is the caller's, derived from the models that answered (D6)
-    assert only_w.card is None and only_w.ai_system == M.AI_SYSTEM_CLAUDE_ONLY
+    assert only_w.card is None and only_w.ai_system == M.AI_SYSTEM_CLAUDE_HAIKU
     assert only_w.desc_sha256 == M.text_sha256("A new text.")
 
 

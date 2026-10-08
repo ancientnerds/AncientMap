@@ -144,8 +144,9 @@ def preflight(targets: list[Path]) -> None:
 
     A root run (``docker exec -u root``, 2026-08-18) leaves root-owned files that the rebuild
     job, which runs as uid 1000, can never replace (plan 9.4). A target that exists must be
-    writable; one that does not must have a writable nearest existing ancestor. Every failing
-    path is named, not just the first.
+    writable; one that does not must have a writable nearest existing ancestor. A file also needs
+    its directory writable: ``save_json`` writes ``<name>.tmp`` beside it and renames that over
+    it. Every failing path is named, not just the first.
     """
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         raise PermissionError(
@@ -155,11 +156,11 @@ def preflight(targets: list[Path]) -> None:
         )
     blocked: list[str] = []
     for target in targets:
-        probe = target
-        while not probe.exists() and probe.parent != probe:
-            probe = probe.parent
-        if not _writable(probe):
-            blocked.append(str(probe))
+        for probe in (target,) if target.is_dir() else (target, target.parent):
+            while not probe.exists() and probe.parent != probe:
+                probe = probe.parent
+            if not _writable(probe):
+                blocked.append(str(probe))
     if blocked:
         unique = sorted(set(blocked))
         raise PermissionError(

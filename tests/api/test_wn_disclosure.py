@@ -35,7 +35,9 @@ def _raw(text: str = TEXT) -> dict:
         "description_citations": [
             {"n": 1, "url": WIKI, "title": "Tarxien Temples", "domain": "en.wikipedia.org"}
         ],
-        DP.PROVENANCE_KEY: M.WebProvenance(desc_sha256=M.text_sha256(text)).to_dict(),
+        DP.PROVENANCE_KEY: M.WebProvenance(
+            desc_sha256=M.text_sha256(text), ai_system=M.AI_SYSTEM
+        ).to_dict(),
     }
 
 
@@ -85,6 +87,9 @@ def test_the_writer_and_the_reader_agree_on_the_provenance_key_and_the_marks():
 
 
 def test_an_unknown_ai_mark_still_fails_on_every_reader_alike():
-    provenance = {**M.WebProvenance(desc_sha256=M.text_sha256(TEXT)).to_dict(), "ai": "wrote"}
+    provenance = {
+        **M.WebProvenance(desc_sha256=M.text_sha256(TEXT), ai_system=M.AI_SYSTEM).to_dict(),
+        "ai": "wrote",
+    }
     with pytest.raises(ValueError, match="not one of"):
         DP.description_disclosure(provenance, TEXT)
