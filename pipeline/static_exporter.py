@@ -169,25 +169,49 @@ def preflight(targets: list[Path]) -> None:
         )
 
 
+def _temp_name(path: Path) -> Path:
+    """The sibling a file is written to before it replaces ``path``.
+
+    Not tempfile.mkstemp: that creates the file 0600, and nginx serves these files from a
+    bind mount as another user. A plain open() takes the process umask. One export runs
+    at a time (the advisory lock of api/services/background_jobs.py), so one fixed name
+    is enough.
+    """
+    return path.with_name(path.name + ".tmp")
+
+
 def save_json(path: Path, data: Any, compress: bool = True):
-    """Save data as JSON, optionally with gzip compression."""
+    """Save data as JSON, optionally with gzip compression.
+
+    Each file is written beside its target and moved over it with os.replace, so a reader
+    (nginx, the frontend build) sees the old file or the complete new one, never the short
+    file a truncate-in-place leaves for the minutes the 362 MB index takes to write.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = _temp_name(path)
+    gz_path = path.with_suffix(path.suffix + ".gz")
+    gz_tmp = _temp_name(gz_path)
 
-    # Save regular JSON
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, separators=(",", ":"), ensure_ascii=False)
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, separators=(",", ":"), ensure_ascii=False)
+        size = tmp.stat().st_size
 
-    size = path.stat().st_size
+        if compress and GZIP_OUTPUT:
+            with open(tmp, "rb") as f_in:
+                with gzip.open(str(gz_tmp), "wb", compresslevel=9) as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+    except BaseException:
+        # A half-written temp file is garbage: the target was never touched.
+        tmp.unlink(missing_ok=True)
+        gz_tmp.unlink(missing_ok=True)
+        raise
+
+    os.replace(tmp, path)
     logger.info(f"  Saved {path.name}: {size / 1024:.1f} KB")
-
-    # Save gzipped version
     if compress and GZIP_OUTPUT:
-        gz_path = path.with_suffix(path.suffix + ".gz")
-        with open(path, "rb") as f_in:
-            with gzip.open(str(gz_path), "wb", compresslevel=9) as f_out:
-                shutil.copyfileobj(f_in, f_out)
-        gz_size = gz_path.stat().st_size
-        logger.info(f"  Saved {gz_path.name}: {gz_size / 1024:.1f} KB (gzip)")
+        os.replace(gz_tmp, gz_path)
+        logger.info(f"  Saved {gz_path.name}: {gz_path.stat().st_size / 1024:.1f} KB (gzip)")
 
 
 def fetch_hub_rows(session) -> list[Any]:

@@ -267,6 +267,11 @@ async def lifespan(app: FastAPI):
 
     start_nightly_scheduler()
 
+    # Nightly static export (04:30 UTC, after the reindex and the backup)
+    from api.services.static_export_schedule import start_static_export_scheduler
+
+    start_static_export_scheduler()
+
     get_redis_client()  # Initialize Redis connection
 
     # Warm up connector status cache in the background (non-blocking), so the

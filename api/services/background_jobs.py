@@ -175,14 +175,8 @@ def read_status(db: Any, name: str) -> dict:
     }
 
 
-def start_job(name: str, work: Callable[[], dict], lock: InstanceLock | None = None) -> dict:
-    """Run ``work`` in a background thread unless the job already runs anywhere.
-
-    Raises JobAlreadyRunning when the lock is held. ``work`` returns a small JSON-able
-    dict that becomes the status's ``result``; an exception it raises becomes the
-    status's ``error`` and is logged with its traceback - never swallowed.
-    """
-    lock = lock or InstanceLock(name)
+def _begin(name: str, lock: InstanceLock) -> dict:
+    """Take the lock and record the run as started; raise JobAlreadyRunning when it is held."""
     if not lock.try_acquire():
         raise JobAlreadyRunning(name)
     started = {
@@ -194,6 +188,18 @@ def start_job(name: str, work: Callable[[], dict], lock: InstanceLock | None = N
     except Exception:
         lock.release()
         raise
+    return started
+
+
+def start_job(name: str, work: Callable[[], dict], lock: InstanceLock | None = None) -> dict:
+    """Run ``work`` in a background thread unless the job already runs anywhere.
+
+    Raises JobAlreadyRunning when the lock is held. ``work`` returns a small JSON-able
+    dict that becomes the status's ``result``; an exception it raises becomes the
+    status's ``error`` and is logged with its traceback - never swallowed.
+    """
+    lock = lock or InstanceLock(name)
+    started = _begin(name, lock)
     thread = threading.Thread(
         target=_run, args=(name, work, lock, started), name=f"job-{name}", daemon=True
     )
@@ -201,7 +207,19 @@ def start_job(name: str, work: Callable[[], dict], lock: InstanceLock | None = N
     return {"job": name, "state": "running", **started}
 
 
-def _run(name: str, work: Callable[[], dict], lock: InstanceLock, started: dict) -> None:
+def run_job(name: str, work: Callable[[], dict], lock: InstanceLock | None = None) -> bool:
+    """Run ``work`` to completion in the calling thread, under the job's lock and status row.
+
+    For a command line that must wait for the result (python -m api.services.rebuild_static);
+    the POST and the nightly use ``start_job``. Raises JobAlreadyRunning when the lock is
+    held. Returns whether ``work`` succeeded; a failure is logged and recorded as in
+    ``start_job``.
+    """
+    lock = lock or InstanceLock(name)
+    return _run(name, work, lock, _begin(name, lock))
+
+
+def _run(name: str, work: Callable[[], dict], lock: InstanceLock, started: dict) -> bool:
     try:
         try:
             result = work()
@@ -213,11 +231,12 @@ def _run(name: str, work: Callable[[], dict], lock: InstanceLock, started: dict)
                 {**started, "finished_at": datetime.now(UTC).isoformat()},
                 error=f"{type(exc).__name__}: {exc}"[:2000],
             )
-            return
+            return False
         _write_status(
             name, "ok", {**started, "finished_at": datetime.now(UTC).isoformat(), "result": result}
         )
         logger.info("[JOB] %s finished: %s", name, result)
+        return True
     finally:
         lock.release()
 

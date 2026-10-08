@@ -340,10 +340,10 @@ def _nightly_already_ran(scheduled_for: datetime) -> bool:
     return last is not None and last >= scheduled_for.astimezone(UTC).replace(tzinfo=None)
 
 
-def _seconds_until_next(hour_utc: int) -> float:
-    """Seconds from now until the next occurrence of hour_utc:00 UTC."""
+def _seconds_until_next(hour_utc: int, minute_utc: int = 0) -> float:
+    """Seconds from now until the next occurrence of hour_utc:minute_utc UTC."""
     now = datetime.now(UTC)
-    target = now.replace(hour=hour_utc, minute=0, second=0, microsecond=0)
+    target = now.replace(hour=hour_utc, minute=minute_utc, second=0, microsecond=0)
     if target <= now:
         target += timedelta(days=1)
     return (target - now).total_seconds()
