@@ -137,7 +137,7 @@ last AS (
     FROM remediation_change_log l
    WHERE l.table_name = 'unified_sites'
      AND l.column_name IN ('period_start', 'period_end', 'period_name')
-     AND l.run_stamp NOT LIKE '%rollback%' AND l.run_stamp NOT LIKE '%probe%'
+     AND l.run_stamp NOT LIKE '%probe%'
      AND l.row_pk IN (SELECT id::text FROM w)
    ORDER BY l.row_pk, l.column_name, l.id DESC)
 SELECT row_pk AS site_id, column_name, run_stamp, confidence, old_value, new_value, applied_at,

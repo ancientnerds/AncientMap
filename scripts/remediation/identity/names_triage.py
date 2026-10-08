@@ -42,6 +42,7 @@ DEFECTS = (
     "nonlatin_script",
     "mixed_script",
     "whitespace_artifact",
+    "edge_punctuation",
     "all_caps",
     "mojibake",
     "digit",
@@ -58,12 +59,15 @@ COMPATIBLE = 0.5
 LABEL_OVERLAP = 0.34
 
 FOREIGN_PREFIX = re.compile(
-    r"^(Dolmen de|Menhir du|Templo|Templos|Castillo|Castello|Château|Cueva|Yacimiento|Sitio|Zona|"
-    r"Gruta|Necrópolis|Necropoli|Tumba|Torre de|Iglesia|Ermita|Pont|Église|Abbaye|Grotte|Parque|"
-    r"Santuario|Mura)\b"
+    r"^(Dolmen d(?:e|el|a|as|os)|Menhir du|Templo|Templos|Tempio|Castillo|Castello|Château|Cueva|"
+    r"Cova|Yacimiento|Sitio|Zona|Gruta|Grotta|Necrópolis|Necropoli|Tumba|Torre d(?:e|el|els|')|"
+    r"Iglesia|Chiesa|Ermita|Pont|Église|Abbaye|Grotte|Parque|Santuario|Mura|Museo|Teatro|Ruinas|"
+    r"Villa Romana)\b"
 )
 ZERO_WIDTH = re.compile(r"[\u200b-\u200f\u2060\ufeff]")
 WHITESPACE_ARTIFACT = re.compile(r"[\u200b-\u200f\u2060\ufeff]|\s{2,}|^\s|\s$")
+#: A dash, comma, semicolon or colon at the start or the end of a name (a cut-off title).
+EDGE_PUNCTUATION = re.compile(r"^[-–—,;:.]|[-–—,;:]$")
 MOJIBAKE = re.compile("\ufffd|\u00c3.|\u00e2\u20ac")
 PARENTHESIS = re.compile(r"\s*\([^)]*\)")
 #: "Tumulus 3", "Cave 12a": an Arabic numeral at the end. A Roman one stays: it is mostly a
@@ -73,6 +77,13 @@ TRAILING_NUMERAL = re.compile(r"\s+\d+[a-z]?\s*$")
 GENERIC = frozenset(
     "dolmen menhir tomb cave church castle fort tumulus mound temple cairn barrow grave site "
     "hillfort villa cemetery necropolis settlement ruins monument stone circle".split()
+)
+#: The kinds of building a name may be made of with no place in it ("Roman Theatre"), and the
+#: foreign adjective of "Villa Romana": a name of nothing else names no site.
+BUILDING_KINDS = frozenset(
+    "theatre theater amphitheatre amphitheater bridge baths bath aqueduct basilica forum palace "
+    "fortress sanctuary mausoleum arch walls wall gate tower lighthouse harbour harbor mine quarry "
+    "romana romano romaine romain".split()
 )
 #: The words a spoken name may leave out: articles and the kind of the thing.
 DROPPABLE = common.STOP_TOKENS | GENERIC
@@ -143,6 +154,8 @@ def defects_of(name: str) -> list[str]:
         found.append("mixed_script")
     if WHITESPACE_ARTIFACT.search(name):
         found.append("whitespace_artifact")
+    if EDGE_PUNCTUATION.search(name):
+        found.append("edge_punctuation")
     if name.isupper() and len(name) > 3:
         found.append("all_caps")
     if MOJIBAKE.search(name):
@@ -178,6 +191,12 @@ def differs_from_label(name: str, label: str | None, english: Sequence[str]) -> 
 def title_form(title: str) -> str:
     """An English Wikipedia title as a name: underscores to spaces, no `(disambiguator)`."""
     return PARENTHESIS.sub("", title.replace("_", " ")).strip()
+
+
+def english_forms(aliases: Sequence[str], titles: Sequence[str]) -> list[str]:
+    """The English names an item is known by besides its label: its aliases and the titles of
+    its English Wikipedia articles. One list for the triage and the spoken records."""
+    return [*aliases, *(title_form(t) for t in titles)]
 
 
 def attested_forms(
@@ -231,7 +250,6 @@ def triage_record(
     row: Mapping[str, Any], label: str | None, aliases: Sequence[str], titles: Sequence[str]
 ) -> dict[str, Any] | None:
     name = row["name"]
-    english = [*aliases, *(title_form(t) for t in titles)]
     found = defects_of(name)
     if not found:
         return None
@@ -243,7 +261,7 @@ def triage_record(
         "country": row["country"],
         "site_type": row["site_type"],
         "defects": found,
-        "differs_from_label": differs_from_label(name, label, english),
+        "differs_from_label": differs_from_label(name, label, english_forms(aliases, titles)),
         "severity": "comma_only" if found == ["comma_qualifier"] else "hard",
         "label": label,
         "aliases": list(aliases)[:12],
@@ -251,6 +269,17 @@ def triage_record(
         "suggestion": repair,
         "needs_model": repair is None,
     }
+
+
+def identifying_words(text: str) -> list[str]:
+    """The words of a name that are neither an article, the kind of the thing nor a kind of
+    building, and longer than one letter: what is left to tell this site from any other."""
+    return [
+        w
+        for w in re.findall(r"[^\W\d_]+", text)
+        if len(w) > 1
+        and common.fold(w).strip() not in common.STOP_TOKENS | GENERIC | BUILDING_KINDS
+    ]
 
 
 def residual_defects(text: str) -> list[str]:
@@ -269,7 +298,7 @@ def residual_defects(text: str) -> list[str]:
         reasons.append("too_long")
     if len(text) < SPOKEN_MIN_CHARS:
         reasons.append("too_short")
-    if text.casefold() in GENERIC:
+    if not identifying_words(text):
         reasons.append("generic_only")
     if text.isupper() and len(text) > SPOKEN_MIN_CHARS:
         reasons.append("all_caps")
@@ -293,8 +322,9 @@ def shortens(name: str, form: str) -> bool:
     return bool(kept) and bool(dropped) and set(kept) <= set(original) and dropped <= DROPPABLE
 
 
-def spoken_record(row: Mapping[str, Any], forms: Sequence[tuple[str, str]]) -> dict[str, Any]:
-    name = row["name"]
+def cleaned_name(name: str) -> tuple[str, list[str]]:
+    """The name without its whitespace artifacts, qualifiers, trailing numeral and edge dashes,
+    and the steps that took."""
     steps: list[str] = []
     text = collapse(name)
     if text != name:
@@ -302,10 +332,18 @@ def spoken_record(row: Mapping[str, Any], forms: Sequence[tuple[str, str]]) -> d
     stripped = drop_qualifiers(text)
     if stripped != text:
         steps.append("qualifier")
-    numberless = TRAILING_NUMERAL.sub("", stripped).strip(" -–—")
+    numberless = TRAILING_NUMERAL.sub("", stripped).strip()
     if numberless != stripped:
         steps.append("numeral")
-    cleaned = numberless
+    trimmed = numberless.strip(" -–—")
+    if trimmed != numberless:
+        steps.append("punctuation")
+    return trimmed, steps
+
+
+def spoken_record(row: Mapping[str, Any], forms: Sequence[tuple[str, str]]) -> dict[str, Any]:
+    name = row["name"]
+    cleaned, steps = cleaned_name(name)
     reasons = residual_defects(cleaned) if cleaned else ["empty"]
     options: list[tuple[str, str]] = []
     clean = bool(cleaned) and not reasons
@@ -331,6 +369,28 @@ def spoken_record(row: Mapping[str, Any], forms: Sequence[tuple[str, str]]) -> d
         "reasons": reasons,
         "attested": [f for f, _ in forms],
     }
+
+
+def mark_ambiguous(spoken: list[dict[str, Any]], rows: Sequence[Mapping[str, Any]]) -> int:
+    """A name spoken by rule after its qualifier was dropped that another shown site's cleaned
+    name equals ("Temple of Apollo" from Delphi and from Pompeii) no longer says which site: it
+    goes to the model with the reason `ambiguous_after_qualifier`. Returns how many."""
+    held = Counter(cleaned_name(r["name"])[0].casefold() for r in rows)
+    marked = 0
+    for record in spoken:
+        if (
+            "qualifier" in record["steps"]
+            and record["source"] == "name"
+            and held[record["spoken"].casefold()] > 1
+        ):
+            record.update(
+                spoken=None,
+                source=None,
+                needs_model=True,
+                reasons=[*record["reasons"], "ambiguous_after_qualifier"],
+            )
+            marked += 1
+    return marked
 
 
 def build(
@@ -373,11 +433,16 @@ def build(
                 counts["defect_" + defect] += 1
         forms = attested_forms(label, aliases, titles, own_label.get(site_id, []))
         said = spoken_record(row, forms)
+        said["differs_from_label"] = differs_from_label(
+            row["name"], label, english_forms(aliases, titles)
+        )
         spoken.append(said)
-        counts["differs_from_label_note"] += differs_from_label(row["name"], label, aliases)
+    counts["spoken_ambiguous"] = mark_ambiguous(spoken, exported.shown)
+    for said in spoken:
+        counts["differs_from_label_note"] += said["differs_from_label"]
         counts["spoken_by_rule"] += not said["needs_model"]
         counts["spoken_needs_model"] += said["needs_model"]
-        counts["spoken_changed"] += (not said["needs_model"]) and said["spoken"] != row["name"]
+        counts["spoken_changed"] += (not said["needs_model"]) and said["spoken"] != said["name"]
     triage.sort(key=lambda r: (r["severity"] != "hard", r["name"].casefold(), r["id"]))
     spoken.sort(key=lambda r: r["id"])
     counts["shown"] = len(exported.shown)

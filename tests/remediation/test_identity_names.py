@@ -43,6 +43,27 @@ class TestTheDefects:
         assert N.defects_of("Dolmen de Menga") == ["foreign_prefix"]
         assert N.defects_of("Templo del Sol") == ["foreign_prefix"]
 
+    def test_the_italian_spanish_and_catalan_prefixes_are_foreign_prefixes(self) -> None:
+        for name in (
+            "Dolmen del prado de Lácara",
+            "Torre d'en Galmés",
+            "Torre del Moro",
+            "Cova d'en Daina",
+            "Tempio di Zeus Olympios",
+            "Museo Campano",
+            "Grotta del Cavallo",
+            "Teatro Romano",
+            "Ruinas Romanas de Mérida",
+            "Villa Romana de Río Verde",
+            "Chiesa Paleocristiana di San Lorenzo",
+        ):
+            assert "foreign_prefix" in N.defects_of(name), name
+
+    def test_a_prefix_is_a_whole_word_not_the_start_of_one(self) -> None:
+        assert "foreign_prefix" not in N.defects_of("Teatroville")
+        assert "foreign_prefix" not in N.defects_of("Torre Hill")
+        assert "foreign_prefix" not in N.defects_of("Dolmen Dale")
+
     def test_a_name_longer_than_forty_characters_is_long(self) -> None:
         assert "long" in N.defects_of("Cathedral and Churches of Echmiatsin and Zvartnots")
         assert "long" not in N.defects_of("x" * 40)
@@ -55,6 +76,12 @@ class TestTheDefects:
         assert N.defects_of("Hadrian  Wall") == ["whitespace_artifact"]
         assert N.defects_of("Hadrian\u200b Wall") == ["whitespace_artifact"]
         assert N.defects_of(" Wall") == ["whitespace_artifact"]
+
+    def test_a_dash_or_comma_at_the_edge_of_a_name_is_an_edge_punctuation(self) -> None:
+        assert N.defects_of("San Lorenzo-") == ["edge_punctuation"]
+        assert N.defects_of("-San Lorenzo") == ["edge_punctuation"]
+        assert N.defects_of("San Lorenzo,") == ["edge_punctuation", "comma_qualifier"]
+        assert N.defects_of("St. Mary") == []
 
     def test_a_greek_letter_inside_a_latin_word_is_a_mixed_script(self) -> None:
         name = f"{GREEK_KAPPA}ourion Ancient Amphitheatre"
@@ -146,6 +173,31 @@ class TestTheSpokenName:
         got = spoken("Plain of Jars Site 3")
         assert got["spoken"] == "Plain of Jars Site" and "numeral" in got["steps"]
 
+    def test_a_dash_at_the_edge_is_its_own_step_not_a_numeral(self) -> None:
+        got = spoken("Villa of Poppaea-")
+        assert got["spoken"] == "Villa of Poppaea" and got["steps"] == ["punctuation"]
+
+    def test_a_chiesa_cut_off_at_a_hyphen_still_has_its_foreign_prefix(self) -> None:
+        got = spoken("Chiesa Paleocristiana di San Lorenzo-")
+        assert got["needs_model"] is True and got["steps"] == ["punctuation"]
+        assert got["reasons"] == ["foreign_prefix"]
+
+    def test_a_qualifier_that_was_the_only_identifying_part_is_not_spoken_by_rule(self) -> None:
+        for name in (
+            "Archaeological Site, Argos",
+            "Amphitheatre, London",
+            "Roman Theatre, Mérida",
+            "Temple C, Selinus",
+            "Bridge, Cordoba",
+        ):
+            got = spoken(name)
+            assert got["needs_model"] is True and got["spoken"] is None, name
+            assert got["steps"] == ["qualifier"] and "generic_only" in got["reasons"], name
+
+    def test_a_name_with_a_place_word_left_after_the_qualifier_is_spoken(self) -> None:
+        got = spoken("Roman Theatre of Orange, Vaucluse")
+        assert got["spoken"] == "Roman Theatre of Orange" and not got["reasons"]
+
     def test_a_regnal_numeral_is_part_of_the_name(self) -> None:
         assert spoken("Tomb of Artaxerxes III")["spoken"] == "Tomb of Artaxerxes III"
 
@@ -228,6 +280,38 @@ class TestTheSpokenName:
         )
         assert got["spoken"] == "Pergamon"
 
+    def test_the_place_a_qualifier_named_is_lost_for_a_name_two_sites_share(self, tmp_path) -> None:
+        delphi = site(name="Temple of Apollo, Delphi")
+        pompeii = site(name="Temple of Apollo, Pompeii")
+        mercury = site(name="Temple of Mercury, Puy de Dome")
+        plain = site(name="Temple of Zeus")
+        zeus = site(name="Temple of Zeus, Olympia")
+        exported = export_of([delphi, pompeii, mercury, plain, zeus])
+        _, rows, counts = N.build(exported, store_of(tmp_path, {}, {}))
+        by_id = {r["id"]: r for r in rows}
+        for ambiguous in (delphi, pompeii, zeus):
+            got = by_id[ambiguous["id"]]
+            assert got["needs_model"] is True and got["spoken"] is None, ambiguous["name"]
+            assert got["reasons"] == ["ambiguous_after_qualifier"]
+        assert by_id[mercury["id"]]["spoken"] == "Temple of Mercury"
+        assert by_id[plain["id"]]["spoken"] == "Temple of Zeus"
+        assert counts["spoken_ambiguous"] == 3 and counts["spoken_needs_model"] == 3
+        assert counts["spoken_by_rule"] == 2
+
+    def test_an_attested_form_spoken_for_a_shared_name_is_not_ambiguous(self, tmp_path) -> None:
+        delphi = site(name="Temple of Apollo, Delphi")
+        pompeii = site(name="Temple of Apollo, Pompeii")
+        store = store_of(
+            tmp_path,
+            {"Q1": entity("Q1", label="Temple of Apollo at Delphi")},
+            {},
+        )
+        _, rows, _ = N.build(
+            export_of([delphi, pompeii], ext_ids=[ext(delphi["id"], "wikidata_qid", "Q1")]), store
+        )
+        got = next(r for r in rows if r["id"] == delphi["id"])
+        assert got["needs_model"] is True and "ambiguous_after_qualifier" in got["reasons"]
+
 
 class TestTheBuild:
     def test_the_forms_come_from_the_item_the_names_table_and_the_article(self, tmp_path) -> None:
@@ -279,3 +363,28 @@ class TestTheBuild:
         a, b = site(name="Aaa, Bbb"), site(name="Zzz 9")
         triage, _, _ = N.build(export_of([a, b]), store_of(tmp_path, {}, {}))
         assert [r["name"] for r in triage] == ["Zzz 9", "Aaa, Bbb"]
+
+    def test_the_note_on_the_label_is_on_both_records_and_counted_from_them(self, tmp_path) -> None:
+        odd = site(name="Quesera, Lanzarote")
+        known = site(name="Boardy, Kent")
+        store = store_of(
+            tmp_path,
+            {
+                "Q1": entity("Q1", label="Cheeseboard"),
+                "Q2": entity("Q2", label="Cheeseboard"),
+            },
+            {},
+        )
+        exported = export_of(
+            [odd, known],
+            ext_ids=[
+                ext(odd["id"], "wikidata_qid", "Q1"),
+                ext(known["id"], "wikidata_qid", "Q2"),
+                ext(known["id"], "enwiki_title", "Boardy,_Kent"),
+            ],
+        )
+        triage, spoken_rows, counts = N.build(exported, store)
+        in_triage = {r["id"]: r["differs_from_label"] for r in triage}
+        in_spoken = {r["id"]: r["differs_from_label"] for r in spoken_rows}
+        assert in_triage == in_spoken == {odd["id"]: True, known["id"]: False}
+        assert counts["differs_from_label_note"] == 1

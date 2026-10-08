@@ -58,6 +58,21 @@ class TestTheClassLabels:
         assert modern == ["village in a park"]
         assert archaeological == ["Roman villa"]
 
+    def test_a_metropolis_and_a_former_capital_are_modern_administrative_classes(self) -> None:
+        # Sofia's "metropolis" holds "polis"; Luoyang's "former capital" and Tongeren's "former
+        # municipality" hold "former" - none of them says the ancient place is a site
+        sofia = ["city in Bulgaria", "largest city", "metropolis", "municipality seat"]
+        modern, archaeological = funnel.classify_classes(sofia)
+        assert modern == ["city in Bulgaria", "municipality seat"] and archaeological == []
+        _, archaeological = funnel.classify_classes(["big city", "former capital"])
+        assert archaeological == []
+        _, archaeological = funnel.classify_classes(["city", "former municipality"])
+        assert archaeological == []
+
+    def test_a_polis_is_still_archaeological(self) -> None:
+        _, archaeological = funnel.classify_classes(["polis", "ancient Greek polis", "city"])
+        assert archaeological == ["polis", "ancient Greek polis"]
+
 
 class TestTheOpening:
     def test_the_word_village_is_not_an_archaeological_villa(self) -> None:

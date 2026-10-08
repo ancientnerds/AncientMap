@@ -52,6 +52,15 @@ class TestTheStampFamily:
         )
         assert scope_window.stamp_family("2026-09-23_scope-e4-s002") == "scope-e4"
 
+    def test_a_reversal_keeps_the_family_of_its_write_and_says_it_is_one(self) -> None:
+        assert (
+            scope_window.stamp_family("2026-09-26_fields-wd3-s004-rollback")
+            == "fields-wd3-rollback"
+        )
+        assert (
+            scope_window.stamp_family("phase3:batch-0288:chunk-0001-rollback") == "phase3-rollback"
+        )
+
 
 class TestTheDateTheWindowTests:
     def test_the_end_of_the_period_is_the_date(self) -> None:
@@ -141,6 +150,28 @@ class TestTheProvenance:
         flags = {r["id"]: r["recheck_d10"] for r in records}
         assert flags[a["id"]] and flags[b["id"]] and not flags[c["id"]]
         assert counts["recheck_d10"] == 2
+
+    def test_a_column_whose_last_row_is_a_rollback_is_not_credited_to_the_reverted_write(
+        self,
+    ) -> None:
+        a, b = site(outside_window=True), site(outside_window=True)
+        records, counts = scope_window.build(
+            export_of(
+                [a, b, hadrian()],
+                period_journal=[
+                    journal(a["id"], stamp="2026-09-26_fields-wd3-s004-rollback"),
+                    journal(b["id"], stamp="2026-09-26_fields-wd3-s004"),
+                ],
+            )
+        )
+        by_id = {r["id"]: r for r in records}
+        reverted = by_id[a["id"]]
+        assert reverted["origin"] == "fields-wd3-rollback" and not reverted["recheck_d10"]
+        assert reverted["period_writes"]["period_start"]["reverted"] is True
+        kept = by_id[b["id"]]
+        assert kept["origin"] == "fields-wd3" and kept["recheck_d10"]
+        assert kept["period_writes"]["period_start"]["reverted"] is False
+        assert counts["recheck_d10"] == 1 and counts["origin_fields-wd3-rollback"] == 1
 
     def test_the_period_the_window_tested_is_reported(self) -> None:
         late = site(name="Late", outside_window=True, period_start=1800, period_end=0)

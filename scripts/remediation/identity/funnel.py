@@ -65,11 +65,11 @@ NOT_MODERN = re.compile(
 )
 #: A class label that names an archaeological or heritage kind.
 ARCHAEOLOGICAL = re.compile(
-    r"(archaeolog|ancient|ruin|polis|tell|necropolis|hillfort|hill fort|castle|temple|tomb|grave|"
+    r"(archaeolog|ancient|ruin|\bpolis\b|tell|necropolis|hillfort|hill fort|castle|temple|tomb|grave|"
     r"barrow|burial|mound|cave|villa|stone|dolmen|menhir|henge|cairn|broch|oppidum|pyramid|"
     r"castrum|settlement site|bronze age|neolithic|iron age|roman|monument|fort|wall|gate|rock|"
     r"cultural property|cultural heritage|historic site|museum|park|church|monastery|abbey|"
-    r"cemetery|megalith|petroglyph|geoglyph|lost|abandoned|former|destroyed|submerged|deserted)",
+    r"cemetery|megalith|petroglyph|geoglyph|lost|abandoned|destroyed|submerged|deserted)",
     re.I,
 )
 #: "... is a village" at the start of the first sentence (at most 80 characters before the verb).

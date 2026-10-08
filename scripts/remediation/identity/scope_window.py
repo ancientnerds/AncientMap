@@ -16,7 +16,10 @@ rule (d) asks whether its exhibits are ancient, a different question from the pe
 Each site carries its **period provenance** from the change journal: the last write of
 `period_start`, `period_end` and `period_name` (stamp, family, confidence, old and new value, the
 models the write's evidence names), and `origin`: the family of the last `period_start` write, or
-`import` when the journal never touched it. A period written by the Phase-3 field lanes WD3/WD4
+`import` when the journal never touched it. A reversal is a journal row too: when the last write of
+a column is a rollback (`journal_chain.is_rollback`) it is reported as that, `reverted: true`, and
+its family is the reversal's (`fields-wd3-rollback`), so a reverted write is never named as the
+column's origin and is not `recheck_d10`. A period written by the Phase-3 field lanes WD3/WD4
 (`fields-wd3`, `fields-wd4`) is `recheck_d10`: those waves were partly answered by MiniMax with no
 recorded release, and the owner's D10 re-checks them before any of them decides a retirement.
 
@@ -38,6 +41,8 @@ for _root in (str(_HERE.parents[3]), str(_HERE.parents[1])):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+import journal_chain  # noqa: E402
+
 from identity import common, export  # noqa: E402
 
 OUTPUT = "SCOPE_WINDOW.jsonl"
@@ -49,7 +54,11 @@ RECHECK_FAMILIES = ("fields-wd3", "fields-wd4")
 
 def stamp_family(run_stamp: str) -> str:
     """The lane a journal stamp belongs to, without its date prefix and its step number:
-    `2026-09-26d_fields-wd1-s018` is `fields-wd1`, `phase3:batch-0288:chunk-0001` is `phase3`."""
+    `2026-09-26d_fields-wd1-s018` is `fields-wd1`, `phase3:batch-0288:chunk-0001` is `phase3`.
+    A reversal keeps its write's family and the suffix: `fields-wd1-rollback`."""
+    if journal_chain.is_rollback(run_stamp):
+        write = run_stamp.removesuffix(journal_chain.ROLLBACK_SUFFIX)
+        return stamp_family(write) + journal_chain.ROLLBACK_SUFFIX
     if run_stamp.startswith("phase3:"):
         return "phase3"
     return re.sub(r"^\d{4}-\d{2}-\d{2}[a-z]?_", "", re.sub(r"-s\d+$", "", run_stamp))
@@ -83,6 +92,7 @@ def provenance(journal: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]
             "new": entry["new_value"],
             "applied_at": entry["applied_at"],
             "models": entry["models"],
+            "reverted": journal_chain.is_rollback(entry["run_stamp"]),
         }
     return out
 

@@ -54,8 +54,9 @@ class TestTheReadIsReadOnly:
         assert outside_e3_window("u.") in export.SHOWN_SQL
         assert outside_e3_window("u.") in export.PERIOD_JOURNAL_SQL
 
-    def test_the_period_journal_leaves_out_rollbacks_and_probes(self) -> None:
-        assert "NOT LIKE '%rollback%'" in export.PERIOD_JOURNAL_SQL
+    def test_the_period_journal_keeps_rollbacks_and_leaves_out_probes(self) -> None:
+        # a reversal is the last row of its column: leaving it out names the reverted write
+        assert "rollback" not in export.PERIOD_JOURNAL_SQL
         assert "NOT LIKE '%probe%'" in export.PERIOD_JOURNAL_SQL
 
 
