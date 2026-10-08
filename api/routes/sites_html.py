@@ -8,7 +8,9 @@ listed (same rule as the sitemap) — the bulk-imported 750K sites are
 searchable via the app but not part of the crawl surface.
 
 A retired site (E4, migration 0020) is not listed anywhere and its own URL
-answers 410 Gone, like a withdrawn story.
+answers 410 Gone, like a withdrawn story - unless it was retired as a duplicate
+(`duplicate_of:<uuid>`, D14) of a shown curated site: that URL has a canonical twin and
+answers 301 to it.
 """
 
 import logging
@@ -34,7 +36,12 @@ from pipeline.sites_html_renderer import (
     site_slug,
 )
 from pipeline.utils.card_provenance import validate as validate_card_provenance
-from pipeline.utils.public_sites import RETIRED, curated_page, not_retired
+from pipeline.utils.public_sites import (
+    RETIRED,
+    curated_page,
+    duplicate_survivor_id,
+    not_retired,
+)
 from pipeline.utils.slugs import story_slug
 
 logger = logging.getLogger(__name__)
@@ -247,10 +254,11 @@ async def legacy_site_redirect(
         target = encode_path(site_path(row.country, row.name, id))
         return RedirectResponse(url=f"{target}{query}", status_code=301)
     exists = db.execute(
-        text("SELECT scope_status FROM unified_sites WHERE id::text = :id"), {"id": id}
+        text("SELECT scope_status, scope_reason FROM unified_sites WHERE id::text = :id"),
+        {"id": id},
     ).fetchone()
     if exists and exists.scope_status == RETIRED:
-        return _site_410()
+        return _retired_site(exists.scope_reason, query, db)
     if exists:
         return RedirectResponse(url=f"/globe.html{query}#focus={id}", status_code=301)
     return _site_404()
@@ -263,6 +271,22 @@ def _site_404() -> Response:
         status_code=404,
         headers={"Cache-Control": "public, max-age=300"},
     )
+
+
+def _retired_site(scope_reason: str | None, query: str, db: Session) -> Response:
+    """The answer for a retired site: 301 to the survivor of a duplicate merge, else 410.
+
+    The survivor must have a crawlable page itself (`_CURATED_WHERE`, retired excluded):
+    a retired or missing survivor leaves nothing to redirect to, and the loser stays 410.
+    `query` is the utm tail of the legacy URL, kept across the hop.
+    """
+    survivor_id = duplicate_survivor_id(scope_reason)
+    if survivor_id:
+        survivor = db.execute(_LEGACY_SITE_SQL, {"id": survivor_id}).fetchone()
+        if survivor:
+            target = encode_path(site_path(survivor.country, survivor.name, survivor_id))
+            return RedirectResponse(url=f"{target}{query}", status_code=301)
+    return _site_410()
 
 
 def _site_410() -> Response:
@@ -281,7 +305,7 @@ def _site_410() -> Response:
 
 
 def _site_by_prefix(prefix: str, db: Session):
-    """The (id, scope_status) row of a site with this 8-hex prefix, or None.
+    """The (id, scope_status, scope_reason) row of a site with this 8-hex prefix, or None.
 
     Reached when no shown curated site matches: the row is either an uncurated site
     (lives on the globe only) or a retired one (answers 410). A retired row wins a
@@ -294,7 +318,7 @@ def _site_by_prefix(prefix: str, db: Session):
     """
     return db.execute(
         text("""
-            SELECT id::text AS id, scope_status FROM unified_sites
+            SELECT id::text AS id, scope_status, scope_reason FROM unified_sites
             WHERE id >= CAST(:lo AS uuid) AND id <= CAST(:hi AS uuid)
             ORDER BY (scope_status IS NOT DISTINCT FROM 'retired') DESC
             LIMIT 1
@@ -350,7 +374,7 @@ async def site_detail(country: str, slug: str, db: Session = Depends(get_db)):
         # wirklich gibt.
         other = _site_by_prefix(prefix, db)
         if other and other.scope_status == RETIRED:
-            return _site_410()
+            return _retired_site(other.scope_reason, "", db)
         if other:
             return RedirectResponse(url=f"/globe.html#focus={other.id}", status_code=301)
         return _site_404()

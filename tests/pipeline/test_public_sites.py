@@ -19,6 +19,7 @@ from pipeline.utils.public_sites import (
     RETIRED,
     SCOPE_STATUSES,
     curated_page,
+    duplicate_survivor_id,
     is_retired,
     journal_join,
     last_change,
@@ -165,3 +166,28 @@ def test_every_page_advertiser_uses_the_one_curated_rule():
     assert indexnow._CURATED_SHOWN == curated_page("u")
     assert static_exporter._CURATED_PAGE == curated_page()
     assert curated_page() in site_stats._CURATED_COUNTRIES_SQL.text
+
+
+SURVIVOR = "ed186ea9-9ed1-415d-828b-97d9f21401d2"
+
+
+def test_the_survivor_of_a_duplicate_retirement_is_its_uuid():
+    assert duplicate_survivor_id(f"duplicate_of:{SURVIVOR}") == SURVIVOR
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        None,
+        "",
+        "out of the E3 window",
+        "duplicate_of:",
+        "duplicate_of:ed186ea9",
+        f"duplicate_of:{SURVIVOR} (Chiapa)",
+        f" duplicate_of:{SURVIVOR}",
+        f"duplicate_of:{SURVIVOR.upper()}",
+        f"duplicate_of:{SURVIVOR}\n",
+    ],
+)
+def test_any_other_reason_names_no_survivor(reason):
+    assert duplicate_survivor_id(reason) is None
