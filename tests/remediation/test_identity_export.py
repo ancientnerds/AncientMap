@@ -101,6 +101,17 @@ class TestTheEntitiesComeFromTheHarvestThenTheDelta:
         item, source = store.get("Q1")
         assert item["id"] == "Q1" and source == entities.SOURCE_HARVEST
 
+    def test_an_item_both_roots_hold_is_read_from_the_harvest(self, tmp_path) -> None:
+        store = store_of(
+            tmp_path,
+            {"Q1": entity("Q1", label="Harvest")},
+            {},
+            delta={"Q1": entity("Q1", label="Delta")},
+        )
+        item, source = store.get("Q1")
+        assert source == entities.SOURCE_HARVEST
+        assert item["labels"]["en"]["value"] == "Harvest"
+
     def test_an_item_only_the_delta_holds_is_found_there(self, tmp_path) -> None:
         store = store_of(tmp_path, {}, {}, delta={"Q2": entity("Q2")})
         assert store.get("Q2")[1] == entities.SOURCE_DELTA

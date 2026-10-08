@@ -36,7 +36,13 @@ class TestTheClassLabels:
         assert funnel.modern_class("municipality of Spain")
 
     def test_an_ancient_settlement_class_is_not_modern(self) -> None:
-        for label in ("ancient city", "deserted village", "Roman city", "former municipality"):
+        for label in (
+            "ancient city",
+            "Roman city",
+            "city in Roman Spain",
+            "abandoned village in Kent",
+            "village of the Iron Age",
+        ):
             assert not funnel.modern_class(label), label
 
     def test_the_settlement_cut_comes_first_a_resort_is_not_a_settlement_class(self) -> None:

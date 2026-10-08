@@ -41,20 +41,15 @@ for _root in (str(_HERE.parents[3]), str(_HERE.parents[1])):
 from identity import common, export  # noqa: E402
 
 OUTPUT = "SCOPE_WINDOW.jsonl"
-PERIOD_COLUMNS = ("period_start", "period_end", "period_name")
 HADRIANS_WALL_PATH_NAME = "Hadrian's Wall Path"
 ORIGIN_IMPORT = "import"
 #: The families whose period is re-checked first (D10).
 RECHECK_FAMILIES = ("fields-wd3", "fields-wd4")
-#: `2026-09-26d_fields-wd1-s018` -> `fields-wd1`; `phase3:batch-0288:chunk-0001` -> `phase3`.
-_FIELDS_STAMP = re.compile(r"(fields-wd\d)")
 
 
 def stamp_family(run_stamp: str) -> str:
-    """The lane a journal stamp belongs to, without its date prefix and its step number."""
-    fields = _FIELDS_STAMP.search(run_stamp)
-    if fields:
-        return fields.group(1)
+    """The lane a journal stamp belongs to, without its date prefix and its step number:
+    `2026-09-26d_fields-wd1-s018` is `fields-wd1`, `phase3:batch-0288:chunk-0001` is `phase3`."""
     if run_stamp.startswith("phase3:"):
         return "phase3"
     return re.sub(r"^\d{4}-\d{2}-\d{2}[a-z]?_", "", re.sub(r"-s\d+$", "", run_stamp))

@@ -101,8 +101,6 @@ def shared_enwiki_edges(
             holders[title.replace("_", " ")].append(site)
     out: dict[str, list[str]] = {}
     for title, sites in sorted(holders.items()):
-        if len(sites) < 2:
-            continue
         items = {tuple(sorted(qids.get(s, ()))) for s in sites}
         if len(items) > 1:
             out[title] = sorted(sites)

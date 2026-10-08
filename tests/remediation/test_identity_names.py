@@ -131,6 +131,10 @@ class TestTheSpokenName:
         assert got["spoken"] == "Temple of Apollo" and got["source"] == "name"
         assert got["needs_model"] is False and got["steps"] == []
 
+    def test_a_double_space_is_a_whitespace_step(self) -> None:
+        got = spoken("Temple  of Apollo")
+        assert got["spoken"] == "Temple of Apollo" and got["steps"] == ["whitespace"]
+
     def test_a_qualifier_after_a_comma_is_dropped(self) -> None:
         got = spoken("Temple of Mercury, Puy de Dome")
         assert got["spoken"] == "Temple of Mercury" and got["steps"] == ["qualifier"]
@@ -162,7 +166,7 @@ class TestTheSpokenName:
         assert got["spoken"] == "Menga" and got["source"] == "label"
 
     def test_a_form_without_the_names_distinctive_word_does_not_stand_for_it(self) -> None:
-        got = spoken("Castillo de Almodovar", ("Castillo", "alias"))
+        got = spoken("Torre de Almofala", ("Torre", "alias"))
         assert got["needs_model"] is True
 
     def test_a_form_that_shares_too_few_words_does_not_stand_for_it(self) -> None:

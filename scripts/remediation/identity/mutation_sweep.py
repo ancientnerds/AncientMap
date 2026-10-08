@@ -231,18 +231,19 @@ CASES: list[Case] = [
         "test_edges_that_share_a_site_make_one_cluster",
         T_DUPS,
     ),
-    guard(
-        "article held once",
-        DUPS,
-        "        if len(sites) < 2:",
-        "test_an_article_held_once_is_no_edge",
-        T_DUPS,
-    ),
-    guard(
+    swap(
         "article under one item",
         DUPS,
         "        if len(items) > 1:",
+        "        if True:",
         "test_a_shared_article_under_one_item_is_left_to_the_shared_item",
+        T_DUPS,
+    ),
+    guard(
+        "article under two items",
+        DUPS,
+        "        if len(items) > 1:",
+        "test_a_shared_article_under_different_items_is_an_edge",
         T_DUPS,
     ),
     swap(
@@ -512,25 +513,49 @@ CASES: list[Case] = [
         "test_a_form_in_capitals_is_not_spoken",
         T_NAMES,
     ),
-    guard(
+    swap(
         "step whitespace",
         NAMES,
         "    if text != name:",
+        "    if True:",
         "test_a_clean_name_is_spoken_as_it_is",
         T_NAMES,
     ),
-    guard(
+    swap(
         "step qualifier",
         NAMES,
         "    if stripped != text:",
+        "    if True:",
+        "test_a_clean_name_is_spoken_as_it_is",
+        T_NAMES,
+    ),
+    swap(
+        "step numeral",
+        NAMES,
+        "    if numberless != stripped:",
+        "    if True:",
         "test_a_clean_name_is_spoken_as_it_is",
         T_NAMES,
     ),
     guard(
-        "step numeral",
+        "step whitespace recorded",
+        NAMES,
+        "    if text != name:",
+        "test_a_double_space_is_a_whitespace_step",
+        T_NAMES,
+    ),
+    guard(
+        "step qualifier recorded",
+        NAMES,
+        "    if stripped != text:",
+        "test_a_qualifier_after_a_comma_is_dropped",
+        T_NAMES,
+    ),
+    guard(
+        "step numeral recorded",
         NAMES,
         "    if numberless != stripped:",
-        "test_a_clean_name_is_spoken_as_it_is",
+        "test_a_trailing_arabic_numeral_is_dropped",
         T_NAMES,
     ),
     guard(
@@ -585,13 +610,6 @@ CASES: list[Case] = [
         T_NAMES,
     ),
     # ------------------------------------------------------------------------------ scope
-    guard(
-        "stamp family fields",
-        SCOPE,
-        "    if fields:",
-        "test_a_field_lane_stamp_is_its_lane",
-        T_SCOPE,
-    ),
     guard(
         "stamp family phase three",
         SCOPE,
@@ -692,17 +710,9 @@ CASES: list[Case] = [
     swap(
         "strict subset",
         PARENTS,
-        "            if not left or not right or left == right or not (left < right or right < left):",
-        "            if not left or not right or left == right:",
-        "test_names_that_merely_overlap_are_not_a_pair",
-        T_SCOPE,
-    ),
-    swap(
-        "equal words",
-        PARENTS,
-        "            if not left or not right or left == right or not (left < right or right < left):",
         "            if not left or not right or not (left < right or right < left):",
-        "test_names_with_the_same_significant_words_are_not_a_pair",
+        "            if not left or not right:",
+        "test_names_that_merely_overlap_are_not_a_pair",
         T_SCOPE,
     ),
     guard(

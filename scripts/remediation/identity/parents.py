@@ -54,7 +54,7 @@ def candidate_pairs(
             if a["country"] != b["country"]:
                 continue
             left, right = words[a["id"]], words[b["id"]]
-            if not left or not right or left == right or not (left < right or right < left):
+            if not left or not right or not (left < right or right < left):
                 continue
             metres = common.metres(a, b)
             if metres > MAX_METRES:
