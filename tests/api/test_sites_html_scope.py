@@ -20,6 +20,7 @@ from tests.fake_sql import RecordingSession
 
 SHOWN = not_retired()
 SITE_ID = "17cf019a-0000-4000-8000-000000000000"
+SURVIVOR_ID = "ed186ea9-9ed1-415d-828b-97d9f21401d2"
 
 
 def _run(coro):
@@ -114,7 +115,11 @@ def test_a_live_country_wins_over_a_retired_slug_of_the_same_name():
 
 def test_detail_page_of_a_retired_site_answers_410():
     db = RecordingSession(
-        {"WHERE id >= CAST(:lo AS uuid)": [SimpleNamespace(id=SITE_ID, scope_status="retired")]}
+        {
+            "WHERE id >= CAST(:lo AS uuid)": [
+                SimpleNamespace(id=SITE_ID, scope_status="retired", scope_reason="out of window")
+            ]
+        }
     )
     resp = _run(sh.site_detail(country="syria", slug="damascus-gate-17cf019a", db=db))
     assert resp.status_code == 410
@@ -132,7 +137,11 @@ def test_detail_page_prefers_the_retired_row_on_a_shared_prefix():
 
 def test_detail_page_of_an_uncurated_shown_site_still_goes_to_the_globe():
     db = RecordingSession(
-        {"WHERE id >= CAST(:lo AS uuid)": [SimpleNamespace(id=SITE_ID, scope_status=None)]}
+        {
+            "WHERE id >= CAST(:lo AS uuid)": [
+                SimpleNamespace(id=SITE_ID, scope_status=None, scope_reason=None)
+            ]
+        }
     )
     resp = _run(sh.site_detail(country="syria", slug="damascus-gate-17cf019a", db=db))
     assert resp.status_code == 301
@@ -140,10 +149,106 @@ def test_detail_page_of_an_uncurated_shown_site_still_goes_to_the_globe():
 
 
 def test_legacy_url_of_a_retired_site_answers_410():
-    db = RecordingSession({"SELECT scope_status FROM": [SimpleNamespace(scope_status="retired")]})
+    db = RecordingSession(
+        {
+            "SELECT scope_status, scope_reason FROM": [
+                SimpleNamespace(scope_status="retired", scope_reason="out of window")
+            ]
+        }
+    )
     resp = asyncio.run(sh.legacy_site_redirect(id=SITE_ID, db=db))
     assert resp.status_code == 410
     assert SHOWN in db.statement_with("SELECT name, country FROM unified_sites")
+
+
+# D14: a duplicate merge retires the loser as `duplicate_of:<survivor id>`. Its URL has a
+# canonical twin then, so it answers 301 to it - a 410 would leave Search Console holding a
+# withdrawn page for a site that lives on under another URL. Every other retirement stays 410.
+SURVIVOR = SimpleNamespace(name="Chiapa de Corzo", country="Mexico")
+SURVIVOR_URL = f"/sites/mexico/chiapa-de-corzo-{SURVIVOR_ID[:8]}"
+
+
+class _LoserSession(RecordingSession):
+    """The curated lookup by id (_LEGACY_SITE_SQL) finds `survivor` for the survivor's id and
+    nothing for the loser's: the loser is retired, so it is not a curated page."""
+
+    def __init__(self, reason, survivor):
+        super().__init__(
+            {
+                "WHERE id >= CAST(:lo AS uuid)": [
+                    SimpleNamespace(id=SITE_ID, scope_status="retired", scope_reason=reason)
+                ],
+                "SELECT scope_status, scope_reason FROM": [
+                    SimpleNamespace(scope_status="retired", scope_reason=reason)
+                ],
+            }
+        )
+        self.survivor = survivor
+
+    def execute(self, stmt, params=None):
+        result = super().execute(stmt, params)
+        if "SELECT name, country FROM unified_sites" in self.statements()[-1]:
+            found = [self.survivor] if self.survivor and params["id"] == SURVIVOR_ID else []
+            return type(result)(found)
+        return result
+
+    def survivor_lookups(self):
+        return [p for s, p in self.log if "SELECT name, country FROM unified_sites" in s]
+
+
+def test_a_duplicate_loser_with_a_shown_survivor_answers_301_to_the_survivor():
+    db = _LoserSession(f"duplicate_of:{SURVIVOR_ID}", SURVIVOR)
+    resp = _run(sh.site_detail(country="syria", slug="damascus-gate-17cf019a", db=db))
+    assert resp.status_code == 301
+    assert resp.headers["location"] == SURVIVOR_URL
+    assert db.survivor_lookups() == [{"id": SURVIVOR_ID}]
+    # the survivor is looked up among the shown curated sites only
+    assert SHOWN in db.statement_with("SELECT name, country FROM unified_sites")
+
+
+def test_the_legacy_url_of_a_duplicate_loser_answers_301_to_the_survivor_and_keeps_utm():
+    db = _LoserSession(f"duplicate_of:{SURVIVOR_ID}", SURVIVOR)
+    resp = asyncio.run(sh.legacy_site_redirect(id=SITE_ID, utm_source="discord", db=db))
+    assert resp.status_code == 301
+    assert resp.headers["location"] == f"{SURVIVOR_URL}?utm_source=discord"
+    assert db.survivor_lookups() == [{"id": SITE_ID}, {"id": SURVIVOR_ID}]
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "out of the E3 window",
+        None,
+        "duplicate_of:",
+        "duplicate_of:not-a-uuid",
+        f"duplicate_of:{SURVIVOR_ID[:-1]}",
+        f"duplicate_of:{SURVIVOR_ID} and more",
+        f"duplicate_of:{SURVIVOR_ID.upper()}",
+        f"duplicate:{SURVIVOR_ID}",
+    ],
+)
+def test_any_other_or_malformed_reason_stays_410_without_asking_for_a_survivor(reason):
+    db = _LoserSession(reason, SURVIVOR)
+    resp = _run(sh.site_detail(country="syria", slug="damascus-gate-17cf019a", db=db))
+    assert resp.status_code == 410
+    assert "location" not in resp.headers
+    assert db.survivor_lookups() == []
+
+
+def test_a_duplicate_loser_whose_survivor_is_retired_or_missing_stays_410():
+    """The curated predicate excludes a retired and a non-curated survivor; a missing id
+    matches no row. All three look the same to the route: no row, so no redirect."""
+    db = _LoserSession(f"duplicate_of:{SURVIVOR_ID}", None)
+    resp = _run(sh.site_detail(country="syria", slug="damascus-gate-17cf019a", db=db))
+    assert resp.status_code == 410
+    assert "location" not in resp.headers
+    assert db.survivor_lookups() == [{"id": SURVIVOR_ID}]
+
+
+def test_the_legacy_url_of_a_loser_with_a_gone_survivor_stays_410():
+    db = _LoserSession(f"duplicate_of:{SURVIVOR_ID}", None)
+    resp = asyncio.run(sh.legacy_site_redirect(id=SITE_ID, db=db))
+    assert resp.status_code == 410
 
 
 def test_siblings_and_parent_link_only_shown_sites():

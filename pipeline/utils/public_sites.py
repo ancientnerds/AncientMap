@@ -41,6 +41,12 @@ RETIRED = "retired"
 
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
+#: A duplicate is retired with the reason ``duplicate_of:<survivor id>`` (D14). The id is
+#: spelled the way Postgres prints a uuid: lower case, 36 characters, nothing after it.
+_DUPLICATE_REASON = re.compile(
+    r"duplicate_of:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+)
+
 
 def _column(alias: str, column: str) -> str:
     if not alias:
@@ -64,6 +70,16 @@ def not_retired(alias: str = "") -> str:
 def is_retired(alias: str = "") -> str:
     """SQL predicate: the row is retired. For the paths that answer 410 or delete."""
     return f"{_column(alias, 'scope_status')} = '{RETIRED}'"
+
+
+def duplicate_survivor_id(scope_reason: str | None) -> str | None:
+    """The survivor id of a ``duplicate_of:<uuid>`` retirement reason, else None.
+
+    Any other reason (out of the time window, a collective entity, free text) and a
+    malformed id give None: the page of such a site has no twin to point at.
+    """
+    match = _DUPLICATE_REASON.fullmatch(scope_reason or "")
+    return match.group(1) if match else None
 
 
 def curated_page(alias: str = "") -> str:
