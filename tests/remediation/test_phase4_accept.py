@@ -4,7 +4,7 @@
 the next. These tests give it a fake production that parses the SQL it is sent - it answers only
 read-only SELECTs, reads the stamp patterns, the (table, column) pairs and the key lists out of the
 statement, and computes the hash invariants the way Postgres would - and break one thing each: a
-chain, a value, a quote, a stored text, a hash, a card file, a boot log. No socket, no production.
+chain, a value, a quote, a stored text, a hash, a boot log. No socket, no production.
 """
 
 from __future__ import annotations
@@ -1079,39 +1079,8 @@ def test_t08_runs_over_the_written_sites() -> None:
 
 
 # ------------------------------------------------------------------------------------------------
-# 5-6. The card file and the boot logs
+# 6. The boot logs
 # ------------------------------------------------------------------------------------------------
-
-
-def test_the_card_file_check_reads_the_tools_own_exit_line(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    card_json = tmp_path / "card_json.py"
-    monkeypatch.setattr(A, "CARD_JSON", card_json)
-    assert A.card_file_deviations(lambda argv: (0, "")) == [
-        f"CARD FILE: {card_json} is not on this tree (WB-D3)"
-    ]
-    card_json.write_text("", encoding="utf-8")
-    seen: list[list[str]] = []
-
-    def command(output: str, status: int = 0) -> Any:
-        def run(argv: Any) -> tuple[int, str]:
-            seen.append(list(argv))
-            return status, output
-
-        return run
-
-    assert A.card_file_deviations(command("4,996 entries equal\nACCEPT_EXIT=0\n")) == []
-    assert seen[-1][1:] == [str(card_json), "--check"]
-    assert A.card_file_deviations(command("1 entry differs\nACCEPT_EXIT=1\n", status=1))
-    assert A.card_file_deviations(command("no exit line at all\n"))
-    # exit status 0 with a failing exit line still fails
-    assert A.card_file_deviations(command("WRITE_EXIT=0\nACCEPT_EXIT=3\n", status=0))
-    # audit 2026-09-25 m17: `--check` prints `ACCEPT_EXIT=` - another tool's clean exit line is
-    # not its answer, two exit lines are not one run, and a failed process is not a clean check
-    assert A.card_file_deviations(command("4,996 entries equal\nSTAGE_EXIT=0\n"))
-    assert A.card_file_deviations(command("ACCEPT_EXIT=1\nACCEPT_EXIT=0\n"))
-    assert A.card_file_deviations(command("ACCEPT_EXIT=0\n", status=1))
 
 
 def test_the_boot_logs_of_both_containers_carry_no_overwrite() -> None:

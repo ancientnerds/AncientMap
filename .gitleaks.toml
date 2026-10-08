@@ -25,7 +25,7 @@ regexes = [
 ]
 
 # Lane WB's journalled write steps (output/remediation/mechanical_teaser/sNNN/{prov,card}/*.sql,
-# committed with every card-file push, docs/procedures/CARD_DESCRIPTIONS.md 5.5): the statements
+# committed with the trail of each sitting, docs/procedures/CARD_DESCRIPTIONS.md 5.5): the statements
 # carry each site's premise as sha256 hex (the description's and the card's text hash, "key as it
 # was") - hashes of public text, not credentials. First flagged in the push of 5c7d52f (38 findings,
 # generic-api-key, all such hashes).

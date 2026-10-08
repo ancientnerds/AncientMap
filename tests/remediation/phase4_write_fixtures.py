@@ -1,9 +1,8 @@
 """Shared fixtures for the Phase-4/5 writer tests: one pinned source, one plan batch on disk, and a
 fake psql that parses what it is given.
 
-Not a test module (no `test_` prefix): `test_phase4_write.py`, `test_phase4_legacy.py` and
-`test_phase4_card_json.py` import it. Nothing here opens a socket, calls a model or touches a
-database.
+Not a test module (no `test_` prefix): `test_phase4_write.py` and `test_phase4_legacy.py` import it. Nothing here opens a socket, calls a
+model or touches a database.
 """
 
 from __future__ import annotations

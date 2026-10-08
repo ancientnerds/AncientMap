@@ -120,164 +120,36 @@ condition, `value = left(lower(unaccent(value)), 500)`. The DELETE just before t
 duplicate `unified_site_names` rows keeping the lowest id, so inserting a duplicate name here is
 undone on the next start.
 
-### 2.3 `card_stats.card_description` — the JSON file wins on every API boot
+### 2.3 `card_stats.card_description` — the database is the one copy (D25, 2026-10-08)
 
-`api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions`, an
-unconditional startup import:
+Until D25 this was the field the JSON file won on every API boot: `api/main.py::lifespan` ran
+`api/services/card_descriptions.py::import_card_descriptions`, an unconditional upsert of
+`public/data/card_descriptions.json` over the column, so a database-only write was reverted at the
+next API start and every card write had to be rendered into the file and pushed in the same sitting.
 
-- Source: `public/data/card_descriptions.json`, key `descriptions`. A normal git blob, **not
-  LFS** (`.gitattributes` puts `public/data/sites/*`, `*.geojson` and `*.json.gz` into LFS,
-  not this file; `git check-attr filter` answers `unspecified`, verified 2026-09-23).
-- Upsert `_UPSERT_SQL` in `api/services/card_descriptions.py`:
+**Rule (since D25): the authoritative copy of a card text is `card_stats.card_description` in the
+database.** Nothing re-derives it on a start: the boot import, `api/services/card_descriptions.py`,
+`teaser.py card-file` and `phase4/card_json.py` are removed, the frontend and the static exporter
+read the column. A card is written through the journal (`apply_remediation_change`, the mechanical
+lanes `teaser-prov-sNNN` / `teaser-card-sNNN`, or `write_gate4.py --group P5`) and nothing else is
+needed: no file, no push, no push lock (`docs/procedures/CARD_DESCRIPTIONS.md` section 5.5).
 
-```sql
-INSERT INTO card_stats (site_id, card_description, ...)
-VALUES (:id, :desc, 0, 0, 0, 0, 0, 0, 0, 0, 'unknown')
-ON CONFLICT (site_id) DO UPDATE SET card_description = :desc
-WHERE card_stats.card_description IS DISTINCT FROM :desc
-```
+- This holds from the deploy of the push that removed the import. Before it the old rule is in force:
+  the file wins on every boot, so a card write needs the file rendered and pushed at once.
+- `public/data/card_descriptions.json` stays in the tree until that deploy is verified (the `commit`
+  field of `http://localhost:8000/` on the VPS equals the pushed HEAD), and is then deleted by a
+  later push. Never edit it; nobody reads it.
+- `scripts/import_card_descriptions.py`, `scripts/merge_rewrites.py` and the `audit_enrich.py` Wave-4
+  merge write that file or the database without a journal. They are not remediation paths.
+- A new site needs a `card_stats` row to be drawable: a zeroed placeholder row
+  (`rarity_tier = 0`) is filled in by the API boot's `backfill_placeholder_stats`
+  (`api/cardgame/generator.py`), a row that does not exist at all by `generate_stats`.
+- `api/routes/sites.py` writes the column with `COALESCE(EXCLUDED.card_description,
+  card_stats.card_description)`: it never clears a value.
 
-- Truncated to 200 characters (`CARD_DESCRIPTION_MAX_LENGTH`, same file).
-
-The `IS DISTINCT FROM` guard only prevents rewriting an identical value. It does **not** protect a
-differing one — the JSON value overwrites the database value on every API start.
-
-**Rule: never treat `card_stats.card_description` as the source of truth, and never fix a card text
-in the database alone. Any Phase 5 correction must be applied to `public/data/card_descriptions.json`
-*and* the database, or it is reverted at the next API restart.**
-
-**The P5 order (2026-09 remediation, design entry [6], production_write step 3): the database
-first, journalled; then the file, byte for byte; then the push - in one sitting.**
-
-1. `scripts/remediation/phase4/card_json.py --prerender` renders the file the P5 plan leaves
-   behind, from the plan alone, and it is committed locally (not pushed);
-2. `output/remediation/tools/write_gate4.py --group P5 --apply --step 100` writes the cards through
-   `apply_remediation_change` (journal row, conditional old value, read-back, inverse proof), one
-   step per invocation; `verify_writes4.py` accepts each step, and its output handed to
-   `write_gate4.py --accept` is what unlocks the next `--apply` (the gate refuses to write while
-   the last step has no recorded acceptance - `docs/procedures/PHASE4_CONTRACTS.md` section 7);
-3. `card_json.py --regenerate` renders the file again from a read-only production SELECT and
-   passes only when it is byte for byte the pre-render;
-4. Push #2 (owner), then 0 `[STARTUP] Card description overwritten` lines on both API containers
-   and `card_json.py --check` (`ACCEPT_EXIT=0`).
-
-**Lane WB (teaser cards, owner decisions of 2026-09-26) keeps the same order** with its own tools:
-journalled steps of at most 100 sites (`scripts/remediation/mechanical/teaser.py plan`, `apply.py
---lane teaser-prov-sNNN` / `teaser-card-sNNN`, `teaser.py accept`), then `teaser.py card-file`
-renders the file from a read-only production SELECT with `card_json`'s renderer - refusing any key
-the named steps did not write, and any card production does not hold as the steps left it - then
-`card_json.py --check` and the push, at once (`docs/procedures/CARD_DESCRIPTIONS.md` section 5.5).
-Its undo never reverts a commit: each step's two `ROLLBACK.sql` (card lane first), `teaser.py
-close-reverted` on production's proof, then `card-file` renders the file back from production (an
-undone step's cards at their values from before it), `card_json.py --check` and the push
-(section 5.6); a red CI inside a lane-WB sitting is answered by that undo of every step of the
-sitting (section 5.5).
-
-**Pushing the file before the database write is forbidden**: the boot import would write the cards
-without a journal, and the journalled write would then refuse every row with matched_0. A red CI
-inside the P5 sitting is answered by `scripts/remediation/phase4/revert4.py --stamp-like 'phase5:%'`
-plus a `git revert` of the JSON commit (rehearsed first; `revert4` skips a write that already has
-its own reversal, so the same pattern reverts only the live round of a batch written again). The
-full sitting is in `docs/procedures/CARD_DESCRIPTIONS.md` ("How a card reaches production").
-
-For contrast, `api/routes/sites.py:1743-1751` deliberately does **not** overwrite — it uses
-`card_description = COALESCE(EXCLUDED.card_description, card_stats.card_description)`. Two write
-paths, opposite semantics; only the startup one is authoritative.
-
-#### The carrier chain, and the decision not to change the importer
-
-Measured 2026-09-20 in the api container: production's **4,996 card texts are byte-identical to
-`public/data/card_descriptions.json`** (4,996 entries, 4,996 rows found, 4,996 identical,
-`would_be_overwritten 0`). There is **no drift today**, and the reason is that the startup import
-is the step which carries the file into the rows. It is a propagation mechanism, not an
-overwriter — and §10.1 of the plan names it as a landmine for exactly that reason.
-
-The chain is already wired end to end, which is why the importer's semantics stay as they are:
-
-```
-generation -> output/card_descriptions.json          <- gitignored, DOES NOT EXIST until generated
-           -> scripts/import_card_descriptions.py    (reads :25, UPDATEs card_stats, copy2 -> public/ :58)
-           -> commit + deploy
-           -> api/main.py startup import             (the only path to an existing row)
-```
-
-`scripts/merge_rewrites.py:2` ("Merge rewrite outputs into card_descriptions.json, then
-re-validate") is the other half of the same workflow.
-
-**Neither is a remediation path** (2026-09-23): the P5 sitting above writes the rows through the
-journal and renders the file with `card_json.py`; `import_card_descriptions.py` UPDATEs
-`card_stats` without a journal row, and both carry a docstring saying so.
-
-#### Step 1 does not exist by default - bootstrap it before Phase 5
-
-Measured 2026-09-20: **`output/card_descriptions.json` is absent**; only the deployed
-`public/data/card_descriptions.json` (1,098,379 B) exists. `scripts/import_card_descriptions.py:29-31`
-fails closed on that, printing `Error: ... not found. Run card description generation first.` and
-`sys.exit(1)`. So the workflow above is **broken at step 1** until the file is created - this was
-found by the OVERWRITER lane after this section was first written, and the section was wrong.
-
-The two files have the same shape, so the bootstrap is a copy. Verified contents of the deployed
-file: exactly one top-level key `descriptions`, **4,996 entries**, UUID site_ids as keys, and a
-**maximum value length of 200** - matching `varchar(200)` and the truncation in
-`api/services/card_descriptions.py` (`CARD_DESCRIPTION_MAX_LENGTH`).
-
-```bash
-cp public/data/card_descriptions.json output/card_descriptions.json   # then edit output/ and run:
-./.venv/Scripts/python.exe scripts/import_card_descriptions.py
-```
-
-Running the script is what updates the database *without* waiting for a restart, and its
-`shutil.copy2` is what refreshes the file the API loads. Editing `public/data/card_descriptions.json`
-directly also works, since that is the file the startup import reads - but then the DB follows only
-at the next boot, and the copy step is skipped.
-
-#### The generator that feeds this chain cannot fail, and cannot notice that it did nothing
-
-Measured 2026-09-20 by **running** `scripts/merge_rewrites.py` in a faithful sandbox - its paths
-derive from `__file__`, so a whole tree was recreated around a copy of it, with a stub verifier that
-exits 3:
-
-| scenario | exit code | what it actually did |
-|---|---|---|
-| all 10 `rewrite_output_*.json` missing (**today's state**) | **0** | printed `WARNING: Missing batch files: [0..9]`, applied 0, and **still wrote `public/data/card_descriptions.json`** |
-| a batch present but every rewrite invalid | **0** | printed `Validation errors (3)`, applied 1, skipped 1 |
-
-Four defects of one kind - a command that reports success without having succeeded:
-
-1. **It cannot fail.** `sys.exit` appears **0 times** in the file, and the verifier's exit code is
-   never read (`returncode` appears **0 times**). The subprocess may fail completely and the script
-   still exits 0.
-2. **Missing batch files are a `WARNING`, not a failure.** A Phase-5 run that forgot to generate its
-   batches is indistinguishable from a successful one.
-3. **Validation errors are printed and then ignored.** The apply loop's only condition is
-   `sid in descs and len(new_desc) <= 200` (`:78`); it never consults the `errors` list. A rewrite
-   rejected as `BAD ENDING` is applied anyway. Only the >200 case is filtered, and only by accident.
-4. **Even the do-nothing run overwrites** the deploy-relevant
-   `public/data/card_descriptions.json`.
-
-**Status: fixed - `merge_rewrites.py` fails closed** (its docstring, "WHY THIS SCRIPT IS WRITTEN
-THIS WAY"; `tests/remediation/test_merge_rewrites_fails_closed.py`): all ten batches present, every
-rewrite valid, at least one applied, the count unchanged and the re-validation not worse - or it
-exits non-zero and writes nothing to `public/data/`. The table above is the defect as measured
-before the fix.
-
-**Consequence for the bootstrap above:** copying the public file back makes
-`import_card_descriptions.py` usable, and it also makes `merge_rewrites.py` runnable - which is what
-makes its silent no-op reachable. **Do not trust its exit code.** Before Phase 5, assert
-`Applied N rewrites` with N > 0 and confirm the public file actually changed. `verify_descriptions.py`
-contains no `sys.exit` either, which independently supports the plan's decision to retire it as a
-gate.
-
-**Rejected alternatives, recorded so they are not re-litigated.** Writing only into a NULL or
-empty target kills this chain — an edited file could never reach a row that already holds text.
-Guarding the import against site_ids recorded in migration 0017's `remediation_change_log` would
-give production API boot code a permanent dependency on a table that exists for one audit; a
-`to_regclass` guard is a band-aid over that coupling, not a fix.
-
-**What was done instead:** the import keeps file-authoritative semantics and gains logging of
-every discarded non-empty value (site_id and both values), so a reverted remediation write is
-visible at boot rather than silent. The remediation is then made correct **by construction**
-rather than by a guard — which is what the rule above already demanded.
+The history (the 4,996 card texts byte-identical to the file on 2026-09-20, the carrier chain, the
+P5 sitting's order "database, file, push", the defects of `merge_rewrites.py`) is in the git history
+of this file and in `output/remediation/AUDIT_LOG.md`.
 
 ---
 
@@ -334,9 +206,8 @@ read through this contract before it becomes a write:
 1. **`site_type` proposals** must be fixed points of `normalize_site_type()`. Anything else is a
    revert-on-restart edit — emit `REVIEW` instead. (Enforced in `t04_site_type.py`.)
 2. **`name_normalized` proposals** must equal `left(lower(unaccent(name)), 500)`.
-3. **`card_description` proposals** are never a database-only fix. Phase 5 writes the rows through
-   the journal *and* renders the file from the same plan, in the order of section 2.3 - a plan that
-   only writes SQL is reverted at the next boot, a file pushed first writes without a journal.
+3. **`card_description` proposals** are written through the journal (section 2.3): since D25 the
+   database is the only copy, so a journalled SQL write stands - no file follows it.
 4. **Value proposals must fit the column**, checked before the proposal is made, not at write time.
 5. **`country` and `site_type` are `varchar(100)`** — a compound value like `"Chile, Easter Island"`
    fits, but the replacement must also fit.

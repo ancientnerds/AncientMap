@@ -241,7 +241,7 @@ COLUMN_COMPARE: dict[str, str] = {
 }
 
 #: Why the two text fields are report-only, not writable. The reasons differ and must not be merged
-#: into "not supported": one is a boot overwriter, the other a phase split. `model.Finding` already
+#: into "not supported": one belongs to the card lane, the other is a phase split. `model.Finding` already
 #: refuses both; the writer refuses them again from its own reason, so the refusal cannot depend on
 #: which stage read the brief.
 REPORT_ONLY_REASON: dict[str, str] = {
@@ -250,9 +250,9 @@ REPORT_ONLY_REASON: dict[str, str] = {
         "regeneration that would produce a better one is Phase 5, not a SQL update"
     ),
     "card_description": (
-        "report-only in Phase 3: `card_stats.card_description` is re-derived on every API boot "
-        "(`api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions`, "
-        "an upsert into `card_stats`), so a database-only write is reverted at the next start"
+        "report-only in Phase 3: `card_stats.card_description` is written by the card lane "
+        "(its own plan, journal and provenance), not by a field correction; the database is the "
+        "only copy of a card text since D25 (2026-10-08), the API boot no longer re-imports a file"
     ),
 }
 

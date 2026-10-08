@@ -583,11 +583,13 @@ Once per sitting, before the first apply:
 ssh ancientnerds "cd /var/www/ancientnerds/scripts/remediation && DO_DRILL=1 ./00_backup_and_drill.sh"
 #   judged by its VERDICT line
 ssh ancientnerds "docker inspect -f '{{.Name}} {{.State.StartedAt}}' ancient_nerds_api ancient_nerds_api2"
-#   noted: an API restart inside the sitting re-imports the old card file (5.5)
+#   noted for the record; an API restart inside the sitting is harmless (5.5)
 ```
 
-and no other push to `main` until 5.5 is done (a deploy restarts the API, whose boot imports the card
-file).
+A card write is database-only (5.5): no push lock, no file push. A deploy during the sitting is
+harmless once the D25 code is live (check the `commit` field of `http://localhost:8000/` on the VPS
+against the push that removed the boot import); until then the old boot import still writes the file's
+cards over the database at every API start, so the push lock holds.
 
 Per step `N` (`NNN` = the step number with three digits; step numbers run across runs):
 
@@ -646,84 +648,52 @@ Between the two applies of a step the old card is live and marked by nothing (it
 nulled, and the teaser provenance hashes the new card): a window of minutes in which a site claims
 less, never more.
 
-### 5.5 The card file: rendered from the database, pushed at once
+### 5.5 The database is the one copy of a card text
 
-`public/data/card_descriptions.json` is the authoritative copy of the column
-(`docs/procedures/FIELD_CONTRACT.md` section 2.3): every API boot upserts each key it carries into
-`card_stats` (`api/services/card_descriptions.py`, logging every non-empty value it replaces as
-`[STARTUP] Card description overwritten`); `public/data` is mounted into the API containers from the
-VPS checkout, which the deploy pulls. **So after each write sitting, before anything else is pushed:**
+Since D25 (2026-10-08) `card_stats.card_description` lives in the database only; this holds from the
+deploy of the push that removed the boot import (before it, 5.4's lock applies). The API boot no
+longer imports `public/data/card_descriptions.json` (`api/services/card_descriptions.py` is gone),
+`teaser.py card-file` and `phase4/card_json.py` are gone, and the frontend and the static exporter
+read the column from the database. So a sitting ends with its `accept --step N`, and:
+
+- **No push lock for card writes.** Any push to `main` and any API restart may happen between two
+  steps; nothing re-imports an old card. The lock stays for the pushes themselves.
+- **No file to render, check or push.** The write order of 5.4 is the whole procedure: provenance
+  lane, card lane, `accept`.
+- **The trail is committed, not deployed.** After a sitting, force-add the proof trail and commit it
+  with the next push that happens anyway:
 
 ```bash
-$PY $MW card-file --steps A-B       # the sitting's steps; read-only; WRITE_EXIT=0
-$PY scripts/remediation/phase4/card_json.py --check     # ACCEPT_EXIT=0: file == production
-git add public/data/card_descriptions.json
 MT=output/remediation/mechanical_teaser
-git add -f $MT/STEPS.jsonl $MT/ACCEPTED $MT/sNNN/PLAN.md $MT/sNNN/SKIPPED.jsonl \
-  $MT/sNNN/prov $MT/sNNN/card          # every step of the sitting; $MT/REVERTED too once it exists
-git commit -m "Lane WB steps A-B: the card file regenerated from production"
-git push origin main                # immediately; the deploy pulls the file
+git add -f $MT/STEPS.jsonl $MT/ACCEPTED $MT/sNNN/PLAN.md $MT/sNNN/SKIPPED.jsonl   $MT/sNNN/prov $MT/sNNN/card          # every step of the sitting; $MT/REVERTED too once it exists
+git commit -m "Lane WB steps A-B: the trail of the sitting"
 ```
 
-`card-file` renders with `card_json`'s own renderer (`file_from_cards`, `canonical`: existing key
-order, new keys in UUID order, cleared keys removed) from a read-only production SELECT, and refuses
-unless every step named is closed, every key it changes is a card cell of those steps, and
-production holds each such cell as the steps left it (an accepted step's planned card; an undone
-step's card from before the step, 5.6) - so the file is exactly the database's for these steps and
-nothing else. After the deploy: re-read `StartedAt` of both API containers (they restarted with the
-new file), 0 `[STARTUP] Card description overwritten` lines in both containers' logs
-(`ssh ancientnerds "docker logs ancient_nerds_api 2>&1 | grep -c 'Card description overwritten'"`,
-likewise `ancient_nerds_api2`), `card_json.py --check` (`ACCEPT_EXIT=0`) and `$PY $MW accept --step N`
-again for each step (still 0 deviations), and the `commit` field of `http://localhost:8000/` on the VPS
-is the pushed HEAD.
+- **The static export** (`public/data/sites/`) follows the database through the export routine, not
+  through a push of a card file.
+- **`public/data/card_descriptions.json`** stays in the tree until the code of D25 is live, then a
+  later push deletes it. It is a dead copy meanwhile: never edit it, never render it, nobody reads
+  it. `scripts/import_card_descriptions.py`, `scripts/merge_rewrites.py` and the `audit_enrich.py`
+  Wave-4 merge are not used for card work.
 
-**Never push the file before the database write**: the boot import would write the cards without a
-journal, and the journalled write would then refuse every row (matched_0). **Never let an API restart
-happen between the write and the push**: the boot would re-import the old file over the new cards
-without a journal; `StartedAt` before and after proves it did not happen. If it did (the overwrite
-lines name the sites), stop: the step's `accept` lists the sites as deviations, and `plan` lists them
-as `journal-disagrees` from then on - an incident for AUDIT_LOG, repaired by its own journalled lane,
-never by a second push.
-
-**A red CI inside the sitting** (the pre-push hook aborts the push, or the pushed commit fails a CI
-gate, so no deploy pulls the file): the database holds the new cards, the VPS checkout still the old
-file, and any API restart until a green deploy would put the old cards back without a journal.
-Answer it as P5 did, by undoing the sitting - never by leaving the database ahead of the deployed
-file: 5.6's commands 1 and 2 (both `ROLLBACK.sql`, `close-reverted`) for **every** step of the
-sitting, the last step first; then its commands 3 and 4 once for the sitting: `card-file --steps
-A-B` (every step is now closed as undone, so the file is rendered back to the cards from before the
-sitting), `card_json.py --check`, one commit (the file and the trail, `REVERTED/` included) and the
-push. Main's file then equals the deployed one whatever the CI does next. (If the hook aborted the
-sitting's push, `origin/main` still holds the old file, which the undo made the database's again:
-the two local commits go out together with the next green push.) Record the incident in AUDIT_LOG,
-and write the sitting again, as new steps, once the CI is green.
+A red CI inside a sitting changes nothing for the cards: the database holds them whatever the
+deploy does.
 
 ### 5.6 Undo
 
-One step - after its acceptance (its file may be out already) or before it - or, in reverse step
-order, every step of a sitting. The whole order, one command after the other, **no API restart and
-no other push in between** (`StartedAt` of both API containers read before and after, as in 5.4):
+One step, after its acceptance or before it, or, in reverse step order, every step of a sitting. The
+undo is database-only, one command after the other:
 
 ```bash
 # 1. The database: each lane's ROLLBACK.sql (rehearsed in 5.4), card lane first - its premise needs
 #    the provenance the provenance lane wrote. A lane that has no ROLLBACK.sql (0 cells) is skipped.
-ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1" \
-  < output/remediation/mechanical_teaser/sNNN/card/ROLLBACK.sql
-ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1" \
-  < output/remediation/mechanical_teaser/sNNN/prov/ROLLBACK.sql
+ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1"   < output/remediation/mechanical_teaser/sNNN/card/ROLLBACK.sql
+ssh ancientnerds "docker exec -i ancient_nerds_db psql -U ancient_map -d ancient_map -v ON_ERROR_STOP=1"   < output/remediation/mechanical_teaser/sNNN/prov/ROLLBACK.sql
 # 2. The proof, read-only: ACCEPT_EXIT=0 and "RESULT: 0 write(s) still standing"
 $PY $MW close-reverted --step N
-# 3. The file, rendered back from production - never a `git revert` of the sitting's commit
-$PY $MW card-file --steps N         # or the sitting's A-B; read-only; WRITE_EXIT=0
-$PY scripts/remediation/phase4/card_json.py --check     # ACCEPT_EXIT=0 - before the push
-# 4. The file and the whole trail in one commit, pushed at once
-git add public/data/card_descriptions.json
-git add -f output/remediation/mechanical_teaser/STEPS.jsonl output/remediation/mechanical_teaser/ACCEPTED \
-  output/remediation/mechanical_teaser/REVERTED output/remediation/mechanical_teaser/sNNN/PLAN.md \
-  output/remediation/mechanical_teaser/sNNN/SKIPPED.jsonl output/remediation/mechanical_teaser/sNNN/prov \
-  output/remediation/mechanical_teaser/sNNN/card
-git commit -m "Lane WB step N undone: the card file rendered back from production"
-git push origin main
+# 3. The trail in one commit (REVERTED/ is new)
+git add -f output/remediation/mechanical_teaser/STEPS.jsonl output/remediation/mechanical_teaser/ACCEPTED   output/remediation/mechanical_teaser/REVERTED output/remediation/mechanical_teaser/sNNN/PLAN.md   output/remediation/mechanical_teaser/sNNN/SKIPPED.jsonl output/remediation/mechanical_teaser/sNNN/prov   output/remediation/mechanical_teaser/sNNN/card
+git commit -m "Lane WB step N undone: the trail"
 ```
 
 What each gate checks:
@@ -740,16 +710,10 @@ What each gate checks:
   plan no further step from it, fix the cause, and ask the sites again in a new run (`select --sites
   FILE` without `--exclude-run` of the old one). A step planned and never applied is closed the same
   way;
-- `card-file` renders the file from production and expects each card cell of an undone step at its
-  value from before the step (a later named step that planned the same site again wins), each of an
-  accepted step at its planned card - so it re-renders after an undo exactly as after a sitting, and
-  only the undone step's keys change; the other steps of the sitting keep their teasers;
-- `card_json.py --check` proves file == production before anything is pushed. The trail files are
-  never reverted: `STEPS.jsonl`, `ACCEPTED/`, `REVERTED/` and the step's plans are the record the
-  next `plan`, `accept` and `card-file` read.
+- the trail files are never reverted: `STEPS.jsonl`, `ACCEPTED/`, `REVERTED/` and the step's plans
+  are the record the next `plan` and `accept` read.
 
-After the deploy: the checks of 5.5 (both `StartedAt` moved, 0 overwrite lines, `card_json.py
---check`, the `commit` field). Record the undo and its reason in AUDIT_LOG.
+Record the undo and its reason in AUDIT_LOG.
 
 ### 5.7 Later
 
@@ -767,7 +731,7 @@ quote outcome and the card's verdict), `pages/` (every page a verifier or judge 
 `OUTCOMES.jsonl`, `OUTCOMES.md`, `DESCRIPTION_DEFECTS.jsonl` (2.2); for the pilot `JUDGE.jsonl`,
 `JUDGE.md`. `output/remediation/handoff/teaser-<run>-<stage>/` (and
 `-scratch/`): the handoff. `output/remediation/mechanical_teaser/`: `STEPS.jsonl`, `sNNN/...`,
-`ACCEPTED/step-NNN.json`, `REVERTED/step-NNN.json` - force-added to git with the card-file commit
+`ACCEPTED/step-NNN.json`, `REVERTED/step-NNN.json` - force-added to git after each sitting
 (the proof trail; never reverted). `output/remediation/mechanical_card_disclosure/`: `LIST.jsonl` (the 185
 sites with their census proof), `sNNN/...`, `ACCEPTED/step-NNN.json` (5.9).
 
@@ -915,8 +879,8 @@ statements, the rollback rendered before the apply, rehearsal, guard probes, con
 through `apply_remediation_change()`, read-back, rollback rehearsal - and needed one extension: a
 column that may be **cleared** (`lane.Column.clears`), for the card of a site that gets none. Two
 tables are two lanes, so a step is a pair (`TEASER_LANE` in `mechanical/lane.py` resolves
-`teaser-prov-sNNN` and `teaser-card-sNNN`); the per-step acceptance and the card file follow the
-P5 sitting's rules (database first, file rendered from it, then the push).
+`teaser-prov-sNNN` and `teaser-card-sNNN`); the per-step acceptance follows the
+P5 sitting's rules, minus the card file (database only since D25, 5.5).
 
 ## 7. Merging (the parallel lanes of 2026-09-26)
 
@@ -936,7 +900,7 @@ description (design entry [6], card_texts; Phase-4 owner decision O3 "same run, 
 Phase-4 selector picked 1-2 of the description's sentences, code assembled them (`phase4/
 assemble.py`), 80-200 characters, no country name, no unattributed evaluative superlative, pinned
 by `_description_provenance.card.text_sha256` (V10, V13) and written in the P5 sitting
-(`write_gate4.py --group P5`, `card_json.py --prerender/--regenerate/--check`). 761 such cards are
+(`write_gate4.py --group P5`, with `card_json.py` for the file until D25). 761 such cards are
 live (measured above). The owner's decisions O2-O4 of 2026-09-26 replace it: every card, those 761
 included, is rewritten as a teaser by lane WB. The Phase-4 scope-v3 run writes its descriptions
 without cards (`pass: phase4-descriptions-only`, `provenance.card: null`; P5 refuses its sites). The
@@ -951,5 +915,5 @@ Never used for this work, and no longer a way to produce card texts:
   the wiki excerpt is empty, write a brief factual description based on the site name, type and
   period" - a card is written only from its site's sourced description;
 - `scripts/import_card_descriptions.py`, `scripts/merge_rewrites.py` and the `audit_enrich.py`
-  Wave-4 merge - none of them journals, and the last two write the file the boot import reads;
+  Wave-4 merge - none of them journals, and the last two write a card file nobody reads since D25;
 - `scripts/verify_descriptions.py` and `scripts/verify_agent.py` as gates: they penalise hedging.
