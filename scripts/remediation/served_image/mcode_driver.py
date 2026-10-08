@@ -84,7 +84,7 @@ def answer_prompt(job: Job, check: str) -> str:
     """The prompt of one run. The question's own text is read from the handoff, never restated."""
     return ANSWER_PROMPT.format(
         stage=job.stage,
-        answer_model=V.ANSWER_MODEL,
+        answer_model=mcode.MODEL,
         prompt_path=job.prompt_path.as_posix(),
         answer_path=job.answer_path.as_posix(),
         check=check,

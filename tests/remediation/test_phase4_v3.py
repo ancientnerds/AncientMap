@@ -1215,8 +1215,9 @@ def test_record_writes_an_answer_only_through_its_shape_check(
 def test_record_needs_the_model_the_agent_runs_as(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """`record` takes `--model` (required, no default; one of `opus_handoff.ANSWER_MODELS`) and
-    stamps the answer with it: Opus and Sonnet both validate, a third model or none is refused."""
+    """`record` takes `--model` (required, no default; one of `opus_handoff.NEW_ANSWER_MODELS`) and
+    stamps the answer with it: Opus and Sonnet both validate, MiniMax (recorded answers only), an
+    unknown model or none is refused."""
     batch_dir, handoff = _select_export(tmp_path)
     run = batch_dir.parent
     answer = handoff / OH.answer_relpath("p4-2001", "finder", "site-1/select")
@@ -1229,7 +1230,7 @@ def test_record_needs_the_model_the_agent_runs_as(
         H.main(base)
     assert missing.value.code == 2 and not answer.exists()
     with pytest.raises(SystemExit) as third:
-        H.main([*base, "--model", "claude-haiku-5-5"])
+        H.main([*base, "--model", "MiniMax-M3.1-Flash-Preview"])
     assert third.value.code == 2 and not answer.exists()
     capsys.readouterr()
 

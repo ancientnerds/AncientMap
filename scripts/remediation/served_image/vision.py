@@ -758,10 +758,11 @@ def check_answer(run: Path, handoff: Path, batch_id: str, label: str, text: str)
     return None
 
 
-#: The model the answering agents of this lane run as. Owner decision 2026-10-03: Claude Code was
-#: replaced by MiniMax Code, so the vision answers carry `opus_handoff.MINIMAX_MODEL` from now on;
-#: the answers of 2026-09-30 keep their Sonnet stamp and stay valid.
-ANSWER_MODEL = "MiniMax-M3.1-Flash-Preview"
+#: The model the answering agents of this lane run as: the `image_depicts` role of owner decision
+#: D6 (2026-10-08, `roles.ROLES`), Sonnet 5.5. It must be one `opus_handoff.NEW_ANSWER_MODELS`, or
+#: the recording command of the brief would be refused. The answers of 2026-09-30 keep their Sonnet
+#: stamp and the MiniMax ones of 2026-10-03 to 2026-10-07 stay valid for reading.
+ANSWER_MODEL = "claude-sonnet-5-5"
 #: The population of a claim-only run: the sites that serve nothing while their Wikidata item
 #: claims a file. The sites that serve an image were judged by the 2026-09-30 run and delivered;
 #: this plan may not touch them, and says so instead of claiming them for its own.

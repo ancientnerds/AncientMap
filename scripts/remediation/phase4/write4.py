@@ -726,7 +726,10 @@ def _phase4_problems(
 ) -> list[str]:
     """A Phase-4 text (a site-list run, `wc4.Marking.PHASE4`) is only kept or dropped by sentence, and
     the provenance it leaves is exactly the old one filtered to the kept sentences
-    (`wc4.filtered_provenance`) - the attribution, the AI mark and the pinned sources of what stays."""
+    (`wc4.filtered_provenance`) - the attribution, the AI mark and the pinned sources of what stays.
+    The disclosure it names is the one the journal evidence records as the checker's: derived from
+    the models that answered when the outcome was built (owner decision D6, 2026-10-08), so the
+    writer holds the stored provenance to the evidence, not to a constant."""
     if marking != wc4.Marking.PHASE4.value or left is None:
         return []
     decisions, _ = wc4.decisions_of(evidence)
@@ -738,6 +741,7 @@ def _phase4_problems(
             wc4.kept_numbers(decisions),
             of=len(decisions),
             description=left,
+            ai_system=evidence["checker"],
         ).to_dict()
     except (KeyError, ValueError) as exc:
         return [f"the Phase-4 provenance cannot be filtered to the kept sentences: {exc}"]

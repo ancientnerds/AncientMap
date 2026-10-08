@@ -38,8 +38,8 @@ def test_the_record_is_exactly_its_six_keys_and_round_trips() -> None:
     [
         ({"lane": "L"}, "is not N"),
         ({"ai": "selected"}, "is not generated"),
-        ({"ai_system": M.AI_SYSTEM_OPUS}, "ai_system"),  # the old string is for the old writes
         ({"ai_system": "someone else"}, "ai_system"),
+        ({"ai_system": M.AI_SYSTEM + " "}, "ai_system"),  # a member of AI_SYSTEMS byte for byte
         ({"basis": M.LEGACY_BASIS}, "basis"),
         ({"v": 2}, "version"),
         ({"desc_sha256": "x"}, "desc_sha256"),
@@ -49,6 +49,15 @@ def test_every_field_of_the_record_is_held(change: dict, message: str) -> None:
     data = {**M.WebProvenance(desc_sha256=DIGEST).to_dict(), **change}
     with pytest.raises(ValueError, match=message):
         M.WebProvenance.from_dict(data)
+
+
+@pytest.mark.parametrize("system", sorted(M.AI_SYSTEMS))
+def test_every_disclosure_a_validator_accepts_is_a_valid_web_disclosure(system: str) -> None:
+    """Owner decision D6 (2026-10-08): the record checks membership in `AI_SYSTEMS`, not equality
+    with `AI_SYSTEM`, so a Claude-only write (`AI_SYSTEM_CLAUDE_ONLY`) validates and so do the 17+
+    WN provenances in production, which carry the combined string."""
+    record = M.WebProvenance(desc_sha256=DIGEST, ai_system=system)
+    assert M.WebProvenance.from_dict(record.to_dict()) == record
 
 
 def test_an_unknown_or_missing_key_is_refused() -> None:

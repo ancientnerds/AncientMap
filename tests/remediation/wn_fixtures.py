@@ -76,14 +76,20 @@ def nothing(site_id: str) -> str:
     return written(site_id, note="no page names this site")
 
 
-def record_written(handoff: Path, answers: Mapping[str, str], *, by: str = "sonnet-write") -> None:
+def record_written(
+    handoff: Path,
+    answers: Mapping[str, str],
+    *,
+    by: str = "sonnet-write",
+    model: str = OH.SONNET_MODEL,
+) -> None:
     """Write each site's answer where its question was exported, as `opus_handoff.py answer
     --model claude-sonnet-5-5` records it."""
     for line in OH.manifest(handoff):
         if line["label"] in answers:
             OH.write_answer(
                 handoff,
-                model=OH.SONNET_MODEL,
+                model=model,
                 batch_id=line["batch_id"],
                 stage=line["stage"],
                 label=line["label"],
@@ -124,6 +130,8 @@ def build_wn_run(
     judged: bool = True,
     first_batch: int = WC4.FIRST_BATCH,
     after: Sequence[Path] = (),
+    writer_model: str = OH.SONNET_MODEL,
+    verifier_model: str = OH.OPUS_MODEL,
 ) -> tuple[Path, Path]:
     """A lane-WN run end to end: read, export (a pilot that draws the whole population, or a chunk),
     write answers, import, verify (every kept sentence SUPPORTED), build; a pilot is judged and passes
@@ -139,9 +147,9 @@ def build_wn_run(
     )
     draw = {"pilot": len(asked), "seed": 1} if pilot else {"pilot": None, "seed": None}
     cli.cmd_export(run, handoff, batch_size=5, exclude=None, after=list(after), wn=True, **draw)
-    record_written(handoff, answers)
+    record_written(handoff, answers, model=writer_model)
     cli.cmd_import(run, handoff, client=FX.FakeClient(), pace=0.0)
-    FX.verify_all(run, root / "handoff" / f"{name}-verify")
+    FX.verify_all(run, root / "handoff" / f"{name}-verify", model=verifier_model)
     cli.cmd_build(run, first_batch=first_batch)
     if pilot and judged:
         FX.judge_all(run, root / "handoff" / f"{name}-judge")

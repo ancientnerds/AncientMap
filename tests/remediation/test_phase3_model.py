@@ -256,7 +256,14 @@ def test_exactly_one_ledger_line_per_call_names_opus_and_is_unmetered(tmp_path: 
     assert summary.total.unmetered_calls == 2
 
 
-@pytest.mark.parametrize("stamp", [OH.OPUS_MODEL, OH.SONNET_MODEL])
+def test_the_answering_models_are_every_stamp_a_handoff_answer_may_carry() -> None:
+    """Derived from `opus_handoff.ANSWER_MODELS`, so Haiku (owner decision D6, 2026-10-08) reads
+    as an answer of the live lanes without a second list."""
+    assert MS.ANSWERING_MODELS == frozenset(OH.ANSWER_MODELS.values())
+    assert OH.HAIKU_MODEL in MS.ANSWERING_MODELS
+
+
+@pytest.mark.parametrize("stamp", [OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL])
 def test_the_ledger_line_names_the_model_that_answered(tmp_path: Path, stamp: str) -> None:
     """Owner decision 2026-10-01: answering subagents run Sonnet. The line names the answer's own
     stamp (`ModelAnswer.model`, from the handoff answer), never the Opus constant."""

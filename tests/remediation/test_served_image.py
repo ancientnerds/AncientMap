@@ -1086,9 +1086,12 @@ class TestTheStages:
         text = V.brief(run, handoff, "check-001")
         assert "--stage served-check" in text and "Read tool" in text and "4 question(s)" in text
         assert (
-            "--model <the model id you run as: MiniMax-M3.1-Flash-Preview>" in text
-        )  # an agent names the model it runs as (owner decisions 2026-10-01 and 2026-10-03)
-        assert "You are Opus agent" not in text  # the answering agents are MiniMax ones now
+            "--model <the model id you run as: claude-sonnet-5-5>" in text
+        )  # an agent names the model it runs as (owner decision D6, 2026-10-08: Claude only)
+        assert (
+            V.ANSWER_MODEL in OH.NEW_ANSWER_MODELS
+        )  # the recorder must accept what the brief names
+        assert "You are Opus agent" not in text  # the vision answers are the image_depicts role's
 
     def test_the_candidates_of_a_failed_image(self, tmp_path: Path) -> None:
         """G: the other live rows in page order; W: P18 and P373 files the gallery lacks, each once,
@@ -1635,7 +1638,9 @@ class TestTheMcodeDriver:
         text = D.answer_prompt(job, D.check_command(run, handoff, job))
         assert job.prompt_path.as_posix() in text
         assert job.answer_path.as_posix() in text
-        assert f"run as {V.ANSWER_MODEL}" in text
+        assert (
+            f"run as {mcode.MODEL}" in text
+        )  # this transport is MiniMax's, whatever the brief says
         assert "check-answer" in text and job.label in text
         assert not job.answer_path.exists()
         # the answer belongs beside the handoff, never inside the repository

@@ -212,17 +212,23 @@ class TestTheExport:
         ("wrong model", 0 of 91 counted), and a WD4 run whose agents run on MiniMax would be told to
         record `claude-sonnet-5-5`. So the model is chosen at export, stored in the round's record
         and named by every brief of that round; the default stays what each rule names."""
-        HO.export(run, tmp_path / "h-r0", model="MiniMax-M3.1-Flash-Preview")
+        HO.export(run, tmp_path / "h-r0", model="claude-haiku-5-5")
         text = HO.brief(run, tmp_path / "h-r0", "wd1-r0-b0001")
-        assert "--model MiniMax-M3.1-Flash-Preview" in text
+        assert "--model claude-haiku-5-5" in text
         assert "claude-sonnet-5-5" not in text
         assert "Sonnet researcher" not in text  # the role must not claim another model either
         record = HO._round_of(run, tmp_path / "h-r0")
-        assert record["model"] == "MiniMax-M3.1-Flash-Preview"
+        assert record["model"] == "claude-haiku-5-5"
 
     def test_a_model_no_answer_may_carry_is_refused(self, run: Path, tmp_path: Path) -> None:
         with pytest.raises(HO.HandoffStepError, match="not one of"):
             HO.export(run, tmp_path / "h-r0", model="gpt-9")
+
+    def test_a_new_round_is_not_asked_of_minimax(self, run: Path, tmp_path: Path) -> None:
+        """D6 (2026-10-08): the recorded MiniMax answers stay readable, but a round exported now
+        records Claude's; the brief would tell the agent a model the recorder refuses."""
+        with pytest.raises(HO.HandoffStepError, match="not one of"):
+            HO.export(run, tmp_path / "h-r0", model="MiniMax-M3.1-Flash-Preview")
 
     def test_the_default_model_is_the_one_the_rule_names(self, run: Path, tmp_path: Path) -> None:
         HO.export(run, tmp_path / "h-r0")

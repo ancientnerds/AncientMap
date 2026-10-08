@@ -29,7 +29,7 @@ one `mass4.py --only <ready batches> --handoff-import` round at a time.
   agent's.
 * `record` is the one way an agent records an answer: `check-answer` first, and only an answer
   without a problem goes to `opus_handoff.write_answer` (write-once, the prompt's sha256, the
-  model the agent says it runs as - `--model`, required, one of `opus_handoff.ANSWER_MODELS` - and
+  model the agent says it runs as - `--model`, required, one of `opus_handoff.NEW_ANSWER_MODELS` - and
   the batch agent's name). A problem is printed and nothing is written, so the corrected
   draft can still be recorded (review finding 2026-09-26: the live v3 run recorded two selections
   the import refuses through `opus_handoff.py answer`, which checks no shape, one second after
@@ -432,7 +432,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.choices["record"].add_argument(
         "--model",
         required=True,
-        choices=sorted(OH.ANSWER_MODELS),
+        choices=list(OH.NEW_ANSWER_MODELS),
         help="the model id you run as, exactly as your own system prompt names it",
     )
     batches = sub.add_parser("ready", help="the batches whose every question is answered in shape")

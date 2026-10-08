@@ -75,21 +75,40 @@ def test_every_answer_names_the_one_pinned_opus_model() -> None:
     assert "deepseek" not in OH.OPUS_MODEL.lower()
 
 
-def test_the_answer_models_are_exactly_opus_sonnet_and_minimax() -> None:
+def test_the_answer_models_are_opus_sonnet_haiku_and_the_recorded_minimax() -> None:
     """Owner decision 2026-10-01: the orchestrator runs Opus 5.5, every answering subagent Sonnet
     5.5. Owner decision 2026-10-03: MiniMax Code (`mcode`, `MiniMax-M3.1-Flash-Preview`) replaces
-    Claude Code, so an answer may name that model too. The three stamps are pinned; an answer
-    recorded before stays valid."""
+    Claude Code, so an answer may name that model too. Owner decision D6 of 2026-10-08: Claude only
+    again, with Haiku 5.5 for the cheap roles. The four stamps are pinned; an answer recorded before
+    stays valid, so the MiniMax entry stays for reading."""
     assert OH.SONNET_MODEL == "anthropic/claude-sonnet-5-5 (Claude Code agent)"
+    assert OH.HAIKU_MODEL == "anthropic/claude-haiku-5-5 (Claude Code agent)"
     assert OH.MINIMAX_MODEL == "minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent)"
     assert dict(OH.ANSWER_MODELS) == {
         "claude-opus-5-5": OH.OPUS_MODEL,
         "claude-sonnet-5-5": OH.SONNET_MODEL,
+        "claude-haiku-5-5": OH.HAIKU_MODEL,
         "MiniMax-M3.1-Flash-Preview": OH.MINIMAX_MODEL,
+    }
+    assert dict(OH.ANSWER_FAMILIES) == {
+        "claude-opus-5-5": "opus",
+        "claude-sonnet-5-5": "sonnet",
+        "claude-haiku-5-5": "haiku",
+        "MiniMax-M3.1-Flash-Preview": "minimax",
     }
 
 
-@pytest.mark.parametrize("stamp", [OH.OPUS_MODEL, OH.SONNET_MODEL, OH.MINIMAX_MODEL])
+def test_a_new_answer_may_name_only_the_three_claude_ids() -> None:
+    """D6: new answers are Claude's. The MiniMax id stays in `ANSWER_MODELS` so the answers already
+    recorded can be read and validated, but nothing new may name it."""
+    assert OH.NEW_ANSWER_MODELS == ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5")
+    assert set(OH.NEW_ANSWER_MODELS) < set(OH.ANSWER_MODELS)
+    assert set(OH.ANSWER_MODELS) - set(OH.NEW_ANSWER_MODELS) == {"MiniMax-M3.1-Flash-Preview"}
+
+
+@pytest.mark.parametrize(
+    "stamp", [OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL, OH.MINIMAX_MODEL]
+)
 def test_each_answer_model_stamp_is_written_read_and_validated(tmp_path: Path, stamp: str) -> None:
     _export(tmp_path)
     assert _answer(tmp_path, model=stamp) is True
@@ -104,14 +123,14 @@ def test_each_answer_model_stamp_is_written_read_and_validated(tmp_path: Path, s
     "stamp",
     [
         "opencode-go/deepseek-v4.1-flash",
-        "anthropic/claude-haiku-5-5 (Claude Code agent)",
+        "anthropic/claude-haiku-5 (Claude Code agent)",
         "claude-sonnet-5-5",  # the model id, not the stamp: the CLI maps one to the other
         "anthropic/claude-sonnet-5-5",
         "MiniMax-M3.1-Flash-Preview",  # the MiniMax model id, not its stamp, either
         "",
     ],
 )
-def test_a_model_outside_the_three_stamps_is_refused_on_write_read_and_validate(
+def test_a_model_outside_the_four_stamps_is_refused_on_write_read_and_validate(
     tmp_path: Path, stamp: str
 ) -> None:
     _export(tmp_path)
@@ -383,7 +402,7 @@ def test_the_cli_validates_and_answers(tmp_path: Path) -> None:
     without = subprocess.run(argv, **env_run)  # no --model: refused, nothing is written
     assert without.returncode == 2 and "--model" in without.stderr
     assert not _answer_file(tmp_path).exists()
-    third = subprocess.run([*argv, "--model", "claude-haiku-5-5"], **env_run)
+    third = subprocess.run([*argv, "--model", "claude-haiku-5"], **env_run)
     assert third.returncode == 2 and "invalid choice" in third.stderr
     assert not _answer_file(tmp_path).exists()
 
@@ -396,9 +415,9 @@ def test_the_cli_validates_and_answers(tmp_path: Path) -> None:
     assert second.returncode == 0 and json.loads(second.stdout)["ok"] is True
 
 
-def test_the_cli_offers_the_minimax_model(tmp_path: Path) -> None:
-    """A MiniMax Code run answers through the same command line, and the answer carries the
-    MiniMax stamp: `--model` is how the answer's `model` is recorded (owner decision 2026-10-03)."""
+def test_the_cli_offers_the_three_claude_models_and_refuses_minimax(tmp_path: Path) -> None:
+    """D6 (2026-10-08): `--model` offers exactly `NEW_ANSWER_MODELS`. A MiniMax Code run can no longer
+    record a new answer, however the recorded ones stay readable (the stamp tests above)."""
     _export(tmp_path)
     text = tmp_path / "answer.txt"
     text.write_text("VERDICT: CORRECT - Ötzi\n", encoding="utf-8")
@@ -415,12 +434,26 @@ def test_the_cli_offers_the_minimax_model(tmp_path: Path) -> None:
         "--label",
         LABEL,
         "--answered-by",
-        "mcode-driver-1",
+        "agent-1",
         "--text-file",
         str(text),
-        "--model",
-        "MiniMax-M3.1-Flash-Preview",
     ]
-    run = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", check=False)
-    assert run.returncode == 0, run.stderr
-    assert _read(tmp_path).model == OH.MINIMAX_MODEL
+    run = subprocess.run(
+        [*argv, "--model", "MiniMax-M3.1-Flash-Preview"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert run.returncode == 2 and "invalid choice" in run.stderr
+    assert not _answer_file(tmp_path).exists()
+
+    haiku = subprocess.run(
+        [*argv, "--model", "claude-haiku-5-5"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert haiku.returncode == 0, haiku.stderr
+    assert _read(tmp_path).model == OH.HAIKU_MODEL

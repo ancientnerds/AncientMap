@@ -1024,6 +1024,7 @@ def import_stage(
                 "handoff": record["handoff"],
                 "answered_by": answer.answered_by,
                 "answered_at": answer.answered_at,
+                "model": answer.model,
                 "prompt_sha256": line["prompt_sha256"],
                 **parsed,
             }
@@ -1109,11 +1110,12 @@ def check_answer(
 
 
 #: The model ids the recorder accepts, as the brief lists them: an agent names the one it actually
-#: runs as, and the list is built from `opus_handoff.ANSWER_MODELS` so it can never offer an id the
-#: recorder would refuse. The brief must never name a narrower set than the one the owner runs (fixed
-#: 2026-10-07: this lane still offered only the two Claude ids after MiniMax Code replaced Claude
-#: Code on 2026-10-03, so an agent was told to stamp a model that had written nothing).
-MODEL_IDS = " or ".join(OH.ANSWER_MODELS)
+#: runs as, and the list is built from `opus_handoff.NEW_ANSWER_MODELS` so it can never offer an id
+#: the recorder would refuse. The brief must never name a narrower set than the one the owner runs
+#: (fixed 2026-10-07: this lane still offered only the two Claude ids after MiniMax Code replaced
+#: Claude Code on 2026-10-03, so an agent was told to stamp a model that had written nothing); since
+#: owner decision D6 (2026-10-08) that set is the three Claude ids again.
+MODEL_IDS = " or ".join(OH.NEW_ANSWER_MODELS)
 
 _BRIEF_HEAD = {
     "writer": (
@@ -1267,12 +1269,28 @@ _VERIFICATION_KEYS = (
 )
 
 
-def _provenance(run: Path, site: C.Basis, state: Progress, ai_system: str) -> dict[str, Any]:
+def _answering_models(site_id: str, *records: Mapping[str, Any]) -> list[str]:
+    """The stamps of the answers an accepted card rests on. A record imported before 2026-10-08
+    kept no stamp, and the disclosure is never guessed from nothing."""
+    stamps = []
+    for record in records:
+        if "model" not in record:
+            raise RunError(
+                f"{site_id}: the {record['stage']} record names no model (imported before the stamp "
+                "was kept): the card's AI disclosure cannot be derived from it"
+            )
+        stamps.append(record["model"])
+    return stamps
+
+
+def _provenance(run: Path, site: C.Basis, state: Progress) -> dict[str, Any]:
     """The provenance of an accepted card: its accepting check, its VERIFIED verification (with the
     sha256 of the text it judged) and the web facts its check's claims cite - those the check was
-    asked with (a rewrite after a failed verification only)."""
+    asked with (a rewrite after a failed verification only). Its `ai_system` is derived from the
+    models that wrote, checked and verified it (`model4.ai_system_for`, owner decision D6)."""
     writer, check, verify = state.writer, state.check, state.verify
     assert writer is not None and check is not None and verify is not None
+    ai_system = M.ai_system_for(_answering_models(site.site_id, writer, check, verify))
     cited = {s for claim in check["claims"] for s in claim["support"] if s.startswith("W")}
     offered = recorded_web_facts(check, state) if check["stage"] == VERIFY_CHECK else ()
     return CP.build(
@@ -1297,7 +1315,7 @@ def _provenance(run: Path, site: C.Basis, state: Progress, ai_system: str) -> di
     )
 
 
-def outcome_rows(run: Path, *, ai_system: str = M.AI_SYSTEM) -> list[dict[str, Any]]:
+def outcome_rows(run: Path) -> list[dict[str, Any]]:
     """The final result of every site of the run: an accepted - checked and VERIFIED - card with
     its provenance, or a clear - a failed site, or a listed site without a description whose card
     is to be cleared. Each row carries its verification state (`verification`: the last
@@ -1336,7 +1354,7 @@ def outcome_rows(run: Path, *, ai_system: str = M.AI_SYSTEM) -> list[dict[str, A
                     "reason": None,
                     "card": writer["card"],
                     "writer": {k: writer[k] for k in ("stage", "answered_by", "answered_at")},
-                    "provenance": _provenance(run, site, state, ai_system),
+                    "provenance": _provenance(run, site, state),
                 }
             )
         else:

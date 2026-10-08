@@ -398,14 +398,13 @@ RESEARCH_WD3 = (
     "\n"
 ) + RESEARCH[RESEARCH.index("## Quotes are checked by machine") :]
 
+
 def _period_list() -> str:
     """The period names the question accepts, as lines for the prompt. The whole vocabulary is in
     the question on purpose: a name it does not hold is refused by name, so the agent reads the
     refusal against this list instead of guessing a spelling."""
     names = sorted(P.PERIODS)
-    return "\n".join(
-        ", ".join(names[start : start + 8]) for start in range(0, len(names), 8)
-    )
+    return "\n".join(", ".join(names[start : start + 8]) for start in range(0, len(names), 8))
 
 
 #: WD4's rules per field: WD3's, with one change to `period_start` (the period word is an answer).
@@ -431,7 +430,7 @@ FIELD_RULES_WD4 = {
         "millennium a source gives for the start of THIS site counts also when the source hedges "
         'it ("c.", "around", "probably", "is thought to", "vers", "vraisemblablement") - give that '
         'year - unless the same source rejects it ("its date cannot be traced").\n'
-        "A period word is a date too, and this lane takes it (owner decision of 2026-10-04, \"a "
+        'A period word is a date too, and this lane takes it (owner decision of 2026-10-04, "a '
         'named period is a value"). When a source calls the site a period of its own ("an Iron '
         'Age hillfort", "a Neolithic causeway enclosure", "Romano-British", "Maya"), answer:\n'
         '- "decision": "replace" (or "keep"), "value": null, "period_name": the period as the '
@@ -496,7 +495,7 @@ LINKS_SHOWN = 10
 #: 20.9 %, and none of 1,544 Years lands inside the stored [period_start, period_end] span. No code
 #: path reads a value because it equals the claim: an answer needs a page it quotes either way.
 ORIGINAL_CLAIM = (
-    'The original import of this database (2025-12-18) kept what the site\'s own article carried '
+    "The original import of this database (2025-12-18) kept what the site's own article carried "
     'then ("{title}", matched on its {match}): Year "{year}", Period "{period}".\n'
     "A claim to confirm or contradict, not a source. The band spans up to a thousand years, the "
     "file disagrees with what this database holds for about a third of the sites that have both, "
@@ -515,8 +514,10 @@ def _original_claim(hint: Mapping[str, Any] | None, rule: R.Rule) -> list[str]:
         return []
     return [
         ORIGINAL_CLAIM.format(
-            title=hint.get("title") or "the article", match=hint.get("match") or "stored URL",
-            year=year or "empty", period=period or "empty",
+            title=hint.get("title") or "the article",
+            match=hint.get("match") or "stored URL",
+            year=year or "empty",
+            period=period or "empty",
         )
     ]
 
@@ -763,17 +764,19 @@ def batches(
 
 def _answering_model(run: Path, model: str | None) -> str | None:
     """The model id this round's answers are recorded under, or `None` when the rule's own brief
-    asks each agent to name what it runs as (WD1). It must be one `opus_handoff.ANSWER_MODELS`
-    knows, because the brief writes it into the recording command and the journal keeps it - a
-    typo here would be a stamp no model ever earned (2026-10-04: WD3's round 1 lost eight answers
-    to an invented stamp, "wrong model", 0 of 91 counted)."""
+    asks each agent to name what it runs as (WD1). It must be one of `opus_handoff.NEW_ANSWER_MODELS`
+    (Claude's, owner decision D6, 2026-10-08), because the brief writes it into the recording
+    command and the journal keeps it - a typo here would be a stamp no model ever earned
+    (2026-10-04: WD3's round 1 lost eight answers to an invented stamp, "wrong model", 0 of 91
+    counted)."""
     rule = R.read_rule(run)
     if model is None:
         named = BRIEF_PARTS[rule.name]["model"]
         return None if named.startswith("<") else named
-    if model not in set(OH.ANSWER_MODELS):
+    if model not in OH.NEW_ANSWER_MODELS:
         raise HandoffStepError(
-            f"{model!r} is not one of the model ids an answer may carry: {sorted(OH.ANSWER_MODELS)}"
+            f"{model!r} is not one of the model ids a new answer may carry: "
+            f"{list(OH.NEW_ANSWER_MODELS)}"
         )
     return model
 
@@ -1521,7 +1524,7 @@ def main(argv: list[str] | None = None) -> int:
         commands[name].add_argument("--batch-id", required=True)
     commands["export"].add_argument(
         "--model",
-        help="the stamp this round's answers may carry (one of opus_handoff.ANSWER_MODELS); "
+        help="the stamp this round's answers may carry (one of opus_handoff.NEW_ANSWER_MODELS); "
         "default: what the run's rule names. The recording command in every brief names it, and it "
         "is what the journal keeps.",
     )

@@ -438,13 +438,16 @@ def test_the_change_note_follows_the_lane() -> None:
     _refused(M.Provenance.from_dict, data, "attribution.changes: lane T")
 
 
-def test_the_disclosed_ai_systems_are_the_two_claude_ones_and_the_combined_one() -> None:
+def test_the_disclosed_ai_systems_are_the_claude_ones_and_the_combined_one() -> None:
     """EU AI Act Art. 50. Owner decision 2026-10-01: the orchestrating session runs Opus 5.5 and
     every answering subagent Sonnet 5.5, so every NEW write discloses both (`AI_SYSTEM`); the
     provenances in production carry the Opus-only string (`AI_SYSTEM_OPUS`, byte-identical to what
     was written until 2026-09-30) and keep validating; the March texts keep their own disclosure.
     Owner decision 2026-10-03: MiniMax Code writes from now on, so a NEW write discloses the two
-    families in one string (`AI_SYSTEM`, `AI_SYSTEM_CLAUDE`); both written strings stay accepted."""
+    families in one string (`AI_SYSTEM`, `AI_SYSTEM_CLAUDE`); both written strings stay accepted.
+    Owner decision D6, 2026-10-08: Claude only again (Opus, Sonnet, Haiku), disclosed by a fourth
+    string, `AI_SYSTEM_CLAUDE_ONLY`; `AI_SYSTEM` is NOT rebound (production holds it, 17+ WN
+    provenances and the pinned consumers carry it)."""
     assert M.AI_SYSTEM_OPUS == (
         "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
         "an-sites-remediation-2026-09"
@@ -458,7 +461,14 @@ def test_the_disclosed_ai_systems_are_the_two_claude_ones_and_the_combined_one()
         "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
         "an-sites-remediation-2026-09"
     )
-    assert M.AI_SYSTEMS == frozenset({M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE, M.AI_SYSTEM})
+    assert M.AI_SYSTEM_CLAUDE_ONLY == (
+        "Claude Opus, Claude Sonnet and Claude Haiku (Anthropic): anthropic/claude-opus-5-5, "
+        "anthropic/claude-sonnet-5-5 and anthropic/claude-haiku-5-5 (Claude Code agents), "
+        "an-sites-remediation-2026-10"
+    )
+    assert M.AI_SYSTEMS == frozenset(
+        {M.AI_SYSTEM_OPUS, M.AI_SYSTEM_CLAUDE, M.AI_SYSTEM, M.AI_SYSTEM_CLAUDE_ONLY}
+    )
     assert M.AI_SYSTEM_OPUS == f"Claude Opus (Anthropic): {MS.MODEL}, an-sites-remediation-2026-09"
     assert MS.MODEL == "anthropic/claude-opus-5-5 (Claude Code agent)"
     assert OH.SONNET_MODEL.split(" (")[0] in M.AI_SYSTEM and "claude-opus-5-5" in M.AI_SYSTEM
@@ -475,7 +485,45 @@ def test_the_combined_disclosure_names_the_writing_models_their_makers_and_nothi
     assert "Claude (Anthropic)" in text and "MiniMax M3.1 Flash (MiniMax)" in text
     for stamp in (OH.OPUS_MODEL, OH.SONNET_MODEL, OH.MINIMAX_MODEL):
         assert stamp.split(" (")[0] in text
-    assert "deepseek" not in text.lower() and "opencode" not in text.lower() and " via Pi " not in text
+    assert (
+        "deepseek" not in text.lower() and "opencode" not in text.lower() and " via Pi " not in text
+    )
+
+
+def test_the_claude_only_disclosure_names_its_models_their_maker_and_no_minimax() -> None:
+    text = M.AI_SYSTEM_CLAUDE_ONLY
+    for stamp in (OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL):
+        assert stamp.split(" (")[0] in text
+    assert "(Anthropic)" in text and "minimax" not in text.lower()
+    assert "deepseek" not in text.lower() and "opencode" not in text.lower()
+
+
+def test_ai_system_for_derives_the_disclosure_from_the_models_that_answered() -> None:
+    """A set of Claude models discloses the Claude-only string; one MiniMax stamp among them keeps
+    the combined string, because the text then rests on a MiniMax judgement."""
+    assert M.ai_system_for([OH.OPUS_MODEL]) == M.AI_SYSTEM_CLAUDE_ONLY
+    assert (
+        M.ai_system_for({OH.OPUS_MODEL, OH.SONNET_MODEL, OH.HAIKU_MODEL}) == M.AI_SYSTEM_CLAUDE_ONLY
+    )
+    assert M.ai_system_for(iter([OH.HAIKU_MODEL, OH.HAIKU_MODEL])) == M.AI_SYSTEM_CLAUDE_ONLY
+    assert M.ai_system_for([OH.OPUS_MODEL, OH.MINIMAX_MODEL]) == M.AI_SYSTEM
+    assert M.ai_system_for([OH.MINIMAX_MODEL]) == M.AI_SYSTEM
+    assert M.ai_system_for([OH.SONNET_MODEL]) in M.AI_SYSTEMS
+
+
+@pytest.mark.parametrize(
+    "stamps",
+    [
+        [],
+        [""],
+        ["claude-opus-5-5"],  # the model id, not the stamp
+        [OH.OPUS_MODEL, "opencode-go/deepseek-v4.1-flash"],
+        ["anthropic/claude-haiku-5 (Claude Code agent)"],
+    ],
+)
+def test_ai_system_for_refuses_no_stamp_and_a_stamp_no_handoff_records(stamps: list[str]) -> None:
+    with pytest.raises(ValueError, match="ai_system_for"):
+        M.ai_system_for(stamps)
 
 
 @pytest.mark.parametrize(
@@ -489,6 +537,9 @@ def test_the_combined_disclosure_names_the_writing_models_their_makers_and_nothi
         "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
         "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
         "an-sites-remediation-2026-09",
+        "Claude Opus, Claude Sonnet and Claude Haiku (Anthropic): anthropic/claude-opus-5-5, "
+        "anthropic/claude-sonnet-5-5 and anthropic/claude-haiku-5-5 (Claude Code agents), "
+        "an-sites-remediation-2026-10",
     ],
 )
 def test_a_provenance_accepts_each_disclosed_ai_system(system: str) -> None:

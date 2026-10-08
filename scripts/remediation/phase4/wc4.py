@@ -952,7 +952,7 @@ def check_record(
     names - a kept text is published only verified. A site that had no description (lane WN) was
     asked about no stored text: `checked` is `None` and `checked_sha256` the sha256 of the empty
     text. `checker` is the disclosure the record names (one of `model4.AI_SYSTEMS`): a new write
-    passes `model4.AI_SYSTEM`; the acceptance passes the written record's own, because a text written
+    passes the disclosure `model4.ai_system_for` derives from the answering models; the acceptance passes the written record's own, because a text written
     before 2026-10-01 truthfully names `AI_SYSTEM_OPUS` and must re-check as written."""
     if composed.description is None:
         raise WcError("a cleared site has no check record")
@@ -1140,13 +1140,14 @@ def disclosure_problems(
 
 
 def filtered_provenance(
-    old: M.Provenance, kept: Sequence[int], *, of: int, description: str
+    old: M.Provenance, kept: Sequence[int], *, of: int, description: str, ai_system: str
 ) -> M.Provenance:
     """The Phase-4 provenance of a text whose sentences were checked: the old one filtered to the
     kept sentences (`kept`, 1-based, of the `of` the checked text holds), `desc_sha256` the new
     text's, the sources only the kept sentences still cite, the AI system the new write's
-    (`model4.AI_SYSTEM`: the same marks, the attribution and the licence stay true - what was
-    selected from the pinned source is still verbatim, only fewer sentences), and the card `None`
+    (`ai_system`, derived from the models that answered, `model4.ai_system_for`: the same marks,
+    the attribution and the licence stay true - what was selected from the pinned source is still
+    verbatim, only fewer sentences), and the card `None`
     (its items name sentences that are no longer the text's; lane WB writes the new card).
 
     Refused (`WcError`): a provenance whose published sentences are not the checked sentences one
@@ -1169,7 +1170,7 @@ def filtered_provenance(
         )
     return dataclasses.replace(
         old,
-        ai_system=M.AI_SYSTEM,
+        ai_system=ai_system,
         sources=sources,
         sentences=sentences,
         card=None,
@@ -1181,6 +1182,7 @@ def provenance_after(
     site: M.PlanSite,
     description: str,
     *,
+    ai_system: str,
     kept: Sequence[int] | None = None,
     of: int | None = None,
     trimmed: int = 0,
@@ -1193,19 +1195,21 @@ def provenance_after(
     text (HUMAN_ONLY D7): a trimmed pre-March text is still not the March chain's. Lane N's
     (`model4.WebProvenance`) for a text lane WN wrote (`NONE`, `WEB`). For a Phase-4 text (`PHASE4`,
     site-list runs) the old provenance filtered to the kept sentences (`filtered_provenance`: `kept`
-    and `of` name them; a Phase-4 text is never trimmed, `trimmed` must be 0)."""
+    and `of` name them; a Phase-4 text is never trimmed, `trimmed` must be 0). `ai_system` is the
+    disclosure a new write carries, derived from the models that answered
+    (`model4.ai_system_for`); lane L's provenance names its own."""
     marking = old_marking(site, listed=listed)
     if marking is Marking.UNCLAIMED:
         return None
     if marking in (Marking.NONE, Marking.WEB):
-        return M.WebProvenance(desc_sha256=M.text_sha256(description))
+        return M.WebProvenance(desc_sha256=M.text_sha256(description), ai_system=ai_system)
     if marking is Marking.PHASE4:
         if trimmed or kept is None or of is None:
             raise WcError("a Phase-4 text is only kept or dropped by sentence, never trimmed")
         old = M.provenance_from_dict((site.raw_data or {})[M.PROVENANCE_KEY])
         if not isinstance(old, M.Provenance):
             raise WcError("a Phase-4 text carries a full provenance")
-        return filtered_provenance(old, kept, of=of, description=description)
+        return filtered_provenance(old, kept, of=of, description=description, ai_system=ai_system)
     return legacy4.legacy_provenance(
         dataclasses.replace(
             site, description=description, description_sha256=M.text_sha256(description)
@@ -1233,6 +1237,7 @@ def written_raw_data(
         provenance = provenance_after(
             site,
             composed.description,
+            ai_system=check.checker,
             kept=[n for n, cites in enumerate(composed.cites, start=1) if cites],
             of=len(composed.cites),
             trimmed=check.trimmed,

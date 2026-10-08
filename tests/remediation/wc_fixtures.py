@@ -193,13 +193,15 @@ Q_ZAMMIT = quote(
 Q_ZAMMIT_WIKI = quote(WIKI, "excavated by Themistocles Zammit between 1915 and 1919")
 
 
-def record_answers(handoff: Path, answers: Mapping[str, str], *, by: str = "opus-check") -> None:
+def record_answers(
+    handoff: Path, answers: Mapping[str, str], *, by: str = "opus-check", model: str = OH.OPUS_MODEL
+) -> None:
     """Write each site's answer where its question was exported, as `opus_handoff.py answer`."""
     for line in OH.manifest(handoff):
         if line["label"] in answers:
             OH.write_answer(
                 handoff,
-                model=OH.OPUS_MODEL,
+                model=model,
                 batch_id=line["batch_id"],
                 stage=line["stage"],
                 label=line["label"],
@@ -303,7 +305,7 @@ def passed_round(
     }  # fmt: skip
 
 
-def verify_all(run: Path, handoff: Path) -> dict[str, Any] | None:
+def verify_all(run: Path, handoff: Path, *, model: str = OH.OPUS_MODEL) -> dict[str, Any] | None:
     """The verification round, answered by a verifier that checked nothing: every kept sentence
     SUPPORTED, every text coherent - nothing is dropped, no `verify2` is due. `None` when the check
     kept no sentence anywhere (nothing to verify)."""
@@ -321,7 +323,7 @@ def verify_all(run: Path, handoff: Path) -> dict[str, Any] | None:
         label: verification(label, ["SUPPORTED"] * len(shown))
         for label, shown in record["shown"].items()
     }
-    record_answers(handoff, answers, by="opus-verify")
+    record_answers(handoff, answers, by="opus-verify", model=model)
     return cli.cmd_verify_import(run, handoff, client=FakeClient(), pace=0.0)
 
 

@@ -38,7 +38,7 @@ import json
 import math
 import re
 from abc import ABC, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -46,6 +46,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Self, TypeVar
 
+import opus_handoff as OH  # the answer stamps `ai_system_for` derives the disclosure from
 from phase3.model import _coerce  # one enum coercion for both phases, not a second spelling
 from phase3.run import read_jsonl
 
@@ -133,7 +134,7 @@ AI_SYSTEM_OPUS = (
 #: Owner decision 2026-10-01: the orchestrating session runs Opus 5.5, every answering subagent runs
 #: Sonnet 5.5, so the disclosure of every NEW write names both. Written to production between
 #: 2026-10-01 and 2026-10-03, so it stays byte-identical and valid; `AI_SYSTEM` is the string a new
-#: write carries since 2026-10-03.
+#: write carried from 2026-10-03 to 2026-10-07 (`AI_SYSTEM_CLAUDE_ONLY` since D6, 2026-10-08).
 AI_SYSTEM_CLAUDE = (
     "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
     "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09"
@@ -147,9 +148,37 @@ AI_SYSTEM = (
     "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
     "an-sites-remediation-2026-09"
 )
-#: Every disclosure a validator accepts: the two strings already in production (provenances re-read by
-#: audits, accepts and plans) and the one a new write carries. A validator accepts exactly these three.
-AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM_CLAUDE, AI_SYSTEM})
+#: Owner decision D6, 2026-10-08: Claude only again - Opus, Sonnet and Haiku 5.5 by role
+#: (`roles.ROLES`), no MiniMax. A NEW write whose answers were all Claude's discloses this string
+#: (`ai_system_for`). `AI_SYSTEM` is NOT rebound to it: production holds `AI_SYSTEM` in 17+ WN
+#: provenances and the pinned consumers compare it; a text a MiniMax agent touched keeps naming it.
+AI_SYSTEM_CLAUDE_ONLY = (
+    "Claude Opus, Claude Sonnet and Claude Haiku (Anthropic): anthropic/claude-opus-5-5, "
+    "anthropic/claude-sonnet-5-5 and anthropic/claude-haiku-5-5 (Claude Code agents), "
+    "an-sites-remediation-2026-10"
+)
+#: Every disclosure a validator accepts: the strings already in production (provenances re-read by
+#: audits, accepts and plans) and the Claude-only one a new write carries. A validator accepts
+#: exactly these four.
+AI_SYSTEMS = frozenset({AI_SYSTEM_OPUS, AI_SYSTEM_CLAUDE, AI_SYSTEM, AI_SYSTEM_CLAUDE_ONLY})
+
+
+def ai_system_for(stamps: Iterable[str]) -> str:
+    """The disclosure of a new write, from the stamps of the answers it rests on
+    (`opus_handoff.ANSWER_MODELS` values): the Claude-only string when every answer was Claude's,
+    the combined `AI_SYSTEM` when any was MiniMax's (the text then rests on a MiniMax judgement).
+    No stamp, or one no handoff answer carries, is refused - the disclosure is never guessed."""
+    named = set(stamps)
+    if not named:
+        raise ValueError("ai_system_for: no answering model given")
+    unknown = named - set(OH.ANSWER_MODELS.values())
+    if unknown:
+        raise ValueError(
+            f"ai_system_for: {sorted(unknown)!r} is no stamp of opus_handoff.ANSWER_MODELS"
+        )
+    return AI_SYSTEM if OH.MINIMAX_MODEL in named else AI_SYSTEM_CLAUDE_ONLY
+
+
 #: Lane L's `ai_system` and `basis`, verbatim from production_write.
 LEGACY_AI_SYSTEM = "2026-03 enrichment chain (LLM; model per site not recorded)"
 LEGACY_BASIS = "description differs from pre-March snapshot d4526691 (plan section 15.3)"
@@ -1635,8 +1664,10 @@ class WebProvenance(_JsonRecord):
             raise ValueError(f"web_provenance.lane: {self.lane!r} is not N")
         if self.ai is not AiMark.GENERATED:
             raise ValueError(f"web_provenance.ai: {self.ai!r} is not generated")
-        if self.ai_system != AI_SYSTEM:
-            raise ValueError(f"web_provenance.ai_system: {self.ai_system!r} is not {AI_SYSTEM!r}")
+        if self.ai_system not in AI_SYSTEMS:
+            raise ValueError(
+                f"web_provenance.ai_system: {self.ai_system!r} is not one of {sorted(AI_SYSTEMS)!r}"
+            )
         if self.basis != WEB_BASIS:
             raise ValueError(f"web_provenance.basis: {self.basis!r}")
         _need_hex(self.desc_sha256, "web_provenance.desc_sha256")

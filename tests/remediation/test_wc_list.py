@@ -253,7 +253,8 @@ def test_a_phase4_text_keeps_its_kept_sentences_and_its_provenance_filtered_to_t
     old = M.Provenance.from_dict(WX.p4_site_raw()[M.PROVENANCE_KEY])
     new = M.Provenance.from_dict(outcome.raw_data[M.PROVENANCE_KEY])
     assert new == dataclasses.replace(
-        old, ai_system=M.AI_SYSTEM, sentences=(old.sentences[0], old.sentences[2]), card=None,
+        old, ai_system=M.AI_SYSTEM_CLAUDE_ONLY, sentences=(old.sentences[0], old.sentences[2]),
+        card=None,
         desc_sha256=M.text_sha256(outcome.description),
     )  # fmt: skip
     assert (new.lane, new.ai, new.attribution, new.licence) == (
@@ -327,11 +328,16 @@ def _two_source_provenance() -> M.Provenance:
 
 def test_filtering_a_provenance_follows_the_kept_sentences_and_their_sources() -> None:
     old = _two_source_provenance()
-    kept = WC4.filtered_provenance(old, [1, 3], of=3, description="A new text.")
+    kept = WC4.filtered_provenance(
+        old, [1, 3], of=3, description="A new text.", ai_system=M.AI_SYSTEM_CLAUDE_ONLY
+    )
     assert [s.src for s in kept.sentences] == ["W", "T.de"] and len(kept.sources) == 2
-    only_w = WC4.filtered_provenance(old, [1, 2], of=3, description="A new text.")
+    only_w = WC4.filtered_provenance(
+        old, [1, 2], of=3, description="A new text.", ai_system=M.AI_SYSTEM_CLAUDE_ONLY
+    )
     assert [s.id for s in only_w.sources] == ["W"] and M.Provenance.from_dict(only_w.to_dict())
-    assert only_w.card is None and only_w.ai_system == M.AI_SYSTEM
+    # the new write's disclosure is the caller's, derived from the models that answered (D6)
+    assert only_w.card is None and only_w.ai_system == M.AI_SYSTEM_CLAUDE_ONLY
     assert only_w.desc_sha256 == M.text_sha256("A new text.")
 
 
@@ -340,26 +346,31 @@ def test_filtering_drops_the_card_of_sentences_that_changed() -> None:
     ones, and the card text itself is lane WB's to rewrite."""
     old = M.Provenance.from_dict(WX.p4_site_raw(card=True)[M.PROVENANCE_KEY])
     assert old.card is not None
-    assert WC4.filtered_provenance(old, [1, 3], of=3, description="A new text.").card is None
+    filtered = WC4.filtered_provenance(
+        old, [1, 3], of=3, description="A new text.", ai_system=M.AI_SYSTEM
+    )
+    assert filtered.card is None
 
 
 def test_filtering_refuses_what_it_cannot_keep_true() -> None:
     old = _two_source_provenance()
     with pytest.raises(WC4.WcError, match="cannot be matched one for one"):
-        WC4.filtered_provenance(old, [1], of=4, description="x")
+        WC4.filtered_provenance(old, [1], of=4, description="x", ai_system=M.AI_SYSTEM)
     with pytest.raises(WC4.WcError, match="nothing kept"):
-        WC4.filtered_provenance(old, [], of=3, description="x")
+        WC4.filtered_provenance(old, [], of=3, description="x", ai_system=M.AI_SYSTEM)
     with pytest.raises(
         WC4.WcError, match="no kept sentence cites the source the attribution names"
     ):
-        WC4.filtered_provenance(old, [3], of=3, description="x")
+        WC4.filtered_provenance(old, [3], of=3, description="x", ai_system=M.AI_SYSTEM)
 
 
 def test_a_phase4_text_is_never_trimmed_in_the_record_either() -> None:
     site = FX.plan_site(FX.row(SITE_P4, WX.P4_TEXT, raw_data=WX.p4_site_raw()))
     assert WC4.old_marking(site, listed=True) is WC4.Marking.PHASE4
     with pytest.raises(WC4.WcError, match="never trimmed"):
-        WC4.provenance_after(site, "A new text.", kept=[1], of=3, trimmed=1, listed=True)
+        WC4.provenance_after(
+            site, "A new text.", kept=[1], of=3, trimmed=1, listed=True, ai_system=M.AI_SYSTEM
+        )
     with pytest.raises(WC4.WcError, match="wrote this text in Phase 4"):
         WC4.old_marking(site)  # a plain run asks none
 

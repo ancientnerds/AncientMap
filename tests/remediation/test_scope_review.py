@@ -635,6 +635,7 @@ def test_a_row_imported_before_the_stamp_keeps_its_opus_label() -> None:
     assert R.judged_by(old) == "opus:r0-001"
     assert R.judged_by({**old, "model": OH.OPUS_MODEL}) == "opus:r0-001"
     assert R.judged_by({**old, "model": OH.SONNET_MODEL}) == "sonnet:r0-001"
+    assert R.judged_by({**old, "model": OH.HAIKU_MODEL}) == "haiku:r0-001"  # owner decision D6
     with pytest.raises(KeyError):
         R.judged_by({**old, "model": "anthropic/claude-haiku (Claude Code agent)"})
 

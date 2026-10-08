@@ -24,6 +24,7 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
 
 import opus_handoff as OH  # noqa: E402
 import research_web  # noqa: E402
+from phase4 import model4 as M  # noqa: E402
 from teaser import answers as A  # noqa: E402
 from teaser import contract as C  # noqa: E402
 from teaser import prompts as P  # noqa: E402
@@ -623,14 +624,21 @@ def make_run(tmp_path: Path, rows: list[dict[str, Any]] | None = None) -> Path:
     return run
 
 
-def answer_all(run: Path, stage: str, handoff: Path, answers: dict[str, str], by: str = "") -> None:
+def answer_all(
+    run: Path,
+    stage: str,
+    handoff: Path,
+    answers: dict[str, str],
+    by: str = "",
+    model: str = OH.OPUS_MODEL,
+) -> None:
     record = R._round(run, stage)
     assert record is not None
     for batch_id, members in record["batches"].items():
         for site_id in members:
             OH.write_answer(
                 handoff,
-                model=OH.OPUS_MODEL,
+                model=model,
                 batch_id=batch_id,
                 stage=stage,
                 label=site_id,
@@ -639,11 +647,18 @@ def answer_all(run: Path, stage: str, handoff: Path, answers: dict[str, str], by
             )
 
 
-def step(run: Path, tmp_path: Path, stage: str, answers: dict[str, str], by: str = "") -> dict:
+def step(
+    run: Path,
+    tmp_path: Path,
+    stage: str,
+    answers: dict[str, str],
+    by: str = "",
+    model: str = OH.OPUS_MODEL,
+) -> dict:
     handoff = tmp_path / f"handoff-{stage}"
     exported = R.export_stage(run, stage, handoff)
     if exported["questions"]:
-        answer_all(run, stage, handoff, answers, by)
+        answer_all(run, stage, handoff, answers, by, model)
         if stage in R.VERIFY_STAGES:
             return R.import_stage(run, stage, fit=T.fit, client=judge_client(), pace=0)
         return R.import_stage(run, stage, fit=T.fit)
@@ -688,12 +703,12 @@ class TestTheRun:
             assert CP.describes(provenance, T.GOOD[row["site_id"]])
             assert provenance["desc_sha256"] == T.sha(T.DESCRIPTIONS[row["site_id"]])
             assert provenance["check"]["by"].startswith("teaser-check-")
-            # `outcome_rows` writes the disclosure of a new write (owner decisions 2026-10-01,
-            # 2026-10-03: Claude and MiniMax)
+            # `outcome_rows` derives the disclosure from the models that answered (owner decision
+            # D6, 2026-10-08): every answer here was Opus's, so the Claude-only string
             assert provenance["ai_system"] == (
-                "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
-                "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
-                "an-sites-remediation-2026-09"
+                "Claude Opus, Claude Sonnet and Claude Haiku (Anthropic): anthropic/claude-opus-5-5, "
+                "anthropic/claude-sonnet-5-5 and anthropic/claude-haiku-5-5 (Claude Code agents), "
+                "an-sites-remediation-2026-10"
             )
             assert provenance["verify"] == {
                 "verdict": "VERIFIED",
@@ -709,6 +724,61 @@ class TestTheRun:
         cleared = [r for r in rows if r["status"] == R.CLEARED]
         assert [(r["site_id"], r["reason"]) for r in cleared] == [(T.EMPTY, R.NO_DESCRIPTION)]
         assert cleared[0]["verification"] is None
+
+    def test_every_stage_record_names_the_stamp_of_the_model_that_answered(
+        self, tmp_path: Path
+    ) -> None:
+        run = make_run(tmp_path)
+        step(run, tmp_path, "write", GOOD_WRITES, model=OH.SONNET_MODEL)
+        step(run, tmp_path, "check", PASSES, model=OH.HAIKU_MODEL)
+        records = R.stage_records(run)
+        assert {r["model"] for r in records["write"].values()} == {OH.SONNET_MODEL}
+        assert {r["model"] for r in records["check"].values()} == {OH.HAIKU_MODEL}
+
+    @pytest.mark.parametrize(
+        ("write", "check", "verify", "expected"),
+        [
+            (OH.SONNET_MODEL, OH.OPUS_MODEL, OH.HAIKU_MODEL, M.AI_SYSTEM_CLAUDE_ONLY),
+            (OH.MINIMAX_MODEL, OH.OPUS_MODEL, OH.OPUS_MODEL, M.AI_SYSTEM),
+            (OH.OPUS_MODEL, OH.MINIMAX_MODEL, OH.OPUS_MODEL, M.AI_SYSTEM),
+            (OH.OPUS_MODEL, OH.OPUS_MODEL, OH.MINIMAX_MODEL, M.AI_SYSTEM),
+        ],
+    )
+    def test_the_disclosure_follows_the_models_that_wrote_checked_and_verified_the_card(
+        self, tmp_path: Path, write: str, check: str, verify: str, expected: str
+    ) -> None:
+        """Owner decision D6: a card rests on its writer, its accepting check and its verification.
+        All Claude's: the Claude-only string. Any MiniMax stamp among them: the combined one."""
+        run = make_run(tmp_path)
+        step(run, tmp_path, "write", GOOD_WRITES, model=write)
+        step(run, tmp_path, "check", PASSES, model=check)
+        step(run, tmp_path, "rewrite1", {})
+        step(run, tmp_path, "verify", VERIFIES, model=verify)
+        step(run, tmp_path, "rewrite-v", {})
+        R.outcomes(run)
+        accepted = [r for r in R.read_outcomes(run) if r["status"] == R.ACCEPTED]
+        assert len(accepted) == 4
+        assert {r["provenance"]["ai_system"] for r in accepted} == {expected}
+        assert expected in M.AI_SYSTEMS
+
+    def test_a_record_imported_before_the_stamp_was_kept_cannot_be_disclosed(
+        self, tmp_path: Path
+    ) -> None:
+        """A stage file without `model` (a run imported before 2026-10-08) names no model to derive
+        the disclosure from, and the disclosure is never guessed."""
+        run = make_run(tmp_path)
+        step(run, tmp_path, "write", GOOD_WRITES)
+        step(run, tmp_path, "check", PASSES)
+        step(run, tmp_path, "rewrite1", {})
+        step(run, tmp_path, "verify", VERIFIES)
+        step(run, tmp_path, "rewrite-v", {})
+        path = run / "STAGE-check.jsonl"
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        for row in rows:
+            del row["model"]
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        with pytest.raises(R.RunError, match="model"):
+            R.outcomes(run)
 
     def test_a_blank_description_clears_the_card_on_the_text_as_it_was_read(
         self, tmp_path: Path
@@ -850,11 +920,13 @@ class TestTheRun:
         R.export_stage(run, "write", handoff)
         text = R.brief(run, handoff, "write-001")
         assert "writer write-001" in text and "--answered-by teaser-write-001" in text
-        # The brief offers every model id the recorder accepts, built from ANSWER_MODELS: an agent
-        # names the model it runs as (owner decision 2026-10-01), and the list may not be narrower
-        # than the models in use (MiniMax joined 2026-10-03, this lane still offered only the two
-        # Claude ids on 2026-10-07 and told an agent to stamp a model that wrote nothing).
-        assert all(model_id in text for model_id in OH.ANSWER_MODELS)
+        # The brief offers every model id the recorder accepts, built from NEW_ANSWER_MODELS: an
+        # agent names the model it runs as (owner decision 2026-10-01), and the list may not be
+        # narrower than the models in use (MiniMax joined 2026-10-03, this lane still offered only
+        # the two Claude ids on 2026-10-07 and told an agent to stamp a model that wrote nothing).
+        # Owner decision D6 (2026-10-08): Claude only again, with Haiku; MiniMax is not offered.
+        assert all(model_id in text for model_id in OH.NEW_ANSWER_MODELS)
+        assert "claude-haiku-5-5" in text and "MiniMax" not in text
         assert text.count("Opus") == 0  # the answering agents are not Opus ones
         assert "handoff-write-scratch/write-001/<label>.json" in text
         assert "no web research" in text
@@ -1576,7 +1648,7 @@ class TestTheVerification:
         text = R.brief(run, handoff, "verify-001")
         assert "verifier verify-001" in text and "sources on the web" in text
         assert "--answered-by teaser-verify-001" in text and "verified or judged" in text
-        assert all(model_id in text for model_id in OH.ANSWER_MODELS)
+        assert all(model_id in text for model_id in OH.NEW_ANSWER_MODELS)
 
     def test_the_judge_lists_the_central_claim_first(self) -> None:
         prompt = P.judge_prompt("Skara Brae", "Scotland", T.GOOD[T.SKARA])

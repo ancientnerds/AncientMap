@@ -7,8 +7,10 @@ and the gallery vision questions were bought from `opencode-go/deepseek-v4.1-fla
 per call) and `deepseek-v4-flash-vision-exp` (the opencode gateway). Both transports are gone.
 Owner decision 2026-10-01: the orchestrating session runs Opus 5.5 and every answering subagent runs
 Sonnet 5.5; an answer names the model that really wrote it (`ANSWER_MODELS`), and answers recorded
-before carry the Opus stamp and stay valid. A stage now runs in two halves with the answering in
-between, done by the orchestrator:
+before carry the Opus stamp and stay valid. Owner decision D6, 2026-10-08: Claude only again, a
+role per task (`roles.ROLES`) on Opus, Sonnet or Haiku 5.5; a NEW answer may name only
+`NEW_ANSWER_MODELS`, while the MiniMax stamp of the answers recorded 2026-10-03 to 2026-10-07 stays
+readable. A stage now runs in two halves with the answering in between, done by the orchestrator:
 
     export   the stage computes the calls it would buy - the exact prompt text, unchanged, so the
              frozen questions stay frozen - and writes them here. No model is called.
@@ -37,11 +39,13 @@ Usage (the orchestrator's side):
 
     python scripts/remediation/opus_handoff.py validate --dir DIR
     python scripts/remediation/opus_handoff.py answer --dir DIR --batch-id B --stage S --label L \\
-        --answered-by AGENT --model MODEL_ID --text-file ANSWER.txt
+        --answered-by AGENT --model MODEL_ID [--role ROLE] --text-file ANSWER.txt
 
 `--model` is required and has no default: it is the model id the answering agent runs as, as its own
-system prompt names it (`claude-opus-5-5`, `claude-sonnet-5-5` or `MiniMax-M3.1-Flash-Preview`, the
-keys of `ANSWER_MODELS`).
+system prompt names it (`claude-opus-5-5`, `claude-sonnet-5-5` or `claude-haiku-5-5`, the
+`NEW_ANSWER_MODELS`). `--role` names the role the answer is given in (`roles.ROLES`): it is refused
+when the role's registered model is not `--model`, and it is recorded as `answered_by =
+"<role>:<AGENT>"`; the stored shape (`ANSWER_KEYS`) does not grow.
 """
 
 from __future__ import annotations
@@ -75,16 +79,24 @@ SONNET_MODEL = "anthropic/claude-sonnet-5-5 (Claude Code agent)"
 #: Claude Code with MiniMax Code (`mcode`, model `MiniMax-M3.1-Flash-Preview`), so from then on the
 #: answering agents are MiniMax ones. Answers recorded before keep their stamp and stay valid.
 MINIMAX_MODEL = "minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent)"
+#: The stamp of an answer by a Haiku agent. Owner decision D6, 2026-10-08: the image prefilter and
+#: the operators run Haiku 5.5 (`roles.ROLES`).
+HAIKU_MODEL = "anthropic/claude-haiku-5-5 (Claude Code agent)"
 #: The model id an agent runs as (as its own system prompt names it) -> the stamp its answer carries.
-#: The only models an answer may name: `answer` offers exactly these keys, `read_answer` and
-#: `validate` accept exactly these values. There is no default model anywhere.
+#: The only models a RECORDED answer may name: `read_answer` and `validate` accept exactly these
+#: values. The MiniMax entry is here to read the answers recorded 2026-10-03 to 2026-10-07; a new
+#: answer is limited to `NEW_ANSWER_MODELS`. There is no default model anywhere.
 ANSWER_MODELS: Mapping[str, str] = MappingProxyType(
     {
         "claude-opus-5-5": OPUS_MODEL,
         "claude-sonnet-5-5": SONNET_MODEL,
+        "claude-haiku-5-5": HAIKU_MODEL,
         "MiniMax-M3.1-Flash-Preview": MINIMAX_MODEL,
     }
 )
+#: The model ids a NEW answer may name (owner decision D6, 2026-10-08): `answer --model` offers
+#: exactly these and the briefs list exactly these. Opus first: the order is the briefs' order.
+NEW_ANSWER_MODELS: tuple[str, ...] = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5")
 #: The model id -> the family its answers are labelled with in evidence that names who judged
 #: (`mechanical/scope_review.judged_by` writes `<family>:<agent>` into a `scope_reason`). Declared
 #: beside the stamps and never split out of the model id: the family is part of the identity, and
@@ -93,6 +105,7 @@ ANSWER_FAMILIES: Mapping[str, str] = MappingProxyType(
     {
         "claude-opus-5-5": "opus",
         "claude-sonnet-5-5": "sonnet",
+        "claude-haiku-5-5": "haiku",
         "MiniMax-M3.1-Flash-Preview": "minimax",
     }
 )
@@ -508,8 +521,13 @@ def main(argv: Iterable[str] | None = None) -> int:
     answer.add_argument(
         "--model",
         required=True,
-        choices=sorted(ANSWER_MODELS),
+        choices=list(NEW_ANSWER_MODELS),
         help="the model id you run as, exactly as your own system prompt names it",
+    )
+    answer.add_argument(
+        "--role",
+        help="the role you answer in (roles.ROLES): refused unless its registered model is --model; "
+        "recorded as answered_by '<role>:<answered-by>'",
     )
     answer.add_argument("--text-file", required=True, help="the answer text, UTF-8, verbatim")
     args = parser.parse_args(list(argv) if argv is not None else None)
@@ -518,13 +536,22 @@ def main(argv: Iterable[str] | None = None) -> int:
         result = validate(root)
         _print(result.to_dict())
         return 0 if result.ok else 1
+    answered_by = args.answered_by
+    if args.role is not None:
+        import roles  # here, not above: roles reads this module's stamps
+
+        try:
+            roles.require_model(args.role, args.model)
+            answered_by = roles.answered_by(args.role, args.answered_by)
+        except roles.RoleError as exc:
+            parser.error(str(exc))
     wrote = write_answer(
         root,
         batch_id=args.batch_id,
         stage=args.stage,
         label=args.label,
         text=Path(args.text_file).read_bytes().decode("utf-8"),
-        answered_by=args.answered_by,
+        answered_by=answered_by,
         model=ANSWER_MODELS[args.model],
     )
     _print({"answer_path": answer_relpath(args.batch_id, args.stage, args.label), "wrote": wrote})

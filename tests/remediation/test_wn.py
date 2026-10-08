@@ -396,12 +396,20 @@ def test_the_text_cites_the_pages_of_its_verified_quotes_and_carries_lane_ns_pro
     assert raw is not None and set(raw) == {M.CITATIONS_KEY, WC4.CHECK_KEY, M.PROVENANCE_KEY}
     assert [(c["n"], c["url"]) for c in raw[M.CITATIONS_KEY]] == [(1, FX.WIKI), (2, FX.MUSEUM)]
     provenance = raw[M.PROVENANCE_KEY]
-    assert provenance == M.WebProvenance(desc_sha256=M.text_sha256(n.description)).to_dict()
+    claude_only = (
+        M.AI_SYSTEM_CLAUDE_ONLY
+    )  # the writer is Sonnet, the verifier Opus (D6, 2026-10-08)
+    assert (
+        provenance
+        == M.WebProvenance(
+            desc_sha256=M.text_sha256(n.description), ai_system=claude_only
+        ).to_dict()
+    )
     assert (provenance["lane"], provenance["ai"], provenance["ai_system"]) == (
-        "N", "generated", M.AI_SYSTEM,
+        "N", "generated", claude_only,
     )  # fmt: skip
     check = raw[WC4.CHECK_KEY]
-    assert check["checker"] == M.AI_SYSTEM and check["checked_sha256"] == _sha("")
+    assert check["checker"] == claude_only and check["checked_sha256"] == _sha("")
     assert check["verifiers"] == ["opus-verify-verify-0001"] and check["kept"] == 3
     assert WC4.wc_problems(n.description, raw, marking="none") == []
     assert WC4.wc_problems(n.description, raw)  # lane L's reading refuses a lane-N provenance
