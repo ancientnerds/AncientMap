@@ -208,6 +208,9 @@ export interface DescriptionSectionProps {
   /** The disclosure of exactly this description, or undefined (descriptionDisclosure.ts). */
   descriptionAi?: DescriptionAi
   descriptionAttribution?: DescriptionAttribution | null
+  /** Show the attribution line under the text: only on the full page, which the popup links
+   *  to (owner 2026-10-08: the line took the globe popup's room for the text). */
+  showAttribution?: boolean
 }
 
 export interface MapSectionProps {

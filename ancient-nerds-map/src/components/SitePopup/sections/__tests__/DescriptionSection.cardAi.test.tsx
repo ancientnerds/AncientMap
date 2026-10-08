@@ -8,7 +8,9 @@
  * in the SSR payload), which no longer reaches this component at all.
  *
  * What stays is the CC BY-SA 4.0 attribution of an adapted description, including its
- * "by an AI system" clause: that is a licence duty of the text, not an AI notice.
+ * "by an AI system" clause: that is a licence duty of the text, not an AI notice. Since
+ * 2026-10-08 (owner: it took the room for the text) it stands on the full page only; the
+ * globe popup links there.
  */
 
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -41,18 +43,26 @@ describe('DescriptionSection: a card carries only its text', () => {
     expect(html({ descriptionAi: 'selected' })).not.toContain('data-ai-generated')
   })
 
-  it('the CC BY-SA attribution stays, with its AI clause', () => {
-    const markup = html({
-      descriptionAi: 'selected',
-      descriptionAttribution: {
-        title: 'Skara Brae',
-        url: 'https://en.wikipedia.org/w/index.php?title=Skara_Brae&oldid=1234567',
-        licence: 'CC BY-SA 4.0',
-        licenceUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
-        changes: 'sentences selected and shortened',
-        revisionDate: '2026-09-01',
-      },
-    })
+  const adapted: Partial<DescriptionSectionProps> = {
+    descriptionAi: 'selected',
+    descriptionAttribution: {
+      title: 'Skara Brae',
+      url: 'https://en.wikipedia.org/w/index.php?title=Skara_Brae&oldid=1234567',
+      licence: 'CC BY-SA 4.0',
+      licenceUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      changes: 'sentences selected and shortened',
+      revisionDate: '2026-09-01',
+    },
+  }
+
+  it('the globe popup leaves the CC BY-SA attribution and the older source link out', () => {
+    const markup = html({ ...adapted, bestWikiUrl: 'https://de.wikipedia.org/wiki/Skara_Brae', sourceLanguage: 'de' })
+    expect(markup).not.toContain('data-description-attribution')
+    expect(markup).not.toContain('Source: de.wikipedia.org')
+  })
+
+  it('the full page keeps the CC BY-SA attribution, with its AI clause', () => {
+    const markup = html({ ...adapted, showAttribution: true })
     expect(markup).toContain('data-description-attribution="true"')
     expect(markup).toContain('CC BY-SA 4.0')
     expect(markup).toContain('by an AI system')

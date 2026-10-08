@@ -27,6 +27,7 @@ export function DescriptionSection({
   descriptionCitations,
   descriptionAi,
   descriptionAttribution,
+  showAttribution = false,
 }: DescriptionSectionProps) {
   const [showCitations, setShowCitations] = useState(false)
   const [showMoreInfo, setShowMoreInfo] = useState(false)
@@ -34,7 +35,7 @@ export function DescriptionSection({
   const hasMoreInfo = !rawDataLoading && hasDisplayableRawData(sourceId, rawData)
 
   // Extract domain for source attribution (e.g. "de.wikipedia.org"). A description with
-  // its own attribution names its source itself: the older enrichment link would then
+  // its own attribution has a different source: the older enrichment link would then
   // name a page the text no longer comes from.
   const wikiSourceDomain = !descriptionAttribution && bestWikiUrl && sourceLanguage && sourceLanguage !== 'en'
     ? (() => { try { return new URL(bestWikiUrl).hostname } catch { return null } })()
@@ -93,11 +94,12 @@ export function DescriptionSection({
           {descriptionContent}
 
           {/* CC BY-SA 4.0 attribution of an adapted description (owner decision 2026-10-07:
-              no AI notice here any more - the card carries only its text) */}
+              no AI notice here any more - the card carries only its text), on the full page
+              only (owner 2026-10-08) */}
           {description && (
             <DescriptionDisclosure
               ai={descriptionAi}
-              attribution={descriptionAttribution}
+              attribution={showAttribution ? descriptionAttribution : null}
             />
           )}
 

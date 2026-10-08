@@ -820,6 +820,7 @@ export default function SitePopup({
                 descriptionCitations={displaySite.descriptionCitations}
                 descriptionAi={descriptionDisclosure?.ai}
                 descriptionAttribution={descriptionDisclosure?.attribution}
+                showAttribution={fullPage}
               />
             )}
 

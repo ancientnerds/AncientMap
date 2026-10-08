@@ -21,8 +21,10 @@
  * the notices of the areas a card is not part of — Theo papers, news videos, YouTube shorts.
  *
  * One component for the popup (DescriptionSection) and the crawler record (SitePage), so the
- * two views cannot say it differently. Every anchor carries one string child, so the
- * server-rendered HTML has no <!-- --> separators inside the line.
+ * two views cannot say it differently. The globe popup leaves the attribution line out (owner
+ * 2026-10-08: it took the room for the text) and links to the full page, which shows it.
+ * Every anchor carries one string child, so the server-rendered HTML has no <!-- -->
+ * separators inside the line.
  */
 
 import type { DescriptionAi, DescriptionAttribution } from '../types/anRoute'
