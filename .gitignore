@@ -233,6 +233,7 @@ output/remediation/*
 # The owner's answers of 2026-10-08 that govern the final DB repair and the shorts-teaser cards:
 # hand-recorded, not derivable from any run, so versioned like HUMAN_ONLY.md.
 !output/remediation/OWNER_DECISIONS_2026-10-08.md
+!output/remediation/final-2026-10-08/
 # The old-to-new commit table for the 2026-09-21 history rewrite. It cannot be regenerated -
 # filter-branch does not keep its mapping - and every hash recorded before the rewrite is
 # stale without it, so it is versioned like AUDIT_LOG.md rather than left to the glob.
