@@ -21,6 +21,9 @@ note from `_card_provenance.ai_system`, `spoken_name` read by `shorts_tts`).
 | X6 | MiniMax-answered material in run dirs | Never ground truth; moved aside by a tested helper, re-answered by Claude (D10). |
 | X7 | WF final measurement size | 100 sites, Opus xhigh, after the last write wave. |
 | X8 | The 73 collective entities with unsourced points | Listed, not retired or merged (not covered by D13/D14/D19). |
+| X9 | A MiniMax-written `period_start` that Claude cannot source (all 265 filled an empty cell) | Restored to the pre-MiniMax state: NULL start, label `Undated` (D10). |
+| X10 | `phase4/assemble._finish` still stamps the Claude+MiniMax `AI_SYSTEM` on new Phase-4 W/S provenance | Fix before the first new W-lane write (D13 re-targets); no W write runs before it. |
+| X11 | Where lanes run | The main checkout is the run tree (branch `run/2026-10-09-db-final`, fast-forwarded as code lands); code is built in worktrees `.worktrees/*`. |
 
 ## Throughput and cost (measured inputs, estimate)
 
@@ -32,8 +35,11 @@ note from `_card_provenance.ai_system`, `spoken_name` read by `shorts_tts`).
   will pause the runs; workflows resume from their run ids.
 - Wall clock is bound by web verification at width <= 3 (Wikimedia throttles this IP at 4+):
   ~14,000 web-checked answers at ~11 min per 5-question batch -> **~7-9 days of continuous running**.
-- Disk: C: ~19 GB free; no step downloads at scale (largest: image candidates 1-2 GB, pruned
-  after verdicts). One worktree only (4.6 GB).
+- Disk: the owner freed space (2026-10-08: ~90 GB free); parallel worktrees allowed.
+- Wikipedia: a shared serial prefetch (`output/remediation/final-2026-10-08/wiki_cache/`, 4,767
+  articles, 0 failures) replaces live Wikipedia fetches by agents; width is bound by RAM, not by
+  Wikimedia (the owner offered Webshare proxies; not used - rotating IPs around Wikimedia's
+  per-IP throttle would break its API etiquette).
 
 ## Order
 
@@ -92,3 +98,8 @@ final report.
 ## Progress log
 
 - 2026-10-08: decisions recorded (c6c896e); state audit and six workstream maps done; this plan.
+- 2026-10-08/09: Phase 1 built in parallel worktrees, reviewed (Opus, 5 findings, 4 fixed, 1 -> X10),
+  merged with the early Phase-3 code (wd5 lane, identity discovery; reviewed, 7 + 5 findings fixed);
+  pushed `49ab4c6` (all hook gates green, CI green), live on api and api2, migration 0029 applied,
+  0 card overwrites at boot; static export refreshed through the new locked CLI, freshness check
+  0 differing sites; Wikipedia cache complete. Phase-2 lane code building (`wf_cdd6677a-8e7`).
