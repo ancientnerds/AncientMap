@@ -106,7 +106,7 @@ CASES: list[Case] = [
         ENTITIES,
         "        self.roots = ((SOURCE_HARVEST, harvest_root), (SOURCE_DELTA, delta_root))",
         "        self.roots = ((SOURCE_DELTA, delta_root), (SOURCE_HARVEST, harvest_root))",
-        "test_a_harvested_item_is_found_in_the_harvest",
+        "test_an_item_both_roots_hold_is_read_from_the_harvest",
         T_EXPORT,
     ),
     # ------------------------------------------------------------------------------ funnel
