@@ -154,6 +154,7 @@ PAGE_COLUMNS: dict[str, tuple[str, ...]] = {
         "filename",
         "author",
         "license",
+        "license_url",
         "commons_page_url",
         "width",
         "height",

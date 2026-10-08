@@ -33,6 +33,8 @@
    "revisionDate": "2026-07-21"
   },
   "card_ai": "generated",
+  "wikidata_qid": null,
+  "enwiki_title": null,
   "alt_names": [
    "Coom Wedge Tomb"
   ],
@@ -40,6 +42,7 @@
    "url": "/data/images/wiki/53ccd265/Kerry - Coom Tomb - 20170731135615.webp",
    "author": "Commander-pirx",
    "license": "CC BY-SA 4.0",
+   "license_url": null,
    "commons_url": "https://commons.wikimedia.org/wiki/File%3AKerry%20-%20Coom%20Tomb%20-%2020170731135615.jpg",
    "width": 1600,
    "height": 2843
@@ -180,6 +183,8 @@
    "revisionDate": "2026-08-10"
   },
   "card_ai": "generated",
+  "wikidata_qid": null,
+  "enwiki_title": null,
   "alt_names": [
    "Cairnpapple Hill"
   ],
@@ -187,6 +192,7 @@
    "url": "/data/images/wiki/c59b8485/Cairnpapple Hill alt1.webp",
    "author": "Gunther Tschuch",
    "license": "CC BY-SA 4.0",
+   "license_url": null,
    "commons_url": "https://commons.wikimedia.org/wiki/File%3ACairnpapple%20Hill%20alt1.jpg",
    "width": 1600,
    "height": 1067
@@ -328,6 +334,8 @@
   "description_ai": "generated",
   "description_attribution": null,
   "card_ai": null,
+  "wikidata_qid": null,
+  "enwiki_title": null,
   "alt_names": [
    "Kekova Island"
   ],
@@ -487,6 +495,8 @@
   "description_ai": "generated",
   "description_attribution": null,
   "card_ai": null,
+  "wikidata_qid": null,
+  "enwiki_title": null,
   "alt_names": [
    "Serpent's Wall"
   ],
@@ -494,6 +504,7 @@
    "url": "/data/images/wiki/7ee8535b/Змієві_вали_біля_села_Іванковичі.webp",
    "author": "Kiyanka",
    "license": "CC BY-SA 4.0",
+   "license_url": null,
    "commons_url": "https://commons.wikimedia.org/wiki/File%3A%D0%97%D0%BC%D1%96%D1%94%D0%B2%D1%96%20%D0%B2%D0%B0%D0%BB%D0%B8%20%D0%B1%D1%96%D0%BB%D1%8F%20%D1%81%D0%B5%D0%BB%D0%B0%20%D0%86%D0%B2%D0%B0%D0%BD%D0%BA%D0%BE%D0%B2%D0%B8%D1%87%D1%96.jpg",
    "width": 1600,
    "height": 1107

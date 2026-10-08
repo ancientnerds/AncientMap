@@ -16,6 +16,8 @@
   "description_citations": null,
   "description_ai": null,
   "description_attribution": null,
+  "wikidata_qid": null,
+  "enwiki_title": null,
   "alt_names": [
     "Göbekli Tepe",
     "Portasar",
@@ -25,7 +27,8 @@
     "url": "/data/images/wiki/9c8b7a65/hero.webp",
     "author": "Teomancimit",
     "license": "CC BY-SA 3.0",
-    "commons_url": "https://commons.wikimedia.org/wiki/File:G%C3%B6bekli_Tepe.jpg"
+    "commons_url": "https://commons.wikimedia.org/wiki/File:G%C3%B6bekli_Tepe.jpg",
+    "license_url": null
   },
   "news": [
     {
