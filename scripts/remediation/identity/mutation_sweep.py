@@ -617,11 +617,11 @@ CASES: list[Case] = [
         T_NAMES,
     ),
     swap(
-        "ambiguity only for the name itself",
+        "ambiguity only for a name spoken by rule",
         NAMES,
-        '            and record["source"] == "name"\n',
+        '            and not record["needs_model"]\n',
         "",
-        "test_an_attested_form_spoken_for_a_shared_name_is_not_ambiguous",
+        "test_the_place_a_qualifier_named_is_lost_for_a_name_two_sites_share",
         T_NAMES,
     ),
     swap(

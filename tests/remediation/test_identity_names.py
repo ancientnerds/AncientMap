@@ -286,7 +286,8 @@ class TestTheSpokenName:
         mercury = site(name="Temple of Mercury, Puy de Dome")
         plain = site(name="Temple of Zeus")
         zeus = site(name="Temple of Zeus, Olympia")
-        exported = export_of([delphi, pompeii, mercury, plain, zeus])
+        theatre = site(name="Roman Theatre, Merida")  # already for the model: nothing to compare
+        exported = export_of([delphi, pompeii, mercury, plain, zeus, theatre])
         _, rows, counts = N.build(exported, store_of(tmp_path, {}, {}))
         by_id = {r["id"]: r for r in rows}
         for ambiguous in (delphi, pompeii, zeus):
@@ -295,7 +296,8 @@ class TestTheSpokenName:
             assert got["reasons"] == ["ambiguous_after_qualifier"]
         assert by_id[mercury["id"]]["spoken"] == "Temple of Mercury"
         assert by_id[plain["id"]]["spoken"] == "Temple of Zeus"
-        assert counts["spoken_ambiguous"] == 3 and counts["spoken_needs_model"] == 3
+        assert by_id[theatre["id"]]["reasons"] == ["generic_only"]
+        assert counts["spoken_ambiguous"] == 3 and counts["spoken_needs_model"] == 4
         assert counts["spoken_by_rule"] == 2
 
     def test_a_label_that_does_not_shorten_the_name_leaves_it_ambiguous(self, tmp_path) -> None:

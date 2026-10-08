@@ -372,15 +372,15 @@ def spoken_record(row: Mapping[str, Any], forms: Sequence[tuple[str, str]]) -> d
 
 
 def mark_ambiguous(spoken: list[dict[str, Any]], rows: Sequence[Mapping[str, Any]]) -> int:
-    """A name spoken by rule after its qualifier was dropped that another shown site's cleaned
-    name equals ("Temple of Apollo" from Delphi and from Pompeii) no longer says which site: it
-    goes to the model with the reason `ambiguous_after_qualifier`. Returns how many."""
+    """A spoken name made after its qualifier was dropped that is also another shown site's cleaned
+    name ("Temple of Apollo" from Delphi and from Pompeii) no longer says which site: it goes to
+    the model with the reason `ambiguous_after_qualifier`. Returns how many."""
     held = Counter(cleaned_name(r["name"])[0].casefold() for r in rows)
     marked = 0
     for record in spoken:
         if (
             "qualifier" in record["steps"]
-            and record["source"] == "name"
+            and not record["needs_model"]
             and held[record["spoken"].casefold()] > 1
         ):
             record.update(
