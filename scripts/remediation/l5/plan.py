@@ -225,10 +225,13 @@ def name_verdicts(
     note: str,
     *,
     premise: str | None = None,
+    rule: str = "l5-name",
+    finding_test_id: str = "B1/name-l5",
 ) -> list[MP.Verdict]:
     """A rename's cells: the name and, where it moves, its key. `premise` is the state the rename
     rests on, for a name lane that conditions on one (`chiapa-name`: the hide of HUMAN_ONLY Nr. 7);
-    `name-l5` checks none."""
+    `name-l5` checks none. `rule` and `finding_test_id` name the lane that renames (the identity
+    package's `name-clean` and `retarget-name` lanes pass their own)."""
     return [
         MP.Verdict(
             site_id=sid,
@@ -236,11 +239,11 @@ def name_verdicts(
             ok=True,
             old_value=old,
             new_value=new,
-            rule="l5-name",
+            rule=rule,
             reason="",
             note=note,
             phase3=False,
-            finding_test_id="B1/name-l5",
+            finding_test_id=finding_test_id,
             evidence=tuple(evidence),
             premise=premise,
             column=column,

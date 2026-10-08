@@ -108,7 +108,13 @@ WRITABLE: dict[tuple[str, str], str] = {
     # must be the key Postgres derives from its row's name at write time (guard 2c).
     ("unified_sites", "name_normalized"): "text",
     ("unified_site_names", "name_normalized"): "text",
+    # The old name of a renamed site stays searchable (owner decisions D13 and D23, 2026-10-08): its
+    # `label` row becomes an `alias` row, which is what the search reads (`name_type <> 'label'`).
+    # `validate_change` allows no other transition of this column.
+    ("unified_site_names", "name_type"): "text",
 }
+#: The one transition the `name_type` column is written for.
+NAME_TYPE_TRANSITION = ("label", "alias")
 #: The key type of each table, so a key is compared in its own type and the primary-key index is
 #: used (the reason migration 0022 exists).
 KEY_TYPES = {"wiki_images": "integer", "unified_sites": "uuid", "unified_site_names": "integer"}
@@ -256,6 +262,14 @@ def validate_change(change: Change) -> None:
         raise ChunkError(f"{change.column} is never cleared to NULL by an image lane")
     if change.column == "name_normalized" and change.new_value is None:
         raise ChunkError(f"{change.table} {change.row_key}: a match key is never cleared to NULL")
+    if (
+        change.column == "name_type"
+        and (change.old_value, change.new_value) != NAME_TYPE_TRANSITION
+    ):
+        raise ChunkError(
+            f"{change.table} {change.row_key}: name_type is written label -> alias and nothing "
+            f"else, not {change.old_value!r} -> {change.new_value!r}"
+        )
     if change.column == "image_kind" and change.new_value not in pv.VOCAB | {None}:
         raise ChunkError(f"image_kind {change.new_value!r} is outside 0019's vocabulary")
     if not TOKEN_RE.fullmatch(change.rule.lower()):

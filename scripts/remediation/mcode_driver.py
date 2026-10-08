@@ -1478,13 +1478,19 @@ def _verdicts(text: str) -> tuple[tuple[str, str], ...] | None:
     """The judged units of one answer as `(unit, verdict)` pairs, or `None` when the text is not
     that shape. Three shapes exist: a check answer carries `sentences`, a verification answer
     `kept`, a field-fill answer a `fields` object; the first two also carry a `coherent` flag, read
-    as its own unit."""
+    as its own unit. A fourth, a bare `verdict` string, is the identity questions' (D13, D20, D23)."""
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
         return None
     if not isinstance(data, dict):
         return None
+    if isinstance(data.get("verdict"), str) and not any(
+        key in data for key in ("fields", "sentences", "kept")
+    ):
+        # a one-verdict answer (the identity questions of the final repair: KEEP, RETARGET, ...):
+        # the verdict is the one unit, the evidence behind it is spot-checked, not compared
+        return (("verdict", data["verdict"]),)
     if isinstance(data.get("fields"), dict):
         return _fill_units(data["fields"])
     if isinstance(data.get("sentences"), list):

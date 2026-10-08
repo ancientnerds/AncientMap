@@ -2116,6 +2116,11 @@ LANE_READBACKS[DUP_RETIRE.name] = DUP_RETIRE_READBACK
 #: Lane WB's disclosure correction (`card_disclosure.py`): one step of at most 100 sites per lane,
 #: `card-disclosure-sNNN`, built by `card_disclosure.lane_of` (it needs the pinned site list).
 CARD_DISCLOSURE_LANE = re.compile(r"^card-disclosure-s(\d{3})\Z")
+#: The identity package's wave lanes (`mechanical/identity_lanes.py`, owner decisions D13, D20, D23 of
+#: 2026-10-08): `scope-window-<wave>`, `name-clean-<wave>`, `retarget-name-<wave>`, `spoken-<wave>`.
+IDENTITY_LANE = re.compile(
+    r"^(?:scope-window|name-clean|retarget-name|spoken)-\d{4}-\d{2}-\d{2}[a-z]?\Z"
+)
 
 
 def resolve_lane(name: str) -> Lane:
@@ -2153,6 +2158,10 @@ def resolve_lane(name: str) -> Lane:
         from mechanical.card_disclosure import lane_of as disclosure_lane_of
 
         return disclosure_lane_of(name)
+    if IDENTITY_LANE.match(name):
+        from mechanical.identity_lanes import lane_of as identity_lane_of
+
+        return identity_lane_of(name)
     match = CARD_STATS_LANE.match(name)
     if match is None:
         raise KeyError(name)

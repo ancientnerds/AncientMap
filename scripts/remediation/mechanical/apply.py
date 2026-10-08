@@ -67,6 +67,7 @@ from mechanical.lane import (  # noqa: E402
     CARD_DISCLOSURE_LANE,
     FIELD_PROV_LANE,
     FIELDS_LANE,
+    IDENTITY_LANE,
     LANE_READBACKS,
     LANES,
     PERIOD_LABEL_LANE,
@@ -1829,6 +1830,10 @@ def readback_for(lane: Lane) -> str:
         from mechanical.card_disclosure import disclosure_readback
 
         return disclosure_readback(lane)
+    if IDENTITY_LANE.match(lane.name):
+        from mechanical.identity_lanes import readback as identity_readback
+
+        return identity_readback(lane)
     from mechanical.card_stats import card_stats_readback
 
     return card_stats_readback(lane)
@@ -1844,7 +1849,8 @@ def _lane_argument(name: str) -> str:
         raise argparse.ArgumentTypeError(
             f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, "
             "scope-review-<wave>, fields-wd1-<wave>-sNNN, card-stats-<wave>, teaser-prov-sNNN, "
-            "teaser-card-sNNN, card-disclosure-sNNN)"
+            "teaser-card-sNNN, card-disclosure-sNNN, scope-window-<wave>, name-clean-<wave>, "
+            "retarget-name-<wave>, spoken-<wave>)"
         ) from exc
     return name
 
