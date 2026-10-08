@@ -19,6 +19,7 @@ import { globeUrlForSite } from '../../constants/brand'
 import { isoDate, longDate } from '../../seo/display'
 import { absoluteUrl, countryPath, sitePath, storyPath } from '../../seo/meta'
 import { blurb } from '../../seo/text'
+import { youtubeIdOf } from '../theo/paperExtras'
 import type { StoryRoute } from '../../types/anRoute'
 import AiFootnote from './AiFootnote'
 import ThumbsFeedback from '../feedback/ThumbsFeedback'
@@ -43,14 +44,6 @@ import '../../styles/story-page.css'
  * ID gibt es nichts einzubetten, dann bleibt das Thumbnail ein reiner Link
  * nach YouTube (kein stiller Fehlschlag, sondern der bisherige Zustand).
  */
-function videoIdOf(url: string): string {
-  try {
-    return new URL(url).searchParams.get('v') || ''
-  } catch {
-    return ''
-  }
-}
-
 /**
  * Der Quellenblock aus den rohen web_sources: erst der [:8]-Schnitt, dann
  * der http(s)-Filter — die Liste ist LLM-derived, ein javascript:-Eintrag
@@ -89,7 +82,7 @@ export default function StoryArticle({ story, children }: StoryArticleProps) {
     story.youtube_url && typeof ts === 'number' && Number.isInteger(ts) && ts > 0
       ? `${story.youtube_url}&t=${ts}s`
       : story.youtube_url
-  const videoId = videoIdOf(story.youtube_url)
+  const videoId = youtubeIdOf(story.youtube_url)
   // Die Detailseite braucht ein Land (Teil der URL) UND eine kuratierte Site —
   // /sites/{country}/{slug} filtert auf source_id = 'ancient_nerds'.
   const sitePagePath =

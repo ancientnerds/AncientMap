@@ -31,6 +31,7 @@ import type {
 } from '../types/anRoute'
 import {
   latestCorrectionDate,
+  youtubeIdOf,
   youtubeThumbnailUrl,
   youtubeWatchUrl,
 } from '../components/theo/paperExtras'
@@ -202,6 +203,25 @@ export function renderHead(m: PageMeta): string {
 // Die neun Seitentypen
 // ---------------------------------------------------------------------------
 
+/**
+ * The video a story summarises, as `isBasedOn`: the story is a secondary text about it,
+ * and the link names the creator's video as its source for search engines and assistants
+ * (no story had one before the SEO audit of 2026-10-08). Nothing without a video id.
+ */
+function storyVideo(route: StoryRoute): string {
+  const id = youtubeIdOf(route.youtube_url)
+  if (!id) return ''
+  return (
+    ', "isBasedOn": {"@type": "VideoObject", ' +
+    `"name": ${jsonStr(route.video_title)}, ` +
+    `"description": ${jsonStr(`Video by ${route.channel_name} on YouTube`)}, ` +
+    `"uploadDate": "${isoDate(route.published_at)}", ` +
+    `"thumbnailUrl": "${youtubeThumbnailUrl(id)}", ` +
+    `"embedUrl": "https://www.youtube-nocookie.com/embed/${id}", ` +
+    `"url": "${youtubeWatchUrl(id)}"}`
+  )
+}
+
 /** story_page(): Description aus post_text (nicht summary), unter 150 Zeichen gar keine. */
 export function storyMeta(route: StoryRoute): PageMeta {
   const canonical = `${BASE_URL}${storyPath(route.headline, route.id)}`
@@ -217,7 +237,7 @@ export function storyMeta(route: StoryRoute): PageMeta {
     '"author": {"@type": "Organization", "name": "Ancient Nerds", ' +
     `"url": "${BASE_URL}"}, ` +
     `"publisher": ${PUBLISHER}, ` +
-    `"mainEntityOfPage": "${canonical}", "url": "${canonical}"}`
+    `"mainEntityOfPage": "${canonical}", "url": "${canonical}"${storyVideo(route)}}`
   const postText = collapse(route.post_text)
   // Under 150 chars of post text the summary carries the snippet; only when
   // both are missing does the tag stay away so Google writes its own.

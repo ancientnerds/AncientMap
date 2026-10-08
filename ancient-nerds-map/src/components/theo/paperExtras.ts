@@ -6,6 +6,16 @@
 
 import type { ResearchCorrection } from '../../types/anRoute'
 
+/** The id of a YouTube watch URL (`?v=`), '' when the URL has none. Shared by the story
+ *  page's player and the story's JSON-LD. */
+export function youtubeIdOf(url: string): string {
+  try {
+    return new URL(url).searchParams.get('v') || ''
+  } catch {
+    return ''
+  }
+}
+
 /** The YouTube watch page of a video. */
 export function youtubeWatchUrl(youtubeId: string): string {
   return `https://www.youtube.com/watch?v=${youtubeId}`

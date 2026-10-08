@@ -228,6 +228,14 @@ describe('research-Autorschaft im JSON-LD (Art.-50-Fälle aus test_ai_act_notice
     expect(JSON.parse(schema)['@type']).toBe('Place')
   })
 
+  it('names the video a story is based on, and nothing without a video id', () => {
+    const story = JSON.parse(storyMeta(FIXTURES.story).schema!)
+    expect(story.isBasedOn['@type']).toBe('VideoObject')
+    expect(story.isBasedOn.embedUrl).toMatch(/^https:\/\/www\.youtube-nocookie\.com\/embed\//)
+    const bare = JSON.parse(storyMeta({ ...FIXTURES.story, youtube_url: 'https://www.youtube.com/' }).schema!)
+    expect(bare.isBasedOn).toBeUndefined()
+  })
+
   it('names the place by its Wikidata item and Wikipedia article when the payload hands them', () => {
     const place = JSON.parse(
       siteMeta({ ...pyrefRoute('site'), wikidata_qid: 'Q1934', enwiki_title: 'Göbekli Tepe' } as never).schema!,

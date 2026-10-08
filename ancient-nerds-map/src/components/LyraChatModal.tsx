@@ -163,8 +163,8 @@ function LyraInlineVideo({ news, children }: { news: NewsHighlight; children?: R
     ? `https://www.youtube.com/watch?v=${videoId}&t=${ts}`
     : `https://www.youtube.com/watch?v=${videoId}`
   const embedUrl = ts != null
-    ? `https://www.youtube.com/embed/${videoId}?start=${ts}&autoplay=1`
-    : `https://www.youtube.com/embed/${videoId}?autoplay=1`
+    ? `https://www.youtube-nocookie.com/embed/${videoId}?start=${ts}&autoplay=1`
+    : `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1`
   // Use maxresdefault (1280x720, true 16:9) with fallback to mqdefault (320x180, true 16:9)
   // Never use hqdefault — it's 480x360 (4:3) with black letterbox bars
   const [thumbFailed, setThumbFailed] = useState(false)
