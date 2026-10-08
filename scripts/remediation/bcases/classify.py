@@ -1129,21 +1129,95 @@ def in_crimea(lat: float, lon: float) -> bool:
     return 44.3 < lat < 46.3 and 32.4 < lon < 36.7
 
 
+#: Owner decision D19 (2026-10-08): a point within about 2 km off its country's coast counts as in
+#: the country - Natural Earth's coast is generalised and a site on a shore, a harbour or a rock
+#: stack lies in the sea of a 1:10m polygon. 2.5 km is the orchestrator's reading of "about 2 km"
+#: (X3): it takes in Marco Gonzalez (2.35 km) and leaves The Lost City of Heracleion (3.83 km,
+#: a drowned city) refused.
+COAST_KM = 2.5
+#: The longest piece of a polygon edge that `km_to_country` projects whole: 0.01 degrees, about 1 km.
+SEGMENT_DEGREES = 0.01
+#: Orchestrator decision X3 (2026-10-08): the polygons of the boundary file that belong to one stored
+#: country, folded. Cyprus is one island, drawn as Cyprus, Northern Cyprus, the two British base
+#: areas and the UN buffer zone. Kosovo is not Serbia's and the Crimea is not Russia's here (B10 and
+#: `POLITICAL_PAIRS` keep those lines), so they are not in this table.
+POLITICAL_EQUIVALENTS = {
+    "cyprus": frozenset(
+        {
+            "cyprus",
+            "northern cyprus",
+            "akrotiri sovereign base area",
+            "dhekelia sovereign base area",
+            "cyprus no mans area",
+        }
+    )
+}
+
+
+def _equivalent_polygons(stored_country: str) -> frozenset[str]:
+    """The folded polygon names that count as the stored country: itself, its spelling in the
+    boundary file (`CC.canonical`) and the polygons of its political equivalents."""
+    own = CC.canonical(stored_country)
+    return POLITICAL_EQUIVALENTS.get(own, frozenset()) | {own}
+
+
+def km_to_country(lat: float, lon: float, polygons: Iterable[Any]) -> float:
+    """The geodesic distance in km from a point to the nearest of `polygons`.
+
+    The polygons are cut to a window around the point first, then drawn on the azimuthal equidistant
+    projection centred on it, where the planar distance to the origin is the distance on the
+    ellipsoid - exact at any latitude, which a distance in degrees is not."""
+    from pyproj import Transformer  # noqa: PLC0415 - only the coast guard needs the projection
+    from shapely import segmentize  # noqa: PLC0415
+    from shapely.geometry import Point, box  # noqa: PLC0415
+    from shapely.ops import transform  # noqa: PLC0415
+
+    reach = 1.0  # degrees: far beyond any tolerance, so a polygon within it keeps its near coast
+    window = box(lon - reach, lat - reach, lon + reach, lat + reach)
+    project = Transformer.from_crs(
+        "EPSG:4326", f"+proj=aeqd +lat_0={lat} +lon_0={lon} +datum=WGS84", always_xy=True
+    ).transform
+    near = [g.intersection(window) for g in polygons]
+    # an edge is a straight line in longitude and latitude, not on the map: cut it into pieces of
+    # about a kilometre before the projection moves only their ends
+    flat = [transform(project, segmentize(g, SEGMENT_DEGREES)) for g in near if not g.is_empty]
+    if not flat:
+        return math.inf
+    origin = Point(0.0, 0.0)
+    return min(g.distance(origin) for g in flat) / 1000.0
+
+
 def country_after_move(
-    stored_country: str, lat: float, lon: float, atlas: tuple[Any, Any, Any]
+    stored_country: str,
+    lat: float,
+    lon: float,
+    atlas: tuple[Any, Any, Any],
+    tolerance_km: float = COAST_KM,
 ) -> dict[str, Any]:
     """Whether the stored country still names the polygon the moved point lies in.
 
     A move is a coordinate change only; a country it contradicts is a follow-up for the country
     lanes, reported here so the plan does not create a T02 finding silently. The Crimean rows keep
-    `Ukraine` by the owner's B10 decision although Natural Earth draws Crimea inside Russia.
+    `Ukraine` by the owner's B10 decision although Natural Earth draws Crimea inside Russia, and a
+    Cyprus row may lie in any polygon of the island (`POLITICAL_EQUIVALENTS`, X3).
+
+    D19: a point that lies in **no** polygon agrees when it is within `tolerance_km` of the stored
+    country's polygons (note `coast, <km> km`). A point inside another country's polygon never
+    agrees by this rule - a land border is not crossed by a tolerance - and nor does a point farther
+    out. `tolerance_km=0` is the plain point-in-polygon test.
     """
     names_, geoms, tree = atlas
     polygons = CC.country_at(names_, geoms, tree, lat, lon)
-    agrees = CC.canonical(stored_country) in {CC.canonical(p) for p in polygons}
+    wanted = _equivalent_polygons(stored_country)
+    agrees = bool(wanted & {CC.canonical(p) for p in polygons})
     note = None
     if not agrees and CC.fold(stored_country) == "ukraine" and in_crimea(lat, lon):
         agrees, note = True, "Crimea: stays Ukraine by the B10 decision"
+    elif not agrees and not polygons and tolerance_km > 0:
+        own = [g for n, g in zip(names_, geoms, strict=True) if CC.canonical(n) in wanted]
+        coast = km_to_country(lat, lon, own)
+        if coast <= tolerance_km:
+            agrees, note = True, f"coast, {coast:.2f} km"
     return {"stored": stored_country, "polygon": polygons, "agrees": agrees, "note": note}
 
 

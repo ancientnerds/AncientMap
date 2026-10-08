@@ -274,3 +274,105 @@ class TestSourceUrl:
         assert "no quote names the site" in checked(
             "source_url", block("replace", REGISTER, quotes)
         )
+
+
+class TestTheBpReader:
+    """Lane wd5 (D12): a quote that dates a site in years before the present states a year -
+    1950 minus the number - within one unit of the number's last significant digit, and at least
+    76 years (the gap between 1950 and 2026)."""
+
+    def test_years_ago_and_bp_state_a_year(self) -> None:
+        assert A.states_year("the cave was occupied about 40,000 years ago", -38050)
+        assert A.states_year("a hearth dated to 12,000 BP", -10050)
+        assert A.states_year("dated to 12,000 cal BP", -10050)
+        assert A.states_year("dated to 12,000 cal. BP", -10050)
+        assert A.states_year("a charcoal date of 3,450 yr BP", -1500)
+
+    def test_ka_and_ma_are_thousands_and_millions_of_years(self) -> None:
+        assert A.states_year("the earliest layer is 45 ka", -43050)
+        assert A.states_year("the earliest layer is 45 kya", -43050)
+        assert A.states_year("artefacts of 12.5 ka BP", -10550)
+        assert A.states_year("hominin remains of 1.2 Ma", -1_198_050)
+        assert A.states_year("hominin remains of 1.2 mya", -1_198_050)
+        assert A.states_year("tools from 250 thousand years ago", -248_050)
+        assert A.states_year("stone tools 2 million years ago", -1_998_050)
+
+    def test_a_range_states_each_end(self) -> None:
+        quote = "occupied between 12,000 and 10,000 years ago"
+        assert A.states_year(quote, -10050)
+        assert A.states_year(quote, -8050)
+        assert A.states_year("occupied 12,000-10,000 BP", -10050)
+        assert A.states_year("occupied 12,000-10,000 BP", -8050)
+
+    def test_the_tolerance_is_one_unit_of_the_last_significant_digit(self) -> None:
+        # 12,000: the last significant digit is the thousands
+        assert A.states_year("12,000 BP", -10050 + 1000)
+        assert A.states_year("12,000 BP", -10050 - 1000)
+        assert not A.states_year("12,000 BP", -10050 + 1001)
+        # 4,500: the hundreds
+        assert A.states_year("4,500 years ago", -2550 + 100)
+        assert not A.states_year("4,500 years ago", -2550 + 101)
+        # 1.2 Ma = 1,200,000: the hundred thousands
+        assert not A.states_year("hominin remains of 1.2 Ma", -1_198_050 - 100_001)
+
+    def test_an_abbreviated_circa_and_a_fraction_are_read(self) -> None:
+        assert A.states_year("dated c.4500 BP", -2550)
+        assert A.bp_dates("1.5 Ma") == [(-1_498_050, 100_000)]
+
+    def test_a_precise_number_still_has_the_gap_between_1950_and_now(self) -> None:
+        # 4,321 BP is 2371 BC: one unit is 1 year, the floor is 76
+        assert A.states_year("4,321 BP", -2371 + 76)
+        assert A.states_year("4,321 BP", -2371 - 76)
+        assert not A.states_year("4,321 BP", -2371 + 77)
+
+    def test_a_number_older_than_6450_bp_states_the_edge_of_the_first_bucket(self) -> None:
+        """The bucket edge: 6,450 BP is 4500 BC, the first year of "4500 - 3000 BC"; older is
+        "< 4500 BC", whose year is the band's nearest, 4501 BC (`bucket_edge`)."""
+        edge = -4501
+        # 6,600 years ago is 4650 BC, 149 years from the edge, beyond its tolerance of 100: only
+        # the bucket rule states it
+        assert A.states_year("a house of 6,600 years ago", edge)
+        assert A.states_year("40,000 years ago", edge)
+        # 6,300 BP is 4350 BC, in "4500 - 3000 BC", 151 years from the edge: not stated
+        assert not A.states_year("6,300 BP", edge)
+        # 6,450 BP itself is 4500 BC: within the floor of 76 years of the edge, not by the bucket
+        assert A.states_year("6,450 BP", edge)
+        assert not A.states_year("6,450 BP", edge - 100)
+
+    def test_the_bucket_edge_is_stated_only_for_that_year(self) -> None:
+        assert not A.states_year("40,000 years ago", -4600)
+        assert not A.states_year("40,000 years ago", -4502)
+
+    def test_a_quote_without_a_unit_states_nothing(self) -> None:
+        for quote in (
+            "about 12,000 people lived there",
+            "a site of 40000 square metres",
+            "discovered 40 years later",
+            "occupied for 12,000 years",
+            "BP was the sponsor of the dig",
+            "12 Mac computers",
+            "an ago of 12000",
+            "a pressure of 120 bp",
+        ):
+            assert not A.states_year(quote, -10050), quote
+
+    def test_years_ago_without_a_number_before_it_states_nothing(self) -> None:
+        assert not A.states_year("many years ago", -10050)
+        assert not A.states_year("excavated years ago", 1950)
+
+    def test_a_year_that_the_text_gives_directly_is_still_read(self) -> None:
+        assert A.states_year("in 449 BC", -449)
+        assert A.bp_dates("founded in 449 BC") == []
+
+    def test_bp_dates_lists_each_stated_year_with_its_tolerance(self) -> None:
+        assert A.bp_dates("12,000 cal BP and 3,321 years ago") == [(-10050, 1000), (-1371, 76)]
+
+    def test_a_bp_quote_carries_a_replace_answer(self) -> None:
+        quotes = [(WIKI, "the cave was inhabited about 40,000 years ago"), (REGISTER, "40 ka")]
+        answer = checked("period_start", block("replace", "-38050", quotes), period_start=None)
+        assert not isinstance(answer, str)
+
+    def test_a_bp_quote_for_another_year_does_not(self) -> None:
+        quotes = [(WIKI, "the cave was inhabited about 40,000 years ago"), (REGISTER, "40 ka")]
+        answer = checked("period_start", block("replace", "-2000", quotes), period_start=None)
+        assert isinstance(answer, str) and "no quote states -2000 itself" in answer

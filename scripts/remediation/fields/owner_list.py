@@ -9,9 +9,16 @@ list. This reads the finished WD3 and WD4 runs and their waves, files only, and 
 
 for every field a question asked, which ended in one of these states:
 
-* `filled` - a `replace` the write plan wrote (its step is accepted with 0 deviations): not listed;
+* `filled` - a `replace` the write plan wrote (its step is accepted with 0 deviations): not listed.
+  A later wave of the same lane that planned the decision again finds the value it wrote and
+  refuses it as `moved-since-classification: ... holds <that value>`: that is the lane's own write,
+  not a refusal - it stays `filled` (measured 2026-10-08: 1,252 written cells were listed `refused`);
 * `sourced` - a `keep`: the stored value now has a quote behind it: not listed;
-* `unresolved` - no source could be quoted (the answer, or exhausted after three rounds): **listed**;
+* `rule` - a start a named rule made (evidence `status: RULE`, written by an accepted step): **listed**,
+  with the rule's own reason - no source stands behind it, and lane wd5 asks it again;
+* `unresolved` - no source could be quoted (the answer, or exhausted after three rounds): **listed**.
+  Lane wd5 may have withdrawn the value on that answer (cleared to `Undated`, or restored from the
+  journal): the reason then says so;
 * `held` - the pages the agents cited could not be read by the checker: **listed**, with the URLs - the
   owner may read them;
 * `refused` - a `replace` the write plan refused (a point in another country, a start after the
@@ -34,7 +41,9 @@ that predates the file) is read as its whole classification.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
+import re
 import sys
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -56,15 +65,16 @@ from fields import population as POP  # noqa: E402
 from fields import rule as R  # noqa: E402
 
 FILLED, SOURCED = "filled", "sourced"
-UNRESOLVED, HELD, REFUSED, NO_WRITE, PENDING = (
+UNRESOLVED, HELD, REFUSED, NO_WRITE, PENDING, RULE = (
     "unresolved",
     "held",
     "refused",
     "no-write",
     "pending",
+    "rule",
 )
 #: The states the owner reads, in the order the list shows them.
-LISTED = (UNRESOLVED, HELD, REFUSED, NO_WRITE)
+LISTED = (RULE, UNRESOLVED, HELD, REFUSED, NO_WRITE)
 OWNER_MD, OWNER_JSONL = "OWNER_LIST.md", "OWNER_LIST.jsonl"
 #: The run's own record of what it put to the model, one line per round (a re-ask round is a line
 #: of its own). Written when the round is exported, so it exists before any answer does.
@@ -72,9 +82,9 @@ ROUNDS_FILE = "ROUNDS.jsonl"
 #: The rules whose runs the list can read: both lanes ask the same question under one source family -
 #: WD3 (owner decisions of 2026-10-01) and WD4 (2026-10-04, the same plus a named period as a
 #: value). They differ in name and stage only, and the stage is in every batch id and write lane, so
-#: a WD4 run can never be mistaken for a WD3 one; the list itself reads neither. WD1 wants two
-#: families and is refused.
-OWNED_RULES = (R.ONE_FAMILY, R.ONE_FAMILY_PERIOD)
+#: a WD4 run can never be mistaken for a WD3 one; the list itself reads neither. Lane wd5 (2026-10-08)
+#: is WD4's rule aimed at values no source stands behind. WD1 wants two families and is refused.
+OWNED_RULES = (R.ONE_FAMILY, R.ONE_FAMILY_PERIOD, R.RECHECK)
 DEFAULT_RUNS = tuple(POP.FIELDS_DIR / name for name in ("wd3-pilot", "wd3"))
 REASON_CHARS = 500
 #: The columns a field is written through (a point is three cells).
@@ -85,6 +95,8 @@ COLUMNS = {
     "source_url": ("source_url",),
 }
 FIELD_OF_COLUMN = {column: field for field, columns in COLUMNS.items() for column in columns}
+#: The cells a plan derives from the value it writes: the period label and the point's geometry.
+DERIVED_COLUMNS = ("period_name", "geom")
 
 
 class OwnerListError(RuntimeError):
@@ -127,17 +139,53 @@ def read_waves(
     shown = {_shown(run) for run in runs}
     out: dict[tuple[str, str], dict[str, Any]] = {}
     settled: set[str] = set()
-    roots = (
-        {waves}
-        if waves is not None
-        else {waves_root(R.read_rule(run).stage) for run in runs}
-    )
+    roots = {waves} if waves is not None else {waves_root(R.read_rule(run).stage) for run in runs}
     for root in sorted(roots):
         if not root.exists():
             continue
         for wave in sorted(p for p in root.iterdir() if (p / FP.WAVE_FILE).exists()):
             _read_wave(wave, shown, out, settled)
+    for cell in out.values():
+        _settle_refusals(cell)
     return out, settled
+
+
+def _holds(note: str) -> str | None:
+    """What a `moved-since-classification` note says the field holds (`decided about X, holds Y`)."""
+    found = re.search(r", holds (.*)\Z", note, re.DOTALL)
+    return None if found is None else found.group(1)
+
+
+def _same_value(column: str, written: str | None, holds: str) -> bool:
+    """Whether the value a refusal found (`holds`, as the note prints it: a Python repr, or the
+    point as `lat, lon`) is the one an accepted step wrote into `column`."""
+    if written is None:
+        return False
+    if column in ("lat", "lon"):
+        point = [part.strip() for part in holds.split(",")]
+        index = 0 if column == "lat" else 1
+        return len(point) == 2 and float(point[index]) == float(written)
+    try:
+        return str(ast.literal_eval(holds)) == written
+    except (ValueError, SyntaxError):
+        return False
+
+
+def _settle_refusals(cell: dict[str, Any]) -> None:
+    """A `moved-since-classification` refusal that found exactly what an accepted step of this
+    lane wrote is that step's own write: not a refusal. Any other refusal stands."""
+    kept = []
+    for column, reason, note in cell.pop("refusals", []):
+        holds = _holds(note) if reason == "moved-since-classification" else None
+        own = (
+            holds is not None
+            and cell.get("accepted")
+            and _same_value(column, cell.get("values", {}).get(column), holds)
+        )
+        if not own:
+            kept.append(f"{reason}: {note}"[:REASON_CHARS])
+    if kept:
+        cell["refused"] = kept[-1]
 
 
 def _read_wave(
@@ -163,11 +211,20 @@ def _read_wave(
         for row in _rows(planned) if planned.exists() else []:
             cell = out.setdefault((row["site_id"], FIELD_OF_COLUMN[row["column"]]), {})
             cell.update(written=True, accepted=accepted)
+            cell.setdefault("values", {})[row["column"]] = row["new_value"]
+            if row["column"] not in DERIVED_COLUMNS:  # the label and the geom follow the value
+                made = [e for e in row["evidence"] if e.get("status") == "RULE"]
+                # a later write of the value (lane wd5 replacing a rule's start) overrides it
+                cell.update(
+                    rule=row["rule"],
+                    rule_made=bool(made),
+                    rule_note=str(made[0].get("reasoning")) if made else None,
+                )
         skipped = step / "SKIPPED.jsonl"
         for row in _rows(skipped) if skipped.exists() else []:
             if row["column"] in FIELD_OF_COLUMN:
                 cell = out.setdefault((row["site_id"], FIELD_OF_COLUMN[row["column"]]), {})
-                cell.update(refused=f"{row['reason']}: {row['note']}"[:REASON_CHARS])
+                cell.setdefault("refusals", []).append((row["column"], row["reason"], row["note"]))
     if accepted_steps == len(record["steps"]):
         settled |= {site for step_sites in record["steps"] for site in step_sites}
 
@@ -176,18 +233,24 @@ def state_of(
     decision: Mapping[str, Any] | None, cell: Mapping[str, Any] | None, settled: bool
 ) -> tuple[str, str]:
     """A field's final state and the reason that goes with it."""
+    cell = cell or {}
+    if cell.get("rule_made") and cell.get("accepted") and cell.get("rule", "").endswith("-replace"):
+        return RULE, f"made by a rule, found in no source: {cell['rule_note']}"
     if decision is None:
         return PENDING, "no decision yet: the answers of this field are not imported"
     verdict = decision["decision"]
     if verdict == "keep":
         return SOURCED, str(decision["reasoning"])
     if verdict == "unresolved":
+        if cell.get("written") and cell.get("accepted"):  # lane wd5 withdrew the value
+            return UNRESOLVED, (
+                f"no source; the value was withdrawn ({cell['rule']}): {decision['reasoning']}"
+            )
         return UNRESOLVED, str(decision["reasoning"])
     if verdict == POP.HELD:
         return HELD, str(decision["reasoning"])
     if verdict != "replace":
         raise OwnerListError(f"{decision['site_id']}/{decision['field']}: decision {verdict!r}")
-    cell = cell or {}
     if cell.get("refused"):
         return REFUSED, str(cell["refused"])
     if cell.get("written"):
@@ -227,8 +290,7 @@ def build(runs: Sequence[Path], waves: Path | None) -> dict[str, Any]:
     for run in runs:
         if R.read_rule(run) not in OWNED_RULES:
             raise OwnerListError(
-                f"{run} is not a WD3 or WD4 run (its RUN.json pins "
-                f"{R.read_rule(run).name!r})"
+                f"{run} is not a WD3, WD4 or wd5 run (its RUN.json pins {R.read_rule(run).name!r})"
             )
     cells, settled = read_waves(runs, waves)
     rows: list[dict[str, Any]] = []
@@ -279,6 +341,7 @@ def build(runs: Sequence[Path], waves: Path | None) -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------ the writing
 STATE_TITLE = {
+    RULE: "a start a rule made, found in no source",
     UNRESOLVED: "no source could be found",
     HELD: "the pages the agents cited could not be read by the checker",
     REFUSED: "a sourced value the write plan refused",
@@ -301,7 +364,7 @@ def render(result: Mapping[str, Any], runs: Sequence[Path]) -> str:
     counts = result["counts"]
     population = result["population"]
     out = [
-        "# Owner list (lanes WD3 and WD4): the fields that stay open",
+        "# Owner list (lanes WD3, WD4 and wd5): the fields that stay open",
         "",
         f"Built {datetime.now(UTC).replace(microsecond=0).isoformat()} by "
         "`scripts/remediation/fields/owner_list.py` from "
@@ -313,15 +376,15 @@ def render(result: Mapping[str, Any], runs: Sequence[Path]) -> str:
         "model, and this list is about those: a site a run never asked is not an open question of that "
         "run (each run's rounds say what it asked, in `ROUNDS.jsonl`).",
         "",
-        "| field | asked | filled | sourced (kept) | no source | unreadable pages | refused | "
+        "| field | asked | filled | sourced (kept) | rule | no source | unreadable pages | refused | "
         "no write | pending |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for field in C.FIELDS:
         c = counts[field]
         out.append(
             f"| {field} | {sum(c.values())} | {c.get(FILLED, 0)} | {c.get(SOURCED, 0)} | "
-            f"{c.get(UNRESOLVED, 0)} | {c.get(HELD, 0)} | {c.get(REFUSED, 0)} | "
+            f"{c.get(RULE, 0)} | {c.get(UNRESOLVED, 0)} | {c.get(HELD, 0)} | {c.get(REFUSED, 0)} | "
             f"{c.get(NO_WRITE, 0)} | {c.get(PENDING, 0)} |"
         )
     for field in C.FIELDS:

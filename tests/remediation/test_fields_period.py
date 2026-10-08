@@ -43,8 +43,12 @@ def period_answer(
     decision: str = "replace",
     value: Any = None,
 ) -> dict[str, Any]:
-    block = TA.block(decision, value, IRON if quotes is None else quotes,
-                     reasoning="the page calls it an Iron Age hillfort")
+    block = TA.block(
+        decision,
+        value,
+        IRON if quotes is None else quotes,
+        reasoning="the page calls it an Iron Age hillfort",
+    )
     if name is not None:
         block[A.PERIOD_KEY] = name
     return block
@@ -52,8 +56,9 @@ def period_answer(
 
 def checked(answer: dict[str, Any], rule: R.Rule = PERIOD, **stored: Any) -> Any:
     """One period_start answer, checked under `rule` (the default: the period run)."""
-    return A.check_shape(TA.text(period_start=answer), ["period_start"],
-                         TA.line(**stored), rule)["period_start"]
+    return A.check_shape(TA.text(period_start=answer), ["period_start"], TA.line(**stored), rule)[
+        "period_start"
+    ]
 
 
 # ------------------------------------------------------------------------------ the rule
@@ -76,7 +81,7 @@ class TestTheRule:
         assert R.TWO_FAMILIES.clearable and not R.TWO_FAMILIES.fill_only
         assert R.ONE_FAMILY.min_quotes == 1 and not R.ONE_FAMILY.clearable
         assert R.DEFAULT is R.TWO_FAMILIES
-        assert sorted(R.RULES) == ["one-family", "one-family-period", "two-families"]
+        assert sorted(R.RULES) == ["one-family", "one-family-period", "recheck", "two-families"]
 
     def test_the_run_pins_its_own_rule(self, tmp_path: Path) -> None:
         R.write_run(tmp_path, PERIOD, built_at="t")
@@ -213,8 +218,9 @@ class TestYearAnswersAreUnchanged:
         assert plain == f"period_start: the quote on {WIKI} carries no date"
 
     def test_a_quoted_year_answers_as_before_under_the_period_run(self) -> None:
-        answer = checked(TA.block("replace", "-800", [(WIKI, "occupied from c. 800 BC")]),
-                         period_start=None)
+        answer = checked(
+            TA.block("replace", "-800", [(WIKI, "occupied from c. 800 BC")]), period_start=None
+        )
         assert answer.decision == "replace" and answer.period_name is None
 
 
@@ -310,6 +316,8 @@ class TestTheQuestion:
         assert HO.BRIEF_PARTS[PERIOD.name]["lane"] == "WD4"
         assert HO.BRIEF_PARTS[R.ONE_FAMILY.name]["lane"] == "WD3"
         assert HO.BRIEF_PARTS[R.TWO_FAMILIES.name]["lane"] == "WD1"
+        assert HO.TEXTS[R.RECHECK.name].field_rules is HO.FIELD_RULES_WD5
+        assert HO.BRIEF_PARTS[R.RECHECK.name]["lane"] == "WD5"
 
 
 class TestTheOriginalImportHint:
@@ -358,7 +366,9 @@ class TestTheOriginalImportHint:
 
     def test_the_two_older_runs_are_asked_the_same_question(self) -> None:
         for rule in (R.TWO_FAMILIES, R.ONE_FAMILY):
-            assert HO.render_prompt(self.LINE, ["period_start"], None, rule, hint=HINT) == HO.render_prompt(  # fmt: skip
+            assert HO.render_prompt(
+                self.LINE, ["period_start"], None, rule, hint=HINT
+            ) == HO.render_prompt(  # fmt: skip
                 self.LINE, ["period_start"], None, rule
             )
 

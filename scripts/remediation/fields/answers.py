@@ -59,6 +59,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
+from decimal import Decimal
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -74,6 +75,7 @@ from fields import rule as R
 from pipeline import periods as P
 from pipeline.normalizers.site_type import CANONICAL_TYPES, normalize_site_type
 from pipeline.utils.geo import haversine_distance
+from pipeline.utils.text import PERIOD_BUCKETS, bucket_edge
 
 KEEP, REPLACE, CLEAR, UNRESOLVED = "keep", "replace", "clear", "unresolved"
 DECISIONS = {
@@ -91,9 +93,10 @@ FIELD_KEYS = frozenset({"decision", "value", "quotes", "reasoning"})
 #: is NOT the `period_name` column of `unified_sites` - that is the bucket label of the written
 #: start (`classify.bucket`), which `plan.py` writes beside the year this key resolves to.
 PERIOD_KEY = "period_name"
-#: The one rule whose question offers a period word as an answer (`handoff.FIELD_RULES_WD4`). Under
-#: the two older rules the key is no key at all: their answers never carry one.
-PERIOD_RULE = R.ONE_FAMILY_PERIOD
+#: The rules whose question offers a period word as an answer (`handoff.FIELD_RULES_WD4`, and wd5's
+#: that repeats it). Under the two older rules the key is no key at all: their answers never carry
+#: one.
+PERIOD_RULES = (R.ONE_FAMILY_PERIOD, R.RECHECK)
 QUOTE_KEYS = frozenset({"url", "quote"})
 #: A point within this distance of the stored one is the stored point (the acceptance's F3 row:
 #: "within 1 km is right").
@@ -194,10 +197,11 @@ def _block(field: str, data: Any, rule: R.Rule) -> FieldAnswer:
     if not isinstance(data, dict) or not FIELD_KEYS <= set(data) <= (FIELD_KEYS | {PERIOD_KEY}):
         shown = sorted(data) if isinstance(data, dict) else type(data).__name__
         raise AnswerError(f"{field}: carries {shown}, not {sorted(FIELD_KEYS)}")
-    if PERIOD_KEY in data and not (field == "period_start" and rule is PERIOD_RULE):
+    if PERIOD_KEY in data and not (field == "period_start" and rule in PERIOD_RULES):
+        asking = " and ".join(f"{r.name}'s (lane {r.stage})" for r in PERIOD_RULES)
         raise AnswerError(
-            f"{field}: {PERIOD_KEY} is period_start's own answer key and only "
-            f"{PERIOD_RULE.name}'s (lane {PERIOD_RULE.stage}) question asks for it"
+            f"{field}: {PERIOD_KEY} is period_start's own answer key and only {asking} question "
+            "asks for it"
         )
     decision = data["decision"]
     if decision not in decisions_of(field, rule):
@@ -345,14 +349,75 @@ def _names_ordinal(words: Sequence[str], number: int, unit: frozenset[str]) -> b
     return False
 
 
+#: Years before the present are counted from 1950 ("BP" is "before present", the present being 1950
+#: by convention). "N years ago" counts from the date of the writing, but a page's own date is
+#: nowhere near exact: the 76 years from 1950 to 2026 are the floor of every tolerance below.
+BP_PRESENT = 1950
+BP_FLOOR = 76
+#: The first bucket's edge: 6,450 BP is 4500 BC, the first year of the next bucket, so a number
+#: older than that is "< 4500 BC" and is written as that band's nearest year (`bucket_edge`).
+BP_BUCKET_AGE = BP_PRESENT - PERIOD_BUCKETS[0][2]
+_BP_NUMBER = r"(?<!\d)(?<!\d\.)(\d+(?:\.\d+)?)"
+#: The unit that follows a number, and what it multiplies it by. Case matters for the short forms:
+#: `Ma` is mega-annum and `ma` is not, `BP` is "before present" and `bp` is a basis point.
+_BP_UNITS = (
+    (r"(?:cal\.?\s*)?(?:yrs?\.?\s*|years?\s+)?BP\b", 1),
+    (r"(?:ka|kya)\b(?:\s*(?:cal\.?\s*)?BP\b)?", 1000),
+    (r"(?:Ma|mya|Mya)\b", 1_000_000),
+    (r"thousand\s+years?\s+ago\b", 1000),
+    (r"million\s+years?\s+ago\b", 1_000_000),
+    (r"years?\s+ago\b", 1),
+)
+_BP_DATE = re.compile(
+    rf"{_BP_NUMBER}(?:\s*(?:[-–—]|to|and)\s*{_BP_NUMBER})?\s*"
+    + "(?:"
+    + "|".join(f"(?P<u{i}>{pattern})" for i, (pattern, _) in enumerate(_BP_UNITS))
+    + ")"
+)
+
+
+def bp_dates(quote: str) -> list[tuple[int, int]]:
+    """The years a quote states in years before the present - "12,000 BP", "12,000 cal BP",
+    "45 ka", "1.2 Ma", "4,500 years ago", "between 12,000 and 10,000 years ago" - each with its
+    tolerance: one unit of the number's last significant digit, at least `BP_FLOOR` years. The
+    year is `BP_PRESENT` less the number."""
+    out: list[tuple[int, int]] = []
+    for match in _BP_DATE.finditer(_THOUSANDS.sub("", quote)):
+        multiplier = next(m for i, (_, m) in enumerate(_BP_UNITS) if match.group(f"u{i}"))
+        for text in (match.group(1), match.group(2)):
+            if text is None:
+                continue
+            age = Decimal(text) * multiplier
+            unit = 10 ** age.normalize().as_tuple().exponent
+            out.append((BP_PRESENT - int(age), max(BP_FLOOR, int(unit))))
+    return out
+
+
+def states_bp(quote: str, year: int) -> bool:
+    """Whether the quote states `year` in years before the present (`bp_dates`): within its
+    tolerance, or - for a number older than `BP_BUCKET_AGE` - as the year the first bucket "< 4500
+    BC" is written as, `bucket_edge`: the page dates the site into that band and the band is all
+    the database shows."""
+    edge = bucket_edge(PERIOD_BUCKETS[0][0])
+    for stated, tolerance in bp_dates(quote):
+        if abs(year - stated) <= tolerance:
+            return True
+        if BP_PRESENT - stated > BP_BUCKET_AGE and year == edge:
+            return True
+    return False
+
+
 def states_year(quote: str, year: int) -> bool:
     """Whether the quote states `year` itself: the year as a whole number (thousands separators
     read), or its century or millennium - a number (arabic, Roman, an English ordinal word) beside
-    a century or millennium word. The n-th century BC runs from n x 100 BC to (n-1) x 100 + 1 BC
-    (the prompt's "the 8th century BC" -> -800), the n-th AD from (n-1) x 100 + 1."""
+    a century or millennium word, or a number of years before the present (`states_bp`). The n-th
+    century BC runs from n x 100 BC to (n-1) x 100 + 1 BC (the prompt's "the 8th century BC" ->
+    -800), the n-th AD from (n-1) x 100 + 1."""
     number = abs(year)
     digits = _THOUSANDS.sub("", quote)
     if number and re.search(rf"(?<!\d){number}(?!\d)", digits):
+        return True
+    if states_bp(quote, year):
         return True
     words = fold(quote, keep_parentheses=True).split()
     century = max(1, (number - 1) // 100 + 1)
@@ -418,7 +483,7 @@ def _check_period(answer: FieldAnswer, line: Mapping[str, Any], rule: R.Rule) ->
         if not any(P.states_period(quote, name) for _, quote in answer.quotes):
             raise AnswerError(
                 f"period_start: no quote names {name} - a period answer rests on the page saying "
-                "so (\"an Iron Age hillfort\")"
+                'so ("an Iron Age hillfort")'
             )
         _period_decision(answer, line, P.start_year(name))
         return
@@ -426,7 +491,7 @@ def _check_period(answer: FieldAnswer, line: Mapping[str, Any], rule: R.Rule) ->
     _period_decision(answer, line, year)
     for url, quote in answer.quotes:
         if not dated(quote):
-            named = _period_a_quote_carries(quote) if rule is PERIOD_RULE else None
+            named = _period_a_quote_carries(quote) if rule in PERIOD_RULES else None
             raise AnswerError(
                 f"period_start: the quote on {url} carries no date"
                 + (
