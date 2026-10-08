@@ -5016,21 +5016,6 @@ TEASER_CASES: list[Case] = [
                 "test_a_phase5_card_key_left_behind_is_a_deviation",
             ),
             (
-                "the card file follows closed steps only",
-                "        if not closed(step, root):",
-                "test_a_step_without_acceptance_is_refused",
-            ),
-            (
-                "the card file carries no foreign card",
-                "    if foreign:",
-                "test_a_card_the_steps_did_not_write_is_refused",
-            ),
-            (
-                "the card file waits for every planned card",
-                "    if unwritten:",
-                "test_a_planned_card_production_does_not_hold_is_refused",
-            ),
-            (
                 "a step is closed once",
                 "    if path.exists():",
                 "test_a_step_is_closed_once",
@@ -5097,19 +5082,6 @@ TEASER_CASES: list[Case] = [
                 "                    if acceptance.exists()\n                    else None",
                 "                    if False\n                    else None",
                 "test_an_accepted_step_is_undone_closed_and_planned_again",
-            ),
-            (
-                "the card file expects an undone step's old cards",
-                '            planned[row["site_id"]] = row["old_value"] if undone else '
-                'row["new_value"]',
-                '            planned[row["site_id"]] = row["new_value"]',
-                "test_the_file_follows_production_after_an_undo",
-            ),
-            (
-                "the card file lets a later step's plan win",
-                "    for step in sorted(steps):",
-                "    for step in steps:",
-                "test_a_site_planned_again_after_an_undo_is_expected_as_the_later_step_wrote_it",
             ),
             (
                 "the acceptance finds a stale provenance",

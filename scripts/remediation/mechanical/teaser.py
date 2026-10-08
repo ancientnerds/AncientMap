@@ -56,7 +56,7 @@ or before it - or planned and never applied, is closed by `close-reverted --step
 proof that none of its writes stands (every planned cell holds its value from before the step, every
 write it had is reversed by its inverse). Its `REVERTED` record stands beside an acceptance the step
 had (which it copies as `superseded_acceptance`), and a later step plans its sites again.
-`card-file` expects the cards of an undone step at their values from before it.
+A card write is database-only: the database is the one copy of a card text (D25), no file follows.
 
     M=scripts/remediation/mechanical
     $M/teaser.py plan --run <run> --step N      (read-only; the next <=100 sites of the run;
@@ -66,7 +66,6 @@ had (which it copies as `superseded_acceptance`), and a later step plans its sit
     $M/apply.py --lane teaser-card-sNNN --rehearse-rollback ; then teaser-prov-sNNN
     $M/teaser.py accept --step N                (read-only; ACCEPT_EXIT=0 at 0 deviations)
     $M/teaser.py close-reverted --step N        (read-only; after an undo: its sites are planned again)
-    $M/teaser.py card-file --steps A-B          (read-only; renders the card file from production)
     $M/teaser.py stale                          (read-only; teaser cards whose description moved)
 """
 
@@ -90,9 +89,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-from phase3 import write_stage as WS  # noqa: E402 - the psql seam card_json reads through
 from phase3.run import read_jsonl  # noqa: E402 - the strict JSON-lines reader (no line skipped)
-from phase4 import card_json as CJ  # noqa: E402 - the card file's one renderer
 from phase4 import (
     model4 as M,  # noqa: E402 - AI_SYSTEMS: the disclosures a write may carry; the correction pair is AI_SYSTEM_OPUS -> AI_SYSTEM_CLAUDE
 )
@@ -302,7 +299,7 @@ def teaser_lane(kind: str, step: int) -> Lane:
                 Column(
                     "card_description",
                     "character varying",
-                    max_chars=CJ.W4.CARD_MAX_CHARS,
+                    max_chars=W4.CARD_MAX_CHARS,
                     fills_null=True,
                     clears=True,
                 ),
@@ -713,7 +710,7 @@ def reverted(step: int, root: Path = ROOT) -> bool:
 
 def closed(step: int, root: Path = ROOT) -> bool:
     """Whether the step is settled - accepted as written, or closed as undone - so the next step
-    may be planned and the card file may name it."""
+    may be planned."""
     return accepted(step, root) or reverted(step, root)
 
 
@@ -1027,7 +1024,7 @@ def close_reverted(
     """Close an undone (or never applied) step on production's proof that none of its writes
     stands; its sites are then planned again by a later step. Read-only. A step accepted before
     its undo keeps its acceptance as history: the `REVERTED` record copies it
-    (`superseded_acceptance`) and is what `plan`, `accept` and `card-file` read from then on."""
+    (`superseded_acceptance`) and is what `plan` and `accept` read from then on."""
     _record, prov_rows, card_rows, live, journal, exported_at = _step_read(step, read, root)
     found, reversed_cells = standing_writes(step, prov_rows, card_rows, live, journal)
     acceptance = _closing(ACCEPTED_DIR, step, root)
@@ -1050,66 +1047,6 @@ def close_reverted(
             },
         )
     return (0 if not found else 1), found
-
-
-# ------------------------------------------------------------------------------ the card file
-def card_file(
-    path: Path,
-    steps: Sequence[int],
-    *,
-    run_sql: Callable[[str], str] = WS.run_sql,
-    root: Path = ROOT,
-) -> dict[str, Any]:
-    """Render `public/data/card_descriptions.json` from production (read-only) after a sitting.
-
-    The API boot imports the file into `card_stats` (FIELD_CONTRACT 2.3), so after the card writes
-    the file must be the database's before it is pushed - immediately. `card_json`'s own renderer
-    (`file_from_cards`, `canonical`, the existing key order, new keys in UUID order, cleared keys
-    removed) renders it; this refuses unless every one of the named steps is closed, every key it
-    changes is a card cell of those steps, and production holds each such cell as the steps left
-    it: an accepted step's planned card, an undone step's card from before the step (5.6 of the
-    runbook: after an undo the file is rendered back the same way, never `git revert`-ed). Where
-    two named steps planned the same site - an undone step's site planned again - the later step's
-    expectation wins. `card_json.py --check` (`ACCEPT_EXIT=0`) is the acceptance of the file that
-    follows."""
-    for step in steps:
-        if not closed(step, root):
-            raise PlanError(
-                f"step {step} has no acceptance: the file follows closed steps only (`accept`, or "
-                "`close-reverted` after an undo)"
-            )
-    planned: dict[str, str | None] = {}
-    for step in sorted(steps):
-        undone = reverted(step, root)
-        for row in read_jsonl(root / step_name(step) / CARD / "PLAN.jsonl"):
-            planned[row["site_id"]] = row["old_value"] if undone else row["new_value"]
-    current = CJ.read_cards(path)
-    live = CJ.production_cards(run_sql)
-    moved = {
-        site_id
-        for site_id in set(current) | {s for s, card in live.items() if card is not None}
-        if current.get(site_id) != live.get(site_id)
-    }
-    foreign = sorted(site_id for site_id in moved if site_id not in planned)
-    if foreign:
-        raise PlanError(
-            f"{len(foreign)} card(s) differ between the file and production that the named steps "
-            f"did not write (first: {foreign[:3]}) - run `card_json.py --check` and settle them first"
-        )
-    unwritten = sorted(site_id for site_id, card in planned.items() if live.get(site_id) != card)
-    if unwritten:
-        raise PlanError(
-            f"{len(unwritten)} card(s) of the named steps: production does not hold them as the "
-            f"steps left them (first: {unwritten[:3]})"
-        )
-    text = CJ.canonical(CJ.file_from_cards(current, live))
-    path.write_text(text, encoding="utf-8", newline="\n")
-    return {
-        "file": str(path),
-        "cards": len(json.loads(text)[CJ.TOP_KEY]),
-        "changed": sum(1 for s in moved if live.get(s) is not None),
-        "removed": sum(1 for s in moved if live.get(s) is None),
-    }
 
 
 # ------------------------------------------------------------------------------ stale cards
@@ -1145,11 +1082,6 @@ def stale(*, read: Callable[[str], str] = read_production) -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------------------ the CLI
-def _steps(value: str) -> list[int]:
-    first, _, last = value.partition("-")
-    return list(range(int(first), int(last or first) + 1))
-
-
 def _print(payload: Any) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))
 
@@ -1170,17 +1102,14 @@ def _run(args: argparse.Namespace) -> int:
             print(f"  {line}")
         print(f"RESULT: {len(found)} write(s) still standing")
         return code
-    if args.command == "card-file":
-        _print(card_file(args.file, _steps(args.steps)))
-        return 0
     _print(stale())
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
     """`accept` and `close-reverted` print `ACCEPT_EXIT=`, every other command `WRITE_EXIT=`. All
-    of them are read-only on production; they write only their files: the step's plans, the closing
-    record, the card file."""
+    of them are read-only on production; they write only their files: the step's plans and the closing
+    record."""
     parser = argparse.ArgumentParser(prog="teaser", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
     plan = sub.add_parser("plan", help="plan the next step of a run (read-only)")
@@ -1190,9 +1119,6 @@ def main(argv: list[str] | None = None) -> int:
     accept.add_argument("--step", required=True, type=int)
     close = sub.add_parser("close-reverted", help="close an undone step (read-only)")
     close.add_argument("--step", required=True, type=int)
-    cards = sub.add_parser("card-file", help="render the card file from production (read-only)")
-    cards.add_argument("--steps", required=True, help="the sitting's steps: N or A-B")
-    cards.add_argument("--file", type=Path, default=CJ.CARD_FILE)
     sub.add_parser("stale", help="teaser cards whose description or card moved (read-only)")
     args = parser.parse_args(argv)
     tag = "ACCEPT" if args.command in ("accept", "close-reverted") else "WRITE"

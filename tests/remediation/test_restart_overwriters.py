@@ -1,28 +1,24 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 """What a container restart may do to an already-written value (plan §10.1).
 
-Two unconditional writers run on every boot and can reach columns the 2026-09
-remediation is about to write:
+One unconditional writer runs on every boot and can reach a column the 2026-09
+remediation writes:
 
-* `api/services/card_descriptions.py`, imported by the API on startup, upserts
-  `card_stats.card_description` from `public/data/card_descriptions.json`. It
-  overwrites on purpose - the file is that column's authoritative copy and the
-  import is the only path from a committed file to an existing row
-  (`docs/procedures/CARD_DESCRIPTIONS.md`, "How a card reaches production") - so the tests here pin two things
-  at once: the overwrite survives (a fill-only variant would be a regression),
-  and it can no longer be silent.
 * `pipeline/lyra/orchestrator.py::_run_migrations` reconciles
   `unified_sites.name_normalized` on every Lyra start. Its old guard compared the
   stored value against itself, so a well-formed but stale key was durable: the
   site stayed unfindable under its own name forever.
 
-Both are driven here through their real functions against recording fakes, so
+The API's boot import of `public/data/card_descriptions.json` into
+`card_stats.card_description` was the second one; D25 (2026-10-08) removed it, and the guard
+below pins that it stays gone.
+
+It is driven here through its real function against recording fakes, so
 these tests assert what the code sends to the database. No database needed.
 """
 
 from __future__ import annotations
 
-import logging
 import re
 from pathlib import Path
 from types import SimpleNamespace
@@ -32,7 +28,6 @@ import pytest
 from sqlalchemy.exc import ArgumentError
 from sqlalchemy.sql.base import Executable
 
-from api.services.card_descriptions import import_card_descriptions
 from pipeline.lyra.site_key import site_key_sql
 
 AN = "11111111-1111-1111-1111-111111111111"
@@ -114,121 +109,26 @@ class _Engine:
         return _Conn(self.log, self.rows_for)
 
 
-def _upserts(log: list[tuple[str, dict[str, Any]]]) -> list[dict[str, Any]]:
-    return [
-        params
-        for sql, params in log
-        if "INSERT INTO card_stats" in sql and "ON CONFLICT (site_id)" in sql
-    ]
-
-
 # --------------------------------------------------------------------------
-# card_stats.card_description — the file stays authoritative, but loudly
+# card_stats.card_description - the database is the one copy (D25, 2026-10-08)
 # --------------------------------------------------------------------------
 
 
-def test_card_description_import_still_overwrites_a_differing_value():
-    """The documented carrier chain keeps working: a committed file wins.
+def test_api_startup_no_longer_imports_the_card_file():
+    """No boot writes `card_stats.card_description`: a card text lives in the database only.
 
-    A fill-only variant (`WHERE card_description IS NULL`) would make the
-    overwrite impossible and break the only path from an edited file to an
-    existing production row. This pins the overwriting upsert.
+    Until D25 the API boot upserted `public/data/card_descriptions.json` over the column, so every
+    card write needed a file push. Read as source on purpose: importing api.main builds the app and
+    its routers (see tests/conftest.py), which the DB-less gate has no use for. The zeroed-row
+    backfill stays - a new site still needs a drawable `card_stats` row.
     """
-    log: list[tuple[str, dict[str, Any]]] = []
-    conn = _Conn(log, {"FROM card_stats": [(AN, "the deployed old text")]})
+    root = Path(__file__).resolve().parents[2]
+    source = (root / "api" / "main.py").read_text(encoding="utf-8")
 
-    result = import_card_descriptions(conn, {AN: "the new text"})
-
-    upsert_sql = next(sql for sql, _ in log if "INSERT INTO card_stats" in sql)
-    assert "ON CONFLICT (site_id) DO UPDATE SET card_description" in upsert_sql
-    assert "IS DISTINCT FROM :desc" in upsert_sql
-    assert _upserts(log) == [{"id": AN, "desc": "the new text"}]
-    assert result["imported"] == 1
-
-
-def test_every_discarded_card_description_is_reported_and_logged(caplog):
-    """A card text that exists only in the database is lost at the next boot.
-
-    Losing it is the price of the file being authoritative; losing it without a
-    trace is the defect. The site id and both values must appear in the boot log.
-    """
-    log: list[tuple[str, dict[str, Any]]] = []
-    conn = _Conn(log, {"FROM card_stats": [(AN, "only in the database")]})
-
-    with caplog.at_level(logging.WARNING, logger="api.services.card_descriptions"):
-        result = import_card_descriptions(conn, {AN: "from the file"})
-
-    assert result["discarded"] == [(AN, "only in the database", "from the file")]
-    warnings = "\n".join(r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING)
-    assert AN in warnings
-    assert "only in the database" in warnings
-    assert "from the file" in warnings
-
-
-def test_identical_card_description_is_not_a_discard(caplog):
-    """The normal boot must stay quiet: nothing was replaced, nothing is logged."""
-    log: list[tuple[str, dict[str, Any]]] = []
-    conn = _Conn(log, {"FROM card_stats": [(AN, "same text")]})
-
-    with caplog.at_level(logging.WARNING, logger="api.services.card_descriptions"):
-        result = import_card_descriptions(conn, {AN: "same text"})
-
-    assert result["discarded"] == []
-    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
-
-
-@pytest.mark.parametrize("stored", [None, ""])
-def test_empty_card_description_is_filled_not_reported(stored):
-    """Filling an empty slot replaces nothing."""
-    log: list[tuple[str, dict[str, Any]]] = []
-    conn = _Conn(log, {"FROM card_stats": [(AN, stored)]})
-
-    result = import_card_descriptions(conn, {AN: "first text"})
-
-    assert result["discarded"] == []
-    assert _upserts(log) == [{"id": AN, "desc": "first text"}]
-
-
-def test_truncation_happens_before_the_comparison():
-    """A 250-char file value that only needs cutting is not a discard.
-
-    `card_stats.card_description` is VARCHAR(200); comparing the untruncated
-    file value would report every over-long draft as a lost database value.
-    """
-    log: list[tuple[str, dict[str, Any]]] = []
-    conn = _Conn(log, {"FROM card_stats": [(AN, "x" * 200)]})
-
-    result = import_card_descriptions(conn, {AN: "x" * 250})
-
-    assert result["discarded"] == []
-    assert _upserts(log) == [{"id": AN, "desc": "x" * 200}]
-
-
-def test_deleted_site_ids_are_skipped_and_reported(caplog):
-    log: list[tuple[str, dict[str, Any]]] = []
-    conn = _Conn(log, {"FROM card_stats": [(AN, "old")]})
-    # `_stale_ids_sql` returns the ids that are not in unified_sites.
-    stale_rows = [(DELETED,)]
-    conn.rows_for["EXCEPT SELECT id FROM unified_sites"] = stale_rows
-
-    with caplog.at_level(logging.WARNING, logger="api.services.card_descriptions"):
-        result = import_card_descriptions(conn, {AN: "new", DELETED: "orphan"})
-
-    assert result["stale"] == [DELETED]
-    assert _upserts(log) == [{"id": AN, "desc": "new"}]
-    assert any(DELETED in r.getMessage() for r in caplog.records)
-
-
-def test_api_startup_uses_the_service_and_carries_no_upsert_of_its_own():
-    """The API boot path must go through the reporting import, not a bare upsert.
-
-    Read as source on purpose: importing api.main builds the app and its routers
-    (see tests/conftest.py), which the DB-less gate has no use for.
-    """
-    source = (Path(__file__).resolve().parents[2] / "api" / "main.py").read_text(encoding="utf-8")
-
-    assert "import_card_descriptions(" in source
+    assert "card_descriptions" not in source
     assert "INSERT INTO card_stats" not in source
+    assert "backfill_placeholder_stats" in source
+    assert not (root / "api" / "services" / "card_descriptions.py").exists()
 
 
 # --------------------------------------------------------------------------

@@ -216,11 +216,10 @@ def _upsert_stats(session, sites, combo_counts, progress: bool) -> tuple[int, in
 
 
 def backfill_placeholder_stats() -> int:
-    """Compute stats for card_stats rows the description import left as placeholders.
+    """Compute stats for card_stats rows that are still zeroed placeholders.
 
-    The card-description import in api/main.py inserts a zeroed row
-    (rarity_tier=0, category_group='unknown') so a generated description has a row
-    to live on. Every card query filters on rarity_tier, so such a row is a card
+    A zeroed row (rarity_tier=0, category_group='unknown') gives a written
+    description a row to live on. Every card query filters on rarity_tier, so such a row is a card
     that can never be drawn — by daily, starter, packs, quiz or expeditions.
     Returns the number of rows filled in.
     """

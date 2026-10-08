@@ -60,9 +60,6 @@ EXEMPT: dict[str, str] = {
     "api/main.py::lifespan": (
         "boot import of legacy JSON contributions: an existence check before an INSERT"
     ),
-    "api/services/card_descriptions.py::<module>:_STALE_IDS_SQL": (
-        "which card ids have no site row at all - identity, not visibility"
-    ),
     "pipeline/lyra/orchestrator.py::_run_migrations": "Lyra's boot migrations and data patches",
     "pipeline/lyra/data_patches.py::add_aliases": "boot data patch: writes alternate names",
     "pipeline/unified_loader.py::load_all": _INGEST,

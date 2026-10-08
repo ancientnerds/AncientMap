@@ -15,11 +15,11 @@ the two drift apart.
 Two rules are enforced here because they decide whether a proposal is a correction at all:
 
 1. **Text fields are report-only in Phase 3** (brief decision 5), and the two reasons differ.
-   `card_description` is re-derived on every API boot from the JSON file
-   (`api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions`,
-   upserting into `card_stats`), so a DB-only `set` is reverted. `unified_sites.description`
-   has **no** boot overwriter; it is report-only because text regeneration belongs to Phase 5,
-   not to a SQL update. Both are refused here, so the refusal cannot depend on which brief a stage read.
+   `card_description` belongs to the card lane (its own plan, journal and provenance; the API boot
+   re-imported a JSON file over it until D25, 2026-10-08, and no longer does), not to a field
+   correction. `unified_sites.description` is report-only because text regeneration belongs to
+   Phase 5, not to a SQL update. Both are refused here, so the refusal cannot depend on which brief
+   a stage read.
 2. **A `site_type` write must be a fixed point of its own boot producer**
    (`pipeline/lyra/orchestrator.py::_run_migrations`): a value that `normalize_site_type()` would
    rewrite is not a correction but a temporary edit. The check imports the producer itself,
@@ -44,7 +44,7 @@ from typing import Any
 from census.model import Confidence, Evidence, Proposal, Severity
 
 #: Fields that may only be *reported*, never `set` (brief decision 5). The two reasons are in
-#: the module docstring: a boot overwriter for `card_description`, the phase split for
+#: the module docstring: the card lane for `card_description`, the phase split for
 #: `description`.
 REPORT_ONLY_FIELDS = frozenset({"description", "card_description"})
 
@@ -149,7 +149,7 @@ class Finding:
             if self.field in REPORT_ONLY_FIELDS:
                 raise ValueError(
                     f"{self.test_id}: {self.field} is report-only in Phase 3 "
-                    "(boot overwriter for card_description, phase split for description)"
+                    "(card lane for card_description, phase split for description)"
                 )
             if not self.evidence:
                 raise ValueError(f"{self.test_id}: a proposed write needs evidence")

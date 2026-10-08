@@ -1,4 +1,4 @@
-"""Lane WB, the write side: the two lanes of a step, their plan, the acceptance and the card file.
+"""Lane WB, the write side: the two lanes of a step, their plan, the acceptance and the closing.
 
 `mechanical/teaser.py` plans a run's outcomes as two cell lanes per step of at most 100 sites -
 `teaser-prov-sNNN` (`unified_sites.raw_data`) and `teaser-card-sNNN` (`card_stats.card_description`,
@@ -25,7 +25,6 @@ from mechanical import apply as A  # noqa: E402
 from mechanical import lane as L  # noqa: E402
 from mechanical import plan as MP  # noqa: E402
 from mechanical import teaser as W  # noqa: E402
-from phase4 import card_json as CJ  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 
 from pipeline.utils import card_provenance as CP  # noqa: E402
@@ -555,7 +554,7 @@ class TestTheUndo:
         assert again["outcomes"] == sorted([T.SKARA, T.NEWGRANGE])
 
     def test_an_accepted_step_is_undone_closed_and_planned_again(self, tmp_path: Path) -> None:
-        """The undo of 5.6: a step accepted as written (its card file may be out already) is
+        """The undo of 5.6: a step accepted as written is
         rolled back; `close-reverted` records the undo beside the acceptance, the acceptance stays
         as history, and the next step plans the undone sites again - none is dropped."""
         root = planned(tmp_path)
@@ -609,82 +608,15 @@ class TestTheUndo:
             W.close_reverted(1, read=lambda _sql: export_for(lives, journal), root=root)
 
 
-# ------------------------------------------------------------------------------ the card file
-class TestTheCardFile:
-    def _file(self, tmp_path: Path, cards: dict[str, str]) -> Path:
-        path = tmp_path / "card_descriptions.json"
-        path.write_text(CJ.canonical({CJ.TOP_KEY: cards}), encoding="utf-8", newline="\n")
-        return path
+# ------------------------------------------------------------------------------ no card file
+class TestNoCardFile:
+    """D25: the database is the one copy of a card text. `card_stats.card_description` is written by
+    the card lane alone; no command renders `public/data/card_descriptions.json` after a sitting."""
 
-    def _live(self, cards: dict[str, str | None]) -> Any:
-        rows = "".join(
-            json.dumps({"id": site, "card": card}) + "\n" for site, card in cards.items()
-        )
-        return lambda _sql: rows
-
-    def test_the_file_follows_production_after_an_accepted_step(self, tmp_path: Path) -> None:
-        root = planned(tmp_path)
-        closed(root)
-        path = self._file(tmp_path, {T.SKARA: T.OLD_CARD, T.NEWGRANGE: T.OLD_CARD})
-        live_cards = {T.SKARA: T.GOOD[T.SKARA], T.NEWGRANGE: None}
-        result = W.card_file(path, [1], run_sql=self._live(live_cards), root=root)
-        assert (result["changed"], result["removed"]) == (1, 1)
-        assert CJ.read_cards(path) == {T.SKARA: T.GOOD[T.SKARA]}
-
-    def test_a_step_without_acceptance_is_refused(self, tmp_path: Path) -> None:
-        root = planned(tmp_path)
-        path = self._file(tmp_path, {})
-        with pytest.raises(MP.PlanError, match="no acceptance"):
-            W.card_file(path, [1], run_sql=self._live({}), root=root)
-
-    def test_a_card_the_steps_did_not_write_is_refused(self, tmp_path: Path) -> None:
-        root = planned(tmp_path)
-        closed(root)
-        path = self._file(tmp_path, {T.SKARA: T.OLD_CARD, T.NEWGRANGE: T.OLD_CARD, T.SACSAY: "a"})
-        live_cards = {T.SKARA: T.GOOD[T.SKARA], T.NEWGRANGE: None, T.SACSAY: "b"}
-        with pytest.raises(MP.PlanError, match="did not write"):
-            W.card_file(path, [1], run_sql=self._live(live_cards), root=root)
-
-    def test_a_planned_card_production_does_not_hold_is_refused(self, tmp_path: Path) -> None:
-        root = planned(tmp_path)
-        closed(root)
-        path = self._file(tmp_path, {T.SKARA: T.OLD_CARD, T.NEWGRANGE: T.OLD_CARD})
-        live_cards = {T.SKARA: T.OLD_CARD, T.NEWGRANGE: None}
-        with pytest.raises(MP.PlanError, match="production does not hold"):
-            W.card_file(path, [1], run_sql=self._live(live_cards), root=root)
-
-    def test_the_file_follows_production_after_an_undo(self, tmp_path: Path) -> None:
-        """5.6: the file was rendered and pushed for step 1, then the step was undone. `card-file`
-        renders it back - the undone step's cards expected at their values from before the step -
-        and never needs a `git revert` of the sitting's commit."""
-        root = planned(tmp_path)
-        closed(root)
-        closed(root, reverted=True)
-        path = self._file(tmp_path, {T.SKARA: T.GOOD[T.SKARA]})
-        live_cards = {T.SKARA: T.OLD_CARD, T.NEWGRANGE: T.OLD_CARD}
-        result = W.card_file(path, [1], run_sql=self._live(live_cards), root=root)
-        assert (result["changed"], result["removed"]) == (2, 0)
-        assert CJ.read_cards(path) == live_cards
-
-    def test_an_undone_step_whose_card_still_stands_is_refused(self, tmp_path: Path) -> None:
-        root = planned(tmp_path)
-        closed(root, reverted=True)
-        path = self._file(tmp_path, {T.SKARA: T.OLD_CARD, T.NEWGRANGE: T.OLD_CARD})
-        live_cards = {T.SKARA: T.GOOD[T.SKARA], T.NEWGRANGE: T.OLD_CARD}
-        with pytest.raises(MP.PlanError, match="production does not hold"):
-            W.card_file(path, [1], run_sql=self._live(live_cards), root=root)
-
-    def test_a_site_planned_again_after_an_undo_is_expected_as_the_later_step_wrote_it(
-        self, tmp_path: Path
-    ) -> None:
-        root = planned(tmp_path)
-        closed(root, reverted=True)
-        W.plan_step("wb-test", 2, read=lambda _sql: export_for(LIVES), root=root, outcomes=OUTCOMES)
-        closed(root, 2)
-        path = self._file(tmp_path, {T.SKARA: T.OLD_CARD, T.NEWGRANGE: T.OLD_CARD})
-        live_cards = {T.SKARA: T.GOOD[T.SKARA], T.NEWGRANGE: None}
-        W.card_file(path, [2, 1], run_sql=self._live(live_cards), root=root)
-        assert CJ.read_cards(path) == {T.SKARA: T.GOOD[T.SKARA]}
+    def test_there_is_no_card_file_command(self) -> None:
+        assert not hasattr(W, "card_file")
+        with pytest.raises(SystemExit):
+            W.main(["card-file", "--steps", "1"])
 
 
 class TestStale:

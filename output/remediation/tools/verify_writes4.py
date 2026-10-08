@@ -40,9 +40,7 @@ production directly, read-only, after every step of 100 sites and once more at t
    `_description_provenance.desc_sha256` (`p4`, `p4l`), and of the card equals its `card.
    text_sha256` (`p5`).
 4. **T08** (`census t08_citation_markers.run`) over the written sites (`p4`): 0 findings.
-5. **The card file** (`--card-check`, `p5`): `phase4/card_json.py --check` is run; it must exit 0
-   and print exactly one exit line, its own `ACCEPT_EXIT=0`.
-6. **The boot logs** (`--boot-logs --since <StartedAt>`, after Push #2): 0 `[STARTUP] Card
+5. **The boot logs** (`--boot-logs --since <StartedAt>`, after Push #2): 0 `[STARTUP] Card
    description overwritten` lines in `ancient_nerds_api` and `ancient_nerds_api2`.
 
 Every deviation is printed by name; the last line is `ACCEPT_EXIT=0` (none) or `ACCEPT_EXIT=1`,
@@ -52,7 +50,7 @@ of the design are a Playwright check against production and not part of this too
     verify_writes4.py --lane p4 --plan <PLAN.jsonl> --run <runs/<run>> [--run <runs/<run2>>]
     verify_writes4.py --lane p4 --plan <PLAN.jsonl> --run <runs/<run>> --allow-stamp 'phase4l:%'
     verify_writes4.py --lane p4l --plan <PLAN.jsonl>
-    verify_writes4.py --lane p5 --plan <PLAN.jsonl> --run <runs/<run>> --card-check
+    verify_writes4.py --lane p5 --plan <PLAN.jsonl> --run <runs/<run>>
     verify_writes4.py --lane p4wc --plan <PLAN.jsonl>
     verify_writes4.py --boot-logs --since 2026-09-24T10:00:00Z
 
@@ -96,7 +94,6 @@ from phase4 import verify4 as V4  # noqa: E402
 from phase4 import wc4  # noqa: E402 - lane WC's invariants and its evidence re-check
 
 REPO = lanes.REPO
-CARD_JSON = REPO / "scripts" / "remediation" / "phase4" / "card_json.py"
 
 #: The (table, column) pairs each lane may write (production_write, ROW GROUPS).
 LANE_COLUMNS: dict[str, frozenset[tuple[str, str]]] = {
@@ -111,8 +108,8 @@ JSON_COLUMNS = frozenset({("unified_sites", "raw_data")})
 PLAN_KEYS = ("site_id", "table", "column", "pk", "old_value", "new_value", "change_key")
 WINDOW = 200
 
-#: production_write, step 3i: the line `api/services/card_descriptions.py` logs for every card the
-#: boot import overwrote.
+#: production_write, step 3i: the line `api/services/card_descriptions.py` logged for every card the
+#: boot import overwrote (the import is gone since D25; the logs the check reads predate it).
 OVERWRITE_LINE = "[STARTUP] Card description overwritten"
 API_CONTAINERS = ("ancient_nerds_api", "ancient_nerds_api2")
 #: An RFC 3339 instant, as `docker inspect -f '{{.State.StartedAt}}'` prints it. Checked because it
@@ -827,7 +824,7 @@ def t08_deviations(site_ids: Iterable[str], production: Production) -> list[str]
 
 
 # ------------------------------------------------------------------------------------------------
-# 5-6. The card file and the boot logs (commands, through one seam)
+# 5. The boot logs (a command, through one seam)
 # ------------------------------------------------------------------------------------------------
 
 
@@ -837,31 +834,6 @@ def run_command(argv: Sequence[str]) -> tuple[int, str]:
         list(argv), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=900
     )
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
-
-
-def exit_lines(output: str) -> list[str]:
-    """Every `*_EXIT=<n>` line the command printed, in order."""
-    return [
-        line.strip() for line in output.splitlines() if write_gate4.EXIT_LINE.match(line.strip())
-    ]
-
-
-def card_file_deviations(command: Callable[[Sequence[str]], tuple[int, str]]) -> list[str]:
-    """production_write: `card_json.py --check` - the file equals the database for every entry.
-
-    Clean only when the process exited 0 and printed exactly one exit line, its own
-    `ACCEPT_EXIT=0` - never another tool's tag, nor the last of two runs (audit 2026-09-25 m17).
-    """
-    if not CARD_JSON.exists():
-        return [f"CARD FILE: {CARD_JSON} is not on this tree (WB-D3)"]
-    status, output = command([sys.executable, str(CARD_JSON), "--check"])
-    lines = exit_lines(output)
-    if status != 0 or lines != [write_gate4.ACCEPT_OK]:
-        return [
-            f"CARD FILE: card_json.py --check exited {status} with the exit line(s) {lines!r}, "
-            f"not one {write_gate4.ACCEPT_OK}"
-        ]
-    return []
 
 
 def boot_log_deviations(
@@ -996,7 +968,6 @@ def main(argv: list[str] | None = None) -> int:
         "e.g. lane L's 'phase4l:%%'",
     )
     parser.add_argument("--complete", action="store_true", help="every planned row is written")
-    parser.add_argument("--card-check", action="store_true", help="run card_json.py --check")
     parser.add_argument("--boot-logs", action="store_true", help="read both API boot logs")
     parser.add_argument("--since", help="the containers' StartedAt (with --boot-logs)")
     parser.add_argument("--host", default=lanes.HOST)
@@ -1013,8 +984,6 @@ def main(argv: list[str] | None = None) -> int:
         if args.plan is None:
             parser.error("--lane needs --plan")
         deviations += accept_lane(args, run=lambda sql: lanes.psql(sql, host=args.host))
-        if args.card_check:
-            deviations += card_file_deviations(run_command)
     for line in deviations:
         print(f"  {line}")
     print(f"RESULT: {len(deviations)} deviation(s)")

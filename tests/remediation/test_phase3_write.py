@@ -36,7 +36,7 @@ from typing import Any
 
 import pytest
 
-from tests.source_functions import function_def, names_used_by
+from tests.source_functions import names_used_by
 
 REPO = Path(__file__).resolve().parents[2]
 PHASE3_PARENT = REPO / "scripts" / "remediation"
@@ -511,7 +511,7 @@ def test_the_report_only_fields_are_refused_though_the_reviewer_cleared_them(
 
 
 def test_the_two_report_only_reasons_stay_apart(tmp_path: Path) -> None:
-    """The boot overwriter is named as such, the phase split as such - not one shared text."""
+    """The card lane is named as such, the phase split as such - not one shared text."""
     plan = W.load_plan(
         _batch(
             tmp_path,
@@ -526,7 +526,7 @@ def test_the_two_report_only_reasons_stay_apart(tmp_path: Path) -> None:
         )
     )
     detail = {refusal.field: refusal.detail for refusal in plan.refused_fields(W.RULE_REPORT_ONLY)}
-    assert "api/main.py::lifespan" in detail["card_description"]
+    assert "card lane" in detail["card_description"]
     assert "Phase 5" in detail["description"]
     assert detail["description"] != detail["card_description"]
 
@@ -547,14 +547,6 @@ def test_the_boot_producers_the_refusals_name_are_where_the_refusals_say(tmp_pat
     refusals then pointed at unrelated code. No test noticed. They name functions now, and this test
     checks that those functions still do what the refusal says.
     """
-    card = W.REPORT_ONLY_REASON["card_description"]
-    assert (
-        "`api/main.py::lifespan` -> `api/services/card_descriptions.py::import_card_descriptions`"
-        in card
-    )
-    assert "import_card_descriptions" in names_used_by(REPO / "api" / "main.py", "lifespan")
-    function_def(REPO / "api" / "services" / "card_descriptions.py", "import_card_descriptions")
-
     plan = _plan(tmp_path, field="site_type", proposed="settlement")
     refusal = plan.refused_fields(W.RULE_FIXED_POINT)[0]
     assert "`pipeline/lyra/orchestrator.py::_run_migrations`" in refusal.detail

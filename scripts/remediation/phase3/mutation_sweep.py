@@ -5088,15 +5088,13 @@ PHASE4_MODEL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 P4_WRITE = "scripts/remediation/phase4/write4.py"
 P4_REVERT = "scripts/remediation/phase4/revert4.py"
 P4_LEGACY = "scripts/remediation/phase4/legacy4.py"
-P4_CARD_JSON = "scripts/remediation/phase4/card_json.py"
 P4_WRITE_GATE = "output/remediation/tools/write_gate4.py"
 P4_LANES = "output/remediation/tools/lanes.py"
 P4_WRITE_TEST = "tests/remediation/test_phase4_write.py"
 P4_LEGACY_TEST = "tests/remediation/test_phase4_legacy.py"
-P4_CARD_TEST = "tests/remediation/test_phase4_card_json.py"
 P4_TOOLS_TEST = "tests/remediation/test_remediation_tools.py"
 #: Track D (WB-D1 ... WB-D3): the change-key lane, the lanes, the writer, the reversal, lane L, the
-#: card file and the gate - every guard with the one test that must fail when it is broken.
+#: gate - every guard with the one test that must fail when it is broken.
 PHASE4_WRITE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 write_stage: an unknown change-key lane is accepted",
@@ -5418,54 +5416,6 @@ PHASE4_WRITE_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    return list(sites)  # mutant\n",
         P4_LEGACY_TEST,
         "test_the_held_set_is_every_plan_site_production_does_not_show_as_written",
-    ),
-    (
-        "p4 card_json: a new key is not appended in UUID order",
-        P4_CARD_JSON,
-        "    for site_id in sorted(set(cards) - set(current)):\n",
-        "    for site_id in sorted(set(cards) - set(current), reverse=True):  # mutant\n",
-        P4_CARD_TEST,
-        "test_existing_keys_keep_their_place_new_keys_append_in_uuid_order_cleared_keys_go",
-    ),
-    (
-        "p4 card_json: a cleared card keeps its key",
-        P4_CARD_JSON,
-        "        if card is not None:\n            ordered[site_id] = card\n    for site_id in sorted",
-        "        if True:  # mutant\n            ordered[site_id] = card\n    for site_id in sorted",
-        P4_CARD_TEST,
-        "test_existing_keys_keep_their_place_new_keys_append_in_uuid_order_cleared_keys_go",
-    ),
-    (
-        "p4 card_json: a key that is not a curated site is kept",
-        P4_CARD_JSON,
-        "    if foreign:\n",
-        "    if False:  # mutant\n",
-        P4_CARD_TEST,
-        "test_a_key_that_is_not_a_curated_site_is_refused",
-    ),
-    (
-        "p4 card_json: regenerate overwrites the pre-render",
-        P4_CARD_JSON,
-        '        path.with_name(path.name + ".regenerated").write_text(',
-        "        path.write_text(  # mutant\n            ",
-        P4_CARD_TEST,
-        "test_regenerate_is_identical_only_when_production_holds_the_prerender",
-    ),
-    (
-        "p4 card_json: a live card the file lacks is no deviation",
-        P4_CARD_JSON,
-        "        if card is not None and site_id not in file_cards:\n",
-        "        if False:  # mutant\n",
-        P4_CARD_TEST,
-        "test_check_finds_every_kind_of_difference",
-    ),
-    (
-        "p4 card_json: a CRLF working copy is compared as it is",
-        P4_CARD_JSON,
-        '    return path.read_bytes().decode("utf-8").replace("\\r\\n", "\\n")\n',
-        '    return path.read_bytes().decode("utf-8")  # mutant\n',
-        P4_CARD_TEST,
-        "test_regenerate_is_identical_only_when_production_holds_the_prerender",
     ),
     (
         "p4 revert4: phase 3 and the mechanical lanes can be reverted",
@@ -6353,23 +6303,7 @@ PHASE4_WRITE_SUP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         P4_WRITE_TEST,
         "test_a_card_clear_is_evidenced_only_by_a_cleared_card_finding",
     ),
-    # -- card_json, the API disclosure and the sitemap
-    (
-        "p4 card_json: a P5 row for a site outside the plan is rendered",
-        P4_CARD_JSON,
-        "            if row.site_id not in cards:\n",
-        "            if False:  # mutant\n",
-        P4_CARD_TEST,
-        "test_a_p5_row_for_a_site_outside_the_plan_is_refused",
-    ),
-    (
-        "p4 card_json: a card that is not a string is read",
-        P4_CARD_JSON,
-        "        if not isinstance(text, str):\n",
-        "        if False:  # mutant\n",
-        P4_CARD_TEST,
-        "test_a_file_whose_card_is_not_a_string_is_refused",
-    ),
+    # -- the API disclosure and the sitemap
     (
         "p4 api: an unknown ai mark is disclosed",
         P4_API_PROVENANCE,
@@ -7404,22 +7338,6 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "        for finding in []  # mutant\n",
         P4_ACCEPT_TEST,
         "test_t08_runs_over_the_written_sites",
-    ),
-    (
-        "p4 verify_writes4: a failing card check passes",
-        P4_ACCEPT,
-        "    if status != 0 or lines != [write_gate4.ACCEPT_OK]:\n",
-        "    if False:  # mutant\n",
-        P4_ACCEPT_TEST,
-        "test_the_card_file_check_reads_the_tools_own_exit_line",
-    ),
-    (
-        "p4 verify_writes4: the first exit line is read",
-        P4_ACCEPT,
-        "    if status != 0 or lines != [write_gate4.ACCEPT_OK]:\n",
-        "    if status != 0 or lines[-1:] != [write_gate4.ACCEPT_OK]:  # mutant\n",
-        P4_ACCEPT_TEST,
-        "test_the_card_file_check_reads_the_tools_own_exit_line",
     ),
     (
         "p4 verify_writes4: an overwrite line passes",
@@ -13131,16 +13049,6 @@ BOOT_DDL_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '    + ")",  # mutant\n',
         BOOT_DDL_TEST,
         BD_FK_ONE_QUERY,
-    ),
-    (
-        "boot-ddl: the card_description refusal cites a line number again",
-        WRITE_STAGE,
-        '        "(`api/main.py::lifespan` -> '
-        '`api/services/card_descriptions.py::import_card_descriptions`, "\n',
-        '        "(`api/main.py:365` -> '
-        '`api/services/card_descriptions.py::import_card_descriptions`, "  # mutant\n',
-        WRITE_TEST,
-        W_PRODUCERS_CITED,
     ),
     (
         "boot-ddl: the site_type refusal cites a line number again",
@@ -22464,22 +22372,6 @@ AUDIT_FIX_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "    provenance = \"u.raw_data->'_description_provenance'\"  # mutant\n",
         P4_ACCEPT_TEST,
         "test_the_acceptance_shares_the_writers_stream_rule_and_provenance_key",
-    ),
-    (
-        "audit-fix: m17 the card check ignores its exit status",
-        P4_ACCEPT,
-        "    if status != 0 or lines != [write_gate4.ACCEPT_OK]:\n",
-        "    if lines != [write_gate4.ACCEPT_OK]:  # mutant\n",
-        P4_ACCEPT_TEST,
-        "test_the_card_file_check_reads_the_tools_own_exit_line",
-    ),
-    (
-        "audit-fix: m17 the card check takes any tool's clean exit line",
-        P4_ACCEPT,
-        "    if status != 0 or lines != [write_gate4.ACCEPT_OK]:\n",
-        '    if status != 0 or [x.rpartition("=")[2] for x in lines] != ["0"]:  # mutant\n',
-        P4_ACCEPT_TEST,
-        "test_the_card_file_check_reads_the_tools_own_exit_line",
     ),
 ]
 MUTATIONS += AUDIT_FIX_MUTATIONS

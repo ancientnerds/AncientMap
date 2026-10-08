@@ -133,40 +133,10 @@ async def lifespan(app: FastAPI):
         logger.error(f"[STARTUP] Table creation/migration failed: {e}")
         raise
 
-    # Import card descriptions from JSON (idempotent — runs every startup). The
-    # file is the authoritative copy of the field and this import is how a
-    # committed file reaches an existing row; what it reports when it discards a
-    # database value lives in api/services/card_descriptions.py (plan §10.1).
-    try:
-        from api.services.card_descriptions import (
-            import_card_descriptions,
-            load_card_descriptions,
-        )
-        from pipeline.database import get_session
-
-        descriptions = load_card_descriptions()
-        if descriptions:
-            with get_session() as _s:
-                imported = import_card_descriptions(_s, descriptions)
-                _s.commit()
-                if imported["imported"]:
-                    # Flush sites cache so fresh queries include cd
-                    from api.cache import cache_delete_pattern as _cdp
-
-                    _cdp("sites:*")
-                    logger.info(
-                        f"[STARTUP] Imported {imported['imported']} card descriptions (cache flushed)"
-                    )
-                else:
-                    logger.info(
-                        f"[STARTUP] Card descriptions already up to date ({imported['checked']} checked)"
-                    )
-    except Exception as e:
-        logger.warning(f"[STARTUP] Card description import failed (non-fatal): {e}")
-
-    # The description import above inserts zeroed placeholder rows (rarity_tier=0)
-    # so a description has a row to live on. Every card query filters on
-    # rarity_tier, so until the stats are computed those are cards nobody can draw.
+    # A card text lives in card_stats only (D25, 2026-10-08): nothing here imports it. A
+    # site whose card_stats row is a zeroed placeholder (rarity_tier=0) has a row for its
+    # description to live on. Every card query filters on rarity_tier, so until the stats are
+    # computed those are cards nobody can draw.
     # Off the critical path: on a fresh DB this is thousands of sites (~90s) and
     # would race the startup health check.
     async def _backfill_card_stats() -> None:
