@@ -66,7 +66,10 @@ def test_a1_reads_the_artist_field_as_parse_attribution_does():
     found = A.resolve(_page({"Artist": USER_ANCHOR, "Attribution": "Someone else"}))
     assert isinstance(found, A.Found)
     assert (found.rule, found.field, found.span) == ("A1", "Artist", USER_ANCHOR)
-    assert (found.author, found.author_url) == ("Udimu", "https://commons.wikimedia.org/wiki/User:Udimu")
+    assert (found.author, found.author_url) == (
+        "Udimu",
+        "https://commons.wikimedia.org/wiki/User:Udimu",
+    )
 
 
 def test_an_empty_artist_field_moves_on_to_the_attribution_line():
@@ -78,7 +81,12 @@ def test_an_empty_artist_field_moves_on_to_the_attribution_line():
 def test_a_present_field_that_cannot_be_read_exactly_ends_the_row():
     """No fall-through past a field that is there: its reason is the row's."""
     found = A.resolve(
-        _page({"Attribution": "\N{REPLACEMENT CHARACTER} Codrin.B", "Credit": f"{USER_ANCHOR} ({OWN_WORK})"})
+        _page(
+            {
+                "Attribution": "\N{REPLACEMENT CHARACTER} Codrin.B",
+                "Credit": f"{USER_ANCHOR} ({OWN_WORK})",
+            }
+        )
     )
     assert isinstance(found, A.Refused)
     assert found.rule == "A2" and "replacement character" in found.reason
@@ -97,8 +105,12 @@ OTHER_AUTHOR = _info("[[User:Other|Other]]")
 @pytest.mark.parametrize(
     ("credit", "says"),
     [
-        (OWN_WORK, "carries 0 user links"),  # the {{Own}} tag with no user link
-        (f"{USER_ANCHOR} and {USER_ANCHOR.replace('Udimu', 'Other')} ({OWN_WORK})", "carries 2 user"),
+        # the {{Own}} tag next to a link that is no user page
+        (f'{OWN_WORK} <a href="https://example.org/x">x</a>', "carries 0 user links"),
+        (
+            f"{USER_ANCHOR} and {USER_ANCHOR.replace('Udimu', 'Other')} ({OWN_WORK})",
+            "carries 2 user",
+        ),
     ],
 )
 def test_an_own_work_credit_without_exactly_one_user_link_ends_the_row(credit, says):
@@ -119,6 +131,146 @@ def test_an_own_work_user_link_that_cannot_be_read_ends_the_row(link_text, says)
     assert found.rule == "A3" and says in found.reason
 
 
+# --------------------------------------------------------------------------------------------
+# A5: the uploader of the first version is the author of a self-licensed file (D18, 2026-10-08)
+# --------------------------------------------------------------------------------------------
+SELF = "== {{int:license-header}} ==\n{{self|cc-by-sa-4.0}}\n"
+
+
+def _uploaded(page: A.Page, user: str | None = "Jane Doe", when: str = "2012-05-01T10:00:00Z"):
+    return A.dataclasses.replace(
+        page, uploader_read=True, first_uploader=user, first_upload_at=when
+    )
+
+
+def test_a_self_licensed_file_with_no_author_anywhere_waits_for_its_upload_history():
+    found = A.resolve(_page(wikitext=SELF))
+    assert isinstance(found, A.NeedsUploader)
+    assert found.span == "{{self|cc-by-sa-4.0}}"
+
+
+def test_a5_names_the_uploader_of_the_first_version_and_links_the_user_page():
+    found = A.resolve(_uploaded(_page(wikitext=SELF), "Jane Doe"))
+    assert isinstance(found, A.Found)
+    assert (found.rule, found.field, found.author) == ("A5", "first upload", "Jane Doe")
+    assert found.author_url == "https://commons.wikimedia.org/wiki/User:Jane_Doe"
+    assert found.span == "{{self|cc-by-sa-4.0}} | first upload by Jane Doe at 2012-05-01T10:00:00Z"
+
+
+def test_a5_quotes_a_user_name_the_way_the_gallery_stores_it():
+    found = A.resolve(_uploaded(_page(wikitext=SELF), "Una giornata uggiosa '94"))
+    assert isinstance(found, A.Found)
+    assert found.author_url == "https://commons.wikimedia.org/wiki/User:Una_giornata_uggiosa_%2794"
+
+
+def test_a5_takes_an_own_work_credit_that_names_no_one():
+    """The Credit says "Own work" and links nobody: the uploader is the author."""
+    page = _page({"Credit": OWN_WORK})
+    assert isinstance(A.resolve(page), A.NeedsUploader)
+    found = A.resolve(_uploaded(page))
+    assert isinstance(found, A.Found) and found.rule == "A5"
+
+
+@pytest.mark.parametrize("user", ["File Upload Bot (Magnus Manske)", "Fæ's bot", "ImageTaggerBot"])
+def test_a5_refuses_a_bot_account_as_the_author(user):
+    found = A.resolve(_uploaded(_page(wikitext=SELF), user))
+    assert isinstance(found, A.Refused) and found.rule == "A5" and "bot account" in found.reason
+
+
+def test_a5_refuses_a_file_with_no_upload_version():
+    found = A.resolve(_uploaded(_page(wikitext=SELF), None))
+    assert isinstance(found, A.Refused) and "no upload version" in found.reason
+
+
+def test_an_earlier_route_beats_a5():
+    """An {{Information}} author, or an Artist, decides before the uploader is asked."""
+    assert A.resolve(_page({"Artist": USER_ANCHOR}, wikitext=SELF)).rule == "A1"
+    assert A.resolve(_page(wikitext=SELF + _info("Plain Name"))).rule == "A4"
+
+
+def test_a_file_that_is_not_self_licensed_gets_no_a5():
+    found = A.resolve(_page(wikitext="{{Information|author=}}\n{{PD-old-100}}\n"))
+    assert isinstance(found, A.Refused) and found.rule == "-"
+
+
+def test_a_plan_over_a_page_whose_history_was_not_read_stops():
+    with pytest.raises(A.AttributionError, match="upload history"):
+        A.build_plan([_row()], {"Temple.jpg": _page(wikitext=SELF)})
+
+
+def test_the_plan_writes_the_uploader_as_author_with_its_evidence():
+    plan = A.build_plan([_row()], {"Temple.jpg": _uploaded(_page(wikitext=SELF))}, "2026-10-08")
+    assert [(c.column, c.new_value, c.rule) for c in plan.changes] == [
+        ("author", "Jane Doe", "A5"),
+        ("author_url", "https://commons.wikimedia.org/wiki/User:Jane_Doe", "A5"),
+    ]
+    (record,) = plan.evidence
+    assert (record["first_uploader"], record["first_upload_at"]) == (
+        "Jane Doe",
+        "2012-05-01T10:00:00Z",
+    )
+    assert "attribution-2026-10-08" in plan.changes[0].evidence[0]["evidence_file"]
+    assert plan.routes["A5"] == 1
+
+
+def test_a_hero_row_that_stays_uncredited_is_listed_for_the_swap():
+    rows = [_row(1, is_hero=True), _row(2)]
+    plan = A.build_plan(rows, {"Temple.jpg": _page(wikitext="{{PD-old-100}}")})
+    assert [(h["site_id"], h["image_id"]) for h in A.unresolved_heroes(rows, plan)] == [(SITE, 1)]
+
+
+def test_the_scope_is_every_licence_that_asks_for_an_author():
+    for free in ("public domain", "pd-", "cc0", "no restrictions", "copyrighted free use"):
+        assert free in A.SCOPE_SQL
+    assert "NOT IN" in A.SCOPE_SQL and "w.license IS NOT NULL" in A.SCOPE_SQL
+    assert "LIKE 'CC BY%'" not in A.SCOPE_SQL
+
+
+def test_a_run_of_2026_10_08_is_stamped_attribution_and_its_date():
+    lane = A.lane_for("2026-10-08")
+    assert lane.stamp == "attribution-2026-10-08" and lane.name == "img-attrib"
+    assert A.out_for("2026-10-08").name == "attribution-2026-10-08"
+    with pytest.raises(A.AttributionError, match="not a date"):
+        A.lane_for("yesterday")
+
+
+def test_the_upload_history_is_read_oldest_first_and_only_where_a5_applies(tmp_path):
+    asked: list[str] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url.params["titles"])
+        versions = [
+            {"user": "Newer", "timestamp": "2020-01-01T00:00:00Z"},
+            {"user": "Jane Doe", "timestamp": "2012-05-01T10:00:00Z"},
+        ]
+        page = {"ns": 6, "title": request.url.params["titles"], "imageinfo": versions}
+        return httpx.Response(200, json={"query": {"pages": [page]}})
+
+    self_page, plain = _page(wikitext=SELF), _page({"Artist": USER_ANCHOR})
+    with Fetcher(root=tmp_path, workers=1, transport=httpx.MockTransport(answer)) as f:
+        out = A.with_first_uploads(
+            {"Self.jpg": self_page, "Plain.jpg": plain, "Gone.jpg": "missing"}, f
+        )
+    assert asked == ["File:Self.jpg"]
+    assert (out["Self.jpg"].first_uploader, out["Self.jpg"].first_upload_at) == (
+        "Jane Doe",
+        "2012-05-01T10:00:00Z",
+    )
+    assert out["Plain.jpg"] is plain and out["Gone.jpg"] == "missing"
+
+
+def test_a_history_longer_than_one_answer_is_refused(tmp_path):
+    def answer(request: httpx.Request) -> httpx.Response:
+        page = {"ns": 6, "title": "File:Self.jpg", "imageinfo": [{"user": "x", "timestamp": "t"}]}
+        return httpx.Response(
+            200, json={"query": {"pages": [page]}, "continue": {"iicontinue": "1"}}
+        )
+
+    with Fetcher(root=tmp_path, workers=1, transport=httpx.MockTransport(answer)) as f:
+        with pytest.raises(A.AttributionError, match="longer than one answer"):
+            A.fetch_first_upload(f, "Self.jpg")
+
+
 def test_a_credit_without_the_own_work_marker_is_not_a3():
     credit = f"{USER_ANCHOR} (Own work (photo))"
     found = A.resolve(_page({"Credit": credit}))
@@ -130,10 +282,22 @@ def test_a_credit_without_the_own_work_marker_is_not_a3():
 @pytest.mark.parametrize(
     ("author", "want"),
     [
-        ("[[User:Letterix|ingostrutz]]", ("ingostrutz", "https://commons.wikimedia.org/wiki/User:Letterix")),
-        ("[[User:Simon Burchell]]", ("Simon Burchell", "https://commons.wikimedia.org/wiki/User:Simon_Burchell")),
-        ("[[:en:User:Bobak|Bobak Ha'Eri]]", ("Bobak Ha'Eri", "https://en.wikipedia.org/wiki/User:Bobak")),
-        ("[https://www.flickr.com/photos/x Claire H.]", ("Claire H.", "https://www.flickr.com/photos/x")),
+        (
+            "[[User:Letterix|ingostrutz]]",
+            ("ingostrutz", "https://commons.wikimedia.org/wiki/User:Letterix"),
+        ),
+        (
+            "[[User:Simon Burchell]]",
+            ("Simon Burchell", "https://commons.wikimedia.org/wiki/User:Simon_Burchell"),
+        ),
+        (
+            "[[:en:User:Bobak|Bobak Ha'Eri]]",
+            ("Bobak Ha'Eri", "https://en.wikipedia.org/wiki/User:Bobak"),
+        ),
+        (
+            "[https://www.flickr.com/photos/x Claire H.]",
+            ("Claire H.", "https://www.flickr.com/photos/x"),
+        ),
         ("Helena Rosengren", ("Helena Rosengren", None)),
     ],
 )
@@ -395,7 +559,11 @@ def test_a_batch_answer_without_a_query_stops_the_lane(tmp_path):
             "ns": 6,
             "title": "File:Temple.jpg",
             "revisions": [
-                {"revid": 1, "timestamp": "2026-01-01T00:00:00Z", "slots": {"main": {"content": ""}}}
+                {
+                    "revid": 1,
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "slots": {"main": {"content": ""}},
+                }
             ],
         },
     ],
@@ -405,7 +573,9 @@ def test_a_page_without_one_revision_and_its_imageinfo_is_named(tmp_path, page):
         return httpx.Response(200, json={"query": {"pages": [page]}})
 
     with Fetcher(root=tmp_path, workers=1, transport=httpx.MockTransport(handler)) as fetcher:
-        assert A.fetch_batch(fetcher, ["Temple.jpg"]) == {"Temple.jpg": "no revision or no imageinfo"}
+        assert A.fetch_batch(fetcher, ["Temple.jpg"]) == {
+            "Temple.jpg": "no revision or no imageinfo"
+        }
 
 
 def test_a_maxlag_refusal_is_asked_again_and_then_raises(tmp_path, monkeypatch):
@@ -449,7 +619,9 @@ def test_the_evidence_file_is_one_canonical_json_line_per_resolved_row(tmp_path)
     A.write_jsonl(path, plan.evidence)
     lines = path.read_text(encoding="utf-8").splitlines()
     assert [json.loads(line)["image_id"] for line in lines] == [1, 2]
-    assert all(line == json.dumps(json.loads(line), ensure_ascii=False, sort_keys=True) for line in lines)
+    assert all(
+        line == json.dumps(json.loads(line), ensure_ascii=False, sort_keys=True) for line in lines
+    )
 
 
 def test_the_evidence_file_is_read_back_whole_when_a_span_carries_a_line_separator(tmp_path):

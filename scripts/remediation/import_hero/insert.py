@@ -66,6 +66,7 @@ from import_hero.plan import (  # noqa: E402
     FETCH_COLUMNS,
     HERO_MIN_HEIGHT,
     HERO_MIN_WIDTH,
+    NULLABLE_FETCH_COLUMNS,
     ImportHeroError,
 )
 
@@ -122,7 +123,8 @@ class Insert:
     change_key: str
     reason: str
     evidence: list[dict[str, Any]]
-    values: dict[str, str]
+    #: A credit column the file does not have (`NULLABLE_FETCH_COLUMNS`) is None - stored as NULL.
+    values: dict[str, str | None]
 
     def as_json(self) -> dict[str, Any]:
         return {
@@ -146,7 +148,7 @@ class Insert:
             change_key=str(record["change_key"]),
             reason=str(record["reason"]),
             evidence=list(record.get("evidence") or ()),
-            values={str(k): str(v) for k, v in dict(record["values"]).items()},
+            values={k: None if v is None else str(v) for k, v in dict(record["values"]).items()},
         )
 
     @property
@@ -348,12 +350,17 @@ def seed_from_import_run(
                         f"the 2025 import links {url!r} for this site and no row of it holds the "
                         f"file: {refusal.get('detail') or ''}".strip()
                     ),
-                    "source": (
+                    # A source refusal that names a source of its own (the candidate search's
+                    # `insert-claims` writes one) keeps it: the journal row must not sign a model's
+                    # confirmed candidate with the 2025 import's name.
+                    "source": str(refusal.get("source") or "")
+                    or (
                         f"the 2025 import's own link for this site, recorded as {url!r} in "
                         f"{source_run.name}/IMPORT_CLAIMS.json; the site showed nothing at all - no "
                         "gallery row and no thumbnail_url (owner decision 2026-10-06)"
                     ),
-                    "evidence_source": (
+                    "evidence_source": str(refusal.get("evidence_source") or "")
+                    or (
                         f"the import run {source_run.name}, which refused this site as "
                         "'no_target_row' because its rows hold no file of the import"
                     ),
@@ -390,6 +397,13 @@ def seed_from_import_run(
         "refusals_total": len(refusals),
         "refused_sites": out_refusals,
     }
+
+
+def _stored(column: str, value: Any) -> str | None:
+    """The value a manifest entry's column becomes in the row: its text, or None where the file has
+    no credit for a nullable credit column (the manifest's empty string; the table holds NULL)."""
+    text = str(value)
+    return None if column in NULLABLE_FETCH_COLUMNS and text == "" else text
 
 
 def plan(
@@ -437,7 +451,7 @@ def plan(
                 )
             )
             continue
-        values = {column: str(entry[column]) for column in INSERT_COLUMNS}
+        values = {column: _stored(column, entry[column]) for column in INSERT_COLUMNS}
         # the read's own twin of guard 2: a site that already holds the file needs no row, and an
         # insert for it would be refused by the unique constraint (site_id, original_url). Measured
         # 2026-10-06: 3 of the 90 planned rows, whose import link carries a different Commons slug
@@ -524,7 +538,8 @@ def _temp_columns() -> str:
     """
     parts = ["    seq               INTEGER PRIMARY KEY", "    site_id           UUID NOT NULL"]
     for column in INSERT_COLUMNS:
-        parts.append(f"    {column:<17} {NUMERIC_TYPES.get(column, 'TEXT')} NOT NULL")
+        null = "" if column in NULLABLE_FETCH_COLUMNS else " NOT NULL"
+        parts.append(f"    {column:<17} {NUMERIC_TYPES.get(column, 'TEXT')}{null}")
     parts += [
         "    demoted_id        INTEGER",
         "    old_thumbnail     TEXT",

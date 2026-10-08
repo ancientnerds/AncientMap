@@ -399,6 +399,32 @@ class TestTheInsertHandover:
         }
         assert [r["reason"] for r in result["refused_targets"]] == ["claim_conflict"]
 
+    def test_a_re_seed_claims_only_the_sites_it_names(self, tmp_path: Path) -> None:
+        """D18 releases the credit-refused sites: their wave claims those targets and no other."""
+        out = self._run(
+            tmp_path,
+            [_site("a", ["Tomb.jpg"]), _site("b", ["Mound.jpg"])],
+            [
+                {"site_id": "a", "commons_file": "Tomb.jpg", "width": 1600, "height": 1200},
+                {"site_id": "b", "commons_file": "Mound.jpg", "width": 1600, "height": 1200},
+            ],
+        )
+        insert_run = tmp_path / "insert"
+        result = CJ.insert_claims(out, insert_run, ["b"])
+        assert result["sites_prepared"] == 1
+        claims = json.loads((insert_run / "IMPORT_CLAIMS.json").read_text(encoding="utf-8"))
+        assert list(claims) == ["b"]
+
+    def test_a_named_site_that_is_no_target_is_refused_by_name(self, tmp_path: Path) -> None:
+        out = self._run(
+            tmp_path,
+            [_site("a", ["Tomb.jpg"])],
+            [{"site_id": "a", "commons_file": "Tomb.jpg", "width": 1600, "height": 1200}],
+        )
+        with pytest.raises(ValueError, match="no target"):
+            CJ.insert_claims(out, tmp_path / "insert", ["a", "z"])
+        assert not (tmp_path / "insert").exists()
+
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

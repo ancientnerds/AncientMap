@@ -143,6 +143,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 default=None,
                 help="the INSERT wave's run directory (insert-claims writes its claims and refusals)",
             )
+            command.add_argument(
+                "--sites",
+                type=Path,
+                default=None,
+                help="only these targets (a file of site ids, one per line): a re-seed",
+            )
     args = parser.parse_args(argv)
     try:
         if args.command == "judge-export":
@@ -173,7 +179,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "insert-claims writes the INSERT wave's records into another directory: "
                     "--insert-run names it"
                 )
-            summary = CJ.insert_claims(args.run_dir, args.insert_run)
+            listed = (
+                None
+                if args.sites is None
+                else [
+                    line.strip()
+                    for line in args.sites.read_text(encoding="utf-8").splitlines()
+                    if line.strip()
+                ]
+            )
+            summary = CJ.insert_claims(args.run_dir, args.insert_run, listed)
     except (JudgeError, OSError, ValueError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 1

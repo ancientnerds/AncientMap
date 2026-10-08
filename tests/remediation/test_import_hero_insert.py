@@ -229,6 +229,135 @@ class TestThePlanOfTheInsertWave:
             )
 
 
+#: A public-domain file as the manifest carries it: no author, no author page, no licence page.
+FREE_VALUES = {
+    **VALUES,
+    "license": "Public domain",
+    "author": "",
+    "author_url": "",
+    "license_url": "",
+}
+
+
+class TestAFileWithoutACredit:
+    """D18 with X4 (2026-10-08): the credit columns a licence does not demand are NULL in the row,
+    the form `wiki_images` already holds them in (no row has the empty string)."""
+
+    def _plan(self, values: dict[str, str]) -> IN.InsertPlan:
+        state = _state(rows={SITE_A: [_row(7, SITE_A)]}, thumbs={SITE_A: None})
+        return IN.plan(state, [_refusal(SITE_A)], fetched={SITE_A: values})
+
+    def test_the_manifests_empty_credit_becomes_none_in_the_planned_row(self) -> None:
+        row = self._plan(FREE_VALUES).inserts[0]
+        assert (row.values["author"], row.values["author_url"], row.values["license_url"]) == (
+            None,
+            None,
+            None,
+        )
+        assert row.values["license"] == "Public domain"
+        # every other column stays the manifest's text
+        assert row.values["filename"] == FILENAME and row.values["width"] == "1600"
+
+    def test_an_author_without_a_page_is_the_only_missing_value_none(self) -> None:
+        row = self._plan({**VALUES, "author_url": ""}).inserts[0]
+        assert row.values["author_url"] is None
+        assert row.values["author"] == "Alessandro Antonelli"
+        assert row.values["license_url"] == VALUES["license_url"]
+
+    def test_the_statement_inserts_null_and_the_temp_table_allows_it(self, tmp_path: Path) -> None:
+        planned = self._plan(FREE_VALUES)
+        chunks = IN.write_chunks(planned, tmp_path / "run", per_chunk=50)
+        sql = (tmp_path / "run" / f"chunk-{chunks[0].number:03d}" / "APPLY.sql").read_text(
+            encoding="utf-8"
+        )
+        create = sql.split("CREATE TEMP TABLE _ih_insert (", 1)[1].split(") ON COMMIT DROP", 1)[0]
+        for column in ("author", "author_url", "license_url"):
+            line = next(ln for ln in create.splitlines() if ln.split()[:1] == [column])
+            assert "NOT NULL" not in line
+        for column in ("filename", "original_url", "license", "width"):
+            line = next(ln for ln in create.splitlines() if ln.split()[:1] == [column])
+            assert "NOT NULL" in line
+        plan_list = sql.split("INSERT INTO _ih_insert (", 1)[1].split(") VALUES", 1)[0]
+        named = [name.strip() for name in plan_list.split(",")]
+        values = _values_of(sql)
+        for column in ("author", "author_url", "license_url"):
+            assert values[named.index(column)] == "NULL"
+        assert values[named.index("license")] == "'Public domain'"
+        # NULL, not the string 'None' nor the empty string
+        assert "'None'" not in sql
+
+    def test_the_readback_compares_null_with_null(self, tmp_path: Path, monkeypatch) -> None:
+        """production answers NULL as JSON null and the journal records it as a NULL new_value; the
+        read-back has to call that the plan's None, and a stray text in its place a difference."""
+        from import_hero import insert_writer as IW
+
+        chunk = IN.write_chunks(self._plan(FREE_VALUES), tmp_path / "run", per_chunk=50)[0]
+        planned = chunk.inserts[0]
+        held = {c: planned.values[c] for c in IN.INSERT_COLUMNS}
+        held.update(
+            row_id="900",
+            site_id=SITE_A,
+            is_hero="true",
+            is_excluded="false",
+            is_lead="false",
+            source_type=IN.SOURCE_TYPE,
+            sort_order="1",
+        )
+        journal = (
+            [
+                {
+                    "site_id": SITE_A,
+                    "table_name": "wiki_images",
+                    "column_name": column,
+                    "row_pk": "900",
+                    "new_value": held.get(column),
+                    "test_id": IN.LANE_TEST_ID,
+                    "confidence": IN.LANE_CONFIDENCE,
+                }
+                for column in IN.INSERT_COLUMNS
+            ]
+            + [
+                {
+                    "site_id": SITE_A,
+                    "table_name": "wiki_images",
+                    "column_name": column,
+                    "row_pk": "900",
+                    "new_value": held[column],
+                    "test_id": IN.LANE_TEST_ID,
+                    "confidence": IN.LANE_CONFIDENCE,
+                }
+                for column in IN.STRUCTURAL_COLUMNS
+            ]
+            + [
+                {
+                    "site_id": SITE_A,
+                    "table_name": "unified_sites",
+                    "column_name": "thumbnail_url",
+                    "row_pk": SITE_A,
+                    "new_value": planned.new_thumbnail,
+                    "test_id": IN.LANE_TEST_ID,
+                    "confidence": IN.LANE_CONFIDENCE,
+                }
+            ]
+        )
+        held["is_lead"] = "false"
+        monkeypatch.setattr(IW, "read_rows_in_production", lambda c: {SITE_A: held})
+        monkeypatch.setattr(IW, "_thumbnails", lambda c: {SITE_A: planned.new_thumbnail})
+        monkeypatch.setattr(IW, "journal_rows", lambda stamp: journal)
+        assert IW.readback(chunk) == []
+        held["author"] = "None"
+        problems = IW.readback(chunk)
+        assert any("author is 'None'" in p for p in problems), problems
+
+    def test_a_chunk_file_keeps_none_as_none(self, tmp_path: Path) -> None:
+        """`Insert.from_json` read every value through `str()`, which would turn None into 'None'."""
+        planned = self._plan(FREE_VALUES)
+        chunks = IN.write_chunks(planned, tmp_path / "run", per_chunk=50)
+        again = IN.Insert.from_json(json.loads(json.dumps(chunks[0].inserts[0].as_json())))
+        assert again.values["author"] is None and again.values["license_url"] is None
+        assert again.values == chunks[0].inserts[0].values
+
+
 class TestSeedingAWaveFromAnImportRun:
     """`fetch --target insert` reads the claims and the refusals out of the run directory, and only the
     2025 import wrote them - into its own run directories, over its own target list. A wave over the
@@ -322,6 +451,28 @@ class TestSeedingAWaveFromAnImportRun:
         claims = json.loads((run / "IMPORT_CLAIMS.json").read_text(encoding="utf-8"))
         assert claims[SITE_A]["image"] == ORIGINAL, "the first claim stands"
         assert claims[SITE_C]["image"] == ORIGINAL
+
+    def test_a_source_refusal_with_a_source_of_its_own_keeps_it(self, tmp_path: Path) -> None:
+        """A candidate-search wave's refusal says a model confirmed the file; re-seeding it must not
+        sign the journal with the 2025 import's name."""
+        own = {
+            "site_id": SITE_A,
+            "reason": "no_target_row",
+            "detail": "",
+            "source": "a model judged this file 'depicts'",
+            "evidence_source": "the candidate search's confirmed verdict",
+        }
+        source = self._source(tmp_path, refusals=[own])
+        run = tmp_path / "insert-2026-10-09-001"
+        IN.seed_from_import_run(source, run, [SITE_A])
+        (written,) = [
+            json.loads(line)
+            for line in (run / "IMPORT_HERO_REFUSALS.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+        assert written["source"] == own["source"]
+        assert written["evidence_source"] == own["evidence_source"]
 
     def test_a_run_without_a_claims_file_is_refused_by_name(self, tmp_path: Path) -> None:
         empty = tmp_path / "empty"

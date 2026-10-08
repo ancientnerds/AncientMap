@@ -190,7 +190,9 @@ def export(
     }
 
 
-def insert_claims(out: Path, insert_run: Path) -> dict[str, Any]:
+def insert_claims(
+    out: Path, insert_run: Path, sites: Sequence[str] | None = None
+) -> dict[str, Any]:
     """The INSERT wave's own two records, from the `depicts` verdicts this run confirmed.
 
     `import_hero/run.py fetch --target insert` reads a run directory that already holds
@@ -205,6 +207,17 @@ def insert_claims(out: Path, insert_run: Path) -> dict[str, Any]:
     name instead of silently overwriting the first.
     """
     targets = _read_jsonl(out / TARGETS)
+    if sites is not None:
+        # a re-seed (credit refusals released by D18): only the sites named, and a site that is no
+        # target of this run is refused by name - there is no file to claim for it
+        wanted = {str(site).strip() for site in sites}
+        absent = sorted(wanted - {str(t.get("site_id") or "") for t in targets})
+        if absent:
+            raise ValueError(
+                f"{len(absent)} named site(s) are no target of {out} (first {absent[0]}): "
+                "there is no confirmed file to claim for them"
+            )
+        targets = [t for t in targets if str(t.get("site_id") or "") in wanted]
     candidates = {str(site["site_id"]): site for site in _read_jsonl(out / CANDIDATES)}
     claims_path = insert_run / "IMPORT_CLAIMS.json"
     refusals_path = insert_run / "IMPORT_HERO_REFUSALS.jsonl"

@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from licenses import credit_columns
 from served_image import state as ST
 
 from import_hero.plan import (
@@ -105,6 +106,22 @@ def local_name(commons_file: str) -> str:
     return name
 
 
+def required_columns(license_name: str) -> tuple[str, ...]:
+    """Every column a manifest entry must carry non-empty: the file, its size, its licence name and
+    what `credit_columns` says the licence demands."""
+    return (
+        "filename",
+        "original_url",
+        "commons_page_url",
+        "title",
+        "license",
+        "width",
+        "height",
+        "file_size_bytes",
+        *credit_columns(license_name),
+    )
+
+
 def manifest_entry(
     site_id: str,
     commons_file: str,
@@ -116,7 +133,9 @@ def manifest_entry(
     """The eleven columns of one fetched file, as strings.
 
     `metadata` is one entry of `fetch_image_metadata_batch()`; `result` is what `download_image()`
-    returned for it. The site's id is named in every refusal, because a manifest is read per site
+    returned for it. A credit column the file does not have is the empty string - the writers store
+    NULL for it (`plan.NULLABLE_FETCH_COLUMNS`) - and is refused only where the licence demands it
+    (`credit_columns`). The site's id is named in every refusal, because a manifest is read per site
     and a message that does not say which one cost a whole wave to find.
 
     A download under the plan's hero minimum (`HERO_MIN_WIDTH` x `HERO_MIN_HEIGHT`) is refused here,
@@ -148,12 +167,14 @@ def manifest_entry(
         "height": str(height),
         "file_size_bytes": str(int(result.file_size)),
     }
-    missing = [column for column in FETCH_COLUMNS if not entry.get(column)]
+    required = required_columns(entry["license"])
+    missing = [column for column in required if not entry.get(column)]
     if missing:
         raise FetchError(
-            f"{site_id}: the fetch of {commons_file!r} names no {', '.join(missing)}: the imageinfo "
-            f"answer carries {', '.join(sorted(metadata))} and the download only its size - a row "
-            f"that shows a file has to credit it (owner decision 2026-10-05)"
+            f"{site_id}: the fetch of {commons_file!r} names no {', '.join(missing)}, which the "
+            f"licence {entry['license']!r} demands ({', '.join(required)}): the imageinfo answer "
+            f"carries {', '.join(sorted(metadata))} and the download only its size - a row that "
+            f"shows a file has to credit it (owner decision 2026-10-05, D18 and X4 of 2026-10-08)"
         )
     return entry
 
