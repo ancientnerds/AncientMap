@@ -19,12 +19,15 @@ A marker names **only a kind the journal and the decision files back**, decided 
 
 * a site whose `period_start` is empty is `undated` (a period only);
 * otherwise the **newest journal row of the value** (it must end at the live value, else the site is
-  refused) says: evidence `status: RULE` - the kind is the rule's own, `derived`, `band` or
-  `structured` (read from the evidence's source, `RULE_VIA`) and **never `quote`**; confidence
+  refused) says: a decision entry `unresolved` (lane wd5 cleared or restored the value because no
+  source stands behind it) - `unsourced` for a point, no kind for a period; evidence `status: RULE`
+  - the kind is the rule's own, `derived`, `band` or `structured` (read from the evidence's source,
+  `RULE_VIA`) and **never `quote`**; confidence
   `two_source` - `two_source`; `authoritative` - `authoritative`; `one_source` with a found quote -
   `quote`; a MiniMax model in the evidence - no kind at all;
 * a RULE row or a MiniMax-written value that a later decision of Claude **kept** with a found quote
-  (`confirmed`: the lane wd5's `keep`) is `quote`, the run the decision's run directory;
+  (`confirmed`: the lane wd5's `keep`) is `quote`, the run the decision's run directory and **no
+  journal row** (the row backs `derived`, `band` or nothing, never `quote`);
 * a value with **no journal row** is the import's: `import_kept` when no decision speaks of it, WD1's
   `keep` (two quotes) or nothing, and `quote` for a later lane's `keep`; a point whose latest
   decision is `unresolved`, `held` or a `replace` that nothing wrote is `unsourced` (D19: the owner
@@ -475,6 +478,14 @@ REFUSAL_MEANING = {
 
 def row_kind(row: Row) -> str | Refused:
     """The kind one journal row's evidence and confidence back, or why none."""
+    if any(e.get("decision") == "unresolved" for e in row.evidence):
+        # lane wd5 cleared or restored this value because no source stands behind it: it is no
+        # sourced value whatever the row's confidence says
+        if row.column in ("lat", "lon"):
+            return UNSOURCED
+        return Refused(
+            UNSOURCED_PERIOD, f"journal row {row.id}: wd5 withdrew the value, unresolved"
+        )
     if any(e.get("status") == "RULE" for e in row.evidence):
         for entry in row.evidence:
             if entry.get("status") == "RULE":
@@ -534,16 +545,18 @@ def classify(
     decided = decision if _about(spec, live, decision) else None
     if newest is not None:
         kind = row_kind(newest)
-        confirming = _confirms(spec, live, decision)
+        if decision is not None and _confirms(spec, live, decision):
+            if kind == QUOTE:
+                return marker(QUOTE, decision.run, newest)
+            if kind in RULE_VIA or (
+                isinstance(kind, Refused) and kind.reason in (MINIMAX_UNCONFIRMED, NO_FOUND_QUOTE)
+            ):
+                # the kind is the decision's, not the row's: the row backs `derived`, `band` or
+                # nothing, never `quote`, so the marker names the decision's run and no journal row
+                return marker(QUOTE, decision.run, None)
         if isinstance(kind, Refused):
-            if confirming and kind.reason in (MINIMAX_UNCONFIRMED, NO_FOUND_QUOTE):
-                kind = QUOTE
-            else:
-                return kind
-        elif confirming and kind in RULE_VIA:
-            kind = QUOTE
-        run = decision.run if confirming and kind == QUOTE and decision else newest.run_stamp
-        return marker(kind, run, newest)
+            return kind
+        return marker(kind, newest.run_stamp, newest)
     if decided is None:
         return marker(IMPORT_KEPT, "import", None)
     if decided.by_minimax:

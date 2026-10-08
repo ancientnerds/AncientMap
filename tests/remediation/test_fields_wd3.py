@@ -703,7 +703,7 @@ class TestTheRun:
                 return [{"site_id": SITE, "links": []}]
             if "jsonb_array_elements" in sql:  # who made each value (wd5)
                 return [{**point_write("lat", "37.9755"), "rule_made": False, "minimax": False,
-                         "note": None}]  # fmt: skip
+                         "withdrawn": False, "note": None}]  # fmt: skip
             if "remediation_change_log" in sql:
                 return [point_write("lat", "37.9755")]
             return [stored_row()]

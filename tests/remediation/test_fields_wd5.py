@@ -231,10 +231,12 @@ SITE_ID = TW.SITE
 
 
 def made_row(column: str, value: Any, *, rule: bool = False, minimax: bool = False,
-             confidence: str = "one_source", note: str | None = None) -> dict[str, Any]:  # fmt: skip
+             confidence: str = "one_source", note: str | None = None,
+             withdrawn: bool = False) -> dict[str, Any]:  # fmt: skip
     return {"site_id": SITE_ID, "column_name": column, "run_stamp": "2026-10-04_fields-wd3-s001",
             "confidence": confidence, "new_value": None if value is None else str(value),
-            "rule_made": rule, "minimax": minimax, "note": note}  # fmt: skip
+            "rule_made": rule, "minimax": minimax, "withdrawn": withdrawn,
+            "note": note}  # fmt: skip
 
 
 def made_of(*rows: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
@@ -254,7 +256,7 @@ def history_of(*rows: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
 
 def recheck(row: dict[str, Any], history: dict[Any, Any], made: dict[Any, Any],
             **status: str) -> dict[str, str]:  # fmt: skip
-    opened = POP.recheck_fields(TW.line_of(**status), row, history, made, TW.wd1([], ()))
+    opened, _sourced = POP.recheck_fields(TW.line_of(**status), row, history, made, TW.wd1([], ()))
     return {field: info["why"] for field, info in opened.items()}
 
 
@@ -269,6 +271,19 @@ class TestTheKinds:
         assert POP.made_kinds(row, sourced, SITE_ID)["period_start"] == "sourced"
         unsourced = made_of(made_row("period_start", -4000, confidence="opus-checked"))
         assert POP.made_kinds(row, unsourced, SITE_ID)["period_start"] is None
+
+    def test_a_value_wd5_withdrew_is_sourced_by_nothing(self) -> None:
+        """A cleared or restored cell is journalled at the lane's confidence, but its decision entry
+        says `unresolved`: no source stands behind it, so no later build counts it as sourced."""
+        row = TW.stored_row(period_start=-4000)
+        withdrawn = made_of(made_row("period_start", -4000, withdrawn=True))
+        assert POP.made_kinds(row, withdrawn, SITE_ID)["period_start"] is None
+        cleared = made_of(made_row("period_start", None, withdrawn=True))
+        assert (
+            POP.made_kinds(TW.stored_row(period_start=None), cleared, SITE_ID)["period_start"]
+            is None
+        )
+        assert "x ->> 'decision' = 'unresolved'" in POP.MADE_SQL
 
     def test_a_row_that_no_longer_ends_at_the_stored_value_claims_nothing(self) -> None:
         row = TW.stored_row(period_start=-3000)
@@ -304,7 +319,7 @@ class TestTheRecheckPopulation:
 
     def test_the_question_says_what_the_rule_was(self) -> None:
         made = made_of(made_row("period_start", -4000, rule=True, note=RULE_NOTE))
-        opened = POP.recheck_fields(
+        opened, _sourced = POP.recheck_fields(
             TW.line_of(), TW.stored_row(period_start=-4000), {}, made, TW.wd1([], ())
         )
         assert (
@@ -397,6 +412,18 @@ class TestTheRecheckRun:
         assert line["open"]["period_start"]["why"] == "rule-made"
         assert counts["population"]["why"] == {"period_start:rule-made": 1}
         assert R.read_rule(out) is RE
+
+    def test_a_sourced_field_is_left_alone_and_counted(self, tmp_path: Path) -> None:
+        root, out = self.prepare(
+            tmp_path, [made_row("period_start", -4000, confidence="two_source"),
+                       made_row("site_type", "Temple", minimax=True)],
+            period_start=-4000, site_type="Temple",
+        )  # fmt: skip
+        counts = POP.build(root, out, table=TABLE, wd1=TW.wd1([]), stage="wd5", history={})
+        assert counts["population"]["skipped_sourced"] == {"period_start": 1}
+        assert counts["population"]["why"] == {"site_type:minimax-answered": 1}
+        saved = json.loads((out / C.COUNTS_FILE).read_text(encoding="utf-8"))
+        assert saved["population"]["skipped_sourced"] == {"period_start": 1}
 
     def test_a_wd5_run_needs_the_history_and_the_made_by_export(self, tmp_path: Path) -> None:
         root, out = self.prepare(tmp_path, [], period_start=-4000)
@@ -1009,6 +1036,16 @@ class TestTheOwnerList:
         assert "lies in 'Neolithic'" in result["rows"][0]["reason"]
         assert OL.RULE in OL.LISTED
         assert "a start a rule made" in OL.render(result, [run])
+
+    def test_a_rule_made_start_that_a_later_lane_kept_with_a_quote_is_sourced(self) -> None:
+        cell = {"rule_made": True, "accepted": True, "rule": "wd4-replace", "written": True,
+                "rule_note": "derived"}  # fmt: skip
+        kept = {"decision": "keep", "reasoning": "the page dates it", "site_id": S1,
+                "field": "period_start"}  # fmt: skip
+        assert OL.state_of(kept, cell, True) == (OL.SOURCED, "the page dates it")
+        for verdict in ("unresolved", "replace"):
+            assert OL.state_of({**kept, "decision": verdict}, cell, True)[0] == OL.RULE, verdict
+        assert OL.state_of(None, cell, True)[0] == OL.RULE
 
     def test_a_rule_row_is_not_a_filled_field(self, tmp_path: Path) -> None:
         evidence = [{"source": "s", "status": "RULE", "reasoning": "r"}]

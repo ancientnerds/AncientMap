@@ -130,13 +130,14 @@ POINT_KEYS = ("site_id", "column_name", "run_stamp", "confidence", "new_value")
 #: ever moved has no row. Read-only; the journal is the truth of how a value came to be.
 MADE_SQL_TEMPLATE = """\
 SELECT DISTINCT ON (c.row_pk, c.column_name) c.row_pk AS site_id, c.column_name, c.run_stamp,
-       c.confidence, c.new_value, e.rule_made, e.minimax, e.note
+       c.confidence, c.new_value, e.rule_made, e.minimax, e.withdrawn, e.note
   FROM remediation_change_log c
   JOIN unified_sites u ON u.id::text = c.row_pk
  CROSS JOIN LATERAL (
        SELECT coalesce(bool_or(x ->> 'status' = 'RULE'), false) AS rule_made,
               coalesce(bool_or(lower(coalesce(x ->> 'model', '')) LIKE '%minimax%'), false)
                 AS minimax,
+              coalesce(bool_or(x ->> 'decision' = 'unresolved'), false) AS withdrawn,
               max(CASE WHEN x ->> 'status' = 'RULE' THEN x ->> 'reasoning' END) AS note
          FROM jsonb_array_elements(CASE WHEN jsonb_typeof(c.evidence) = 'array'
                                         THEN c.evidence ELSE '[]'::jsonb END) x) e
@@ -152,7 +153,7 @@ def made_sql(site_ids: Sequence[str]) -> str:
     return MADE_SQL_TEMPLATE.format(only=f"\n   AND c.row_pk IN ({sql_ids(site_ids)})")
 
 
-MADE_KEYS = (*POINT_KEYS, "rule_made", "minimax", "note")
+MADE_KEYS = (*POINT_KEYS, "rule_made", "minimax", "withdrawn", "note")
 #: The column(s) a field is stored in.
 FIELD_COLUMNS = {
     "coordinates": ("lat", "lon"),
@@ -464,8 +465,8 @@ def column_kind(column: str, stored: Mapping[str, Any], made: Mapping[tuple[str,
                 site: str) -> str | None:  # fmt: skip
     """Who made the value `column` holds now, from its newest journal row: `rule` (evidence status
     RULE), `minimax` (an evidence entry names a MiniMax model), `sourced` (another lane's write at
-    a sourced confidence), or None - no journal row, a row of a confidence no source backs, or one
-    that no longer ends at the stored value (written around the journal: nothing is claimed of it)."""
+    a sourced confidence), or None - no journal row, a row of a confidence no source backs, a
+    withdrawal (wd5 cleared or restored the value on an `unresolved` answer), or one that no longer ends at the stored value (written around the journal: nothing is claimed of it)."""
     row = made.get((site, column))
     if row is None:
         return None
@@ -477,6 +478,8 @@ def column_kind(column: str, stored: Mapping[str, Any], made: Mapping[tuple[str,
     else:
         same = str(row["new_value"]) == str(held)
     if not same:
+        return None
+    if row["withdrawn"]:  # wd5 cleared or restored it: no source stands behind the value
         return None
     if row["rule_made"]:
         return RULE
@@ -533,8 +536,9 @@ def recheck_fields(
     history: Mapping[tuple[str, str], Mapping[str, Any]],
     made: Mapping[tuple[str, str], Mapping[str, Any]],
     wd1: Wd1,
-) -> dict[str, dict[str, Any]]:
-    """The fields of one classified site that lane wd5 asks: `{field: {"why", "wd1", "made"}}`.
+) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """The fields of one classified site that lane wd5 asks, `{field: {"why", "wd1", "made"}}`, and
+    the fields it leaves alone because another lane's source stands behind them (`sourced`).
 
     Never asked: a field whose newest journal row is another lane's sourced write (`sourced`) - that
     lane's source stands; a period or type or URL that no rule and no MiniMax agent made and none
@@ -543,11 +547,13 @@ def recheck_fields(
     `unsourced-point`."""
     site = str(line["site_id"])
     opened: dict[str, dict[str, Any]] = {}
+    sourced: list[str] = []
     kinds = made_kinds(stored, made, site)
     for field in C.FIELDS:
         decision = history.get((site, field))
         kind = field_kind(kinds, field)
         if kind == SOURCED:
+            sourced.append(field)
             continue
         if field == "period_start" and kind == RULE:
             why = WHY_RULE_MADE
@@ -562,7 +568,7 @@ def recheck_fields(
             "wd1": _wd1_summary(wd1.decisions.get((site, field))),
             "made": _made_note(kind, field, site, decision, made),
         }
-    return opened
+    return opened, sourced
 
 
 def _point_unsourced(line: Mapping[str, Any], decision: Mapping[str, Any] | None,
@@ -619,12 +625,14 @@ def build(
     made = read_made(out) if rule.recheck else {}
     unseen: set[str] = set()
     journal_sourced: set[str] = set()
+    skipped_sourced: Counter[str] = Counter()
     contradictions: dict[str, list[str]] = {}
 
     def refine(line: Mapping[str, Any], stored: Mapping[str, Any]) -> dict[str, Any] | None:
         site = str(line["site_id"])
         if rule.recheck:
-            opened = recheck_fields(line, stored, history or {}, made, wd1)
+            opened, sourced = recheck_fields(line, stored, history or {}, made, wd1)
+            skipped_sourced.update(sourced)
             wrong = []
         else:
             opened, wrong = open_fields(line, stored, wd1, points.get(site))
@@ -661,6 +669,7 @@ def build(
         "sites": counts["sites"],
         **_tally(out),
         "wd1_unseen_sites": sorted(unseen & mine),
+        "skipped_sourced": dict(sorted(skipped_sourced.items())),
         "journal_sourced_points": {
             site: points[site]["run_stamp"] for site in sorted(journal_sourced)
         },

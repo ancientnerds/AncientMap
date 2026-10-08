@@ -390,8 +390,11 @@ RESTORE = "restore"
 def _action(answer: str, field: str, kinds: Mapping[str, str | None], under: R.Rule) -> str:
     """What the plan does with a field's answer: the answer itself, except under the recheck rule,
     where `unresolved` clears a start a rule made (D12, "unsourced -> Undated") and restores a value
-    a MiniMax agent wrote. Only those two; a start a MiniMax agent wrote is restored, never cleared
-    to Undated, and nothing else is withdrawn."""
+    a MiniMax agent wrote. Only those two; nothing else is withdrawn. A start a MiniMax agent wrote
+    is restored to what the journal's row replaced, never cleared by this rule; when that was no
+    start (all 265 MiniMax starts of 2026-10-08 filled an empty cell), the restored state is an
+    empty start, and the label that follows it is `UNDATED` (the period invariant; the master plan
+    item 9 and the fields map line 244) - the label was NULL before, which that invariant forbids."""
     if not (under.recheck and answer == A.UNRESOLVED):
         return answer
     kind = POP.field_kind(kinds, field)

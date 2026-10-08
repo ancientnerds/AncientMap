@@ -367,6 +367,31 @@ class TestTheBpReader:
     def test_bp_dates_lists_each_stated_year_with_its_tolerance(self) -> None:
         assert A.bp_dates("12,000 cal BP and 3,321 years ago") == [(-10050, 1000), (-1371, 76)]
 
+    def test_a_round_number_is_trusted_to_a_tenth_of_itself_not_to_its_unit(self) -> None:
+        """ "10,000" has one significant digit, whose unit is 10,000 years: far past the "< 4500 BC"
+        bucket it names. The tolerance stops at a tenth of the number."""
+        assert A.bp_dates("10,000 BP") == [(-8050, 1000)]
+        assert A.bp_dates("20,000 BP") == [(-18050, 2000)]
+        assert not A.states_year("occupied 10,000 years ago", -500)
+        assert not A.states_year("10,000 BP", -8050 - 1001)
+        assert not A.states_year("20,000 BP", -9000)
+        assert A.states_year("20,000 BP", -18050 + 2000)
+
+    def test_a_range_is_read_with_the_finer_unit_of_its_two_ends(self) -> None:
+        quote = "between 12,000 and 10,000 years ago"
+        assert A.bp_dates(quote) == [(-10050, 1000), (-8050, 1000)]
+        assert not A.states_year(quote, 1200)
+        assert not A.states_year(quote, -8050 + 1001)
+
+    def test_the_other_ways_to_write_years_before_the_present_are_read(self) -> None:
+        assert A.bp_dates("12,000 years cal BP") == [(-10050, 1000)]
+        assert A.bp_dates("10,500 radiocarbon years BP") == [(-8550, 100)]
+        assert A.bp_dates("9,000 uncalibrated BP") == [(-7050, 900)]
+        assert A.bp_dates("9,000 uncal BP") == [(-7050, 900)]
+        assert A.bp_dates("38,000 years before present") == [(-36050, 1000)]
+        assert A.bp_dates("38,000 yrs before present") == [(-36050, 1000)]
+        assert A.bp_dates("38,000 before present") == []
+
     def test_a_bp_quote_carries_a_replace_answer(self) -> None:
         quotes = [(WIKI, "the cave was inhabited about 40,000 years ago"), (REGISTER, "40 ka")]
         answer = checked("period_start", block("replace", "-38050", quotes), period_start=None)

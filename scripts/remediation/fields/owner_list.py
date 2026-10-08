@@ -234,7 +234,13 @@ def state_of(
 ) -> tuple[str, str]:
     """A field's final state and the reason that goes with it."""
     cell = cell or {}
-    if cell.get("rule_made") and cell.get("accepted") and cell.get("rule", "").endswith("-replace"):
+    kept = decision is not None and decision["decision"] == "keep"  # a later lane sourced it
+    if (
+        cell.get("rule_made")
+        and cell.get("accepted")
+        and cell.get("rule", "").endswith("-replace")
+        and not kept
+    ):
         return RULE, f"made by a rule, found in no source: {cell['rule_note']}"
     if decision is None:
         return PENDING, "no decision yet: the answers of this field are not imported"

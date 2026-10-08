@@ -354,18 +354,23 @@ def _names_ordinal(words: Sequence[str], number: int, unit: frozenset[str]) -> b
 #: nowhere near exact: the 76 years from 1950 to 2026 are the floor of every tolerance below.
 BP_PRESENT = 1950
 BP_FLOOR = 76
+#: A number is never trusted past this share of itself: "10,000 BP" has one significant digit, one
+#: unit of which is 10,000 years, but it dates a site to within a tenth, not to any year of the span.
+BP_SHARE = 10
 #: The first bucket's edge: 6,450 BP is 4500 BC, the first year of the next bucket, so a number
 #: older than that is "< 4500 BC" and is written as that band's nearest year (`bucket_edge`).
 BP_BUCKET_AGE = BP_PRESENT - PERIOD_BUCKETS[0][2]
 _BP_NUMBER = r"(?<!\d)(?<!\d\.)(\d+(?:\.\d+)?)"
 #: The unit that follows a number, and what it multiplies it by. Case matters for the short forms:
 #: `Ma` is mega-annum and `ma` is not, `BP` is "before present" and `bp` is a basis point.
+_BP_YEARS = r"(?:yrs?\.?\s*|years?\s+)"
 _BP_UNITS = (
-    (r"(?:cal\.?\s*)?(?:yrs?\.?\s*|years?\s+)?BP\b", 1),
+    (rf"{_BP_YEARS}?(?:(?:un)?cal(?:ibrated)?\.?\s*|radiocarbon\s+|14C\s+)?{_BP_YEARS}?BP\b", 1),
     (r"(?:ka|kya)\b(?:\s*(?:cal\.?\s*)?BP\b)?", 1000),
     (r"(?:Ma|mya|Mya)\b", 1_000_000),
     (r"thousand\s+years?\s+ago\b", 1000),
     (r"million\s+years?\s+ago\b", 1_000_000),
+    (r"(?:yrs?\.?|years?)\s+before\s+present\b", 1),
     (r"years?\s+ago\b", 1),
 )
 _BP_DATE = re.compile(
@@ -379,17 +384,18 @@ _BP_DATE = re.compile(
 def bp_dates(quote: str) -> list[tuple[int, int]]:
     """The years a quote states in years before the present - "12,000 BP", "12,000 cal BP",
     "45 ka", "1.2 Ma", "4,500 years ago", "between 12,000 and 10,000 years ago" - each with its
-    tolerance: one unit of the number's last significant digit, at least `BP_FLOOR` years. The
-    year is `BP_PRESENT` less the number."""
+    tolerance: one unit of the number's last significant digit (the finer of the two ends of a
+    range), at most a `BP_SHARE`th of the number, at least `BP_FLOOR` years. The year is
+    `BP_PRESENT` less the number."""
     out: list[tuple[int, int]] = []
     for match in _BP_DATE.finditer(_THOUSANDS.sub("", quote)):
         multiplier = next(m for i, (_, m) in enumerate(_BP_UNITS) if match.group(f"u{i}"))
-        for text in (match.group(1), match.group(2)):
-            if text is None:
-                continue
-            age = Decimal(text) * multiplier
-            unit = 10 ** age.normalize().as_tuple().exponent
-            out.append((BP_PRESENT - int(age), max(BP_FLOOR, int(unit))))
+        ages = [Decimal(t) * multiplier for t in (match.group(1), match.group(2)) if t is not None]
+        unit = min(10 ** age.normalize().as_tuple().exponent for age in ages)
+        out.extend(
+            (BP_PRESENT - int(age), max(BP_FLOOR, min(int(unit), int(age) // BP_SHARE)))
+            for age in ages
+        )
     return out
 
 

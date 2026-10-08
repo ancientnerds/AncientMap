@@ -197,7 +197,7 @@ class TestWhatAMarkerNames:
     def test_a_rule_made_start_is_a_quote_only_when_claude_kept_it_with_a_found_quote(self) -> None:
         rule_row = row(5, evidence=RULE_EVIDENCE)
         kept = classify([rule_row], decision("keep"))
-        assert (kept.kind, kept.run, kept.journal_id) == ("quote", "wd5", 5)
+        assert (kept.kind, kept.run, kept.journal_id) == ("quote", "wd5", None)
         for other in (
             decision("keep", model=MINIMAX),           # a MiniMax keep is no confirmation
             decision("keep", quotes=[]),               # a keep with no quote
@@ -207,6 +207,10 @@ class TestWhatAMarkerNames:
             decision("unresolved"),
         ):  # fmt: skip
             assert kind_of(classify([rule_row], other)) == "derived", other.row
+
+    def test_a_quote_row_claude_kept_names_the_decisions_run_and_its_own_row(self) -> None:
+        got = classify([row(7)], decision("keep"))
+        assert (got.kind, got.run, got.journal_id) == ("quote", "wd5", 7)
 
     @pytest.mark.parametrize(("confidence", "kind"), [("two_source", "two_source"),
                                                       ("authoritative", "authoritative"),
@@ -222,6 +226,15 @@ class TestWhatAMarkerNames:
         odd = classify([row(7, confidence="opus-checked")])
         assert odd.reason == "unknown-confidence" and "opus-checked" in odd.note
 
+    def test_a_value_wd5_withdrew_is_unsourced_whatever_its_confidence_says(self) -> None:
+        withdrawal = {"source": "WD5 decision (counted, round 1, x)", "decision": "unresolved",
+                      "status": "none", "reasoning": "r"}  # fmt: skip
+        point = classify([row(9, column="lat", evidence=(withdrawal,), new="36.5")],
+                         spec=COORD, site=coord_live())  # fmt: skip
+        assert (point.kind, point.journal_id) == ("unsourced", 9)
+        period = classify([row(9, evidence=(withdrawal,))])
+        assert isinstance(period, F.Refused) and period.reason == "unsourced-period"
+
     def test_the_newest_journal_row_decides(self) -> None:
         rows = [row(5, evidence=RULE_EVIDENCE), row(8, confidence="two_source", old="-2500")]
         assert classify(rows).kind == "two_source" and classify(rows).journal_id == 8
@@ -231,7 +244,7 @@ class TestWhatAMarkerNames:
         got = classify([minimax_row])
         assert isinstance(got, F.Refused) and got.reason == "minimax-unconfirmed"
         confirmed = classify([minimax_row], decision("keep"))
-        assert (confirmed.kind, confirmed.run, confirmed.journal_id) == ("quote", "wd5", 6)
+        assert (confirmed.kind, confirmed.run, confirmed.journal_id) == ("quote", "wd5", None)
         assert (
             classify([minimax_row], decision("keep", model=MINIMAX)).reason == "minimax-unconfirmed"
         )
