@@ -21,7 +21,6 @@ listed with its reason, and nothing is written for a site whose state moved sinc
 
 from __future__ import annotations
 
-import json
 import re
 import sys
 from collections.abc import Mapping, Sequence
@@ -41,6 +40,7 @@ from mechanical import plan as MP  # noqa: E402
 from mechanical.identity_lanes import WAVE, name_lane  # noqa: E402
 from mechanical.lane import Lane, sql_literal  # noqa: E402
 
+from identity import plan_files as PF  # noqa: E402
 from identity.waves import SITES_PER_WAVE  # noqa: E402
 
 LABEL, ALIAS = CW.NAME_TYPE_TRANSITION
@@ -187,22 +187,8 @@ def write_name_plan(plan: NamePlan, built_at: str, out: Path) -> MP.Plan:
     """PLAN.jsonl, SKIPPED.jsonl, PLAN.md and ROLLBACK.sql of the rename lane into `out`; the
     alias chunk is written beside it by `write_alias_chunk`."""
     mech = name_plan(plan, built_at)
-    out.mkdir(parents=True, exist_ok=True)
-    MP.write_plan_jsonl(mech, out / "PLAN.jsonl")
-    (out / "SKIPPED.jsonl").write_text(
-        "".join(json.dumps(s, ensure_ascii=False, sort_keys=True) + "\n" for s in plan.skipped),
-        encoding="utf-8",
-        newline="\n",
-    )
-    lane = plan.lane
     lines = [
-        f"# {lane.label} ({lane.name}) - planned, not applied",
-        "",
-        f"Built {built_at} by `scripts/remediation/identity/`: {mech.counters['sites']} site(s), "
-        f"{mech.counters['cells']} cell(s) (`name` and its match key, the key computed by "
-        f"Postgres from the new name). Run stamp `{lane.run_stamp}`, journal test id "
-        f"`{lane.test_id}`, premise `{lane.premise_sql}` (the external ids the name is attested by).",
-        "",
+        *PF.header_lines(mech, plan.lane.label, "scripts/remediation/identity/"),
         "| site | old name | new name | new key |",
         "| --- | --- | --- | --- |",
     ]
@@ -219,14 +205,9 @@ def write_name_plan(plan: NamePlan, built_at: str, out: Path) -> MP.Plan:
     for sid, cells in sorted(by_site.items()):
         lines.append(f"* **{cells['name'].new_value}** (`{sid}`): {cells['name'].note}")
         lines += [f"  * {e['source']}: {e['quote']}" for e in cells["name"].evidence]
-    if plan.skipped:
-        lines += ["", "## Skipped", ""]
-        lines += [
-            f"* `{s['site_id']}` {s['name']}: {s['reason']} - {s['note']}" for s in plan.skipped
-        ]
+    lines += PF.skipped_lines(plan.skipped)
     lines.append("")
-    (out / "PLAN.md").write_text("\n".join(lines), encoding="utf-8", newline="\n")
-    MP.write_rollback_sql(mech, out / "ROLLBACK.sql", plan_path=out / "PLAN.jsonl")
+    PF.write_cell_plan(mech, plan.skipped, out, "\n".join(lines))
     return mech
 
 

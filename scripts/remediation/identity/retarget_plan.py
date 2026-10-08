@@ -436,6 +436,56 @@ def build_names(
     return plan
 
 
+# ------------------------------------------------------------------------------------ the read-back
+def verify_wave(
+    decisions: Mapping[str, Mapping[str, Any]],
+    asked: Mapping[str, Mapping[str, Any]],
+    live: Live,
+    skipped: Mapping[str, str],
+) -> list[dict[str, Any]]:
+    """Per site of a wave, what production holds against what the decisions wrote (read-only): the
+    links, the source_url, the name and its key, and the old name as a row that is no `label`.
+    `skipped` are the sites a plan left out, with why: they are reported as such, not as deviations."""
+    out = []
+    for sid in sorted(decisions):
+        if sid in skipped:
+            out.append({"site_id": sid, "state": "skipped", "why": skipped[sid], "deviations": []})
+            continue
+        target = decisions[sid]["data"]["target"]
+        now = live.sites.get(sid)
+        if now is None:
+            out.append({"site_id": sid, "state": "gone", "deviations": ["the row is gone"]})
+            continue
+        links, deviations = stored_links(now["ext"]), []
+        for kind, cell in (("wikidata_qid", "qid"), ("enwiki_title", "enwiki_title")):
+            if links[kind] != [target[cell]["value"]]:
+                deviations.append(
+                    f"{kind} is {links[kind]}, the plan wrote {target[cell]['value']!r}"
+                )
+        if now["source_url"] != target["source_url"]["value"]:
+            deviations.append(f"source_url is {now['source_url']!r}")
+        new_name, old_name = target["name"]["value"], asked[sid]["name"]
+        if now["name"] != new_name:
+            deviations.append(f"name is {now['name']!r}, the plan wrote {new_name!r}")
+        elif live.keys.get(new_name) != now["name_normalized"]:
+            deviations.append(
+                f"name_normalized is {now['name_normalized']!r}, not the key of the name"
+            )
+        old_rows = [r for r in live.name_rows.get(sid, []) if r["name"] == old_name]
+        if old_name != new_name and not any(r["name_type"] != name_write.LABEL for r in old_rows):
+            deviations.append(
+                f"the old name {old_name!r} is not searchable: no row of it is an alias"
+            )
+        out.append(
+            {
+                "site_id": sid,
+                "state": "landed" if not deviations else "deviates",
+                "deviations": deviations,
+            }
+        )
+    return out
+
+
 # ------------------------------------------------------------------------------------ the hand-offs
 def handoff_records(
     decisions: Mapping[str, Mapping[str, Any]],

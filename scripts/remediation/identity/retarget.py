@@ -58,6 +58,12 @@ from opus_audit import quotes as Q  # noqa: E402
 
 from identity import answers as A  # noqa: E402
 from identity import common, export  # noqa: E402
+from identity.prompts import (  # noqa: E402
+    cache_entries,
+    cache_section,
+    earlier_section,
+    wiki_cache_dir,
+)
 from identity.rounds import (  # noqa: E402
     DECIDED,
     HELD,
@@ -89,7 +95,6 @@ MAX_MOVE_M = 25_000.0
 ANSWER_KEYS = frozenset({"site_id", "verdict", "why", "quotes", "target", "merge_with"})
 TARGET_KEYS = ("name", "qid", "enwiki_title", "source_url", "coordinates")
 RECHECK_KEYS = frozenset({"site_id", "verdict", "why", "quotes"})
-WIKI_CACHE_SUBDIR = Path("output") / "remediation" / "final-2026-10-08" / "wiki_cache"
 
 
 def article_url(title: str) -> str:
@@ -102,26 +107,6 @@ def _normal(text: str) -> str:
 
 
 # ------------------------------------------------------------------------------------ the contexts
-def wiki_cache_dir(root: Path | None = None) -> Path:
-    return (root or common.main_checkout()) / WIKI_CACHE_SUBDIR
-
-
-def cache_entries(cache: Path) -> dict[str, list[dict[str, str]]]:
-    """The shared Wikipedia cache per site: `{lang, title, path}`, the path absolute and with `/`."""
-    index = cache / "INDEX.jsonl"
-    if not index.exists():
-        raise common.IdentityError(
-            f"{index} does not exist: the shared Wikipedia cache is not built"
-        )
-    by_site: dict[str, list[dict[str, str]]] = {}
-    for row in common.read_jsonl(index):
-        path = (cache / str(row["file"]).replace("\\", "/")).as_posix()
-        by_site.setdefault(row["site_id"], []).append(
-            {"lang": row["lang"], "title": row["title"], "path": path}
-        )
-    return by_site
-
-
 def merge_candidates(
     site_id: str,
     shared: Sequence[Mapping[str, Any]],
@@ -329,11 +314,6 @@ and "quotes" at the top shows that the record is not the ancient site. For MERGE
 id of the record that already is the ancient site; otherwise both are null.
 """
 
-CACHE_NOTE = """
-CACHED WIKIPEDIA (read the site's Wikipedia text here first; a JSON file with the field "text")
-{lines}
-"""
-
 RECHECK_TEMPLATE = """You are the adversarial reviewer of the identity pass (owner decision D13) of \
 the Ancient Nerds final repair. A web verifier proposed to change one curated record of a map of \
 ancient sites; a wrong change is written to production and shown to every visitor, so try to REFUTE \
@@ -410,23 +390,6 @@ def _candidates(ctx: Mapping[str, Any]) -> str:
     return "\nRECORDS A MERGE MAY NAME\n" + "\n".join(lines) + "\n"
 
 
-def _cache(ctx: Mapping[str, Any]) -> str:
-    if not ctx["cache"]:
-        return ""
-    lines = "\n".join(
-        f'  - {c["lang"]}.wikipedia "{c["title"]}": {c["path"]}' for c in ctx["cache"]
-    )
-    return CACHE_NOTE.format(lines=lines)
-
-
-def _earlier(earlier: str | None) -> str:
-    return (
-        ""
-        if earlier is None
-        else f"\nAN EARLIER ANSWER TO THIS QUESTION WAS NOT COUNTED\n  {earlier}\n"
-    )
-
-
 def render_web(ctx: Mapping[str, Any], earlier: str | None = None) -> str:
     """The exact web question for one record. Pure: the stored context and, for a re-ask, why the
     earlier answer was held."""
@@ -448,8 +411,8 @@ def render_web(ctx: Mapping[str, Any], earlier: str | None = None) -> str:
         description="    " + description.replace("\n", "\n    "),
         why=_why_lines(ctx),
         candidates=_candidates(ctx),
-        cache=_cache(ctx),
-        earlier=_earlier(earlier),
+        cache=cache_section(ctx),
+        earlier=earlier_section(earlier),
         max_km=int(MAX_MOVE_M / 1000),
     )
 
@@ -806,11 +769,11 @@ def render_recheck(ctx: Mapping[str, Any], earlier: str | None = None) -> str:
         qids=", ".join(ctx["qids"]) or "none",
         titles=", ".join(ctx["enwiki"]) or "none",
         description=" ".join(str(ctx["description"] or "(none)").split()),
-        cache=_cache(ctx),
+        cache=cache_section(ctx),
         verdict=proposal["verdict"],
         why=proposal["why"],
         proposal=_proposal_text(proposal),
-        earlier=_earlier(earlier),
+        earlier=earlier_section(earlier),
         question=QUESTIONS[proposal["verdict"]],
     )
 
