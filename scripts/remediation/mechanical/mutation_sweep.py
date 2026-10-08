@@ -7551,7 +7551,7 @@ WD5_CASES: list[Case] = [
     guard(
         "wd5: a value wd5 withdrew is sourced by nothing",
         FIELDS / "population.py",
-        '    if row["withdrawn"]:  # wd5 cleared or restored it: no source stands behind the value',
+        '    if row["withdrawn"]:',
         "test_a_value_wd5_withdrew_is_sourced_by_nothing",
         WD5_TESTS,
     ),

@@ -479,7 +479,8 @@ def column_kind(column: str, stored: Mapping[str, Any], made: Mapping[tuple[str,
         same = str(row["new_value"]) == str(held)
     if not same:
         return None
-    if row["withdrawn"]:  # wd5 cleared or restored it: no source stands behind the value
+    # wd5 cleared or restored the value: no source stands behind it
+    if row["withdrawn"]:
         return None
     if row["rule_made"]:
         return RULE
