@@ -23,6 +23,8 @@ sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
 import mcode_driver as D  # noqa: E402
 
+from tests.remediation.wc_fixtures import wiki_cache  # noqa: E402,F401 - the autouse fixture
+
 SITE = "1f3c04f4-4025-4779-9968-6aa298127478"
 OTHER_SITE = "1f9d65ff-7a7d-4885-85d4-2d581dbc3081"
 

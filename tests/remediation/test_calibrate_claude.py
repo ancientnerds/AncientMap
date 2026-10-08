@@ -508,3 +508,39 @@ def test_the_cli_exits_two_on_a_refusal(tmp_path: Path, capsys: pytest.CaptureFi
     code = CC.main(["compare", "--root", str(tmp_path / "calibration"), "--id", "nope"])
     assert code == 2
     assert "REFUSED" in capsys.readouterr().err
+
+
+def test_a_condition_the_lane_named_in_its_comparison_fails_the_calibration(tmp_path: Path) -> None:
+    """`lane_failures` is how a lane adds a condition of its own (lane WC: a known error the role
+    missed): the agreement can be complete and the calibration still fails, with the lane's words."""
+    compared(tmp_path, second="DROP")  # full agreement
+    comparison = tmp_path / "calibration" / "cal-fact-1" / CC.COMPARISON_FILE
+    report = json.loads(comparison.read_text(encoding="utf-8"))
+    comparison.write_text(
+        json.dumps({**report, "lane_failures": ["known error s/sentence-2 missed"]}),
+        encoding="utf-8",
+    )
+    result = CC.verdict(
+        tmp_path / "calibration", calibration_id="cal-fact-1", false_sources=0, now=lambda: NOW
+    )
+    assert result["passed"] is False and result["agreement"] == 1.0
+    assert "known error s/sentence-2 missed" in result["tier_move"]["reason"]
+
+
+def test_prepare_registers_the_calibration_run_with_the_register_it_is_given(
+    tmp_path: Path,
+) -> None:
+    sealed(tmp_path)
+    run = a_source_run(tmp_path, ("wc-0001", "wc-0002"))
+    seen: list[tuple[Path, ...]] = []
+
+    def register(source_run: Path, handoff: Path, out: Path, batches: Any) -> Path:
+        seen.append((source_run, handoff, out))
+        return tmp_path / "registered"
+
+    report = CC.prepare(
+        tmp_path / "calibration", calibration_id="cal-fact-1", run=run, register=register
+    )
+    assert report["calibration_run"] == str(tmp_path / "registered")
+    assert seen == [(run, tmp_path / "handoff", tmp_path / "calibration" / "cal-fact-1")]
+    assert not (tmp_path / "calibration" / "cal-fact-1-run").exists()  # the default did not run

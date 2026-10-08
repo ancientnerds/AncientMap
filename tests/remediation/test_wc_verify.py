@@ -28,7 +28,12 @@ from wc import answers as A  # noqa: E402
 from wc import cli as C  # noqa: E402
 
 from tests.remediation import wc_fixtures as FX  # noqa: E402
-from tests.remediation.wc_fixtures import OH, WC4, M  # noqa: E402
+from tests.remediation.wc_fixtures import (  # noqa: E402
+    OH,
+    WC4,
+    M,
+    wiki_cache,  # noqa: E402,F401 - the autouse fixture
+)
 
 #: Site B: its second sentence leans on its first ("It was carved ...").
 TEXT_B = "The Hypogeum lies in Paola. It was carved about 4000 BC."
@@ -302,10 +307,9 @@ def test_verify_asks_every_site_whose_check_kept_a_sentence_with_its_text_as_pub
     record = C._verify_round_of(run, _hv(tmp_path))
     assert record["shown"] == {FX.SITE_A: [1, 2, 3], FX.SITE_B: [1, 2]}
     brief = C.verify_brief(run, _hv(tmp_path), "verify-0001")
-    assert "--answered-by opus-wc-verify-0001" in brief and "--stage verify " in brief
-    assert (
-        "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in brief
-    )  # an agent names the model it runs as (owner decision 2026-10-01)
+    assert "--answered-by sonnet-wc-verify-0001" in brief and "--stage verify " in brief
+    # the web verifier is Sonnet, high, in every kind of run (owner decision D6, 2026-10-08)
+    assert "--model claude-sonnet-5-5 --role web_verifier" in brief
     assert "wc/cli.py verify-check-answer" in brief and "2 site(s)" in brief
     with pytest.raises(C.WcRunError, match="no batch"):
         C.verify_brief(run, _hv(tmp_path), "verify-0009")
@@ -401,7 +405,7 @@ def test_a_wrong_or_unsupported_sentence_is_dropped_and_the_changed_text_verifie
     # 2026-09-27) - a broken sentence goes, and what remains is published only as confirmed
     assert "verified again" not in prompt
     assert "what remains is published only if a verifier confirms it" in prompt
-    assert "--answered-by opus-wc-verify2-0001" in C.verify_brief(
+    assert "--answered-by sonnet-wc-verify2-0001" in C.verify_brief(
         run, _hv(tmp_path, "verify2"), "verify2-0001"
     )
     _verify(run, _hv(tmp_path, "verify2"),

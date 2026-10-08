@@ -28,7 +28,12 @@ from wc import cli as C  # noqa: E402
 from wc import prompts as P  # noqa: E402
 
 from tests.remediation import wc_fixtures as FX  # noqa: E402
-from tests.remediation.wc_fixtures import OH, WC4, M  # noqa: E402
+from tests.remediation.wc_fixtures import (  # noqa: E402
+    OH,
+    WC4,
+    M,
+    wiki_cache,  # noqa: E402,F401 - the autouse fixture
+)
 
 
 # ------------------------------------------------------------------------------ the sentences
@@ -802,14 +807,20 @@ def test_a_failed_fetch_is_recorded_and_its_quote_does_not_count(tmp_path: Path)
 #: printed `opus_handoff.py answer` command carries `--model <the model id you run as: ...>`. A
 #: brief is printed for the agent and is no part of an exported prompt, so the four QUESTION/REASK
 #: pins above are untouched and no exported question goes stale.
+#: The three BRIEFs re-pinned again 2026-10-09 (owner decision D6, the final repair): the printed
+#: `opus_handoff.py answer` command carries `--model {model} --role {role}` from the role registry
+#: (`roles.ROLES`: fact_checker, web_verifier, pilot_judge), the first line names the role's family,
+#: and every brief sends the agent to the shared Wikipedia cache first (`WIKI_CACHE_NOTE`, pinned
+#: too). Again a brief is no part of an exported prompt: no answer goes stale.
 PINS = {
     "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
     "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
-    "CHECK_BRIEF": "d47531379af16d0fcbdaa14f4f9f8f12431c81d4172d12d57cccf1b77326995d",
+    "CHECK_BRIEF": "df2eaa3e04a08c70a223f04e54eb8b5164e895c86c134e1badb12b54d69e7b55",
     "VERIFY_QUESTION": "f2f88204af84597a7ce792bfb364b8d67c696a6c83c0d47814c050a024dc5a82",
-    "VERIFY_BRIEF": "35669c7d587256a8b9a71fc06744d9ad472e49dec6f7549928927897288e8c8c",
+    "VERIFY_BRIEF": "112343f6c4151e28e4b46e12747684d43e7f751062777e8f205b77a303a6afbc",
     "JUDGE_QUESTION": "6aba7d0af909bcfeb5a25766696404ecc0043ff1858bec231d247f00924d495d",
-    "JUDGE_BRIEF": "b06554b4fdf864ac14b7c66077a919731df403a0d429604b452c8f80785802aa",
+    "JUDGE_BRIEF": "84e03f52b104ee213367dd18958fca4cf6d49927a6b26573cc446b89d504a95d",
+    "WIKI_CACHE_NOTE": "93e4aef437cc9fe971cf47ca173da9bdeaa04a4586888f5cfcfd034e14daf61c",
 }
 
 
@@ -961,10 +972,10 @@ def test_the_brief_names_the_batchs_own_scratch_and_the_commands(tmp_path: Path)
     run, handoff = _run(tmp_path)
     text = C.brief(run, handoff, "wc-0002")
     assert "1 question(s)" in text and "wc-test-r1-scratch/wc-0002/<label>.json" in text
-    assert "wc/cli.py check-answer" in text and "--answered-by opus-check-r1-wc-0002" in text
-    assert (
-        "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in text
-    )  # an agent names the model it runs as (owner decision 2026-10-01)
+    assert "wc/cli.py check-answer" in text and "--answered-by sonnet-check-r1-wc-0002" in text
+    # the model and the role are the registry's (owner decision D6, 2026-10-08), never the agent's own
+    assert "--model claude-sonnet-5-5 --role fact_checker" in text
+    assert "You are Sonnet checker wc-0002" in text
     with pytest.raises(C.WcRunError, match="no batch"):
         C.brief(run, handoff, "wc-0009")
 
@@ -1207,7 +1218,7 @@ def test_the_pilot_judge_sees_the_kept_text_with_its_quotes_and_the_drops(tmp_pa
     judge = C.judge_brief(run, handoff, "judge-0001")
     assert (
         "--answered-by opus-wc-judge-judge-0001" in judge
-        and "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>" in judge
+        and "--model claude-opus-5-5 --role pilot_judge" in judge
     )
 
 

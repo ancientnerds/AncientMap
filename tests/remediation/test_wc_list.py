@@ -37,6 +37,7 @@ from tests.remediation import wc_fixtures as FX  # noqa: E402
 from tests.remediation import wn_fixtures as WX  # noqa: E402
 from tests.remediation.phase4_write_fixtures import W4  # noqa: E402
 from tests.remediation.test_phase4_wc_write import _accept_output, _production  # noqa: E402
+from tests.remediation.wc_fixtures import wiki_cache  # noqa: E402,F401 - the autouse fixture
 
 SITE_P4 = "2a000000-0000-4000-8000-00000000002a"  #: a Phase-4 text; its sentence 2 is dropped
 SITE_ALL = "2b000000-0000-4000-8000-00000000002b"  #: a Phase-4 text the check keeps whole
@@ -225,6 +226,7 @@ def test_the_briefs_of_a_list_run_are_the_sonnet_ones_and_a_plain_run_keeps_its_
     brief = cli.brief(run, Path(record["handoff"]), "wc-0001")
     assert "Sonnet checker wc-0001" in brief and "--model claude-sonnet-5-5" in brief
     assert "--answered-by sonnet-check-r1-wc-0001" in brief and "claude-opus-5-5" not in brief
+    assert "--role fact_checker" in brief
 
 
 # ------------------------------------------------------------------------------ the build
@@ -305,9 +307,13 @@ def test_the_verifier_and_the_judge_of_a_list_run_are_sonnet_agents(built) -> No
     handoff = root / "handoff" / "wcl-pilot-verify"
     brief = cli.verify_brief(run, handoff, "verify-0001")
     assert "Sonnet verifier verify-0001" in brief and "--answered-by sonnet-wc-verify-0001" in brief
+    assert "--model claude-sonnet-5-5 --role web_verifier" in brief
     judge = cli.judge_brief(run, root / "handoff" / "wcl-pilot-judge", "judge-0001")
-    assert "Sonnet judge judge-0001" in judge and "--model claude-sonnet-5-5" in judge
-    assert "--answered-by sonnet-wc-judge-judge-0001" in judge
+    # the judge is the pilot judge (Opus, xhigh) in every kind of run (owner decision D6)
+    assert (
+        "Opus judge judge-0001" in judge and "--model claude-opus-5-5 --role pilot_judge" in judge
+    )
+    assert "--answered-by opus-wc-judge-judge-0001" in judge
     result = json.loads((run / "judge" / "RESULT.json").read_text(encoding="utf-8"))
     assert result["passed"] is True
 

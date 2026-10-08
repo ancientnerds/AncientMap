@@ -115,16 +115,34 @@ Answer ONLY these sentences again. A page that failed to fetch stays failed: use
 {failures}
 """
 
-#: The instruction of the Opus agent that answers one batch of check questions.
-CHECK_BRIEF = """You are Opus checker {batch} of the Ancient Nerds sentence check (lane WC, round \
+#: What every brief says of the shared Wikipedia cache (`{wiki_cache}`: the repo-relative directory
+#: of `output/remediation/final-2026-10-08/wiki_cache`, filled once by one serial fetcher). The
+#: agents read the site's Wikipedia text from disk and fetch every other source live, a few requests
+#: at a time: four or more parallel fetchers got the office IP throttled (403/429) on 2026-10-07, and
+#: a throttled fetch is no finding. The cache is a reading aid only: code checks every quote against
+#: the live page it fetches itself. A brief is printed for the agent and is no part of an exported
+#: prompt, so a change here makes no answer stale.
+WIKI_CACHE_NOTE = """\
+The Wikipedia article of each site is in a shared cache on disk: {wiki_cache}/INDEX.jsonl holds one \
+JSON line per site and page ({{"site_id", "lang", "title", "file"}}); the page is the JSON file \
+{wiki_cache}/<file> ({{"resolved_title", "revid", "text"}}; <file> is written with \\ or /). Read the \
+site's Wikipedia text from there FIRST - this cache is the only other place you may read. Fetch \
+every other source live: a few requests per question, one at a time. An HTTP 403 or 429 is never a \
+finding: fetch the page again yourself (curl) before you call a source unreachable or a quote \
+missing. Code still checks each quote against the live page it fetches itself."""
+
+#: The instruction of the agent that answers one batch of check questions.
+CHECK_BRIEF = """You are {family} checker {batch} of the Ancient Nerds sentence check (lane WC, round \
 {round}). You answer {count} question(s), each about another site. Answer each one on its own, as \
 if it were the only one.
 
 Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per \
 question with its "label" (the site id) and its "prompt_path" (relative to {handoff}). Open no \
-other file of the repository - no other batch, nothing else under output/ or docs/, no database, \
+other file of the repository (the Wikipedia cache named below is the one exception) - no other batch, nothing else under output/ or docs/, no database, \
 no git history. Your evidence is your own web research (WebSearch, WebFetch), as each prompt says. \
 Run every command below from the repository root, {repo}.
+
+{wiki_cache_note}
 
 For each question:
 1. Read {handoff}/<prompt_path>.
@@ -138,9 +156,9 @@ quotes; it prints each sentence's outcome and the description your answer would 
    Fix what it names - a quote copied inexactly, a page that refuses the fetcher, a title the page \
 does not carry, a piece to remove that is not exact - and check again. If no page you can quote supports a sentence, it is a DROP \
 ("unsupported"). Never change a finding to make the check pass.
-5. Record it - an answer is written once:
+5. Record it (you run as {model}; the command refuses any other model) - an answer is written once:
    {python} scripts/remediation/opus_handoff.py answer --dir {handoff} --batch-id {batch} \
---stage {stage} --label <label> --answered-by {batch_agent} --model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5> --text-file {scratch}/<label>.json
+--stage {stage} --label <label> --answered-by {batch_agent} --model {model} --role {role} --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded and how many \
 sentences you kept, trimmed and dropped.
@@ -201,8 +219,8 @@ One object per kept sentence, in order ({kept_count} kept); each quote is {{"url
 every "note" is a short plain sentence, at most 600 characters.
 """
 
-#: The instruction of the Opus agent that verifies one batch (stage `verify` or `verify2`).
-VERIFY_BRIEF = """You are Opus verifier {batch} of the Ancient Nerds sentence check (lane WC, \
+#: The instruction of the agent that verifies one batch (stage `verify` or `verify2`).
+VERIFY_BRIEF = """You are {family} verifier {batch} of the Ancient Nerds sentence check (lane WC, \
 verification round {round}, stage {stage}). You verify {count} site(s), each on its own, before \
 its text is published. You are an agent of your own: you answered no other batch of lane WC - no \
 check, no other verification, no judge question. If you did, stop here and report it; the import \
@@ -210,9 +228,11 @@ refuses a verifier whose name checked or verified the site before.
 
 Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per \
 question with its "label" (the site id) and its "prompt_path" (relative to {handoff}). Open no \
-other file of the repository - no other batch, nothing else under output/ or docs/, no database, \
+other file of the repository (the Wikipedia cache named below is the one exception) - no other batch, nothing else under output/ or docs/, no database, \
 no git history. Your evidence is your own web research (WebSearch, WebFetch). Run every command \
 below from the repository root, {repo}.
+
+{wiki_cache_note}
 
 For each question:
 1. Read {handoff}/<prompt_path>.
@@ -223,9 +243,9 @@ For each question:
    {python} scripts/remediation/wc/cli.py verify-check-answer --run-dir {run} --handoff \
 {handoff} --batch-id {batch} --label <label> --text-file {scratch}/<label>.json
    It prints the problem, if any: fix the shape, never the finding.
-5. Record it - an answer is written once:
+5. Record it (you run as {model}; the command refuses any other model) - an answer is written once:
    {python} scripts/remediation/opus_handoff.py answer --dir {handoff} --batch-id {batch} \
---stage {stage} --label <label> --answered-by {batch_agent} --model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5> --text-file {scratch}/<label>.json
+--stage {stage} --label <label> --answered-by {batch_agent} --model {model} --role {role} --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded, how many kept \
 sentences you found SUPPORTED, UNSUPPORTED and WRONG, and how many texts incoherent.
@@ -273,16 +293,18 @@ One object per kept sentence and per dropped sentence, in order ({kept_count} ke
 need at least one quote; every "note" is a short plain sentence, at most 600 characters.
 """
 
-#: The instruction of the Opus agent that judges one batch of the pilot.
-JUDGE_BRIEF = """You are Opus judge {batch} of the pilot of the Ancient Nerds sentence check (lane \
+#: The instruction of the agent that judges one batch of the pilot.
+JUDGE_BRIEF = """You are {family} judge {batch} of the pilot of the Ancient Nerds sentence check (lane \
 WC). You judge {count} site(s), each on its own. You are a fresh agent: you checked and verified \
 none of this run's sites and answered no other batch of lane WC - if you did, stop here and report \
 it. Judge from your own research.
 
 Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per \
 question with its "label" (the site id) and its "prompt_path" (relative to {handoff}). Open no \
-other file of the repository - no other batch, nothing else under output/ or docs/, no database, \
+other file of the repository (the Wikipedia cache named below is the one exception) - no other batch, nothing else under output/ or docs/, no database, \
 no git history. Run every command below from the repository root, {repo}.
+
+{wiki_cache_note}
 
 For each question:
 1. Read {handoff}/<prompt_path>.
@@ -293,9 +315,9 @@ For each question:
    {python} scripts/remediation/wc/cli.py judge-check-answer --run-dir {run} --handoff {handoff} \
 --batch-id {batch} --label <label> --text-file {scratch}/<label>.json
    It prints the problem, if any: fix the shape, never the finding.
-5. Record it - an answer is written once:
+5. Record it (you run as {model}; the command refuses any other model) - an answer is written once:
    {python} scripts/remediation/opus_handoff.py answer --dir {handoff} --batch-id {batch} \
---stage {stage} --label <label> --answered-by {batch_agent} --model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5> --text-file {scratch}/<label>.json
+--stage {stage} --label <label> --answered-by {batch_agent} --model {model} --role {role} --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.
 """

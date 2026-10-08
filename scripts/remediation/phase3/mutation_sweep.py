@@ -23643,6 +23643,437 @@ WC_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 ]
 MUTATIONS += WC_VERIFY_MUTATIONS
 
+# ── lane WC by role: the final repair's descriptions package (owner decisions D6, D10, D22, D25) ──
+WCR_CLI = "scripts/remediation/wc/cli.py"
+WCR_VOID = "scripts/remediation/wc/void.py"
+WCR_CAL = "scripts/remediation/wc/calibration.py"
+WCR_ROLES_TEST = "tests/remediation/test_wc_roles.py"
+WCR_VOID_TEST = "tests/remediation/test_wc_void.py"
+WCR_REPAIRS_TEST = "tests/remediation/test_wc_repairs.py"
+WCR_CAL_TEST = "tests/remediation/test_wc_calibration.py"
+WCR_MINIMAX_CHECK = "test_a_minimax_check_answer_is_never_imported"
+WCR_MINIMAX_VERIFY = (
+    "test_a_minimax_verification_answer_is_never_imported_and_verify_void_is_the_way_back"
+)
+WCR_ROLE_REFUSED = "test_a_check_answer_given_in_another_role_or_under_another_stamp_is_refused"
+WCR_ADV_ROLE = "test_only_the_adversarial_role_answers_an_adversarial_check"
+WCR_SAMPLE = "test_a_chunk_is_judged_by_a_seeded_sample_and_the_result_records_the_draw"
+WCR_VOID_MOVES = "test_only_the_minimax_answers_of_the_round_move_and_a_claude_answer_stays"
+WCR_MINIMAX_REASONS = (
+    "test_a_minimax_text_that_is_gone_or_was_replaced_is_reported_and_not_asked_again"
+)
+
+WCR_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    # ── the importers take Claude's answers in the round's role only ────────────────────────────
+    (
+        "wc roles: a MiniMax answer is imported",
+        WCR_CLI,
+        "    if answer.model == OH.MINIMAX_MODEL:\n        raise WcRunError(",
+        "    if False:  # mutant\n        raise WcRunError(",
+        WCR_ROLES_TEST,
+        WCR_MINIMAX_CHECK,
+    ),
+    (
+        "wc roles: an answer given in another role is imported",
+        WCR_CLI,
+        "    if named is not None and named != role_name:\n",
+        "    if False:  # mutant\n",
+        WCR_ROLES_TEST,
+        WCR_ROLE_REFUSED,
+    ),
+    (
+        "wc roles: an answer under another role's stamp is imported",
+        WCR_CLI,
+        '    if problem is not None:\n        raise WcRunError(f"{where}: {problem}")\n',
+        '    if False:  # mutant\n        raise WcRunError(f"{where}: {problem}")\n',
+        WCR_ROLES_TEST,
+        WCR_ROLE_REFUSED,
+    ),
+    (
+        "wc roles: an adversarial check is answered without a role",
+        WCR_CLI,
+        "    if named is None and role_name == ROLE_ADVERSARIAL:\n",
+        "    if False:  # mutant\n",
+        WCR_ROLES_TEST,
+        WCR_ADV_ROLE,
+    ),
+    (
+        "wc roles: the check import does not ask the role",
+        WCR_CLI,
+        '        _require_role(answer, role_name=check_role(run), where=f"{batch_id}/{label}")\n',
+        "        pass  # mutant\n",
+        WCR_ROLES_TEST,
+        WCR_MINIMAX_CHECK,
+    ),
+    (
+        "wc roles: the verify import does not ask the role",
+        WCR_CLI,
+        '        _require_role(answer, role_name=ROLE_VERIFY, where=f"{batch_id}/{label}")\n',
+        "        pass  # mutant\n",
+        WCR_ROLES_TEST,
+        WCR_MINIMAX_VERIFY,
+    ),
+    (
+        "wc roles: the judge import does not ask the role",
+        WCR_CLI,
+        '        _require_role(answer, role_name=ROLE_JUDGE, where=f"{batch_id}/{label}")\n',
+        "        pass  # mutant\n",
+        WCR_ROLES_TEST,
+        "test_a_minimax_judge_answer_is_never_imported",
+    ),
+    (
+        "wc roles: the judge imports a calibration round",
+        WCR_CLI,
+        '    if record.get("calibration"):\n        raise WcRunError(\n            f"{run}: the judge round is a calibration round',
+        '    if False:  # mutant\n        raise WcRunError(\n            f"{run}: the judge round is a calibration round',
+        WCR_CAL_TEST,
+        "test_a_judge_pool_is_registered_so_that_the_judge_briefs_and_checks_its_answers",
+    ),
+    # ── the briefs take model, role and family from the registry ───────────────────────────────
+    (
+        "wc roles: an adversarial run is briefed as a plain check",
+        WCR_CLI,
+        "    return ROLE_ADVERSARIAL if run_adversarial(run) else ROLE_CHECK\n",
+        "    return ROLE_CHECK  # mutant\n",
+        WCR_ROLES_TEST,
+        "test_an_adversarial_run_asks_the_adversarial_question_and_is_answered_in_that_role",
+    ),
+    (
+        "wc roles: the verify brief names the check role",
+        WCR_CLI,
+        "        **_role_fields(ROLE_VERIFY),\n",
+        "        **_role_fields(ROLE_CHECK),  # mutant\n",
+        WCR_ROLES_TEST,
+        "test_the_verify_brief_is_the_web_verifiers_and_the_judge_brief_the_pilot_judges",
+    ),
+    (
+        "wc roles: the judge brief names the check role",
+        WCR_CLI,
+        "        **_role_fields(ROLE_JUDGE),\n",
+        "        **_role_fields(ROLE_CHECK),  # mutant\n",
+        WCR_ROLES_TEST,
+        "test_the_verify_brief_is_the_web_verifiers_and_the_judge_brief_the_pilot_judges",
+    ),
+    (
+        "wc roles: a brief sends the agent to a cache that is not there",
+        WCR_CLI,
+        "    if not index.is_file():\n",
+        "    if False:  # mutant\n",
+        WCR_ROLES_TEST,
+        "test_a_brief_refuses_to_send_an_agent_to_a_cache_that_is_not_there",
+    ),
+    (
+        "wc roles: the briefs name no cache",
+        WCR_CLI,
+        '        "wiki_cache_note": P.WIKI_CACHE_NOTE.format(wiki_cache=_shown(WIKI_CACHE)),\n',
+        '        "wiki_cache_note": "",  # mutant\n',
+        WCR_ROLES_TEST,
+        "test_every_brief_sends_the_agent_to_the_shared_wikipedia_cache_first",
+    ),
+    # ── the adversarial second check ───────────────────────────────────────────────────────────
+    (
+        "wc adversarial: the adversarial question is the plain list one",
+        WCR_CLI,
+        "(P2.CHECK_QUESTION_ADVERSARIAL if adversarial else P2.CHECK_QUESTION_LISTED)",
+        "(P2.CHECK_QUESTION_LISTED if adversarial else P2.CHECK_QUESTION_LISTED)",
+        WCR_ROLES_TEST,
+        "test_an_adversarial_run_asks_the_adversarial_question_and_is_answered_in_that_role",
+    ),
+    (
+        "wc adversarial: an adversarial run without a report is exported",
+        WCR_CLI,
+        "    if adversarial and defects is None:\n",
+        "    if False:  # mutant\n",
+        WCR_ROLES_TEST,
+        "test_the_adversarial_export_needs_a_report_and_is_no_pilot_and_no_wn_run",
+    ),
+    (
+        "wc adversarial: an adversarial pilot or WN run is exported",
+        WCR_CLI,
+        "    if adversarial and (wn or pilot is not None):\n",
+        "    if False:  # mutant\n",
+        WCR_ROLES_TEST,
+        "test_the_adversarial_export_needs_a_report_and_is_no_pilot_and_no_wn_run",
+    ),
+    (
+        "wc adversarial: a changed standing sentence is asked about",
+        WCR_CLI,
+        "                        if kept_text is None or kept_text not in current:\n",
+        "                        if kept_text is None:  # mutant\n",
+        WCR_REPAIRS_TEST,
+        "test_a_site_that_changed_or_left_is_counted_and_not_checked_again",
+    ),
+    (
+        "wc adversarial: a standing claim keeps its old sentence number",
+        WCR_CLI,
+        '                        claim["sentence"] = current.index(kept_text) + 1\n',
+        '                        claim["sentence"] = claim["sentence"]  # mutant\n',
+        WCR_REPAIRS_TEST,
+        "test_a_standing_claim_is_numbered_again_where_the_sentences_before_it_were_dropped",
+    ),
+    (
+        "wc adversarial: a site with no description is asked about",
+        WCR_CLI,
+        '            elif wc4.is_empty(row["description"]):\n                skipped["no-description"] += 1\n',
+        '            elif False:  # mutant\n                skipped["no-description"] += 1\n',
+        WCR_REPAIRS_TEST,
+        "test_a_site_that_changed_or_left_is_counted_and_not_checked_again",
+    ),
+    (
+        "wc adversarial: a closure is written twice",
+        WCR_CLI,
+        "    if (run / CLOSURE_FILE).exists():\n",
+        "    if False:  # mutant\n",
+        WCR_REPAIRS_TEST,
+        "test_the_adversary_drops_one_standing_sentence_and_refutes_the_other",
+    ),
+    (
+        "wc adversarial: a plain run has a closure",
+        WCR_CLI,
+        '    if not run_adversarial(run):\n        raise WcRunError(f"{run}: not an adversarial second check',
+        '    if False:  # mutant\n        raise WcRunError(f"{run}: not an adversarial second check',
+        WCR_REPAIRS_TEST,
+        "test_a_closure_is_for_an_adversarial_run_only",
+    ),
+    # ── the sampled judge ──────────────────────────────────────────────────────────────────────
+    (
+        "wc sample: a sample is drawn without its seed",
+        WCR_CLI,
+        "    if (sample is None) != (seed is None):\n",
+        "    if False:  # mutant\n",
+        WCR_ROLES_TEST,
+        "test_a_sample_needs_its_seed_and_fits_the_chunk",
+    ),
+    (
+        "wc sample: a pilot is judged by a sample",
+        WCR_CLI,
+        '        if json.loads((run / POPULATION_FILE).read_text(encoding="utf-8"))["pilot"] is not None:\n',
+        "        if False:  # mutant\n",
+        WCR_ROLES_TEST,
+        "test_a_pilot_is_judged_whole_and_a_sampled_verdict_approves_no_plan",
+    ),
+    (
+        "wc sample: a sample larger than the chunk is drawn",
+        WCR_CLI,
+        "        if not 1 <= sample <= len(labels):\n",
+        "        if False:  # mutant\n",
+        WCR_ROLES_TEST,
+        "test_a_sample_needs_its_seed_and_fits_the_chunk",
+    ),
+    (
+        "wc sample: a site a list run does not write is sampled",
+        WCR_CLI,
+        '        labels = [label for label in labels if finals[label].get("planned", True)]\n',
+        "        labels = labels  # mutant\n",
+        WCR_ROLES_TEST,
+        "test_a_sample_leaves_out_the_sites_a_list_run_does_not_write",
+    ),
+    (
+        "wc sample: the round forgets the draw",
+        WCR_CLI,
+        '            "plan_sha256": _sha256(run / PLAN_FILE),\n            "sample": drawn,\n',
+        '            "plan_sha256": _sha256(run / PLAN_FILE),\n            "sample": None,\n',
+        WCR_ROLES_TEST,
+        WCR_SAMPLE,
+    ),
+    (
+        "wc sample: the result forgets the draw",
+        WCR_CLI,
+        '    if record.get("sample") is not None:\n        result["sample"] = record["sample"]\n',
+        '    if False:  # mutant\n        result["sample"] = record["sample"]\n',
+        WCR_ROLES_TEST,
+        WCR_SAMPLE,
+    ),
+    (
+        "wc sample: a sampled WN chunk owes the pilot minimum",
+        WCR_CLI,
+        '        if run_of == KIND_WN and record.get("sample") is None\n',
+        "        if run_of == KIND_WN\n",
+        WCR_ROLES_TEST,
+        "test_a_sampled_judge_of_a_wn_chunk_owes_no_pilot_minimum",
+    ),
+    (
+        "wc sample: a sampled verdict approves a plan",
+        WCR_CLI,
+        '        if result.get("sample") is not None:\n',
+        "        if False:  # mutant\n",
+        WCR_ROLES_TEST,
+        "test_a_pilot_is_judged_whole_and_a_sampled_verdict_approves_no_plan",
+    ),
+    # ── the MiniMax recheck list ───────────────────────────────────────────────────────────────
+    (
+        "wc minimax: a Claude answer makes a text MiniMax's",
+        WCR_CLI,
+        '                        json.loads(path.read_text(encoding="utf-8"))["model"] == OH.MINIMAX_MODEL\n',
+        '                        json.loads(path.read_text(encoding="utf-8"))["model"] != OH.MINIMAX_MODEL\n',
+        WCR_REPAIRS_TEST,
+        "test_the_texts_minimax_shaped_and_that_still_stand_are_the_recheck_list",
+    ),
+    (
+        "wc minimax: a text another run wrote is asked again",
+        WCR_CLI,
+        '                check.get("run") in touched[site_id]\n',
+        "                True\n",
+        WCR_REPAIRS_TEST,
+        WCR_MINIMAX_REASONS,
+    ),
+    (
+        "wc minimax: a text that moved since is asked again",
+        WCR_CLI,
+        '                and check.get("desc_sha256") == row["description_sha256"]\n',
+        "                and True\n",
+        WCR_REPAIRS_TEST,
+        WCR_MINIMAX_REASONS,
+    ),
+    (
+        "wc minimax: a cleared text is asked again",
+        WCR_CLI,
+        '        elif wc4.is_empty(row["description"]):\n            reason = "cleared"\n',
+        '        elif False:  # mutant\n            reason = "cleared"\n',
+        WCR_REPAIRS_TEST,
+        WCR_MINIMAX_REASONS,
+    ),
+    (
+        "wc minimax: a retired site is asked again",
+        WCR_CLI,
+        '        elif row["scope_status"] == "retired":\n            reason = "retired"\n',
+        '        elif False:  # mutant\n            reason = "retired"\n',
+        WCR_REPAIRS_TEST,
+        WCR_MINIMAX_REASONS,
+    ),
+    # ── verify-void ────────────────────────────────────────────────────────────────────────────
+    (
+        "wc void: a Claude answer is voided",
+        WCR_VOID,
+        "        return tuple(a for a in self.answers if a.model == OH.MINIMAX_MODEL)\n",
+        "        return tuple(a for a in self.answers if a.model != OH.MINIMAX_MODEL)  # mutant\n",
+        WCR_VOID_TEST,
+        WCR_VOID_MOVES,
+    ),
+    (
+        "wc void: a later round with a Claude answer is archived",
+        WCR_VOID,
+        "        if r.claude:\n            raise VoidError(",
+        "        if False:  # mutant\n            raise VoidError(",
+        WCR_VOID_TEST,
+        "test_a_claude_answer_in_a_later_round_is_never_archived",
+    ),
+    (
+        "wc void: a built run is voided",
+        WCR_VOID,
+        "    if built:\n        raise VoidError(",
+        "    if False:  # mutant\n        raise VoidError(",
+        WCR_VOID_TEST,
+        "test_a_built_run_is_never_voided",
+    ),
+    (
+        "wc void: the dry run moves files",
+        WCR_VOID,
+        "    if found.void_from is None or not apply:\n",
+        "    if found.void_from is None:  # mutant\n",
+        WCR_VOID_TEST,
+        "test_the_dry_run_reports_what_would_move_and_moves_nothing",
+    ),
+    (
+        "wc void: a run without a MiniMax answer is voided from its first round",
+        WCR_VOID,
+        "    first = next((r for r in rounds if r.minimax), None)\n",
+        "    first = next((r for r in rounds if r.answers), None)  # mutant\n",
+        WCR_VOID_TEST,
+        "test_a_run_without_a_minimax_answer_is_left_alone_even_when_applied",
+    ),
+    (
+        "wc void: the import record of a voided round stays",
+        WCR_VOID,
+        "        if r.verified.exists():\n            r.verified.rename(",
+        "        if False:  # mutant\n            r.verified.rename(",
+        WCR_VOID_TEST,
+        WCR_VOID_MOVES,
+    ),
+    (
+        "wc void: a later round keeps its ROUND.json",
+        WCR_VOID,
+        '        shutil.move(str(r.round_file), str(void_run / f"round-{r.number}-{ROUND_FILE}"))\n',
+        "        pass  # mutant\n",
+        WCR_VOID_TEST,
+        "test_a_later_round_is_taken_back_whole_and_its_handoff_archived",
+    ),
+    (
+        "wc void: a later round keeps its handoff",
+        WCR_VOID,
+        "        shutil.move(str(r.handoff), str(archives[r.number]))\n",
+        "        pass  # mutant\n",
+        WCR_VOID_TEST,
+        "test_a_later_round_is_taken_back_whole_and_its_handoff_archived",
+    ),
+    (
+        "wc void: a void tag is used twice",
+        WCR_VOID,
+        "        if used.exists():\n",
+        "        if False:  # mutant\n",
+        WCR_VOID_TEST,
+        "test_a_void_tag_is_used_once_and_a_second_void_of_one_round_is_refused",
+    ),
+    # ── the calibration of lane WC ─────────────────────────────────────────────────────────────
+    (
+        "wc calibration: a trimmed sentence is not a kept one",
+        WCR_CAL,
+        '        if isinstance(row, dict) and row.get("verdict") in MERGED:\n',
+        "        if False:  # mutant\n",
+        WCR_CAL_TEST,
+        "test_a_trimmed_sentence_counts_as_kept_and_nothing_else_changes",
+    ),
+    (
+        "wc calibration: the comparison ignores the merge",
+        WCR_CAL,
+        "    read = merge if merge_check else (lambda text: text)\n",
+        "    read = lambda text: text  # noqa: E731 - mutant\n",
+        WCR_CAL_TEST,
+        "test_without_the_merge_a_trimmed_sentence_the_role_keeps_whole_is_a_disagreement",
+    ),
+    (
+        "wc calibration: a missed known error is not a failure",
+        WCR_CAL,
+        "        if missed:\n            failures.append(",
+        "        if False:  # mutant\n            failures.append(",
+        WCR_CAL_TEST,
+        "test_the_check_pool_agrees_with_keep_and_trimmed_as_one_and_misses_a_known_error",
+    ),
+    (
+        "wc calibration: an expectation about no case of the pool passes",
+        WCR_CAL,
+        "        if label not in recorded:\n            raise WcCalibrationError(",
+        "        if False:  # mutant\n            raise WcCalibrationError(",
+        WCR_CAL_TEST,
+        "test_an_expectation_about_a_label_outside_the_pool_stops_the_command",
+    ),
+    (
+        "wc calibration: any number of extra WRONG verdicts is allowed",
+        WCR_CAL,
+        "    if extra > MAX_EXTRA_WRONG:\n",
+        "    if False:  # mutant\n",
+        WCR_CAL_TEST,
+        "test_a_fresh_judge_must_find_the_known_findings_again_and_may_add_one_wrong",
+    ),
+    (
+        "wc calibration: the lane's failures do not fail the calibration",
+        "scripts/remediation/calibrate_claude.py",
+        '    failures.extend(report.get("lane_failures", []))\n',
+        "    pass  # mutant\n",
+        "tests/remediation/test_calibrate_claude.py",
+        "test_a_condition_the_lane_named_in_its_comparison_fails_the_calibration",
+    ),
+    (
+        "wc calibration: prepare ignores the register it is given",
+        "scripts/remediation/calibrate_claude.py",
+        '    calibration_run = register(run, handoff, out, sealed["batches"])\n',
+        '    calibration_run = D.register_calibration_run(run, handoff, out, sealed["batches"])  # mutant\n',
+        "tests/remediation/test_calibrate_claude.py",
+        "test_prepare_registers_the_calibration_run_with_the_register_it_is_given",
+    ),
+]
+MUTATIONS += WCR_MUTATIONS
+
 # ── lane WN and the WC site-list runs (owner decisions of 2026-10-01) ─────────────────────────
 WN_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (

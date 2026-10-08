@@ -699,9 +699,9 @@ are **asked** here. Each text is asked under its marking (`wc4.Marking`):
   like every kept sentence.
 - A text a WC check kept before (`CHECK_KEY` in `raw_data`) is asked again; its check record is replaced
   and its provenance follows its marking (lane L's moves to the new text).
-- The briefs are `prompts_sonnet.CHECK_BRIEF_SONNET`, `VERIFY_BRIEF_SONNET`, `JUDGE_BRIEF_SONNET` (the
-  agents are named `sonnet-check-r<round>-wc-000N`, `sonnet-wc-verify-000N`, `sonnet-wc-judge-judge-000N`);
-  the verifier's and the judge's questions are WC's own.
+- The briefs are `prompts.CHECK_BRIEF`, `VERIFY_BRIEF`, `JUDGE_BRIEF` for every kind of run, which print the
+  model and role of the registry (section 15.1; before 2026-10-09 a list run had Sonnet copies of them,
+  `CHECK_BRIEF_SONNET` and the like); the verifier's and the judge's questions are WC's own.
 
 ### 11.2 Measured (read-only, 2026-10-01 10:24 UTC; the fresh read's sha256 `bfcbb8ab...b8831`)
 
@@ -1115,3 +1115,217 @@ check prompts of `mass-2026-09-27-01..05` are built by unchanged code (`prompts.
 `DESCRIPTION_DEFECTS.jsonl` (170 lines, 136 sites) and `export --sites ... --defects ...` gave 136 questions in
 28 batches, every one with its reported claims (160 of 160 sentence-mapped claims matched their sentence, 10 are
 unmapped). Nothing was written to production and nothing was run against it in this fix round.
+
+## 15. Lane WC by role (the final repair, 2026-10-09; worktree `p2-wc`)
+
+Owner decisions D6, D10, D22, D25 of 2026-10-08 (`output/remediation/OWNER_DECISIONS_2026-10-08.md`),
+master plan X6 (`final-2026-10-08/MASTER_PLAN.md`), workstream map `plans/descriptions.md`. Claude only:
+the check rounds and lane WN's write round are the **fact checker's** (`roles.ROLES`: Sonnet 5.5, high),
+the verification rounds the **web verifier's** (Sonnet 5.5, high), the judge the **pilot judge's** (Opus 5.5,
+xhigh), the adversarial second check the **adversarial** role's (Opus 5.5, high). Lane WN's writer is the
+fact checker too: no writer role is registered. A MiniMax answer is never ground truth.
+
+### 15.1 What the code does now
+
+- **The briefs take model, role and family from the registry** (`cli._role_fields`): the printed `opus_handoff.py
+  answer` command is `--answered-by <family>-check-r<round>-wc-000N --model <model> --role <role>`; `answer --role`
+  refuses a model that is not the role's and records `answered_by` as `<role>:<agent>`. Agent names:
+  `sonnet-check-r<round>-<batch>` (Opus for the adversary), `sonnet-wc-<batch>` for a verification batch
+  (`sonnet-wc-verify-000N`, `sonnet-wc-verify2-000N`), `opus-wc-judge-<batch>`, `sonnet-write-wn-000N`. A verifier
+  must not reuse a checker's name: the batch id in the name keeps them apart and `verify-import` still refuses
+  a name that checked or verified the site before. `prompts.py` and `prompts_sonnet.py` carry `{family}`,
+  `{model}`, `{role}`; `CHECK_BRIEF_SONNET`, `VERIFY_BRIEF_SONNET` and `JUDGE_BRIEF_SONNET` are gone (one brief
+  per stage, whatever the kind of run). The question texts are unchanged: no exported answer went stale.
+- **Every brief names the shared Wikipedia cache** (`WIKI_CACHE_NOTE`; `output/remediation/final-2026-10-08/
+  wiki_cache`, filled once by `final-2026-10-08/tools/wiki_cache.py`): read the site's Wikipedia text from disk
+  first, fetch every other source live, a few requests at a time, a 403 or 429 is never a finding. A brief
+  refuses to be printed while `INDEX.jsonl` is missing. The cache is a reading aid only: the import still
+  fetches every quoted page itself.
+- **The importers take Claude's answers in the round's role only** (`cli._require_role`): `import`,
+  `verify-import` and `judge-import` refuse an answer whose stamp is MiniMax's (the way back is `verify-void`
+  below), one that names another role than the round's, and a role's answer carrying another model's stamp. An
+  answer recorded before the registry names no role and is valid when its stamp is a Claude one; the adversarial
+  check alone requires its role to be named.
+- **`verify-void`** (`wc/void.py`, 15.3) - **`judge-export --sample N --seed S`** (15.4) - the adversarial second
+  check (`export --adversarial`, `defect-kept-sites`, `defect-closure`, 15.5) - **`minimax-sites`** (15.6) -
+  `wc/calibration.py` (15.2).
+
+### 15.2 Calibrations (seal before the first answer; a failing role moves up one tier)
+
+Variables as in 11.3, run from the merged main checkout. `CAL=output/remediation/calibration`;
+`K="$PY scripts/remediation/wc/calibration.py"`; `CC="$PY scripts/remediation/calibrate_claude.py"`. A pool is
+batches of an answered handoff whose answers are no MiniMax's (`seal` refuses one); the threshold is sealed
+**before** the copy is made and the agents run. The known errors are what the pilots' judges found (Cloghanmore,
+the Paris aqueduct "carved", Nyons incoherent; measured 2026-10-09): `known` derives them from the pilots' own
+`JUDGED.jsonl`; a role that misses one fails whatever its agreement is (`lane_failures`, counted by `verdict`).
+
+    # fact checker (Sonnet, high): 6 batches, 30 sites of the three pilots; KEEP and KEEP_TRIMMED are one verdict
+    $CC seal --id wc-fc-1  --role fact_checker --handoff $H/wc-pilot-2026-09-27-r1  --batches wc-0001 wc-0002 --threshold 0.9
+    $CC seal --id wc-fc-2  --role fact_checker --handoff $H/wc-pilot-2026-09-27b-r1 --batches wc-0001 wc-0003 wc-0004 --threshold 0.9
+    $CC seal --id wc-fc-3  --role fact_checker --handoff $H/wc-pilot-2026-09-27c-r1 --batches wc-0001 --threshold 0.9
+    $K known --kind check --run $RUNS/pilot-2026-09-27  > $CAL/known-wc-fc-1.json   # Cloghanmore
+    $K known --kind check --run $RUNS/pilot-2026-09-27b > $CAL/known-wc-fc-2.json   # the Paris aqueduct
+    echo '[]' > $CAL/known-wc-fc-3.json
+    $K prepare --id wc-fc-1 --run $RUNS/pilot-2026-09-27     # and -2 with pilot-2026-09-27b, -3 with -27c
+    #   one Sonnet agent per batch of $CAL/wc-fc-N, its instruction: $C brief --run-dir $CAL/wc-fc-N-run --handoff $CAL/wc-fc-N --batch-id wc-000N
+    $OH validate --dir $CAL/wc-fc-N     # the calibrated batches only are answered: the other batches of the copy keep theirs
+    $K compare --id wc-fc-N --merge --known $CAL/known-wc-fc-N.json
+    #   spot-check the URL and quote of every disagreement in COMPARISON.json (O18), count the false ones
+    $CC verdict --id wc-fc-N --false-sources <n>
+
+    # web verifier (Sonnet, high): the pilot-27c verification (Opus-answered, 20 sites) and the 15 questions of mass-02
+    $CC seal --id wc-wv-1 --role web_verifier --handoff $H/wc-pilot-2026-09-27c-verify --batches verify-0001 verify-0002 verify-0003 verify-0004 --threshold 0.95
+    $CC seal --id wc-wv-2 --role web_verifier --handoff $H/wc-mass-2026-09-27-02-verify --batches verify-0003 verify-0004 verify-0005 --threshold 0.95
+    $K prepare --id wc-wv-1 --run $RUNS/pilot-2026-09-27c   # and wc-wv-2 with --run $RUNS/mass-2026-09-27-02
+    #   the batches are answered with $C verify-brief --run-dir $CAL/wc-wv-N-run --handoff $CAL/wc-wv-N --batch-id verify-000N
+    $K compare --id wc-wv-N ; $CC verdict --id wc-wv-N --false-sources <n>
+
+    # pilot judge (Opus, xhigh): the pilots' judge questions, the known findings recalled, at most one extra WRONG
+    $CC seal --id wc-pj-1 --role pilot_judge --handoff $H/wc-pilot-2026-09-27-judge  --batches judge-0002 --threshold 0.9
+    $CC seal --id wc-pj-2 --role pilot_judge --handoff $H/wc-pilot-2026-09-27b-judge --batches judge-0001 judge-0004 --threshold 0.9
+    $K known --kind judge --run $RUNS/pilot-2026-09-27  > $CAL/known-wc-pj-1.json
+    $K known --kind judge --run $RUNS/pilot-2026-09-27b > $CAL/known-wc-pj-2.json
+    $K prepare --id wc-pj-1 --run $RUNS/pilot-2026-09-27     # the judge pool is registered here (judge/ROUND.json)
+    #   $C judge-brief --run-dir $CAL/wc-pj-N-run --handoff $CAL/wc-pj-N --batch-id judge-000N
+    $K compare --id wc-pj-N --known $CAL/known-wc-pj-N.json ; $CC verdict --id wc-pj-N --false-sources <n>
+
+A calibration run's rounds are marked `calibration`: no import reads them (`verify-import`, `judge-import`
+refuse). A role that fails is moved up one tier by a committed edit of `roles.ROLES`, sealed and calibrated again;
+Opus has no tier above (`held`: the owner decides).
+
+### 15.3 `verify-void`: the MiniMax verification answers of mass-03, -04 and -05
+
+A verification round is written once, so a round holding a MiniMax answer is taken back by one tested command,
+never by hand. Measured read-only on 2026-10-09 with the dry run:
+
+| run | round 1 (`verify`) | round 2 (`verify2`) | what the void does |
+| --- | --- | --- | --- |
+| `mass-2026-09-27-03` | 492 of 492 MiniMax, exported, **not imported** | none | moves the 492 answers aside |
+| `mass-2026-09-27-04` | 480 answers, **109 MiniMax**, imported | exported, 60 answers all MiniMax, not imported | moves the 109, `VERIFIED.jsonl.void`, takes round 2 back whole (ROUND.json, handoff `...-verify2.void-<tag>`) |
+| `mass-2026-09-27-05` | 144 Sonnet, imported | 28 of 28 MiniMax, imported | voids round 2 alone: the 28 answers, `round-2/VERIFIED.jsonl.void` |
+
+    for N in 03 04 05; do $C verify-void --run-dir $RUNS/mass-2026-09-27-$N; done          # the dry run, always first
+    for N in 03 04 05; do $C verify-void --run-dir $RUNS/mass-2026-09-27-$N --apply --tag 20261009; done
+
+Moved answers keep their layout under `<handoff>.void-<tag>/`; the stamp is read from each answer file's `model`,
+never from the agent's name (the MiniMax answers are named `opus-wc-verify-...`); a Claude answer is never moved
+and a later round holding one is refused; a built run is refused; a tag is used once; `<run>/verify/VOID-<tag>.json`
+records every file with its sha256. Then per run, in this order (the check rounds are Opus/Sonnet and stay):
+
+    #   mass-03: round 1 only      -> one web-verifier agent per batch of $H/wc-mass-2026-09-27-03-verify (all 99 batches)
+    #   mass-04: round 1, the 109  -> the batches that lost an answer (validate names the missing labels); then verify-import
+    #   mass-05: round 2, the 28   -> the batches of $H/wc-mass-2026-09-27-05-verify2
+    $C verify-brief --run-dir $RUNS/mass-2026-09-27-$N --handoff $H/wc-mass-2026-09-27-$N-verify --batch-id verify-000K
+    $OH validate --dir $H/wc-mass-2026-09-27-$N-verify
+    $C verify-import --run-dir $RUNS/mass-2026-09-27-$N --handoff $H/wc-mass-2026-09-27-$N-verify
+    #   to_verify2 > 0: $C verify-export --run-dir ... --handoff $H/wc-mass-2026-09-27-$N-verify2   (a fresh export for 04; 03 too)
+    $C build --run-dir $RUNS/mass-2026-09-27-$N --first-batch 4400    # 03: 4400, 04: 4500, 05: 4600 (above every plan: > 4325)
+
+`mass-05` needs only the 28 answers of round 2 and no re-export; `mass-04` re-imports round 1 over its 371 Sonnet
+and the 109 new Claude answers; `mass-03` has no `verify2` yet. A Claude verifier must not reuse a checker's
+name - the `verify-brief` names are `sonnet-wc-verify-000N` and `sonnet-wc-verify2-000N`.
+
+### 15.4 The sampled judge
+
+A chunk that is no pilot is judged by a seeded sample of the sites it will write, about 55 per chunk:
+
+    $C judge-export --run-dir $RUNS/mass-2026-09-27-$N --handoff $H/wc-mass-2026-09-27-$N-judge --sample 55 --seed <S>
+    #   one fresh Opus xhigh agent per judge batch: $C judge-brief ... ; $OH validate ; then
+    $C judge-import --run-dir $RUNS/mass-2026-09-27-$N --handoff $H/wc-mass-2026-09-27-$N-judge
+
+`RESULT.json` carries the draw (`sample: {sites, seed, of}`); the thresholds are the pilot's, the WN minimum does
+not apply to a sample. A list run's site that is not written (`unchanged`, `defect-kept`) is not drawn. A pilot is
+judged whole (`--sample` is refused for one) and a sampled result approves no plan (`pilot_approval`). A failed
+sample is a finding about the chunk: `revert4` its stamp, or clear the sentences by a list run, before the next step.
+
+### 15.5 The 141 defect sites (D25b)
+
+    # 1. copy-in (an operator step; the cardgap file lives in the db-finish worktree)
+    mkdir -p $M/teaser/runs/wb-cardgap-2026-10-07
+    cp C:/PythonProjects/AncientMap/.claude/worktrees/db-finish/output/remediation/teaser/runs/wb-cardgap-2026-10-07/DESCRIPTION_DEFECTS.jsonl \
+       $M/teaser/runs/wb-cardgap-2026-10-07/DESCRIPTION_DEFECTS.jsonl
+    # 2. the continuation of defects-2026-10-02 (136 sites, 45 answered by Sonnet, 91 held): its frozen prompts are
+    #    answered now by the fact checker (brief, validate, import, verify, build --first-batch 4700), exactly as 11.3
+    # 3. the five new sites (Wamanmarka, Tanqa Tanqa, Lakhan-Jo-Daro, Wain's Hill, Cave of Niaux): a run after it
+    R=defects-2026-10-09
+    $C read --run-dir $RUNS/$R
+    DEF=$(for f in $M/teaser/runs/*/DESCRIPTION_DEFECTS.jsonl; do printf -- '--defects %s ' "$f"; done)   # all 8 files
+    $C defect-sites --run-dir $RUNS/$R $DEF --out $RUNS/$R/DEFECT_SITES.txt
+    $C export --run-dir $RUNS/$R --handoff $H/wc-$R-r1 --sites $RUNS/$R/DEFECT_SITES.txt \
+        --defects $RUNS/$R/DEFECT_SITES.txt.report.json --after $RUNS/defects-2026-10-02
+    #   ...answer, import, verify, build --first-batch 4710, write in the chain (15.8)
+
+A text whose check keeps every sentence is `defect-kept` and not written; that is the adversarial check's list.
+After the repair plans are **written and accepted**:
+
+    A=defects-adv-2026-10-09
+    $C read --run-dir $RUNS/$A                                     # a fresh read: the written texts are in it
+    $C defect-kept-sites --run-dir $RUNS/$A --from $RUNS/defects-2026-10-02 --from $RUNS/defects-2026-10-09 --out $RUNS/$A/KEPT.txt
+    #   each standing claim is found again in the live text and numbered as it stands (a trimmed sentence by its
+    #   final text); `skipped` counts text-changed-since / no-description / retired / not-a-curated-row
+    $C export --run-dir $RUNS/$A --handoff $H/wc-$A-r1 --sites $RUNS/$A/KEPT.txt \
+        --defects $RUNS/$A/KEPT.txt.report.json --adversarial      # no --after, no --pilot
+    #   Opus, high, role adversarial, one agent per batch: $C brief ... ; $OH validate ; $C import ; the verify
+    #   rounds are the web verifier's as everywhere ; $C build --run-dir $RUNS/$A --first-batch <next>
+    $C defect-closure --run-dir $RUNS/$A                           # CLOSURE.json and the lines for AUDIT_LOG.md
+
+The adversary is told the claim, the sentence and the page that contradicts it and to look for the strongest
+evidence **against** the sentence first (`ADVERSARIAL_OPENING`); a DROP is written like every WC drop (follow the
+plan through the gate), a KEEP closes the defect line: `defect-closure` prints the claims the adversary refuted
+with its note, its machine-checked quotes and the verifier's verdict - append them to `AUDIT_LOG.md`. Tebessa
+(304 or 305) gets its sourced decision in this check. A repair only drops; a corrected sentence is lane E's.
+Every repaired site's WB card turns stale (the `desc_sha256` tie): `lane WB select` finds them.
+
+### 15.6 The Claude re-check of MiniMax-touched texts (D10)
+
+    R=wc-recheck-minimax-2026-10-09
+    $C read --run-dir $RUNS/$R
+    $C minimax-sites --run-dir $RUNS/$R --from $RUNS/mass-2026-09-27-01 --from $RUNS/mass-2026-09-27-02 \
+        --from <the WN run: C:/PythonProjects/AncientMap/.claude/worktrees/db-finish/output/remediation/wc_runner/runs/wn-2026-10-06> \
+        --out $RUNS/$R/MINIMAX_SITES.txt
+
+A site is on the list when an answer stamped MiniMax stands in a check, write or verification round of a source run
+(the judge only measured) **and** the live text is still the one that run wrote (`_description_check` names the run
+and hashes the text). Measured on the owner's side before: 63 verify2 answers of mass-02 (57 sites still hold their
+text, 5 cleared, 1 without a record) and the 17 WN texts; the report names the others by reason (`cleared`: lane
+WN's rerun takes them; `rewritten-since`; `retired`). Then a site-list run, no `--defects`:
+
+    $C export --run-dir $RUNS/$R --handoff $H/$R-r1 --sites $RUNS/$R/MINIMAX_SITES.txt   # a WN text is asked as `web`
+    #   fact checker (Sonnet) check, web verifier (Sonnet) verify, build, a sampled Opus judge (15.4), write in the chain
+
+### 15.7 The WN rerun (D22)
+
+The 28 empty sites, the sites a WC check cleared (a cleared site holds no WC key) and the five mass-02 clears are
+lane WN's population by themselves: `export --wn` asks every curated site without a description. The site block
+names the English Wikipedia title and the Wikidata item (`site_block`), the agent finds the article in the shared
+cache first. Sites of the old WN pilot that stayed empty (Kyaneai Tarihi Sarnic, Templo del Sol, Te Pito Kura) are
+asked again: do **not** pass `--after` the old WN run. Leave out what D13/D14/D20 take (modern-town records,
+duplicate pairs, retired sites) with `--exclude F`, and run it **after** the WC clears are written:
+
+    R=wn-2026-10-09
+    $C read --run-dir $RUNS/$R
+    $C export --run-dir $RUNS/$R --handoff $H/wn-$R-w --wn --pilot 20 --seed <S> [--exclude F]
+    #   writer Sonnet (fact_checker), new Sonnet verifiers, an Opus xhigh judge of the pilot (judge-export, whole);
+    #   J_THRESHOLDS unchanged: 0 WRONG, <= 5 % UNSUPPORTED, 0 incoherent, >= 10 of 20 judged
+    $C export --run-dir $RUNS/wn-2026-10-09b --handoff $H/wn-...-w --wn --after $RUNS/$R           # the rest, one chunk
+
+The new pilot is the **second WN plan** in the chain: the old pilot (judged by MiniMax, RESULT passed, its batch is
+in the apply root) stays the first WN plan named; the gate's API check (12.6) still applies. Sites that stay empty
+are final: no card, no Short.
+
+### 15.8 The chain the gate names
+
+`PLANS` in run order, the plain WC pilot first: `pilot-2026-09-27c`, `mass-2026-09-27-01`, `-02`, the old WN pilot
+(`wn-2026-10-06`, copy its `POPULATION.json`, `judge/RESULT.json` and `WC4.jsonl` into main `runs/` first, the
+gate names the pilot's path), then `mass-03`, `-04`, `-05`, `defects-2026-10-02`, `defects-2026-10-09`, the
+MiniMax recheck run, the new WN pilot and its chunk, the adversarial run last. Dry, `--rehearse`, `--apply --step
+100`, acceptance with `--allow-stamp wb-teaser-prov-%`, `--accept`, finally `--complete`; run the acceptance from
+a tree that has `model4.AI_SYSTEMS` with the Claude-only strings (otherwise 209 false deviations); write the
+acceptance log as UTF-8 without BOM (Git Bash `>` is fine, PowerShell 5.1 `1>` is UTF-16).
+
+### 15.9 Mutation cases and measurements
+
+`WCR_MUTATIONS` in `scripts/remediation/phase3/mutation_sweep.py` (`mutation_sweep.py "wc roles" "wc adversarial"
+"wc sample" "wc minimax" "wc void" "wc calibration"`) holds a case for every guard above; the tests are
+`tests/remediation/test_wc_roles.py`, `test_wc_void.py`, `test_wc_repairs.py`, `test_wc_calibration.py`, and the
+re-pinned briefs in `test_wc.py` and `test_wn.py`.

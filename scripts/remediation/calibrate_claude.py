@@ -207,9 +207,17 @@ def seal(
     return sealed
 
 
-def prepare(root: Path, *, calibration_id: str, run: Path) -> dict[str, Any]:
+def prepare(
+    root: Path,
+    *,
+    calibration_id: str,
+    run: Path,
+    register: Callable[[Path, Path, Path, Sequence[str]], Path] = D.register_calibration_run,
+) -> dict[str, Any]:
     """Copy the sealed pool into `<root>/<id>` without its answers and register the calibration run
-    (`mcode_driver.register_calibration_run`). The recorded answers go to `RECORDED.json`."""
+    (`register`, by default `mcode_driver.register_calibration_run`; a lane whose pool is a kind of
+    round that one does not know passes its own, as `wc/calibration.py` does for the judge's). The
+    recorded answers go to `RECORDED.json`."""
     sealed = _sealed(root, calibration_id)
     _need_unchanged_role(sealed)
     handoff = Path(sealed["handoff"])
@@ -220,7 +228,7 @@ def prepare(root: Path, *, calibration_id: str, run: Path) -> dict[str, Any]:
         raise CalibrationError(f"{out} exists: a calibration copy is written once")
     recorded = D.copy_for_calibration(handoff, out, sealed["batches"])
     _write_once(out / RECORDED_FILE, recorded)
-    calibration_run = D.register_calibration_run(run, handoff, out, sealed["batches"])
+    calibration_run = register(run, handoff, out, sealed["batches"])
     return {
         "prepared": str(out),
         "calibration_run": str(calibration_run),
@@ -271,6 +279,9 @@ def _failures(report: dict[str, Any], sealed: dict[str, Any], false_sources: int
         failures.append(
             f"agreement {report['agreement']} is below the sealed threshold {sealed['threshold']}"
         )
+    # a lane's own conditions, named by the lane when it compared (`wc/calibration.py`: a known
+    # error the role missed, more extra WRONG verdicts than the lane allows)
+    failures.extend(report.get("lane_failures", []))
     if false_sources > sealed["max_false_sources"]:
         failures.append(
             f"{false_sources} false source(s) counted, {sealed['max_false_sources']} allowed"
