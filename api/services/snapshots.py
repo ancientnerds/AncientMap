@@ -47,6 +47,7 @@ _SNAPSHOT_COLUMNS = [
     "edited_by",
     "raw_data",
     "parent_site_id",
+    "spoken_name",
     "created_at",
     "updated_at",
     "scope_status",
@@ -122,6 +123,7 @@ def create_snapshot(
                 'edited_by', edited_by,
                 'raw_data', raw_data,
                 'parent_site_id', parent_site_id::text,
+                'spoken_name', spoken_name,
                 'created_at', created_at::text,
                 'updated_at', updated_at::text,
                 'scope_status', scope_status,
@@ -301,7 +303,7 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
                 lat, lon, geom, site_type,
                 period_start, period_end, period_name,
                 country, description, thumbnail_url, source_url,
-                edited_by, raw_data, parent_site_id,
+                edited_by, raw_data, parent_site_id, spoken_name,
                 created_at, updated_at
             )
             SELECT
@@ -327,6 +329,7 @@ def restore_snapshot(db: Session, snapshot_id: str, restored_by: str = "system")
                 COALESCE(old_data->>'edited_by', 'initial'),
                 old_data->'raw_data',
                 NULLIF(old_data->>'parent_site_id', '')::uuid,
+                old_data->>'spoken_name',
                 COALESCE((old_data->>'created_at')::timestamp, NOW()),
                 NOW()
             FROM snapshot_rows

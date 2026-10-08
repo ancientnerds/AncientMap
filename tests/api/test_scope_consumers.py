@@ -239,6 +239,34 @@ def test_restore_brings_scope_back_only_from_a_snapshot_that_recorded_it():
     assert statements.index(scope) > statements.index(upsert)
 
 
+def test_snapshots_carry_spoken_name_like_parent_site_id():
+    """D23 (migration 0029): a snapshot records the spoken name and a re-created row gets it back,
+    but the upsert of an existing row leaves it alone, as it leaves parent_site_id: the lane
+    `spoken-<wave>` journals its own writes and rolls them back itself."""
+    from api.services import snapshots
+
+    db = RecordingSession({"SELECT COUNT(*) FROM unified_sites": [(1,)]})
+    snapshots.create_snapshot(db, [SITE_ID], created_by="t", description="d", snapshot_type="edit")
+    assert "'spoken_name', spoken_name" in db.statement_with("INSERT INTO snapshot_rows")
+    assert "spoken_name" in snapshots._SNAPSHOT_COLUMNS
+
+    db = RecordingSession(
+        {
+            "FROM db_snapshots": [SimpleNamespace(source_id="ancient_nerds", snapshot_type="edit")],
+            "FROM snapshot_rows WHERE snapshot_id": [SimpleNamespace(site_id=SITE_ID)],
+        }
+    )
+    with (
+        patch.object(snapshots, "create_snapshot", return_value="undo"),
+        patch.object(snapshots, "cache_delete_pattern", return_value=0),
+    ):
+        snapshots.restore_snapshot(db, "snap", restored_by="t")
+    upsert = db.statement_with("ON CONFLICT (id) DO UPDATE SET")
+    insert, _, update = upsert.partition("ON CONFLICT (id) DO UPDATE SET")
+    assert "old_data->>'spoken_name'" in insert
+    assert "spoken_name" not in update and "parent_site_id" not in update
+
+
 def _preview_db(old_data: dict) -> RecordingSession:
     """A one-row snapshot of a site that is retired now."""
     return RecordingSession(

@@ -23,14 +23,15 @@ def specific_place(country: str | None) -> str:
     return (country or "").split(",")[-1].strip()
 
 
-def spoken_name(name: str, country: str | None) -> str:
-    """Closing line the narrator speaks: "Machu Picchu, Peru." A country
-    contributes its most specific part; a country already contained in the
-    name is not repeated."""
+def spoken_name(name: str, country: str | None, spoken: str | None = None) -> str:
+    """Closing line the narrator speaks: "Machu Picchu, Peru." The site's `spoken_name` (D23)
+    replaces its `name` where one is set. A country contributes its most specific part; a country
+    already contained in the spoken name is not repeated."""
+    said = spoken or name
     place = specific_place(country)
-    if not place or place.lower() in name.lower():
-        return f"{name}."
-    return f"{name}, {place}."
+    if not place or place.lower() in said.lower():
+        return f"{said}."
+    return f"{said}, {place}."
 
 
 def narrate(

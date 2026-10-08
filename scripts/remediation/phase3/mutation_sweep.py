@@ -7488,10 +7488,26 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 shorts_export: site.json drops the pinned card hash",
         SHORTS_EXPORT,
-        '        return row["card_text_sha256"], None\n',
-        "        return None, None  # mutant\n",
+        '        return row["card_text_sha256"], None, None\n',
+        "        return None, None, None  # mutant\n",
         SHORTS_TEST,
         "test_s13_the_export_carries_the_pinned_hash_into_site_json",
+    ),
+    (
+        "p4 shorts_export: site.json drops the card's AI system",
+        SHORTS_EXPORT,
+        '        provenance["ai_system"] if mark else None,\n',
+        "        None,  # mutant\n",
+        SHORTS_TEST,
+        "test_the_export_carries_the_ai_system_of_a_marked_card_and_none_for_the_rest",
+    ),
+    (
+        "p4 shorts_export: site.json drops the spoken name",
+        SHORTS_EXPORT,
+        '        "spoken_name": row["spoken_name"],\n',
+        '        "spoken_name": None,  # mutant\n',
+        SHORTS_TEST,
+        "test_the_export_carries_the_spoken_name_of_the_row",
     ),
 ]
 #: The p4-verify supplement (wip/p4-verify-sup): the reviews' findings C1-C7 and R1-R5, D2,

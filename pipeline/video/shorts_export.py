@@ -183,7 +183,7 @@ RARITY_NAMES: dict[int, str] = {5: "Legendary", 4: "Epic", 3: "Rare", 2: "Uncomm
 
 _SITE_SQL = text(
     """
-    SELECT s.id::text AS id, s.name, s.country, s.lat, s.lon, s.site_type, s.period_name,
+    SELECT s.id::text AS id, s.name, s.spoken_name, s.country, s.lat, s.lon, s.site_type, s.period_name,
            s.description, s.scope_status, s.scope_reason,
            c.card_description, c.rarity_tier, c.rarity_score, c.total_power,
            c.antiquity, c.fortification, c.cultural_influence, c.mystery, c.legacy,
@@ -221,8 +221,9 @@ _LOOKUP_SQL = text(
 )
 
 
-def card_pin_and_mark(row: Mapping) -> tuple[str | None, str | None]:
-    """The card hash S13 may narrate and the card's AI mark, from the row's provenance.
+def card_pin_and_mark(row: Mapping) -> tuple[str | None, str | None, str | None]:
+    """The card hash S13 may narrate, the card's AI mark and the AI system that wrote it, from the
+    row's provenance.
 
     A lane-WB teaser provenance (`pipeline.utils.card_provenance`) is the card's only statement
     once it exists: its hash while the description is the one the card was checked against (a
@@ -230,19 +231,26 @@ def card_pin_and_mark(row: Mapping) -> tuple[str | None, str | None]:
     card key of `_description_provenance` pins the card as before, and no AI note is claimed.
     """
     if row["card_provenance"] is None:
-        return row["card_text_sha256"], None
+        return row["card_text_sha256"], None, None
     provenance = teaser.validate(row["card_provenance"])
     card = (row["card_description"] or "").strip()
-    return teaser.shorts_pin(provenance, row["description"]), teaser.card_ai(provenance, card)
+    mark = teaser.card_ai(provenance, card)
+    return (
+        teaser.shorts_pin(provenance, row["description"]),
+        mark,
+        provenance["ai_system"] if mark else None,
+    )
 
 
 def assemble_site(row: Mapping, images: list[Mapping]) -> dict:
     """Pure: shape one site row plus its image rows into the site.json record."""
     tier = int(row["rarity_tier"] or 1)
-    card_pin, card_ai = card_pin_and_mark(row)
+    card_pin, card_ai, card_ai_system = card_pin_and_mark(row)
     return {
         "id": row["id"],
         "name": row["name"],
+        # The short English form the narrator speaks (D23); None = speak `name`.
+        "spoken_name": row["spoken_name"],
         "slug": slugify(row["name"]),
         "country": row["country"],
         "country_code": country_code_for(row["country"]),
@@ -259,6 +267,8 @@ def assemble_site(row: Mapping, images: list[Mapping]) -> dict:
         "card_text_sha256": card_pin,
         # "generated" for a lane-WB teaser card: the description's AI note.
         "card_ai": card_ai,
+        # The `ai_system` of the card's provenance: the description's AI note names these models.
+        "card_ai_system": card_ai_system,
         "description": (row["description"] or "").strip(),
         "rarity_tier": tier,
         "rarity_name": RARITY_NAMES[tier],
