@@ -7488,8 +7488,8 @@ WD5_CASES: list[Case] = [
     Case(
         "wd5: a BP date has the gap between 1950 and now as its floor",
         FIELDS / "answers.py",
-        "max(BP_FLOOR, int(unit))",
-        "int(unit)",
+        "max(BP_FLOOR, min(int(unit), int(age) // BP_SHARE))",
+        "min(int(unit), int(age) // BP_SHARE)",
         "test_a_precise_number_still_has_the_gap_between_1950_and_now",
         FIELDS_ANSWER_TESTS,
     ),
