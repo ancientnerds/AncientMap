@@ -298,7 +298,7 @@ class TestTheSpokenName:
         assert counts["spoken_ambiguous"] == 3 and counts["spoken_needs_model"] == 3
         assert counts["spoken_by_rule"] == 2
 
-    def test_an_attested_form_spoken_for_a_shared_name_is_not_ambiguous(self, tmp_path) -> None:
+    def test_a_label_that_does_not_shorten_the_name_leaves_it_ambiguous(self, tmp_path) -> None:
         delphi = site(name="Temple of Apollo, Delphi")
         pompeii = site(name="Temple of Apollo, Pompeii")
         store = store_of(
@@ -311,6 +311,18 @@ class TestTheSpokenName:
         )
         got = next(r for r in rows if r["id"] == delphi["id"])
         assert got["needs_model"] is True and "ambiguous_after_qualifier" in got["reasons"]
+
+    def test_an_attested_form_spoken_for_a_shared_name_is_not_ambiguous(self, tmp_path) -> None:
+        delphi = site(name="Temple of Apollo, Delphi")
+        pompeii = site(name="Temple of Apollo, Pompeii")
+        store = store_of(tmp_path, {"Q1": entity("Q1", aliases=("Apollo",))}, {})
+        _, rows, counts = N.build(
+            export_of([delphi, pompeii], ext_ids=[ext(delphi["id"], "wikidata_qid", "Q1")]), store
+        )
+        got = next(r for r in rows if r["id"] == delphi["id"])
+        assert got["spoken"] == "Apollo" and got["source"] == "alias"
+        assert got["needs_model"] is False and "ambiguous_after_qualifier" not in got["reasons"]
+        assert counts["spoken_ambiguous"] == 1
 
 
 class TestTheBuild:

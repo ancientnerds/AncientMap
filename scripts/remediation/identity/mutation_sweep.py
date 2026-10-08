@@ -549,7 +549,7 @@ CASES: list[Case] = [
     swap(
         "a single letter identifies nothing",
         NAMES,
-        "        if len(w) > 1 and common.fold(w)",
+        "        if len(w) > 1\n        and common.fold(w)",
         "        if common.fold(w)",
         "test_a_qualifier_that_was_the_only_identifying_part_is_not_spoken_by_rule",
         T_NAMES,
