@@ -869,7 +869,11 @@ class TestTheWaveAndTheLane:
             FP.read_wave("2026-10-02a")  # no WD1 wave of that label
 
     def test_a_site_whose_only_flaw_is_its_label_is_no_wave_site(self, repo: Path) -> None:
-        # OTHER's label is not the bucket of its start (WD1's wave would repair it): WD3 fills only
+        # OTHER's label is not the bucket of its start (WD1's wave would repair it): WD3 fills only.
+        # OTHER has a decision (a keep), so the plan asks whether its label alone makes it a site
+        decisions = HO._read_jsonl(repo / "run" / HO.DECISIONS_FILE)
+        keep = {**wd3_decision("site_type", "keep", "City", "City"), "site_id": TP.OTHER}
+        HO._write_jsonl(repo / "run" / HO.DECISIONS_FILE, [*decisions, keep])
         FP.build_wave(repo / "run", "2026-10-02a")
         assert FP.read_wave("2026-10-02a", "wd3")["steps"] == [[TP.SITE]]
 
