@@ -345,11 +345,13 @@ def export_for(lives: list[W.Live], journal: list[dict] | None = None) -> str:
                 {
                     "site_id": s.site_id,
                     "name": s.name,
+                    "country": s.country,
                     "description": s.description,
                     "scope_status": s.scope_status,
                     "raw_data": s.raw_data,
                     "has_card_row": s.has_card_row,
                     "card": s.card,
+                    "alt_names": list(s.alt_names),
                 }
                 for s in lives
             ],
