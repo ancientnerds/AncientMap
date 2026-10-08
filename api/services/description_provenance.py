@@ -8,15 +8,17 @@ render key of the EU-AI-Act disclosure, graded by provenance:
 
 * ``ai: 'selected'`` (lanes W and S): verbatim Wikipedia sentences an AI system only chose and
   shortened. Shown as the attribution line under the description; no IPTC type is claimed.
-* ``ai: 'generated'`` (lanes T and R, the legacy lane L for held March-LLM text, and lane N for a
-  description an AI agent wrote from web pages for a site that had none): the AI wrote the words.
-  Shown with the existing AI footnote; lane T, a translated adaptation, also carries the
-  attribution line. Lanes L and N claim no licence and have no attribution line.
+* ``ai: 'generated'`` (lanes T and R, the legacy lane L for held March-LLM text, lane N for a
+  description an AI agent wrote from web pages for a site that had none, and lane E for a W or S
+  text that the enrichment lane added AI-written sentences to): the AI wrote the words. Shown with
+  the existing AI footnote; lane T, a translated adaptation, and lane E, which keeps the Wikipedia
+  sentences it started from, also carry the attribution line. Lanes L and N claim no licence and
+  have no attribution line.
 
 Per-site attribution meets CC BY-SA 4.0 section 3(a) - the article title and its revision
 permalink, the licence and its link, and the change note - and is surfaced only for the lanes
-whose text adapts a CC BY-SA source (W, S, T). R's pages are restricted: their facts are restated,
-nothing of their wording is published, and no attribution line names them.
+whose text adapts a CC BY-SA source (W, S, T, E). R's pages are restricted: their facts are
+restated, nothing of their wording is published, and no attribution line names them.
 
 A disclosure is a statement about one text. It is made only while the description served is the
 one the provenance hashes (``desc_sha256``): a description edited afterwards by any other path is
@@ -43,8 +45,14 @@ from pipeline.utils.card_provenance import card_ai as teaser_card_ai
 #: raw_data panel (``ancient-nerds-map/src/config/sourceFields.ts``).
 PROVENANCE_KEY = "_description_provenance"
 
+#: Lane E (``scripts/remediation/phase4/model4.py:EnrichedProvenance``, orchestrator decision X1 of
+#: 2026-10-08): a W or S text with sentences added from web pages. It keeps the attribution of the
+#: pinned Wikipedia revision, so the API must name it in ``ATTRIBUTION_LANES`` before the first
+#: lane-E write (``output/remediation/tools/write_gate4.py`` asks the live API's commit).
+ENRICHMENT_LANE = "E"
+
 #: The lanes whose published text adapts a CC BY-SA source and therefore names it.
-ATTRIBUTION_LANES = frozenset({"W", "S", "T"})
+ATTRIBUTION_LANES = frozenset({"W", "S", "T", ENRICHMENT_LANE})
 
 #: The AI marks the writer uses; anything else is not a provenance this module reads.
 AI_MARKS = frozenset({"selected", "generated"})
@@ -85,8 +93,8 @@ def description_disclosure(
     """The disclosure of `description`, or ``None`` when nothing may be claimed for it.
 
     ``{"ai", "lane", "aiSystem", "licence", "attribution"}``; ``attribution`` is
-    ``{"title", "url", "licence", "licenceUrl", "changes", "revisionDate"}`` for lanes W, S and T and
-    ``None`` otherwise; ``licence`` is ``None`` for the legacy lane, which claims none.
+    ``{"title", "url", "licence", "licenceUrl", "changes", "revisionDate"}`` for lanes W, S, T and E
+    and ``None`` otherwise; ``licence`` is ``None`` for the legacy lane, which claims none.
     """
     if provenance is None or description is None:
         return None

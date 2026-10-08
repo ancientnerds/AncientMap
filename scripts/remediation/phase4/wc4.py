@@ -104,7 +104,12 @@ CHECK_KEY = "_description_check"
 #: No v1 record was ever written (production held none on 2026-09-27, read-only).
 CHECK_VERSION = 2
 #: The keys a WC write replaces (or, for a cleared site, removes): nothing else of `raw_data` moves.
-WC_KEYS = frozenset({M.CITATIONS_KEY, M.PROVENANCE_KEY, CHECK_KEY})
+#: The `raw_data` key of the enrichment record (lane E, owner decisions D3/D4/D21, orchestrator
+#: decision X1 of 2026-10-08): sentences added to a checked or Phase-4 text, `DescriptionEnrichment`.
+#: An enriched text carries it in place of `_description_check` (the old record moves into it as
+#: `base_check`), so a WC write owns it like the other three.
+ENRICH_KEY = "_description_enrichment"
+WC_KEYS = frozenset({M.CITATIONS_KEY, M.PROVENANCE_KEY, CHECK_KEY, ENRICH_KEY})
 #: The WC gate plan's batches carry this in `pass` (a P4 plan's carry none, lane L's
 #: `legacy4.PLAN_MARK`), so one is never read as another.
 PLAN_MARK = "phase4-wc"
@@ -528,12 +533,26 @@ class Composed:
     cites: tuple[tuple[int, ...], ...]
 
 
-def compose(decisions: Sequence[Decision], quotes: Mapping[int, Sequence[Quote]]) -> Composed:
+def compose(
+    decisions: Sequence[Decision],
+    quotes: Mapping[int, Sequence[Quote]],
+    *,
+    base: Base | None = None,
+) -> Composed:
     """The kept sentences in their order, each with one marker per distinct page of its verified
     quotes (`quotes`, by sentence number), numbered by the pages' first appearance; the citations
-    of exactly those pages. A kept sentence without a verified quote is a contract breach."""
+    of exactly those pages. A kept sentence without a verified quote is a contract breach.
+
+    With a `base` (lane E, the enrichment: `compose_append`) the kept sentences are appended to the
+    stored text: it stays byte for byte, with its markers, and so does its citation list; a page the
+    base already cites keeps its number, every other page is numbered from N+1 (N the highest
+    number of the base) by first appearance. `description` is `None` when nothing was kept, whatever
+    the base holds."""
     numbers: dict[str, int] = {}
     titles: dict[str, str] = {}
+    if base is not None:
+        numbers.update({citation["url"]: citation["n"] for citation in base.citations})
+    first_new = len(numbers) + 1
     published: list[str] = []
     cites: list[tuple[int, ...]] = []
     for decision in decisions:
@@ -556,13 +575,20 @@ def compose(decisions: Sequence[Decision], quotes: Mapping[int, Sequence[Quote]]
         numbered.sort()
         published.append(with_markers(text, numbered))
         cites.append(tuple(numbered))
-    citations = tuple(
+    new = tuple(
         {"n": number, "url": url, "title": titles[url], "domain": A.domain_of(url)}
         for url, number in numbers.items()
+        if number >= first_new
     )
+    if base is None:
+        return Composed(
+            description=" ".join(published) if published else None,
+            citations=new,
+            cites=tuple(cites),
+        )
     return Composed(
-        description=" ".join(published) if published else None,
-        citations=citations,
+        description=f"{base.text} {' '.join(published)}" if published else None,
+        citations=(*(dict(citation) for citation in base.citations), *new),
         cites=tuple(cites),
     )
 
@@ -683,6 +709,8 @@ def run_verification(
     decisions: Sequence[Decision],
     quotes: Mapping[int, Sequence[Quote]],
     rounds: Sequence[Mapping[str, Any]],
+    *,
+    base: Base | None = None,
 ) -> tuple[list[Decision], list[dict[str, Any]], VerifyStatus | None]:
     """The decisions after the recorded verification rounds, each round with what code derives
     from it - `passed`, `drops` (sentence number -> why) and `cleared` - and where the
@@ -701,7 +729,10 @@ def run_verification(
       drop can break what stays;
     * round 2 otherwise: the site is cleared - a text is published only as a verifier confirmed it.
 
-    Nothing is ever added back. No round follows a verified or cleared site, or round 2."""
+    Nothing is ever added back. No round follows a verified or cleared site, or round 2.
+
+    With a `base` (lane E) the decisions are the appended sentences only and a round's text is the
+    whole text as the verifier saw it: the base with the kept sentences appended (`compose`)."""
     current = list(decisions)
     derived: list[dict[str, Any]] = []
     status = None if kept_numbers(current) else VerifyStatus.NOTHING_KEPT
@@ -710,7 +741,7 @@ def run_verification(
             raise WcError(f"verification round {index}: the verification had ended ({status})")
         shown = kept_numbers(current)
         verdicts, coherent, broken = _read_round(
-            index, given, shown, str(compose(current, quotes).description)
+            index, given, shown, str(compose(current, quotes, base=base).description)
         )
         passed = coherent and all(verdict == SUPPORTED for verdict in verdicts)
         drops: dict[int, DropReason] = {}
@@ -752,11 +783,13 @@ def apply_verification(
     decisions: Sequence[Decision],
     quotes: Mapping[int, Sequence[Quote]],
     rounds: Sequence[Mapping[str, Any]],
+    *,
+    base: Base | None = None,
 ) -> tuple[list[Decision], dict[str, Any]]:
     """The verified decisions and the verification record (`VERIFICATION_KEY`): its status, the
     sentences the check kept (`before`), every round with what code derives from it, and the
     sentences kept after the verification. A verification still due is refused (`WcError`)."""
-    current, derived, status = run_verification(decisions, quotes, rounds)
+    current, derived, status = run_verification(decisions, quotes, rounds, base=base)
     if status is None:
         raise WcError(
             f"the verification is not finished: round {len(derived) + 1} "
@@ -1028,6 +1061,10 @@ def old_marking(site: M.PlanSite, *, listed: bool = False) -> Marking:
         raise WcError("the stored text was checked sentence by sentence before")
     if M.PROVENANCE_KEY in raw:
         provenance = M.provenance_from_dict(raw[M.PROVENANCE_KEY])
+        if isinstance(provenance, M.EnrichedProvenance):
+            raise WcError(
+                "a lane-E text was enriched: neither a check nor a list run asks it again"
+            )
         if isinstance(provenance, M.LegacyProvenance):
             return Marking.L
         if not listed:
@@ -1098,6 +1135,8 @@ def disclosure_problems(
     a cleared site - carries none. A Phase-4 text (`PHASE4`) keeps its full provenance, a text lane
     WN wrote or wrote again (`NONE`, `WEB`) carries lane N's: required, hashing the written text."""
     wanted = _WANTED_PROVENANCE.get(marking["old"])
+    if wanted is M.Provenance and marking.get("enriched"):
+        wanted = M.EnrichedProvenance  # lane E (`enriched_provenance`): the W/S text, extended
     if wanted is not None:
         stored = (raw_data or {}).get(M.PROVENANCE_KEY)
         if description is None:
@@ -1275,6 +1314,8 @@ def wc_problems(
     if description is None:
         present = sorted(WC_KEYS & raw.keys())
         return [f"a cleared description beside {present} in raw_data"] if present else []
+    if ENRICH_KEY in raw:
+        return enrichment_pair_problems(description, raw, marking=marking)
     problems: list[str] = []
     digest = M.text_sha256(description)
     try:
@@ -1370,7 +1411,9 @@ class WcOutcome:
                 f"{self.site_id}: the outcome carries no verification - it was built before the "
                 "verify stage and is never written (verify-export, verify-import, build again)"
             )
-        if not isinstance(self.evidence, dict) or set(self.evidence) != EVIDENCE_KEYS:
+        if not isinstance(self.evidence, dict) or set(self.evidence) != evidence_keys(
+            self.evidence
+        ):
             keys = sorted(self.evidence) if isinstance(self.evidence, dict) else self.evidence
             raise ValueError(f"{self.site_id}: outcome.evidence carries {keys}")
         if self.evidence[EVIDENCE_DESCRIPTION] != self.description:
@@ -1461,7 +1504,7 @@ def verification_problems(evidence: Mapping[str, Any], description: str | None) 
     try:
         before, quotes = checked_of(evidence)
         given = [{key: r[key] for key in ROUND_KEYS} for r in record["rounds"]]
-        final, expected = apply_verification(before, quotes, given)
+        final, expected = apply_verification(before, quotes, given, base=base_of(evidence))
         recorded, _ = decisions_of(evidence)
     except (KeyError, TypeError, ValueError) as exc:
         return [f"the verification does not read: {exc}"]
@@ -1519,7 +1562,10 @@ def evidence_problems(
     evidence's decisions and verified quotes, its citations, the check record's verdicts, cites,
     quote digests and verifiers, the verification it passed (`verification_problems`), and the AI
     disclosure its recorded marking requires (`disclosure_problems`) - so the database alone
-    re-checks every published sentence, its verification and its footnote."""
+    re-checks every published sentence, its verification and its footnote. The evidence of an
+    enrichment (`EVIDENCE_DECISION_ENRICH`) is asked by `enrichment_evidence_problems`."""
+    if evidence.get("decision") == EVIDENCE_DECISION_ENRICH:
+        return enrichment_evidence_problems(evidence, description, raw_data)
     try:
         decisions, verified = decisions_of(evidence)
         composed = compose(decisions, verified)
@@ -1553,3 +1599,578 @@ def evidence_problems(
     if check != expected:
         problems.append("the check record is not the one the evidence's decisions give")
     return problems
+
+
+# ------------------------------------------------------------------------------ the enrichment
+# Lane E (owner decisions D3, D4 and D21 of 2026-10-08; orchestrator decision X1; runbook
+# `docs/procedures/SENTENCE_CHECK.md` section 14). A shown description that is thin (D3), or has no
+# sourced open question (D4), or names a disputed matter as settled (D21) gets sentences appended
+# that an agent wrote from verbatim quotes of reputable pages. The appended sentences are decided,
+# verified and judged exactly as a lane-WN text's are (the decisions below are over the NEW
+# sentences, `n` counts them from 1); what differs is the text they are composed into: the stored
+# text stays, byte for byte, with its `[n]` markers and its citation list, and the new pages are
+# numbered from N+1 (`compose(..., base=)`). The verifier is shown the whole text, so a round's
+# `text_sha256` is the sha256 of the whole new description, which is what the record hashes.
+ENRICH_VERSION = 1
+FACT, DISPUTE_A, DISPUTE_B, OPEN_QUESTION = "fact", "dispute_a", "dispute_b", "open_question"
+#: The classes of an appended sentence in the order they are read: facts first, the two positions of
+#: a dispute, the open question last (the page pays the hook off at its end).
+ENRICH_CLASSES = (FACT, DISPUTE_A, DISPUTE_B, OPEN_QUESTION)
+#: The journal evidence of an enrichment names the owner decisions it executes.
+EVIDENCE_DECISION_ENRICH = "2026-10-08: D3/D4/D21 Anreicherung"
+#: The key that carries what the enrichment adds to `EVIDENCE_KEYS`: the base text, the old check
+#: record, the class of each appended sentence and the dispute brief, if any.
+ENRICH_EVIDENCE_KEY = "enrichment"
+ENRICH_EVIDENCE_KEYS = EVIDENCE_KEYS | {ENRICH_EVIDENCE_KEY}
+
+
+def evidence_keys(evidence: Any) -> frozenset[str]:
+    """The keys the evidence must carry: an enrichment's have one more (`ENRICH_EVIDENCE_KEY`)."""
+    enriched = isinstance(evidence, dict) and evidence.get("decision") == EVIDENCE_DECISION_ENRICH
+    return ENRICH_EVIDENCE_KEYS if enriched else EVIDENCE_KEYS
+
+
+def base_problems(text: str, citations: Any) -> list[str]:
+    """Why a stored description cannot be enriched, or nothing: it is trimmed, ends on a sentence,
+    splits into sentences (`checked_sentences`), and its markers and citation list agree - the
+    markers numbered 1..K by first use, the list exactly those K numbers with one distinct URL each.
+    The new sentences are appended after it, so none of this may be broken already."""
+    if not text.strip():
+        return ["the text is empty"]
+    problems: list[str] = []
+    if text != text.strip():
+        problems.append("the text has leading or trailing whitespace")
+    try:
+        checked_sentences(text)
+    except WcError as exc:
+        problems.append(f"the text does not split into sentences: {exc}")
+    if not ends_like_a_sentence(strip_markers(text)):
+        problems.append(
+            "the text does not end with . ! or ?: a sentence appended to it would run on"
+        )
+    try:
+        listed = entries(citations, "enrich")
+    except ValueError as exc:
+        return [*problems, str(exc)]
+    first_use = list(dict.fromkeys(marker_sequence(text)))
+    if first_use != list(range(1, len(first_use) + 1)):
+        problems.append(f"the markers {first_use} are not numbered 1..N by first use")
+    numbers = [entry["n"] for entry in listed]
+    if sorted(numbers) != sorted(set(first_use)) or len(set(numbers)) != len(numbers):
+        problems.append(f"the markers {first_use} and the citations {numbers} disagree")
+    urls = [entry.get("url") for entry in listed]
+    if any(not isinstance(url, str) or not url for url in urls) or len(set(urls)) != len(urls):
+        problems.append("a citation has no URL, or two citations share one")
+    return problems
+
+
+@dataclass(frozen=True)
+class Base:
+    """The stored text an enrichment is appended to and its citation list as stored (`compose`)."""
+
+    text: str
+    citations: tuple[Mapping[str, Any], ...]
+
+    def __post_init__(self) -> None:
+        problems = base_problems(self.text, list(self.citations))
+        if problems:
+            raise WcError("this text cannot be enriched: " + "; ".join(problems))
+
+    @property
+    def sentences(self) -> int:
+        """How many sentences the stored text holds (`checked_sentences`)."""
+        return len(checked_sentences(self.text))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"text": self.text, "citations": [dict(citation) for citation in self.citations]}
+
+    @classmethod
+    def from_dict(cls, data: Any) -> Base:
+        d = M._obj(data, "enrichment base", frozenset({"text", "citations"}))
+        if not isinstance(d["citations"], list):
+            raise ValueError("enrichment base: citations is a list")
+        return cls(text=d["text"], citations=tuple(dict(c) for c in d["citations"]))
+
+
+def base_of(evidence: Mapping[str, Any]) -> Base | None:
+    """The base an enrichment's evidence appended to, `None` for every other evidence."""
+    if evidence.get("decision") != EVIDENCE_DECISION_ENRICH:
+        return None
+    return Base.from_dict(evidence[ENRICH_EVIDENCE_KEY]["base"])
+
+
+def classes_of(evidence: Mapping[str, Any]) -> dict[int, str]:
+    """Sentence number -> class, as the evidence of an enrichment records them."""
+    return {int(n): cls for n, cls in evidence[ENRICH_EVIDENCE_KEY]["classes"].items()}
+
+
+_ENRICH_SENTENCE_KEYS = frozenset({"n", "class", "verdict", "reason", "cites", "quote_sha256"})
+_ENRICH_KEYS = frozenset(
+    {
+        "v", "run", "writer", "base_sha256", "base_sentences", "base_citations", "base_check",
+        "sentences", "desc_sha256", "verifiers", "verified_sha256",
+    }
+)  # fmt: skip
+
+
+@dataclass(frozen=True)
+class EnrichedSentence:
+    """One appended sentence in the public record: its class, its verdict, the citation numbers its
+    markers carry (numbers of the whole text, a page the base cites keeps its number) and the sha256
+    of each verified quote (the words stay in the journal)."""
+
+    n: int
+    kind: str
+    verdict: Verdict
+    reason: DropReason | None
+    cites: tuple[int, ...]
+    quote_sha256: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        M._need_int(self.n, "enriched sentence n", minimum=1)
+        if self.kind not in ENRICH_CLASSES:
+            raise ValueError(
+                f"enriched sentence {self.n}: class {self.kind!r} is not one of "
+                f"{list(ENRICH_CLASSES)}"
+            )
+        if self.verdict not in (Verdict.KEEP, Verdict.DROP):
+            raise ValueError(f"enriched sentence {self.n}: an appended sentence is kept or dropped")
+        kept = self.verdict is Verdict.KEEP
+        if kept == (self.reason is not None):
+            raise ValueError(f"enriched sentence {self.n}: a reason belongs to a dropped sentence")
+        if self.reason is not None:
+            M._need_member(self.reason, DropReason, f"enriched sentence {self.n}: reason")
+        if kept != bool(self.cites) or kept != bool(self.quote_sha256):
+            raise ValueError(
+                f"enriched sentence {self.n}: a kept sentence cites and has verified quotes, a "
+                "dropped one neither"
+            )
+        for number in self.cites:
+            M._need_int(number, f"enriched sentence {self.n}: cite", minimum=1)
+        if len(set(self.cites)) != len(self.cites):
+            raise ValueError(f"enriched sentence {self.n}: a citation number repeats")
+        for digest in self.quote_sha256:
+            M._need_hex(digest, f"enriched sentence {self.n}: quote_sha256")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "n": self.n,
+            "class": self.kind,
+            "verdict": self.verdict.value,
+            "reason": None if self.reason is None else self.reason.value,
+            "cites": list(self.cites),
+            "quote_sha256": list(self.quote_sha256),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Any) -> EnrichedSentence:
+        d = M._obj(data, "enriched sentence", _ENRICH_SENTENCE_KEYS)
+        if not isinstance(d["cites"], list) or not isinstance(d["quote_sha256"], list):
+            raise ValueError("enriched sentence: cites and quote_sha256 are lists")
+        return cls(
+            n=d["n"],
+            kind=d["class"],
+            verdict=Verdict(d["verdict"]),
+            reason=None if d["reason"] is None else DropReason(d["reason"]),
+            cites=tuple(d["cites"]),
+            quote_sha256=tuple(d["quote_sha256"]),
+        )
+
+
+@dataclass(frozen=True)
+class DescriptionEnrichment:
+    """`raw_data._description_enrichment` v1: that sentences were appended to the stored text, by
+    whom, which stayed after the verification, and the text it describes. `desc_sha256` and
+    `verified_sha256` are the sha256 of the whole new description: the verifier was shown the whole
+    text and confirmed the appended sentences in it, and the card basis (`teaser/run.py`) follows
+    `desc_sha256` as it follows the check record's. The stored text's own check record, where it had
+    one, moves into `base_check` unchanged - it describes the base (`base_sha256`), not this text."""
+
+    run: str
+    writer: str
+    base_sha256: str
+    base_sentences: int
+    base_citations: int
+    base_check: Mapping[str, Any] | None
+    sentences: tuple[EnrichedSentence, ...]
+    desc_sha256: str
+    verifiers: tuple[str, ...]
+    verified_sha256: str
+    v: int = ENRICH_VERSION
+
+    def __post_init__(self) -> None:
+        if self.v != ENRICH_VERSION or isinstance(self.v, bool):
+            raise ValueError(f"enrichment.v: {self.v!r} is not version {ENRICH_VERSION}")
+        M._need_text(self.run, "enrichment.run")
+        if self.writer not in M.AI_SYSTEMS:
+            raise ValueError(
+                f"enrichment.writer: {self.writer!r} is not one of {sorted(M.AI_SYSTEMS)!r}"
+            )
+        M._need_hex(self.base_sha256, "enrichment.base_sha256")
+        M._need_hex(self.desc_sha256, "enrichment.desc_sha256")
+        M._need_hex(self.verified_sha256, "enrichment.verified_sha256")
+        if self.desc_sha256 == self.base_sha256:
+            raise ValueError("enrichment: the new text is the base text - nothing was appended")
+        M._need_int(self.base_sentences, "enrichment.base_sentences", minimum=1)
+        M._need_int(self.base_citations, "enrichment.base_citations", minimum=0)
+        if self.base_check is not None:
+            old = DescriptionCheck.from_dict(self.base_check)
+            if old.desc_sha256 != self.base_sha256:
+                raise ValueError("enrichment.base_check does not describe the base text")
+        if (
+            not isinstance(self.verifiers, tuple)
+            or not 1 <= len(self.verifiers) <= len(VERIFY_STAGES)
+            or len(set(self.verifiers)) != len(self.verifiers)
+        ):
+            raise ValueError(
+                f"enrichment.verifiers: {self.verifiers!r} is not one distinct agent per "
+                f"verification round (1 to {len(VERIFY_STAGES)})"
+            )
+        for name in self.verifiers:
+            M._need_text(name, "enrichment.verifiers")
+        if [s.n for s in self.sentences] != list(range(1, len(self.sentences) + 1)):
+            raise ValueError("enrichment.sentences: not numbered 1..m in order")
+        order = [ENRICH_CLASSES.index(s.kind) for s in self.sentences]
+        if order != sorted(order):
+            raise ValueError(f"enrichment.sentences: classes out of order {list(ENRICH_CLASSES)}")
+        kept = [s for s in self.sentences if s.verdict is Verdict.KEEP]
+        if not kept:
+            raise ValueError("enrichment: a record describes appended sentences; none kept is none")
+        fresh = sorted({n for s in kept for n in s.cites if n > self.base_citations})
+        if fresh != list(range(self.base_citations + 1, self.base_citations + 1 + len(fresh))):
+            raise ValueError(
+                f"enrichment: the new citation numbers {fresh} do not follow the base's "
+                f"{self.base_citations} without a gap"
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "v": self.v,
+            "run": self.run,
+            "writer": self.writer,
+            "base_sha256": self.base_sha256,
+            "base_sentences": self.base_sentences,
+            "base_citations": self.base_citations,
+            "base_check": None if self.base_check is None else dict(self.base_check),
+            "sentences": [sentence.to_dict() for sentence in self.sentences],
+            "desc_sha256": self.desc_sha256,
+            "verifiers": list(self.verifiers),
+            "verified_sha256": self.verified_sha256,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Any) -> DescriptionEnrichment:
+        d = M._obj(data, "enrichment", _ENRICH_KEYS)
+        if not isinstance(d["sentences"], list) or not isinstance(d["verifiers"], list):
+            raise ValueError("enrichment.sentences and enrichment.verifiers are lists")
+        if d["base_check"] is not None and not isinstance(d["base_check"], dict):
+            raise ValueError("enrichment.base_check is an object or null")
+        return cls(
+            v=d["v"],
+            run=d["run"],
+            writer=d["writer"],
+            base_sha256=d["base_sha256"],
+            base_sentences=d["base_sentences"],
+            base_citations=d["base_citations"],
+            base_check=d["base_check"],
+            sentences=tuple(EnrichedSentence.from_dict(s) for s in d["sentences"]),
+            desc_sha256=d["desc_sha256"],
+            verifiers=tuple(d["verifiers"]),
+            verified_sha256=d["verified_sha256"],
+        )
+
+
+def enrichment_record(
+    decisions: Sequence[Decision],
+    classes: Mapping[int, str],
+    composed: Composed,
+    quotes: Mapping[int, Sequence[Quote]],
+    *,
+    run: str,
+    base: Base,
+    base_check: Mapping[str, Any] | None,
+    verification: Mapping[str, Any],
+    writer: str,
+) -> DescriptionEnrichment:
+    """The public record of a verified enrichment: every appended sentence's class, verdict, the
+    numbers its markers carry and the sha256 of each verified quote; `verification` is the site's
+    verification record (`apply_verification`, run with the same `base`), whose verifiers and whose
+    last round's `text_sha256` - the whole new text - the record names."""
+    if composed.description is None:
+        raise WcError("nothing was appended: there is no enrichment record")
+    if verification["status"] != VerifyStatus.VERIFIED.value:
+        raise WcError(f"an enrichment is published only verified, not {verification['status']!r}")
+    rounds = verification["rounds"]
+    return DescriptionEnrichment(
+        run=run,
+        writer=writer,
+        base_sha256=M.text_sha256(base.text),
+        base_sentences=base.sentences,
+        base_citations=len(base.citations),
+        base_check=base_check,
+        sentences=tuple(
+            EnrichedSentence(
+                n=d.n,
+                kind=classes[d.n],
+                verdict=d.verdict,
+                reason=d.reason,
+                cites=cites,
+                quote_sha256=tuple(M.text_sha256(q.quote) for q in quotes.get(d.n, ()))
+                if d.kept
+                else (),
+            )
+            for d, cites in zip(decisions, composed.cites, strict=True)
+        ),
+        desc_sha256=M.text_sha256(composed.description),
+        verifiers=tuple(r["answered_by"] for r in rounds),
+        verified_sha256=rounds[-1]["text_sha256"],
+    )
+
+
+def union_ai_system(old: str, new: str) -> str:
+    """The disclosure of a text two writes made: the combined `AI_SYSTEM` when MiniMax took part in
+    either (the text then rests on a MiniMax judgement), the Haiku-naming one when Haiku did, else
+    `AI_SYSTEM_CLAUDE` (Opus and Sonnet)."""
+    named = {old, new}
+    unknown = named - M.AI_SYSTEMS
+    if unknown:
+        raise WcError(f"{sorted(unknown)!r} is no disclosure of model4.AI_SYSTEMS")
+    if M.AI_SYSTEM in named:
+        return M.AI_SYSTEM
+    if M.AI_SYSTEM_CLAUDE_HAIKU in named:
+        return M.AI_SYSTEM_CLAUDE_HAIKU
+    return M.AI_SYSTEM_CLAUDE
+
+
+def added_sentences(
+    composed: Composed, *, base_sentences: int, sources: Sequence[M.SourceRef]
+) -> tuple[M.AddedSentence, ...]:
+    """Lane E's `added` list: one entry per citation of each kept appended sentence, the sentence's
+    position in the whole text (the base's sentences come first), the citation number and the
+    source - the pinned source whose URL the citation is, else `E<n>`."""
+    by_url = {ref.url: ref.id for ref in sources}
+    url_of = {citation["n"]: citation["url"] for citation in composed.citations}
+    added: list[M.AddedSentence] = []
+    position = base_sentences
+    for cites in composed.cites:
+        if not cites:
+            continue
+        position += 1
+        for number in cites:
+            added.append(
+                M.AddedSentence(
+                    sentence=position, n=number, src=by_url.get(url_of[number], f"E{number}")
+                )
+            )
+    return tuple(added)
+
+
+def enriched_provenance(
+    raw_data: Mapping[str, Any] | None,
+    composed: Composed,
+    *,
+    base: Base,
+    ai_system: str,
+    marking: Marking,
+) -> M.LegacyProvenance | M.WebProvenance | M.EnrichedProvenance:
+    """The provenance the enriched text carries (`raw_data` is the stored object, orchestrator decision
+    X1): lane L's, hashing the new text, for a checked March text; lane N's for a lane-WN text, naming the writers of both writes;
+    for a Phase-4 text of lane W or S lane E's - the old provenance kept (attribution, sources, the
+    verbatim spans) with the appended sentences in `added`. Any other text is not enriched."""
+    if composed.description is None:
+        raise WcError("nothing was appended: there is no provenance")
+    digest = M.text_sha256(composed.description)
+    old = M.provenance_from_dict((raw_data or {})[M.PROVENANCE_KEY])
+    if marking is Marking.L:
+        if not isinstance(old, M.LegacyProvenance):
+            raise WcError("a lane-L text carries lane L's provenance")
+        return M.LegacyProvenance(desc_sha256=digest)
+    if marking is Marking.WEB:
+        if not isinstance(old, M.WebProvenance):
+            raise WcError("a lane-N text carries lane N's provenance")
+        return M.WebProvenance(
+            desc_sha256=digest, ai_system=union_ai_system(old.ai_system, ai_system)
+        )
+    if marking is Marking.PHASE4:
+        if not isinstance(old, M.Provenance) or old.lane not in M.ENRICHABLE_LANES:
+            raise WcError("only a lane-W or lane-S text is enriched from Phase 4")
+        if len(old.sentences) != base.sentences:
+            raise WcError(
+                f"the provenance lists {len(old.sentences)} published sentences, the text "
+                f"{base.sentences}: they cannot be matched one for one"
+            )
+        return M.EnrichedProvenance(
+            run=old.run,
+            base_lane=old.lane,
+            ai_system=union_ai_system(old.ai_system, ai_system),
+            licence=old.licence,
+            attribution=dataclasses.replace(
+                old.attribution, changes=M.Changes.SELECTED_AND_EXTENDED
+            ),
+            sources=old.sources,
+            sentences=old.sentences,
+            added=added_sentences(composed, base_sentences=base.sentences, sources=old.sources),
+            desc_sha256=digest,
+        )
+    raise WcError(f"a {marking.value} text is not enriched: it is no basis of a card")
+
+
+def enriched_raw_data(
+    site: M.PlanSite,
+    composed: Composed,
+    record: DescriptionEnrichment,
+    provenance: M.LegacyProvenance | M.WebProvenance | M.EnrichedProvenance,
+) -> dict[str, Any]:
+    """The `raw_data` an enrichment leaves: the old object less WC's keys, plus the citations (the
+    stored ones verbatim, then the new pages), the enrichment record and the provenance."""
+    new = {key: value for key, value in (site.raw_data or {}).items() if key not in WC_KEYS}
+    new[M.CITATIONS_KEY] = [dict(citation) for citation in composed.citations]
+    new[ENRICH_KEY] = record.to_dict()
+    new[M.PROVENANCE_KEY] = provenance.to_dict()
+    return new
+
+
+def enrichment_pair_problems(
+    description: str, raw: Mapping[str, Any], *, marking: str | None = None
+) -> list[str]:
+    """What an enriched (description, raw_data) pair breaks; the counterpart of `wc_problems`:
+
+    * the enrichment record reads and its `desc_sha256` and `verified_sha256` are the description's;
+    * no check record stands beside it (the old one moved into `base_check`);
+    * the provenance is there, is the class the recorded old `marking` calls for (lane E's for a
+      Phase-4 text, N's for a lane-N text, L's for a March text; any of the three when the marking
+      is unknown) and hashes the description;
+    * the markers are numbered 1..M by first use, the citations are exactly those numbers, the base's
+      K stay as stored and every new one is `{n, url, title, domain}` with the URL's host as domain,
+      and the record's sentences cite exactly the new numbers (plus numbers the base had)."""
+    problems: list[str] = []
+    digest = M.text_sha256(description)
+    try:
+        record = DescriptionEnrichment.from_dict(raw.get(ENRICH_KEY))
+    except (ValueError, KeyError) as exc:
+        return [f"the enrichment record does not read: {exc}"]
+    if record.desc_sha256 != digest:
+        problems.append("the enrichment record's desc_sha256 is not the sha256 of the description")
+    if record.verified_sha256 != digest:
+        problems.append(
+            "the enrichment record's verified_sha256 is not the sha256 of the description: the "
+            "served text is not the one its verifier confirmed"
+        )
+    if CHECK_KEY in raw:
+        problems.append(
+            "a check record beside an enrichment record: the old one moved into base_check"
+        )
+    wanted: tuple[type, ...] = {
+        Marking.PHASE4.value: (M.EnrichedProvenance,),
+        Marking.WEB.value: (M.WebProvenance,),
+        Marking.NONE.value: (M.WebProvenance,),
+        Marking.L.value: (M.LegacyProvenance,),
+        Marking.MARCH.value: (M.LegacyProvenance,),
+    }.get(str(marking), (M.LegacyProvenance, M.WebProvenance, M.EnrichedProvenance))
+    if M.PROVENANCE_KEY not in raw:
+        problems.append("an enriched text carries its provenance: the AI wrote part of it")
+    else:
+        try:
+            provenance = M.provenance_from_dict(raw[M.PROVENANCE_KEY])
+        except ValueError as exc:
+            provenance = None
+            problems.append(f"the provenance does not read: {exc}")
+        if provenance is not None and not isinstance(provenance, wanted):
+            problems.append(
+                f"a lane-{provenance.lane.value} provenance beside an enriched {marking} text"
+            )
+        elif provenance is not None and provenance.desc_sha256 != digest:
+            problems.append("the provenance's desc_sha256 is not the sha256 of the description")
+    try:
+        listed = entries(raw.get(M.CITATIONS_KEY), "enrich")
+    except ValueError as exc:
+        return [*problems, str(exc)]
+    for entry in listed:
+        if entry["n"] > record.base_citations:
+            if set(entry) != _CITATION_KEYS:
+                problems.append(f"citation {entry.get('n')} carries {sorted(entry)}")
+            elif entry["domain"] != A.domain_of(entry["url"]):
+                problems.append(
+                    f"citation {entry['n']}: domain {entry['domain']!r} is not its host"
+                )
+    first_use = list(dict.fromkeys(marker_sequence(description)))
+    numbers = [entry["n"] for entry in listed]
+    if first_use != list(range(1, len(first_use) + 1)):
+        problems.append(f"the markers {first_use} are not numbered 1..N by first use")
+    if sorted(numbers) != sorted(set(first_use)) or len(set(numbers)) != len(numbers):
+        problems.append(f"the markers {first_use} and the citations {numbers} disagree (D1)")
+    cited = {n for sentence in record.sentences for n in sentence.cites}
+    if not cited <= set(first_use):
+        problems.append(
+            f"the record cites {sorted(cited - set(first_use))}, which no marker carries"
+        )
+    fresh_markers = {n for n in first_use if n > record.base_citations}
+    if fresh_markers != {n for n in cited if n > record.base_citations}:
+        problems.append(
+            f"the markers beyond the base's {record.base_citations} citations are "
+            f"{sorted(fresh_markers)}, the record cites {sorted(n for n in cited if n > record.base_citations)}"
+        )
+    return problems
+
+
+def enrichment_evidence_problems(
+    evidence: Mapping[str, Any], description: str | None, raw_data: Mapping[str, Any] | None
+) -> list[str]:
+    """`evidence_problems` of an enrichment: production is exactly what the evidence composes - the
+    stored text with the verified sentences appended (`compose(..., base=)`), the citations, the
+    enrichment record, the lane-E `added` list - after a passed verification of the whole text."""
+    try:
+        decisions, verified = decisions_of(evidence)
+        base = base_of(evidence)
+        detail = evidence[ENRICH_EVIDENCE_KEY]
+        classes = classes_of(evidence)
+        if set(detail) != _ENRICH_DETAIL_KEYS:
+            return [f"the journal evidence's enrichment block carries {sorted(detail)}"]
+        composed = compose(decisions, verified, base=base)
+        disclosure = disclosure_problems(evidence["marking"], description, raw_data)
+    except (KeyError, TypeError, ValueError) as exc:
+        return [f"the journal evidence does not compose: {exc}"]
+    problems: list[str] = list(disclosure)
+    if composed.description != description:
+        problems.append("the description is not what the journal evidence composes")
+    problems.extend(verification_problems(evidence, description))
+    if description is None:
+        return problems
+    raw = dict(raw_data or {})
+    if raw.get(M.CITATIONS_KEY) != [dict(c) for c in composed.citations]:
+        problems.append("the citations are not the base's and the pages of the verified quotes")
+    try:
+        stored = DescriptionEnrichment.from_dict(raw.get(ENRICH_KEY))
+        expected = enrichment_record(
+            decisions,
+            classes,
+            composed,
+            verified,
+            run=evidence["run"],
+            base=base,
+            base_check=detail["base_check"],
+            verification=evidence[VERIFICATION_KEY],
+            writer=stored.writer,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        return [*problems, f"the enrichment record does not read: {exc}"]
+    if stored != expected:
+        problems.append("the enrichment record is not the one the evidence's decisions give")
+    try:
+        provenance = M.provenance_from_dict(raw.get(M.PROVENANCE_KEY))
+    except ValueError:
+        return problems  # `disclosure_problems` names a missing or unreadable one
+    if isinstance(provenance, M.EnrichedProvenance) and provenance.added != added_sentences(
+        composed, base_sentences=base.sentences, sources=provenance.sources
+    ):
+        problems.append("the provenance's added list is not the evidence's appended sentences")
+    return problems
+
+
+#: What the enrichment block of a journal evidence carries (`lane E`): the base text and citations
+#: as stored, the old check record, each appended sentence's class, the dispute brief and whether the
+#: text was thin.
+_ENRICH_DETAIL_KEYS = frozenset({"base", "base_check", "classes", "dispute", "thin"})
+
+#: Lane E's id in the provenance (`model4.Lane.E`), as the transaction's invariant 6 spells it.
+ENRICHED_LANE = M.Lane.E.value

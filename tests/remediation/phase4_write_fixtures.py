@@ -632,17 +632,22 @@ class FakeDb:
             site = self.sites[row["site"]]
             raw = site.raw_data or {}
             digest = _sha_or_null(site.description)
-            check = raw.get(WC4.CHECK_KEY) or {}
+            enriched = row["evidence"]["decision"] == WC4.EVIDENCE_DECISION_ENRICH
+            check = raw.get(WC4.ENRICH_KEY if enriched else WC4.CHECK_KEY) or {}
             if check.get("desc_sha256") != digest or check.get("verified_sha256") != digest:
                 raise PsqlError("invariant 5 (WC): the check record's desc_sha256")
             provenance = raw.get(M.PROVENANCE_KEY)
             # the lane the recorded marking calls for (write4._wc_invariants' CASE): N for a lane-WN
-            # text, the old provenance's lane for a Phase-4 text, else L
+            # text, the old provenance's lane for a Phase-4 text (E for an enriched one), else L
             marking = row["evidence"]["marking"]["old"]
             if marking in ("none", "web"):
                 lane = "N"
             elif marking == "phase4":
-                lane = json.loads(row["old"])[M.PROVENANCE_KEY]["lane"]
+                lane = (
+                    WC4.ENRICHED_LANE
+                    if enriched
+                    else json.loads(row["old"])[M.PROVENANCE_KEY]["lane"]
+                )
             else:
                 lane = "L"
             if provenance is not None and (
