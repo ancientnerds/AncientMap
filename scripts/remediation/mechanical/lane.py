@@ -63,7 +63,7 @@ from __future__ import annotations
 import functools
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from prod_write import sql_literal  # noqa: F401 - the one quoting rule, re-exported for the lanes
 
@@ -1636,6 +1636,10 @@ CARD_STATS_LANE = re.compile(r"^card-stats-(\d{4}-\d{2}-\d{2}[a-z]?)\Z")
 #: Lane WB writes each step of at most 100 sites as two lanes of its own (`mechanical/teaser.py`):
 #: `teaser-prov-sNNN` (the card provenance in raw_data) and `teaser-card-sNNN` (the card).
 TEASER_LANE = re.compile(r"^teaser-(prov|card)-s(\d{3})\Z")
+#: The provenance markers of a site's period and point (`mechanical/field_prov.py`, owner decisions
+#: D12 and D19 of 2026-10-08): `period-prov-<wave>-sNNN` writes `raw_data._period_provenance`,
+#: `coord-prov-<wave>-sNNN` writes `raw_data._coord_provenance`, a step of at most 100 sites each.
+FIELD_PROV_LANE = re.compile(r"^(period|coord)-prov-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
 
 # ------------------------------------------------------------ the WD1/WD3 structured-field lanes
 #: FINISH_PLAN_2026-09-26 lane WD1 (`scripts/remediation/fields/`): the decided coordinates,
@@ -1647,15 +1651,21 @@ TEASER_LANE = re.compile(r"^teaser-(prov|card)-s(\d{3})\Z")
 #: WD3's question with WD3's rules, plus a named period as a value) write through the same cells and
 #: invariants as `fields-wd3-<wave>-s<NNN>` and `fields-wd4-<wave>-s<NNN>`: a stamp, a test id, a
 #: table and a directory of their own, so no step of one lane can be mistaken for a step of another.
-FIELDS_LANE = re.compile(r"^fields-(wd1|wd3|wd4)-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
-FIELDS_STAGES = ("wd1", "wd3", "wd4")
+FIELDS_LANE = re.compile(r"^fields-(wd1|wd3|wd4|wd5)-(\d{4}-\d{2}-\d{2}[a-z]?)-s(\d{3})\Z")
+FIELDS_STAGES = ("wd1", "wd3", "wd4", "wd5")
 #: Where each stage's waves live: `output/remediation/<FIELDS_ROOTS[stage]>/<wave>/sNNN`.
 FIELDS_ROOTS = {stage: f"fields/{stage}/write" for stage in FIELDS_STAGES}
 #: The journal's `confidence` of a stage's writes: WD1 rests on two quotes of two source families,
 #: WD3 on one quote (the column's free text, `migrations/0017`). WD4 asks WD3's question with the
 #: same discipline - a named period is a value, and one quote of one family carries it (rule
-#: `one-family-period`, 2026-10-04).
-FIELDS_CONFIDENCE = {"wd1": "two_source", "wd3": "one_source", "wd4": "one_source"}
+#: `one-family-period`, 2026-10-04). wd5 (rule `recheck`, 2026-10-08) rests on the same: one quote of
+#: one family, whether it replaces a value, restores one from the journal or clears a rule's start.
+FIELDS_CONFIDENCE = {
+    "wd1": "two_source",
+    "wd3": "one_source",
+    "wd4": "one_source",
+    "wd5": "one_source",
+}
 _BUCKETS = tuple(label for label, _lo, _hi in PERIOD_BUCKETS)
 
 #: A site's point is three cells: `lat` and `lon` (NOT NULL, corrected and never cleared -
@@ -1685,6 +1695,16 @@ FIELDS_CELLS = (
         clears=True,
     ),
     Column("source_url", "text", fills_null=True, clears=True),
+)
+#: Lane wd5 may leave a site without a start - the owner's decision D12 of 2026-10-08, "unsourced ->
+#: Undated" - and then `period_name` is the residue label (`UNDATED`), which the invariant below
+#: already expects (`bucket_case` answers it for a NULL start). The finished stages' cells are not
+#: touched: their rendered statements are what was applied.
+FIELDS_CELLS_WD5 = tuple(
+    replace(cell, allowed_new_values=(*cell.allowed_new_values, UNDATED))
+    if cell.name == "period_name"
+    else cell
+    for cell in FIELDS_CELLS
 )
 _POINT = "ST_SetSRID(ST_MakePoint(u.lon, u.lat), 4326)"
 FIELDS_INVARIANTS = (
@@ -1719,8 +1739,8 @@ _GEOM_NOT_POINT = Residual(
 
 
 def fields_lane(wave: str, step: int, stage: str = "wd1") -> Lane:
-    """Step `step` of the `stage` (`wd1`, `wd3` or `wd4`) wave `wave` (a date label, `2026-09-27` or
-    `2026-09-27b`)."""
+    """Step `step` of the `stage` (`wd1`, `wd3`, `wd4` or `wd5`) wave `wave` (a date label,
+    `2026-09-27` or `2026-09-27b`)."""
     name = f"fields-{stage}-{wave}-s{step:03d}"
     if FIELDS_LANE.match(name) is None or step < 1:
         raise ValueError(
@@ -1739,7 +1759,7 @@ def fields_lane(wave: str, step: int, stage: str = "wd1") -> Lane:
         rehearsal_residual=_PERIOD_MISMATCH,
         lock_timeout=LOCK_TIMEOUT,
         statement_timeout=STATEMENT_TIMEOUT,
-        cells=FIELDS_CELLS,
+        cells=FIELDS_CELLS_WD5 if stage == "wd5" else FIELDS_CELLS,
         site_invariants=FIELDS_INVARIANTS,
     )
 
@@ -2099,9 +2119,9 @@ CARD_DISCLOSURE_LANE = re.compile(r"^card-disclosure-s(\d{3})\Z")
 
 
 def resolve_lane(name: str) -> Lane:
-    """The lane called `name`: a registered one, a scope-review wave, a WD1 or WD3 fields step, a
-    residue period-label step, a lane-WB teaser step or disclosure-correction step, or a card_stats
-    wave. `KeyError` otherwise.
+    """The lane called `name`: a registered one, a scope-review wave, a WD1/WD3/WD4/wd5 fields step,
+    a residue period-label step, a lane-WB teaser step or disclosure-correction step, a period or
+    point provenance-marker step, or a card_stats wave. `KeyError` otherwise.
 
     The card_stats lanes are built by `card_stats.card_stats_lane`, imported here and only here:
     their owned values are the card generator's own, and importing the API package is not a cost
@@ -2125,6 +2145,10 @@ def resolve_lane(name: str) -> Lane:
         from mechanical.teaser import lane_of
 
         return lane_of(name)
+    if FIELD_PROV_LANE.match(name):
+        from mechanical.field_prov import lane_of as field_prov_lane_of
+
+        return field_prov_lane_of(name)
     if CARD_DISCLOSURE_LANE.match(name):
         from mechanical.card_disclosure import lane_of as disclosure_lane_of
 

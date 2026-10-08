@@ -20,6 +20,14 @@ Three rules share every module of this package (`answers`, `handoff`, `plan`, th
   `period_name` (`pipeline.periods`), and its batches and write lanes carry `wd4`, so a period run
   can never write into a finished wd3 run.
 
+* **recheck** (lane wd5, owner decisions D10, D12 and D19 of 2026-10-08): WD4's rule aimed at the
+  values no source stands behind - a period a named rule made (1,254 sites), a field a MiniMax
+  agent decided (calibration failed at 64.71 %), a point nobody sourced - and the one rule whose
+  plan *replaces* a stored value, only one of those. A period nobody can source is cleared to the
+  label `Undated` when a rule made it; a value a MiniMax agent wrote and Claude cannot source is
+  restored from the journal. The answer kinds are WD4's, and `answers.states_year` reads a date in
+  years before the present (BP).
+
 A run without `RUN.json` is a WD1 run: the files of those runs were written before the switch
 existed, and their prompts are pinned by hash - `read_rule` names the default instead of guessing.
 """
@@ -77,7 +85,10 @@ class Rule:
     `stage` is the handoff stage of the run's answers, the prefix of its batches and the family of
     the write lanes (`fields-<stage>-<wave>-sNNN`). `clearable`: an exhausted field is emptied
     (WD1); otherwise it stays (WD3). `fill_only`: the write plan changes empty and unsourced fields
-    only and never rewrites a period label that no written start asks for (WD3).
+    only and never rewrites a period label that no written start asks for (WD3). `recheck`: the
+    question is asked of a stored value that no source stands behind, and the plan replaces such a
+    value (and only such a value); it writes a period label only beside a start it writes or
+    clears, like a fill-only rule.
     """
 
     name: str
@@ -87,6 +98,13 @@ class Rule:
     forbidden_families: frozenset[str]
     clearable: bool
     fill_only: bool
+    recheck: bool = False
+
+    @property
+    def asks_open_fields(self) -> bool:
+        """Whether the question names each field's open reason and the site's own links, and the
+        plan keeps a label beside the start it writes: the fill-only rules' and the recheck's."""
+        return self.fill_only or self.recheck
 
     @property
     def rests_on(self) -> str:
@@ -105,7 +123,8 @@ class Rule:
 TWO_FAMILIES = Rule("two-families", "wd1", 2, 2, frozenset(), True, False)
 ONE_FAMILY = Rule("one-family", "wd3", 1, 1, FORBIDDEN_FAMILIES, False, True)
 ONE_FAMILY_PERIOD = Rule("one-family-period", "wd4", 1, 1, FORBIDDEN_FAMILIES, False, True)
-RULES = {rule.name: rule for rule in (TWO_FAMILIES, ONE_FAMILY, ONE_FAMILY_PERIOD)}
+RECHECK = Rule("recheck", "wd5", 1, 1, FORBIDDEN_FAMILIES, False, False, True)
+RULES = {rule.name: rule for rule in (TWO_FAMILIES, ONE_FAMILY, ONE_FAMILY_PERIOD, RECHECK)}
 BY_STAGE = {rule.stage: rule for rule in RULES.values()}
 #: The rule of a run without `RUN.json`: WD1's, the lane whose runs predate the file.
 DEFAULT = TWO_FAMILIES

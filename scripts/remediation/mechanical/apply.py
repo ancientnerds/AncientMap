@@ -65,6 +65,7 @@ from prod_write import SSH_HOST, OutcomeUnknown, send  # noqa: E402
 
 from mechanical.lane import (  # noqa: E402
     CARD_DISCLOSURE_LANE,
+    FIELD_PROV_LANE,
     FIELDS_LANE,
     LANE_READBACKS,
     LANES,
@@ -1820,6 +1821,10 @@ def readback_for(lane: Lane) -> str:
         from mechanical.teaser import teaser_readback
 
         return teaser_readback(lane)
+    if FIELD_PROV_LANE.match(lane.name):
+        from mechanical.field_prov import prov_readback
+
+        return prov_readback(lane)
     if CARD_DISCLOSURE_LANE.match(lane.name):
         from mechanical.card_disclosure import disclosure_readback
 

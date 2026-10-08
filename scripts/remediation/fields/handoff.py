@@ -474,6 +474,80 @@ ANSWER_FORMAT_WD4 = (
     "beside it is refused.\n"
 )
 
+
+# ---------------------------------------------------------------------------- lane wd5's texts
+def _swap(text: str, old: str, new: str) -> str:
+    """`text` with the one sentence `old` replaced by `new` - refused when `old` is not in it, so a
+    later edit of the text this one is derived from fails here instead of shipping unchanged."""
+    if text.count(old) != 1:
+        raise ValueError(f"the text to derive wd5's rule from no longer holds {old!r} once")
+    return text.replace(old, new)
+
+
+#: How the plan treats `unresolved` per field under the recheck rule (`plan.site_cells`): what the
+#: agent is told, so that an answer is never given for the sake of its consequence.
+_WD5_UNRESOLVED = {
+    "coordinates": (
+        "What unresolved does in this lane: a point a MiniMax agent moved is moved back to the "
+        "point it had before; any other stored point stays - it cannot be emptied - and the site "
+        "goes to the owner's list (such a site gets no Short). Answer unresolved only when no "
+        "source can be quoted; a page you could not open is not a finding, say so in the "
+        "reasoning."
+    ),
+    "site_type": (
+        "What unresolved does in this lane: a type a MiniMax agent wrote is withdrawn; any other "
+        "stored type stays and the site goes to the owner's list."
+    ),
+    "source_url": (
+        "What unresolved does in this lane: a page a MiniMax agent wrote is withdrawn; any other "
+        "stored page stays and the site goes to the owner's list."
+    ),
+}
+
+_WD5_BP = (
+    ' A date in years before the present is read too - "40,000 years ago", "12,000 BP", '
+    '"12,000 cal BP", "45 ka", "1.2 Ma" (also "between 12,000 and 10,000 years ago"): the '
+    'year is 1950 minus that number ("12,000 BP" is -10050), and a quote states your year when '
+    "it is within one unit of that number's last significant digit (at least 76 years). A "
+    "site a source dates older than 6,450 years before the present (4500 BC) is in the band "
+    '"< 4500 BC", the only thing the map shows of it: give the year the number works out to, '
+    "or -4501, the band's own year."
+)
+_WD5_UNRESOLVED_PERIOD = (
+    "- unresolved: no source dates the start. What follows is this lane's own rule: a start that a "
+    'rule made (the stored value says so above) becomes "Undated" with no year, and a start a '
+    "MiniMax agent wrote is withdrawn. Answer unresolved only when no source can be quoted - a "
+    "page you could not open is not a finding, say so in the reasoning - and never keep or "
+    "replace a start to avoid that: the stored start has no source behind it.\n"
+)
+
+#: wd5's rules per field: WD4's, with the BP reader named in `period_start` and what `unresolved`
+#: does said per field. Every other sentence is WD3's/WD4's own string, not a copy of it.
+FIELD_RULES_WD5 = {
+    **{field: FIELD_RULES_WD4[field] + "\n" + note for field, note in _WD5_UNRESOLVED.items()},
+    "period_start": _swap(
+        _swap(
+            FIELD_RULES_WD4["period_start"],
+            ' A year worked out from "4,500 years ago" or a BP date is not read.',
+            _WD5_BP,
+        ),
+        "- unresolved: no source dates the start. The field stays as it is - an empty one stays "
+        "empty - and the site goes to the owner's list.\n",
+        _WD5_UNRESOLVED_PERIOD,
+    ),
+}
+
+RESEARCH_WD5 = _swap(
+    RESEARCH_WD3,
+    "- A field no source supports stays as it is: answer unresolved. That is an answer, not a "
+    "failure - do not stretch a source to fill a field.\n",
+    "- A field no source supports: answer unresolved (the field's rules say what that does). That "
+    "is an answer, not a failure - do not stretch a source to fill a field, and do not keep a "
+    "stored value because it is stored: every field of this question has no source behind it yet.\n",
+)
+
+ANSWER_FORMAT_WD5 = ANSWER_FORMAT_WD4
+
 #: A field of a WD3 question is open for one of these reasons (`population.py`).
 OPEN_TEXT = {
     "empty": "the field is empty",
@@ -484,6 +558,15 @@ OPEN_TEXT = {
     "unsourced": "the stored value has no source: an earlier pass found none (its clear was "
     "refused). A source that confirms it is a keep; a source for another value is a replace, "
     "which is listed for the owner and not written - only an empty field is filled",
+    # lane wd5: a stored value is replaced, when it is one of these three
+    "rule-made": "the stored start was made by a rule and found in no source: the beginning of "
+    "the epoch a rule gives the site's type, the edge of the band the 2025 import filed the site "
+    "under, or the inception date of the site's Wikidata item. No source stands behind it",
+    "minimax-answered": "an earlier pass answered this field with a MiniMax model, whose answers "
+    "failed their calibration (64.71 % agreement, the bar was 90 %). Whatever it decided - a "
+    "value it wrote, a value it kept, or no value - no reliable pass has checked a source for it",
+    "unsourced-point": "the stored point has no source: earlier passes found none for it, or "
+    "found a better point that a guard refused",
 }
 WD1_SHOWN_CHARS = 600
 #: How many of a site's own links a WD3 question lists (best first).
@@ -504,10 +587,14 @@ ORIGINAL_CLAIM = (
 )
 
 
+#: The stages that show the original import's claim: WD4's and the recheck's.
+HINT_STAGES = (R.ONE_FAMILY_PERIOD.stage, R.RECHECK.stage)
+
+
 def _original_claim(hint: Mapping[str, Any] | None, rule: R.Rule) -> list[str]:
-    """The lines of the original import's own period claim, or none. WD4 only: the two finished
-    lanes asked their question without it, and their prompts are pinned by hash."""
-    if hint is None or rule.stage != R.ONE_FAMILY_PERIOD.stage:
+    """The lines of the original import's own period claim, or none. WD4 and wd5 only: the two
+    older lanes asked their question without it, and their prompts are pinned by hash."""
+    if hint is None or rule.stage not in HINT_STAGES:
         return []
     year, period = str(hint.get("year") or "").strip(), str(hint.get("period") or "").strip()
     if not year and not period:
@@ -636,6 +723,25 @@ TEXTS = {
         research=RESEARCH_WD3 + "\n" + KNOWN_FETCH_TROUBLE,
         answer_format=ANSWER_FORMAT_WD4,
     ),
+    R.RECHECK.name: Texts(
+        intro=(
+            "You are a researcher in the structured-field re-check (lane wd5) of a curated "
+            "database of ancient sites. This question is about ONE site and the fields listed "
+            "below: each holds a value, or nothing, that no reliable pass has found a source "
+            "for. Research each field on its own and decide it from a source you quote."
+        ),
+        field_rules=FIELD_RULES_WD5,
+        empty_note=(
+            "The field is empty, so keep is no answer: replace with a sourced value or a sourced "
+            "period name, or answer unresolved."
+        ),
+        retry_note=(
+            "An earlier answer to this field did not count: {why}. Answer it again "
+            "from a source the checker can read - or answer unresolved when none can be quoted."
+        ),
+        research=RESEARCH_WD5 + "\n" + KNOWN_FETCH_TROUBLE,
+        answer_format=ANSWER_FORMAT_WD5,
+    ),
 }
 
 
@@ -653,7 +759,7 @@ def _site_lines(line: Mapping[str, Any], rule: R.Rule) -> list[str]:
         ),
         f"- English Wikipedia article of the item: {line['enwiki'] or 'none'}",
     ]
-    if rule.fill_only:
+    if rule.asks_open_fields:
         out.append(f"- stored source_url: {line['fields']['source_url']['stored'] or 'none'}")
         links = line["links"]
         if links:
@@ -672,6 +778,9 @@ def _open_lines(line: Mapping[str, Any], field: str) -> list[str]:
     families) made of it - a lead to check, not evidence."""
     opened = line["open"][field]
     out = [f"Open because: {OPEN_TEXT[opened['why']]}."]
+    made = opened.get("made")
+    if made is not None:
+        out.append(f"What stands: {made} (a lead to check, not evidence).")
     earlier = opened["wd1"]
     if earlier is not None:
         out.append(
@@ -713,7 +822,7 @@ def render_prompt(
         out.append(f"### {field}")
         out.append("")
         out.append(f"Stored value: {json.dumps(status['stored'], ensure_ascii=False)}")
-        if rule.fill_only:
+        if rule.asks_open_fields:
             out.extend(_open_lines(line, field))
         out.append(f"Why you are asked: {status['status']} - {status['reason']}")
         evidence = _evidence_lines(field, status)
@@ -1004,6 +1113,20 @@ BRIEF_PARTS = {
         "role": "Sonnet researcher",
         "lane": "WD4",
         "work": "fill",
+        "evidence": (
+            "Your evidence is your own web research, as each prompt says: start from the site's "
+            "Wikidata item, its Wikipedia article in any language, its stored source_url and the "
+            "pages listed in the prompt, then reputable sources - heritage registers, museums, "
+            "universities, journals, Pleiades, excavation reports. Never ancientnerds.com, AI "
+            "content farms or Wikipedia mirrors."
+        ),
+        "unsourced": 'is "unresolved"',
+        "model": "claude-sonnet-5-5",
+    },
+    R.RECHECK.name: {
+        "role": "Sonnet researcher",
+        "lane": "WD5",
+        "work": "re-check",
         "evidence": (
             "Your evidence is your own web research, as each prompt says: start from the site's "
             "Wikidata item, its Wikipedia article in any language, its stored source_url and the "

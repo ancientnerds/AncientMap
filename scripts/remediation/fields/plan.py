@@ -30,7 +30,8 @@ SKIPPED.jsonl; other fields of the site go on):
   invariant inside the transaction and fail the whole step) - refused when the live `geom` is
   neither NULL nor the live point, and when the new point lies in another country than the stored
   one (`country-changes`: a country is the country lanes' question,
-  `bcases.classify.country_after_move`). `unresolved` is held for the owner
+  `bcases.classify.country_after_move`; a point in the sea within 2.5 km of the stored country, or in
+  a polygon of Cyprus's island, is the stored country's - D19, X3). `unresolved` is held for the owner
   (`coordinates-unresolved`); the columns are NOT NULL;
 * **period_start** `replace` -> the attested year - refused when the site's `period_end` lies before
   it; `clear` -> NULL; written only together with its label (`period-name-refused` when the
@@ -59,6 +60,22 @@ and a period label is written only beside a start written in the same step.
                                         written source_url with the item its article names (a
                                         journalled site_external_ids pass re-derives the ids), and
                                         every written start (the scope check, WD2)
+
+**Lane wd5** (`rule.py`, the `recheck` rule; D10, D12, D19 of 2026-10-08) is the one lane that
+replaces a stored value, and only a value no source stands behind. Who made the value is read from
+the journal (`population.made_sql`, the step's sites): its newest row's evidence says `RULE` or names
+a MiniMax model, and the question named the field open for a reason (`line["open"][field]["why"]`).
+
+* `replace` is written onto an empty field, or onto a value that is `rule-made` (a rule made it),
+  `minimax-answered` (a MiniMax agent wrote it, or decided it and left it) or an `unsourced-point`
+  (nothing sourced the stored point); another lane's sourced write is never replaced
+  (`sourced-value`);
+* `unresolved` on a start a rule made clears it to NULL with the label `Undated` (D12, "unsourced ->
+  Undated") - only a rule-made start; on a value a MiniMax agent wrote it **restores** the journal's
+  old value (the pattern of `mechanical/reversal*.py`; a point restores `lat`, `lon` and `geom`
+  together); anything else stays and is listed;
+* `keep` writes nothing: a MiniMax keep that Claude confirms stands on Claude's quote;
+* a period label is written beside the start the step writes, clears or restores, and only then.
 
 **Undo**: each step's ROLLBACK.sql (written before its APPLY.sql, pinned to its PLAN.jsonl) restores
 every old value under the step's `-rollback` stamp - rehearse it with `apply.py --rehearse-rollback`
@@ -104,8 +121,9 @@ from mechanical.plan import (  # noqa: E402
 from fields import answers as A  # noqa: E402
 from fields import classify as C  # noqa: E402
 from fields import handoff as HO  # noqa: E402
+from fields import population as POP  # noqa: E402
 from fields import rule as R  # noqa: E402
-from pipeline.utils.text import categorize_period  # noqa: E402
+from pipeline.utils.text import UNDATED, categorize_period  # noqa: E402
 
 #: At most this many sites per step (PIECE6 section 7, the 100-step write rule).
 STEP_SITES = 100
@@ -125,6 +143,15 @@ HANDOFF_FILE = "HANDOFF.json"
 ACCEPTED_FILE = "ACCEPTED.json"
 NOTHING_FILE = "NOTHING_TO_WRITE.json"
 WRITTEN_FIELDS = ("lat", "lon", "geom", "period_start", "period_name", "site_type", "source_url")
+#: Lane wd5: the open reasons whose `unresolved` answer may write (a rule's start is cleared, a
+#: MiniMax value restored); an unsourced point that nobody wrote has nothing to withdraw.
+WITHDRAWABLE = (POP.WHY_RULE_MADE, POP.WHY_MINIMAX)
+#: Lane wd5: who may have made a value that one of the open reasons names, for a `replace` to land on it.
+REPLACEABLE = {
+    POP.WHY_RULE_MADE: (POP.RULE,),
+    POP.WHY_MINIMAX: (POP.MINIMAX, None),
+    POP.WHY_UNSOURCED_POINT: (POP.MINIMAX, None),
+}
 
 LIVE_SQL = """\
 SELECT u.id::text AS site_id, u.name, u.source_id, u.scope_status, u.country,
@@ -170,7 +197,16 @@ def wants_write(
     stored start is what the label is compared against, and is refused by name without it."""
     if any(d["decision"] in (A.REPLACE, A.CLEAR) for d in decisions):
         return True
-    if rule.fill_only:
+    if rule.recheck and line is not None:
+        # an unresolved answer clears a rule's start or restores a MiniMax value: the plan decides
+        # which from the journal, so every site that was asked for one of these is a wave site
+        if any(
+            d["decision"] == A.UNRESOLVED
+            and line["open"].get(d["field"], {}).get("why") in WITHDRAWABLE
+            for d in decisions
+        ):
+            return True
+    if rule.asks_open_fields:
         return False
     if line is None:
         raise PlanError(
@@ -208,11 +244,7 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
         by_site.setdefault(d["site_id"], []).append(d)
     # every site a decision speaks for, not only the population's: a rule row is a value a named
     # rule supports, and a site the run never asked is still a site the rule dates (2026-10-04)
-    sites = sorted(
-        sid
-        for sid in by_site
-        if wants_write(by_site[sid], classified.get(sid), rule)
-    )
+    sites = sorted(sid for sid in by_site if wants_write(by_site[sid], classified.get(sid), rule))
     steps = [sites[i : i + STEP_SITES] for i in range(0, len(sites), STEP_SITES)]
     held = [
         {
@@ -329,7 +361,7 @@ def _decision_evidence(decision: Mapping[str, Any], rule: R.Rule) -> list[dict[s
         "reasoning": decision["reasoning"],
         "value_page": decision["value_page"],
     }
-    if rule.fill_only:
+    if rule.asks_open_fields:
         entry["model"] = decision["model"]
     return [*quoted, entry]
 
@@ -350,6 +382,76 @@ def _journal_ok(
     return journal_break(links, live)
 
 
+#: Lane wd5: what an `unresolved` answer becomes for a value a MiniMax agent wrote - the plan puts
+#: back what the journal's newest row replaced. Never an answer an agent gives (`answers.DECISIONS`).
+RESTORE = "restore"
+
+
+def _action(answer: str, field: str, kinds: Mapping[str, str | None], under: R.Rule) -> str:
+    """What the plan does with a field's answer: the answer itself, except under the recheck rule,
+    where `unresolved` clears a start a rule made (D12, "unsourced -> Undated") and restores a value
+    a MiniMax agent wrote. Only those two; nothing else is withdrawn. A start a MiniMax agent wrote
+    is restored to what the journal's row replaced, never cleared by this rule; when that was no
+    start (all 265 MiniMax starts of 2026-10-08 filled an empty cell), the restored state is an
+    empty start, and the label that follows it is `UNDATED` (the period invariant; the master plan
+    item 9 and the fields map line 244) - the label was NULL before, which that invariant forbids."""
+    if not (under.recheck and answer == A.UNRESOLVED):
+        return answer
+    kind = POP.field_kind(kinds, field)
+    if field == "period_start" and kind == POP.RULE:
+        return A.CLEAR
+    if kind == POP.MINIMAX:
+        return RESTORE
+    return answer
+
+
+def _withdrawal_evidence(action: str, field: str) -> dict[str, Any]:
+    """The journal's evidence of a cell the plan withdraws on an `unresolved` answer."""
+    if action == A.CLEAR:
+        quote = (
+            "unresolved: no source dates the start, and the stored start was made by a rule "
+            "(journal evidence status RULE), so the site is Undated with no year"
+        )
+    else:
+        quote = (
+            f"unresolved: no source stands behind the {field} a MiniMax agent wrote, so the "
+            "journal's earlier value is put back"
+        )
+    return {
+        "source": "OWNER_DECISIONS_2026-10-08.md D10, D12",
+        "url": "output/remediation/OWNER_DECISIONS_2026-10-08.md",
+        "quote": quote,
+    }
+
+
+def _replaceable(line: Mapping[str, Any], field: str, kinds: Mapping[str, str | None]) -> bool:
+    """Whether a stored value may be replaced under the recheck rule: the question named the field
+    open for a reason, and the journal says it was made by who that reason names (`REPLACEABLE`).
+    Another lane's sourced write is neither."""
+    why = line["open"].get(field, {}).get("why")
+    return why in REPLACEABLE and POP.field_kind(kinds, field) in REPLACEABLE[why]
+
+
+def _sourced_note(line: Mapping[str, Any], field: str, kinds: Mapping[str, str | None]) -> str:
+    why = line["open"].get(field, {}).get("why")
+    return (
+        f"the question named the field open for {why!r}, and the journal says it was made by "
+        f"{POP.field_kind(kinds, field)!r}: a value a source stands behind is never replaced"
+    )
+
+
+def _restored_point(
+    live: Mapping[str, Any],
+    journals: Mapping[str, Sequence[JournalLink]],
+    kinds: Mapping[str, str | None],
+) -> tuple[float, float]:
+    """The point before the MiniMax agent moved it: each of `lat` and `lon` that agent wrote goes
+    back to the old value of its newest journal row, the other stays. `kinds` says which."""
+    lat = journals["lat"][-1].old_value if kinds.get("lat") == POP.MINIMAX else live["lat_text"]
+    lon = journals["lon"][-1].old_value if kinds.get("lon") == POP.MINIMAX else live["lon_text"]
+    return float(lat), float(lon)
+
+
 def site_cells(
     live: Mapping[str, Any],
     line: Mapping[str, Any],
@@ -360,10 +462,16 @@ def site_cells(
     derive: Callable[[int | None], str | None] = categorize_period,
     frontend: Callable[[int], str] | None = None,
     under: R.Rule = R.DEFAULT,
+    kinds: Mapping[str, str | None] | None = None,
 ) -> list[Verdict]:
     """Every cell of one site - writes (`ok`) and refusals. Pure: every input is given. Under a
     fill-only rule (WD3) a replace is written only for a field the question named open
-    (`line["open"]`), a clear is refused, and a period label is written only beside a start."""
+    (`line["open"]`), a clear is refused, and a period label is written only beside a start.
+    Under the recheck rule (wd5) `kinds` says who made each column's value (`population.made_kinds`,
+    from the journal): a replace lands on an empty field or a value of a kind its open reason names
+    (`REPLACEABLE`), an unresolved answer clears a rule-made start to `Undated` or restores what a
+    MiniMax agent wrote, and the label follows the start the step writes."""
+    kinds = kinds or {}
     out: list[Verdict] = []
     tag = under.stage
 
@@ -405,22 +513,26 @@ def site_cells(
             refuse(column, "held-unreadable", decision["reasoning"], None if stored is None
                    else str(stored))  # fmt: skip
             continue
-        if decision["decision"] == A.UNRESOLVED and field != "coordinates":
+        action = _action(decision["decision"], field, kinds, under)
+        if action == A.UNRESOLVED and field != "coordinates":
             refuse(field, "field-unresolved", decision["reasoning"],
                    None if stored is None else str(stored))  # fmt: skip
             continue
-        if under.fill_only:
+        if under.asks_open_fields:
             column = "lat" if field == "coordinates" else field
             if decision["decision"] == A.CLEAR:
                 refuse(column, "never-clears", f"the {under.name} rule fills fields, it never "
                        "empties one", None if stored is None else str(stored))  # fmt: skip
                 continue
-            if field not in line["open"]:
+            if under.fill_only and field not in line["open"]:
                 refuse(column, "not-an-open-field", "the question named this field open: a field "
                        "that holds a sourced value is never replaced",
                        None if stored is None else str(stored))  # fmt: skip
                 continue
         evidence = _decision_evidence(decision, under)
+        if action != decision["decision"]:
+            evidence = [*evidence, _withdrawal_evidence(action, field)]
+        replaces = f"{tag}-restore" if action == RESTORE else f"{tag}-replace"
         if field == "coordinates":
             live_point = f"{float(live['lat_text'])}, {float(live['lon_text'])}"
             if stored != live_point:
@@ -430,10 +542,17 @@ def site_cells(
                     f"decided about {stored}, holds {live_point}",
                 )
                 continue
-            if decision["decision"] == A.UNRESOLVED:
+            if action == A.UNRESOLVED:
                 refuse("lat", "coordinates-unresolved", decision["reasoning"], live_point)
                 continue
-            lat, lon = (float(x) for x in str(decision["value"]).split(","))
+            if under.recheck and action == A.REPLACE and not _replaceable(line, field, kinds):
+                refuse("lat", "sourced-value", _sourced_note(line, field, kinds), live_point,
+                       str(decision["value"]))  # fmt: skip
+                continue
+            if action == RESTORE:
+                lat, lon = _restored_point(live, journals, kinds)
+            else:
+                lat, lon = (float(x) for x in str(decision["value"]).split(","))
             if not (live["geom_text"] is None or live["geom_is_point"]):
                 refuse("geom", "geom-not-point", "the live geom is neither NULL nor the live point")
                 continue
@@ -442,18 +561,20 @@ def site_cells(
                 refuse(
                     "lat",
                     "country-changes",
-                    f"the new point lies in {country['polygon']}, the site says {live['country']}",
+                    f"the new point lies in {country['polygon'] or 'no country polygon, beyond the coast tolerance'}, the site says {live['country']}",
                     live_point,
-                    str(decision["value"]),
+                    f"{_point_text(lat)}, {_point_text(lon)}",
                 )
                 continue
             note = f"{live_point} -> {_point_text(lat)}, {_point_text(lon)}"
+            if country.get("note"):
+                note += f" ({country['note']})"
             group = []
             if float(live["lat_text"]) != lat:
-                group.append(cell("lat", live["lat_text"], _point_text(lat), f"{tag}-replace", note,
+                group.append(cell("lat", live["lat_text"], _point_text(lat), replaces, note,
                                   evidence))  # fmt: skip
             if float(live["lon_text"]) != lon:
-                group.append(cell("lon", live["lon_text"], _point_text(lon), f"{tag}-replace", note,
+                group.append(cell("lon", live["lon_text"], _point_text(lon), replaces, note,
                                   evidence))  # fmt: skip
             group.append(cell("geom", live["geom_text"], ewkt(lat, lon), f"{tag}-point", note,
                               evidence))  # fmt: skip
@@ -478,13 +599,27 @@ def site_cells(
                 field, "moved-since-classification", f"decided about {stored!r}, holds {current!r}"
             )
             continue
-        new = None if decision["decision"] == A.CLEAR else str(decision["value"])
+        if action == A.CLEAR:
+            new = None
+        elif action == RESTORE:
+            new = journals[field][-1].old_value
+        else:
+            new = str(decision["value"])
         if new == current_text:
             continue
         if under.fill_only and current_text is not None and current_text.strip():
             refuse(field, "not-empty", f"the {under.name} rule fills an empty field: a stored "
                    f"value is never replaced (it stays {current_text!r}; the owner list names the "
                    f"value found: {new!r})", current_text, new)  # fmt: skip
+            continue
+        if (
+            under.recheck
+            and action == A.REPLACE
+            and current_text is not None
+            and current_text.strip()
+            and not _replaceable(line, field, kinds)
+        ):
+            refuse(field, "sourced-value", _sourced_note(line, field, kinds), current_text, new)
             continue
         if field == "period_start":
             end = live["period_end"]
@@ -497,7 +632,7 @@ def site_cells(
                     new,
                 )
                 continue
-        rule = f"{tag}-clear" if new is None else f"{tag}-replace"
+        rule = f"{tag}-clear" if action == A.CLEAR else replaces
         write(field, current_text, new, rule, f"{current_text!r} -> {new!r}", evidence)
         if field == "period_start" and out[-1].ok:
             final_start = None if new is None else int(new)
@@ -510,9 +645,12 @@ def site_cells(
         )
         return out
     started = [v for v in out if v.ok and v.column == "period_start"]
-    if under.fill_only and not started:
-        return out  # WD3 fills: a label is written only beside a start it writes
-    label = None if final_start is None else derive(final_start)
+    if under.asks_open_fields and not started:
+        return out  # a label is written only beside a start the step writes, clears or restores
+    if final_start is None:
+        label = UNDATED if under.recheck else None
+    else:
+        label = derive(final_start)
     named: Verdict | None = None
     if final_start is not None and frontend is not None and frontend(final_start) != label:
         named = refusal(
@@ -523,14 +661,16 @@ def site_cells(
         # here too, a reader of this journal row alone must see who answered
         answered = (
             [_decision_evidence(decisions["period_start"], under)[-1]]
-            if under.fill_only and started
+            if under.asks_open_fields and started
             else []
         )
         evidence = [
             {
                 "source": "pipeline/utils/text.py:categorize_period",
                 "url": "pipeline/utils/text.py",
-                "quote": f"categorize_period({final_start}) = {label!r}",
+                "quote": f"categorize_period({final_start}) = {label!r}"
+                if final_start is not None
+                else f"no start: the label is the residue label {UNDATED!r}",
             },
             {
                 "source": "output/remediation/gold_standard/GOLD_STANDARD.md:79",
@@ -612,6 +752,11 @@ def build_step(
     if missing:
         raise PlanError(f"{len(missing)} site(s) of the step no longer exist: {missing[:3]}")
     journals = {column: load_journal(reader, column, sites) for column in WRITTEN_FIELDS}
+    made = (
+        {(str(r["site_id"]), str(r["column_name"])): r for r in reader(POP.made_sql(sites))}
+        if rule.recheck
+        else {}
+    )
     verdicts: list[Verdict] = []
     for sid in sites:
         verdicts.extend(
@@ -623,6 +768,7 @@ def build_step(
                 country_check=country_check,
                 frontend=frontend,
                 under=rule,
+                kinds=POP.made_kinds(rows[sid], made, sid) if rule.recheck else None,
             )
         )
     changes = tuple(v for v in verdicts if v.ok)
@@ -851,8 +997,9 @@ def handoff(wave: str, stage: str = R.DEFAULT.stage) -> dict[str, Any]:
 
 # ------------------------------------------------------------------------------ the CLI
 def _country_check() -> Callable[[str, float, float], Mapping[str, Any]]:
-    """`bcases.classify.country_after_move` over the boundary file, loaded once."""
-    from bcases.classify import country_after_move
+    """`bcases.classify.country_after_move` over the boundary file, loaded once, with D19's coast
+    tolerance (`COAST_KM`) - a point in the sea within it of the stored country counts as in it."""
+    from bcases.classify import COAST_KM, country_after_move
 
     tools = REPO / "output" / "remediation" / "tools"
     if str(tools) not in sys.path:
@@ -860,7 +1007,7 @@ def _country_check() -> Callable[[str, float, float], Mapping[str, Any]]:
     import country_census as CC  # noqa: PLC0415 - the boundary file and its spelling rules
 
     atlas = CC.load_countries()
-    return lambda country, lat, lon: country_after_move(country, lat, lon, atlas)
+    return lambda country, lat, lon: country_after_move(country, lat, lon, atlas, COAST_KM)
 
 
 def main(argv: list[str] | None = None) -> int:

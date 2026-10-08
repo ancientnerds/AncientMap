@@ -697,16 +697,19 @@ class TestTheRun:
         counts = POP.build(root, rest, table=TABLE, wd1=wd1([]), without=pilot)
         assert counts["sites"] == 0
 
-    def test_the_export_writes_the_four_files(self, tmp_path: Path) -> None:
+    def test_the_export_writes_the_five_files(self, tmp_path: Path) -> None:
         def reader(sql: str) -> list[dict[str, Any]]:
             if "site_content_links" in sql:
                 return [{"site_id": SITE, "links": []}]
+            if "jsonb_array_elements" in sql:  # who made each value (wd5)
+                return [{**point_write("lat", "37.9755"), "rule_made": False, "minimax": False,
+                         "withdrawn": False, "note": None}]  # fmt: skip
             if "remediation_change_log" in sql:
                 return [point_write("lat", "37.9755")]
             return [stored_row()]
 
         result = POP.export(tmp_path / "o", reader=reader)
-        assert result == {"stored": 1, "links": 1, "points": 1}
+        assert result == {"stored": 1, "links": 1, "points": 1, "made": 1}
         assert (tmp_path / "o" / C.SEEDS_FILE).read_text(encoding="utf-8") == ""
         assert POP.read_links(tmp_path / "o") == {SITE: []}
         assert POP.read_points(tmp_path / "o")[SITE]["new_value"] == "37.9755"
@@ -866,7 +869,11 @@ class TestTheWaveAndTheLane:
             FP.read_wave("2026-10-02a")  # no WD1 wave of that label
 
     def test_a_site_whose_only_flaw_is_its_label_is_no_wave_site(self, repo: Path) -> None:
-        # OTHER's label is not the bucket of its start (WD1's wave would repair it): WD3 fills only
+        # OTHER's label is not the bucket of its start (WD1's wave would repair it): WD3 fills only.
+        # OTHER has a decision (a keep), so the plan asks whether its label alone makes it a site
+        decisions = HO._read_jsonl(repo / "run" / HO.DECISIONS_FILE)
+        keep = {**wd3_decision("site_type", "keep", "City", "City"), "site_id": TP.OTHER}
+        HO._write_jsonl(repo / "run" / HO.DECISIONS_FILE, [*decisions, keep])
         FP.build_wave(repo / "run", "2026-10-02a")
         assert FP.read_wave("2026-10-02a", "wd3")["steps"] == [[TP.SITE]]
 
@@ -1027,8 +1034,12 @@ class TestTheOwnerList:
         step.mkdir(parents=True)
         HO._write_json(wave / "WAVE.json", {"run": POP._shown(run), "steps": [[s[0], s[2]]]})
         (wave / "WAVE.sha256").write_text(sha(wave / "WAVE.json") + "\n", encoding="utf-8")
-        HO._write_jsonl(step / "PLAN.jsonl", [{"site_id": s[0], "column": "period_start"},
-                                              {"site_id": s[0], "column": "period_name"}])  # fmt: skip
+        HO._write_jsonl(step / "PLAN.jsonl", [
+            {"site_id": s[0], "column": "period_start", "new_value": "-2500", "rule": "wd3-replace",
+             "evidence": []},
+            {"site_id": s[0], "column": "period_name", "new_value": "3000 - 1500 BC",
+             "rule": "wd3-derive-period-name", "evidence": []},
+        ])  # fmt: skip
         HO._write_jsonl(step / "SKIPPED.jsonl", [{"site_id": s[2], "column": "source_url",
                                                   "reason": "moved-since-classification", "note": "holds 'x'"}])  # fmt: skip
         HO._write_json(step / "ACCEPTED.json", {"deviations": 0})
@@ -1088,7 +1099,7 @@ class TestTheOwnerList:
     def test_only_a_wd3_or_wd4_run_has_an_owner_list(self, tmp_path: Path) -> None:
         run = tmp_path / "wd1"
         run.mkdir()
-        with pytest.raises(OL.OwnerListError, match="not a WD3 or WD4 run"):
+        with pytest.raises(OL.OwnerListError, match="not a WD3, WD4 or wd5 run"):
             OL.build([run], tmp_path / "none")
 
     def test_a_period_run_has_an_owner_list_too(
@@ -1132,12 +1143,27 @@ class TestTheRunsRoundsAreItsPopulation:
         ]
         lines, decisions = [], []
         for number, (site, field, verdict) in enumerate(spec):
-            lines.append({"site_id": site, "name": f"Site {number}", "country": "Peru",
-                          "asked": [field], "fields": {field: {"stored": None}},
-                          "open": {field: {"why": "empty", "wd1": None}}})
+            lines.append(
+                {
+                    "site_id": site,
+                    "name": f"Site {number}",
+                    "country": "Peru",
+                    "asked": [field],
+                    "fields": {field: {"stored": None}},
+                    "open": {field: {"why": "empty", "wd1": None}},
+                }
+            )
             if verdict:
-                decisions.append({"site_id": site, "field": field, "decision": verdict, "asked": 3,
-                                  "reasoning": f"{verdict} reasoning", "via": "counted"})
+                decisions.append(
+                    {
+                        "site_id": site,
+                        "field": field,
+                        "decision": verdict,
+                        "asked": 3,
+                        "reasoning": f"{verdict} reasoning",
+                        "via": "counted",
+                    }
+                )
         HO._write_jsonl(run / C.CLASSIFIED_FILE, lines)
         HO._write_jsonl(run / "DECISIONS.jsonl", decisions)
         wave = waves / "2026-10-02a"
@@ -1145,25 +1171,34 @@ class TestTheRunsRoundsAreItsPopulation:
         step.mkdir(parents=True)
         HO._write_json(wave / "WAVE.json", {"run": POP._shown(run), "steps": [[s[0]]]})
         (wave / "WAVE.sha256").write_text(sha(wave / "WAVE.json") + "\n", encoding="utf-8")
-        HO._write_jsonl(step / "PLAN.jsonl", [{"site_id": s[0], "column": "period_start"}])
+        HO._write_jsonl(step / "PLAN.jsonl", [{"site_id": s[0], "column": "period_start",
+                                               "new_value": "-2500", "rule": "wd3-replace",
+                                               "evidence": []}])  # fmt: skip
         HO._write_jsonl(step / "SKIPPED.jsonl", [])
         HO._write_json(step / "ACCEPTED.json", {"deviations": 0})
         return run, waves
 
     def test_a_field_the_run_never_asked_is_not_a_question_of_it(self, tmp_path: Path) -> None:
         run, waves = self.build_files(tmp_path)
-        HO._write_jsonl(run / OL.ROUNDS_FILE, [{"round": 0, "fields": {self.S[0]: ["period_start"]}}])
+        HO._write_jsonl(
+            run / OL.ROUNDS_FILE, [{"round": 0, "fields": {self.S[0]: ["period_start"]}}]
+        )
         result = OL.build([run], waves)
         assert result["counts"]["period_start"] == {"filled": 1}
         assert result["counts"]["site_type"] == {}, "never asked, so never a question of this run"
         assert result["population"] == {"classified": 4, "asked": 1}
 
-    def test_a_site_asked_in_a_later_round_stays_pending_until_answered(self, tmp_path: Path) -> None:
+    def test_a_site_asked_in_a_later_round_stays_pending_until_answered(
+        self, tmp_path: Path
+    ) -> None:
         run, waves = self.build_files(tmp_path)
-        HO._write_jsonl(run / OL.ROUNDS_FILE, [
-            {"round": 0, "fields": {self.S[0]: ["period_start"]}},
-            {"round": 1, "fields": {self.S[1]: ["site_type"], self.S[2]: ["coordinates"]}},
-        ])
+        HO._write_jsonl(
+            run / OL.ROUNDS_FILE,
+            [
+                {"round": 0, "fields": {self.S[0]: ["period_start"]}},
+                {"round": 1, "fields": {self.S[1]: ["site_type"], self.S[2]: ["coordinates"]}},
+            ],
+        )
         result = OL.build([run], waves)
         assert result["counts"]["period_start"] == {"filled": 1}
         assert result["counts"]["site_type"] == {"unresolved": 1}
@@ -1174,10 +1209,13 @@ class TestTheRunsRoundsAreItsPopulation:
 
     def test_a_run_whose_questions_were_all_answered_is_final(self, tmp_path: Path) -> None:
         run, waves = self.build_files(tmp_path)
-        HO._write_jsonl(run / OL.ROUNDS_FILE, [
-            {"round": 0, "fields": {self.S[0]: ["period_start"], self.S[1]: ["site_type"]}},
-            {"round": 1, "fields": {self.S[1]: ["site_type"]}},
-        ])
+        HO._write_jsonl(
+            run / OL.ROUNDS_FILE,
+            [
+                {"round": 0, "fields": {self.S[0]: ["period_start"], self.S[1]: ["site_type"]}},
+                {"round": 1, "fields": {self.S[1]: ["site_type"]}},
+            ],
+        )
         summary = OL.write([run], waves, tmp_path / "out", final=True)
         assert summary["pending"] == 0 and summary["listed"] == 1
         assert summary["population"] == {"classified": 4, "asked": 2}
@@ -1203,23 +1241,62 @@ class TestTheRunsRoundsAreItsPopulation:
                 (run / "write").mkdir(parents=True)
                 R.write_run(run, rule)
                 site = f"00000000-0000-4000-8000-00000000000{len(runs) + 1}"
-                HO._write_jsonl(run / C.CLASSIFIED_FILE, [{
-                    "site_id": site, "name": f"{stage} site", "country": "Peru",
-                    "asked": ["period_start"], "fields": {"period_start": {"stored": None}},
-                    "open": {"period_start": {"why": "empty", "wd1": None}}}])
-                HO._write_jsonl(run / "DECISIONS.jsonl", [{
-                    "site_id": site, "field": "period_start", "decision": "replace", "asked": 1,
-                    "reasoning": "a source says so", "via": "counted"}])
-                HO._write_jsonl(run / OL.ROUNDS_FILE, [{"round": 0, "fields": {site: ["period_start"]}}])
+                HO._write_jsonl(
+                    run / C.CLASSIFIED_FILE,
+                    [
+                        {
+                            "site_id": site,
+                            "name": f"{stage} site",
+                            "country": "Peru",
+                            "asked": ["period_start"],
+                            "fields": {"period_start": {"stored": None}},
+                            "open": {"period_start": {"why": "empty", "wd1": None}},
+                        }
+                    ],
+                )
+                HO._write_jsonl(
+                    run / "DECISIONS.jsonl",
+                    [
+                        {
+                            "site_id": site,
+                            "field": "period_start",
+                            "decision": "replace",
+                            "asked": 1,
+                            "reasoning": "a source says so",
+                            "via": "counted",
+                        }
+                    ],
+                )
+                HO._write_jsonl(
+                    run / OL.ROUNDS_FILE, [{"round": 0, "fields": {site: ["period_start"]}}]
+                )
                 wave = run / "write" / "2026-10-04"
                 step = wave / "s001"
                 step.mkdir(parents=True)
-                HO._write_json(wave / "WAVE.json", {"run": POP._shown(run), "steps": [[site]],
-                                                    "stage": stage, "rule": rule.name})
+                HO._write_json(
+                    wave / "WAVE.json",
+                    {"run": POP._shown(run), "steps": [[site]], "stage": stage, "rule": rule.name},
+                )
                 (wave / "WAVE.sha256").write_text(sha(wave / "WAVE.json") + "\n", encoding="utf-8")
-                HO._write_jsonl(step / "PLAN.jsonl", [
-                    {"site_id": site, "column": "period_start"},
-                    {"site_id": site, "column": "period_name"}])
+                HO._write_jsonl(
+                    step / "PLAN.jsonl",
+                    [
+                        {
+                            "site_id": site,
+                            "column": "period_start",
+                            "new_value": "-2500",
+                            "rule": "wd3-replace",
+                            "evidence": [],
+                        },
+                        {
+                            "site_id": site,
+                            "column": "period_name",
+                            "new_value": "3000 - 1500 BC",
+                            "rule": "wd3-derive-period-name",
+                            "evidence": [],
+                        },
+                    ],
+                )
                 HO._write_jsonl(step / "SKIPPED.jsonl", [])
                 HO._write_json(step / "ACCEPTED.json", {"deviations": 0})
                 runs.append(run)
