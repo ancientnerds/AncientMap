@@ -39,10 +39,13 @@ def _line(
     t: str = "2026-09-18T12:00:00+00:00",
     status: int = 200,
     purpose: str | None = "",
+    proto: str | None = "HTTP/2.0",
 ) -> str:
     entry = {"t": t, "ref": ref, "req": req, "status": status, "ua": ua}
     if purpose is not None:
         entry["purpose"] = purpose
+    if proto is not None:
+        entry["proto"] = proto
     return json.dumps(entry)
 
 
@@ -53,6 +56,7 @@ def _visit(
     page: bool = True,
     at: datetime | None = None,
     prefetch: bool | None = False,
+    http1: bool | None = False,
 ) -> rl.Visit:
     return rl.Visit(
         at=at or datetime(2026, 9, 18, 12, 0, tzinfo=UTC),
@@ -62,6 +66,7 @@ def _visit(
         bot=bot,
         page=page,
         prefetch=prefetch,
+        http1=http1,
     )
 
 
@@ -267,6 +272,54 @@ def test_coverage_report_reads_only_lines_that_carry_the_purpose():
     assert out["families"] == [{"family": "search", "visits": 1, "bots": 0}]
     assert out["lines"] == 1
     assert out["covered_from"] == marked.isoformat()
+
+
+def test_parse_lines_read_the_protocol():
+    """The scraper of 2026-09-26 forged a Google referer and a Chrome UA, and
+    spoke HTTP/1.1 on all 2,604 of its requests; browsers arrive over h2."""
+    h1, h10, h2, h3, before = rl.parse_lines(
+        [
+            _line("https://www.google.com/", "GET /sites/", proto="HTTP/1.1"),
+            _line("https://www.google.com/", "GET /sites/", proto="HTTP/1.0"),
+            _line("https://www.google.com/", "GET /sites/", proto="HTTP/2.0"),
+            _line("https://www.google.com/", "GET /sites/", proto="HTTP/3.0"),
+            _line("https://www.google.com/", "GET /sites/", proto=None),
+        ]
+    )
+    assert (h1.http1, h10.http1, h2.http1, h3.http1) == (True, True, False, False)
+    # A line from before nginx logged the field: nobody can tell
+    assert before.http1 is None
+
+
+def test_coverage_report_counts_an_http1_page_as_scripted():
+    """2026-10-08: 80 % of the day's Google lines were one scraper over
+    HTTP/1.1; counted as arrivals they made nginx read five times Umami."""
+    out = rl.coverage_report(
+        [_visit(), _visit(http1=True), _visit(http1=True, status=410), _visit(http1=True, page=False)],
+        SINCE,
+        UNTIL,
+    )
+    assert out["families"] == [{"family": "search", "visits": 1, "bots": 0}]
+    assert out["hosts"] == [{"host": "google.com", "visits": 1}]
+    assert out["statuses"] == []
+    assert out["scripted"] == 2
+    assert out["lines"] == 4
+
+
+def test_coverage_report_reads_only_lines_that_carry_the_protocol():
+    """A line logged before nginx wrote the protocol may be the scraper or a
+    visitor; it is not read, and the window starts where the field does."""
+    marked = SINCE + timedelta(days=3)
+    out = rl.coverage_report([_visit(at=SINCE + timedelta(days=1), http1=None), _visit(at=marked)], SINCE, UNTIL)
+    assert out["families"] == [{"family": "search", "visits": 1, "bots": 0}]
+    assert out["lines"] == 1
+    assert out["covered_from"] == marked.isoformat()
+
+
+def test_aggregate_leaves_out_http1_requests():
+    since = SINCE - timedelta(days=1)
+    table = rl.aggregate([_visit(), _visit(http1=True), _visit(http1=None)], since)
+    assert table["search"]["google.com"]["human"] == 2
 
 
 # ---- the file -------------------------------------------------------------

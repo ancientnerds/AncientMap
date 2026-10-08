@@ -106,6 +106,44 @@ def test_a_site_page_opening_itself_is_not_an_interaction():
     assert {s.id: s.events["site_open"] for s in sessions} == {"seo": 1, "globe": 1, "both": 1}
 
 
+def test_a_story_or_paper_page_reporting_its_own_reader_is_not_an_interaction():
+    """PageOpen sends story_open / paper_open with method "landing" for every
+    reader who lands on the page (2026-10-04). Counted as an act, it made 86 %
+    of one-page story sessions "human" instead of 11 %."""
+    rows = [
+        ev("story", path="/news-archive/x-1"),
+        ev("story", "story_open", event_type=2, data={"method": "landing", "context": "story"}),
+        ev("paper", path="/research/p"),
+        ev("paper", "paper_open", event_type=2, data={"method": "landing", "context": "paper"}),
+        # A card opened by hand is still the reader's own act.
+        ev("card", path="/news-archive/"),
+        ev("card", "story_open", event_type=2, data={"method": "expand"}),
+        # So is anything the reader does after landing.
+        ev("played", path="/news-archive/x-1"),
+        ev("played", "story_open", event_type=2, data={"method": "landing"}),
+        ev("played", "media_play", event_type=2, data={"kind": "video"}),
+    ]
+    sessions = fs.sessions_from_rows(rows)
+    assert {s.id: s.human for s in sessions} == {"story": False, "paper": False, "card": True, "played": True}
+    # The events stay for the session type and the journeys.
+    assert {s.id: s.events["story_open"] for s in sessions} == {"story": 1, "paper": 0, "card": 1, "played": 1}
+
+
+def test_the_same_url_twice_is_not_a_second_page():
+    """A reload, or the same search result clicked again after going back to
+    Google: 264 such repeats in the tracker history to 2026-10-08."""
+    rows = [
+        ev("again", path="/news-archive/x-1"),
+        ev("again", path="/news-archive/x-1", minute=1, referrer="www.google.com"),
+        ev("next", path="/news-archive/x-1"),
+        ev("next", path="/sites/peru/x-1", minute=1),
+    ]
+    sessions = fs.sessions_from_rows(rows)
+    assert {s.id: s.human for s in sessions} == {"again": False, "next": True}
+    # Page views still count every load.
+    assert {s.id: s.pages for s in sessions} == {"again": 2, "next": 2}
+
+
 def test_session_types():
     rows = [
         ev("r", path="/news-archive/x-1"),
@@ -171,6 +209,8 @@ def test_journeys_skip_unconfirmed_sessions_and_cap_the_chain():
     rows = [ev("bot", path="/sites/peru/x-1")]  # one page, nothing else
     for i in range(8):
         rows.append(ev("long", path="/", minute=i))
+    # Eight loads of one URL are no second page; the play is the human act.
+    rows.append(ev("long", "media_play", event_type=2, data={"kind": "video"}, minute=9))
     js = fs.journeys(fs.sessions_from_rows(rows))
     assert js == [("direct → home → home → home → home → home", 1)]  # entry + 5 steps
 

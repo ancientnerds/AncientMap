@@ -134,43 +134,80 @@ function installErrorCapture(page: string): void {
   })
 }
 
+/** The three numbers a scroll depth is measured on. */
+export interface ScrollBox {
+  scrollTop: number
+  clientHeight: number
+  scrollHeight: number
+}
+
+/** The box a scroll moved, when that box is the page. Most pages scroll the
+ *  document, but story and site pages scroll a full-height container
+ *  (`.story-page`/`.site-page`: height 100vh, overflow-y auto) and the window
+ *  never moves: measured 2026-10-08 in Chromium, scrollTop 1,342-3,681 px
+ *  after eight wheel steps, window.scrollY 0 and not one window `scroll`
+ *  event - 29 of 901 story sessions had ever sent a depth. A box less than
+ *  half the viewport tall is a strip inside the page (chips, a gallery). */
+export function pageScrollBox(box: ScrollBox | null, viewport: number): ScrollBox | null {
+  if (!box) return null
+  return box.clientHeight >= viewport / 2 ? box : null
+}
+
 function installScrollDepth(page: string): void {
   if (!CONTENT_PAGES.has(page)) return
   const fired = new Set<number>()
   let ticking = false
-  const measure = () => {
+  const measure = (box: ScrollBox) => {
     ticking = false
-    const doc = document.documentElement
-    const reached = newDepthSteps(window.scrollY, window.innerHeight, doc.scrollHeight, fired)
+    const reached = newDepthSteps(box.scrollTop, box.clientHeight, box.scrollHeight, fired)
     for (const depth of reached) track('scroll_depth', { depth, page })
   }
   // Only on a real scroll. Measuring at load counted a short page as "read
   // to the end" and gave every headless fetch four depth events at once
   // (SG/VN scraper bursts, 2026-09-17); a scroll is the visitor's own act.
-  window.addEventListener(
+  // Captured on the document: an element's scroll does not bubble, and a
+  // window listener never hears the container pages (pageScrollBox).
+  document.addEventListener(
     'scroll',
-    () => {
-      if (ticking) return
+    event => {
+      const target = event.target
+      const el = target === document ? document.documentElement : target instanceof Element ? target : null
+      const box = pageScrollBox(el, window.innerHeight)
+      if (!box || ticking) return
       ticking = true
-      requestAnimationFrame(measure)
+      requestAnimationFrame(() => measure(box))
     },
-    { passive: true }
+    { capture: true, passive: true }
   )
+}
+
+/** What a click on a link reports, if anything. A click a handler already
+ *  took over (preventDefault) goes nowhere: the video poster of a story is a
+ *  youtube.com link whose handler plays the video in place, and 77 of the 83
+ *  "outbound youtube.com" clicks up to 2026-10-08 were such plays, a median
+ *  7 ms after their media_play. */
+export function linkClick(
+  href: string,
+  defaultPrevented: boolean,
+  ownHost: string
+): { name: 'discord_click'; src: string } | { name: 'outbound_click'; host: string } | null {
+  if (defaultPrevented) return null
+  if (href.startsWith('/goto/discord')) {
+    return { name: 'discord_click', src: new URLSearchParams(href.split('?')[1] ?? '').get('src') ?? 'unknown' }
+  }
+  const host = outboundHost(href, ownHost)
+  return host ? { name: 'outbound_click', host } : null
 }
 
 function installOutboundClicks(page: string): void {
   document.addEventListener('click', event => {
     const anchor = (event.target as Element | null)?.closest?.('a[href]')
     if (!anchor) return
-    const href = anchor.getAttribute('href') ?? ''
-    if (href.startsWith('/goto/discord')) {
-      // The funnel redirect logs the click server-side as well; this one
-      // puts it into the visitor's journey.
-      track('discord_click', { src: new URLSearchParams(href.split('?')[1] ?? '').get('src') ?? 'unknown', page })
-      return
-    }
-    const host = outboundHost(href, location.hostname)
-    if (host) track('outbound_click', { host, page })
+    const click = linkClick(anchor.getAttribute('href') ?? '', event.defaultPrevented, location.hostname)
+    // The Discord funnel redirect logs the click server-side as well; this
+    // one puts it into the visitor's journey.
+    if (click?.name === 'discord_click') track('discord_click', { src: click.src, page })
+    else if (click) track('outbound_click', { host: click.host, page })
   })
 }
 

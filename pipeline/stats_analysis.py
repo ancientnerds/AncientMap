@@ -61,6 +61,15 @@ ENGAGEMENTS = ("media_play", "outbound_click", "share", "feedback", "lyra_chat",
 #: instead of a visitor picking it — SitePopup's effect sends the page type,
 #: and on the server-rendered detail page that is "site" (SitePopup.tsx).
 AUTO_SITE_OPEN_CONTEXT = "site"
+#: The `method` a `story_open` or `paper_open` carries when the page itself
+#: sent it for a reader who landed there (components/analytics/PageOpen.tsx,
+#: since 2026-10-04). Like the self-opened site above, it proves nothing about
+#: a human: before it, 58 of 551 one-page story sessions (11 %) counted as
+#: human, after it 167 of 195 (86 %), only 23 of them with an act of their own
+#: (SEO audit 2026-10-08).
+AUTO_OPEN_METHOD = "landing"
+#: The events a page fires by itself with `method=AUTO_OPEN_METHOD`.
+LANDING_OPEN_EVENTS = ("story_open", "paper_open")
 #: Custom events that appear as steps in a journey (page types fill the rest).
 JOURNEY_EVENTS = {
     "site_open",
@@ -196,9 +205,16 @@ class Session:
     #: four windows with it — "in the last five minutes" is about the last
     #: sign of life, not about when the visitor arrived.
     last_seen: datetime | None = None
-    #: site_open events the page fired on its own; they stay in `events` (the
-    #: session type and the journey want them) but prove nothing about a human.
+    #: Opens the page fired on its own - a site_open with the page type as
+    #: context, a story_open or paper_open with method "landing". They stay in
+    #: `events` (the session type and the journey want them) but prove nothing
+    #: about a human.
     auto_opens: int = 0
+    #: The distinct URL paths viewed. A second view of the same URL is a
+    #: reload or the same search result clicked again - 264 such repeats, 71 of
+    #: them with google.com as referer again (2026-09-17..10-08) - not a reader
+    #: going on to another page.
+    urls: set[str] = field(default_factory=set)
 
     @property
     def pages(self) -> int:
@@ -215,7 +231,7 @@ class Session:
         # /clusters proves are a single machine.
         if not self.page_steps:
             return False
-        if self.pages >= 2:
+        if len(self.urls) >= 2:
             return True
         return sum(self.events[n] for n in INTERACTIONS) > self.auto_opens
 
@@ -264,13 +280,17 @@ def sessions_from_rows(rows: list[dict[str, Any]]) -> list[Session]:
             if s.entry is None:
                 s.entry = source_family(r.get("referrer_domain"), r.get("utm_source"))
                 s.from_ai = is_ai_entry(r.get("referrer_domain"), r.get("utm_source"))
-            page = page_type(r["url_path"] or "/")
+            path = r["url_path"] or "/"
+            page = page_type(path)
             s.page_steps.append(page)
             s.steps.append(page)
+            s.urls.add(path)
         else:
             name = r["event_name"] or "event"
             s.events[name] += 1
             if name == "site_open" and data.get("context") == AUTO_SITE_OPEN_CONTEXT:
+                s.auto_opens += 1
+            if name in LANDING_OPEN_EVENTS and data.get("method") == AUTO_OPEN_METHOD:
                 s.auto_opens += 1
             if name == "scroll_depth":
                 s.depth = max(s.depth, int(float(data.get("depth", 0) or 0)))

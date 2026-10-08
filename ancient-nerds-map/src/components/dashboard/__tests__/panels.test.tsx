@@ -104,6 +104,7 @@ const EMPTY = {
       lines: 0,
       unverified: 0,
       prefetched: 0,
+      scripted: 0,
       families: [],
       hosts: [],
       statuses: [],
