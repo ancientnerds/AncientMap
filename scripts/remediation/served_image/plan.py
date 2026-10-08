@@ -76,6 +76,10 @@ EXPECTED = "EXPECTED.jsonl"
 SUMMARY = "PLAN_SUMMARY.json"
 
 CONFIRMED, REPLACED, CLEARED, NOTHING = "confirmed", "replaced", "cleared", "no image"
+#: D15: a rechecked hero the checker called `region_or_type` stays - the picture is the owner's 2025
+#: link and a view of the right place is not a picture of another site. Planned like `confirmed`
+#: (the globe's thumbnail follows the served row), named apart so the report can tell them.
+KEPT = "kept"
 #: The site serves nothing, its own Wikidata item claims a file, and the replacement stage called a
 #: claimed file `depicts`: it now serves that file. Not `cleared` - that outcome means the site was
 #: emptied, and the goal's report tells the two apart.
@@ -230,26 +234,32 @@ def decide_site(
         if population != V.UNCONFIRMED_ONLY or pre["status"] not in PC.CONFIRMED:
             raise ST.StateError(f"{sid}: the served image has no check answer")
         evidence = [_evidence_precheck(pre)]
-    elif check["verdict"] == V.DEPICTS:
+    elif not V.needs_replacement(check, population):
         evidence = [_evidence_precheck(pre), _evidence_check(check)]
     else:
         return _not_depicting(site, live, pre, check, rep)
+    outcome = KEPT if check is not None and check["verdict"] == V.REGION_OR_TYPE else CONFIRMED
     if served["kind"] != ST.GALLERY:
         repair = check["repair"] if check is not None else None
         if repair is None:
-            return SitePlan(sid, CONFIRMED, None, thumb)
+            return SitePlan(sid, outcome, None, thumb)
         reason = (
             f"the served thumbnail's file depicts the site, but its address serves no picture "
             f"({repair['error']}): the thumbnail becomes the file's rendering the check was shown"
         )
         evidence = [*evidence, {"source": "served_image/CHECK.jsonl", "repair": dict(repair)}]
         new = repair["render_url"]
-        return SitePlan(sid, CONFIRMED, None, new, _thumb(site, new, RULE_THUMB, reason, evidence))
+        return SitePlan(sid, outcome, None, new, _thumb(site, new, RULE_THUMB, reason, evidence))
     row = next(r for r in live if int(r["id"]) == served["image_id"])
     target = local_path(sid, str(row["filename"]))
-    reason = f"the served image {row['id']} depicts the site; the globe shows it too"
+    what = (
+        "stays: the recheck calls it a view of the right place, and it is the owner's link"
+        if outcome == KEPT
+        else "depicts the site"
+    )
+    reason = f"the served image {row['id']} {what}; the globe shows it too"
     changes = _thumb(site, target, RULE_ALIGN, reason, evidence)
-    return SitePlan(sid, CONFIRMED, int(row["id"]), target, changes)
+    return SitePlan(sid, outcome, int(row["id"]), target, changes)
 
 
 def _other_sites_out(
@@ -418,6 +428,10 @@ def build(run: Path) -> tuple[list[SitePlan], dict[str, Any]]:
     state = ST.load_read(run / "READ.json")
     V.verify_precheck(run)
     prechecks = PC.load_prechecks(run / PC.PRECHECK_FILE)
+    sites = V.run_sites(run)
+    if sites is not None:
+        # a run restricted to named sites (D15) plans those and nothing else
+        prechecks = {sid: pre for sid, pre in prechecks.items() if sid in set(sites)}
     if (run / V.EXPORT_CHECK).exists():
         record = json.loads((run / V.EXPORT_CHECK).read_text(encoding="utf-8"))
         if record["read_sha256"] != state.sha256:
@@ -429,7 +443,7 @@ def build(run: Path) -> tuple[list[SitePlan], dict[str, Any]]:
         # this plan may not touch them and must say that instead of claiming them as its own.
         population = V.CLAIMED_ONLY
         checks = {}
-    failed = [c for c in checks.values() if c["verdict"] != V.DEPICTS]
+    failed = [c for c in checks.values() if V.needs_replacement(c, population)]
     replaces: dict[str, Mapping[str, Any]] = {}
     claimed: set[str] = set()
     without: set[str] = set()

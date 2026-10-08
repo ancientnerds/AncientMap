@@ -61,6 +61,7 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
         sys.path.insert(0, str(_path))
 
 import opus_handoff as OH  # noqa: E402
+import roles as RO  # noqa: E402 - the D6 registry: which model answers in which role
 from gallery_audit.vision import Images, VisionError, pilot  # noqa: E402
 from phase3.fetch_stage import write_once  # noqa: E402 - the handoff's one write rule
 from phase3.run import read_jsonl  # noqa: E402 - the one JSONL reader
@@ -91,7 +92,11 @@ NOT_A_PICTURE = "not a picture"
 
 ALL = "all"
 UNCONFIRMED_ONLY = "unconfirmed"
-POPULATIONS = (ALL, UNCONFIRMED_ONLY)
+#: D15 (2026-10-08): the sites named by `--sites`, checked again with the richer prompt
+#: (`CHECK_PROMPT_V2`). A `region_or_type` verdict keeps the hero here (the owner's 2025 link); only
+#: `other_site` goes on to the replacement stage.
+RECHECK = "recheck"
+POPULATIONS = (ALL, UNCONFIRMED_ONLY, RECHECK)
 
 QUESTIONS_CHECK = "QUESTIONS_CHECK.jsonl"
 QUESTIONS_REPLACE = "QUESTIONS_REPLACE.jsonl"
@@ -122,6 +127,24 @@ Return JSON only, no prose:
 {{"verdict": "depicts" | "region_or_type" | "other_site",
  "shows": "<what the picture shows, at most 20 words>",
  "basis": "<what the verdict rests on - the visible feature, or the page and what it says - at most 40 words>"}}
+
+""" + _VERDICT_TERMS.replace("{", "{{").replace("}", "}}")
+
+CHECK_PROMPT_V2_ID = "served-check-v2"
+CHECK_PROMPT_V2 = """You re-check a verdict. The picture {image} is, or is about to become, the main image of the page of the archaeological site "{name}" ({site_type}, {country}; latitude {lat}, longitude {lon}). It comes from: {source}
+The site's Wikidata item: {qid}
+An earlier check ({earlier_stage}, {earlier_answered_by}) called the picture {earlier_verdict}: {earlier_shows}
+The owner linked a picture for this site by hand in 2025: {owner_link}
+The site's English Wikipedia article: {wikipedia}; its lead image: {lead}
+The site's description begins: {description}
+
+Look at the picture itself, then check it against the web: the picture's Commons file page and its categories, the Wikipedia article, the Wikidata item. You may overturn the earlier verdict or confirm it. Do not confirm it because it was said before, and do not overturn it because the picture looks plausible: a verdict rests on what the picture shows and on what the pages say.
+If you answer other_site you must say in "shows" which monument or place the picture shows, and you must have opened the picture's Commons file page or category: put its address (commons.wikimedia.org/...) in "basis".
+
+Return JSON only, no prose:
+{{"verdict": "depicts" | "region_or_type" | "other_site",
+ "shows": "<what the picture shows, at most 25 words>",
+ "basis": "<what the verdict rests on - the visible feature, or the page and what it says - at most 60 words>"}}
 
 """ + _VERDICT_TERMS.replace("{", "{{").replace("}", "}}")
 
@@ -225,8 +248,35 @@ class CheckQuestion:
     jpeg_sha256: str
     #: A thumbnail shown through its file's rendering: `{"render_url", "stored_url", "error"}`.
     repair: Mapping[str, str] | None = None
+    #: A recheck's context (`recheck.CONTEXT_KEYS`); None for the first check, whose prompt is
+    #: byte for byte the one of 2026-09-30.
+    context: Mapping[str, Any] | None = None
+
+    @property
+    def prompt_id(self) -> str:
+        return CHECK_PROMPT_ID if self.context is None else CHECK_PROMPT_V2_ID
 
     def prompt(self) -> str:
+        if self.context is not None:
+            ctx = self.context
+            return CHECK_PROMPT_V2.format(
+                name=self.name,
+                site_type=self.site_type,
+                country=self.country,
+                lat=self.lat,
+                lon=self.lon,
+                qid=_qid_line(self.qid),
+                image=self.image,
+                source=self.source,
+                earlier_stage=ctx["earlier_stage"],
+                earlier_answered_by=ctx["earlier_answered_by"],
+                earlier_verdict=ctx["earlier_verdict"],
+                earlier_shows=ctx["earlier_shows"],
+                owner_link=_or_none(ctx["owner_link_file"] or ctx["owner_link_url"]),
+                wikipedia=_or_none(ctx["wikipedia_title"]),
+                lead=_or_none(ctx["wikipedia_lead_image"]),
+                description=_or_none(ctx["description"]),
+            )
         return CHECK_PROMPT.format(
             name=self.name,
             site_type=self.site_type,
@@ -242,6 +292,7 @@ class CheckQuestion:
         out = asdict(self)
         out["served"] = dict(self.served)
         out["repair"] = None if self.repair is None else dict(self.repair)
+        out["context"] = None if self.context is None else dict(self.context)
         return out
 
 
@@ -327,6 +378,10 @@ class ReplaceQuestion:
         return cls(**fields)
 
 
+def _or_none(value: Any) -> str:
+    return str(value) if value else "none"
+
+
 def _qid_line(qid: str | None) -> str:
     return f"{qid} (https://www.wikidata.org/wiki/{qid})" if qid else "none"
 
@@ -338,7 +393,18 @@ def _text(value: Any, key: str) -> str:
     return value.strip()
 
 
-def parse_check(text: str) -> dict[str, str]:
+#: The Commons page a recheck's `other_site` must cite (D15: "a Commons category or file-page check
+#: by the agent"), and the fewest words its `shows` may name the monument in.
+COMMONS_HOST = "commons.wikimedia.org"
+MIN_SHOWS_WORDS = 3
+
+
+def parse_check(
+    text: str, question: CheckQuestion | None = None, *, strict: bool = False
+) -> dict[str, str]:
+    """One check answer. For a recheck question (`question.context`), or when `strict` is asked for
+    (the hero re-check of the candidate search has no served question), an `other_site` verdict must
+    also name what the picture shows (`MIN_SHOWS_WORDS` words) and cite a Commons page."""
     data = pilot.extract_json(text)
     if data is None:
         raise AnswerError("no JSON object in the answer")
@@ -346,11 +412,24 @@ def parse_check(text: str) -> dict[str, str]:
         raise AnswerError(f"the answer carries {sorted(data)}, not ['basis', 'shows', 'verdict']")
     if data["verdict"] not in VERDICTS:
         raise AnswerError(f"'verdict' {data['verdict']!r} is not one of {list(VERDICTS)}")
-    return {
+    parsed = {
         "verdict": data["verdict"],
         "shows": _text(data["shows"], "shows"),
         "basis": _text(data["basis"], "basis"),
     }
+    asks_more = strict or (question is not None and question.context is not None)
+    if asks_more and parsed["verdict"] == OTHER_SITE:
+        if len(parsed["shows"].split()) < MIN_SHOWS_WORDS:
+            raise AnswerError(
+                f"an other_site verdict names what the picture shows in at least "
+                f"{MIN_SHOWS_WORDS} words, not {parsed['shows']!r}"
+            )
+        if COMMONS_HOST not in parsed["basis"]:
+            raise AnswerError(
+                f"an other_site verdict rests on the picture's Commons page: 'basis' must cite "
+                f"{COMMONS_HOST}/..."
+            )
+    return parsed
 
 
 def parse_replace(text: str, question: ReplaceQuestion) -> dict[str, Any]:
@@ -402,6 +481,30 @@ def verify_precheck(run: Path) -> None:
 
 
 # ------------------------------------------------------------------------------ export: check
+def _named_sites(sites: Sequence[str], prechecks: Mapping[str, Mapping[str, Any]]) -> set[str]:
+    """The sites a `--sites` list names: each once, each pre-checked."""
+    named = list(sites)
+    if not named:
+        raise ST.StateError("--sites names no site")
+    if len(set(named)) != len(named):
+        raise ST.StateError("--sites names a site twice")
+    unknown = [sid for sid in named if sid not in prechecks]
+    if unknown:
+        raise ST.StateError(
+            f"{len(unknown)} named site(s) are not in the pre-check (first {unknown[0]}): "
+            "the pre-check must cover them"
+        )
+    return set(named)
+
+
+def needs_replacement(check: Mapping[str, Any], population: str) -> bool:
+    """Whether a checked image goes on to the replacement stage: it was not called `depicts` - and,
+    in a recheck, was not called `region_or_type` either (D15: the owner's hero stays)."""
+    if population == RECHECK:
+        return check["verdict"] not in (DEPICTS, REGION_OR_TYPE)
+    return check["verdict"] != DEPICTS
+
+
 def file_behind(
     pictures: Pictures, served: Mapping[str, Any], stored_url: str, error: Unfetchable
 ) -> tuple[dict[str, str], bytes] | None:
@@ -428,19 +531,43 @@ def export_check(
     *,
     population: str = ALL,
     per_batch: int = CHECK_PER_BATCH,
+    sites: Sequence[str] | None = None,
+    context: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Every served image of the population into `handoff`, `per_batch` per batch."""
+    """Every served image of the population into `handoff`, `per_batch` per batch.
+
+    `sites` restricts the population to the sites named (each must be a pre-checked site that
+    serves an image) and is recorded in `EXPORT_CHECK.json`, so the plan examines those sites and
+    no others. The `recheck` population (D15) needs `sites` and the `context` of every one of them
+    (`recheck.build_context`), and asks the richer prompt (`CHECK_PROMPT_V2`); the other populations
+    take no context."""
     if population not in POPULATIONS:
         raise ST.StateError(f"population {population!r} is not one of {list(POPULATIONS)}")
     if not 1 <= per_batch <= CHECK_PER_BATCH:
         raise ST.StateError(f"a check batch holds 1..{CHECK_PER_BATCH} images, not {per_batch}")
+    if (population == RECHECK) != (context is not None):
+        raise ST.StateError("a recheck needs its context, and no other population takes one")
+    if population == RECHECK and sites is None:
+        raise ST.StateError("a recheck examines the sites it is given: --sites is required")
+    if sites is not None:
+        named = _named_sites(sites, prechecks)
     asked = [
         sid
         for sid in state.site_ids()
         if sid in prechecks
         and prechecks[sid]["status"] != PC.NO_IMAGE
-        and (population == ALL or prechecks[sid]["status"] == PC.UNCONFIRMED)
+        and (sites is None or sid in named)
+        and (population != UNCONFIRMED_ONLY or prechecks[sid]["status"] == PC.UNCONFIRMED)
     ]
+    if sites is not None and len(asked) != len(named):
+        gone = sorted(named - set(asked))
+        raise ST.StateError(
+            f"{len(gone)} named site(s) serve no image or are not in the read (first {gone[0]})"
+        )
+    if context is not None:
+        absent = [sid for sid in asked if sid not in context]
+        if absent:
+            raise ST.StateError(f"{len(absent)} site(s) have no context (first {absent[0]})")
     questions: list[CheckQuestion] = []
     unfetchable: list[dict[str, Any]] = []
     for sid in asked:
@@ -476,6 +603,7 @@ def export_check(
             image=image,
             jpeg_sha256=digest,
             repair=repair,
+            context=None if context is None else dict(context[sid]),
         )
         OH.export(
             handoff,
@@ -497,7 +625,8 @@ def export_check(
     summary = {
         "handoff": str(handoff),
         "population": population,
-        "prompt_id": CHECK_PROMPT_ID,
+        "prompt_id": CHECK_PROMPT_V2_ID if context is not None else CHECK_PROMPT_ID,
+        "sites": None if sites is None else list(sites),
         "questions": len(questions),
         "questions_sha256": digest,
         "read_sha256": state.sha256,
@@ -556,7 +685,9 @@ def candidates_for(
     served = precheck["served"]
     rows = ST.live_rows(state.rows.get(sid, ()))
     gallery = [r for r in rows if int(r["id"]) != served.get("image_id")]
-    known = {ST.file_of_row(r) for r in rows} | {served.get("file")}
+    # a file the gallery holds - live or excluded - is no new candidate: an excluded row was judged
+    # (or removed) before, and unhiding it needs a judgement of its own (WD2, D15)
+    known = {ST.file_of_row(r) for r in state.rows.get(sid, ())} | {served.get("file")}
     known.discard(None)
     seen: set[str] = set()
     files: list[tuple[str, str]] = []
@@ -596,6 +727,7 @@ def export_replace(
     *,
     images_per_batch: int = REPLACE_IMAGES_PER_BATCH,
     claimed_only: bool = False,
+    sites: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """Every served image the check did not call `depicts`, with its candidates - and every site
     that serves **no** image while its own Wikidata item claims one, with that claim's files: the
@@ -618,11 +750,19 @@ def export_replace(
                 "must export the failed images too, not the claimed files alone"
             )
     checks = [] if claimed_only else read_jsonl(run / CHECK)
-    failed = [c for c in checks if c["verdict"] != DEPICTS]
+    population = _check_population(run)
+    if sites is not None:
+        named = _named_sites(sites, prechecks)
+        recorded = _check_sites(run)
+        if recorded is not None and named != set(recorded):
+            raise ST.StateError("--sites is not the list the check stage was exported for")
+    failed = [c for c in checks if needs_replacement(c, population)]
     claimed = [
         sid
         for sid, pre in prechecks.items()
-        if pre["status"] == PC.NO_IMAGE and wanted_files(pre, harvest, pictures.commons)
+        if pre["status"] == PC.NO_IMAGE
+        and (sites is None or sid in named)
+        and wanted_files(pre, harvest, pictures.commons)
     ]
     asked: list[tuple[str, Mapping[str, Any] | None]] = [(str(c["site_id"]), c) for c in failed]
     asked += [(sid, None) for sid in claimed]
@@ -698,6 +838,7 @@ def export_replace(
         "handoff": str(handoff),
         "prompt_id": REPLACE_PROMPT_ID,
         "claimed_only": claimed_only,
+        "sites": None if sites is None else list(sites),
         "failed": len(failed),
         "claimed": len(claimed),
         "questions": len(questions),
@@ -721,6 +862,33 @@ def export_replace(
     }
 
 
+def _check_population(run: Path) -> str:
+    """The population the run's check stage was exported for (`ALL` when it has no check stage)."""
+    path = run / EXPORT_CHECK
+    return json.loads(path.read_text(encoding="utf-8"))["population"] if path.exists() else ALL
+
+
+def _check_sites(run: Path) -> list[str] | None:
+    """The sites the run's check stage was restricted to, or None for an unrestricted stage (or a
+    run that has none)."""
+    path = run / EXPORT_CHECK
+    return json.loads(path.read_text(encoding="utf-8")).get("sites") if path.exists() else None
+
+
+def run_sites(run: Path) -> list[str] | None:
+    """The sites the run examines, as its export records say: the check stage's list, else the
+    replacement stage's, else None (every pre-checked site). The two lists must agree."""
+    lists = {}
+    for name in (EXPORT_CHECK, EXPORT_REPLACE):
+        path = run / name
+        if path.exists():
+            lists[name] = json.loads(path.read_text(encoding="utf-8")).get("sites")
+    named = [sites for sites in lists.values() if sites is not None]
+    if len({tuple(sorted(sites)) for sites in named}) > 1:
+        raise ST.StateError("the check and the replacement export name different sites")
+    return named[0] if named else None
+
+
 # ------------------------------------------------------------------------------ the agent's aids
 def _questions(run: Path, stage: str) -> dict[tuple[str, str], Any]:
     if stage == STAGE_CHECK:
@@ -742,7 +910,7 @@ def stage_of(run: Path, handoff: Path) -> str:
 
 
 def parse(stage: str, question: Any, text: str) -> dict[str, Any]:
-    return parse_check(text) if stage == STAGE_CHECK else parse_replace(text, question)
+    return parse_check(text, question) if stage == STAGE_CHECK else parse_replace(text, question)
 
 
 def check_answer(run: Path, handoff: Path, batch_id: str, label: str, text: str) -> str | None:
@@ -767,7 +935,7 @@ ANSWER_MODEL = "claude-sonnet-5-5"
 #: claims a file. The sites that serve an image were judged by the 2026-09-30 run and delivered;
 #: this plan may not touch them, and says so instead of claiming them for its own.
 CLAIMED_ONLY = "claimed-only"
-BRIEF = """You are agent {batch} of the served-image check ({what}), running as {answer_model}. You answer {count} \
+BRIEF = """You are agent {batch} of the served-image check ({what}), running as {answer_model}{as_role}. You answer {count} \
 question(s), each about another archaeological site. Answer each one on its own.
 
 Read ONLY your own files: {handoff}/{batch}/MANIFEST.jsonl lists your questions, one JSON line \
@@ -788,7 +956,7 @@ For each question:
 5. Record it - an answer is written once:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
 --batch-id {batch} --stage {stage} --label <label> --answered-by {batch} \
---model <the model id you run as: {answer_model}> \
+--model <the model id you run as: {answer_model}>{role_flag} \
 --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.
@@ -799,8 +967,12 @@ def _shown(path: Path) -> str:
     return path.resolve().as_posix()
 
 
-def brief(run: Path, handoff: Path, batch_id: str) -> str:
+def brief(run: Path, handoff: Path, batch_id: str, role: str | None = None) -> str:
+    """The instruction of one batch's agent. With a `role` of the D6 registry (`roles.ROLES`) the
+    agent runs as that role's model and records its answers `--role <role>`; without one the text is
+    the lane's original, Sonnet 5.5 and no role (the answers of 2026-09-30 were given so)."""
     stage = stage_of(run, handoff)
+    answer_model = ANSWER_MODEL if role is None else RO.role(role).model
     labels = [label for batch, label in _questions(run, stage) if batch == batch_id]
     if not labels:
         raise ST.StateError(f"{batch_id} is no batch of {handoff}")
@@ -816,13 +988,20 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
         scratch=f"{shown}-scratch/{batch_id}",
         run=_shown(run),
         stage=stage,
-        answer_model=ANSWER_MODEL,
+        answer_model=answer_model,
+        as_role="" if role is None else f" in the role {role} at effort {RO.role(role).effort}",
+        role_flag="" if role is None else f" --role {role}",
     )
 
 
 # ------------------------------------------------------------------------------ import
-def import_stage(run: Path, stage: str) -> dict[str, Any]:
-    """Every answer of the stage, validated, re-prompted and parsed, into CHECK/REPLACE.jsonl."""
+def import_stage(run: Path, stage: str, role: str | None = None) -> dict[str, Any]:
+    """Every answer of the stage, validated, re-prompted and parsed, into CHECK/REPLACE.jsonl.
+
+    With a `role` every answer must have been recorded in it (`answered_by` = `<role>:<agent>`) by
+    the role's registered model; an answer that names another role or carries another model's stamp
+    stops the import. Without one, an answer that names a role still has to carry that role's
+    model's stamp (`roles.answer_problem`)."""
     record_path = run / (EXPORT_CHECK if stage == STAGE_CHECK else EXPORT_REPLACE)
     if not record_path.is_file():
         raise ST.StateError(f"{record_path} does not exist - export the stage first")
@@ -865,6 +1044,13 @@ def import_stage(run: Path, stage: str) -> dict[str, Any]:
                 if hashlib.sha256(shown.read_bytes()).hexdigest() != c.jpeg_sha256:
                     raise ST.StateError(f"{shown} is not the picture candidate {c.label} showed")
         answer = OH.read_answer(handoff, batch_id=batch_id, stage=stage, label=label, prompt=prompt)
+        problem = RO.answer_problem(answer.answered_by, answer.model)
+        if problem is not None:
+            raise ST.StateError(f"{batch_id}/{label}: {problem}")
+        if role is not None and RO.role_of(answer.answered_by) != role:
+            raise ST.StateError(
+                f"{batch_id}/{label}: answered by {answer.answered_by!r}, not in the role {role}"
+            )
         try:
             parsed = parse(stage, question, answer.text)
         except AnswerError as exc:
@@ -873,7 +1059,7 @@ def import_stage(run: Path, stage: str) -> dict[str, Any]:
         base = {
             "site_id": label,
             "batch_id": batch_id,
-            "prompt_id": CHECK_PROMPT_ID if stage == STAGE_CHECK else REPLACE_PROMPT_ID,
+            "prompt_id": question.prompt_id if stage == STAGE_CHECK else REPLACE_PROMPT_ID,
             "prompt_sha256": line["prompt_sha256"],
             "answered_by": answer.answered_by,
             "answered_at": answer.answered_at,

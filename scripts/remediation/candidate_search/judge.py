@@ -21,7 +21,8 @@ and has to look.
 Batch shape: `IMAGES_PER_BATCH` candidates, packed by site, so one site never splits across two
 agents (its candidates are one judgement). The write side of this stage is `write_targets`: the
 `(site_id, commons_file)` pairs the INSERT lane's fetch takes, one per site - the best `depicts`
-candidate of that site, the largest, because a bigger file stores a bigger hero at the same licence.
+candidate of that site, the best quality (`rank_key`), because the page's picture should be the clearest
+photograph of the site, not the largest file.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -137,19 +138,13 @@ def download(
     return {**candidate, "path": str(named), "fetched": True}, ""
 
 
-def export(
-    out: Path,
-    sites: Sequence[Mapping[str, Any]],
-    client: Any,
-    *,
-    images_per_batch: int = IMAGES_PER_BATCH,
-    sites_per_batch: int = SITES_PER_BATCH,
-) -> dict[str, Any]:
-    """The run's candidates into batches, every image on disk, one prompt file per site.
+def download_all(
+    out: Path, sites: Sequence[Mapping[str, Any]], client: Any
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """Every candidate's rendering on disk under `<out>/pictures/`, and the refusals by name.
 
-    The prompts are written where the handoff reads them (`<out>/<batch_id>/<site_id>.prompt.txt`),
-    so an agent answers one file per site and the code can record it under the model's own name.
-    """
+    Returns `(sites with their fetched candidates - each now carrying its `path`, refusals)`; a site
+    none of whose candidates could be fetched is left out of the first list (its refusals name why)."""
     pictures = out / PICTURES
     prepared: list[dict[str, Any]] = []
     refusals: list[dict[str, str]] = []
@@ -169,6 +164,23 @@ def export(
             rows.append(row)
         if rows:
             prepared.append({**site, "candidates": rows})
+    return prepared, refusals
+
+
+def export(
+    out: Path,
+    sites: Sequence[Mapping[str, Any]],
+    client: Any,
+    *,
+    images_per_batch: int = IMAGES_PER_BATCH,
+    sites_per_batch: int = SITES_PER_BATCH,
+) -> dict[str, Any]:
+    """The run's candidates into batches, every image on disk, one prompt file per site.
+
+    The prompts are written where the handoff reads them (`<out>/<batch_id>/<site_id>.prompt.txt`),
+    so an agent answers one file per site and the code can record it under the model's own name.
+    """
+    prepared, refusals = download_all(out, sites, client)
     batches = pack(prepared, images_per_batch=images_per_batch, sites_per_batch=sites_per_batch)
     written = 0
     for batch in batches:
@@ -184,7 +196,7 @@ def export(
         "candidates": sum(len(s["candidates"]) for s in prepared),
         "batches": len(batches),
         "prompt_files": written,
-        "images": str(pictures),
+        "images": str(out / PICTURES),
         "refused_images": len(refusals),
         "refusals": refusals[:20],
     }
@@ -461,41 +473,50 @@ def import_answers(
     }
 
 
-def write_targets(out: Path, verdicts: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """One `(site_id, commons_file)` per site that has a `depicts` verdict - the largest of them.
+def rank_key(row: Mapping[str, Any]) -> tuple[int, int]:
+    """How good a `depicts` candidate is as the page's picture: its quality (1-5, the "shows this
+    site" role gives one with every `depicts`; a row without one - the first run's - ranks 0) and
+    then its pixels. The best quality wins, not the largest file: a sharp photograph of the remains
+    beats a bigger one of the same field."""
+    return (
+        int(row.get("quality") or 0),
+        int(row.get("width") or 0) * int(row.get("height") or 0),
+    )
 
-    The fetch takes that pair and records the licence, the author and both URLs by itself; what this
-    stage decides is only **which** file each site gets.
+
+def write_targets(
+    out: Path,
+    verdicts: Sequence[Mapping[str, Any]],
+    confirmed: Collection[tuple[str, str]] | None = None,
+) -> dict[str, Any]:
+    """One `(site_id, commons_file)` per site that has a `depicts` verdict - the best of them.
+
+    The best is `rank_key`'s: the highest quality, then the most pixels. With `confirmed` (the
+    `(site id, file)` pairs the adversarial re-check confirmed) only those candidates are eligible:
+    a pick nobody re-checked is not written. The fetch takes the pair and records the licence, the
+    author and both URLs by itself; what this stage decides is only **which** file each site gets.
     """
     best: dict[str, dict[str, Any]] = {}
     for row in verdicts:
         if row.get("verdict") != DEPICTS:
             continue
         site_id = str(row["site_id"])
-        size = (int(row.get("width") or 0), int(row.get("height") or 0))
+        if confirmed is not None and (site_id, str(row["file"])) not in confirmed:
+            continue
         current = best.get(site_id)
-        if current is None or size > (
-            int(current.get("width") or 0),
-            int(current.get("height") or 0),
-        ):
+        if current is None or rank_key(row) > rank_key(current):
             best[site_id] = dict(row)
     out.mkdir(parents=True, exist_ok=True)
-    (out / TARGETS).write_text(
-        "".join(
-            json.dumps(
-                {
-                    "site_id": row["site_id"],
-                    "commons_file": row["file"],
-                    "width": row["width"],
-                    "height": row["height"],
-                },
-                ensure_ascii=False,
-                sort_keys=True,
-            )
-            + "\n"
-            for row in sorted(best.values(), key=lambda r: str(r["site_id"]))
-        ),
-        encoding="utf-8",
-        newline="\n",
-    )
+    lines = []
+    for row in sorted(best.values(), key=lambda r: str(r["site_id"])):
+        target: dict[str, Any] = {
+            "site_id": row["site_id"],
+            "commons_file": row["file"],
+            "width": row["width"],
+            "height": row["height"],
+        }
+        if row.get("quality") is not None:
+            target["quality"] = row["quality"]
+        lines.append(json.dumps(target, ensure_ascii=False, sort_keys=True) + "\n")
+    (out / TARGETS).write_text("".join(lines), encoding="utf-8", newline="\n")
     return {"sites_to_fetch": len(best), "file": str(out / TARGETS)}
