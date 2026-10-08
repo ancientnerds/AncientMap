@@ -1284,7 +1284,9 @@ Every repaired site's WB card turns stale (the `desc_sha256` tie): `lane WB sele
         --from <the WN run: C:/PythonProjects/AncientMap/.claude/worktrees/db-finish/output/remediation/wc_runner/runs/wn-2026-10-06> \
         --out $RUNS/$R/MINIMAX_SITES.txt
 
-A site is on the list when an answer stamped MiniMax stands in a check, write or verification round of a source run
+Each source run is read against the checkout it lives in (`<tree>/output/remediation/wc_runner/runs/<name>`
+records its handoffs relative to that tree, so the WN pilot of the db-finish worktree is named as it is), and a
+round whose handoff is not there stops the command. A site is on the list when an answer stamped MiniMax stands in a check, write or verification round of a source run
 (the judge only measured) **and** the live text is still the one that run wrote (`_description_check` names the run
 and hashes the text). Measured on the owner's side before: 63 verify2 answers of mass-02 (57 sites still hold their
 text, 5 cleared, 1 without a record) and the 17 WN texts; the report names the others by reason (`cleared`: lane

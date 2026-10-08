@@ -23941,6 +23941,22 @@ WCR_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         WCR_REPAIRS_TEST,
         WCR_MINIMAX_REASONS,
     ),
+    (
+        "wc minimax: a round whose handoff is missing is skipped",
+        WCR_CLI,
+        "        if not handoff.is_dir():\n",
+        "        if False:  # mutant\n",
+        WCR_REPAIRS_TEST,
+        "test_a_round_whose_handoff_is_missing_stops_the_recheck_list",
+    ),
+    (
+        "wc minimax: a run is read against the wrong tree",
+        WCR_CLI,
+        "        return resolved.parents[4]\n",
+        "        return default  # mutant\n",
+        WCR_REPAIRS_TEST,
+        "test_a_run_is_read_against_the_tree_it_was_recorded_in",
+    ),
     # ── verify-void ────────────────────────────────────────────────────────────────────────────
     (
         "wc void: a Claude answer is voided",

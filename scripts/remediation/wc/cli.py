@@ -2471,11 +2471,28 @@ def closure_markdown(record: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _tree_of(run: Path, default: Path) -> Path:
+    """The checkout a run's rounds are recorded relative to: a run directory
+    `<tree>/output/remediation/wc_runner/runs/<name>` records its handoffs as `output/remediation/
+    handoff/...` of that tree (the WN pilot's lives in another worktree than the mass runs'); any
+    other run (a test's, one recorded with absolute paths) is read against `default`."""
+    resolved = run.resolve()
+    if resolved.parent.name == "runs" and resolved.parent.parent.name == "wc_runner":
+        return resolved.parents[4]
+    return default
+
+
 def _text_rounds(run: Path, base: Path) -> list[tuple[str, Path, Mapping[str, Sequence[str]]]]:
-    """`(stage, handoff, batches)` of every check, write and verification round the run exported."""
+    """`(stage, handoff, batches)` of every check, write and verification round the run exported. A
+    round whose handoff directory is not there stops the command: a list built without it would
+    leave out the texts that round's answers shaped, and say nothing."""
+    tree = _tree_of(run, base)
     stage = WRITE_STAGE if run_kind(run) == KIND_WN else STAGE
-    rounds = [(stage, base / r["handoff"], r["batches"]) for r in read_rounds(run)]
-    rounds += [(r["stage"], base / r["handoff"], r["batches"]) for r in _verify_rounds(run)]
+    rounds = [(stage, tree / r["handoff"], r["batches"]) for r in read_rounds(run)]
+    rounds += [(r["stage"], tree / r["handoff"], r["batches"]) for r in _verify_rounds(run)]
+    for _, handoff, _ in rounds:
+        if not handoff.is_dir():
+            raise WcRunError(f"{run}: the handoff {handoff} of one of its rounds is not there")
     return rounds
 
 

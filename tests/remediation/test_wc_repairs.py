@@ -14,6 +14,7 @@ No socket, no model, no database.
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -356,3 +357,25 @@ def test_the_sites_a_wc_check_cleared_are_in_the_wn_rerun_and_a_stale_key_is_not
     )
     assert [e["site_id"] for e in asked] == [FX.SITE_A, FX.SITE_B]
     assert listed == {"stale-keys": [FX.SITE_C], "has-description": [FX.SITE_D]}
+
+
+def test_a_run_is_read_against_the_tree_it_was_recorded_in(tmp_path: Path) -> None:
+    """The WN pilot lives in another worktree than the mass runs: `<tree>/output/remediation/wc_runner/
+    runs/<name>` records its handoffs relative to its own tree, any other run against the default."""
+    tree = tmp_path / "other-tree"
+    run = tree / "output" / "remediation" / "wc_runner" / "runs" / "wn-x"
+    run.mkdir(parents=True)
+    default = tmp_path / "default"
+    assert C._tree_of(run, default) == tree.resolve()
+    assert C._tree_of(tmp_path / "runs" / "wc-x", default) == default
+
+
+def test_a_round_whose_handoff_is_missing_stops_the_recheck_list(tmp_path: Path) -> None:
+    """A list built without a round's answers would leave out the texts they shaped, silently."""
+    root = tmp_path / "wc"
+    run0, plan = FX.build_run(root, _rows(), _answers(), pilot=False, name="wc-02")
+    _restamp(root / "handoff" / "wc-02-verify")
+    run = _read(tmp_path, _fresh_rows(plan, _rows()))
+    shutil.rmtree(root / "handoff" / "wc-02-verify")
+    with pytest.raises(C.WcRunError, match="one of its rounds is not there"):
+        C.cmd_minimax_sites(run, [run0], tmp_path / "m.txt")
