@@ -34,7 +34,6 @@ from pipeline.video.shorts_render import (
     NAME_AUDIO_DELAY_S,
     NAME_LAYOUTS,
     NARRATION_TAIL_S,
-    TEASER_NOTE,
     Segment,
     StillPick,
     build_comment,
@@ -58,6 +57,7 @@ from pipeline.video.shorts_render import (
     segment_starts,
     stills_graph,
     stills_window,
+    teaser_note,
     word_face,
     wrap_lines,
 )
@@ -288,20 +288,59 @@ class TestText:
         assert text.rstrip().endswith("#Shorts #archaeology #ancienthistory #Peru #MachuPicchu")
         assert "Mapbox" not in build_description(site, imgs, "v")
         # A card without a teaser provenance claims no AI text (O10 marks the teaser cards).
-        assert TEASER_NOTE not in text
-        teaser = build_description({**site, "card_ai": "generated"}, imgs, "v")
-        assert TEASER_NOTE in teaser
-        assert teaser.index(TEASER_NOTE) < teaser.index("AI-generated voice")
+        assert "Text: AI-generated" not in text
+        teaser = build_description(
+            {**site, "card_ai": "generated", "card_ai_system": AI_SYSTEM_OPUS_ONLY}, imgs, "v"
+        )
+        note = teaser_note(AI_SYSTEM_OPUS_ONLY)
+        assert note in teaser
+        assert teaser.index(note) < teaser.index("AI-generated voice")
 
-    def test_the_teaser_note_names_every_writing_family_and_no_single_claude_tier(self):
-        """The cards were written by Claude Opus and Claude Sonnet agents (owner decision
-        2026-10-01), so the note names the makers and families, never one Claude tier. Owner
-        decision 2026-10-03: MiniMax M3.1 Flash writes the cards from now on, so its maker and
-        model join the note; which model wrote a given card is stated per card in the site
-        page's provenance (`ai_system`)."""
-        assert "Claude" in TEASER_NOTE and "Anthropic" in TEASER_NOTE
-        assert "MiniMax" in TEASER_NOTE
-        assert "Opus" not in TEASER_NOTE and "Sonnet" not in TEASER_NOTE
+    def test_the_teaser_note_names_exactly_the_models_the_card_s_ai_system_names(self):
+        """Owner decision 2026-10-08: the note is built from the card's `_card_provenance.ai_system`
+        and names the models that wrote that card, no more: a Claude-only card never claims
+        MiniMax and a MiniMax card never claims Claude."""
+        opus = teaser_note(AI_SYSTEM_OPUS_ONLY)
+        assert "Claude Opus 5.5" in opus and "Anthropic" in opus
+        assert "Sonnet" not in opus and "MiniMax" not in opus
+        both = teaser_note(AI_SYSTEM_CLAUDE_TIERS)
+        assert "Claude Opus 5.5" in both and "Claude Sonnet 5.5" in both
+        assert "MiniMax" not in both
+        mixed = teaser_note(AI_SYSTEM_MIXED)
+        assert "Claude Opus 5.5" in mixed and "Claude Sonnet 5.5" in mixed
+        assert "MiniMax M3.1 Flash (MiniMax)" in mixed
+        minimax = teaser_note(
+            "MiniMax M3.1 Flash (MiniMax): minimax/MiniMax-M3.1-Flash-Preview, a-run"
+        )
+        assert "MiniMax M3.1 Flash" in minimax
+        assert "Claude" not in minimax and "Anthropic" not in minimax
+
+    def test_the_teaser_note_names_a_model_once(self):
+        note = teaser_note("x: anthropic/claude-opus-5-5, anthropic/claude-opus-5-5")
+        assert note.count("Claude Opus 5.5") == 1
+
+    def test_a_card_ai_system_that_names_no_model_has_no_note(self):
+        with pytest.raises(ValueError, match="names no model"):
+            teaser_note("Claude Opus (Anthropic)")
+
+    def test_a_model_id_the_note_cannot_name_is_refused(self):
+        with pytest.raises(ValueError, match="unknown/gpt-9"):
+            teaser_note("x: unknown/gpt-9")
+
+    def test_a_generated_card_without_its_ai_system_is_not_described(self):
+        site = {
+            "name": "X",
+            "country": "Peru",
+            "card_text": "A.",
+            "card_ai": "generated",
+            "card_ai_system": None,
+            "rarity_name": "Common",
+            "rarity_tier": 1,
+            "total_power": 1,
+            "page_path": "/sites/peru/x-abcd1234",
+        }
+        with pytest.raises(ValueError, match="card_ai_system"):
+            build_description(site, [], "v")
 
     def test_hashtags_use_the_specific_place_and_skip_duplicates(self):
         tags = hashtags({"name": "Rano Raraku", "country": "Chile, Easter Island"})
@@ -520,6 +559,7 @@ class TestExportShape:
             "civilization": "Inca",
             "card_text_sha256": None,
             "card_provenance": None,
+            "spoken_name": "Machu Picchu",
         }
         imgs = [
             {
@@ -567,6 +607,22 @@ def test_local_image_name_is_filesystem_safe_and_keeps_original_extension():
 CARD = "Machu Picchu is a 15th-century Inca citadel at 2,430 metres."
 CARD_SHA = hashlib.sha256(CARD.encode("utf-8")).hexdigest()
 
+#: The `ai_system` strings production holds (`model4.AI_SYSTEM_OPUS`, `AI_SYSTEM_CLAUDE`,
+#: `AI_SYSTEM`), copied here: `pipeline` cannot import `scripts`.
+AI_SYSTEM_OPUS_ONLY = (
+    "Claude Opus (Anthropic): anthropic/claude-opus-5-5 (Claude Code agent), "
+    "an-sites-remediation-2026-09"
+)
+AI_SYSTEM_CLAUDE_TIERS = (
+    "Claude Opus and Claude Sonnet (Anthropic): anthropic/claude-opus-5-5 and "
+    "anthropic/claude-sonnet-5-5 (Claude Code agents), an-sites-remediation-2026-09"
+)
+AI_SYSTEM_MIXED = (
+    "Claude (Anthropic) and MiniMax M3.1 Flash (MiniMax): anthropic/claude-opus-5-5, "
+    "anthropic/claude-sonnet-5-5, minimax/MiniMax-M3.1-Flash-Preview, "
+    "an-sites-remediation-2026-09"
+)
+
 #: One `_SITE_SQL` row, as the export reads it; a card without card provenance.
 _EXPORT_ROW = {
     "id": "12345678-aaaa-bbbb-cccc-1234567890ab",
@@ -589,6 +645,7 @@ _EXPORT_ROW = {
     "civilization": None,
     "card_text_sha256": None,
     "card_provenance": None,
+    "spoken_name": None,
 }
 
 
@@ -783,7 +840,7 @@ def _teaser_row(**over):
     row = dict(_EXPORT_ROW, description=description, card_description=CARD)
     row["card_provenance"] = CP.build(
         run="wb-test",
-        ai_system="Claude Opus (Anthropic)",
+        ai_system=AI_SYSTEM_OPUS_ONLY,
         card=CARD,
         description=description,
         stage="check",
@@ -812,6 +869,28 @@ def test_s13_a_teaser_card_is_pinned_by_its_own_provenance_and_marked_generated(
     assert site["card_ai"] == "generated"
     checks = {c.name: c.ok for c in evaluate(_measurements(**card_trace(site)))}
     assert checks["card_traced"] is True
+
+
+def test_the_export_carries_the_ai_system_of_a_marked_card_and_none_for_the_rest():
+    marked = assemble_site(_teaser_row(), [])
+    assert marked["card_ai_system"] == AI_SYSTEM_OPUS_ONLY
+    # A card the provenance does not hash is not marked, so it claims no AI system either.
+    unmarked = assemble_site(_teaser_row(card_description="Another card."), [])
+    assert unmarked["card_ai_system"] is None
+    assert assemble_site(dict(_EXPORT_ROW), [])["card_ai_system"] is None
+
+
+def test_the_export_carries_the_spoken_name_of_the_row():
+    assert assemble_site(dict(_EXPORT_ROW), [])["spoken_name"] is None
+    named = assemble_site(dict(_EXPORT_ROW, spoken_name="Akapana"), [])
+    assert named["spoken_name"] == "Akapana"
+    assert named["name"] == "X"
+
+
+def test_the_site_sql_reads_the_spoken_name():
+    from pipeline.video.shorts_export import _SITE_SQL
+
+    assert "s.spoken_name" in " ".join(str(_SITE_SQL).split())
 
 
 def test_s13_a_stale_teaser_card_is_not_narrated_but_stays_marked():
@@ -930,6 +1009,19 @@ class TestSpokenName:
     def test_no_repetition_and_no_country(self):
         assert spoken_name("Temple of Egypt", "Egypt") == "Temple of Egypt."
         assert spoken_name("Atlantis", None) == "Atlantis."
+
+    def test_a_set_spoken_name_replaces_the_name(self):
+        assert (
+            spoken_name("Tiwanaku, Akapana (pyramid) 2", "Bolivia", "Akapana")
+            == "Akapana, Bolivia."
+        )
+
+    def test_the_country_check_runs_against_the_spoken_name(self):
+        assert spoken_name("Peru Site 7", "Peru", "Tambo") == "Tambo, Peru."
+        assert spoken_name("Tambo", "Peru", "Peru Gate") == "Peru Gate."
+
+    def test_an_unset_spoken_name_speaks_the_name(self):
+        assert spoken_name("Machu Picchu", "Peru", None) == "Machu Picchu, Peru."
 
 
 class TestFlagAndMusic:

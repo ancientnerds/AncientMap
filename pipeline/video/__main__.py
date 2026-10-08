@@ -335,7 +335,7 @@ def run_short(args: argparse.Namespace) -> Path | None:
         # The name is spoken on its own during the return flight; slower so it lands.
         # Its length decides how long the return flight is recorded (site-short.ts).
         site["name_audio_s"] = shorts_tts.narrate(
-            shorts_tts.spoken_name(site["name"], site["country"]),
+            shorts_tts.spoken_name(site["name"], site["country"], site["spoken_name"]),
             site_dir / "name.mp3",
             voice_id=args.voice,
             speed=args.speed - 0.07,

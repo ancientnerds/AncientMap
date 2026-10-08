@@ -509,6 +509,10 @@ class UnifiedSite(Base):
     scope_status: Mapped[str | None] = mapped_column(Text, nullable=True)
     scope_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Short English name the narrator speaks in a Short (D23, migration 0029). NULL = not set:
+    # `name` is spoken. Written by the remediation lane spoken-<wave>.
+    spoken_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Relationships
     parent_site: Mapped["UnifiedSite | None"] = relationship(
         "UnifiedSite",
