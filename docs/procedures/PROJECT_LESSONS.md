@@ -126,6 +126,38 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   Worktrees fertiger Workflows sofort entfernen (Junctions zuerst lösen), die Platte mit
   `df -h /c` beobachten, Mutation-Sweeps nie in einem Worktree laufen lassen, den ein anderer
   Agent gleichzeitig benutzt.
+- **Backups: die Kreuzkopie Workstation <-> VPS ist die Offsite-Kopie (Owner D24, 2026-10-08).**
+  Eine Drittpartei-Kopie gibt es nicht; A4 (`MAILTO`) und A5 (Offsite-Ziel) sind damit
+  verworfen. `scripts/remediation/offsite_sync.py` läuft auf der **Workstation**:
+  (1) der neueste `database_*.dump` unter `/var/www/ancientnerds/backups/<dir>/` kommt per scp
+  nach `C:/PythonProjects/AncientMap-Offsite/db/` (sha256 per `sha256sum` über ssh und per
+  hashlib, gleich oder Abbruch; `SHA256SUMS` auf beiden Seiten; lokal bleiben die neuesten 2,
+  je 0,9 GB); (2) `output/remediation` des Hauptcheckouts (ohne `*.env`, `handoff/`, `pages/`,
+  `cache/`) geht als `remediation-evidence_<Datum>.tar.gz` nach
+  `backups/remediation-evidence/` (gleiche Prüfung; lokal in `AncientMap-Offsite/evidence/` die
+  neuesten 2, auf dem VPS die neuesten 4). Gemessen 2026-10-08: das Tar ist **2,4 GB** (5,0 GB
+  roh, davon `served_image` 2,0 GB), Bauen 4,4 min. Eine Kopie erscheint erst nach bestandener
+  Prüfung unter ihrem Namen (`.part` davor). Ist der neueste Dump **älter als 26 h**, kopiert der
+  Lauf trotzdem, schreibt dann **eine** Zeile `OFFSITE-SYNC STALE: …` nach stderr und endet mit
+  Exit 1; der VPS-Cron hat kein `MAILTO`, diese Zeile ist der Alarm für ein ausgefallenes
+  nächtliches Backup. Exit 2 = ein Schritt scheiterte (`OFFSITE-SYNC FAILED: …`). `--check-only`
+  beurteilt nur das Alter. Task Scheduler (**nicht eingetragen**, der Owner entscheidet; Vorbild
+  `AncientMap-LaneWatchdog`), wöchentlich sonntags, nach dem 04:15-UTC-Drill auf dem VPS (der
+  Trigger läuft in Ortszeit: 08:00 sind 06:00 UTC im Sommer, 07:00 UTC im Winter):
+  `schtasks /Create /TN "AncientMap-OffsiteSync" /SC WEEKLY /D SUN /ST 08:00 /TR "C:\PythonProjects\AncientMap\.venv\Scripts\python.exe C:\PythonProjects\AncientMap\scripts\remediation\offsite_sync.py"`
+  (die Workstation muss laufen; ein verpasster Lauf zeigt sich beim nächsten als STALE, wenn
+  der Dump dann schon über 26 h alt ist). Vor jeder Schreibwelle zusätzlich auf dem VPS
+  `DO_DRILL=1 ./00_backup_and_drill.sh <Datum>_remediation`; der Prune behält nur die neuesten 7
+  `_remediation`-Verzeichnisse, einen frühen Pre-Wave-Dump einer langen Kampagne daher am selben
+  Tag mit dem Skript kopieren. Das Bildverzeichnis (20 GB) gehört nicht zur Routine: C: hat
+  wenig Platz, ein Re-Sync nur auf Zuruf. *(`infra.md` 3.2, `OWNER_DECISIONS_2026-10-08.md` D24)*
+- **Alte Shorts-Renders archiviert, nie gelöscht (D25).** `scripts/remediation/archive_old_renders.py`
+  verschiebt die 16 Slug-Verzeichnisse (153 mp4) von `video-assets/shorts/` nach
+  `video-assets/shorts-archive-2026-10-08/` per `os.rename` auf demselben Laufwerk, schreibt
+  `MANIFEST.sha256` vor und `MANIFEST.after.sha256` nach dem Verschieben (beide müssen gleich
+  sein), verweigert bei vorhandenem Ziel und ist ohne `--apply` ein Probelauf. Die Verzeichnisnamen
+  sind die vollen Slugs (`archaeological-site-of-olympia`, nicht `olympia`).
+  *(`infra.md` 3.5, 2026-10-08)*
 
 ## Datenbank
 
