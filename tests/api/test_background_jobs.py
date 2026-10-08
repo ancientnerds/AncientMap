@@ -188,3 +188,58 @@ def test_run_module_reports_a_successful_child():
     result = bj.run_module("json.tool", "--help", timeout_s=60)
     assert result["elapsed_seconds"] >= 0
     assert "--compact" in result["output_tail"]  # the tail of json.tool's help text
+
+
+# --- run_job: the same lock and status row, run to completion in the caller (D25) -------
+
+
+def _run_blocking(monkeypatch, work, lock) -> tuple[bool, list[tuple[str, dict, str | None]]]:
+    written: list[tuple[str, dict, str | None]] = []
+    monkeypatch.setattr(
+        bj,
+        "_write_status",
+        lambda name, status, data, error=None: written.append((status, data, error)),
+    )
+    return bj.run_job("demo", work, lock=lock), written
+
+
+def test_run_job_runs_in_the_calling_thread_and_reports_success(monkeypatch):
+    pg = FakePostgres()
+    lock = bj.InstanceLock("demo", connect=pg.connect)
+    ran_in: list[str] = []
+
+    def work() -> dict:
+        ran_in.append(threading.current_thread().name)
+        return {"sources": 3}
+
+    ok, written = _run_blocking(monkeypatch, work, lock)
+    assert ok is True
+    assert ran_in == [threading.current_thread().name]
+    assert [status for status, _, _ in written] == ["running", "ok"]
+    assert pg.locks == {}
+
+
+def test_run_job_reports_a_failure_and_records_it(monkeypatch):
+    pg = FakePostgres()
+    lock = bj.InstanceLock("demo", connect=pg.connect)
+
+    def boom() -> dict:
+        raise RuntimeError("pipeline.static_exporter exited 1")
+
+    ok, written = _run_blocking(monkeypatch, boom, lock)
+    assert ok is False
+    assert [status for status, _, _ in written] == ["running", "error"]
+    assert "exited 1" in written[1][2]
+    assert pg.locks == {}
+
+
+def test_run_job_is_refused_while_the_job_runs_anywhere(monkeypatch):
+    pg = FakePostgres()
+    assert bj.InstanceLock("demo", connect=pg.connect).try_acquire()
+    monkeypatch.setattr(bj, "_write_status", lambda *a, **k: pytest.fail("must not write"))
+    with pytest.raises(bj.JobAlreadyRunning):
+        bj.run_job(
+            "demo",
+            lambda: pytest.fail("must not run"),
+            lock=bj.InstanceLock("demo", connect=pg.connect),
+        )

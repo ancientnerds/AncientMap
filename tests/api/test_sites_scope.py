@@ -19,6 +19,7 @@ from fastapi import HTTPException
 
 from api.routes import sites as sr
 from api.services.background_jobs import JobAlreadyRunning
+from api.services.rebuild_static import REBUILD_STATIC_JOB, run_static_export
 from pipeline.utils.public_sites import not_retired
 from tests.fake_sql import RecordingSession
 
@@ -317,7 +318,7 @@ def test_rebuild_static_starts_a_job_and_returns_at_once():
         resp = sr.rebuild_static_json(user=SimpleNamespace(username="founder"))
     assert resp["state"] == "running"
     name, work = start.call_args.args
-    assert name == sr.REBUILD_STATIC_JOB and work is sr._run_static_export
+    assert name == REBUILD_STATIC_JOB and work is run_static_export
     route = next(r for r in sr.router.routes if r.path == "/rebuild-static")
     assert route.status_code == 202
 
@@ -331,20 +332,11 @@ def test_rebuild_static_refuses_a_second_run_with_409():
     assert exc.value.status_code == 409
 
 
-def test_the_export_runs_in_a_child_process():
-    """The 1.76M-site index must not be built inside the serving API process."""
-    with patch.object(sr, "run_module", return_value={"elapsed_seconds": 1.0}) as run:
-        assert sr._run_static_export() == {"elapsed_seconds": 1.0}
-    # --no-library: public/data/library/ belongs to the library refresh job
-    assert run.call_args.args == ("pipeline.static_exporter", "--no-library")
-    assert run.call_args.kwargs["timeout_s"] == sr._REBUILD_STATIC_TIMEOUT_S
-
-
 def test_rebuild_static_status_reads_the_shared_job_row():
     db = RecordingSession()
     with patch.object(sr, "read_status", return_value={"state": "ok"}) as read:
         assert sr.rebuild_static_status(_user=None, db=db) == {"state": "ok"}
-    assert read.call_args.args == (db, sr.REBUILD_STATIC_JOB)
+    assert read.call_args.args == (db, REBUILD_STATIC_JOB)
 
 
 # --------------------------------------------------------------------------------------

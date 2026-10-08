@@ -33,11 +33,12 @@ from api.cache import (
     cache_set,
     cache_set_bytes,
 )
-from api.services.background_jobs import JobAlreadyRunning, read_status, run_module, start_job
+from api.services.background_jobs import JobAlreadyRunning, read_status, start_job
 from api.services.description_provenance import card_ai, description_disclosure, provenance_of
 from api.services.jwt_auth import require_founder
 from api.services.lyra_tools import _escape_ilike
 from api.services.rate_limiter import RateLimiter, get_client_ip
+from api.services.rebuild_static import REBUILD_STATIC_JOB, run_static_export
 from pipeline.database import DiscordUser, affected_rows, get_db
 from pipeline.lyra.site_key import site_key_sql
 from pipeline.normalizers.site_type import normalize_site_type
@@ -1831,24 +1832,6 @@ def batch_update_sites(
 # =============================================================================
 
 
-#: Background-job name of the static export (api/services/background_jobs.py).
-REBUILD_STATIC_JOB = "rebuild-static"
-
-#: The last full export took about 4 minutes; half an hour means something is stuck.
-_REBUILD_STATIC_TIMEOUT_S = 30 * 60
-
-
-def _run_static_export() -> dict:
-    """The job body: the export in a child process (it also writes the file snapshot).
-
-    --no-library: public/data/library/ belongs to the library refresh job, which runs
-    under its own lock; this export would only re-write the same table's rows there.
-    """
-    return run_module(
-        "pipeline.static_exporter", "--no-library", timeout_s=_REBUILD_STATIC_TIMEOUT_S
-    )
-
-
 @router.post("/rebuild-static", status_code=202)
 def rebuild_static_json(user: DiscordUser = Depends(require_founder)):
     """Start a rebuild of the static JSON files from the database (founders only).
@@ -1861,7 +1844,7 @@ def rebuild_static_json(user: DiscordUser = Depends(require_founder)):
     """
     logger.info("Static rebuild requested by %s", user.username)
     try:
-        return start_job(REBUILD_STATIC_JOB, _run_static_export)
+        return start_job(REBUILD_STATIC_JOB, run_static_export)
     except JobAlreadyRunning:
         raise HTTPException(status_code=409, detail="A static rebuild is already running") from None
 

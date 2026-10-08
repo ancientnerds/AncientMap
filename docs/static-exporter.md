@@ -21,6 +21,8 @@ index, the details, the image index, the links, the hub list and the snapshot fi
 | `python -m pipeline.static_exporter` | `StaticExporter.export_all()` | Everything below |
 | `python -m pipeline.static_exporter --hubs-only` | `export_hubs_snapshot()` | `hubs.snapshot.json` only |
 | `POST /api/sites/rebuild-static` (founders) | the CLI above, in a child process | Background job: answers 202, `GET /api/sites/rebuild-static/status` reports it (the export takes ~4 min, nginx cuts `/api/` at 120 s) |
+| `python -m api.services.rebuild_static` (in the API container, after a write wave) | the same job body, run to completion in the caller | Takes the same lock and status row as the POST; waits; exit 0 ok, 1 failed, 3 an export already runs |
+| nightly, 04:30 UTC (`api/services/static_export_schedule.py`) | the same job as the POST | Started by both API instances; the lock lets one run, the other logs "already running" |
 | `POST /api/library/refresh` (internal key) | `aggregate_library()` + `_export_library()` | Background job: answers 202, `GET /api/library/refresh/status` reports it |
 
 Both jobs run once across `api` and `api2` (Postgres advisory lock) and keep their status in
@@ -122,10 +124,14 @@ save_json(path, data, compress=True)
 ```
 
 1. Creates parent directories
-2. Writes compact JSON (`separators=(",",":")`, no whitespace)
-3. Logs file size in KB
-4. If `GZIP_OUTPUT` is true, writes `.json.gz` at compression level 9
-5. Logs gzipped size
+2. Writes compact JSON (`separators=(",",":")`, no whitespace) to `<name>.tmp` beside the target
+3. If `GZIP_OUTPUT` is true, writes `<name>.gz.tmp` at compression level 9
+4. Moves each temp file over its target with `os.replace` (atomic on one file system) and logs the sizes
+
+A reader (nginx, the frontend build) sees the old file or the complete new one, never the
+short file a truncate-in-place left for the minutes the 362 MB `sites/index.json` takes. A
+failed write removes its temp files and leaves the targets untouched. The temp file takes the
+process umask (not `mkstemp`'s 0600): nginx reads these files as another user.
 
 ## Snapshot files: `write_file_snapshot()`
 
@@ -137,8 +143,13 @@ with an empty one would drop the whole version history silently.
 ## When Things Run
 
 ```
+After a write wave (the last deploy first: a deploy kills a running export), in the API container:
+  docker exec ancient_nerds_api python -m api.services.rebuild_static   (locked, waits)
+  scp + docker cp scripts/remediation/static_export_check.py, then python /tmp/x.py  (0 differing sites)
+Every night 04:30 UTC: the same job, started by the API (api/services/static_export_schedule.py)
 Manual deploy / data refresh:
   python -m pipeline.static_exporter            (or POST /api/sites/rebuild-static)
+  (the plain CLI takes no lock: use it only when no other export can run)
   └─→ export_all() → sources + sites + images + hubs + content + links + library + snapshot
 ```
 
@@ -158,6 +169,10 @@ docker exec ancient_nerds_api python -m pipeline.static_exporter --no-library
 
 The export files are gitignored (`.gitignore`, "PUBLIC DATA — generated on VPS"): they are
 produced on the VPS and survive a deploy (`git clean -fd` without `-x` keeps ignored files).
-Nothing of them is committed or pushed.
+Nothing of them is committed or pushed, and no LFS step belongs to them (`.gitattributes` still
+lists `public/data/sites/index.json` as an LFS pattern; the file is ignored and never added).
+`scripts/remediation/static_export_check.py` compares the served `d` and `cd` of every shown
+site with the database (sha256 of `left(description, 500)` and of the card text); it runs in
+the API container and exits 1 while any site differs.
 
 News feed is served live by the FastAPI endpoint `GET /news/feed`.

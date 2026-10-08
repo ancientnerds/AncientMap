@@ -18,6 +18,8 @@ DB-less: a refused export must not have read the database either.
 
 from __future__ import annotations
 
+import gzip
+import json
 import os
 from pathlib import Path
 
@@ -164,3 +166,66 @@ def test_writable_asks_the_operating_system():
     from pipeline import static_exporter
 
     assert static_exporter._writable(Path(os.getcwd())) is os.access(os.getcwd(), os.W_OK)
+
+
+# --- save_json replaces the file atomically (D25) ---------------------------------------
+#
+# The 362 MB sites/index.json used to be truncated in place: nginx and the frontend build
+# could read a short file for the minutes an export takes. A reader now sees the old file
+# or the new one, never a part.
+
+
+def test_save_json_replaces_the_file_with_the_complete_new_one(tmp_path):
+    from pipeline import static_exporter
+
+    target = tmp_path / "sites" / "index.json"
+    static_exporter.save_json(target, {"v": 1})
+    static_exporter.save_json(target, {"v": 2})
+    assert json.loads(target.read_text(encoding="utf-8")) == {"v": 2}
+    with gzip.open(tmp_path / "sites" / "index.json.gz", "rt", encoding="utf-8") as f:
+        assert json.load(f) == {"v": 2}
+    assert sorted(p.name for p in target.parent.iterdir()) == ["index.json", "index.json.gz"]
+
+
+def test_a_reader_never_sees_a_partial_file(tmp_path, monkeypatch):
+    """The target path is only ever touched by os.replace, and the temp file is complete then."""
+    from pipeline import static_exporter
+
+    target = tmp_path / "index.json"
+    static_exporter.save_json(target, {"v": 1})
+    seen: dict[str, str] = {}
+    real_replace = os.replace
+
+    def spy(src, dst):
+        assert Path(src).parent == Path(dst).parent  # same directory, so the replace is atomic
+        if Path(dst) == target:
+            assert target.read_text(encoding="utf-8") == '{"v":1}'  # still the old file
+            seen[target.name] = Path(src).read_text(encoding="utf-8")  # the complete new one
+        else:
+            seen[Path(dst).name] = ""
+        real_replace(src, dst)
+
+    monkeypatch.setattr(static_exporter.os, "replace", spy)
+    static_exporter.save_json(target, {"v": 2})
+    assert seen["index.json"] == '{"v":2}'
+    assert "index.json.gz" in seen
+
+
+def test_a_failed_write_keeps_the_old_files_and_leaves_no_temp_file(tmp_path):
+    from pipeline import static_exporter
+
+    target = tmp_path / "index.json"
+    static_exporter.save_json(target, {"v": 1})
+    with pytest.raises(TypeError):
+        static_exporter.save_json(target, {"v": object()})
+    assert json.loads(target.read_text(encoding="utf-8")) == {"v": 1}
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["index.json", "index.json.gz"]
+
+
+def test_the_temp_file_is_readable_by_the_web_server(tmp_path):
+    """mkstemp would make the file 0600; nginx serves it from the bind mount as another user."""
+    from pipeline import static_exporter
+
+    target = tmp_path / "index.json"
+    static_exporter.save_json(target, {"v": 1})
+    assert (target.stat().st_mode & 0o044) == 0o044 or os.name == "nt"

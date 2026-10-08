@@ -81,8 +81,15 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   2026-09-25 verweigert `pipeline/static_exporter.py` den Lauf als root und nennt vor dem
   ersten Schreiben jede Datei, die er nicht schreiben kann. Abhilfe ohne sudo:
   `docker exec -u root ancient_nerds_api chown -R 1000:1000 /app/public/data/<pfad>`, dann
-  `docker exec ancient_nerds_api python -m pipeline.static_exporter --no-library`.
-  Die Export-Dateien sind gitignoriert und entstehen nur auf dem VPS; kein Commit, kein LFS.
+  `docker exec ancient_nerds_api python -m api.services.rebuild_static` (seit 2026-10-08 die
+  gesperrte Form: derselbe Advisory-Lock und dieselbe Statuszeile wie `POST /api/sites/rebuild-static`
+  und der nächtliche Lauf um 04:30 UTC; der blanke `pipeline.static_exporter` nimmt keinen Lock,
+  zwei gleichzeitige Läufe zerstören die Dateien). Nach einer Welle: erst der letzte Deploy (er
+  tötet einen laufenden Export), dann dieser Lauf, dann `scripts/remediation/static_export_check.py`
+  im API-Container (`docker cp`, nicht per `docker exec -i`; Ergebnis: 0 abweichende Sites).
+  `save_json` schreibt seit 2026-10-08 atomar (temporäre Datei + `os.replace`).
+  Die Export-Dateien sind gitignoriert und entstehen nur auf dem VPS; kein Commit, kein LFS,
+  kein Push (nginx liefert sie aus dem Bind-Mount `/var/www/ancientnerds/public/data`).
   *(Phase 6, 2026-09-25)*
 - **Der Deploy scheitert am `git pull`, nicht an den Gates — drei Ursachen, je ein Deploy
   (2026-09-22):** (1) Eine Datei, die erst als ungetrackte Kopie auf den VPS kam und später

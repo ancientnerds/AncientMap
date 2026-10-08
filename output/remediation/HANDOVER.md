@@ -161,7 +161,10 @@ It ends with `verify_writes4.py --lane p4l --plan logs/_write_apply_p4l/LANE_PLA
    runbook", steps 1-8, in order: (1) the card_stats wave `card-stats-2026-09-23` (re-plan first: its
    premise holds `md5(description)` and the P4 writes moved it); (2) name keys (expected: nothing to
    plan); (3) the static export on the VPS (chown the root-owned files, export as the container
-   user); (4) the Phase-5 sitting and **Push #2** (HUMAN_ONLY D5); (5) the Qdrant resync; (6) the
+   user with the locked `docker exec ancient_nerds_api python -m api.services.rebuild_static`, then
+   `scripts/remediation/static_export_check.py` in the container: 0 differing sites; the files are
+   gitignored and served from the VPS bind mount - there is no commit, no LFS push and no deploy;
+   the same job also runs every night at 04:30 UTC); (4) the Phase-5 sitting and **Push #2** (HUMAN_ONLY D5); (5) the Qdrant resync; (6) the
    IndexNow catch-up; (7) the checks, both acceptances; (8) the acceptance draw and its judging
    (`acceptance/PROTOCOL.md`, sealed; the draw excludes the mass run's audit samples
    `logs/p4_mass/midrun_sample.txt` and `audit500_sample.txt`).
