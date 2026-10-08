@@ -6,6 +6,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from pipeline.database import NewsItem, NewsVideo, get_session
 from pipeline.lyra.config import (
@@ -402,6 +403,39 @@ def verify_video_posts(
     return verified
 
 
+#: The summary schema's limit for a headline (prompts/summary.txt).
+HEADLINE_MAX_CHARS = 100
+
+
+def _web_correction(result: dict[str, Any]) -> dict[str, Any]:
+    """The parts of a CORRECTED answer that can be stored, by NewsItem field.
+
+    Readers see headline, key facts and post together, and the verifier used
+    to replace the post alone: in a sample of 40 public stories (SEO audit
+    2026-10-08) 27.5 % stated a disputed claim of the video as fact and 32.5 %
+    had a wrong fact or a contradiction between headline, facts and post -
+    6189 headed "Evidence Supports Cast Stone Construction at Osireion" over a
+    post that said the evidence does not. A part the answer leaves out, or
+    gives in a shape the field cannot hold, keeps its current value.
+    """
+    fields: dict[str, Any] = {}
+    text = result.get("corrected_text")
+    if isinstance(text, str) and text.strip():
+        fields["post_text"] = text.strip()
+    headline = result.get("corrected_headline")
+    if isinstance(headline, str) and headline.strip():
+        if len(headline.strip()) <= HEADLINE_MAX_CHARS:
+            fields["headline"] = headline.strip()
+        else:
+            logger.warning(
+                f"Web verify headline over {HEADLINE_MAX_CHARS} chars, not applied: {headline[:120]!r}"
+            )
+    facts = result.get("corrected_facts")
+    if isinstance(facts, list) and facts and all(isinstance(f, str) and f.strip() for f in facts):
+        fields["facts"] = [f.strip() for f in facts]
+    return fields
+
+
 def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
     """Web fact-check high-significance items using MiniMax search.
 
@@ -489,11 +523,13 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
         item.web_sources = existing
 
         search_text = "\n".join(f"- [{r.title}]({r.url}): {r.snippet}" for r in all_results[:5])
-        facts_text = "\n".join(f"- {f}" for f in (item.facts or [])[:5])
+        # All of them: a corrected list replaces the stored one as a whole.
+        facts_text = "\n".join(f"- {f}" for f in (item.facts or []))
 
         user_msg = (
+            f"Headline: {item.headline or ''}\n\n"
+            f"Key facts:\n{facts_text}\n\n"
             f"Post: {item.post_text or ''}\n\n"
-            f"Key facts claimed:\n{facts_text}\n\n"
             f"Web search results:\n{search_text}"
         )
 
@@ -530,16 +566,24 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
 
         verdict = result.get("verdict", "")
 
-        if verdict == "CORRECTED" and result.get("corrected_text"):
-            bleed = story_script_bleed(texts=[result["corrected_text"]])
+        correction = _web_correction(result) if verdict == "CORRECTED" else {}
+        if correction:
+            bleed = story_script_bleed(
+                correction.get("headline"),
+                [correction.get("post_text", ""), *correction.get("facts", [])],
+            )
             if bleed:
                 logger.warning(
                     f"Web verify correction with foreign script for item {item.id}: "
                     f"{bleed[:3]!r}, not applied"
                 )
             else:
-                logger.info(f"Web verify corrected item {item.id}: {result.get('reason', '')}")
-                item.post_text = result["corrected_text"]
+                logger.info(
+                    f"Web verify corrected item {item.id} ({', '.join(sorted(correction))}): "
+                    f"{result.get('reason', '')}"
+                )
+                for field_name, value in correction.items():
+                    setattr(item, field_name, value)
         elif verdict == "REJECT":
             logger.info(f"Web verify unverified item {item.id}: {result.get('reason', '')}")
             item.news_category = "unverified"

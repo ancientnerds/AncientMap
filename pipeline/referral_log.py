@@ -406,7 +406,9 @@ def coverage_report(visits: Iterable[Visit], since: datetime, until: datetime) -
     Same rule for old lines: only those that carry the protocol are read.
     """
     marked = [
-        v for v in visits if since <= v.at < until and v.prefetch is not None and v.http1 is not None
+        v
+        for v in visits
+        if since <= v.at < until and v.prefetch is not None and v.http1 is not None
     ]
     prefetched = sum(1 for v in marked if v.prefetch and v.page)
     scripted = sum(1 for v in marked if v.http1 and not v.prefetch and v.page)

@@ -295,7 +295,12 @@ def test_coverage_report_counts_an_http1_page_as_scripted():
     """2026-10-08: 80 % of the day's Google lines were one scraper over
     HTTP/1.1; counted as arrivals they made nginx read five times Umami."""
     out = rl.coverage_report(
-        [_visit(), _visit(http1=True), _visit(http1=True, status=410), _visit(http1=True, page=False)],
+        [
+            _visit(),
+            _visit(http1=True),
+            _visit(http1=True, status=410),
+            _visit(http1=True, page=False),
+        ],
         SINCE,
         UNTIL,
     )
@@ -310,7 +315,9 @@ def test_coverage_report_reads_only_lines_that_carry_the_protocol():
     """A line logged before nginx wrote the protocol may be the scraper or a
     visitor; it is not read, and the window starts where the field does."""
     marked = SINCE + timedelta(days=3)
-    out = rl.coverage_report([_visit(at=SINCE + timedelta(days=1), http1=None), _visit(at=marked)], SINCE, UNTIL)
+    out = rl.coverage_report(
+        [_visit(at=SINCE + timedelta(days=1), http1=None), _visit(at=marked)], SINCE, UNTIL
+    )
     assert out["families"] == [{"family": "search", "visits": 1, "bots": 0}]
     assert out["lines"] == 1
     assert out["covered_from"] == marked.isoformat()

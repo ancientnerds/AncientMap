@@ -124,9 +124,19 @@ def test_a_story_or_paper_page_reporting_its_own_reader_is_not_an_interaction():
         ev("played", "media_play", event_type=2, data={"kind": "video"}),
     ]
     sessions = fs.sessions_from_rows(rows)
-    assert {s.id: s.human for s in sessions} == {"story": False, "paper": False, "card": True, "played": True}
+    assert {s.id: s.human for s in sessions} == {
+        "story": False,
+        "paper": False,
+        "card": True,
+        "played": True,
+    }
     # The events stay for the session type and the journeys.
-    assert {s.id: s.events["story_open"] for s in sessions} == {"story": 1, "paper": 0, "card": 1, "played": 1}
+    assert {s.id: s.events["story_open"] for s in sessions} == {
+        "story": 1,
+        "paper": 0,
+        "card": 1,
+        "played": 1,
+    }
 
 
 def test_the_same_url_twice_is_not_a_second_page():
@@ -1203,7 +1213,18 @@ def test_a_slow_page_names_where_it_usually_loses_the_time():
     nothing where the rows predate it."""
     base = {"page": "globe", "name": "INP", "p75": 1908.0, "samples": 19, "sessions": 12, **LAST}
     with_where = {**base, "top_phase": "presentation", "top_target": "canvas"}
-    [row] = [p for p in fs.problems([], vitals=[with_where], not_found=[], errors=[]) if p["kind"] == "slow_page"]
-    assert row["detail"] == "p75 1908 ms against a 200 ms budget, 19 samples; mostly presentation at canvas"
-    [old] = [p for p in fs.problems([], vitals=[base], not_found=[], errors=[]) if p["kind"] == "slow_page"]
+    [row] = [
+        p
+        for p in fs.problems([], vitals=[with_where], not_found=[], errors=[])
+        if p["kind"] == "slow_page"
+    ]
+    assert (
+        row["detail"]
+        == "p75 1908 ms against a 200 ms budget, 19 samples; mostly presentation at canvas"
+    )
+    [old] = [
+        p
+        for p in fs.problems([], vitals=[base], not_found=[], errors=[])
+        if p["kind"] == "slow_page"
+    ]
     assert old["detail"] == "p75 1908 ms against a 200 ms budget, 19 samples"

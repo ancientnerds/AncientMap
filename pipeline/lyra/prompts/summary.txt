@@ -37,6 +37,18 @@ Judge the topic's SUBJECT, not its vocabulary. Keep a topic about an ancient sit
 Ages merely appear in it — a medieval chronicler describing a Roman ruin, medieval reuse of a
 megalith, occupation continuing from prehistory into later centuries.
 
+CLAIMS ARE NOT FACTS:
+Many of these channels argue for interpretations that archaeology does not accept: a lost advanced
+civilisation, machining or cast stone, a site far older than its dating evidence. Report what the
+video says without adopting it.
+- A fact states only what is established: a measurement, a date and how it was obtained, a find,
+  who excavated, what the site is.
+- A claim the presenter makes, or an interpretation archaeologists dispute, is written as the
+  video's claim: "The video argues that ...", "The presenter proposes ...". Never state it as a
+  fact, neither in a fact nor in a headline.
+- A headline about such a claim names it as a claim: "Video argues Baalbek's megaliths predate the
+  Romans", not "Baalbek's megaliths predate the Romans".
+
 Requirements:
 - For each topic, write a concise headline (max 100 chars) that captures the key finding or discovery.
   Headlines should read like news headlines: factual, specific, no clickbait.
