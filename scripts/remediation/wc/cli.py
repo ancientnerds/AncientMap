@@ -1130,9 +1130,8 @@ def cmd_import(
                 answers, library, label=label, checked=entry["plan_site"]["description"] or ""
             )
         failed = {str(n): [str(r["why"])] for n, r in results.items() if not r["counted"]}
-        if (
-            failed and kind not in WRITTEN_KINDS
-        ):  # a written sentence is never re-asked: it is dropped
+        # a written sentence is never re-asked: it is dropped
+        if failed and kind not in WRITTEN_KINDS:
             reask[label] = failed
         rows.append(
             {**attempt, "results": {str(n): result for n, result in sorted(results.items())}}
