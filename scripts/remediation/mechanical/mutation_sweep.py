@@ -7564,6 +7564,14 @@ WD5_CASES: list[Case] = [
         "test_wd5_is_a_lane_of_its_own",
         WD5_TESTS,
     ),
+    Case(
+        "wd5: a later lane's decision overrides an earlier one",
+        FIELDS / "population.py",
+        '            history[(str(row["site_id"]), str(row["field"]))] = row',
+        '            history.setdefault((str(row["site_id"]), str(row["field"])), row)',
+        "test_the_history_runs_wd1_then_wd3_then_wd4",
+        WD5_TESTS,
+    ),
     guard(
         "wd5: a wd5 run needs the history",
         FIELDS / "population.py",

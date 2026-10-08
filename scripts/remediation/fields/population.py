@@ -728,7 +728,8 @@ def main(argv: list[str] | None = None) -> int:
         default=FIELDS_DIR,
         help="where WD1's runs (wd1, wd1-pilot, wd1-rest, wd1-rest-pilot) and its waves "
         "(wd1/write) live - this checkout's output/remediation/fields, which holds them only "
-        "where the run itself was built; from a worktree, name the checkout that has them",
+        "where the run itself was built; from a worktree, name the checkout that has them. "
+        "Stage wd5 also reads wd3's and wd4's DECISIONS.jsonl there",
     )
     cut = run.add_mutually_exclusive_group()
     cut.add_argument("--pilot", type=int, help="a pilot: this many of the population's sites")
