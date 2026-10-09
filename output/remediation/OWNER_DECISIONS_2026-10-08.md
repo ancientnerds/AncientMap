@@ -68,3 +68,13 @@ no OAuth setup until the owner says so. The Shorts decisions below (D26-D34) are
 | D33 | YouTube API | **Channel exists; set the API up together with the owner** (rec); he clicks the consent once. |
 | D34 | Music licence (Audiio "GlassKeys") | **Cleared** for monetised YouTube. |
 | D35 | Retention experiments | **All three**: opener types (rec), TTS speed 0.92 vs 1.0, sentence-1 length 55-70 vs 70-85. |
+
+## Follow-up decisions of 2026-10-09 (weekly Claude quota at 69 % after the first day)
+
+| # | question | decision |
+| --- | --- | --- |
+| D36 | Model mix after the quota warning | **Sonnet instead of Opus, and test Haiku**: field research, fact checker, web verifier and card writer on Sonnet 5.5 (the calibrations measured no Opus advantage: field research 0.864 Sonnet vs 0.871 Opus, BP 0.92 vs 0.88, fact checker 9/30 and 30/30 for both); Opus only for small spot checks and pilot verdicts; Haiku stays on mechanical steps and is calibrated for the fact checker. Supersedes the D6 tier moves of 2026-10-09 to Opus. |
+| D37 | Scope after the quota warning | **Everything as decided** (D1-D35), no prioritising cut. |
+| D38 | The running Opus calibration of the card checkers | Stop it (the WD5 pilot runs to its end; the fact-checker gold diagnosis finishes). |
+| D39 | The rest of the weekly quota | **Work until about 90 %, then pause cleanly** until the reset. |
+
