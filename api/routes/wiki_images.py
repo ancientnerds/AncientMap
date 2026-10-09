@@ -303,7 +303,9 @@ async def get_wiki_images(site_id: str, db: Session = Depends(get_db)):
         images.append(
             {
                 "url": f"/data/images/wiki/{site_id_short}/{row.filename}",
-                "thumb": f"/data/images/wiki/{site_id_short}/{row.filename}",
+                # The gallery's tile: the 480 px copy (pipeline/wiki_thumbs.py); nginx
+                # answers with the image itself where no copy exists yet.
+                "thumb": f"/data/images/wiki-thumbs/{site_id_short}/{row.filename}",
                 "title": row.title,
                 "author": row.author,
                 "authorUrl": row.author_url,

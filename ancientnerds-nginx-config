@@ -304,6 +304,21 @@ server {
         gzip_static on;
     }
 
+    # Gallery thumbnails (pipeline/wiki_thumbs.py): a 480 px copy of each wiki
+    # image wider than that, under the same <id8>/<filename>. The gallery loaded
+    # the full 1600 px files before - 12.7 MB on the Göbekli Tepe page, mobile
+    # LCP 9.8 s (SEO audit 2026-10-08). Read from disk; where no thumbnail exists
+    # (a narrow image, or one an image wave added since the last sync) the
+    # image itself answers, so a missing thumbnail costs bytes, never a picture.
+    location ^~ /data/images/wiki-thumbs/ {
+        root /var/www/ancientnerds/public;
+        try_files $uri @wiki_image;
+        add_header Cache-Control "public, max-age=86400";
+    }
+    location @wiki_image {
+        rewrite ^/data/images/wiki-thumbs/(.*)$ /data/images/wiki/$1 last;
+    }
+
     # Wiki images — served by API container (files are inside Docker)
     location /data/images/wiki/ {
         proxy_pass http://an_api/data/images/wiki/;

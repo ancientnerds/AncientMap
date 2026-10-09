@@ -115,7 +115,7 @@ def test_country_route_hands_the_raw_sites_payload():
             "site_type": "Fortification",
             "period_name": "500 - 1000 AD",
             "period_start": 980,
-            "thumbnail_url": "/data/images/wiki/7a1b2c3d/hero.webp",
+            "thumbnail_url": "/data/images/wiki-thumbs/7a1b2c3d/hero.webp",
         },
     ]
 
