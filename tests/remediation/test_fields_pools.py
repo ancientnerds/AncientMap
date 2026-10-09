@@ -330,14 +330,17 @@ class TestComparingAnAnsweredPool:
 
 
 # ------------------------------------------------------------------------------ the BP pool
-def bp_world(tmp_path: Path, ages: dict[str, tuple[str, str]]) -> Path:
-    """`wd3` with a site per `name -> (reasoning, final decision)`: an unresolved period whose
-    agent named an age in years before the present."""
+def bp_world(tmp_path: Path, ages: dict[str, tuple[Any, ...]]) -> Path:
+    """`wd3` with a site per `name -> (reasoning, final decision[, answering model])`: an unresolved
+    period whose agent named an age in years before the present. Every other run of the lanes holds
+    empty files (`bp_candidates` refuses a run that is not there)."""
     fields = tmp_path / "output" / "remediation" / "fields"
+    for name in (*POP.WD1_RUN_NAMES, *PL.LATER_RUNS):
+        for file in (HO.DECISIONS_FILE, HO.ATTEMPTS_FILE, C.CLASSIFIED_FILE):
+            HO._write_jsonl(fields / name / file, [])
     run = fields / "wd3"
-    run.mkdir(parents=True)
     lines, decisions, attempts = [], [], []
-    for number, (name, (reasoning, final)) in enumerate(ages.items(), start=1):
+    for number, (name, (reasoning, final, *model)) in enumerate(ages.items(), start=1):
         site = site_id(number)
         line = TW.wd3_line(site, ["period_start"])
         line["name"], line["country"] = name, "Spain"
@@ -346,7 +349,8 @@ def bp_world(tmp_path: Path, ages: dict[str, tuple[str, str]]) -> Path:
             decision(site, "period_start", final, via="exhausted", round_=2, name=name)
         )
         attempts.append({"site_id": site, "field": "period_start", "round": 2,
-                         "answer": {"decision": "unresolved", "reasoning": reasoning}})  # fmt: skip
+                         "answer": {"decision": "unresolved", "reasoning": reasoning},
+                         **({"model": model[0]} if model else {})})  # fmt: skip
     HO._write_jsonl(run / C.CLASSIFIED_FILE, lines)
     HO._write_jsonl(run / HO.DECISIONS_FILE, decisions)
     HO._write_jsonl(run / HO.ATTEMPTS_FILE, attempts)
@@ -402,11 +406,54 @@ class TestTheBpCandidates:
     ) -> None:
         fields = bp_world(tmp_path, {"Old Cave": (OLD, "unresolved")})
         run4 = fields / "wd4"
-        run4.mkdir()
         line = HO._read_jsonl(fields / "wd3" / C.CLASSIFIED_FILE)[0]
         HO._write_jsonl(run4 / C.CLASSIFIED_FILE, [{**line, "country": "France"}])
         [candidate] = PL.bp_candidates(fields).values()
         assert candidate.line["country"] == "France"
+
+
+class TestTheBpReaderWasTheObstacle:
+    def test_a_year_worked_out_from_an_age_that_is_not_accepted_says_the_reader_was_the_obstacle(
+        self, tmp_path: Path
+    ) -> None:
+        said = "Sources give 'about 7000 years ago'; a year worked out from an age is not accepted."
+        [candidate] = PL.bp_candidates(
+            bp_world(tmp_path, {"Elk Cave": (said, "unresolved")})
+        ).values()
+        assert candidate.clean
+
+
+class TestTheBpCandidatesAreClaudes:
+    MINIMAX = "minimax/MiniMax-M3.1-Flash-Preview (MiniMax Code agent)"
+    CLAUDE = "anthropic/claude-sonnet-5-5 (Claude Code agent)"
+
+    def test_a_site_only_a_minimax_reasoning_dates_is_no_candidate(self, tmp_path: Path) -> None:
+        fields = bp_world(tmp_path, {"Old Cave": (OLD, "unresolved", self.MINIMAX)})
+        assert PL.bp_candidates(fields) == {}
+
+    def test_a_minimax_reasoning_neither_dates_nor_cleans_a_claude_candidate(
+        self, tmp_path: Path
+    ) -> None:
+        fields = bp_world(tmp_path, {"Old Cave": ("Wikipedia dates it to about 40,000 years ago.",
+                                                  "unresolved", self.CLAUDE)})  # fmt: skip
+        run = fields / "wd3"
+        site = HO._read_jsonl(run / HO.DECISIONS_FILE)[0]["site_id"]
+        HO._write_jsonl(run / HO.ATTEMPTS_FILE, [
+            *HO._read_jsonl(run / HO.ATTEMPTS_FILE),
+            {"site_id": site, "field": "period_start", "round": 2, "model": self.MINIMAX,
+             "answer": {"decision": "unresolved", "reasoning": BRONZE}},
+        ])  # fmt: skip
+        [candidate] = PL.bp_candidates(fields).values()
+        assert candidate.ages == (40000,) and candidate.reasonings == (
+            "Wikipedia dates it to about 40,000 years ago.",
+        )
+        assert not candidate.clean  # BRONZE's "not read" does not make a Claude text clean
+
+    def test_a_run_file_that_is_not_there_is_refused_not_skipped(self, tmp_path: Path) -> None:
+        fields = bp_world(tmp_path, {"Old Cave": (OLD, "unresolved")})
+        (fields / "wd1-rest" / HO.ATTEMPTS_FILE).unlink()
+        with pytest.raises(POP.PopulationError, match="is missing"):
+            PL.bp_candidates(fields)
 
 
 class TestThePick:

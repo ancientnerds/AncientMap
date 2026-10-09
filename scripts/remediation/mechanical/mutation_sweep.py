@@ -8079,6 +8079,7 @@ ADVERSARIAL = FIELDS / "adversarial.py"
 POOLS = FIELDS / "pools.py"
 FIELDS_HANDOFF = FIELDS / "handoff.py"
 FIELDS_PLAN = FIELDS / "plan.py"
+CALIBRATE = FIELDS.parent / "calibrate_claude.py"
 FIELDS_POPULATION = FIELDS / "population.py"
 CARRY_TESTS = "tests/remediation/test_fields_carry.py"
 OPS_TESTS = "tests/remediation/test_fields_wd5_ops.py"
@@ -8147,8 +8148,44 @@ WD5_ADV_CASES: list[Case] = [
     guard(
         "wd5-adv: a MiniMax decision is asked again",
         CARRY,
-        '    if "minimax" in str(decision.get("model") or "").lower():',
+        '    if "minimax" in answering_model(decision, census).lower():',
         "test_a_decision_a_minimax_model_made_is_asked_again",
+        CARRY_TESTS,
+    ),
+    guard(
+        "wd5-adv: a decision that names its model is read as it is",
+        CARRY,
+        '    if "model" in decision:',
+        "test_a_decision_that_names_its_model_does_not_need_the_census",
+        CARRY_TESTS,
+    ),
+    guard(
+        "wd5-adv: a WD1 decision the census lacks is refused",
+        CARRY,
+        "    if key not in census:",
+        "test_a_wd1_decision_the_census_does_not_hold_is_refused_not_carried_without_a_model",
+        CARRY_TESTS,
+    ),
+    Case(
+        "wd5-adv: a carried row names the model that answered",
+        CARRY,
+        '                "model": answering_model(decision, census),\n',
+        "",
+        "test_a_wd1_decision_takes_the_model_the_census_found_behind_its_answer",
+        CARRY_TESTS,
+    ),
+    guard(
+        "wd5-adv: the model census must be there",
+        CARRY,
+        '    if not path.exists():\n        raise CarryError(f"{path} is missing: the carried WD1',
+        "test_a_missing_census_is_refused",
+        CARRY_TESTS,
+    ),
+    guard(
+        "wd5-adv: the census names one model per answer",
+        CARRY,
+        '        if models.setdefault(key, str(row["true_model"])) != row["true_model"]:',
+        "test_a_census_that_names_two_models_for_one_answer_is_refused",
         CARRY_TESTS,
     ),
     guard(
@@ -8397,12 +8434,52 @@ WD5_ADV_CASES: list[Case] = [
         WD5_TESTS,
     ),
     # -- what the plan reads and writes
-    guard(
+    Case(
         "wd5-adv: a wd5 wave needs the re-check",
         FIELDS_PLAN,
-        "    if rule.recheck:\n        _require_adversarial(run)",
+        "        _require_adversarial(run)\n",
+        "        pass\n",
         "test_a_wave_is_planned_only_from_the_decisions_the_check_was_applied_to",
         ADV_TESTS,
+    ),
+    Case(
+        "wd5-adv: a wd5 wave needs the calibrations",
+        FIELDS_PLAN,
+        "        _require_calibrated()\n",
+        "        pass\n",
+        "test_the_wave_is_planned_only_after_the_roles_passed_their_calibration",
+        WD5_TESTS,
+    ),
+    guard(
+        "wd5-adv: a calibration that is not passed everywhere is refused",
+        CALIBRATE,
+        "    if unmet:",
+        "test_the_wave_is_planned_only_after_the_roles_passed_their_calibration",
+        WD5_TESTS,
+    ),
+    Case(
+        "wd5-adv: a failed verdict is no calibration",
+        CALIBRATE,
+        '        if path.stem in seals and json.loads(path.read_text(encoding="utf-8"))["passed"]',
+        "        if path.stem in seals",
+        "test_the_wave_is_planned_only_after_the_roles_passed_their_calibration",
+        WD5_TESTS,
+    ),
+    Case(
+        "wd5-adv: a calibration names the pool it passed",
+        CALIBRATE,
+        '            and seal["comparison"] == comparison',
+        "            and True",
+        "test_the_wave_is_planned_only_after_the_roles_passed_their_calibration",
+        WD5_TESTS,
+    ),
+    Case(
+        "wd5-adv: a calibration binds the role as it is now",
+        CALIBRATE,
+        '            and seal["role_sha256"] == RO.role_sha256(role)',
+        "            and True",
+        "test_the_wave_is_planned_only_after_the_roles_passed_their_calibration",
+        WD5_TESTS,
     ),
     guard(
         "wd5-adv: a wave needs the applied marker",
@@ -8893,6 +8970,29 @@ WD5_ADV_CASES: list[Case] = [
         "            edge = edge or (FIRST_BUCKET in reached and len(reached) > 1)",
         "            edge = edge or len(reached) > 1",
         "test_an_age_near_another_buckets_edge_is_no_edge_case",
+        POOL_TESTS,
+    ),
+    Case(
+        "wd5-adv: an age that is not accepted as a year says the reader was the obstacle",
+        POOLS,
+        "not readable|not accepted|",
+        "not readable|",
+        "test_a_year_worked_out_from_an_age_that_is_not_accepted_says_the_reader_was_the_obstacle",
+        POOL_TESTS,
+    ),
+    guard(
+        "wd5-adv: a MiniMax reasoning is no BP gold",
+        POOLS,
+        '            if "minimax" in str(a.get("model") or "").lower():',
+        "test_a_minimax_reasoning_neither_dates_nor_cleans_a_claude_candidate",
+        POOL_TESTS,
+    ),
+    Case(
+        "wd5-adv: a BP run that is not there is refused",
+        POOLS,
+        "        for a in POP._read_jsonl(run / HO.ATTEMPTS_FILE):",
+        "        for a in HO._read_jsonl(run / HO.ATTEMPTS_FILE):",
+        "test_a_run_file_that_is_not_there_is_refused_not_skipped",
         POOL_TESTS,
     ),
     guard(

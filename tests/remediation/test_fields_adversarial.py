@@ -30,6 +30,7 @@ from fields import wiki as W  # noqa: E402
 from mechanical.plan import PlanError  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
+from tests.remediation import test_fields_carry as TC  # noqa: E402
 from tests.remediation import test_fields_handoff as TH  # noqa: E402
 from tests.remediation import test_fields_plan as TP  # noqa: E402
 from tests.remediation import test_fields_wd3 as TW  # noqa: E402
@@ -670,6 +671,7 @@ class TestWhatThePlanReads:
         monkeypatch.setattr(FP, "REPO", tmp_path)
         monkeypatch.setattr(HO, "REPO", tmp_path)
         run = make_run(tmp_path, [dec(verdict="unresolved", value=None, quote=BUILT)], A_ID)
+        T5.pass_calibrations(tmp_path)
         with pytest.raises(PlanError, match="adv/APPLIED.json|APPLIED.json is missing"):
             FP.build_wave(run, "2026-10-09a")
         T5.pin_adversarial(run)
@@ -711,3 +713,31 @@ class TestWhatThePlanReads:
         evidence = FP._decision_evidence(confirmed, R.RECHECK)
         assert evidence[-1]["adversarial"] == {"verdict": "confirm", "round": 0}
         assert "adversarial" not in FP._decision_evidence(dec(), R.RECHECK)[-1]
+
+
+class TestACarriedWd1Decision:
+    """WD1's `DECISIONS.jsonl` rows carry no `model` key: the carried row gets the census's model, and
+    the check and the plan read it like any other decision's."""
+
+    def carried_row(self, tmp_path: Path) -> dict[str, Any]:
+        site = TC.COAST
+        world = TC.World(tmp_path, [TC.wd1_decision(site)], site)
+        world.lines(TC.line(site))
+        world.census = {("wd1-r1-b0004", f"{site}.answer.json"): "claude-sonnet-5-5"}
+        world.carry()
+        [row] = CA.read_carried(world.run)
+        return row
+
+    def test_the_check_selects_it_and_the_packet_names_the_model(self, tmp_path: Path) -> None:
+        row = self.carried_row(tmp_path / "carry")
+        run = make_run(tmp_path, [row], row["site_id"])
+        put_page(
+            Path(row["origin"]["run"]), "https://x.org/a", "The point is 35.156834, 32.788315."
+        )
+        assert AD.select(run, seed=1, wiki=None)["replace"] == 1
+        packet = AD.read_cells(run / HO.ADV_DIR)[AD.cell_id(row["site_id"], "coordinates")]
+        assert packet["model"] == "claude-sonnet-5-5" and packet["via"] == CA.CARRIED
+
+    def test_the_plans_evidence_names_the_model(self, tmp_path: Path) -> None:
+        row = self.carried_row(tmp_path)
+        assert FP._decision_evidence(row, R.RECHECK)[-1]["model"] == "claude-sonnet-5-5"

@@ -21,10 +21,12 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
 import opus_handoff as OH  # noqa: E402
+import roles as RO  # noqa: E402
 from fields import answers as A  # noqa: E402
 from fields import classify as C  # noqa: E402
 from fields import handoff as HO  # noqa: E402
 from fields import plan as FP  # noqa: E402
+from fields import pools as PL  # noqa: E402
 from fields import population as POP  # noqa: E402
 from fields import rule as R  # noqa: E402
 from mechanical import apply as MA  # noqa: E402
@@ -722,6 +724,25 @@ def pin_adversarial(run: Path) -> None:
     )
 
 
+def pass_calibrations(repo: Path, *, passed: bool = True, skip: str | None = None,
+                      sha: str | None = None) -> None:  # fmt: skip
+    """THRESHOLDS.json and the verdicts of the three calibrations lane wd5 needs, under `repo`:
+    `skip` leaves one comparison out, `sha` seals against another registry entry."""
+    root = repo / "output" / "remediation" / "calibration"
+    (root / "verdicts").mkdir(parents=True, exist_ok=True)
+    seals = {}
+    for number, (role, comparison) in enumerate(PL.WD5_CALIBRATIONS):
+        if comparison == skip:
+            continue
+        cal = f"cal-{number}"
+        seals[cal] = {"role": role, "comparison": comparison,
+                      "role_sha256": sha or RO.role_sha256(role)}  # fmt: skip
+        (root / "verdicts" / f"{cal}.json").write_text(
+            json.dumps({"passed": passed}), encoding="utf-8"
+        )
+    (root / "THRESHOLDS.json").write_text(json.dumps(seals), encoding="utf-8")
+
+
 class TestTheWaveAndTheStep:
     @pytest.fixture
     def repo(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -747,6 +768,7 @@ class TestTheWaveAndTheStep:
         ])  # fmt: skip
         HO._write_json(run / HO.REASK_FILE, {"after_round": 0, "fields": {}})
         pin_adversarial(run)
+        pass_calibrations(tmp_path)
         return tmp_path
 
     @staticmethod
@@ -773,6 +795,21 @@ class TestTheWaveAndTheStep:
             FP.wave_dir("2026-10-09a", "wd5")
             == repo / "output/remediation/fields/wd5/write/2026-10-09a"
         )
+
+    @pytest.mark.parametrize(
+        ("over", "said"),
+        [
+            ({"passed": False}, "field_researcher/fields-decided, field_researcher/bp-bucket"),
+            ({"skip": "bp-bucket"}, "field_researcher/bp-bucket"),
+            ({"sha": "0" * 64}, "adversarial/adv-truth"),
+        ],
+    )
+    def test_the_wave_is_planned_only_after_the_roles_passed_their_calibration(
+        self, repo: Path, over: dict[str, Any], said: str
+    ) -> None:
+        pass_calibrations(repo, **over)
+        with pytest.raises(PlanError, match=said):
+            FP.build_wave(repo / "run", "2026-10-09a")
 
     def test_an_unresolved_of_an_unsourced_point_is_no_wave_site(self, repo: Path) -> None:
         line = HO.read_classified(repo / "run")

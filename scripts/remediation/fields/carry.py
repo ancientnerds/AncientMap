@@ -18,7 +18,10 @@ recorded (`CARRIED.json`, `not_carried`) so that the cell is asked as any other:
 * the run's population holds the point as an open field (`CLASSIFIED.jsonl`);
 * the latest decision of the point (`population.read_history`) is a counted `replace` with a value -
   not `unresolved`, `held` or `keep` - and not one a MiniMax model answered (master plan X6: MiniMax
-  answers are never ground truth, the point is asked again by Claude);
+  answers are never ground truth, the point is asked again by Claude). WD3 and WD4 rows name the
+  model that answered; WD1 rows do not, and the carried row gets the model the model census of
+  2026-10-01 found behind the answer file (not the Opus stamp, which sat on Sonnet answers too). A WD1
+  decision the census does not hold is refused: its model is not known, and no row is carried without one;
 * it was made about the point the run holds (`stored` equals the run's stored point), so the plan's
   `moved-since-classification` does not refuse it for a different reason;
 * the country check the plan runs would agree now. A point the guard still refuses (inside another
@@ -53,6 +56,8 @@ from fields import harvest as H  # noqa: E402
 from fields import population as POP  # noqa: E402
 from fields import rule as R  # noqa: E402
 
+#: The model census: which model really wrote each recorded answer (read-only, 2026-10-01).
+CENSUS_FILE = Path("model_census") / "ANSWERS_TRUE_MODEL.jsonl"
 CARRIED_FILE = "CARRIED.jsonl"
 CARRIED_META = "CARRIED.json"
 #: The `via` of a carried decision (`handoff.COUNTED` and `EXHAUSTED` are the others).
@@ -78,6 +83,33 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def _sha256_text(path: Path) -> str:
     return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def read_census(path: Path) -> dict[tuple[str, str], str]:
+    """`{(answered_by, answer file name): the model that wrote it}` of the model census. A census that
+    is not there is refused, and so is an answer file two census rows name with different models."""
+    if not path.exists():
+        raise CarryError(f"{path} is missing: the carried WD1 decisions need the model census")
+    models: dict[tuple[str, str], str] = {}
+    for row in _read_jsonl(path):
+        key = (str(row["answered_by"]), str(row["file"]).replace("\\", "/").rsplit("/", 1)[-1])
+        if models.setdefault(key, str(row["true_model"])) != row["true_model"]:
+            raise CarryError(f"{path} names two models for the answer {key}")
+    return models
+
+
+def answering_model(decision: Mapping[str, Any], census: Mapping[tuple[str, str], str]) -> str:
+    """The model that answered a decision: the row's own `model` (WD3, WD4), else the census's model
+    of the answer file `<site id>.answer.json` of its agent (WD1 rows carry none)."""
+    if "model" in decision:
+        return str(decision["model"])
+    key = (str(decision["answered_by"]), f"{decision['site_id']}.answer.json")
+    if key not in census:
+        raise CarryError(
+            f"{decision['site_id']}/{decision['field']}: the decision names no model and the model "
+            f"census holds no answer of {key[0]}: its model is not known, it is not carried"
+        )
+    return census[key]
 
 
 def refused_sites(waves: Sequence[Path]) -> dict[str, str]:
@@ -120,6 +152,7 @@ def not_carried_reason(
     line: Mapping[str, Any],
     decision: Mapping[str, Any] | None,
     country_check: Callable[[str, float, float], Mapping[str, Any]],
+    census: Mapping[tuple[str, str], str],
 ) -> str | None:
     """Why the earlier decision of this point is not carried, or `None` when it is."""
     if decision is None:
@@ -128,7 +161,7 @@ def not_carried_reason(
         return f"the earlier decision is {decision['decision']}, not a replace with a value"
     if decision["via"] != "counted":
         return f"the earlier decision came {decision['via']}, not from a counted answer"
-    if "minimax" in str(decision.get("model") or "").lower():
+    if "minimax" in answering_model(decision, census).lower():
         return "a MiniMax model answered it: Claude asks the point again (D10)"
     if decision["stored"] != line["fields"][FIELD]["stored"]:
         return (
@@ -153,6 +186,7 @@ def carry_points(
     fields_dir: Path,
     waves: Sequence[Path],
     country_check: Callable[[str, float, float], Mapping[str, Any]],
+    census: Mapping[tuple[str, str], str],
 ) -> dict[str, Any]:
     """CARRIED.jsonl and CARRIED.json of a wd5 run: the refused points whose earlier decision stands.
 
@@ -179,7 +213,7 @@ def carry_points(
             outside.append(site)
             continue
         decision = history.get((site, FIELD))
-        reason = not_carried_reason(line, decision, country_check)
+        reason = not_carried_reason(line, decision, country_check, census)
         if reason is not None:
             not_carried[site] = reason
             continue
@@ -188,6 +222,7 @@ def carry_points(
         carried.append(
             {
                 **{k: v for k, v in decision.items() if k != "run"},
+                "model": answering_model(decision, census),
                 "via": CARRIED,
                 "origin": {"run": POP._shown(origin), "via": decision["via"]},
             }
@@ -249,6 +284,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=POP.FIELDS_DIR,
         help="where the runs of WD1, WD3 and WD4 and their waves live (default: this checkout's)",
     )
+    cmd.add_argument(
+        "--census",
+        type=Path,
+        help="the model census (default: model_census/ANSWERS_TRUE_MODEL.jsonl beside the fields dir)",
+    )
     args = parser.parse_args(list(argv) if argv is not None else None)
     try:
         from fields import plan as FP  # noqa: PLC0415 - plan imports handoff, which imports this
@@ -260,6 +300,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             fields_dir=args.fields_dir,
             waves=[args.fields_dir / lane / "write" for lane in WAVE_LANES],
             country_check=FP._country_check(),
+            census=read_census(args.census or args.fields_dir.parent / CENSUS_FILE),
         )
     except (CarryError, POP.PopulationError, R.RuleError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)

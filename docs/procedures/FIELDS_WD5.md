@@ -65,6 +65,7 @@ $PY $F/pools.py build-adversarial --out $POOLS/adv        --seed 20261010   # 40
 # then the three printed `calibrate_claude.py seal ...` commands
 ```
 
+A MiniMax agent's reasoning is no BP gold (D10): only the attempts of WD1 and of Claude agents count.
 The BP set holds the six sites the 30-site audit confirmed in "< 4500 BC" (Le Moustier, Bruniquel, Cro-Magnon,
 Apidima, Boxgrove, Lake Mungo), one bucket-edge case (a number whose tolerance reaches 6,450 BP) and a seeded fill of
 sites whose earlier reasoning dated them in one bucket; `TRUTH.json` says on what each rests (`audit-confirmed`,
@@ -135,7 +136,10 @@ H=output/remediation/handoff/fields-wd5
    records (2026-10-09, with the real boundary file): **16 of the 23 are carried**; asked again are Narona,
    Heracleion, Achladia (the point lies in Greece, the site says Germany), Flevum (Netherlands for Germany), and
    Clachtoll Broch, Stairhaven and Kaljaja, which a MiniMax model answered. A pilot that holds one of the 23 asks it.
-   Both files are pinned: an edit is refused at the export.
+   Both files are pinned: an edit is refused at the export. A WD1 decision carries no `model` key: the carried row
+   gets the model the model census (`output/remediation/model_census/ANSWERS_TRUE_MODEL.jsonl`, `--census` to name
+   another) found behind its answer file (not the Opus stamp), and a WD1 decision the census does not hold refuses the
+   whole `carry-points`.
 
 ## 5. The rounds and the re-check
 
@@ -194,6 +198,9 @@ bash scripts/remediation/wd5_wave.sh 2026-10-12a $W5P     # plan.py wave refuses
 bash scripts/remediation/wd5_wave.sh 2026-10-12b $W5
 ```
 
+`plan.py wave` also refuses until the three calibrations have a passing verdict (`fields-decided` and `bp-bucket` of
+`field_researcher`, `adv-truth` of `adversarial`), each sealed against the role's registry entry as it is now: the
+calibration runs use the export and the import themselves, so the check stands at the one path into production.
 The script stops at the first refusal. By hand, per step N: `plan.py step --stage wd5 --wave W --step N`, then
 `apply.py --lane fields-wd5-W-sNNN` with `--emit`, `--verify`, `--rehearse`, `--probe-guards`, `--apply`, `--verify`,
 `--rehearse-rollback`, then `plan.py accept --stage wd5 --wave W --step N` (0 deviations). A step with nothing to write

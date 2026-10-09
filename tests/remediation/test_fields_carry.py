@@ -85,6 +85,7 @@ class World:
     """A fields directory with a WD3 run that decided, and its wave that refused."""
 
     def __init__(self, tmp_path: Path, decisions: list[dict[str, Any]], *sites: str) -> None:
+        self.census: dict[tuple[str, str], str] = {}
         self.fields = tmp_path / "fields"
         self.run = self.fields / "wd5"
         self.decisions = decisions
@@ -105,6 +106,7 @@ class World:
             fields_dir=self.fields,
             waves=[self.fields / lane / "write" for lane in CA.WAVE_LANES],
             country_check=check,
+            census=self.census,
         )
 
 
@@ -113,6 +115,69 @@ def world(tmp_path: Path) -> World:
     made = World(tmp_path, [decision(COAST)], COAST)
     made.lines(line(COAST))
     return made
+
+
+def wd1_decision(site: str, **over: Any) -> dict[str, Any]:
+    """A decision as WD1's `DECISIONS.jsonl` holds it: no `model` key (only WD3 and WD4 rows have one)."""
+    row = decision(site, answered_by="wd1-r1-b0004", **over)
+    del row["model"]
+    return row
+
+
+class TestTheModelOfACarriedDecision:
+    def test_a_wd1_decision_takes_the_model_the_census_found_behind_its_answer(
+        self, tmp_path: Path
+    ) -> None:
+        world = World(tmp_path, [wd1_decision(COAST)], COAST)
+        world.lines(line(COAST))
+        world.census = {("wd1-r1-b0004", f"{COAST}.answer.json"): "claude-sonnet-5-5"}
+        assert world.carry()["carried"] == 1
+        [row] = CA.read_carried(world.run)
+        assert row["model"] == "claude-sonnet-5-5" and row["via"] == "carried"
+
+    def test_a_wd1_decision_the_census_does_not_hold_is_refused_not_carried_without_a_model(
+        self, tmp_path: Path
+    ) -> None:
+        world = World(tmp_path, [wd1_decision(COAST)], COAST)
+        world.lines(line(COAST))
+        world.census = {("wd1-r1-b0099", f"{COAST}.answer.json"): "claude-sonnet-5-5"}
+        with pytest.raises(CA.CarryError, match="census holds no answer of wd1-r1-b0004"):
+            world.carry()
+        assert not (world.run / CA.CARRIED_FILE).exists()
+
+    def test_a_wd1_decision_the_census_puts_on_a_minimax_model_is_asked_again(
+        self, tmp_path: Path
+    ) -> None:
+        world = World(tmp_path, [wd1_decision(COAST)], COAST)
+        world.lines(line(COAST))
+        world.census = {("wd1-r1-b0004", f"{COAST}.answer.json"): "MiniMax-M3.1-Flash-Preview"}
+        assert world.carry()["carried"] == 0
+
+    def test_a_decision_that_names_its_model_does_not_need_the_census(self, world: World) -> None:
+        assert world.carry()["carried"] == 1
+        assert CA.read_carried(world.run)[0]["model"] == CLAUDE
+
+    def test_the_census_is_read_by_agent_and_file_name(self, tmp_path: Path) -> None:
+        path = tmp_path / "census.jsonl"
+        row = {"answered_by": "wd1-r0-b0075", "true_model": "claude-opus-5-5"}
+        name = "\\".join(["fields-wd1-r0", "wd1-r0-b0075", "wd1", f"{COAST}.answer.json"])
+        rows = [{**row, "file": name}]
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        assert CA.read_census(path) == {("wd1-r0-b0075", f"{COAST}.answer.json"): "claude-opus-5-5"}
+
+    def test_a_census_that_names_two_models_for_one_answer_is_refused(self, tmp_path: Path) -> None:
+        path = tmp_path / "census.jsonl"
+        rows = [
+            {"answered_by": "a", "file": f"d/{COAST}.answer.json", "true_model": m}
+            for m in ("claude-opus-5-5", "claude-sonnet-5-5")
+        ]
+        path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        with pytest.raises(CA.CarryError, match="two models"):
+            CA.read_census(path)
+
+    def test_a_missing_census_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(CA.CarryError, match="need the model census"):
+            CA.read_census(tmp_path / "none.jsonl")
 
 
 class TestWhatIsCarried:

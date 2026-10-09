@@ -83,6 +83,12 @@ ADV_PER_CLASS = 20
 THRESHOLD = 0.9
 MAX_UNDECIDED_EXCESS = 0.10
 COMPARISON_DECIDED, COMPARISON_BP, COMPARISON_ADV = "fields-decided", "bp-bucket", "adv-truth"
+#: The calibrations lane wd5 needs passed before its first write: `(role, comparison)`.
+WD5_CALIBRATIONS = (
+    ("field_researcher", COMPARISON_DECIDED),
+    ("field_researcher", COMPARISON_BP),
+    ("adversarial", COMPARISON_ADV),
+)
 GENERAL_STAGE = "frg"
 #: The model the BP pool's round is exported for: the registry's, so the brief names it.
 RESEARCHER_MODEL = RO.role("field_researcher").model
@@ -107,7 +113,7 @@ EDGE = "edge"
 #: be read as a year"), and one that says the sources disagree - a date the sites' own reasoning
 #: does not settle is no gold.
 UNREADABLE = re.compile(
-    r"not read|cannot be read|can't be read|unreadable|not a year|does not read|not readable|"
+    r"not read|cannot be read|can't be read|unreadable|not a year|does not read|not readable|not accepted|"
     r"readable (?:year|form|page)|cannot be (?:stated|quoted)",
     re.I,
 )
@@ -331,22 +337,27 @@ def bp_buckets(texts: Sequence[str]) -> tuple[frozenset[str], tuple[int, ...], b
 def bp_candidates(fields_dir: Path) -> dict[str, BpCandidate]:
     """The sites a WD1, WD3 or WD4 agent left without a period for want of the BP reader, whose
     latest classification (WD4, WD3, its pilot) asked the period: `period_start` ended `clear`,
-    `unresolved` or `held` and an answer's reasoning names an age in years before the present."""
+    `unresolved` or `held` and an answer's reasoning names an age in years before the present. A
+    MiniMax agent's reasoning is read as nothing (D10): its attempts name the model, WD1's name none.
+    A run file that is not there is refused - a missing run would shrink the candidates unseen."""
     reasonings: dict[str, list[str]] = {}
     final: dict[str, str] = {}
     names: dict[str, str] = {}
     for name in (*POP.WD1_RUN_NAMES, *LATER_RUNS):
         run = fields_dir / name
-        for d in HO._read_jsonl(run / HO.DECISIONS_FILE):
+        for d in POP._read_jsonl(run / HO.DECISIONS_FILE):
             if d["field"] == "period_start":
                 final[d["site_id"]], names[d["site_id"]] = d["decision"], d["name"]
-        for a in HO._read_jsonl(run / HO.ATTEMPTS_FILE):
+        for a in POP._read_jsonl(run / HO.ATTEMPTS_FILE):
+            # MiniMax is never ground truth (D10, X6); WD1's attempts name no model: Claude's
+            if "minimax" in str(a.get("model") or "").lower():
+                continue
             text = (a["answer"] or {}).get("reasoning") if a["field"] == "period_start" else None
             if text and BP_MENTION.search(text):
                 reasonings.setdefault(a["site_id"], []).append(text)
     lines: dict[str, Mapping[str, Any]] = {}
     for name in LATER_RUNS:  # the latest classification wins
-        for line in HO._read_jsonl(fields_dir / name / C.CLASSIFIED_FILE):
+        for line in POP._read_jsonl(fields_dir / name / C.CLASSIFIED_FILE):
             if "period_start" in line["asked"]:
                 lines[line["site_id"]] = line
     out: dict[str, BpCandidate] = {}

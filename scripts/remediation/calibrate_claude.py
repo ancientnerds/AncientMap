@@ -425,6 +425,35 @@ def verdict(
     return result
 
 
+def require_passed(root: Path, needs: Iterable[tuple[str, str]]) -> None:
+    """Refuse unless every `(role, comparison)` of `needs` has a passing verdict whose seal names the
+    role and the comparison and binds the role's registry entry as it is now: the calibration of a
+    role that was edited (a tier move) since its seal no longer vouches for it, and neither does a
+    failed one. All the unmet needs are named in one refusal."""
+    seals = _seals(root)
+    verdicts_dir = root / VERDICTS_DIR
+    passed = [
+        seals[path.stem]
+        for path in sorted(verdicts_dir.glob("*.json"))
+        if path.stem in seals and json.loads(path.read_text(encoding="utf-8"))["passed"]
+    ]
+    unmet = [
+        f"{role}/{comparison}"
+        for role, comparison in needs
+        if not any(
+            seal["role"] == role
+            and seal["comparison"] == comparison
+            and seal["role_sha256"] == RO.role_sha256(role)
+            for seal in passed
+        )
+    ]
+    if unmet:
+        raise CalibrationError(
+            f"no passing verdict under {verdicts_dir} for {', '.join(unmet)} (sealed against the "
+            "role's registry entry as it is now): calibrate before the lane writes"
+        )
+
+
 # ------------------------------------------------------------------------------------------ CLI
 def main(argv: Iterable[str] | None = None) -> int:
     """0: the step is done (and a verdict passed). 1: the verdict is a fail. 2: refused."""
