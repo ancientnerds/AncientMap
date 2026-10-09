@@ -34,6 +34,7 @@ from wc import prompts_sonnet as P2  # noqa: E402
 
 from tests.remediation import wc_fixtures as FX  # noqa: E402
 from tests.remediation import wn_fixtures as WX  # noqa: E402
+from tests.remediation.wc_fixtures import wiki_cache  # noqa: E402,F401 - the autouse fixture
 
 
 def _sha(text: str) -> str:
@@ -46,7 +47,7 @@ def _sha(text: str) -> str:
 #: pin and a new export, never an edit under a running round.
 PINS = {
     "WRITE_QUESTION": "69c6d6a71dbe5c414b64a2421b2d4bb3eac499c5a050e16266409df7ffc88a44",
-    "WRITE_BRIEF": "f1dbef439b05efc46220b522bcd05141986cd8e08d2ffd6dc677e1ec806f4aae",
+    "WRITE_BRIEF": "d4759eeca19bf0c9e722c751d268784090f403c0091be1f3c73a6d890e3ea3b9",
     "VERIFY_QUESTION_WN": "6a1e020d54c09377dcfba34a70b5c317bb9b7ebe2839e09ed716e227e06b5537",
     "JUDGE_QUESTION_WN": "75c58553ed4a650834f9052672b3a93225c2dda73f1d5914870aefb64b4df2e4",
     "CHECK_QUESTION_LISTED": "2bcf9adf92932f5538e8a02ebe85403efb56670d8f852b7f5fef97706cb16fdf",
@@ -54,9 +55,8 @@ PINS = {
     "DEFECTS_TAIL": "abeb2651235a2fc721231a033ca0f180aefb83b0ce52077129be72460614e3a3",
     "DEFECT_LINE": "b02547a1450c20f6f607365700a1c389b2b8a4d3460af27add1d7608e6a7c7ff",
     "NO_TRIM": "fd0ac89cf5cd7e0cb56da9e52e34f240990d5a2deffadff61021672d4ca39203",
-    "CHECK_BRIEF_SONNET": "835f1199223c1f733c689d45f6b28afecebfa9b16b18a6f11987a8c7a7f000eb",
-    "VERIFY_BRIEF_SONNET": "29af52e0cf0216f2dd00aa69a567f4e0ace48c405e6cc19ea3ed71147a710866",
-    "JUDGE_BRIEF_SONNET": "e3a9b171ea83899ca9b083e0027903d045d5e71908f3959f7d132e5650906670",
+    "ADVERSARIAL_OPENING": "975eb4b55583d1abebd9a6832b733198ea968552ebd440ae264712f8fd2c7009",
+    "CHECK_QUESTION_ADVERSARIAL": "fe49e8eb98deebb69e62cb3783bc9637c4f0b42bef8f04a13a0d0a123e7c90c8",
     "ORIGINS": "ec130df29b532f3afcf28291a207a08e9fd9f404e9be198f6db29509ace36c3e",
 }
 
@@ -87,13 +87,12 @@ def test_a_derived_text_refuses_an_old_template_that_changed_under_it() -> None:
     assert P2._derive("a text", ("text", "word")) == "a word"
 
 
-@pytest.mark.parametrize(
-    "brief", [P2.WRITE_BRIEF, P2.CHECK_BRIEF_SONNET, P2.VERIFY_BRIEF_SONNET, P2.JUDGE_BRIEF_SONNET]
-)
-def test_every_new_brief_tells_the_agent_to_record_with_the_sonnet_model(brief: str) -> None:
-    assert "--model claude-sonnet-5-5" in brief
-    assert "claude-opus-5-5" not in brief and "<the model id" not in brief
-    assert "You are Sonnet" in brief and "You are Opus" not in brief
+def test_the_write_brief_takes_model_role_and_family_from_the_role_registry() -> None:
+    """2026-10-09 (owner decision D6): no brief names a model of its own - the printed
+    `opus_handoff.py answer` command carries the role's (`cli.brief`, `test_wc_roles.py`)."""
+    assert "--model {model} --role {role}" in P2.WRITE_BRIEF
+    assert "You are {family} writer" in P2.WRITE_BRIEF
+    assert "claude-" not in P2.WRITE_BRIEF and "Sonnet" not in P2.WRITE_BRIEF
 
 
 # ------------------------------------------------------------------------------ the write answer
@@ -331,7 +330,9 @@ def test_the_brief_names_a_sonnet_writer_and_the_sonnet_model(run_dirs) -> None:
     (record,) = cli.read_rounds(run)
     brief = cli.brief(run, Path(record["handoff"]), "wn-0001")
     assert "Sonnet writer wn-0001" in brief and "--stage write" in brief
-    assert "--answered-by sonnet-write-wn-0001 --model claude-sonnet-5-5" in brief
+    assert (
+        "--answered-by sonnet-write-wn-0001 --model claude-sonnet-5-5 --role fact_checker" in brief
+    )
     assert "check-answer --run-dir" in brief and "answer with no sentences" in brief
 
 

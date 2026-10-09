@@ -58,8 +58,8 @@ def _disclosures(outcome: WC4.WcOutcome) -> set[str]:
     [
         (OH.SONNET_MODEL, OH.OPUS_MODEL, M.AI_SYSTEM_CLAUDE),
         (OH.HAIKU_MODEL, OH.SONNET_MODEL, M.AI_SYSTEM_CLAUDE_HAIKU),
-        (OH.MINIMAX_MODEL, OH.OPUS_MODEL, M.AI_SYSTEM),
-        (OH.SONNET_MODEL, OH.MINIMAX_MODEL, M.AI_SYSTEM),
+        # a MiniMax answer is no longer imported (2026-10-09, `cli._require_role`): the rows MiniMax
+        # answered were written before, and `disclosure_of` below still reads their stamps
     ],
 )
 def test_the_provenance_the_check_record_and_the_evidence_name_the_derived_disclosure(

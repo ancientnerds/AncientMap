@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import pytest
 import requests
 
 REPO = Path(__file__).resolve().parents[2]
@@ -27,6 +28,20 @@ import opus_handoff as OH  # noqa: E402
 from phase4 import legacy4 as L4  # noqa: E402
 from phase4 import model4 as M  # noqa: E402
 from phase4 import wc4 as WC4  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def wiki_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The shared Wikipedia cache the briefs send the agents to (`cli.WIKI_CACHE`, gitignored run
+    state): an empty one in the test's own directory. A module imports this fixture by name."""
+    from wc import cli
+
+    cache = tmp_path / "wiki_cache"
+    cache.mkdir()
+    (cache / "INDEX.jsonl").write_text("", encoding="utf-8")
+    monkeypatch.setattr(cli, "WIKI_CACHE", cache)
+    return cache
+
 
 SITE_A = "0a000000-0000-4000-8000-00000000000a"
 SITE_B = "0b000000-0000-4000-8000-00000000000b"
@@ -194,9 +209,15 @@ Q_ZAMMIT_WIKI = quote(WIKI, "excavated by Themistocles Zammit between 1915 and 1
 
 
 def record_answers(
-    handoff: Path, answers: Mapping[str, str], *, by: str = "opus-check", model: str = OH.OPUS_MODEL
+    handoff: Path,
+    answers: Mapping[str, str],
+    *,
+    by: str = "opus-check",
+    model: str = OH.OPUS_MODEL,
+    at: str = "2026-09-26T12:00:00+00:00",
 ) -> None:
-    """Write each site's answer where its question was exported, as `opus_handoff.py answer`."""
+    """Write each site's answer where its question was exported, as `opus_handoff.py answer`; `at`
+    is the answer's time (before the role registry of 2026-10-08 by default)."""
     for line in OH.manifest(handoff):
         if line["label"] in answers:
             OH.write_answer(
@@ -207,7 +228,7 @@ def record_answers(
                 label=line["label"],
                 text=answers[line["label"]],
                 answered_by=f"{by}-{line['batch_id']}",
-                now=lambda: "2026-09-26T12:00:00+00:00",
+                now=lambda: at,
             )
 
 

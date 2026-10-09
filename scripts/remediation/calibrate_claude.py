@@ -70,6 +70,9 @@ PROMPT_SUFFIX = ".prompt.txt"
 COMPARE_ALL = "all"
 #: O18: a calibration allows no false source.
 MAX_FALSE_SOURCES = 0
+#: The name a lane WC handoff starts with (`wc-pilot-2026-09-27-r1`): its pools carry the lane's
+#: conditions (`seal(lane=...)`).
+LANE_WC_PREFIX = "wc-"
 
 
 class CalibrationError(ValueError):
@@ -201,14 +204,19 @@ def seal(
     max_undecided_excess: float | None = None,
     comparison: str = COMPARE_ALL,
     truth: Path | None = None,
+    lane: dict[str, Any] | None = None,
     now: Callable[[], str] = utc_now,
 ) -> dict[str, Any]:
-    """Seal `calibration_id` before its run, and return the seal.
+    """Seal `calibration_id` before its run, and return the seal. `lane` is a lane's own pass
+    conditions (lane WC: the known errors and the verdict merge, `wc/calibration.py seal`), sealed
+    with the threshold: `compare` of this module refuses such a calibration and `verdict` refuses one
+    whose comparison does not carry the lane's `lane_failures`.
 
     Refused: an id already sealed; a verdict for the id; a calibration copy of the id; a threshold
     that is not a number in (0, 1]; an undecided-rate bound outside [0, 1]; a role that is not
     registered; a pool with a missing batch, no recorded answer, or a MiniMax or unstamped answer;
-    a truth pool that carries an answer or whose truth file is not exactly its cases."""
+    a truth pool that carries an answer or whose truth file is not exactly its cases; a pool of
+    lane WC (a handoff named `wc-...`) without the lane's conditions."""
     OH._component(calibration_id, "calibration id")
     OH._component(comparison, "comparison")
     if isinstance(threshold, bool) or not isinstance(threshold, int | float):
@@ -233,6 +241,11 @@ def seal(
     seals = _seals(root)
     if calibration_id in seals:
         raise CalibrationError(f"{calibration_id} is already sealed")
+    if handoff.name.startswith(LANE_WC_PREFIX) and lane is None:
+        raise CalibrationError(
+            f"{handoff.name} is a lane WC pool: seal it with `wc/calibration.py seal`, which seals "
+            "the known errors with the threshold"
+        )
     if truth is None:
         _check_pool(handoff, batches)
     else:
@@ -256,6 +269,8 @@ def seal(
         "max_false_sources": max_false_sources,
         "sealed_at": now(),
     }
+    if lane is not None:
+        sealed["lane"] = lane
     root.mkdir(parents=True, exist_ok=True)
     path = root / THRESHOLDS_FILE
     path.write_text(
@@ -267,9 +282,17 @@ def seal(
     return sealed
 
 
-def prepare(root: Path, *, calibration_id: str, run: Path) -> dict[str, Any]:
+def prepare(
+    root: Path,
+    *,
+    calibration_id: str,
+    run: Path,
+    register: Callable[[Path, Path, Path, Sequence[str]], Path] = D.register_calibration_run,
+) -> dict[str, Any]:
     """Copy the sealed pool into `<root>/<id>` without its answers and register the calibration run
-    (`mcode_driver.register_calibration_run`). The recorded answers go to `RECORDED.json`."""
+    (`register`, by default `mcode_driver.register_calibration_run`; a lane whose pool is a kind of
+    round that one does not know passes its own, as `wc/calibration.py` does for the judge's). The
+    recorded answers go to `RECORDED.json`."""
     sealed = _sealed(root, calibration_id)
     _need_unchanged_role(sealed)
     handoff = Path(sealed["handoff"])
@@ -283,7 +306,7 @@ def prepare(root: Path, *, calibration_id: str, run: Path) -> dict[str, Any]:
         raise CalibrationError(f"{out} exists: a calibration copy is written once")
     recorded = D.copy_for_calibration(handoff, out, sealed["batches"])
     _write_once(out / RECORDED_FILE, recorded)
-    calibration_run = D.register_calibration_run(run, handoff, out, sealed["batches"])
+    calibration_run = register(run, handoff, out, sealed["batches"])
     return {
         "prepared": str(out),
         "calibration_run": str(calibration_run),
@@ -333,6 +356,11 @@ def compare(
     A seal that names another comparison (`comparators` of the tool that owns it) is measured by
     that one; a comparison nobody here knows is refused by name."""
     sealed = _sealed(root, calibration_id)
+    if "lane" in sealed:
+        raise CalibrationError(
+            f"{calibration_id} was sealed with its lane's conditions: compare it with the lane's "
+            "own command (`wc/calibration.py compare`)"
+        )
     kind = sealed.get("comparison", COMPARE_ALL)
     comparator = {**COMPARATORS, **(comparators or {})}.get(kind)
     if comparator is None:
@@ -361,6 +389,9 @@ def _failures(report: dict[str, Any], sealed: dict[str, Any], false_sources: int
         failures.append(
             f"agreement {report['agreement']} is below the sealed threshold {sealed['threshold']}"
         )
+    # a lane's own conditions, named by the lane when it compared (`wc/calibration.py`: a known
+    # error the role missed, more extra WRONG verdicts than the lane allows)
+    failures.extend(report.get("lane_failures", []))
     if false_sources > sealed["max_false_sources"]:
         failures.append(
             f"{false_sources} false source(s) counted, {sealed['max_false_sources']} allowed"
@@ -398,6 +429,11 @@ def verdict(
     if not comparison_path.exists():
         raise CalibrationError(f"{calibration_id} is not compared: {comparison_path} is missing")
     report = json.loads(comparison_path.read_text(encoding="utf-8"))
+    if "lane" in sealed and "lane_failures" not in report:
+        raise CalibrationError(
+            f"{calibration_id} was sealed with its lane's conditions, but its comparison carries no "
+            "`lane_failures`: it was not compared with the lane's command"
+        )
     failures = _failures(report, sealed, false_sources)
     result: dict[str, Any] = {
         "calibration_id": calibration_id,

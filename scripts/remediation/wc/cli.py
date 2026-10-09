@@ -22,6 +22,11 @@ order, is `docs/procedures/SENTENCE_CHECK.md`.
     $C judge-check-answer --run-dir R --handoff HJ --batch-id B --label SITE --text-file F
     $C judge-import       --run-dir R --handoff HJ       # RESULT.json, JUDGE_EXIT=
     $C defect-sites       --run-dir R --defects D ... --out F   # a site list from WB's defects
+    $C verify-void        --run-dir R [--apply] [--tag T]       # MiniMax verify answers moved aside
+    $C defect-kept-sites  --run-dir R --from R0 ... --out F     # standing defect claims -> a list
+    $C export --sites F --defects F.report.json --adversarial   # the adversarial second check
+    $C defect-closure     --run-dir R                           # what it decided, for AUDIT_LOG
+    $C minimax-sites      --run-dir R --from R0 ... --out F     # MiniMax-touched texts that stand
     $C export --sites F   ...                            # a site-list run (kind wc-list)
     $C export --wn        ...                            # lane WN: write the missing descriptions
 
@@ -126,6 +131,7 @@ import math
 import sys
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -136,6 +142,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
         sys.path.insert(0, _root)
 
 import opus_handoff as OH  # noqa: E402 - the one contract every model answer goes through
+import roles as RO  # noqa: E402 - the roles that answer (owner decision D6, 2026-10-08)
 import run_files as RF  # noqa: E402 - the shared clock and JSON writers
 from opus_audit import quotes as Q  # noqa: E402
 from phase3 import write_stage as W  # noqa: E402 - the read-only psql seam
@@ -146,6 +153,7 @@ from phase4 import model4 as M  # noqa: E402
 from wc import answers as A  # noqa: E402
 from wc import prompts as P  # noqa: E402
 from wc import prompts_sonnet as P2  # noqa: E402 - the texts added 2026-10-01 (site lists, WN)
+from wc import void as V  # noqa: E402 - `verify-void`: MiniMax verification answers moved aside
 
 STAGE = "check"
 JUDGE_STAGE = "judge"
@@ -167,6 +175,20 @@ FINAL_FILE = "FINAL.jsonl"
 SUMMARY_FILE = "SUMMARY.json"
 PLAN_FILE = "WC4.jsonl"
 JUDGE_DIR = "judge"
+#: The roles that answer lane WC (`roles.ROLES`, owner decision D6 of 2026-10-08): the check rounds
+#: and lane WN's write round are the fact checker's, the verification rounds the web verifier's, the
+#: judge's questions the pilot judge's, the adversarial second check the adversarial role's. A
+#: brief takes its `--model`, `--role` and the agent's family from the registry, and the imports
+#: refuse an answer that names another role or carries another role's stamp (`_require_role`).
+ROLE_CHECK, ROLE_VERIFY, ROLE_JUDGE = "fact_checker", "web_verifier", "pilot_judge"
+ROLE_ADVERSARIAL = "adversarial"
+#: The day the role registry went live (owner decision D6, 2026-10-08). An answer given before it may
+#: name no role; every answer given from this day on names the role of the round it answers
+#: (`_require_role`), so a Haiku or Sonnet answer cannot enter an Opus round by leaving `--role` off.
+ROLE_REGISTRY_FROM = datetime(2026, 10, 8, tzinfo=UTC)
+#: The shared Wikipedia cache of the final repair (`tools/wiki_cache.py`): the briefs send the
+#: agents to it first, so no more than a few of them fetch Wikipedia live at the same time.
+WIKI_CACHE = REPO / "output" / "remediation" / "final-2026-10-08" / "wiki_cache"
 #: The verification's directory under the run: `round-<n>/ROUND.json` (the export's record: its
 #: handoff, batches and the sentences each question showed), `round-<n>/VERIFIED.jsonl` (the
 #: import's record per site) and `pages/` (the pages the verifiers quoted, fetched by code).
@@ -401,11 +423,14 @@ def check_prompt(
     asked: Sequence[int],
     failures: Mapping[str, Sequence[str]],
     kind: str = KIND_WC,
+    adversarial: bool = False,
 ) -> str:
     """The exact question about one site: round 1 asks every sentence and has no failures; the
     re-ask round asks the failed ones and says what failed (`failures`: sentence number -> why). A
     site-list run asks `prompts_sonnet.CHECK_QUESTION_LISTED` (the origin of the text said as it is,
-    no trim for a Phase-4 text), lane WN's round 1 the write question (`write_prompt`)."""
+    no trim for a Phase-4 text) - an adversarial second check of it
+    `prompts_sonnet.CHECK_QUESTION_ADVERSARIAL` -, lane WN's round 1 the write question
+    (`write_prompt`)."""
     if kind == KIND_WN:
         return write_prompt(entry)
     site = M.PlanSite.from_dict(entry["plan_site"])
@@ -415,7 +440,7 @@ def check_prompt(
         lines = [f"S{n}: " + "; ".join(failures[str(n)]) for n in asked]
         reask = P.REASK_BLOCK.format(failures="\n".join(lines))
     if kind == KIND_LIST:
-        return P2.CHECK_QUESTION_LISTED.format(
+        return (P2.CHECK_QUESTION_ADVERSARIAL if adversarial else P2.CHECK_QUESTION_LISTED).format(
             site=site_block(site),
             sentences=sentences,
             reask=reask,
@@ -440,6 +465,82 @@ def run_kind(run: Path) -> str:
     exported before 2026-10-01 records none: it is a plain WC run."""
     record = json.loads((run / POPULATION_FILE).read_text(encoding="utf-8"))
     return record.get("kind", KIND_WC)
+
+
+def run_adversarial(run: Path) -> bool:
+    """Is the run an adversarial second check (`export --adversarial`)? Its list run's check question
+    opens as `prompts_sonnet.ADVERSARIAL_OPENING` and its check answers are the adversarial role's.
+    A run exported before records none: it is not."""
+    record = json.loads((run / POPULATION_FILE).read_text(encoding="utf-8"))
+    return bool(record.get("adversarial", False))
+
+
+def check_role(run: Path) -> str:
+    """The role that answers the run's check rounds (and lane WN's write round)."""
+    return ROLE_ADVERSARIAL if run_adversarial(run) else ROLE_CHECK
+
+
+def _role_fields(role_name: str) -> dict[str, str]:
+    """What a brief prints of the role that answers it - the family of its model, the model id, the
+    role - and the note on the shared Wikipedia cache. The cache must exist: a brief that sends an
+    agent to a directory that is not there would send it to the live site, which is what the cache
+    is for."""
+    entry = RO.role(role_name)
+    index = WIKI_CACHE / "INDEX.jsonl"
+    if not index.is_file():
+        raise WcRunError(
+            f"the shared Wikipedia cache is missing: {index} does not exist "
+            "(tools/wiki_cache.py fills it)"
+        )
+    return {
+        "family": OH.ANSWER_FAMILIES[entry.model].capitalize(),
+        "model": entry.model,
+        "role": role_name,
+        "wiki_cache_note": P.WIKI_CACHE_NOTE.format(wiki_cache=_shown(WIKI_CACHE)),
+    }
+
+
+def _agent_family(role_name: str) -> str:
+    """The lower-case family of the role's model: the prefix of the agent names (`sonnet-check-...`)."""
+    return OH.ANSWER_FAMILIES[RO.role(role_name).model]
+
+
+def _agent_of(answered_by: str) -> str:
+    """The agent an `answered_by` names: `<role>:<agent>` is the agent, a name without a role is
+    itself. The independence checks compare agents, never the whole string: `fact_checker:agent-7`
+    and `web_verifier:agent-7` are one agent."""
+    return answered_by.partition(":")[2] or answered_by
+
+
+def _require_role(answer: OH.Answer, *, role_name: str, where: str) -> None:
+    """An answer enters a lane WC round only as the round's role's, from a Claude model: never a
+    MiniMax answer (owner decisions D6 and D10; master plan X6 - `verify-void` moves such an answer
+    aside and the batch is answered again), never an answer given in another role, never a role's
+    answer carrying another model's stamp. Only an answer given before the registry
+    (`ROLE_REGISTRY_FROM`) may name no role, and then its stamp must be a Claude one; every later
+    answer names the round's role."""
+    if answer.model == OH.MINIMAX_MODEL:
+        raise WcRunError(
+            f"{where}: answered by MiniMax ({answer.answered_by}) - a MiniMax answer is never "
+            "imported (D10): `verify-void` moves it aside, a Claude agent answers the question again"
+        )
+    named = RO.role_of(answer.answered_by)
+    if named is None and (
+        role_name == ROLE_ADVERSARIAL
+        or datetime.fromisoformat(answer.answered_at) >= ROLE_REGISTRY_FROM
+    ):
+        raise WcRunError(
+            f"{where}: {answer.answered_by} names no role - an answer given from "
+            f"{ROLE_REGISTRY_FROM.date()} on is answered with `answer --role {role_name}` "
+            "(the brief prints the command)"
+        )
+    if named is not None and named != role_name:
+        raise WcRunError(
+            f"{where}: {answer.answered_by} was given in role {named}, this round is {role_name}'s"
+        )
+    problem = RO.answer_problem(answer.answered_by, answer.model)
+    if problem is not None:
+        raise WcRunError(f"{where}: {problem}")
 
 
 def read_sites(run: Path) -> dict[str, dict[str, Any]]:
@@ -481,6 +582,7 @@ def _export_round(
         raise WcRunError(f"{handoff} is not empty: a round takes a new handoff directory")
     sites = read_sites(run)
     kind = run_kind(run)
+    adversarial = run_adversarial(run)
     stage, prefix = (WRITE_STAGE, WRITE_PREFIX) if kind == KIND_WN else (STAGE, "wc")
     batches: dict[str, list[str]] = {}
     for start in range(0, len(questions), batch_size):
@@ -492,7 +594,7 @@ def _export_round(
                 stage=stage,
                 label=site_id,
                 field="description",
-                prompt=check_prompt(sites[site_id], asked, failures, kind),
+                prompt=check_prompt(sites[site_id], asked, failures, kind, adversarial),
             )
             batches.setdefault(batch_id, []).append(site_id)
     record = {
@@ -592,6 +694,7 @@ def cmd_export(
     sites: Path | None = None,
     wn: bool = False,
     defects: Path | None = None,
+    adversarial: bool = False,
 ) -> dict[str, Any]:
     """Round 1: the population of the run's read, a seeded pilot draw of it, or its first `limit`
     sites in site-id order (a chunk of the mass run: the next chunk names this run in `--after`),
@@ -600,13 +703,20 @@ def cmd_export(
     site-list run: the population is those curated sites, whatever their text; `wn` lane WN's: the
     sites without a description, and round 1 is the write round. `defects` (the `.report.json` of
     `defect-sites`, a site-list run only) puts each listed site's reported claims into its question
-    (`defects_block`): the check must settle them, not find the sentence's own source again."""
+    (`defects_block`): the check must settle them, not find the sentence's own source again.
+    `adversarial` (with `defects`) makes the run the second check of a site whose reported claim the
+    first check left standing: its question opens as `prompts_sonnet.ADVERSARIAL_OPENING` and the
+    adversarial role answers it (`check_role`)."""
     if (run / SITES_FILE).exists():
         raise WcRunError(f"{run} was exported already: a run has one population")
     if (pilot is None) != (seed is None):
         raise WcRunError("--pilot and --seed go together")
     if defects is not None and sites is None:
         raise WcRunError("--defects names the claims of a site list: it goes with --sites")
+    if adversarial and defects is None:
+        raise WcRunError("--adversarial checks the claims a report names: it goes with --defects")
+    if adversarial and (wn or pilot is not None):
+        raise WcRunError("--adversarial is a site-list run's second check: no --wn, no --pilot")
     if limit is not None and (pilot is not None or limit < 1):
         raise WcRunError("--limit is a chunk of at least one site, never beside --pilot")
     rows = read_jsonl(run / ROWS_FILE)
@@ -668,6 +778,7 @@ def cmd_export(
         if defects is None
         else {"path": _shown(defects), "sha256": _sha256(defects), "sites": len(claims)},
         "after": [_shown(other) for other in after],
+        "adversarial": adversarial,
         "pilot": None if pilot is None else {"sites": pilot, "seed": seed},
         "limit": limit,
         "asked": len(drawn),
@@ -686,12 +797,15 @@ def cmd_export(
 
 
 def brief(run: Path, handoff: Path, batch_id: str) -> str:
-    """The instruction of the Opus agent that answers one batch of one round."""
+    """The instruction of the agent that answers one batch of one round: the fact checker's (the
+    adversarial role's in an adversarial second check), recording with the role's model and role."""
     record = round_of(run, handoff)
     if batch_id not in record["batches"]:
         raise WcRunError(f"{batch_id} is no batch of {handoff}")
     shown = _shown(handoff)
     kind = run_kind(run)
+    role_name = check_role(run)
+    family = _agent_family(role_name)
     fields = {
         "batch": batch_id,
         "round": record["round"],
@@ -701,20 +815,17 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
         "run": _shown(run),
         "python": Path(sys.executable).as_posix(),
         "repo": REPO.as_posix(),
+        **_role_fields(role_name),
     }
     if kind == KIND_WN:
         return P2.WRITE_BRIEF.format(
             **fields,
             stage=WRITE_STAGE,
-            batch_agent=f"sonnet-write-{batch_id}",
+            batch_agent=f"{family}-write-{batch_id}",
             min_sentences=A.MIN_SENTENCES,
         )
-    if kind == KIND_LIST:
-        return P2.CHECK_BRIEF_SONNET.format(
-            **fields, stage=STAGE, batch_agent=f"sonnet-check-r{record['round']}-{batch_id}"
-        )
     return P.CHECK_BRIEF.format(
-        **fields, stage=STAGE, batch_agent=f"opus-check-r{record['round']}-{batch_id}"
+        **fields, stage=STAGE, batch_agent=f"{family}-check-r{record['round']}-{batch_id}"
     )
 
 
@@ -910,6 +1021,7 @@ def cmd_import(
         raise WcRunError(f"{handoff}: the manifest is not the round's record")
     sites = read_sites(run)
     kind = run_kind(run)
+    adversarial = run_adversarial(run)
     stage = WRITE_STAGE if kind == KIND_WN else STAGE
     parsed: dict[str, tuple[dict[str, Any], tuple[A.SentenceAnswer, ...] | None]] = {}
     drafts: list[dict[str, Any]] = []
@@ -917,10 +1029,11 @@ def cmd_import(
     for (batch_id, label), line in sorted(manifest.items()):
         entry = sites[label]
         failures = record["failures"].get(label, {})
-        prompt = check_prompt(entry, _asked(record, label), failures, kind)
+        prompt = check_prompt(entry, _asked(record, label), failures, kind, adversarial)
         if OH.prompt_sha256(prompt) != line["prompt_sha256"]:
             raise WcRunError(f"{batch_id}/{label}: the exported prompt is not this question's")
         answer = OH.read_answer(handoff, batch_id=batch_id, stage=stage, label=label, prompt=prompt)
+        _require_role(answer, role_name=check_role(run), where=f"{batch_id}/{label}")
         attempt = {
             "round": number,
             "handoff": record["handoff"],
@@ -1598,13 +1711,13 @@ def cmd_verify_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str,
 
 
 def verify_brief(run: Path, handoff: Path, batch_id: str) -> str:
-    """The instruction of the Opus agent that verifies one batch of one verification round."""
+    """The instruction of the web verifier that verifies one batch of one verification round."""
     record = _verify_round_of(run, handoff)
     if batch_id not in record["batches"]:
         raise WcRunError(f"{batch_id} is no batch of {handoff}")
     shown = _shown(handoff)
-    sonnet = run_kind(run) != KIND_WC
-    return (P2.VERIFY_BRIEF_SONNET if sonnet else P.VERIFY_BRIEF).format(
+    return P.VERIFY_BRIEF.format(
+        **_role_fields(ROLE_VERIFY),
         batch=batch_id,
         round=record["round"],
         stage=record["stage"],
@@ -1614,7 +1727,7 @@ def verify_brief(run: Path, handoff: Path, batch_id: str) -> str:
         run=_shown(run),
         python=Path(sys.executable).as_posix(),
         repo=REPO.as_posix(),
-        batch_agent=f"{'sonnet' if sonnet else 'opus'}-wc-{batch_id}",
+        batch_agent=f"{_agent_family(ROLE_VERIFY)}-wc-{batch_id}",
     )
 
 
@@ -1686,8 +1799,11 @@ def cmd_verify_import(
         if OH.prompt_sha256(prompt) != line["prompt_sha256"]:
             raise WcRunError(f"{batch_id}/{label}: the exported prompt is not this question's")
         answer = OH.read_answer(handoff, batch_id=batch_id, stage=stage, label=label, prompt=prompt)
-        others = site.checkers | {given["answered_by"] for given in earlier.get(label, [])}
-        if answer.answered_by in others:
+        _require_role(answer, role_name=ROLE_VERIFY, where=f"{batch_id}/{label}")
+        others = {_agent_of(name) for name in site.checkers} | {
+            _agent_of(given["answered_by"]) for given in earlier.get(label, [])
+        }
+        if _agent_of(answer.answered_by) in others:
             raise WcRunError(
                 f"{batch_id}/{label}: {answer.answered_by} checked or verified this site before - "
                 "a verification is an independent agent's; have the batch answered again by a new "
@@ -1793,18 +1909,46 @@ def _judge_round(run: Path, handoff: Path) -> dict[str, Any]:
     return record
 
 
-def cmd_judge_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str, Any]:
+def cmd_judge_export(
+    run: Path,
+    handoff: Path,
+    *,
+    batch_size: int,
+    sample: int | None = None,
+    seed: int | None = None,
+) -> dict[str, Any]:
     """The pilot's measurement: one judge question per built site, on its text after the
     verification. The round records the sha256 of the gate plan it judges (`plan_sha256`): the
-    gate writes a pilot's plan only as it was judged (`pilot_approval`)."""
+    gate writes a pilot's plan only as it was judged (`pilot_approval`).
+
+    `sample` and `seed` (owner decision D25a of 2026-10-08) make it a **sampled** judge of a chunk
+    that is no pilot: `sample` sites are drawn with `seed` from the sites the chunk will write
+    (`planned`; a site a list run does not write is not judged) and only they are asked. The round
+    records the draw (`sample`) and so does the result; a pilot is judged whole - its verdict is the
+    gate's approval of the plan - and a sampled verdict approves nothing (`pilot_approval`)."""
     if (run / JUDGE_DIR / "ROUND.json").exists():
         raise WcRunError(f"{run}: the judge round was exported")
+    if (sample is None) != (seed is None):
+        raise WcRunError("--sample and --seed go together")
     finals = _finals(run)
     sites = read_sites(run)
     kind = run_kind(run)
     batches: dict[str, list[str]] = {}
     # a lane-WN site whose agent wrote no sentence has nothing to judge
     labels = sorted(label for label, final in finals.items() if final["of"] or kind != KIND_WN)
+    drawn: dict[str, Any] | None = None
+    if sample is not None and seed is not None:
+        # a list run's site that is not written (`unchanged`, `defect-kept`) has no new text to judge
+        labels = [label for label in labels if finals[label].get("planned", True)]
+        if json.loads((run / POPULATION_FILE).read_text(encoding="utf-8"))["pilot"] is not None:
+            raise WcRunError(
+                f"{run}: a pilot is judged whole - its verdict approves the plan, a sample's cannot"
+            )
+        if not 1 <= sample <= len(labels):
+            raise WcRunError(f"a sample of {sample} from {len(labels)} judgeable site(s)")
+        drawn = {"sites": sample, "seed": seed, "of": len(labels)}
+        chosen = set(audit4.draw_sample(labels, seed=seed, count=sample, exclude=set()))
+        labels = [label for label in labels if label in chosen]
     for start in range(0, len(labels), batch_size):
         batch_id = f"judge-{start // batch_size + 1:04d}"
         for label in labels[start : start + batch_size]:
@@ -1825,9 +1969,10 @@ def cmd_judge_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str, 
             "exported_at": RF.now(),
             "batches": batches,
             "plan_sha256": _sha256(run / PLAN_FILE),
+            "sample": drawn,
         },
     )
-    return {"questions": len(labels), "batches": len(batches)}
+    return {"questions": len(labels), "batches": len(batches), "sample": drawn}
 
 
 def judge_brief(run: Path, handoff: Path, batch_id: str) -> str:
@@ -1835,8 +1980,8 @@ def judge_brief(run: Path, handoff: Path, batch_id: str) -> str:
     if batch_id not in record["batches"]:
         raise WcRunError(f"{batch_id} is no batch of {handoff}")
     shown = _shown(handoff)
-    sonnet = run_kind(run) != KIND_WC
-    return (P2.JUDGE_BRIEF_SONNET if sonnet else P.JUDGE_BRIEF).format(
+    return P.JUDGE_BRIEF.format(
+        **_role_fields(ROLE_JUDGE),
         batch=batch_id,
         count=len(record["batches"][batch_id]),
         handoff=shown,
@@ -1845,7 +1990,7 @@ def judge_brief(run: Path, handoff: Path, batch_id: str) -> str:
         python=Path(sys.executable).as_posix(),
         repo=REPO.as_posix(),
         stage=JUDGE_STAGE,
-        batch_agent=f"{'sonnet' if sonnet else 'opus'}-wc-judge-{batch_id}",
+        batch_agent=f"{_agent_family(ROLE_JUDGE)}-wc-judge-{batch_id}",
     )
 
 
@@ -1874,6 +2019,10 @@ def cmd_judge_import(
     """The judge's answers: validated, parsed, quote-checked; the measurement and its verdict. The
     judge is fresh: a name that checked or verified any site of the run does not count."""
     record = _judge_round(run, handoff)
+    if record.get("calibration"):
+        raise WcRunError(
+            f"{run}: the judge round is a calibration round; a comparison is never imported"
+        )
     check = OH.validate(handoff)
     if not check.ok:
         raise WcRunError(f"{handoff}: the judge round does not validate: {check.to_dict()}")
@@ -1881,11 +2030,11 @@ def cmd_judge_import(
     sites = read_sites(run)
     run_of = run_kind(run)
     workers = {
-        attempt["answered_by"]
+        _agent_of(attempt["answered_by"])
         for final in finals.values()
         for attempt in final["evidence"]["answers"]
     } | {
-        r["answered_by"]
+        _agent_of(r["answered_by"])
         for final in finals.values()
         for r in final["evidence"][wc4.VERIFICATION_KEY]["rounds"]
     }
@@ -1897,6 +2046,7 @@ def cmd_judge_import(
         answer = OH.read_answer(
             handoff, batch_id=batch_id, stage=JUDGE_STAGE, label=label, prompt=prompt
         )
+        _require_role(answer, role_name=ROLE_JUDGE, where=f"{batch_id}/{label}")
         kept, dropped = _judge_counts(finals[label])
         parsed = A.parse_judge(answer.text, site_id=label, kept=kept, dropped=dropped)
         pages = run / JUDGE_DIR / PAGES_DIR
@@ -1920,7 +2070,7 @@ def cmd_judge_import(
                 "site_id": label,
                 "batch_id": batch_id,
                 "answered_by": answer.answered_by,
-                "independent": answer.answered_by not in workers,
+                "independent": _agent_of(answer.answered_by) not in workers,
                 "coherent": parsed.coherent,
                 "note": parsed.note,
                 "items": rows,
@@ -1931,12 +2081,15 @@ def cmd_judge_import(
     }:
         raise WcRunError(f"{handoff}: the manifest is not the judge round's record")
     RF.write_jsonl(run / JUDGE_DIR / "JUDGED.jsonl", judged)
+    # a WN pilot must have judged half of its drawn sites; a sampled judge of a chunk judges a sample
     drawn = (
         json.loads((run / POPULATION_FILE).read_text(encoding="utf-8"))["asked"]
-        if run_of == KIND_WN
+        if run_of == KIND_WN and record.get("sample") is None
         else None
     )
     result = {**judge_result(judged, drawn=drawn), "plan_sha256": record["plan_sha256"]}
+    if record.get("sample") is not None:
+        result["sample"] = record["sample"]
     RF.write_json(run / JUDGE_DIR / "RESULT.json", result)
     return result
 
@@ -2004,6 +2157,33 @@ def judge_result(
     }
 
 
+def _require_sampled_judge_passed(run: Path, plan: Path) -> None:
+    """A chunk whose sampled judge was exported is written only when that judge passed on exactly
+    this plan (master plan, descriptions map: a plan whose judge failed is never in the root). A
+    judge exported and not imported has no verdict, a failed one is a finding about the chunk, and a
+    plan built again after its judge is not the judged one. A chunk with no judge round at all is
+    not asked here: the sample is the operator's step (SENTENCE_CHECK.md 15.4)."""
+    if not (run / JUDGE_DIR / "ROUND.json").exists():
+        return
+    path = run / JUDGE_DIR / "RESULT.json"
+    if not path.exists():
+        raise WcRunError(
+            f"{run}: the sampled judge was exported and not imported (judge-import writes "
+            f"{path.name}): a chunk is written after its judge passed"
+        )
+    result = json.loads(path.read_text(encoding="utf-8"))
+    if result["passed"] is not True:
+        raise WcRunError(
+            f"{run}: the sampled judge did not pass ({result['failures']}): the chunk is never "
+            "written - revert its stamp or clear the sentences by a list run"
+        )
+    if result.get("plan_sha256") != _sha256(plan):
+        raise WcRunError(
+            f"{plan}: not the plan the sampled judge judged (RESULT.json plan_sha256 "
+            f"{result.get('plan_sha256')!r}): a plan is written only as it was judged"
+        )
+
+
 def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
     """The pilot verdict every WC plan the gate writes rests on (`write_gate4.wc_batches`; the review
     of 2026-09-26: nothing tied a mass plan to a passed pilot). Each plan is `<run>/WC4.jsonl`. The
@@ -2043,6 +2223,7 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
                     "plain chunks - name the WC pilot first"
                 )
         if pilot is None:
+            _require_sampled_judge_passed(run, plan)
             continue
         if which == "WN" and pilot["sites"] != wn_pilot_size(population["population"]):
             raise WcRunError(
@@ -2053,6 +2234,11 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
         if not path.exists():
             raise WcRunError(f"{run}: the pilot was not judged (judge-import writes {path.name})")
         result = json.loads(path.read_text(encoding="utf-8"))
+        if result.get("sample") is not None:
+            raise WcRunError(
+                f"{run}: the pilot was judged by a sample ({result['sample']}): a sampled verdict "
+                "approves no plan - judge the pilot whole"
+            )
         if result["passed"] is not True:
             raise WcRunError(
                 f"{run}: the pilot's judge did not pass ({result['failures']}): its outcomes are "
@@ -2152,6 +2338,268 @@ def cmd_defect_sites(
     return {key: value for key, value in report.items() if key != "claims"}
 
 
+# ------------------------------------------------------------------------------------ the repairs
+def _write_list(out: Path, ids: Sequence[str], report: Mapping[str, Any]) -> dict[str, Any]:
+    """A site list (one id per line) and its `.report.json`, which records the list's sha256 - the
+    shape `export --sites ... --defects` reads."""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("".join(f"{site_id}\n" for site_id in ids), encoding="utf-8", newline="\n")
+    full = {**report, "out": {"path": _shown(out), "sha256": _sha256(out)}}
+    RF.write_json(out.with_name(out.name + ".report.json"), full)
+    return full
+
+
+def cmd_defect_kept_sites(run: Path, sources: Sequence[Path], out: Path) -> dict[str, Any]:
+    """The site list of an adversarial second check (owner decision D25b, 2026-10-08): every site
+    whose reported claim a built site-list run (`sources`) left standing - its sentence kept, by the
+    check and by the verifier. `run` holds a fresh read, made after the sources' plans were written,
+    so a site a source rewrote carries its new text: each claim's sentence is found again in the
+    live text (the kept sentence as the source's FINAL decision left it, after a trim) and numbered
+    as it stands now; a claim tied to no sentence stays tied to none. A site is left out, counted
+    under its reason, when it is no curated row, is retired, has no description now, or no longer
+    holds the kept sentence (`text-changed-since`). `out.report.json` is `defect-sites`' report for
+    the adversarial export: the read, the list's sha256 and the claims."""
+    rows = {row["id"]: row for row in read_jsonl(run / ROWS_FILE)}
+    skipped: Counter[str] = Counter()
+    per_site: dict[str, list[dict[str, Any]]] = {}
+    for source in sources:
+        summary = json.loads((source / SUMMARY_FILE).read_text(encoding="utf-8"))
+        if "defects_kept" not in summary:
+            raise WcRunError(
+                f"{source}: not a built site-list run (SUMMARY.json has no defects_kept)"
+            )
+        asked = read_sites(source)
+        finals = _finals(source)
+        for site_id, standing in sorted(summary["defects_kept"].items()):
+            row = rows.get(site_id)
+            if row is None:
+                skipped["not-a-curated-row"] += 1
+            elif row["scope_status"] == "retired":
+                skipped["retired"] += 1
+            elif wc4.is_empty(row["description"]):
+                skipped["no-description"] += 1
+            else:
+                current = wc4.checked_sentences(row["description"])
+                for given in standing:
+                    key = (given["claim"], given["url"], given["sentence"])
+                    found = [
+                        claim
+                        for claim in asked[site_id]["defects"]
+                        if (claim["claim"], claim["url"], claim["sentence"]) == key
+                    ]
+                    if len(found) != 1:
+                        raise WcRunError(
+                            f"{source}/{site_id}: the standing claim {given!r} is not one claim "
+                            "of the run's report"
+                        )
+                    claim = dict(found[0])
+                    if claim["sentence"] is not None:
+                        kept_text = finals[site_id]["decisions"][claim["sentence"] - 1]["text"]
+                        if kept_text is None or kept_text not in current:
+                            skipped["text-changed-since"] += 1
+                            continue
+                        claim["sentence"] = current.index(kept_text) + 1
+                        claim["sentence_text"] = kept_text
+                    per_site.setdefault(site_id, []).append(claim)
+    ids = sorted(per_site)
+    report = _write_list(
+        out,
+        ids,
+        {
+            "read": json.loads((run / READ_FILE).read_text(encoding="utf-8")),
+            "from": [{"path": _shown(s), "sha256": _sha256(s / SUMMARY_FILE)} for s in sources],
+            "sites": len(ids),
+            "skipped": dict(sorted(skipped.items())),
+            "claims": {site_id: per_site[site_id] for site_id in ids},
+        },
+    )
+    return {key: value for key, value in report.items() if key != "claims"}
+
+
+CLOSURE_FILE = "CLOSURE.json"
+
+
+def cmd_defect_closure(run: Path) -> dict[str, Any]:
+    """What an adversarial second check decided, claim by claim, for the audit log: a claim whose
+    sentence the adversary dropped is **resolved** (the drop is written like every WC drop); one
+    whose sentence it kept is **refuted** - the report is closed on the adversary's note and quotes
+    and the verifier's verdict, which the log records (`CLOSURE.json`, written once, and its markdown
+    lines). Only a built adversarial run has one."""
+    if not run_adversarial(run):
+        raise WcRunError(f"{run}: not an adversarial second check (export --adversarial)")
+    if (run / CLOSURE_FILE).exists():
+        raise WcRunError(f"{run / CLOSURE_FILE} exists: a closure is written once")
+    summary = json.loads((run / SUMMARY_FILE).read_text(encoding="utf-8"))
+    asked = read_sites(run)
+    finals = _finals(run)
+    resolved: list[dict[str, Any]] = []
+    refuted: list[dict[str, Any]] = []
+    for site_id, entry in asked.items():
+        final = finals[site_id]
+        rounds = final["verification"]["rounds"]
+        for claim in entry.get("defects") or []:
+            number = claim["sentence"]
+            decisions = final["decisions"]
+            kept = (
+                all(d["text"] is not None for d in decisions)
+                if number is None
+                else decisions[number - 1]["text"] is not None
+            )
+            sentence = None if number is None else final["evidence"]["sentences"][number - 1]
+            line = {
+                "site_id": site_id,
+                "name": entry["name"],
+                "sentence": number,
+                "sentence_text": claim["sentence_text"],
+                "claim": claim["claim"],
+                "reported_url": claim["url"],
+                "reported_run": claim["run"],
+            }
+            if not kept:
+                reason = None if number is None else decisions[number - 1]["reason"]
+                resolved.append(
+                    {
+                        **line,
+                        "reason": reason,
+                        "note": None if sentence is None else sentence["note"],
+                        "quotes": [] if sentence is None else sentence["quotes"],
+                    }
+                )
+                continue
+            refuted.append(
+                {
+                    **line,
+                    "adversary_note": None if sentence is None else sentence["note"],
+                    "adversary_quotes": [] if sentence is None else sentence["quotes"],
+                    "verifiers": [
+                        {
+                            "answered_by": r["answered_by"],
+                            "stage": r["stage"],
+                            "verdict": None if number is None else r["verdicts"].get(str(number)),
+                        }
+                        for r in rounds
+                    ],
+                }
+            )
+    standing = {
+        site: [c["claim"] for c in claims] for site, claims in summary["defects_kept"].items()
+    }
+    record = {
+        "run": run.name,
+        "closed_at": RF.now(),
+        "claims": len(resolved) + len(refuted),
+        "resolved": resolved,
+        "refuted": refuted,
+        "standing_in_summary": standing,
+    }
+    RF.write_json(run / CLOSURE_FILE, record)
+    return record
+
+
+def closure_markdown(record: Mapping[str, Any]) -> str:
+    """The closure as lines for the audit log: one per claim, the refutations with the adversary's
+    note and the quotes it relied on."""
+    lines = [
+        f"### Adversarial second check `{record['run']}`: {len(record['resolved'])} claim(s) "
+        f"resolved by a drop, {len(record['refuted'])} refuted (defect line closed)"
+    ]
+    for item in record["resolved"]:
+        lines.append(
+            f"- RESOLVED {item['name']} ({item['site_id']}) S{item['sentence']}: "
+            f'"{item["claim"]}" - dropped ({item["reason"]})'
+        )
+    for item in record["refuted"]:
+        quotes = "; ".join(f"{q['url']}" for q in item["adversary_quotes"] if q.get("verified"))
+        lines.append(
+            f"- REFUTED {item['name']} ({item['site_id']}) S{item['sentence']}: "
+            f'"{item["claim"]}" (reported against {item["reported_url"]}) - kept: '
+            f"{item['adversary_note']} [{quotes}]"
+        )
+    return "\n".join(lines)
+
+
+def _tree_of(run: Path, default: Path) -> Path:
+    """The checkout a run's rounds are recorded relative to: a run directory
+    `<tree>/output/remediation/wc_runner/runs/<name>` records its handoffs as `output/remediation/
+    handoff/...` of that tree (the WN pilot's lives in another worktree than the mass runs'); any
+    other run (a test's, one recorded with absolute paths) is read against `default`."""
+    resolved = run.resolve()
+    if resolved.parent.name == "runs" and resolved.parent.parent.name == "wc_runner":
+        return resolved.parents[4]
+    return default
+
+
+def _text_rounds(run: Path, base: Path) -> list[tuple[str, Path, Mapping[str, Sequence[str]]]]:
+    """`(stage, handoff, batches)` of every check, write and verification round the run exported. A
+    round whose handoff directory is not there stops the command: a list built without it would
+    leave out the texts that round's answers shaped, and say nothing."""
+    tree = _tree_of(run, base)
+    stage = WRITE_STAGE if run_kind(run) == KIND_WN else STAGE
+    rounds = [(stage, tree / r["handoff"], r["batches"]) for r in read_rounds(run)]
+    rounds += [(r["stage"], tree / r["handoff"], r["batches"]) for r in _verify_rounds(run)]
+    for _, handoff, _ in rounds:
+        if not handoff.is_dir():
+            raise WcRunError(f"{run}: the handoff {handoff} of one of its rounds is not there")
+    return rounds
+
+
+def cmd_minimax_sites(
+    run: Path, sources: Sequence[Path], out: Path, *, base: Path = REPO
+) -> dict[str, Any]:
+    """The site list of the Claude re-check of MiniMax-touched texts (owner decision D10,
+    2026-10-08): every site that has an answer stamped MiniMax in a check, write or verification
+    round of a source run, and whose live text (`run`'s fresh read) is still the one that source
+    wrote (`_description_check` names the source and hashes the live description). The others are
+    reported by reason and not asked: `cleared` (no description now: lane WN's rerun takes them),
+    `rewritten-since` (another lane wrote the text), `retired`, `not-a-curated-row`. The list goes to
+    `export --sites`, where a text lane WN wrote is asked again as `web`."""
+    rows = {row["id"]: row for row in read_jsonl(run / ROWS_FILE)}
+    touched: dict[str, set[str]] = {}
+    for source in sources:
+        for stage, handoff, batches in _text_rounds(source, base):
+            for batch_id, labels in batches.items():
+                for label in labels:
+                    path = handoff / OH.answer_relpath(batch_id, stage, label)
+                    if path.exists() and (
+                        json.loads(path.read_text(encoding="utf-8"))["model"] == OH.MINIMAX_MODEL
+                    ):
+                        touched.setdefault(label, set()).add(source.name)
+    holds: list[str] = []
+    other: dict[str, list[str]] = {}
+    for site_id in sorted(touched):
+        row = rows.get(site_id)
+        if row is None:
+            reason = "not-a-curated-row"
+        elif row["scope_status"] == "retired":
+            reason = "retired"
+        elif wc4.is_empty(row["description"]):
+            reason = "cleared"
+        else:
+            check = (row["raw_data"] or {}).get(wc4.CHECK_KEY) or {}
+            same = (
+                check.get("run") in touched[site_id]
+                and check.get("desc_sha256") == row["description_sha256"]
+            )
+            reason = "holds-its-text" if same else "rewritten-since"
+        if reason == "holds-its-text":
+            holds.append(site_id)
+        else:
+            other.setdefault(reason, []).append(site_id)
+    report = _write_list(
+        out,
+        holds,
+        {
+            "read": json.loads((run / READ_FILE).read_text(encoding="utf-8")),
+            "from": [_shown(s) for s in sources],
+            "touched": len(touched),
+            "sites": len(holds),
+            "others": {reason: sorted(ids) for reason, ids in sorted(other.items())},
+            "others_counts": {reason: len(ids) for reason, ids in sorted(other.items())},
+        },
+    )
+    return report
+
+
 # ------------------------------------------------------------------------------------ the CLI
 def _print(payload: Any) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))
@@ -2177,10 +2625,22 @@ def build_parser() -> argparse.ArgumentParser:
         ("judge-check-answer", "one judge answer's shape"),
         ("judge-import", "the judge's answers, the measurement and its verdict"),
         ("defect-sites", "a site list from WB's DESCRIPTION_DEFECTS.jsonl files"),
+        ("verify-void", "move the MiniMax verification answers aside (dry run unless --apply)"),
+        ("defect-kept-sites", "a site list for the adversarial second check of standing claims"),
+        ("defect-closure", "what an adversarial second check decided, for the audit log"),
+        ("minimax-sites", "a site list: the texts MiniMax answers shaped and that still stand"),
     ):
         command = sub.add_parser(name, help=text)
         command.add_argument("--run-dir", required=True, type=Path)
-        if name not in ("read", "build", "defect-sites"):
+        if name not in (
+            "read",
+            "build",
+            "defect-sites",
+            "verify-void",
+            "defect-kept-sites",
+            "defect-closure",
+            "minimax-sites",
+        ):
             command.add_argument("--handoff", required=True, type=Path)
         if name in (
             "brief",
@@ -2196,6 +2656,9 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--text-file", required=True, type=Path)
         if name in ("export", "export-reask", "verify-export", "judge-export"):
             command.add_argument("--batch-size", type=int, default=BATCH_SIZE)
+        if name == "judge-export":
+            command.add_argument("--sample", type=int, default=None)
+            command.add_argument("--seed", type=int, default=None)
         if name == "read":
             command.add_argument("--host", default=W.SSH_HOST)
         if name == "defect-sites":
@@ -2206,6 +2669,7 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--sites", type=Path, default=None)
             command.add_argument("--wn", action="store_true")
             command.add_argument("--defects", type=Path, default=None)
+            command.add_argument("--adversarial", action="store_true")
             command.add_argument("--exclude", type=Path, default=None)
             command.add_argument("--after", type=Path, action="append", default=[])
             command.add_argument("--pilot", type=int, default=None)
@@ -2215,6 +2679,14 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--no-fetch", action="store_true")
         if name == "build":
             command.add_argument("--first-batch", type=int, required=True)
+        if name == "verify-void":
+            command.add_argument("--apply", action="store_true")
+            command.add_argument("--tag", default=None)
+        if name in ("defect-kept-sites", "minimax-sites"):
+            command.add_argument(
+                "--from", type=Path, action="append", required=True, dest="sources"
+            )
+            command.add_argument("--out", type=Path, required=True)
     return parser
 
 
@@ -2238,6 +2710,7 @@ def run_command(args: argparse.Namespace) -> int:
                 sites=args.sites,
                 wn=args.wn,
                 defects=args.defects,
+                adversarial=args.adversarial,
             )
         )
     elif command == "brief":
@@ -2267,7 +2740,11 @@ def run_command(args: argparse.Namespace) -> int:
     elif command == "build":
         _print(cmd_build(run, first_batch=args.first_batch))
     elif command == "judge-export":
-        _print(cmd_judge_export(run, args.handoff, batch_size=args.batch_size))
+        _print(
+            cmd_judge_export(
+                run, args.handoff, batch_size=args.batch_size, sample=args.sample, seed=args.seed
+            )
+        )
     elif command == "judge-brief":
         print(judge_brief(run, args.handoff, args.batch_id))
     elif command == "judge-check-answer":
@@ -2281,6 +2758,16 @@ def run_command(args: argparse.Namespace) -> int:
         return 0 if result["passed"] else 1
     elif command == "defect-sites":
         _print(cmd_defect_sites(run, args.defects, args.out, proven_only=args.proven_only))
+    elif command == "verify-void":
+        _print(V.verify_void(run, base=REPO, apply=args.apply, tag=args.tag))
+    elif command == "defect-kept-sites":
+        _print(cmd_defect_kept_sites(run, args.sources, args.out))
+    elif command == "defect-closure":
+        record = cmd_defect_closure(run)
+        _print({k: record[k] for k in ("run", "claims")} | {"closure": _shown(run / CLOSURE_FILE)})
+        print(closure_markdown(record))
+    elif command == "minimax-sites":
+        _print(cmd_minimax_sites(run, args.sources, args.out))
     return 0
 
 
@@ -2290,7 +2777,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     tag = "JUDGE" if args.command == "judge-import" else "WC"
     try:
         code = run_command(args)
-    except (WcRunError, OH.HandoffError, wc4.WcError, Q.AuditError, A.AnswerError) as exc:
+    except (
+        WcRunError,
+        OH.HandoffError,
+        wc4.WcError,
+        Q.AuditError,
+        A.AnswerError,
+        V.VoidError,
+    ) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         code = 1
     print(f"{tag}_EXIT={code}", flush=True)

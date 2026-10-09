@@ -10,8 +10,11 @@ must match - so the rules of the check, the verification and the judge stay one 
 the old template that this one rests on is an `ImportError`, never a silent drift. The WN write
 question is its own text. Every text is pinned by a byte hash in `tests/remediation/test_wn.py`.
 
-The briefs tell the agent to record its answer with `--model claude-sonnet-5-5` (the model id every
-answering agent runs as) and name the agents `sonnet-...`.
+The write brief (`WRITE_BRIEF`) takes the answering model, its role and its family from the role
+registry (`roles.ROLES`, owner decision D6 of 2026-10-08), as the three briefs of `prompts.py` do:
+the `--model` and `--role` of the printed `opus_handoff.py answer` command are the role's, never an
+agent's own choice. The adversarial second check of a defect-kept site (`CHECK_QUESTION_ADVERSARIAL`)
+is the list run's check question with another opening, answered by the `adversarial` role.
 """
 
 from __future__ import annotations
@@ -162,16 +165,18 @@ page supports {min_sentences} sentences, answer {{"site_id": "{site_id}", "sente
 600 characters.
 """
 
-#: The instruction of the Sonnet agent that answers one batch of write questions.
-WRITE_BRIEF = """You are Sonnet writer {batch} of the Ancient Nerds web-sourced descriptions (lane WN). \
+#: The instruction of the agent that answers one batch of write questions.
+WRITE_BRIEF = """You are {family} writer {batch} of the Ancient Nerds web-sourced descriptions (lane WN). \
 You answer {count} question(s), each about another site. Answer each one on its own, as if it were \
 the only one.
 
 Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per \
 question with its "label" (the site id) and its "prompt_path" (relative to {handoff}). Open no \
-other file of the repository - no other batch, nothing else under output/ or docs/, no database, \
+other file of the repository (the Wikipedia cache named below is the one exception) - no other batch, nothing else under output/ or docs/, no database, \
 no git history. Your evidence is your own web research (WebSearch, WebFetch), as each prompt says. \
 Run every command below from the repository root, {repo}.
+
+{wiki_cache_note}
 
 For each question:
 1. Read {handoff}/<prompt_path>.
@@ -186,9 +191,9 @@ quotes; it prints each sentence's outcome and the description your answer would 
 does not carry, a sentence too close to its quote, a sentence that opens with a pronoun - and check \
 again. If no page you can quote supports {min_sentences} sentences, answer with no sentences. Never \
 change a finding to make the check pass.
-5. Record it - an answer is written once:
+5. Record it (you run as {model}; the command refuses any other model) - an answer is written once:
    {python} scripts/remediation/opus_handoff.py answer --dir {handoff} --batch-id {batch} \
---stage {stage} --label <label> --answered-by {batch_agent} --model claude-sonnet-5-5 \
+--stage {stage} --label <label> --answered-by {batch_agent} --model {model} --role {role} \
 --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded and how many \
@@ -246,18 +251,29 @@ JUDGE_QUESTION_WN = _derive(
     ),
 )
 
-# ------------------------------------------------------------------ the briefs of every non-plain run
-_OLD_MODEL = "--model <the model id you run as: claude-sonnet-5-5 or claude-opus-5-5>"
-_NEW_MODEL = "--model claude-sonnet-5-5"
+# ------------------------------------------------------------------ the adversarial second check
+#: The opening of the adversarial second check of a site whose later-reported claim the check and the
+#: verifier both left standing (`wc/cli.py export --adversarial`, owner decision D25b of 2026-10-08):
+#: the same question as a site-list run's, asked by an agent whose task is to break the kept sentence.
+#: A sentence it KEEPs stays, with the note why the reported page does not contradict it - the
+#: refutation the repair records; a DROP is written like every WC drop.
+ADVERSARIAL_OPENING = (
+    "You are the adversarial second checker of one site description of the Ancient Nerds "
+    "archaeology database. A later web check reported a claim of it contradicted, and an earlier "
+    "check and an independent verifier still kept the sentence. You do not defend the description: "
+    "you try to show that the reported claim is right and that the sentence must go. For each "
+    "reported claim search first for the strongest evidence against the sentence - reputable pages "
+    "that contradict it, or that contradict each other - and read the reported page in full; you "
+    "KEEP a sentence only when you found none and reputable, independent sources support every "
+    "claim in it. You check the description sentence by sentence."
+)
 
-#: The check brief of a site-list run, the verifier's and the judge's brief of a site-list or WN
-#: run: the old briefs, a Sonnet agent, recording with `--model claude-sonnet-5-5`.
-CHECK_BRIEF_SONNET = _derive(
-    P.CHECK_BRIEF, ("You are Opus checker", "You are Sonnet checker"), (_OLD_MODEL, _NEW_MODEL)
-)
-VERIFY_BRIEF_SONNET = _derive(
-    P.VERIFY_BRIEF, ("You are Opus verifier", "You are Sonnet verifier"), (_OLD_MODEL, _NEW_MODEL)
-)
-JUDGE_BRIEF_SONNET = _derive(
-    P.JUDGE_BRIEF, ("You are Opus judge", "You are Sonnet judge"), (_OLD_MODEL, _NEW_MODEL)
+#: The adversarial check question: `CHECK_QUESTION_LISTED` with `ADVERSARIAL_OPENING`.
+CHECK_QUESTION_ADVERSARIAL = _derive(
+    CHECK_QUESTION_LISTED,
+    (
+        "You check one site description of the Ancient Nerds archaeology database sentence by "
+        "sentence.",
+        ADVERSARIAL_OPENING,
+    ),
 )
