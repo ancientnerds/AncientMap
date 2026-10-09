@@ -1053,3 +1053,31 @@ class TestThePremisesInSQL:
             db.execute(f"SELECT {L.PARENT_PREMISE_SQL} FROM unified_sites u").fetchone()[0]
             == "Theatre | NULL | 40.75, 14.5"
         )
+
+
+class TestTheWavesCommandOnNothing:
+    def test_the_waves_command_writes_one_file_per_wave_and_refuses_none(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        from identity import common
+
+        run = tmp_path / "run"
+        run.mkdir()
+        common.write_jsonl(
+            run / "DUP_DECISIONS.jsonl",
+            [
+                {
+                    "cluster_id": "dup-1",
+                    "status": "held",
+                    "merges": [],
+                    "part_of": [],
+                    "wrong_id": [],
+                    "distinct": [],
+                    "held": [],
+                }
+            ],
+        )
+        monkeypatch.setattr(common, "run_dir", lambda root=None: run)
+        assert D.main(["--out", str(tmp_path / "out"), "waves", "--date", WAVE]) == 1
+        assert "holds no decided MERGE" in capsys.readouterr().err
+        assert not (tmp_path / "out").exists()

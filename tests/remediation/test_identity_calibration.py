@@ -119,6 +119,17 @@ class TestTheDuplicateCases:
             negatives
         ) == 15
 
+    def test_a_named_negative_is_not_chosen_a_second_time(self) -> None:
+        pairs = self.pairs()
+        extra = [(pairs[0]["b"], pairs[0]["a"])]  # the first WRONG-ID pair, the other way round
+        negatives = [
+            c
+            for c in C.dup_cases(self.DUPLICATES, self.O9, pairs, extra_negatives=extra)
+            if c.kind == "negative"
+        ]
+        keys = [frozenset(c.sites()) for c in negatives]
+        assert len(keys) == len(set(keys)) == 15 and negatives[0].source == "named negative"
+
     def test_too_few_negatives_are_an_error(self) -> None:
         with pytest.raises(P.PlanError, match="only 3 negatives available, 15 wanted"):
             C.dup_cases(self.DUPLICATES, self.O9, self.pairs(wrong=1, neither=2))

@@ -593,3 +593,31 @@ class TestTheProbeRun:
         ProbeProduction(retire, records, monkeypatch)
         assert A.cmd_probe_guards(records, tmp_path, retire) == 0
         assert capsys.readouterr().out.count("refused by its own guard=True") == 9
+
+
+class TestTheWavesCommandOnNothing:
+    def test_the_waves_command_refuses_without_a_decided_child(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        from identity import common
+
+        run = tmp_path / "run"
+        run.mkdir()
+        common.write_jsonl(
+            run / "PARENT_DECISIONS.jsonl",
+            [
+                {
+                    "child": CHILD,
+                    "parent": PARENT,
+                    "child_name": "c",
+                    "parent_name": "p",
+                    "p361": False,
+                    "status": "held",
+                    "why": "w",
+                    "quotes": [],
+                }
+            ],
+        )
+        monkeypatch.setattr(common, "run_dir", lambda root=None: run)
+        assert PA.main(["--out", str(tmp_path / "out"), "waves", "--date", WAVE]) == 1
+        assert "holds no decided child" in capsys.readouterr().err

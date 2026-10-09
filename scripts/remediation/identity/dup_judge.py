@@ -650,7 +650,8 @@ def build_decisions(
         merges, parts, wrong, distinct, held = [], [], [], [], []
         pending = False
         names = {m["id"]: m["name"] for m in cluster["members"]}
-        if not verdict["members"]:  # an answer that was not in shape: nothing of it is decided
+        # an answer that was not in shape has no members: nothing of it is decided
+        if not verdict["members"]:
             held.append({"site_id": None, "name": cluster_id, "reason": verdict["reason"]})
         for m in verdict["members"]:
             site = m["site_id"]

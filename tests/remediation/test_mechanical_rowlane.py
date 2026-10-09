@@ -11,6 +11,7 @@ libpg_query when `pglast` is installed (it is in no requirements file: the check
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import sys
 from dataclasses import replace
@@ -887,3 +888,31 @@ class TestTheProbeRun:
         assert text.splitlines()[0] == "images heroes links names  site"
         assert "Banias (" + LOSER + ")" in text
         assert LOSER in asked[0] and SURVIVOR in asked[0]
+
+
+class TestTheSmallerGuards:
+    def test_tables_with_two_keys_are_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        assert R.key_column(LANE) == "id"
+        monkeypatch.setitem(R.TARGET_KEYS, "site_content_links", "link_id")
+        with pytest.raises(P.PlanError, match=re.escape("keyed by ['id', 'link_id'], not one")):
+            R.key_column(LANE)
+
+    def test_an_empty_plan_has_no_read_back(self) -> None:
+        with pytest.raises(P.PlanError, match="refusing to check the read-back of an empty plan"):
+            A.assert_the_write_landed([], lane=LANE)
+
+    def test_a_boolean_is_flipped_and_any_other_cell_gets_its_never_stored_value(self) -> None:
+        assert R.flipped("true", "boolean") == "false" and R.flipped("false", "boolean") == "true"
+        assert R.flipped(None, "boolean") == "true"
+        assert R.flipped(SURVIVOR, "uuid") == A.NEVER_STORED["uuid"]
+        assert R.flipped("label", "character varying") == A.NEVER_STORED["character varying"]
+
+    def test_a_change_with_a_row_id_that_is_no_serial_is_refused(self) -> None:
+        verdict = P.Verdict(
+            site_id=LOSER, site_name="Banias", ok=True, old_value=LOSER, new_value=SURVIVOR,
+            rule="r", reason="", note="n", phase3=False, finding_test_id=LANE.test_id,
+            evidence=EVIDENCE, premise=PREMISE, column="site_id", table="wiki_images", row_id="007",
+        )  # fmt: skip
+        plan = P.Plan(changes=(verdict,), skipped=(), lane=LANE)
+        with pytest.raises(P.PlanError, match="is not a row id"):
+            P.plan_record(verdict, plan)
