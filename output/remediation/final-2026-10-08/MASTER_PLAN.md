@@ -90,6 +90,16 @@ as the contract and calibration pass -> pool sites after their enrichment -> thi
 sites after their basis -> re-targeted/merged sites last. A failed or declined site keeps its card
 (D5). Provenance v3; steps of <= 100; journal stamps continue at `wb-teaser-*-s035`.
 
+**Image waves (Phase 3/6) - after every accepted wave** re-run the SEO session's gallery thumbnails (separate root
+`public/data/images/wiki-thumbs/`, idempotent, never touches the wiki tree; agreed 2026-10-09 with session ancientmap-78):
+`ssh ancientnerds "docker exec ancient_nerds_api nice -n 19 python -m pipeline.wiki_thumbs"`.
+
+**After the data repair (handed over by the SEO session, owner-approved):** the 38 high-demand in-scope sites without a
+curated page (Colosseum, Carthage, Ephesus, Nineveh, Catalhoyuk, Mohenjo-daro, Nan Madol, ...; Chaco Canyon wrongly
+out_of_scope because Wikidata P571=1980 is the park designation; Choquequirao and Comalcalco the same gap), each per
+ENRICHMENT_AUDIT; inputs `output/seo-audit-2026-10-08/scratch/demand/agg_inscope_candidates.csv` and
+`proposals_by_demand.csv` in the main checkout.
+
 **Phase 8 - Close-out:** site_type merge, card_stats wave + the five dead columns, static export,
 docs (CLAUDE.md, HANDOVER 0.0.0, CARD_DESCRIPTIONS, SENTENCE_CHECK, FIELDS_*, AUDIT_LOG,
 HUMAN_ONLY), WF measurement (X7), the owner list of everything that stays empty or unsourced, the
@@ -103,3 +113,6 @@ final report.
   pushed `49ab4c6` (all hook gates green, CI green), live on api and api2, migration 0029 applied,
   0 card overwrites at boot; static export refreshed through the new locked CLI, freshness check
   0 differing sites; Wikipedia cache complete. Phase-2 lane code building (`wf_cdd6677a-8e7`).
+- 2026-10-09: calibrations (several rounds; lessons in AUDIT_LOG), D36-D39 (Sonnet instead of Opus, pause at ~90 %
+  weekly quota), WD5 pilot written (wave 2026-10-09a: 92 cells at 45 sites, 0 deviations), readers for foreign-language
+  dates / regional periods / table coordinates merged (6f1b7e9); WD5 main run started; cards fine-tuning building.
