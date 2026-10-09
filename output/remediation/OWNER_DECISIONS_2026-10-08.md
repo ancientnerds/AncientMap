@@ -77,4 +77,6 @@ no OAuth setup until the owner says so. The Shorts decisions below (D26-D34) are
 | D37 | Scope after the quota warning | **Everything as decided** (D1-D35), no prioritising cut. |
 | D38 | The running Opus calibration of the card checkers | Stop it (the WD5 pilot runs to its end; the fact-checker gold diagnosis finishes). |
 | D39 | The rest of the weekly quota | **Work until about 90 %, then pause cleanly** until the reset. |
+| D40 | Quality control of the new card texts after calibration teaser-2026-10-10 (no Sonnet role passed; the Haiku trial was weaker than Sonnet) | **Opus for the checkers**: fact_checker and web_verifier on Opus 5.5, the card writer stays Sonnet. |
+| D41 | Weekly quota at 95 % on 2026-10-09 (about 22:30 Berlin) | **Pause everything** until the reset. |
 

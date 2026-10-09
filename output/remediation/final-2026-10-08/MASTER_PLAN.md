@@ -116,3 +116,27 @@ final report.
 - 2026-10-09: calibrations (several rounds; lessons in AUDIT_LOG), D36-D39 (Sonnet instead of Opus, pause at ~90 %
   weekly quota), WD5 pilot written (wave 2026-10-09a: 92 cells at 45 sites, 0 deviations), readers for foreign-language
   dates / regional periods / table coordinates merged (6f1b7e9); WD5 main run started; cards fine-tuning building.
+
+## RESUME POINT - paused 2026-10-09 about 20:30 UTC (owner: weekly quota 95 %)
+
+Nothing is half-written in production: the only write is the WD5 pilot wave 2026-10-09a (92 cells at 45 sites,
+accepted, 0 deviations). Run tree = main checkout on `run/2026-10-09-db-final` = `fix/2026-10-08-db-final`; the
+branch is NOT pushed (about 25 commits ahead of main: lane code, calibration fixes, releases, D36 moves, readers,
+cards tune) - push it first (merge origin/main, CI-only gates, main-push.lock; the SEO session also pushes).
+
+In order after the reset:
+1. **WD5 main run** (`output/remediation/fields/wd5`, 1,767 sites): round r0 exported (146 batches, 1,752
+   questions), **997 answered** when stopped. Resume workflow `wf_cc685b15-849` from its script (it now stops after
+   the r0 import - remove that `return` to continue into the re-asks, the Sonnet re-check (adv-truth-002 passed
+   0.96), the backup drill and wave 2026-10-10a), or run the same steps fresh: recorded answers are write-once and
+   skipped.
+2. **D40**: register owner moves fact_checker and web_verifier to Opus (roles.py, decision D40); calibrate them once
+   on the adjudicated gold of teaser-2026-10-10 or release under D40 with the -09c and -10 evidence; card_writer
+   stays Sonnet (measured at the pilot). Cards hook_rater and adversarial still failed on Sonnet in -10.
+3. **Card pilot** (40 sites), the D10 re-check of the 167 MiniMax cards, then the waves.
+4. Pilot re-ask: Olympe, Chitinamit, Shypyntsi (cleared to Undated by 2026-10-09a although a quote states a value).
+5. Then the other lanes in the order above (WC finish and defects, identity, enrichment, images, close-out).
+
+Live cards the 2026-10-09 adjudication found wrong (the rewrite replaces them): Astale, North Bersted Man, Roman
+Ruins of Sao Cucufate, Caesar's Camp (Bracknell Forest), Teotihuacan - Pyramid of the Moon, Nysa Bridge.
+
