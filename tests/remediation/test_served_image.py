@@ -1595,6 +1595,18 @@ class TestThePlan:
         with pytest.raises(ST.StateError, match="not a run directory"):
             PL.lane_for(tmp_path / "run")
 
+    def test_a_named_run_names_the_journal_stamp_too(self, tmp_path: Path) -> None:
+        """D15's run is `served-image-2026-10-08-os47`: the stamp is the directory's name."""
+        lane = PL.lane_for(tmp_path / "served-image-2026-10-08-os47")
+        assert lane.stamp == "served-image-2026-10-08-os47"
+        for bad in (
+            "served-image-2026-10-08-OS47",
+            "served-image-2026-10-08-",
+            "served-image-os47",
+        ):
+            with pytest.raises(ST.StateError, match="not a run directory"):
+                PL.lane_for(tmp_path / bad)
+
 
 def _full_run(
     tmp_path: Path, verdicts: dict[str, str], model: str = OH.OPUS_MODEL, **setup: Any

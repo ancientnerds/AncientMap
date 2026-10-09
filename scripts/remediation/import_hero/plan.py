@@ -422,6 +422,13 @@ FETCH_COLUMNS = (
     "file_size_bytes",
 )
 
+#: The three credit columns `wiki_images` holds as NULL when the file names nothing for them
+#: (measured 2026-10-09 over the curated rows: every empty value is NULL, none is ''). A manifest
+#: entry carries a missing one as the empty string and every writer stores NULL for it (owner
+#: decision D18 with orchestrator decision X4; `fetch.credit_columns` says which of them a licence
+#: demands).
+NULLABLE_FETCH_COLUMNS = ("author", "author_url", "license_url")
+
 
 def _fetch_changes(
     state: ST.State,
@@ -455,13 +462,18 @@ def _fetch_changes(
     evidence = _evidence(state, sid, row, str(fetch.get("image") or ""))
     out = []
     for column in FETCH_COLUMNS:
-        value = fetch[column]
+        value: str | None = fetch[column]
         if column in ("width", "height", "file_size_bytes"):
             value = str(int(value))
+        elif column in NULLABLE_FETCH_COLUMNS and str(value) == "":
+            value = None
         else:
             value = str(value)
         old = row.get(column)
-        if old is None or str(old) == value:
+        if value is None:
+            if old is None:
+                continue
+        elif old is None or str(old) == value:
             continue
         out.append(
             Change(

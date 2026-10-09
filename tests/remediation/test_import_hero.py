@@ -901,6 +901,86 @@ class TestTheFetchManifest:
         with pytest.raises(IF.FetchError, match="cannot be stored"):
             IF.local_name('Makedonisches Grab Korinos "A" Dromos.jpg')
 
+    def test_the_author_is_required_where_the_licence_asks_for_attribution(self) -> None:
+        """D18 and X4 (2026-10-08): a CC BY* file without an author is a row that credits nobody."""
+        thin = {k: v for k, v in FETCH_META.items() if k != "author"}
+        with pytest.raises(IF.FetchError, match="author"):
+            self._entry(meta=thin)
+
+    def test_the_author_url_is_never_required(self) -> None:
+        """D18: the link to the author's page is not a condition. The measured form is NULL (1,333
+        of the 11,632 CC BY-SA 3.0 rows have none), and the manifest carries it as ''."""
+        no_page = {k: v for k, v in FETCH_META.items() if k != "author_url"}
+        entry = self._entry(meta=no_page)
+        assert entry["author_url"] == ""
+        assert entry["author"] == FETCH_META["author"]
+
+    def test_the_licence_url_is_required_where_the_licence_asks_for_attribution(self) -> None:
+        thin = {k: v for k, v in FETCH_META.items() if k != "license_url"}
+        with pytest.raises(IF.FetchError, match="license_url"):
+            self._entry(meta=thin)
+
+    @pytest.mark.parametrize(
+        "licence", ["Public domain", "PD-old-100", "CC0", "CC0 1.0", "No restrictions"]
+    )
+    def test_a_free_licence_needs_neither_an_author_nor_a_licence_url(self, licence: str) -> None:
+        """5,952 curated rows are 'Public domain', none has a licence URL and 350 no author: a
+        literal 'author and licence URL for every file' would refuse them all."""
+        free = {
+            k: v for k, v in FETCH_META.items() if k not in ("author", "author_url", "license_url")
+        } | {"license": licence}
+        entry = self._entry(meta=free)
+        assert (entry["author"], entry["author_url"], entry["license_url"]) == ("", "", "")
+        assert entry["license"] == licence
+
+    def test_commons_attribution_licence_needs_the_author_but_has_no_licence_page(self) -> None:
+        """None of the 135 curated 'Attribution' rows carries a licence URL, 130 carry an author."""
+        meta = {k: v for k, v in FETCH_META.items() if k != "license_url"} | {
+            "license": "Attribution"
+        }
+        assert self._entry(meta=meta)["license_url"] == ""
+        with pytest.raises(IF.FetchError, match="author"):
+            self._entry(meta={k: v for k, v in meta.items() if k != "author"})
+
+    @pytest.mark.parametrize(
+        "licence", ["CC BY-SA 4.0", "CC BY 2.5", "GFDL 1.2", "OGL 3", "FAL", "KOGL Type 1", "Foo"]
+    )
+    def test_every_other_licence_name_is_strict_never_free(self, licence: str) -> None:
+        """A name the rule does not know demands both, because a wrong 'free' would publish a file
+        without the credit its terms ask for."""
+        assert IF.credit_columns(licence) == ("author", "license_url")
+
+    def test_the_hero_wave_stores_a_missing_credit_as_null(self) -> None:
+        """`_fetch_changes` turns the manifest's '' into NULL for the three nullable columns, and a
+        row that already holds NULL there is no change."""
+        state = ST.State(
+            sites={THASOS: {"id": THASOS, "name": "Thasos"}},
+            rows={},
+            retired=frozenset(),
+            read_at="2026-10-09T00:00:00Z",
+            sha256="0" * 64,
+        )
+        row = _row(1, THASOS, AGORA)
+        free = IF.manifest_entry(
+            THASOS,
+            FETCH_TITLE,
+            {
+                k: v
+                for k, v in FETCH_META.items()
+                if k not in ("author", "author_url", "license_url")
+            }
+            | {"license": "Public domain"},
+            _Result(),
+        )
+        changes = {c.column: c for c in IH._fetch_changes(state, THASOS, row, free, reason="r")}
+        assert changes["author"].new_value is None and changes["author"].old_value == "Jane Doe"
+        assert changes["author_url"].new_value is None
+        assert changes["license_url"].new_value is None
+        nulls = _row(1, THASOS, AGORA) | {"author": None, "author_url": None, "license_url": None}
+        assert not {"author", "author_url", "license_url"} & {
+            c.column for c in IH._fetch_changes(state, THASOS, nulls, free, reason="r")
+        }
+
     def test_the_entry_is_the_sites_own_file_and_not_another_sites(self) -> None:
         """Two sites may link the same Commons file; the manifest is keyed by site, so the entry
         must carry the file it fetched, never a neighbour's."""

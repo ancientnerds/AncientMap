@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -192,12 +192,29 @@ class Result:
 
 
 def run_precheck(
-    state: State, harvest: Harvest, commons: Commons, *, subset: bool = False
+    state: State,
+    harvest: Harvest,
+    commons: Commons,
+    *,
+    subset: bool = False,
+    sites: Sequence[str] | None = None,
 ) -> Result:
     """The pre-check of every site of the read. A shown site the harvest does not list is
     refused, unless `subset` - a measured sample - names the harvest's sites as the population; a
     harvest site the read neither shows nor knows as retired (WD1's harvest lists every curated
     site, the retired ones too) is refused as well."""
+    if sites is not None:
+        # D15: a named population (the heroes a recheck examines). The harvest must cover each of
+        # them; the sites it does not name are none of this run's business.
+        unknown = [sid for sid in sites if sid not in state.sites]
+        if unknown:
+            raise HarvestError(
+                f"{len(unknown)} named site(s) are not shown in the read: {unknown[:3]}"
+            )
+        absent = [sid for sid in sites if sid not in harvest.qids]
+        if absent:
+            raise HarvestError(f"{len(absent)} named site(s) are not in the harvest: {absent[:3]}")
+        subset = True
     missing = [sid for sid in state.site_ids() if sid not in harvest.qids]
     stray = [sid for sid in harvest.qids if sid not in state.sites and sid not in state.retired]
     if missing and not subset:
@@ -210,7 +227,11 @@ def run_precheck(
             f"the harvest lists {len(stray)} site(s) the read neither shows nor knows as retired "
             f"(first {stray[0]}): not curated, or curated since the harvest"
         )
-    population = [sid for sid in state.site_ids() if sid in harvest.qids]
+    population = [
+        sid
+        for sid in state.site_ids()
+        if sid in harvest.qids and (sites is None or sid in set(sites))
+    ]
     served = {sid: served_of(state.sites[sid], state.rows.get(sid, ())) for sid in population}
     files = [s.file for s in served.values() if s.file is not None]
     infos = commons.categories(files)

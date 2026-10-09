@@ -32,6 +32,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import threading
 import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
@@ -52,6 +53,8 @@ from pipeline.utils.mediawiki import dereference  # noqa: E402
 from served_image.state import StateError, canonical_file  # noqa: E402
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
+#: English Wikipedia's API: the candidate search reads an article's lead image and its images.
+WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 #: Titles per `prop=` query - the API's own limit for a client without the bot right.
 TITLES_PER_QUERY = 50
 #: A continuation chain longer than this is refused rather than recorded half.
@@ -139,14 +142,20 @@ class Commons:
         self.sleep = sleep
         self.clock = clock
         self._last: dict[str, float] = {}
+        # Two workers may share one instance (the candidate search runs at most two sites at a
+        # time): the pace lock keeps two requests of one host `pace` seconds apart, the cache lock
+        # keeps two writers from tearing one cache file.
+        self._pace_lock = threading.Lock()
+        self._cache_lock = threading.Lock()
 
     # ------------------------------------------------------------------------ transport
     def _wait(self, url: str) -> None:
         host = urlsplit(url).hostname or ""
-        last = self._last.get(host)
-        if last is not None and last + self.pace > self.clock():
-            self.sleep(last + self.pace - self.clock())
-        self._last[host] = self.clock()
+        with self._pace_lock:
+            last = self._last.get(host)
+            if last is not None and last + self.pace > self.clock():
+                self.sleep(last + self.pace - self.clock())
+            self._last[host] = self.clock()
 
     def get(self, url: str) -> httpx.Response:
         self._wait(url)
@@ -162,20 +171,21 @@ class Commons:
             raise CommonsError(f"{response.url}: HTTP {response.status_code}")
         return response
 
-    def api(self, params: Mapping[str, Any]) -> dict[str, Any]:
+    def api(self, params: Mapping[str, Any], url: str = COMMONS_API) -> dict[str, Any]:
         """One API query, sent as a POST: 50 long titles in a GET line answer HTTP 414 (T09
-        measured it), and the API reads a query from a form body just the same."""
-        self._wait(COMMONS_API)
+        measured it), and the API reads a query from a form body just the same. `url` is the
+        wiki's API: Commons' by default, `WIKIPEDIA_API` for an article's images."""
+        self._wait(url)
         data = {"format": "json", "formatversion": 2, **params}
         try:
-            response = self.client.post(COMMONS_API, data=data)
+            response = self.client.post(url, data=data)
         except httpx.HTTPError as exc:
-            raise CommonsError(f"{COMMONS_API}: {type(exc).__name__}: {exc}") from exc
+            raise CommonsError(f"{url}: {type(exc).__name__}: {exc}") from exc
         if response.status_code != 200:
-            raise CommonsError(f"{COMMONS_API}: HTTP {response.status_code} for {dict(params)}")
+            raise CommonsError(f"{url}: HTTP {response.status_code} for {dict(params)}")
         body = response.json()
         if "error" in body:
-            raise CommonsError(f"Commons refused {dict(params)}: {body['error']}")
+            raise CommonsError(f"{url} refused {dict(params)}: {body['error']}")
         return body
 
     # ------------------------------------------------------------------------ the cache
@@ -184,15 +194,19 @@ class Commons:
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
     def _save(self, name: str, data: Mapping[str, Any]) -> None:
+        """Merge `data` into the cache file: keys are only ever added, so a second worker's
+        entries survive the write of the first."""
         self.cache.mkdir(parents=True, exist_ok=True)
         path = self.cache / f"{name}.json"
-        tmp = path.with_suffix(".json.tmp")
-        tmp.write_text(
-            json.dumps(data, ensure_ascii=False, sort_keys=True, indent=1) + "\n",
-            encoding="utf-8",
-            newline="\n",
-        )
-        tmp.replace(path)
+        with self._cache_lock:
+            merged = {**self._load(name), **data}
+            tmp = path.with_suffix(".json.tmp")
+            tmp.write_text(
+                json.dumps(merged, ensure_ascii=False, sort_keys=True, indent=1) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            tmp.replace(path)
 
     # ------------------------------------------------------------------------ categories
     def categories(self, files: Iterable[str]) -> dict[str, FileInfo]:
@@ -386,6 +400,71 @@ class Commons:
             cached[key] = entry
             self._save("search", cached)
         return list(entry["files"])[:limit]
+
+    def geosearch(
+        self, lat: float, lon: float, radius_m: int, limit: int
+    ) -> list[tuple[str, float]]:
+        """The Commons files geotagged within `radius_m` metres of a point, nearest first, as
+        `(title form, distance in metres)`: `list=geosearch` in the file namespace. The API caps the
+        radius at 10 km; a radius it refuses raises. An empty answer is a valid one and cached."""
+        key = f"{lat:.6f}\t{lon:.6f}\t{radius_m}\t{limit}"
+        cached = self._load("geosearch")
+        entry = cached.get(key)
+        if entry is None:
+            body = self.api(
+                {
+                    "action": "query",
+                    "list": "geosearch",
+                    "gscoord": f"{lat}|{lon}",
+                    "gsradius": radius_m,
+                    "gslimit": limit,
+                    "gsnamespace": "6",
+                    "gsprimary": "all",
+                }
+            )
+            hits = (body.get("query") or {}).get("geosearch") or []
+            entry = [[canonical_file(h["title"]), float(h["dist"])] for h in hits]
+            self._save("geosearch", {key: entry})
+        return [(str(title), float(dist)) for title, dist in entry]
+
+    def wikipedia_images(self, title: str) -> dict[str, Any]:
+        """An English Wikipedia article's lead image and the files it shows, in page order:
+        `{"missing": bool, "lead": title form | None, "files": [title form, ...]}`.
+
+        `prop=pageimages` names the lead image and `prop=images` lists the article's file links
+        (`imlimit=max`, at most 500: the search keeps the first dozen usable ones, so the rest is
+        never read). A file that is not on Commons (a local `enwiki` upload) is named here all the
+        same; the Commons `imageinfo` that follows reports it `missing`. A redirect is followed."""
+        key = " ".join(title.split())
+        cached = self._load("wikipedia_images")
+        entry = cached.get(key)
+        if entry is None:
+            body = self.api(
+                {
+                    "action": "query",
+                    "prop": "pageimages|images",
+                    "piprop": "name",
+                    "imlimit": "max",
+                    "redirects": 1,
+                    "titles": key,
+                },
+                url=WIKIPEDIA_API,
+            )
+            pages = (body.get("query") or {}).get("pages") or []
+            if len(pages) != 1:
+                raise CommonsError(f"Wikipedia answered {len(pages)} pages for {key!r}")
+            page = pages[0]
+            if page.get("missing") or page.get("invalid"):
+                entry = {"missing": True, "lead": None, "files": []}
+            else:
+                lead = page.get("pageimage")
+                entry = {
+                    "missing": False,
+                    "lead": canonical_file(lead) if lead else None,
+                    "files": [canonical_file(i["title"]) for i in page.get("images") or []],
+                }
+            self._save("wikipedia_images", {key: entry})
+        return dict(entry)
 
     def download(self, url: str) -> Path:
         """The bytes behind a URL, kept once under `files/<sha256 of the URL>`."""

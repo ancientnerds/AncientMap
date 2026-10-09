@@ -17,6 +17,7 @@ import pytest
 _ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_ROOT / "scripts" / "remediation"))
 
+import opus_handoff as OH  # noqa: E402
 from candidate_search import judge as CJ  # noqa: E402
 from candidate_search import judge_run as JR  # noqa: E402
 
@@ -331,9 +332,26 @@ class TestTheInsertHandover:
     and the whole search ends in a file nobody reads.
     """
 
-    def _run(self, tmp_path: Path, sites: list[dict], targets: list[dict]) -> Path:
+    def _run(
+        self, tmp_path: Path, sites: list[dict], targets: list[dict], model: str = OH.SONNET_MODEL
+    ) -> Path:
         out = tmp_path / "candidates"
         out.mkdir()
+        (out / CJ.VERDICTS).write_text(
+            "".join(
+                json.dumps(
+                    {
+                        "site_id": t["site_id"],
+                        "file": t["commons_file"],
+                        "verdict": CJ.DEPICTS,
+                        "model": model,
+                    }
+                )
+                + "\n"
+                for t in targets
+            ),
+            encoding="utf-8",
+        )
         (out / CJ.CANDIDATES).write_text(
             "".join(json.dumps(s, ensure_ascii=False) + "\n" for s in sites), encoding="utf-8"
         )
@@ -398,6 +416,69 @@ class TestTheInsertHandover:
             "a": {"image": "https://upload.wikimedia.org/wikipedia/commons/1/1e/Tomb.jpg"}
         }
         assert [r["reason"] for r in result["refused_targets"]] == ["claim_conflict"]
+
+    def test_a_re_seed_claims_only_the_sites_it_names(self, tmp_path: Path) -> None:
+        """D18 releases the credit-refused sites: their wave claims those targets and no other."""
+        out = self._run(
+            tmp_path,
+            [_site("a", ["Tomb.jpg"]), _site("b", ["Mound.jpg"])],
+            [
+                {"site_id": "a", "commons_file": "Tomb.jpg", "width": 1600, "height": 1200},
+                {"site_id": "b", "commons_file": "Mound.jpg", "width": 1600, "height": 1200},
+            ],
+        )
+        insert_run = tmp_path / "insert"
+        result = CJ.insert_claims(out, insert_run, ["b"])
+        assert result["sites_prepared"] == 1
+        claims = json.loads((insert_run / "IMPORT_CLAIMS.json").read_text(encoding="utf-8"))
+        assert list(claims) == ["b"]
+
+    def test_a_named_site_that_is_no_target_is_refused_by_name(self, tmp_path: Path) -> None:
+        out = self._run(
+            tmp_path,
+            [_site("a", ["Tomb.jpg"])],
+            [{"site_id": "a", "commons_file": "Tomb.jpg", "width": 1600, "height": 1200}],
+        )
+        with pytest.raises(ValueError, match="no target"):
+            CJ.insert_claims(out, tmp_path / "insert", ["a", "z"])
+        assert not (tmp_path / "insert").exists()
+
+    def test_a_minimax_target_is_never_claimed_without_a_claude_recheck(
+        self, tmp_path: Path
+    ) -> None:
+        """The candidate run of 2026-10-06 was judged by MiniMax alone: its targets are not Claude's
+        (owner decisions D6, D10), so no claim is written for them until a Claude re-check confirms."""
+        target = {"site_id": "a", "commons_file": "Tomb.jpg", "width": 1600, "height": 1200}
+        out = self._run(tmp_path, [_site("a", ["Tomb.jpg"])], [target], model=OH.MINIMAX_MODEL)
+        insert_run = tmp_path / "insert"
+        with pytest.raises(ValueError, match="no Claude model"):
+            CJ.insert_claims(out, insert_run)
+        assert not insert_run.exists()
+        result = CJ.insert_claims(out, insert_run, confirmed={("a", "Tomb.jpg")})
+        assert result["sites_prepared"] == 1
+
+    def test_a_target_without_a_depicts_verdict_is_refused_by_name(self, tmp_path: Path) -> None:
+        out = self._run(
+            tmp_path,
+            [_site("a", ["Tomb.jpg"])],
+            [{"site_id": "a", "commons_file": "Tomb.jpg", "width": 1600, "height": 1200}],
+        )
+        (out / CJ.VERDICTS).write_text("", encoding="utf-8")
+        with pytest.raises(ValueError, match="no depicts verdict"):
+            CJ.insert_claims(out, tmp_path / "insert")
+
+    def test_only_a_claude_stamped_recheck_confirms(self, tmp_path: Path) -> None:
+        def row(verdict: str, model: str, file: str) -> str:
+            meta = {"site_id": "a", "file": file}
+            return json.dumps({"verdict": verdict, "model": model, "meta": meta}) + "\n"
+
+        (tmp_path / "RECHECK_01.jsonl").write_text(
+            row("depicts", OH.OPUS_MODEL, "Tomb.jpg")
+            + row("other_site", OH.OPUS_MODEL, "Mound.jpg")
+            + row("depicts", OH.MINIMAX_MODEL, "Gate.jpg"),
+            encoding="utf-8",
+        )
+        assert CJ.confirmed_by_recheck(tmp_path) == {("a", "Tomb.jpg")}
 
 
 if __name__ == "__main__":

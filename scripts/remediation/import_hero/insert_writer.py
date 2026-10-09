@@ -213,7 +213,7 @@ def readback(chunk: IN.InsertChunk) -> list[str]:
             continue
         # data holds what the plan wrote
         for column in IN.INSERT_COLUMNS:
-            if str(held.get(column)) != planned.values[column]:
+            if held.get(column) != planned.values[column]:
                 problems.append(
                     f"{site}: {column} is {held.get(column)!r}, the plan wrote "
                     f"{planned.values[column]!r}"

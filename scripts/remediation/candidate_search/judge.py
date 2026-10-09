@@ -21,7 +21,8 @@ and has to look.
 Batch shape: `IMAGES_PER_BATCH` candidates, packed by site, so one site never splits across two
 agents (its candidates are one judgement). The write side of this stage is `write_targets`: the
 `(site_id, commons_file)` pairs the INSERT lane's fetch takes, one per site - the best `depicts`
-candidate of that site, the largest, because a bigger file stores a bigger hero at the same licence.
+candidate of that site, the best quality (`rank_key`), because the page's picture should be the clearest
+photograph of the site, not the largest file.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +40,7 @@ for _path in (_ROOT, _ROOT / "scripts" / "remediation"):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+import opus_handoff as OH  # noqa: E402
 from served_image import state as ST  # noqa: E402
 
 CANDIDATES = "CANDIDATES.jsonl"
@@ -137,19 +139,13 @@ def download(
     return {**candidate, "path": str(named), "fetched": True}, ""
 
 
-def export(
-    out: Path,
-    sites: Sequence[Mapping[str, Any]],
-    client: Any,
-    *,
-    images_per_batch: int = IMAGES_PER_BATCH,
-    sites_per_batch: int = SITES_PER_BATCH,
-) -> dict[str, Any]:
-    """The run's candidates into batches, every image on disk, one prompt file per site.
+def download_all(
+    out: Path, sites: Sequence[Mapping[str, Any]], client: Any
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """Every candidate's rendering on disk under `<out>/pictures/`, and the refusals by name.
 
-    The prompts are written where the handoff reads them (`<out>/<batch_id>/<site_id>.prompt.txt`),
-    so an agent answers one file per site and the code can record it under the model's own name.
-    """
+    Returns `(sites with their fetched candidates - each now carrying its `path`, refusals)`; a site
+    none of whose candidates could be fetched is left out of the first list (its refusals name why)."""
     pictures = out / PICTURES
     prepared: list[dict[str, Any]] = []
     refusals: list[dict[str, str]] = []
@@ -169,6 +165,23 @@ def export(
             rows.append(row)
         if rows:
             prepared.append({**site, "candidates": rows})
+    return prepared, refusals
+
+
+def export(
+    out: Path,
+    sites: Sequence[Mapping[str, Any]],
+    client: Any,
+    *,
+    images_per_batch: int = IMAGES_PER_BATCH,
+    sites_per_batch: int = SITES_PER_BATCH,
+) -> dict[str, Any]:
+    """The run's candidates into batches, every image on disk, one prompt file per site.
+
+    The prompts are written where the handoff reads them (`<out>/<batch_id>/<site_id>.prompt.txt`),
+    so an agent answers one file per site and the code can record it under the model's own name.
+    """
+    prepared, refusals = download_all(out, sites, client)
     batches = pack(prepared, images_per_batch=images_per_batch, sites_per_batch=sites_per_batch)
     written = 0
     for batch in batches:
@@ -184,13 +197,65 @@ def export(
         "candidates": sum(len(s["candidates"]) for s in prepared),
         "batches": len(batches),
         "prompt_files": written,
-        "images": str(pictures),
+        "images": str(out / PICTURES),
         "refused_images": len(refusals),
         "refusals": refusals[:20],
     }
 
 
-def insert_claims(out: Path, insert_run: Path) -> dict[str, Any]:
+def claude_stamps() -> frozenset[str]:
+    """The answer stamps of the models a new answer may name (owner decision D6): the only stamps
+    whose `depicts` may put a picture on a page."""
+    return frozenset(OH.ANSWER_MODELS[model] for model in OH.NEW_ANSWER_MODELS)
+
+
+def confirmed_by_recheck(run: Path) -> set[tuple[str, str]]:
+    """The `(site id, file)` pairs a Claude adversarial re-check confirmed as `depicts`, from the
+    `RECHECK_NN.jsonl` files of one run directory (`image_roles/run.py recheck-import`). A re-check
+    row whose stamp is not a Claude stamp confirms nothing."""
+    stamps = claude_stamps()
+    out: set[tuple[str, str]] = set()
+    for path in sorted(run.glob("RECHECK_[0-9][0-9].jsonl")):
+        for row in _read_jsonl(path):
+            if row["verdict"] == DEPICTS and row["model"] in stamps:
+                out.add((str(row["meta"]["site_id"]), str(row["meta"]["file"])))
+    return out
+
+
+def targets_without_claude(
+    targets: Sequence[Mapping[str, Any]],
+    verdicts: Sequence[Mapping[str, Any]],
+    confirmed: Collection[tuple[str, str]] = (),
+) -> list[tuple[str, str, str]]:
+    """The targets whose `depicts` was not given by Claude and that no Claude re-check confirmed,
+    each as `(site id, file, the verdict's model)`.
+
+    A MiniMax verdict is never ground truth (owner decisions D6 and D10): the candidate run of
+    2026-10-06 picked its targets with MiniMax alone, so a target of it becomes a live hero only
+    after Claude's adversarial re-check (`hero_recheck`) confirmed that very file. A target with no
+    `depicts` verdict in `verdicts` is refused by name."""
+    stamps = claude_stamps()
+    models = {
+        (str(v["site_id"]), str(v["file"])): str(v.get("model") or "")
+        for v in verdicts
+        if v.get("verdict") == DEPICTS
+    }
+    unjudged = []
+    for target in targets:
+        key = (str(target["site_id"]), str(target["commons_file"]))
+        if key not in models:
+            raise ValueError(f"{key[0]}: target {key[1]!r} has no depicts verdict in {VERDICTS}")
+        if models[key] not in stamps and key not in confirmed:
+            unjudged.append((key[0], key[1], models[key]))
+    return unjudged
+
+
+def insert_claims(
+    out: Path,
+    insert_run: Path,
+    sites: Sequence[str] | None = None,
+    confirmed: Collection[tuple[str, str]] = (),
+) -> dict[str, Any]:
     """The INSERT wave's own two records, from the `depicts` verdicts this run confirmed.
 
     `import_hero/run.py fetch --target insert` reads a run directory that already holds
@@ -203,8 +268,31 @@ def insert_claims(out: Path, insert_run: Path) -> dict[str, Any]:
     Claims are merged, never replaced: a wave can be prepared in more than one go, and a site whose
     claim another lane already recorded keeps that URL - a second claim for one site is refused by
     name instead of silently overwriting the first.
+
+    A target whose `depicts` verdict was not given by Claude is refused unless its `(site, file)` is
+    in `confirmed` (the pairs a Claude re-check confirmed, `confirmed_by_recheck`): the candidate run
+    of 2026-10-06 was judged by MiniMax alone, and nothing it picked goes live without Claude
+    (owner decisions D6, D10).
     """
     targets = _read_jsonl(out / TARGETS)
+    if sites is not None:
+        # a re-seed (credit refusals released by D18): only the sites named, and a site that is no
+        # target of this run is refused by name - there is no file to claim for it
+        wanted = {str(site).strip() for site in sites}
+        absent = sorted(wanted - {str(t.get("site_id") or "") for t in targets})
+        if absent:
+            raise ValueError(
+                f"{len(absent)} named site(s) are no target of {out} (first {absent[0]}): "
+                "there is no confirmed file to claim for them"
+            )
+        targets = [t for t in targets if str(t.get("site_id") or "") in wanted]
+    unjudged = targets_without_claude(targets, _read_jsonl(out / VERDICTS), confirmed)
+    if unjudged:
+        raise ValueError(
+            f"{len(unjudged)} target(s) were judged depicts by no Claude model and no Claude "
+            f"re-check confirmed them (first {unjudged[0][0]}: {unjudged[0][1]!r}, model {unjudged[0][2] or 'none'!r}): judge them again with the image "
+            "roles (`image_roles/run.py pool`) and pass the re-check's run with --recheck-run"
+        )
     candidates = {str(site["site_id"]): site for site in _read_jsonl(out / CANDIDATES)}
     claims_path = insert_run / "IMPORT_CLAIMS.json"
     refusals_path = insert_run / "IMPORT_HERO_REFUSALS.jsonl"
@@ -448,41 +536,50 @@ def import_answers(
     }
 
 
-def write_targets(out: Path, verdicts: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """One `(site_id, commons_file)` per site that has a `depicts` verdict - the largest of them.
+def rank_key(row: Mapping[str, Any]) -> tuple[int, int]:
+    """How good a `depicts` candidate is as the page's picture: its quality (1-5, the "shows this
+    site" role gives one with every `depicts`; a row without one - the first run's - ranks 0) and
+    then its pixels. The best quality wins, not the largest file: a sharp photograph of the remains
+    beats a bigger one of the same field."""
+    return (
+        int(row.get("quality") or 0),
+        int(row.get("width") or 0) * int(row.get("height") or 0),
+    )
 
-    The fetch takes that pair and records the licence, the author and both URLs by itself; what this
-    stage decides is only **which** file each site gets.
+
+def write_targets(
+    out: Path,
+    verdicts: Sequence[Mapping[str, Any]],
+    confirmed: Collection[tuple[str, str]] | None = None,
+) -> dict[str, Any]:
+    """One `(site_id, commons_file)` per site that has a `depicts` verdict - the best of them.
+
+    The best is `rank_key`'s: the highest quality, then the most pixels. With `confirmed` (the
+    `(site id, file)` pairs the adversarial re-check confirmed) only those candidates are eligible:
+    a pick nobody re-checked is not written. The fetch takes the pair and records the licence, the
+    author and both URLs by itself; what this stage decides is only **which** file each site gets.
     """
     best: dict[str, dict[str, Any]] = {}
     for row in verdicts:
         if row.get("verdict") != DEPICTS:
             continue
         site_id = str(row["site_id"])
-        size = (int(row.get("width") or 0), int(row.get("height") or 0))
+        if confirmed is not None and (site_id, str(row["file"])) not in confirmed:
+            continue
         current = best.get(site_id)
-        if current is None or size > (
-            int(current.get("width") or 0),
-            int(current.get("height") or 0),
-        ):
+        if current is None or rank_key(row) > rank_key(current):
             best[site_id] = dict(row)
     out.mkdir(parents=True, exist_ok=True)
-    (out / TARGETS).write_text(
-        "".join(
-            json.dumps(
-                {
-                    "site_id": row["site_id"],
-                    "commons_file": row["file"],
-                    "width": row["width"],
-                    "height": row["height"],
-                },
-                ensure_ascii=False,
-                sort_keys=True,
-            )
-            + "\n"
-            for row in sorted(best.values(), key=lambda r: str(r["site_id"]))
-        ),
-        encoding="utf-8",
-        newline="\n",
-    )
+    lines = []
+    for row in sorted(best.values(), key=lambda r: str(r["site_id"])):
+        target: dict[str, Any] = {
+            "site_id": row["site_id"],
+            "commons_file": row["file"],
+            "width": row["width"],
+            "height": row["height"],
+        }
+        if row.get("quality") is not None:
+            target["quality"] = row["quality"]
+        lines.append(json.dumps(target, ensure_ascii=False, sort_keys=True) + "\n")
+    (out / TARGETS).write_text("".join(lines), encoding="utf-8", newline="\n")
     return {"sites_to_fetch": len(best), "file": str(out / TARGETS)}

@@ -64,7 +64,9 @@ from served_image import vision as V  # noqa: E402
 LANE_NAME = "served-image"
 TEST_ID = "WD2/served-image"
 LABEL = "served image"
-RUN_RE = re.compile(r"served-image-(\d{4}-\d{2}-\d{2}[a-z]?)")
+#: `served-image-2026-09-26`, `...-26b` (a second run of the day) or `...-2026-10-08-os47` (a named
+#: run: the D15 re-check of the 47 heroes). The group is the journal stamp.
+RUN_RE = re.compile(r"served-image-(\d{4}-\d{2}-\d{2}(?:[a-z]|-[a-z0-9]+)?)")
 
 RULE_ALIGN = "wd2-align"
 RULE_HERO = "wd2-hero"
@@ -76,6 +78,10 @@ EXPECTED = "EXPECTED.jsonl"
 SUMMARY = "PLAN_SUMMARY.json"
 
 CONFIRMED, REPLACED, CLEARED, NOTHING = "confirmed", "replaced", "cleared", "no image"
+#: D15: a rechecked hero the checker called `region_or_type` stays - the picture is the owner's 2025
+#: link and a view of the right place is not a picture of another site. Planned like `confirmed`
+#: (the globe's thumbnail follows the served row), named apart so the report can tell them.
+KEPT = "kept"
 #: The site serves nothing, its own Wikidata item claims a file, and the replacement stage called a
 #: claimed file `depicts`: it now serves that file. Not `cleared` - that outcome means the site was
 #: emptied, and the goal's report tells the two apart.
@@ -89,7 +95,7 @@ def lane_for(run: Path) -> CW.Lane:
     """The journal identity of a run: lane `served-image`, stamped with the run directory's date."""
     match = RUN_RE.fullmatch(run.name)
     if match is None:
-        raise ST.StateError(f"{run} is not a run directory (served-image-YYYY-MM-DD[a-z])")
+        raise ST.StateError(f"{run} is not a run directory (served-image-YYYY-MM-DD[a-z|-name])")
     return CW.Lane(LANE_NAME, TEST_ID, f"{LANE_NAME}-{match.group(1)}", "authoritative", LABEL)
 
 
@@ -230,26 +236,32 @@ def decide_site(
         if population != V.UNCONFIRMED_ONLY or pre["status"] not in PC.CONFIRMED:
             raise ST.StateError(f"{sid}: the served image has no check answer")
         evidence = [_evidence_precheck(pre)]
-    elif check["verdict"] == V.DEPICTS:
+    elif not V.needs_replacement(check, population):
         evidence = [_evidence_precheck(pre), _evidence_check(check)]
     else:
         return _not_depicting(site, live, pre, check, rep)
+    outcome = KEPT if check is not None and check["verdict"] == V.REGION_OR_TYPE else CONFIRMED
     if served["kind"] != ST.GALLERY:
         repair = check["repair"] if check is not None else None
         if repair is None:
-            return SitePlan(sid, CONFIRMED, None, thumb)
+            return SitePlan(sid, outcome, None, thumb)
         reason = (
             f"the served thumbnail's file depicts the site, but its address serves no picture "
             f"({repair['error']}): the thumbnail becomes the file's rendering the check was shown"
         )
         evidence = [*evidence, {"source": "served_image/CHECK.jsonl", "repair": dict(repair)}]
         new = repair["render_url"]
-        return SitePlan(sid, CONFIRMED, None, new, _thumb(site, new, RULE_THUMB, reason, evidence))
+        return SitePlan(sid, outcome, None, new, _thumb(site, new, RULE_THUMB, reason, evidence))
     row = next(r for r in live if int(r["id"]) == served["image_id"])
     target = local_path(sid, str(row["filename"]))
-    reason = f"the served image {row['id']} depicts the site; the globe shows it too"
+    what = (
+        "stays: the recheck calls it a view of the right place, and it is the owner's link"
+        if outcome == KEPT
+        else "depicts the site"
+    )
+    reason = f"the served image {row['id']} {what}; the globe shows it too"
     changes = _thumb(site, target, RULE_ALIGN, reason, evidence)
-    return SitePlan(sid, CONFIRMED, int(row["id"]), target, changes)
+    return SitePlan(sid, outcome, int(row["id"]), target, changes)
 
 
 def _other_sites_out(
@@ -414,22 +426,40 @@ def _claims_a_file(prechecks: Mapping[str, Mapping[str, Any]]) -> bool:
     return any(pre["status"] == PC.NO_IMAGE and pre["qid"] for pre in prechecks.values())
 
 
+def _require_role(population: str, rows: Any, name: str) -> None:
+    """A recheck's answers are the adversarial role's, whatever the importer was told: the plan
+    reads the stamps of `name` itself (owner decision D6)."""
+    role = V.population_role(population)
+    if role is None:
+        return
+    problems = V.role_problems(list(rows), role)
+    if problems:
+        raise ST.StateError(
+            f"{len(problems)} answer(s) of {name} are not the {role} role's (first: {problems[0]})"
+        )
+
+
 def build(run: Path) -> tuple[list[SitePlan], dict[str, Any]]:
     state = ST.load_read(run / "READ.json")
     V.verify_precheck(run)
     prechecks = PC.load_prechecks(run / PC.PRECHECK_FILE)
+    sites = V.run_sites(run)
+    if sites is not None:
+        # a run restricted to named sites (D15) plans those and nothing else
+        prechecks = {sid: pre for sid, pre in prechecks.items() if sid in set(sites)}
     if (run / V.EXPORT_CHECK).exists():
         record = json.loads((run / V.EXPORT_CHECK).read_text(encoding="utf-8"))
         if record["read_sha256"] != state.sha256:
             raise ST.StateError("CHECK was exported from another READ.json - re-run the lane")
         population = record["population"]
         checks = _by_site(V.read_jsonl(run / V.CHECK))
+        _require_role(population, checks.values(), V.CHECK)
     else:
         # A claim-only run: the served images were judged by the 2026-09-30 run and delivered, so
         # this plan may not touch them and must say that instead of claiming them as its own.
         population = V.CLAIMED_ONLY
         checks = {}
-    failed = [c for c in checks.values() if c["verdict"] != V.DEPICTS]
+    failed = [c for c in checks.values() if V.needs_replacement(c, population)]
     replaces: dict[str, Mapping[str, Any]] = {}
     claimed: set[str] = set()
     without: set[str] = set()
@@ -455,6 +485,7 @@ def build(run: Path) -> tuple[list[SitePlan], dict[str, Any]]:
             if replace_record["questions"] and (run / V.REPLACE).exists()
             else {}
         )
+        _require_role(population, replaces.values(), V.REPLACE)
         missing = {c["site_id"] for c in failed} - without - set(replaces)
         if missing:
             raise ST.StateError(f"{len(missing)} failed image(s) have no replacement answer")
