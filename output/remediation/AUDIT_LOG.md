@@ -13996,3 +13996,45 @@ the two content questions this run parked with a default instead of an answer - 
 year (304 / 305; the English Wikipedia contradicts itself between its city and basilica article) and
 whether a card may carry a claim without a hedge that every source hedges (Helorus, Kition,
 Uçan ağıl).
+
+
+## 2026-10-09 - Cards: contract shorts-v1 supersedes the v1 name and style rules (branch fix/db-final-p2-cards)
+
+Owner decisions D1-D6, D10 and D35 of 2026-10-08 (`OWNER_DECISIONS_2026-10-08.md`). **Superseded,
+in writing, before any run:** CARD_DESCRIPTIONS 1.3 / 1.4 / 1.5 (a card names its site, may ask one
+question) for every card written from now on - the new section 9 holds the contract - and the note
+of 2026-10-07 above ("the cards stay plain factual prose: an evocative tone is not part of what the
+checker judges"): the card is a nameless Shorts teaser whose hook the rater judges; its tone is
+still mystery as tone, never a claim, and every claim is still checked and web-verified. The v1
+files `teaser/contract.py`, `prompts.py` and `answers.py` are byte-frozen; `teaser/shorts_v1.py`,
+`prompts_shorts.py`, `answers_shorts.py` and `calibrate.py` are new; `teaser/run.py` dispatches on
+`RUN.json["contract"]` (`v1`, `shorts-v1`, `recheck-v1`).
+
+What the code now does, each with a test and a `teaser-shorts:` mutation case: three variants rated
+for their hook (floor 3); the import refuses an answer given in another role or stamped with another
+model than the role's; a seeded-defect canary per check batch voids a careless checker's batch; a
+failed or thin-declined site keeps its card (`kept`, no clear row); provenance version 3 records
+the contract, the model of each stage, the hook, the anchors and the reserve, and only a `shorts_ready`
+version-3 card is pinned for the Shorts gate; the planner runs the name rule again against the live
+name, aliases and country (`name-changed`); `seed-live` records the 167 MiniMax cards of
+`wb-cardgap-2026-10-07` for a Claude re-check (check, verify, adversarial; a failure clears through
+the journal as `card-clear-recheck-<reason>`, a pass stands). The calibration is sealed before any
+answer (`teaser/calibrate.py`, `output/remediation/calibration/teaser-<id>/`). Nothing was written to
+production, nothing rendered or uploaded.
+
+
+## 2026-10-09 - Cards: the fix round after the review of package cards (branch fix/db-final-p2-cards)
+
+Eight findings of the review, each with a test and a `teaser-shorts:` mutation case: a re-check clear
+carries the card it judged and the run that wrote it (`seeded_card_sha256`, `seeded_run`), and the
+planner refuses `card-changed` for a live card that is another one (a shorts-v1 card written through
+the journal after `seed-live` no longer loses its card and provenance to the old verdict); the canary
+is blind (random UUID label, random place in the batch, the card of a site outside the batch, a round
+that would be one batch split in two); the calibration cases are exported by role, shuffled under
+opaque keys and one neutral stage, the key-to-set mapping in `JOBS.jsonl` alone; `shorts_export` pins
+only a shorts-ready version-3 card (the Phase-5 card key pinned cards that name their site, D1);
+`run.py escalate` is refused until `roles.ROLES` names the new model (the recorder checks the
+registry), documented in 9.2; the checker calibration seals and measures claim agreement (0.90);
+`select --exclude-run` refuses a run of another contract; the re-check seed carries the web facts of
+the card's provenance into the checker, verifier and adversary questions and into the mechanical
+check; a NULL country in the export is `""`, not the text "None". Nothing was written to production.

@@ -2,8 +2,7 @@
 
 Reads the card text and rarity from `card_stats`, the site row from
 `unified_sites` (with the card hash its provenance pins, for the audit's S13
-check: a lane-WB teaser's `_card_provenance`, else the Phase-5 card key of
-`_description_provenance`), and every non-excluded Commons image with its
+check: a lane-WB teaser's `_card_provenance` alone), and every non-excluded Commons image with its
 attribution from `wiki_images`. Raw SQL on purpose: `card_stats` is an api-side model and the
 import-linter forbids pipeline -> api imports.
 """
@@ -188,8 +187,6 @@ _SITE_SQL = text(
            c.card_description, c.rarity_tier, c.rarity_score, c.total_power,
            c.antiquity, c.fortification, c.cultural_influence, c.mystery, c.legacy,
            c.civilization,
-           s.raw_data -> '_description_provenance' -> 'card' ->> 'text_sha256'
-               AS card_text_sha256,
            s.raw_data -> '_card_provenance' AS card_provenance
     FROM unified_sites s
     JOIN card_stats c ON c.site_id = s.id
@@ -226,12 +223,15 @@ def card_pin_and_mark(row: Mapping) -> tuple[str | None, str | None, str | None]
     row's provenance.
 
     A lane-WB teaser provenance (`pipeline.utils.card_provenance`) is the card's only statement
-    once it exists: its hash while the description is the one the card was checked against (a
-    stale card is not narrated), and `generated` while it hashes the card. Without it, the Phase-5
-    card key of `_description_provenance` pins the card as before, and no AI note is claimed.
+    once it exists: its hash while the card is a version-3 card (contract shorts-v1) that is
+    `shorts_ready` and the description is the one it was checked against (a stale card, and a
+    version-2 card that names its site, are not narrated), and `generated` while it hashes the
+    card. Without it nothing pins the card: the Phase-5 card key of `_description_provenance`
+    pinned cards that name their site, which a narrated card never does (owner decision D1), and
+    no AI note is claimed.
     """
     if row["card_provenance"] is None:
-        return row["card_text_sha256"], None, None
+        return None, None, None
     provenance = teaser.validate(row["card_provenance"])
     card = (row["card_description"] or "").strip()
     mark = teaser.card_ai(provenance, card)

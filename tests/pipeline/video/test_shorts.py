@@ -557,7 +557,6 @@ class TestExportShape:
             "mystery": 4,
             "legacy": 5,
             "civilization": "Inca",
-            "card_text_sha256": None,
             "card_provenance": None,
             "spoken_name": "Machu Picchu",
         }
@@ -643,7 +642,6 @@ _EXPORT_ROW = {
     "mystery": 0,
     "legacy": 0,
     "civilization": None,
-    "card_text_sha256": None,
     "card_provenance": None,
     "spoken_name": None,
 }
@@ -816,38 +814,40 @@ def test_s13_the_audit_measures_the_card_through_card_trace():
     assert not keys & {"card_sha256", "card_provenance_sha256"}
 
 
-def test_s13_the_export_carries_the_pinned_hash_into_site_json():
-    row = dict(_EXPORT_ROW, card_text_sha256=CARD_SHA)
-    assert assemble_site(row, [])["card_text_sha256"] == CARD_SHA
+def test_s13_a_card_without_a_card_provenance_is_never_pinned():
+    """The Phase-5 card key pinned cards that name their site; a narrated card never does (D1), so
+    a card with only that key has no pin and the export does not even read the key."""
     assert assemble_site(dict(_EXPORT_ROW), [])["card_text_sha256"] is None
+    assert (
+        assemble_site(dict(_EXPORT_ROW, card_text_sha256=CARD_SHA), [])["card_text_sha256"] is None
+    )
 
 
-def test_s13_the_export_reads_the_hash_from_the_card_provenance():
+def test_s13_the_export_reads_the_pin_from_the_card_provenance_alone():
     from pipeline.video.shorts_export import _SITE_SQL
 
     sql = " ".join(str(_SITE_SQL).split())
-    assert (
-        "s.raw_data -> '_description_provenance' -> 'card' ->> 'text_sha256' "
-        "AS card_text_sha256" in sql
-    )
     assert "s.raw_data -> '_card_provenance' AS card_provenance" in sql
+    assert "card_text_sha256" not in sql and "_description_provenance" not in sql
 
 
-def _teaser_row(**over):
+def _teaser_row(version: int = 3, shorts_ready: bool = True, **over):
+    """A site row whose card has a teaser provenance: version 3 (contract shorts-v1) by default,
+    the one a Short may narrate; version 2 names its site and is marked but never pinned."""
     from pipeline.utils import card_provenance as CP
 
     description = "Machu Picchu is a 15th-century Inca citadel at 2,430 metres."
     row = dict(_EXPORT_ROW, description=description, card_description=CARD)
-    row["card_provenance"] = CP.build(
-        run="wb-test",
-        ai_system=AI_SYSTEM_OPUS_ONLY,
-        card=CARD,
-        description=description,
-        stage="check",
-        checker="teaser-check-b001",
-        checked_at="2026-09-26T12:00:00+00:00",
-        claims=[{"claim": "a 15th-century Inca citadel", "support": ["S1"]}],
-        verify={
+    fields = {
+        "run": "wb-test",
+        "ai_system": AI_SYSTEM_OPUS_ONLY,
+        "card": CARD,
+        "description": description,
+        "stage": "check",
+        "checker": "teaser-check-b001",
+        "checked_at": "2026-09-26T12:00:00+00:00",
+        "claims": [{"claim": "a 15th-century Inca citadel", "support": ["S1"]}],
+        "verify": {
             "verdict": "VERIFIED",
             "stage": "verify",
             "by": "teaser-verify-001",
@@ -856,19 +856,46 @@ def _teaser_row(**over):
             "unproven": 0,
             "text_sha256": CP.text_sha256(CARD),
         },
-        web_facts=[],
-    )
+        "web_facts": [],
+    }
+    if version == 2:
+        row["card_provenance"] = CP.build(**fields)
+    else:
+        stamp = "anthropic/claude-opus-5-5 (Claude Code agent)"
+        row["card_provenance"] = CP.build_v3(
+            **fields,
+            models={"write": stamp, "rate": stamp, "check": stamp, "verify": stamp},
+            hook={"type": "object", "rating": 4, "variant": 1},
+            anchors=["Inca citadel"] if shorts_ready else [],
+            reserve=["S2"] if shorts_ready else None,
+            shorts_ready=shorts_ready,
+        )
     return {**row, **over}
 
 
 def test_s13_a_teaser_card_is_pinned_by_its_own_provenance_and_marked_generated():
     """Lane WB: the teaser provenance is the card's only statement - its hash (not the Phase-5
-    key, which the lane nulls) goes to S13, and the AI note is claimed for the card."""
-    site = assemble_site(_teaser_row(card_text_sha256="f" * 64), [])
+    key, which the lane nulls) goes to S13, and the AI note is claimed for the card. Only a
+    version-3 card that is `shorts_ready` has a pin (owner decision D1, contract shorts-v1)."""
+    site = assemble_site(_teaser_row(), [])
     assert site["card_text_sha256"] == CARD_SHA
     assert site["card_ai"] == "generated"
     checks = {c.name: c.ok for c in evaluate(_measurements(**card_trace(site)))}
     assert checks["card_traced"] is True
+
+
+def test_s13_a_version_2_card_names_its_site_and_is_marked_but_never_pinned():
+    site = assemble_site(_teaser_row(version=2), [])
+    assert site["card_text_sha256"] is None
+    assert site["card_ai"] == "generated"
+    failed = [c for c in evaluate(_measurements(**card_trace(site))) if not c.ok]
+    assert [c.name for c in failed] == ["card_traced"]
+
+
+def test_s13_a_version_3_card_that_is_not_shorts_ready_is_not_pinned():
+    site = assemble_site(_teaser_row(shorts_ready=False), [])
+    assert site["card_text_sha256"] is None
+    assert site["card_ai"] == "generated"
 
 
 def test_the_export_carries_the_ai_system_of_a_marked_card_and_none_for_the_rest():

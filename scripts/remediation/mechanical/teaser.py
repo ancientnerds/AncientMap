@@ -58,6 +58,24 @@ write it had is reversed by its inverse). Its `REVERTED` record stands beside an
 had (which it copies as `superseded_acceptance`), and a later step plans its sites again.
 A card write is database-only: the database is the one copy of a card text (D25), no file follows.
 
+## Contract shorts-v1 and the Claude re-check
+
+A run of contract shorts-v1 (`teaser/shorts_v1.py`) accepts nameless Shorts cards with a version-3
+provenance (`pipeline.utils.card_provenance`, owner decisions D1-D6 of 2026-10-08). Three things differ
+here:
+
+* a site whose chain failed, or whose writer declined its thin description, **keeps its card** (D5):
+  its outcome is `kept` and the planner lists it (`KEPT`) with no clear and no `card-clear-*` row. A
+  card a re-check run confirmed (`confirmed`, owner decision D10) stands the same way (`CONFIRMED`).
+  A card a re-check run cleared is a plain clear, `card-clear-recheck-<reason>`;
+* a version-3 provenance names its models, and its `ai_system` must be the string derived from them
+  (`model4.ai_system_for`): `new_raw_data` refuses any other, since `pipeline/` holds the shape and
+  this module the strings;
+* a card is nameless **against the live name**: owner decisions D13 and D23 can rename a site or add
+  aliases after a card was written, so the planner runs the name rule again (`shorts_v1.name_problems`,
+  the live name, its aliases and its country) and lists a card that gives its site away as
+  `name-changed`.
+
     M=scripts/remediation/mechanical
     $M/teaser.py plan --run <run> --step N      (read-only; the next <=100 sites of the run;
                                                  <run> is the run's directory or its bare name)
@@ -95,6 +113,7 @@ from phase4 import (
 )
 from phase4 import write4 as W4  # noqa: E402 - the exit line
 from prod_write import send  # noqa: E402
+from teaser import shorts_v1 as SV  # noqa: E402 - the name rule, run again against the live name
 
 from mechanical import card_disclosure_list as CORRECTED  # noqa: E402 - the 185 sites' pinned ids
 from mechanical.citations import canonical, premise_of, reprint  # noqa: E402
@@ -351,9 +370,12 @@ def teaser_readback(lane: Lane) -> str:
 # ------------------------------------------------------------------------------ the read
 def site_sql(site_ids: Iterable[str]) -> str:
     return (
-        "SELECT u.id::text AS site_id, u.name, u.description, u.scope_status, "
+        "SELECT u.id::text AS site_id, u.name, u.country, u.description, u.scope_status, "
         "u.raw_data::text AS raw_data, (c.site_id IS NOT NULL) AS has_card_row, "
-        "c.card_description AS card FROM unified_sites u LEFT JOIN card_stats c ON "
+        "c.card_description AS card, "
+        "coalesce((SELECT json_agg(n.name ORDER BY n.name) FROM unified_site_names n "
+        "WHERE n.site_id = u.id), '[]'::json) AS alt_names "
+        "FROM unified_sites u LEFT JOIN card_stats c ON "
         f"c.site_id = u.id WHERE u.source_id = 'ancient_nerds' AND u.id::text IN "
         f"({sql_ids(site_ids)}) ORDER BY u.id"
     )
@@ -393,6 +415,10 @@ class Live:
     raw_data: str | None
     has_card_row: bool
     card: str | None
+    #: The site's country and every name the catalogue stores for it, read with the site: the
+    #: version-3 name rule is run against them (`classify`).
+    country: str = ""
+    alt_names: tuple[str, ...] = ()
 
 
 def _live(r: Mapping[str, Any]) -> Live:
@@ -404,6 +430,8 @@ def _live(r: Mapping[str, Any]) -> Live:
         raw_data=r["raw_data"],
         has_card_row=bool(r["has_card_row"]),
         card=r["card"],
+        country=r["country"] or "",
+        alt_names=tuple(r["alt_names"]),
     )
 
 
@@ -428,7 +456,25 @@ RAW_DATA_NOT_OBJECT = "raw-data-not-an-object"
 NOT_REPRINTED = "raw-data-not-reprinted"
 NOTHING_TO_CHANGE = "nothing-to-change"
 DISCLOSURE_CORRECTED = "disclosure-corrected-since"
+#: An outcome that writes nothing: the site keeps its card (owner decision D5, contract shorts-v1) or
+#: a re-check run confirmed the card (owner decision D10). The spellings are `teaser/run.py`'s `KEPT`
+#: and `CONFIRMED` (a test pins them).
+KEPT = "kept"
+CONFIRMED = "confirmed"
+#: A version-3 card gives its site away against the live name, aliases or country.
+NAME_CHANGED = "name-changed"
+#: A re-check clear (contract recheck-v1) judged another card than the one the site holds now: a
+#: newer card was written through the journal after the run seeded the live one. The spelling is
+#: `teaser/run.py`'s `CARD_CHANGED` (a test pins it).
+CARD_CHANGED = "card-changed"
 REFUSAL_MEANING = {
+    KEPT: "the site keeps its card: its chain failed or its writer declined its thin description "
+    "(owner decision D5) - nothing is written, nothing is cleared",
+    CONFIRMED: "a re-check run confirmed the live card: it stands (owner decision D10)",
+    CARD_CHANGED: "a re-check clear judged another card than the live one (a newer card was "
+    "written after the run seeded it): the live card is not cleared on the old verdict",
+    NAME_CHANGED: "the card gives its site away against the live name, aliases or country (a name "
+    "changed or an alias was added since it was written): write the card again",
     NOT_VERIFIED: "the accepted card carries no VERIFIED web verification (an outcome written "
     "before the verify stage existed): never written - ask the site again in a new run",
     STALE_DESCRIPTION: "the description changed after the card was checked: run lane WB again",
@@ -468,6 +514,13 @@ def new_raw_data(
                 f"{CP.CARD_PROVENANCE_KEY}: ai_system {provenance['ai_system']!r} is not one of "
                 f"{sorted(M.AI_SYSTEMS)!r}"
             )
+        if provenance["v"] == CP.VERSION_3:
+            derived = M.ai_system_for(m for m in provenance["models"].values() if m is not None)
+            if provenance["ai_system"] != derived:
+                raise ValueError(
+                    f"{CP.CARD_PROVENANCE_KEY}: ai_system {provenance['ai_system']!r} is not the "
+                    f"one derived from its models, {derived!r}"
+                )
         out[CP.CARD_PROVENANCE_KEY] = provenance
     return out
 
@@ -541,6 +594,8 @@ def classify(
     """One site's two cells - (provenance, card), either `None` when it needs no change - or the
     refusal that lists it."""
     site_id, name = outcome["site_id"], outcome["name"]
+    if outcome["status"] in (KEPT, CONFIRMED):
+        return _refused(site_id, name, outcome["status"], REFUSAL_MEANING[outcome["status"]])
     # only a VERIFIED card is written; an OUTCOMES.jsonl from before the verify stage has no key
     if outcome["status"] == ACCEPTED and outcome.get("verification") != CP.VERIFIED:
         return _refused(site_id, name, NOT_VERIFIED, "no VERIFIED web verification")
@@ -560,11 +615,30 @@ def classify(
         return _refused(
             site_id, name, STALE_DESCRIPTION, "the live description is not the one checked"
         )
+    if outcome["status"] == ACCEPTED and outcome["provenance"]["v"] == CP.VERSION_3:
+        if not live.country:
+            raise PlanError(f"{site_id}: the export carries no country for the name rule")
+        leaks = SV.name_problems(outcome["card"], live.name, live.alt_names, live.country)
+        if leaks:
+            return _refused(site_id, name, NAME_CHANGED, "; ".join(leaks))
     raw = None if live.raw_data is None else json.loads(live.raw_data)
     if raw is not None and not isinstance(raw, dict):
         return _refused(site_id, name, RAW_DATA_NOT_OBJECT, f"raw_data is a {type(raw).__name__}")
     if live.raw_data is not None and reprint(raw) != live.raw_data:
         return _refused(site_id, name, NOT_REPRINTED, "the journal would record another spelling")
+    # a re-check outcome names the card it judged and the run that wrote it
+    if "seeded_card_sha256" in outcome:
+        if live.card is None or CP.text_sha256(live.card) != outcome["seeded_card_sha256"]:
+            return _refused(site_id, name, CARD_CHANGED, "the live card is not the one re-checked")
+        if outcome["seeded_run"] is not None:
+            written = (raw or {}).get("_card_provenance")
+            if not isinstance(written, dict) or written.get("run") != outcome["seeded_run"]:
+                return _refused(
+                    site_id,
+                    name,
+                    CARD_CHANGED,
+                    f"the live card is not of run {outcome['seeded_run']}",
+                )
     for column, value in (("raw_data", canonical(live.raw_data)), ("card_description", live.card)):
         links = journal.get((site_id, column), ())
         if column == "raw_data":

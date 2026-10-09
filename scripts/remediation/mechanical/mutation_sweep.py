@@ -5329,7 +5329,16 @@ TEASER_CASES: list[Case] = [
             ),
             (
                 "a run is selected once",
-                '    if (run / "RUN.json").exists():',
+                '    if (run / "RUN.json").exists():\n'
+                '        raise RunError(f"{run} is selected already: a run\'s sites are fixed once")\n'
+                '    export = run / "EXPORT.jsonl"\n'
+                "    read(export)\n"
+                '    text = export.read_text(encoding="utf-8")\n'
+                "    try:\n"
+                '        parsed, exported_at = parse_tagged_export(text, ("site",))\n'
+                "    except PlanError as exc:\n"
+                "        raise RunError(str(exc)) from exc\n"
+                "    wanted = None",
                 "test_select_fixes_the_candidates_once",
             ),
             (
@@ -5567,14 +5576,14 @@ TEASER_CASES: list[Case] = [
             (
                 "verify: the provenance's web facts are the recorded ones",
                 '    offered = recorded_web_facts(check, state) if check["stage"] == VERIFY_CHECK '
-                "else ()",
+                "else ()\n    return CP.build(",
                 '    offered = web_facts(state.verified[0]) if check["stage"] == VERIFY_CHECK '
-                "else ()",
+                "else ()\n    return CP.build(",
                 "test_the_rewrite_and_its_check_keep_the_web_facts_they_were_asked_with",
             ),
             (
                 "verify: an import that would swap a judged card is refused",
-                "        progress(site_id, settled)",
+                "        progress(site_id, settled, spec)",
                 "        del site_id",
                 "test_a_stage_imported_again_with_another_card_is_refused",
             ),
@@ -5618,14 +5627,14 @@ TEASER_CASES: list[Case] = [
             ),
             (
                 "verify: a verifier never wrote or checked the card",
-                "        if stage in CHECKER_STAGES or stage in VERIFY_STAGES:",
-                "        if stage in CHECKER_STAGES:",
+                "        if stage in spec.independent:",
+                "        if stage in spec.checkers:",
                 "test_a_verifier_who_wrote_or_checked_the_card_is_refused",
             ),
             (
                 "verify: the second verifier is a new one",
-                "        if stage in CHECKER_STAGES or stage in VERIFY_STAGES:",
-                "        if stage in CHECKER_STAGES:",
+                "        if stage in spec.independent:",
+                "        if stage in spec.checkers:",
                 "test_the_second_verifier_is_a_new_one",
             ),
             (
@@ -5637,13 +5646,14 @@ TEASER_CASES: list[Case] = [
             ),
             (
                 "verify: five cards per verifier batch",
-                "        size = JUDGE_BATCH_SIZE if stage in VERIFY_STAGES else BATCH_SIZE",
-                "        size = BATCH_SIZE",
+                "        if stage in (*spec.verifiers, *spec.adversarial):\n"
+                "            size = JUDGE_BATCH_SIZE",
+                "        if False:\n            size = JUDGE_BATCH_SIZE",
                 "test_every_accepted_card_is_asked_five_to_a_batch",
             ),
             (
                 "verify: check-answer takes a verifier's shape",
-                "    if stage == JUDGE_STAGE or stage in VERIFY_STAGES:",
+                "    if stage == JUDGE_STAGE or stage in spec.verifiers:",
                 "    if stage == JUDGE_STAGE:",
                 "test_check_answer_takes_a_verifier_s_shape_only",
             ),
@@ -5771,12 +5781,6 @@ TEASER_CASES: list[Case] = [
                 "            and bool(support)\n",
                 "            and True\n",
                 "test_a_claim_without_a_sentence_id_is_refused",
-            ),
-            (
-                "a stale card is not narrated",
-                '    return None if stale(provenance, description) else provenance["text_sha256"]',
-                '    return provenance["text_sha256"]',
-                "test_a_teaser_card_is_shorts_eligible_only_while_its_description_is_unchanged",
             ),
             (
                 "the mark is for the hashed card only",
@@ -9787,6 +9791,1284 @@ UNDRAWABLE_CASES: list[Case] = [
     ),
 ]
 CASES += UNDRAWABLE_CASES
+
+# ------------------------------------------------ contract shorts-v1 and the Claude re-check (2026-10-09)
+SHORTS_V1 = REPO / "scripts/remediation/teaser/shorts_v1.py"
+ANSWERS_SHORTS = REPO / "scripts/remediation/teaser/answers_shorts.py"
+CALIBRATE = REPO / "scripts/remediation/teaser/calibrate.py"
+SHORTS_RULE_TESTS = "tests/remediation/test_teaser_shorts.py"
+SHORTS_RUN_TESTS = "tests/remediation/test_teaser_shorts_run.py"
+SHORTS_WRITE_TESTS = "tests/remediation/test_mechanical_teaser_shorts.py"
+PROVENANCE_V3_TESTS = "tests/remediation/test_card_provenance_v3.py"
+CALIBRATE_TESTS = "tests/remediation/test_teaser_calibrate.py"
+
+TEASER_SHORTS_CASES: list[Case] = [
+    # ------------------------------------------------ the mechanical rules (shorts_v1.py)
+    *(
+        guard(f"teaser-shorts: {label}", SHORTS_V1, needle, test, SHORTS_RULE_TESTS)
+        for label, needle, test in (
+            (
+                "a thin decline needs a thin description",
+                "    if not site.thin:",
+                "test_a_thin_decline_is_refused_for_a_description_with_enough_in_it",
+            ),
+            ("C7 the stored name is refused", "    if hit:", "test_the_stored_name_is_refused"),
+            (
+                "C7 a stored name among the aliases is reported once",
+                "        if not key or key in {fold(form) for form in forms}:",
+                "test_a_stored_name_among_the_aliases_is_reported_once",
+            ),
+            (
+                "C7 a single common word is no alias",
+                "        if len(key.split()) == 1 and _generic(key):",
+                "test_a_single_common_word_alias_is_no_name",
+            ),
+            (
+                "C7 an alias is refused whole",
+                "        if names_in(card, [alias]):",
+                "test_every_alias_is_refused_whole",
+            ),
+            (
+                "C7 a distinctive word of the name is refused",
+                "    if leaked:",
+                "test_a_distinctive_word_of_the_name_is_refused",
+            ),
+            (
+                "C8 the country and its people are refused",
+                "    if named:",
+                "test_the_country_and_its_people_are_refused",
+            ),
+            (
+                "C13 a proper noun is a capitalised word that opens no sentence",
+                "            if bare[:1].isupper():",
+                "test_a_proper_noun_of_the_description_may_reach_1000_px",
+            ),
+            (
+                "C5 exactly two sentences",
+                "    if len(pieces) != SENTENCES:",
+                "test_exactly_two_sentences",
+            ),
+            (
+                "C5 each sentence ends with a full stop",
+                '        if not piece.endswith("."):',
+                "test_each_sentence_ends_with_a_full_stop",
+            ),
+            (
+                "C5 sentence one is 40-85 characters",
+                "    if pieces and not S1_MIN <= len(pieces[0]) <= S1_MAX:",
+                "test_sentence_one_is_40_to_85_characters",
+            ),
+            (
+                "C3 at most two numerals",
+                "    if count > MAX_NUMERALS:",
+                "test_at_most_two_numerals",
+            ),
+            (
+                "C3 at most eight digits",
+                "    if digits > MAX_DIGITS:",
+                "test_at_most_eight_digits",
+            ),
+            (
+                "C3 at most four digits in sentence one",
+                "    if s1_digits > MAX_S1_DIGITS:",
+                "test_at_most_four_digits_in_sentence_one",
+            ),
+            (
+                "C3 a regnal number is spelled out",
+                "    if _ROMAN.search(card):",
+                "test_a_roman_numeral_is_spelled_out",
+            ),
+            (
+                "C9 no location word opens sentence one",
+                "    if head in LOCATION_PREPOSITIONS and not following[:1].isdigit():",
+                "test_a_location_word_opens_no_sentence_one",
+            ),
+            (
+                "C9 these words open no sentence one",
+                "    if head in BAD_OPENERS:",
+                "test_these_words_open_no_sentence_one",
+            ),
+            (
+                "C9 no bare type label opens sentence one",
+                "        if typed:",
+                "test_a_bare_type_label_is_no_opener",
+            ),
+            (
+                "C8 no administrative word in sentence one",
+                "    if hits:",
+                "test_an_administrative_word_in_sentence_one_is_refused",
+            ),
+            (
+                "C10 no question, exclamation or ellipsis",
+                '    if any(mark in card for mark in ("?", "!", "...", "…")):',
+                "test_no_question_mark_at_all",
+            ),
+            (
+                "C10 no you",
+                r'    if re.search(r"\byou(?:r|rs|rself)?\b", lowered):',
+                "test_no_you",
+            ),
+            ("C10 no call to action", "    if called:", "test_no_call_to_action"),
+            (
+                "C11 a mystery word needs its stem in the description",
+                "    if unsupported:",
+                "test_a_mystery_word_needs_the_same_stem_in_the_description",
+            ),
+            (
+                "C13 a word wider than its limit is refused",
+                "        if seen[bare] > limit:",
+                "test_a_common_word_wider_than_696_px_is_refused",
+            ),
+            (
+                "C14 a site that cannot be a short names no anchor",
+                "    if not site.shorts_eligible:\n        return [",
+                "test_a_site_that_cannot_be_a_short_names_no_anchor",
+            ),
+            (
+                "C14 one to three anchors",
+                "    if not 1 <= len(anchors) <= MAX_ANCHORS:",
+                "test_an_eligible_card_names_one_to_three_anchors",
+            ),
+            (
+                "C14 an anchor is in the card once",
+                "        if card.count(anchor) != 1:",
+                "test_an_anchor_is_in_the_card_once_verbatim",
+            ),
+            (
+                "C14 the anchors are in the order of the card",
+                "    if starts != sorted(starts):",
+                "test_the_anchors_are_in_the_order_of_the_card",
+            ),
+            (
+                "C14 anchor one ends in the tail of sentence one",
+                "    if not len(s1) - ANCHOR_S1_TAIL <= end <= len(s1):",
+                "test_anchor_one_ends_in_the_last_25_characters_of_sentence_one",
+            ),
+            (
+                "C14 a later anchor starts at character 95",
+                "        if start < ANCHOR_LATER_START:",
+                "test_a_later_anchor_starts_at_character_95_or_later",
+            ),
+            (
+                "C14 anchors start 28 characters apart",
+                "        if after - before < ANCHOR_GAP:",
+                "test_anchors_start_28_characters_apart",
+            ),
+            (
+                "C15 a reserve is a list",
+                "    if not isinstance(reserve, list | tuple) or not reserve:",
+                "test_a_reserve_is_sentence_ids_the_card_does_not_use_or_reveal",
+            ),
+            (
+                "C15 a reserve names an entry once",
+                "    if len(set(reserve)) != len(reserve):",
+                "test_a_reserve_is_sentence_ids_the_card_does_not_use_or_reveal",
+            ),
+            (
+                "C15 a reserve entry is a sentence of the description",
+                "        if entry not in site.described_ids:",
+                "test_a_reserve_is_sentence_ids_the_card_does_not_use_or_reveal",
+            ),
+            (
+                "C6 the narration is at most 14 seconds",
+                "    if narration_seconds(card) > NARRATION_MAX_S:",
+                "test_the_narration_estimate_caps_at_14_seconds",
+            ),
+            (
+                "C16 no five-word opening repeats",
+                "    if any(opening(other, 5) == five for other in others):",
+                "test_a_repeated_five_word_opening_is_refused",
+            ),
+            (
+                "C16 a three-word opening in one percent of the run",
+                "    if 1 + sum(1 for other in others if opening(other, 3) == three) > allowed:",
+                "test_a_three_word_opening_may_occur_in_one_percent_of_the_run",
+            ),
+            (
+                "canary: a defect that does not apply is refused",
+                "        if match is None:",
+                "test_a_defect_that_does_not_apply_is_refused",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser-shorts: {label}", SHORTS_V1, old, new, test, SHORTS_RULE_TESTS)
+        for label, old, new, test in (
+            (
+                "C4 the v1 rules without the name rule",
+                "        if not p.startswith(inverted)",
+                "        if True",
+                "test_every_sample_passes_the_contract",
+            ),
+            (
+                "C9 a number after a location word makes it a number opener",
+                "    if head in LOCATION_PREPOSITIONS and not following[:1].isdigit():",
+                "    if head in LOCATION_PREPOSITIONS:",
+                "test_a_location_word_before_a_number_is_allowed",
+            ),
+            (
+                "C9 a bare type label needs an article",
+                "    if head in ARTICLES:",
+                "    if True:",
+                "test_a_site_noun_is_only_a_bare_type_label_after_an_article",
+            ),
+            (
+                "C11 a stem the description has is allowed",
+                "        if re.search(pattern, lowered) and not re.search(pattern, source)",
+                "        if re.search(pattern, lowered)",
+                "test_first_and_rare_are_allowed_where_the_description_says_them",
+            ),
+            (
+                "C13 a proper noun may be wider",
+                "        limit = PROPER_WORD_PX if bare in proper else COMMON_WORD_PX",
+                "        limit = COMMON_WORD_PX",
+                "test_a_proper_noun_of_the_description_may_reach_1000_px",
+            ),
+            (
+                "C15 a reserve is not a sentence the card uses",
+                "        elif entry in basis:",
+                "        elif False:",
+                "test_a_reserve_is_sentence_ids_the_card_does_not_use_or_reveal",
+            ),
+            (
+                "C14 a card of a site that can be a short needs its sixth image",
+                "    return pool_images >= MIN_POOL_IMAGES and len(description) >= MIN_ELIGIBLE_CHARS",
+                "    return len(description) >= MIN_ELIGIBLE_CHARS",
+                "test_eligible_needs_six_images_and_300_characters",
+            ),
+            (
+                "C14 a card of a site that can be a short needs 300 characters",
+                "    return pool_images >= MIN_POOL_IMAGES and len(description) >= MIN_ELIGIBLE_CHARS",
+                "    return pool_images >= MIN_POOL_IMAGES",
+                "test_eligible_needs_six_images_and_300_characters",
+            ),
+            (
+                "the narration counts each digit",
+                "    return base + per_char * len(card) + per_digit * sum(ch.isdigit() for ch in card)",
+                "    return base + per_char * len(card)",
+                "test_the_narration_estimate_caps_at_14_seconds",
+            ),
+            (
+                "the canary removes the first hedge it finds",
+                '                return pattern.sub("", card, count=1)',
+                "                return card",
+                "test_the_hedge_defect_removes_the_hedge",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the answer shapes (answers_shorts.py)
+    *(
+        guard(f"teaser-shorts: {label}", ANSWERS_SHORTS, needle, test, SHORTS_RULE_TESTS)
+        for label, needle, test in (
+            (
+                "a variant rests on a sentence",
+                "    if not basis:",
+                "test_each_variant_is_exactly_its_shape",
+            ),
+            (
+                "a variant's hook type is declared",
+                '    if data["hook_type"] not in SV.HOOK_TYPES:',
+                "test_each_variant_is_exactly_its_shape",
+            ),
+            (
+                "the writer answers exactly three variants",
+                "    if not isinstance(raw, list) or len(raw) != SV.VARIANTS:",
+                "test_exactly_three_variants",
+            ),
+            (
+                "the variants are different cards",
+                "    if len({v.card for v in variants}) != len(variants):",
+                "test_the_variants_differ_in_card_and_in_their_first_three_words",
+            ),
+            (
+                "the variants open differently",
+                "    if len(set(openings)) != len(openings):",
+                "test_the_variants_differ_in_card_and_in_their_first_three_words",
+            ),
+            (
+                "a thin decline is exactly its shape",
+                '        if data["card"] is not None or data["thin"] is not True:',
+                "test_a_thin_decline_is_exactly_its_shape",
+            ),
+            (
+                "a rating is exactly its shape",
+                "        if not isinstance(entry, dict) or set(entry) != RATING_KEYS:",
+                "test_each_rating_is_exactly_its_shape",
+            ),
+            (
+                "a rating names a variant shown",
+                "        if type(number) is not int or number not in cards:",
+                "test_one_rating_per_variant_shown",
+            ),
+            (
+                "a hook is a whole number one to five",
+                "        if type(hook) is not int or not MIN_HOOK <= hook <= MAX_HOOK:",
+                "test_the_hook_is_a_whole_number_one_to_five",
+            ),
+            (
+                "the first five words are copied exactly",
+                "        if first5 != first_five(cards[number]):",
+                "test_the_first_five_words_are_copied_exactly",
+            ),
+            (
+                "one rating per variant",
+                "    if sorted(number for number, _, _ in ratings) != sorted(cards):",
+                "test_one_rating_per_variant_shown",
+            ),
+            (
+                "best is a variant shown",
+                "    if type(best) is not int or best not in cards:",
+                "test_best_has_the_highest_rating",
+            ),
+            (
+                "best has the highest hook",
+                "    if next(hook for number, _, hook in ratings if number == best) != top:",
+                "test_best_has_the_highest_rating",
+            ),
+            (
+                "a PASS has no unsupported claim",
+                "        if unsupported:",
+                "test_a_pass_with_an_unsupported_claim_or_a_reason_is_refused",
+            ),
+            (
+                "a PASS has no name leak",
+                '        if data["name_leak"]:',
+                "test_a_pass_with_a_name_leak_is_refused",
+            ),
+            (
+                "a PASS has every judgement field good",
+                "        if bad:",
+                "test_a_pass_with_a_field_false_is_refused",
+            ),
+            (
+                "a PASS has no reason",
+                "        if reasons:",
+                "test_a_pass_with_an_unsupported_claim_or_a_reason_is_refused",
+            ),
+            (
+                "the rewrite lists a repeat per contradicted claim",
+                "    if not isinstance(repeats, list) or len(repeats) != contradicted:",
+                "test_the_repeats_follow_v1",
+            ),
+        )
+    ),
+    *(
+        guard(f"teaser-shorts: {label}", ANSWERS_SHORTS, needle, test, SHORTS_RULE_TESTS)
+        for label, needle, test in (
+            (
+                "a variant is exactly its shape",
+                "    if not isinstance(data, dict) or set(data) != VARIANT_KEYS:",
+                "test_a_variant_with_another_key_is_refused",
+            ),
+            (
+                "a variant's anchors are phrases",
+                "    if not isinstance(anchors, list) or not all(isinstance(a, str) and a.strip() for a in anchors):",
+                "test_each_variant_is_exactly_its_shape",
+            ),
+            (
+                "a thin decline is told from three variants",
+                "    if set(data) == THIN_KEYS:",
+                "test_a_thin_decline_for_a_thin_description",
+            ),
+            (
+                "a repeats entry is null or a sentence of the description",
+                "        if entry is not None and entry not in site.described_ids:",
+                "test_the_repeats_follow_v1",
+            ),
+            (
+                "the ratings are a list",
+                "    if not isinstance(raw, list):",
+                "test_each_rating_is_exactly_its_shape",
+            ),
+            (
+                "the checker lists claims",
+                "    if not isinstance(raw_claims, list) or not raw_claims:",
+                "test_every_field_is_a_boolean_and_the_claims_a_list",
+            ),
+            (
+                "a claim is exactly its shape",
+                '        if not isinstance(raw, dict) or set(raw) != {"claim", "support"}:',
+                "test_a_claim_is_exactly_its_shape_and_the_verdict_one_of_two",
+            ),
+            (
+                "every judgement field is a boolean",
+                "        if not isinstance(data[key], bool):",
+                "test_every_field_is_a_boolean_and_the_claims_a_list",
+            ),
+            (
+                "the verdict is PASS or FAIL",
+                '    if data["verdict"] not in A.VERDICTS:',
+                "test_a_claim_is_exactly_its_shape_and_the_verdict_one_of_two",
+            ),
+            (
+                "the reasons are a list",
+                "    if not isinstance(raw_reasons, list):",
+                "test_a_claim_is_exactly_its_shape_and_the_verdict_one_of_two",
+            ),
+        )
+    ),
+    Case(
+        "teaser-shorts: a variant's reserve is null or a list",
+        ANSWERS_SHORTS,
+        "    if reserve is not None and (",
+        "    if False and (",
+        "test_each_variant_is_exactly_its_shape",
+        SHORTS_RULE_TESTS,
+    ),
+    Case(
+        "teaser-shorts: a FAIL needs a reason",
+        ANSWERS_SHORTS,
+        "    elif not reasons:",
+        "    elif False:",
+        "test_a_fail_needs_a_reason",
+        SHORTS_RULE_TESTS,
+    ),
+    # ------------------------------------------------ the provenance, version 3
+    *(
+        Case(
+            f"teaser-shorts: provenance: {label}",
+            CARD_PROVENANCE,
+            old,
+            new,
+            test,
+            PROVENANCE_V3_TESTS,
+        )
+        for label, old, new, test in (
+            (
+                "a version is 2 or 3",
+                '    _need(type(version) is int and version in VERSIONS, f"v is not one of {list(VERSIONS)}")',
+                "    pass",
+                "test_any_other_version_is_refused",
+            ),
+            (
+                "version 3 carries its keys",
+                "    keys = _KEYS if version == VERSION else _KEYS_V3",
+                "    keys = _KEYS",
+                "test_a_version_3_provenance_without_its_keys_is_refused",
+            ),
+            (
+                "version 3 is held to its shape",
+                '    if version == VERSION_3:\n        _shorts(value, check["stage"])',
+                '    if False:\n        _shorts(value, check["stage"])',
+                "test_the_contract_is_shorts_v1",
+            ),
+            (
+                "the contract is shorts-v1",
+                '        value["contract"] == CONTRACT_SHORTS,',
+                "        True,",
+                "test_the_contract_is_shorts_v1",
+            ),
+            (
+                "the models name the four stages",
+                "        isinstance(models, dict) and set(models) == set(MODEL_STAGES),",
+                "        True,",
+                "test_the_models_of_the_four_stages_are_named",
+            ),
+            (
+                "only the unrated rewrite has no rate model",
+                '        (models["rate"] is None) == unrated,',
+                "        True,",
+                "test_the_unrated_card_names_no_rating_and_no_variant",
+            ),
+            (
+                "the hook is the hook shape",
+                '    _need(isinstance(hook, dict) and set(hook) == _HOOK_KEYS, "hook is not the hook shape")',
+                "    pass",
+                "test_the_hook_is_a_declared_type_a_rating_and_a_variant",
+            ),
+            (
+                "the hook type is declared",
+                '    _need(hook["type"] in HOOK_TYPES, f"hook.type {hook[\'type\']!r} is not one of {HOOK_TYPES}")',
+                "    pass",
+                "test_the_hook_is_a_declared_type_a_rating_and_a_variant",
+            ),
+            (
+                "the unrated card has no rating",
+                "        if unrated:\n            _need(hook[key] is None",
+                "        if False:\n            _need(hook[key] is None",
+                "test_the_unrated_card_names_no_rating_and_no_variant",
+            ),
+            (
+                "the rated card has a rating and a variant",
+                "                type(hook[key]) is int and 1 <= hook[key] <= top,",
+                "                True,",
+                "test_the_hook_is_a_declared_type_a_rating_and_a_variant",
+            ),
+            (
+                "the anchors are at most three phrases",
+                "        and len(anchors) <= MAX_ANCHORS",
+                "        and True",
+                "test_the_anchors_are_at_most_three_phrases",
+            ),
+            (
+                "the reserve is null or sentence ids",
+                "        reserve is None\n        or (",
+                "        True\n        or (",
+                "test_the_reserve_is_null_or_sentence_ids_and_reveal",
+            ),
+            (
+                "shorts_ready is a boolean",
+                '    _need(type(ready) is bool, "shorts_ready is not true or false")',
+                "    pass",
+                "test_shorts_ready_needs_a_reserve_and_an_anchor",
+            ),
+            (
+                "shorts_ready needs a reserve and an anchor",
+                "        not ready or (reserve is not None and bool(anchors)),",
+                "        True,",
+                "test_shorts_ready_needs_a_reserve_and_an_anchor",
+            ),
+            (
+                "a stale card is not pinned",
+                "    if stale(provenance, description):\n        return None\n    if provenance",
+                "    if False:\n        return None\n    if provenance",
+                "test_a_shorts_ready_card_is_pinned_while_its_description_is_unchanged",
+            ),
+            (
+                "a version-2 card is not pinned",
+                '    if provenance["v"] != VERSION_3 or not provenance["shorts_ready"]:',
+                '    if not provenance["shorts_ready"]:',
+                "test_a_version_2_provenance_is_never_a_shorts_pin",
+            ),
+            (
+                "a card that is not shorts-ready is not pinned",
+                '    if provenance["v"] != VERSION_3 or not provenance["shorts_ready"]:',
+                '    if provenance["v"] != VERSION_3:',
+                "test_a_card_that_is_not_shorts_ready_is_not_pinned",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the write plan (mechanical/teaser.py)
+    *(
+        guard(f"teaser-shorts: {label}", TEASER, needle, test, SHORTS_WRITE_TESTS)
+        for label, needle, test in (
+            (
+                "a kept or confirmed outcome writes nothing",
+                '    if outcome["status"] in (KEPT, CONFIRMED):',
+                "test_a_site_that_keeps_its_card_is_listed_not_cleared",
+            ),
+            (
+                "a version-3 card is held to its models",
+                '        if provenance["v"] == CP.VERSION_3:',
+                "test_an_ai_system_that_is_not_the_derived_one_is_refused",
+            ),
+            (
+                "a version-3 ai_system is the derived one",
+                '            if provenance["ai_system"] != derived:',
+                "test_an_ai_system_that_is_not_the_derived_one_is_refused",
+            ),
+            (
+                "the name rule is run against the live name",
+                '    if outcome["status"] == ACCEPTED and outcome["provenance"]["v"] == CP.VERSION_3:',
+                "test_a_renamed_site_whose_new_name_is_in_the_card_is_refused",
+            ),
+            (
+                "the live country is read for the name rule",
+                "        if not live.country:",
+                "test_a_version_3_outcome_needs_the_country_in_the_export",
+            ),
+            (
+                "a card that gives its site away is listed",
+                "        if leaks:",
+                "test_a_renamed_site_whose_new_name_is_in_the_card_is_refused",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the run by contract (run.py)
+    *(
+        guard(f"teaser-shorts: {label}", TEASER_RUN, needle, test, SHORTS_RUN_TESTS)
+        for label, needle, test in (
+            (
+                "a run names a known contract",
+                "    if value not in (SHORTS, RECHECK):",
+                "test_an_unknown_contract_is_refused",
+            ),
+            (
+                "a v1 run holds an object",
+                "    if isinstance(value, dict):",
+                "test_a_v1_run_holds_its_limits_as_an_object_and_is_contract_v1",
+            ),
+            (
+                "a role-bound run records its roles",
+                '    if "roles" not in record:',
+                "test_a_role_bound_run_records_its_roles",
+            ),
+            (
+                "an answer is given in the stage's role",
+                "    if named != role:",
+                "test_an_answer_in_another_role_is_refused",
+            ),
+            (
+                "an answer is stamped with the role's model",
+                "    if stamp != expected:",
+                "test_a_stamp_that_is_not_the_roles_model_is_refused",
+            ),
+            (
+                "only a version-3 card of the contract is current",
+                "    if contract == SHORTS:\n        return teaser[",
+                "test_only_a_version_3_card_of_the_contract_is_current",
+            ),
+            (
+                "a shorts site row carries its images",
+                "    if contract == SHORTS:\n        found[",
+                "test_the_candidates_carry_their_images_and_the_bases_their_names",
+            ),
+            (
+                "a run of another contract is no exclusion",
+                "        if other != contract:",
+                "test_a_run_of_another_contract_is_no_exclusion_and_a_v1_site_is_asked_again",
+            ),
+            (
+                "a round that would be one batch is split for the canary",
+                "    if stage in spec.canary and len(groups) == 1 and len(groups[0]) > 1:",
+                "test_a_round_that_would_be_one_batch_is_split_so_each_canary_has_a_donor",
+            ),
+            (
+                "an escalation needs the registry to name the new model",
+                '    if RO.role(role).model != move["to"]:',
+                "test_an_escalation_needs_the_registry_to_name_the_new_model_first",
+            ),
+            (
+                "a re-check run is seeded not selected",
+                "    if contract not in (V1, SHORTS):",
+                "test_a_recheck_run_is_seeded_never_selected",
+            ),
+            (
+                "the chain follows the contract",
+                "    if spec.name == SHORTS:\n        return shorts_progress(site_id, records)",
+                "test_every_stage_in_order_to_a_version_3_provenance",
+            ),
+            (
+                "the re-check chain follows the contract",
+                "    if spec.name == RECHECK:\n        return recheck_progress(site_id, records)",
+                "test_a_card_that_passes_check_verify_and_adversary_is_confirmed",
+            ),
+            (
+                "a rating judges the variant it was shown",
+                '    if variant["card"] != rated["card"]:',
+                "test_a_stage_imported_again_after_it_was_rated_is_refused",
+            ),
+            (
+                "a rating below the floor names every opening",
+                "        if below:",
+                "test_a_best_opening_below_the_floor_sends_the_site_to_a_rewrite",
+            ),
+            (
+                "a rating's diversity finding is the chosen card's",
+                '        if shown["number"] == rated["chosen"]:',
+                "test_a_rating_that_fails_diversity_is_a_failed_round",
+            ),
+            (
+                "a thin decline keeps the card",
+                '        if written["thin"]:',
+                "test_a_thin_decline_keeps_the_card_and_asks_no_more",
+            ),
+            (
+                "no clean variant is a failed round",
+                "        if not clean:",
+                "test_every_variant_failing_goes_to_a_rewrite_with_its_problems",
+            ),
+            (
+                "a rating is asked",
+                "        if rated is None:",
+                "test_a_variant_with_a_mechanical_problem_is_not_rated",
+            ),
+            (
+                "the hook floor",
+                '        if rated["problems"] or rated["best_rating"] < AS.HOOK_FLOOR:',
+                "test_a_best_opening_below_the_floor_sends_the_site_to_a_rewrite",
+            ),
+            (
+                "a checker failure is a finding",
+                '        if checked["verdict"] != A.PASSED:\n            findings.append(P.Finding(view',
+                "test_a_site_whose_chain_fails_keeps_its_card_it_is_never_cleared",
+            ),
+            (
+                "a re-check run has its seeded card",
+                '    if written is None:\n        raise RunError(f"{site_id}: no seeded card',
+                "test_a_recheck_run_without_its_seeded_card_is_refused",
+            ),
+            (
+                "a re-checked card with a mechanical problem is cleared",
+                '    if written["problems"]:\n        found = (P.Finding(written["card"], P.findings_of(written)),)',
+                "test_a_re_checked_card_with_a_mechanical_problem_is_cleared_without_a_question",
+            ),
+            (
+                "a re-check failed by the checker is cleared",
+                '    if checked["verdict"] != A.PASSED:\n        found = (P.Finding(written["card"], P.findings_of(checked)),)',
+                "test_any_failure_clears_the_card_with_its_reason",
+            ),
+            (
+                "a re-check failed by the verifier is cleared",
+                '    if verified["verdict"] != VERIFIED:',
+                "test_any_failure_clears_the_card_with_its_reason",
+            ),
+            (
+                "a re-check failed by the adversary is cleared",
+                '    if reviewed["verdict"] != A.PASSED:',
+                "test_any_failure_clears_the_card_with_its_reason",
+            ),
+            (
+                "a seeded stage is never asked",
+                "    if stage in spec.seeded:",
+                "test_the_write_stage_is_seeded_never_asked",
+            ),
+            (
+                "a stage belongs to the contract",
+                "    if stage not in spec.stages:",
+                "test_the_write_stage_is_seeded_never_asked",
+            ),
+            (
+                "a check batch carries a canary",
+                "    if stage not in spec.canary:",
+                "test_every_check_batch_carries_one_blind_seeded_defect_beside_its_questions",
+            ),
+            (
+                "the canary is not imported as a site",
+                "        if (batch_id, site_id) in seeded:",
+                "test_a_checker_that_catches_its_canary_is_imported_without_it",
+            ),
+            (
+                "an answer is bound to its role",
+                '        if spec.roles:\n            why = role_problem(roles, spec.roles[stage], answer.answered_by, answer.model)\n            if why is not None:\n                raise RunError(f"{batch_id}/{site_id}: {why}")',
+                "test_an_answer_not_given_in_a_role_is_refused",
+            ),
+            (
+                "a canary answer is bound to its role",
+                "        if spec.roles:\n            why = role_problem(roles, spec.roles[stage], answer.answered_by, answer.model)\n            if why is not None:\n                raise RunError(f\"{batch_id}/{canary['label']}: {why}\")",
+                "test_the_canary_answer_must_be_in_the_role_too",
+            ),
+            (
+                "a rater, checker or verifier is new to the site",
+                "        if stage in spec.independent:",
+                "test_a_rater_that_rated_the_site_before_is_refused",
+            ),
+            (
+                "the canaries are read",
+                "    if canaries:\n        read_canaries(",
+                "test_a_checker_that_passes_its_canary_voids_the_batch_and_nothing_is_written",
+            ),
+            (
+                "a rating is checked for diversity",
+                "    if stage in spec.raters:\n        rate_diversity(",
+                "test_a_repeated_opening_between_two_sites_fails_the_second_rating",
+            ),
+            (
+                "a canary the checker passed voids the batch",
+                '        if parsed["verdict"] == A.PASSED:\n            passed.append(batch_id)',
+                "test_a_checker_that_passes_its_canary_voids_the_batch_and_nothing_is_written",
+            ),
+            (
+                "a void batch refuses the import",
+                "    if passed:\n        raise CanaryPassed(passed)",
+                "test_a_checker_that_passes_its_canary_voids_the_batch_and_nothing_is_written",
+            ),
+            (
+                "a rating answer is checked",
+                '    if parsed["kind"] == "rate":',
+                "test_check_answer_takes_a_rating",
+            ),
+            (
+                "only a batch with a canary is voided",
+                '    if canary is None:\n        raise RunError(f"batch {batch_id} of',
+                "test_a_batch_whose_canary_was_caught_is_not_voided",
+            ),
+            (
+                "a role needs a failed calibration to move",
+                '    if verdict.get("role") != role or verdict.get("passed") is not False or move is None:',
+                "test_an_escalation_needs_a_failed_verdict_of_that_role_one_tier_up",
+            ),
+            (
+                "a role of the run moves",
+                "    if role not in recorded:",
+                "test_a_role_the_run_does_not_use_is_not_moved",
+            ),
+            (
+                "a role moves one tier",
+                '    if move["from"] != recorded[role]["model"] or move["to"] != RO.next_tier(move["from"]):',
+                "test_an_escalation_needs_a_failed_verdict_of_that_role_one_tier_up",
+            ),
+            (
+                "a role that answered does not move",
+                "    if begun or (role == JUDGE_ROLE and _round(run, JUDGE_STAGE) is not None):",
+                "test_a_failed_calibration_moves_a_role_up_one_tier_before_its_first_round",
+            ),
+            (
+                "a re-check run is seeded once",
+                '    if (run / "RUN.json").exists():\n'
+                '        raise RunError(f"{run} is selected already: a run\'s sites are fixed once")\n'
+                '    export = run / "EXPORT.jsonl"\n'
+                "    read(export)\n"
+                '    text = export.read_text(encoding="utf-8")\n'
+                "    try:\n"
+                '        parsed, exported_at = parse_tagged_export(text, ("site",))\n'
+                "    except PlanError as exc:\n"
+                "        raise RunError(str(exc)) from exc\n"
+                "    sites: list[dict[str, Any]] = []",
+                "test_a_recheck_run_is_seeded_once",
+            ),
+            (
+                "a re-check run seeds only the cards of its run",
+                '    if teaser is None or teaser["run"] != provenance_run:',
+                "test_the_seed_lists_the_sites_it_does_not_re_check",
+            ),
+            (
+                "a re-check run seeds only a card its provenance hashes",
+                '    if not CP.describes(teaser, row["card"]):',
+                "test_the_seed_lists_the_sites_it_does_not_re_check",
+            ),
+            (
+                "a re-check run seeds only a card",
+                '    if not row["has_card_row"] or row["card"] is None:',
+                "test_the_seed_lists_the_sites_it_does_not_re_check",
+            ),
+            (
+                "a re-check run needs a card to re-check",
+                '    if not sites:\n        raise RunError(f"no live card',
+                "test_a_run_with_no_card_of_the_run_is_refused",
+            ),
+            (
+                "a role-bound contract has agent jobs",
+                "    if not spec.roles:",
+                "test_a_v1_run_has_no_roles_and_no_agent_jobs",
+            ),
+            (
+                "a role-bound brief names its role",
+                "    if spec.roles:\n        return role_brief",
+                "test_a_writer_brief_names_the_role_the_fixed_model_and_the_flags",
+            ),
+            (
+                "the pilot's judge is the contract's",
+                "    if contract_of(run) == SHORTS:\n        return PS.judge_prompt",
+                "test_the_pilot_judge_is_the_pilot_judge_role",
+            ),
+            (
+                "a re-check run has no pilot judge",
+                '    if spec_of(run).name == RECHECK:\n        raise RunError("a re-check run has no pilot judge',
+                "test_a_pilot_judge_is_refused_for_a_recheck_run",
+            ),
+            (
+                "a re-check run has no description defects",
+                "    if spec_of(run).name == RECHECK:\n        return []",
+                "test_any_failure_clears_the_card_with_its_reason",
+            ),
+            (
+                "the judge is bound to its role",
+                "            if spec.roles:\n                why = role_problem(roles, JUDGE_ROLE",
+                "test_the_pilots_judge_answers_in_its_role",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser-shorts: {label}", TEASER_RUN, old, new, test, SHORTS_RUN_TESTS)
+        for label, old, new, test in (
+            (
+                "the bases of a shorts run carry their images",
+                "    shorts = contract_of(run) == SHORTS",
+                "    shorts = False",
+                "test_the_candidates_carry_their_images_and_the_bases_their_names",
+            ),
+            (
+                "a rating counts the cards of other sites",
+                "        if site_id not in asking",
+                "        if True",
+                "test_the_cards_of_the_earlier_rounds_of_other_sites_count",
+            ),
+            (
+                "a failed shorts site keeps its card",
+                '"status": KEPT if spec.name == SHORTS else CLEARED,\n                    "reason": state.reason,',
+                '"status": CLEARED,\n                    "reason": state.reason,',
+                "test_a_site_whose_chain_fails_keeps_its_card_it_is_never_cleared",
+            ),
+            (
+                "a no-description site keeps its card",
+                '"status": KEPT if spec.name == SHORTS else CLEARED,\n                    "reason": NO_DESCRIPTION,',
+                '"status": CLEARED,\n                    "reason": NO_DESCRIPTION,',
+                "test_a_shorts_site_without_a_description_keeps_its_card",
+            ),
+            (
+                "a re-checked card is confirmed",
+                '"status": CONFIRMED if spec.name == RECHECK else ACCEPTED,',
+                '"status": ACCEPTED,',
+                "test_a_card_that_passes_check_verify_and_adversary_is_confirmed",
+            ),
+            (
+                "shorts_ready needs the site, a reserve and an anchor",
+                '            site.shorts_eligible and writer["reserve"] is not None and bool(writer["anchors"])',
+                "            True",
+                "test_shorts_ready_needs_an_eligible_site_a_reserve_and_an_anchor",
+            ),
+            (
+                "a rewrite is not rated",
+                '            "rating": None if rated is None else rated["best_rating"],',
+                '            "rating": 3,',
+                "test_a_contradicted_card_is_rewritten_and_carries_no_rating",
+            ),
+            (
+                "a web agent is told about the Wikipedia cache",
+                "    web = kind in WEB_KINDS",
+                "    web = False",
+                "test_a_verifier_is_told_where_the_wikipedia_text_is_and_that_a_403_is_no_finding",
+            ),
+            (
+                "a void batch is set aside, not deleted",
+                "            answer.replace(destination)",
+                "            answer.unlink()",
+                "test_a_voided_batch_is_answered_again_by_a_new_agent",
+            ),
+            (
+                "a batch caught its canary and stands",
+                '        raise RunError(f"the checker of batch {batch_id} caught its canary: the batch stands")',
+                "        pass",
+                "test_a_batch_whose_canary_was_caught_is_not_voided",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the calibration (calibrate.py)
+    *(
+        guard(f"teaser-shorts: calibration: {label}", CALIBRATE, needle, test, CALIBRATE_TESTS)
+        for label, needle, test in (
+            (
+                "nothing is sealed after a case or a verdict",
+                "    if present:",
+                "test_a_directory_with_a_case_or_a_verdict_cannot_be_sealed",
+            ),
+            (
+                "a sealed file is never rewritten",
+                '    if path.exists() and path.read_text(encoding="utf-8") != text:',
+                "test_a_sealed_file_is_never_rewritten",
+            ),
+            (
+                "the thresholds do not change after the seal",
+                "    if _sha(text) != entries[0][SEALED_KEY]:",
+                "test_the_thresholds_cannot_change_after_the_seal",
+            ),
+            (
+                "the prompts do not change after the seal",
+                "    if moved:",
+                "test_a_prompt_that_changed_after_the_seal_refuses_the_calibration",
+            ),
+            (
+                "the registry does not change after the seal",
+                '        if RO.role_sha256(name) != entry["sha256"]:',
+                "test_a_role_registry_that_changed_after_the_seal_refuses_the_calibration",
+            ),
+            (
+                "a recorded answer is ground truth unless MiniMax's",
+                "    if model is not None:",
+                "test_the_ground_truth_rule",
+            ),
+            (
+                "a pool has the sealed number of cases",
+                "    if len(pool) < count:",
+                "test_a_pool_smaller_than_the_sealed_set_is_refused",
+            ),
+            (
+                "a base card breaks no rule",
+                '        if found:\n            raise CalibrationError(\n                f"{path}: the card',
+                "test_a_base_card_that_breaks_the_contract_is_refused",
+            ),
+            (
+                "the base cards are as many as sealed",
+                '    if len(base_cards) < needed or spec["checker_good"]["cases"] > len(base_cards):',
+                "test_the_base_cards_are_as_many_as_sealed_and_the_samples_exactly",
+            ),
+            (
+                "the samples are exactly as many as sealed",
+                '    if len(strong) != hooks["strong"]:',
+                "test_the_base_cards_are_as_many_as_sealed_and_the_samples_exactly",
+            ),
+            (
+                "the cases are fixed before the first export",
+                '    if (run_dir / HANDOFFS_FILE).exists():\n        raise CalibrationError(f"{run_dir / HANDOFFS_FILE} exists',
+                "test_cases_cannot_be_fixed_after_a_role_was_exported",
+            ),
+            (
+                "a fixed sample is never rewritten",
+                "    if fixed - {digest}:",
+                "test_the_cases_are_fixed_once_and_logged",
+            ),
+            (
+                "the fixed cases are the logged ones",
+                '    if len(fixed) != 1 or not path.is_file() or _sha(path.read_text("utf-8")) != fixed[0]:',
+                "test_a_case_file_changed_after_it_was_fixed_is_refused",
+            ),
+            ("a role has cases", "    if not jobs:", "test_a_role_without_cases_is_refused"),
+            (
+                "a role is exported once",
+                "    if role in exported:",
+                "test_a_role_is_exported_once_into_a_directory_of_its_own",
+            ),
+            (
+                "a role gets a directory of its own",
+                "    if handoff.exists() and any(handoff.iterdir()):",
+                "test_a_role_is_exported_once_into_a_directory_of_its_own",
+            ),
+            (
+                "a role is exported before it is answered",
+                "    if exported is None:\n"
+                '        raise CalibrationError(f"role {role} was never exported")\n'
+                '    handoff = Path(exported["handoff"])',
+                "test_a_role_never_exported_is_refused",
+            ),
+            (
+                "a role is exported before its agents are asked for",
+                "    if exported is None:\n"
+                '        raise CalibrationError(f"role {role} was never exported")\n'
+                '    fixed = thresholds["registry"][role]',
+                "test_a_role_never_exported_has_no_agents",
+            ),
+            (
+                "every case is answered",
+                "    if not check.ok:",
+                "test_an_unanswered_case_is_no_agreement",
+            ),
+            (
+                "an answer is given in the set's role",
+                "            if RO.role_of(answer.answered_by) != role:",
+                "test_the_answers_must_be_the_roles_and_the_sealed_models",
+            ),
+            (
+                "an answer is stamped with the sealed model",
+                "            if answer.model != OH.ANSWER_MODELS[model]:",
+                "test_a_stamp_that_is_not_the_sealed_model_is_refused",
+            ),
+            (
+                "a verdict is written once",
+                '    if path.exists():\n        raise CalibrationError(f"{path} exists',
+                "test_a_verdict_is_written_once",
+            ),
+            (
+                "the writer is measured on a pilot run",
+                "        if writer_run is None:",
+                "test_a_pilot_run_is_needed_and_must_be_shorts_v1",
+            ),
+            (
+                "the pilot run is a shorts-v1 run",
+                "    if R.contract_of(writer_run) != R.SHORTS:",
+                "test_a_pilot_run_is_needed_and_must_be_shorts_v1",
+            ),
+            (
+                "the pilot has its sealed sites",
+                '    if len(rows) < rule["sites"]:',
+                "test_the_pilot_must_have_its_sealed_number_of_sites",
+            ),
+            (
+                "the pilot's first answers are the writer's",
+                "    if wrong:",
+                "test_a_pilot_written_by_another_model_is_refused",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser-shorts: calibration: {label}", CALIBRATE, old, new, test, CALIBRATE_TESTS)
+        for label, old, new, test in (
+            (
+                "a false pass fails the checker",
+                '        and len(false_pass) <= rule["false_pass_max"],',
+                "        and True,",
+                "test_one_false_pass_fails_the_role_even_when_agreement_is_high",
+            ),
+            (
+                "the checker must agree",
+                '        "passed": _met(same / len(agree), rule["verdict_agreement_min"])',
+                '        "passed": True',
+                "test_a_checker_that_fails_the_recorded_passes_disagrees",
+            ),
+            (
+                "a recorded failure must fail again",
+                '        "passed": failed >= spec["checker_fail_again"]["fail_min"],',
+                '        "passed": True,',
+                "test_a_checker_that_passes_the_recorded_failures_fails",
+            ),
+            (
+                "a seeded defect must be caught",
+                '        "passed": caught >= spec["checker_defects"]["caught_min"],',
+                '        "passed": True,',
+                "test_a_defect_the_checker_passes_is_named_by_its_kind",
+            ),
+            (
+                "a good card must pass",
+                '        "passed": passed >= spec["checker_good"]["pass_min"],',
+                '        "passed": True,',
+                "test_a_checker_that_fails_the_good_cards_fails",
+            ),
+            (
+                "a contradiction must be caught",
+                '            "passed": caught >= rule_c["caught_min"],',
+                '            "passed": True,',
+                "test_a_verifier_that_misses_a_contradiction_fails",
+            ),
+            (
+                "a verified card is not called contradicted",
+                '            "passed": len(falsely) <= rule_v["falsely_contradicted_max"]',
+                '            "passed": True',
+                "test_a_good_card_called_contradicted_is_counted",
+            ),
+            (
+                "a verifier cites no false source",
+                '            and len(false_sources) <= rule_v["false_sources_max"],',
+                "            and True,",
+                "test_a_quote_the_page_does_not_hold_is_a_false_source",
+            ),
+            (
+                "a strong opener is rated above a weak one",
+                '            "passed": ordered >= rule["ordered_right_min"]',
+                '            "passed": True',
+                "test_one_misordered_pair_fails_the_role",
+            ),
+            (
+                "a rater stays near the reference",
+                '            and close >= rule["reference_within_one_min"],',
+                "            and True,",
+                "test_a_rater_far_from_the_reference_fails",
+            ),
+            (
+                "a reviewer agrees with the record",
+                '        "passed": agreement >= spec["adversarial_agreement"]["agreement_min"],',
+                '        "passed": True,',
+                "test_a_reviewer_that_passes_everything_fails_the_role",
+            ),
+            (
+                "the writer's first answers are clean",
+                '            "passed": share >= rule["clean_first_min"],',
+                '            "passed": True,',
+                "test_a_writer_below_the_floor_is_held_at_the_top_tier",
+            ),
+        )
+    ),
+    # ------------------------------------------------ the fix round (2026-10-09, review of package cards)
+    *(
+        Case(f"teaser-shorts: calibration: {label}", CALIBRATE, old, new, test, CALIBRATE_TESTS)
+        for label, old, new, test in (
+            (
+                "a case key says nothing of its case",
+                "        key = str(uuid.UUID(int=rng.getrandbits(128), version=4))",
+                "        key = f\"{job['set']}-{job['number']:03d}\"",
+                "test_a_key_says_nothing_of_its_case",
+            ),
+            (
+                "the questions carry one neutral stage",
+                '                stage=STAGE,\n                label=job["key"],',
+                '                stage=job["set"],\n                label=job["key"],',
+                "test_the_questions_do_not_tell_the_role_what_kind_of_case_each_is",
+            ),
+            (
+                "a role's cases are shuffled together",
+                "    rng.shuffle(order)",
+                "    order = list(order)",
+                "test_the_questions_do_not_tell_the_role_what_kind_of_case_each_is",
+            ),
+            (
+                "a good card and its flawed twin are never in one batch",
+                '            if len(batch) < size and all(other["site_id"] != job["site_id"] for other in batch):',
+                "            if len(batch) < size:",
+                "test_the_questions_do_not_tell_the_role_what_kind_of_case_each_is",
+            ),
+            (
+                "the checker must agree on the claims",
+                '        and _met(claims, rule["claim_agreement_min"])\n',
+                "",
+                "test_verdicts_that_agree_with_claims_that_do_not_fail_the_role",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser-shorts: {label}", TEASER_RUN, old, new, test, SHORTS_RUN_TESTS)
+        for label, old, new, test in (
+            (
+                "the canary label is blind",
+                '            "label": str(uuid.uuid4()),',
+                '            "label": f"canary-{donor}",',
+                "test_every_check_batch_carries_one_blind_seeded_defect_beside_its_questions",
+            ),
+            (
+                "the canary card is a site outside the batch",
+                "        donor = groups[(index + 1) % len(groups)][1][0]  # one batch: its only site",
+                "        donor = groups[index][1][0]  # one batch: its only site",
+                "test_every_check_batch_carries_one_blind_seeded_defect_beside_its_questions",
+            ),
+            (
+                "the canary sits at a random place",
+                "            canary_at = random.SystemRandom().randrange(len(questions) + 1)",
+                "            canary_at = len(questions)",
+                "test_the_canary_sits_at_a_random_place_not_always_last",
+            ),
+            (
+                "a re-check outcome names the card it judged",
+                '            common["seeded_card_sha256"] = CP.text_sha256(state.writer["card"])',
+                '            common["seeded_card_sha256"] = None',
+                "test_any_failure_clears_the_card_with_its_reason",
+            ),
+            (
+                "a re-check outcome names the run that wrote the card",
+                '            common["seeded_run"] = seeded_run',
+                '            common["seeded_run"] = None',
+                "test_any_failure_clears_the_card_with_its_reason",
+            ),
+            (
+                "the seeded card keeps the web facts of its provenance",
+                '        "web_facts": [dict(fact) for fact in teaser["web_facts"]],',
+                '        "web_facts": [],',
+                "test_a_card_resting_on_a_web_fact_is_asked_with_that_fact",
+            ),
+            (
+                "a re-check question shows the web facts",
+                '        return site.with_web(C.WebFact(**fact) for fact in state.writer["web_facts"])',
+                "        return site",
+                "test_a_card_resting_on_a_web_fact_is_asked_with_that_fact",
+            ),
+            (
+                "the seeded card's figures may come from its web facts",
+                '    ).with_web(C.WebFact(**fact) for fact in teaser["web_facts"])',
+                "    )",
+                "test_a_card_resting_on_a_web_fact_is_asked_with_that_fact",
+            ),
+        )
+    ),
+    *(
+        guard(f"teaser-shorts: {label}", TEASER, needle, test, SHORTS_WRITE_TESTS)
+        for label, needle, test in (
+            (
+                "a re-check outcome is held to the card it judged",
+                '    if "seeded_card_sha256" in outcome:',
+                "test_a_card_written_after_the_seed_is_not_cleared_on_the_old_verdict",
+            ),
+            (
+                "a newer card is not cleared on the old verdict",
+                '        if live.card is None or CP.text_sha256(live.card) != outcome["seeded_card_sha256"]:',
+                "test_a_card_written_after_the_seed_is_not_cleared_on_the_old_verdict",
+            ),
+            (
+                "a seeded run is held to its card",
+                '        if outcome["seeded_run"] is not None:',
+                "test_a_card_of_another_run_with_the_same_text_is_not_cleared_either",
+            ),
+            (
+                "a card of another run is not cleared",
+                '            if not isinstance(written, dict) or written.get("run") != outcome["seeded_run"]:',
+                "test_a_card_of_another_run_with_the_same_text_is_not_cleared_either",
+            ),
+        )
+    ),
+    Case(
+        "teaser-shorts: a NULL country is no country",
+        TEASER,
+        '        country=r["country"] or "",',
+        '        country=str(r["country"]),',
+        "test_a_null_country_in_the_export_is_no_country",
+        SHORTS_WRITE_TESTS,
+    ),
+    Case(
+        "teaser-shorts: a card without a card provenance is not pinned",
+        REPO / "pipeline/video/shorts_export.py",
+        "        return None, None, None",
+        '        return row["card_text_sha256"], None, None',
+        "test_s13_a_card_without_a_card_provenance_is_never_pinned",
+        SHORTS_TESTS_VIDEO,
+    ),
+]
+CASES += TEASER_SHORTS_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

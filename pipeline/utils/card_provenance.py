@@ -32,6 +32,18 @@ marked as such wherever it is shown or narrated:
   verifier quoted from a page: each such quote (`W1`, ...: id, URL, quote) that a claim of `check`
   cites, and no other - the card's fact basis beyond its description.
 
+Version 3 (contract `shorts-v1`, owner decisions D1-D6 of 2026-10-08) is the provenance of a nameless
+Shorts card. It keeps every key of version 2 and adds `contract`, `models` (the answer stamp of the
+model that wrote, rated, checked and verified the card - `rate` is `None` for the one card rewritten
+after a failed verification, which is not rated), `hook` (the declared type, the rater's rating 1-5
+and the variant 1-3 the card was; `None` and `None` for that same rewrite), `anchors` (the photo
+phrases the Short cuts its stills on), `reserve` (the description sentences held back for the page, or
+`reveal`, or `None`) and `shorts_ready`. `ai_system` is derived from the stamps in `models` at the
+one place a provenance enters a write (`scripts/remediation/mechanical/teaser.py`, which holds the
+strings): this module checks the shape only, since `pipeline/` cannot import the lane. Version 2
+stays valid: the 2,830 cards written before are version 2, and their site pages are unchanged. The
+shorts gate (`shorts_pin`) pins a version-3 card only: a card that names its site cannot be narrated.
+
 The key is its own, beside `_description_provenance`, because the description's provenance is
 replaced whole whenever a description is rewritten (Phase 4, lane WC), and a card outlives that. The
 leading underscore keeps it out of the generic raw_data panel (`src/config/sourceFields.ts`).
@@ -54,6 +66,10 @@ CARD_PROVENANCE_KEY = "_card_provenance"
 #: 2 since the web verification (2026-09-26): `verify` and `web_facts`. No version 1 was ever
 #: written (read-only count 2026-09-26 21:00 UTC: 0 teaser provenances in production).
 VERSION = 2
+#: Version 3: contract `shorts-v1`, the nameless Shorts card. `build` writes version 2, `build_v3`
+#: version 3; `validate` accepts both (`VERSIONS`).
+VERSION_3 = 3
+VERSIONS = (VERSION, VERSION_3)
 KIND = "teaser"
 LANE = "WB"
 #: The AI mark: the card's words are written by an AI system (EU AI Act Art. 50).
@@ -72,6 +88,17 @@ FIRST_VERIFY, SECOND_VERIFY = "verify", "verify2"
 #: the machine did not find on its page), and its central claim - what the site is - is never one.
 #: The rule and its reasons: docs/procedures/CARD_DESCRIPTIONS.md, section 2.1.
 MAX_UNPROVEN_CLAIMS = 1
+#: The contract of a version-3 provenance (`scripts/remediation/teaser/shorts_v1.py`).
+CONTRACT_SHORTS = "shorts-v1"
+#: The stages a version-3 provenance names a model for.
+MODEL_STAGES = ("write", "rate", "check", "verify")
+#: The hook types a writer declares (`shorts_v1.HOOK_TYPES` is this tuple).
+HOOK_TYPES = ("object", "act", "person", "number", "name_meaning", "absence")
+#: The best rating of a hook (1-5) and the number of variants a writer answers (1-3).
+MAX_RATING = 5
+MAX_VARIANT = 3
+MAX_ANCHORS = 3
+REVEAL = "reveal"
 
 _KEYS = frozenset(
     {
@@ -88,6 +115,9 @@ _KEYS = frozenset(
         "web_facts",
     }
 )
+_KEYS_V3 = _KEYS | {"contract", "models", "hook", "anchors", "reserve", "shorts_ready"}
+_HOOK_KEYS = frozenset({"type", "rating", "variant"})
+_RESERVE_ID = re.compile(r"S[1-9][0-9]*")
 _CHECK_KEYS = frozenset({"verdict", "stage", "by", "at", "claims"})
 _CLAIM_KEYS = frozenset({"claim", "support"})
 _VERIFY_KEYS = frozenset({"verdict", "stage", "by", "at", "claims", "unproven", "text_sha256"})
@@ -123,8 +153,10 @@ def validate(value: Any) -> dict[str, Any]:
     fails on every reader alike instead of reading as "nothing to disclose".
     """
     _need(isinstance(value, dict), f"is not a JSON object but {type(value).__name__}")
-    _need(set(value) == _KEYS, f"carries {sorted(value)}, not {sorted(_KEYS)}")
-    _need(value["v"] == VERSION and type(value["v"]) is int, f"v is not {VERSION}")
+    version = value.get("v")
+    _need(type(version) is int and version in VERSIONS, f"v is not one of {list(VERSIONS)}")
+    keys = _KEYS if version == VERSION else _KEYS_V3
+    _need(set(value) == keys, f"carries {sorted(value)}, not {sorted(keys)}")
     _need(value["kind"] == KIND, f"kind {value['kind']!r} is not {KIND!r}")
     _need(value["lane"] == LANE, f"lane {value['lane']!r} is not {LANE!r}")
     _need(value["ai"] == AI_GENERATED, f"ai {value['ai']!r} is not {AI_GENERATED!r}")
@@ -155,7 +187,77 @@ def validate(value: Any) -> dict[str, Any]:
         )
     _web_facts(value["web_facts"], claims, check["stage"])
     _verify(value["verify"], check, value["text_sha256"])
+    if version == VERSION_3:
+        _shorts(value, check["stage"])
     return value
+
+
+def _stamp_or_none(value: Any, what: str, *, allowed_none: bool) -> None:
+    if value is None:
+        _need(allowed_none, f"{what} is null")
+        return
+    _text(value, what)
+
+
+def _shorts(value: Mapping[str, Any], check_stage: str) -> None:
+    """The keys a version-3 provenance adds: the contract, the models of its four stages, the hook,
+    the anchors, the reserve and `shorts_ready`. The one card that is not rated is the rewrite after
+    a failed verification (checked at `check-v`): its `models.rate`, `hook.rating` and
+    `hook.variant` are `None`, and only its."""
+    _need(
+        value["contract"] == CONTRACT_SHORTS,
+        f"contract {value['contract']!r} is not {CONTRACT_SHORTS!r}",
+    )
+    unrated = check_stage == VERIFY_REWRITE_CHECK
+    models = value["models"]
+    _need(
+        isinstance(models, dict) and set(models) == set(MODEL_STAGES),
+        f"models is not {list(MODEL_STAGES)}",
+    )
+    for stage in MODEL_STAGES:
+        _stamp_or_none(models[stage], f"models.{stage}", allowed_none=stage == "rate" and unrated)
+    _need(
+        (models["rate"] is None) == unrated,
+        "models.rate is null exactly for the rewrite after a failed verification",
+    )
+    hook = value["hook"]
+    _need(isinstance(hook, dict) and set(hook) == _HOOK_KEYS, "hook is not the hook shape")
+    _need(hook["type"] in HOOK_TYPES, f"hook.type {hook['type']!r} is not one of {HOOK_TYPES}")
+    for key, top in (("rating", MAX_RATING), ("variant", MAX_VARIANT)):
+        if unrated:
+            _need(hook[key] is None, f"hook.{key} of a rewrite after a failed verification is null")
+        else:
+            _need(
+                type(hook[key]) is int and 1 <= hook[key] <= top,
+                f"hook.{key} is not a whole number 1-{top}",
+            )
+    anchors = value["anchors"]
+    _need(
+        isinstance(anchors, list)
+        and len(anchors) <= MAX_ANCHORS
+        and all(isinstance(a, str) and bool(a.strip()) for a in anchors),
+        f"anchors is not a list of at most {MAX_ANCHORS} non-empty strings",
+    )
+    reserve = value["reserve"]
+    _need(
+        reserve is None
+        or (
+            isinstance(reserve, list)
+            and bool(reserve)
+            and len(set(reserve)) == len(reserve)
+            and all(
+                isinstance(r, str) and (r == REVEAL or bool(_RESERVE_ID.fullmatch(r)))
+                for r in reserve
+            )
+        ),
+        f"reserve is neither null nor a list of sentence ids and {REVEAL!r}",
+    )
+    ready = value["shorts_ready"]
+    _need(type(ready) is bool, "shorts_ready is not true or false")
+    _need(
+        not ready or (reserve is not None and bool(anchors)),
+        "shorts_ready needs a reserve and at least one anchor",
+    )
 
 
 def _web_facts(facts: Any, claims: list[dict[str, Any]], stage: str) -> None:
@@ -269,6 +371,53 @@ def build(
     )
 
 
+def build_v3(
+    *,
+    run: str,
+    ai_system: str,
+    card: str,
+    description: str,
+    stage: str,
+    checker: str,
+    checked_at: str,
+    claims: Sequence[Mapping[str, Any]],
+    verify: Mapping[str, Any],
+    web_facts: Sequence[Mapping[str, Any]],
+    models: Mapping[str, str | None],
+    hook: Mapping[str, Any],
+    anchors: Sequence[str],
+    reserve: Sequence[str] | None,
+    shorts_ready: bool,
+) -> dict[str, Any]:
+    """The version-3 provenance of one checked and verified shorts-v1 card, validated: `build`'s
+    inputs plus the contract's. `ai_system` must be derived from `models` by the caller (the lane
+    holds the strings)."""
+    base = build(
+        run=run,
+        ai_system=ai_system,
+        card=card,
+        description=description,
+        stage=stage,
+        checker=checker,
+        checked_at=checked_at,
+        claims=claims,
+        verify=verify,
+        web_facts=web_facts,
+    )
+    return validate(
+        {
+            **base,
+            "v": VERSION_3,
+            "contract": CONTRACT_SHORTS,
+            "models": {stage_name: models[stage_name] for stage_name in MODEL_STAGES},
+            "hook": {key: hook[key] for key in sorted(_HOOK_KEYS)},
+            "anchors": list(anchors),
+            "reserve": None if reserve is None else list(reserve),
+            "shorts_ready": shorts_ready,
+        }
+    )
+
+
 def describes(provenance: Mapping[str, Any], card: str | None) -> bool:
     """Whether `card` is exactly the card the provenance hashes."""
     return card is not None and provenance["text_sha256"] == text_sha256(card)
@@ -288,7 +437,13 @@ def card_ai(provenance: Mapping[str, Any], card: str | None) -> str | None:
 
 
 def shorts_pin(provenance: Mapping[str, Any], description: str | None) -> str | None:
-    """The card hash the shorts gate (S13) may narrate: the provenance's own `text_sha256` while
-    the description is the one the card was checked against, `None` for a stale card - a short
-    narrates only a card proven against the text the site shows."""
-    return None if stale(provenance, description) else provenance["text_sha256"]
+    """The card hash the shorts gate (S13) may narrate: the provenance's own `text_sha256` of a
+    version-3 card that is `shorts_ready` while the description is the one the card was checked
+    against. `None` for a stale card - a short narrates only a card proven against the text the
+    site shows - and for a version-2 card, which names its site and cannot be a Short (owner
+    decision D1, 2026-10-08)."""
+    if stale(provenance, description):
+        return None
+    if provenance["v"] != VERSION_3 or not provenance["shorts_ready"]:
+        return None
+    return provenance["text_sha256"]

@@ -222,6 +222,37 @@ def _teaser(card: str = TEASER, description: str = DESCRIPTION) -> dict[str, Any
     )
 
 
+def _teaser_v3(**over: Any) -> dict[str, Any]:
+    """A shorts-v1 (version 3) teaser provenance, built by its one builder."""
+    fields: dict[str, Any] = {
+        "run": "wb-shorts-2026-10-09",
+        "ai_system": AI_SYSTEM,
+        "card": TEASER,
+        "description": DESCRIPTION,
+        "stage": "check",
+        "checker": "fact_checker:teaser-check-001",
+        "checked_at": "2026-10-09T12:00:00+00:00",
+        "claims": [{"claim": "megalithic temples on Malta", "support": ["S1"]}],
+        "verify": {
+            **VERIFIED,
+            "by": "web_verifier:teaser-verify-001",
+            "text_sha256": CP.text_sha256(TEASER),
+        },
+        "web_facts": [],
+        "models": {
+            "write": "anthropic/claude-opus-5-5 (Claude Code agent)",
+            "rate": "anthropic/claude-opus-5-5 (Claude Code agent)",
+            "check": "anthropic/claude-sonnet-5-5 (Claude Code agent)",
+            "verify": "anthropic/claude-sonnet-5-5 (Claude Code agent)",
+        },
+        "hook": {"type": "object", "rating": 4, "variant": 2},
+        "anchors": ["megalithic temples"],
+        "reserve": ["S2"],
+        "shorts_ready": True,
+    }
+    return CP.build_v3(**{**fields, **over})
+
+
 #: The web verification of a card the checker accepted (lane WB's stage `verify`); its
 #: `text_sha256` is the card's the verifier judged (the builders add it).
 VERIFIED = {
@@ -351,12 +382,16 @@ def test_a_web_fact_is_recorded_exactly_where_a_claim_of_a_rewrite_cites_it():
 
 def test_a_teaser_card_is_shorts_eligible_only_while_its_description_is_unchanged():
     """A stale card (the description changed since the card was checked against it) keeps its AI
-    mark but is not narrated: the shorts gate S13 gets no pin for it."""
+    mark but is not narrated: the shorts gate S13 gets no pin for it. Only a version-3 card that
+    is `shorts_ready` has a pin at all: a version-2 card names its site (owner decision D1)."""
     fresh = _teaser()
-    assert CP.shorts_pin(fresh, DESCRIPTION) == CP.text_sha256(TEASER)
-    assert CP.shorts_pin(fresh, DESCRIPTION + " Edited.") is None
-    assert CP.shorts_pin(fresh, None) is None
     assert CP.stale(fresh, DESCRIPTION + " Edited.") and not CP.stale(fresh, DESCRIPTION)
+    assert CP.shorts_pin(fresh, DESCRIPTION) is None
+    ready = _teaser_v3()
+    assert CP.shorts_pin(ready, DESCRIPTION) == CP.text_sha256(TEASER)
+    assert CP.shorts_pin(ready, DESCRIPTION + " Edited.") is None
+    assert CP.shorts_pin(ready, None) is None
+    assert CP.shorts_pin(_teaser_v3(shorts_ready=False), DESCRIPTION) is None
 
 
 def test_the_provenance_key_is_the_writers_own():
