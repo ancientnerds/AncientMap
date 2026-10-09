@@ -345,10 +345,13 @@ _BEFORE = re.compile(r"\bb\.?\s?c\.?\s?(?:e\.?)?\b", re.IGNORECASE)
 #: not ("iron", "late"), so those names are quoted whole. `_key_of` reads a *name* the same way for
 #: a lookup, so the word has one reading and one place in this module.
 #: The names that are ordinary English words when written small: "the initial period of the dig", "a
-#: classic example". A quote names them only capitalised in its own spelling ("the Initial Period",
-#: "the Classic period", "Late Classic"); the folded comparison below would read both. Their forms
-#: stay whole, so "initial" alone is not the Initial Period.
-_PROPER = frozenset({"classic", "initial period"})
+#: classic example", "ancient woodland". A quote names them only capitalised in its own spelling
+#: ("the Initial Period", "the Classic period", "Late Classic", "the Woodland period"); the folded
+#: comparison below would read both. A sentence begins with a capital too: there the name needs its
+#: next word capitalised as well ("Classic Maya", "Initial Period"), so "Classic examples of" and
+#: "Woodland pottery" are not it. Their forms stay whole, so "initial" alone is not the Initial
+#: Period.
+_PROPER = frozenset({"classic", "initial period", "woodland"})
 _FORMS: dict[str, tuple[str, ...]] = {
     key: (
         (key, key.removesuffix(" period").strip())
@@ -366,6 +369,26 @@ _CAPITALISED: dict[str, re.Pattern[str]] = {
     )
     for key in _PROPER
 }
+
+
+_SENTENCE_START: dict[str, re.Pattern[str]] = {
+    key: re.compile(
+        r"[\s-]+".join(word.capitalize() for word in key.split())
+        + (r"[\s-]+[A-Z]" if len(key.split()) == 1 else "")
+    )
+    for key in _PROPER
+}
+
+
+def _names_capitalised(key: str, quote: str) -> bool:
+    """Whether `quote` prints the `_PROPER` name `key` capitalised: anywhere inside a sentence, at
+    the start of one only with the next word capitalised."""
+    for found in _CAPITALISED[key].finditer(quote):
+        before = quote[: found.start()].rstrip()
+        inside_sentence = bool(before) and before[-1] not in ".!?"
+        if inside_sentence or _SENTENCE_START[key].match(quote, found.start()):
+            return True
+    return False
 
 
 def fold_name(name: str) -> str:
@@ -424,7 +447,7 @@ def states_period(quote: str, name: str) -> bool:
     key = _key_of(name)
     if key is None:
         return False
-    if key in _PROPER and _CAPITALISED[key].search(quote) is None:
+    if key in _PROPER and not _names_capitalised(key, quote):
         return False
     return any(f" {form} " in f" {text} " for form in _FORMS[key])
 

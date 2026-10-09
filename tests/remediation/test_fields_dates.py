@@ -124,6 +124,30 @@ STATED = (
     ("no", "fra eldre steinalder (4000–5.600 f.Kr.)", -5600),
     ("fi", "noin 5000–500 eaa.", -5000),
     ("id", "(2500–1500 SM)", -2500),
+    # an AD abbreviation after a "before" word is a BC phrase, in every language that has one
+    ("pl", "450 przed n. e.", -450),
+    ("pl", "450 pr. n. e.", -450),
+    ("cs", "v roce 450 před n. l.", -450),
+    ("cs", "ve 3. století před Kristem", -250),
+    ("sk", "roku 450 pred n. l.", -450),
+    ("sk", "roku 450 pred Kr.", -450),
+    ("hr", "450. godine prije n. e.", -450),
+    ("hr", "450. godine prije Kr.", -450),
+    ("sr", "450. године пре н. е.", -450),
+    ("sr", "450. године пре нове ере", -450),
+    ("mk", "450 г. пред н. е.", -450),
+    ("bg", "450 г. преди н. е.", -450),
+    ("pt", "em 450 antes de J.C.", -450),
+    ("pt", "em 450 antes da nossa era", -450),
+    ("fr", "en 450 avant l'ère chrétienne", -450),
+    # a modern year before an ancient date is its own statement
+    ("en", "In 1998 the 3rd century BC walls were found.", -250),
+    ("en", "Excavated in 1998 and 1999; the 4th century BC wall", -350),
+    ("en", "Excavated in 1998 and 1999; the 4th century BC wall", 1999),
+    ("en", "from 800 to the 7th century BC", -800),
+    ("en", "the 8th century and the 7th century BC", -750),
+    ("sh", "u V veku pre nove ere", -450),
+    ("sh", "450 prije n. l.", -450),
 )
 
 
@@ -203,6 +227,32 @@ NOT_STATED = (
     ("pl", "I tak dalej", -50),
     # a hyphenated sentence end is no minus
     ("en", "built between 1500-1000", -1000),
+    # an AD abbreviation after a "before" word is never AD, whether the phrase is in the table or not
+    ("pl", "450 przed n. e.", 450),
+    ("cs", "v roce 450 před n. l.", 450),
+    ("sk", "roku 450 pred n. l.", 450),
+    ("hr", "450. godine prije n. e.", 450),
+    ("sr", "450. године пре н. е.", 450),
+    ("bg", "450 г. преди н. е.", 450),
+    ("mk", "450 г. пред н. е.", 450),
+    ("sh", "450 prije n. l.", 450),
+    ("pt", "em 450 antes de J.C.", 450),
+    ("pt", "em 450 antes da nossa era", 450),
+    ("fr", "en 450 avant l'ère chrétienne", 450),
+    ("cs", "ve 3. století před Kristem", 250),
+    # a modern year does not borrow the era of an ancient date after it: a determiner, a comma, a
+    # semicolon, a bracket or a full stop between them is no range
+    ("en", "In 1998 the 3rd century BC walls were found.", -1998),
+    ("en", "Since 1962 the 5th century BC temple was studied.", -1962),
+    ("en", "In 2009 the 300 BC temple was restored.", -2009),
+    ("en", "In 1962, a 300 BC temple was found.", -1962),
+    ("en", "Excavated in 1998 and 1999; the 4th century BC wall", -1998),
+    ("en", "Excavated in 1998 and 1999; the 4th century BC wall", -1999),
+    ("en", "Excavated in 1998 (the 4th century BC wall)", -1998),
+    ("en", "Excavated in 1998. The 4th century BC wall", -1998),
+    ("en", "In 1998 and the 3rd century BC walls", -1998),
+    # Czech and Slovak věk is an age, Serbian vek a century only against a number and a marker
+    ("cs", "bronzový věk 5", -450),
 )
 
 
@@ -367,6 +417,36 @@ def test_a_minus_sign_is_the_marker_of_a_table_value() -> None:
     assert D.tokens("(−330)")[0].minus
     assert not D.tokens("883-859")[-1].minus  # a range hyphen
     assert not A.states_year("built 1500-500", -500)
+
+
+def test_an_ad_abbreviation_after_a_before_word_is_a_bc_marker() -> None:
+    # not phrases of the table: a "before" word and an AD abbreviation are BC all the same
+    for quote in ("450 prije n. l.", "450 pred n. e.", "450 vor n. Chr.", "450 godine pre n. l."):
+        assert [(s.era, s.lo) for s in D.statements(quote)] == [("BC", -450)], quote
+    assert [(s.era, s.lo) for s in D.statements("5. století před n. e.")] == [("BC", -500)]
+    assert [(s.era, s.lo) for s in D.statements("450 n. l.")] == [("AD", 450)]
+    assert [(s.era, s.lo) for s in D.statements("450 prije")] == [(None, 450)]
+
+
+def test_a_marker_made_of_joint_words_ends_a_run_of_years() -> None:
+    quote = "Periodo 600 a C y 1000 d C"
+    assert A.states_year(quote, -600) and not A.states_year(quote, 600)
+    assert A.states_year(quote, 1000) and not A.states_year(quote, -1000)
+
+
+def test_a_range_of_a_year_and_a_century_needs_a_range_word() -> None:
+    assert [s.era for s in D.statements("In 1998 the 3rd century BC walls")] == [None, "BC"]
+    assert [s.era for s in D.statements("from 800 to the 7th century BC")] == ["BC", "BC"]
+    assert [s.era for s in D.statements("the 8th century - the 7th century BC")] == ["BC", "BC"]
+    assert [s.era for s in D.statements("the 8th century, the 7th century BC")] == [None, "BC"]
+
+
+def test_czech_and_slovak_age_is_no_century_word() -> None:
+    assert not D.has_unit_word("bronzový věk")
+    assert not A.dated("bronzový věk")
+    assert not A.dated("doba kamenná, železný věk a vek")
+    assert A.states_year("u V veku pre nove ere", -450)  # Serbian: against a number and a marker
+    assert not A.states_year("u V veku", -450)
 
 
 def test_an_unknown_word_is_no_unit_word() -> None:

@@ -344,3 +344,13 @@ BC" for -5000, "the 1st century AD" for -100); it accepts none the old one refus
 Known limits: a period name is read only in English (a French "Néolithique final" is not a name of the table);
 spelled-out ordinals ("cinquième siècle", "fünftes Jahrhundert") are read in English only; the Aurignacian,
 Mousterian and Magdalenian are not names (their starts differ by region and dating method: quote the BP date).
+
+Fix round after the review of `ad6d77e` (2026-10-09): a "before" word (przed, před, pred, prije, pre, пре, пред, преди,
+до, antes, avant, prima, vor, voor) and an AD abbreviation after it is a BC marker ("450 przed n. e.", "450. godine prije
+n. l."); a modern year takes the era of an ancient date after it only across a range word or a dash, never across a
+determiner, a comma, a semicolon, a bracket or a full stop ("In 1998 the 3rd century BC walls" states the 3rd century
+only); Czech and Slovak `věk` (age) is a century only against a number and an era marker; `woodland` counts only
+capitalised, and a sentence-initial `Classic`, `Initial Period` or `Woodland` needs its next word capitalised as well.
+Re-measured on the 3,557 period answers of wd1, wd1-rest, wd3, wd4 and the wd5 pilot that carry a year and a quote: the
+old reader accepted 3,472, the reviewed commit 3,454, this one 3,454; 18 old accepts refused (0.5 %), none gained, and
+this round changes none of the 3,557.

@@ -442,6 +442,10 @@ class TestTheOrdinaryWordsThatAreAlsoNames:
         assert P.states_period("a ceremonial centre of the Initial Period", "Initial Period")
         assert P.states_period("a village of the Initial period", "initial period")
         assert P.states_period("a village of the Initial period", "Initial")  # the bare word, read
+        assert P.states_period("a Woodland period camp in Ohio", "woodland")
+        assert P.states_period("Classic Maya cities rose", "classic")  # a sentence start, named whole
+        assert P.states_period("Initial Period ceramics", "initial period")
+        assert P.states_period("It is old. Woodland Period pottery was found.", "woodland")
 
     @pytest.mark.parametrize(
         ("quote", "name"),
@@ -451,6 +455,13 @@ class TestTheOrdinaryWordsThatAreAlsoNames:
             ("the initial period of occupation", "initial"),
             ("the CLASSIC trench", "classic"),  # not the spelling of a source naming an era
             ("a Classical temple", "classic"),  # another word that begins alike
+            ("The hillfort lies within ancient woodland above the river", "woodland"),
+            ("a woodland clearing with a barrow", "woodland"),
+            # a sentence begins with a capital: the name needs its next word capitalised too
+            ("Classic examples of the type are known.", "classic"),
+            ("Initial period of occupation was short.", "initial period"),
+            ("Woodland pottery was found in the ditch.", "woodland"),
+            ("It is old. Woodland pottery was found.", "woodland"),
         ],
     )
     def test_the_small_spelling_and_a_longer_word_name_nothing(self, quote: str, name: str) -> None:

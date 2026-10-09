@@ -8328,6 +8328,46 @@ PERIODS_TESTS = "tests/pipeline/test_periods.py"
 #: reading more than a quote says. Every label starts with "wd5l:", so the list runs on its own:
 #: `mutation_sweep.py wd5l:`.
 WD5L_CASES: list[Case] = [
+    # -- dates.py: BC phrases, ranges and the Czech age
+    guard(
+        "wd5l: a before word and an AD marker make a BC one",
+        DATES,
+        "        if found is None and self.toks[i].low in _BEFORE_WORDS and i + 1 < len(self.toks):",
+        "test_an_ad_abbreviation_after_a_before_word_is_a_bc_marker",
+        DATES_TESTS,
+    ),
+    guard(
+        "wd5l: a comma, bracket or full stop ends a range",
+        DATES,
+        "        if _BREAKS.search(gap):",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: a determiner alone is no range",
+        DATES,
+        "        return any(t.low in words for t in self.toks[end:start])",
+        "        return True",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: a run of years is joined by a range word, not by a determiner",
+        DATES,
+        "                    and self._joined(k - gap, at, CONNECTORS)\n",
+        "",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: Czech and Slovak vek is an age",
+        DATES,
+        "    if word in CENTURY_ABBREVIATIONS or word in CENTURY_OR_AGE_FORMS:\n        return CENTURY, True\n",
+        "    if word in CENTURY_ABBREVIATIONS:\n        return CENTURY, True\n"
+        "    if word in CENTURY_OR_AGE_FORMS:\n        return CENTURY, False\n",
+        "test_czech_and_slovak_age_is_no_century_word",
+        DATES_TESTS,
+    ),
     # -- dates.py: the era is read, not assumed
     guard(
         "wd5l: ad, ce, sm and mo count in capitals only",
@@ -8405,7 +8445,7 @@ WD5L_CASES: list[Case] = [
     guard(
         "wd5l: a statement takes the next one's marker",
         DATES,
-        "            if s.era is None and nxt.era is not None and self._only_joints(end, start):",
+        "            if s.era is None and nxt.era is not None and self._only_joints(s, end, start):",
         "test_a_quote_states_the_year_it_prints",
         DATES_TESTS,
     ),
@@ -8422,7 +8462,7 @@ WD5L_CASES: list[Case] = [
         DATES,
         "                    and self._marker_at(k, False) is None\n",
         "",
-        "test_a_marker_goes_with_the_statement_before_it_not_the_number_after_it",
+        "test_a_marker_made_of_joint_words_ends_a_run_of_years",
         DATES_TESTS,
     ),
     Case(
@@ -8569,10 +8609,26 @@ WD5L_CASES: list[Case] = [
         POINTS_TESTS,
     ),
     # -- periods.py
+    Case(
+        "wd5l: woodland is named capitalised",
+        PERIODS_PY,
+        '_PROPER = frozenset({"classic", "initial period", "woodland"})',
+        '_PROPER = frozenset({"classic", "initial period"})',
+        "test_the_small_spelling_and_a_longer_word_name_nothing",
+        PERIODS_TESTS,
+    ),
+    Case(
+        "wd5l: a sentence start names the period only with its next word capitalised",
+        PERIODS_PY,
+        "        if inside_sentence or _SENTENCE_START[key].match(quote, found.start()):",
+        "        if True:",
+        "test_the_small_spelling_and_a_longer_word_name_nothing",
+        PERIODS_TESTS,
+    ),
     guard(
         "wd5l: classic and the initial period are named capitalised",
         PERIODS_PY,
-        "    if key in _PROPER and _CAPITALISED[key].search(quote) is None:",
+        "    if key in _PROPER and not _names_capitalised(key, quote):",
         "test_the_small_spelling_and_a_longer_word_name_nothing",
         PERIODS_TESTS,
     ),

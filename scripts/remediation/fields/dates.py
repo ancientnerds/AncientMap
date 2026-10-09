@@ -70,6 +70,11 @@ def group_thousands(text: str) -> str:
     return _GROUPED.sub(lambda m: re.sub(r"\D", "", m.group(0)), text)
 
 
+def plain_text(text: str) -> str:
+    """`text` with its accents removed: the string the offsets of `tokens` index."""
+    return _COMBINING.sub("", unicodedata.normalize("NFKD", text))
+
+
 @dataclass(frozen=True)
 class Token:
     raw: str  #: as printed, accents removed
@@ -85,7 +90,7 @@ def tokens(text: str) -> list[Token]:
     """The numbers and the words of `text`, accents removed ("siècle" -> "siecle", "př." ->
     "pr"). Digits and letters are separate tokens, so "5th" is "5" and "th", "449BC" is "449" and
     "BC"."""
-    plain = _COMBINING.sub("", unicodedata.normalize("NFKD", text))
+    plain = plain_text(text)
     out = []
     for match in _TOKEN.finditer(plain):
         start, end = match.span()
@@ -126,11 +131,14 @@ CENTURY_PREFIXES = (
 #: The short or ambiguous unit words, whole: "wiek" begins "większy" (bigger), "αιων" "αιώνιος"
 #: (eternal).
 CENTURY_FORMS = frozenset(
-    {"wiek", "wieku", "wieki", "wiekow", "wiekach", "wiekiem", "wiekami", "vek", "veka", "veku",
+    {"wiek", "wieku", "wieki", "wiekow", "wiekach", "wiekiem", "wiekami",
      "vekovi", "vijek", "vijeka", "vijeku", "vijekovi", "век", "века", "веке", "веку", "веком",
      "веков", "веки", "веках", "eeuw", "eeuwen", "siglo", "siglos", "segle", "segles", "seklet",
      "seklene"}
 )  # fmt: skip
+#: Serbian "vek" (century) is Czech and Slovak "věk" (age, "bronzový věk") once the accents are
+#: folded: it is a century only against a number and an era marker, like an abbreviation.
+CENTURY_OR_AGE_FORMS = frozenset({"vek", "veka", "veku"})
 MILLENNIUM_PREFIXES = (
     "millennium", "millennia", "millenaire", "millenn", "milenio", "milenij", "jahrtausend",
     "evezred", "tysiacleci", "tisicilet", "tisucljec", "χιλιετ", "тысячелет", "тисячоліт",
@@ -165,6 +173,16 @@ QUALIFIERS = frozenset(
      "etwa", "verso", "fra", "tra", "dal", "dall", "fin", "fine", "inizio"}
 )  # fmt: skip
 JOINTS = CONNECTORS | DETERMINERS | QUALIFIERS
+#: The connectors that make a plain year one end of a range with the date after it: "from 800 to the
+#: 7th century BC". "and" is not among them for a year - "In 1998 and the 3rd century BC walls" are
+#: two things - though it joins two centuries.
+YEAR_RANGE_WORDS = frozenset(
+    {"to", "bis", "od", "do", "po", "till", "til", "a", "au", "al", "ate", "hasta", "по", "до"}
+)
+#: What ends a range in the text between two statements: a comma, a semicolon, a colon, a bracket
+#: or a sentence stop - but not the full stop of "c." or "ca." in "c. 3300".
+_BREAKS = re.compile(r"[,;:()\[\]{}!?.]")
+_ABBREVIATION_DOT = re.compile(r"\b(?:c|ca|approx)\.")
 #: The most joint words that may stand between two numbers of one statement.
 MAX_JOINTS = 4
 #: A word that may stand between a number or a unit and its era marker: "2921 cal. BC", "4-3
@@ -173,7 +191,7 @@ FILLERS = frozenset(
     {"cal", "calibrated", "uncal", "uncalibrated", "of", "year", "years", "ish", "г", "гг", "год",
      "года", "году", "рік", "року", "рр", "yil", "yili", "yilinda", "yıl", "rok", "roku", "jahr",
      "jahre", "jahren", "an", "ans", "annee", "annees", "anno", "anni", "ano", "anos", "ar", "aar",
-     "jaar", "lat", "let", "ev", "talet", "tallet", "talen"}
+     "jaar", "lat", "let", "ev", "talet", "tallet", "talen", "godine", "godina", "године", "година"}
 )  # fmt: skip
 
 ORDINAL_WORDS = (
@@ -218,16 +236,20 @@ _BC_MARKERS = (
     # Spanish, Catalan, Italian, Portuguese
     "a. C.", "a. de C.", "antes de Cristo", "a. e. c.", "a. n. e.", "aC", "avanti Cristo",
     "prima di Cristo", "antes de nuestra era", "antes de la era común", "a.C.n.",
+    "antes de J.C.", "antes de Jesucristo", "antes de Jesus Cristo", "antes da nossa era",
+    "antes da era comum", "a. J.C.", "avant l'ère chrétienne", "avant l'ère commune",
     # Swedish, Danish, Norwegian, Finnish, Estonian, Latvian, Indonesian
     "f.Kr.", "före Kristus", "før Kristus", "f.v.t.", "fvt", "før vor tidsregning", "eaa.",
     "ennen ajanlaskun alkua", "eKr.", "p.m.ē.", "SM",
     # Hungarian, Polish, Czech, Slovak, Slovene, Croatian, Serbian
     "Kr. e.", "Krisztus előtt", "p.n.e.", "przed Chr.", "przed naszą erą", "př. n. l.",
     "př. Kr.", "pr. n. l.", "pr. Kr.", "pr. n. št.", "pre nove ere", "prije Krista", "pre Hrista",
+    "przed Kr.", "před Kristem", "před Kr.", "pred Kristom", "prije Kr.", "pred n. št.",
+    "pred našim štetjem", "prije nove ere",
     # Greek, Russian, Ukrainian, Bulgarian, Macedonian, Serbian Cyrillic
     "π.Χ.", "προ Χριστού", "π.Κ.Ε.", "до н. э.", "до н. е.", "до нашей эры", "до нашої ери",
     "до Р. Х.", "до Рождества Христова", "пр. н. е.", "пр. Хр.", "п.н.е.", "пред нашата ера",
-    "пре нове ере", "пре Христа",
+    "пре нове ере", "пре Христа", "преди Христа", "преди нашата ера",
     # Turkish
     "M.Ö.", "MÖ", "İ.Ö.", "İÖ", "Milattan önce",
 )  # fmt: skip
@@ -247,6 +269,13 @@ _UPPER_ONLY = frozenset(
     {("ad",), ("a", "d"), ("ce",), ("c", "e"), ("mo",), ("m", "o"), ("io",), ("i", "o"), ("ms",),
      ("m", "s"), ("sm",)}
 )  # fmt: skip
+#: The words that mean "before" ahead of an era: an AD abbreviation right after one of them is the
+#: end of a BC phrase ("450 przed n. e.", "450 prije n. l.", "450 пре н. е."), never AD. The common
+#: phrases are in `_BC_MARKERS`; this reads the ones the table lacks.
+_BEFORE_WORDS = frozenset(
+    {"przed", "pred", "pr", "prije", "pre", "пре", "пред", "преди", "до", "antes", "avant",
+     "prima", "vor", "voor", "before"}
+)  # fmt: skip
 #: Hungarian "i. e." (before Christ) is English "i.e." ("that is"): read only before a Hungarian
 #: century or millennium, or a number with a Hungarian ending ("776-ban").
 _HUNGARIAN_ONLY = frozenset({("i", "e")})
@@ -256,7 +285,8 @@ for _text in _BC_MARKERS:
 for _text in _AD_MARKERS:
     _MARKERS[_words(_text)] = AD
 _MARKERS[("i", "e")] = BC  # i. e. - see `_HUNGARIAN_ONLY`
-_MARKER_LENGTHS = sorted({len(key) for key in _MARKERS}, reverse=True)
+#: The lengths of the markers, and one more for each: a "before" word ahead of an AD marker.
+_MARKER_LENGTHS = sorted({n for key in _MARKERS for n in (len(key), len(key) + 1)}, reverse=True)
 #: The case endings Hungarian hangs on a year with a hyphen: "i. e. 776-ban" (in 776 BC).
 _HUNGARIAN_ENDINGS = frozenset(
     {"ban", "ben", "ig", "ra", "re", "tol", "bol", "nal", "nel", "val", "vel", "hoz", "hez"}
@@ -321,7 +351,7 @@ def _roman_value(token: Token, adjacent: bool) -> int | None:
 def _unit(tok: Token) -> tuple[str, bool] | None:
     """`(kind, abbreviated)` when `tok` is a century or millennium word."""
     word = tok.low
-    if word in CENTURY_ABBREVIATIONS:
+    if word in CENTURY_ABBREVIATIONS or word in CENTURY_OR_AGE_FORMS:
         return CENTURY, True
     if word in MILLENNIUM_ABBREVIATIONS:
         return MILLENNIUM, True
@@ -344,7 +374,9 @@ class _Quote:
     """One quote, tokenised: its numbers, unit words and era markers, and the statements they make."""
 
     def __init__(self, quote: str) -> None:
-        self.toks = tokens(group_thousands(quote))
+        grouped = group_thousands(quote)
+        self.plain = plain_text(grouped)
+        self.toks = tokens(grouped)
         self.units = {i: u for i, t in enumerate(self.toks) if (u := _unit(t)) is not None}
         self.nums = self._numbers()
         self.by_last = {n.last: n for n in self.nums.values()}
@@ -371,7 +403,16 @@ class _Quote:
 
     # ---- markers
     def _marker_at(self, i: int, hungarian: bool) -> tuple[str, int] | None:
-        """`(era, length)` of the era marker that begins at token `i`, longest first."""
+        """`(era, length)` of the era marker that begins at token `i`, longest first. A "before"
+        word and an AD marker after it make a BC one."""
+        found = self._table_marker_at(i, hungarian)
+        if found is None and self.toks[i].low in _BEFORE_WORDS and i + 1 < len(self.toks):
+            after = self._table_marker_at(i + 1, hungarian)
+            if after is not None and after[0] == AD:
+                return BC, after[1] + 1
+        return found
+
+    def _table_marker_at(self, i: int, hungarian: bool) -> tuple[str, int] | None:
         for length in _MARKER_LENGTHS:
             if i + length > len(self.toks):
                 continue
@@ -466,18 +507,38 @@ class _Quote:
     def statements(self) -> list[Statement]:
         raw = sorted(self._unit_statements() + self._year_statements(), key=lambda r: r[0])
         # "the 8th century to the seventh century BC": a statement without a marker takes the next
-        # one's when nothing but joint words stands between them
+        # one's when a range stands between them (`_only_joints`)
         for i in range(len(raw) - 2, -1, -1):
             (first, end, s), (start, _, nxt) = raw[i], raw[i + 1]
-            if s.era is None and nxt.era is not None and self._only_joints(end, start):
+            if s.era is None and nxt.era is not None and self._only_joints(s, end, start):
                 width = s.hi - s.lo if s.kind == YEAR else 0
                 lo, hi = span(s.kind, s.number, nxt.era, width)
                 raw[i] = (first, end, replace(s, era=nxt.era, lo=lo, hi=hi))
         return [s for _, _, s in raw if not (s.last_century and s.era != BC)]
 
-    def _only_joints(self, end: int, start: int) -> bool:
+    def _only_joints(self, statement: Statement, end: int, start: int) -> bool:
+        """Whether the statement that ends at token `end` and the one that begins at token `start`
+        are the two ends of one range: joint words between them with a range word among them, or a
+        dash and nothing else, and no comma, bracket, colon or full stop in the text between. A
+        determiner alone is no range ("In 1998 the 3rd century BC walls"), and a year does not take
+        the era of an ancient date after it unless a range word says they belong together."""
         between = self.toks[end:start]
-        return len(between) <= MAX_JOINTS and all(t.low in JOINTS for t in between)
+        if len(between) > MAX_JOINTS or not all(t.low in JOINTS for t in between):
+            return False
+        if start <= end:
+            return True
+        return self._joined(end, start, CONNECTORS if statement.kind != YEAR else YEAR_RANGE_WORDS)
+
+    def _joined(self, end: int, start: int, words: frozenset[str]) -> bool:
+        """Whether the joint words from token `end` up to token `start` make the numbers on either
+        side the ends of one range: a dash between them, or one of `words` - and in either case no
+        comma, bracket, colon or full stop in the text between ("In 1962, a 300 BC temple")."""
+        gap = _ABBREVIATION_DOT.sub("", self.plain[self.toks[end - 1].end : self.toks[start].start])
+        if _BREAKS.search(gap):
+            return False
+        if any(c in _HYPHENS or c in _MINUS for c in gap):
+            return True
+        return any(t.low in words for t in self.toks[end:start])
 
     def _unit_statements(self) -> list[_Raw]:
         out: list[_Raw] = []
@@ -548,8 +609,9 @@ class _Quote:
                 elif (
                     toks[k].low in JOINTS
                     and gap < MAX_JOINTS
-                    and self._number_follows(k)
                     and self._marker_at(k, False) is None
+                    and (at := self._number_follows(k)) is not None
+                    and self._joined(k - gap, at, CONNECTORS)
                 ):
                     k, gap = k + 1, gap + 1
                 else:
@@ -591,14 +653,15 @@ class _Quote:
             return 0
         return 99 if n.value % 100 == 0 else 9 if n.value % 10 == 0 else 0
 
-    def _number_follows(self, k: int) -> bool:
-        """Whether a number comes after the joint words that start at token `k`."""
+    def _number_follows(self, k: int) -> int | None:
+        """The index of the unclaimed number that comes after the joint words that start at token
+        `k`."""
         for at in range(k, min(k + MAX_JOINTS + 1, len(self.toks))):
-            if at in self.nums and self.nums[at].arabic:
-                return True
+            if at in self.nums and self.nums[at].arabic and at not in self.claimed:
+                return at
             if self.toks[at].low not in JOINTS:
-                return False
-        return False
+                return None
+        return None
 
     def _hungarian_ending(self, index: int) -> bool:
         toks = self.toks
