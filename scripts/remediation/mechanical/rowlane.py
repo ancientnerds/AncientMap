@@ -630,13 +630,19 @@ def _site_cells(records: Sequence[A.ChangeRecord]) -> dict[str, list[int]]:
 
 
 def redirect(records: Sequence[A.ChangeRecord], destination: str) -> ProbeResult:
-    """Every move of the first site that has one sent to `destination` instead."""
+    """Every move of the first site that has one and neither leaves nor reaches `destination`,
+    sent to `destination` instead (a move that already points there would be a no-op, which guard 2
+    refuses before the destination guard is asked - the retired probe row is itself a loser)."""
     moves = _site_cells(records)
-    if not moves:
+    movable = [
+        site
+        for site in sorted(moves)
+        if all(destination not in (records[i].old_value, records[i].new_value) for i in moves[site])
+    ]
+    if not movable:
         return None
-    first = moves[sorted(moves)[0]]
     mutated = list(records)
-    for index in first:
+    for index in moves[movable[0]]:
         mutated[index] = replace(mutated[index], new_value=destination)
     return mutated
 

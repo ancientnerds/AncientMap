@@ -24,7 +24,12 @@ from identity import parent_judge as J  # noqa: E402
 from identity import rounds  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
-from tests.remediation.identity_fixtures import entity, site  # noqa: E402
+from tests.remediation.identity_fixtures import (  # noqa: E402
+    CALIBRATED,
+    entity,
+    passed_calibrations,
+    site,
+)
 
 PARENT = "99999999-0000-4000-8000-000000000001"
 KID_A = "aaaaaaaa-0000-4000-8000-000000000002"
@@ -33,6 +38,21 @@ KID_C = "cccccccc-0000-4000-8000-000000000004"
 URL = "https://en.wikipedia.org/wiki/Pompeii"
 TEXT = "The Theatre Area is a part of Pompeii, near the Forum."
 NOW = "2026-10-12T00:00:00+00:00"
+
+
+@pytest.fixture(autouse=True)
+def _calibrated(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every role has a sealed, passed calibration under a temporary calibration root."""
+    root = tmp_path_factory.mktemp("calibration")
+    monkeypatch.setattr(rounds.CC, "CALIBRATION_ROOT", root)
+    passed_calibrations(root)
+
+
+def import_round(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """`J.import_round` with every role calibrated (`TestTheCalibrationGate` calls `J.import_round`)."""
+    return J.import_round(*args, calibrations=CALIBRATED, **kwargs)
+
+
 SONNET = OH.ANSWER_MODELS["claude-sonnet-5-5"]
 OPUS = OH.ANSWER_MODELS["claude-opus-5-5"]
 
@@ -552,7 +572,7 @@ class TestTheRounds:
             answered_by="web_verifier:b1",
             model=SONNET,
         )
-        summary = J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fetch, now=lambda: NOW)
+        summary = import_round(run, J.STAGE_VERDICT, "r1", CTX, fetch, now=lambda: NOW)
         assert summary["decided"] == 1
         J.export_rechecks(run, CTX, tmp_path / "h2", now=lambda: NOW)
         rows = [
@@ -572,9 +592,7 @@ class TestTheRounds:
             answered_by="adversarial:b1",
             model=OPUS,
         )
-        assert (
-            J.import_round(run, J.STAGE_RECHECK, "r1", CTX, fetch, now=lambda: NOW)["decided"] == 1
-        )
+        assert import_round(run, J.STAGE_RECHECK, "r1", CTX, fetch, now=lambda: NOW)["decided"] == 1
         assert J.write_decisions(run, CTX) == {"children": 1, "decided": 1}
         [written] = [
             json.loads(x)
@@ -599,7 +617,7 @@ class TestTheRounds:
             model=OPUS,
         )
         with pytest.raises(rounds.RoundError, match="this stage asks web_verifier"):
-            J.import_round(run, J.STAGE_VERDICT, "r1", CTX, lambda urls, store: {}, now=lambda: NOW)
+            import_round(run, J.STAGE_VERDICT, "r1", CTX, lambda urls, store: {}, now=lambda: NOW)
 
     def test_the_brief_and_the_shape_check(self, tmp_path: Path) -> None:
         run = tmp_path / "run"

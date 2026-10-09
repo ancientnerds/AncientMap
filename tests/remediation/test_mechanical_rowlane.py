@@ -638,6 +638,21 @@ class TestTheProbes:
                 r for r in full_plan() if r.column != "site_id"
             ]
 
+    def test_a_destination_probe_skips_the_site_that_is_itself_the_destination(self) -> None:
+        """The retired probe row is a loser of the real plan: redirecting its own moves to it would
+        be a no-op that guard 2 refuses before the destination guard is asked."""
+        plan = [
+            cell("wiki_images", "11", "site_id", R.RETIRED_ROW, SURVIVOR, site=R.RETIRED_ROW),
+            cell("wiki_images", "12", "site_id", LOSER, SURVIVOR, site=LOSER),
+        ]
+        mutated = self.cases(plan)["invariant-dest-shown"][2]
+        assert [(r.site_id, r.new_value) for r in mutated] == [
+            (R.RETIRED_ROW, SURVIVOR),
+            (LOSER, R.RETIRED_ROW),
+        ]
+        alone = [plan[0]]
+        assert "invariant-dest-shown" not in self.cases(alone)
+
     def test_the_hero_probe_drops_the_demotion_and_the_alias_probe_the_name_row(self) -> None:
         hero = self.cases()["invariant-hero-cell"][2]
         assert len(hero) == 4 and not [r for r in hero if r.column == "is_hero"]

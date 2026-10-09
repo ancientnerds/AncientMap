@@ -23,6 +23,8 @@ import opus_handoff as OH  # noqa: E402
 from identity import rounds, wiki  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
+from tests.remediation.identity_fixtures import CALIBRATED, passed_calibrations  # noqa: E402
+
 SONNET = OH.ANSWER_MODELS["claude-sonnet-5-5"]
 OPUS = OH.ANSWER_MODELS["claude-opus-5-5"]
 HAIKU = OH.ANSWER_MODELS["claude-haiku-5-5"]
@@ -205,6 +207,72 @@ class TestTheRoleOfAnAnswer:
             assert problem is not None and message in problem
 
 
+# ------------------------------------------------------------------------- the calibrations
+class TestTheCalibrationGate:
+    """D6: a role's answers count only after a sealed calibration of that role passed."""
+
+    def root(self, tmp_path: Path) -> Path:
+        root = tmp_path / "calibration"
+        passed_calibrations(root)
+        return root
+
+    def check(
+        self, tmp_path: Path, roles: Any = ("web_verifier",), calibrations: Any = None
+    ) -> None:
+        rounds.check_calibrated(
+            roles, CALIBRATED if calibrations is None else calibrations, self.root(tmp_path)
+        )
+
+    def test_a_passed_sealed_calibration_of_the_role_counts(self, tmp_path: Path) -> None:
+        self.check(tmp_path, ["web_verifier", "adversarial", "web_verifier"])
+
+    def test_a_role_without_a_named_calibration_does_not(self, tmp_path: Path) -> None:
+        with pytest.raises(rounds.RoundError, match="role adversarial answered"):
+            self.check(tmp_path, ["adversarial"], {"web_verifier": "cal-web_verifier"})
+
+    def test_a_calibration_without_a_verdict_does_not(self, tmp_path: Path) -> None:
+        root = self.root(tmp_path)
+        (root / "verdicts" / "cal-web_verifier.json").unlink()
+        with pytest.raises(rounds.RoundError, match="has no verdict"):
+            rounds.check_calibrated(["web_verifier"], CALIBRATED, root)
+
+    def test_a_failed_verdict_does_not(self, tmp_path: Path) -> None:
+        root = self.root(tmp_path)
+        path = root / "verdicts" / "cal-web_verifier.json"
+        path.write_text(
+            json.dumps({"role": "web_verifier", "passed": False, "held": "the owner decides"}),
+            encoding="utf-8",
+        )
+        with pytest.raises(rounds.RoundError, match="did not pass"):
+            rounds.check_calibrated(["web_verifier"], CALIBRATED, root)
+
+    def test_another_role_s_calibration_does_not(self, tmp_path: Path) -> None:
+        with pytest.raises(rounds.RoundError, match="calibration of role adversarial, not of"):
+            self.check(tmp_path, ["web_verifier"], {"web_verifier": "cal-adversarial"})
+
+    def test_a_role_whose_registry_entry_changed_after_the_seal_does_not(
+        self, tmp_path: Path
+    ) -> None:
+        root = self.root(tmp_path)
+        seals = json.loads((root / "THRESHOLDS.json").read_text(encoding="utf-8"))
+        seals["cal-web_verifier"]["role_sha256"] = "0" * 64
+        (root / "THRESHOLDS.json").write_text(json.dumps(seals), encoding="utf-8")
+        with pytest.raises(rounds.RoundError, match="changed after the seal"):
+            rounds.check_calibrated(["web_verifier"], CALIBRATED, root)
+
+    def test_a_verdict_without_a_seal_does_not(self, tmp_path: Path) -> None:
+        root = self.root(tmp_path)
+        (root / "THRESHOLDS.json").write_text("{}", encoding="utf-8")
+        with pytest.raises(rounds.RoundError, match="is not sealed"):
+            rounds.check_calibrated(["web_verifier"], CALIBRATED, root)
+
+    def test_the_flag_is_role_equals_id(self) -> None:
+        assert rounds.parse_calibrations(["a=b", "c=d"]) == {"a": "b", "c": "d"}
+        for bad in (["x"], ["=y"], ["x="], ["a=b", "a=c"]):
+            with pytest.raises(rounds.RoundError):
+                rounds.parse_calibrations(bad)
+
+
 # ---------------------------------------------------------------------------------- the rounds
 class TestTheRoundFiles:
     def export(
@@ -279,6 +347,23 @@ class TestTheRoundFiles:
             encoding="utf-8",
         )
         assert rounds.labels_for_round(run, STAGE, ["a", "b"]) == (["a"], {"a": "r"})
+
+    def test_a_label_decided_in_a_later_verdict_round_joins_the_next_recheck(
+        self, tmp_path: Path
+    ) -> None:
+        """Recheck round 1 asked A; B became decided only in verdict round 2: the next recheck
+        round asks B (never rechecked) and A's held recheck, not A's decided one."""
+        run = tmp_path / "run"
+        self.export(tmp_path, ["a"])
+        stage = run / STAGE
+        (stage / rounds.ANSWERS_DIR).mkdir(parents=True)
+        (stage / rounds.ANSWERS_DIR / "r1.jsonl").write_text("", encoding="utf-8")
+        decided = {"label": "a", "status": "decided", "reason": ""}
+        (stage / rounds.DECISIONS_FILE).write_text(json.dumps(decided) + "\n", encoding="utf-8")
+        assert rounds.labels_for_round(run, STAGE, ["a", "b"]) == (["b"], {})
+        held = {"label": "a", "status": "held", "reason": "r"}
+        (stage / rounds.DECISIONS_FILE).write_text(json.dumps(held) + "\n", encoding="utf-8")
+        assert rounds.labels_for_round(run, STAGE, ["a", "b"]) == (["a", "b"], {"a": "r"})
 
     def test_only_the_newest_round_is_importable(self, tmp_path: Path) -> None:
         run = tmp_path / "run"

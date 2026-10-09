@@ -533,14 +533,18 @@ def decide_verdict(
         )
         metres = None
         reason = failure
+        metres_limit, limit_evidence = DEFAULT_METRES, []
         if m.verdict == "MERGE" and m.survivor is not None:
             metres = distance[tuple(sorted((site, m.survivor)))]
-            limit = _limit(metres, overrides.get(site), library)
-            if reason is None and metres > DEFAULT_METRES and limit is None:
-                reason = (
-                    f"beyond {DEFAULT_METRES} m ({metres:.0f} m): a per-pair override with a quote "
-                    "is the owner's to give (OVERRIDES.json)"
-                )
+            if metres > DEFAULT_METRES:
+                granted = _limit(metres, overrides.get(site), library)
+                if granted is None:
+                    reason = reason or (
+                        f"beyond {DEFAULT_METRES} m ({metres:.0f} m): a per-pair override with a "
+                        "quote is the owner's to give (OVERRIDES.json)"
+                    )
+                else:
+                    metres_limit, limit_evidence = granted
         out_members.append(
             {
                 "site_id": site,
@@ -552,6 +556,8 @@ def decide_verdict(
                 "quotes": list(m.quotes),
                 "quote_outcomes": outcomes,
                 "metres": None if metres is None else round(metres, 1),
+                "metres_limit": metres_limit,
+                "limit_evidence": limit_evidence,
                 "status": HELD if reason else DECIDED,
                 "reason": reason or "",
             }
@@ -568,9 +574,12 @@ def decide_verdict(
     }
 
 
-def _limit(metres: float, override: Mapping[str, Any] | None, library: Q.Library) -> int | None:
-    """The distance limit an override gives a loser, or `None`: it needs a limit at or above the
-    measured distance, and evidence whose quotes the machine finds."""
+def _limit(
+    metres: float, override: Mapping[str, Any] | None, library: Q.Library
+) -> tuple[int, list[dict[str, str]]] | None:
+    """The distance limit an override gives a loser with the evidence that carries it, or `None`:
+    it needs a limit at or above the measured distance, and evidence whose quotes the machine
+    finds. The limit and its quotes are what the decision, the pair and the plan journal."""
     if override is None:
         return None
     limit = int(override["metres_limit"])
@@ -578,7 +587,7 @@ def _limit(metres: float, override: Mapping[str, Any] | None, library: Q.Library
     if limit < math.ceil(metres) or not quotes:
         return None
     _outcomes, failure = rounds.quote_outcomes(quotes, "override", library)
-    return None if failure else limit
+    return None if failure else (limit, [dict(q) for q in quotes])
 
 
 def decide_recheck(
@@ -626,7 +635,6 @@ def build_decisions(
     ctx: Context,
     verdicts: Mapping[str, Mapping[str, Any]],
     rechecks: Mapping[str, Mapping[str, Any]],
-    overrides: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """`DUP_DECISIONS.jsonl`: per cluster what is decided, what waits for its recheck and what is
     held, and per already-retired loser the move that completes its retirement.
@@ -635,7 +643,6 @@ def build_decisions(
     same target; a RETARGET or REJECT, or a held recheck, holds it with the reasons of both readers.
     WRONG_ID needs no recheck (Opus rechecks MERGE and PART_OF). Nothing is guessed: a cluster with no
     verdict is `unanswered`."""
-    overrides = overrides or {}
     records: list[dict[str, Any]] = []
     for cluster_id in sorted(ctx.clusters):
         cluster = ctx.clusters[cluster_id]
@@ -694,12 +701,9 @@ def build_decisions(
                     "metres": m["metres"],
                 }
                 if m["verdict"] == "MERGE":
-                    override = overrides.get(site)
-                    item["metres_limit"] = (
-                        int(override["metres_limit"])
-                        if override and (m["metres"] or 0) > DEFAULT_METRES
-                        else DEFAULT_METRES
-                    )
+                    # the limit and its evidence are the verdict round's, checked once there
+                    item["metres_limit"] = m["metres_limit"]
+                    item["limit_evidence"] = m["limit_evidence"]
                     merges.append(item)
                 else:
                     parts.append(item)
@@ -735,6 +739,7 @@ def build_decisions(
                         "quotes": [],
                         "metres": None,
                         "metres_limit": DEFAULT_METRES,
+                        "limit_evidence": [],
                         "already_retired": True,
                     }
                 ],
@@ -812,10 +817,14 @@ def import_round(
     ctx: Context,
     fetch: rounds.Fetch,
     *,
+    calibrations: Mapping[str, str],
     now: Callable[[], str] = rounds.now_utc,
     root: Path | None = None,
+    calibration_root: Path | None = None,
 ) -> dict[str, Any]:
-    """Parse, fetch and decide every answer of one round of `stage`; merge the decisions."""
+    """Parse, fetch and decide every answer of one round of `stage`; merge the decisions.
+
+    `calibrations` names the passed calibration of each answering role (`rounds.check_calibrated`)."""
     verdicts = load_decisions(run, STAGE_VERDICT)
     overrides = _overrides(run)
 
@@ -844,8 +853,8 @@ def import_round(
         dup_run(run), stage, round_name,
         prompt_of=_prompt_of(stage, ctx, verdicts if stage == STAGE_RECHECK else None),
         allowed_roles=(ROLE_VERDICT,) if stage == STAGE_VERDICT else ROLES_RECHECK,
-        parse=parse, decide=decide, wiki=ctx.wiki, fetch=fetch,
-        extra_urls={q["source"] for o in overrides.values() for q in o.get("evidence", [])},
+        parse=parse, decide=decide, wiki=ctx.wiki, fetch=fetch, calibrations=calibrations,
+        calibration_root=calibration_root, extra_urls={q["source"] for o in overrides.values() for q in o.get("evidence", [])},
         now=now, root=root, repo=REPO,
     )  # fmt: skip
 
@@ -853,7 +862,7 @@ def import_round(
 def write_decisions(run: Path, ctx: Context) -> dict[str, Any]:
     """Build `DUP_DECISIONS.jsonl` from the imported verdicts and rechecks."""
     records = build_decisions(
-        ctx, load_decisions(run, STAGE_VERDICT), load_decisions(run, STAGE_RECHECK), _overrides(run)
+        ctx, load_decisions(run, STAGE_VERDICT), load_decisions(run, STAGE_RECHECK)
     )
     common.write_jsonl(run / DUP_DECISIONS, records)
     return decisions_summary(records)
@@ -973,6 +982,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             cmd.add_argument("--handoff", type=Path, required=True, help="a new directory")
         else:
             cmd.add_argument("--round", required=True)
+            cmd.add_argument(
+                "--calibration", action="append", default=[], metavar="ROLE=ID",
+                help="the passed calibration of each answering role (repeatable)",
+            )  # fmt: skip
     brief_cmd = sub.add_parser("brief")
     brief_cmd.add_argument("--stage", choices=(STAGE_VERDICT, STAGE_RECHECK), required=True)
     brief_cmd.add_argument("--round", required=True)
@@ -1012,7 +1025,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "import":
             print(
                 json.dumps(
-                    import_round(run, args.stage, args.round, ctx, _fetch_live),
+                    import_round(
+                        run,
+                        args.stage,
+                        args.round,
+                        ctx,
+                        _fetch_live,
+                        calibrations=rounds.parse_calibrations(args.calibration),
+                    ),  # fmt: skip
                     indent=1,
                     sort_keys=True,
                 )

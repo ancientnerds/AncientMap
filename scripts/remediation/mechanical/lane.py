@@ -221,6 +221,11 @@ _SAYS = re.compile(r"^[A-Za-z0-9 _/,()-]+\Z")
 #: A probe value that stands for the planned site's own id: a site named as its own parent (D25) is
 #: a value no list of fixed ids can hold, because it differs from plan row to plan row.
 PROBE_SELF = "{self}"
+#: A probe value that stands for a curated shown site near the planned site (the retire lane's
+#: `scope_reason` names a survivor that passes every other check and is not the decided one): which
+#: row that is depends on the plan, so `apply.cmd_probe_guards` reads one from production and
+#: `apply.probe_cases` splices its id in where the placeholder stands.
+PROBE_NEIGHBOUR = "{neighbour}"
 
 
 @dataclass(frozen=True)
@@ -250,12 +255,15 @@ class SiteInvariant:
             raise ValueError(f"{self.says!r} cannot be spliced into a RAISE message")
         if not self.predicate.strip() or "$$" in self.predicate:
             raise ValueError(f"{self.says}: the predicate is empty or would end the DO block")
+        placeholder = len(self.probe_values) == 1 and (
+            self.probe_values == (PROBE_SELF,) or PROBE_NEIGHBOUR in self.probe_values[0]
+        )
         if not _IDENTIFIER.match(self.probe_column) or (
-            len(self.probe_values) < 3 and self.probe_values != (PROBE_SELF,)
+            len(self.probe_values) < 3 and not placeholder
         ):
             raise ValueError(
                 f"{self.says}: a probe needs its column and three values (one differs from any "
-                "old and new value), or the site's own id alone"
+                "old and new value), or one placeholder (the site's own id, or a neighbour)"
             )
         if self.probe_name and not _KEY_PREFIX.match(self.probe_name):
             raise ValueError(f"{self.says}: {self.probe_name!r} is not a probe name like a-b")
@@ -2404,12 +2412,17 @@ def _pair_case(subject: str, pairs: Sequence[MergePair], pick: str) -> str:
     return f"CASE {subject} {whens} END"
 
 
-#: What the move rests on: the loser's name and external ids, and its survivor's. Not the counts of
-#: what it holds - the move changes those, and the reversal runs after it.
+#: What the move rests on: the loser's name and external ids, its scope status and reason, and its
+#: survivor's name and ids. Not the counts of what it holds - the move changes those, and the
+#: reversal runs after it. The scope status and reason are there so that the move cannot be undone
+#: while the retirement stands: the retirement is rolled back first, then the move, and the move's
+#: reversal (guard 5) refuses a loser that is retired.
 def _move_premise_sql(pairs: Sequence[MergePair]) -> str:
     survivor_of = _pair_case("CAST(u.id AS text)", pairs, "survivor")
     return (
-        f"u.name || ' | ' || {external_ids_sql('u')} || ' | survivor ' || coalesce((SELECT "
+        f"u.name || ' | ' || {external_ids_sql('u')} || ' | ' || "
+        "coalesce(u.scope_status, 'NULL') || ' | ' || coalesce(u.scope_reason, 'NULL') || "
+        "' | survivor ' || coalesce((SELECT "
         f"s.name || ' | ' || {external_ids_sql('s')} FROM unified_sites s "
         f"WHERE CAST(s.id AS text) = {survivor_of}), '')"
     )
@@ -2564,7 +2577,40 @@ def dup_merge_retire_lane(wave: str, pairs: Sequence[MergePair]) -> Lane:
         lock_timeout=LOCK_TIMEOUT,
         statement_timeout=STATEMENT_TIMEOUT,
         cells=DUPLICATE_HIDE_CELLS,
-        site_invariants=duplicate_survivor_invariants(DUP_RETIRE_METRES, limits),
+        site_invariants=(
+            *duplicate_survivor_invariants(DUP_RETIRE_METRES, limits),
+            decided_survivor_invariant(pairs),
+        ),
+    )
+
+
+def decided_survivor_invariant(pairs: Sequence[MergePair]) -> SiteInvariant:
+    """A loser retires onto the survivor the wave decided for it - the move lane's `dest-named-near`
+    for the retirement. The three survivor checks ask whether the named row is curated, shown and
+    near; this asks whether it is *the* row. It comes after them, so its probe names a row that
+    passes all three (`PROBE_NEIGHBOUR`) and only this check refuses it."""
+    survivor_of = _pair_case("CAST(u.id AS text)", pairs, "survivor")
+    return SiteInvariant(
+        says="planned site(s) retire onto a survivor other than the one decided for them",
+        predicate=f"u.scope_reason IS DISTINCT FROM {sql_literal(DUPLICATE_PREFIX)} || {survivor_of}",
+        probe_column="scope_reason",
+        probe_values=(f"{DUPLICATE_PREFIX}{PROBE_NEIGHBOUR}",),
+        probe_name="survivor-decided",
+    )
+
+
+def survivor_neighbour_sql(
+    loser: str, survivor: str, planned: Sequence[str], metres: int = DUP_RETIRE_METRES
+) -> str:
+    """SQL: the nearest curated shown site within `metres` of `loser` that is neither its survivor
+    nor a site the plan writes (a planned loser is retired inside the probe's transaction)."""
+    others = ", ".join(sql_literal(site) for site in sorted(planned))
+    return (
+        "SELECT CAST(s.id AS text) AS id FROM unified_sites s, unified_sites u "
+        f"WHERE CAST(u.id AS text) = {sql_literal(loser)} AND s.source_id = 'ancient_nerds' "
+        f"AND {not_retired('s')} AND CAST(s.id AS text) <> {sql_literal(survivor)} "
+        f"AND CAST(s.id AS text) NOT IN ({others}) AND {sphere_metres('s', 'u')} <= {metres} "
+        f"ORDER BY {sphere_metres('s', 'u')}, s.id LIMIT 1"
     )
 
 
@@ -2588,10 +2634,12 @@ def parent_invariants(metres: int = PARENT_METRES) -> tuple[SiteInvariant, ...]:
             says="planned site(s) name no curated site as their parent",
             predicate=f"NOT EXISTS (SELECT 1 FROM unified_sites s WHERE {_PARENT})",
             probe_column="parent_site_id",
+            # `parent_site_id` is a foreign key to `unified_sites.id`: a probe value must be a
+            # row that exists, so these are three GeoNames rows (read on production 2026-10-09).
             probe_values=(
-                "00000000-0000-0000-0000-000000000000",
-                "8db5555a-a9a3-417b-944c-6ec0c04de0db",  # GeoNames Chiapa
-                "ffffffff-ffff-4fff-8fff-ffffffffffff",
+                "8db5555a-a9a3-417b-944c-6ec0c04de0db",  # GeoNames Chiapa de Corzo
+                "0000a084-b9f4-4d8c-a217-08c6d688ca23",  # GeoNames Seminary Palace
+                "0000db0b-1961-45ce-b069-e7fa36aff1ac",  # GeoNames Killusty Castle
             ),
             probe_name="parent-not-curated",
         ),

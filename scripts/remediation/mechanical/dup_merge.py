@@ -97,6 +97,7 @@ class WavePair:
     cluster_id: str
     why: str
     quotes: tuple[Mapping[str, str], ...]
+    limit_evidence: tuple[Mapping[str, str], ...]
 
     def lane_pair(self) -> MergePair:
         return MergePair(self.loser, self.survivor, self.metres_limit)
@@ -112,6 +113,7 @@ class WavePair:
             "cluster_id": self.cluster_id,
             "why": self.why,
             "quotes": [dict(q) for q in self.quotes],
+            "limit_evidence": [dict(q) for q in self.limit_evidence],
         }
 
 
@@ -147,6 +149,7 @@ def decided_pairs(decisions: Sequence[Mapping[str, Any]]) -> list[WavePair]:
                     cluster_id=r["cluster_id"],
                     why=m["why"],
                     quotes=tuple(m["quotes"]),
+                    limit_evidence=tuple(m["limit_evidence"]),
                 )
             )
     return sorted(pairs, key=lambda p: (p.cluster_id, p.loser))
@@ -225,6 +228,7 @@ def load_wave(wave: str, root: Path | None = None) -> list[WavePair]:
             cluster_id=p["cluster_id"],
             why=p["why"],
             quotes=tuple(p["quotes"]),
+            limit_evidence=tuple(p["limit_evidence"]),
         )
         for p in data["pairs"]
     ]
@@ -370,9 +374,11 @@ def _ids(read: Read, site_id: str) -> str:
 
 def move_premise(read: Read, loser: Mapping[str, Any], survivor: Mapping[str, Any]) -> str:
     """What `lane.dup_merge_move_lane`'s premise SQL prints for the loser, from the read's rows."""
+    status = "NULL" if loser["scope_status"] is None else loser["scope_status"]
+    reason = "NULL" if loser["scope_reason"] is None else loser["scope_reason"]
     return (
-        f"{loser['name']} | {_ids(read, loser['id'])} | survivor {survivor['name']} | "
-        f"{_ids(read, survivor['id'])}"
+        f"{loser['name']} | {_ids(read, loser['id'])} | {status} | {reason} | "
+        f"survivor {survivor['name']} | {_ids(read, survivor['id'])}"
     )
 
 
@@ -451,7 +457,10 @@ def _evidence(
             "url": None,
             "quote": f"MERGE {pair.loser_name!r} into {pair.survivor_name!r}: {pair.why}",
         },
-        *(dict(q) | {"url": q["source"]} if "url" not in q else dict(q) for q in pair.quotes),
+        *(
+            dict(q) | {"url": q["source"]} if "url" not in q else dict(q)
+            for q in (*pair.quotes, *pair.limit_evidence)
+        ),
         {
             "source": "production:unified_sites",
             "url": None,

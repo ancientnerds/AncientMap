@@ -33,6 +33,7 @@ for _root in (str(_HERE.parents[3]), str(_HERE.parents[1])):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+import calibrate_claude as CC  # noqa: E402
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
@@ -202,6 +203,51 @@ def role_problem(answer: OH.Answer, allowed_roles: Iterable[str]) -> str | None:
     return RO.answer_problem(answer.answered_by, answer.model)
 
 
+def parse_calibrations(values: Iterable[str]) -> dict[str, str]:
+    """`--calibration ROLE=ID` (repeatable) as `{role: calibration id}`."""
+    out: dict[str, str] = {}
+    for value in values:
+        role, separator, calibration_id = value.partition("=")
+        if not separator or not role or not calibration_id:
+            raise RoundError(f"--calibration {value!r} is not ROLE=ID")
+        if role in out:
+            raise RoundError(f"--calibration names role {role} twice")
+        out[role] = calibration_id
+    return out
+
+
+def check_calibrated(
+    roles: Iterable[str], calibrations: Mapping[str, str], root: Path | None = None
+) -> None:
+    """Refuse an import whose answering roles are not calibrated (owner decision D6): each role
+    needs the id of a sealed calibration of that role (`calibrate_claude.py`) whose verdict passed
+    and whose registry entry is unchanged since the seal. An answer of a role without one counts
+    for nothing, so the import stops before it reads a page or writes a decision."""
+    base = CC.CALIBRATION_ROOT if root is None else root
+    for role in sorted(set(roles)):
+        calibration_id = calibrations.get(role)
+        if calibration_id is None:
+            raise RoundError(
+                f"role {role} answered, but no passed calibration of it is named "
+                f"(--calibration {role}=<id>)"
+            )
+        path = base / CC.VERDICTS_DIR / f"{calibration_id}.json"
+        if not path.exists():
+            raise RoundError(f"calibration {calibration_id} of role {role} has no verdict ({path})")
+        verdict = json.loads(path.read_text(encoding="utf-8"))
+        if verdict["role"] != role:
+            raise RoundError(
+                f"calibration {calibration_id} is a calibration of role {verdict['role']}, "
+                f"not of {role}"
+            )
+        if verdict["passed"] is not True:
+            raise RoundError(f"calibration {calibration_id} of role {role} did not pass")
+        try:
+            CC._need_unchanged_role(CC._sealed(base, calibration_id))
+        except CC.CalibrationError as exc:
+            raise RoundError(f"calibration {calibration_id} of role {role}: {exc}") from exc
+
+
 def read_answers(
     run: Path,
     stage: str,
@@ -288,14 +334,16 @@ def labels_for_round(
     stage_run: Path, stage: str, first: Sequence[str]
 ) -> tuple[list[str], dict[str, str]]:
     """`(labels, earlier)` of the next round: `first` for round 1; later the labels whose latest
-    decision is held (with why), once the newest round is imported."""
+    decision is held (with why) and the labels of `first` that no round decided yet (a recheck
+    stage's `first` is the verdict stage's decided clusters, which grow with every verdict round),
+    once the newest round is imported."""
     if not load_rounds(stage_run, stage):
         return sorted(first), {}
     newest_imported(stage_run, stage, "a re-ask")
-    held = {
-        label: d for label, d in load_decisions(stage_run, stage).items() if d["status"] == HELD
-    }
-    return sorted(held), {label: d["reason"] for label, d in held.items()}
+    decisions = load_decisions(stage_run, stage)
+    held = {label: d for label, d in decisions.items() if d["status"] == HELD}
+    unasked = [label for label in first if label not in decisions]
+    return sorted({*held, *unasked}), {label: d["reason"] for label, d in held.items()}
 
 
 def shape_held(label: str, round_name: str, answered_by: str, reason: str) -> dict[str, Any]:
@@ -370,12 +418,16 @@ def import_stage(
     decide: Callable[[str, Any, str, str, Q.Library], dict[str, Any]],
     wiki: WikiIndex | None,
     fetch: Fetch,
+    calibrations: Mapping[str, str],
     extra_urls: Iterable[str] = (),
     now: Callable[[], str] = now_utc,
     root: Path | None = None,
     repo: Path | None = None,
+    calibration_root: Path | None = None,
 ) -> dict[str, Any]:
     """Read, parse, fetch and decide every answer of one round of `stage`; merge the decisions.
+
+    `calibrations` maps each answering role to its passed calibration (`check_calibrated`).
 
     `parse(label, text)` returns the answer's items (each with `.quotes`) or raises `AnswerError`;
     `decide(label, items, round_name, answered_by, library)` is the stage's machine checks. A
@@ -389,6 +441,10 @@ def import_stage(
         problem = role_problem(answer, allowed_roles)
         if problem is not None:
             raise RoundError(f"{stage}/{label}: {problem}")
+    check_calibrated(
+        {RO.role_of(a.answered_by) for a in answers.values()}, calibrations, calibration_root
+    )
+    for label, answer in answers.items():
         try:
             parsed[label] = (parse(label, answer.text), answer)
         except AnswerError as exc:

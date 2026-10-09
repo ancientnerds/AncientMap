@@ -437,10 +437,8 @@ class TestTheProbes:
 
     def test_the_other_probes_name_a_row_of_their_kind(self) -> None:
         cases = self.cases()
-        assert (
-            cases["invariant-parent-not-curated"][2][0].new_value
-            == "00000000-0000-0000-0000-000000000000"
-        )
+        # parent_site_id is a foreign key: the probe must name a row that exists (GeoNames Chiapa)
+        assert cases["invariant-parent-not-curated"][2][0].new_value == GEONAMES
         assert (
             cases["invariant-parent-retired"][2][0].new_value
             == "04d8ce82-4fa3-4e48-88b7-bb41b354260c"
@@ -593,7 +591,7 @@ class TestTheProbeRun:
         assert A.cmd_probe_guards([self.RECORD], tmp_path, LANE) == 0
         assert capsys.readouterr().out.count("refused by its own guard=True") == 9
 
-    def test_the_retire_lane_s_three_checks_are_proven_with_the_wave_s_limits(
+    def test_the_retire_lane_s_four_checks_are_proven_with_the_wave_s_limits(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
         retire = L.dup_merge_retire_lane(WAVE, [L.MergePair(CHILD, PARENT, 2500)])
@@ -603,7 +601,7 @@ class TestTheProbeRun:
         ]  # fmt: skip
         ProbeProduction(retire, records, monkeypatch)
         assert A.cmd_probe_guards(records, tmp_path, retire) == 0
-        assert capsys.readouterr().out.count("refused by its own guard=True") == 9
+        assert capsys.readouterr().out.count("refused by its own guard=True") == 10
 
 
 class TestTheWavesCommandOnNothing:

@@ -27,7 +27,13 @@ from identity import dup_judge as J
 from identity.wiki import WikiIndex  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
-from tests.remediation.identity_fixtures import export_of, ext, site  # noqa: E402
+from tests.remediation.identity_fixtures import (  # noqa: E402
+    CALIBRATED,
+    export_of,
+    ext,
+    passed_calibrations,
+    site,
+)
 
 A_ID = "aaaaaaaa-0000-4000-8000-000000000001"
 B_ID = "bbbbbbbb-0000-4000-8000-000000000002"
@@ -39,6 +45,21 @@ URL_BANIAS = "https://en.wikipedia.org/wiki/Banias"
 URL_PART = "https://en.wikipedia.org/wiki/Pompeii"
 TEXT_PART = "The Theatre Area is a part of Pompeii."
 NOW = "2026-10-10T00:00:00+00:00"
+
+
+@pytest.fixture(autouse=True)
+def _calibrated(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every role has a sealed, passed calibration under a temporary calibration root."""
+    root = tmp_path_factory.mktemp("calibration")
+    monkeypatch.setattr(rounds.CC, "CALIBRATION_ROOT", root)
+    passed_calibrations(root)
+
+
+def import_round(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """`J.import_round` with every role calibrated (`TestTheCalibrationGate` calls `J.import_round`)."""
+    return J.import_round(*args, calibrations=CALIBRATED, **kwargs)
+
+
 SONNET = OH.ANSWER_MODELS["claude-sonnet-5-5"]
 OPUS = OH.ANSWER_MODELS["claude-opus-5-5"]
 
@@ -554,6 +575,25 @@ class TestTheMachineChecks:
         }
         decision = J.decide_verdict(self.far_cluster(), J.parse_verdict(a_merge_answer(), CLUSTER), round_name="r1", answered_by="x", library=library(tmp_path, PAGES), overrides=override)  # fmt: skip
         assert decision["status"] == J.DECIDED
+        [far] = [m for m in decision["members"] if m["verdict"] == "MERGE"]
+        assert far["metres_limit"] == 4000
+        assert far["limit_evidence"] == override[A_ID]["evidence"]
+        near = decided(a_merge_answer(), tmp_path)
+        assert [(m["metres_limit"], m["limit_evidence"]) for m in near["members"]] == [
+            (2000, [])
+        ] * 3
+
+    def test_the_decision_carries_the_override_s_limit_and_evidence_to_the_merge(
+        self, tmp_path: Path
+    ) -> None:
+        """Checked once in the verdict round: build_decisions reads no OVERRIDES.json again."""
+        evidence = [{"source": URL_BANIAS, "quote": "ancient site at the foot"}]
+        far = {"metres_limit": 4000, "evidence": evidence}
+        decision = J.decide_verdict(self.far_cluster(), J.parse_verdict(a_merge_answer(), CLUSTER), round_name="r1", answered_by="x", library=library(tmp_path, PAGES), overrides={A_ID: far})  # fmt: skip
+        ctx = J.Context(CTX.clusters, (), CTX.shown, CTX.names, None, CTX.basis)
+        [record] = J.build_decisions(ctx, {CID: decision}, {CID: recheck_decision(tmp_path)})
+        [merge] = record["merges"]
+        assert merge["metres_limit"] == 4000 and merge["limit_evidence"] == evidence
 
     @pytest.mark.parametrize(
         "override",
@@ -635,11 +675,10 @@ class TestTheDecisions:
         self,
         verdicts: dict[str, Any],
         rechecks: dict[str, Any] | None = None,
-        overrides=None,
         losers=(),
     ):
         ctx = J.Context(CTX.clusters, tuple(losers), CTX.shown, CTX.names, None, CTX.basis)
-        return J.build_decisions(ctx, verdicts, rechecks or {}, overrides)
+        return J.build_decisions(ctx, verdicts, rechecks or {})
 
     def test_a_confirmed_merge_is_decided_with_both_readers_reasons(self, tmp_path: Path) -> None:
         [record] = self.build({CID: verdict_decision(tmp_path)}, {CID: recheck_decision(tmp_path)})
@@ -718,14 +757,6 @@ class TestTheDecisions:
         assert (
             record["status"] == "held" and "a quote does not count" in record["held"][0]["reason"]
         )
-
-    def test_an_override_widens_the_limit_the_lanes_read(self, tmp_path: Path) -> None:
-        decision = verdict_decision(tmp_path)
-        decision["members"][0]["metres"] = 2300.0
-        [record] = self.build(
-            {CID: decision}, {CID: recheck_decision(tmp_path)}, {A_ID: {"metres_limit": 2500}}
-        )
-        assert record["merges"][0]["metres_limit"] == 2500
 
     def test_an_already_retired_loser_is_a_move_with_no_model(self) -> None:
         loser = {
@@ -822,7 +853,7 @@ class TestTheRounds:
         with pytest.raises(rounds.RoundError, match="exported but not imported"):
             J.export_verdicts(run, CTX, tmp_path / "h2")
         write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, "not json")
-        J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
+        import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         second = J.export_verdicts(run, CTX, tmp_path / "h2", now=lambda: NOW)
         assert (
             second.name == "r2"
@@ -839,7 +870,7 @@ class TestTheRounds:
         run = self.run_dir(tmp_path)
         J.export_verdicts(run, CTX, tmp_path / "h1", now=lambda: NOW)
         write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, a_merge_answer())
-        J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
+        import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         with pytest.raises(rounds.RoundError, match="no question to ask"):
             J.export_verdicts(run, CTX, tmp_path / "h2")
 
@@ -848,7 +879,7 @@ class TestTheRounds:
         for n in (1, 2, 3):
             J.export_verdicts(run, CTX, tmp_path / f"h{n}", now=lambda: NOW)
             write_answer(tmp_path / f"h{n}", f"r{n}-b01", J.STAGE_VERDICT, CID, "not json")
-            J.import_round(run, J.STAGE_VERDICT, f"r{n}", CTX, fake_fetch(PAGES), now=lambda: NOW)
+            import_round(run, J.STAGE_VERDICT, f"r{n}", CTX, fake_fetch(PAGES), now=lambda: NOW)
         with pytest.raises(rounds.RoundError, match="3 dup-verdict rounds are out"):
             J.export_verdicts(run, CTX, tmp_path / "h4")
 
@@ -856,9 +887,7 @@ class TestTheRounds:
         run = self.run_dir(tmp_path)
         J.export_verdicts(run, CTX, tmp_path / "h1", now=lambda: NOW)
         write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, a_merge_answer())
-        summary = J.import_round(
-            run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW
-        )
+        summary = import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         assert (
             summary["decided"] == 1
             and summary["held"] == 0
@@ -899,16 +928,14 @@ class TestTheRounds:
         def never(urls: list[str], store: Path) -> dict[str, int]:
             raise AssertionError(f"fetched {urls}")
 
-        summary = J.import_round(run, J.STAGE_VERDICT, "r1", ctx, never, now=lambda: NOW)
+        summary = import_round(run, J.STAGE_VERDICT, "r1", ctx, never, now=lambda: NOW)
         assert summary["decided"] == 1 and summary["pages"] == {"cache": 1}
 
     def test_an_answer_that_is_not_in_shape_is_held_with_the_reason(self, tmp_path: Path) -> None:
         run = self.run_dir(tmp_path)
         J.export_verdicts(run, CTX, tmp_path / "h1", now=lambda: NOW)
         write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, answer([member(A_ID)]))
-        summary = J.import_round(
-            run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW
-        )
+        summary = import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         assert summary["held"] == 1 and summary["held_reasons"] == {"shape": 1}
 
     @pytest.mark.parametrize(
@@ -930,29 +957,51 @@ class TestTheRounds:
             tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, a_merge_answer(), by=by, model=model
         )
         with pytest.raises(rounds.RoundError, match=message):
-            J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
+            import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         assert J.load_decisions(run, J.STAGE_VERDICT) == {}
+
+    @pytest.mark.parametrize(
+        ("calibrations", "message"),
+        [
+            ({}, "no passed calibration of it is named"),
+            ({"web_verifier": "cal-nothing"}, "has no verdict"),
+            ({"web_verifier": "cal-adversarial"}, "is a calibration of role adversarial"),
+        ],
+    )
+    def test_an_answer_of_a_role_without_a_passed_calibration_counts_for_nothing(
+        self, tmp_path: Path, calibrations: dict[str, str], message: str
+    ) -> None:
+        run = self.run_dir(tmp_path)
+        J.export_verdicts(run, CTX, tmp_path / "h1", now=lambda: NOW)
+        write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, a_merge_answer())
+        with pytest.raises(rounds.RoundError, match=message):
+            J.import_round(
+                run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), calibrations=calibrations,
+                now=lambda: NOW,
+            )  # fmt: skip
+        assert J.load_decisions(run, J.STAGE_VERDICT) == {}
+        assert not (run / J.DUP_DIR / J.STAGE_VERDICT / rounds.PAGES_DIR).exists()
 
     def test_an_unanswered_round_is_not_imported(self, tmp_path: Path) -> None:
         run = self.run_dir(tmp_path)
         J.export_verdicts(run, CTX, tmp_path / "h1", now=lambda: NOW)
         with pytest.raises(rounds.RoundError, match="does not validate"):
-            J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES))
+            import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES))
 
     def test_only_the_newest_round_is_imported(self, tmp_path: Path) -> None:
         run = self.run_dir(tmp_path)
         J.export_verdicts(run, CTX, tmp_path / "h1", now=lambda: NOW)
         write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, "not json")
-        J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
+        import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         J.export_verdicts(run, CTX, tmp_path / "h2", now=lambda: NOW)
         with pytest.raises(rounds.RoundError, match="is not the newest"):
-            J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES))
+            import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES))
 
     def test_the_recheck_asks_the_decided_relations_and_decides_them(self, tmp_path: Path) -> None:
         run = self.run_dir(tmp_path)
         J.export_verdicts(run, CTX, tmp_path / "h1", now=lambda: NOW)
         write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, a_merge_answer())
-        J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
+        import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         record = J.export_rechecks(run, CTX, tmp_path / "h2", now=lambda: NOW)
         assert record.labels == [CID]
         manifest = OH.read_manifest(tmp_path / "h2", "r1-b01")
@@ -983,9 +1032,7 @@ class TestTheRounds:
             by="adversarial:r1",
             model=OPUS,
         )
-        summary = J.import_round(
-            run, J.STAGE_RECHECK, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW
-        )
+        summary = import_round(run, J.STAGE_RECHECK, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         assert summary["decided"] == 1
         written = J.write_decisions(run, CTX)
         assert written["merges"] == 1 and written["status"] == {"complete": 1}
@@ -996,7 +1043,7 @@ class TestTheRounds:
         run = self.run_dir(tmp_path)
         J.export_verdicts(run, CTX, tmp_path / "h1", now=lambda: NOW)
         write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, a_merge_answer())
-        J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
+        import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         J.export_rechecks(run, CTX, tmp_path / "h2", now=lambda: NOW)
         recheck = json.dumps(
             {
@@ -1022,7 +1069,7 @@ class TestTheRounds:
             model=SONNET,
         )
         with pytest.raises(rounds.RoundError, match="this stage asks adversarial or pilot_judge"):
-            J.import_round(run, J.STAGE_RECHECK, "r1", CTX, fake_fetch(PAGES))
+            import_round(run, J.STAGE_RECHECK, "r1", CTX, fake_fetch(PAGES))
 
     def test_no_recheck_without_a_decided_relation(self, tmp_path: Path) -> None:
         run = self.run_dir(tmp_path)
@@ -1034,7 +1081,7 @@ class TestTheRounds:
             CID,
             answer([member(A_ID), member(B_ID), member(C_ID)]),
         )
-        J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
+        import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         with pytest.raises(rounds.RoundError, match="no cluster has a decided MERGE or PART_OF"):
             J.export_rechecks(run, CTX, tmp_path / "h2")
 
@@ -1056,7 +1103,7 @@ class TestTheBriefAndTheCheck:
     def test_a_recheck_brief_names_the_adversarial_role(self, tmp_path: Path) -> None:
         run = self.exported(tmp_path)
         write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, a_merge_answer())
-        J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
+        import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         J.export_rechecks(run, CTX, tmp_path / "h2", now=lambda: NOW)
         text = J.brief(run, J.STAGE_RECHECK, "r1", "r1-b01")
         assert "role adversarial" in text and "--model claude-opus-5-5 --role adversarial" in text
@@ -1074,7 +1121,7 @@ class TestTheBriefAndTheCheck:
     ) -> None:
         run = self.exported(tmp_path)
         write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, a_merge_answer())
-        J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
+        import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         J.export_rechecks(run, CTX, tmp_path / "h2", now=lambda: NOW)
         text = J.brief(
             run, J.STAGE_RECHECK, "r1", "r1-b01", role="pilot_judge", handoff="calibration/copy"

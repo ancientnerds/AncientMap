@@ -634,8 +634,10 @@ def export_rechecks(
 
 def import_round(
     run: Path, stage: str, round_name: str, ctx: Context, fetch: rounds.Fetch, *,
-    now: Callable[[], str] = rounds.now_utc, root: Path | None = None,
+    calibrations: Mapping[str, str], now: Callable[[], str] = rounds.now_utc,
+    root: Path | None = None, calibration_root: Path | None = None,
 ) -> dict[str, Any]:  # fmt: skip
+    """`calibrations` names the passed calibration of each answering role."""
     verdicts = load_decisions(run, STAGE_VERDICT)
 
     def parse(label: str, text: str) -> Any:
@@ -661,6 +663,7 @@ def import_round(
         prompt_of=_prompt_of(stage, ctx, verdicts if stage == STAGE_RECHECK else None),
         allowed_roles=(ROLE_VERDICT,) if stage == STAGE_VERDICT else ROLES_RECHECK,
         parse=parse, decide=decide, wiki=ctx.wiki, fetch=fetch, now=now, root=root, repo=REPO,
+        calibrations=calibrations, calibration_root=calibration_root,
     )  # fmt: skip
 
 
@@ -784,6 +787,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     imp = sub.add_parser("import")
     imp.add_argument("--stage", choices=stages, required=True)
     imp.add_argument("--round", required=True)
+    imp.add_argument(
+        "--calibration", action="append", default=[], metavar="ROLE=ID",
+        help="the passed calibration of each answering role (repeatable)",
+    )  # fmt: skip
     brief_cmd = sub.add_parser("brief")
     brief_cmd.add_argument("--stage", choices=stages, required=True)
     brief_cmd.add_argument("--round", required=True)
@@ -823,7 +830,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "import":
             print(
                 json.dumps(
-                    import_round(run, args.stage, args.round, ctx, _fetch_live),
+                    import_round(
+                        run,
+                        args.stage,
+                        args.round,
+                        ctx,
+                        _fetch_live,
+                        calibrations=rounds.parse_calibrations(args.calibration),
+                    ),  # fmt: skip
                     indent=1,
                     sort_keys=True,
                 )

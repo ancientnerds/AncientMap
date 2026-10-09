@@ -44,11 +44,20 @@ QUOTES = (
 )
 
 
+LIMIT_QUOTES = (
+    {
+        "source": "https://en.wikipedia.org/wiki/Amathus",
+        "quote": "the two names denote one site",
+        "url": "https://en.wikipedia.org/wiki/Amathus",
+    },
+)
+
+
 def pair(loser: str = LOSER, survivor: str = SURVIVOR, **over: Any) -> D.WavePair:
     base: dict[str, Any] = {
         "loser": loser, "survivor": survivor, "loser_name": "Banias",
         "survivor_name": "Caesarea Philippi", "metres_limit": 2000, "already_retired": False,
-        "cluster_id": "dup-1", "why": "one site", "quotes": QUOTES,
+        "cluster_id": "dup-1", "why": "one site", "quotes": QUOTES, "limit_evidence": (),
     }  # fmt: skip
     return D.WavePair(**{**base, **over})
 
@@ -144,7 +153,7 @@ class TestTheWaves:
     def decision(self, site: str, target: str, **over: Any) -> dict[str, Any]:
         item = {"kind": "MERGE", "site_id": site, "name": f"n-{site[:4]}", "target": target,
                 "target_name": f"n-{target[:4]}", "why": "w", "quotes": [dict(q) for q in QUOTES],
-                "metres": 10.0, "metres_limit": 2000}  # fmt: skip
+                "metres": 10.0, "metres_limit": 2000, "limit_evidence": []}  # fmt: skip
         return {"cluster_id": "dup-1", "status": "complete", "merges": [{**item, **over}]}
 
     def test_a_decided_merge_is_a_pair_with_its_names_and_limit(self) -> None:
@@ -156,6 +165,11 @@ class TestTheWaves:
             f"n-{LOSER[:4]}",
             f"n-{SURVIVOR[:4]}",
         )
+
+    def test_the_override_s_evidence_reaches_the_pair(self) -> None:
+        item = self.decision(LOSER, SURVIVOR, metres_limit=2500, limit_evidence=list(LIMIT_QUOTES))
+        [only] = D.decided_pairs([item])
+        assert only.limit_evidence == LIMIT_QUOTES
 
     def test_an_already_retired_loser_is_marked(self) -> None:
         pairs = D.decided_pairs([self.decision(LOSER, SURVIVOR, already_retired=True)])
@@ -202,6 +216,7 @@ class TestTheWaves:
                 loser_name="Ancient Amathunta",
                 survivor_name="Amathus",
                 metres_limit=2500,
+                limit_evidence=LIMIT_QUOTES,
             ),
         ]
         path = D.write_wave(WAVE, pairs, tmp_path)
@@ -357,6 +372,137 @@ class TestTheLaneFamily:
         # 2.1 km: inside the 2,500 m limit of the first pair, outside the 2,000 m default of the
         # second; 1.9 km: inside the default of the third, which the first pair's limit does not touch
         assert rows == {LOSER: 0, LOSER2: 1, THIRD: 0}
+
+
+class TestTheDecidedSurvivorInvariant:
+    """The retirement lands on the survivor the wave decided, not on another curated site near the
+    loser (the move lane's `dest-named-near`, for the retire lane)."""
+
+    PAIRS = [L.MergePair(LOSER, SURVIVOR), L.MergePair(LOSER2, SURVIVOR2)]
+    NEIGHBOUR = "33333333-3333-4333-8333-333333333333"
+
+    def world(self) -> Any:
+        from tests.remediation.test_mechanical_rowlane import sqlite_world
+
+        db = sqlite_world()
+        for site_id, name, lat in (
+            (LOSER, "Banias", 33.0),
+            (SURVIVOR, "Caesarea Philippi", 33.0 + 0.0045),
+            (LOSER2, "Ancient Amathunta", 34.0),
+            (SURVIVOR2, "Amathus", 34.0 + 0.0045),
+            (self.NEIGHBOUR, "Neighbour", 33.0 + 0.0090),
+        ):
+            db.execute(
+                "INSERT INTO unified_sites VALUES (?, ?, 'ancient_nerds', NULL, NULL, ?, 35.0)",
+                (site_id, name, lat),
+            )
+        for loser, survivor in ((LOSER, SURVIVOR), (LOSER2, SURVIVOR2)):
+            db.execute(
+                "UPDATE unified_sites SET scope_status = 'retired', scope_reason = ? WHERE id = ?",
+                (f"duplicate_of:{survivor}", loser),
+            )
+        return db
+
+    def broken(self, db: Any, site: str) -> int:
+        invariant = L.decided_survivor_invariant(self.PAIRS)
+        return db.execute(
+            f"SELECT {invariant.predicate} FROM unified_sites u WHERE u.id = ?", (site,)
+        ).fetchone()[0]
+
+    def test_the_retire_lane_ends_with_it_and_probes_it_with_a_neighbour(self) -> None:
+        retire = L.dup_merge_retire_lane(WAVE, self.PAIRS)
+        last = retire.site_invariants[-1]
+        assert [i.probe_name for i in retire.site_invariants][-1] == "survivor-decided"
+        assert last.probe_column == "scope_reason"
+        assert last.probe_values == (f"duplicate_of:{L.PROBE_NEIGHBOUR}",)
+        assert len(retire.site_invariants) == 4
+
+    def test_the_decided_survivor_breaks_nothing_and_another_curated_site_does(self) -> None:
+        db = self.world()
+        assert (self.broken(db, LOSER), self.broken(db, LOSER2)) == (0, 0)
+        db.execute(
+            "UPDATE unified_sites SET scope_reason = ? WHERE id = ?",
+            (f"duplicate_of:{self.NEIGHBOUR}", LOSER),
+        )
+        assert (self.broken(db, LOSER), self.broken(db, LOSER2)) == (1, 0)
+        # another pair's survivor is as wrong as a stranger: each loser has its own
+        db.execute(
+            "UPDATE unified_sites SET scope_reason = ? WHERE id = ?",
+            (f"duplicate_of:{SURVIVOR2}", LOSER),
+        )
+        assert self.broken(db, LOSER) == 1
+
+    def test_the_neighbour_probe_passes_the_three_survivor_checks_and_only_this_one_fires(
+        self,
+    ) -> None:
+        db = self.world()
+        db.execute(
+            "UPDATE unified_sites SET scope_reason = ? WHERE id = ?",
+            (f"duplicate_of:{self.NEIGHBOUR}", LOSER),
+        )
+        retire = L.dup_merge_retire_lane(WAVE, self.PAIRS)
+        fired = [
+            i.probe_name
+            for i in retire.site_invariants
+            if db.execute(
+                f"SELECT {i.predicate} FROM unified_sites u WHERE u.id = ?", (LOSER,)
+            ).fetchone()[0]
+        ]
+        assert fired == ["survivor-decided"]
+
+    def test_the_neighbour_is_the_nearest_curated_shown_site_that_is_not_planned(self) -> None:
+        db = self.world()
+        sql = L.survivor_neighbour_sql(LOSER, SURVIVOR, [LOSER, SURVIVOR, LOSER2, SURVIVOR2])
+        assert db.execute(sql).fetchall() == [(self.NEIGHBOUR,)]
+        planned = L.survivor_neighbour_sql(LOSER, SURVIVOR, [LOSER, SURVIVOR, self.NEIGHBOUR])
+        assert db.execute(planned).fetchall() == []
+        # a planned loser (retired inside the probe), a retired and a far site are no neighbours
+        db.execute(
+            "UPDATE unified_sites SET scope_status = 'retired' WHERE id = ?", (self.NEIGHBOUR,)
+        )
+        assert db.execute(sql).fetchall() == []
+        db.execute(
+            "UPDATE unified_sites SET scope_status = NULL, lat = 40.0 WHERE id = ?",
+            (self.NEIGHBOUR,),
+        )
+        assert db.execute(sql).fetchall() == []
+
+    def test_a_single_probe_value_that_is_no_placeholder_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="one placeholder"):
+            L.SiteInvariant(
+                says="x", predicate="1 = 0", probe_column="scope_reason", probe_values=("x",)
+            )
+
+    def test_probing_reads_the_neighbour_of_the_first_loser_and_a_lonely_one_fails(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        retire = L.dup_merge_retire_lane(WAVE, self.PAIRS)
+        records = [
+            A.ChangeRecord(site_id=LOSER, site_name="Banias", old_value=None, new_value=v, rule="r", condition="c", reason="r", evidence=({"source": "t", "quote": "q"},), premise="p", column=c)
+            for c, v in (("scope_status", "retired"), ("scope_reason", f"duplicate_of:{SURVIVOR}"))
+        ]  # fmt: skip
+        asked: list[str] = []
+
+        def reader(rows: list[dict[str, str]]) -> Any:
+            return lambda: lambda sql: asked.append(sql) or rows
+
+        monkeypatch.setattr(A, "psql_json_reader", reader([{"id": self.NEIGHBOUR}]))
+        assert A.neighbour_of(records, retire) == {"neighbour": self.NEIGHBOUR}
+        assert f"= '{LOSER}'" in asked[0] and f"<> '{SURVIVOR}'" in asked[0]
+        monkeypatch.setattr(A, "psql_json_reader", reader([]))
+        with pytest.raises(P.PlanError, match="cannot be probed with this plan"):
+            A.neighbour_of(records, retire)
+        # a plan without the cell it would corrupt reads nothing either
+        assert A.neighbour_of(records[:1], retire) == {}
+        # a lane that probes with no placeholder reads nothing
+        assert A.neighbour_of(records, L.DUP_RETIRE) == {}
+        # and the probe splices the id in
+        cases = {
+            c[0]: c for c in A.probe_cases(records, retire, {"id": "x", "name": "n", "premise": "p", "neighbour": self.NEIGHBOUR})
+        }  # fmt: skip
+        assert (
+            cases["invariant-survivor-decided"][2][1].new_value == f"duplicate_of:{self.NEIGHBOUR}"
+        )
 
 
 # ------------------------------------------------------------------------------- the checks
@@ -606,6 +752,15 @@ class TestTheMovePlan:
         assert any("MERGE 'Banias' into 'Caesarea Philippi'" in q for q in quotes)
         assert any("289.5 m apart" in q for q in quotes)
 
+    def test_a_pair_beyond_two_kilometres_journals_the_evidence_of_its_limit(self) -> None:
+        plan, _, _ = moved(pairs=[pair(metres_limit=2500, limit_evidence=LIMIT_QUOTES)])
+        quotes = [e["quote"] for e in plan.changes[0].evidence]
+        assert "the two names denote one site" in quotes
+        plain, _, _ = moved()
+        assert "the two names denote one site" not in [
+            e["quote"] for e in plain.changes[0].evidence
+        ]
+
     def test_the_plan_is_renderable_by_the_row_lane(self) -> None:
         plan, _, _ = moved()
         records = [
@@ -713,6 +868,10 @@ def retired(read: D.Read | None = None, pairs: list[D.WavePair] | None = None):
 
 
 class TestTheRetirePlan:
+    def test_the_retirement_journals_the_evidence_of_a_widened_limit(self) -> None:
+        plan, _ = retired(pairs=[pair(metres_limit=2500, limit_evidence=LIMIT_QUOTES)])
+        assert "the two names denote one site" in [e["quote"] for e in plan.changes[0].evidence]
+
     def test_the_loser_gets_its_two_cells(self) -> None:
         plan, held = retired()
         assert held == [] and plan.lane.name == f"dup-merge-retire-{WAVE}"
@@ -824,7 +983,7 @@ class TestTheRetirePlan:
         assert (
             "D14 duplicate retirement" in sql
             and "live images" in sql
-            and sql.count("-- site invariant:") == 3
+            and sql.count("-- site invariant:") == 4
         )
 
 
@@ -941,7 +1100,7 @@ class TestTheCLI:
         run.mkdir()
         common.write_jsonl(run / "DUP_DECISIONS.jsonl", [{
             "cluster_id": "dup-1", "status": "complete", "part_of": [], "wrong_id": [], "distinct": [], "held": [],
-            "merges": [{"kind": "MERGE", "site_id": LOSER, "name": "Banias", "target": SURVIVOR, "target_name": "Caesarea Philippi", "why": "w", "quotes": [], "metres": 3.0, "metres_limit": 2000}],
+            "merges": [{"kind": "MERGE", "site_id": LOSER, "name": "Banias", "target": SURVIVOR, "target_name": "Caesarea Philippi", "why": "w", "quotes": [], "metres": 3.0, "metres_limit": 2000, "limit_evidence": []}],
         }])  # fmt: skip
         monkeypatch.setattr(common, "run_dir", lambda root=None: run)
         assert D.main(["--out", str(tmp_path / "out"), "waves", "--date", WAVE]) == 0
@@ -988,13 +1147,17 @@ class TestThePremisesInSQL:
         db = sqlite3.connect(":memory:")
         db.create_aggregate("string_agg", 2, StringAgg)
         db.executescript(
-            "CREATE TABLE unified_sites (id TEXT PRIMARY KEY, name TEXT);"
+            "CREATE TABLE unified_sites (id TEXT PRIMARY KEY, name TEXT, scope_status TEXT, "
+            "scope_reason TEXT);"
             "CREATE TABLE site_external_ids (site_id TEXT, kind TEXT, value TEXT);"
             "CREATE TABLE wiki_images (site_id TEXT, is_excluded INTEGER);"
             "CREATE TABLE site_content_links (site_id TEXT);"
         )
         for site_id, row in read.sites.items():
-            db.execute("INSERT INTO unified_sites VALUES (?, ?)", (site_id, row["name"]))
+            db.execute(
+                "INSERT INTO unified_sites VALUES (?, ?, ?, ?)",
+                (site_id, row["name"], row["scope_status"], row["scope_reason"]),
+            )
         for site_id, ids in read.ext.items():
             db.executemany(
                 "INSERT INTO site_external_ids VALUES (?, ?, ?)", [(site_id, k, v) for k, v in ids]
@@ -1023,6 +1186,25 @@ class TestThePremisesInSQL:
         assert self.printed(self.database(read), move.premise_sql) == D.move_premise(
             read, loser, survivor
         )
+
+    def test_the_move_premise_names_the_loser_s_scope_so_the_move_cannot_be_undone_while_it_is_retired(
+        self,
+    ) -> None:
+        """The retirement is rolled back first, then the move: a loser that is retired prints
+        another premise than the one the move was planned on, and guard 5 refuses the reversal."""
+        read = after_the_move()
+        move, _ = lanes([pair()])
+        planned = D.move_premise(read, read.sites[LOSER], read.sites[SURVIVOR])
+        assert "| NULL | NULL | survivor " in planned
+        retired_site = {
+            **read.sites[LOSER],
+            "scope_status": "retired",
+            "scope_reason": f"duplicate_of:{SURVIVOR}",
+        }
+        retired_read = replace(read, sites={**read.sites, LOSER: retired_site})
+        printed = self.printed(self.database(retired_read), move.premise_sql)
+        assert printed == D.move_premise(retired_read, retired_site, read.sites[SURVIVOR])
+        assert printed != planned and f"| retired | duplicate_of:{SURVIVOR} | survivor " in printed
 
     def test_the_retire_premise_adds_what_the_loser_holds_and_how_many_images_the_survivor_shows(
         self,

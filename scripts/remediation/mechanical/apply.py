@@ -65,12 +65,15 @@ from prod_write import SSH_HOST, OutcomeUnknown, send  # noqa: E402
 
 from mechanical.lane import (  # noqa: E402
     CARD_DISCLOSURE_LANE,
+    DUP_RETIRE_METRES,
+    DUPLICATE_PREFIX,
     FIELD_PROV_LANE,
     FIELDS_LANE,
     IDENTITY_LANE,
     LANE_READBACKS,
     LANES,
     PERIOD_LABEL_LANE,
+    PROBE_NEIGHBOUR,
     PROBE_SELF,
     SCOPE_REVIEW_LANE,
     T05,
@@ -82,6 +85,7 @@ from mechanical.lane import (  # noqa: E402
     outside,
     resolve_lane,
     scope_review_readback,
+    survivor_neighbour_sql,
     typed_case,
     written_where,
 )
@@ -1798,6 +1802,8 @@ def _cell_probe_cases(
         )
         if value == PROBE_SELF:
             value = chosen.site_id
+        elif PROBE_NEIGHBOUR in value:
+            value = value.replace(PROBE_NEIGHBOUR, str(foreign["neighbour"]))
         probes.append(
             (
                 invariant.probe_suffix,
@@ -1817,6 +1823,29 @@ def unprobed_invariants(records: Sequence[ChangeRecord], lane: Lane) -> list[str
         return rowlane.unprobed_invariants(records, lane)
     columns = {r.column for r in records}
     return [i.says for i in lane.site_invariants if i.probe_column not in columns]
+
+
+def neighbour_of(records: Sequence[ChangeRecord], lane: Lane) -> dict[str, str]:
+    """`{"neighbour": id}` for a lane whose site invariant probes with `PROBE_NEIGHBOUR`: a curated
+    shown site near the first planned loser, read from production (read-only), else `{}`. A plan
+    with no such site fails here, loudly: the invariant would stay unproven."""
+    wanting = [i for i in lane.site_invariants if any(PROBE_NEIGHBOUR in v for v in i.probe_values)]
+    if not wanting:
+        return {}
+    cell = next((r for r in records if r.column == wanting[0].probe_column), None)
+    if cell is None:
+        return {}
+    survivor = str(cell.new_value).removeprefix(DUPLICATE_PREFIX)
+    sql = survivor_neighbour_sql(
+        cell.site_id, survivor, [r.site_id for r in records], DUP_RETIRE_METRES
+    )
+    rows = psql_json_reader()(sql)
+    if not rows:
+        raise PlanError(
+            f"{cell.site_name} ({cell.site_id}) has no other curated shown site within "
+            f"{DUP_RETIRE_METRES} m: '{wanting[0].says}' cannot be probed with this plan"
+        )
+    return {"neighbour": str(rows[0]["id"])}
 
 
 def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T05) -> int:
@@ -1851,11 +1880,12 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
         )
     if not foreign:
         raise PlanError("no non-curated row to probe the source guard with")
+    row = {**foreign[0], **neighbour_of(records, lane)}
 
     failures = 0
     for says in unprobed_invariants(records, lane):
         print(f"[site invariant - {says}] not probed: the plan writes no cell it could corrupt")
-    for suffix, name, mutated, expected in probe_cases(records, lane, foreign[0]):
+    for suffix, name, mutated, expected in probe_cases(records, lane, row):
         stamp = f"{lane.probe_run_stamp}-{suffix}"
         sql = render_transaction(
             mutated,
