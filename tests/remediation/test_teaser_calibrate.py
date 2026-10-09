@@ -728,6 +728,15 @@ ALL_FAIL = {
 
 
 class TestTheFactChecker:
+    @staticmethod
+    def lenient(**floors: float) -> dict[str, Any]:
+        """The table with the claim floor off (and any other floor as given), so that one rule of
+        the agreement set is what a test asks about."""
+        table = json.loads(json.dumps(TINY))
+        rule = table["roles"]["fact_checker"]["sets"]["checker_agreement"]
+        rule.update({"claim_agreement_min": 0.0, **floors})
+        return table
+
     def all_sets(self, run_dir: Path, **verdicts: Any) -> None:
         good = verdicts.get("good", "PASS")
         recorded = verdicts.get("agreement", None)
@@ -797,8 +806,7 @@ class TestTheFactChecker:
     def test_one_false_pass_fails_the_role_even_when_agreement_is_high(
         self, tmp_path: Path
     ) -> None:
-        lenient = json.loads(json.dumps(TINY))
-        lenient["roles"]["fact_checker"]["sets"]["checker_agreement"]["verdict_agreement_min"] = 0.6
+        lenient = self.lenient(verdict_agreement_min=0.6)
         run_dir = fixed_dir(tmp_path, lenient)
         self.all_sets(run_dir, agreement="PASS")
         agreement = K.evaluate(run_dir, "fact_checker")["sets"]["checker_agreement"]
@@ -820,7 +828,7 @@ class TestTheFactChecker:
         assert rule["claim_agreement_min"] == 0.9
 
     def test_a_checker_that_fails_the_recorded_passes_disagrees(self, tmp_path: Path) -> None:
-        run_dir = fixed_dir(tmp_path)
+        run_dir = fixed_dir(tmp_path, self.lenient())  # the claim floor has its own test
         self.all_sets(run_dir, agreement="FAIL")
         agreement = K.evaluate(run_dir, "fact_checker")["sets"]["checker_agreement"]
         assert agreement["false_pass"] == [] and agreement["verdict_agreement"] < 0.9
