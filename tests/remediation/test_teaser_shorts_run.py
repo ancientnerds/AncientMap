@@ -50,13 +50,6 @@ OPUS = OH.OPUS_MODEL
 SONNET = OH.SONNET_MODEL
 
 
-def sonnet_checker(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Register `fact_checker` on Sonnet again: no registered role of the card lane is on a lower tier
-    since teaser-2026-10-09b, and `escalate_role` moves a role up from the model a run recorded."""
-    sonnet = RO.Role("fact_checker", "claude-sonnet-5-5", "high", "wb_check_verify_opus")
-    monkeypatch.setattr(RO, "ROLES", RO._registry(*{**RO.ROLES, "fact_checker": sonnet}.values()))
-
-
 def sid(name: str) -> str:
     return str(S.BY_NAME[name]["site_id"])
 
@@ -273,12 +266,50 @@ class TestSelect:
             40,
             85,
         ]
-        assert record["roles"]["card_writer"] == {"model": "claude-opus-5-5", "effort": "high"}
-        assert record["roles"]["hook_rater"] == {"model": "claude-opus-5-5", "effort": "xhigh"}
-        assert record["roles"]["fact_checker"] == {"model": "claude-opus-5-5", "effort": "high"}
-        assert record["roles"]["web_verifier"] == {"model": "claude-opus-5-5", "effort": "high"}
+        assert record["roles"]["card_writer"] == {"model": "claude-sonnet-5-5", "effort": "high"}
+        assert record["roles"]["hook_rater"] == {"model": "claude-sonnet-5-5", "effort": "medium"}
+        assert record["roles"]["fact_checker"] == {"model": "claude-sonnet-5-5", "effort": "high"}
+        assert record["roles"]["web_verifier"] == {"model": "claude-sonnet-5-5", "effort": "high"}
         assert record["roles"]["pilot_judge"] == {"model": "claude-opus-5-5", "effort": "xhigh"}
         assert R.spec_of(run) is R.SHORTS_SPEC
+        assert record["batch_sizes"] == {"main": 15, "judge": 8, "rate": 25}
+        assert R.run_batch_sizes(run) == record["batch_sizes"]
+
+    def test_a_run_selected_before_the_sizes_were_recorded_keeps_its_own(
+        self, tmp_path: Path
+    ) -> None:
+        run = make_run(tmp_path, NAMES)
+        record = json.loads((run / "RUN.json").read_text(encoding="utf-8"))
+        del record["batch_sizes"]
+        (run / "RUN.json").write_text(json.dumps(record), encoding="utf-8")
+        assert R.run_batch_sizes(run) == {"main": 15, "judge": 5, "rate": 25}
+
+    def test_a_stage_is_exported_at_the_size_named_and_the_round_records_it(
+        self, tmp_path: Path
+    ) -> None:
+        run = make_run(tmp_path, NAMES)
+        exported = R.export_stage(run, "write", tmp_path / "handoff-write", batch_size=2)
+        assert max(exported["batches"].values()) <= 2 and len(exported["batches"]) > 1
+        assert R.read_rounds(run)[-1]["batch_size"] == 2
+
+    def test_a_stage_is_exported_at_the_runs_own_size_by_default(self, tmp_path: Path) -> None:
+        run = make_run(tmp_path, NAMES)
+        R.export_stage(run, "write", tmp_path / "handoff-write")
+        assert R.read_rounds(run)[-1]["batch_size"] == 15
+
+    @pytest.mark.parametrize("size", [0, -1, True])
+    def test_a_batch_size_is_a_count_of_one_or_more(self, tmp_path: Path, size: Any) -> None:
+        run = make_run(tmp_path, NAMES)
+        with pytest.raises(R.RunError, match="not a count of 1 or more"):
+            R.export_stage(run, "write", tmp_path / "handoff-write", batch_size=size)
+        with pytest.raises(R.RunError, match="not a count of 1 or more"):
+            R.export_judge(run, tmp_path / "handoff-judge", batch_size=size)
+
+    def test_the_kind_of_a_stage_picks_its_size(self) -> None:
+        spec = R.SHORTS_SPEC
+        assert R.stage_kind("write", spec) == "main" and R.stage_kind("check", spec) == "main"
+        assert R.stage_kind("verify", spec) == "judge"
+        assert R.stage_kind("rate", spec) == "rate"
 
     def test_a_v1_run_holds_its_limits_as_an_object_and_is_contract_v1(
         self, tmp_path: Path
@@ -408,7 +439,12 @@ class TestTheFirstRound:
         assert (
             prov["v"] == 3 and prov["contract"] == "shorts-v1" and prov["run"] == "wb-shorts-test"
         )
-        assert prov["models"] == {"write": OPUS, "rate": OPUS, "check": OPUS, "verify": OPUS}
+        assert prov["models"] == {
+            "write": SONNET,
+            "rate": SONNET,
+            "check": SONNET,
+            "verify": SONNET,
+        }
         assert prov["ai_system"] == M.AI_SYSTEM_CLAUDE
         assert prov["hook"] == {"type": "object", "rating": 4, "variant": 1}
         assert prov["anchors"] == S.BY_NAME[MP]["anchors"] and prov["reserve"] == ["S3"]
@@ -666,7 +702,7 @@ class TestTheFirstRound:
         R.outcomes(run)
         prov = outcome(run, MP)["provenance"]
         assert prov["check"]["stage"] == "check-v" and prov["verify"]["stage"] == "verify2"
-        assert prov["models"] == {"write": OPUS, "rate": None, "check": OPUS, "verify": OPUS}
+        assert prov["models"] == {"write": SONNET, "rate": None, "check": SONNET, "verify": SONNET}
         assert prov["hook"] == {"type": "object", "rating": None, "variant": None}
         assert [d["claim"] for d in R.read_jsonl(run / "DESCRIPTION_DEFECTS.jsonl")] == []
 
@@ -716,7 +752,7 @@ class TestTheRoles:
         R.export_stage(run, "write", handoff)
         OH.write_answer(
             handoff, batch_id="write-001", stage="write", label=sid(MP), text=variants_json(MP),
-            answered_by="teaser-write-001", model=OPUS,
+            answered_by="teaser-write-001", model=SONNET,
         )  # fmt: skip
         with pytest.raises(R.RunError, match="did not answer as role card_writer"):
             R.import_stage(run, "write", fit=T.fit)
@@ -743,9 +779,9 @@ class TestTheRoles:
             sid(MP),
             variants_json(MP),
             "card_writer",
-            model="claude-sonnet-5-5",
+            model="claude-opus-5-5",
         )
-        with pytest.raises(R.RunError, match="role card_writer is recorded as claude-opus-5-5"):
+        with pytest.raises(R.RunError, match="role card_writer is recorded as claude-sonnet-5-5"):
             R.import_stage(run, "write", fit=T.fit)
 
     def test_a_rater_that_rated_the_site_before_is_refused(self, tmp_path: Path) -> None:
@@ -760,7 +796,7 @@ class TestTheRoles:
         shown = R.shown_variants(R.stage_records(run)["rewrite1"][sid(MP)])
         OH.write_answer(
             handoff, batch_id="rate1-001", stage="rate1", label=sid(MP), text=rate_json(shown, [4, 3, 2]),
-            answered_by="hook_rater:teaser-rate-001", model=OPUS,
+            answered_by="hook_rater:teaser-rate-001", model=SONNET,
         )  # fmt: skip
         with pytest.raises(R.RunError, match="wrote or checked this site before"):
             R.import_stage(run, "rate1", fit=T.fit)
@@ -780,7 +816,6 @@ class TestTheRoles:
     def test_an_escalation_needs_the_registry_to_name_the_new_model_first(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        sonnet_checker(monkeypatch)
         run = make_run(tmp_path, [MP])
         verdict = tmp_path / "verdict.json"
         move = RO.escalation("fact_checker", calibration_id="c-1", reason="agreement 0.8")
@@ -806,7 +841,6 @@ class TestTheRoles:
     def test_a_failed_calibration_moves_a_role_up_one_tier_before_its_first_round(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        sonnet_checker(monkeypatch)
         run = make_run(tmp_path, [MP])
         other = make_run(tmp_path / "other", [MP])
         verdict = tmp_path / "verdict.json"
@@ -1109,8 +1143,8 @@ class TestTheBriefs:
         run, handoff = self.exported(tmp_path, "write")
         text = R.brief(run, handoff, "write-001")
         assert "You are writer write-001 of lane WB, contract shorts-v1" in text
-        assert "**card_writer**: your model is **claude-opus-5-5**, effort high" in text
-        assert "--role card_writer" in text and "--model claude-opus-5-5" in text
+        assert "**card_writer**: your model is **claude-sonnet-5-5**, effort high" in text
+        assert "--role card_writer" in text and "--model claude-sonnet-5-5" in text
         assert "--answered-by teaser-write-001" in text and "--stage write" in text
         assert "an answer stamped with any other model is refused" in text
         assert "accepts the decline the prompt offers" in text
@@ -1119,9 +1153,9 @@ class TestTheBriefs:
     @pytest.mark.parametrize(
         ("stage", "role", "model", "effort"),
         [
-            ("rate", "hook_rater", "claude-opus-5-5", "xhigh"),
-            ("check", "fact_checker", "claude-opus-5-5", "high"),
-            ("verify", "web_verifier", "claude-opus-5-5", "high"),
+            ("rate", "hook_rater", "claude-sonnet-5-5", "medium"),
+            ("check", "fact_checker", "claude-sonnet-5-5", "high"),
+            ("verify", "web_verifier", "claude-sonnet-5-5", "high"),
         ],
     )
     def test_each_stage_names_the_role_the_registry_fixed(
@@ -1159,7 +1193,7 @@ class TestTheBriefs:
         job = jobs[0]
         assert (job["role"], job["model"], job["effort"], job["stage"]) == (
             "web_verifier",
-            "claude-opus-5-5",
+            "claude-sonnet-5-5",
             "high",
             "verify",
         )
@@ -1520,7 +1554,7 @@ class TestTheRecheckRun:
         with pytest.raises(R.RunError, match="did not answer as role fact_checker"):
             R.import_stage(run, "check", fit=T.fit)
         text = R.brief(run, handoff, "check-001")
-        assert "**fact_checker**" in text and "--model claude-opus-5-5" in text
+        assert "**fact_checker**" in text and "--model claude-sonnet-5-5" in text
         assert R.agent_jobs(run, handoff)[0]["role"] == "fact_checker"
 
     def test_a_pilot_judge_is_refused_for_a_recheck_run(self, tmp_path: Path) -> None:

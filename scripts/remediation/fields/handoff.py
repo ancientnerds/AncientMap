@@ -5,7 +5,8 @@ No model is called here. The orchestrator's cycle (run from the repository root;
 `H=output/remediation/handoff/fields-wd1`):
 
     $F export --run $R --handoff $H-r0          one question per site, its flagged fields only,
-                                                batches of `BATCH_SIZE` sites (country, name order)
+                                                batches of `--batch-size` sites (default `BATCH_SIZE`;
+                                                recorded in the round; a re-ask keeps round 0's)
     $F brief --run $R --handoff $H-r0 --batch-id B      the instruction of batch B's Opus agent;
         the agent answers each question and records it with `opus_handoff.py answer`
     $F check-answer --run $R --handoff $H-r0 --batch-id B --label L --text-file F
@@ -91,7 +92,12 @@ from pipeline import periods as P  # noqa: E402
 
 #: WD1's handoff stage (`Rule.stage`); a run's own stage is its rule's.
 STAGE = R.TWO_FAMILIES.stage
-BATCH_SIZE = 8
+#: Sites per batch of a new run (owner decision D36, 2026-10-09: every agent re-reads its brief
+#: and the repository instructions, so fewer, larger batches cost less quota). The size is an
+#: export parameter (`export --batch-size`) and is recorded in the round's record; a run
+#: exported before the change keeps its 8: its re-ask rounds read the size from round 0.
+BATCH_SIZE = 12
+LEGACY_BATCH_SIZE = 8
 #: Round 0 and two re-asks, as the acceptance does.
 MAX_ROUND = 2
 ROUNDS_FILE = "ROUNDS.jsonl"
@@ -909,17 +915,23 @@ def render_prompt(
 
 # ------------------------------------------------------------------------------ export
 def batches(
-    labels: Sequence[str], classified: Mapping[str, Any], round_no: int, stage: str = STAGE
+    labels: Sequence[str],
+    classified: Mapping[str, Any],
+    round_no: int,
+    stage: str = STAGE,
+    size: int = BATCH_SIZE,
 ) -> list[tuple[str, list[str]]]:
-    """Sites by country, then name, cut into batches of `BATCH_SIZE` - one agent reads one
-    country's registers for a whole batch."""
+    """Sites by country, then name, cut into batches of `size` (`BATCH_SIZE` unless the export names
+    one) - one agent reads one country's registers for a whole batch."""
+    if isinstance(size, bool) or size < 1:
+        raise HandoffStepError(f"batch size {size!r} is not a count of 1 or more")
     ordered = sorted(
         labels,
         key=lambda s: (classified[s]["country"] or "", classified[s]["name"].casefold(), s),
     )
     return [
-        (f"{stage}-r{round_no}-b{number + 1:04d}", ordered[i : i + BATCH_SIZE])
-        for number, i in enumerate(range(0, len(ordered), BATCH_SIZE))
+        (f"{stage}-r{round_no}-b{number + 1:04d}", ordered[i : i + size])
+        for number, i in enumerate(range(0, len(ordered), size))
     ]
 
 
@@ -949,6 +961,7 @@ def _export_round(
     fields_of: Mapping[str, Sequence[str]],
     notes: Mapping[str, Mapping[str, str]],
     model: str | None = None,
+    batch_size: int = BATCH_SIZE,
 ) -> dict[str, Any]:
     rule = R.read_rule(run)
     answering = _answering_model(run, model)
@@ -960,7 +973,7 @@ def _export_round(
         raise HandoffStepError(f"{handoff} is not empty: a round gets a directory of its own")
     classified = read_classified(run)
     hints = read_hints(run)
-    groups = batches(list(fields_of), classified, round_no, rule.stage)
+    groups = batches(list(fields_of), classified, round_no, rule.stage, batch_size)
     for batch_id, labels in groups:
         for label in labels:
             OH.export(
@@ -977,6 +990,7 @@ def _export_round(
         "round": round_no,
         "handoff": _shown(handoff),
         "model": answering,
+        "batch_size": batch_size,
         "batches": dict(groups),
         "fields": {label: list(fields_of[label]) for label in sorted(fields_of)},
         "notes": {label: dict(notes[label]) for label in sorted(notes)},
@@ -1022,13 +1036,20 @@ def _read_site_ids(path: Path) -> frozenset[str]:
 
 
 def export(
-    run: Path, handoff: Path, model: str | None = None, *, sites: frozenset[str] | None = None
+    run: Path,
+    handoff: Path,
+    model: str | None = None,
+    *,
+    sites: frozenset[str] | None = None,
+    batch_size: int = BATCH_SIZE,
 ) -> dict[str, Any]:
     """Round 0: every site with a field in CONFLICT or MISSING or flagged, with exactly those fields.
 
     `model` is the stamp the round's answers may carry, stored in the round's record and named by
     every brief of it; the default is what the run's rule names. It is the only place a model id
     reaches an answer, so a lane answered by another model says so here (2026-10-04).
+
+    `batch_size` is the sites per batch (`BATCH_SIZE`); it is recorded in the round.
 
     `sites` cuts the round down to the named sites of this run, and the run keeps every site it
     classified: a round's own record lists the questions it asked, so a cut shows up as the
@@ -1047,7 +1068,7 @@ def export(
     fields_of = {sid: fields for sid, fields in fields_of.items() if fields}
     if sites is not None:
         fields_of = _cut(classified, fields_of, sites)
-    return _export_round(run, handoff, 0, fields_of, {}, model)
+    return _export_round(run, handoff, 0, fields_of, {}, model, batch_size)
 
 
 def export_reask(run: Path, handoff: Path) -> dict[str, Any]:
@@ -1083,7 +1104,10 @@ def export_reask(run: Path, handoff: Path) -> dict[str, Any]:
     }
     # a re-ask goes to a new agent of the same lane, so it carries the round's stamp forward
     carried = next((r.get("model") for r in rounds if r["round"] == last), None)
-    return _export_round(run, handoff, last + 1, reask["fields"], notes, carried)
+    # the run keeps the batch size of its first round (a run exported before the size was
+    # recorded was cut into 8)
+    size = next(r for r in rounds if r["round"] == 0).get("batch_size", LEGACY_BATCH_SIZE)
+    return _export_round(run, handoff, last + 1, reask["fields"], notes, carried, size)
 
 
 # ------------------------------------------------------------------------------ the agent's aids
@@ -1782,6 +1806,12 @@ def main(argv: list[str] | None = None) -> int:
         help="a file of site ids, one per line: this round asks only these sites of the run, and "
         "the run keeps the rest (the owner's cut of 2026-10-04: 18 of 330 batches)",
     )
+    commands["export"].add_argument(
+        "--batch-size",
+        type=int,
+        default=BATCH_SIZE,
+        help="sites per batch (recorded in the round; re-ask rounds keep round 0's)",
+    )
     commands["check-answer"].add_argument("--label", required=True)
     commands["check-answer"].add_argument("--text-file", type=Path, required=True)
     commands["import"].add_argument("--pace", type=float, default=Q.PACE_SECONDS)
@@ -1801,6 +1831,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.handoff,
                 args.model,
                 sites=None if args.sites is None else _read_site_ids(_resolve(args.sites)),
+                batch_size=args.batch_size,
             )
         elif args.command == "export-reask":
             result = export_reask(run, args.handoff)

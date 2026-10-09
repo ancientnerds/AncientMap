@@ -761,8 +761,9 @@ class TestEvaluating:
         answer(handoff, spec, {q.label: wrong for q in questions})
         SG.import_answers(directory, handoff, spec)
         verdict = CAL.evaluate(directory, "adversarial", cp=cp)
-        assert not verdict["passed"] and verdict["tier_move"] is None
-        assert "no higher tier" in verdict["held"] and "the owner decides" in verdict["held"]
+        # the adversarial role is Sonnet since D36: a failing role moves up one tier, to Opus
+        assert not verdict["passed"] and verdict["tier_move"]["to"] == "claude-opus-5-5"
+        assert "held" not in verdict
 
 
 class TestTheProductionQuestions:

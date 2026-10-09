@@ -274,7 +274,7 @@ class TestTheCalibrationEndToEnd:
         assert record.name == "r1" and sorted(record.batches) == manifest["batches"]
         text = R.brief(copy, spec, "r1", manifest["batches"][0])
         assert (
-            "--role web_verifier --model claude-opus-5-5" in text
+            "--role web_verifier --model claude-sonnet-5-5" in text
             and f"--stage-dir {copy.resolve().as_posix()}" in text
         )
         labels = [s for sids in record.batches.values() for s in sids]
@@ -288,7 +288,7 @@ class TestTheCalibrationEndToEnd:
                 verdict = "RETARGET" if sid == CHANIA else "KEEP"
                 OH.write_answer(out, batch_id=batch_id, stage=spec.stage, label=sid,
                                 text=json.dumps({"site_id": sid, "verdict": verdict}),
-                                answered_by=RO.answered_by("web_verifier", batch_id), model=OH.OPUS_MODEL,
+                                answered_by=RO.answered_by("web_verifier", batch_id), model=OH.SONNET_MODEL,
                                 now=lambda: NOW)  # fmt: skip
         report = CC.compare(root, calibration_id="retarget-web")
         assert (report["units"], report["agreed"], report["unanswered"]) == (4, 4, [])
@@ -302,9 +302,7 @@ class TestTheCalibrationEndToEnd:
         with pytest.raises(R.RoundError, match="not on the lane's own scope-window-web"):
             R.require_calibration(root, "retarget-web", "web_verifier", "scope-window-web")
 
-    def test_a_role_that_disagrees_fails_and_is_held_at_the_top_tier(
-        self, world: dict[str, Any]
-    ) -> None:
+    def test_a_role_that_disagrees_fails_and_moves_up_one_tier(self, world: dict[str, Any]) -> None:
         pool = labelled_pool(world)
         manifest = CAL.load_manifest(pool)
         root = world["tmp"] / "cal"
@@ -316,14 +314,12 @@ class TestTheCalibrationEndToEnd:
             for sid in sids:
                 OH.write_answer(Path(prepared["prepared"]), batch_id=batch_id, stage=spec.stage, label=sid,
                                 text=json.dumps({"site_id": sid, "verdict": "KEEP"}),
-                                answered_by=RO.answered_by("web_verifier", batch_id), model=OH.OPUS_MODEL,
+                                answered_by=RO.answered_by("web_verifier", batch_id), model=OH.SONNET_MODEL,
                                 now=lambda: NOW)  # fmt: skip
         CC.compare(root, calibration_id="c")
         verdict = CC.verdict(root, calibration_id="c", false_sources=0)
         assert verdict["passed"] is False and verdict["agreement"] == 0.75
-        # web_verifier is Opus since teaser-2026-10-09b: no tier above, the verdict is held
-        assert verdict["tier_move"] is None
-        assert verdict["held"] == "no higher tier than claude-opus-5-5: the owner decides"
+        assert verdict["tier_move"]["to"] == "claude-opus-5-5"
         with pytest.raises(R.RoundError, match="did not pass"):
             R.require_calibration(root, "c", "web_verifier", "retarget-web")
 
@@ -376,7 +372,7 @@ class TestNoFalseWrite:
                 body = fresh.get(sid, {"verdict": "KEEP"})
                 OH.write_answer(Path(prepared["prepared"]), batch_id=batch_id, stage=spec.stage, label=sid,
                                 text=json.dumps({"site_id": sid, "why": "x", **body}),
-                                answered_by=RO.answered_by("web_verifier", batch_id), model=OH.OPUS_MODEL,
+                                answered_by=RO.answered_by("web_verifier", batch_id), model=OH.SONNET_MODEL,
                                 now=lambda: NOW)  # fmt: skip
         CC.compare(root, calibration_id="fw")
         return CC.verdict(root, calibration_id="fw", false_sources=0), second
@@ -388,7 +384,7 @@ class TestNoFalseWrite:
         assert got["agreement"] == 0.75 >= got["threshold"]
         assert got["passed"] is False and got["false_writes"] == 1
         assert got["false_write_labels"] == [other]
-        assert got["tier_move"] is None and got["held"].endswith("the owner decides")
+        assert got["tier_move"]["reason"].startswith("1 false write(s) counted, 0 allowed")
         with pytest.raises(R.RoundError, match="did not pass"):
             R.require_calibration(world["tmp"] / "cal", "fw", "web_verifier", "retarget-web")
 

@@ -25266,7 +25266,7 @@ ENRICH_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         '            E.require_role(answer, role, f"{batch_id}/{label}")\n',
         "            pass  # mutant\n",
         ENRICH_DISPUTE_TEST,
-        "test_the_adjudicator_is_the_adversarial_role_on_opus",
+        "test_the_adjudicator_is_the_adversarial_role_on_sonnet",
     ),
     (
         "enrich disputes: the screen's recall is not held to the bar",

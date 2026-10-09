@@ -570,7 +570,7 @@ class TestTheRounds:
             label=PARENT,
             text=a_part_answer(),
             answered_by="web_verifier:b1",
-            model=OPUS,
+            model=SONNET,
         )
         summary = import_round(run, J.STAGE_VERDICT, "r1", CTX, fetch, now=lambda: NOW)
         assert summary["decided"] == 1
@@ -590,7 +590,7 @@ class TestTheRounds:
             label=PARENT,
             text=answer(rows),
             answered_by="adversarial:b1",
-            model=OPUS,
+            model=SONNET,
         )
         assert import_round(run, J.STAGE_RECHECK, "r1", CTX, fetch, now=lambda: NOW)["decided"] == 1
         assert J.write_decisions(run, CTX) == {"children": 1, "decided": 1}

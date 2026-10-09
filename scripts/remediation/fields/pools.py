@@ -257,7 +257,7 @@ def build_general(
     eligible = wd1_eligible(fields_dir)
     picked = stratify(eligible, size, random.Random(seed))  # noqa: S311 - a seeded, recorded draw
     classified = {s: dict(eligible[s].line) for s in picked}
-    groups = HO.batches(sorted(picked), classified, 0, GENERAL_STAGE)
+    groups = HO.batches(sorted(picked), classified, 0, GENERAL_STAGE, HO.LEGACY_BATCH_SIZE)
     handoff, run = out / "handoff", out / "run"
     for batch_id, labels in groups:
         for label in labels:
@@ -282,6 +282,7 @@ def build_general(
         [
             {
                 "round": 0, "handoff": HO._shown(handoff), "model": None, "batches": dict(groups),
+                "batch_size": HO.LEGACY_BATCH_SIZE,
                 "fields": {s: list(eligible[s].fields) for s in sorted(picked)}, "notes": {},
                 "exported_at": H.now(),
             }
@@ -869,7 +870,7 @@ def build_adversarial_truth(
     (run / C.CLASSIFIED_FILE).write_text("", encoding="utf-8", newline="\n")
     ordered = sorted(cells, key=lambda pair: pair[0]["cell"])
     HO._write_json(run / AD.CELLS_FILE, {"seed": seed, "cells": [c for c, _ in ordered]})
-    AD._export_round(run, handoff, 0, [c["cell"] for c, _ in ordered], {})
+    AD._export_round(run, handoff, 0, [c["cell"] for c, _ in ordered], {}, AD.LEGACY_BATCH_SIZE)
     truth = {cell["cell"]: entry for cell, entry in ordered}
     HO._write_json(out / TRUTH_FILE, truth)
     batches = list(AD.read_rounds(run)[0]["batches"])

@@ -90,7 +90,7 @@ def reply(field: str, decision: str, reasoning: str = REASON, quotes: Any = ()) 
 
 
 def record(handoff: Path, batch: str, cell: str, text: str, *, role: bool = True,
-           model: str = OH.OPUS_MODEL) -> None:  # fmt: skip
+           model: str = OH.SONNET_MODEL) -> None:  # fmt: skip
     OH.write_answer(handoff, batch_id=batch, stage=AD.STAGE, label=cell, text=text,
                     answered_by=f"adversarial:{batch}" if role else batch, model=model)  # fmt: skip
 
@@ -357,7 +357,8 @@ class TestTheRounds:
         assert {m["batch_id"] for m in manifest} == {"adv-r0-b0001"}
         assert {m["field"] for m in manifest} == {"period_start"}
         record_ = AD.read_rounds(adv)[0]
-        assert record_["model"] == "claude-opus-5-5" and record_["round"] == 0
+        assert record_["model"] == "claude-sonnet-5-5" and record_["round"] == 0
+        assert record_["batch_size"] == AD.BATCH_SIZE == 12
         assert record_["fields"][cell_of(A_ID)] == ["period_start"]
         with pytest.raises(AD.AdversarialError, match="exported already"):
             AD.export(adv, tmp_path / "h-r0b")
@@ -377,16 +378,32 @@ class TestTheRounds:
         with pytest.raises(AD.AdversarialError, match="is not empty"):
             AD.export(adv, tmp_path / "busy")
 
-    def test_nine_cells_are_two_batches(self) -> None:
+    def test_thirteen_cells_are_two_batches_of_the_new_default(self) -> None:
+        cells = [{"cell": f"c{n}", "country": "Greece", "name": f"s{n:02d}"} for n in range(13)]
+        assert [len(labels) for _, labels in AD.batches(cells, 0)] == [12, 1]
+
+    def test_the_batch_size_is_an_explicit_parameter_and_is_recorded(
+        self, adv: Path, tmp_path: Path
+    ) -> None:
         cells = [{"cell": f"c{n}", "country": "Greece", "name": f"s{n:02d}"} for n in range(9)]
-        assert [len(labels) for _, labels in AD.batches(cells, 0)] == [8, 1]
+        assert [len(labels) for _, labels in AD.batches(cells, 0, 8)] == [8, 1]
+        assert [len(labels) for _, labels in AD.batches(cells, 0, 2)] == [2, 2, 2, 2, 1]
+        for size in (0, -1, True):
+            with pytest.raises(AD.AdversarialError, match="not a count of 1 or more"):
+                AD.batches(cells, 0, size)
+        result = AD.export(adv, tmp_path / "h-r0", batch_size=2)
+        assert result["batches"] == 2  # 3 cells in batches of 2
+        assert AD.read_rounds(adv)[0]["batch_size"] == 2
+
+    def test_a_check_exported_before_the_size_was_recorded_keeps_its_eight(self) -> None:
+        assert AD.LEGACY_BATCH_SIZE == 8
 
     def test_the_brief_names_the_role_the_model_and_the_cache(
         self, adv: Path, tmp_path: Path
     ) -> None:
         AD.export(adv, tmp_path / "h-r0")
         text = AD.brief(adv, tmp_path / "h-r0", "adv-r0-b0001")
-        assert "--model claude-opus-5-5 --role adversarial" in text
+        assert "--model claude-sonnet-5-5 --role adversarial" in text
         assert "handoff.py wiki-text --label <site id>" in text and "--stage adv" in text
         assert "adversarial.py check-answer" in text and "3 check question(s)" in text
         with pytest.raises(AD.AdversarialError, match="is no batch"):
@@ -474,8 +491,8 @@ class TestTheImport:
         self, adv: Path, tmp_path: Path
     ) -> None:
         self.answer_all(tmp_path, {A_ID: "confirm", B_ID: "confirm", C_ID: "confirm"},
-                        model=OH.SONNET_MODEL)  # fmt: skip
-        with pytest.raises(AD.AdversarialError, match="registered to claude-opus-5-5"):
+                        model=OH.OPUS_MODEL)  # fmt: skip
+        with pytest.raises(AD.AdversarialError, match="registered to claude-sonnet-5-5"):
             self.imported(adv)
 
     def test_an_exported_prompt_that_changed_is_refused(self, adv: Path, tmp_path: Path) -> None:
@@ -518,11 +535,22 @@ class TestTheImport:
             encoding="utf-8"
         )
         assert "An earlier answer to this check could not be used" in prompt
+        assert AD.read_rounds(adv)[1]["batch_size"] == AD.read_rounds(adv)[0]["batch_size"] == 12
         record(tmp_path / "h-r1", "adv-r1-b0001", cell_of(C_ID), reply("period_start", "unclear"))
         final = self.imported(adv)
         assert final["states"] == {"confirm": 2, "unclear": 1} and final["waiting_for_reask"] == 0
         with pytest.raises(AD.AdversarialError, match="nothing to ask again"):
             AD.export_reask(adv, tmp_path / "h-r2")
+
+    def test_a_re_ask_of_a_check_exported_before_the_size_was_recorded_is_cut_into_eight(
+        self, adv: Path, tmp_path: Path
+    ) -> None:
+        self.answer_all(tmp_path, {A_ID: "confirm", B_ID: "confirm", C_ID: "unclear"})
+        self.imported(adv)
+        rounds = [{k: v for k, v in r.items() if k != "batch_size"} for r in AD.read_rounds(adv)]
+        HO._write_jsonl(adv / AD.ROUNDS_FILE, rounds)
+        AD.export_reask(adv, tmp_path / "h-r1")
+        assert AD.read_rounds(adv)[1]["batch_size"] == AD.LEGACY_BATCH_SIZE == 8
 
     def test_a_re_ask_needs_the_round_before_it_imported(self, adv: Path, tmp_path: Path) -> None:
         with pytest.raises(AD.AdversarialError, match="import round 0 before a re-ask"):
@@ -683,7 +711,7 @@ class TestWhatThePlanReads:
     def test_a_rejected_rule_made_start_is_cleared_to_undated(self) -> None:
         original = dec(verdict="replace")
         rejected = AD._rewritten(original, AD.REJECT, {"round": 0, "answered_by": "adversarial:b",
-                                                       "model": OH.OPUS_MODEL, "reasoning": REASON,
+                                                       "model": OH.SONNET_MODEL, "reasoning": REASON,
                                                        "problem": None, "quotes": []})  # fmt: skip
         cells = FP.site_cells(
             TP.live(period_start=-4000, period_name="4500 - 3000 BC"),
@@ -697,7 +725,7 @@ class TestWhatThePlanReads:
 
     def test_an_unclear_cell_is_held_not_written(self) -> None:
         held = AD._rewritten(dec(), AD.UNCLEAR, {"round": 1, "answered_by": "adversarial:b",
-                                                 "model": OH.OPUS_MODEL, "reasoning": REASON,
+                                                 "model": OH.SONNET_MODEL, "reasoning": REASON,
                                                  "problem": None, "quotes": []})  # fmt: skip
         cells = FP.site_cells(
             TP.live(period_start=-4000, period_name="4500 - 3000 BC"),

@@ -390,11 +390,11 @@ def test_an_unanswered_question_fails_the_calibration(tmp_path: Path) -> None:
 
 
 def test_a_failing_opus_role_has_no_tier_to_move_to_and_is_held(tmp_path: Path) -> None:
-    sealed(tmp_path, role="adversarial")
+    sealed(tmp_path, role="pilot_judge")
     run = a_source_run(tmp_path, ())
     CC.prepare(tmp_path / "calibration", calibration_id="cal-fact-1", run=run)
     out = tmp_path / "calibration" / "cal-fact-1"
-    by = "adversarial:wc"
+    by = "pilot_judge:wc"
     fresh(
         out,
         "wc-0001",
@@ -989,16 +989,16 @@ def test_a_release_file_beside_a_pass_is_not_read(tmp_path: Path) -> None:
     assert CC.require_passed(root, NEEDS)[0]["standing"] == CC.PASSED
 
 
-def forged_release(tmp_path: Path, **over: Any) -> Path:
+def forged_release(tmp_path: Path, cid: str = "cal-held", **over: Any) -> Path:
     """A release record not made by `CC.release`: hand-written, with the right sha256 of the
     verdict, the seal and the role, as a copied or later tool's record would carry them."""
     root = tmp_path / "calibration"
-    seal = json.loads((root / CC.THRESHOLDS_FILE).read_text(encoding="utf-8"))["cal-held"]
+    seal = json.loads((root / CC.THRESHOLDS_FILE).read_text(encoding="utf-8"))[cid]
     proof = evidence_file(tmp_path)
     record = {
-        "calibration_id": "cal-held",
+        "calibration_id": cid,
         "role": seal["role"],
-        "verdict_sha256": CC.sha256_file(root / CC.VERDICTS_DIR / "cal-held.json"),
+        "verdict_sha256": CC.sha256_file(root / CC.VERDICTS_DIR / f"{cid}.json"),
         "seal_sha256": CC.seal_sha256(seal),
         "role_sha256": seal["role_sha256"],
         "decided_by": "someone",
@@ -1007,7 +1007,7 @@ def forged_release(tmp_path: Path, **over: Any) -> Path:
         "decided_at": NOW,
     }
     record.update(over)
-    path = root / CC.RELEASES_DIR / "cal-held.json"
+    path = root / CC.RELEASES_DIR / f"{cid}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(record), encoding="utf-8")
     return path
@@ -1091,3 +1091,429 @@ def test_the_cli_refuses_to_release_a_pass(
          "--decided-by", "orchestrator", "--reason", "x", "--evidence", str(one)]
     )  # fmt: skip
     assert code == 2 and "REFUSED" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------------ the release under an owner decision
+#: A Sonnet verdict that failed with a tier move to Opus, as `CC.verdict` writes it for a role that was
+#: on Sonnet; owner decision D36 moved the role back to Sonnet and the owner keeps that tier.
+def a_move(
+    role: str = "field_researcher", calibration_id: str = "fr-general-001"
+) -> dict[str, str]:
+    return {
+        "role": role,
+        "from": "claude-sonnet-5-5",
+        "to": "claude-opus-5-5",
+        "calibration_id": calibration_id,
+        "reason": "agreement 0.8636 is below the sealed threshold 0.9",
+    }
+
+
+def moved_verdict(
+    tmp_path: Path,
+    calibration_id: str = "fr-general-001",
+    role: str = "field_researcher",
+    **over: Any,
+) -> Path:
+    over.setdefault("tier_move", a_move(role, calibration_id))
+    over.setdefault("held", None)
+    return held_verdict(tmp_path, calibration_id=calibration_id, role=role, **over)
+
+
+def owner_released(tmp_path: Path, **over: Any) -> dict[str, Any]:
+    over.setdefault("calibration_id", "fr-general-001")
+    over.setdefault("owner_decision", "D36")
+    return released(tmp_path, **over)
+
+
+def test_an_owner_decision_releases_a_verdict_with_a_tier_move_and_records_the_decision(
+    tmp_path: Path,
+) -> None:
+    moved_verdict(tmp_path)
+
+    record = owner_released(tmp_path)
+
+    assert record["owner_decision"] == "D36" and record["calibration_id"] == "fr-general-001"
+    stored = tmp_path / "calibration" / CC.RELEASES_DIR / "fr-general-001.json"
+    assert json.loads(stored.read_text(encoding="utf-8")) == record
+    assert record["role_sha256"] == RO.role_sha256("field_researcher")
+
+
+def test_a_release_without_an_owner_decision_carries_none(tmp_path: Path) -> None:
+    held_verdict(tmp_path)
+    assert "owner_decision" not in released(tmp_path)
+
+
+def test_a_gate_names_a_release_under_an_owner_decision(tmp_path: Path) -> None:
+    moved_verdict(tmp_path)
+    owner_released(tmp_path)
+
+    standing = CC.require_passed(tmp_path / "calibration", NEEDS)
+
+    assert standing == [
+        {
+            "role": "field_researcher",
+            "comparison": "bp-bucket",
+            "calibration_id": "fr-general-001",
+            "standing": "released (owner decision D36)",
+            "owner_decision": "D36",
+            "decided_by": "orchestrator (D8)",
+        }
+    ]
+    assert CC.released_label("D36") == f"{CC.RELEASED} (owner decision D36)"
+
+
+def test_a_plain_release_is_still_named_released_without_a_decision(tmp_path: Path) -> None:
+    held_verdict(tmp_path)
+    released(tmp_path)
+    line = CC.require_passed(tmp_path / "calibration", NEEDS)[0]
+    assert line["standing"] == CC.RELEASED and "owner_decision" not in line
+
+
+def test_a_verdict_with_a_tier_move_is_still_not_released_without_a_decision(
+    tmp_path: Path,
+) -> None:
+    moved_verdict(tmp_path)
+    with pytest.raises(CC.CalibrationError, match="tier move"):
+        released(tmp_path, calibration_id="fr-general-001")
+
+
+def test_an_owner_decision_does_not_release_a_pass(tmp_path: Path) -> None:
+    moved_verdict(tmp_path, passed=True, tier_move=None)
+    with pytest.raises(CC.CalibrationError, match="passed"):
+        owner_released(tmp_path)
+
+
+def test_an_owner_decision_releases_only_a_verdict_that_has_a_tier_move(tmp_path: Path) -> None:
+    held_verdict(tmp_path, calibration_id="fr-general-001")  # held at the top, no tier move
+    with pytest.raises(CC.CalibrationError, match="carries no tier move"):
+        owner_released(tmp_path)
+
+
+def test_an_owner_decision_nobody_applied_releases_nothing(tmp_path: Path) -> None:
+    moved_verdict(tmp_path)
+    with pytest.raises(CC.CalibrationError, match="names decision D37"):
+        owner_released(tmp_path, owner_decision="D37")
+    assert not (tmp_path / "calibration" / CC.RELEASES_DIR / "fr-general-001.json").exists()
+
+
+def test_an_owner_decision_releases_only_a_calibration_its_move_rests_on(tmp_path: Path) -> None:
+    moved_verdict(tmp_path, calibration_id="cal-elsewhere")
+    with pytest.raises(CC.CalibrationError, match="does not rest on cal-elsewhere"):
+        owner_released(tmp_path, calibration_id="cal-elsewhere")
+
+
+def test_an_owner_decision_releases_only_a_verdict_of_the_model_the_owner_kept(
+    tmp_path: Path,
+) -> None:
+    """A verdict made on Opus while the registry holds Sonnet again is another model's."""
+    moved_verdict(tmp_path, model="claude-opus-5-5")
+    with pytest.raises(
+        CC.CalibrationError, match="registered to claude-sonnet-5-5, not claude-opus"
+    ):
+        owner_released(tmp_path)
+
+
+def test_an_owner_decision_does_not_release_a_candidate_trial(tmp_path: Path) -> None:
+    sealed(
+        tmp_path,
+        calibration_id="fr-general-001",
+        role="field_researcher",
+        candidate_model="claude-haiku-5-5",
+    )
+    verdicts = tmp_path / "calibration" / CC.VERDICTS_DIR
+    verdicts.mkdir(parents=True)
+    (verdicts / "fr-general-001.json").write_text(
+        json.dumps(
+            {
+                "calibration_id": "fr-general-001",
+                "role": "field_researcher",
+                "model": "claude-haiku-5-5",
+                "passed": False,
+                "tier_move": a_move(),
+                "decided_at": NOW,
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(CC.CalibrationError, match="candidate trial"):
+        owner_released(tmp_path)
+
+
+def test_an_owner_release_of_a_role_that_changed_after_the_seal_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    moved_verdict(tmp_path)
+    changed = dict(RO.ROLES)
+    changed["field_researcher"] = RO.Role("field_researcher", "claude-opus-5-5", "high", "x")
+    monkeypatch.setattr(RO, "ROLES", changed)
+    with pytest.raises(CC.CalibrationError, match="changed after the seal"):
+        owner_released(tmp_path)
+
+
+def forged_owner_release(tmp_path: Path, **over: Any) -> Path:
+    return forged_release(tmp_path, **{"cid": "fr-general-001", "owner_decision": "D36", **over})
+
+
+def test_a_hand_written_owner_release_of_a_verdict_with_a_tier_move_stands(
+    tmp_path: Path,
+) -> None:
+    """The control of the forged cases below."""
+    moved_verdict(tmp_path)
+    forged_owner_release(tmp_path)
+    line = CC.require_passed(tmp_path / "calibration", NEEDS)[0]
+    assert line["standing"] == "released (owner decision D36)"
+
+
+@pytest.mark.parametrize(
+    ("verdict_over", "release_over", "message"),
+    [
+        ({"tier_move": None, "held": HELD}, {}, "carries no tier move"),
+        ({}, {"owner_decision": "D37"}, "names decision D37"),
+        ({"model": "claude-opus-5-5"}, {}, "not claude-opus-5-5"),
+    ],
+)
+def test_a_forged_owner_release_is_checked_again_at_the_gate(
+    tmp_path: Path, verdict_over: dict[str, Any], release_over: dict[str, Any], message: str
+) -> None:
+    moved_verdict(tmp_path, **verdict_over)
+    forged_owner_release(tmp_path, **release_over)
+    with pytest.raises(CC.CalibrationError, match=f"release of fr-general-001.*{message}"):
+        CC.require_passed(tmp_path / "calibration", NEEDS)
+
+
+def test_a_release_of_a_tier_move_verdict_without_a_decision_does_not_stand(
+    tmp_path: Path,
+) -> None:
+    moved_verdict(tmp_path)
+    forged_release(tmp_path, cid="fr-general-001")
+    with pytest.raises(CC.CalibrationError, match="release of fr-general-001.*tier move"):
+        CC.require_passed(tmp_path / "calibration", NEEDS)
+
+
+def test_the_cli_releases_under_an_owner_decision(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    moved_verdict(tmp_path)
+    proof = evidence_file(tmp_path)
+    code = CC.main(
+        [
+            "release", "--root", str(tmp_path / "calibration"), "--id", "fr-general-001",
+            "--decided-by", "orchestrator (D36)", "--reason", "0 false sources",
+            "--evidence", str(proof), "--owner-decision", "D36",
+        ]
+    )  # fmt: skip
+    assert code == 0 and json.loads(capsys.readouterr().out)["owner_decision"] == "D36"
+    standing = CC.require_passed(tmp_path / "calibration", NEEDS)[0]["standing"]
+    assert standing == "released (owner decision D36)"
+
+
+# ----------------------------------------------------------------------- the candidate-model trial
+HAIKU = "claude-haiku-5-5"
+
+
+def candidate_sealed(tmp_path: Path, **over: Any) -> dict[str, Any]:
+    return sealed(tmp_path, candidate_model=HAIKU, **over)
+
+
+def test_a_candidate_seal_records_the_candidate_and_leaves_the_registry_alone(
+    tmp_path: Path,
+) -> None:
+    before = RO.role_sha256("enrich_writer")
+
+    seal = candidate_sealed(tmp_path)
+
+    assert seal["model"] == HAIKU and seal["candidate_model"] == HAIKU
+    assert seal["role_sha256"] == RO.role_sha256("enrich_writer", model=HAIKU) != before
+    assert seal["registered_role_sha256"] == before == RO.role_sha256("enrich_writer")
+    assert RO.ROLES["enrich_writer"].model == "claude-sonnet-5-5"
+
+
+def test_a_seal_that_is_no_trial_carries_no_candidate_key(tmp_path: Path) -> None:
+    seal = sealed(tmp_path)
+    assert "candidate_model" not in seal and "registered_role_sha256" not in seal
+
+
+@pytest.mark.parametrize(
+    ("model", "message"),
+    [
+        ("claude-sonnet-5-5", "is the registered model of enrich_writer"),
+        ("MiniMax-M3.1-Flash-Preview", "not a model a role may be registered to"),
+    ],
+)
+def test_a_candidate_must_be_another_registrable_model(
+    tmp_path: Path, model: str, message: str
+) -> None:
+    with pytest.raises(RO.RoleError, match=message):
+        sealed(tmp_path, candidate_model=model)
+    assert not (tmp_path / "calibration" / CC.THRESHOLDS_FILE).exists()
+
+
+def candidate_compared(tmp_path: Path, second: str = "DROP", **kwargs: Any) -> None:
+    candidate_sealed(tmp_path)
+    run = a_source_run(tmp_path, ())
+    CC.prepare(tmp_path / "calibration", calibration_id="cal-fact-1", run=run)
+    out = tmp_path / "calibration" / "cal-fact-1"
+    kwargs.setdefault("model", OH.ANSWER_MODELS[HAIKU])
+    fresh(out, "wc-0001", SITE_A, check_answer(SITE_A, "KEEP", second), **kwargs)
+    fresh(out, "wc-0002", SITE_B, check_answer(SITE_B, "KEEP", "KEEP"), **kwargs)
+
+
+def test_a_trial_is_compared_on_the_candidates_stamp(tmp_path: Path) -> None:
+    candidate_compared(tmp_path)
+    report = CC.compare(tmp_path / "calibration", calibration_id="cal-fact-1")
+    assert report["unanswered"] == [] and report["units"] == 6
+
+
+def test_a_trial_refuses_an_answer_of_the_registered_model(tmp_path: Path) -> None:
+    candidate_compared(tmp_path, model=OH.SONNET_MODEL)
+    with pytest.raises(RO.RoleError, match="candidate model is claude-haiku-5-5"):
+        CC.compare(tmp_path / "calibration", calibration_id="cal-fact-1")
+
+
+def test_a_failed_trial_names_the_candidate_and_moves_nobody(tmp_path: Path) -> None:
+    candidate_compared(tmp_path, second="KEEP")
+    CC.compare(tmp_path / "calibration", calibration_id="cal-fact-1")
+
+    result = CC.verdict(
+        tmp_path / "calibration", calibration_id="cal-fact-1", false_sources=0, now=lambda: NOW
+    )
+
+    assert result["passed"] is False  # 5 of 6 against 0.9
+    assert result["model"] == HAIKU and result["candidate_model"] == HAIKU
+    assert result["registered_model"] == "claude-sonnet-5-5"
+    assert result["tier_move"] is None and "held" not in result
+
+
+def test_a_passing_trial_names_the_model_that_passed(tmp_path: Path) -> None:
+    candidate_sealed(tmp_path, threshold=0.5)
+    run = a_source_run(tmp_path, ())
+    CC.prepare(tmp_path / "calibration", calibration_id="cal-fact-1", run=run)
+    out = tmp_path / "calibration" / "cal-fact-1"
+    stamp = {"model": OH.ANSWER_MODELS[HAIKU]}
+    fresh(out, "wc-0001", SITE_A, check_answer(SITE_A, "KEEP", "DROP"), **stamp)
+    fresh(out, "wc-0002", SITE_B, check_answer(SITE_B, "KEEP", "KEEP"), **stamp)
+    CC.compare(tmp_path / "calibration", calibration_id="cal-fact-1")
+    result = CC.verdict(
+        tmp_path / "calibration", calibration_id="cal-fact-1", false_sources=0, now=lambda: NOW
+    )
+    assert result["passed"] is True and result["tier_move"] is None
+    assert result["model"] == HAIKU and result["candidate_model"] == HAIKU
+
+
+def passed_trial(tmp_path: Path, comparison: str = "all") -> None:
+    """A passed verdict of a trial of `enrich_writer` with Haiku, as `CC.verdict` writes it."""
+    candidate_sealed(tmp_path, comparison=comparison)
+    verdicts = tmp_path / "calibration" / CC.VERDICTS_DIR
+    verdicts.mkdir(parents=True)
+    body = {
+        "calibration_id": "cal-fact-1",
+        "role": "enrich_writer",
+        "model": HAIKU,
+        "passed": True,
+        "tier_move": None,
+    }
+    (verdicts / "cal-fact-1.json").write_text(json.dumps(body), encoding="utf-8")
+
+
+def test_no_gate_accepts_a_trial_for_the_registered_role(tmp_path: Path) -> None:
+    passed_trial(tmp_path)
+    with pytest.raises(CC.CalibrationError, match="enrich_writer/all"):
+        CC.require_passed(tmp_path / "calibration", [("enrich_writer", "all")])
+
+
+def test_a_trial_does_not_vouch_when_the_registry_holds_the_candidate_without_an_owner_move(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An edit of `ROLES` alone makes the digests match; the gate also asks for the owner move."""
+    passed_trial(tmp_path)
+    changed = dict(RO.ROLES)
+    changed["enrich_writer"] = RO.Role("enrich_writer", HAIKU, "high", "enrich-writer")
+    monkeypatch.setattr(RO, "ROLES", changed)
+    with pytest.raises(CC.CalibrationError, match="enrich_writer/all"):
+        CC.require_passed(tmp_path / "calibration", [("enrich_writer", "all")])
+
+
+def test_a_trial_vouches_for_the_role_once_an_owner_move_registered_the_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    passed_trial(tmp_path)
+    changed = dict(RO.ROLES)
+    changed["enrich_writer"] = RO.Role("enrich_writer", HAIKU, "high", "enrich-writer")
+    move = {
+        **RO._d36_move("enrich_writer", "high", "a test move"),
+        "from": "claude-sonnet-5-5",
+        "to": HAIKU,
+    }
+    monkeypatch.setattr(RO, "ROLES", changed)
+    monkeypatch.setattr(RO, "APPLIED_ESCALATIONS", (*RO.APPLIED_ESCALATIONS, move))
+    line = CC.require_passed(tmp_path / "calibration", [("enrich_writer", "all")])[0]
+    assert line["standing"] == CC.PASSED and line["calibration_id"] == "cal-fact-1"
+
+
+def test_a_trial_may_still_be_prepared_after_an_owner_move_registered_the_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The seal stays valid while the registry holds the registered entry and once it holds the
+    candidate's."""
+    candidate_sealed(tmp_path)
+    changed = dict(RO.ROLES)
+    changed["enrich_writer"] = RO.Role("enrich_writer", HAIKU, "high", "enrich-writer")
+    monkeypatch.setattr(RO, "ROLES", changed)
+    run = a_source_run(tmp_path, ())
+    CC.prepare(tmp_path / "calibration", calibration_id="cal-fact-1", run=run)
+
+
+def test_a_trial_refuses_a_registry_that_changed_to_something_else(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    candidate_sealed(tmp_path)
+    changed = dict(RO.ROLES)
+    changed["enrich_writer"] = RO.Role("enrich_writer", "claude-opus-5-5", "high", "enrich-writer")
+    monkeypatch.setattr(RO, "ROLES", changed)
+    run = a_source_run(tmp_path, ())
+    with pytest.raises(CC.CalibrationError, match="changed after the seal"):
+        CC.prepare(tmp_path / "calibration", calibration_id="cal-fact-1", run=run)
+
+
+def test_the_cli_seals_a_candidate_trial(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    handoff = an_answered_handoff(tmp_path)
+    code = CC.main(
+        [
+            "seal", "--root", str(tmp_path / "calibration"), "--id", "cal-fact-1",
+            "--role", "enrich_writer", "--handoff", str(handoff),
+            "--batches", "wc-0001", "wc-0002", "--threshold", "0.9",
+            "--candidate-model", HAIKU,
+        ]
+    )  # fmt: skip
+    assert code == 0
+    assert json.loads(capsys.readouterr().out)["candidate_model"] == HAIKU
+
+
+def test_a_tier_move_that_put_the_candidate_in_the_registry_is_no_owner_move(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The registry holds the candidate and the digests match, but a failed calibration put it there
+    (a tier move to Opus), not the owner: the trial vouches for nobody."""
+    sealed(tmp_path, candidate_model="claude-opus-5-5")
+    verdicts = tmp_path / "calibration" / CC.VERDICTS_DIR
+    verdicts.mkdir(parents=True)
+    (verdicts / "cal-fact-1.json").write_text(
+        json.dumps({"calibration_id": "cal-fact-1", "role": "enrich_writer",
+                    "model": "claude-opus-5-5", "passed": True, "tier_move": None}),
+        encoding="utf-8",
+    )  # fmt: skip
+    changed = dict(RO.ROLES)
+    changed["enrich_writer"] = RO.Role("enrich_writer", "claude-opus-5-5", "high", "enrich-writer")
+    tier = {
+        "role": "enrich_writer",
+        "from": "claude-sonnet-5-5",
+        "to": "claude-opus-5-5",
+        "calibration_id": "x",
+        "reason": "failed",
+    }
+    monkeypatch.setattr(RO, "ROLES", changed)
+    monkeypatch.setattr(RO, "APPLIED_ESCALATIONS", (*RO.APPLIED_ESCALATIONS, tier))
+    with pytest.raises(CC.CalibrationError, match="enrich_writer/all"):
+        CC.require_passed(tmp_path / "calibration", [("enrich_writer", "all")])

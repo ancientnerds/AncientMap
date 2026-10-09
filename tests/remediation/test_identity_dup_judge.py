@@ -818,7 +818,7 @@ def write_answer(
     text: str,
     *,
     by: str = "web_verifier:b1",
-    model: str = OPUS,
+    model: str = SONNET,
 ) -> None:
     OH.write_answer(
         handoff, batch_id=batch, stage=stage, label=label, text=text, answered_by=by, model=model
@@ -946,8 +946,8 @@ class TestTheRounds:
             ("agent-1", SONNET, "names no role"),
             ("adversarial:agent-1", SONNET, "this stage asks web_verifier"),
             ("web_verifier:agent-1", OH.MINIMAX_MODEL, "answered by MiniMax"),
-            ("web_verifier:agent-1", SONNET, "is registered to claude-opus-5-5"),
-            ("web_verifier:agent-1", OH.HAIKU_MODEL, "is registered to claude-opus-5-5"),
+            ("web_verifier:agent-1", OPUS, "is registered to claude-sonnet-5-5"),
+            ("web_verifier:agent-1", OH.HAIKU_MODEL, "is registered to claude-sonnet-5-5"),
         ],
     )
     def test_an_answer_that_is_not_the_role_s_stops_the_import(
@@ -1032,7 +1032,7 @@ class TestTheRounds:
             CID,
             recheck,
             by="adversarial:r1",
-            model=OPUS,
+            model=SONNET,
         )
         summary = import_round(run, J.STAGE_RECHECK, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         assert summary["decided"] == 1
@@ -1068,7 +1068,7 @@ class TestTheRounds:
             CID,
             recheck,
             by="web_verifier:r1",
-            model=OPUS,
+            model=SONNET,
         )
         with pytest.raises(rounds.RoundError, match="this stage asks adversarial or pilot_judge"):
             import_round(run, J.STAGE_RECHECK, "r1", CTX, fake_fetch(PAGES))
@@ -1096,7 +1096,9 @@ class TestTheBriefAndTheCheck:
 
     def test_the_brief_names_the_role_the_model_and_the_commands(self, tmp_path: Path) -> None:
         text = J.brief(self.exported(tmp_path), J.STAGE_VERDICT, "r1", "r1-b01")
-        assert "role web_verifier" in text and "--model claude-opus-5-5 --role web_verifier" in text
+        assert (
+            "role web_verifier" in text and "--model claude-sonnet-5-5 --role web_verifier" in text
+        )
         assert "dup_judge.py check-answer --stage dup-verdict --round r1" in text
         assert "403 or 429 is a throttle" in text and "4. Check its shape" in text
 
@@ -1106,7 +1108,7 @@ class TestTheBriefAndTheCheck:
         import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
         J.export_rechecks(run, CTX, tmp_path / "h2", now=lambda: NOW)
         text = J.brief(run, J.STAGE_RECHECK, "r1", "r1-b01")
-        assert "role adversarial" in text and "--model claude-opus-5-5 --role adversarial" in text
+        assert "role adversarial" in text and "--model claude-sonnet-5-5 --role adversarial" in text
 
     def test_a_brief_names_a_role_of_its_stage(self, tmp_path: Path) -> None:
         run = self.exported(tmp_path)

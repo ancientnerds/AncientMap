@@ -1,7 +1,7 @@
 """Lane WC answers by role (owner decision D6, 2026-10-08): the check rounds and lane WN's write
-round are the fact checker's (Opus since teaser-2026-10-09b, high), the verification rounds the web
-verifier's (Opus, high), the judge the pilot judge's (Opus, xhigh), the adversarial second check of a standing defect
-the adversarial role's (Opus, high). A brief takes its model, role and agent family from
+round are the fact checker's (Sonnet, high), the verification rounds the web verifier's (Sonnet,
+high), the judge the pilot judge's (Opus, xhigh), the adversarial second check of a standing defect
+the adversarial role's (Sonnet, high). A brief takes its model, role and agent family from
 `roles.ROLES`; an import accepts only a Claude answer given in the round's role; a chunk is judged
 by a sample (`judge-export --sample N --seed S`) that never approves a plan.
 
@@ -49,12 +49,12 @@ def test_the_check_brief_is_the_fact_checkers_and_names_the_registry_model_and_r
     run, handoff = _run(tmp_path)
     text = C.brief(run, handoff, "wc-0002")
     entry = RO.role("fact_checker")
-    assert (entry.model, entry.effort) == ("claude-opus-5-5", "high")
-    assert "You are Opus checker wc-0002" in text
+    assert (entry.model, entry.effort) == ("claude-sonnet-5-5", "high")
+    assert "You are Sonnet checker wc-0002" in text
     assert f"--model {entry.model} --role fact_checker" in text
-    assert "--answered-by opus-check-r1-wc-0002" in text
+    assert "--answered-by sonnet-check-r1-wc-0002" in text
     _no_braces_left(text)
-    assert "claude-sonnet-5-5" not in text and "<the model id" not in text
+    assert "claude-opus-5-5" not in text and "<the model id" not in text
 
 
 def test_every_brief_sends_the_agent_to_the_shared_wikipedia_cache_first(tmp_path: Path) -> None:
@@ -101,9 +101,9 @@ def test_the_verify_brief_is_the_web_verifiers_and_the_judge_brief_the_pilot_jud
     run = _checked(tmp_path)
     C.cmd_verify_export(run, _hv(tmp_path), batch_size=5)
     verify = C.verify_brief(run, _hv(tmp_path), "verify-0001")
-    assert "You are Opus verifier verify-0001" in verify
-    assert "--model claude-opus-5-5 --role web_verifier" in verify
-    assert "--answered-by opus-wc-verify-0001" in verify
+    assert "You are Sonnet verifier verify-0001" in verify
+    assert "--model claude-sonnet-5-5 --role web_verifier" in verify
+    assert "--answered-by sonnet-wc-verify-0001" in verify
     _no_braces_left(verify)
     built = FX.build_run(tmp_path / "b", _rows(), _answers(), pilot=True, judged=False)[0]
     handoff = tmp_path / "b" / "handoff" / "judge"
@@ -118,15 +118,17 @@ def test_the_verify_brief_is_the_web_verifiers_and_the_judge_brief_the_pilot_jud
 
 def test_the_write_brief_of_lane_wn_is_the_fact_checkers_too(tmp_path: Path) -> None:
     """No writer role is registered: the web research that writes a sentence on a quote is the fact
-    checker's (Opus, high)."""
+    checker's (Sonnet, high)."""
     run = tmp_path / "wn"
     run.mkdir()
     C.cmd_read(run, runner=FX.ReadRunner([WX.wn_row(WX.SITE_N)]))
     handoff = tmp_path / "wn-w"
     C.cmd_export(run, handoff, batch_size=5, exclude=None, after=[], pilot=None, seed=None, wn=True)
     text = C.brief(run, handoff, "wn-0001")
-    assert "You are Opus writer wn-0001" in text
-    assert "--answered-by opus-write-wn-0001 --model claude-opus-5-5 --role fact_checker" in text
+    assert "You are Sonnet writer wn-0001" in text
+    assert (
+        "--answered-by sonnet-write-wn-0001 --model claude-sonnet-5-5 --role fact_checker" in text
+    )
     _no_braces_left(text)
     # a writer reads the article first; its text is no second witness for what it must establish
     assert P.WIKI_CACHE_NOTE_WRITER.format(wiki_cache=C._shown(C.WIKI_CACHE)) in text
@@ -195,9 +197,9 @@ def test_a_minimax_judge_answer_is_never_imported(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("by", "model", "match"),
     [
-        ("web_verifier:opus-check-r1", OH.OPUS_MODEL, "was given in role web_verifier"),
+        ("web_verifier:sonnet-check-r1", OH.SONNET_MODEL, "was given in role web_verifier"),
         ("pilot_judge:opus-check-r1", OH.OPUS_MODEL, "was given in role pilot_judge"),
-        ("fact_checker:opus-check-r1", OH.SONNET_MODEL, "registered to claude-opus-5-5"),
+        ("fact_checker:sonnet-check-r1", OH.OPUS_MODEL, "registered to claude-sonnet-5-5"),
     ],
 )
 def test_a_check_answer_given_in_another_role_or_under_another_stamp_is_refused(
@@ -223,14 +225,14 @@ def test_an_answer_in_the_rounds_own_role_imports_and_so_does_a_legacy_unnamed_c
     _record(
         handoff,
         {FX.SITE_A: answers[FX.SITE_A]},
-        by="fact_checker:opus-check-r1",
-        model=OH.OPUS_MODEL,
+        by="fact_checker:sonnet-check-r1",
+        model=OH.SONNET_MODEL,
     )
     rest = {k: v for k, v in answers.items() if k != FX.SITE_A}
     _record(handoff, rest, by="opus-check", model=OH.OPUS_MODEL)  # recorded before the registry
     assert C.cmd_import(run, handoff, client=FX.FakeClient(), pace=0.0)["answers"] == 3
     rows = read_jsonl(run / "round-1" / "ANSWERS.jsonl")
-    assert {r["answered_by"] for r in rows} >= {"fact_checker:opus-check-r1-wc-0001"}
+    assert {r["answered_by"] for r in rows} >= {"fact_checker:sonnet-check-r1-wc-0001"}
 
 
 # ------------------------------------------------------------------------------ the adversary
@@ -282,9 +284,9 @@ def test_an_adversarial_run_asks_the_adversarial_question_and_is_answered_in_tha
     assert "A LATER WEB CHECK REPORTED A CLAIM OF THIS DESCRIPTION CONTRADICTED" in prompt
     assert "THIS TEXT IS NOT TRIMMED" in prompt  # the Phase-4 rule is still there
     text = C.brief(run, handoff, "wc-0001")
-    assert "You are Opus checker wc-0001" in text
-    assert "--model claude-opus-5-5 --role adversarial" in text
-    assert "--answered-by opus-check-r1-wc-0001" in text
+    assert "You are Sonnet checker wc-0001" in text
+    assert "--model claude-sonnet-5-5 --role adversarial" in text
+    assert "--answered-by sonnet-check-r1-wc-0001" in text
     assert RO.role("adversarial").effort == "high"
 
 
@@ -314,8 +316,8 @@ def test_the_adversarial_export_needs_a_report_and_is_no_pilot_and_no_wn_run(
     ("by", "model", "match"),
     [
         ("opus-check-r1", OH.OPUS_MODEL, "names no role"),
-        ("fact_checker:opus-check-r1", OH.OPUS_MODEL, "was given in role fact_checker"),
-        ("adversarial:opus-check-r1", OH.SONNET_MODEL, "registered to claude-opus-5-5"),
+        ("fact_checker:sonnet-check-r1", OH.SONNET_MODEL, "was given in role fact_checker"),
+        ("adversarial:sonnet-check-r1", OH.OPUS_MODEL, "registered to claude-sonnet-5-5"),
     ],
 )
 def test_only_the_adversarial_role_answers_an_adversarial_check(
@@ -535,7 +537,7 @@ def test_one_agent_cannot_check_and_then_verify_the_same_site_under_two_role_pre
     tmp_path: Path,
 ) -> None:
     run, handoff = _check_round(tmp_path)
-    FX.record_answers(handoff, _answers(), by="fact_checker:agent-7", model=OH.OPUS_MODEL, at=NEW)
+    FX.record_answers(handoff, _answers(), by="fact_checker:agent-7", model=OH.SONNET_MODEL, at=NEW)
     C.cmd_import(run, handoff, client=FX.FakeClient(), pace=0.0)
     verify = tmp_path / "handoff" / "wc-test-verify"
     C.cmd_verify_export(run, verify, batch_size=5)
@@ -543,7 +545,7 @@ def test_one_agent_cannot_check_and_then_verify_the_same_site_under_two_role_pre
         FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED"] * 3),
         FX.SITE_B: FX.verification(FX.SITE_B, ["SUPPORTED"] * 2),
     }
-    FX.record_answers(verify, answers, by="web_verifier:agent-7", model=OH.OPUS_MODEL, at=NEW)
+    FX.record_answers(verify, answers, by="web_verifier:agent-7", model=OH.SONNET_MODEL, at=NEW)
     # the checkers are fact_checker:agent-7-wc-0001; this verifier is the same agent in another role
     for line in OH.manifest(verify):
         path = verify / line["answer_path"]

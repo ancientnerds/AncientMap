@@ -39,13 +39,16 @@ Usage (the orchestrator's side):
 
     python scripts/remediation/opus_handoff.py validate --dir DIR
     python scripts/remediation/opus_handoff.py answer --dir DIR --batch-id B --stage S --label L \\
-        --answered-by AGENT --model MODEL_ID [--role ROLE] --text-file ANSWER.txt
+        --answered-by AGENT --model MODEL_ID [--role ROLE [--candidate-model MODEL_ID]] \\
+        --text-file ANSWER.txt
 
 `--model` is required and has no default: it is the model id the answering agent runs as, as its own
 system prompt names it (`claude-opus-5-5`, `claude-sonnet-5-5` or `claude-haiku-5-5`, the
 `NEW_ANSWER_MODELS`). `--role` names the role the answer is given in (`roles.ROLES`): it is refused
 when the role's registered model is not `--model`, and it is recorded as `answered_by =
-"<role>:<AGENT>"`; the stored shape (`ANSWER_KEYS`) does not grow.
+"<role>:<AGENT>"`; the stored shape (`ANSWER_KEYS`) does not grow. `--candidate-model` (with `--role`)
+records an answer of a candidate-model trial (`roles.candidate_model`): `--model` must be that
+candidate, which is not the role's registered model; the role stays registered as it was.
 
 `--check "COMMAND"` runs the lane's own answer check (its `check-answer`) before anything is written
 and records the answer only when the command exits 0 (`run_answer_check`: the command is split like
@@ -552,6 +555,12 @@ def main(argv: Iterable[str] | None = None) -> int:
         help="the role you answer in (roles.ROLES): refused unless its registered model is --model; "
         "recorded as answered_by '<role>:<answered-by>'",
     )
+    answer.add_argument(
+        "--candidate-model",
+        choices=list(NEW_ANSWER_MODELS),
+        help="with --role: the answer is a trial of this model for the role (it must be --model "
+        "and not the role's registered model)",
+    )
     answer.add_argument("--text-file", required=True, help="the answer text, UTF-8, verbatim")
     answer.add_argument(
         "--check",
@@ -559,6 +568,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     )
     args = parser.parse_args(list(argv) if argv is not None else None)
     root = Path(args.dir)
+    if args.command == "answer" and args.candidate_model is not None and args.role is None:
+        parser.error("--candidate-model is a trial for a role: name it with --role")
     if args.command == "validate":
         result = validate(root)
         _print(result.to_dict())
@@ -568,7 +579,14 @@ def main(argv: Iterable[str] | None = None) -> int:
         import roles  # here, not above: roles reads this module's stamps
 
         try:
-            roles.require_model(args.role, args.model)
+            if args.candidate_model is None:
+                roles.require_model(args.role, args.model)
+            else:
+                roles.candidate_model(args.role, args.candidate_model)
+                if args.model != args.candidate_model:
+                    raise roles.RoleError(
+                        f"--model {args.model} is not the candidate model {args.candidate_model}"
+                    )
             answered_by = roles.answered_by(args.role, args.answered_by)
         except roles.RoleError as exc:
             parser.error(str(exc))

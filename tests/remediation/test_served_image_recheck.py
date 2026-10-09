@@ -515,7 +515,7 @@ class TestTheRole:
             tmp_path, {THASOS: "other_site", HABU: "depicts", BARE: "region_or_type"}
         )
         text = V.brief(run, handoff, "check-001", "adversarial")
-        assert "running as claude-opus-5-5 in the role adversarial at effort high" in text
+        assert "running as claude-sonnet-5-5 in the role adversarial at effort high" in text
         assert "--role adversarial" in text
         assert V.brief(run, handoff, "check-001") == text  # the recheck is bound to its role
 
@@ -585,7 +585,7 @@ class TestTheRole:
             OH.write_answer(
                 handoff, batch_id=line["batch_id"], stage=V.STAGE_CHECK, label=line["label"],
                 text=_answer("depicts", basis="b"), answered_by=f"adversarial:{line['batch_id']}",
-                model=OH.OPUS_MODEL, now=lambda: "2026-10-09T03:00:00+00:00",
+                model=OH.SONNET_MODEL, now=lambda: "2026-10-09T03:00:00+00:00",
             )  # fmt: skip
         with pytest.raises(ST.StateError, match="not in the role image_depicts"):
             V.import_stage(run, V.STAGE_CHECK, "image_depicts")
@@ -602,9 +602,9 @@ class TestTheRole:
             OH.write_answer(
                 handoff, batch_id=line["batch_id"], stage=V.STAGE_CHECK, label=line["label"],
                 text=_answer("depicts", basis="b"), answered_by=f"adversarial:{line['batch_id']}",
-                model=OH.SONNET_MODEL, now=lambda: "2026-10-09T03:00:00+00:00",
+                model=OH.OPUS_MODEL, now=lambda: "2026-10-09T03:00:00+00:00",
             )  # fmt: skip
-        with pytest.raises(ST.StateError, match="registered to claude-opus-5-5"):
+        with pytest.raises(ST.StateError, match="registered to claude-sonnet-5-5"):
             V.import_stage(run, V.STAGE_CHECK, "adversarial")
 
 
@@ -626,7 +626,7 @@ class TestThePlan:
                 OH.write_answer(
                     handoff, batch_id=line["batch_id"], stage=V.STAGE_REPLACE,
                     label=line["label"], text=replace[line["label"]],
-                    answered_by=f"adversarial:{line['batch_id']}", model=OH.OPUS_MODEL,
+                    answered_by=f"adversarial:{line['batch_id']}", model=OH.SONNET_MODEL,
                     now=lambda: "2026-10-09T03:00:00+00:00",
                 )  # fmt: skip
             V.import_stage(run, V.STAGE_REPLACE, "adversarial")
@@ -642,11 +642,11 @@ class TestThePlan:
         """Whatever the importer was told, the plan reads the stamps of CHECK.jsonl itself."""
         run, _, _ = _recheck_run(tmp_path, {THASOS: "depicts", HABU: "depicts", BARE: "depicts"})
         rows = [json.loads(x) for x in (run / V.CHECK).read_text(encoding="utf-8").splitlines()]
-        rows[0]["model"] = OH.SONNET_MODEL
+        rows[0]["model"] = OH.OPUS_MODEL
         (run / V.CHECK).write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
         with pytest.raises(ST.StateError, match="not the adversarial role's"):
             PL.write_plan(run)
-        rows[0]["model"] = OH.OPUS_MODEL
+        rows[0]["model"] = OH.SONNET_MODEL
         rows[0]["answered_by"] = "check-001"
         (run / V.CHECK).write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
         with pytest.raises(ST.StateError, match="not in the role adversarial"):

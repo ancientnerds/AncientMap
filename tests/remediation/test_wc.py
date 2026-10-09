@@ -874,6 +874,41 @@ def _run(tmp_path: Path, rows=None, **export) -> tuple[Path, Path]:
     return run, handoff
 
 
+def test_a_new_run_asks_ten_to_a_batch_and_the_round_records_the_size(
+    tmp_path: Path,
+) -> None:
+    assert C.BATCH_SIZE == 10 and C.LEGACY_BATCH_SIZE == 5
+    run = tmp_path / "runs" / "wc-test"
+    run.mkdir(parents=True)
+    C.cmd_read(run, runner=_Runner(_rows()))
+    assert C.run_batch_size(run, None) == 10  # nothing exported yet
+    C.cmd_export(
+        run, tmp_path / "h", batch_size=C.run_batch_size(run, None),
+        exclude=None, after=[], pilot=None, seed=None,
+    )  # fmt: skip
+    (record,) = C.read_rounds(run)
+    assert record["batch_size"] == 10 and len(record["batches"]) == 1
+
+
+def test_a_later_round_follows_the_size_of_the_first_unless_one_is_named(tmp_path: Path) -> None:
+    run, _ = _run(tmp_path)  # exported with batch_size=2
+    assert C.read_rounds(run)[0]["batch_size"] == 2
+    assert C.run_batch_size(run, None) == 2
+    assert C.run_batch_size(run, 7) == 7
+    for size in (0, -2, True):
+        with pytest.raises(C.WcRunError, match="not a count of 1 or more"):
+            C.run_batch_size(run, size)
+
+
+def test_a_run_exported_before_the_size_was_recorded_keeps_its_five(tmp_path: Path) -> None:
+    run, _ = _run(tmp_path)
+    rounds = [{k: v for k, v in r.items() if k != "batch_size"} for r in C.read_rounds(run)]
+    (run / C.ROUNDS_FILE).write_text(
+        "".join(json.dumps(r, sort_keys=True) + "\n" for r in rounds), encoding="utf-8"
+    )
+    assert C.run_batch_size(run, None) == C.LEGACY_BATCH_SIZE == 5
+
+
 def test_the_read_is_phase4s_plan_read_with_the_scope_status_and_nothing_written(
     tmp_path: Path,
 ) -> None:
@@ -977,10 +1012,10 @@ def test_the_brief_names_the_batchs_own_scratch_and_the_commands(tmp_path: Path)
     run, handoff = _run(tmp_path)
     text = C.brief(run, handoff, "wc-0002")
     assert "1 question(s)" in text and "wc-test-r1-scratch/wc-0002/<label>.json" in text
-    assert "wc/cli.py check-answer" in text and "--answered-by opus-check-r1-wc-0002" in text
+    assert "wc/cli.py check-answer" in text and "--answered-by sonnet-check-r1-wc-0002" in text
     # the model and the role are the registry's (owner decision D6, 2026-10-08), never the agent's own
-    assert "--model claude-opus-5-5 --role fact_checker" in text
-    assert "You are Opus checker wc-0002" in text
+    assert "--model claude-sonnet-5-5 --role fact_checker" in text
+    assert "You are Sonnet checker wc-0002" in text
     with pytest.raises(C.WcRunError, match="no batch"):
         C.brief(run, handoff, "wc-0009")
 

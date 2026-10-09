@@ -520,7 +520,7 @@ class TestThePick:
         assert len(manifest) == 6 and {m["stage"] for m in manifest} == {"wd5"}
         assert {m["field"] for m in manifest} == {"period_start"}
         record = HO.read_rounds(out / "run")[0]
-        assert record["model"] == "claude-opus-5-5"
+        assert record["model"] == "claude-sonnet-5-5"
         truth = json.loads((out / PL.TRUTH_FILE).read_text(encoding="utf-8"))
         assert set(truth) == {m["label"] for m in manifest}
         named = next(v for v in truth.values() if v["basis"] == PL.AUDIT_CONFIRMED)
@@ -548,7 +548,7 @@ class TestThePick:
         PL.prepare(root, calibration_id="fr-bp-001", run=out / "run")
         cal_run = D.calibration_run(root / "fr-bp-001")
         assert R.read_rule(cal_run) is R.RECHECK
-        assert HO.read_rounds(cal_run)[0]["model"] == "claude-opus-5-5"
+        assert HO.read_rounds(cal_run)[0]["model"] == "claude-sonnet-5-5"
 
 
 # ------------------------------------------------------------------------------ comparing the BP pool
@@ -1074,7 +1074,7 @@ class TestTheKnownTruthPoolEndToEnd:
         body = {"fields": {field: {"decision": verdict, "value": None, "quotes": [],
                                    "reasoning": "x" * 40}}}  # fmt: skip
         OH.write_answer(copy, batch_id=batch, stage=AD.STAGE, label=label, text=json.dumps(body),
-                        answered_by=f"adversarial:{batch}", model=OH.OPUS_MODEL)  # fmt: skip
+                        answered_by=f"adversarial:{batch}", model=OH.SONNET_MODEL)  # fmt: skip
 
     def run(self, world: TruthWorld, tmp_path: Path, wrong: str, right: str) -> dict[str, Any]:
         _, root, copy, truth = self.prepared(world, tmp_path)
@@ -1104,7 +1104,8 @@ class TestTheKnownTruthPoolEndToEnd:
     ) -> None:
         verdict = self.run(truth_world, tmp_path, "confirm", "confirm")
         assert verdict["passed"] is False and verdict["agreement"] == 0.375
-        assert verdict["tier_move"] is None and "no higher tier" in verdict["held"]  # the top
+        # Sonnet since D36: a failing checker moves up one tier, to Opus
+        assert verdict["tier_move"]["to"] == "claude-opus-5-5" and "held" not in verdict
         report = json.loads((tmp_path / "calibration" / PL.ADV_CALIBRATION_ID
                              / CC.COMPARISON_FILE).read_text(encoding="utf-8"))  # fmt: skip
         assert report["lane_failures"] == [
@@ -1214,20 +1215,29 @@ class TestTheWaveGateNeedsTheNewCalibrations:
         assert (PL.GENERAL_CALIBRATION_ID, PL.BP_CALIBRATION_ID, PL.ADV_CALIBRATION_ID) == (
             "fr-general-002", "fr-bp-002", "adv-truth-001")  # fmt: skip
 
-    def test_a_passed_calibration_sealed_before_the_tier_move_no_longer_vouches(
+    def test_a_calibration_sealed_against_the_other_tiers_entry_does_not_vouch(
         self, tmp_path: Path
     ) -> None:
-        """fr-bp-001 passed (0.92) against the Sonnet entry of `field_researcher`; the entry changed
-        (Opus), so the gate refuses it and the BP pool is measured again as fr-bp-002."""
+        """fr-bp-001 passed (0.92) against the Sonnet entry of `field_researcher`, which owner move D36
+        put back in the registry: it vouches again (the digest is the one it was sealed with). A pass
+        sealed against the Opus entry (fr-bp-002) does not, and the gate refuses it by name."""
         sonnet_entry = "1e00fc31840d778071741f19b48a6165985e1595676532ccb41ec368dd927fec"
-        assert RO.role_sha256("field_researcher") != sonnet_entry
+        assert RO.role_sha256("field_researcher") == sonnet_entry
         root = tmp_path / "calibration"
         (root / CC.VERDICTS_DIR).mkdir(parents=True)
-        (root / CC.THRESHOLDS_FILE).write_text(json.dumps({"fr-bp-001": {
-            "role": "field_researcher", "comparison": "bp-bucket", "role_sha256": sonnet_entry,
-        }}), encoding="utf-8")  # fmt: skip
+
+        def seal(digest: str) -> None:
+            (root / CC.THRESHOLDS_FILE).write_text(json.dumps({"fr-bp-001": {
+                "role": "field_researcher", "comparison": "bp-bucket", "role_sha256": digest,
+            }}), encoding="utf-8")  # fmt: skip
+
         (root / CC.VERDICTS_DIR / "fr-bp-001.json").write_text(json.dumps({"passed": True}),
                                                                encoding="utf-8")  # fmt: skip
+        seal(sonnet_entry)
+        assert (
+            CC.require_passed(root, [("field_researcher", "bp-bucket")])[0]["standing"] == "passed"
+        )
+        seal(RO.role_sha256("field_researcher", model="claude-opus-5-5"))
         with pytest.raises(CC.CalibrationError, match="field_researcher/bp-bucket"):
             CC.require_passed(root, [("field_researcher", "bp-bucket")])
 
@@ -1338,7 +1348,7 @@ class TestTheBpPoolEndToEnd:
         for line in OH.manifest(copy):
             if line["batch_id"] in {b.name for b in copy.iterdir() if b.is_dir()}:
                 OH.write_answer(copy, batch_id=line["batch_id"], stage="wd5", label=line["label"],
-                                text=self.reply(quote), model=kw.get("model", OH.OPUS_MODEL),
+                                text=self.reply(quote), model=kw.get("model", OH.SONNET_MODEL),
                                 answered_by=kw.get("by", f"field_researcher:{line['batch_id']}"))  # fmt: skip
 
     def test_a_counted_answer_in_the_right_bucket_passes_the_pool(

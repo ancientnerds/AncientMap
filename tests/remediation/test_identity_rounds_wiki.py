@@ -38,7 +38,7 @@ def prompt_of(label: str, earlier: str | None) -> str:
     return f"question {label}" + (f" / {earlier}" if earlier else "")
 
 
-def answer(model: str = OPUS, by: str = "web_verifier:b1") -> OH.Answer:
+def answer(model: str = SONNET, by: str = "web_verifier:b1") -> OH.Answer:
     return OH.Answer(text="{}", answered_by=by, answered_at=NOW, model=model)
 
 
@@ -180,8 +180,8 @@ class TestTheRoleOfAnAnswer:
     @pytest.mark.parametrize(
         ("model", "by", "allowed", "message"),
         [
-            (OPUS, "web_verifier:b1", ("web_verifier",), None),
-            (OPUS, "adversarial:b1", ("adversarial", "pilot_judge"), None),
+            (SONNET, "web_verifier:b1", ("web_verifier",), None),
+            (SONNET, "adversarial:b1", ("adversarial", "pilot_judge"), None),
             (OPUS, "pilot_judge:b1", ("adversarial", "pilot_judge"), None),
             (MINIMAX, "web_verifier:b1", ("web_verifier",), "never ground truth"),
             (MINIMAX, "b1", ("web_verifier",), "never ground truth"),
@@ -189,13 +189,19 @@ class TestTheRoleOfAnAnswer:
             (SONNET, "unknown:b1", ("web_verifier",), "names no role"),
             (OPUS, "adversarial:b1", ("web_verifier",), "this stage asks web_verifier"),
             (
-                SONNET,
+                OPUS,
                 "adversarial:b1",
+                ("adversarial", "pilot_judge"),
+                "is registered to claude-sonnet-5-5",
+            ),
+            (
+                SONNET,
+                "pilot_judge:b1",
                 ("adversarial", "pilot_judge"),
                 "is registered to claude-opus-5-5",
             ),
-            (SONNET, "web_verifier:b1", ("web_verifier",), "is registered to claude-opus-5-5"),
-            (HAIKU, "web_verifier:b1", ("web_verifier",), "is registered to claude-opus-5-5"),
+            (OPUS, "web_verifier:b1", ("web_verifier",), "is registered to claude-sonnet-5-5"),
+            (HAIKU, "web_verifier:b1", ("web_verifier",), "is registered to claude-sonnet-5-5"),
         ],
     )
     def test_each_case(
@@ -388,7 +394,7 @@ class TestTheRoundFiles:
             label="c1",
             text="{}",
             answered_by="web_verifier:b1",
-            model=OPUS,
+            model=SONNET,
         )
         got = rounds.read_answers(tmp_path / "run", STAGE, record, prompt_of, root=tmp_path)
         assert got["c1"].answered_by == "web_verifier:b1"

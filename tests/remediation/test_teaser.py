@@ -1214,13 +1214,25 @@ class TestTheVerification:
         line = next(line for line in OH.manifest(handoff) if line["label"] == T.SKARA)
         return (handoff / line["prompt_path"]).read_text(encoding="utf-8")
 
-    def test_every_accepted_card_is_asked_five_to_a_batch(self) -> None:
-        due = {f"site-{n:02d}": R.Progress(R.DUE, "verify") for n in range(7)}
+    def test_every_accepted_card_is_asked_eight_to_a_batch(self) -> None:
+        due = {f"site-{n:02d}": R.Progress(R.DUE, "verify") for n in range(10)}
         groups = R._batches("verify", due)
+        assert [(batch, len(members)) for batch, members in groups] == [
+            ("verify-001", 8),
+            ("verify-002", 2),
+        ]
+        assert R.JUDGE_BATCH_SIZE == 8 and R.BATCH_SIZE == 15 and R.RATE_BATCH_SIZE == 25
+
+    def test_the_sizes_a_run_recorded_cut_its_batches(self) -> None:
+        """A run selected before the sizes were recorded keeps the five of its time."""
+        due = {f"site-{n:02d}": R.Progress(R.DUE, "verify") for n in range(7)}
+        groups = R._batches("verify", due, sizes=R.LEGACY_BATCH_SIZES)
         assert [(batch, len(members)) for batch, members in groups] == [
             ("verify-001", 5),
             ("verify-002", 2),
         ]
+        assert R.LEGACY_BATCH_SIZES == {"main": 15, "judge": 5, "rate": 25}
+        assert R.DEFAULT_BATCH_SIZES == {"main": 15, "judge": 8, "rate": 25}
 
     def test_the_verifier_sees_only_the_card_and_every_quote_is_checked(
         self, tmp_path: Path

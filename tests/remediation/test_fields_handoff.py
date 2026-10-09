@@ -178,6 +178,47 @@ class TestTheExport:
             HO.export(run, tmp_path / "h-empty", sites=frozenset())
         assert not (run / HO.ROUNDS_FILE).exists()  # a refused cut exports no round
 
+    def test_the_batch_size_is_an_explicit_recorded_parameter_of_twelve_by_default(
+        self, run: Path, tmp_path: Path
+    ) -> None:
+        assert HO.BATCH_SIZE == 12 and HO.LEGACY_BATCH_SIZE == 8
+        HO.export(run, tmp_path / "h-r0")
+        assert HO.read_rounds(run)[0]["batch_size"] == 12
+
+    def test_a_named_size_cuts_the_batches_and_is_recorded(self, run: Path, tmp_path: Path) -> None:
+        classified = {f"s{i}": {"country": "Peru", "name": f"n{i:02d}"} for i in range(5)}
+        cut = HO.batches(list(classified), classified, 0, size=2)
+        assert [len(labels) for _, labels in cut] == [2, 2, 1]
+        for size in (0, -1, True):
+            with pytest.raises(HO.HandoffStepError, match="not a count of 1 or more"):
+                HO.batches(list(classified), classified, 0, size=size)
+        HO.export(run, tmp_path / "h-r0", batch_size=1)
+        assert HO.read_rounds(run)[0]["batch_size"] == 1
+
+    def test_a_re_ask_keeps_the_size_of_round_zero(self, run: Path, tmp_path: Path) -> None:
+        handoff = tmp_path / "h-r0"
+        HO.export(run, handoff, batch_size=3)
+        invented = {**KEEP, "quotes": [KEEP["quotes"][0],
+                                       {"url": REGISTER, "quote": "built by Pericles in 449 BC"}]}  # fmt: skip
+        record(handoff, "wd1-r0-b0001", A_ID, answer(period_start=invented))
+        HO.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        HO.export_reask(run, tmp_path / "h-r1")
+        assert [r["batch_size"] for r in HO.read_rounds(run)] == [3, 3]
+
+    def test_a_round_exported_before_the_size_was_recorded_is_re_asked_in_eights(
+        self, run: Path, tmp_path: Path
+    ) -> None:
+        handoff = tmp_path / "h-r0"
+        HO.export(run, handoff)
+        rounds = [{k: v for k, v in r.items() if k != "batch_size"} for r in HO.read_rounds(run)]
+        HO._write_jsonl(run / HO.ROUNDS_FILE, rounds)
+        invented = {**KEEP, "quotes": [KEEP["quotes"][0],
+                                       {"url": REGISTER, "quote": "built by Pericles in 449 BC"}]}  # fmt: skip
+        record(handoff, "wd1-r0-b0001", A_ID, answer(period_start=invented))
+        HO.import_rounds(run, client=pages_client(), net=api(tmp_path), pace=0)
+        HO.export_reask(run, tmp_path / "h-r1")
+        assert HO.read_rounds(run)[1]["batch_size"] == HO.LEGACY_BATCH_SIZE
+
     def test_batches_follow_country_and_name(self) -> None:
         classified = {
             f"s{i}": {"country": country, "name": name}

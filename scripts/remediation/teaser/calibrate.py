@@ -26,21 +26,35 @@ cards of the production export and a file of vetted shorts-v1 cards (`--base-car
               once. A failing role carries its `tier_move` (`run.py escalate` applies it).
     release   a verdict that failed and is held at the top tier (Opus has no tier above): who decided
               it should stand, why, and the sha256 of the verdict, the sealed thresholds, the role's
-              registry entry and the evidence, into RELEASE-<role>.json, once.
+              registry entry and the evidence, into RELEASE-<role>.json, once. With
+              `--owner-decision D36` a verdict that failed WITH a tier move is released instead,
+              when the owner kept the tier: the role is registered to the verdict's model again and
+              an applied owner move (`roles.APPLIED_ESCALATIONS`) names the decision and this
+              calibration (`standing` then says "released (owner decision D36)").
     standing  how a role's verdict stands: passed, or released (a release that still rests on what
               it was made on). Refused otherwise - this is what a gate asks.
 
     T=scripts/remediation/teaser/calibrate.py     D=output/remediation/calibration/teaser-<id>
-    $T seal --run-dir $D
+    $T seal --run-dir $D [--candidate-role fact_checker --candidate-model claude-haiku-5-5]
     $T jobs --run-dir $D --runs output/remediation/teaser/runs/wb-ws-2026-09-27-01 ... \\
         --export output/remediation/teaser/runs/<run>/EXPORT.jsonl --base-cards BASE.jsonl
-    $T export --run-dir $D --role fact_checker --handoff output/remediation/handoff/cal-<id>-...
-    $T agents --run-dir $D --role fact_checker             one workflow job per batch: role, fixed
+    $T export --run-dir $D --role fact_checker --handoff output/remediation/handoff/cal-<id>-... \\
+        [--batch-size N] [--candidate-model MODEL_ID]
+    $T agents --run-dir $D --role fact_checker [--candidate-model M]   one workflow job per batch: role, fixed
         model id, effort, brief, how many may run at once (JSON)
-    $T evaluate --run-dir $D --role fact_checker           (web_verifier: fetches the cited pages)
+    $T evaluate --run-dir $D --role fact_checker [--candidate-model M]   (web_verifier: fetches pages)
     $T evaluate --run-dir $D --role card_writer --writer-run output/remediation/teaser/runs/<pilot>
-    $T release --run-dir $D --role hook_rater --decided-by TEXT --reason TEXT --evidence FILE ...
+    $T release --run-dir $D --role hook_rater --decided-by TEXT --reason TEXT --evidence FILE ... \\
+        [--owner-decision D36]
     $T standing --run-dir $D --role hook_rater
+
+**A candidate trial** (`seal --candidate-role R --candidate-model M`, owner decision D36's Haiku
+trial of the fact checker) calibrates role R with model M in this directory WITHOUT changing the
+registry: the seal records the candidate, the agents are briefed with it and record their answers with
+`opus_handoff.py answer --candidate-model M`, `export`, `agents` and `evaluate` must be given the same
+`--candidate-model` for that role, and the verdict names the model that passed. The seal binds the
+digest the role would have with M, so `standing` and `release` refuse the verdict for the registered
+role until an owner move has registered M. A failed trial carries no tier move.
 
 `BASE.jsonl` is one JSON object per line: `site_id, name, country, description, alt_names,
 pool_images, image_titles, card, anchors` and `"sample": true` on the eleven cards of the design's
@@ -105,8 +119,12 @@ RELEASE_FILE = "RELEASE-{role}.json"
 #: The first day MiniMax answered lane WB (owner decision of 2026-10-03). A recorded answer that
 #: carries no model stamp and was given on or after it is not ground truth.
 MINIMAX_CUTOVER = "2026-10-03"
+#: Cases per agent batch of an export. Since 2026-10-09 (owner decision D36, quota) a web role gets
+#: 8 per batch instead of 5: every agent re-reads its brief and the repository instructions, and that
+#: fixed cost is paid per batch. An export records its size (`HANDOFFS.json`, `batch_size`); a role
+#: exported earlier keeps the size it was exported with (an export is written once).
 BATCH_SIZE = 15
-WEB_BATCH_SIZE = 5
+WEB_BATCH_SIZE = 8
 #: The stage every calibration question is exported and answered under: it names no set.
 STAGE = "calibration"
 #: A fresh claim covers a recorded one of the same card when at least this share of the recorded
@@ -263,15 +281,41 @@ def module_hashes(root: Path = ROOT, names: Iterable[str] | None = None) -> dict
 
 
 # ------------------------------------------------------------------------------ the seal
+def registry_entry(name: str, candidate: str | None = None) -> dict[str, Any]:
+    """The registry entry of role `name` as a seal records it. A `candidate` model (a trial of D36)
+    is the entry the role would have with it: `model` and `sha256` are the candidate's, and the
+    registered model and digest are kept beside them, so that the seal can tell a registry that is
+    as sealed from one an owner move changed to the candidate."""
+    entry = RO.role(name)
+    if candidate is None:
+        return {"model": entry.model, "effort": entry.effort, "sha256": RO.role_sha256(name)}
+    RO.candidate_model(name, candidate)
+    return {
+        "model": candidate,
+        "effort": entry.effort,
+        "sha256": RO.role_sha256(name, model=candidate),
+        "candidate": True,
+        "registered_model": entry.model,
+        "registered_sha256": RO.role_sha256(name),
+    }
+
+
 def seal(
     run_dir: Path,
     *,
     thresholds: Mapping[str, Any] = THRESHOLDS,
     now: Callable[[], str] = _now,
     root: Path = ROOT,
+    candidates: Mapping[str, str] | None = None,
 ) -> str:
     """Write THRESHOLDS.json and log its sha256 - before any case, answer or verdict exists in
-    `run_dir`. The registry entries of the calibrated roles are sealed with it."""
+    `run_dir`. The registry entries of the calibrated roles are sealed with it. `candidates` maps a
+    calibrated role to the candidate model it is tried with (`registry_entry`); a role that is no
+    calibrated role of the table is refused."""
+    candidates = dict(candidates or {})
+    unknown = sorted(set(candidates) - set(thresholds["roles"]))
+    if unknown:
+        raise CalibrationError(f"{unknown} are no calibrated role of the table: no candidate trial")
     present = [p for p in (JOBS_FILE, HANDOFFS_FILE) if (run_dir / p).exists()]
     present += [p.name for p in run_dir.glob("VERDICT-*.json")] if run_dir.exists() else []
     if present:
@@ -282,11 +326,7 @@ def seal(
         **thresholds,
         "modules": module_hashes(root),
         "registry": {
-            name: {
-                "model": RO.role(name).model,
-                "effort": RO.role(name).effort,
-                "sha256": RO.role_sha256(name),
-            }
+            name: registry_entry(name, candidates.get(name))
             for name in (*thresholds["roles"], RO.role("pilot_judge").name)
         },
     }
@@ -330,6 +370,34 @@ def integrity(run_dir: Path) -> tuple[dict[str, Any], str]:
     return json.loads(text), _sha(text)
 
 
+def _registry_as_sealed(name: str, entry: Mapping[str, Any]) -> bool:
+    """Whether role `name` is registered as the seal recorded it. A candidate trial recorded the
+    registered entry beside the candidate's: either is the sealed state (the second after an owner
+    move registered the candidate)."""
+    now = RO.role_sha256(name)
+    if entry.get("candidate"):
+        return now in (entry["registered_sha256"], entry["sha256"])
+    return now == entry["sha256"]
+
+
+def require_candidate(thresholds: Mapping[str, Any], role: str, candidate: str | None) -> None:
+    """A step on a role sealed as a trial is given the trial's model (`--candidate-model`), and a role
+    that was sealed as itself is given none: a step never guesses which one it works on."""
+    entry = thresholds["registry"][role]
+    sealed_candidate = entry["model"] if entry.get("candidate") else None
+    if candidate != sealed_candidate:
+        if sealed_candidate is None:
+            raise CalibrationError(
+                f"role {role} is sealed as itself, not as a candidate trial: give no "
+                f"--candidate-model ({candidate})"
+            )
+        raise CalibrationError(
+            f"role {role} is sealed as a trial of {sealed_candidate}: give "
+            f"--candidate-model {sealed_candidate}"
+            + ("" if candidate is None else f" (not {candidate})")
+        )
+
+
 def sealed(run_dir: Path, *, root: Path = ROOT) -> tuple[dict[str, Any], str]:
     """The sealed thresholds and their sha256 - refusing a file that is not the one the log sealed
     and a calibration whose prompts, answer shapes, quote check or role registry changed after the
@@ -343,7 +411,7 @@ def sealed(run_dir: Path, *, root: Path = ROOT) -> tuple[dict[str, Any], str]:
             "sealed - seal a new calibration"
         )
     for name, entry in thresholds["registry"].items():
-        if RO.role_sha256(name) != entry["sha256"]:
+        if not _registry_as_sealed(name, entry):
             raise CalibrationError(f"the registry entry of role {name} changed after the seal")
     return thresholds, digest
 
@@ -795,14 +863,27 @@ def wiki_map(group: Sequence[Mapping[str, Any]], cache: WikiCache) -> str:
 
 
 def export_role(
-    run_dir: Path, role: str, handoff: Path, *, wiki_cache: Path | None = None
+    run_dir: Path,
+    role: str,
+    handoff: Path,
+    *,
+    wiki_cache: Path | None = None,
+    batch_size: int | None = None,
+    candidate_model: str | None = None,
 ) -> dict[str, Any]:
     """Every case of one role into a handoff directory of its own, to be answered by that role.
     The cases of all the role's sets are shuffled together under their opaque keys and one neutral
     stage name: the role is not told which kind of case a question is (a seeded flaw, a recorded
     failure, a good card), so that a threshold met by the role proves reading, not label-reading.
-    A web role gets, beside each batch's manifest, the map from its labels to the cache's pages."""
+    A web role gets, beside each batch's manifest, the map from its labels to the cache's pages.
+
+    `batch_size` is the cases per batch: `WEB_BATCH_SIZE` for a web role and `BATCH_SIZE` otherwise
+    unless named; it is recorded with the export (`HANDOFFS.json`). `candidate_model` must be the
+    model the role was sealed as a trial of, if it was (`require_candidate`)."""
     thresholds, _ = sealed(run_dir)
+    require_candidate(thresholds, role, candidate_model)
+    if batch_size is not None and (isinstance(batch_size, bool) or batch_size < 1):
+        raise CalibrationError(f"batch size {batch_size!r} is not a count of 1 or more")
     jobs = [j for j in sealed_jobs(run_dir) if j["role"] == role]
     if not jobs:
         raise CalibrationError(f"no case of role {role!r}")
@@ -813,7 +894,7 @@ def export_role(
     if handoff.exists() and any(handoff.iterdir()):
         raise CalibrationError(f"{handoff} is not empty: a role gets a directory of its own")
     web = any(j["set"] in WEB_SETS for j in jobs)
-    size = WEB_BATCH_SIZE if web else BATCH_SIZE
+    size = batch_size or (WEB_BATCH_SIZE if web else BATCH_SIZE)
     cache = WikiCache(wiki_cache or ROOT / R.WIKI_CACHE) if web else None
     rng = random.Random(f"{thresholds['seed']}/{role}/deal")  # noqa: S311 - a sealed, seeded draw
     batches = {}
@@ -833,11 +914,12 @@ def export_role(
             (handoff / batch / WIKI_MAP).write_text(
                 wiki_map(group, cache), encoding="utf-8", newline="\n"
             )
-    exported[role] = {"handoff": str(handoff), "batches": batches}
+    exported[role] = {"handoff": str(handoff), "batches": batches, "batch_size": size}
     record_path.write_text(_text(exported), encoding="utf-8", newline="\n")
     return {
         "role": role,
         "cases": len(jobs),
+        "batch_size": size,
         "batches": {batch: len(keys) for batch, keys in batches.items()},
     }
 
@@ -872,7 +954,7 @@ makes (the floor: list every claim, each fact on its own):
 answer that fails it:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
 --batch-id {batch} --stage {stage} --label <label> --answered-by cal-{batch} --role {role} \
---model {model} --text-file {scratch}/<label>.json --check "{check}"
+--model {model}{candidate} --text-file {scratch}/<label>.json --check "{check}"
 {web_note}
 When every question of the batch is recorded, report how many answers you recorded.
 """
@@ -898,12 +980,16 @@ CAL_WEB_NOTE = (
 WIKI_MAP = "WIKI_MAP.jsonl"
 
 
-def agent_jobs(run_dir: Path, role: str) -> list[dict[str, Any]]:
+def agent_jobs(
+    run_dir: Path, role: str, *, candidate_model: str | None = None
+) -> list[dict[str, Any]]:
     """The workflow-ready jobs of one exported role: for each batch the agent that answers it - role,
     the model id and effort the seal fixed for the role, the brief it is given and how many such
     agents may run at the same time. A workflow starts one fresh agent per job, waits for them, and
-    `evaluate` reads the answers."""
+    `evaluate` reads the answers. A role sealed as a candidate trial is briefed with the candidate
+    model, and its agents record with `--candidate-model` (`require_candidate`)."""
     thresholds, _ = sealed(run_dir)
+    require_candidate(thresholds, role, candidate_model)
     exported = _handoffs(run_dir).get(role)
     if exported is None:
         raise CalibrationError(f"role {role} was never exported")
@@ -928,6 +1014,7 @@ def agent_jobs(run_dir: Path, role: str) -> list[dict[str, Any]]:
                 handoff=shown,
                 scratch=f"{shown}-scratch/{batch}",
                 stage=STAGE,
+                candidate=f" --candidate-model {fixed['model']}" if fixed.get("candidate") else "",
                 check=check_command(run_dir, batch, f"{shown}-scratch/{batch}"),
                 web_files=" except the Wikipedia cache named below" if web else "",
                 web_note=(
@@ -1460,11 +1547,15 @@ def evaluate(
     *,
     writer_run: Path | None = None,
     client: httpx.Client | None = None,
+    candidate_model: str | None = None,
     now: Callable[[], str] = _now,
 ) -> dict[str, Any]:
     """Measure one role against the sealed thresholds and write `VERDICT-<role>.json`, once. A
-    failing role carries its tier move (`roles.escalation`), or, at the top tier, a hold."""
+    failing role carries its tier move (`roles.escalation`), or, at the top tier, a hold. A role
+    sealed as a candidate trial (`candidate_model` must name it) carries neither: the verdict names
+    the candidate that passed or failed and the registered model, and moves nothing."""
     thresholds, digest = sealed(run_dir)
+    require_candidate(thresholds, role, candidate_model)
     path = run_dir / VERDICT_FILE.format(role=role)
     if path.exists():
         raise CalibrationError(f"{path} exists: a verdict is written once")
@@ -1499,7 +1590,10 @@ def evaluate(
         "thresholds_sha256": digest,
         "decided_at": now(),
     }
-    if failed:
+    if thresholds["registry"][role].get("candidate"):
+        verdict["candidate_model"] = thresholds["registry"][role]["model"]
+        verdict["registered_model"] = thresholds["registry"][role]["registered_model"]
+    elif failed:
         try:
             verdict["tier_move"] = RO.escalation(
                 role, calibration_id=run_dir.name, reason="failed: " + ", ".join(failed)
@@ -1522,14 +1616,37 @@ def _need_standing_record(run_dir: Path, role: str) -> tuple[dict[str, Any], Pat
     entry = thresholds["registry"].get(role)
     if entry is None:
         raise CalibrationError(f"role {role} is not in the registry sealed in {run_dir}")
-    if RO.role_sha256(role) != entry["sha256"]:
+    if not _registry_as_sealed(role, entry):
         raise CalibrationError(f"the registry entry of role {role} changed after the seal")
+    if entry.get("candidate"):
+        # a trial vouches for nobody until an owner move has registered the candidate
+        moved = RO.last_move(role)
+        if (
+            RO.role_sha256(role) != entry["sha256"]
+            or moved is None
+            or moved.get("kind") != RO.OWNER_KIND
+            or moved["to"] != entry["model"]
+        ):
+            raise CalibrationError(
+                f"role {role} was sealed in {run_dir} as a trial of {entry['model']}: the verdict "
+                f"stands for the registered role ({entry['registered_model']}) only after an "
+                "owner move has registered the candidate"
+            )
     verdict = json.loads(path.read_text(encoding="utf-8"))
     if verdict["role"] != role:
         raise CalibrationError(f"{path} is the verdict of role {verdict['role']}, not {role}")
     if verdict["thresholds_sha256"] != digest:
         raise CalibrationError(f"{path} does not rest on the thresholds sealed in {run_dir}")
     return verdict, path, digest
+
+
+def _owner_released(verdict: Mapping[str, Any], decision: str) -> None:
+    """Refuse unless an owner decision lets this verdict stand (`calibrate_claude.check_owner_release`);
+    a verdict of a candidate trial is never released."""
+    try:
+        CC.check_owner_release(verdict, decision, candidate="candidate_model" in verdict)
+    except CC.CalibrationError as exc:
+        raise CalibrationError(str(exc)) from exc
 
 
 def release_role(
@@ -1539,6 +1656,7 @@ def release_role(
     decided_by: str,
     reason: str,
     evidence: Sequence[Path],
+    owner_decision: str | None = None,
     now: Callable[[], str] = _now,
 ) -> dict[str, Any]:
     """Let a verdict stand that failed and is held at the top tier, written once to
@@ -1549,22 +1667,29 @@ def release_role(
     sealed thresholds, or of a role registered otherwise than sealed; a verdict that passed; one with
     a tier move (the role moves up, it is not released); a failed one that is not held; an empty
     `decided_by` or `reason`; no evidence, a path that is not a file, a file named twice; a release
-    written already."""
+    written already.
+
+    `owner_decision` (`D36`) releases instead a verdict that failed WITH a tier move, when the owner
+    kept the tier it was made on (`calibrate_claude.check_owner_release`): the role is registered to
+    the verdict's model again and an applied owner move names the decision and this calibration."""
     if not decided_by.strip():
         raise CalibrationError("decided by is empty: a release names who decided it")
     if not reason.strip():
         raise CalibrationError("reason is empty: a release names why the verdict stands")
     verdict, path, digest = _need_standing_record(run_dir, role)
-    if verdict["passed"]:
-        raise CalibrationError(f"role {role} passed: there is nothing to release")
-    if verdict["tier_move"] is not None:
-        raise CalibrationError(
-            f"role {role} carries a tier move: the role moves up a tier, it is not released"
-        )
-    if not verdict.get("held"):
-        raise CalibrationError(
-            f"role {role} failed but is not held at the top tier: only a held verdict is released"
-        )
+    if owner_decision is None:
+        if verdict["passed"]:
+            raise CalibrationError(f"role {role} passed: there is nothing to release")
+        if verdict["tier_move"] is not None:
+            raise CalibrationError(
+                f"role {role} carries a tier move: the role moves up a tier, it is not released"
+            )
+        if not verdict.get("held"):
+            raise CalibrationError(
+                f"role {role} failed but is not held at the top tier: only a held verdict is released"
+            )
+    else:
+        _owner_released(verdict, owner_decision)
     release_path = run_dir / RELEASE_FILE.format(role=role)
     if release_path.exists():
         raise CalibrationError(f"{release_path} exists: a release is written once")
@@ -1583,6 +1708,8 @@ def release_role(
         "evidence": items,
         "decided_at": now(),
     }
+    if owner_decision is not None:
+        record["owner_decision"] = owner_decision
     release_path.write_text(_text(record), encoding="utf-8", newline="\n")
     return record
 
@@ -1598,12 +1725,16 @@ def standing(run_dir: Path, role: str) -> dict[str, str]:
     if verdict["passed"]:
         return {**line, "standing": CC.PASSED}
     release_path = run_dir / RELEASE_FILE.format(role=role)
-    if verdict["tier_move"] is not None or not verdict.get("held") or not release_path.is_file():
-        raise CalibrationError(
-            f"role {role} has no passing verdict and no release in {run_dir}: calibrate it "
-            "again (a tier move) or release the held verdict"
-        )
+    unreleased = (
+        f"role {role} has no passing verdict and no release in {run_dir}: calibrate it "
+        "again (a tier move) or release the held verdict"
+    )
+    if not release_path.is_file():
+        raise CalibrationError(unreleased)
     record = json.loads(release_path.read_text(encoding="utf-8"))
+    decision = record.get("owner_decision")
+    if decision is None and (verdict["tier_move"] is not None or not verdict.get("held")):
+        raise CalibrationError(unreleased)
     moved = f"the release of {role} ({release_path})"
     if record["verdict_sha256"] != CC.sha256_file(path):
         raise CalibrationError(f"{moved}: the verdict changed after the release")
@@ -1617,6 +1748,17 @@ def standing(run_dir: Path, role: str) -> dict[str, str]:
         CC.verify_evidence(record["evidence"], moved)
     except CC.CalibrationError as exc:
         raise CalibrationError(str(exc)) from exc
+    if decision is not None:
+        try:
+            _owner_released(verdict, decision)
+        except CalibrationError as exc:
+            raise CalibrationError(f"{moved}: {exc}") from exc
+        return {
+            **line,
+            "standing": CC.released_label(decision),
+            "owner_decision": decision,
+            "decided_by": record["decided_by"],
+        }
     return {**line, "standing": CC.RELEASED, "decided_by": record["decided_by"]}
 
 
@@ -1724,18 +1866,34 @@ def main(argv: Iterable[str] | None = None) -> int:
     jobs.add_argument("--runs", required=True, nargs="+", type=Path)
     jobs.add_argument("--export", required=True, type=Path)
     jobs.add_argument("--base-cards", required=True, type=Path)
+    seal_cli = sub.choices["seal"]
+    seal_cli.add_argument("--candidate-role", choices=sorted(THRESHOLDS["roles"]))
+    seal_cli.add_argument("--candidate-model", choices=list(OH.NEW_ANSWER_MODELS))
     export = sub.choices["export"]
     export.add_argument("--role", required=True, choices=sorted(set(SET_ROLE.values())))
     export.add_argument("--handoff", required=True, type=Path)
+    export.add_argument("--batch-size", type=int, default=None)
     sub.choices["agents"].add_argument(
         "--role", required=True, choices=sorted(set(SET_ROLE.values()))
     )
+    for name in ("export", "agents", "evaluate"):
+        sub.choices[name].add_argument(
+            "--candidate-model",
+            choices=list(OH.NEW_ANSWER_MODELS),
+            default=None,
+            help="the model the role was sealed as a trial of, if it was",
+        )
     for name in ("release", "standing"):
         sub.choices[name].add_argument("--role", required=True, choices=sorted(RO.ROLES))
     release_cli = sub.choices["release"]
     release_cli.add_argument("--decided-by", required=True)
     release_cli.add_argument("--reason", required=True)
     release_cli.add_argument("--evidence", required=True, nargs="+", type=Path)
+    release_cli.add_argument(
+        "--owner-decision",
+        default=None,
+        help="let a verdict that failed with a tier move stand under this owner decision (D36)",
+    )
     ev = sub.choices["evaluate"]
     ev.add_argument("--role", required=True, choices=sorted(THRESHOLDS["roles"]))
     ev.add_argument("--writer-run", type=Path)
@@ -1743,7 +1901,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     run_dir = _resolve(args.run_dir)
     try:
         if args.command == "seal":
-            payload: Any = {"thresholds_sha256": seal(run_dir)}
+            if (args.candidate_role is None) != (args.candidate_model is None):
+                raise CalibrationError("--candidate-role and --candidate-model go together")
+            trial = (
+                {} if args.candidate_role is None else {args.candidate_role: args.candidate_model}
+            )
+            payload: Any = {"thresholds_sha256": seal(run_dir, candidates=trial)}
         elif args.command == "jobs":
             thresholds, _ = sealed(run_dir)
             runs = [_resolve(r) for r in args.runs]
@@ -1755,9 +1918,15 @@ def main(argv: Iterable[str] | None = None) -> int:
             )
             payload = {"cases": len(made), "jobs_sha256": fix_jobs(run_dir, made)}
         elif args.command == "export":
-            payload = export_role(run_dir, args.role, _resolve(args.handoff))
+            payload = export_role(
+                run_dir,
+                args.role,
+                _resolve(args.handoff),
+                batch_size=args.batch_size,
+                candidate_model=args.candidate_model,
+            )
         elif args.command == "agents":
-            payload = agent_jobs(run_dir, args.role)
+            payload = agent_jobs(run_dir, args.role, candidate_model=args.candidate_model)
         elif args.command == "check-answer":
             payload = check_answer(
                 run_dir, args.batch_id, args.label, args.text_file.read_bytes().decode("utf-8")
@@ -1773,11 +1942,17 @@ def main(argv: Iterable[str] | None = None) -> int:
                 decided_by=args.decided_by,
                 reason=args.reason,
                 evidence=args.evidence,
+                owner_decision=args.owner_decision,
             )
         elif args.command == "standing":
             payload = standing(run_dir, args.role)
         else:
-            payload = evaluate(run_dir, args.role, writer_run=args.writer_run)
+            payload = evaluate(
+                run_dir,
+                args.role,
+                writer_run=args.writer_run,
+                candidate_model=args.candidate_model,
+            )
     except (CalibrationError, RO.RoleError, OH.HandoffError, R.RunError, PlanError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 2

@@ -41,7 +41,7 @@ provenance), `checked-before`, `provenance-unreadable`, `provenance-hash-differs
 fails), `not-splittable`, `excluded` (`--exclude`), `earlier-run` (`--after`). The read is always
 fresh, so the sites the Phase-4 v3 run (WA) rewrote have left the population by themselves.
 
-**One question per site**, in batches of `--batch-size` sites (default 5) named `wc-NNNN`, stage
+**One question per site**, in batches of `--batch-size` sites (default 10; 5 for a run exported before 2026-10-09) named `wc-NNNN`, stage
 `check`, label the site id: the site's stored values (to identify it, not as evidence), its
 sentences (`wc4.checked_sentences`) and the frozen question (`prompts.CHECK_QUESTION`). One Opus
 agent per batch answers every question of its batch (`brief`), checks each answer with
@@ -186,7 +186,13 @@ WRITE_PREFIX = "wn"
 DRAFTS_FILE = "DRAFTS.jsonl"
 #: The import's own page store, under the run (the judge's: `<run>/judge/pages/`).
 PAGES_DIR = "pages"
-BATCH_SIZE = 5
+#: Sites per batch of a new run's check, verification and judge rounds (owner decision D36,
+#: 2026-10-09: every agent re-reads its brief and the repository instructions, so fewer, larger
+#: batches cost less quota). `--batch-size` names it; every round records the size it used
+#: (`batch_size`). A run exported before the change has no record and keeps 5
+#: (`LEGACY_BATCH_SIZE`): its later rounds follow the size of its first round.
+BATCH_SIZE = 10
+LEGACY_BATCH_SIZE = 5
 MAX_ROUNDS = 2  #: the first round and one re-ask round, then a failing sentence is dropped
 ROWS_FILE = "ROWS.jsonl"
 READ_FILE = "READ.json"
@@ -596,6 +602,18 @@ def read_rounds(run: Path) -> list[dict[str, Any]]:
     return read_jsonl(path) if path.exists() else []
 
 
+def run_batch_size(run: Path, explicit: int | None) -> int:
+    """The sites per batch of the next round of `run`: `explicit` (`--batch-size`) when given, else
+    the size of the run's first round (`LEGACY_BATCH_SIZE` when that round recorded none), else
+    `BATCH_SIZE` for a run that has exported nothing."""
+    if explicit is not None:
+        if isinstance(explicit, bool) or explicit < 1:
+            raise WcRunError(f"batch size {explicit!r} is not a count of 1 or more")
+        return explicit
+    rounds = read_rounds(run)
+    return BATCH_SIZE if not rounds else int(rounds[0].get("batch_size", LEGACY_BATCH_SIZE))
+
+
 def round_of(run: Path, handoff: Path) -> dict[str, Any]:
     for record in read_rounds(run):
         if Path(record["handoff"]).resolve() == handoff.resolve():
@@ -640,6 +658,7 @@ def _export_round(
         "round": number,
         "handoff": _shown(handoff),
         "exported_at": RF.now(),
+        "batch_size": batch_size,
         "batches": batches,
         "asked": {site_id: asked for site_id, asked, _ in questions},
         "failures": {site_id: failures for site_id, _, failures in questions if failures},
@@ -1884,6 +1903,7 @@ def cmd_verify_export(run: Path, handoff: Path, *, batch_size: int) -> dict[str,
             "stage": stage,
             "handoff": _shown(handoff),
             "exported_at": RF.now(),
+            "batch_size": batch_size,
             "batches": batches,
             "shown": shown,
         },
@@ -2161,6 +2181,7 @@ def cmd_judge_export(
         {
             "handoff": _shown(handoff),
             "exported_at": RF.now(),
+            "batch_size": batch_size,
             "batches": batches,
             "plan_sha256": _sha256(run / PLAN_FILE),
             "sample": drawn,
@@ -2883,7 +2904,12 @@ def build_parser() -> argparse.ArgumentParser:
             command.add_argument("--label", required=True)
             command.add_argument("--text-file", required=True, type=Path)
         if name in ("export", "export-reask", "verify-export", "judge-export"):
-            command.add_argument("--batch-size", type=int, default=BATCH_SIZE)
+            command.add_argument(
+                "--batch-size",
+                type=int,
+                default=None,
+                help="sites per batch, recorded in the round (default: the run's first round's, else 10)",
+            )
         if name == "judge-export":
             command.add_argument("--sample", type=int, default=None)
             command.add_argument("--seed", type=int, default=None)
@@ -2931,7 +2957,7 @@ def run_command(args: argparse.Namespace) -> int:
             cmd_export(
                 run,
                 args.handoff,
-                batch_size=args.batch_size,
+                batch_size=run_batch_size(run, args.batch_size),
                 exclude=args.exclude,
                 after=args.after,
                 pilot=args.pilot,
@@ -2957,9 +2983,11 @@ def run_command(args: argparse.Namespace) -> int:
     elif command == "import":
         _print(cmd_import(run, args.handoff))
     elif command == "export-reask":
-        _print(cmd_export_reask(run, args.handoff, batch_size=args.batch_size))
+        _print(cmd_export_reask(run, args.handoff, batch_size=run_batch_size(run, args.batch_size)))
     elif command == "verify-export":
-        _print(cmd_verify_export(run, args.handoff, batch_size=args.batch_size))
+        _print(
+            cmd_verify_export(run, args.handoff, batch_size=run_batch_size(run, args.batch_size))
+        )
     elif command == "verify-brief":
         print(verify_brief(run, args.handoff, args.batch_id))
     elif command == "verify-check-answer":
@@ -2974,7 +3002,11 @@ def run_command(args: argparse.Namespace) -> int:
     elif command == "judge-export":
         _print(
             cmd_judge_export(
-                run, args.handoff, batch_size=args.batch_size, sample=args.sample, seed=args.seed
+                run,
+                args.handoff,
+                batch_size=run_batch_size(run, args.batch_size),
+                sample=args.sample,
+                seed=args.seed,
             )
         )
     elif command == "judge-brief":

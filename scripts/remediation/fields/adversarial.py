@@ -15,7 +15,8 @@ of
 * `unclear` - the page and the sources the checker could reach do not decide it.
 
     adversarial.py select  --run RUN --seed N     adv/CELLS.json: the cells, frozen with their prompts
-    adversarial.py export  --adv ADV --handoff H  round 0: one check question per cell, batches of 8
+    adversarial.py export  --adv ADV --handoff H  round 0: one check question per cell, batches of
+                                                  --batch-size (default 12; recorded in the round)
     adversarial.py brief   --adv ADV --handoff H --batch-id B     the instruction of batch B's agent
     adversarial.py check-answer --adv ADV --handoff H --batch-id B --label L --text-file F
     adversarial.py import  --adv ADV              parse, role-check, machine-check the counter-quotes
@@ -84,7 +85,11 @@ from fields import wiki as W  # noqa: E402
 STAGE = "adv"
 ROLE = "adversarial"
 ADVERSARIAL = "adversarial"
-BATCH_SIZE = 8
+#: Cells per batch of a new check (owner decision D36, 2026-10-09: fewer, larger batches cost
+#: less quota; every agent re-reads its brief). The size is an export parameter, recorded in the
+#: round; a check exported before the change keeps its 8 (its re-ask reads round 0's).
+BATCH_SIZE = 12
+LEGACY_BATCH_SIZE = 8
 #: Round 0 asks every cell; round 1 asks, of a new agent, the cells round 0 left undecided. Then the
 #: cell is held.
 MAX_ROUND = 1
@@ -487,24 +492,33 @@ def _round_of(adv: Path, handoff: Path) -> dict[str, Any]:
     raise AdversarialError(f"{handoff} is not the directory of an exported round of {adv}")
 
 
-def batches(cells: Sequence[Mapping[str, Any]], round_no: int) -> list[tuple[str, list[str]]]:
-    """Cells by country, then name, cut into batches of `BATCH_SIZE`."""
+def batches(
+    cells: Sequence[Mapping[str, Any]], round_no: int, size: int = BATCH_SIZE
+) -> list[tuple[str, list[str]]]:
+    """Cells by country, then name, cut into batches of `size` (`BATCH_SIZE` unless named)."""
+    if isinstance(size, bool) or size < 1:
+        raise AdversarialError(f"batch size {size!r} is not a count of 1 or more")
     ordered = sorted(cells, key=lambda c: (c["country"] or "", c["name"].casefold(), c["cell"]))
     return [
-        (f"{STAGE}-r{round_no}-b{number + 1:04d}", [c["cell"] for c in ordered[i : i + BATCH_SIZE]])
-        for number, i in enumerate(range(0, len(ordered), BATCH_SIZE))
+        (f"{STAGE}-r{round_no}-b{number + 1:04d}", [c["cell"] for c in ordered[i : i + size]])
+        for number, i in enumerate(range(0, len(ordered), size))
     ]
 
 
 def _export_round(
-    adv: Path, handoff: Path, round_no: int, asked: Sequence[str], notes: Mapping[str, str]
+    adv: Path,
+    handoff: Path,
+    round_no: int,
+    asked: Sequence[str],
+    notes: Mapping[str, str],
+    batch_size: int = BATCH_SIZE,
 ) -> dict[str, Any]:
     rounds = read_rounds(adv)
     target = HO._resolve(handoff)
     if target.exists() and any(target.iterdir()):
         raise AdversarialError(f"{handoff} is not empty: a round gets a directory of its own")
     cells = read_cells(adv)
-    groups = batches([cells[c] for c in asked], round_no)
+    groups = batches([cells[c] for c in asked], round_no, batch_size)
     for batch_id, labels in groups:
         for label in labels:
             OH.export(
@@ -519,6 +533,7 @@ def _export_round(
         "round": round_no,
         "handoff": HO._shown(handoff),
         "model": RO.role(ROLE).model,
+        "batch_size": batch_size,
         "batches": dict(groups),
         "fields": {label: [cells[label]["field"]] for label in sorted(asked)},
         "notes": {label: notes[label] for label in sorted(notes)},
@@ -533,11 +548,11 @@ def _export_round(
     }
 
 
-def export(adv: Path, handoff: Path) -> dict[str, Any]:
-    """Round 0: one check question per selected cell."""
+def export(adv: Path, handoff: Path, batch_size: int = BATCH_SIZE) -> dict[str, Any]:
+    """Round 0: one check question per selected cell, `batch_size` to a batch (recorded)."""
     if read_rounds(adv):
         raise AdversarialError("round 0 is exported already - re-asks go through export-reask")
-    return _export_round(adv, handoff, 0, sorted(read_cells(adv)), {})
+    return _export_round(adv, handoff, 0, sorted(read_cells(adv)), {}, batch_size)
 
 
 def export_reask(adv: Path, handoff: Path) -> dict[str, Any]:
@@ -552,7 +567,10 @@ def export_reask(adv: Path, handoff: Path) -> dict[str, Any]:
     reask = json.loads(path.read_text(encoding="utf-8"))["cells"]
     if not reask:
         raise AdversarialError("nothing to ask again")
-    return _export_round(adv, handoff, last + 1, sorted(reask), reask)
+    # the check keeps the batch size of its first round (one exported before the size was
+    # recorded was cut into 8)
+    size = next(r for r in rounds if r["round"] == 0).get("batch_size", LEGACY_BATCH_SIZE)
+    return _export_round(adv, handoff, last + 1, sorted(reask), reask, size)
 
 
 # ------------------------------------------------------------------------------ the agent's aids
@@ -929,6 +947,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         commands[name].add_argument("--adv", type=Path, required=True, help="the stage directory")
     for name in ("export", "export-reask", "brief", "check-answer"):
         commands[name].add_argument("--handoff", type=Path, required=True)
+    commands["export"].add_argument(
+        "--batch-size",
+        type=int,
+        default=BATCH_SIZE,
+        help="cells per batch (recorded in the round; the re-ask keeps round 0's)",
+    )
     for name in ("brief", "check-answer"):
         commands[name].add_argument("--batch-id", required=True)
     commands["check-answer"].add_argument("--label", required=True)
@@ -951,7 +975,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             adv = HO._resolve(args.adv)
             if args.command == "export":
-                result = export(adv, args.handoff)
+                result = export(adv, args.handoff, args.batch_size)
             elif args.command == "export-reask":
                 result = export_reask(adv, args.handoff)
             elif args.command == "brief":

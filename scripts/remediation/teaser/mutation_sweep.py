@@ -48,6 +48,18 @@ def c(label: str, path: Path, old: str, new: str, test: str, testfile: str = T_R
     return Case(f"teaser repair: {label}", path, old, new, test, testfile)
 
 
+T_CAND = "tests/remediation/test_teaser_calibrate_candidate.py"
+T_CAL = "tests/remediation/test_teaser_calibrate.py"
+
+
+def d36(label: str, path: Path, needle: str, test: str, testfile: str = T_CAND) -> Case:
+    return guard(f"teaser d36: {label}", path, needle, test, testfile)
+
+
+def d36c(label: str, path: Path, old: str, new: str, test: str, testfile: str = T_CAND) -> Case:
+    return Case(f"teaser d36: {label}", path, old, new, test, testfile)
+
+
 def rel(label: str, needle: str, test: str) -> Case:
     return guard(f"teaser release: {label}", CAL, needle, test, T_RELEASE)
 
@@ -232,7 +244,7 @@ CASES: list[Case] = [
     ),
     rel(
         "the role is registered as it was sealed",
-        '    if RO.role_sha256(role) != entry["sha256"]:',
+        "    if not _registry_as_sealed(role, entry):",
         "test_a_role_that_changed_after_the_seal_is_not_released",
     ),
     rel(
@@ -257,15 +269,15 @@ CASES: list[Case] = [
     ),
     rel(
         "a pass is not released",
-        '    if verdict["passed"]:\n'
-        '        raise CalibrationError(f"role {role} passed: there is nothing to release")',
+        '        if verdict["passed"]:\n'
+        '            raise CalibrationError(f"role {role} passed: there is nothing to release")',
         "test_a_pass_is_not_released",
     ),
     rel(
         "a verdict with a tier move is not released",
-        '    if verdict["tier_move"] is not None:\n'
-        "        raise CalibrationError(\n"
-        '            f"role {role} carries a tier move',
+        '        if verdict["tier_move"] is not None:\n'
+        "            raise CalibrationError(\n"
+        '                f"role {role} carries a tier move',
         "test_a_verdict_with_a_tier_move_is_moved_not_released",
     ),
     rel(
@@ -285,14 +297,14 @@ CASES: list[Case] = [
     ),
     rel(
         "a held verdict stands only with its release",
-        '    if verdict["tier_move"] is not None or not verdict.get("held") or not release_path.is_file():',
+        "    if not release_path.is_file():",
         "test_a_held_verdict_without_its_release_does_not_stand",
     ),
     Case(
         "teaser release: a failed verdict stands with a release only when it is held",
         CAL,
-        '    if verdict["tier_move"] is not None or not verdict.get("held") or not release_path.is_file():',
-        '    if verdict["tier_move"] is not None or not release_path.is_file():',
+        '    if decision is None and (verdict["tier_move"] is not None or not verdict.get("held")):',
+        '    if decision is None and verdict["tier_move"] is not None:',
         "test_a_release_beside_a_failed_verdict_that_is_not_held_does_not_stand",
         T_RELEASE,
     ),
@@ -315,6 +327,104 @@ CASES: list[Case] = [
         "the thresholds and the role are unchanged since the release",
         '    if record["thresholds_sha256"] != digest or record["role_sha256"] != RO.role_sha256(role):',
         "test_a_release_whose_binding_changed_is_refused_by_name",
+    ),
+    # ------------------------------------------------------------------ owner decision D36 (2026-10-09)
+    d36(
+        "a trial needs a calibrated role",
+        CAL,
+        "    if unknown:",
+        "test_a_trial_needs_a_calibrated_role_and_another_registrable_model",
+    ),
+    d36c(
+        "a trial seal is as sealed or as an owner move left it",
+        CAL,
+        'return now in (entry["registered_sha256"], entry["sha256"])',
+        'return now == entry["registered_sha256"]',
+        "test_a_trial_stands_once_an_owner_move_registered_the_candidate",
+    ),
+    d36c(
+        "a trial seal also meets the registered entry",
+        CAL,
+        'return now in (entry["registered_sha256"], entry["sha256"])',
+        'return now == entry["sha256"]',
+        "test_no_gate_accepts_a_trial_for_the_registered_role",
+    ),
+    d36(
+        "a step is given the trial's model",
+        CAL,
+        "    if candidate != sealed_candidate:",
+        "test_a_trial_role_is_exported_only_with_its_candidate_model",
+    ),
+    d36(
+        "a role sealed as itself is given no candidate",
+        CAL,
+        "        if sealed_candidate is None:",
+        "test_a_role_sealed_as_itself_is_not_given_a_candidate",
+    ),
+    d36(
+        "the batch size is a count",
+        CAL,
+        "    if batch_size is not None and (isinstance(batch_size, bool) or batch_size < 1):",
+        "test_the_batch_size_is_an_explicit_export_parameter",
+        T_CAL,
+    ),
+    d36c(
+        "a named batch size is used",
+        CAL,
+        "    size = batch_size or (WEB_BATCH_SIZE if web else BATCH_SIZE)",
+        "    size = WEB_BATCH_SIZE if web else BATCH_SIZE",
+        "test_the_batch_size_is_an_explicit_export_parameter",
+        T_CAL,
+    ),
+    d36c(
+        "the agents of a trial record with the candidate",
+        CAL,
+        'if fixed.get("candidate") else ""',
+        'if False else ""',
+        "test_the_agents_of_a_trial_are_briefed_with_the_candidate",
+    ),
+    d36(
+        "a trial moves nobody",
+        CAL,
+        '    if thresholds["registry"][role].get("candidate"):',
+        "test_a_trial_is_evaluated_on_the_candidates_stamp_and_moves_nobody",
+    ),
+    d36(
+        "a trial stands for nobody before an owner move",
+        CAL,
+        '    if entry.get("candidate"):\n        # a trial vouches',
+        "test_no_gate_accepts_a_trial_for_the_registered_role",
+    ),
+    d36c(
+        "only an owner move registers the candidate",
+        CAL,
+        '            or moved.get("kind") != RO.OWNER_KIND',
+        "            or False",
+        "test_a_tier_move_that_registered_the_candidate_is_no_owner_move",
+    ),
+    d36c(
+        "a release under an owner decision asks the decision",
+        CAL,
+        "    else:\n        _owner_released(verdict, owner_decision)",
+        "    else:\n        pass",
+        "test_an_owner_decision_the_registry_does_not_hold_releases_nothing",
+        T_RELEASE,
+    ),
+    d36c(
+        "standing asks the owner decision again",
+        CAL,
+        "    if decision is not None:\n        try:\n            _owner_released(verdict, decision)",
+        "    if False:\n        try:\n            _owner_released(verdict, decision)",
+        "test_a_forged_owner_release_is_checked_again_when_the_verdict_stands",
+        T_RELEASE,
+    ),
+    d36c(
+        "standing names the owner decision",
+        CAL,
+        '            "standing": CC.released_label(decision),',
+        '            "standing": CC.RELEASED,',
+        "test_standing_says_released_under_the_owner_decision",
+        T_RELEASE,
     ),
 ]
 

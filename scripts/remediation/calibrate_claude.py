@@ -20,7 +20,12 @@ model or opens a socket.
              questions, the file maps each case to its expected value and is pinned with them.
              `--comparison` names how `compare` measures it (`all` units, or one a tool registers,
              `fields/pools.py`), `--max-undecided-excess` bounds how far the fresh rate of cells
-             nobody decided may lie above the gold's.
+             nobody decided may lie above the gold's. `--candidate-model MODEL_ID` calibrates the
+             role with another model WITHOUT changing the registry (a trial, D36): the seal records
+             the candidate, answers must carry its stamp (`opus_handoff.py answer --candidate-model`)
+             and the verdict names the model that passed. The seal binds the digest the role would
+             have with the candidate, so no gate accepts the verdict for the registered role until
+             an owner move has registered the candidate; a failed trial carries no tier move.
     prepare  copy the pool into `<root>/<id>` without its answers (the recorded ones go to
              `RECORDED.json`) and register the calibration run. Refused when the pool or the role
              changed after the seal.
@@ -35,15 +40,20 @@ model or opens a socket.
              verdict that passed, one with a tier move (the role moves, it is not released), one not
              held, a missing verdict and an empty reason. `require_passed` counts a valid release
              like a pass and names it as released.
+             `--owner-decision D36` releases a verdict that failed WITH a tier move instead, when the
+             owner kept the tier: the role's registry entry is the verdict's model again and an
+             applied owner move (`roles.APPLIED_ESCALATIONS`) names that decision and the
+             calibration among its evidence. The gates say "released (owner decision D36)".
 
     python scripts/remediation/calibrate_claude.py seal --id ID --role ROLE --handoff DIR \\
         --batches B [B ...] --threshold 0.9 [--truth FILE] [--comparison NAME] \\
-        [--max-undecided-excess 0.1] [--write-verdicts V [V ...] --max-false-writes 0]
+        [--max-undecided-excess 0.1] [--write-verdicts V [V ...] --max-false-writes 0] \\
+        [--candidate-model MODEL_ID]
     python scripts/remediation/calibrate_claude.py prepare --id ID --run RUN
     python scripts/remediation/calibrate_claude.py compare --id ID
     python scripts/remediation/calibrate_claude.py verdict --id ID --false-sources N
     python scripts/remediation/calibrate_claude.py release --id ID --decided-by TEXT --reason TEXT \\
-        --evidence FILE [FILE ...]
+        --evidence FILE [FILE ...] [--owner-decision D36]
 """
 
 from __future__ import annotations
@@ -200,7 +210,15 @@ def _sealed(root: Path, calibration_id: str) -> dict[str, Any]:
 
 
 def _need_unchanged_role(seal: dict[str, Any]) -> None:
-    if RO.role_sha256(seal["role"]) != seal["role_sha256"]:
+    """The role's registry entry is as the seal saw it. A candidate trial saw the registered entry
+    (`registered_role_sha256`) and may also meet the entry an owner move gave the role afterwards
+    (`role_sha256`, the entry with the candidate model)."""
+    now = RO.role_sha256(seal["role"])
+    if seal.get("candidate_model") is None:
+        unchanged = now == seal["role_sha256"]
+    else:
+        unchanged = now in (seal["registered_role_sha256"], seal["role_sha256"])
+    if not unchanged:
         raise CalibrationError(
             f"the registry entry of role {seal['role']} changed after the seal: seal a new "
             "calibration"
@@ -222,6 +240,7 @@ def seal(
     lane: dict[str, Any] | None = None,
     write_verdicts: Sequence[str] = (),
     max_false_writes: int = MAX_FALSE_WRITES,
+    candidate_model: str | None = None,
     now: Callable[[], str] = utc_now,
 ) -> dict[str, Any]:
     """Seal `calibration_id` before its run, and return the seal. `lane` is a lane's own pass
@@ -236,7 +255,12 @@ def seal(
     that is not a number in (0, 1]; an undecided-rate bound outside [0, 1]; a role that is not
     registered; a pool with a missing batch, no recorded answer, or a MiniMax or unstamped answer;
     a truth pool that carries an answer or whose truth file is not exactly its cases; a pool of
-    lane WC (a handoff named `wc-...`) without the lane's conditions."""
+    lane WC (a handoff named `wc-...`) without the lane's conditions; a `candidate_model` that is not
+    a model a role may be registered to or is the role's registered one.
+
+    `candidate_model` seals a trial of another model for the role (the registry stays as it is): the
+    seal's `model` is the candidate, its `role_sha256` the digest of the entry with the candidate,
+    and `registered_role_sha256` the registry's entry as sealed."""
     OH._component(calibration_id, "calibration id")
     OH._component(comparison, "comparison")
     if isinstance(threshold, bool) or not isinstance(threshold, int | float):
@@ -250,6 +274,8 @@ def seal(
     ):
         raise CalibrationError(f"max_undecided_excess {max_undecided_excess!r} is not in [0, 1]")
     entry = RO.role(role)
+    if candidate_model is not None:
+        RO.candidate_model(role, candidate_model)
     if (root / VERDICTS_DIR / f"{calibration_id}.json").exists():
         raise CalibrationError(
             f"{calibration_id} has a verdict already: a threshold is sealed first"
@@ -273,7 +299,7 @@ def seal(
     sealed = {
         "calibration_id": calibration_id,
         "role": role,
-        "model": entry.model,
+        "model": entry.model if candidate_model is None else candidate_model,
         "effort": entry.effort,
         "calibration_set": entry.calibration_set,
         "handoff": str(handoff.resolve()),
@@ -283,7 +309,7 @@ def seal(
         "truth": None if truth is None else str(truth.resolve()),
         "comparison": comparison,
         "max_undecided_excess": max_undecided_excess,
-        "role_sha256": RO.role_sha256(role),
+        "role_sha256": RO.role_sha256(role, model=candidate_model),
         "roles_sha256": RO.registry_sha256(),
         "threshold": threshold,
         "max_false_sources": max_false_sources,
@@ -293,6 +319,9 @@ def seal(
     }
     if lane is not None:
         sealed["lane"] = lane
+    if candidate_model is not None:
+        sealed["candidate_model"] = candidate_model
+        sealed["registered_role_sha256"] = RO.role_sha256(role)
     root.mkdir(parents=True, exist_ok=True)
     path = root / THRESHOLDS_FILE
     path.write_text(
@@ -349,7 +378,10 @@ def _fresh_answers(out: Path, sealed: dict[str, Any]) -> dict[str, str]:
                 f"{file}: recorded under role {named}, but {sealed['calibration_id']} calibrates "
                 f"role {sealed['role']}"
             )
-        RO.require_stamp(sealed["role"], answer["model"])
+        if sealed.get("candidate_model") is None:
+            RO.require_stamp(sealed["role"], answer["model"])
+        else:
+            RO.require_candidate_stamp(sealed["candidate_model"], answer["model"])
         fresh[file.name[: -len(ANSWER_SUFFIX)]] = answer["text"]
     return fresh
 
@@ -493,7 +525,11 @@ def verdict(
         "tier_move": None,
         "decided_at": now(),
     }
-    if failures:
+    if sealed.get("candidate_model") is not None:
+        # a trial moves nothing: the registered role neither escalates nor is held by it
+        result["candidate_model"] = sealed["candidate_model"]
+        result["registered_model"] = RO.role(sealed["role"]).model
+    elif failures:
         try:
             result["tier_move"] = RO.escalation(
                 sealed["role"], calibration_id=calibration_id, reason="; ".join(failures)
@@ -540,6 +576,31 @@ def verify_evidence(items: Sequence[dict[str, str]], moved: str) -> None:
             raise CalibrationError(f"{moved}: evidence {file} changed after the release")
 
 
+def check_owner_release(verdict: dict[str, Any], decision: str, *, candidate: bool) -> None:
+    """Refuse unless `verdict` is a failed one with a tier move that an owner decision lets stand:
+    not a candidate trial (`candidate`; shared with `teaser/calibrate.py`), the role registered to the verdict's model (the owner kept that tier) and
+    an applied owner move naming `decision` and this calibration (`roles.require_owner_move`)."""
+    calibration_id = verdict["calibration_id"]
+    if verdict["passed"]:
+        raise CalibrationError(f"{calibration_id} passed: there is nothing to release")
+    if candidate:
+        raise CalibrationError(
+            f"{calibration_id} is a candidate trial: a trial is never released, the owner move "
+            "registers the candidate and the verdict then stands as a pass"
+        )
+    if verdict["tier_move"] is None:
+        raise CalibrationError(
+            f"{calibration_id} carries no tier move: an owner decision releases a verdict that "
+            "failed with one (a held verdict is released without a decision)"
+        )
+    try:
+        RO.require_owner_move(
+            verdict["role"], decision, model=verdict["model"], calibration_id=calibration_id
+        )
+    except RO.RoleError as exc:
+        raise CalibrationError(f"{calibration_id}: {exc}") from exc
+
+
 def release(
     root: Path,
     *,
@@ -547,6 +608,7 @@ def release(
     decided_by: str,
     reason: str,
     evidence: Sequence[Path],
+    owner_decision: str | None = None,
     now: Callable[[], str] = utc_now,
 ) -> dict[str, Any]:
     """Let a verdict stand that failed and is held at the top tier, written once to
@@ -558,7 +620,13 @@ def release(
     verdict; a verdict of another role than the seal's; a verdict that passed (nothing to release);
     one with a tier move (that role moves up, it is not released); a failed verdict that is not held;
     an empty `decided_by` or `reason`; no evidence, an evidence path that is not a file, one named
-    twice; a release written already."""
+    twice; a release written already.
+
+    `owner_decision` (`D36`) releases instead a verdict that failed WITH a tier move - the owner
+    kept the tier the verdict was made on (`check_owner_release`): refused when the verdict has no tier
+    move (a held one is released without a decision), when the seal is a candidate trial, and when
+    `roles.require_owner_move` finds no applied owner move of the role naming that decision and
+    this calibration, or the role not registered to the verdict's model."""
     if not decided_by.strip():
         raise CalibrationError("decided by is empty: a release names who decided it")
     if not reason.strip():
@@ -574,13 +642,19 @@ def release(
         )
     if held["passed"]:
         raise CalibrationError(f"{calibration_id} passed: there is nothing to release")
-    if held["tier_move"] is not None:
-        raise CalibrationError(
-            f"{calibration_id} carries a tier move: the role moves up a tier, it is not released"
-        )
-    if not held.get("held"):
-        raise CalibrationError(
-            f"{calibration_id} failed but is not held at the top tier: only a held verdict is released"
+    if owner_decision is None:
+        if held["tier_move"] is not None:
+            raise CalibrationError(
+                f"{calibration_id} carries a tier move: the role moves up a tier, it is not released"
+            )
+        if not held.get("held"):
+            raise CalibrationError(
+                f"{calibration_id} failed but is not held at the top tier: only a held verdict is "
+                "released"
+            )
+    else:
+        check_owner_release(
+            held, owner_decision, candidate=sealed.get("candidate_model") is not None
         )
     items = evidence_records(evidence)
     record = {
@@ -594,6 +668,8 @@ def release(
         "evidence": items,
         "decided_at": now(),
     }
+    if owner_decision is not None:
+        record["owner_decision"] = owner_decision
     _write_once(root / RELEASES_DIR / f"{calibration_id}.json", record)
     return record
 
@@ -610,7 +686,15 @@ def _check_release(root: Path, calibration_id: str, seal: dict[str, Any]) -> dic
     if record["calibration_id"] != calibration_id or record["role"] != seal["role"]:
         raise CalibrationError(f"{moved}: it names another calibration or role than the seal")
     verdict = _read(verdict_path, "the verdict")
-    if verdict["passed"] or verdict["tier_move"] is not None or not verdict.get("held"):
+    decision = record.get("owner_decision")
+    if decision is not None:
+        try:
+            check_owner_release(
+                verdict, decision, candidate=seal.get("candidate_model") is not None
+            )
+        except CalibrationError as exc:
+            raise CalibrationError(f"{moved}: {exc}") from exc
+    elif verdict["passed"] or verdict["tier_move"] is not None or not verdict.get("held"):
         raise CalibrationError(
             f"{moved}: the verdict is not a failed one held at the top tier (it passed, carries a "
             "tier move or is not held): only `release` makes a release, and it refuses such a verdict"
@@ -625,12 +709,28 @@ def _check_release(root: Path, calibration_id: str, seal: dict[str, Any]) -> dic
 
 def _binds(seal: dict[str, Any], role: str, comparison: str) -> bool:
     """Whether a seal names the role and the comparison and binds the role's registry entry as it is
-    now."""
-    return (
+    now. A candidate trial binds the entry with the candidate model: that matches only once the
+    registry holds the candidate, and only when an owner move (never a tier move or an edit without
+    a record) put it there."""
+    if not (
         seal["role"] == role
         and seal["comparison"] == comparison
         and seal["role_sha256"] == RO.role_sha256(role)
+    ):
+        return False
+    if seal.get("candidate_model") is None:
+        return True
+    moved = RO.last_move(role)
+    return (
+        moved is not None
+        and moved.get("kind") == RO.OWNER_KIND
+        and moved["to"] == seal["candidate_model"]
     )
+
+
+def released_label(owner_decision: str) -> str:
+    """How a gate says that a verdict stands by an owner decision: `released (owner decision D36)`."""
+    return f"{RELEASED} (owner decision {owner_decision})"
 
 
 def require_passed(root: Path, needs: Iterable[tuple[str, str]]) -> list[dict[str, str]]:
@@ -678,9 +778,11 @@ def require_passed(root: Path, needs: Iterable[tuple[str, str]]) -> list[dict[st
             "standing": how,
         }
         if how == RELEASED:
-            line["decided_by"] = _check_release(root, calibration_id, seals[calibration_id])[
-                "decided_by"
-            ]
+            record = _check_release(root, calibration_id, seals[calibration_id])
+            line["decided_by"] = record["decided_by"]
+            if "owner_decision" in record:
+                line["owner_decision"] = record["owner_decision"]
+                line["standing"] = released_label(record["owner_decision"])
         standing.append(line)
     if unmet:
         raise CalibrationError(
@@ -718,12 +820,22 @@ def main(argv: Iterable[str] | None = None) -> int:
         "--write-verdicts", nargs="*", default=[], help="verdicts that cause a write: 0 false ones"
     )
     seal_cli.add_argument("--max-false-writes", type=int, default=MAX_FALSE_WRITES)
+    seal_cli.add_argument(
+        "--candidate-model",
+        default=None,
+        help="calibrate the role with this model without changing the registry (a trial)",
+    )
     sub.choices["prepare"].add_argument("--run", required=True, type=Path)
     sub.choices["verdict"].add_argument("--false-sources", required=True, type=int)
     release_cli = sub.choices["release"]
     release_cli.add_argument("--decided-by", required=True)
     release_cli.add_argument("--reason", required=True)
     release_cli.add_argument("--evidence", required=True, nargs="+", type=Path)
+    release_cli.add_argument(
+        "--owner-decision",
+        default=None,
+        help="let a verdict that failed with a tier move stand under this owner decision (D36)",
+    )
     args = parser.parse_args(list(argv) if argv is not None else None)
     try:
         if args.command == "seal":
@@ -739,6 +851,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 truth=args.truth,
                 write_verdicts=args.write_verdicts,
                 max_false_writes=args.max_false_writes,
+                candidate_model=args.candidate_model,
             )
         elif args.command == "prepare":
             payload = prepare(args.root, calibration_id=args.calibration_id, run=args.run)
@@ -751,6 +864,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 decided_by=args.decided_by,
                 reason=args.reason,
                 evidence=args.evidence,
+                owner_decision=args.owner_decision,
             )
         else:
             payload = verdict(

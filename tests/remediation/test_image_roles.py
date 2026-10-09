@@ -610,7 +610,7 @@ class TestTheHeroRecheck:
 
     def test_the_role_is_the_adversarial_one_and_each_round_has_its_own_files(self) -> None:
         assert (RO.role(HR.SPEC.role).model, RO.role(HR.SPEC.role).effort) == (
-            "claude-opus-5-5",
+            "claude-sonnet-5-5",
             "high",
         )
         one, two = HR.spec_for_round(1), HR.spec_for_round(2)
@@ -949,7 +949,7 @@ class TestTheIdentityAnswers:
     def test_the_role_is_the_web_verifier_for_both_modes(self) -> None:
         for spec in (ID.VERIFY_SPEC, ID.RESEARCH_SPEC):
             assert (RO.role(spec.role).model, RO.role(spec.role).effort) == (
-                "claude-opus-5-5",
+                "claude-sonnet-5-5",
                 "high",
             )
             assert spec.web is True

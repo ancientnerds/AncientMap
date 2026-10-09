@@ -217,15 +217,15 @@ def test_a_phase4_text_is_never_trimmed_the_check_answer_refuses_a_cut(tmp_path:
     assert A.parse_check(cut, site_id=SITE_P4, sentences=list(WX.P4_SENTENCES), asked=[1, 2, 3])
 
 
-def test_the_briefs_of_a_list_run_are_the_opus_ones_and_a_plain_run_keeps_its_own(
+def test_the_briefs_of_a_list_run_are_the_sonnet_ones_and_a_plain_run_keeps_its_own(
     tmp_path: Path,
 ) -> None:
     run = _read(tmp_path, _p4_rows())
     _export(run, tmp_path, [SITE_P4])
     (record,) = cli.read_rounds(run)
     brief = cli.brief(run, Path(record["handoff"]), "wc-0001")
-    assert "Opus checker wc-0001" in brief and "--model claude-opus-5-5" in brief
-    assert "--answered-by opus-check-r1-wc-0001" in brief and "claude-sonnet-5-5" not in brief
+    assert "Sonnet checker wc-0001" in brief and "--model claude-sonnet-5-5" in brief
+    assert "--answered-by sonnet-check-r1-wc-0001" in brief and "claude-opus-5-5" not in brief
     assert "--role fact_checker" in brief
 
 
@@ -300,14 +300,14 @@ def test_a_misaligned_provenance_and_a_retired_site_are_never_asked(built) -> No
     assert population["asked"] == 3 and population["pilot"] == {"sites": 3, "seed": 1}
 
 
-def test_the_verifier_and_the_judge_of_a_list_run_are_opus_agents(built) -> None:
+def test_the_verifier_and_the_judge_of_a_list_run_are_sonnet_agents(built) -> None:
     root, run, _ = built
     verify = next((root / "handoff" / "wcl-pilot-verify").glob("verify-0001"))
     assert verify.is_dir()
     handoff = root / "handoff" / "wcl-pilot-verify"
     brief = cli.verify_brief(run, handoff, "verify-0001")
-    assert "Opus verifier verify-0001" in brief and "--answered-by opus-wc-verify-0001" in brief
-    assert "--model claude-opus-5-5 --role web_verifier" in brief
+    assert "Sonnet verifier verify-0001" in brief and "--answered-by sonnet-wc-verify-0001" in brief
+    assert "--model claude-sonnet-5-5 --role web_verifier" in brief
     judge = cli.judge_brief(run, root / "handoff" / "wcl-pilot-judge", "judge-0001")
     # the judge is the pilot judge (Opus, xhigh) in every kind of run (owner decision D6)
     assert (

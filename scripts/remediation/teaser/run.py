@@ -10,7 +10,7 @@ write is `scripts/remediation/mechanical/teaser.py` (plan) and `mechanical/apply
     R=output/remediation/teaser/runs/<run>    H=output/remediation/handoff/teaser-<run>
     $T select --run R [--pilot 20 --seed N] [--sites FILE] [--basis WC ...] [--exclude-run R0 ...]
         (read-only)
-    $T export --run R --stage write --handoff $H-write     one question per site, batches of 15
+    $T export --run R --stage write --handoff $H-write     one question per site, batches of 15 (`--batch-size N` is recorded)
     $T brief --run R --handoff $H-write --batch-id B       the instruction of batch B's agent
         (the agent drafts, runs `check-answer` until it is clean, and records with
         `opus_handoff.py answer --answered-by teaser-B`)
@@ -54,7 +54,7 @@ refuse the decline for a site with a drawable name form.
 Every card a checker accepted is then **verified** on the web (`verify`, owner O2: "natuerlich
 muessen sie inhaltlich stimmen"): an independent web judge - the pilot judge's prompt, answer shape
 and machine quote check - decides each claim SUPPORTED / CONTRADICTED / UNVERIFIABLE against a page
-it quotes, 5 cards per batch, listing at least as many claims as the accepting check did
+it quotes, 8 cards per batch (5 in a run selected before 2026-10-09), listing at least as many claims as the accepting check did
 (`claims_floor`). A quote proves a claim only when the machine found it on a page lane WC's source
 rule admits (`prove_claims`: never an AI aggregator, a Wikipedia mirror, a blocked domain or this
 project's site - such a page is not even fetched). The card is VERIFIED when no claim is
@@ -188,7 +188,7 @@ SENTENCE_CHECKED = "WC"
 BASES = tuple(sorted(BASIS_LANES | {SENTENCE_CHECKED}))
 BATCH_SIZE = 15
 #: Cards per web judge batch: a verifier's (stages verify, verify2) and the pilot judge's.
-JUDGE_BATCH_SIZE = 5
+JUDGE_BATCH_SIZE = 8
 #: The checker rounds: a writer stage, then its checker stage.
 CHECK_ROUNDS = (("write", "check"), ("rewrite1", "check1"), ("rewrite2", "check2"))
 #: The web verification of every accepted card, and its one rewrite round.
@@ -292,6 +292,13 @@ RECHECK_ADVERSARIAL_FAILED = "recheck-adversarial-failed"
 #: Questions per rater batch, per adversarial batch.
 RATE_BATCH_SIZE = 25
 JUDGE_ROLE = "pilot_judge"
+#: The batch sizes of a new run by kind (owner decision D36, 2026-10-09: every agent re-reads its
+#: brief and the repository instructions, so a web stage asks 8 cards per agent instead of 5). A
+#: run records them at its selection (`RUN.json["batch_sizes"]`) and an export records the size
+#: it used (`ROUNDS.jsonl["batch_size"]`); a run selected before the change has none and keeps
+#: the sizes it was built with (`LEGACY_BATCH_SIZES`).
+DEFAULT_BATCH_SIZES = {"main": BATCH_SIZE, "judge": JUDGE_BATCH_SIZE, "rate": RATE_BATCH_SIZE}
+LEGACY_BATCH_SIZES = {"main": 15, "judge": 5, "rate": 25}
 
 
 @dataclass(frozen=True)
@@ -718,6 +725,7 @@ def select(
         "pilot": None if pilot is None else {"n": pilot[0], "seed": pilot[1]},
         "sites_file": None if sites_file is None else _shown(sites_file),
         "excluded_runs": [_shown(path) for path in exclude],
+        "batch_sizes": dict(DEFAULT_BATCH_SIZES),
         "contract": {
             "min_chars": C.MIN_CHARS,
             "max_chars": C.MAX_CHARS,
@@ -1207,20 +1215,37 @@ def prompt_for(stage: str, site: C.Basis, state: Progress, spec: Spec = V1_SPEC)
 
 
 # ------------------------------------------------------------------------------ export
+def run_batch_sizes(run: Path) -> dict[str, int]:
+    """The batch sizes of a run by kind (`main`, `judge`, `rate`): the ones it recorded at its
+    selection, or - for a run selected before they were recorded - the sizes it was built with."""
+    record = json.loads((run / "RUN.json").read_text(encoding="utf-8"))
+    return dict(record.get("batch_sizes", LEGACY_BATCH_SIZES))
+
+
+def stage_kind(stage: str, spec: Spec) -> str:
+    """Which batch size a stage uses: `judge` for a web stage, `rate` for a rating stage, else `main`
+    (the writers, and the checkers that keep a writer's batch together)."""
+    if stage in (*spec.verifiers, *spec.adversarial):
+        return "judge"
+    if stage in spec.raters:
+        return "rate"
+    return "main"
+
+
 def _batches(
-    stage: str, due: Mapping[str, Progress], spec: Spec = V1_SPEC
+    stage: str,
+    due: Mapping[str, Progress],
+    spec: Spec = V1_SPEC,
+    sizes: Mapping[str, int] = DEFAULT_BATCH_SIZES,
 ) -> list[tuple[str, list[str]]]:
-    """Batches of one stage: writer stages by site id in chunks of 15, verify stages in chunks of 5
-    (each card researched on the web; so is an adversarial review), a rating stage in chunks of 25;
+    """Batches of one stage: writer stages by site id in chunks of `sizes["main"]` (15), verify stages
+    in chunks of `sizes["judge"]` (8; each card researched on the web; so is an adversarial review),
+    a rating stage in chunks of `sizes["rate"]` (25);
     a checker stage keeps each writer batch together, so one checker checks one writer's cards. A
     round of a canary-bearing stage that would be one batch is split in two: the canary of each
     batch is made from a site of the other, so that no site is asked twice in a batch."""
     if stage in spec.writers or stage in (*spec.verifiers, *spec.adversarial, *spec.raters):
-        size = BATCH_SIZE
-        if stage in (*spec.verifiers, *spec.adversarial):
-            size = JUDGE_BATCH_SIZE
-        if stage in spec.raters:
-            size = RATE_BATCH_SIZE
+        size = sizes[stage_kind(stage, spec)]
         ordered = sorted(due)
         groups = [ordered[i : i + size] for i in range(0, len(ordered), size)]
     else:
@@ -1230,9 +1255,9 @@ def _batches(
             assert writer is not None
             by_writer.setdefault(writer["batch_id"], []).append(site_id)
         groups = [
-            members[i : i + BATCH_SIZE]
+            members[i : i + sizes["main"]]
             for _batch, members in sorted(by_writer.items())
-            for i in range(0, len(members), BATCH_SIZE)
+            for i in range(0, len(members), sizes["main"])
         ]
     if stage in spec.canary and len(groups) == 1 and len(groups[0]) > 1:
         half = (len(groups[0]) + 1) // 2  # a blind canary needs a site outside the batch
@@ -1240,9 +1265,15 @@ def _batches(
     return [(f"{stage}-{n:03d}", group) for n, group in enumerate(groups, start=1)]
 
 
-def export_stage(run: Path, stage: str, handoff: Path) -> dict[str, Any]:
-    """One stage's round into a handoff directory of its own; refused while an earlier one waits."""
+def export_stage(
+    run: Path, stage: str, handoff: Path, batch_size: int | None = None
+) -> dict[str, Any]:
+    """One stage's round into a handoff directory of its own; refused while an earlier one waits.
+    `batch_size` overrides the run's size for the stage's kind (`stage_kind`); the size used is
+    recorded in the round (`batch_size`)."""
     spec = spec_of(run)
+    if batch_size is not None and (isinstance(batch_size, bool) or batch_size < 1):
+        raise RunError(f"batch size {batch_size!r} is not a count of 1 or more")
     if stage not in spec.stages:
         raise RunError(f"{stage!r} is no stage of lane WB contract {spec.name}: {spec.stages}")
     if stage in spec.seeded:
@@ -1261,7 +1292,11 @@ def export_stage(run: Path, stage: str, handoff: Path) -> dict[str, Any]:
     if not due:
         return {"stage": stage, "questions": 0, "note": "nobody is due: no round, next stage"}
     sites = bases(run)
-    groups = _batches(stage, due, spec)
+    sizes = run_batch_sizes(run)
+    kind = stage_kind(stage, spec)
+    if batch_size is not None:
+        sizes = {**sizes, kind: batch_size}
+    groups = _batches(stage, due, spec, sizes)
     canaries = canary_questions(spec, stage, groups, sites, due)
     for batch_id, members in groups:
         questions = [
@@ -1291,6 +1326,7 @@ def export_stage(run: Path, stage: str, handoff: Path) -> dict[str, Any]:
     record = {
         "stage": stage,
         "handoff": _shown(handoff),
+        "batch_size": sizes[kind],
         "batches": dict(groups),
         "exported_at": _now(),
     }
@@ -2616,9 +2652,12 @@ def judge_prompt_for(run: Path, name: str, country: str, card: str) -> str:
     return P.judge_prompt(name, country, card)
 
 
-def export_judge(run: Path, handoff: Path) -> dict[str, Any]:
+def export_judge(run: Path, handoff: Path, batch_size: int | None = None) -> dict[str, Any]:
     """Every accepted card of the run - its final, VERIFIED card, the one to be written - to fresh
-    independent web judges (the pilot gate, runbook 5.2)."""
+    independent web judges (the pilot gate, runbook 5.2). The cards per judge are `batch_size` or the
+    run's `judge` size; the size used is recorded in the round."""
+    if batch_size is not None and (isinstance(batch_size, bool) or batch_size < 1):
+        raise RunError(f"batch size {batch_size!r} is not a count of 1 or more")
     if spec_of(run).name == RECHECK:
         raise RunError("a re-check run has no pilot judge: its cards are confirmed or cleared")
     if _round(run, JUDGE_STAGE) is not None:
@@ -2630,9 +2669,10 @@ def export_judge(run: Path, handoff: Path) -> dict[str, Any]:
     accepted = [r for r in read_outcomes(run) if r["status"] == ACCEPTED]
     ordered = sorted(r["site_id"] for r in accepted)
     cards = {r["site_id"]: r["card"] for r in accepted}
+    size = batch_size or run_batch_sizes(run)["judge"]
     groups = [
-        (f"{JUDGE_STAGE}-{n:03d}", ordered[i : i + JUDGE_BATCH_SIZE])
-        for n, i in enumerate(range(0, len(ordered), JUDGE_BATCH_SIZE), start=1)
+        (f"{JUDGE_STAGE}-{n:03d}", ordered[i : i + size])
+        for n, i in enumerate(range(0, len(ordered), size), start=1)
     ]
     for batch_id, members in groups:
         for site_id in members:
@@ -2648,6 +2688,7 @@ def export_judge(run: Path, handoff: Path) -> dict[str, Any]:
     record = {
         "stage": JUDGE_STAGE,
         "handoff": _shown(handoff),
+        "batch_size": size,
         "batches": dict(groups),
         "exported_at": _now(),
     }
@@ -2933,6 +2974,7 @@ def seed_live(
         "provenance_run": provenance_run,
         "contract": RECHECK,
         "roles": roles_record(RECHECK_SPEC),
+        "batch_sizes": dict(DEFAULT_BATCH_SIZES),
         "limits": {"max_unproven_claims": CP.MAX_UNPROVEN_CLAIMS},
     }
     write_json(run / "RUN.json", record)
@@ -3060,6 +3102,13 @@ def main(argv: list[str] | None = None) -> int:
         commands[name].add_argument("--handoff", required=True, type=Path)
     for name in ("export", "import"):
         commands[name].add_argument("--stage", required=True, choices=ALL_STAGES)
+    for name in ("export", "judge-export"):
+        commands[name].add_argument(
+            "--batch-size",
+            type=int,
+            default=None,
+            help="questions per batch (recorded in the round); default: the run's size for the stage",
+        )
     for name in ("check-answer", "brief", "void-batch"):
         commands[name].add_argument("--batch-id", required=True)
     commands["seed-live"].add_argument("--provenance-run", required=True)
@@ -3098,7 +3147,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
         elif args.command == "export":
-            _print(export_stage(run, args.stage, args.handoff))
+            _print(export_stage(run, args.stage, args.handoff, args.batch_size))
         elif args.command == "import":
             _print(import_stage(run, args.stage))
         elif args.command == "check-answer":
@@ -3113,7 +3162,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "outcomes":
             _print(outcomes(run))
         elif args.command == "judge-export":
-            _print(export_judge(run, args.handoff))
+            _print(export_judge(run, args.handoff, args.batch_size))
         elif args.command == "agents":
             _print(agent_jobs(run, args.handoff))
         elif args.command == "void-batch":

@@ -376,7 +376,7 @@ def _research_round(screened: dict[str, Any], answers: dict[str, str] | None = N
         answers or {EF.SITE_W: _research_answer(EF.SITE_W), EF.SITE_NONE: json.dumps(
             {"site_id": EF.SITE_NONE, "disputed": False, "position_a": None, "position_b": None,
              "asserting": [], "note": "one view only"})},
-        role="field_researcher", model=OH.OPUS_MODEL, agent="opus-dispute",
+        role="field_researcher", model=OH.SONNET_MODEL, agent="sonnet-dispute",
     )  # fmt: skip
     return handoff
 
@@ -393,12 +393,13 @@ def test_the_research_round_asks_one_question_per_candidate(screened: dict[str, 
     with pytest.raises(D.DisputeError, match="was exported"):
         D.cmd_export(run, screened["tmp"] / "h2")
     text = D.brief(run, screened["tmp"] / "h", "ds-0001")
-    assert "--role field_researcher --model claude-opus-5-5" in text and "--stage dispute" in text
+    assert "--role field_researcher --model claude-sonnet-5-5" in text and "--stage dispute" in text
     # the brief calls the agent by the registry's model, as the recording command does
     assert (
-        "You are Opus researcher ds-0001" in text and "--answered-by opus-dispute-ds-0001" in text
+        "You are Sonnet researcher ds-0001" in text
+        and "--answered-by sonnet-dispute-ds-0001" in text
     )
-    assert "Sonnet" not in text
+    assert "Opus" not in text
 
 
 def test_check_answer_reports_the_shape_and_the_quotes_of_each_position(
@@ -456,7 +457,7 @@ def test_the_import_checks_every_quote_and_ends_an_unverified_position(
     ("kwargs", "message"),
     [
         ({"role": "web_verifier"}, "does not name the role 'field_researcher'"),
-        ({"model": OH.SONNET_MODEL}, "registered to claude-opus-5-5"),
+        ({"model": OH.OPUS_MODEL}, "registered to claude-sonnet-5-5"),
     ],
 )
 def test_the_research_import_refuses_an_answer_that_is_not_the_researchers_role(
@@ -465,14 +466,14 @@ def test_the_research_import_refuses_an_answer_that_is_not_the_researchers_role(
     handoff = screened["tmp"] / "h"
     D.cmd_export(screened["run"], handoff)
     _record(handoff, {EF.SITE_W: _research_answer(EF.SITE_W), EF.SITE_NONE: _research_answer(EF.SITE_NONE)},
-            **{"role": "field_researcher", "model": OH.OPUS_MODEL, "agent": "x", **kwargs})  # fmt: skip
+            **{"role": "field_researcher", "model": OH.SONNET_MODEL, "agent": "x", **kwargs})  # fmt: skip
     with pytest.raises(E.EnrichError, match=message):
         D.cmd_import(screened["run"], handoff, client=EF.pages_client(), pace=0.0)
     assert not (screened["run"] / D.RESEARCH_FILE).exists()
 
 
 def _adjudicate(screened: dict[str, Any], verdicts: dict[str, dict], *, agent: str = "opus-adjudicate",
-                role: str = "adversarial", model: str = OH.OPUS_MODEL) -> Path:  # fmt: skip
+                role: str = "adversarial", model: str = OH.SONNET_MODEL) -> Path:  # fmt: skip
     handoff = _research_round(screened)
     D.cmd_import(screened["run"], handoff, client=EF.pages_client(), pace=0.0)
     h2 = screened["tmp"] / "handoff" / "da"
@@ -499,7 +500,7 @@ def test_the_adjudication_asks_the_researched_sites_and_an_independent_agent_ans
         and "POSITION A: The first phase is near 3600 BC" in prompt
     )
     assert "source: " + EF.POSITIONS in prompt
-    assert "--role adversarial --model claude-opus-5-5" in D.brief(
+    assert "--role adversarial --model claude-sonnet-5-5" in D.brief(
         screened["run"], h2, "da-0001", stage=D.ADJUDICATE_STAGE
     )
     assert D.cmd_adjudicate_import(screened["run"], h2) == {"dispute": 1}
@@ -509,13 +510,13 @@ def test_the_adjudication_asks_the_researched_sites_and_an_independent_agent_ans
     ("kwargs", "message"),
     [
         (
-            {"role": "field_researcher", "model": OH.OPUS_MODEL},
+            {"role": "field_researcher", "model": OH.SONNET_MODEL},
             "does not name the role 'adversarial'",
         ),
-        ({"model": OH.SONNET_MODEL}, "registered to claude-opus-5-5"),
+        ({"model": OH.OPUS_MODEL}, "registered to claude-sonnet-5-5"),
     ],
 )
-def test_the_adjudicator_is_the_adversarial_role_on_opus(
+def test_the_adjudicator_is_the_adversarial_role_on_sonnet(
     screened: dict[str, Any], kwargs: dict, message: str
 ) -> None:
     h2 = _adjudicate(screened, {EF.SITE_W: {"verdict": "dispute", "asserting": []}}, **kwargs)

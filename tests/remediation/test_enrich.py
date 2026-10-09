@@ -323,7 +323,7 @@ def test_a_new_sentence_the_verifier_does_not_confirm_is_dropped_and_the_rest_is
         run, tmp_path / "v1", verdicts={EF.SITE_W: ["SUPPORTED", "UNSUPPORTED"]}
     )
     assert first["to_verify2"] == 1 and first["verdicts"]["UNSUPPORTED"] == 1
-    second = EF.verify_enriched(run, tmp_path / "v2", agent="opus-wc-verify2")
+    second = EF.verify_enriched(run, tmp_path / "v2", agent="sonnet-wc-verify2")
     assert second["stage"] == "verify2" and second["sites"] == 1
     cli.cmd_build(run, first_batch=WC4.FIRST_BATCH)
     finals = {f["site_id"]: f for f in read_jsonl(run / cli.FINAL_FILE)}
@@ -341,7 +341,7 @@ def test_a_text_the_verifier_calls_incoherent_loses_the_new_sentence_it_names(
 ) -> None:
     run, _ = _to_verify(tmp_path)
     EF.verify_enriched(run, tmp_path / "v1", coherent={EF.SITE_W: (False, [1])})
-    EF.verify_enriched(run, tmp_path / "v2", agent="opus-wc-verify2")
+    EF.verify_enriched(run, tmp_path / "v2", agent="sonnet-wc-verify2")
     cli.cmd_build(run, first_batch=WC4.FIRST_BATCH)
     final = {f["site_id"]: f for f in read_jsonl(run / cli.FINAL_FILE)}[EF.SITE_W]
     assert [d["reason"] for d in final["decisions"]] == ["verify-incoherent", None]
@@ -354,7 +354,7 @@ def test_a_verifier_must_be_an_independent_agent_in_the_verifiers_role(tmp_path:
     answers = {l: FX.verification(l, ["SUPPORTED"] * len(s)) for l, s in record["shown"].items()}
     for model, role, message in (
         (OH.SONNET_MODEL, "enrich_writer", "does not name the role 'web_verifier'"),
-        (OH.SONNET_MODEL, "web_verifier", "registered to claude-opus-5-5"),
+        (OH.OPUS_MODEL, "web_verifier", "registered to claude-sonnet-5-5"),
     ):
         handoff = tmp_path / f"v-{role}-{model[:6]}"
         # the same questions, answered in another role: the round's own directory is written once

@@ -148,7 +148,7 @@ question) and is measured by the pilot's judge (`coherent`).
 **The verification** (`wc4.run_verification`, `wc4.apply_verification`; 2026-09-27). After every
 check round is imported and before the build, every site whose check kept a sentence goes to an
 independent Opus verifier - a different agent than the checker of that site - in batches of 5
-sites (stage `verify`, batches `verify-NNNN`). The question (`prompts.VERIFY_QUESTION`) is the
+(10 for a run exported after 2026-10-09: `--batch-size`, recorded in the round) sites (stage `verify`, batches `verify-NNNN`). The question (`prompts.VERIFY_QUESTION`) is the
 pilot judge's, applied to the **kept text as it will be published**: the kept sentences in order as
 K1..Km with the trims applied, the old sentence each piece was cut from, the checker's verified
 quotes, and the dropped sentences as context only (what a kept sentence may have referred to), never

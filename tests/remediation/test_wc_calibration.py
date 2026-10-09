@@ -192,16 +192,15 @@ def test_the_check_pool_agrees_with_keep_and_trimmed_as_one_and_misses_a_known_e
         FX.SITE_B: _check(FX.SITE_B, "KEEP", "KEEP"),
         FX.SITE_C: _check(FX.SITE_C, "DROP", "DROP"),
     }
-    FX.record_answers(out, fresh, by="fact_checker:opus-check-r1", model=OH.OPUS_MODEL)
+    FX.record_answers(out, fresh, by="fact_checker:sonnet-check-r1", model=OH.SONNET_MODEL)
     report = K.compare(root, calibration_id="c1")
     assert report["agreement"] == 1.0 and report["merged"] is True and report["kind"] == "check"
     assert report["extra_wrong"] == 0
     assert report["lane_failures"] and "known error" in report["lane_failures"][0]
     assert report["known"][0]["fresh"] == "KEEP" and report["known"][0]["missed"] is True
     result = CC.verdict(root, calibration_id="c1", false_sources=0, now=lambda: NOW)
-    # the fact checker is Opus since teaser-2026-10-09b: no tier above, the verdict is held
-    assert result["passed"] is False and result["tier_move"] is None
-    assert result["held"] == "no higher tier than claude-opus-5-5: the owner decides"
+    assert result["passed"] is False and result["tier_move"]["to"] == "claude-opus-5-5"
+    assert "known error" in result["tier_move"]["reason"]
 
 
 def test_a_check_pool_that_finds_every_known_error_passes_and_only_a_dropped_sentence_differs(
@@ -218,7 +217,7 @@ def test_a_check_pool_that_finds_every_known_error_passes_and_only_a_dropped_sen
         FX.SITE_C: _check(FX.SITE_C, "DROP", "DROP"),
     }
     assert K._sentences(fresh[FX.SITE_B]) != K._sentences(recorded[FX.SITE_B])
-    FX.record_answers(out, fresh, by="fact_checker:opus-check-r1", model=OH.OPUS_MODEL)
+    FX.record_answers(out, fresh, by="fact_checker:sonnet-check-r1", model=OH.SONNET_MODEL)
     report = K.compare(root, calibration_id="c1")
     assert report["lane_failures"] == []
     assert [d["unit"] for d in report["disagreements"]][0] == "sentence-3"
@@ -322,7 +321,7 @@ def test_a_fresh_verification_must_not_support_what_the_judge_found_wrong(tmp_pa
         FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED", "SUPPORTED", "SUPPORTED"]),
         FX.SITE_B: FX.verification(FX.SITE_B, ["SUPPORTED", "SUPPORTED"]),
     }
-    FX.record_answers(out, fresh, by="web_verifier:opus-wc", model=OH.OPUS_MODEL)
+    FX.record_answers(out, fresh, by="web_verifier:sonnet-wc", model=OH.SONNET_MODEL)
     report = K.compare(root, calibration_id="c1")
     assert [row["missed"] for row in report["known"]] == [
         True,
@@ -344,7 +343,7 @@ def test_a_fresh_verification_that_finds_both_known_errors_passes(tmp_path: Path
             FX.SITE_B, ["SUPPORTED", "SUPPORTED"], coherent=False, broken=[2]
         ),
     }
-    FX.record_answers(out, fresh, by="web_verifier:opus-wc", model=OH.OPUS_MODEL)
+    FX.record_answers(out, fresh, by="web_verifier:sonnet-wc", model=OH.SONNET_MODEL)
     report = K.compare(root, calibration_id="c1")
     assert report["lane_failures"] == [] and report["merged"] is False
     assert CC.verdict(root, calibration_id="c1", false_sources=0, now=lambda: NOW)["passed"] is True

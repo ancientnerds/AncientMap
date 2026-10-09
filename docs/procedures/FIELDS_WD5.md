@@ -16,8 +16,8 @@ replaces a stored value only where the journal says nobody sourced it, clears a 
 
 | role (`roles.ROLES`) | model, effort | does | calibrated on |
 |---|---|---|---|
-| `field_researcher` | **Opus 5.5 high** (Sonnet until 2026-10-09: `fr-general-001` failed, see 3.0) | answers the questions; recorded `--role field_researcher` | `fr-general-002` (60 sites) and `fr-bp-002` (about 25) |
-| `adversarial` | Opus 5.5 high | tries to break every cell the plan would write | `adv-truth-001` (50 cells whose truth is known) |
+| `field_researcher` | **Sonnet 5.5 high** (Opus from the tier move of 2026-10-09, `fr-general-001` failed, to the owner move D36 of the same day, see 3.0b) | answers the questions; recorded `--role field_researcher` | `fr-general-001` (released under D36) and `fr-bp-001` (passed 0.92); the Opus runs `-002` stay as the comparison |
+| `adversarial` | **Sonnet 5.5 high** (Opus until D36) | tries to break every cell the plan would write | `adv-truth-002` (the 50 cells of `adv-truth-001`, answered by Sonnet; `-001` was Opus and no longer binds) |
 | `operator` | Haiku 5.5 low | runs the scripted steps (no judgement) | a scripted dry run (`scripted_dry_run`), not in this file |
 
 **An answer is the role's or it is not imported.** `handoff.py import` refuses (by name, nothing written) an answer
@@ -59,6 +59,38 @@ AUDIT_LOG.
 | `fr-general-001` | `field_researcher`, Sonnet | agreement 0.8636 (76 of 88 units) < 0.9 sealed, 0 false sources, undecided excess 0.0331 | **failed**: tier move Sonnet to Opus (`roles.APPLIED_ESCALATIONS`); measured again as `fr-general-002` |
 | `fr-bp-001` | `field_researcher`, Sonnet | 0.92, passed | sealed against the Sonnet entry; the entry changed, so the gate (`require_passed`) no longer accepts it: measured again as `fr-bp-002` |
 | `adv-001` | `adversarial`, Opus | agreement 0.575 (23 of 40 units) < 0.9, 0 false sources | **failed, held** (no tier above Opus); its design is replaced, not the role |
+
+**3.0b Owner decision D36 (2026-10-09): Sonnet instead of Opus, and what it does to the calibrations.** The weekly Claude
+quota stood at 69 % after one day. The calibrations had measured no Opus advantage (field research 0.864 Sonnet against
+0.871 Opus; BP 0.92 against 0.88; the card fact checker failed the same sets on both), so the owner moved
+`field_researcher`, `fact_checker`, `web_verifier`, `card_writer`, `hook_rater` (at medium), `adversarial` and
+`code_review` to Sonnet 5.5; `pilot_judge` stays on Opus xhigh (small spot checks and pilot verdicts), the image roles,
+`enrich_writer` and `operator` did not move. The move is a record, not a silent edit: seven **owner moves**
+(`"kind": "owner"`) in `roles.APPLIED_ESCALATIONS`, each with the decision, the models, the effort the role has
+afterwards, the reason and the calibrations it rests on; `check_applied_escalations` holds the registry to the chain of
+tier moves and owner moves in order, model and effort.
+
+* A calibration that failed on Sonnet with a tier move is **released under the decision** while the registry holds
+  Sonnet again: `calibrate_claude.py release ... --owner-decision D36` and `teaser/calibrate.py release ... --owner-decision D36`
+  accept a failed verdict WITH a tier move only when the role's registry entry is the verdict's model and an owner move
+  names that decision and lists the calibration among its evidence. Everything else of the release stays (verdict, seal
+  and role digests, evidence files, refusals); the gates (`require_passed`, `standing`) re-check the decision every time
+  and say `released (owner decision D36)`. `fr-bp-001` (Sonnet, passed) stands again by itself: the registry entry is the
+  one it was sealed against. `fr-*-002`, `adv-truth-001` and the Opus calibrations of the card lane (`teaser-2026-10-09c`)
+  no longer bind the roles they were sealed for.
+* A **candidate-model trial** calibrates a role with another model without touching the registry
+  (`calibrate_claude.py seal --candidate-model M`; `teaser/calibrate.py seal --candidate-role R --candidate-model M`, then
+  `export`, `agents` and `evaluate` with the same `--candidate-model`). The seal binds the digest the role would have with
+  M; the agents record with `opus_handoff.py answer --role R --model M --candidate-model M`; the verdict names the model
+  that passed; a failed trial moves nobody; and no gate accepts the verdict for the registered role until an owner move
+  has registered M.
+* **Batch sizes** are an explicit, recorded export parameter and larger for new runs (every agent re-reads its brief and
+  the repository instructions, a fixed cost per batch): fields questions per batch 8 to 12 (`handoff.py export --batch-size`),
+  the adversarial check 8 to 12 (`adversarial.py export --batch-size`), the card lane's web stages 5 to 8 and its
+  calibration web roles 5 to 8 (`--batch-size`; writers and checkers stay at 15), lane WC's check, verification and
+  judge rounds 5 to 10 (`wc/cli.py ... --batch-size`). Each round records the size it used; a re-ask or a later round of a
+  run exported before the change keeps that run's size (8, 5, 5, and `RUN.json` without `batch_sizes` for the cards).
+  The calibration pools keep their shapes (8 per batch, 7 adversarial batches).
 
 **3.0a The second round (2026-10-09) and the release.** `adv-truth-001` (adversarial, Opus) **passed** at 0.94 (47 of 50).
 `fr-general-002` (0.871, 81 of 93) and `fr-bp-002` (0.88, 22 of 25) are Opus and **failed with 0 false sources, held**:

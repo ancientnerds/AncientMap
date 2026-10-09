@@ -209,7 +209,7 @@ def test_the_adversary_drops_one_standing_sentence_and_refutes_the_other(
         ),
         SITE_NONE: FX.answer(SITE_NONE, [FX.drop(1, "contradicted", FX.Q_DATE)]),
     }
-    FX.record_answers(handoff, answers, by="adversarial:opus-check-r1", model=OH.OPUS_MODEL)
+    FX.record_answers(handoff, answers, by="adversarial:sonnet-check-r1", model=OH.SONNET_MODEL)
     C.cmd_import(run, handoff, client=FX.FakeClient(), pace=0.0)
     FX.verify_all(run, tmp_path / "handoff" / "adv-verify")
     summary = C.cmd_build(run, first_batch=4101)

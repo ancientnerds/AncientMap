@@ -165,10 +165,10 @@ class TestTheQuestion:
         HO.export(run, handoff)
         batch = next(iter(HO.read_rounds(run)[0]["batches"]))
         text = HO.brief(run, handoff, batch)
-        assert "WD5 structured-field re-check" in text and "claude-opus-5-5" in text
+        assert "WD5 structured-field re-check" in text and "claude-sonnet-5-5" in text
         # the model is the registry's for the role, not a constant of the brief (2026-10-09: the
-        # role moved to Opus while this table still said Sonnet)
-        assert "Sonnet" not in text
+        # role moved to Opus and, under D36, back to Sonnet while this table still said Sonnet)
+        assert "Opus" not in text
         assert HO.BRIEF_PARTS[R.RECHECK.name]["model"] == RO.role("field_researcher").model
         other = tmp_path / "handoff2"
         run2 = tmp_path / "run2"

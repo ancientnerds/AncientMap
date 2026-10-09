@@ -138,11 +138,11 @@ def verify_enriched(
     *,
     verdicts: Mapping[str, Sequence[str]] | None = None,
     role: str = "web_verifier",
-    model: str = OH.OPUS_MODEL,
-    agent: str = "opus-wc-verify",
+    model: str = OH.SONNET_MODEL,
+    agent: str = "sonnet-wc-verify",
     coherent: Mapping[str, tuple[bool, Sequence[int]]] | None = None,
 ) -> dict[str, Any] | None:
-    """One verification round, answered by a new Opus agent in the role of the web verifier: every
+    """One verification round, answered by a new Sonnet agent in the role of the web verifier: every
     new sentence SUPPORTED unless `verdicts` says otherwise, every text coherent."""
     from wc import cli
 

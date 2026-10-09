@@ -459,7 +459,8 @@ H=output/remediation/handoff/teaser-wb-pilot-2026-09-27     # $H-<stage>: one di
 ### 5.1 One stage (the same for every stage and every run)
 
 1. `$PY $T export --run $RUN --stage <stage> --handoff $H-<stage>` - the stage's questions, batches of
-   15 (`<stage>-001`, ...; a verify stage 5 per batch). It refuses while an earlier stage waits for
+   15 (`<stage>-001`, ...; a verify stage 8 per batch, 5 in a run selected before 2026-10-09; `--batch-size N` is
+   recorded in the round). It refuses while an earlier stage waits for
    its import, a second export of the stage, and a non-empty directory. `"questions": 0` means nobody
    is due: go to the next stage.
 2. For each batch `B`, a **new** Opus agent - never one that answered another batch of lane WB (the
@@ -524,7 +525,7 @@ sentence-checked March texts (basis `WC`: shorter, trimmed, the bulk of the fina
 2. The ten stages and `outcomes` (5.1) - the per-card web verification included: the pilot's
    final cards are the ones its verifiers found VERIFIED.
 3. `$PY $T judge-export --run $RUN --handoff $H-judge` - every accepted card (the final, VERIFIED
-   card, the one to be written), 5 per batch, to a **fresh** Opus agent with web access (the brief
+   card, the one to be written), 8 per batch (`--batch-size`), to a **fresh** Opus agent with web access (the brief
    from `$PY $T brief --run $RUN --handoff $H-judge --batch-id judge-NNN`) that answered nothing in
    the run - no card written, checked or **verified**. The judge sees only the site's name, country
    and card (`prompts.judge_prompt`, the verifiers' own question) and decides every claim SUPPORTED /

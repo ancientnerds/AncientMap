@@ -132,7 +132,7 @@ class TestTheBriefAndTheShapeCheck:
         R.export_round(out, SPEC, tmp_path / "h1", questions(), now=lambda: NOW)
         text = R.brief(out, SPEC, "r1", "r1-b01")
         assert "running as the role web_verifier" in text
-        assert "--role web_verifier --model claude-opus-5-5" in text
+        assert "--role web_verifier --model claude-sonnet-5-5" in text
         assert (
             f"--lane toy check-answer --stage toy-web --stage-dir {out.resolve().as_posix()} "
             "--round r1 --batch-id r1-b01"
@@ -171,7 +171,7 @@ class TestTheImport:
         decisions = R.decisions_by_site(out)
         assert decisions[A_ID]["status"] == R.DECIDED and decisions[A_ID]["round"] == "r1"
         assert decisions[A_ID]["answered_by"] == "web_verifier:r1-b01"
-        assert decisions[A_ID]["model"] == OH.OPUS_MODEL
+        assert decisions[A_ID]["model"] == OH.SONNET_MODEL
         assert decisions[B_ID]["reason"] == "ok: the answer says no"
         assert R.held_sites(out) == {B_ID: "ok: the answer says no"}
         with pytest.raises(R.RoundError, match="imported already"):
@@ -327,12 +327,12 @@ class TestTheRoleCheck:
         with pytest.raises(R.RoundError, match="recorded under adversarial"):
             run_import(out)
 
-    @pytest.mark.parametrize("stamp", [OH.SONNET_MODEL, OH.HAIKU_MODEL, OH.MINIMAX_MODEL])
+    @pytest.mark.parametrize("stamp", [OH.OPUS_MODEL, OH.HAIKU_MODEL, OH.MINIMAX_MODEL])
     def test_an_answer_stamped_by_another_model_than_the_role_s_is_refused(
         self, out: Path, tmp_path: Path, stamp: str
     ) -> None:
         self.record_with(out, tmp_path, "role", stamp)
-        with pytest.raises(R.RoundError, match="registered to claude-opus-5-5"):
+        with pytest.raises(R.RoundError, match="registered to claude-sonnet-5-5"):
             run_import(out)
         assert not (out / R.DECISIONS_FILE).exists()
 
