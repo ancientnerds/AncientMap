@@ -361,8 +361,8 @@ def test_a_wc_plan_is_read_strictly(tmp_path: Path) -> None:
 #: raw_data is guarded to a raw_data row (executed on a real Postgres 16, `pg_throwaway_check.py`).
 #: Re-pinned 2026-10-09 (lane E, `docs/procedures/SENTENCE_CHECK.md` section 14): invariant 5 reads the
 #: enrichment record instead of the check record for a plan row whose evidence is an enrichment's, and
-#: invariant 6 maps a Phase-4 text of that kind to lane E; both cases are CASEs on `p.evidence`. NOT yet
-#: executed on a real Postgres (no Docker here): `pg_throwaway_check.py` is the first run to make.
+#: invariant 6 maps a Phase-4 text of that kind to lane E; both cases are CASEs on `p.evidence`. Executed on
+#: a throwaway Postgres 16 on 2026-10-09 (`pg_throwaway_check.py`, `check_enrichment`: `ALL OK`).
 WC_SQL_PINS = {
     "null_tests": "b9ac358501af4a6f50a803ac6d8f24565c5c1ebb85d4403bfdfc4975c8048ea3",
     "invariants": "0aeea5d8cc2dac0b74c942c0e7b9d82996d9fa5140c0729fee96ce3ff64f8552",

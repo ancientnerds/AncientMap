@@ -1115,3 +1115,206 @@ check prompts of `mass-2026-09-27-01..05` are built by unchanged code (`prompts.
 `DESCRIPTION_DEFECTS.jsonl` (170 lines, 136 sites) and `export --sites ... --defects ...` gave 136 questions in
 28 batches, every one with its reported claims (160 of 160 sentence-mapped claims matched their sentence, 10 are
 unmapped). Nothing was written to production and nothing was run against it in this fix round.
+
+## 14. Lane E: the enrichment ("Anreicherung", owner decisions D3, D4 and D21 of 2026-10-08; worktree `fix/db-final-p2-enrich`)
+
+Owner decisions (`output/remediation/OWNER_DECISIONS_2026-10-08.md`): **D3** a thin description is enriched first, with
+sourced sentences by the WN mechanics - never padding; **D4** each Shorts-pool site gets one sourced open question
+with a verbatim quote, added to the description so the page pays the hook off; **D21** a disputed site's description
+names both positions with sources, and its card asserts neither. Orchestrator decisions (`MASTER_PLAN.md`): **X1** the
+sentences appended to a Phase-4 (W/S) text need a provenance that can say so - a new lane `E`; **X2** D21 applies to
+shown sites, the retirements (Baltic Sea Anomaly, Yonaguni, the Bosnian pyramids, Richat) stand. Models are D6's:
+the writer runs as the role `field_researcher` (Sonnet 5.5, high), the verifier as `web_verifier` (Sonnet 5.5, high),
+the pilot's judge as `pilot_judge` (Opus 5.5, xhigh), the dispute's adjudicator as `adversarial` (Opus 5.5, high).
+The registry is unchanged (it is exactly D6's twelve roles): the enrichment reuses the role whose model and effort D6
+names for web research. No MiniMax answer is ever counted (section 14.6).
+
+### 14.1 The population
+
+`export --enrich --sites F` asks the listed sites that can be enriched (`wc/enrich.py:classify`); the list is the frame
+(pool-and-thin first, then the Shorts pool in fame order, D3/D4/D27). A listed site is asked when it is a curated, not
+retired site whose shown text is a **basis** - a W or S text whose provenance hashes it, or a March (lane L) or lane-N text
+that a sentence check hashes (`_description_check`, `desc_sha256` and `verified_sha256`) - and whose markers and
+citations agree (`wc4.base_problems`: trimmed, ends on a sentence, markers numbered 1..N by first use, the list exactly
+those N numbers with one URL each, the provenance's sentences matching the text's one for one). Listed and never asked,
+each under its reason: `retired`, `no-description`, `enriched-before` (a text is enriched once), `no-provenance` (an
+unclaimed text - HUMAN_ONLY D7: its origin is not provable, the AI footnote would be false or missing),
+`provenance-unreadable`, `provenance-hash-differs`, `phase4-lane-not-enrichable` (lane T and R), `unchecked-text` (an
+unchecked March or lane-N text: the new sentences would sit beside old ones nobody verified and the text would become a
+card basis it is not - lane WC comes first), `excluded`, `earlier-run`, `base-not-enrichable`, `provenance-misaligned`.
+A lane-E text is asked by no check and no list run (`enriched-text`).
+
+### 14.2 The question and the answer
+
+One Sonnet-high question per site (`prompts_enrich.ENRICH_QUESTION`, stage `enrich`, batches `we-NNNN`, 5 sites): the site
+block (with the English Wikipedia title and the Wikidata item), the sentences it already has (context, no evidence) and the
+classes it may take, in the order they are read: `fact` (up to 3, only a **thin** text - under `enrich.THIN_CHARS` = 300
+characters, markers out - may take them), `dispute_a` and `dispute_b` (both positions or neither, only a site with a
+dispute brief), `open_question` (at most 1, at most 220 characters, sourced by a quote in which a source itself calls the
+matter open - "Never invent a mystery": no hook is the right answer for most sites). The answer
+(`answers.parse_enrich`) is a write answer's shape with a `class` on each sentence: each sentence 25 to 400 characters,
+one sentence that stands alone, 1 to 4 quotes of the check answer's shape, no citation marker, no run of 12 words of its
+own quotes **or of a sentence the description already has** (`MAX_SHARED_RUN`), none twice, together at most 450 characters
+(`MAX_ADDED_CHARS`); no sentence at all is an answer and leaves the site as it is. The numbers are design numbers,
+measured on no corpus: the pilot is where they are measured.
+
+### 14.3 The import, the verification, the build
+
+* `import` validates the round, rebuilds every prompt, parses each answer (`parse_enrich`; a malformed one refuses the import
+  - it is never read as empty), **fetches every quoted page itself** (`<run>/pages/`) and records every written sentence as a
+  `KEEP` on its quotes in the check round's own format (`DRAFTS.jsonl` keeps text and class). No re-ask: a sentence whose
+  quote is not found is dropped (`unverified`). **Every answer must name its role and the role's model**
+  (`enrich.require_role`, `opus_handoff.py answer --role`): a plain name, a MiniMax stamp, Opus as the writer or Sonnet as
+  the judge is refused.
+* `verify-export` (stage `verify`, a **new** agent per batch, role `web_verifier`): the question shows the whole text -
+  the old sentences (S, not under judgement) and the new ones (K, with class and the writer's quotes). SUPPORTED /
+  UNSUPPORTED / WRONG per new sentence; an open question is SUPPORTED only if a reputable source itself calls the matter
+  open; a dispute sentence only if the position is attributed to its holders and not stated as fact. `verify2` for a
+  text a drop changed, drops only. A round's `text_sha256` is the sha256 of the **whole new text** (`wc4.compose(...,
+  base=)` inside `run_verification`): what the verifier was shown and what the record hashes. Independence is by agent
+  name without the role (`wc4.agent_name`): `field_researcher:sonnet-x` and `web_verifier:sonnet-x` are one agent.
+* `build --first-batch N`: the composition is `wc4.compose(decisions, quotes, base=)`: the stored text stays byte for
+  byte with its `[n]`, the citation list keeps the stored entries verbatim, a page the base already cites keeps its number,
+  every other page is numbered from N+1 by first appearance. A site that got no sentence is `not_planned.unchanged`
+  (`FINAL.jsonl` `planned: false`, `cleared: false`): nothing is written for it. The check record is replaced by
+  `raw_data._description_enrichment` (14.4); the journal evidence's `decision` is `wc4.EVIDENCE_DECISION_ENRICH` and its
+  `enrichment` block holds the base (text and citations as stored), the old check record, each new sentence's class, the
+  dispute brief and the thin flag - the database alone composes the text again (`wc4.enrichment_evidence_problems`).
+
+### 14.4 What is written
+
+* `raw_data._description_enrichment` v1 (`wc4.DescriptionEnrichment`, in `WC_KEYS`): run, writer disclosure, the base's
+  sha256, sentence count and citation count, the old check record (`base_check`, unchanged: it describes the base), each new
+  sentence's class, verdict, the citation numbers its markers carry and the sha256 of each verified quote, `desc_sha256`
+  and `verified_sha256` (both the new text's), the verifiers. `_description_check` is removed (its record moved into
+  `base_check`); `description_citations` is the base's list plus the new pages.
+* Provenance by the base: a **W or S** text becomes **lane E** (`model4.EnrichedProvenance`: the Phase-4 record kept whole
+  - attribution of the pinned revision, sources, verbatim spans - `lane: E`, `base_lane`, `ai: generated`, the change note
+  "sentences selected, shortened and extended", `card: null`, and `added`: per citation of each appended sentence its
+  position in the whole text, the citation number and the source - the pinned source's id (`W`) when the cited page is
+  that source's own, else `E<n>`); a **checked March** text keeps **lane L** (hash moved); a **lane-N** text keeps **N**
+  (the `ai_system` names every model of both writes, `wc4.union_ai_system`). `api/services/description_provenance.py`
+  names lane E in `ATTRIBUTION_LANES` (`ENRICHMENT_LANE`): the CC BY-SA attribution line stays and the existing AI
+  footnote shows (D11 keeps the footnote off the site page; the Shorts note and the data stay true).
+* **The transaction** (`write4._wc_invariants`, re-pinned): invariant 5 reads the enrichment record instead of the check
+  record for a plan row whose evidence is an enrichment's (`CASE` on `p.evidence ->> 'decision'`), invariant 6 maps a
+  `phase4` marking of that kind to lane E. **Executed on a real Postgres 16** (2026-10-09, `postgres:16-alpine`,
+  `tests/remediation/pg_throwaway_check.py`, `check_enrichment`: a W text to lane E, a checked L text and a lane-N text
+  rehearsed, written, journalled and reversed; an enriched text carrying the old lane stops at invariant 6, an enrichment
+  record naming another verified text stops at invariant 5; `ALL OK`, WN and list runs unchanged). The plan rules
+  (`validate_rows`) hold the pair, the provenance (`write4._enriched_problems`) and the verification, so nothing the rules
+  refuse reaches the SQL.
+* **The gate** (`write_gate4.py --group WC`) asks the live API's `commit` for lane E as it does for lane N: a plan with a
+  W/S text becoming lane E is refused in a dry run, a rehearsal and an apply until the live API contains the commit that
+  added `ENRICHMENT_LANE` (`git log -S`, never a typed sha). **Deploy first**, then check `commit` at `/`.
+* **The card basis** (`teaser/run.py`): `E` is a basis lane (`BASIS_LANES`; `OWNER_LANE["E"]` = `WE`), and `check_desc_sha256`
+  is `coalesce(_description_enrichment.desc_sha256, _description_check.desc_sha256)`, so an enriched L or N text is a
+  basis through its enrichment record exactly as it was through its check record. Every enriched site with a WB card
+  goes stale (`CP.stale` ties the card to `desc_sha256`): **the description wave precedes the card of each site**, and the
+  static export (WF), Qdrant and IndexNow follow every description write.
+
+### 14.5 The pilot and its gate
+
+`export --enrich --sites F --pilot 20 --seed S` (exactly 20 sites, or the whole population when it is smaller; the same
+minimum sample as WN: at least half of the drawn sites ended with a text the judge judged, and as many kept sentences).
+`judge-export` asks every site that has at least one written sentence; `JUDGE_QUESTION_ENRICH` shows the old text as
+context. The judge (a fresh **Opus** agent, role `pilot_judge`, xhigh) answers SUPPORTED / UNSUPPORTED / WRONG per kept new
+sentence - and **INVENTED** for an open question that may be true but that no reputable source calls open (`parse_judge(...,
+hooks=)` allows it for the hook only). Thresholds `cli.ENRICH_THRESHOLDS`: 0 WRONG with a found quote, at most 5 %
+UNSUPPORTED, 0 incoherent texts, **0 hook invented**. `RESULT.json` records `measured.hook_invented`; `pilot_approval`
+reads it again (a forged `passed` with a missing or non-zero count is refused), and a lane-E mass plan is approved only by a
+**lane-E pilot** (own class `ENRICH`: a WC or WN pilot never approves it, nor the other way round).
+The map's second calibration of the writer - a leave-one-out on about 40 sites whose descriptions already carry a sourced
+open question, the sentence removed, recovery sealed at 70 % - has no tool in this package: build the throwaway read by
+hand (description and provenance rehashed), run it as a pilot and let the judge measure it.
+
+### 14.6 Roles, independence and what is not counted
+
+Every answer of the lane names its role (`<role>:<agent>`) and the role's model; the importers refuse the rest. The writer,
+the verifiers and the judge are different agents (compared without the role). A MiniMax answer is never ground truth
+(master plan X6); an answer recorded before the registry has no role and is not counted here.
+
+### 14.7 The dispute screen (D21, `wc/disputes.py`)
+
+    D="$PY scripts/remediation/wc/disputes.py"
+    $C read --run-dir $RUNS/$R                                  # one read (ROWS.jsonl)
+    $D fetch-categories --run-dir $RUNS/$R                      # CATEGORIES.json: MediaWiki, 50 titles a query
+    $D candidates --run-dir $RUNS/$R --wiki-cache output/remediation/final-2026-10-08/wiki_cache
+    $D recall --run-dir $RUNS/$R                                # the screen vs the known positives, bar 0.9
+    $D export --run-dir $RUNS/$R --handoff $H/dispute-$R-r      # research: Sonnet, role field_researcher
+    $D brief --run-dir $RUNS/$R --handoff $H/dispute-$R-r --batch-id ds-000N     # per batch
+    $D check-answer ... ; $OH validate --dir $H/dispute-$R-r ; $D import --run-dir $RUNS/$R --handoff $H/dispute-$R-r
+    $D adjudicate-export --run-dir $RUNS/$R --handoff $H/dispute-$R-a            # Opus high, role adversarial
+    $D adjudicate-brief ... ; $OH validate ... ; $D adjudicate-import --run-dir $RUNS/$R --handoff $H/dispute-$R-a
+    $D outputs --run-dir $RUNS/$R             # DISPUTES.jsonl, DISPUTE_DEFECTS.jsonl, SUMMARY.json
+
+*Candidates* (in code, shown sites only - retired ones are never listed): the description (`DESCRIPTION_PATTERNS`:
+disputed, hoax, pseudo, natural, claimed, doubt), the English Wikipedia text of the shared cache (two hits of
+`WIKIPEDIA_PATTERN`, `--wiki-min-hits`), the enwiki categories (`CATEGORY_PATTERNS`: Pseudoarchaeology, Archaeological
+controversies, hoaxes and forgeries, Lost City of Z, Rock formations, the esoteric/unexplained family) and the site type
+(anomaly, natural feature). Measured on the read of 2026-10-02 and the cache of 2026-10-08, **without** the categories: 226
+candidates; **with the categories of the eleven known positives** 10 of 11 (Pantelleria Vecchia Bank, whose description
+and article carry no signal, is the miss - the screen's bar of 0.9 is met by one name). The research then costs one Sonnet
+answer per candidate (plus the categories' roughly 90 MediaWiki queries).
+*Research*: disputed or not; two positions (claim, holders, 1 to 4 verbatim quotes each) and the description sentences that
+state one position as fact. The import fetches every page itself and checks every quote (`answers.quote_outcomes`); a
+position with no checked quote ends the site as `unverified`. *Adjudication*: an independent Opus agent looks for the
+reasons it is **not** a dispute; only `dispute` reaches the outputs. *Outputs*: `DISPUTES.jsonl` (briefs, `enrich.DISPUTE_KEYS`)
+and `DISPUTE_DEFECTS.jsonl` (one `DESCRIPTION_DEFECTS.jsonl`-shaped line per asserting sentence).
+*Feeding the lane*: (1) `cli.py defect-sites --defects DISPUTE_DEFECTS.jsonl --out F` and a `wc-list` run
+(`export --sites F --defects F.report.json`, section 11.3): the dispute enters the check question as a reported claim
+(`prompts_sonnet.DEFECTS_HEAD`), so the sentence that states a side as fact is dropped (Pantelleria states the 2015
+reading as fact); (2) after that write and a fresh `read`, `export --enrich --sites S --disputes DISPUTES.jsonl`: each
+listed site gets the dispute block and must name both positions (`dispute_a`, `dispute_b`) or none. The export refuses a
+brief whose asserting sentence is still in the text (`cli._read_disputes`). The card then asserts neither: the card
+contract allows "debated" only when the description says so.
+
+### 14.8 The runbook
+
+    R=enrich-2026-10-DD ; F=output/remediation/enrich/$R.sites.txt          # one site id per line
+    $C read   --run-dir $RUNS/$R
+    $C export --run-dir $RUNS/$R --handoff $H/enrich-$R-w --enrich --sites $F --pilot 20 --seed <S> [--disputes D]
+    #   per batch we-0001.. one Sonnet agent, whose whole instruction is
+    $C brief  --run-dir $RUNS/$R --handoff $H/enrich-$R-w --batch-id we-000N
+    $OH validate --dir $H/enrich-$R-w
+    $C import --run-dir $RUNS/$R --handoff $H/enrich-$R-w
+    $C verify-export --run-dir $RUNS/$R --handoff $H/enrich-$R-verify       # new agents: verify-brief, validate
+    $C verify-import --run-dir $RUNS/$R --handoff $H/enrich-$R-verify      # prints to_verify2
+    #   to_verify2 > 0 (once): verify-export --handoff $H/enrich-$R-verify2 ... verify-import
+    $C build  --run-dir $RUNS/$R --first-batch <past every earlier plan, 4800+>
+    $C judge-export --run-dir $RUNS/$R --handoff $H/enrich-$R-judge         # fresh Opus agents, role pilot_judge
+    $C judge-import --run-dir $RUNS/$R --handoff $H/enrich-$R-judge        # RESULT.json, JUDGE_EXIT=
+    PLANS="--wc-plan <every earlier WC plan, the WC pilot first> --wc-plan $RUNS/$R/WC4.jsonl"
+    $G $PLANS; $G $PLANS --rehearse; $G $PLANS --apply --step 100
+    $V --plan $M/logs/_write_apply_p4wc/LANE_PLAN.jsonl > $L/accept-enrich-pilot.log; $G --accept $L/accept-enrich-pilot.log
+
+The mass run is chunks of a few hundred sites (`export --enrich --sites F2 --limit N [--after ...]`, no judge of its own).
+Order of the work: lane WC written and accepted (14.1: only a checked text is enriched); **the API with lane E deployed**
+(14.4); the dispute repair pass and the enrichment pilot; the chunks; then lane WB's cards, then WF. Undo is `revert4.py
+--stamp-like 'phase4wc:p4wc-NNNN:%'` (the reversal writes the old description and `raw_data` back).
+
+### 14.9 Gates of the code, what changed, known limits (2026-10-09)
+
+**Code.** New: `wc/enrich.py`, `wc/prompts_enrich.py`, `wc/disputes.py`; `tests/remediation/test_enrich.py`,
+`test_enrich_model.py`, `test_enrich_write.py`, `test_disputes.py`, `enrich_fixtures.py`, `tests/api/test_enrich_disclosure.py`.
+Changed: `wc/cli.py` (kind `wn-enrich`, `--enrich`, `--disputes`, the role checks, `ENRICH_THRESHOLDS`, the pilot class,
+agents compared without their role), `wc/answers.py` (`parse_enrich`, the INVENTED verdict), `api/services/description_provenance.py`
+(lane E), `output/remediation/tools/write_gate4.py` (the lane-E guard), `teaser/run.py` (basis, owner, SQL), the mutation sweep
+(`ENRICH_MUTATIONS`, 13 needles re-anchored). **`scripts/remediation/phase4/` (hashed by mass4) changes in three files - say
+so at the merge:** `model4.py` (`Lane.E`, `Changes.SELECTED_AND_EXTENDED`, `AddedSentence`, `EnrichedProvenance`,
+`provenance_from_dict`), `wc4.py` (`ENRICH_KEY` in `WC_KEYS`, `compose(base=)`, `run_verification`/`apply_verification`
+`base`, `Base`, `DescriptionEnrichment`, `enriched_provenance`, `enrichment_pair_problems`, `enrichment_evidence_problems`,
+`agent_name`), `write4.py` (invariants 5 and 6, `_enriched_problems`). Merge into a tree only when no mass4 run executes.
+The prompts of the earlier runs are untouched (`prompts.py`, `prompts_sonnet.py`): they rebuild byte for byte.
+
+**Known limits.**
+- The SQL of invariants 5 and 6 is pinned (`WC_SQL_PINS` re-pinned) and was run on a throwaway Postgres 16
+  (`pg_throwaway_check.py`); production's own `--rehearse` (ends in ROLLBACK) is still the first run against its data.
+- T and R texts, unclaimed texts and unchecked texts are not enriched (14.1); the Phase-5 card key of a W/S provenance is
+  dropped when the text becomes lane E (lane WB writes the new card).
+- The numbers (thin = 300 characters, 3 facts, 220-character hook, 450 characters in all, the 12-word rule against the
+  existing text) are design numbers; the pilot measures them. Expect a hook yield of 35 to 55 %, not 100 %.
+- Roles: the registry has no description-writer role; the writer and the dispute researcher run as `field_researcher`
+  (same model and effort D6 names for web research) and the calibration set of that role is the field researcher's.
+- The dispute screen's recall is measured on eleven names, ten of which it flags; it needs the categories fetched.
+- The static export, Qdrant and IndexNow follow every description write; this package runs none of them.
