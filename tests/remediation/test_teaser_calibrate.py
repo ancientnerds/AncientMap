@@ -265,7 +265,13 @@ def wiki_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             )
             title = f"Zorgat {n}"
             lines.append(
-                {"site_id": site_row(n)["site_id"], "lang": lang, "title": title, "file": file}
+                {
+                    "site_id": site_row(n)["site_id"],
+                    "lang": lang,
+                    "title": title,
+                    # the real cache indexes its files with a backslash (written on Windows)
+                    "file": file.replace("/", chr(92)),
+                }
             )
     (root / "INDEX.jsonl").write_text(
         "".join(json.dumps(row) + "\n" for row in lines), encoding="utf-8"

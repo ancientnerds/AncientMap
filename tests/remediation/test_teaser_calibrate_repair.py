@@ -146,6 +146,7 @@ class TestTheCacheMap:
                 for page in line["pages"]:
                     assert set(page) == {"lang", "title", "file"}
                     assert (wiki_cache / page["file"]).is_file()
+                    assert chr(92) not in page["file"]  # the agent's shell reads forward slashes
 
     def test_a_site_without_a_cached_page_has_a_line_with_no_pages(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)

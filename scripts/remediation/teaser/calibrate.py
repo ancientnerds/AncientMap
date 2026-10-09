@@ -775,7 +775,7 @@ def wiki_map(group: Sequence[Mapping[str, Any]], cache: WikiCache) -> str:
     lines = []
     for job in group:
         pages = [
-            {"lang": lang, "title": row["title"], "file": row["file"]}
+            {"lang": lang, "title": row["title"], "file": row["file"].replace("\\", "/")}
             for lang, row in sorted(cache.pages.get(job["site_id"], {}).items())
         ]
         lines.append(json.dumps({"label": job["key"], "pages": pages}, ensure_ascii=False))
