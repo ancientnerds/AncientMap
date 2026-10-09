@@ -121,7 +121,6 @@ def paper_summary_kwargs(row) -> dict:
         "id": row.id,
         "slug": row.slug,
         "title": row.title or row.question,
-        "question": row.question,
         "summary": row.card_description or None,
         "author": row.published_by,
         "published_at": row.published_at.isoformat() if row.published_at else None,

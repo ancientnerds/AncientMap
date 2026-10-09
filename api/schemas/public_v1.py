@@ -545,7 +545,8 @@ class ResearchPaperSummary(BaseModel):
         description="Paper title",
         json_schema_extra={"example": "Cyclical World Ages in Comparative Mythology"},
     )
-    question: str = Field(description="The research question the paper answers")
+    # No `question`: it is the internal commission text ("For a cosmological novel ..."),
+    # which the paper page never shows (owner decision 2026-10-09).
     summary: str | None = Field(None, description="Short abstract / card description")
     author: str | None = Field(
         None,
