@@ -85,11 +85,21 @@ def reversal_cell(**over: Any) -> A.ChangeRecord:
 
 # ------------------------------------------------------------------------------ the lane shape
 class TestTheLaneShape:
-    def test_a_target_must_be_keyed_by_a_site_id(self) -> None:
+    def test_a_target_is_a_table_with_its_key(self) -> None:
         with pytest.raises(ValueError, match="is not a target"):
-            L.Target("wiki_images", "id", "w")
+            L.Target("wiki_images", "site_id", "w")
         with pytest.raises(ValueError, match="is not a target"):
             L.Target("card_stats", "id", "t")
+        with pytest.raises(ValueError, match="is not a target"):
+            L.Target("site_external_ids", "id", "e")
+
+    def test_a_row_keyed_target_is_a_row_lane_s_and_no_cell_lane_s(self) -> None:
+        """Keyed by a row id of their own, the images, links and names are no cell lane's target:
+        its plan key is a site id (D14, 2026-10-08)."""
+        assert L.WIKI_IMAGES.row_keyed and L.SITE_CONTENT_LINKS.row_keyed and L.SITE_NAMES.row_keyed
+        assert not L.UNIFIED_SITES.row_keyed and not L.CARD_STATS.row_keyed
+        with pytest.raises(ValueError, match="keyed by a row id of its own"):
+            replace(L.SCOPE, target=L.WIKI_IMAGES)
 
     def test_u_is_the_site_and_only_the_site(self) -> None:
         with pytest.raises(ValueError, match="`u` is the site"):

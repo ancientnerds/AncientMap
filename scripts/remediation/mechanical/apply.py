@@ -67,15 +67,18 @@ from mechanical.lane import (  # noqa: E402
     CARD_DISCLOSURE_LANE,
     FIELD_PROV_LANE,
     FIELDS_LANE,
+    IDENTITY_LANE,
     LANE_READBACKS,
     LANES,
     PERIOD_LABEL_LANE,
+    PROBE_SELF,
     SCOPE_REVIEW_LANE,
     T05,
     TEASER_LANE,
     Column,
     Lane,
     fields_readback,
+    identity_readback,
     outside,
     resolve_lane,
     scope_review_readback,
@@ -158,6 +161,10 @@ class ChangeRecord:
     premise: str | None = None
     column: str | None = None
     journal_id: int | None = None
+    #: A row lane's cell (`Lane.row_cells`): the table written and the id of the row in it. The
+    #: record's `site_id` is then the site the cell concerns, never the row's key.
+    table: str | None = None
+    row_id: str | None = None
 
 
 def _text(value: Any) -> str | None:
@@ -191,6 +198,8 @@ def load_records(path: Path) -> list[ChangeRecord]:
                     premise=None if premise is None else str(premise),
                     column=_text(payload.get("column")),
                     journal_id=None if journal_id is None else int(journal_id),
+                    table=_text(payload.get("row_table")),
+                    row_id=_text(payload.get("row_id")),
                 )
             )
     if not records:
@@ -258,6 +267,15 @@ def typed_value(cell: Column, text: str) -> Any:
             return json.loads(text)
         except json.JSONDecodeError as exc:
             raise PlanError(f"{cell.name}: {text!r} is not JSON") from exc
+    if cell.sql_type == "uuid":
+        # the journal records the text, so it must be the spelling the database prints
+        if not UUID_RE.match(text):
+            raise PlanError(f"{cell.name}: {text!r} is not a lower-case uuid")
+        return text
+    if cell.sql_type == "boolean":
+        if text not in ("true", "false"):
+            raise PlanError(f"{cell.name}: {text!r} is not how the database prints a boolean")
+        return text == "true"
     if cell.sql_type == "double precision":
         # compared as the number it is: '51.10' and '51.1' are one value, and the database's own
         # print of a double (`lat::text`) is what a planned old value carries
@@ -272,14 +290,19 @@ def typed_value(cell: Column, text: str) -> Any:
 
 
 def _validate_cell(r: ChangeRecord, lane: Lane, *, rollback: bool) -> None:
-    """One record of a cell lane, in its column's type.
+    """One record of a cell lane, in its column's type: `_validate_value` over the lane's cell."""
+    _validate_value(r, lane.cell(r.column), lane.name, rollback=rollback)
+
+
+def _validate_value(r: ChangeRecord, cell: Column, lane_name: str, *, rollback: bool) -> None:
+    """One cell's old and new value, in the column's type.
 
     NULL is allowed on one side only, and only for a column the lane fills: the old value of a
     write, the new value of its reversal - or, for a column the lane empties (`Column.clears`), the
     new value of a write and the old value of its reversal. Never on both sides: NULL to NULL is no
-    change. Everything else is a column lane's rule, per column.
+    change. Everything else is a column lane's rule, per column. A row lane (`rowlane.py`) checks
+    its cells here too, so the one rule is stated once.
     """
-    cell = lane.cell(r.column)
     empty_side, filled_side = ("new", "old") if rollback else ("old", "new")
     values = {"old": r.old_value, "new": r.new_value}
     if r.old_value is None and r.new_value is None:
@@ -312,7 +335,7 @@ def _validate_cell(r: ChangeRecord, lane: Lane, *, rollback: bool) -> None:
         return
     if cell.allowed_new_values and lane_value not in cell.allowed_new_values:
         raise PlanError(
-            f"{r.site_id}: {lane_value!r} is not a value the {lane.name} lane owns in "
+            f"{r.site_id}: {lane_value!r} is not a value the {lane_name} lane owns in "
             f"{cell.name} ({', '.join(cell.allowed_new_values)})"
         )
 
@@ -331,6 +354,10 @@ def validate_records(
     (`rollback=True`) the value the lane owns is the one being undone, so the owned-value check
     reads `old_value` instead of `new_value`.
     """
+    if lane.row_cells:
+        from mechanical import rowlane
+
+        return rowlane.validate_records(records, source=source, lane=lane, rollback=rollback)
     if not records:
         raise PlanError("refusing to validate an empty plan")
     if source != CURATED_SOURCE:
@@ -417,8 +444,15 @@ def _writable_case(lane: Lane, *, rollback: bool) -> str:
     """Guard 2 of a cell lane: the cell is not a change, not writable in its column, or NULL on a
     side its column never is NULL (the old value of a write, the new value of its reversal, and
     only for a column the lane fills). A column the lane does not own falls to `ELSE true`."""
+    whens = writable_whens([(cell.name, cell) for cell in lane.cells], rollback=rollback)
+    return "CASE p.column_name" + "".join(whens) + "\n                ELSE true END"
+
+
+def writable_whens(cells: Iterable[tuple[str, Column]], *, rollback: bool) -> list[str]:
+    """The `WHEN <key> THEN <refused>` branches of guard 2, one per cell: `key` is what the plan's
+    selector reads - the column's name, or a row lane's `table.column`."""
     whens = []
-    for cell in lane.cells:
+    for key, cell in cells:
         refused = [f"{cell.cast('p.new_value')} IS NOT DISTINCT FROM {cell.cast('p.old_value')}"]
         empty, filled = (
             ("p.new_value", "p.old_value") if rollback else ("p.old_value", "p.new_value")
@@ -429,8 +463,8 @@ def _writable_case(lane: Lane, *, rollback: bool) -> str:
             refused.append(f"{empty} IS NULL")
         if cell.max_chars is not None:
             refused.append(f"length(p.new_value) > {cell.max_chars}")
-        whens.append(f"\n                WHEN {_literal(cell.name)} THEN " + " OR ".join(refused))
-    return "CASE p.column_name" + "".join(whens) + "\n                ELSE true END"
+        whens.append(f"\n                WHEN {_literal(key)} THEN " + " OR ".join(refused))
+    return whens
 
 
 def render_transaction(
@@ -457,6 +491,18 @@ def render_transaction(
     `rollback_change_key`): the two directions of one row are two transitions, not one. A missing
     `run_stamp` is the lane's own - the write's, or the reversal's.
     """
+    if lane.row_cells:
+        from mechanical import rowlane
+
+        return rowlane.render_transaction(
+            records,
+            run_stamp=run_stamp,
+            site_ids=site_ids,
+            source=source,
+            validate=validate,
+            rollback=rollback,
+            lane=lane,
+        )
     records = list(records)
     if not records:
         raise PlanError("refusing to render a transaction with no rows")
@@ -822,6 +868,10 @@ SELECT 'curated sites', count(*)::text
 
 def post_commit_reads(lane: Lane, *, run_stamp: str, source: str = CURATED_SOURCE) -> str:
     """`POST_COMMIT_READS` for one lane: its journal identity, its column(s), its residual."""
+    if lane.row_cells:
+        from mechanical import rowlane
+
+        return rowlane.post_commit_reads(lane, run_stamp=run_stamp, source=source)
     target = lane.target
     if lane.cells:
         column_test = "IN (" + ", ".join(_literal(c) for c in lane.columns) + ")"
@@ -900,6 +950,10 @@ def assert_the_write_landed(
     outside the lane's column. A mismatch raises, so `--apply` cannot report success over a
     read-back that disagrees with the plan it just wrote.
     """
+    if lane.row_cells:
+        from mechanical import rowlane
+
+        return rowlane.assert_the_write_landed(records, run_stamp=run_stamp, lane=lane)
     if not records:
         raise PlanError("refusing to check the read-back of an empty plan")
     stamp = lane.run_stamp if run_stamp is None else run_stamp
@@ -1068,6 +1122,10 @@ SELECT 'temp table {plan_table} left behind',
 
 def rollback_rehearsal_reads(records: Sequence[ChangeRecord], lane: Lane = T05) -> str:
     """The reads after a rehearsed reversal, per planned row and the value *that* row was given."""
+    if lane.row_cells:
+        from mechanical import rowlane
+
+        return rowlane.rollback_rehearsal_reads(records, lane)
     planned, values = _planned_values(records, lane, "written")
     if lane.cells:
         holds = cell_case(lane, "p.written", compare="IS NOT DISTINCT FROM", otherwise="false")
@@ -1302,6 +1360,10 @@ def _cell_value_rows(lane: Lane, columns: Iterable[str]) -> list[dict[str, Any]]
 
 def verify_interests(records: Sequence[ChangeRecord], lane: Lane = T05) -> str:
     """The value table (and hub slug) for the values this plan touches - measured, not asserted."""
+    if lane.row_cells:
+        from mechanical import rowlane
+
+        return rowlane.verify_interests(records, lane)
     if lane.cells:
         wanted_cells = {
             (r.column, "<NULL>" if v is None else v)
@@ -1491,6 +1553,10 @@ def probe_cases(
     `premise`), read from production by the caller. Pure, so a test can check that every guard the
     lane renders has its probe.
     """
+    if lane.row_cells:
+        from mechanical import rowlane
+
+        return rowlane.probe_cases(records, lane, foreign)
     if lane.cells:
         return _cell_probe_cases(records, lane, foreign)
     first = records[0]
@@ -1585,6 +1651,10 @@ NEVER_STORED = {
     "character varying": "A value that was never there",
     "double precision": "-98.7654321",
     "geometry": "SRID=4326;POINT(-179.987654 -89.987654)",
+    "uuid": "00000000-0000-4000-8000-0000000d1e5e",
+    # a boolean has two values, so no value is "never stored": a probe of a boolean cell flips the
+    # cell's own value instead (`rowlane.flipped`)
+    "boolean": "false",
 }
 #: The column guard 2's foreign-column probe writes into: `name`, unless the lane owns it (the L5
 #: name lane does), then `description` - both `unified_sites` text columns no lane owns together.
@@ -1596,6 +1666,8 @@ NOT_OWNED = {
     "character varying": "A value this lane does not own",
     "double precision": "98.7654321",
     "geometry": "SRID=4326;POINT(179.987654 89.987654)",
+    "uuid": "00000000-0000-4000-8000-0000000d1e5f",
+    "boolean": "true",
 }
 
 
@@ -1724,6 +1796,8 @@ def _cell_probe_cases(
         value = next(
             v for v in invariant.probe_values if v not in (chosen.old_value, chosen.new_value)
         )
+        if value == PROBE_SELF:
+            value = chosen.site_id
         probes.append(
             (
                 invariant.probe_suffix,
@@ -1737,6 +1811,10 @@ def _cell_probe_cases(
 
 def unprobed_invariants(records: Sequence[ChangeRecord], lane: Lane) -> list[str]:
     """The site invariants this plan cannot probe: it plans no cell of their probe column."""
+    if lane.row_cells:
+        from mechanical import rowlane
+
+        return rowlane.unprobed_invariants(records, lane)
     columns = {r.column for r in records}
     return [i.says for i in lane.site_invariants if i.probe_column not in columns]
 
@@ -1753,7 +1831,12 @@ def cmd_probe_guards(records: Sequence[ChangeRecord], out: Path, lane: Lane = T0
     """
     # Read as JSON: a name may contain the `|` unaligned psql separates fields on.
     premise = f", {lane.premise_sql} AS premise" if lane.premise_sql is not None else ""
-    if lane.cells:
+    if lane.row_cells:
+        from mechanical import rowlane
+
+        # the probe keeps the first cell's values and swaps in a row of a site of another source
+        foreign = [rowlane.foreign_row(lane, str(records[0].table))]
+    elif lane.cells:
         # the probe keeps the first cell's values and swaps in another source's site: guard 1
         # refuses it for its source (and, off unified_sites, for having no row there at all)
         foreign = psql_json_reader()(
@@ -1829,6 +1912,8 @@ def readback_for(lane: Lane) -> str:
         from mechanical.card_disclosure import disclosure_readback
 
         return disclosure_readback(lane)
+    if IDENTITY_LANE.match(lane.name):
+        return identity_readback(lane)
     from mechanical.card_stats import card_stats_readback
 
     return card_stats_readback(lane)
@@ -1844,7 +1929,9 @@ def _lane_argument(name: str) -> str:
         raise argparse.ArgumentTypeError(
             f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, "
             "scope-review-<wave>, fields-wd1-<wave>-sNNN, card-stats-<wave>, teaser-prov-sNNN, "
-            "teaser-card-sNNN, card-disclosure-sNNN)"
+            "teaser-card-sNNN, card-disclosure-sNNN, dup-merge-move-<wave>, "
+            "dup-merge-retire-<wave>, parent-<wave>)"
+            + (f": {exc.args[0]}" if exc.args and exc.args[0] != name else "")
         ) from exc
     return name
 

@@ -1487,6 +1487,9 @@ def _verdicts(text: str) -> tuple[tuple[str, str], ...] | None:
         return None
     if isinstance(data.get("fields"), dict):
         return _fill_units(data["fields"])
+    identity = _identity_units(data)
+    if identity is not None:
+        return identity
     if isinstance(data.get("sentences"), list):
         pairs = [(f"sentence-{row.get('n')}", str(row.get("verdict"))) for row in data["sentences"]]
     elif isinstance(data.get("kept"), list):
@@ -1494,6 +1497,31 @@ def _verdicts(text: str) -> tuple[tuple[str, str], ...] | None:
     else:
         return None
     return tuple(pairs) + (("coherent", str(data.get("coherent"))),)
+
+
+#: The identity stages' answers (`identity/dup_judge.py`, `identity/parent_judge.py`): a list of
+#: `members` (the duplicate verdict and its recheck) or `children` (the parent question), one row per
+#: site, each with a `verdict` or a `decision` and - when it names one - a `survivor`, `parent` or
+#: `target`. The unit is the site, the verdict what the lane would act on: `MERGE:<survivor>` says
+#: which record survives, so a different survivor is a disagreement.
+_IDENTITY_LISTS = ("members", "children")
+_IDENTITY_TARGETS = ("survivor", "parent", "target")
+
+
+def _identity_units(data: Mapping[str, Any]) -> tuple[tuple[str, str], ...] | None:
+    key = next((k for k in _IDENTITY_LISTS if isinstance(data.get(k), list)), None)
+    if key is None:
+        return None
+    units: list[tuple[str, str]] = []
+    for row in data[key]:
+        if not isinstance(row, dict) or "site_id" not in row:
+            return None
+        verdict = row.get("verdict", row.get("decision"))
+        if verdict is None:
+            return None
+        target = next((row[t] for t in _IDENTITY_TARGETS if row.get(t)), None)
+        units.append((str(row["site_id"]), f"{verdict}:{target}" if target else str(verdict)))
+    return tuple(units)
 
 
 def _fill_units(fields: Any) -> tuple[tuple[str, str], ...] | None:
@@ -1534,12 +1562,15 @@ def _sources(text: str) -> tuple[str, ...]:
     for group in (
         data.get("sentences"),
         data.get("kept"),
+        data.get("members"),
+        data.get("children"),
         (list(fields.values()) if isinstance(fields, dict) else None),
         [data],
     ):
         for row in group or []:
             for quote in (row.get("quotes") if isinstance(row, dict) else None) or []:
-                url = quote.get("url") if isinstance(quote, dict) else None
+                # the older lanes cite a `url`, the identity stages a `source` (the URL of the page)
+                url = (quote.get("url") or quote.get("source")) if isinstance(quote, dict) else None
                 if isinstance(url, str) and url not in urls:
                     urls.append(url)
     return tuple(urls)

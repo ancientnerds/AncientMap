@@ -44,6 +44,14 @@ A lane is a `(table, key column, value column, curated-scope predicate)`:
   text is compared in (`p.old_value::integer`), its width, the values it owns and whether its old
   value may be NULL (a column the lane *fills*, whose reversal restores the NULL).
 
+A third shape is the **row lane** (`row_cells`, D14 of 2026-10-08, `rowlane.py`): its cells are
+columns of rows that carry an id of their own - `wiki_images`, `site_content_links`,
+`unified_site_names` (`ROW_TARGETS`) - and belong to a site only through `site_id`. The plan names
+each cell by table, row id and column, and the site it concerns; the lane's `row_invariants` count
+violations over the whole plan after the write. `dup-merge-move-<wave>` is the one row lane; its
+sisters `dup-merge-retire-<wave>` and `parent-<wave>` are ordinary cell lanes with their own
+survivor and parent checks (see the section "D14 and D25" below).
+
 T05 is the country lane that was applied on 2026-09-21. Its rendering is pinned byte for byte in
 `tests/remediation/test_mechanical.py` (sha256 of `APPLY.sql`/`ROLLBACK.sql` rendered from the
 delivered plan), so it carries no fourth or fifth guard and no server bounds: `allowed_new_values=()`,
@@ -61,9 +69,11 @@ this module - and every lane that does not write card_stats - never imports the 
 from __future__ import annotations
 
 import functools
+import json
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from pathlib import Path
 
 from prod_write import sql_literal  # noqa: F401 - the one quoting rule, re-exported for the lanes
 
@@ -91,10 +101,20 @@ class Residual:
     predicate: str
 
 
-#: The tables a lane may write, each with its key column. Both keys are a site id, which is what
-#: makes the curated-scope predicate (`u.source_id`) and the journal's `site_id_ref` one rule for
-#: every lane. `apply_remediation_change()` allows four more tables; their keys are not site ids.
-TARGET_KEYS = {"unified_sites": "id", "card_stats": "site_id"}
+#: The tables a lane may write, each with its key column. The first two keys are a site id, which is
+#: what makes the curated-scope predicate (`u.source_id`) and the journal's `site_id_ref` one rule
+#: for every cell lane. The other three are keyed by a row id of their own (`ROW_TARGETS`): only a
+#: **row lane** (`Lane.row_cells`, D14) writes them, and its plan names the row beside the site it
+#: belongs to. `apply_remediation_change()` allows one more table (`site_external_ids`).
+TARGET_KEYS = {
+    "unified_sites": "id",
+    "card_stats": "site_id",
+    "wiki_images": "id",
+    "site_content_links": "id",
+    "unified_site_names": "id",
+}
+#: The tables keyed by a row id (an integer serial) and owned by a site through their `site_id`.
+ROW_TARGETS = frozenset({"wiki_images", "site_content_links", "unified_site_names"})
 
 #: The types a cell's planned text is cast to before it is compared with the stored value - the
 #: base types of the columns the cell lanes write (read from the catalog on production,
@@ -102,7 +122,16 @@ TARGET_KEYS = {"unified_sites": "id", "card_stats": "site_id"}
 #: 2026-09-26: `geometry(Point,4326)`, no trigger on the table). Spliced into SQL as `::<type>`,
 #: so the set is closed.
 CELL_TYPES = frozenset(
-    {"integer", "jsonb", "text", "character varying", "double precision", "geometry"}
+    {
+        "integer",
+        "jsonb",
+        "text",
+        "character varying",
+        "double precision",
+        "geometry",
+        "uuid",
+        "boolean",
+    }
 )
 
 
@@ -133,9 +162,18 @@ class Target:
         """Whether the written row is the curated site itself."""
         return self.table == "unified_sites"
 
+    @property
+    def row_keyed(self) -> bool:
+        """Whether the table is keyed by a row id of its own (a row lane writes it): the plan's
+        site id is then the *owner* of the row, never its key."""
+        return self.table in ROW_TARGETS
+
 
 UNIFIED_SITES = Target("unified_sites", "id", "u")
 CARD_STATS = Target("card_stats", "site_id", "t")
+WIKI_IMAGES = Target("wiki_images", "id", "w")
+SITE_CONTENT_LINKS = Target("site_content_links", "id", "c")
+SITE_NAMES = Target("unified_site_names", "id", "n")
 
 
 @dataclass(frozen=True)
@@ -180,6 +218,9 @@ class Column:
 #: What a site invariant's RAISE says after `<label>: <count> ` - spliced into the message literal,
 #: so the lane label's rule holds for it too, and it must name what is wrong.
 _SAYS = re.compile(r"^[A-Za-z0-9 _/,()-]+\Z")
+#: A probe value that stands for the planned site's own id: a site named as its own parent (D25) is
+#: a value no list of fixed ids can hold, because it differs from plan row to plan row.
+PROBE_SELF = "{self}"
 
 
 @dataclass(frozen=True)
@@ -209,10 +250,12 @@ class SiteInvariant:
             raise ValueError(f"{self.says!r} cannot be spliced into a RAISE message")
         if not self.predicate.strip() or "$$" in self.predicate:
             raise ValueError(f"{self.says}: the predicate is empty or would end the DO block")
-        if not _IDENTIFIER.match(self.probe_column) or len(self.probe_values) < 3:
+        if not _IDENTIFIER.match(self.probe_column) or (
+            len(self.probe_values) < 3 and self.probe_values != (PROBE_SELF,)
+        ):
             raise ValueError(
                 f"{self.says}: a probe needs its column and three values (one differs from any "
-                "old and new value)"
+                "old and new value), or the site's own id alone"
             )
         if self.probe_name and not _KEY_PREFIX.match(self.probe_name):
             raise ValueError(f"{self.says}: {self.probe_name!r} is not a probe name like a-b")
@@ -221,6 +264,55 @@ class SiteInvariant:
     def probe_suffix(self) -> str:
         """The probe's name, which ends its run stamp: `invariant-<probe_name or column>`."""
         return f"invariant-{self.probe_name or self.probe_column}"
+
+
+@dataclass(frozen=True)
+class RowCell:
+    """One column of a row-keyed table (`ROW_TARGETS`) that a row lane writes.
+
+    A row lane (`Lane.row_cells`, D14) writes cells of rows that carry an id of their own - the
+    images and content links of a duplicate, the name row that becomes an alias. The plan names
+    each cell by `(table, row id, column)` and, beside it, the site the cell concerns (the journal's
+    `site_id_ref` and the curated-scope check); `column` carries the type the planned text is
+    compared in, its width and the values the lane owns, exactly as a cell lane's.
+    """
+
+    table: str
+    column: Column
+
+    def __post_init__(self) -> None:
+        if self.table not in ROW_TARGETS:
+            raise ValueError(f"{self.table!r} is not a row-keyed table ({sorted(ROW_TARGETS)})")
+
+    @property
+    def qualified(self) -> str:
+        """`table.column`: what a plan cell is looked up by."""
+        return f"{self.table}.{self.column.name}"
+
+
+@dataclass(frozen=True)
+class RowInvariant:
+    """A condition a row lane's whole write must leave true - checked inside the transaction after
+    the loop (the write only; a reversal restores a state the invariant may never have held).
+
+    `bad_sql` is the `FROM ... WHERE ...` of a `SELECT count(*) INTO bad` over the plan's temp
+    table (`{plan}`): the violations it counts; `says` names what is wrong, spliced into the RAISE
+    message like a site invariant's.
+    `probe` names the corruption `--probe-guards` applies to prove the invariant can fail
+    (`rowlane.PROBES`): a probe that the plan cannot carry is reported as not probed.
+    """
+
+    says: str
+    bad_sql: str
+    probe: str
+
+    def __post_init__(self) -> None:
+        if _SAYS.match(self.says) is None:
+            raise ValueError(f"{self.says!r} cannot be spliced into a RAISE message")
+        if "{plan}" not in self.bad_sql or "$$" in self.bad_sql:
+            raise ValueError(f"{self.says}: the count must read the plan and not end the DO block")
+        if not _KEY_PREFIX.match(self.probe):
+            raise ValueError(f"{self.says}: {self.probe!r} is not a probe name like a-b")
 
 
 def typed_case(
@@ -271,6 +363,12 @@ def _check_cell_lane(lane: Lane) -> None:
             f"{lane.name}: a cell lane names its columns in `cells`, not in `column`, "
             "`max_chars` or `allowed_new_values`"
         )
+    if lane.target.row_keyed or lane.row_invariants:
+        raise ValueError(
+            f"{lane.name}: {lane.target.table} is keyed by a row id of its own - a row lane "
+            "(`row_cells`) writes it, a cell lane's plan key is a site id (and its row invariants "
+            "belong to a row lane)"
+        )
     names = [cell.name for cell in lane.cells]
     if len(set(names)) != len(names):
         raise ValueError(f"{lane.name}: a column appears twice in `cells`")
@@ -286,6 +384,31 @@ def _check_cell_lane(lane: Lane) -> None:
             f"{lane.name}: two site invariants share one probe name ({', '.join(probes)}) - a "
             "probe's run stamp would read as the other's; set each one's probe_name"
         )
+
+
+def _check_row_lane(lane: Lane) -> None:
+    """A row lane names its cells in `row_cells` and nothing in the column or cell lane's fields."""
+    if lane.column or lane.max_chars or lane.allowed_new_values or lane.cells:
+        raise ValueError(
+            f"{lane.name}: a row lane names its cells in `row_cells`, not in `column`, "
+            "`max_chars`, `allowed_new_values` or `cells`"
+        )
+    if lane.site_invariants or lane.write_invariant is not None or lane.reverses_journal:
+        raise ValueError(
+            f"{lane.name}: a row lane checks `row_invariants`; site invariants, a write invariant "
+            "and a journal reversal belong to a cell lane"
+        )
+    if lane.target is not UNIFIED_SITES:
+        raise ValueError(
+            f"{lane.name}: a row lane's curated-scope predicate reads unified_sites (`u`); the "
+            "tables it writes are named by its `row_cells`"
+        )
+    names = [cell.qualified for cell in lane.row_cells]
+    if len({*names}) < len(names):
+        raise ValueError(f"{lane.name}: a cell appears twice in `row_cells`")
+    probes = [invariant.probe for invariant in lane.row_invariants]
+    if len({*probes}) < len(probes):
+        raise ValueError(f"{lane.name}: two row invariants share one probe ({', '.join(probes)})")
 
 
 @dataclass(frozen=True)
@@ -319,12 +442,21 @@ class Lane:
     write_invariant: Residual | None = None
     #: Conditions every planned site satisfies after the write (`SiteInvariant`); cell lanes only.
     site_invariants: tuple[SiteInvariant, ...] = ()
+    #: A **row lane** (D14, 2026-10-08) writes cells of row-keyed tables (`ROW_TARGETS`) instead of
+    #: columns of a site: each plan cell names `(table, row id, column)` and the site it concerns.
+    row_cells: tuple[RowCell, ...] = ()
+    #: Conditions the row lane's whole write leaves true (`RowInvariant`).
+    row_invariants: tuple[RowInvariant, ...] = ()
 
     def __post_init__(self) -> None:
         """Every field that reaches SQL unquoted is checked here, once, instead of trusted."""
-        if self.cells:
+        if self.row_cells:
+            _check_row_lane(self)
+        elif self.cells:
             _check_cell_lane(self)
         else:
+            if self.row_invariants:
+                raise ValueError(f"{self.name}: row invariants belong to a row lane")
             if self.site_invariants:
                 raise ValueError(f"{self.name}: site invariants belong to a cell lane")
             _check_column_lane(self)
@@ -364,8 +496,26 @@ class Lane:
 
     @property
     def columns(self) -> tuple[str, ...]:
-        """The columns this lane writes: its one column, or its cells' names."""
+        """The columns this lane writes: its one column, its cells' names, or - on a row lane -
+        each cell as `table.column`."""
+        if self.row_cells:
+            return tuple(cell.qualified for cell in self.row_cells)
         return tuple(cell.name for cell in self.cells) if self.cells else (self.column,)
+
+    def row_cell(self, table: str | None, column: str | None) -> RowCell:
+        """The row cell `table.column` - refused unless this is a row lane that owns it."""
+        for cell in self.row_cells:
+            if cell.table == table and cell.column.name == column:
+                return cell
+        raise ValueError(f"{self.name}: {table}.{column} is not a cell this lane writes")
+
+    def row_change_key(self, table: str, row_id: str, column: str) -> str:
+        """The journal's identity of one row lane cell's *write*: the cell, not the site."""
+        return f"{self.key_prefix}:{table}:{row_id}:{column}"
+
+    def row_rollback_change_key(self, table: str, row_id: str, column: str) -> str:
+        """The journal's identity of one row lane cell's *reversal*."""
+        return f"{self.key_prefix}-rollback:{table}:{row_id}:{column}"
 
     def cell(self, column: str | None) -> Column:
         """The cell spec of `column` - refused unless this is a cell lane that owns it."""
@@ -472,7 +622,9 @@ UK_PARTS = Lane(
 # ------------------------------------------------------------------------------- the read-backs
 def written_where(lane: Lane) -> str:
     """Where a lane's journal rows belong, in words: `unified_sites.country`, or a cell lane's
-    `card_stats.(mystery, rarity_tier)`."""
+    `card_stats.(mystery, rarity_tier)`, or a row lane's `table.column` list."""
+    if lane.row_cells:
+        return ", ".join(lane.columns)
     if not lane.cells:
         return f"unified_sites.{lane.column}"
     return f"{lane.target.table}.({', '.join(lane.columns)})"
@@ -480,6 +632,9 @@ def written_where(lane: Lane) -> str:
 
 def outside(lane: Lane, prefix: str = "") -> str:
     """SQL: a journal row (its columns prefixed with `prefix`) that is none of this lane's cells."""
+    if lane.row_cells:
+        listed = ", ".join(sql_literal(column) for column in lane.columns)
+        return f"({prefix}table_name || '.' || {prefix}column_name NOT IN ({listed}))"
     if not lane.cells:
         return (
             f"({prefix}table_name <> 'unified_sites' OR {prefix}column_name <> "
@@ -505,6 +660,32 @@ def journal_readback(lane: Lane, extra: Sequence[tuple[str, str]]) -> str:
     `--apply` must be comparable line by line.
     """
     stamp = sql_literal(lane.run_stamp)
+    # A row lane's journal rows are keyed by the row of another table; the site they concern is
+    # their `site_id_ref`, which is therefore the curated-scope read (and never the row key).
+    row_whose = (
+        (
+            "journal rows for this run on non-curated sites",
+            "FROM remediation_change_log l LEFT JOIN unified_sites u ON u.id = l.site_id_ref "
+            f"WHERE l.run_stamp = {stamp} AND (u.id IS NULL OR u.source_id <> 'ancient_nerds')",
+        ),
+        (
+            "journal rows for this run with no site_id_ref",
+            f"FROM remediation_change_log WHERE run_stamp = {stamp} AND site_id_ref IS NULL",
+        ),
+    )
+    site_whose = (
+        (
+            "journal rows for this run on non-curated rows",
+            "FROM remediation_change_log l LEFT JOIN unified_sites u ON u.id::text = l.row_pk "
+            f"WHERE l.run_stamp = {stamp} AND (u.id IS NULL OR u.source_id <> 'ancient_nerds')",
+        ),
+        (
+            "journal rows for this run with a site_id_ref of another site",
+            f"FROM remediation_change_log WHERE run_stamp = {stamp} "
+            "AND site_id_ref::text IS DISTINCT FROM row_pk",
+        ),
+    )
+    whose = row_whose if lane.row_cells else site_whose
     metrics: list[tuple[str, str]] = [
         ("curated sites", "FROM unified_sites WHERE source_id = 'ancient_nerds'"),
         *extra,
@@ -524,16 +705,7 @@ def journal_readback(lane: Lane, extra: Sequence[tuple[str, str]]) -> str:
             f"journal rows for this run outside {written_where(lane)}",
             f"FROM remediation_change_log WHERE run_stamp = {stamp} AND {outside(lane)}",
         ),
-        (
-            "journal rows for this run on non-curated rows",
-            "FROM remediation_change_log l LEFT JOIN unified_sites u ON u.id::text = l.row_pk "
-            f"WHERE l.run_stamp = {stamp} AND (u.id IS NULL OR u.source_id <> 'ancient_nerds')",
-        ),
-        (
-            "journal rows for this run with a site_id_ref of another site",
-            f"FROM remediation_change_log WHERE run_stamp = {stamp} "
-            "AND site_id_ref::text IS DISTINCT FROM row_pk",
-        ),
+        *whose,
     ]
     body = "\nUNION ALL\n".join(
         f"SELECT {sql_literal(metric)} AS metric, count(*)::text AS value\n  {source}"
@@ -1820,13 +1992,30 @@ def _survivor_far(metres: int) -> str:
 _SURVIVOR_FAR = _survivor_far(DUPLICATE_METRES)
 
 
-def duplicate_survivor_invariants(metres: int) -> tuple[SiteInvariant, ...]:
+def duplicate_survivor_invariants(
+    metres: int, limits: Mapping[str, int] | None = None
+) -> tuple[SiteInvariant, ...]:
     """A retired duplicate's survivor is a visible curated row within `metres` - three checks after
     the write, one per way it can fail, disjoint, so each probe is refused by its own. Each probe
     writes `duplicate_of:<a row of that kind>` (read 2026-09-29): an id no row has and a GeoNames
     row; three duplicates scope-e4 retired; three visible curated sites 364 km to 11,400 km away
     (so beyond any `metres` a lane allows). The scope lane's rule and the Chiapa hide use 100 m
-    (`DUPLICATE_METRES`); the owner-decided retirements of `dup-retire` 2,000 m."""
+    (`DUPLICATE_METRES`); the owner-decided retirements of `dup-retire` 2,000 m.
+
+    `limits` (`dup-merge-retire-<wave>`, D14) gives a loser its own distance limit - the pairs the
+    evidence puts further apart than `metres`, each with a decision that says why - and the third
+    check reads it per loser, `metres` for every loser it does not name."""
+    if limits:
+        per_loser = (
+            "CASE CAST(u.id AS text) "
+            + " ".join(f"WHEN {sql_literal(k)} THEN {int(v)}" for k, v in sorted(limits.items()))
+            + f" ELSE {metres} END"
+        )
+        far = f"{sphere_metres('s', 'u')} > {per_loser}"
+        says_far = f"planned site(s) name a survivor further than their limit ({metres} m or more)"
+    else:
+        far = _survivor_far(metres)
+        says_far = f"planned site(s) name a survivor further than {metres} m"
     return (
         SiteInvariant(
             says="planned site(s) name no curated site as their survivor",
@@ -1854,10 +2043,10 @@ def duplicate_survivor_invariants(metres: int) -> tuple[SiteInvariant, ...]:
             probe_name="survivor-retired",
         ),
         SiteInvariant(
-            says=f"planned site(s) name a survivor further than {metres} m",
+            says=says_far,
             predicate=(
                 f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_NAMES_SURVIVOR} AND "
-                f"{not_retired('s')} AND {_survivor_far(metres)})"
+                f"{not_retired('s')} AND {far})"
             ),
             probe_column="scope_reason",
             probe_values=(
@@ -2112,6 +2301,485 @@ DUP_RETIRE_READBACK = journal_readback(
 LANES[DUP_RETIRE.name] = DUP_RETIRE
 LANE_READBACKS[DUP_RETIRE.name] = DUP_RETIRE_READBACK
 
+# ----------------------------------- D14 and D25: merge the duplicates, parents of components
+#: The three lane families of the identity workstream (owner decisions D14 and D25 of 2026-10-08),
+#: one lane per wave of at most 100 sites, each with a run stamp, a key prefix and a directory of
+#: its own - a stamp is applied once (`apply.py` refuses a stamp that journals rows already):
+#:
+#: * `dup-merge-move-<wave>` - a **row lane**: the images, content links and the name row of a
+#:   duplicate go to the survivor, in one transaction (`MOVE_CELLS`);
+#: * `dup-merge-retire-<wave>` - the loser is retired as `duplicate_of:<survivor>`, `dup-retire`'s
+#:   two cells and three survivor checks, its pairs read from the wave's `PAIRS.json`;
+#: * `parent-<wave>` - `parent_site_id` of a component site (`PARENT_CELLS`).
+#:
+#: The order is move, then retire; the reversal is retire, then move (the retire's premise counts
+#: what the loser holds after the move, so the retire's reversal must come first).
+_WAVE = r"\d{4}-\d{2}-\d{2}[a-z]?"
+DUP_MERGE_MOVE_LANE = re.compile(rf"^dup-merge-move-({_WAVE})\Z")
+DUP_MERGE_RETIRE_LANE = re.compile(rf"^dup-merge-retire-({_WAVE})\Z")
+PARENT_LANE = re.compile(rf"^parent-({_WAVE})\Z")
+#: Every lane of the family; `readback_for` reads one regex.
+IDENTITY_LANE = re.compile(rf"^(?:dup-merge-(?:move|retire)|parent)-({_WAVE})\Z")
+DUP_MERGE_ROOT = "mechanical_dup_merge"
+PARENT_ROOT = "mechanical_parent"
+PAIRS_FILE = "PAIRS.json"
+#: Where the run tree lives (`output/remediation/`, gitignored): a wave's `PAIRS.json` is read from
+#: there, by the lane factory and by the planners, so the lane and its plan name the same pairs.
+REMEDIATION_ROOT = Path(__file__).resolve().parents[3] / "output" / "remediation"
+PARENT_METRES = 5000
+_UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z")
+
+
+@dataclass(frozen=True)
+class MergePair:
+    """One duplicate pair of a wave: the loser, the survivor it moves onto and the distance the
+    survivor may be at (`DUP_RETIRE_METRES` unless the wave's decision gives evidence for more)."""
+
+    loser: str
+    survivor: str
+    metres_limit: int = DUP_RETIRE_METRES
+
+    def __post_init__(self) -> None:
+        if not _UUID.match(self.loser) or not _UUID.match(self.survivor):
+            raise ValueError(f"{self.loser!r} / {self.survivor!r}: a pair is two lower-case uuids")
+        if self.loser == self.survivor:
+            raise ValueError(f"{self.loser}: a site is not its own survivor")
+        if self.metres_limit < DUP_RETIRE_METRES:
+            raise ValueError(
+                f"{self.loser}: the limit {self.metres_limit} m is below the default "
+                f"{DUP_RETIRE_METRES} m - a limit only ever widens, with evidence"
+            )
+
+
+def check_wave(wave: str) -> None:
+    """`wave` is a date label like `2026-10-10` or `2026-10-10b`: the only labels `resolve_lane` finds."""
+    if re.match(rf"^{_WAVE}\Z", wave) is None:
+        raise ValueError(f"{wave!r} is not a wave label like 2026-10-10 or 2026-10-10b")
+
+
+def check_pairs(pairs: Sequence[MergePair]) -> None:
+    """A wave's pairs: one pair per loser, and no survivor that is another pair's loser - a chain
+    retires the survivor of the pair before it, and the duplicates pointing at it with it."""
+    if not pairs:
+        raise ValueError("a wave holds at least one pair")
+    losers = [p.loser for p in pairs]
+    if len(set(losers)) != len(losers):
+        raise ValueError("a loser appears in two pairs of the wave")
+    chained = sorted({p.survivor for p in pairs} & set(losers))
+    if chained:
+        raise ValueError(f"{chained}: a survivor is another pair's loser - a chain, not a pair")
+
+
+def pairs_path(wave: str, root: Path | None = None) -> Path:
+    """`<run tree>/mechanical_dup_merge/<wave>/PAIRS.json`."""
+    check_wave(wave)
+    return (root or REMEDIATION_ROOT) / DUP_MERGE_ROOT / wave / PAIRS_FILE
+
+
+def load_pairs(wave: str, root: Path | None = None) -> tuple[MergePair, ...]:
+    """The pairs of a wave, read from its `PAIRS.json`: `{"wave": W, "pairs": [{"loser",
+    "survivor", "metres_limit"?}, ...]}`. A file of another wave is refused."""
+    path = pairs_path(wave, root)
+    if not path.exists():
+        raise FileNotFoundError(f"{path} does not exist - plan the wave first (dup_merge.py waves)")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("wave") != wave:
+        raise ValueError(f"{path} is the file of wave {data.get('wave')!r}, not {wave!r}")
+    pairs = tuple(
+        MergePair(p["loser"], p["survivor"], int(p.get("metres_limit", DUP_RETIRE_METRES)))
+        for p in data["pairs"]
+    )
+    check_pairs(pairs)
+    return pairs
+
+
+def _pair_case(subject: str, pairs: Sequence[MergePair], pick: str) -> str:
+    """SQL: `CASE <subject> WHEN '<loser>' THEN <pair.pick> ... END` - the lane's own data, the way
+    `DUP_RETIRE` names its survivors (`_SURVIVOR_OF`); NULL for a site the lane names no pair for."""
+    whens = " ".join(
+        f"WHEN {sql_literal(p.loser)} THEN "
+        + (sql_literal(p.survivor) if pick == "survivor" else str(p.metres_limit))
+        for p in pairs
+    )
+    return f"CASE {subject} {whens} END"
+
+
+#: What the move rests on: the loser's name and external ids, and its survivor's. Not the counts of
+#: what it holds - the move changes those, and the reversal runs after it.
+def _move_premise_sql(pairs: Sequence[MergePair]) -> str:
+    survivor_of = _pair_case("CAST(u.id AS text)", pairs, "survivor")
+    return (
+        f"u.name || ' | ' || {external_ids_sql('u')} || ' | survivor ' || coalesce((SELECT "
+        f"s.name || ' | ' || {external_ids_sql('s')} FROM unified_sites s "
+        f"WHERE CAST(s.id AS text) = {survivor_of}), '')"
+    )
+
+
+#: The cells a duplicate's move writes: its images and content links change site, a hero that
+#: would be a second hero is demoted, and its name row becomes an alias of the survivor.
+MOVE_CELLS = (
+    RowCell("wiki_images", Column("site_id", "uuid")),
+    RowCell("wiki_images", Column("is_hero", "boolean", allowed_new_values=("false",))),
+    RowCell("site_content_links", Column("site_id", "uuid")),
+    RowCell("unified_site_names", Column("site_id", "uuid")),
+    RowCell(
+        "unified_site_names",
+        Column(
+            "name_type",
+            "character varying",
+            max_chars=50,
+            allowed_new_values=("alias",),
+            fills_null=True,
+        ),
+    ),
+)
+_MOVED_TO = "CAST(s.id AS text) = q.new_value"
+
+
+def move_invariants(pairs: Sequence[MergePair]) -> tuple[RowInvariant, ...]:
+    """What the move leaves true, five checks after the write, each with its own probe
+    (`rowlane.PROBES`): every moved cell lands on a shown curated site, on the survivor the lane
+    names for its site and within that pair's distance, no touched site ends with two live heroes,
+    and every loser's name is a name of its survivor."""
+    survivor_q = _pair_case("CAST(q.site_id AS text)", pairs, "survivor")
+    limit_q = _pair_case("CAST(q.site_id AS text)", pairs, "limit")
+    survivor_t = _pair_case("CAST(t.sid AS text)", pairs, "survivor")
+    return (
+        RowInvariant(
+            says="planned cell(s) move to a site that is not a curated one",
+            bad_sql=(
+                "FROM {plan} q WHERE q.column_name = 'site_id' AND NOT EXISTS (SELECT 1 FROM "
+                f"unified_sites s WHERE {_MOVED_TO} AND s.source_id = 'ancient_nerds')"
+            ),
+            probe="dest-curated",
+        ),
+        RowInvariant(
+            says="planned cell(s) move to a retired site",
+            bad_sql=(
+                "FROM {plan} q WHERE q.column_name = 'site_id' AND EXISTS (SELECT 1 FROM "
+                f"unified_sites s WHERE {_MOVED_TO} AND s.source_id = 'ancient_nerds' AND "
+                f"{is_retired('s')})"
+            ),
+            probe="dest-shown",
+        ),
+        RowInvariant(
+            says="planned cell(s) move to a site other than the survivor named for their site "
+            "or beyond its distance limit",
+            bad_sql=(
+                "FROM {plan} q JOIN unified_sites l ON l.id = q.site_id "
+                f"WHERE q.column_name = 'site_id' AND (q.new_value IS DISTINCT FROM {survivor_q} "
+                f"OR EXISTS (SELECT 1 FROM unified_sites s WHERE {_MOVED_TO} AND "
+                f"{sphere_metres('s', 'l')} > {limit_q}))"
+            ),
+            probe="dest-named-near",
+        ),
+        RowInvariant(
+            says="touched site(s) end with more than one live hero",
+            bad_sql=(
+                "FROM (SELECT CAST(q.site_id AS text) AS sid FROM {plan} q UNION SELECT "
+                "q.new_value FROM {plan} q WHERE q.column_name = 'site_id') t WHERE (SELECT "
+                "count(*) FROM wiki_images w WHERE CAST(w.site_id AS text) = t.sid AND "
+                "w.is_hero IS TRUE AND w.is_excluded IS NOT TRUE) > 1"
+            ),
+            probe="hero-cell",
+        ),
+        RowInvariant(
+            says="planned site(s) end without their name among the names of their survivor",
+            bad_sql=(
+                "FROM (SELECT DISTINCT CAST(q.site_id AS text) AS sid FROM {plan} q) t "
+                "JOIN unified_sites l ON CAST(l.id AS text) = t.sid WHERE NOT EXISTS (SELECT 1 "
+                f"FROM unified_site_names n WHERE CAST(n.site_id AS text) = {survivor_t} "
+                f"AND n.name_normalized = {site_key_sql('l.name')})"
+            ),
+            probe="alias-cells",
+        ),
+    )
+
+
+def _retired_duplicates_holding() -> Residual:
+    return Residual(
+        "retired duplicates still holding an image or a content link",
+        f"{is_retired()} AND scope_reason LIKE {sql_literal(DUPLICATE_PREFIX + '%')} AND "
+        "(EXISTS (SELECT 1 FROM wiki_images w WHERE w.site_id = unified_sites.id) OR "
+        "EXISTS (SELECT 1 FROM site_content_links c WHERE c.site_id = unified_sites.id))",
+    )
+
+
+def dup_merge_move_lane(wave: str, pairs: Sequence[MergePair]) -> Lane:
+    """The row lane of one wave's moves (`dup-merge-move-<wave>`), for exactly `pairs`."""
+    check_wave(wave)
+    check_pairs(pairs)
+    residual = _retired_duplicates_holding()
+    return Lane(
+        name=f"dup-merge-move-{wave}",
+        key_prefix=f"dup-merge-move-{wave}",
+        run_stamp=f"{wave}_mechanical-dup-merge-move",
+        test_id="D14/dup-merge-move",
+        confidence="two_source",
+        label="D14 duplicate move",
+        plan_table="_dup_merge_move_plan",
+        out_dir_name=f"{DUP_MERGE_ROOT}/{wave}/move",
+        post_commit_residual=residual,
+        rehearsal_residual=residual,
+        premise_sql=_move_premise_sql(pairs),
+        lock_timeout=LOCK_TIMEOUT,
+        statement_timeout=STATEMENT_TIMEOUT,
+        row_cells=MOVE_CELLS,
+        row_invariants=move_invariants(pairs),
+    )
+
+
+def _retire_premise_sql(pairs: Sequence[MergePair]) -> str:
+    """The retirement's premise: `DUP_RETIRE`'s - the loser's name, what it holds (after the move),
+    its external ids and its survivor's name and ids - and how many live images the survivor has,
+    so a loser whose images are shown is never retired onto a survivor that shows none."""
+    survivor_of = _pair_case("CAST(u.id AS text)", pairs, "survivor")
+    loser = " || ' | ' || ".join(("u.name", EMPTY_ROW_PREMISE_SQL, NAME_FIX_PREMISE_SQL))
+    return (
+        loser + " || ' | survivor ' || coalesce((SELECT s.name || ' | ' || "
+        f"{external_ids_sql('s')} || ' | live images ' || CAST((SELECT count(*) FROM wiki_images "
+        "w WHERE w.site_id = s.id AND w.is_excluded IS NOT TRUE) AS text) "
+        f"FROM unified_sites s WHERE CAST(s.id AS text) = {survivor_of}), '')"
+    )
+
+
+def dup_merge_retire_lane(wave: str, pairs: Sequence[MergePair]) -> Lane:
+    """The retirement of one wave's losers (`dup-merge-retire-<wave>`): `dup-retire`'s cells,
+    residual and survivor checks, over the wave's own pairs and their distance limits."""
+    check_wave(wave)
+    check_pairs(pairs)
+    limits = {p.loser: p.metres_limit for p in pairs if p.metres_limit != DUP_RETIRE_METRES}
+    return Lane(
+        name=f"dup-merge-retire-{wave}",
+        key_prefix=f"dup-merge-retire-{wave}",
+        run_stamp=f"{wave}_mechanical-dup-merge-retire",
+        test_id="D14/dup-merge-retire",
+        confidence="two_source",
+        label="D14 duplicate retirement",
+        plan_table="_dup_merge_retire_plan",
+        out_dir_name=f"{DUP_MERGE_ROOT}/{wave}/retire",
+        post_commit_residual=RETIRED_DUPLICATES,
+        rehearsal_residual=RETIRED_DUPLICATES,
+        premise_sql=_retire_premise_sql(pairs),
+        lock_timeout=LOCK_TIMEOUT,
+        statement_timeout=STATEMENT_TIMEOUT,
+        cells=DUPLICATE_HIDE_CELLS,
+        site_invariants=duplicate_survivor_invariants(DUP_RETIRE_METRES, limits),
+    )
+
+
+#: A component site's parent (`parent_site_id`, NULL on every row until now): the child's name,
+#: country and point are what the decision rests on. The parent's own validity is the invariants'.
+PARENT_CELLS = (Column("parent_site_id", "uuid", fills_null=True),)
+PARENT_PREMISE_SQL = (
+    "u.name || ' | ' || coalesce(u.country, 'NULL') || ' | ' || CAST(u.lat AS text) || ', ' || "
+    "CAST(u.lon AS text)"
+)
+_PARENT = "s.id = u.parent_site_id AND s.source_id = 'ancient_nerds'"
+
+
+def parent_invariants(metres: int = PARENT_METRES) -> tuple[SiteInvariant, ...]:
+    """A child's parent is a shown curated site of its country within `metres`, at depth one: four
+    checks after the write, each probed with a value of its own kind (a site that is its own parent
+    is the site's own id, `PROBE_SELF`). The first three are disjoint; the fourth is probed with
+    a parent that passes them."""
+    return (
+        SiteInvariant(
+            says="planned site(s) name no curated site as their parent",
+            predicate=f"NOT EXISTS (SELECT 1 FROM unified_sites s WHERE {_PARENT})",
+            probe_column="parent_site_id",
+            probe_values=(
+                "00000000-0000-0000-0000-000000000000",
+                "8db5555a-a9a3-417b-944c-6ec0c04de0db",  # GeoNames Chiapa
+                "ffffffff-ffff-4fff-8fff-ffffffffffff",
+            ),
+            probe_name="parent-not-curated",
+        ),
+        SiteInvariant(
+            says="planned site(s) name a retired site as their parent",
+            predicate=f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_PARENT} AND {is_retired('s')})",
+            probe_column="parent_site_id",
+            probe_values=(
+                "04d8ce82-4fa3-4e48-88b7-bb41b354260c",  # Olympos Ruins
+                "07fb4e2f-26e5-4720-a949-9c28d4712e11",  # Templo Romano Evora
+                "13c3f25f-3887-49c1-9492-cf7e512e5782",  # Alba Fucens
+            ),
+            probe_name="parent-retired",
+        ),
+        SiteInvariant(
+            says=f"planned site(s) name a parent in another country or further than {metres} m",
+            predicate=(
+                f"EXISTS (SELECT 1 FROM unified_sites s WHERE {_PARENT} AND {not_retired('s')} "
+                f"AND (s.country IS DISTINCT FROM u.country OR {sphere_metres('s', 'u')} > {metres}))"
+            ),
+            probe_column="parent_site_id",
+            probe_values=(
+                "30d3fb78-6b80-42f9-87f8-7616e63bec4f",  # Tikal
+                "74145e9b-76a6-48de-a902-08ecb2f1f7bb",  # Achladia
+                "6aa4c8de-3794-42fe-b68e-6b6ab77bd8ed",  # Delphinion
+            ),
+            probe_name="parent-far",
+        ),
+        SiteInvariant(
+            says="planned site(s) are their own parent or sit in a chain",
+            predicate=(
+                "u.parent_site_id = u.id OR EXISTS (SELECT 1 FROM unified_sites s WHERE "
+                "s.id = u.parent_site_id AND s.parent_site_id IS NOT NULL) OR EXISTS (SELECT 1 "
+                "FROM unified_sites c WHERE c.parent_site_id = u.id)"
+            ),
+            probe_column="parent_site_id",
+            probe_values=(PROBE_SELF,),
+            probe_name="parent-depth",
+        ),
+    )
+
+
+_HAS_PARENT = Residual(
+    "curated sites that name a parent",
+    "parent_site_id IS NOT NULL",
+)
+
+
+def parent_lane(wave: str) -> Lane:
+    """The `parent_site_id` fill of one wave (`parent-<wave>`)."""
+    check_wave(wave)
+    return Lane(
+        name=f"parent-{wave}",
+        key_prefix=f"parent-{wave}",
+        run_stamp=f"{wave}_mechanical-parent",
+        test_id="D25/parent-site",
+        confidence="one_source",
+        label="D25 parent site",
+        plan_table="_parent_plan",
+        out_dir_name=f"{PARENT_ROOT}/{wave}",
+        post_commit_residual=_HAS_PARENT,
+        rehearsal_residual=_HAS_PARENT,
+        premise_sql=PARENT_PREMISE_SQL,
+        lock_timeout=LOCK_TIMEOUT,
+        statement_timeout=STATEMENT_TIMEOUT,
+        cells=PARENT_CELLS,
+        site_invariants=parent_invariants(),
+    )
+
+
+_ALL_CURATED = (
+    "FROM {table} x JOIN unified_sites u ON u.id = x.site_id WHERE u.source_id = 'ancient_nerds'"
+)
+
+
+@functools.cache
+def identity_readback(lane: Lane) -> str:
+    """The read-only verification of an identity wave, before and after its write.
+
+    Every family prints the journal metrics of `journal_readback` and its own measures: the move
+    the totals that must not change (a move shifts rows between curated sites) and what is left on
+    retired duplicates; the retirement the survivor checks; the parents the depth, country and
+    distance of every child.
+    """
+    if DUP_MERGE_MOVE_LANE.match(lane.name) is not None:
+        live_heroes = (
+            "FROM (SELECT w.site_id FROM wiki_images w JOIN unified_sites u ON u.id = w.site_id "
+            "WHERE u.source_id = 'ancient_nerds' AND w.is_hero IS TRUE AND w.is_excluded IS NOT "
+            "TRUE GROUP BY w.site_id HAVING count(*) > 1) x"
+        )
+        return journal_readback(
+            lane,
+            [
+                (
+                    lane.post_commit_residual.metric,
+                    _CURATED_ROWS + lane.post_commit_residual.predicate,
+                ),
+                ("wiki_images rows of curated sites", _ALL_CURATED.format(table="wiki_images")),
+                (
+                    "site_content_links rows of curated sites",
+                    _ALL_CURATED.format(table="site_content_links"),
+                ),
+                (
+                    "unified_site_names rows of curated sites",
+                    _ALL_CURATED.format(table="unified_site_names"),
+                ),
+                ("curated sites with more than one live hero", live_heroes),
+                (
+                    "retired duplicates whose name is not among the names of their survivor",
+                    "FROM unified_sites d WHERE d.source_id = 'ancient_nerds' AND "
+                    f"{is_retired('d')} AND d.scope_reason LIKE 'duplicate_of:%' AND NOT EXISTS "
+                    "(SELECT 1 FROM unified_site_names n WHERE CAST(n.site_id AS text) = "
+                    "substring(d.scope_reason from 14 for 36) AND n.name_normalized = "
+                    f"{site_key_sql('d.name')})",
+                ),
+                _DUPLICATE_SURVIVOR_GONE,
+            ],
+        )
+    if DUP_MERGE_RETIRE_LANE.match(lane.name) is not None:
+        return journal_readback(
+            lane,
+            [
+                *scope_status_counts(),
+                _RETIRED_DUPLICATE_ROWS,
+                _STATUS_WITHOUT_REASON,
+                _DUPLICATE_SURVIVOR_GONE,
+                (
+                    "retired duplicates with a live image whose survivor shows none",
+                    "FROM unified_sites d WHERE d.source_id = 'ancient_nerds' AND "
+                    f"{is_retired('d')} AND d.scope_reason LIKE 'duplicate_of:%' AND EXISTS "
+                    "(SELECT 1 FROM wiki_images w WHERE w.site_id = d.id AND w.is_excluded IS NOT "
+                    "TRUE) AND NOT EXISTS (SELECT 1 FROM wiki_images w WHERE CAST(w.site_id AS "
+                    "text) = substring(d.scope_reason from 14 for 36) AND w.is_excluded IS NOT "
+                    "TRUE)",
+                ),
+            ],
+        )
+    kids = _CURATED_ROWS + "parent_site_id IS NOT NULL"
+    child = (
+        "FROM unified_sites c JOIN unified_sites p ON p.id = c.parent_site_id WHERE "
+        "c.source_id = 'ancient_nerds' AND "
+    )
+    return journal_readback(
+        lane,
+        [
+            ("curated sites that name a parent", kids),
+            (
+                "curated children whose parent is retired or not curated",
+                child + f"(p.source_id <> 'ancient_nerds' OR {is_retired('p')})",
+            ),
+            (
+                "curated children in another country than their parent",
+                child + "p.country IS DISTINCT FROM c.country",
+            ),
+            (
+                f"curated children further than {PARENT_METRES} m from their parent",
+                child + f"{sphere_metres('p', 'c')} > {PARENT_METRES}",
+            ),
+            (
+                "curated sites in a chain (a child that is a parent, or its own parent)",
+                "FROM unified_sites c WHERE c.source_id = 'ancient_nerds' AND "
+                "c.parent_site_id IS NOT NULL AND (c.parent_site_id = c.id OR EXISTS "
+                "(SELECT 1 FROM unified_sites p WHERE p.id = c.parent_site_id AND "
+                "p.parent_site_id IS NOT NULL) OR EXISTS (SELECT 1 FROM unified_sites k WHERE "
+                "k.parent_site_id = c.id))",
+            ),
+        ],
+    )
+
+
+def identity_lane(name: str) -> Lane | None:
+    """The lane of the identity family called `name`, or `None` when `name` is none of them. A
+    move or retirement wave is built from its `PAIRS.json` (`KeyError` while there is none)."""
+    move = DUP_MERGE_MOVE_LANE.match(name)
+    retire = DUP_MERGE_RETIRE_LANE.match(name)
+    parent = PARENT_LANE.match(name)
+    if parent is not None:
+        return parent_lane(parent.group(1))
+    if move is None and retire is None:
+        return None
+    wave = (move or retire).group(1)  # type: ignore[union-attr]
+    try:
+        pairs = load_pairs(wave)
+    except FileNotFoundError as exc:
+        raise KeyError(f"{name}: {exc}") from exc
+    return dup_merge_move_lane(wave, pairs) if move else dup_merge_retire_lane(wave, pairs)
+
+
 # ------------------------------------------- the card disclosure correction (lane WB, 2026-10-01)
 #: Lane WB's disclosure correction (`card_disclosure.py`): one step of at most 100 sites per lane,
 #: `card-disclosure-sNNN`, built by `card_disclosure.lane_of` (it needs the pinned site list).
@@ -2121,7 +2789,9 @@ CARD_DISCLOSURE_LANE = re.compile(r"^card-disclosure-s(\d{3})\Z")
 def resolve_lane(name: str) -> Lane:
     """The lane called `name`: a registered one, a scope-review wave, a WD1/WD3/WD4/wd5 fields step,
     a residue period-label step, a lane-WB teaser step or disclosure-correction step, a period or
-    point provenance-marker step, or a card_stats wave. `KeyError` otherwise.
+    point provenance-marker step, a duplicate merge (`dup-merge-move-<wave>`,
+    `dup-merge-retire-<wave>`; both read the wave's `PAIRS.json`) or parent (`parent-<wave>`) wave,
+    or a card_stats wave. `KeyError` otherwise.
 
     The card_stats lanes are built by `card_stats.card_stats_lane`, imported here and only here:
     their owned values are the card generator's own, and importing the API package is not a cost
@@ -2130,6 +2800,9 @@ def resolve_lane(name: str) -> Lane:
     """
     if name in LANES:
         return LANES[name]
+    identity = identity_lane(name)
+    if identity is not None:
+        return identity
     review = SCOPE_REVIEW_LANE.match(name)
     if review is not None:
         return scope_review_lane(review.group(1))
