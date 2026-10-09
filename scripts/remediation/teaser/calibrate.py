@@ -24,6 +24,11 @@ cards of the production export and a file of vetted shorts-v1 cards (`--base-car
               alone.
     evaluate  one role: every set measured against the sealed thresholds, VERDICT-<role>.json written
               once. A failing role carries its `tier_move` (`run.py escalate` applies it).
+    release   a verdict that failed and is held at the top tier (Opus has no tier above): who decided
+              it should stand, why, and the sha256 of the verdict, the sealed thresholds, the role's
+              registry entry and the evidence, into RELEASE-<role>.json, once.
+    standing  how a role's verdict stands: passed, or released (a release that still rests on what
+              it was made on). Refused otherwise - this is what a gate asks.
 
     T=scripts/remediation/teaser/calibrate.py     D=output/remediation/calibration/teaser-<id>
     $T seal --run-dir $D
@@ -34,6 +39,8 @@ cards of the production export and a file of vetted shorts-v1 cards (`--base-car
         model id, effort, brief, how many may run at once (JSON)
     $T evaluate --run-dir $D --role fact_checker           (web_verifier: fetches the cited pages)
     $T evaluate --run-dir $D --role card_writer --writer-run output/remediation/teaser/runs/<pilot>
+    $T release --run-dir $D --role hook_rater --decided-by TEXT --reason TEXT --evidence FILE ...
+    $T standing --run-dir $D --role hook_rater
 
 `BASE.jsonl` is one JSON object per line: `site_id, name, country, description, alt_names,
 pool_images, image_titles, card, anchors` and `"sample": true` on the eleven cards of the design's
@@ -69,6 +76,7 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+import calibrate_claude as CC  # noqa: E402 - the evidence a release rests on
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
 import web_rules as WR  # noqa: E402 - how an agent uses the Wikipedia cache and the web
@@ -92,6 +100,8 @@ THRESHOLDS_FILE = "THRESHOLDS.json"
 JOBS_FILE = "JOBS.jsonl"
 HANDOFFS_FILE = "HANDOFFS.json"
 VERDICT_FILE = "VERDICT-{role}.json"
+#: `release`: the decision to let a verdict stand that failed and is held at the top tier.
+RELEASE_FILE = "RELEASE-{role}.json"
 #: The first day MiniMax answered lane WB (owner decision of 2026-10-03). A recorded answer that
 #: carries no model stamp and was given on or after it is not ground truth.
 MINIMAX_CUTOVER = "2026-10-03"
@@ -1500,6 +1510,112 @@ def evaluate(
     return verdict
 
 
+def _need_standing_record(run_dir: Path, role: str) -> tuple[dict[str, Any], Path, str]:
+    """The role's verdict, its file and the sealed thresholds' sha256 - for a verdict that rests on
+    the seal of `run_dir` and a role that is registered as it was sealed. Module bytes are not
+    asked: they were checked when the verdict was made (`evaluate` reads `sealed`), and a later
+    change to them moves the next calibration's seal, not this verdict."""
+    thresholds, digest = integrity(run_dir)
+    path = run_dir / VERDICT_FILE.format(role=role)
+    if not path.is_file():
+        raise CalibrationError(f"role {role} has no verdict in {run_dir}: {path} is missing")
+    entry = thresholds["registry"].get(role)
+    if entry is None:
+        raise CalibrationError(f"role {role} is not in the registry sealed in {run_dir}")
+    if RO.role_sha256(role) != entry["sha256"]:
+        raise CalibrationError(f"the registry entry of role {role} changed after the seal")
+    verdict = json.loads(path.read_text(encoding="utf-8"))
+    if verdict["role"] != role:
+        raise CalibrationError(f"{path} is the verdict of role {verdict['role']}, not {role}")
+    if verdict["thresholds_sha256"] != digest:
+        raise CalibrationError(f"{path} does not rest on the thresholds sealed in {run_dir}")
+    return verdict, path, digest
+
+
+def release_role(
+    run_dir: Path,
+    role: str,
+    *,
+    decided_by: str,
+    reason: str,
+    evidence: Sequence[Path],
+    now: Callable[[], str] = _now,
+) -> dict[str, Any]:
+    """Let a verdict stand that failed and is held at the top tier, written once to
+    `RELEASE-<role>.json`: `evaluate` says "the owner decides" where Opus has no tier above, and
+    this is that decision on record, with the sha256 of what it rests on.
+
+    Refused: an unsealed directory; no verdict, one of another role, one that does not rest on the
+    sealed thresholds, or of a role registered otherwise than sealed; a verdict that passed; one with
+    a tier move (the role moves up, it is not released); a failed one that is not held; an empty
+    `decided_by` or `reason`; no evidence, a path that is not a file, a file named twice; a release
+    written already."""
+    if not decided_by.strip():
+        raise CalibrationError("decided by is empty: a release names who decided it")
+    if not reason.strip():
+        raise CalibrationError("reason is empty: a release names why the verdict stands")
+    verdict, path, digest = _need_standing_record(run_dir, role)
+    if verdict["passed"]:
+        raise CalibrationError(f"role {role} passed: there is nothing to release")
+    if verdict["tier_move"] is not None:
+        raise CalibrationError(
+            f"role {role} carries a tier move: the role moves up a tier, it is not released"
+        )
+    if not verdict.get("held"):
+        raise CalibrationError(
+            f"role {role} failed but is not held at the top tier: only a held verdict is released"
+        )
+    release_path = run_dir / RELEASE_FILE.format(role=role)
+    if release_path.exists():
+        raise CalibrationError(f"{release_path} exists: a release is written once")
+    try:
+        items = CC.evidence_records(evidence)
+    except CC.CalibrationError as exc:
+        raise CalibrationError(str(exc)) from exc
+    record = {
+        "calibration_id": run_dir.name,
+        "role": role,
+        "verdict_sha256": CC.sha256_file(path),
+        "thresholds_sha256": digest,
+        "role_sha256": RO.role_sha256(role),
+        "decided_by": decided_by,
+        "reason": reason,
+        "evidence": items,
+        "decided_at": now(),
+    }
+    release_path.write_text(_text(record), encoding="utf-8", newline="\n")
+    return record
+
+
+def standing(run_dir: Path, role: str) -> dict[str, str]:
+    """How the verdict of `role` in `run_dir` stands: `passed`, or `released` (naming who decided)
+    when it failed at the top tier and its release still rests on the verdict, the sealed thresholds,
+    the role's registry entry and the evidence files it was made on - or `CalibrationError`. A
+    failed verdict with a tier move, a held one without a release and a role without a verdict do
+    not stand."""
+    verdict, path, digest = _need_standing_record(run_dir, role)
+    line = {"role": role, "calibration_id": run_dir.name}
+    if verdict["passed"]:
+        return {**line, "standing": CC.PASSED}
+    release_path = run_dir / RELEASE_FILE.format(role=role)
+    if verdict["tier_move"] is not None or not release_path.is_file():
+        raise CalibrationError(
+            f"role {role} has no passing verdict and no release in {run_dir}: calibrate it "
+            "again (a tier move) or release the held verdict"
+        )
+    record = json.loads(release_path.read_text(encoding="utf-8"))
+    moved = f"the release of {role} ({release_path})"
+    if record["verdict_sha256"] != CC.sha256_file(path):
+        raise CalibrationError(f"{moved}: the verdict changed after the release")
+    if record["thresholds_sha256"] != digest or record["role_sha256"] != RO.role_sha256(role):
+        raise CalibrationError(f"{moved}: the thresholds or the role changed after the release")
+    try:
+        CC.verify_evidence(record["evidence"], moved)
+    except CC.CalibrationError as exc:
+        raise CalibrationError(str(exc)) from exc
+    return {**line, "standing": CC.RELEASED, "decided_by": record["decided_by"]}
+
+
 VOID_FILE = "VOID.jsonl"
 
 
@@ -1587,7 +1703,9 @@ def main(argv: Iterable[str] | None = None) -> int:
         stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("seal", "jobs", "export", "agents", "evaluate", "check-answer", "void"):
+    for name in (
+        "seal", "jobs", "export", "agents", "evaluate", "check-answer", "void", "release", "standing",
+    ):  # fmt: skip
         command = sub.add_parser(name)
         command.add_argument("--run-dir", required=True, type=Path)
     check = sub.choices["check-answer"]
@@ -1608,6 +1726,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     sub.choices["agents"].add_argument(
         "--role", required=True, choices=sorted(set(SET_ROLE.values()))
     )
+    for name in ("release", "standing"):
+        sub.choices[name].add_argument("--role", required=True, choices=sorted(RO.ROLES))
+    release_cli = sub.choices["release"]
+    release_cli.add_argument("--decided-by", required=True)
+    release_cli.add_argument("--reason", required=True)
+    release_cli.add_argument("--evidence", required=True, nargs="+", type=Path)
     ev = sub.choices["evaluate"]
     ev.add_argument("--role", required=True, choices=sorted(THRESHOLDS["roles"]))
     ev.add_argument("--writer-run", type=Path)
@@ -1638,6 +1762,16 @@ def main(argv: Iterable[str] | None = None) -> int:
             payload = void_answers(
                 run_dir, args.role, [x.strip() for x in args.labels.split(",")], args.reason
             )
+        elif args.command == "release":
+            payload = release_role(
+                run_dir,
+                args.role,
+                decided_by=args.decided_by,
+                reason=args.reason,
+                evidence=args.evidence,
+            )
+        elif args.command == "standing":
+            payload = standing(run_dir, args.role)
         else:
             payload = evaluate(run_dir, args.role, writer_run=args.writer_run)
     except (CalibrationError, RO.RoleError, OH.HandoffError, R.RunError, PlanError) as exc:

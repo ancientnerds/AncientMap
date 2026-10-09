@@ -20,6 +20,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
+import calibrate_claude as CC  # noqa: E402
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
 from fields import answers as A  # noqa: E402
@@ -792,9 +793,17 @@ class TestTheWaveAndTheStep:
         self, repo: Path
     ) -> None:
         result = FP.build_wave(repo / "run", "2026-10-09a")
+        calibrations = result.pop("calibrations")
         assert result == {"wave": "2026-10-09a", "sites": 2, "steps": 1, "held": 2}
         record = FP.read_wave("2026-10-09a", "wd5")
         assert record["rule"] == "recheck" and record["stage"] == "wd5"
+        # every calibration the wave stands on is named, and how it stands
+        assert [(c["role"], c["comparison"], c["standing"]) for c in calibrations] == [
+            ("field_researcher", "fields-decided", "passed"),
+            ("field_researcher", "bp-bucket", "passed"),
+            ("adversarial", "adv-known-truth", "passed"),
+        ]
+        assert record["calibrations"] == calibrations
         assert (
             FP.wave_dir("2026-10-09a", "wd5")
             == repo / "output/remediation/fields/wd5/write/2026-10-09a"
@@ -814,6 +823,35 @@ class TestTheWaveAndTheStep:
         pass_calibrations(repo, **over)
         with pytest.raises(PlanError, match=said):
             FP.build_wave(repo / "run", "2026-10-09a")
+
+    def test_a_released_calibration_is_named_released_in_the_wave(self, repo: Path) -> None:
+        """A researcher pool that failed at the top tier and was released stands like a pass, and the
+        wave says so (`calibrate_claude.py release`)."""
+        root = repo / "output" / "remediation" / "calibration"
+        verdict = root / "verdicts" / "cal-1.json"
+        verdict.write_text(
+            json.dumps({
+                "role": "field_researcher", "passed": False, "tier_move": None,
+                "held": "no higher tier than claude-opus-5-5: the owner decides",
+            }),
+            encoding="utf-8",
+        )  # fmt: skip
+        spot_check = repo / "spot-check.md"
+        spot_check.write_text("0 false sources\n", encoding="utf-8")
+        CC.release(
+            root, calibration_id="cal-1", decided_by="orchestrator (D8)",
+            reason="0 false sources; equally valid choices", evidence=[spot_check],
+        )  # fmt: skip
+
+        calibrations = FP.build_wave(repo / "run", "2026-10-09a")["calibrations"]
+
+        assert [(c["comparison"], c["standing"]) for c in calibrations] == [
+            ("fields-decided", "passed"),
+            ("bp-bucket", "released"),
+            ("adv-known-truth", "passed"),
+        ]
+        assert calibrations[1]["decided_by"] == "orchestrator (D8)"
+        assert FP.read_wave("2026-10-09a", "wd5")["calibrations"] == calibrations
 
     def test_an_unresolved_of_an_unsourced_point_is_no_wave_site(self, repo: Path) -> None:
         line = HO.read_classified(repo / "run")

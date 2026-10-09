@@ -187,13 +187,16 @@ def _sha256_text(path: Path) -> str:
 
 
 # ------------------------------------------------------------------------------ the wave
-def _require_calibrated() -> None:
-    """Lane wd5 writes only what calibrated roles answered (D6, map step 1): a passing verdict of the
-    general pool, the BP pool and the adversarial pool, each sealed against the role as it is now.
-    The check stands at the wave, the one path into production: the calibration runs themselves use
-    the export and the import."""
+def _require_calibrated() -> list[dict[str, str]]:
+    """Lane wd5 writes only what calibrated roles answered (D6, map step 1): a passing verdict - or
+    one the orchestrator released at the top tier (`calibrate_claude.py release`) - of the general
+    pool, the BP pool and the adversarial pool, each sealed against the role as it is now. Returns
+    how each stands, so that the wave names a release as released. The check stands at the wave, the
+    one path into production: the calibration runs themselves use the export and the import."""
     try:
-        CC.require_passed(REPO / "output" / "remediation" / "calibration", PL.WD5_CALIBRATIONS)
+        return CC.require_passed(
+            REPO / "output" / "remediation" / "calibration", PL.WD5_CALIBRATIONS
+        )
     except CC.CalibrationError as exc:
         raise PlanError(str(exc)) from exc
 
@@ -257,8 +260,9 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
     decisions = HO._read_jsonl(fields_fn)
     if not decisions:
         raise PlanError(f"{fields_fn} holds no decision - import the handoff first")
+    calibrations: list[dict[str, str]] = []
     if rule.recheck:
-        _require_calibrated()
+        calibrations = _require_calibrated()
         _require_adversarial(run)
     derived_fn = run / DERIVED_FILE
     derived = HO._read_jsonl(derived_fn) if derived_fn.exists() else []
@@ -300,10 +304,13 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
         "held": len(held),
         "steps": steps,
     }
+    result = {"wave": wave, "sites": len(sites), "steps": len(steps), "held": len(held)}
+    if rule.recheck:  # the wave says how each calibration it stands on stands (a release: released)
+        record["calibrations"] = result["calibrations"] = calibrations
     target.mkdir(parents=True, exist_ok=True)
     HO._write_jsonl(target / HELD_FILE, held)
     write_wave(wave, record, rule.stage)
-    return {"wave": wave, "sites": len(sites), "steps": len(steps), "held": len(held)}
+    return result
 
 
 def write_wave(wave: str, record: Mapping[str, Any], stage: str = R.DEFAULT.stage) -> None:

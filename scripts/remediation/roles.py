@@ -79,8 +79,9 @@ ROLES: Mapping[str, Role] = _registry(
     # 0.7902 of a required 1.0, within one of the xhigh reference 1.0); Opus has no higher model
     # tier, so the orchestrator raised the effort under D8 (AUDIT_LOG 2026-10-09).
     Role("hook_rater", "claude-opus-5-5", "xhigh", "design_run_hand_drawn_60"),
-    Role("fact_checker", "claude-sonnet-5-5", "high", "wb_check_verify_opus"),
-    Role("web_verifier", "claude-sonnet-5-5", "high", "wb_check_verify_opus"),
+    # Opus since the tier moves of 2026-10-09 (`APPLIED_ESCALATIONS`): Sonnet failed teaser-2026-10-09b.
+    Role("fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus"),
+    Role("web_verifier", "claude-opus-5-5", "high", "wb_check_verify_opus"),
     # Opus since the tier move of 2026-10-09 (`APPLIED_ESCALATIONS`): Sonnet failed fr-general-001.
     Role("field_researcher", "claude-opus-5-5", "high", "wd1_wd3_rounds_and_bp_set"),
     # The description writer of lane E (`wc/prompts_enrich.py`). It rode on `field_researcher` until
@@ -109,6 +110,24 @@ APPLIED_ESCALATIONS: tuple[Mapping[str, str], ...] = (
             "to": "claude-opus-5-5",
             "calibration_id": "fr-general-001",
             "reason": "agreement 0.8636 is below the sealed threshold 0.9",
+        }
+    ),
+    MappingProxyType(
+        {
+            "role": "fact_checker",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "teaser-2026-10-09b",
+            "reason": "failed: checker_agreement, checker_fail_again, checker_good",
+        }
+    ),
+    MappingProxyType(
+        {
+            "role": "web_verifier",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "teaser-2026-10-09b",
+            "reason": "failed: verifier_verified",
         }
     ),
 )

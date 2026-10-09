@@ -37,6 +37,7 @@ STAGE = REMEDIATION / "image_roles/stage.py"
 T_REPAIR = "tests/remediation/test_teaser_calibrate_repair.py"
 T_RUN = "tests/remediation/test_teaser_shorts_run.py"
 T_QUOTE = "tests/remediation/test_quote_check.py"
+T_RELEASE = "tests/remediation/test_teaser_calibrate_release.py"
 
 
 def g(label: str, path: Path, needle: str, test: str, testfile: str = T_REPAIR) -> Case:
@@ -45,6 +46,10 @@ def g(label: str, path: Path, needle: str, test: str, testfile: str = T_REPAIR) 
 
 def c(label: str, path: Path, old: str, new: str, test: str, testfile: str = T_REPAIR) -> Case:
     return Case(f"teaser repair: {label}", path, old, new, test, testfile)
+
+
+def rel(label: str, needle: str, test: str) -> Case:
+    return guard(f"teaser release: {label}", CAL, needle, test, T_RELEASE)
 
 
 CASES: list[Case] = [
@@ -159,7 +164,7 @@ CASES: list[Case] = [
     g(
         "a void needs its reason",
         CAL,
-        "    if not reason.strip():",
+        '    if not reason.strip():\n        raise CalibrationError("a void needs its reason',
         "test_a_question_without_an_answer_a_missing_reason_and_a_repeat_are_refused",
     ),
     g(
@@ -217,6 +222,81 @@ CASES: list[Case] = [
         "    if result.outcome == Q.NOT_FOUND:",
         "test_a_quote_the_page_does_not_hold_says_where_the_page_differs",
         T_QUOTE,
+    ),
+    # ------------------------------------------------------------------ the release of a held verdict
+    rel(
+        "a role without a verdict has nothing to stand on",
+        "    if not path.is_file():\n"
+        '        raise CalibrationError(f"role {role} has no verdict in {run_dir}: {path} is missing")',
+        "test_a_missing_verdict_is_not_released",
+    ),
+    rel(
+        "the role is registered as it was sealed",
+        '    if RO.role_sha256(role) != entry["sha256"]:',
+        "test_a_role_that_changed_after_the_seal_is_not_released",
+    ),
+    rel(
+        "the verdict is the role's",
+        '    if verdict["role"] != role:',
+        "test_a_verdict_of_another_role_than_the_file_names_is_not_released",
+    ),
+    rel(
+        "the verdict rests on the sealed thresholds",
+        '    if verdict["thresholds_sha256"] != digest:',
+        "test_a_verdict_that_does_not_rest_on_the_sealed_thresholds_is_not_released",
+    ),
+    rel(
+        "it names who decided",
+        "    if not decided_by.strip():",
+        "test_a_release_names_who_decided_and_why",
+    ),
+    rel(
+        "it names why",
+        '    if not reason.strip():\n        raise CalibrationError("reason is empty',
+        "test_a_release_names_who_decided_and_why",
+    ),
+    rel(
+        "a pass is not released",
+        '    if verdict["passed"]:\n'
+        '        raise CalibrationError(f"role {role} passed: there is nothing to release")',
+        "test_a_pass_is_not_released",
+    ),
+    rel(
+        "a verdict with a tier move is not released",
+        '    if verdict["tier_move"] is not None:\n'
+        "        raise CalibrationError(\n"
+        '            f"role {role} carries a tier move',
+        "test_a_verdict_with_a_tier_move_is_moved_not_released",
+    ),
+    rel(
+        "only a held verdict is released",
+        '    if not verdict.get("held"):',
+        "test_a_failed_verdict_that_is_not_held_is_not_released",
+    ),
+    rel(
+        "a release is written once",
+        "    if release_path.exists():",
+        "test_a_release_is_written_once",
+    ),
+    rel(
+        "a pass stands as passed",
+        '    if verdict["passed"]:\n        return {**line, "standing": CC.PASSED}',
+        "test_a_passed_verdict_stands_as_passed",
+    ),
+    rel(
+        "a held verdict stands only with its release",
+        '    if verdict["tier_move"] is not None or not release_path.is_file():',
+        "test_a_held_verdict_without_its_release_does_not_stand",
+    ),
+    rel(
+        "the verdict is unchanged since the release",
+        '    if record["verdict_sha256"] != CC.sha256_file(path):',
+        "test_a_release_whose_binding_changed_is_refused_by_name",
+    ),
+    rel(
+        "the thresholds and the role are unchanged since the release",
+        '    if record["thresholds_sha256"] != digest or record["role_sha256"] != RO.role_sha256(role):',
+        "test_a_release_whose_binding_changed_is_refused_by_name",
     ),
 ]
 

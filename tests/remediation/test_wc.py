@@ -977,10 +977,10 @@ def test_the_brief_names_the_batchs_own_scratch_and_the_commands(tmp_path: Path)
     run, handoff = _run(tmp_path)
     text = C.brief(run, handoff, "wc-0002")
     assert "1 question(s)" in text and "wc-test-r1-scratch/wc-0002/<label>.json" in text
-    assert "wc/cli.py check-answer" in text and "--answered-by sonnet-check-r1-wc-0002" in text
+    assert "wc/cli.py check-answer" in text and "--answered-by opus-check-r1-wc-0002" in text
     # the model and the role are the registry's (owner decision D6, 2026-10-08), never the agent's own
-    assert "--model claude-sonnet-5-5 --role fact_checker" in text
-    assert "You are Sonnet checker wc-0002" in text
+    assert "--model claude-opus-5-5 --role fact_checker" in text
+    assert "You are Opus checker wc-0002" in text
     with pytest.raises(C.WcRunError, match="no batch"):
         C.brief(run, handoff, "wc-0009")
 

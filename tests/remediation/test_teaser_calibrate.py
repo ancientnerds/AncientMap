@@ -37,6 +37,7 @@ from tests.remediation.test_teaser_shorts_run import (  # noqa: E402
     check_json,
     make_run,
     sid,
+    sonnet_checker,
     step,
     writes,
 )
@@ -384,7 +385,7 @@ class TestTheSeal:
         thresholds, again = K.sealed(run_dir)
         assert again == digest and thresholds["seed"] == 7
         assert set(thresholds["modules"]) == set(K.MODULES)
-        assert thresholds["registry"]["fact_checker"]["model"] == "claude-sonnet-5-5"
+        assert thresholds["registry"]["fact_checker"]["model"] == "claude-opus-5-5"
         assert thresholds["registry"]["pilot_judge"]["effort"] == "xhigh"
 
     def test_a_directory_with_a_case_or_a_verdict_cannot_be_sealed(self, tmp_path: Path) -> None:
@@ -715,19 +716,15 @@ class TestTheQuestions:
         job = jobs[0]
         assert (job["role"], job["model"], job["effort"]) == (
             "web_verifier",
-            "claude-sonnet-5-5",
+            "claude-opus-5-5",
             "high",
         )
         assert job["cases"] == 4 and job["max_parallel"] == 3
         assert job["batch_id"] == "web-verifier-001"
         brief = job["brief"]
-        assert (
-            "answering as the role **web_verifier**" in brief and "**claude-sonnet-5-5**" in brief
-        )
+        assert "answering as the role **web_verifier**" in brief and "**claude-opus-5-5**" in brief
         assert "--stage calibration" in brief and "--role web_verifier" in brief
-        assert (
-            "--model claude-sonnet-5-5" in brief and "--answered-by cal-web-verifier-001" in brief
-        )
+        assert "--model claude-opus-5-5" in brief and "--answered-by cal-web-verifier-001" in brief
         assert not any(name in brief for name in K.SET_ROLE)
         assert "WIKI_MAP.jsonl" in brief and "NEVER a finding" in brief
         # the cache is no confirmation, and the verifier may read as many pages as it needs
@@ -741,7 +738,7 @@ class TestTheQuestions:
         K.export_role(run_dir, "fact_checker", tmp_path / "h-good")
         plain = K.agent_jobs(run_dir, "fact_checker")[0]
         assert plain["max_parallel"] is None and "Wikipedia cache" not in plain["brief"]
-        assert (plain["role"], plain["model"]) == ("fact_checker", "claude-sonnet-5-5")
+        assert (plain["role"], plain["model"]) == ("fact_checker", "claude-opus-5-5")
         assert not any(name in plain["brief"] for name in K.SET_ROLE)
 
     def test_the_reference_is_answered_by_the_pilot_judge(self, tmp_path: Path) -> None:
@@ -811,7 +808,7 @@ class TestTheFactChecker:
         self.all_sets(run_dir)
         verdict = K.evaluate(run_dir, "fact_checker")
         assert verdict["passed"] is True and verdict["tier_move"] is None
-        assert verdict["model"] == "claude-sonnet-5-5" and verdict["effort"] == "high"
+        assert verdict["model"] == "claude-opus-5-5" and verdict["effort"] == "high"
         sets = verdict["sets"]
         assert (
             sets["checker_agreement"]["verdict_agreement"] == 1.0
@@ -834,8 +831,9 @@ class TestTheFactChecker:
             K.evaluate(run_dir, "fact_checker")
 
     def test_a_pass_of_a_card_with_an_unsupported_claim_is_a_false_pass_and_fails_the_role(
-        self, tmp_path: Path
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        sonnet_checker(monkeypatch)  # a Sonnet role moves up; the registered Opus one is held
         run_dir = fixed_dir(tmp_path)
         self.all_sets(run_dir, agreement="PASS")
         verdict = K.evaluate(run_dir, "fact_checker")
@@ -846,6 +844,14 @@ class TestTheFactChecker:
             "role": "fact_checker", "from": "claude-sonnet-5-5", "to": "claude-opus-5-5",
             "calibration_id": "teaser-test", "reason": "failed: checker_agreement",
         }  # fmt: skip
+
+    def test_a_failing_checker_on_opus_is_held_and_not_moved(self, tmp_path: Path) -> None:
+        """`fact_checker` is Opus since teaser-2026-10-09b: there is no tier above."""
+        run_dir = fixed_dir(tmp_path)
+        self.all_sets(run_dir, agreement="PASS")
+        verdict = K.evaluate(run_dir, "fact_checker")
+        assert verdict["passed"] is False and verdict["tier_move"] is None
+        assert verdict["held"] == "no higher tier than claude-opus-5-5: the owner decides"
 
     def test_one_false_pass_fails_the_role_even_when_agreement_is_high(
         self, tmp_path: Path
@@ -889,7 +895,10 @@ class TestTheFactChecker:
         }
         assert verdict["passed"] is False
 
-    def test_a_defect_the_checker_passes_is_named_by_its_kind(self, tmp_path: Path) -> None:
+    def test_a_defect_the_checker_passes_is_named_by_its_kind(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        sonnet_checker(monkeypatch)
         run_dir = fixed_dir(tmp_path)
         self.all_sets(run_dir, defects="PASS")
         verdict = K.evaluate(run_dir, "fact_checker")
@@ -910,9 +919,9 @@ class TestTheFactChecker:
 
     def test_a_stamp_that_is_not_the_sealed_model_is_refused(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_role(run_dir, "fact_checker", ALL_FAIL, model="claude-opus-5-5")
+        answer_role(run_dir, "fact_checker", ALL_FAIL, model="claude-sonnet-5-5")
         with pytest.raises(
-            K.CalibrationError, match="role fact_checker is sealed to claude-sonnet-5-5"
+            K.CalibrationError, match="role fact_checker is sealed to claude-opus-5-5"
         ):
             K.evaluate(run_dir, "fact_checker")
 
@@ -965,13 +974,13 @@ class TestTheWebVerifier:
             {"verifier_contradicted": verifier_text(True), "verifier_verified": verified},
         )
         verdict = K.evaluate(run_dir, "web_verifier", client=judge_client())
-        assert verdict["passed"] is True and verdict["model"] == "claude-sonnet-5-5"
+        assert verdict["passed"] is True and verdict["model"] == "claude-opus-5-5"
         assert verdict["sets"]["verifier_contradicted"]["caught"] == 2
         assert verdict["sets"]["verifier_verified"]["claim_agreement"] == 1.0
         assert verdict["sets"]["verifier_verified"]["false_sources"] == []
 
     def test_a_quote_the_page_does_not_hold_is_a_false_source(self, tmp_path: Path) -> None:
-        run_dir = fixed_dir(tmp_path)
+        run_dir = fixed_dir(tmp_path)  # web_verifier is Opus since teaser-2026-10-09b: held
         answer_role(
             run_dir,
             "web_verifier",
@@ -995,7 +1004,8 @@ class TestTheWebVerifier:
         verdict = K.evaluate(run_dir, "web_verifier", client=judge_client())
         verified = verdict["sets"]["verifier_verified"]
         assert len(verified["false_sources"]) >= 2 and verified["passed"] is False
-        assert verdict["passed"] is False and verdict["tier_move"]["to"] == "claude-opus-5-5"
+        assert verdict["passed"] is False and verdict["tier_move"] is None
+        assert verdict["held"] == "no higher tier than claude-opus-5-5: the owner decides"
 
     def test_a_verifier_that_misses_a_contradiction_fails(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
@@ -1051,7 +1061,7 @@ class TestTheHookRater:
         verdict = K.evaluate(run_dir, "hook_rater")
         hooks = verdict["sets"]["hook_pairs"]
         assert hooks["pairs_ordered_right"] == 1.0 and hooks["within_one_of_reference"] == 1.0
-        assert verdict["passed"] is True and verdict["effort"] == "medium"
+        assert verdict["passed"] is True and verdict["effort"] == "xhigh"
 
     def test_one_misordered_pair_fails_the_role(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)

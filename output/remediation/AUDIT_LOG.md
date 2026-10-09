@@ -14097,3 +14097,31 @@ three new calibrations (`fr-general-002`, `fr-bp-002`, `adv-truth-001`) are the 
 - hook_rater (Opus medium): FAIL (hook_pairs ordered right 0.7902 of 1.0; within one of the xhigh reference 1.0; held 'owner decides'). D6 escalation of effort medium to xhigh under D8 (no higher model tier); recalibrated in teaser-2026-10-09b.
 - Nothing was written to production.
 
+
+### 2026-10-09: recalibration verdicts, three releases and two tier moves (orchestrator, D8)
+
+Verdicts of the recalibrations (owner away, full autonomy delegated; D6 says a failing role moves up a tier and is silent about the top tier, the code says "the owner decides"):
+
+- `adv-truth-001` (adversarial, Opus, known-truth pool, 50 cells): PASSED, agreement 0.94 (47/50), 0 false sources.
+- `fr-general-002` (field_researcher, Opus, general pool): FAILED 0.871 < 0.9 (81/93), 0 false sources, held "no higher tier: the owner decides". The Opus O18 spot check found every disagreement sourced and judged them equally valid `source_url` choices or defensible types (Necropolis vs the recorded keep, Earthwork vs Timber circle, City vs Fort, Bassae -450 better sourced than the recorded keep): 13 disagreements over 11 answers, every quote found live (hmdb.org was a fetch failure on the checker side, curl 200).
+- `fr-bp-002` (field_researcher, Opus, BP pool): FAILED 0.88 < 0.9 (22/25), 0 false sources, held. All 3 disagreements were machine fetch failures while the quotes stand on the pages: Cova Negra (PMC article, quote present, the checker read nothing), Apidima (smithsonianmag 403 to the checker, 200 to curl, quote present), Kozarnika (bnr.bg SSL error not reproducible, quote present).
+- `teaser-2026-10-09b` fact_checker (Sonnet high): FAILED. checker_defects 30/30 caught (passed), checker_fail_again 9/30 failed again (failed), checker_good 26/30 (failed), checker_agreement verdict agreement 0.7556 (failed) -> tier move to Opus.
+- `teaser-2026-10-09b` web_verifier (Sonnet high): FAILED the verified set (5 falsely contradicted, card verdict agreement 0.6); contradicted 14/15 counted PASSED -> tier move to Opus.
+- `teaser-2026-10-09b` hook_rater (Opus xhigh): FAILED pairs 0.9161 < 1.0 (11 strong against 13 weak openers; within one of the Opus xhigh reference 1.0), held.
+
+Decisions (orchestrator, D8):
+
+- (a) `field_researcher` (Opus) is RELEASED for lane wd5 on `fr-general-002` and `fr-bp-002`: 0 false sources, the disagreements are equally valid choices or fetch failures, and every cell wd5 writes passes the calibrated Opus adversarial check (`adv-truth-001`) and the machine quote check before any write.
+- (b) `hook_rater` (Opus xhigh) is RELEASED: it only orders three variants that each passed the fact check; its strong/weak labels were the orchestrator's heuristic (sample = strong, location-first = weak).
+- (c) cards `fact_checker` and `web_verifier` take their sealed tier moves to `claude-opus-5-5`: `roles.APPLIED_ESCALATIONS` records both (calibration `teaser-2026-10-09b`, the reasons of their verdicts), and they are calibrated again in `teaser-2026-10-09c`.
+
+What changed in the code:
+
+- `calibrate_claude.py release --id ID --decided-by TEXT --reason TEXT --evidence FILE...` writes `releases/<id>.json` once (sha256 of the verdict, the seal and the role's registry entry; each evidence file's path and sha256; who, why, when). Refused: a verdict that passed, one with a tier move, one not held, a missing verdict, a verdict of another role than the seal's, a role edited since the seal, an empty reason or decider, no evidence, a missing or doubled evidence file, a release written already. `require_passed` counts a release like a pass when verdict, seal, role entry and evidence still hash as released, refuses a release that moved by name, prefers a pass, and returns per need how it stands (`passed` or `released`, with the decider); `fields/plan.py wave` writes that list into `WAVE.json` and its output, so a released calibration is named released.
+- `teaser/calibrate.py release` and `standing` do the same for a held `VERDICT-<role>.json` (`RELEASE-<role>.json`). `standing` binds the verdict to the sealed thresholds and the role's registry entry, not to the module bytes (those were checked when the verdict was made).
+- The card lane has no gate that reads a calibration verdict: `teaser/run.py` `export`, `import` and `import_stage` never ask whether a role passed; only `escalate_role` reads a verdict, and it refuses a verdict without a tier move, so a released hold cannot be mistaken for a move. Whether a card run may begin is the orchestrator's check (`teaser/calibrate.py standing --run-dir D --role R` is the call for it). The identity lanes' own gates (`identity/rounds.py`, `label_rounds.py`) still read `verdict["passed"]` alone; they use `web_verifier` and `adversarial`, which passed or moved, and no identity release is made here.
+- Adversarial must be calibrated again in `teaser-2026-10-09c`: its pass (0.92) was sealed in `teaser-2026-10-09` against 12 module hashes that differ in `teaser-2026-10-09b` (quote check, `web_rules.py`, `prompts.py`, `run.py`, `calibrate.py`, `roles.py` among them) and against a thresholds file whose sha256 is not the one of the table now in force.
+- Tests that pinned `fact_checker` and `web_verifier` on Sonnet now pin Opus (briefs, stamps, answer names, the `wc`, `wn`, `enrich`, identity and card suites); the escalation tests of the card lane register a Sonnet `fact_checker` on purpose because no registered role of the lane is on a lower tier any more.
+- Docstrings that still say "web verifier (Sonnet)" (`identity/*.py`, `image_roles/*.py`, `wc/prompts_enrich.py`) were not edited: they describe the roles at the time those lanes ran, and `retarget_plan.RESEARCH` is the provenance string of writes already made.
+
+Nothing was written to production. No agent was asked; nothing was sealed, answered or released by this change - the three releases and `teaser-2026-10-09c` are the operator's commands.

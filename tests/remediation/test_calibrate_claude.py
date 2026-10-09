@@ -81,7 +81,7 @@ def an_answered_handoff(tmp_path: Path, **kwargs: Any) -> Path:
 def sealed(tmp_path: Path, handoff: Path | None = None, **overrides: Any) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
         "calibration_id": "cal-fact-1",
-        "role": "fact_checker",
+        "role": "enrich_writer",
         "handoff": handoff or an_answered_handoff(tmp_path),
         "batches": ["wc-0001", "wc-0002"],
         "threshold": 0.9,
@@ -99,13 +99,13 @@ def test_seal_writes_the_cases_the_pool_digest_the_registry_digests_and_the_thre
 
     path = tmp_path / "calibration" / CC.THRESHOLDS_FILE
     assert json.loads(path.read_text(encoding="utf-8"))["cal-fact-1"] == seal
-    assert seal["role"] == "fact_checker"
+    assert seal["role"] == "enrich_writer"
     assert seal["model"] == "claude-sonnet-5-5" and seal["effort"] == "high"
     assert seal["threshold"] == 0.9 and seal["max_false_sources"] == 0
     assert seal["case_ids"] == [f"wc-0001/{SITE_A}", f"wc-0002/{SITE_B}"]
     assert seal["batches"] == ["wc-0001", "wc-0002"]
     assert seal["sealed_at"] == NOW
-    assert seal["role_sha256"] == RO.role_sha256("fact_checker")
+    assert seal["role_sha256"] == RO.role_sha256("enrich_writer")
     assert seal["roles_sha256"] == RO.registry_sha256()
     assert len(seal["pool_sha256"]) == 64
 
@@ -260,7 +260,7 @@ def prepared(tmp_path: Path) -> Path:
 
 def fresh(out: Path, batch: str, site: str, text: str, **kwargs: Any) -> None:
     kwargs.setdefault("model", OH.SONNET_MODEL)
-    kwargs.setdefault("answered_by", f"fact_checker:{batch}")
+    kwargs.setdefault("answered_by", f"enrich_writer:{batch}")
     put_answer(out, batch, site, text, **kwargs)
 
 
@@ -294,11 +294,11 @@ def test_compare_counts_a_missing_fresh_answer_as_unanswered(tmp_path: Path) -> 
 
 
 def test_compare_refuses_a_fresh_answer_of_the_wrong_model(tmp_path: Path) -> None:
-    """Calibrating `fact_checker` (Sonnet) with an Opus answer would measure another model."""
+    """Calibrating `enrich_writer` (Sonnet) with an Opus answer would measure another model."""
     out = prepared(tmp_path)
     fresh(out, "wc-0001", SITE_A, check_answer(SITE_A, "KEEP", "DROP"), model=OH.OPUS_MODEL)
     fresh(out, "wc-0002", SITE_B, check_answer(SITE_B, "KEEP", "KEEP"))
-    with pytest.raises(RO.RoleError, match="fact_checker"):
+    with pytest.raises(RO.RoleError, match="enrich_writer"):
         CC.compare(tmp_path / "calibration", calibration_id="cal-fact-1")
     assert not (out / "COMPARISON.json").exists()
 
@@ -359,7 +359,7 @@ def test_verdict_fails_below_the_sealed_threshold_and_moves_the_role_up_one_tier
 
     assert result["passed"] is False
     assert result["tier_move"] == {
-        "role": "fact_checker",
+        "role": "enrich_writer",
         "from": "claude-sonnet-5-5",
         "to": "claude-opus-5-5",
         "calibration_id": "cal-fact-1",
@@ -472,12 +472,12 @@ def test_the_cli_runs_the_four_steps(tmp_path: Path, capsys: pytest.CaptureFixtu
 
     assert (
         CC.main(
-            ["seal", "--root", root, "--id", "cal-fact-1", "--role", "fact_checker",
+            ["seal", "--root", root, "--id", "cal-fact-1", "--role", "enrich_writer",
              "--handoff", str(handoff), "--batches", "wc-0001", "wc-0002", "--threshold", "0.9"]
         )
         == 0
     )  # fmt: skip
-    assert json.loads(capsys.readouterr().out)["role"] == "fact_checker"
+    assert json.loads(capsys.readouterr().out)["role"] == "enrich_writer"
 
     assert CC.main(["prepare", "--root", root, "--id", "cal-fact-1", "--run", str(run)]) == 0
     assert json.loads(capsys.readouterr().out)["questions"] == 2
@@ -699,7 +699,7 @@ def test_the_cli_seals_a_truth_pool(tmp_path: Path, capsys: pytest.CaptureFixtur
     code = CC.main(
         [
             "seal", "--root", str(tmp_path / "calibration"), "--id", "cal-fact-1",
-            "--role", "fact_checker", "--handoff", str(handoff),
+            "--role", "enrich_writer", "--handoff", str(handoff),
             "--batches", "wc-0001", "wc-0002", "--threshold", "0.9",
             "--truth", str(truth), "--comparison", "truth-label",
             "--max-undecided-excess", "0.1",
@@ -744,3 +744,276 @@ def test_prepare_registers_the_calibration_run_with_the_register_it_is_given(
     assert report["calibration_run"] == str(tmp_path / "registered")
     assert seen == [(run, tmp_path / "handoff", tmp_path / "calibration" / "cal-fact-1")]
     assert not (tmp_path / "calibration" / "cal-fact-1-run").exists()  # the default did not run
+
+
+# ----------------------------------------------------------------------- the release of a held verdict
+HELD = "no higher tier than claude-opus-5-5: the owner decides"
+
+
+def held_verdict(
+    tmp_path: Path,
+    *,
+    calibration_id: str = "cal-held",
+    role: str = "field_researcher",
+    comparison: str = "bp-bucket",
+    **verdict_over: Any,
+) -> Path:
+    """A sealed calibration of an Opus role whose verdict failed and is held at the top tier, as
+    `CC.verdict` writes it (the held-at-the-top path is `test_a_failing_opus_role_...`)."""
+    sealed(tmp_path, calibration_id=calibration_id, role=role, comparison=comparison)
+    verdicts = tmp_path / "calibration" / CC.VERDICTS_DIR
+    verdicts.mkdir(parents=True, exist_ok=True)
+    body = {
+        "calibration_id": calibration_id,
+        "role": role,
+        "model": RO.role(role).model,
+        "passed": False,
+        "agreement": 0.88,
+        "threshold": 0.9,
+        "false_sources": 0,
+        "tier_move": None,
+        "held": HELD,
+        "decided_at": NOW,
+    }
+    body.update(verdict_over)
+    path = verdicts / f"{calibration_id}.json"
+    path.write_text(json.dumps(body, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def evidence_file(
+    tmp_path: Path, name: str = "spot-check.md", text: str = "0 false sources\n"
+) -> Path:
+    path = tmp_path / "evidence" / name
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def released(tmp_path: Path, **over: Any) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {
+        "calibration_id": "cal-held",
+        "decided_by": "orchestrator (D8)",
+        "reason": "0 false sources; the disagreements are equally valid choices",
+        "evidence": [evidence_file(tmp_path)],
+        "now": lambda: NOW,
+    }
+    kwargs.update(over)
+    return CC.release(tmp_path / "calibration", **kwargs)
+
+
+def test_a_release_binds_the_verdict_the_seal_the_role_and_the_evidence(tmp_path: Path) -> None:
+    verdict_path = held_verdict(tmp_path)
+    evidence = evidence_file(tmp_path)
+    root = tmp_path / "calibration"
+    seal = json.loads((root / CC.THRESHOLDS_FILE).read_text(encoding="utf-8"))["cal-held"]
+
+    record = released(tmp_path, evidence=[verdict_path, evidence])
+
+    stored = root / CC.RELEASES_DIR / "cal-held.json"
+    assert json.loads(stored.read_text(encoding="utf-8")) == record
+    assert record["calibration_id"] == "cal-held" and record["role"] == "field_researcher"
+    assert record["verdict_sha256"] == hashlib.sha256(verdict_path.read_bytes()).hexdigest()
+    assert record["seal_sha256"] == CC.seal_sha256(seal)
+    assert record["role_sha256"] == RO.role_sha256("field_researcher")
+    assert record["decided_by"] == "orchestrator (D8)" and record["decided_at"] == NOW
+    assert record["reason"].startswith("0 false sources")
+    assert record["evidence"] == [
+        {"path": str(verdict_path.resolve()), "sha256": record["verdict_sha256"]},
+        {
+            "path": str(evidence.resolve()),
+            "sha256": hashlib.sha256(evidence.read_bytes()).hexdigest(),
+        },
+    ]
+
+
+def test_a_release_is_written_once(tmp_path: Path) -> None:
+    held_verdict(tmp_path)
+    released(tmp_path)
+    with pytest.raises(CC.CalibrationError, match="exists"):
+        released(tmp_path, reason="another reason")
+
+
+def test_a_passed_verdict_is_not_released(tmp_path: Path) -> None:
+    held_verdict(tmp_path, passed=True, held=None)
+    with pytest.raises(CC.CalibrationError, match="passed"):
+        released(tmp_path)
+    assert not (tmp_path / "calibration" / CC.RELEASES_DIR).exists()
+
+
+def test_a_verdict_with_a_tier_move_is_moved_not_released(tmp_path: Path) -> None:
+    move = {"role": "web_verifier", "from": "a", "to": "b", "calibration_id": "x", "reason": "y"}
+    held_verdict(tmp_path, tier_move=move, held=None)
+    with pytest.raises(CC.CalibrationError, match="tier move"):
+        released(tmp_path)
+
+
+def test_a_failed_verdict_that_is_not_held_is_not_released(tmp_path: Path) -> None:
+    held_verdict(tmp_path, held=None)
+    with pytest.raises(CC.CalibrationError, match="held"):
+        released(tmp_path)
+
+
+def test_a_missing_verdict_is_not_released(tmp_path: Path) -> None:
+    sealed(tmp_path, calibration_id="cal-held", role="field_researcher", comparison="bp-bucket")
+    with pytest.raises(CC.CalibrationError, match="does not exist"):
+        released(tmp_path)
+
+
+def test_an_unsealed_calibration_is_not_released(tmp_path: Path) -> None:
+    with pytest.raises(CC.CalibrationError, match="not sealed"):
+        released(tmp_path)
+
+
+@pytest.mark.parametrize("field", ["decided_by", "reason"])
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_a_release_names_who_decided_and_why(tmp_path: Path, field: str, blank: str) -> None:
+    held_verdict(tmp_path)
+    with pytest.raises(CC.CalibrationError, match=field.replace("_", " ")):
+        released(tmp_path, **{field: blank})
+    assert not (tmp_path / "calibration" / CC.RELEASES_DIR).exists()
+
+
+def test_a_release_needs_evidence_that_exists_once_each(tmp_path: Path) -> None:
+    held_verdict(tmp_path)
+    with pytest.raises(CC.CalibrationError, match="evidence"):
+        released(tmp_path, evidence=[])
+    with pytest.raises(CC.CalibrationError, match="is not a file"):
+        released(tmp_path, evidence=[tmp_path / "nowhere.md"])
+    one = evidence_file(tmp_path)
+    with pytest.raises(CC.CalibrationError, match="twice"):
+        released(tmp_path, evidence=[one, one])
+
+
+def test_a_release_of_a_role_that_changed_after_the_seal_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    held_verdict(tmp_path)
+    monkeypatch.setattr(RO, "role_sha256", lambda name: "0" * 64)
+    with pytest.raises(CC.CalibrationError, match="registry"):
+        released(tmp_path)
+
+
+def test_a_verdict_of_another_role_than_the_seal_is_not_released(tmp_path: Path) -> None:
+    path = held_verdict(tmp_path)
+    body = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**body, "role": "web_verifier"}), encoding="utf-8")
+    with pytest.raises(CC.CalibrationError, match="web_verifier"):
+        released(tmp_path)
+
+
+NEEDS = [("field_researcher", "bp-bucket")]
+
+
+def test_a_released_verdict_stands_like_a_pass_and_is_named_released(tmp_path: Path) -> None:
+    held_verdict(tmp_path)
+    released(tmp_path)
+
+    standing = CC.require_passed(tmp_path / "calibration", NEEDS)
+
+    assert standing == [
+        {
+            "role": "field_researcher",
+            "comparison": "bp-bucket",
+            "calibration_id": "cal-held",
+            "standing": CC.RELEASED,
+            "decided_by": "orchestrator (D8)",
+        }
+    ]
+
+
+def test_a_held_verdict_without_its_release_does_not_stand(tmp_path: Path) -> None:
+    held_verdict(tmp_path)
+    with pytest.raises(CC.CalibrationError, match="field_researcher/bp-bucket"):
+        CC.require_passed(tmp_path / "calibration", NEEDS)
+
+
+def test_a_release_binds_the_role_and_the_comparison_like_a_pass(tmp_path: Path) -> None:
+    held_verdict(tmp_path)
+    released(tmp_path)
+    with pytest.raises(CC.CalibrationError, match="field_researcher/general"):
+        CC.require_passed(tmp_path / "calibration", [("field_researcher", "general")])
+    with pytest.raises(CC.CalibrationError, match="adversarial/bp-bucket"):
+        CC.require_passed(tmp_path / "calibration", [("adversarial", "bp-bucket")])
+
+
+def test_a_release_of_a_role_that_was_edited_since_no_longer_stands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    held_verdict(tmp_path)
+    released(tmp_path)
+    monkeypatch.setattr(RO, "role_sha256", lambda name: "0" * 64)
+    with pytest.raises(CC.CalibrationError, match="field_researcher/bp-bucket"):
+        CC.require_passed(tmp_path / "calibration", NEEDS)
+
+
+def test_a_pass_is_named_passed_and_is_preferred_to_a_release(tmp_path: Path) -> None:
+    held_verdict(tmp_path, calibration_id="cal-held")
+    released(tmp_path)
+    held_verdict(tmp_path, calibration_id="cal-pass", passed=True, held=None)
+
+    standing = CC.require_passed(tmp_path / "calibration", NEEDS)
+
+    assert [(s["calibration_id"], s["standing"]) for s in standing] == [("cal-pass", CC.PASSED)]
+    assert "decided_by" not in standing[0]
+
+
+@pytest.mark.parametrize("what", ["verdict", "seal", "evidence", "evidence-gone"])
+def test_a_release_whose_binding_changed_is_refused_by_name(tmp_path: Path, what: str) -> None:
+    held_verdict(tmp_path)
+    evidence = evidence_file(tmp_path)
+    released(tmp_path, evidence=[evidence])
+    root = tmp_path / "calibration"
+    if what == "verdict":
+        path = root / CC.VERDICTS_DIR / "cal-held.json"
+        body = json.loads(path.read_text(encoding="utf-8"))
+        path.write_text(json.dumps({**body, "agreement": 0.89}), encoding="utf-8")
+    elif what == "seal":
+        path = root / CC.THRESHOLDS_FILE
+        seals = json.loads(path.read_text(encoding="utf-8"))
+        seals["cal-held"]["threshold"] = 0.5
+        path.write_text(json.dumps(seals), encoding="utf-8")
+    elif what == "evidence":
+        evidence.write_text("0 false sources, and more\n", encoding="utf-8")
+    else:
+        evidence.unlink()
+    with pytest.raises(CC.CalibrationError, match=f"release of cal-held.*{what.split('-')[0]}"):
+        CC.require_passed(root, NEEDS)
+
+
+def test_a_release_file_beside_a_pass_is_not_read(tmp_path: Path) -> None:
+    held_verdict(tmp_path, passed=True, held=None)
+    root = tmp_path / "calibration"
+    (root / CC.RELEASES_DIR).mkdir()
+    (root / CC.RELEASES_DIR / "cal-held.json").write_text("not json", encoding="utf-8")
+    assert CC.require_passed(root, NEEDS)[0]["standing"] == CC.PASSED
+
+
+def test_the_cli_releases_a_held_verdict(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    held_verdict(tmp_path)
+    one, two = evidence_file(tmp_path, "a.md"), evidence_file(tmp_path, "b.md", "b\n")
+    root = str(tmp_path / "calibration")
+
+    code = CC.main(
+        ["release", "--root", root, "--id", "cal-held", "--decided-by", "orchestrator",
+         "--reason", "0 false sources", "--evidence", str(one), str(two)]
+    )  # fmt: skip
+
+    assert code == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["calibration_id"] == "cal-held" and len(printed["evidence"]) == 2
+    assert CC.require_passed(tmp_path / "calibration", NEEDS)[0]["standing"] == CC.RELEASED
+
+
+def test_the_cli_refuses_to_release_a_pass(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    held_verdict(tmp_path, passed=True, held=None)
+    one = evidence_file(tmp_path)
+    code = CC.main(
+        ["release", "--root", str(tmp_path / "calibration"), "--id", "cal-held",
+         "--decided-by", "orchestrator", "--reason", "x", "--evidence", str(one)]
+    )  # fmt: skip
+    assert code == 2 and "REFUSED" in capsys.readouterr().err

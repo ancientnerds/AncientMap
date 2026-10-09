@@ -60,6 +60,25 @@ AUDIT_LOG.
 | `fr-bp-001` | `field_researcher`, Sonnet | 0.92, passed | sealed against the Sonnet entry; the entry changed, so the gate (`require_passed`) no longer accepts it: measured again as `fr-bp-002` |
 | `adv-001` | `adversarial`, Opus | agreement 0.575 (23 of 40 units) < 0.9, 0 false sources | **failed, held** (no tier above Opus); its design is replaced, not the role |
 
+**3.0a The second round (2026-10-09) and the release.** `adv-truth-001` (adversarial, Opus) **passed** at 0.94 (47 of 50).
+`fr-general-002` (0.871, 81 of 93) and `fr-bp-002` (0.88, 22 of 25) are Opus and **failed with 0 false sources, held**:
+Opus has no tier above, and the code says "the owner decides". The owner is away and delegated full autonomy (D8), so the
+orchestrator **released** both, because the O18 spot check found every disagreement sourced and equally valid
+(`fr-general-002`: another `source_url` page or a defensible type) or a machine fetch failure while the quote stands on the
+page (`fr-bp-002`: Cova Negra, Apidima, Kozarnika), and because every cell the wave writes also passes the calibrated Opus
+adversarial check and the machine quote check first. A release is a record, never an edit of the verdict:
+
+```
+$PY scripts/remediation/calibrate_claude.py release --id fr-general-002 --decided-by TEXT --reason TEXT \
+    --evidence verdicts/fr-general-002.json fr-general-002/COMPARISON.json <spot-check note>
+```
+
+It is refused for a verdict that passed, one with a tier move, one that is not held and a missing verdict, and it writes
+`releases/<id>.json` once: the sha256 of the verdict, the seal, the role's registry entry and every evidence file. The
+gate (`require_passed`) counts a release like a pass while all of that still hashes as released, refuses a release that
+moved by name, and `plan.py wave` records in `WAVE.json` how each calibration stands (`passed` or `released`, with the
+decider). The cards lane has the same pair in `teaser/calibrate.py release` and `standing`.
+
 `adv-001` and `fr-general-001` stay recorded as failed; nothing of them is edited. **Why `adv-001`'s design was
 replaced.** Its gold was the `opus_audit` keep and revert verdicts on the DeepSeek Phase-3 writes - a different
 question, answered on different evidence (the finder's quote and the evidence files of the audit), asked of the

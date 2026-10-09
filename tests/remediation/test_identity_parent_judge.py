@@ -570,7 +570,7 @@ class TestTheRounds:
             label=PARENT,
             text=a_part_answer(),
             answered_by="web_verifier:b1",
-            model=SONNET,
+            model=OPUS,
         )
         summary = import_round(run, J.STAGE_VERDICT, "r1", CTX, fetch, now=lambda: NOW)
         assert summary["decided"] == 1

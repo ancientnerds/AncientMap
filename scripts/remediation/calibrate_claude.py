@@ -29,6 +29,12 @@ model or opens a socket.
     verdict  `passed` and, when it did not, the tier move (or the hold at the top) into
              `<root>/verdicts/<id>.json`. `--false-sources` is the count of the spot check of every
              disagreement's URL and quote (O18), made by the orchestrator, never assumed.
+    release  the decision to let a verdict stand that failed and is held at the top tier (Opus has
+             no tier above), into `<root>/releases/<id>.json`: who decided, why, and the sha256 of
+             the verdict, the seal, the role's registry entry and each evidence file. Refused for a
+             verdict that passed, one with a tier move (the role moves, it is not released), one not
+             held, a missing verdict and an empty reason. `require_passed` counts a valid release
+             like a pass and names it as released.
 
     python scripts/remediation/calibrate_claude.py seal --id ID --role ROLE --handoff DIR \\
         --batches B [B ...] --threshold 0.9 [--truth FILE] [--comparison NAME] \\
@@ -36,6 +42,8 @@ model or opens a socket.
     python scripts/remediation/calibrate_claude.py prepare --id ID --run RUN
     python scripts/remediation/calibrate_claude.py compare --id ID
     python scripts/remediation/calibrate_claude.py verdict --id ID --false-sources N
+    python scripts/remediation/calibrate_claude.py release --id ID --decided-by TEXT --reason TEXT \\
+        --evidence FILE [FILE ...]
 """
 
 from __future__ import annotations
@@ -60,6 +68,8 @@ from phase3.ledger import utc_now  # noqa: E402 - the ledger's clock
 CALIBRATION_ROOT = D.REPO / "output" / "remediation" / "calibration"
 THRESHOLDS_FILE = "THRESHOLDS.json"
 VERDICTS_DIR = "verdicts"
+#: `<root>/releases/<id>.json`: the decision to let a verdict stand that failed and is held at the top tier.
+RELEASES_DIR = "releases"
 RECORDED_FILE = "RECORDED.json"
 COMPARISON_FILE = "COMPARISON.json"
 ANSWER_SUFFIX = ".answer.json"
@@ -68,6 +78,9 @@ PROMPT_SUFFIX = ".prompt.txt"
 #: A pool whose gold is not a recorded answer, or that measures with a rule of its own, names another
 #: comparison at the seal and is compared by the tool that owns it (`compare(comparators=...)`).
 COMPARE_ALL = "all"
+#: How a verdict stands for `require_passed`: it passed, or it failed at the top tier and was released.
+PASSED = "passed"
+RELEASED = "released"
 #: O18: a calibration allows no false source.
 MAX_FALSE_SOURCES = 0
 #: The name a lane WC handoff starts with (`wc-pilot-2026-09-27-r1`): its pools carry the lane's
@@ -491,33 +504,179 @@ def verdict(
     return result
 
 
-def require_passed(root: Path, needs: Iterable[tuple[str, str]]) -> None:
-    """Refuse unless every `(role, comparison)` of `needs` has a passing verdict whose seal names the
-    role and the comparison and binds the role's registry entry as it is now: the calibration of a
-    role that was edited (a tier move) since its seal no longer vouches for it, and neither does a
-    failed one. All the unmet needs are named in one refusal."""
+def seal_sha256(seal: dict[str, Any]) -> str:
+    """The sha256 of a seal as `THRESHOLDS.json` holds it (its canonical JSON): what a release binds."""
+    return hashlib.sha256(
+        json.dumps(seal, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def evidence_records(evidence: Sequence[Path]) -> list[dict[str, str]]:
+    """What a release rests on besides the verdict: `{path, sha256}` of each evidence file (the
+    resolved path). Refused: no evidence, a path that is not a file, a file named twice. Shared by
+    every calibration tool that releases (`teaser/calibrate.py release`)."""
+    if not evidence:
+        raise CalibrationError("a release names its evidence: at least one file")
+    files = [Path(f).resolve() for f in evidence]
+    for file in files:
+        if not file.is_file():
+            raise CalibrationError(f"evidence {file} is not a file")
+    if len(set(files)) != len(files):
+        raise CalibrationError("evidence names a file twice")
+    return [{"path": str(f), "sha256": sha256_file(f)} for f in files]
+
+
+def verify_evidence(items: Sequence[dict[str, str]], moved: str) -> None:
+    """Refuse (naming `moved`, the release) an evidence file that is gone or changed since."""
+    for item in items:
+        file = Path(item["path"])
+        if not file.is_file():
+            raise CalibrationError(f"{moved}: evidence {file} is gone")
+        if sha256_file(file) != item["sha256"]:
+            raise CalibrationError(f"{moved}: evidence {file} changed after the release")
+
+
+def release(
+    root: Path,
+    *,
+    calibration_id: str,
+    decided_by: str,
+    reason: str,
+    evidence: Sequence[Path],
+    now: Callable[[], str] = utc_now,
+) -> dict[str, Any]:
+    """Let a verdict stand that failed and is held at the top tier, written once to
+    `<root>/releases/<id>.json`: Opus has no tier above, `verdict` says "the owner decides", and
+    this is that decision on record - who made it, why, and the sha256 of what it rests on (the
+    verdict, the seal, the role's registry entry, every evidence file).
+
+    Refused: a calibration that is not sealed or whose role was edited since the seal; a missing
+    verdict; a verdict of another role than the seal's; a verdict that passed (nothing to release);
+    one with a tier move (that role moves up, it is not released); a failed verdict that is not held;
+    an empty `decided_by` or `reason`; no evidence, an evidence path that is not a file, one named
+    twice; a release written already."""
+    if not decided_by.strip():
+        raise CalibrationError("decided by is empty: a release names who decided it")
+    if not reason.strip():
+        raise CalibrationError("reason is empty: a release names why the verdict stands")
+    sealed = _sealed(root, calibration_id)
+    _need_unchanged_role(sealed)
+    verdict_path = root / VERDICTS_DIR / f"{calibration_id}.json"
+    held = _read(verdict_path, "the verdict")
+    if held["role"] != sealed["role"]:
+        raise CalibrationError(
+            f"{verdict_path} is the verdict of role {held['role']}, but {calibration_id} is sealed "
+            f"for role {sealed['role']}"
+        )
+    if held["passed"]:
+        raise CalibrationError(f"{calibration_id} passed: there is nothing to release")
+    if held["tier_move"] is not None:
+        raise CalibrationError(
+            f"{calibration_id} carries a tier move: the role moves up a tier, it is not released"
+        )
+    if not held.get("held"):
+        raise CalibrationError(
+            f"{calibration_id} failed but is not held at the top tier: only a held verdict is released"
+        )
+    items = evidence_records(evidence)
+    record = {
+        "calibration_id": calibration_id,
+        "role": sealed["role"],
+        "verdict_sha256": sha256_file(verdict_path),
+        "seal_sha256": seal_sha256(sealed),
+        "role_sha256": sealed["role_sha256"],
+        "decided_by": decided_by,
+        "reason": reason,
+        "evidence": items,
+        "decided_at": now(),
+    }
+    _write_once(root / RELEASES_DIR / f"{calibration_id}.json", record)
+    return record
+
+
+def _check_release(root: Path, calibration_id: str, seal: dict[str, Any]) -> dict[str, Any]:
+    """The release of `calibration_id`, once it is shown to rest on the verdict, the seal, the role
+    entry and the evidence files as they are now - or `CalibrationError` naming what moved."""
+    path = root / RELEASES_DIR / f"{calibration_id}.json"
+    record = _read(path, "the release")
+    moved = f"the release of {calibration_id} ({path})"
+    if record["verdict_sha256"] != sha256_file(root / VERDICTS_DIR / f"{calibration_id}.json"):
+        raise CalibrationError(f"{moved}: the verdict changed after the release")
+    if record["seal_sha256"] != seal_sha256(seal) or record["role_sha256"] != seal["role_sha256"]:
+        raise CalibrationError(f"{moved}: the seal changed after the release")
+    verify_evidence(record["evidence"], moved)
+    return record
+
+
+def _binds(seal: dict[str, Any], role: str, comparison: str) -> bool:
+    """Whether a seal names the role and the comparison and binds the role's registry entry as it is
+    now."""
+    return (
+        seal["role"] == role
+        and seal["comparison"] == comparison
+        and seal["role_sha256"] == RO.role_sha256(role)
+    )
+
+
+def require_passed(root: Path, needs: Iterable[tuple[str, str]]) -> list[dict[str, str]]:
+    """Refuse unless every `(role, comparison)` of `needs` has a standing verdict whose seal names
+    the role and the comparison and binds the role's registry entry as it is now: the calibration of
+    a role that was edited (a tier move) since its seal no longer vouches for it, and neither does a
+    failed one. A verdict stands when it passed, or when it failed, is held at the top tier and has
+    a release (`release`) that still rests on the verdict, the seal and the evidence it was made on
+    (a release that does not is refused by name). A pass is preferred to a release. All the unmet
+    needs are named in one refusal.
+
+    Returns, per need, how it stands (`standing` is `PASSED` or `RELEASED`; a release also names who
+    decided it), so that the caller can say so in its output."""
     seals = _seals(root)
     verdicts_dir = root / VERDICTS_DIR
-    passed = [
-        seals[path.stem]
+    candidates = [
+        (path.stem, seals[path.stem], PASSED)
         for path in sorted(verdicts_dir.glob("*.json"))
         if path.stem in seals and json.loads(path.read_text(encoding="utf-8"))["passed"]
     ]
-    unmet = [
-        f"{role}/{comparison}"
-        for role, comparison in needs
-        if not any(
-            seal["role"] == role
-            and seal["comparison"] == comparison
-            and seal["role_sha256"] == RO.role_sha256(role)
-            for seal in passed
-        )
+    candidates += [
+        (path.stem, seals[path.stem], RELEASED)
+        for path in sorted(verdicts_dir.glob("*.json"))
+        if path.stem in seals and (root / RELEASES_DIR / f"{path.stem}.json").exists()
     ]
+    standing: list[dict[str, str]] = []
+    unmet: list[str] = []
+    for role, comparison in needs:
+        found = next(
+            (
+                (calibration_id, how)
+                for calibration_id, seal, how in candidates
+                if _binds(seal, role, comparison)
+            ),
+            None,
+        )
+        if found is None:
+            unmet.append(f"{role}/{comparison}")
+            continue
+        calibration_id, how = found
+        line = {
+            "role": role,
+            "comparison": comparison,
+            "calibration_id": calibration_id,
+            "standing": how,
+        }
+        if how == RELEASED:
+            line["decided_by"] = _check_release(root, calibration_id, seals[calibration_id])[
+                "decided_by"
+            ]
+        standing.append(line)
     if unmet:
         raise CalibrationError(
-            f"no passing verdict under {verdicts_dir} for {', '.join(unmet)} (sealed against the "
-            "role's registry entry as it is now): calibrate before the lane writes"
+            f"no passing or released verdict under {verdicts_dir} for {', '.join(unmet)} (sealed "
+            "against the role's registry entry as it is now): calibrate before the lane writes"
         )
+    return standing
 
 
 # ------------------------------------------------------------------------------------------ CLI
@@ -527,7 +686,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     parser = argparse.ArgumentParser(prog="calibrate-claude", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("seal", "prepare", "compare", "verdict"):
+    for name in ("seal", "prepare", "compare", "verdict", "release"):
         command = sub.add_parser(name)
         command.add_argument("--root", type=Path, default=CALIBRATION_ROOT)
         command.add_argument("--id", required=True, dest="calibration_id")
@@ -550,6 +709,10 @@ def main(argv: Iterable[str] | None = None) -> int:
     seal_cli.add_argument("--max-false-writes", type=int, default=MAX_FALSE_WRITES)
     sub.choices["prepare"].add_argument("--run", required=True, type=Path)
     sub.choices["verdict"].add_argument("--false-sources", required=True, type=int)
+    release_cli = sub.choices["release"]
+    release_cli.add_argument("--decided-by", required=True)
+    release_cli.add_argument("--reason", required=True)
+    release_cli.add_argument("--evidence", required=True, nargs="+", type=Path)
     args = parser.parse_args(list(argv) if argv is not None else None)
     try:
         if args.command == "seal":
@@ -570,6 +733,14 @@ def main(argv: Iterable[str] | None = None) -> int:
             payload = prepare(args.root, calibration_id=args.calibration_id, run=args.run)
         elif args.command == "compare":
             payload = compare(args.root, calibration_id=args.calibration_id)
+        elif args.command == "release":
+            payload = release(
+                args.root,
+                calibration_id=args.calibration_id,
+                decided_by=args.decided_by,
+                reason=args.reason,
+                evidence=args.evidence,
+            )
         else:
             payload = verdict(
                 args.root, calibration_id=args.calibration_id, false_sources=args.false_sources

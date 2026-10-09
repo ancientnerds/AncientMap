@@ -138,7 +138,7 @@ class TestTheScopeLane:
         )
         brief = capsys.readouterr().out
         assert (
-            "--role web_verifier --model claude-sonnet-5-5" in brief and "scope-window-web" in brief
+            "--role web_verifier --model claude-opus-5-5" in brief and "scope-window-web" in brief
         )
 
         out = R.stage_dir(run, SJ.web_spec())
@@ -523,7 +523,7 @@ class TestTheRetargetLane:
             0,
             1,
             0,
-            "claude-sonnet-5-5",
+            "claude-opus-5-5",
         )
 
         code, _, _ = run_json(

@@ -524,7 +524,7 @@ class TestTheSpec:
         assert (spec.stage, spec.role, spec.model) == (
             "retarget-web",
             "web_verifier",
-            "claude-sonnet-5-5",
+            "claude-opus-5-5",
         )
         assert RT.recheck_spec().role == "adversarial"
         assert RT.recheck_spec().model == "claude-opus-5-5"

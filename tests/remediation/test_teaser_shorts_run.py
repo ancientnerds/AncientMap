@@ -50,6 +50,13 @@ OPUS = OH.OPUS_MODEL
 SONNET = OH.SONNET_MODEL
 
 
+def sonnet_checker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Register `fact_checker` on Sonnet again: no registered role of the card lane is on a lower tier
+    since teaser-2026-10-09b, and `escalate_role` moves a role up from the model a run recorded."""
+    sonnet = RO.Role("fact_checker", "claude-sonnet-5-5", "high", "wb_check_verify_opus")
+    monkeypatch.setattr(RO, "ROLES", RO._registry(*{**RO.ROLES, "fact_checker": sonnet}.values()))
+
+
 def sid(name: str) -> str:
     return str(S.BY_NAME[name]["site_id"])
 
@@ -268,8 +275,8 @@ class TestSelect:
         ]
         assert record["roles"]["card_writer"] == {"model": "claude-opus-5-5", "effort": "high"}
         assert record["roles"]["hook_rater"] == {"model": "claude-opus-5-5", "effort": "xhigh"}
-        assert record["roles"]["fact_checker"] == {"model": "claude-sonnet-5-5", "effort": "high"}
-        assert record["roles"]["web_verifier"] == {"model": "claude-sonnet-5-5", "effort": "high"}
+        assert record["roles"]["fact_checker"] == {"model": "claude-opus-5-5", "effort": "high"}
+        assert record["roles"]["web_verifier"] == {"model": "claude-opus-5-5", "effort": "high"}
         assert record["roles"]["pilot_judge"] == {"model": "claude-opus-5-5", "effort": "xhigh"}
         assert R.spec_of(run) is R.SHORTS_SPEC
 
@@ -401,7 +408,7 @@ class TestTheFirstRound:
         assert (
             prov["v"] == 3 and prov["contract"] == "shorts-v1" and prov["run"] == "wb-shorts-test"
         )
-        assert prov["models"] == {"write": OPUS, "rate": OPUS, "check": SONNET, "verify": SONNET}
+        assert prov["models"] == {"write": OPUS, "rate": OPUS, "check": OPUS, "verify": OPUS}
         assert prov["ai_system"] == M.AI_SYSTEM_CLAUDE
         assert prov["hook"] == {"type": "object", "rating": 4, "variant": 1}
         assert prov["anchors"] == S.BY_NAME[MP]["anchors"] and prov["reserve"] == ["S3"]
@@ -659,7 +666,7 @@ class TestTheFirstRound:
         R.outcomes(run)
         prov = outcome(run, MP)["provenance"]
         assert prov["check"]["stage"] == "check-v" and prov["verify"]["stage"] == "verify2"
-        assert prov["models"] == {"write": OPUS, "rate": None, "check": SONNET, "verify": SONNET}
+        assert prov["models"] == {"write": OPUS, "rate": None, "check": OPUS, "verify": OPUS}
         assert prov["hook"] == {"type": "object", "rating": None, "variant": None}
         assert [d["claim"] for d in R.read_jsonl(run / "DESCRIPTION_DEFECTS.jsonl")] == []
 
@@ -773,6 +780,7 @@ class TestTheRoles:
     def test_an_escalation_needs_the_registry_to_name_the_new_model_first(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        sonnet_checker(monkeypatch)
         run = make_run(tmp_path, [MP])
         verdict = tmp_path / "verdict.json"
         move = RO.escalation("fact_checker", calibration_id="c-1", reason="agreement 0.8")
@@ -798,6 +806,7 @@ class TestTheRoles:
     def test_a_failed_calibration_moves_a_role_up_one_tier_before_its_first_round(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        sonnet_checker(monkeypatch)
         run = make_run(tmp_path, [MP])
         other = make_run(tmp_path / "other", [MP])
         verdict = tmp_path / "verdict.json"
@@ -1111,8 +1120,8 @@ class TestTheBriefs:
         ("stage", "role", "model", "effort"),
         [
             ("rate", "hook_rater", "claude-opus-5-5", "xhigh"),
-            ("check", "fact_checker", "claude-sonnet-5-5", "high"),
-            ("verify", "web_verifier", "claude-sonnet-5-5", "high"),
+            ("check", "fact_checker", "claude-opus-5-5", "high"),
+            ("verify", "web_verifier", "claude-opus-5-5", "high"),
         ],
     )
     def test_each_stage_names_the_role_the_registry_fixed(
@@ -1150,7 +1159,7 @@ class TestTheBriefs:
         job = jobs[0]
         assert (job["role"], job["model"], job["effort"], job["stage"]) == (
             "web_verifier",
-            "claude-sonnet-5-5",
+            "claude-opus-5-5",
             "high",
             "verify",
         )
@@ -1511,7 +1520,7 @@ class TestTheRecheckRun:
         with pytest.raises(R.RunError, match="did not answer as role fact_checker"):
             R.import_stage(run, "check", fit=T.fit)
         text = R.brief(run, handoff, "check-001")
-        assert "**fact_checker**" in text and "--model claude-sonnet-5-5" in text
+        assert "**fact_checker**" in text and "--model claude-opus-5-5" in text
         assert R.agent_jobs(run, handoff)[0]["role"] == "fact_checker"
 
     def test_a_pilot_judge_is_refused_for_a_recheck_run(self, tmp_path: Path) -> None:

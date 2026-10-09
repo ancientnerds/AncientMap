@@ -24,12 +24,13 @@ import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
 
 #: D6, role by role: (model id, effort). `field_researcher` is Opus since the tier move of 2026-10-09
-#: (fr-general-001 failed on Sonnet); `enrich_writer` is the lane E writer that stayed on Sonnet.
+#: (fr-general-001 failed on Sonnet), `fact_checker` and `web_verifier` since teaser-2026-10-09b;
+#: `enrich_writer` is the lane E writer that stayed on Sonnet.
 D6 = {
     "card_writer": ("claude-opus-5-5", "high"),
     "hook_rater": ("claude-opus-5-5", "xhigh"),
-    "fact_checker": ("claude-sonnet-5-5", "high"),
-    "web_verifier": ("claude-sonnet-5-5", "high"),
+    "fact_checker": ("claude-opus-5-5", "high"),
+    "web_verifier": ("claude-opus-5-5", "high"),
     "field_researcher": ("claude-opus-5-5", "high"),
     "enrich_writer": ("claude-sonnet-5-5", "high"),
     "adversarial": ("claude-opus-5-5", "high"),
@@ -101,9 +102,12 @@ def test_an_unregistered_role_is_refused_not_defaulted() -> None:
 
 
 def test_the_model_id_of_the_cli_is_checked_against_the_registry() -> None:
-    RO.require_model("fact_checker", "claude-sonnet-5-5")
-    with pytest.raises(RO.RoleError, match="fact_checker.*claude-sonnet-5-5.*claude-opus-5-5"):
-        RO.require_model("fact_checker", "claude-opus-5-5")
+    RO.require_model("enrich_writer", "claude-sonnet-5-5")
+    with pytest.raises(RO.RoleError, match="enrich_writer.*claude-sonnet-5-5.*claude-opus-5-5"):
+        RO.require_model("enrich_writer", "claude-opus-5-5")
+    RO.require_model("fact_checker", "claude-opus-5-5")  # moved up by teaser-2026-10-09b
+    with pytest.raises(RO.RoleError, match="fact_checker.*claude-opus-5-5.*claude-sonnet-5-5"):
+        RO.require_model("fact_checker", "claude-sonnet-5-5")
 
 
 # ----------------------------------------------------------------------------- answered_by
@@ -158,16 +162,36 @@ def test_an_escalation_needs_its_reason_and_its_calibration() -> None:
         RO.escalation("image_prefilter", calibration_id="c", reason=" ")
 
 
-def test_the_field_researcher_move_is_a_record_and_the_registry_stands_where_it_ends() -> None:
-    [move] = RO.APPLIED_ESCALATIONS
-    assert dict(move) == {
-        "role": "field_researcher",
-        "from": "claude-sonnet-5-5",
-        "to": "claude-opus-5-5",
-        "calibration_id": "fr-general-001",
-        "reason": "agreement 0.8636 is below the sealed threshold 0.9",
-    }
-    assert RO.ROLES["field_researcher"].model == move["to"]
+def test_the_applied_moves_are_records_and_the_registry_stands_where_they_end() -> None:
+    """Three moves, oldest first, each copied from the failed verdict that named it
+    (`verdicts/fr-general-001.json`, `VERDICT-fact_checker.json` and `VERDICT-web_verifier.json` of
+    teaser-2026-10-09b)."""
+    moves = [dict(move) for move in RO.APPLIED_ESCALATIONS]
+    assert moves == [
+        {
+            "role": "field_researcher",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "fr-general-001",
+            "reason": "agreement 0.8636 is below the sealed threshold 0.9",
+        },
+        {
+            "role": "fact_checker",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "teaser-2026-10-09b",
+            "reason": "failed: checker_agreement, checker_fail_again, checker_good",
+        },
+        {
+            "role": "web_verifier",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "teaser-2026-10-09b",
+            "reason": "failed: verifier_verified",
+        },
+    ]
+    for move in moves:
+        assert RO.ROLES[move["role"]].model == move["to"]
     RO.check_applied_escalations(RO.APPLIED_ESCALATIONS, RO.ROLES)
 
 
@@ -287,12 +311,12 @@ def test_answer_with_a_role_records_the_role_in_answered_by(tmp_path: Path) -> N
     text.write_text("VERDICT: SUPPORTED\n", encoding="utf-8")
 
     done = _run(
-        _answer_argv(tmp_path, text, "--model", "claude-sonnet-5-5", "--role", "fact_checker")
+        _answer_argv(tmp_path, text, "--model", "claude-sonnet-5-5", "--role", "enrich_writer")
     )
 
     assert done.returncode == 0, done.stderr
     stored = _stored(tmp_path)
-    assert stored["answered_by"] == "fact_checker:agent-7"
+    assert stored["answered_by"] == "enrich_writer:agent-7"
     assert stored["model"] == OH.SONNET_MODEL
     assert set(stored) == OH.ANSWER_KEYS  # the frozen shape did not grow
 
@@ -303,11 +327,11 @@ def test_answer_with_a_role_refuses_a_model_that_is_not_the_registered_one(tmp_p
     text.write_text("VERDICT: SUPPORTED\n", encoding="utf-8")
 
     refused = _run(
-        _answer_argv(tmp_path, text, "--model", "claude-opus-5-5", "--role", "fact_checker")
+        _answer_argv(tmp_path, text, "--model", "claude-opus-5-5", "--role", "enrich_writer")
     )
 
     assert refused.returncode == 2
-    assert "fact_checker" in refused.stderr and "claude-sonnet-5-5" in refused.stderr
+    assert "enrich_writer" in refused.stderr and "claude-sonnet-5-5" in refused.stderr
     assert not (tmp_path / OH.answer_relpath("batch-0001", "check", "site-1")).exists()
 
 

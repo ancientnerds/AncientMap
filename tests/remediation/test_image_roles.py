@@ -949,7 +949,7 @@ class TestTheIdentityAnswers:
     def test_the_role_is_the_web_verifier_for_both_modes(self) -> None:
         for spec in (ID.VERIFY_SPEC, ID.RESEARCH_SPEC):
             assert (RO.role(spec.role).model, RO.role(spec.role).effort) == (
-                "claude-sonnet-5-5",
+                "claude-opus-5-5",
                 "high",
             )
             assert spec.web is True

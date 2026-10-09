@@ -8690,7 +8690,7 @@ WD5_ADV_CASES: list[Case] = [
     Case(
         "wd5-adv: a wd5 wave needs the calibrations",
         FIELDS_PLAN,
-        "        _require_calibrated()\n",
+        "        calibrations = _require_calibrated()\n",
         "        pass\n",
         "test_the_wave_is_planned_only_after_the_roles_passed_their_calibration",
         WD5_TESTS,
@@ -8713,16 +8713,16 @@ WD5_ADV_CASES: list[Case] = [
     Case(
         "wd5-adv: a calibration names the pool it passed",
         CALIBRATE,
-        '            and seal["comparison"] == comparison',
-        "            and True",
+        '        and seal["comparison"] == comparison',
+        "        and True",
         "test_the_wave_is_planned_only_after_the_roles_passed_their_calibration",
         WD5_TESTS,
     ),
     Case(
         "wd5-adv: a calibration binds the role as it is now",
         CALIBRATE,
-        '            and seal["role_sha256"] == RO.role_sha256(role)',
-        "            and True",
+        '        and seal["role_sha256"] == RO.role_sha256(role)',
+        "        and True",
         "test_the_wave_is_planned_only_after_the_roles_passed_their_calibration",
         WD5_TESTS,
     ),
@@ -9649,6 +9649,145 @@ WD5_ADV_CASES: list[Case] = [
     ),
 ]
 CASES += WD5_ADV_CASES
+
+
+# ---------------- the release of a held verdict (2026-10-09): calibrate_claude.py release/require_passed
+RELEASE_TESTS = "tests/remediation/test_calibrate_claude.py"
+RELEASE_CASES: list[Case] = [
+    guard(
+        "release: a passed verdict is not released",
+        CALIBRATE,
+        '    if held["passed"]:',
+        "test_a_passed_verdict_is_not_released",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: a verdict with a tier move is not released",
+        CALIBRATE,
+        '    if held["tier_move"] is not None:',
+        "test_a_verdict_with_a_tier_move_is_moved_not_released",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: only a held verdict is released",
+        CALIBRATE,
+        '    if not held.get("held"):',
+        "test_a_failed_verdict_that_is_not_held_is_not_released",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: the verdict is the seal's role",
+        CALIBRATE,
+        '    if held["role"] != sealed["role"]:',
+        "test_a_verdict_of_another_role_than_the_seal_is_not_released",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: it names who decided",
+        CALIBRATE,
+        "    if not decided_by.strip():",
+        "test_a_release_names_who_decided_and_why",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: it names why",
+        CALIBRATE,
+        "    if not reason.strip():",
+        "test_a_release_names_who_decided_and_why",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: it needs evidence",
+        CALIBRATE,
+        "    if not evidence:",
+        "test_a_release_needs_evidence_that_exists_once_each",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: evidence is a file",
+        CALIBRATE,
+        "        if not file.is_file():\n"
+        '            raise CalibrationError(f"evidence {file} is not a file")',
+        "test_a_release_needs_evidence_that_exists_once_each",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: evidence is named once",
+        CALIBRATE,
+        "    if len(set(files)) != len(files):",
+        "test_a_release_needs_evidence_that_exists_once_each",
+        RELEASE_TESTS,
+    ),
+    Case(
+        "release: the role is unchanged since the seal",
+        CALIBRATE,
+        "    _need_unchanged_role(sealed)\n    verdict_path = root / VERDICTS_DIR",
+        "    verdict_path = root / VERDICTS_DIR",
+        "test_a_release_of_a_role_that_changed_after_the_seal_is_refused",
+        RELEASE_TESTS,
+    ),
+    Case(
+        "release: a release stands only for a held verdict's own release file",
+        CALIBRATE,
+        '        if path.stem in seals and (root / RELEASES_DIR / f"{path.stem}.json").exists()',
+        "        if path.stem in seals",
+        "test_a_held_verdict_without_its_release_does_not_stand",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: a release is checked against what it rests on",
+        CALIBRATE,
+        "        if how == RELEASED:",
+        "test_a_release_whose_binding_changed_is_refused_by_name",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: the verdict is unchanged since the release",
+        CALIBRATE,
+        '    if record["verdict_sha256"] != sha256_file(root / VERDICTS_DIR / f"{calibration_id}.json"):',
+        "test_a_release_whose_binding_changed_is_refused_by_name",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: the seal is unchanged since the release",
+        CALIBRATE,
+        '    if record["seal_sha256"] != seal_sha256(seal) or record["role_sha256"] != seal["role_sha256"]:',
+        "test_a_release_whose_binding_changed_is_refused_by_name",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: the evidence is still there",
+        CALIBRATE,
+        "        if not file.is_file():\n"
+        '            raise CalibrationError(f"{moved}: evidence {file} is gone")',
+        "test_a_release_whose_binding_changed_is_refused_by_name",
+        RELEASE_TESTS,
+    ),
+    guard(
+        "release: the evidence is unchanged",
+        CALIBRATE,
+        '        if sha256_file(file) != item["sha256"]:',
+        "test_a_release_whose_binding_changed_is_refused_by_name",
+        RELEASE_TESTS,
+    ),
+    Case(
+        "release: the wave records how each calibration stands",
+        FIELDS_PLAN,
+        '        record["calibrations"] = result["calibrations"] = calibrations\n',
+        "        pass\n",
+        "test_a_released_calibration_is_named_released_in_the_wave",
+        WD5_TESTS,
+    ),
+    Case(
+        "release: a pass is named passed before a release",
+        CALIBRATE,
+        "    candidates += [\n        (path.stem, seals[path.stem], RELEASED)",
+        "    candidates = [\n        (path.stem, seals[path.stem], RELEASED)",
+        "test_a_pass_is_named_passed_and_is_preferred_to_a_release",
+        RELEASE_TESTS,
+    ),
+]
+CASES += RELEASE_CASES
 
 
 # ---------------------------------------------- HUMAN_ONLY Nr. 7: the Chiapa lanes (2026-09-29)

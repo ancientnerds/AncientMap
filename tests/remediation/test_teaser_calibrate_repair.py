@@ -616,7 +616,7 @@ class TestTheRecorderHook:
         return OH.main(
             ["answer", "--dir", str(handoff), "--batch-id", batch, "--stage", stage,
              "--label", label, "--answered-by", "agent", "--role", "fact_checker",
-             "--model", "claude-sonnet-5-5", "--text-file", str(file), *extra]
+             "--model", "claude-opus-5-5", "--text-file", str(file), *extra]
         )  # fmt: skip
 
     def test_a_failing_check_stops_the_record(
