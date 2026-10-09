@@ -641,7 +641,12 @@ output/remediation/mechanical_dups/REHEARSAL.sql
 # the AUDIT_LOG - the numbers, the disagreements and the spot-check - not in the copy, which is an
 # answered handoff directory an agent writes into and which the next calibration replaces.
 output/remediation/mcode_driver/
-output/remediation/calibration/
+# Calibrations are working data (handoffs, answers, fetched pages) ... except the gold's adjudication
+# (2026-10-10): the orchestrator's labels of the recorded answers a calibration is measured against
+# (`teaser/calibrate.py`, `Adjudication`) are versioned, because a seal binds them by sha256.
+!output/remediation/calibration/
+output/remediation/calibration/*
+!output/remediation/calibration/teaser-gold/
 # The candidate search's judgement (2026-10-06, run `candidates-2026-10-06`): 595 sites carrying
 # 5,809 candidate pictures, one verdict each. `VERDICTS.jsonl` is that stage's whole output and
 # `TARGETS.jsonl` is what the INSERT lane fetched from; neither regenerates, because regenerating

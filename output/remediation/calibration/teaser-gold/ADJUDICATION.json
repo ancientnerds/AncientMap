@@ -1,0 +1,415 @@
+{
+ "version": "teaser-gold-adjudication-v1",
+ "made_by": "orchestrator's diagnosis (Opus), written into the file by the builder (Claude Sonnet 5.5)",
+ "made_on": "2026-10-09",
+ "basis": "output/remediation/calibration/releases-evidence/fact_checker-gold-diagnosis.md, sections (1) and (3), on the draw of calibrations teaser-2026-10-09b and -09c (same seed, same cases). The scoring key of a case is run/stage/site_id.",
+ "checker_fails": [
+  {
+   "run": "wb-ws-2026-09-27-01",
+   "stage": "check",
+   "site_id": "06b4c496-930b-45ac-a8f4-3e4831de1a50",
+   "name": "Westbury Camp",
+   "card": "On a slope of the Mendip Hills, Westbury Camp is an Iron Age hill fort whose narrow bank may once have carried a dry stone wall, its north east defences largely destroyed by small quarries.",
+   "label": "hair-split",
+   "note": "'narrow bank' against 'narrow top of the bank'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-01",
+   "stage": "check",
+   "site_id": "25ba654d-b16a-44bc-9022-459aeb272ca2",
+   "name": "Al-Rabadha",
+   "card": "On the pilgrim route from Kufa to Mecca, Al-Rabadha is dominated by a palace of 13 rooms opening on a central courtyard, where ovens, grain storage and a glass-making furnace were found.",
+   "label": "substantive",
+   "note": "both models fail it again"
+  },
+  {
+   "run": "wb-ws-2026-09-27-01",
+   "stage": "check",
+   "site_id": "918025af-8cfa-47db-a273-b4b715590e0c",
+   "name": "Broch of Mousa",
+   "card": "On the island of Mousa in Shetland rises the Broch of Mousa, the tallest broch still standing, thought to have been built circa 300 BC and besieged by Earl Harald Maddadsson in 1153.",
+   "label": "substantive",
+   "note": "the Orkneyinga Saga attribution dropped"
+  },
+  {
+   "run": "wb-ws-2026-09-27-01",
+   "stage": "check",
+   "site_id": "a98dcb51-39c4-4ab9-b34e-1f10a9aa14d9",
+   "name": "Pilgrims' Way",
+   "card": "The Pilgrims' Way, supposedly walked from Winchester to Becket's shrine at Canterbury, follows an ancient trackway on the North Downs, dated by finds to 600–450 BC and probably older.",
+   "label": "hair-split",
+   "note": "'walked' against 'taken'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-01",
+   "stage": "check",
+   "site_id": "ba33abc5-f266-4b9c-85f1-cd691699b271",
+   "name": "Kit's Coty House",
+   "card": "Near Aylesford in Kent, three stones still carry the capstone of Kit's Coty House, a long barrow built circa 4000 BCE, its mound ploughed flat yet traced in aerial photographs.",
+   "label": "substantive",
+   "note": "'largely' dropped"
+  },
+  {
+   "run": "wb-ws-2026-09-27-02",
+   "stage": "check",
+   "site_id": "525dac17-d918-4dd5-9f58-6bc00715525e",
+   "name": "Carwynnen Quoit",
+   "card": "Also known as the Giant's Frying Pan, Carwynnen Quoit is a portal dolmen built around 3000 BC, its capstone weighing around 10 tons. It collapsed in 1966 and was re-erected in 2014.",
+   "label": "hair-split",
+   "note": "the 'dolmen weighs' reading is a grammar over-parse (gold dubious)"
+  },
+  {
+   "run": "wb-ws-2026-09-27-02",
+   "stage": "check",
+   "site_id": "57c8634d-3306-4f87-81e0-fe3f4d07e367",
+   "name": "Pigi Artemidos",
+   "card": "Road builders at the foot of lower Olympus found Pigi Artemidos, a Bronze Age settlement: a stone-ringed tumulus holding nine tombs, and bronze knives, needles and a spiral earring.",
+   "label": "hair-split",
+   "note": "'builders found' against 'found during construction'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-02",
+   "stage": "check",
+   "site_id": "7c097275-ba5b-44f8-852b-77f450b7b813",
+   "name": "Welsh Way",
+   "card": "Across the Cotswold Hills ran the Welsh Way, an Iron Age trade route from South Wales to the Oxford area, later improved by the Roman army. Today it survives as a named lane.",
+   "label": "substantive",
+   "note": "both models fail it again"
+  },
+  {
+   "run": "wb-ws-2026-09-27-02",
+   "stage": "check",
+   "site_id": "a4856c44-4e78-4a45-b618-d558b763942d",
+   "name": "Arroyo de Piedra",
+   "card": "Hieroglyphs tell that Arroyo de Piedra and Tamarindito once formed an independent Maya polity. Then Dos Pilas rose, and in the 8th century the city was apparently abandoned.",
+   "label": "substantive",
+   "note": "the referent of 'the city' is ambiguous"
+  },
+  {
+   "run": "wb-ws-2026-09-27-02",
+   "stage": "check",
+   "site_id": "ef5738eb-4e38-442e-b64e-7a4d8d469f38",
+   "name": "Khichuqaqa",
+   "card": "On the slope of the mountain Kapuliyuq, about 3,160 metres up in the Cusco Region, Khichuqaqa holds rock paintings, and tombs lie nearby. Come and look at what the painters left.",
+   "label": "substantive",
+   "note": "'Come and look' is a call to action"
+  },
+  {
+   "run": "wb-ws-2026-09-27-02",
+   "stage": "check",
+   "site_id": "fbe0c4cf-1863-4930-9bca-1557de689b67",
+   "name": "Simanya Cave",
+   "card": "Simanya Cave winds 372 m into the Sant Llorenç del Munt massif. Chalcolithic ceramics surfaced here in 1911, and between 1929 and 1930 Pau Codina's surveys found a large amount of pottery.",
+   "label": "hair-split",
+   "note": "'winds'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-03",
+   "stage": "check",
+   "site_id": "019ea3e7-663b-4a60-863a-980007df6878",
+   "name": "Pyramid of Sekhemkhet- Buried Pyramid",
+   "card": "At Saqqara, a narrow passage descends about 61 m beneath the Buried Pyramid of Sekhemkhet, whose sarcophagus is cut from a single block of fine alabaster, its lid sealed with mortar.",
+   "label": "substantive",
+   "note": "61 m passage length read as a depth"
+  },
+  {
+   "run": "wb-ws-2026-09-27-03",
+   "stage": "check",
+   "site_id": "1f020df7-29e0-4b61-aecc-80e294e7b59d",
+   "name": "Izamal",
+   "card": "Izamal, probably the biggest city of the Northern Yucatec Plains, built in megalithic carved blocks and rounded corners, and was later a pilgrimage site rivaled only by Chichen Itza.",
+   "label": "substantive",
+   "note": "the sentence is ungrammatical"
+  },
+  {
+   "run": "wb-ws-2026-09-27-03",
+   "stage": "check",
+   "site_id": "86066b6b-c86e-48ad-90b7-9099ca1e5e58",
+   "name": "Limes Germanicus",
+   "card": "At its height the Limes Germanicus ran from the Rhine's North Sea outlet to near Regensburg: bank, ditch, palisade and watchtowers between the Roman Empire and unsubdued Germanic tribes.",
+   "label": "substantive",
+   "note": "both models fail it again"
+  },
+  {
+   "run": "wb-ws-2026-09-27-03",
+   "stage": "check",
+   "site_id": "d55baca6-8a56-4a3b-8323-f5399e331666",
+   "name": "Eastern Gate of Philippopolis",
+   "card": "On the main road to Byzantium stood the Eastern Gate of Philippopolis, rebuilt in the 4th century with one wide central entrance, two narrower side entrances and two watch towers.",
+   "label": "substantive",
+   "note": "the towers are tied to the rebuild"
+  },
+  {
+   "run": "wb-ws-2026-09-27-03",
+   "stage": "check",
+   "site_id": "da2f5fea-80b2-4c88-a5d1-738c054512b5",
+   "name": "Balanica",
+   "card": "In the Sićevo Gorge, the Balanica caves yielded half a hominin jaw in 2006, lying 1.5 m below the artifact-bearing level: the first such find from controlled digs in the Central Balkans.",
+   "label": "substantive",
+   "note": "'with firm stratigraphic context' dropped from a 'first' claim"
+  },
+  {
+   "run": "wb-ws-2026-09-27-03",
+   "stage": "check",
+   "site_id": "df0881e1-4fd6-4d2d-b9de-ffdca718970c",
+   "name": "Odeon of Philippopolis",
+   "card": "In a corner of Plovdiv's Roman forum lies the Odeon of Philippopolis, a council house that doubled as a theatre, with a Corinthian skene two stories high above orchestra and cavea.",
+   "label": "substantive",
+   "note": "'skene above orchestra and cavea'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-03",
+   "stage": "check",
+   "site_id": "e3e42f8a-9a6e-438b-bd2f-69b883334600",
+   "name": "Spy Cave",
+   "card": "In 1886 Spy Cave yielded Neanderthal fossils of excellent quality. Its small chambers also held almost 12,000 Pleistocene remains of mammoth, cave hyena, woolly rhinoceros and cave bear.",
+   "label": "substantive",
+   "note": "a partial species list presented as the full list; an invented find spot"
+  },
+  {
+   "run": "wb-ws-2026-09-27-04",
+   "stage": "check",
+   "site_id": "31fabe04-8275-48fc-bdbc-85073302026a",
+   "name": "Uragh Stone Circle",
+   "card": "Between Lough Inchiquin and Lough Cloonee Upper, the Bronze Age Uragh Stone Circle sets five low megaliths beside a standing stone ten feet high, its centre dug out by treasure seekers.",
+   "label": "hair-split",
+   "note": "the 'largest standing stone' is the one large stone (gold dubious)"
+  },
+  {
+   "run": "wb-ws-2026-09-27-04",
+   "stage": "check",
+   "site_id": "6493afc6-9665-440c-90ea-1e7d9fc28e6b",
+   "name": "Temple of Hercules Gaditanus",
+   "card": "Outside Gadir-Gades, perhaps as early as the 8th century BC, the Temple of Hercules Gaditanus honoured Melqart and then Hercules. Hannibal, Scipio Africanus and Caesar paid respect here.",
+   "label": "hair-split",
+   "note": "'outside' against 'outskirts'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-04",
+   "stage": "check",
+   "site_id": "67b015db-bcdf-4250-92e0-d43ef1237e4b",
+   "name": "Castro of Vieito",
+   "card": "On the Lima River estuary, the Castro of Vieito lasted a century: a modest walled settlement of paved floors and a circular great house, where Roman coins of silver and bronze were found.",
+   "label": "substantive",
+   "note": "'considered modest' is stated as fact"
+  },
+  {
+   "run": "wb-ws-2026-09-27-04",
+   "stage": "check",
+   "site_id": "73cd4580-09d7-4bd4-9ec1-58c1fd18ef67",
+   "name": "Sexi - Phoenician Colony",
+   "card": "On the Mediterranean coast at Almuñécar lay Sexi, a Phoenician colony. Its coins of the 3rd-2nd centuries BC show the god Melqart on one face and one or two fish on the other.",
+   "label": "substantive",
+   "note": "'many' coins became all coins"
+  },
+  {
+   "run": "wb-ws-2026-09-27-04",
+   "stage": "check",
+   "site_id": "788f9236-c12f-4f94-9dc6-4f3a3d682626",
+   "name": "Santuário Rupestre de Panóias",
+   "card": "At the entrance of the Santuário Rupestre de Panóias, a rock bears inscriptions in Latin and Greek describing the ritual once held here, among three large rocks cut with cavities and stairs.",
+   "label": "hair-split",
+   "note": "stairs 'cut' against 'built'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-04",
+   "stage": "check",
+   "site_id": "7aa50e78-6ede-4901-b2a3-155f842ca0e2",
+   "name": "Kriemhildenstuhl",
+   "card": "On the Kästenberg northwest of Bad Dürkheim, the Kriemhildenstuhl was quarried by working parties called Arbeitsköpfe, each 25 metres above the next. Excavators first came in 1884.",
+   "label": "substantive",
+   "note": "NOT IN THE DIAGNOSIS'S LISTS - labelled by the builder (Claude Sonnet 5.5), the orchestrator confirms: S4 says 'individual' Arbeitskopfe stood 25 m above the next level, the card says 'each' (a quantifier widened); 'first came in 1884' is an inference from a list"
+  },
+  {
+   "run": "wb-ws-2026-09-27-04",
+   "stage": "check",
+   "site_id": "7e79ddfa-87b6-4b1f-bbfc-0a0772e3946d",
+   "name": "Ancient City of Blanda",
+   "card": "In the 4th century BC Lucanians rebuilt the village on the Palècastro hill and ringed it with a city wall. The Ancient City of Blanda left a necropolis and a large quantity of ceramics.",
+   "label": "hair-split",
+   "note": "'left a necropolis'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-04",
+   "stage": "check",
+   "site_id": "84c1ff70-a242-423d-96f8-694b1b7fcc67",
+   "name": "Gazma Cave",
+   "card": "At 1450 m above sea level, Gazma Cave was a Paleolithic dwelling site: its 6 cultural layers yielded fauna fossils and 874 stone tools, in forms like those from Azokh and Tağlar caves.",
+   "label": "hair-split",
+   "note": "'layers yielded'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-04",
+   "stage": "check",
+   "site_id": "a45b9287-fe45-43b0-a8d6-8c434e16e65b",
+   "name": "Nesebar",
+   "card": "Known as the Pearl of the Black Sea, the ancient part of Nesebar sits on a peninsula beyond a narrow human-made isthmus, with remains of an acropolis, a temple of Apollo and an agora.",
+   "label": "hair-split",
+   "note": "the location of the remains (gold dubious or over-strict)"
+  },
+  {
+   "run": "wb-ws-2026-09-27-04",
+   "stage": "check",
+   "site_id": "b306aff1-60d0-4d34-85e3-fe206911dc65",
+   "name": "Shipton Hill Settlement",
+   "card": "Inside the oval enclosure of Shipton Hill Settlement, a rare Iron Age defended settlement in Dorset, digs found pottery sherds, hammer stones, flint flakes, scrapers and bits of quern-stone.",
+   "label": "hair-split",
+   "note": "'inside the enclosure', and 'digs'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-04",
+   "stage": "check",
+   "site_id": "d8af7833-8171-40a3-a24c-cd3fff898c07",
+   "name": "Temple of Ptah, Sekhmet and Nefertom",
+   "card": "At Karnak, six small gateways built close together lead into the central sanctuary of the Temple of Ptah, where his statue stands. Excavators found baboon figurines and stelae with his name.",
+   "label": "hair-split",
+   "note": "'six gateways lead into'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-05",
+   "stage": "check",
+   "site_id": "4a07cc38-1b55-4254-b0ad-fe875310caf7",
+   "name": "Temple of Augustus, Split",
+   "card": "Bronze letters nailed to its stones once spelled out the dedication of the Temple of Augustus. Made a church under Byzantine rule, it survived to modern times, later serving as a granary.",
+   "label": "substantive",
+   "note": "namesake: the description is about Pula; both models fail it again"
+  },
+  {
+   "run": "wb-ws-2026-09-27-05",
+   "stage": "check",
+   "site_id": "85ed945a-9d3c-437c-97b5-adf0cf0b3a9c",
+   "name": "Salzofen Cave",
+   "card": "In 1924 two hunters sheltering from a storm in Salzofen Cave found fossilized bones at its entrance. The next day a school principal began to dig, unearthing large amounts of bone fossils.",
+   "label": "substantive",
+   "note": "'the next day' anchored to the wrong event"
+  },
+  {
+   "run": "wb-ws-2026-09-27-05",
+   "stage": "check",
+   "site_id": "f859776a-9e93-4c62-9585-1f4aed2cbaa0",
+   "name": "Roman Thermae, Varna",
+   "card": "In Varna, once Odessus, stand the Roman Thermae, the largest in the Balkans, with frigidarium, tepidarium, caldarium and palaestra, heated by an underfloor hypocaust.",
+   "label": "wrong",
+   "note": "S3 literally contains 'the largest in the Balkans'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-05",
+   "stage": "check1",
+   "site_id": "4a07cc38-1b55-4254-b0ad-fe875310caf7",
+   "name": "Temple of Augustus, Split",
+   "card": "Bronze letters nailed to the architrave once spelled out the dedication of the Temple of Augustus. Its Corinthian columns still stand: under Byzantine rule it became a church and survived.",
+   "label": "substantive",
+   "note": "namesake: the description is about Pula; both models fail it again"
+  },
+  {
+   "run": "wb-ws-2026-09-27-06",
+   "stage": "check",
+   "site_id": "2e46252e-2205-4aed-92ee-38eeb5758399",
+   "name": "Domica Cave",
+   "card": "Among the dense speleothems of Domica Cave, post holes of dwellings and fireplaces were found in several places, traces of a human presence that reaches back to the Paleolithic.",
+   "label": "substantive",
+   "note": "the post holes are tied to the Paleolithic"
+  },
+  {
+   "run": "wb-ws-2026-09-27-06",
+   "stage": "check",
+   "site_id": "2fe3e1da-dcae-4014-a4d9-8b3132952546",
+   "name": "Machu Pitumarka",
+   "card": "On a hill northeast of Pitumarka, at the southern shore of the river Ch'illkamayu, the ruined walls of Machu Pitumarka keep watch over the Cusco Region. Climb up and see what still stands.",
+   "label": "substantive",
+   "note": "both models fail it again"
+  },
+  {
+   "run": "wb-ws-2026-09-27-06",
+   "stage": "check",
+   "site_id": "3df64c15-9caf-430f-b6d0-82bd2b15ddd1",
+   "name": "Pyramid G1-d",
+   "card": "In 1992, work to remove a road on the Giza plateau uncovered Pyramid G1-d, a satellite in the complex of Khufu with a height of 13.8 metres and a slope very similar to the Great Pyramid's.",
+   "label": "substantive",
+   "note": "the original height is presented as the current height"
+  },
+  {
+   "run": "wb-ws-2026-09-27-06",
+   "stage": "check",
+   "site_id": "a28e4962-5513-4955-b1e0-d6a8f8f244cc",
+   "name": "Lohra Megalithic Tomb",
+   "card": "In 1931 a farmer ploughing near Marburg hit an obstacle: the Lohra Megalithic Tomb, where 20 vessels placed on the chamber floor lay beneath human ashes, almost fully preserved.",
+   "label": "wrong",
+   "note": "S8 states all four 'unsupported' claims; the recorded checker missed S8"
+  },
+  {
+   "run": "wb-ws-2026-09-27-06",
+   "stage": "check",
+   "site_id": "aa60e5f1-a3f5-4f27-b152-44ad38e72f54",
+   "name": "Stoke Hill",
+   "card": "North of Exeter rises Stoke Hill, crowned at 159 metres by a Roman signal station. Just below lies an Iron Age hill fort, with sight of a number of other hill forts at once.",
+   "label": "substantive",
+   "note": "'better position to have sight' becomes 'with sight'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-06",
+   "stage": "check",
+   "site_id": "ad16f637-fa0c-4920-bfae-7a53dee2593a",
+   "name": "Tal-Barrani",
+   "card": "In Tal-Barrani, a milk depot's builders uncovered three Punic rock-cut tombs; in May 1993, trenching along the road revealed a multi-chambered catacomb and a Late Roman chamber tomb.",
+   "label": "hair-split",
+   "note": "'builders found' against 'found during construction'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-06",
+   "stage": "check",
+   "site_id": "b1b150e6-ebca-4c21-ad56-ddccd8c9afcc",
+   "name": "Samothrace Temple Complex",
+   "card": "On three narrow terraces of mount Hagios Georgios, between two steep-banked torrents, the Samothrace Temple Complex was celebrated throughout Ancient Greece for its Mystery religion.",
+   "label": "substantive",
+   "note": "the torrents separate the terraces; the card puts the whole complex between them"
+  },
+  {
+   "run": "wb-ws-2026-09-27-06",
+   "stage": "check",
+   "site_id": "bf6f967e-3161-45c3-840d-d68ebff231b7",
+   "name": "Caves of Poço Velho",
+   "card": "In the centre of Cascais, the Caves of Poço Velho held a necropolis of around 115 burials, with limestone votive offerings such as cylindrical idols and decorated schist slabs.",
+   "label": "substantive",
+   "note": "NOT IN THE DIAGNOSIS'S LISTS - labelled by the builder (Claude Sonnet 5.5), the orchestrator confirms: 'evidence points to their use as a necropolis' became 'held a necropolis' (a sharpened hedge); the schist slabs are made an example of limestone votive offerings"
+  },
+  {
+   "run": "wb-ws-2026-09-27-06",
+   "stage": "check",
+   "site_id": "c345810f-7f8d-4845-88c7-64c652fa34d1",
+   "name": "Knossos",
+   "card": "On Kephala hill in the Kairatos valley, Knossos was settled about 7000 BC; its first palace rose around 1900 BC, and the Palace of Minos still dominates the site.",
+   "label": "hair-split",
+   "note": "'still dominates' (gold dubious or over-strict)"
+  },
+  {
+   "run": "wb-ws-2026-09-27-06",
+   "stage": "check",
+   "site_id": "df70e98f-a1d1-4998-966a-d9a4ee2a945f",
+   "name": "Piruro",
+   "card": "Above the river Tantamayo, over 3.8 km above sea level, the Fortress of Piruro II rises five stories, its walls built with stones hewn in squared shape and uniform size.",
+   "label": "substantive",
+   "note": "'above the river'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-06",
+   "stage": "check",
+   "site_id": "e2a08d7d-4038-4738-9702-4eb316357521",
+   "name": "La Grotte des Fées",
+   "card": "Railway builders near Châtelperron first found La Grotte des Fées around 1840, perhaps in 1848. Within lay several thousand flint blades and mammoth tusks of over 2 metres long.",
+   "label": "hair-split",
+   "note": "'builders found' against 'found during construction'"
+  },
+  {
+   "run": "wb-ws-2026-09-27-06",
+   "stage": "check",
+   "site_id": "e6b90e74-f7c5-40fa-846f-6ffab5ac8beb",
+   "name": "Ta' Kaċċatura",
+   "card": "On a long, flat ridge between Wied Dalam and Wied Żembaq, Ta' Kaċċatura holds a rustic Roman villa and underground cisterns, witness to a thriving olive oil industry.",
+   "label": "hair-split",
+   "note": "what 'witness to' attaches to"
+  }
+ ],
+ "verified_cards": [],
+ "verified_cards_note": "To be filled by the orchestrator from `calibrate.py dispute-list` (the 7 + 12 Opus false contradictions of -09c): one entry per recorded VERIFIED card, label clean (the default for a card not listed), disputed or contradicted. A seal binds this file by its sha256: complete it BEFORE sealing teaser-2026-10-10."
+}

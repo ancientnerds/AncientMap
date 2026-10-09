@@ -5637,9 +5637,8 @@ TEASER_CASES: list[Case] = [
             ),
             (
                 "verify: still contradicted is its own reason",
-                '        CONTRADICTED_AFTER_VERIFY if second["verdict"] == CONTRADICTED else '
-                "UNPROVEN_AFTER_VERIFY",
-                "        UNPROVEN_AFTER_VERIFY",
+                '    reason = AFTER_VERIFY[second["verdict"]]',
+                "    reason = UNPROVEN_AFTER_VERIFY",
                 "test_still_contradicted_after_the_rewrite_the_site_gets_no_card",
             ),
             (
@@ -12119,13 +12118,13 @@ TEASER_SHORTS_CASES: list[Case] = [
             ),
             (
                 "a recorded failure must fail again",
-                '        "passed": failed >= spec["checker_fail_again"]["fail_min"],',
+                '        "passed": failed >= required,',
                 '        "passed": True,',
                 "test_a_checker_that_passes_the_recorded_failures_fails",
             ),
             (
                 "a seeded defect must be caught",
-                '        "passed": caught >= spec["checker_defects"]["caught_min"],',
+                '        "passed": len(caught) >= rule["caught_min"],',
                 '        "passed": True,',
                 "test_a_defect_the_checker_passes_is_named_by_its_kind",
             ),

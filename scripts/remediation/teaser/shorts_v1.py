@@ -735,3 +735,168 @@ def canary_card(card: str, site: C.Basis, index: int) -> tuple[str, str]:
         except ValueError:
             continue
     raise ValueError("no seeded defect applies to the card")
+
+
+# ------------------------------------------------------------------------------ the subtle defects
+#: The seeded defects of the checker's calibration that the blunt kinds above cannot measure.
+#: Diagnosis of calibration teaser-2026-10-09b/c (2026-10-09): `checker_defects` was 30 of 30 for both
+#: models because 11 of its defects were an appended superlative and any FAIL counted as a catch,
+#: while both models miss a real card that drops 'largely', widens 'many' to all, drops the saga's
+#: attribution or gives an original height as the current one. Each subtle kind changes a word the
+#: card's claim hangs on and nothing else, so the flawed card stays fluent; it counts as caught only
+#: when the checker names the defect's claim (`names_the_claim`).
+SUBTLE_KINDS = ("qualifier", "quantifier", "attribution", "original", "scope", "findspot")
+_QUALIFIERS = (
+    "largely",
+    "mostly",
+    "mainly",
+    "partly",
+    "partially",
+    "typically",
+    "usually",
+    "often",
+    "almost",
+    "nearly",
+    "apparently",
+    "reportedly",
+    "among others",
+    "with firm stratigraphic context",
+)
+#: A bound that qualifies a number ('over 80', 'up to twenty', 'around 4,300'): dropped, the number
+#: stands for an exact count. Only before a numeral or a number word, so that 'over a bay' is safe.
+_BOUND = re.compile(
+    r"\b(?:over|more than|up to|as many as|around|about|roughly|approximately|at least|nearly|"
+    r"almost) (?=\d|(?:one|two|three|four|five|six|seven|eight|nine|ten|twelve|twenty|thirty|"
+    r"fifty|hundred)\b)",
+    re.IGNORECASE,
+)
+_QUANTIFIERS = ("many", "several", "most", "some", "a number of", "numerous")
+_ATTRIBUTIONS = (
+    (re.compile(r"\baccording to [^,.;]+, ?", re.IGNORECASE), ""),
+    (re.compile(r", according to [^,.;]+(?=[.,;])", re.IGNORECASE), ""),
+    (
+        re.compile(
+            r"\b(?:the )?(?:saga|sagas|legend|tradition|chronicle|chronicles|inscription|"
+            r"tablet|Bible)\s+(?:says|tells|records|claims|holds)\s+(?:that )?",
+            re.IGNORECASE,
+        ),
+        "",
+    ),
+    (re.compile(r"\b(?:legend|tradition) holds that ", re.IGNORECASE), ""),
+    (re.compile(r"\bis said to (?:be |have been )?", re.IGNORECASE), "is "),
+    (re.compile(r"\bit is said that ", re.IGNORECASE), ""),
+    (re.compile(r"\bby one estimate,? ", re.IGNORECASE), ""),
+)
+_ORIGINALS = (
+    (
+        re.compile(r"\boriginal (height|size|length|width|depth|diameter|form|name|purpose)\b"),
+        r"\1",
+    ),
+    (re.compile(r"\boriginally (stood|measured|was|were|rose|had|covered)\b"), r"\1"),
+    (re.compile(r"\b(?:originally|once) ", re.IGNORECASE), ""),
+)
+_SUPERLATIVE_SCOPE = re.compile(
+    r"(\b(?:largest|oldest|tallest|earliest|longest|biggest|highest|deepest|first|best-preserved)\b"
+    r"[^.,;]*?)\s+(?:in|of|among|outside|before)\s+(?:the\s+)?[A-Z][^.,;]*"
+)
+#: A card that speaks of a find is given a place for it that the description never named.
+_FIND_WORDS = re.compile(
+    r"\b(?:found|finds?|discovered|unearthed|uncovered|excavated|turned up|bones|burials|skeletons)\b",
+    re.IGNORECASE,
+)
+FIND_SPOT = "beneath the eastern wall"
+
+
+@dataclass(frozen=True)
+class SeededDefect:
+    """A card with one seeded flaw: its `kind`, the flawed `card`, whether the kind is `subtle`, the
+    flawed `sentence` (the claim a checker must name) and the `witness` words that name it."""
+
+    kind: str
+    card: str
+    subtle: bool
+    sentence: str
+    witness: tuple[str, ...]
+
+
+def _sentence_of(flawed: str, original: str) -> str:
+    """The sentence of `flawed` that is not a sentence of `original`: the one the defect changed."""
+    before = set(card_sentences(original))
+    changed = [s for s in card_sentences(flawed) if s not in before]
+    if len(changed) != 1:
+        raise ValueError("the defect did not change exactly one sentence")
+    return changed[0]
+
+
+def seed_subtle(card: str, kind: str) -> SeededDefect:
+    """`card` with one subtle flaw of `kind` (`SUBTLE_KINDS`): a qualifier dropped, a quantifier
+    widened to all, an attribution dropped, an original size or state given as the present one, a
+    superlative stripped of its scope, or a find spot invented. `ValueError` when the card has
+    nothing to flaw that way."""
+    if kind == "qualifier":
+        for word in _QUALIFIERS:
+            match = re.search(rf"\b{re.escape(word)}\b,? ?", card, re.IGNORECASE)
+            if match:
+                flawed = card[: match.start()] + card[match.end() :]
+                return _subtle(kind, card, flawed, (word,))
+        match = _BOUND.search(card)
+        if match:
+            flawed = card[: match.start()] + card[match.end() :]
+            return _subtle(kind, card, flawed, (match.group(0).strip().casefold(),))
+        raise ValueError("no qualifier in the card to drop")
+    if kind == "quantifier":
+        for word in _QUANTIFIERS:
+            match = re.search(rf"\b{re.escape(word)}\b", card, re.IGNORECASE)
+            if match:
+                flawed = card[: match.start()] + "all" + card[match.end() :]
+                return _subtle(kind, card, flawed, (word, "all"))
+        raise ValueError("no quantifier in the card to widen")
+    if kind == "attribution":
+        for pattern, replacement in _ATTRIBUTIONS:
+            match = pattern.search(card)
+            if match:
+                flawed = card[: match.start()] + replacement + card[match.end() :]
+                words = re.findall(r"\w+", match.group(0).casefold())
+                return _subtle(kind, card, flawed, tuple(w for w in words if len(w) > 3)[:3])
+        raise ValueError("no attribution in the card to drop")
+    if kind == "original":
+        for pattern, replacement in _ORIGINALS:
+            match = pattern.search(card)
+            if match:
+                flawed = pattern.sub(replacement, card, count=1)
+                return _subtle(kind, card, flawed, (match.group(0).split()[0].casefold(), "now"))
+        raise ValueError("no original size or state in the card to make current")
+    if kind == "scope":
+        match = _SUPERLATIVE_SCOPE.search(card)
+        if not match:
+            raise ValueError("no scoped superlative in the card to strip")
+        flawed = card[: match.start()] + match.group(1) + card[match.end() :]
+        return _subtle(kind, card, flawed, (match.group(1).split()[0].casefold(), "scope"))
+    if kind == "findspot":
+        if not _FIND_WORDS.search(card) or FIND_SPOT in card:
+            raise ValueError("no find in the card to give a place")
+        flawed = f"{card} The finds came from {FIND_SPOT}."
+        return _subtle(kind, card, flawed, ("beneath", "eastern wall"))
+    raise ValueError(f"{kind!r} is not a subtle defect: {SUBTLE_KINDS}")
+
+
+def _subtle(kind: str, card: str, flawed: str, witness: tuple[str, ...]) -> SeededDefect:
+    flawed = re.sub(r" {2,}", " ", flawed).replace(" ,", ",").replace(" .", ".")
+    flawed = re.sub(r"(^|[.!?] )([a-z])", lambda m: m.group(1) + m.group(2).upper(), flawed)
+    if flawed == card:
+        raise ValueError(f"the {kind} defect changed nothing")
+    return SeededDefect(kind, flawed, True, _sentence_of(flawed, card), witness)
+
+
+def seeded_defect(card: str, site: C.Basis, index: int) -> SeededDefect:
+    """The calibration's flawed card: the subtle kinds are tried in a rotation that starts at `index`
+    and the first that applies is used; a card none applies to gets a blunt defect
+    (`canary_card`), which is reported as such (`subtle` false)."""
+    for step in range(len(SUBTLE_KINDS)):
+        kind = SUBTLE_KINDS[(index + step) % len(SUBTLE_KINDS)]
+        try:
+            return seed_subtle(card, kind)
+        except ValueError:
+            continue
+    kind, flawed = canary_card(card, site, index)
+    return SeededDefect(kind, flawed, False, _sentence_of(flawed, card), ())

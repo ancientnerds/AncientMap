@@ -405,10 +405,12 @@ def verify_rewrite_prompt(
     card: str,
     contradicted: Sequence[Mapping[str, Any]],
     unproven: Sequence[Mapping[str, Any]],
+    disputed: Sequence[Mapping[str, Any]] = (),
 ) -> str:
     """The one rewrite after a failed web verification: the writer's rules, the card, every claim
-    the verifier found contradicted (page, quote, whether the machine found the quote) or could not
-    prove, and the web facts (`site.web`) a contradicted claim may be corrected with."""
+    the verifier found contradicted (page, quote, whether the machine found the quote), disputed
+    (reputable sources disagree) or could not prove, and the web facts (`site.web`) a contradicted
+    claim may be corrected with."""
     not_proven = "\n".join(f"- {claim['claim']}" for claim in unproven) or "(none)"
     return (
         f"{PURPOSE}\n\nThe card below was accepted by a checker - every claim of it is in the "
@@ -419,6 +421,7 @@ def verify_rewrite_prompt(
         f"has.\n\nTHE SITE\n{_site_block(site)}\n\n"
         f"THE CARD THE WEB CHECK DID NOT VERIFY ({len(card)} characters)\n{card}\n\n"
         f"CONTRADICTED - a page says otherwise:\n{P._contradicted(contradicted)}\n\n"
+        f"{P.disputed_block(disputed)}"
         f"NOT PROVEN - the web check found no page that proves these:\n{not_proven}\n\n"
         "WHAT THE NEW CARD MUST DO\n"
         "1. Drop every contradicted claim, or correct it. Correct a claim only with a fact that a "
@@ -435,7 +438,8 @@ def verify_rewrite_prompt(
         "other). Prefer the facts the web check proved.\n"
         "4. For each contradicted claim above, in its order, name the sentence of the description "
         "that states it, or null if no sentence does: this lists the description's own errors for "
-        "their repair.\n\n"
+        "their repair.\n"
+        f"{P.DISPUTED_RULE if disputed else ''}\n"
         f"{_tail(site, VERIFY_WRITER_FORMAT, may_decline=False)}"
     )
 
@@ -556,6 +560,7 @@ def checker_prompt(site: SV.ShortsBasis, card: str, anchors: Sequence[str] = ())
         "supported; an embellishment, a sharpened hedge, a computed number or an inference the "
         "sentences do not make is not. Use only the sentences above - not your own knowledge, "
         "even where you know the claim is true.\n"
+        f"{P.QUALIFIER_STEP}"
         f"{_web_rule(site)}"
         "3. name_leak: true when the card gives the site away - its name or an alias, any "
         "distinctive word of the name (see AVOID), an English rendering used as a name ('Temple "
@@ -601,7 +606,8 @@ def judge_prompt(name: str, country: str, card: str) -> str:
         "above, not about a namesake or a neighbouring place. Then each other fact, number, "
         "date, name, place, material, size, function, superlative, and every statement or "
         "implication that something is unknown or mysterious.\n"
-        "2. For each, search the web and decide SUPPORTED, CONTRADICTED or UNVERIFIABLE.\n"
+        "2. For each, search the web and decide SUPPORTED, CONTRADICTED, DISPUTED or "
+        f"UNVERIFIABLE. {P.CONTRADICTION_STEP}\n"
         "3. Prefer pages that can be quoted: Wikipedia, national heritage registers, museum and "
         "university pages, published papers. Some sites refuse automated readers (Historic "
         "England and the Heritage Gateway answer 403, UNESCO often refuses, PDFs may be "
@@ -619,7 +625,8 @@ ADVERSARIAL_NOTE = (
     "have both passed it. Your task is to find the reason it must NOT stay public. Read every "
     "claim as a sceptical editor: a sharpened hedge, a computed number, a superlative, an implied "
     "mystery, a namesake, a claim the cited pages do not carry. Pass the card only if you tried "
-    "and found nothing."
+    "and found nothing. A finding is a reason you can state: a claim no sentence carries, or a "
+    "reputable page that is incompatible with the card - never a doubt alone."
 )
 
 
@@ -659,7 +666,15 @@ def adversarial_prompt(
         "3. tone_ok: English, one or two sentences, no marketing copy, mystery only as tone.\n"
         "4. this_site: the card is about this site, not a namesake or a neighbour.\n"
         "5. The verifier above may have missed something. You may check any claim against pages on "
-        "the web; a reason that rests on a page names the page and quotes it.\n"
+        "the web; a reason that rests on a page names the page and quotes it. A page is a reason "
+        "against the card only as a reputable source (an excavation report, a heritage register, "
+        "a museum or university page, a peer-reviewed paper, a better-sourced Wikipedia article) "
+        "that states something incompatible with the claim as the card words it. These are no "
+        "finding: a rounding, a range that overlaps the claim's, another estimate that the "
+        "card's own hedge already covers, a different spelling or naming convention, the same "
+        "fact in other words. A claim on which reputable sources disagree with each other is a "
+        "finding only if the card states it as fact: say that the sources disagree and name "
+        "them.\n"
         "PASS only when every claim has support, tone_ok and this_site are true and you have no "
         "other finding.\n\n"
         f"{P.CHECKER_FORMAT}\n"

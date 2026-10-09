@@ -10,6 +10,9 @@ in it, it is never independent confirmation. The briefs of every lane that point
 
 * `VERIFIER_RULE`: a verifier, a judge, an adversarial reviewer - any role that confirms or rejects a
   decision or a text. No cap on requests; the politeness stays.
+  It carries `CONTRADICTION_RULE`: what a contradiction is (a reputable source that says something
+  incompatible) and what it is not (rounding, an overlapping range, a compatible estimate, a naming
+  convention); a claim on which reputable sources disagree is DISPUTED, never contradicted.
 * `RESEARCHER_RULE`: a researcher or a writer - the cache stays the first reading, its text is not a
   second witness for the description that was written from it.
 * `QUOTE_RULE`: what an agent that quotes a page does before it records the answer (a lane with a
@@ -27,6 +30,28 @@ POLITENESS = (
     "or quote another page, before you call a source unreachable or a claim unverifiable."
 )
 
+#: What a contradiction is, for every role that can call one. Diagnosis of calibration
+#: teaser-2026-10-09b/c (2026-10-09): once the verifiers were told to look outside the cached article,
+#: the web verifier falsely contradicted 7 of 20 recorded VERIFIED cards (Opus) and the adversarial
+#: reviewer passed 13 of 25 clean cards (22 of 25 before the rule) - rounding, an overlapping range,
+#: another compatible estimate, a naming convention and genuinely disputed claims were all called
+#: contradictions. A contradiction needs a reputable source that says something incompatible.
+CONTRADICTION_RULE = (
+    "A CONTRADICTION is a reputable source - an excavation report, a heritage register, a museum or "
+    "university page, a peer-reviewed paper, or a better-sourced Wikipedia article - that states "
+    "something INCOMPATIBLE with the claim as it is worded: another date outside the claim's own "
+    "hedge, another place, another count, another identity. These are NOT contradictions: a "
+    "rounding (16.6 ha and 'about 17 hectares'), a range that overlaps the claim's, another "
+    "estimate that the claim's own hedge ('about', 'possibly', 'by one estimate') already covers, a "
+    "different spelling or naming convention (a surname with or without its second part, a "
+    "transliteration), and the same fact in other words. Where reputable sources disagree among "
+    "themselves about the claim (two dates, two functions, each held by one of them), the claim is "
+    "DISPUTED, not contradicted: never report it as a contradiction - say that the sources "
+    "disagree and name them, and use the verdict DISPUTED where your answer format has one (the "
+    "text must then hedge the claim or drop it). The article the text came from is still never "
+    "confirmation of anything."
+)
+
 #: For a role that confirms or rejects (verifier, judge, adversarial reviewer).
 VERIFIER_RULE = (
     "The cached Wikipedia article is where the description or the card under test came from, so "
@@ -37,7 +62,10 @@ VERIFIER_RULE = (
     "'still' or 'first', or a present-tense state, look for a page OUTSIDE that article that could "
     "contradict it: an excavation report or heritage register, a museum or university page, a "
     "scholarly paper, the other-language Wikipedias, the WebSearch tool. There is no cap on "
-    "requests for this: read as many pages as the claim needs. " + POLITENESS
+    "requests for this: read as many pages as the claim needs. "
+    + CONTRADICTION_RULE
+    + " "
+    + POLITENESS
 )
 
 #: For a role that researches or writes (the cache is the first reading).
