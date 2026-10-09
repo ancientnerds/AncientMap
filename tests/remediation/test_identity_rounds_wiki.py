@@ -1,6 +1,6 @@
 """The rounds of an identity stage and the shared Wikipedia cache they read.
 
-`identity/rounds.py` exports a stage's questions into a handoff directory, reads the agents' answers
+`identity/label_rounds.py` exports a stage's questions into a handoff directory, reads the agents' answers
 back against the prompts rebuilt from the data, and refuses an answer that is not the role's (no role,
 the wrong role, the wrong model, a MiniMax stamp). `identity/wiki.py` is the cache of the article of
 every shown site: the questions name its files, the import reads a cited article from it.
@@ -20,7 +20,8 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
 import opus_handoff as OH  # noqa: E402
-from identity import rounds, wiki  # noqa: E402
+from identity import label_rounds as rounds  # noqa: E402
+from identity import wiki  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
 from tests.remediation.identity_fixtures import CALIBRATED, passed_calibrations  # noqa: E402

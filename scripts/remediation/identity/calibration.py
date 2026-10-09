@@ -1,45 +1,49 @@
-"""The calibration sets of the duplicate verdict (D14) and the parent question (D25).
+"""Calibration pools of the identity questions (owner decision D6, 2026-10-08).
 
-Owner decision D6 (2026-10-08): a role calibrates against already-judged cases with a threshold
-sealed before its first answer (`calibrate_claude.py`). The two identity roles are the web verifier
-(Sonnet, high) of `dup-verdict` and `parent-verdict`; the pool they are measured on is a handoff
-directory of **answered** questions, and an answer in it must be a real model's (the seal refuses a
-MiniMax stamp and an unstamped one), so this module builds the questions and checks the gold, and
-never writes an answer itself.
+Every role passes a calibration before its first answer of a lane: it re-answers cases that were
+judged already and is measured against them, with the threshold sealed first
+(`calibrate_claude.py`: seal, prepare, compare, verdict). The identity questions are new, so no
+earlier judgement is an answer to them - the earlier ones are of other questions (L5 asked whether a
+*link* names a site, the scope review whether an entry is a *site*; a modern-town record passes both).
+So a pool here is built in two steps, and the gold is always a real model's:
 
-**Duplicates** - `dup_cases`: the positives are the pairs that were judged one site before - the 19
-retired by the scope lane (`bcases/DUPLICATES.jsonl`) and the 5 of the owner's decision O9
-(`mechanical/dups.PAIRS`), 24 pairs once Banias, which is in both lists, is counted once. The
-negatives are 15 pairs the owner-case classification called `WRONG-ID` or `NEITHER`
-(`bcases/dup_pairs.jsonl`: a shared item that names a class or a neighbour), the pairs named in
-`--negative A=B` and nothing else; **no negative was judged by a model yet**, so
-the gold is made by one labelling: `export` writes every case as a `dup-verdict` question, Opus xhigh
-agents answer it blind in the role `pilot_judge`, and `gold-check` holds those answers to what was
-known - every positive must come out MERGE, and a positive the gold calls something else is listed
-for the orchestrator to decide before the pool is sealed. The pool is then the answered batches.
+1. **Select** the cases the map names, deterministically (a seed), and export the lane's own
+   questions for them into a pool: a stage directory (`ROUNDS.jsonl`, `contexts/r1.jsonl`) plus its
+   handoff directory. The earlier judgement of a case (the N7 class of `bcases/names.jsonl`, the
+   sample audit's four defects, the scope-e4 decisions, the review's counted `not_a_site`) is kept in
+   `POOL.json` as a **hint** and is never in a prompt.
+2. **Label**: the pilot judge (role `pilot_judge`, Opus xhigh) answers the pool through the same
+   brief (`run.py ... brief --as-role pilot_judge --stage-dir POOL`). Its answers are the recorded
+   ones: stamped Opus, `answered_by` `pilot_judge:<batch>`. `status` reports the pool unfit to seal
+   until every question has one. A hint that disagrees with the label is listed (`disagreements`) for
+   the orchestrator to read, never decided here.
 
-**Parents** - `parent_cases`: the `PART-OF` class of `dup_pairs.jsonl` and the pairs of the `NEITHER`
-class whose names are contained in each other, oriented by `parents.candidate_pairs`' rule (the
-shorter name is the parent); the same blind labelling by Opus xhigh makes the gold, and the
-heuristic classes are the cross-check that `gold-check` reports (they are a heuristic, so
-a disagreement is listed, not failed).
+Then the role under test is sealed against the pool, re-answers a copy and is compared:
 
-Sealing is `calibrate_claude.py seal --id ID --role web_verifier --handoff DIR --batches ...
---threshold 0.92` (the plan's 92 %), and the gate of "0 false MERGE" is carried by the verdict's
-`--false-sources`: pass the spot-check count plus `false_merges(comparison)`.
+    PY=./.venv/Scripts/python.exe; C=scripts/remediation/identity/calibration.py; I=scripts/remediation/identity
+    CC=scripts/remediation/calibrate_claude.py
+    $PY $C export --lane retarget --pool DIR --handoff DIR-h [--seed 20261009]
+    $PY $I/run.py --lane retarget brief --stage retarget-web --stage-dir DIR --as-role pilot_judge --round r1 --batch-id r1-b01
+    $PY $C status --pool DIR                       # 0 unanswered, or not fit to seal
+    $PY $CC seal --id ID --role web_verifier --handoff DIR-h --batches r1-b01 ... --threshold 0.9 --write-verdicts NOT_A_SITE OUT_OF_WINDOW RETARGET RETIRE --max-false-writes 0
+    $PY $C prepare --id ID --pool DIR              # the copy the role re-answers
+    ...                                   # agents run the brief printed for <root>/ID-run
+    $PY $CC compare --id ID
+    $PY $CC verdict --id ID --false-sources N
 
-    PY=./.venv/Scripts/python.exe
-    $PY scripts/remediation/identity/calibration.py read --kind dup
-    $PY scripts/remediation/identity/calibration.py export --kind dup --handoff output/remediation/handoff/cal-dup-gold
-    # Opus xhigh agents answer (role pilot_judge), then:
-    $PY scripts/remediation/identity/calibration.py gold-check --kind dup --handoff output/remediation/handoff/cal-dup-gold
+The comparison counts the verdict and every value it writes (the item of a re-target, the year of a
+`PERIOD_WRONG`, a new name, a spoken name) as units, and the seal's write verdicts
+(`rounds.WRITE_VERDICTS`) with `--max-false-writes 0` fail the verdict on any answer that writes
+what the pool does not support. The calibration of a stage is the one made on its own lane's pool:
+`run.py import` refuses another lane's calibration and any answer given before the verdict.
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
+import random
+import shutil
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -48,513 +52,446 @@ from typing import Any
 
 _HERE = Path(__file__).resolve()
 REPO = _HERE.parents[3]
-for _root in (REPO, REPO / "scripts" / "remediation"):
-    if str(_root) not in sys.path:
-        sys.path.insert(0, str(_root))
+for _root in (str(REPO), str(_HERE.parents[1]), str(REPO / "output" / "remediation" / "tools")):
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
 
+import calibrate_claude as CC  # noqa: E402
 import opus_handoff as OH  # noqa: E402
-from mechanical import dups  # noqa: E402
-from mechanical import plan as P  # noqa: E402
+import roles as RO  # noqa: E402
+from mechanical.scope_review import parse_export as parse_scope_export  # noqa: E402
 
-from identity import common, dup_clusters, dup_judge, export, parent_judge, rounds  # noqa: E402
-from identity.wiki import WikiIndex, load_cache  # noqa: E402
+from identity import common, export, funnel, names_judge, retarget, scope_judge  # noqa: E402
+from identity import rounds as R  # noqa: E402
+from identity.prompts import cache_entries, wiki_cache_dir  # noqa: E402
+from identity.scope_window import ORIGIN_IMPORT  # noqa: E402
+from pipeline.normalizers.dates import E3_CUTOFFS, e3_region  # noqa: E402
 
-CAL_DIR = "calibration"
-BCASES = common.REPO / "output" / "remediation" / "bcases"
-DUPLICATES = BCASES / "DUPLICATES.jsonl"
-DUP_PAIRS = BCASES / "dup_pairs.jsonl"
-N_NEGATIVES = 15
-N_PARENT_POSITIVES = 20
-N_PARENT_NEGATIVES = 10
-GOLD_ROLE = "pilot_judge"
-NEGATIVE_CLASSES = ("WRONG-ID", "NEITHER")
+POOL_FILE = "POOL.json"
+DEFAULT_SEED = 20261009
+#: The four records the 2026-09-25 sample audit found to describe a modern place (plans/identity.md).
+KNOWN_DEFECTS = {
+    "6b978047-cbc3-4901-9d6d-7fb40104f015": "Chania",
+    "7b3f1698-60de-4e2f-98cc-f405bfa01478": "Ravenglass",
+    "1b68e8c4-22fd-4e5a-8708-92fb516034f0": "Bayston Hill",
+    "13120650-2e61-45af-976c-b2e0665c49af": "Alba Fucens",
+}
+LANES = ("retarget", "scope-window", "names")
+POOL_ROLE = "pilot_judge"
+
+
+class PoolError(ValueError):
+    """A pool that cannot be built or is not fit for the step asked. Nothing was written."""
 
 
 @dataclass(frozen=True)
-class Case:
-    """One calibration case: a pair of sites, what was known of it, and where that came from."""
+class PoolCase:
+    """One case of a pool: the question's context, where the case comes from and what the earlier
+    judgement said (the hint - never part of a prompt)."""
 
-    case_id: str
-    kind: str  # positive | negative
-    a: str
-    b: str
-    #: for a positive, the loser and survivor the earlier judgement named; `None` for a negative
-    expected: Mapping[str, str] | None
+    site_id: str
+    context: Mapping[str, Any]
     source: str
-
-    def sites(self) -> tuple[str, str]:
-        return (self.a, self.b)
+    hint: str
 
 
-def case_id(prefix: str, a: str, b: str) -> str:
-    digest = hashlib.sha256("\n".join(sorted((a, b))).encode()).hexdigest()[:10]
-    return f"{prefix}-{digest}"
+def seeded(items: Sequence[Any], seed: int, count: int, key: Any = lambda x: x) -> list[Any]:
+    """`count` of `items` (all of them when fewer), the same ones for the same seed."""
+    ordered = sorted(items, key=key)
+    if len(ordered) <= count:
+        return ordered
+    return sorted(random.Random(seed).sample(ordered, count), key=key)  # noqa: S311 - a seeded draw
 
 
-def _hash_order(pair: Mapping[str, Any]) -> str:
-    return hashlib.sha256(f"{pair['a']}|{pair['b']}".encode()).hexdigest()
-
-
-# ------------------------------------------------------------------------------------ duplicates
-def dup_cases(
-    duplicates: Sequence[Mapping[str, Any]],
-    o9: Sequence[tuple[str, str]],
-    pairs: Sequence[Mapping[str, Any]],
-    *,
-    extra_negatives: Sequence[tuple[str, str]] = (),
-    n_negatives: int = N_NEGATIVES,
-) -> list[Case]:
-    """The duplicate calibration cases: every pair judged one site before (by loser id, so a pair in
-    both lists counts once), then `n_negatives` negatives - the extra ones first, the rest of the
-    `WRONG-ID` class before the `NEITHER` class, each class in a hash order, so the choice is the
-    same on every run."""
-    cases: dict[str, Case] = {}
-    for item in duplicates:
-        loser, survivor = item["loser_id"], item["survivor_id"]
-        cases[loser] = Case(
-            case_id("dup-pos", loser, survivor), "positive", loser, survivor,
-            {"loser": loser, "survivor": survivor}, "bcases/DUPLICATES.jsonl",
-        )  # fmt: skip
-    for loser, survivor in o9:
-        cases.setdefault(
-            loser,
-            Case(
-                case_id("dup-pos", loser, survivor), "positive", loser, survivor,
-                {"loser": loser, "survivor": survivor}, "mechanical/dups.PAIRS (O9)",
-            ),
-        )  # fmt: skip
-    negatives = [
-        Case(case_id("dup-neg", a, b), "negative", a, b, None, "named negative")
-        for a, b in extra_negatives
-    ]
-    seen = {frozenset(c.sites()) for c in negatives}
-    for klass in NEGATIVE_CLASSES:
-        for pair in sorted((p for p in pairs if p["class"] == klass), key=_hash_order):
-            key = frozenset((pair["a"], pair["b"]))
-            if key in seen:
-                continue
-            seen.add(key)
-            negatives.append(
-                Case(
-                    case_id("dup-neg", pair["a"], pair["b"]),
-                    "negative",
-                    pair["a"],
-                    pair["b"],
-                    None,
-                    f"bcases/dup_pairs.jsonl {klass}",
-                )
-            )
-    if len(negatives) < n_negatives:
-        raise P.PlanError(f"only {len(negatives)} negatives available, {n_negatives} wanted")
-    return sorted(cases.values(), key=lambda c: c.case_id) + negatives[:n_negatives]
-
-
-def resolve_named(shown_rows: Sequence[Mapping[str, Any]], a: str, b: str) -> tuple[str, str]:
-    """The ids of two shown sites named `a` and `b`; a name that is not exactly one site is refused."""
-    found = []
-    for name in (a, b):
-        ids = [r["id"] for r in shown_rows if r["name"] == name]
-        if len(ids) != 1:
-            raise P.PlanError(f"{name!r} names {len(ids)} shown sites, not one")
-        found.append(ids[0])
-    return found[0], found[1]
-
-
-def facts_parts(site_ids: Sequence[str]) -> tuple[tuple[str, str], ...]:
-    """The read of the cases' sites: the columns `export` reads for every shown site, for exactly
-    these ids (a retired loser included)."""
-    ids = P.sql_ids(site_ids)
-    swaps = (
-        (export.SHOWN_SQL, f"WHERE {export.SHOWN}", f"WHERE u.id IN ({ids})"),
-        (export.EXT_IDS_SQL, f"WHERE {export.SHOWN}", f"WHERE e.site_id IN ({ids})"),
-        (export.NAMES_SQL, f"WHERE {export.SHOWN} AND", f"WHERE n.site_id IN ({ids}) AND"),
-    )
-    queries = []
-    for sql, old, new in swaps:
-        if sql.count(old) != 1:
-            raise P.PlanError(
-                f"export.py no longer filters on {old!r} once: the calibration read must be rewritten"
-            )
-        queries.append(sql.replace(old, new))
-    return (("shown", queries[0]), ("ext_ids", queries[1]), ("names", queries[2]))
-
-
-@dataclass(frozen=True)
-class Facts:
-    """The sites of a calibration set, as `export.py` would read them."""
-
-    shown: tuple[Mapping[str, Any], ...]
-    ext_ids: tuple[Mapping[str, Any], ...]
-    names: tuple[Mapping[str, Any], ...]
-    read_at: str
-
-
-def read_facts(path: Path, site_ids: Sequence[str]) -> Path:
-    """Read production (read-only, one snapshot) and keep the answer as it came."""
-    return P.write_tagged_export(P.tagged_export_script(facts_parts(site_ids)), path)
-
-
-def parse_facts(text: str, site_ids: Sequence[str]) -> Facts:
-    rows, read_at = P.parse_tagged_export(text, [k for k, _ in facts_parts(site_ids)])
-    held = {r["id"] for r in rows["shown"]}
-    missing = sorted(set(site_ids) - held)
-    if missing:
-        raise P.PlanError(
-            f"{len(missing)} calibration site(s) are not in unified_sites: {missing[:3]}"
-        )
-    return Facts(tuple(rows["shown"]), tuple(rows["ext_ids"]), tuple(rows["names"]), read_at)
-
-
-def dup_context(facts: Facts, cases: Sequence[Case], wiki: WikiIndex | None) -> dup_judge.Context:
-    """The context of the calibration questions: one cluster per case, its members read as
-    `dup_clusters.member` reads them."""
-    shown = common.rows_by_id(facts.shown)
-    qids = export.qids_by_site(facts.ext_ids)
-    enwiki = export.enwiki_by_site(facts.ext_ids)
-    clusters: dict[str, Mapping[str, Any]] = {}
-    for case in cases:
-        rows = sorted((shown[s] for s in case.sites()), key=lambda r: (r["created_at"], r["id"]))
-        metres = common.metres(rows[0], rows[1])
-        shared = sorted(set(qids.get(case.a, ())) & set(qids.get(case.b, ())))
-        edge: dict[str, Any] = (
-            {"kind": "shared_qid", "qid": shared[0], "sites": sorted(case.sites())}
-            if shared
-            else {
-                "kind": "name_point",
-                "metres": round(metres),
-                "similarity": 0.0,
-                "sites": sorted(case.sites()),
-            }
-        )
-        clusters[case.case_id] = {
-            "record": "cluster",
-            "cluster_id": case.case_id,
-            "size": 2,
-            "kinds": [edge["kind"]],
-            "bcases_classes": [],
-            "max_distance_m": round(metres, 1),
-            "min_distance_m": round(metres, 1),
-            "distance_band": dup_clusters.band(metres),
-            "edges": [edge],
-            "members": [
-                dup_clusters.member(r, qids.get(r["id"], []), enwiki.get(r["id"], [])) for r in rows
-            ],
-        }
-    names: dict[str, list[str]] = {}
-    for row in facts.names:
-        names.setdefault(row["site_id"], []).append(row["name"])
-    return dup_judge.Context(
-        clusters=clusters,
-        retired_losers=(),
-        shown=shown,
-        names={k: tuple(sorted(set(v))) for k, v in names.items()},
-        wiki=wiki,
-        basis=facts.read_at,
-    )
-
-
-def cal_dir(run: Path, kind: str) -> Path:
-    return run / CAL_DIR / kind
-
-
-def export_gold(
-    stage_run: Path, ctx: dup_judge.Context, cases: Sequence[Case], handoff: Path
-) -> rounds.Round:
-    """Every case as a `dup-verdict` question, in the calibration's own stage directory."""
-    return rounds.export_round(
-        stage_run, dup_judge.STAGE_VERDICT, [c.case_id for c in cases],
-        dup_judge._prompt_of(dup_judge.STAGE_VERDICT, ctx), handoff, basis=ctx.basis,
-    )  # fmt: skip
-
-
-def gold_relations(text: str, cluster: Mapping[str, Any]) -> dict[str, str]:
-    """`{member: "MERGE:<survivor>" | "PART_OF:<parent>" | verdict}` of one gold answer."""
-    members = dup_judge.parse_verdict(text, cluster)
+# ------------------------------------------------------------------------------------- retarget
+def stub_funnel(row: Mapping[str, Any]) -> dict[str, Any]:
+    """A funnel record for a site the funnel did not list: no signal, its first sentence."""
     return {
-        s: f"{m.verdict}:{m.survivor or m.parent}" if (m.survivor or m.parent) else m.verdict
-        for s, m in members.items()
+        "tier": "calibration",
+        "p31": [],
+        "p31_modern": [],
+        "sentence1": funnel.first_sentence(row["description"]),
+        "opening_match": None,
+        "shared_with": [],
     }
 
 
-def gold_check(
-    handoff: Path,
-    ctx: dup_judge.Context,
-    cases: Sequence[Case],
+def select_retarget(
+    run: Path,
     *,
-    batches: Mapping[str, Sequence[str]],
-) -> dict[str, Any]:
-    """The gold answers held to what was known. A positive whose loser the gold does not MERGE is
-    listed in `positive_disagreements`; a negative the gold MERGEs in `negative_merges` (not a fault
-    of the gold, a finding about the case); a different survivor in `survivor_differs`."""
-    by_label = {label: batch for batch, labels in batches.items() for label in labels}
-    report: dict[str, Any] = {"cases": len(cases), "answered": 0, "positive_disagreements": [],
-                              "survivor_differs": [], "negative_merges": [], "gold_models": []}  # fmt: skip
-    for case in cases:
-        batch = by_label[case.case_id]
-        cluster = ctx.clusters[case.case_id]
-        prompt = dup_judge.verdict_prompt(cluster, ctx)
-        answer = OH.read_answer(
-            handoff,
-            batch_id=batch,
-            stage=dup_judge.STAGE_VERDICT,
-            label=case.case_id,
-            prompt=prompt,
-        )
-        problem = rounds.role_problem(answer, (GOLD_ROLE,))
-        if problem is not None:
-            raise rounds.RoundError(f"{case.case_id}: {problem}")
-        report["answered"] += 1
-        report["gold_models"].append(answer.model)
-        relations = gold_relations(answer.text, cluster)
-        merged = {s: r for s, r in relations.items() if r.startswith("MERGE:")}
-        if case.kind == "positive":
-            assert case.expected is not None
-            if not merged:
-                report["positive_disagreements"].append(
-                    {"case": case.case_id, "relations": relations}
-                )
-            elif relations.get(case.expected["loser"]) != f"MERGE:{case.expected['survivor']}":
-                report["survivor_differs"].append({"case": case.case_id, "relations": relations})
-        elif merged:
-            report["negative_merges"].append({"case": case.case_id, "relations": relations})
-    report["gold_models"] = sorted(set(report["gold_models"]))
-    return report
-
-
-def false_merges(comparison: Mapping[str, Any]) -> int:
-    """The MERGEs a re-answering role made where the recorded gold made none: a false MERGE retires
-    a real site, and the seal allows none. Read from `COMPARISON.json` (`calibrate_claude compare`)."""
-    return sum(
-        1
-        for d in comparison["disagreements"]
-        if str(d["fresh"]).startswith("MERGE:") and not str(d["recorded"]).startswith("MERGE:")
+    root: Path | None = None,
+    bcases_names: Path | None = None,
+    seed: int = DEFAULT_SEED,
+    n7_site: int = 8,
+    n7_locality: int = 8,
+    clean: int = 12,
+) -> list[PoolCase]:
+    """The D13 pool: the four audited defects, N7 records of both kinds, and sites the funnel did not
+    list (no defect was found for them)."""
+    exported = export.load_export(run / common.EXPORT_FILE)
+    by_id = common.rows_by_id(exported.shown)
+    listed = {r["id"]: r for r in common.read_jsonl(run / "IDENTITY_FUNNEL.jsonl")}
+    ext: dict[str, dict[str, list[str]]] = {}
+    for e in exported.ext_ids:
+        ext.setdefault(e["site_id"], {}).setdefault(e["kind"], []).append(e["value"])
+    names = {sid: row["name"] for sid, row in by_id.items()}
+    cache = cache_entries(wiki_cache_dir(root))
+    bcases = (
+        bcases_names or (root or common.main_checkout()) / "output/remediation/bcases/names.jsonl"
     )
+    n7 = [r for r in common.read_jsonl(bcases) if r["class"] == "N7" and r["site_id"] in by_id]
 
+    def case(sid: str, source: str, hint: str) -> PoolCase:
+        rec = listed.get(sid) or stub_funnel(by_id[sid])
+        ctx = retarget.site_context(
+            by_id[sid],
+            rec,
+            ext.get(sid, {}),
+            retarget.merge_candidates(sid, rec["shared_with"], exported.pairs, names),
+            cache.get(sid, []),
+            exported.exported_at,
+        )
+        return PoolCase(sid, ctx, source, hint)
 
-# --------------------------------------------------------------------------------------- parents
-def parent_cases(
-    pairs: Sequence[Mapping[str, Any]],
-    shown: Mapping[str, Mapping[str, Any]],
-    *,
-    n_positive: int = N_PARENT_POSITIVES,
-    n_negative: int = N_PARENT_NEGATIVES,
-) -> list[Case]:
-    """The `PART-OF` pairs (positives) and the contained-name `NEITHER` pairs (negatives) of the
-    owner-case classification, each as a parent question with one child. The parent of a pair is the
-    one whose significant words are the subset (`parents.candidate_pairs`' rule); a pair whose words
-    are not nested has no parent and is left out."""
-    out: list[Case] = []
-    for klass, kind, wanted in (
-        ("PART-OF", "positive", n_positive),
-        ("NEITHER", "negative", n_negative),
-    ):
-        taken = 0
-        for pair in sorted((p for p in pairs if p["class"] == klass), key=_hash_order):
-            if taken >= wanted:
-                break
-            if pair["a"] not in shown or pair["b"] not in shown:
-                continue
-            left, right = common.tokens(pair["a_name"]), common.tokens(pair["b_name"])
-            if not left or not right or not (left < right or right < left):
-                continue
-            parent, child = (pair["a"], pair["b"]) if left < right else (pair["b"], pair["a"])
-            out.append(
-                Case(
-                    case_id("par-" + kind[:3], parent, child),
-                    kind,
-                    parent,
-                    child,
-                    None,
-                    f"bcases/dup_pairs.jsonl {klass}",
+    cases = [
+        case(
+            sid,
+            f"known-defect:{name}",
+            "the sample audit found this record to describe a modern place",
+        )
+        for sid, name in sorted(KNOWN_DEFECTS.items())
+        if sid in by_id
+    ]
+    taken = {c.site_id for c in cases}
+    for kind, count in (("anchor-is-a-site", n7_site), ("anchor-is-locality", n7_locality)):
+        pool = [r for r in n7 if r["n7"] == kind and r["site_id"] not in taken]
+        for r in seeded(pool, seed, count, key=lambda r: r["site_id"]):
+            taken.add(r["site_id"])
+            cases.append(
+                case(
+                    r["site_id"],
+                    f"bcases-n7:{kind}",
+                    f"bcases N7 {kind} (a code class): stored name {r['name']!r}, English label "
+                    f"{r['en_label']!r}, item classes {r['p31']}",
                 )
             )
-            taken += 1
-        if taken < wanted:
-            raise P.PlanError(f"only {taken} {klass} pairs with nested names, {wanted} wanted")
+    rest = [sid for sid in by_id if sid not in listed and sid not in taken]
+    for sid in seeded(rest, seed, clean):
+        cases.append(case(sid, "not-in-funnel", "the funnel found no sign of a modern place"))
+    return cases
+
+
+# ------------------------------------------------------------------------------------ scope window
+def snapshot_record(site: Mapping[str, Any], group: str) -> dict[str, Any]:
+    """A `SCOPE_WINDOW.jsonl`-shaped record from a row of the scope review's snapshot: the
+    discovery's fields, the provenance unknown (`import`)."""
+    end = site["period_end"]
+    date = end if end else site["period_start"]
+    return {
+        "id": str(site["id"]),
+        "name": site["name"],
+        "country": site["country"],
+        "site_type": site["site_type"],
+        "lat": site["lat"],
+        "lon": site["lon"],
+        "groups": [group],
+        "museum_question": site["site_type"] == "Museum",
+        "scope_status": site["scope_status"],
+        "scope_reason": site["scope_reason"],
+        "period_start": site["period_start"],
+        "period_end": end,
+        "period_name": None,
+        "date_used": date,
+        "origin": ORIGIN_IMPORT,
+        "recheck_d10": False,
+        "period_writes": {},
+        "description": " ".join(str(site["excerpt"]).split())[:300],
+        "source_url": site["source_url"],
+        "images": 0,
+    }
+
+
+def select_scope(
+    run: Path,
+    *,
+    scope_decisions: Path,
+    review_snapshot: Path,
+    review_answers: Path,
+    root: Path | None = None,
+    seed: int = DEFAULT_SEED,
+    reviewed: int = 12,
+) -> list[PoolCase]:
+    """The D20 pool: the scope-e4 decisions (a quote-backed keep or retire of a dated entry, 36),
+    and the review's counted `not_a_site` answers, over the entries as the review saw them."""
+    exported = export.load_export(run / common.EXPORT_FILE)
+    ext: dict[str, dict[str, list[str]]] = {}
+    for e in exported.ext_ids:
+        ext.setdefault(e["site_id"], {}).setdefault(e["kind"], []).append(e["value"])
+    cache = cache_entries(wiki_cache_dir(root))
+    snapshot = parse_scope_export(review_snapshot.read_text(encoding="utf-8")).by_id()
+    decisions = json.loads(scope_decisions.read_text(encoding="utf-8"))["decisions"]
+
+    def case(sid: str, source: str, hint: str) -> PoolCase | None:
+        site = snapshot.get(sid)
+        if site is None or site["lon"] is None:
+            return None
+        date = site["period_end"] or site["period_start"]
+        region = e3_region(site)
+        outside = date is not None and region is not None and date > E3_CUTOFFS[region]
+        group = "outside_window" if outside else "calibration"
+        record = snapshot_record(site, group)
+        ctx = scope_judge.site_context(
+            record, ext.get(sid, {}), cache.get(sid, []), exported.exported_at
+        )
+        return PoolCase(sid, ctx, source, hint)
+
+    cases = []
+    for d in sorted(decisions, key=lambda d: d["site_id"]):
+        built = case(
+            d["site_id"],
+            f"scope-e4:{d['rule']}:{d['status']}",
+            f"scope-e4 rule {d['rule']} decided {d['status']}: {d.get('note') or d['quote']}",
+        )
+        if built is not None:
+            cases.append(built)
+    taken = {c.site_id for c in cases}
+    counted = [
+        r
+        for r in common.read_jsonl(review_answers)
+        if r["decision"] == "not_a_site" and r["counted"] and r["site_id"] not in taken
+    ]
+    for r in seeded(counted, seed, reviewed, key=lambda r: r["site_id"]):
+        built = case(
+            r["site_id"],
+            "scope-review:not_a_site",
+            f"counted not_a_site ({r['kind']}): {r['reason']}",
+        )
+        if built is not None:
+            cases.append(built)
+    return cases
+
+
+# ------------------------------------------------------------------------------------------ names
+def select_names(
+    run: Path, *, root: Path | None = None, seed: int = DEFAULT_SEED, hard: int = 12, comma: int = 8
+) -> list[PoolCase]:
+    """The D23 pool: records the triage could not repair itself, hard defects and comma-only ones in
+    the proportion the triage has them (170 hard, 131 comma-only)."""
+    exported = export.load_export(run / common.EXPORT_FILE)
+    by_id = common.rows_by_id(exported.shown)
+    ext: dict[str, dict[str, list[str]]] = {}
+    for e in exported.ext_ids:
+        ext.setdefault(e["site_id"], {}).setdefault(e["kind"], []).append(e["value"])
+    cache = cache_entries(wiki_cache_dir(root))
+    triage = [t for t in common.read_jsonl(run / names_judge.TRIAGE_FILE) if t["needs_model"]]
+    cases = []
+    for severity, count in (("hard", hard), ("comma_only", comma)):
+        for t in seeded(
+            [t for t in triage if t["severity"] == severity], seed, count, key=lambda t: t["id"]
+        ):
+            ctx = names_judge.clean_context(
+                t,
+                by_id[t["id"]],
+                ext.get(t["id"], {}),
+                cache.get(t["id"], []),
+                exported.exported_at,
+            )
+            cases.append(
+                PoolCase(
+                    t["id"],
+                    ctx,
+                    f"triage:{severity}",
+                    f"triage defects {t['defects']}, no repair by rule",
+                )
+            )
+    return cases
+
+
+# ------------------------------------------------------------------------------------------- pool
+def spec_of(lane: str) -> R.StageSpec:
+    """The web stage a lane's pool is made of (holders are not needed to render a prompt)."""
+    return {
+        "retarget": lambda: retarget.web_spec({}),
+        "scope-window": scope_judge.web_spec,
+        "names": names_judge.clean_spec,
+    }[lane]()
+
+
+def export_pool(
+    pool: Path, lane: str, handoff: Path, cases: Sequence[PoolCase], *, seed: int
+) -> dict[str, Any]:
+    """Export the lane's questions for `cases` into `pool` (a stage directory) and `handoff`, and
+    keep each case's source and hint beside them (`POOL.json`). Refused for an empty pool."""
+    if not cases:
+        raise PoolError("the pool selected no case")
+    spec = spec_of(lane)
+    record = R.export_round(pool, spec, handoff, [R.Question(c.site_id, c.context) for c in cases])
+    manifest = {
+        "lane": lane,
+        "stage": spec.stage,
+        "seed": seed,
+        "handoff": handoff.as_posix(),
+        "batches": sorted(record.batches),
+        "cases": [{"site_id": c.site_id, "source": c.source, "hint": c.hint} for c in cases],
+    }
+    (pool / POOL_FILE).write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    return {"questions": len(cases), "batches": len(record.batches), "handoff": str(handoff)}
+
+
+def load_manifest(pool: Path) -> dict[str, Any]:
+    path = pool / POOL_FILE
+    if not path.exists():
+        raise PoolError(f"{path} does not exist: export the pool first")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def status(pool: Path) -> dict[str, Any]:
+    """Whether the pool is fit to seal: every question answered, by the pilot judge, in shape."""
+    manifest = load_manifest(pool)
+    check = OH.validate(Path(manifest["handoff"]))
+    wrong = []
+    for line in OH.manifest(Path(manifest["handoff"])):
+        path = Path(manifest["handoff"]) / line["answer_path"]
+        if path.exists():
+            answer = json.loads(path.read_text(encoding="utf-8"))
+            if RO.role_of(answer["answered_by"]) != POOL_ROLE:
+                wrong.append(line["label"])
+    problems = check.to_dict()
+    return {
+        "questions": problems["questions"],
+        "answered": problems["answered"],
+        "unanswered": [m["label"] for m in problems["missing"]],
+        "stale_or_malformed": len(problems["stale"]) + len(problems["malformed"]),
+        "not_the_pilot_judge": wrong,
+        "fit_to_seal": check.ok and not wrong,
+    }
+
+
+def disagreements(pool: Path) -> list[dict[str, Any]]:
+    """The labelled cases whose label is not what the hint suggests, for the orchestrator to read."""
+    manifest = load_manifest(pool)
+    handoff = Path(manifest["handoff"])
+    out = []
+    labels: dict[str, str] = {}
+    for line in OH.manifest(handoff):
+        path = handoff / line["answer_path"]
+        if path.exists():
+            labels[line["label"]] = json.loads(
+                json.loads(path.read_text(encoding="utf-8"))["text"]
+            )["verdict"]
+    for case in manifest["cases"]:
+        verdict = labels.get(case["site_id"])
+        if (
+            verdict is not None
+            and _hint_verdicts(case["source"])
+            and verdict not in _hint_verdicts(case["source"])
+        ):
+            out.append(
+                {
+                    **case,
+                    "label": verdict,
+                    "expected_one_of": sorted(_hint_verdicts(case["source"])),
+                }
+            )
     return out
 
 
-def parent_context(
-    facts: Facts, cases: Sequence[Case], wiki: WikiIndex | None
-) -> parent_judge.Context:
-    shown = common.rows_by_id(facts.shown)
-    qids = export.qids_by_site(facts.ext_ids)
-    questions: dict[str, dict[str, Any]] = {}
-    for case in cases:
-        parent, child = shown[case.a], shown[case.b]
-        questions[case.case_id] = {
-            "parent": parent_judge._brief(parent, qids.get(parent["id"], ())),
-            "parent_is_child": False,
-            "children": [
-                {
-                    **parent_judge._brief(child, qids.get(child["id"], ())),
-                    "metres": round(common.metres(parent, child), 1),
-                    "shared_qid": bool(
-                        set(qids.get(parent["id"], ())) & set(qids.get(child["id"], ()))
-                    ),
-                    "competing_parents": [],
-                    "sources": ["calibration"],
-                }
-            ],
-        }
-    names: dict[str, list[str]] = {}
-    for row in facts.names:
-        names.setdefault(row["site_id"], []).append(row["name"])
-    return parent_judge.Context(
-        questions=questions,
-        shown=shown,
-        names={k: tuple(sorted(set(v))) for k, v in names.items()},
-        qids={k: tuple(v) for k, v in qids.items()},
-        wiki=wiki,
-        store=None,
-        basis=facts.read_at,
-    )
+#: The verdicts an earlier judgement makes likely, by the prefix of a case's source - a sanity check
+#: on the label, never a gold. A source that is not listed expects nothing.
+HINT_VERDICTS = (
+    ("known-defect:", {"RETARGET", "MERGE"}),
+    ("bcases-n7:anchor-is-locality", {"RETARGET", "RETIRE", "MERGE"}),
+    ("bcases-n7:anchor-is-a-site", {"KEEP"}),
+    ("not-in-funnel", {"KEEP"}),
+    ("scope-e4:d:in_scope", {"MUSEUM_KEEP"}),
+    ("scope-e4:d:retired", {"OUT_OF_WINDOW", "NOT_A_SITE"}),
+    ("scope-e4:a:pending", {"PERIOD_WRONG"}),
+    ("scope-e4:b:retired", {"OUT_OF_WINDOW", "NOT_A_SITE"}),
+    ("scope-review:not_a_site", {"NOT_A_SITE"}),
+)
 
 
-def export_parent_gold(
-    stage_run: Path, ctx: parent_judge.Context, cases: Sequence[Case], handoff: Path
-) -> rounds.Round:
-    """Every case as a `parent-verdict` question. A question's label is its case id (a file name);
-    the answer's `parent_id` is the real parent's, which the prompt prints."""
-
-    def build(label: str, earlier: str | None) -> str:
-        return parent_judge.verdict_prompt(ctx.questions[label], ctx, earlier)
-
-    return rounds.export_round(
-        stage_run, parent_judge.STAGE_VERDICT, [c.case_id for c in cases], build, handoff,
-        basis=ctx.basis,
-    )  # fmt: skip
+def _hint_verdicts(source: str) -> set[str]:
+    for prefix, verdicts in HINT_VERDICTS:
+        if source.startswith(prefix):
+            return verdicts
+    return set()
 
 
-def parent_gold_check(
-    handoff: Path,
-    ctx: parent_judge.Context,
-    cases: Sequence[Case],
-    *,
-    batches: Mapping[str, Sequence[str]],
-) -> dict[str, Any]:
-    """The gold answers against the owner-case classes (a heuristic: a disagreement is listed for
-    the orchestrator to read, not counted a fault of the gold)."""
-    by_label = {label: batch for batch, labels in batches.items() for label in labels}
-    report: dict[str, Any] = {"cases": len(cases), "answered": 0, "positive_not_part": [],
-                              "negative_part": [], "gold_models": []}  # fmt: skip
-    for case in cases:
-        question = ctx.questions[case.case_id]
-        answer = OH.read_answer(
-            handoff, batch_id=by_label[case.case_id], stage=parent_judge.STAGE_VERDICT,
-            label=case.case_id, prompt=parent_judge.verdict_prompt(question, ctx),
-        )  # fmt: skip
-        problem = rounds.role_problem(answer, (GOLD_ROLE,))
-        if problem is not None:
-            raise rounds.RoundError(f"{case.case_id}: {problem}")
-        report["answered"] += 1
-        report["gold_models"].append(answer.model)
-        verdict = parent_judge.parse_verdict(answer.text, question)[case.b].verdict
-        if case.kind == "positive" and verdict != "PART":
-            report["positive_not_part"].append({"case": case.case_id, "verdict": verdict})
-        elif case.kind == "negative" and verdict == "PART":
-            report["negative_part"].append({"case": case.case_id, "verdict": verdict})
-    report["gold_models"] = sorted(set(report["gold_models"]))
-    return report
+def prepare(root: Path, calibration_id: str, pool: Path) -> dict[str, Any]:
+    """`calibrate_claude.prepare` on the sealed pool, then the copy's contexts: the copy is the stage
+    directory the role under test is briefed from (`run.py ... --stage-dir <root>/<id>-run`)."""
+    summary = CC.prepare(root, calibration_id=calibration_id, run=pool)
+    copy_run = Path(summary["calibration_run"])
+    shutil.copytree(pool / R.CONTEXTS_DIR, copy_run / R.CONTEXTS_DIR)
+    return {**summary, "stage_dir": str(copy_run)}
 
 
-# ------------------------------------------------------------------------------------------ CLI
-def _load_cases(run: Path, kind: str) -> list[Case]:
-    path = cal_dir(run, kind) / "CASES.jsonl"
-    return [
-        Case(c["case_id"], c["kind"], c["a"], c["b"], c["expected"], c["source"])
-        for c in common.read_jsonl(path)
-    ]
-
-
+# ---------------------------------------------------------------------------------------------- CLI
 def main(argv: Sequence[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
-    ap = argparse.ArgumentParser(
-        description="Calibration sets of the duplicate verdict and the parent question."
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--root", type=Path, default=None, help="main checkout (default: found)")
-    sub = ap.add_subparsers(dest="command", required=True)
-    kinds = ("dup", "parent")
-    read = sub.add_parser("read", help="choose the cases and read their sites (read-only)")
-    read.add_argument("--kind", choices=kinds, required=True)
-    read.add_argument("--negative", action="append", default=[], metavar="A=B",
-                      help="dup only: a named negative pair, two shown site names")  # fmt: skip
-    export_cmd = sub.add_parser("export", help="export every case as a verdict question")
-    export_cmd.add_argument("--kind", choices=kinds, required=True)
-    export_cmd.add_argument("--handoff", type=Path, required=True)
-    check = sub.add_parser("gold-check", help="hold the gold answers to what was known")
-    check.add_argument("--kind", choices=kinds, required=True)
-    check.add_argument("--handoff", type=Path, required=True)
-    fm = sub.add_parser("false-merges", help="count the MERGEs a re-answer made against the gold")
-    fm.add_argument("--comparison", type=Path, required=True)
-    args = ap.parse_args(argv)
-    run = common.run_dir(args.root)
+    parser.add_argument("--run-dir", type=Path, default=None)
+    parser.add_argument("--root", type=Path, default=None, help="the main checkout")
+    sub = parser.add_subparsers(dest="command", required=True)
+    exp = sub.add_parser("export", help="select the cases and export the lane's questions")
+    exp.add_argument("--lane", required=True, choices=LANES)
+    exp.add_argument("--pool", required=True, type=Path)
+    exp.add_argument("--handoff", required=True, type=Path)
+    exp.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    for name in ("status", "disagreements"):
+        sub.add_parser(name).add_argument("--pool", required=True, type=Path)
+    prep = sub.add_parser("prepare", help="the sealed pool's copy and its contexts")
+    prep.add_argument("--id", required=True, dest="calibration_id")
+    prep.add_argument("--pool", required=True, type=Path)
+    prep.add_argument("--calibration-root", type=Path, default=CC.CALIBRATION_ROOT)
+    args = parser.parse_args(list(argv) if argv is not None else None)
+    run = args.run_dir or common.run_dir()
+    root = args.root or common.main_checkout()
     try:
-        if args.command == "false-merges":
-            print(false_merges(json.loads(args.comparison.read_text(encoding="utf-8"))))
-            return 0
-        out = cal_dir(run, args.kind)
-        stage = dup_judge.STAGE_VERDICT if args.kind == "dup" else parent_judge.STAGE_VERDICT
-        if args.command == "read":
-            exported = export.load_export(run / common.EXPORT_FILE)
-            if args.kind == "dup":
-                extra = [
-                    resolve_named(exported.shown, *spec.split("=", 1)) for spec in args.negative
-                ]
-                o9 = [(p.loser, p.survivor) for p in dups.PAIRS]
-                cases = dup_cases(
-                    common.read_jsonl(DUPLICATES),
-                    o9,
-                    common.read_jsonl(DUP_PAIRS),
-                    extra_negatives=extra,
-                )
-            else:
-                cases = parent_cases(
-                    common.read_jsonl(DUP_PAIRS), common.rows_by_id(exported.shown)
-                )
-            ids = sorted({s for c in cases for s in c.sites()})
-            read_facts(out / "READ.jsonl", ids)
-            common.write_jsonl(
-                out / "CASES.jsonl",
-                [
-                    {"case_id": c.case_id, "kind": c.kind, "a": c.a, "b": c.b,
-                     "expected": c.expected, "source": c.source}
-                    for c in cases
-                ],
-            )  # fmt: skip
-            counts = {k: sum(1 for c in cases if c.kind == k) for k in ("positive", "negative")}
-            print(json.dumps({"cases": len(cases), **counts, "sites": len(ids)}, indent=1))
-            return 0
-        cases = _load_cases(run, args.kind)
-        ids = sorted({s for c in cases for s in c.sites()})
-        facts = parse_facts((out / "READ.jsonl").read_text(encoding="utf-8"), ids)
-        wiki = load_cache(args.root)
         if args.command == "export":
-            if args.kind == "dup":
-                record = export_gold(out, dup_context(facts, cases, wiki), cases, args.handoff)
-            else:
-                record = export_parent_gold(
-                    out, parent_context(facts, cases, wiki), cases, args.handoff
+            remediation = root / "output" / "remediation"
+            if args.lane == "retarget":
+                cases = select_retarget(run, root=root, seed=args.seed)
+            elif args.lane == "scope-window":
+                cases = select_scope(
+                    run,
+                    scope_decisions=remediation / "mechanical_scope" / "DECISIONS.json",
+                    review_snapshot=remediation / "mechanical_scope_review" / "SNAPSHOT_R0.jsonl",
+                    review_answers=remediation / "mechanical_scope_review" / "NONSITE_R0.jsonl",
+                    root=root,
+                    seed=args.seed,
                 )
-            print(json.dumps({"round": record.name, "run": str(rounds.stage_dir(out, stage)),
-                              "batches": {b: len(v) for b, v in record.batches.items()}}, indent=1))  # fmt: skip
-            return 0
-        batches = rounds.find_round(out, stage, "r1").batches
-        if args.kind == "dup":
-            report = gold_check(
-                args.handoff, dup_context(facts, cases, wiki), cases, batches=batches
+            else:
+                cases = select_names(run, root=root, seed=args.seed)
+            payload: Any = export_pool(
+                args.pool.resolve(), args.lane, args.handoff.resolve(), cases, seed=args.seed
             )
+        elif args.command == "status":
+            payload = status(args.pool)
+        elif args.command == "disagreements":
+            payload = disagreements(args.pool)
         else:
-            report = parent_gold_check(
-                args.handoff, parent_context(facts, cases, wiki), cases, batches=batches
-            )
-        print(json.dumps(report, indent=1, sort_keys=True))
-    except (P.PlanError, rounds.RoundError, OH.HandoffError, common.IdentityError) as exc:
+            payload = prepare(args.calibration_root, args.calibration_id, args.pool)
+    except (
+        PoolError,
+        R.RoundError,
+        CC.CalibrationError,
+        common.IdentityError,
+        OH.HandoffError,
+    ) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
-        return 2
-    return 0
+        return 1
+    print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))
+    return 0 if args.command != "status" or payload["fit_to_seal"] else 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

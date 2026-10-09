@@ -5,7 +5,7 @@ exactly once, the mutant compiles, the named test passed on the unmutated file a
 FAILED against the mutant - anything else fails the sweep). The cases are this package's: one per guard
 of the row lane (`mechanical/rowlane.py`), the lane family in `mechanical/lane.py` (the move, retire and
 parent lanes), the planners (`dup_merge.py`, `parent.py`), the two question stages (`dup_judge.py`,
-`parent_judge.py`, `rounds.py`) and the calibration sets (`calibration.py`), each naming the one test
+`parent_judge.py`, `label_rounds.py`) and the calibration sets (`pair_calibration.py`), each naming the one test
 that must notice.
 
 A guard that is an `if` is found by its line: `at()` reads the file, takes the `nth` line equal to
@@ -46,9 +46,9 @@ DUP_MERGE = MECH / "dup_merge.py"
 PARENT = MECH / "parent.py"
 DUP_JUDGE = IDENT / "dup_judge.py"
 PARENT_JUDGE = IDENT / "parent_judge.py"
-ROUNDS = IDENT / "rounds.py"
+ROUNDS = IDENT / "label_rounds.py"
 WIKI = IDENT / "wiki.py"
-CALIBRATION = IDENT / "calibration.py"
+CALIBRATION = IDENT / "pair_calibration.py"
 MCODE = REMEDIATION / "mcode_driver.py"
 
 T_ROW = "tests/remediation/test_mechanical_rowlane.py"

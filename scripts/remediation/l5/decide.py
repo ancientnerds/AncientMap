@@ -277,3 +277,10 @@ def decide(
     except Held as exc:
         return decision(HELD, str(exc))
     return decision(DECIDED, "")
+
+
+# The seam other lanes reuse (the identity package, owner decision D13 of 2026-10-08): the same page
+# reads and gates, one implementation.
+entity_page = _entity
+article_check = _article
+is_english = _english

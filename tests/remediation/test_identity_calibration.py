@@ -1,6 +1,6 @@
 """The calibration sets of the duplicate verdict (D14) and the parent question (D25).
 
-`identity/calibration.py` builds the cases a role is measured on: the pairs judged one site before
+`identity/pair_calibration.py` builds the cases a role is measured on: the pairs judged one site before
 (positives), the pairs the owner-case classification called WRONG-ID or NEITHER (negatives, no model
 judged them yet) and, for parents, the PART-OF and the contained-name NEITHER pairs. It writes no
 answer: the gold is a blind Opus xhigh labelling in the role `pilot_judge`, and `gold_check` holds it to
@@ -23,8 +23,9 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
 
 import mcode_driver as D  # noqa: E402
 import opus_handoff as OH  # noqa: E402
-from identity import calibration as C  # noqa: E402
-from identity import common, dup_judge, export, parent_judge, rounds  # noqa: E402
+from identity import common, dup_judge, export, parent_judge  # noqa: E402
+from identity import label_rounds as rounds  # noqa: E402
+from identity import pair_calibration as C  # noqa: E402
 from mechanical import plan as P  # noqa: E402
 
 from tests.remediation.identity_fixtures import export_of, ext, site  # noqa: E402

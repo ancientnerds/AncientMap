@@ -10034,7 +10034,7 @@ CASES += UNDRAWABLE_CASES
 # ------------------------------------------------ contract shorts-v1 and the Claude re-check (2026-10-09)
 SHORTS_V1 = REPO / "scripts/remediation/teaser/shorts_v1.py"
 ANSWERS_SHORTS = REPO / "scripts/remediation/teaser/answers_shorts.py"
-CALIBRATE = REPO / "scripts/remediation/teaser/calibrate.py"
+CALIBRATE_SHORTS = REPO / "scripts/remediation/teaser/calibrate.py"
 SHORTS_RULE_TESTS = "tests/remediation/test_teaser_shorts.py"
 SHORTS_RUN_TESTS = "tests/remediation/test_teaser_shorts_run.py"
 SHORTS_WRITE_TESTS = "tests/remediation/test_mechanical_teaser_shorts.py"
@@ -10965,7 +10965,7 @@ TEASER_SHORTS_CASES: list[Case] = [
     ),
     # ------------------------------------------------ the calibration (calibrate.py)
     *(
-        guard(f"teaser-shorts: calibration: {label}", CALIBRATE, needle, test, CALIBRATE_TESTS)
+        guard(f"teaser-shorts: calibration: {label}", CALIBRATE_SHORTS, needle, test, CALIBRATE_TESTS)
         for label, needle, test in (
             (
                 "nothing is sealed after a case or a verdict",
@@ -11100,7 +11100,7 @@ TEASER_SHORTS_CASES: list[Case] = [
         )
     ),
     *(
-        Case(f"teaser-shorts: calibration: {label}", CALIBRATE, old, new, test, CALIBRATE_TESTS)
+        Case(f"teaser-shorts: calibration: {label}", CALIBRATE_SHORTS, old, new, test, CALIBRATE_TESTS)
         for label, old, new, test in (
             (
                 "a false pass fails the checker",
@@ -11178,7 +11178,7 @@ TEASER_SHORTS_CASES: list[Case] = [
     ),
     # ------------------------------------------------ the fix round (2026-10-09, review of package cards)
     *(
-        Case(f"teaser-shorts: calibration: {label}", CALIBRATE, old, new, test, CALIBRATE_TESTS)
+        Case(f"teaser-shorts: calibration: {label}", CALIBRATE_SHORTS, old, new, test, CALIBRATE_TESTS)
         for label, old, new, test in (
             (
                 "a case key says nothing of its case",

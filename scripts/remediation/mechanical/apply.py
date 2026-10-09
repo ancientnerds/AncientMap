@@ -70,6 +70,7 @@ from mechanical.lane import (  # noqa: E402
     FIELD_PROV_LANE,
     FIELDS_LANE,
     IDENTITY_LANE,
+    IDENTITY_WAVE_LANE,
     LANE_READBACKS,
     LANES,
     PERIOD_LABEL_LANE,
@@ -1944,6 +1945,10 @@ def readback_for(lane: Lane) -> str:
         return disclosure_readback(lane)
     if IDENTITY_LANE.match(lane.name):
         return identity_readback(lane)
+    if IDENTITY_WAVE_LANE.match(lane.name):
+        from mechanical.identity_lanes import readback as identity_wave_readback
+
+        return identity_wave_readback(lane)
     from mechanical.card_stats import card_stats_readback
 
     return card_stats_readback(lane)
@@ -1960,7 +1965,8 @@ def _lane_argument(name: str) -> str:
             f"invalid choice: {name!r} (choose from {', '.join(sorted(LANES))}, "
             "scope-review-<wave>, fields-wd1-<wave>-sNNN, card-stats-<wave>, teaser-prov-sNNN, "
             "teaser-card-sNNN, card-disclosure-sNNN, dup-merge-move-<wave>, "
-            "dup-merge-retire-<wave>, parent-<wave>)"
+            "dup-merge-retire-<wave>, parent-<wave>, scope-window-<wave>, name-clean-<wave>, "
+            "retarget-name-<wave>, spoken-<wave>)"
             + (f": {exc.args[0]}" if exc.args and exc.args[0] != name else "")
         ) from exc
     return name

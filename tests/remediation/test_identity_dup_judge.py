@@ -3,7 +3,7 @@
 `identity/dup_judge.py` asks one question per cluster (a web verifier gives each member DISTINCT,
 MERGE, PART_OF or WRONG_ID with quotes), asks it again of every relation with the first answer in
 front of the reader (the adversarial recheck), and builds `DUP_DECISIONS.jsonl` from both. The rounds
-(`identity/rounds.py`) are the shared part: export, role and model checks, the import. Nothing here
+(`identity/label_rounds.py`) are the shared part: export, role and model checks, the import. Nothing here
 fetches a page or calls a model - the pages are written into the library by hand, the answers into a
 handoff directory with `opus_handoff.write_answer`.
 """
@@ -22,7 +22,8 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
 import opus_handoff as OH  # noqa: E402
-from identity import common, dup_clusters, rounds  # noqa: E402
+from identity import common, dup_clusters  # noqa: E402
+from identity import label_rounds as rounds  # noqa: E402
 from identity import dup_judge as J
 from identity.wiki import WikiIndex  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402

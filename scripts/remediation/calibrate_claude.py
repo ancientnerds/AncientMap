@@ -32,7 +32,7 @@ model or opens a socket.
 
     python scripts/remediation/calibrate_claude.py seal --id ID --role ROLE --handoff DIR \\
         --batches B [B ...] --threshold 0.9 [--truth FILE] [--comparison NAME] \\
-        [--max-undecided-excess 0.1]
+        [--max-undecided-excess 0.1] [--write-verdicts V [V ...] --max-false-writes 0]
     python scripts/remediation/calibrate_claude.py prepare --id ID --run RUN
     python scripts/remediation/calibrate_claude.py compare --id ID
     python scripts/remediation/calibrate_claude.py verdict --id ID --false-sources N
@@ -73,6 +73,8 @@ MAX_FALSE_SOURCES = 0
 #: The name a lane WC handoff starts with (`wc-pilot-2026-09-27-r1`): its pools carry the lane's
 #: conditions (`seal(lane=...)`).
 LANE_WC_PREFIX = "wc-"
+#: ... and, for a pool whose verdicts cause writes, no false write.
+MAX_FALSE_WRITES = 0
 
 
 class CalibrationError(ValueError):
@@ -205,6 +207,8 @@ def seal(
     comparison: str = COMPARE_ALL,
     truth: Path | None = None,
     lane: dict[str, Any] | None = None,
+    write_verdicts: Sequence[str] = (),
+    max_false_writes: int = MAX_FALSE_WRITES,
     now: Callable[[], str] = utc_now,
 ) -> dict[str, Any]:
     """Seal `calibration_id` before its run, and return the seal. `lane` is a lane's own pass
@@ -212,6 +216,9 @@ def seal(
     with the threshold: `compare` of this module refuses such a calibration and `verdict` refuses one
     whose comparison does not carry the lane's `lane_failures`.
 
+    `write_verdicts` are the verdicts of the pool's answers that cause a write (a re-target, a
+    retirement): the verdict counts every answer of the role that carries one of them and differs
+    from the recorded answer in any unit as a false write, and `max_false_writes` of them fail it.
     Refused: an id already sealed; a verdict for the id; a calibration copy of the id; a threshold
     that is not a number in (0, 1]; an undecided-rate bound outside [0, 1]; a role that is not
     registered; a pool with a missing batch, no recorded answer, or a MiniMax or unstamped answer;
@@ -267,6 +274,8 @@ def seal(
         "roles_sha256": RO.registry_sha256(),
         "threshold": threshold,
         "max_false_sources": max_false_sources,
+        "write_verdicts": sorted(set(write_verdicts)),
+        "max_false_writes": max_false_writes,
         "sealed_at": now(),
     }
     if lane is not None:
@@ -379,7 +388,22 @@ def compare(
     return report
 
 
-def _failures(report: dict[str, Any], sealed: dict[str, Any], false_sources: int) -> list[str]:
+def _false_writes(root: Path, calibration_id: str, sealed: dict[str, Any]) -> list[str]:
+    """The labels of the role's answers that carry a sealed write verdict and differ from the
+    recorded answer in any unit (the verdict, or a value it writes): a write the pool does not
+    support. A seal made before write verdicts existed carries none (its pool has no writes)."""
+    write = set(sealed.get("write_verdicts", ()))
+    if not write:
+        return []
+    report = _read(root / calibration_id / COMPARISON_FILE, "the comparison")
+    fresh = _fresh_answers(root / calibration_id, sealed)
+    labels = sorted({d["label"] for d in report["disagreements"]})
+    return [label for label in labels if json.loads(fresh[label]).get("verdict") in write]
+
+
+def _failures(
+    report: dict[str, Any], sealed: dict[str, Any], false_sources: int, false_writes: int
+) -> list[str]:
     failures: list[str] = []
     if report["unanswered"]:
         failures.append(f"{len(report['unanswered'])} question(s) unanswered")
@@ -405,6 +429,9 @@ def _failures(report: dict[str, Any], sealed: dict[str, Any], false_sources: int
             failures.append(
                 f"the fresh undecided rate is {excess} above the gold's, {bound} allowed"
             )
+    allowed = sealed.get("max_false_writes", MAX_FALSE_WRITES)
+    if false_writes > allowed:
+        failures.append(f"{false_writes} false write(s) counted, {allowed} allowed")
     return failures
 
 
@@ -434,7 +461,8 @@ def verdict(
             f"{calibration_id} was sealed with its lane's conditions, but its comparison carries no "
             "`lane_failures`: it was not compared with the lane's command"
         )
-    failures = _failures(report, sealed, false_sources)
+    false_writes = _false_writes(root, calibration_id, sealed)
+    failures = _failures(report, sealed, false_sources, len(false_writes))
     result: dict[str, Any] = {
         "calibration_id": calibration_id,
         "role": sealed["role"],
@@ -447,6 +475,8 @@ def verdict(
         "unanswered": report["unanswered"],
         "undecided_excess": report.get("undecided_excess"),
         "false_sources": false_sources,
+        "false_writes": len(false_writes),
+        "false_write_labels": false_writes,
         "tier_move": None,
         "decided_at": now(),
     }
@@ -514,6 +544,10 @@ def main(argv: Iterable[str] | None = None) -> int:
         default=None,
         help="a truth pool: the file mapping each case to its gold",
     )
+    seal_cli.add_argument(
+        "--write-verdicts", nargs="*", default=[], help="verdicts that cause a write: 0 false ones"
+    )
+    seal_cli.add_argument("--max-false-writes", type=int, default=MAX_FALSE_WRITES)
     sub.choices["prepare"].add_argument("--run", required=True, type=Path)
     sub.choices["verdict"].add_argument("--false-sources", required=True, type=int)
     args = parser.parse_args(list(argv) if argv is not None else None)
@@ -529,6 +563,8 @@ def main(argv: Iterable[str] | None = None) -> int:
                 comparison=args.comparison,
                 max_undecided_excess=args.max_undecided_excess,
                 truth=args.truth,
+                write_verdicts=args.write_verdicts,
+                max_false_writes=args.max_false_writes,
             )
         elif args.command == "prepare":
             payload = prepare(args.root, calibration_id=args.calibration_id, run=args.run)

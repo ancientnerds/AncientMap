@@ -1,51 +1,81 @@
-"""The rounds of an identity question stage: export, the agents' answers, the import's reading.
+"""Rounds of identity questions: export, brief, shape check and import, for every stage of the
+identity package (final repair 2026-10-08: D13 modern-town records, D20 scope window, D23 names).
 
-The identity stages (the duplicate verdict, its adversarial recheck, the parent question) all run
-the same way as L5 (`l5/handoff.py`): the stage exports its questions, Claude agents of the
-orchestrating session answer them through `opus_handoff.py answer --role`, `opus_handoff.py validate`
-checks every answer's shape and prompt, and the stage's import reads them back. This module is the
-part they share, and nothing of any one question's content:
+Every model judgement goes through `opus_handoff.py` (owner, 2026-09-23; D6, 2026-10-08: Claude
+only, one role per stage). A **stage** (`StageSpec`) is one kind of question with the role that
+answers it: the web verifier (Sonnet) researches and proposes, the adversarial reviewer (Opus)
+re-checks what would be written. This module is the engine L5's `handoff.py` is for links, with the
+stage's own parts injected:
 
-* **a round** is one export into its own handoff directory (an exported question is never
-  replaced); a re-ask round asks the labels whose latest answer was held, each prompt carrying why,
-  so the import can rebuild every prompt exactly and refuse an answer to any other;
-* **a batch** is `PER_BATCH` questions for one agent;
-* **an answer is the role's** (`roles.ROLES`, owner decision D6): it must name the role the stage
-  asks (`answered_by = "<role>:<agent>"`), carry that role's model stamp, and never be a MiniMax
-  stamp (master plan X6, owner decision D10: a MiniMax answer is no ground truth).
+    render   the exact prompt of a question (a pure function of its stored context and, for a
+             re-ask, why the earlier answer was held), so the import rebuilds it and refuses an
+             answer to any other prompt;
+    parse    the exact answer shape and the rules the answer itself can break (nothing fetched);
+    decide   the machine checks that need the pages (quotes found, titles resolved, items placed);
+    cited    the URLs the checks read, fetched once each;
+    titles   the English Wikipedia titles the checks resolve.
 
-The rounds of a stage are recorded in `<run>/<stage>/ROUNDS.jsonl`; only the newest round is imported
-and there are at most `MAX_ROUNDS` of them (the first and two re-asks).
+**A round** is one export into its own handoff directory (an exported question is never replaced):
+a first round `r1` asks the sites it is given (a pilot, or the whole population); a **follow-on**
+round asks sites never asked (the rest of the population after a pilot); a **re-ask** round asks
+the sites whose latest answer was held, each prompt carrying why. The rounds are recorded in
+`ROUNDS.jsonl`, the stored contexts in `contexts/<round>.jsonl`; a round is imported once
+`answers/<round>.jsonl` exists. Only the newest round is imported, and a held site is asked again
+at most `MAX_REASKS` times (two re-ask rounds).
+
+**The import** refuses, with nothing written, an answer that is not the stage's role's: the
+`answered_by` carries `<role>:<agent>` (`opus_handoff.py answer --role`), and the stamp must be the
+role's registered model's (`roles.answer_problem`). It writes `answers/<round>.jsonl` (every answer as
+decided or held), merges `DECISIONS.jsonl` (per site, the decision of its latest imported round),
+`TITLES.json` and `PAGES.jsonl`; the page bytes stay under `pages/`, not versioned.
+
+**Calibration first.** `require_calibration` refuses a role whose calibration (`calibrate_claude.py`)
+has no passed verdict, or whose verdict was reached under another registry entry, or whose pool is
+not the lane's own, or that was sealed without a bar of 0 false writes (`WRITE_VERDICTS`): a role
+that has not passed is not a role to write from (D6). `import_round` refuses an answer given before
+the verdict was decided: the calibration comes first, not after.
 """
 
 from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections import Counter
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+import httpx
 
 _HERE = Path(__file__).resolve()
 for _root in (str(_HERE.parents[3]), str(_HERE.parents[1])):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
-import calibrate_claude as CC  # noqa: E402
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
+from l5 import web  # noqa: E402 - the project's User-Agent and the title resolution
 from opus_audit import quotes as Q  # noqa: E402
 
 from identity import common  # noqa: E402
-from identity.wiki import WikiIndex  # noqa: E402
 
 ROUNDS_FILE = "ROUNDS.jsonl"
+DECISIONS_FILE = "DECISIONS.jsonl"
+TITLES_FILE = "TITLES.json"
+PAGES_FILE = "PAGES.jsonl"
+PAGES_DIR = "pages"
 ANSWERS_DIR = "answers"
-PER_BATCH = 5
-#: The first round and two re-asks: what is held after them stays held and is listed.
-MAX_ROUNDS = 3
+CONTEXTS_DIR = "contexts"
+#: At most two re-ask rounds; what is held after them stays held.
+MAX_REASKS = 2
+DECIDED, HELD = "decided", "held"
+VERDICTS_DIR = "verdicts"
+THRESHOLDS_FILE = "THRESHOLDS.json"
+#: The verdicts of the identity questions that cause a write (a re-target, a retirement): a
+#: calibration is sealed with these and a bar of 0 false ones (owner D13, D20).
+WRITE_VERDICTS = ("NOT_A_SITE", "OUT_OF_WINDOW", "RETARGET", "RETIRE")
 
 
 class RoundError(ValueError):
@@ -53,430 +83,554 @@ class RoundError(ValueError):
 
 
 class AnswerError(ValueError):
-    """An answer that is not in its exact shape, or breaks a rule it can break on its own."""
+    """The answer is not in its exact shape, or breaks a rule it can break on its own."""
+
+
+@dataclass(frozen=True)
+class Question:
+    """One question: the site it is about and the JSON-able context its prompt is a function of."""
+
+    site_id: str
+    context: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class Outcome:
+    """What the machine checks made of one parsed answer: `decided` or `held` (with why), and the
+    stage's own record of the answer (`data`: verdicts, cells, quote outcomes, facts)."""
+
+    status: str
+    reason: str
+    data: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class Env:
+    """What a stage's `decide` reads: the quote library over the fetched pages and the resolved
+    English Wikipedia titles."""
+
+    library: Q.Library
+    titles: Mapping[str, Mapping[str, Any]]
+
+
+@dataclass(frozen=True)
+class StageSpec:
+    """One kind of question and its parts (see the module docstring)."""
+
+    lane: str
+    stage: str
+    role: str
+    render: Callable[[Mapping[str, Any], str | None], str]
+    parse: Callable[[str, Mapping[str, Any]], Any]
+    decide: Callable[[Any, Mapping[str, Any], Env], Outcome]
+    cited: Callable[[Any, Mapping[str, Any]], set[str]]
+    titles: Callable[[Any, Mapping[str, Any]], set[str]]
+    per_batch: int = 5
+    guidance: str = ""
+
+    @property
+    def model(self) -> str:
+        """The model id the role is registered to: what `answer --model` must say."""
+        return RO.role(self.role).model
 
 
 def now_utc() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
+def stage_dir(run: Path, spec: StageSpec) -> Path:
+    """Where a stage keeps its rounds, contexts, answers and decisions."""
+    return run / spec.lane / spec.stage
+
+
+# ------------------------------------------------------------------------------------ the files
+def write_jsonl(path: Path, records: Sequence[Mapping[str, Any]]) -> None:
+    common.write_jsonl(path, records)
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    return common.read_jsonl(path) if path.exists() else []
+
+
+def _write_once(path: Path, text: str) -> None:
+    if path.exists():
+        raise RoundError(f"{path} exists: a round file is written once")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8", newline="\n")
+
+
+# ------------------------------------------------------------------------------------ the rounds
 @dataclass(frozen=True)
 class Round:
     name: str
-    stage: str
     handoff: str
     exported_at: str
-    #: what the questions were built from (the export's snapshot clock), so an import can refuse
-    #: to read answers against another state of the data
-    basis: str
     batches: dict[str, list[str]]
-    #: label -> why its answer of the round before was held (re-ask rounds only)
+    #: site id -> why its answer of the round before was held (re-ask rounds only)
     earlier: dict[str, str]
 
     @property
-    def labels(self) -> list[str]:
-        return [label for batch in self.batches.values() for label in batch]
+    def sites(self) -> list[str]:
+        return [sid for batch in self.batches.values() for sid in batch]
 
 
-def stage_dir(run: Path, stage: str) -> Path:
-    return run / stage
+def _round_of(record: Mapping[str, Any]) -> Round:
+    """A round from its record. A calibration run's record (`mcode_driver.register_calibration_run`)
+    numbers its round (`round: 1`) instead of naming it and carries the copy's own keys."""
+    return Round(
+        name=record["name"] if "name" in record else f"r{record['round']}",
+        handoff=record["handoff"],
+        exported_at=record["exported_at"],
+        batches=record["batches"],
+        earlier=record["earlier"] if "earlier" in record else {},
+    )
 
 
-def load_rounds(run: Path, stage: str) -> list[Round]:
-    path = stage_dir(run, stage) / ROUNDS_FILE
-    if not path.exists():
-        return []
-    return [
-        Round(**json.loads(line)) for line in path.read_text(encoding="utf-8").splitlines() if line
-    ]
+def load_rounds(out: Path) -> list[Round]:
+    return [_round_of(r) for r in _read_jsonl(out / ROUNDS_FILE)]
 
 
-def find_round(run: Path, stage: str, name: str) -> Round:
-    for r in load_rounds(run, stage):
+def find_round(out: Path, name: str) -> Round:
+    for r in load_rounds(out):
         if r.name == name:
             return r
-    raise RoundError(f"no round {name!r} in {stage_dir(run, stage) / ROUNDS_FILE}")
+    raise RoundError(f"no round {name!r} in {out / ROUNDS_FILE}")
 
 
-def imported(run: Path, stage: str, name: str) -> bool:
-    return (stage_dir(run, stage) / ANSWERS_DIR / f"{name}.jsonl").exists()
+def imported(out: Path, name: str) -> bool:
+    return (out / ANSWERS_DIR / f"{name}.jsonl").exists()
 
 
-def newest_imported(run: Path, stage: str, doing: str) -> list[Round]:
-    """The rounds, only when the newest is imported: `doing` would read decisions older than the
-    answers already exported."""
-    rounds = load_rounds(run, stage)
+def load_decisions(out: Path) -> list[dict[str, Any]]:
+    return _read_jsonl(out / DECISIONS_FILE)
+
+
+def decisions_by_site(out: Path) -> dict[str, dict[str, Any]]:
+    return {d["site_id"]: d for d in load_decisions(out)}
+
+
+def load_contexts(out: Path) -> dict[str, Mapping[str, Any]]:
+    """The context of every site ever asked: the stored contexts of the rounds in order, a later
+    round's (a re-ask's) over an earlier one's."""
+    merged: dict[str, Mapping[str, Any]] = {}
+    for record in load_rounds(out):
+        merged.update(_contexts(out, record.name))
+    return merged
+
+
+def agreement(first: Path, second: Path) -> dict[str, Any]:
+    """The verdicts of two imports of the same questions side by side - a pilot answered by the
+    stage's role and again by the pilot judge (`--as-role pilot_judge`, a stage directory of its own)."""
+    a, b = decisions_by_site(first), decisions_by_site(second)
+    shared = sorted(set(a) & set(b))
+    pairs = [(sid, a[sid]["data"].get("verdict"), b[sid]["data"].get("verdict")) for sid in shared]
+    return {
+        "shared": len(shared),
+        "agree": sum(1 for _, x, y in pairs if x == y),
+        "disagree": [{"site_id": sid, "first": x, "second": y} for sid, x, y in pairs if x != y],
+        "only_first": sorted(set(a) - set(b)),
+        "only_second": sorted(set(b) - set(a)),
+    }
+
+
+def latest_imported(out: Path, doing: str) -> list[Round]:
+    """The rounds, only if the newest one is imported: `doing` would otherwise read decisions older
+    than the answers already exported, and those answers could never be written."""
+    rounds = load_rounds(out)
     if not rounds:
-        raise RoundError(f"no {stage} round is exported yet - {doing} reads the imported answers")
-    if not imported(run, stage, rounds[-1].name):
+        raise RoundError(f"no round is exported yet - {doing} reads the imported answers")
+    if not imported(out, rounds[-1].name):
         raise RoundError(
-            f"{stage} round {rounds[-1].name} is exported but not imported - import it before {doing}"
+            f"round {rounds[-1].name} is exported but not imported - import it before {doing}"
         )
     return rounds
 
 
-def batches(
-    labels: Sequence[str], round_name: str, per_batch: int = PER_BATCH
-) -> dict[str, list[str]]:
-    """`<round>-bNN -> labels`, in label order, at most `per_batch` each."""
+def held_sites(out: Path) -> dict[str, str]:
+    """The sites whose latest decision is held, with the reason a re-ask shows."""
+    return {d["site_id"]: d["reason"] for d in load_decisions(out) if d["status"] == HELD}
+
+
+def reask_sites(out: Path) -> dict[str, str]:
+    """The held sites a new round asks, with their reasons - once the newest round is imported, and
+    only while fewer than `MAX_REASKS` re-ask rounds are out."""
+    reasks = [r for r in latest_imported(out, "a re-ask") if r.earlier]
+    if len(reasks) >= MAX_REASKS:
+        raise RoundError(
+            f"{len(reasks)} re-ask rounds are out: a held site is asked at most twice more - what "
+            "stays held goes to the owner list"
+        )
+    return held_sites(out)
+
+
+def batches(site_ids: Sequence[str], round_name: str, per_batch: int) -> dict[str, list[str]]:
+    """`<round>-bNN -> site ids`, in site order, at most `per_batch` each."""
     if per_batch < 1:
         raise RoundError("a batch holds at least one question")
-    ordered = sorted(labels)
+    ordered = sorted(site_ids)
     return {
         f"{round_name}-b{i // per_batch + 1:02d}": ordered[i : i + per_batch]
         for i in range(0, len(ordered), per_batch)
     }
 
 
-def shown(path: Path) -> str:
-    """A path as the brief prints it: relative to the main checkout where it lies inside."""
-    try:
-        return path.resolve().relative_to(common.main_checkout().resolve()).as_posix()
-    except ValueError:
-        return path.as_posix()
-
-
-def resolve(path: str | Path, root: Path | None = None) -> Path:
-    candidate = Path(path)
-    return candidate if candidate.is_absolute() else (root or common.main_checkout()) / candidate
+def _contexts(out: Path, round_name: str) -> dict[str, Mapping[str, Any]]:
+    path = out / CONTEXTS_DIR / f"{round_name}.jsonl"
+    if not path.exists():
+        raise RoundError(f"{path} does not exist - the round's contexts were never stored")
+    return {r["site_id"]: r["context"] for r in common.read_jsonl(path)}
 
 
 def export_round(
-    run: Path,
-    stage: str,
-    labels: Sequence[str],
-    prompt_of: Callable[[str, str | None], str],
+    out: Path,
+    spec: StageSpec,
     handoff: Path,
+    questions: Sequence[Question],
     *,
-    basis: str,
     earlier: Mapping[str, str] | None = None,
-    per_batch: int = PER_BATCH,
     now: Callable[[], str] = now_utc,
 ) -> Round:
-    """Export one round of questions into a new handoff directory and record it."""
+    """Export one round of questions into a new handoff directory and record it. The first round asks
+    the questions it is given; a later round without `earlier` is a follow-on and asks only sites
+    never asked; a later round with `earlier` is a re-ask and asks exactly the held sites."""
     earlier = dict(earlier or {})
-    if not labels:
+    if not questions:
         raise RoundError("no question to ask - nothing to export")
-    if len(set(labels)) != len(labels):
-        raise RoundError("a label is asked twice in one round")
+    ids = [q.site_id for q in questions]
+    if len(set(ids)) != len(ids):
+        raise RoundError("a site is asked twice in one round")
     if handoff.exists() and any(handoff.iterdir()):
         raise RoundError(f"{handoff} is not empty: a round is exported into a new directory")
-    name = f"r{len(load_rounds(run, stage)) + 1}"
-    if len(load_rounds(run, stage)) >= MAX_ROUNDS:
-        raise RoundError(
-            f"{MAX_ROUNDS} {stage} rounds are out: what stays held is listed, not asked"
-        )
-    grouped = batches(labels, name, per_batch)
+    known = load_rounds(out)
+    number = len(known) + 1
+    if number == 1 and earlier:
+        raise RoundError("round 1 re-asks nothing")
+    if number > 1:
+        latest_imported(out, "another round")
+        if earlier:
+            if sum(1 for r in known if r.earlier) >= MAX_REASKS:
+                raise RoundError(
+                    f"{MAX_REASKS} re-ask rounds are out: a held site is asked at most twice more"
+                )
+            if set(earlier) != set(ids) or not set(ids) <= set(held_sites(out)):
+                raise RoundError("a re-ask round asks exactly the held sites, each with its reason")
+        elif asked := sorted(set(ids) & set(load_contexts(out))):
+            raise RoundError(
+                f"a follow-on round asks only sites never asked: {len(asked)} were, {asked[:3]}"
+            )
+    name = f"r{number}"
+    grouped = batches(ids, name, spec.per_batch)
+    by_id = {q.site_id: q for q in questions}
     handoff.mkdir(parents=True, exist_ok=True)
-    for batch_id, members in grouped.items():
-        for label in members:
+    for batch_id, sids in grouped.items():
+        for sid in sids:
             OH.export(
                 handoff,
                 batch_id=batch_id,
-                stage=stage,
-                label=label,
+                stage=spec.stage,
+                label=sid,
                 field=None,
-                prompt=prompt_of(label, earlier.get(label)),
+                prompt=spec.render(by_id[sid].context, earlier.get(sid)),
             )
-    record = Round(name, stage, shown(handoff), now(), basis, grouped, earlier)
-    path = stage_dir(run, stage) / ROUNDS_FILE
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as fh:
+    _write_once(
+        out / CONTEXTS_DIR / f"{name}.jsonl",
+        "".join(
+            json.dumps(
+                {"site_id": q.site_id, "context": q.context}, ensure_ascii=False, sort_keys=True
+            )
+            + "\n"
+            for q in sorted(questions, key=lambda q: q.site_id)
+        ),
+    )
+    record = Round(name, handoff.as_posix(), now(), grouped, earlier)
+    with (out / ROUNDS_FILE).open("a", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(asdict(record), ensure_ascii=False, sort_keys=True) + "\n")
     return record
 
 
-def role_problem(answer: OH.Answer, allowed_roles: Iterable[str]) -> str | None:
-    """Why an answer is not given by one of `allowed_roles`, or `None`.
+# ------------------------------------------------------------------------------ the agent's aids
+BRIEF = """You are agent {batch} of the identity pass of the Ancient Nerds final repair (lane \
+{lane}, stage {stage}, round {round}), running as the role {role}. You answer {count} question(s), \
+each about another curated site of the map. Answer each one on its own.
 
-    An answer must name its role (`answer --role` records `<role>:<agent>`), be one of the allowed
-    roles, carry the stamp of that role's registered model, and not be a MiniMax stamp: master plan
-    X6 (owner decision D10) - MiniMax answers are never ground truth."""
-    allowed = list(allowed_roles)
-    if answer.model == OH.MINIMAX_MODEL:
-        return "answered by MiniMax - a MiniMax answer is never ground truth (D10)"
-    named = RO.role_of(answer.answered_by)
-    if named is None:
-        return f"answered_by {answer.answered_by!r} names no role (answer --role {allowed[0]})"
-    if named not in allowed:
-        return f"answered in role {named}, but this stage asks {' or '.join(allowed)}"
-    return RO.answer_problem(answer.answered_by, answer.model)
+Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per question \
+with its "label" (the site id) and its "prompt_path" (relative to {handoff}). Open no other file of \
+the repository, no database, no git history - except the cached Wikipedia pages a prompt names: \
+read the site's Wikipedia text from that cache first, and fetch other sources live (a few requests \
+at most; a 403 or 429 is a refusal of the server, never a finding - test it yourself with curl \
+before you write that a page cannot be read). The machine fetches every URL you cite with a plain \
+HTTP GET and looks for your quote in what it serves (for an HTML page: its visible text; for \
+Special:EntityData/<QID>.json: the JSON's strings) - quote verbatim, cite the page you quote, never \
+a search result page. Keep each quote short (one clause, about 5 to 25 words) and never let it run \
+across a footnote marker such as [1], a table cell or a list item.
+{guidance}
+For each question:
+1. Read {handoff}/<prompt_path>.
+2. Research and decide, exactly as the prompt's rules say.
+3. Write your answer - only the JSON object the prompt specifies - to a new UTF-8 file of your own:
+   {scratch}/<label>.json
+4. Check its shape (nothing is fetched and your verdict is not judged):
+   {python} {run} --lane {lane} check-answer --stage {stage} --stage-dir {stage_dir} \
+--round {round} --batch-id {batch} \
+--label <label> --text-file {scratch}/<label>.json
+   It prints the problem, if any: fix the shape, never the finding.
+5. Record it - an answer is written once, under your role:
+   {python} {handoff_tool} answer --dir {handoff} --batch-id {batch} --stage {stage} \
+--label <label> --answered-by {batch} --role {role} --model {model} --text-file {scratch}/<label>.json
+
+When every question of the batch is recorded, report how many answers you recorded.
+"""
 
 
-def parse_calibrations(values: Iterable[str]) -> dict[str, str]:
-    """`--calibration ROLE=ID` (repeatable) as `{role: calibration id}`."""
-    out: dict[str, str] = {}
-    for value in values:
-        role, separator, calibration_id = value.partition("=")
-        if not separator or not role or not calibration_id:
-            raise RoundError(f"--calibration {value!r} is not ROLE=ID")
-        if role in out:
-            raise RoundError(f"--calibration names role {role} twice")
-        out[role] = calibration_id
-    return out
+def brief(out: Path, spec: StageSpec, round_name: str, batch_id: str) -> str:
+    """The instruction of the agent that answers one batch of one round."""
+    record = find_round(out, round_name)
+    if batch_id not in record.batches:
+        raise RoundError(f"{batch_id} is no batch of round {round_name}")
+    return BRIEF.format(
+        batch=batch_id,
+        lane=spec.lane,
+        stage=spec.stage,
+        round=round_name,
+        role=spec.role,
+        model=spec.model,
+        count=len(record.batches[batch_id]),
+        handoff=record.handoff,
+        scratch=f"{record.handoff}-scratch/{batch_id}",
+        guidance=("\n" + spec.guidance + "\n") if spec.guidance else "",
+        stage_dir=out.resolve().as_posix(),
+        python="./.venv/Scripts/python.exe",
+        run="scripts/remediation/identity/run.py",
+        handoff_tool="scripts/remediation/opus_handoff.py",
+    )
 
 
-def check_calibrated(
-    roles: Iterable[str], calibrations: Mapping[str, str], root: Path | None = None
-) -> None:
-    """Refuse an import whose answering roles are not calibrated (owner decision D6): each role
-    needs the id of a sealed calibration of that role (`calibrate_claude.py`) whose verdict passed
-    and whose registry entry is unchanged since the seal. An answer of a role without one counts
-    for nothing, so the import stops before it reads a page or writes a decision."""
-    base = CC.CALIBRATION_ROOT if root is None else root
-    for role in sorted(set(roles)):
-        calibration_id = calibrations.get(role)
-        if calibration_id is None:
-            raise RoundError(
-                f"role {role} answered, but no passed calibration of it is named "
-                f"(--calibration {role}=<id>)"
+def check_answer(
+    out: Path, spec: StageSpec, round_name: str, batch_id: str, label: str, text: str
+) -> str | None:
+    """The shape problem of an answer text, or None - no page is fetched, no verdict judged."""
+    record = find_round(out, round_name)
+    if label not in record.batches.get(batch_id, []):
+        raise RoundError(f"{batch_id}/{label} is no question of round {round_name}")
+    context = _contexts(out, round_name)[label]
+    try:
+        spec.parse(text, context)
+    except AnswerError as exc:
+        return str(exc)
+    return None
+
+
+# ------------------------------------------------------------------------------ the calibration
+def require_calibration(
+    root: Path, calibration_id: str, role: str, pool_stage: str
+) -> dict[str, Any]:
+    """The passed verdict of `calibration_id` for `role`, or `RoundError`.
+
+    The verdict must exist and have passed, name this role and the model the registry holds for it
+    now, and its seal must have been made under the role's current registry entry
+    (`roles.role_sha256`): a role moved up a tier after a failed calibration is calibrated again.
+    The sealed pool must be the lane's own (its questions are of `pool_stage`, the lane's web
+    stage), and the seal must hold the bar of 0 false writes over `WRITE_VERDICTS`, which the
+    verdict met."""
+    verdict_path = root / VERDICTS_DIR / f"{calibration_id}.json"
+    if not verdict_path.exists():
+        raise RoundError(
+            f"calibration {calibration_id} has no verdict at {verdict_path}: seal it, re-answer "
+            f"the pool as role {role}, compare, and take the verdict first (calibrate_claude.py)"
+        )
+    verdict = json.loads(verdict_path.read_text(encoding="utf-8"))
+    if not verdict["passed"]:
+        raise RoundError(f"calibration {calibration_id} did not pass: {verdict.get('tier_move')}")
+    if verdict["role"] != role:
+        raise RoundError(
+            f"calibration {calibration_id} measured role {verdict['role']}, not {role}"
+        )
+    registered = RO.role(role)
+    if verdict["model"] != registered.model:
+        raise RoundError(
+            f"calibration {calibration_id} measured {verdict['model']}, the registry holds "
+            f"{registered.model} for {role} now: calibrate again"
+        )
+    thresholds = root / THRESHOLDS_FILE
+    seals = json.loads(thresholds.read_text(encoding="utf-8")) if thresholds.exists() else {}
+    seal = seals.get(calibration_id)
+    if seal is None or seal["role_sha256"] != RO.role_sha256(role):
+        raise RoundError(
+            f"calibration {calibration_id} was sealed under another registry entry of {role}: "
+            "calibrate again"
+        )
+    stages = {
+        row["stage"]
+        for batch in seal["batches"]
+        for row in OH.read_manifest(Path(seal["handoff"]), batch).values()
+    }
+    if stages != {pool_stage}:
+        raise RoundError(
+            f"calibration {calibration_id} was measured on the questions of {sorted(stages)}, not "
+            f"on the lane's own {pool_stage}: seal a calibration of this lane's pool"
+        )
+    if (
+        not set(WRITE_VERDICTS) <= set(seal.get("write_verdicts", ()))
+        or seal.get("max_false_writes") != 0
+    ):
+        raise RoundError(
+            f"calibration {calibration_id} was not sealed with the bar of 0 false writes over "
+            f"{', '.join(WRITE_VERDICTS)}: seal it with --write-verdicts and --max-false-writes 0"
+        )
+    if verdict.get("false_writes") != 0:
+        raise RoundError(
+            f"calibration {calibration_id} counted {verdict.get('false_writes')} false write(s)"
+        )
+    return verdict
+
+
+# ------------------------------------------------------------------------------------ the import
+def load_titles(out: Path) -> dict[str, dict[str, Any]]:
+    path = out / TITLES_FILE
+    if not path.exists():
+        return {}
+    return dict(json.loads(path.read_text(encoding="utf-8"))["titles"])
+
+
+def _role_problems(spec: StageSpec, answers: Mapping[str, OH.Answer]) -> list[str]:
+    problems = []
+    for sid, answer in sorted(answers.items()):
+        named = RO.role_of(answer.answered_by)
+        if named != spec.role:
+            problems.append(
+                f"{sid}: recorded under {named or 'no role'} ({answer.answered_by!r}), the stage "
+                f"asks role {spec.role}"
             )
-        path = base / CC.VERDICTS_DIR / f"{calibration_id}.json"
-        if not path.exists():
-            raise RoundError(f"calibration {calibration_id} of role {role} has no verdict ({path})")
-        verdict = json.loads(path.read_text(encoding="utf-8"))
-        if verdict["role"] != role:
-            raise RoundError(
-                f"calibration {calibration_id} is a calibration of role {verdict['role']}, "
-                f"not of {role}"
-            )
-        if verdict["passed"] is not True:
-            raise RoundError(f"calibration {calibration_id} of role {role} did not pass")
-        try:
-            CC._need_unchanged_role(CC._sealed(base, calibration_id))
-        except CC.CalibrationError as exc:
-            raise RoundError(f"calibration {calibration_id} of role {role}: {exc}") from exc
+            continue
+        why = RO.answer_problem(answer.answered_by, answer.model)
+        if why is not None:
+            problems.append(f"{sid}: {why}")
+    return problems
 
 
-def read_answers(
-    run: Path,
-    stage: str,
-    record: Round,
-    prompt_of: Callable[[str, str | None], str],
+def import_round(
+    out: Path,
+    spec: StageSpec,
+    round_name: str,
     *,
-    root: Path | None = None,
-) -> dict[str, OH.Answer]:
-    """Every answer of a round, read against the prompt rebuilt from the data (`OH.read_answer`
-    refuses an answer to another prompt)."""
-    handoff = resolve(record.handoff, root)
-    check = OH.validate(handoff)
+    decided_at: str,
+    http: Callable[[], httpx.Client] = web.client,
+    resolver: Callable[[list[str], httpx.Client], dict[str, dict[str, Any]]] = web.resolve_titles,
+    now: Callable[[], str] = now_utc,
+    pace: float = Q.PACE_SECONDS,
+) -> dict[str, Any]:
+    """Parse, fetch, resolve and decide every answer of one round; merge the decisions. Refused
+    when an answer was given before `decided_at`, the time the role's calibration was decided."""
+    record = find_round(out, round_name)
+    newest = load_rounds(out)[-1].name
+    if record.name != newest:
+        raise RoundError(
+            f"round {round_name} is not the newest ({newest}): its answers would overwrite the "
+            "newer round's decisions"
+        )
+    if imported(out, round_name):
+        raise RoundError(f"round {round_name} is imported already")
+    root = Path(record.handoff)
+    check = OH.validate(root)
     if not check.ok:
         raise RoundError(
-            f"{handoff} does not validate ({len(check.missing)} missing, {len(check.stale)} stale, "
+            f"{root} does not validate ({len(check.missing)} missing, {len(check.stale)} stale, "
             f"{len(check.malformed)} malformed, {len(check.orphans)} orphan(s)) - run "
             "`opus_handoff.py validate` and have the questions answered first"
         )
-    answers: dict[str, OH.Answer] = {}
-    for batch_id, labels in record.batches.items():
-        for label in labels:
-            answers[label] = OH.read_answer(
-                handoff,
+    contexts = _contexts(out, round_name)
+    raw: dict[str, OH.Answer] = {}
+    for batch_id, sids in record.batches.items():
+        for sid in sids:
+            raw[sid] = OH.read_answer(
+                root,
                 batch_id=batch_id,
-                stage=stage,
-                label=label,
-                prompt=prompt_of(label, record.earlier.get(label)),
+                stage=spec.stage,
+                label=sid,
+                prompt=spec.render(contexts[sid], record.earlier.get(sid)),
             )
-    return answers
-
-
-def write_answers_file(path: Path, records: Sequence[Mapping[str, Any]]) -> None:
-    common.write_jsonl(path, records)
-
-
-def check_importable(run: Path, stage: str, name: str) -> Round:
-    """The round `name`, only if it is the newest one: an older one would overwrite newer decisions."""
-    record = find_round(run, stage, name)
-    newest = load_rounds(run, stage)[-1].name
-    if record.name != newest:
+    problems = _role_problems(spec, raw)
+    if problems:
         raise RoundError(
-            f"round {name} is not the newest ({newest}): its answers would overwrite the newer "
-            "round's decisions"
+            f"{len(problems)} answer(s) are not the stage's role's - delete them from {root} and "
+            f"have them answered again: " + "; ".join(problems[:5])
         )
-    return record
 
+    calibrated = datetime.fromisoformat(decided_at)
+    early = [
+        sid for sid, a in sorted(raw.items()) if datetime.fromisoformat(a.answered_at) < calibrated
+    ]
+    if early:
+        raise RoundError(
+            f"{len(early)} answer(s) were given before the calibration was decided ({decided_at}): "
+            f"delete them from {root} and have them answered again: {early[:3]}"
+        )
 
-def parse_quotes(data: Any, where: str) -> tuple[dict[str, str], ...]:
-    if not isinstance(data, list):
-        raise AnswerError(f"{where}: quotes is not a list")
-    checked = []
-    for q in data:
-        if not isinstance(q, dict) or set(q) != {"source", "quote"}:
-            raise AnswerError(f"{where}: a quote is not {{source, quote}}: {q!r}")
-        if not all(isinstance(q[k], str) and q[k].strip() for k in ("source", "quote")):
-            raise AnswerError(f"{where}: a quote needs a source and a text")
-        if not Q.is_url(q["source"]):
-            raise AnswerError(
-                f"{where}: a quote's source must be the URL of the page: {q['source']!r}"
-            )
-        refused = Q.not_fetchable(q["source"])
-        if refused:
-            raise AnswerError(f"{where}: {q['source']} is never fetched here ({refused})")
-        checked.append({"source": q["source"], "quote": q["quote"]})
-    return tuple(checked)
-
-
-# ------------------------------------------------------------------------------ the decisions
-DECIDED, HELD = "decided", "held"
-DECISIONS_FILE = "DECISIONS.jsonl"
-PAGES_DIR = "pages"
-Fetch = Callable[[list[str], Path], dict[str, int]]
-
-
-def load_decisions(stage_run: Path, stage: str) -> dict[str, dict[str, Any]]:
-    """The latest decision per label of a stage (`<stage_run>/<stage>/DECISIONS.jsonl`)."""
-    path = stage_dir(stage_run, stage) / DECISIONS_FILE
-    if not path.exists():
-        return {}
-    return {r["label"]: r for r in common.read_jsonl(path)}
-
-
-def labels_for_round(
-    stage_run: Path, stage: str, first: Sequence[str]
-) -> tuple[list[str], dict[str, str]]:
-    """`(labels, earlier)` of the next round: `first` for round 1; later the labels whose latest
-    decision is held (with why) and the labels of `first` that no round decided yet (a recheck
-    stage's `first` is the verdict stage's decided clusters, which grow with every verdict round),
-    once the newest round is imported."""
-    if not load_rounds(stage_run, stage):
-        return sorted(first), {}
-    newest_imported(stage_run, stage, "a re-ask")
-    decisions = load_decisions(stage_run, stage)
-    held = {label: d for label, d in decisions.items() if d["status"] == HELD}
-    unasked = [label for label in first if label not in decisions]
-    return sorted({*held, *unasked}), {label: d["reason"] for label, d in held.items()}
-
-
-def shape_held(label: str, round_name: str, answered_by: str, reason: str) -> dict[str, Any]:
-    """A label whose answer is not in shape: held, with the reason a re-ask shows."""
-    return {
-        "label": label,
-        "status": HELD,
-        "reason": f"shape: {reason}",
-        "round": round_name,
-        "answered_by": answered_by,
-        "members": [],
-    }
-
-
-def quote_outcomes(
-    quotes: Sequence[Mapping[str, str]], key: str, library: Q.Library
-) -> tuple[list[str], str | None]:
-    """Each quote's outcome, and the first failure in words (or `None` when every quote is found)."""
-    if not quotes:
-        return [], None
-    check = Q.check_verdict(
-        {"quotes": list(quotes)}, {"change_key": key, "evidence_files": []}, library
-    )
-    outcomes = [f"{r.outcome}: {r.detail}".rstrip(": ") for r in check.quotes]
-    if check.counted:
-        return outcomes, None
-    failed = next(r for r in check.quotes if r.outcome != Q.FOUND)
-    return outcomes, f"a quote does not count ({failed.outcome}: {failed.source})"
-
-
-def keep_pages(
-    pages: Path,
-    urls: Iterable[str],
-    wiki: WikiIndex | None,
-    fetch: Fetch,
-    *,
-    now: Callable[[], str] = now_utc,
-) -> dict[str, int]:
-    """Keep every cited page under `pages`: a Wikipedia article the shared cache holds is stored
-    from the cache (the very text the agent read), every other URL is fetched live by `fetch`."""
-    live: list[str] = []
-    counts = {"cache": 0}
-    for url in sorted(set(urls)):
-        cached = wiki.for_url(url) if wiki is not None else None
-        if cached is None:
-            live.append(url)
-            continue
-        if not (pages / f"{Q.url_key(url)}.json").exists():
-            Q.store_page(
-                pages,
-                url,
-                status=200,
-                final_url=url,
-                content_type="text/plain; charset=utf-8",
-                body=cached.text().encode("utf-8"),
-                error="",
-                fetched_at=cached.fetched_at or now(),
-            )
-        counts["cache"] += 1
-    counts.update(fetch(live, pages) if live else {})
-    return counts
-
-
-def import_stage(
-    stage_run: Path,
-    stage: str,
-    round_name: str,
-    *,
-    prompt_of: Callable[[str, str | None], str],
-    allowed_roles: Sequence[str],
-    parse: Callable[[str, str], Any],
-    decide: Callable[[str, Any, str, str, Q.Library], dict[str, Any]],
-    wiki: WikiIndex | None,
-    fetch: Fetch,
-    calibrations: Mapping[str, str],
-    extra_urls: Iterable[str] = (),
-    now: Callable[[], str] = now_utc,
-    root: Path | None = None,
-    repo: Path | None = None,
-    calibration_root: Path | None = None,
-) -> dict[str, Any]:
-    """Read, parse, fetch and decide every answer of one round of `stage`; merge the decisions.
-
-    `calibrations` maps each answering role to its passed calibration (`check_calibrated`).
-
-    `parse(label, text)` returns the answer's items (each with `.quotes`) or raises `AnswerError`;
-    `decide(label, items, round_name, answered_by, library)` is the stage's machine checks. A
-    wrong role, a MiniMax stamp or an answer to another prompt stops the import (`RoundError`):
-    those are not answers a re-ask can mend, they are answers that do not count at all."""
-    record = check_importable(stage_run, stage, round_name)
-    answers = read_answers(stage_run, stage, record, prompt_of, root=root)
-    parsed: dict[str, tuple[Any, OH.Answer]] = {}
-    decisions: dict[str, dict[str, Any]] = {}
-    for label, answer in answers.items():
-        problem = role_problem(answer, allowed_roles)
-        if problem is not None:
-            raise RoundError(f"{stage}/{label}: {problem}")
-    check_calibrated(
-        {RO.role_of(a.answered_by) for a in answers.values()}, calibrations, calibration_root
-    )
-    for label, answer in answers.items():
+    parsed: dict[str, Any] = {}
+    held: dict[str, Outcome] = {}
+    for sid, answer in raw.items():
         try:
-            parsed[label] = (parse(label, answer.text), answer)
+            parsed[sid] = spec.parse(answer.text, contexts[sid])
         except AnswerError as exc:
-            decisions[label] = shape_held(label, round_name, answer.answered_by, str(exc))
-    urls = {
-        q["source"] for items, _ in parsed.values() for item in items.values() for q in item.quotes
-    }
-    counts = keep_pages(
-        stage_dir(stage_run, stage) / PAGES_DIR, urls | set(extra_urls), wiki, fetch, now=now
+            held[sid] = Outcome(HELD, f"shape: {exc}", {})
+
+    pages = out / PAGES_DIR
+    urls = sorted({u for sid, p in parsed.items() for u in spec.cited(p, contexts[sid])})
+    titles = load_titles(out)
+    wanted = sorted(
+        {t for sid, p in parsed.items() for t in spec.titles(p, contexts[sid])} - set(titles)
     )
-    library = Q.Library(repo or common.REPO, stage_dir(stage_run, stage) / PAGES_DIR)
-    for label, (items, answer) in parsed.items():
-        by = f"{answer.answered_by} ({answer.answered_at})"
-        decisions[label] = decide(label, items, round_name, by, library)
-    out = stage_dir(stage_run, stage)
-    write_answers_file(
-        out / ANSWERS_DIR / f"{round_name}.jsonl", [decisions[c] for c in sorted(decisions)]
+    with http() as client:
+        fetched = Q.collect(urls, pages, client, now=now, pace=pace)
+        resolved_at = now()
+        if wanted:
+            titles.update(
+                {t: {**r, "resolved_at": resolved_at} for t, r in resolver(wanted, client).items()}
+            )
+    missing = [t for t in wanted if t not in titles]
+    if missing:
+        raise RoundError(f"{len(missing)} title(s) came back unresolved: {missing[:3]}")
+
+    env = Env(Q.Library(common.REPO, pages), titles)
+    outcomes: dict[str, Outcome] = dict(held)
+    for sid, p in parsed.items():
+        outcomes[sid] = spec.decide(p, contexts[sid], env)
+    records = [
+        {
+            "site_id": sid,
+            "status": o.status,
+            "reason": o.reason,
+            "round": round_name,
+            "answered_by": raw[sid].answered_by,
+            "model": raw[sid].model,
+            "answered_at": raw[sid].answered_at,
+            "data": dict(o.data),
+        }
+        for sid, o in sorted(outcomes.items())
+    ]
+    write_jsonl(out / ANSWERS_DIR / f"{round_name}.jsonl", records)
+    merged = {d["site_id"]: d for d in load_decisions(out)}
+    merged.update({r["site_id"]: r for r in records})
+    write_jsonl(out / DECISIONS_FILE, [merged[s] for s in sorted(merged)])
+    (out / TITLES_FILE).write_text(
+        json.dumps({"titles": titles}, ensure_ascii=False, indent=1, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
     )
-    merged = load_decisions(stage_run, stage)
-    merged.update(decisions)
-    common.write_jsonl(out / DECISIONS_FILE, [merged[c] for c in sorted(merged)])
-    statuses = {s: sum(1 for d in decisions.values() if d["status"] == s) for s in (DECIDED, HELD)}
-    reasons: dict[str, int] = {}
-    for d in decisions.values():
-        if d["status"] == HELD:
-            reasons[d["reason"].split(":")[0]] = reasons.get(d["reason"].split(":")[0], 0) + 1
+    known = {r["url"]: r for r in _read_jsonl(out / PAGES_FILE)}
+    known.update({r["url"]: r for r in Q.page_index(urls, pages)})
+    write_jsonl(out / PAGES_FILE, [known[u] for u in sorted(known)])
+    statuses = Counter(r["status"] for r in records)
     return {
-        "stage": stage,
         "round": round_name,
-        "answers": len(decisions),
-        "decided": statuses[DECIDED],
-        "held": statuses[HELD],
-        "held_reasons": reasons,
-        "pages": counts,
+        "answers": len(records),
+        "decided": statuses.get(DECIDED, 0),
+        "held": statuses.get(HELD, 0),
+        "held_reasons": dict(
+            Counter(r["reason"].split(":")[0] for r in records if r["status"] == HELD)
+        ),
+        "pages": fetched,
+        "titles_resolved": len(wanted),
+        "sites_decided_overall": sum(1 for d in merged.values() if d["status"] == DECIDED),
+        "sites_held_overall": sum(1 for d in merged.values() if d["status"] == HELD),
     }

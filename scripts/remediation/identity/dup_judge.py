@@ -54,7 +54,8 @@ for _root in (REPO, REPO / "scripts" / "remediation"):
 import opus_handoff as OH  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
-from identity import common, export, rounds  # noqa: E402
+from identity import common, export  # noqa: E402
+from identity import label_rounds as rounds  # noqa: E402
 from identity.wiki import WikiIndex, article_url, load_cache  # noqa: E402
 
 STAGE_VERDICT = "dup-verdict"

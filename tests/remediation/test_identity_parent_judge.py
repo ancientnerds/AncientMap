@@ -21,7 +21,7 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
 
 import opus_handoff as OH  # noqa: E402
 from identity import parent_judge as J  # noqa: E402
-from identity import rounds  # noqa: E402
+from identity import label_rounds as rounds  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
 from tests.remediation.identity_fixtures import (  # noqa: E402

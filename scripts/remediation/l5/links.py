@@ -66,9 +66,14 @@ class StepError(ValueError):
 
 
 # ------------------------------------------------------------------------------ the offline check
-def delivered(number: int) -> tuple[QR.Wave, list[QR.Change]]:
-    """The step's plan, only if its APPLY.sql and ROLLBACK.sql are exactly what it renders."""
-    wave = L5P.step_wave(number)
+StepWave = Callable[[int], QR.Wave]
+
+
+def delivered(number: int, step_wave: StepWave = L5P.step_wave) -> tuple[QR.Wave, list[QR.Change]]:
+    """The step's plan, only if its APPLY.sql and ROLLBACK.sql are exactly what it renders.
+    `step_wave` names the step's journal identity: L5's, or another lane's that runs its link
+    steps through the same commands (the identity package's re-targets)."""
+    wave = step_wave(number)
     rows = L5P.load_step(wave)
     rendered = L5P.statements(rows, wave)
     for name in ("APPLY.sql", "ROLLBACK.sql"):
@@ -222,8 +227,8 @@ def refused_by(guard: str, output: str) -> bool:
 
 
 # ------------------------------------------------------------------------------ the commands
-def cmd_check(number: int, read: Read = lanes.psql) -> int:
-    wave, rows = delivered(number)
+def cmd_check(number: int, read: Read = lanes.psql, step_wave: StepWave = L5P.step_wave) -> int:
+    wave, rows = delivered(number, step_wave)
     problems = deviations(rows, "old", read)
     for problem in problems:
         print(f"  DEVIATION {problem}")
@@ -236,8 +241,10 @@ def _rehearsed(proc: Any, stamp: str, read: Read) -> tuple[bool, int]:
     return ok, journal_count(stamp, read)
 
 
-def cmd_rehearse(number: int, sender: Send = send, read: Read = lanes.psql) -> int:
-    wave, rows = delivered(number)
+def cmd_rehearse(
+    number: int, sender: Send = send, read: Read = lanes.psql, step_wave: StepWave = L5P.step_wave
+) -> int:
+    wave, rows = delivered(number, step_wave)
     sql = QR.render_split(rows, reversal=False, rehearsal=True, wave=wave, removals=True)
     proc = sender(sql)
     print(proc.stdout)
@@ -250,8 +257,10 @@ def cmd_rehearse(number: int, sender: Send = send, read: Read = lanes.psql) -> i
     return A.EXIT_OK
 
 
-def cmd_probe_guards(number: int, sender: Send = send, read: Read = lanes.psql) -> int:
-    wave, rows = delivered(number)
+def cmd_probe_guards(
+    number: int, sender: Send = send, read: Read = lanes.psql, step_wave: StepWave = L5P.step_wave
+) -> int:
+    wave, rows = delivered(number, step_wave)
     failures = 0
     for guard, mutated in probe_cases(rows, probe_live(rows, read)):
         probe = replace(wave, run_stamp=f"{wave.run_stamp}-probe-{guard}")
@@ -287,8 +296,10 @@ def _settle(rows: list[QR.Change], wave: QR.Wave, what: str, ended: bool, read: 
     return A.EXIT_COMMITTED_UNCLEAN
 
 
-def cmd_apply(number: int, sender: Send = send, read: Read = lanes.psql) -> int:
-    wave, rows = delivered(number)
+def cmd_apply(
+    number: int, sender: Send = send, read: Read = lanes.psql, step_wave: StepWave = L5P.step_wave
+) -> int:
+    wave, rows = delivered(number, step_wave)
     already = journal_count(wave.run_stamp, read)
     if already:
         raise StepError(
@@ -322,8 +333,8 @@ def cmd_apply(number: int, sender: Send = send, read: Read = lanes.psql) -> int:
     return A.EXIT_OK
 
 
-def cmd_verify(number: int, read: Read = lanes.psql) -> int:
-    wave, rows = delivered(number)
+def cmd_verify(number: int, read: Read = lanes.psql, step_wave: StepWave = L5P.step_wave) -> int:
+    wave, rows = delivered(number, step_wave)
     problems = verify(rows, wave, read)
     for problem in problems:
         print(f"  DEVIATION {problem}")
@@ -331,8 +342,10 @@ def cmd_verify(number: int, read: Read = lanes.psql) -> int:
     return A.EXIT_OK if not problems else A.EXIT_COMMITTED_UNCONFIRMED
 
 
-def cmd_rehearse_rollback(number: int, sender: Send = send, read: Read = lanes.psql) -> int:
-    wave, rows = delivered(number)
+def cmd_rehearse_rollback(
+    number: int, sender: Send = send, read: Read = lanes.psql, step_wave: StepWave = L5P.step_wave
+) -> int:
+    wave, rows = delivered(number, step_wave)
     if verify(rows, wave, read):
         raise StepError(
             f"{wave.out.name} has not landed as planned - rehearse its undo after the apply"

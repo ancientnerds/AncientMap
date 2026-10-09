@@ -1393,7 +1393,12 @@ def _psql_reader() -> Any:
     return read
 
 
-def psql_json_reader() -> Callable[[str], list[dict[str, Any]]]:
+#: What a read-only reader sends before its statement: the session cannot write, and no command tag
+#: (`SET`) reaches the answer's rows (the discovery's export, `identity/export.py`, sends the same).
+READ_ONLY_PREFIX = "\\set QUIET on\nSET default_transaction_read_only = on;\n"
+
+
+def psql_json_reader(*, read_only: bool = False) -> Callable[[str], list[dict[str, Any]]]:
     """Rows from production as JSON objects, one per line - a name may contain the `|` that
     unaligned psql separates on, so the later lanes read `row_to_json` instead of splitting.
 
@@ -1405,11 +1410,16 @@ def psql_json_reader() -> Callable[[str], list[dict[str, Any]]]:
     ended the run as a traceback after a COMMIT that had already landed (WB provenance lane s032,
     2026-10-07). The message names psql's exit code and stderr, so a dropped channel is not
     mistaken for a value psql printed in a shape `row_to_json` cannot produce.
+
+    `read_only=True` opens the session read-only first (`READ_ONLY_PREFIX`): the identity package's
+    live reads send nothing else, and a statement that wrote would fail instead of landing.
     """
     from mechanical import apply as apply_mod
 
+    prefix = READ_ONLY_PREFIX if read_only else ""
+
     def read(sql: str) -> list[dict[str, Any]]:
-        proc = apply_mod.run_psql(f"SELECT row_to_json(t) FROM ({sql}) t", rows=True)
+        proc = apply_mod.run_psql(f"{prefix}SELECT row_to_json(t) FROM ({sql}) t", rows=True)
         rows: list[dict[str, Any]] = []
         for number, line in enumerate(jsonl_lines(proc.stdout), start=1):
             if not line.strip():
