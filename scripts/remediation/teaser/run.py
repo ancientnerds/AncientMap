@@ -59,12 +59,13 @@ it quotes, 8 cards per batch (5 in a run selected before 2026-10-09), listing at
 rule admits (`prove_claims`: never an AI aggregator, a Wikipedia mirror, a blocked domain or this
 project's site - such a page is not even fetched). The card is VERIFIED when no claim is
 contradicted (proven or not), at most `CP.MAX_UNPROVEN_CLAIMS` claim lacks a proving quote and the
-central claim (the verifier's first) has one; CONTRADICTED when any claim is contradicted; else
-UNPROVEN (`card_verification`). A card not VERIFIED gets one rewrite (`rewrite-v`: the writer sees
+central claim (the verifier's first) has one; CONTRADICTED when any claim is contradicted; DISPUTED
+when none is but reputable sources disagree about one (the card must hedge it or drop it; reported
+apart, `disputed-after-verify`); else UNPROVEN (`card_verification`). A card not VERIFIED gets one rewrite (`rewrite-v`: the writer sees
 the contradicted claims with their pages and quotes, and may correct one only from the description
 or a web fact - a contradicting quote the machine found on an admitted page, never of the central
 claim), the ordinary check (`check-v`) and a new verifier (`verify2`); a card still not VERIFIED
-clears the site (`contradicted-after-verify`, `unproven-after-verify`; a rewrite that fails the
+clears the site (`contradicted-after-verify`, `disputed-after-verify`, `unproven-after-verify`; a rewrite that fails the
 mechanical checks or `check-v`: `failed-after-verify-rewrite`). Each stage's round is exported once,
 into a handoff directory of its own; the import rebuilds every prompt from the run's files and
 refuses an answer to any other.
@@ -209,11 +210,16 @@ JUDGE_STAGE = "judge"
 #: the card to the one rewrite round, or clear the site after it.
 VERIFIED = CP.VERIFIED
 CONTRADICTED = "CONTRADICTED"
+#: Reputable sources disagree among themselves about a claim: the card must hedge it or drop it, so it
+#: goes to the rewrite like a contradicted one and is reported separately (calibration
+#: teaser-2026-10-09b/c: disputed claims were being called contradictions).
+DISPUTED = "DISPUTED"
 UNPROVEN = "UNPROVEN"
 #: Why a site the run asked is cleared (OUTCOMES.jsonl "reason").
 FAILED_REWRITES = "failed-after-two-rewrites"
 FAILED_VERIFY_REWRITE = "failed-after-verify-rewrite"
 CONTRADICTED_AFTER_VERIFY = "contradicted-after-verify"
+DISPUTED_AFTER_VERIFY = "disputed-after-verify"
 UNPROVEN_AFTER_VERIFY = "unproven-after-verify"
 NAME_UNDRAWABLE = "name-undrawable"
 #: The writer stages whose writer may decline a site that no card can be written for: all but the
@@ -287,6 +293,7 @@ THIN_DECLINED = "thin-declined"
 RECHECK_MECHANICAL = "recheck-mechanical"
 RECHECK_CHECK_FAILED = "recheck-check-failed"
 RECHECK_CONTRADICTED = "recheck-contradicted"
+RECHECK_DISPUTED = "recheck-disputed"
 RECHECK_UNPROVEN = "recheck-unproven"
 RECHECK_ADVERSARIAL_FAILED = "recheck-adversarial-failed"
 #: Questions per rater batch, per adversarial batch.
@@ -893,6 +900,14 @@ def progress(
     return Progress(CLEARED, None, tuple(findings), reason=FAILED_REWRITES)
 
 
+#: Why a site is cleared after the second verification, by the verdict that cleared it.
+AFTER_VERIFY = {
+    CONTRADICTED: CONTRADICTED_AFTER_VERIFY,
+    DISPUTED: DISPUTED_AFTER_VERIFY,
+    UNPROVEN: UNPROVEN_AFTER_VERIFY,
+}
+
+
 def verification_progress(
     site_id: str,
     records: Mapping[str, Mapping[str, Mapping[str, Any]]],
@@ -929,9 +944,7 @@ def verification_progress(
             ACCEPTED, SECOND_VERIFY, tuple(findings), rewritten, rechecked, (first, second)
         )
     findings.append(P.Finding(rewritten["card"], P.findings_of(second)))
-    reason = (
-        CONTRADICTED_AFTER_VERIFY if second["verdict"] == CONTRADICTED else UNPROVEN_AFTER_VERIFY
-    )
+    reason = AFTER_VERIFY[second["verdict"]]
     return Progress(CLEARED, None, tuple(findings), verified=(first, second), reason=reason)
 
 
@@ -1020,6 +1033,13 @@ def shorts_progress(
     return Progress(CLEARED, None, tuple(findings), reason=FAILED_REWRITES)
 
 
+RECHECK_REASON = {
+    CONTRADICTED: RECHECK_CONTRADICTED,
+    DISPUTED: RECHECK_DISPUTED,
+    UNPROVEN: RECHECK_UNPROVEN,
+}
+
+
 def recheck_progress(
     site_id: str, records: Mapping[str, Mapping[str, Mapping[str, Any]]]
 ) -> Progress:
@@ -1042,7 +1062,7 @@ def recheck_progress(
         return Progress(DUE, FIRST_VERIFY, (), written, checked)
     if verified["verdict"] != VERIFIED:
         found = (P.Finding(written["card"], P.findings_of(verified)),)
-        reason = RECHECK_CONTRADICTED if verified["verdict"] == CONTRADICTED else RECHECK_UNPROVEN
+        reason = RECHECK_REASON[verified["verdict"]]
         return Progress(CLEARED, None, found, written, checked, (verified,), reason=reason)
     reviewed = judging(site_id, records[ADVERSARIAL].get(site_id), written)
     if reviewed is None:
@@ -1079,11 +1099,14 @@ def card_verification(claims: Sequence[Mapping[str, Any]]) -> str:
     """A card's verification from its judged claims (CARD_DESCRIPTIONS.md, section 2.1):
     CONTRADICTED when any claim is contradicted - with a proving quote or without one (a page that
     refused the machine, a PDF, a quote mis-copied): a contradiction is never waved through as
-    merely unproven; else VERIFIED when at most `CP.MAX_UNPROVEN_CLAIMS` claim lacks a proving quote
+    merely unproven; else DISPUTED when any claim is disputed (reputable sources disagree about it:
+    the card must hedge or drop it, proven or not, `answers.JUDGE_VERDICTS`); else VERIFIED when at most `CP.MAX_UNPROVEN_CLAIMS` claim lacks a proving quote
     and the central claim - the judge's first, what the site is (`prompts.judge_prompt`) - has one;
     else UNPROVEN."""
     if any(claim["verdict"] == CONTRADICTED for claim in claims):
         return CONTRADICTED
+    if any(claim["verdict"] == DISPUTED for claim in claims):
+        return DISPUTED
     unproven = [claim for claim in claims if not proves(claim)]
     if len(unproven) > CP.MAX_UNPROVEN_CLAIMS or not proves(claims[0]):
         return UNPROVEN
@@ -1095,13 +1118,18 @@ def contradicted_claims(verified: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     return [claim for claim in verified["claims"] if claim["verdict"] == CONTRADICTED]
 
 
+def disputed_claims(verified: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """The claims a verifier found disputed (reputable sources disagree), in its order."""
+    return [claim for claim in verified["claims"] if claim["verdict"] == DISPUTED]
+
+
 def unproven_claims(verified: Mapping[str, Any]) -> list[Mapping[str, Any]]:
-    """The claims a verifier neither proved nor contradicted (UNVERIFIABLE, or SUPPORTED with a
-    quote the machine did not find), in its order."""
+    """The claims a verifier neither proved, contradicted nor found disputed (UNVERIFIABLE, or
+    SUPPORTED with a quote the machine did not find), in its order."""
     return [
         claim
         for claim in verified["claims"]
-        if claim["verdict"] != CONTRADICTED and not proves(claim)
+        if claim["verdict"] not in (CONTRADICTED, DISPUTED) and not proves(claim)
     ]
 
 
@@ -1180,7 +1208,11 @@ def contract_prompt(spec: Spec, stage: str, site: C.Basis, state: Progress) -> s
         assert state.card is not None
         first = state.verified[0]
         return PS.verify_rewrite_prompt(
-            shown, state.card, contradicted_claims(first), unproven_claims(first)
+            shown,
+            state.card,
+            contradicted_claims(first),
+            unproven_claims(first),
+            disputed_claims(first),
         )
     if stage in spec.writers:
         return PS.rewrite_prompt(site, state.findings)
@@ -1204,7 +1236,11 @@ def prompt_for(stage: str, site: C.Basis, state: Progress, spec: Spec = V1_SPEC)
         assert state.card is not None
         first = state.verified[0]
         return P.verify_rewrite_prompt(
-            shown, state.card, contradicted_claims(first), unproven_claims(first)
+            shown,
+            state.card,
+            contradicted_claims(first),
+            unproven_claims(first),
+            disputed_claims(first),
         )
     if stage in WRITER_STAGES:
         return P.rewrite_prompt(site, state.findings)
@@ -2584,6 +2620,21 @@ def outcomes_markdown(
         )
     if not contradictions:
         lines.append("None.")
+    lines += ["", "## Every claim the sources dispute (the card must hedge it or drop it)", ""]
+    disputes = [
+        (r, v, claim)
+        for r in rows
+        for v in r["verifications"]
+        for claim in v["claims"]
+        if claim["verdict"] == DISPUTED
+    ]
+    for r, v, claim in disputes:
+        lines.append(
+            f"- {r['name']} (`{r['site_id'][:8]}`, {v['stage']}, now {r['status']}): "
+            f"{claim['claim']} - {claim['url']} ({claim['quote_outcome']})"
+        )
+    if not disputes:
+        lines.append("None.")
     lines += ["", "| site | status | verification | card |", "|---|---|---|---|"]
     for r in rows:
         card = (r["card"] or "").replace("|", "\\|")
@@ -2712,9 +2763,11 @@ class JudgeTally:
     supported: int = 0
     contradicted: int = 0
     contradicted_unproven: int = 0
+    disputed: int = 0
     unproven: int = 0
     wrong_cards: list[str] = field(default_factory=list)
     disputed_cards: list[str] = field(default_factory=list)
+    disputed_claim_cards: list[str] = field(default_factory=list)
 
     @property
     def unproven_share(self) -> float:
@@ -2723,7 +2776,11 @@ class JudgeTally:
     @property
     def passed(self) -> bool:
         no_contradiction = self.contradicted == 0 and self.contradicted_unproven == 0
-        return no_contradiction and self.unproven_share <= PILOT_MAX_UNPROVEN_SHARE
+        return (
+            no_contradiction
+            and self.disputed == 0
+            and self.unproven_share <= PILOT_MAX_UNPROVEN_SHARE
+        )
 
 
 def import_judge(
@@ -2784,6 +2841,10 @@ def import_judge(
                 tally.contradicted += 1
                 if site_id not in tally.wrong_cards:
                     tally.wrong_cards.append(site_id)
+            elif result["verdict"] == DISPUTED:
+                tally.disputed += 1
+                if site_id not in tally.disputed_claim_cards:
+                    tally.disputed_claim_cards.append(site_id)
             else:
                 tally.unproven += 1
                 if result["verdict"] == CONTRADICTED:
@@ -2806,10 +2867,12 @@ def import_judge(
         "supported": tally.supported,
         "contradicted": tally.contradicted,
         "contradicted_unproven": tally.contradicted_unproven,
+        "disputed": tally.disputed,
         "unproven": tally.unproven,
         "unproven_share": round(tally.unproven_share, 4),
         "wrong_cards": tally.wrong_cards,
         "disputed_cards": tally.disputed_cards,
+        "disputed_claim_cards": tally.disputed_claim_cards,
         "transient_failures": failing,
         "pilot": "PASS" if tally.passed else "FAIL",
     }
@@ -2831,6 +2894,7 @@ def judge_markdown(run: Path, rows: Sequence[Mapping[str, Any]], summary: Mappin
         f"**PILOT: {summary['pilot']}** - {summary['cards']} cards, {summary['claims']} claims: "
         f"{summary['supported']} supported, {summary['contradicted']} contradicted with a proving "
         f"quote, {summary['contradicted_unproven']} contradicted without a proving quote, "
+        f"{summary['disputed']} disputed (reputable sources disagree; each fails the pilot), "
         f"{summary['unproven']} unproven in all ({summary['unproven_share']:.1%}).",
         "",
         "## Every contradiction (read each before anything else)",
@@ -2849,6 +2913,17 @@ def judge_markdown(run: Path, rows: Sequence[Mapping[str, Any]], summary: Mappin
             f"({claim['quote_outcome']})"
         )
     if not contradictions:
+        lines.append("None.")
+    lines += ["", "## Every claim the sources dispute (the card must hedge it or drop it)", ""]
+    disputes = [
+        (row, claim) for row in rows for claim in row["claims"] if claim["verdict"] == DISPUTED
+    ]
+    for row, claim in disputes:
+        lines.append(
+            f"- {row['name']} (`{row['site_id'][:8]}`): {claim['claim']} - {claim['url']} "
+            f"({claim['quote_outcome']})"
+        )
+    if not disputes:
         lines.append("None.")
     lines.append("")
     for row in rows:

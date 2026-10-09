@@ -67,6 +67,7 @@ TINY: dict[str, Any] = {
                 "verifier_verified": {
                     "cases": 2,
                     "falsely_contradicted_max": 0,
+                    "falsely_disputed_max": 0,
                     "claim_coverage_min": 0.8,
                     "claim_agreement_min": 0.9,
                     "false_sources_max": 0,
@@ -334,6 +335,23 @@ def checker_text(verdict: str):
     return make
 
 
+def defect_text(verdict: str, *, naming: bool = True):
+    """A checker's answer to a seeded-defect case: a FAIL names the flawed sentence as an unsupported
+    claim when the defect is a subtle one (`naming`), as a checker that found it would."""
+
+    def make(job: dict[str, Any]) -> str:
+        recorded = job["recorded"]
+        if verdict == "FAIL" and recorded.get("subtle") and naming:
+            return check_json(
+                "FAIL",
+                claims=[{"claim": recorded["sentence"], "support": []}],
+                reasons=["The card says more than its sentence."],
+            )
+        return checker_text(verdict)(job)
+
+    return make
+
+
 def judge_client() -> httpx.Client:
     def handler(request: httpx.Request) -> httpx.Response:
         if str(request.url) == PAGE:
@@ -567,9 +585,9 @@ class TestTheCases:
         good = {j["site_id"]: j for j in jobs if j["set"] == "checker_good"}
         assert set(defects) == set(good)
         for site, bad in defects.items():
-            assert (
-                bad["card"] != good[site]["card"] and bad["recorded"]["defect"] in SV.DEFECT_KINDS
-            )
+            assert bad["card"] != good[site]["card"]
+            assert bad["recorded"]["defect"] in (*SV.DEFECT_KINDS, *SV.SUBTLE_KINDS)
+            assert bad["recorded"]["subtle"] == (bad["recorded"]["defect"] in SV.SUBTLE_KINDS)
             assert good[site]["card"] == C.final_card(good[site]["card"])
 
     def test_the_adversary_is_not_shown_what_the_web_found(self, tmp_path: Path) -> None:
@@ -818,7 +836,9 @@ class TestTheFactChecker:
             {
                 "checker_agreement": agreement,
                 "checker_fail_again": checker_text(verdicts.get("again", "FAIL")),
-                "checker_defects": checker_text(verdicts.get("defects", "FAIL")),
+                "checker_defects": defect_text(
+                    verdicts.get("defects", "FAIL"), naming=verdicts.get("naming", True)
+                ),
                 "checker_good": checker_text(good),
             },
         )
@@ -903,7 +923,10 @@ class TestTheFactChecker:
         verdict = K.evaluate(run_dir, "fact_checker")
         assert verdict["sets"]["checker_fail_again"] == {
             "cases": 2,
+            "counted": 2,
             "failed_again": 0,
+            "failed_again_required": 2,
+            "unscored": {"hair-split": {}, "wrong": []},
             "passed": False,
         }
         assert verdict["passed"] is False
@@ -913,7 +936,8 @@ class TestTheFactChecker:
         self.all_sets(run_dir, defects="PASS")
         verdict = K.evaluate(run_dir, "fact_checker")
         missed = verdict["sets"]["checker_defects"]["missed_by_defect"]
-        assert sum(missed.values()) == 3 and set(missed) <= set(SV.DEFECT_KINDS)
+        assert sum(missed.values()) == 3
+        assert set(missed) <= {*SV.DEFECT_KINDS, *SV.SUBTLE_KINDS}
         assert verdict["tier_move"]["reason"] == "failed: checker_defects"
 
     def test_a_checker_that_fails_the_good_cards_fails(self, tmp_path: Path) -> None:

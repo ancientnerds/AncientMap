@@ -17,7 +17,11 @@ from teaser import contract as C
 PASSED = "PASS"
 FAILED = "FAIL"
 VERDICTS = (PASSED, FAILED)
-JUDGE_VERDICTS = ("SUPPORTED", "CONTRADICTED", "UNVERIFIABLE")
+#: DISPUTED: reputable sources disagree among themselves about the claim (a better-sourced page gives
+#: another date, function or count than another reputable page). It is not a contradiction: the card
+#: must hedge the claim or drop it (`run.card_verification`). It needs the page and quote that show
+#: the disagreement, like SUPPORTED and CONTRADICTED.
+JUDGE_VERDICTS = ("SUPPORTED", "CONTRADICTED", "DISPUTED", "UNVERIFIABLE")
 #: A quote shorter than this proves nothing: `the`, a date, a name alone are on any page.
 MIN_QUOTE_CHARS = 20
 

@@ -48,6 +48,15 @@ def c(label: str, path: Path, old: str, new: str, test: str, testfile: str = T_R
     return Case(f"teaser repair: {label}", path, old, new, test, testfile)
 
 
+T_DISPUTED = "tests/remediation/test_teaser_disputed.py"
+T_ADJ = "tests/remediation/test_teaser_calibrate_adjudication.py"
+T_SUBTLE = "tests/remediation/test_teaser_subtle_defects.py"
+WEB_RULES = REMEDIATION / "web_rules.py"
+ANSWERS = REMEDIATION / "teaser/answers.py"
+PROMPTS = REMEDIATION / "teaser/prompts.py"
+PROMPTS_SHORTS = REMEDIATION / "teaser/prompts_shorts.py"
+SHORTS_V1 = REMEDIATION / "teaser/shorts_v1.py"
+
 T_CAND = "tests/remediation/test_teaser_calibrate_candidate.py"
 T_CAL = "tests/remediation/test_teaser_calibrate.py"
 
@@ -58,6 +67,10 @@ def d36(label: str, path: Path, needle: str, test: str, testfile: str = T_CAND) 
 
 def d36c(label: str, path: Path, old: str, new: str, test: str, testfile: str = T_CAND) -> Case:
     return Case(f"teaser d36: {label}", path, old, new, test, testfile)
+
+
+def gold(label: str, path: Path, old: str, new: str, test: str, testfile: str = T_ADJ) -> Case:
+    return Case(f"teaser gold: {label}", path, old, new, test, testfile)
 
 
 def rel(label: str, needle: str, test: str) -> Case:
@@ -425,6 +438,147 @@ CASES: list[Case] = [
         '            "standing": CC.RELEASED,',
         "test_standing_says_released_under_the_owner_decision",
         T_RELEASE,
+    ),
+    # ------------------------------------------------------------------ the contradiction rule and DISPUTED
+    gold(
+        "every verifier brief carries the definition of a contradiction",
+        WEB_RULES,
+        "    + CONTRADICTION_RULE\n",
+        '    + ""\n',
+        "test_every_verifying_role_reads_the_definition",
+        T_DISPUTED,
+    ),
+    gold(
+        "a judge may dispute a claim",
+        ANSWERS,
+        'JUDGE_VERDICTS = ("SUPPORTED", "CONTRADICTED", "DISPUTED", "UNVERIFIABLE")',
+        'JUDGE_VERDICTS = ("SUPPORTED", "CONTRADICTED", "UNVERIFIABLE")',
+        "test_a_judge_may_dispute_a_claim_with_its_page_and_quote",
+        T_DISPUTED,
+    ),
+    gold(
+        "a disputed claim keeps a card from being verified",
+        RUN,
+        '    if any(claim["verdict"] == DISPUTED for claim in claims):\n        return DISPUTED',
+        "    if False:\n        return DISPUTED",
+        "test_a_disputed_claim_is_not_verified",
+        T_DISPUTED,
+    ),
+    gold(
+        "a disputed claim is no unproven one",
+        RUN,
+        'if claim["verdict"] not in (CONTRADICTED, DISPUTED) and not proves(claim)',
+        'if claim["verdict"] not in (CONTRADICTED,) and not proves(claim)',
+        "test_the_claims_are_told_apart",
+        T_DISPUTED,
+    ),
+    gold(
+        "a card still disputed after the rewrite is cleared as disputed",
+        RUN,
+        "    DISPUTED: DISPUTED_AFTER_VERIFY,\n",
+        "",
+        "test_a_card_still_disputed_after_the_rewrite_is_cleared_as_disputed",
+        T_DISPUTED,
+    ),
+    gold(
+        "the pilot judge fails a disputed claim",
+        RUN,
+        "            and self.disputed == 0\n",
+        "",
+        "test_the_pilot_judge_fails_a_card_with_a_disputed_claim",
+        T_DISPUTED,
+    ),
+    gold(
+        "the v1 judge is told what is no contradiction",
+        PROMPTS,
+        '        f"{CONTRADICTION_STEP}\\n"',
+        '        "\\n"',
+        "test_a_judge_is_told_what_is_no_contradiction",
+        T_DISPUTED,
+    ),
+    gold(
+        "the rewrite after a dispute says hedge or drop",
+        PROMPTS,
+        "        f\"{DISPUTED_RULE if disputed else ''}\\n\"",
+        '        "\\n"',
+        "test_a_disputed_claim_is_shown_with_the_hedge_or_drop_rule",
+        T_DISPUTED,
+    ),
+    # ------------------------------------------------------------------ the qualifier step
+    gold(
+        "the v1 checker compares the qualifiers",
+        PROMPTS,
+        '        f"{QUALIFIER_STEP}"',
+        '        ""',
+        "test_a_checker_compares_the_qualifiers_of_each_claim",
+        T_DISPUTED,
+    ),
+    gold(
+        "the shorts checker compares the qualifiers",
+        PROMPTS_SHORTS,
+        '        f"{P.QUALIFIER_STEP}"',
+        '        ""',
+        "test_a_checker_compares_the_qualifiers_of_each_claim",
+        T_DISPUTED,
+    ),
+    # ------------------------------------------------------------------ the subtle defects
+    gold(
+        "a widened quantifier says all",
+        SHORTS_V1,
+        'flawed = card[: match.start()] + "all" + card[match.end() :]',
+        "flawed = card[: match.start()] + match.group(0) + card[match.end() :]",
+        "test_the_flaw_is_the_one_change",
+        T_SUBTLE,
+    ),
+    gold(
+        "a subtle defect is caught only when the claim is named",
+        CAL,
+        '        elif recorded.get("subtle") and not names_the_claim(checks[key], case):',
+        "        elif False:",
+        "test_a_fail_that_names_nothing_catches_no_subtle_defect",
+    ),
+    # ------------------------------------------------------------------ the adjudicated gold
+    gold(
+        "a hair-split is not scored",
+        CAL,
+        "    scored = [k for k in cases if labels[k] in (None, SUBSTANTIVE)]",
+        "    scored = list(cases)",
+        "test_a_hair_split_accepts_either_verdict",
+    ),
+    gold(
+        "the fail-again minimum scales with the substantive cases",
+        CAL,
+        '    required = -(-rule_again["fail_min"] * len(counted) // rule_again["cases"])',
+        '    required = rule_again["fail_min"]',
+        "test_a_wrong_record_is_dropped_and_reported_by_name",
+    ),
+    gold(
+        "a seal binds the adjudication file",
+        CAL,
+        "    sealed_adjudication(thresholds, root)\n    return thresholds, digest",
+        "    return thresholds, digest",
+        "test_a_file_changed_after_the_seal_is_refused",
+    ),
+    gold(
+        "a label for a case the draw does not hold is refused",
+        CAL,
+        "    if stray := adjudication.stray(fails, cards):",
+        "    if False:",
+        "test_a_label_for_a_case_the_draw_does_not_hold_is_refused",
+    ),
+    gold(
+        "a dispute of a clean card counts against the verifier",
+        CAL,
+        "    falsely_disputed = [k for k in clean if results[k][0] == R.DISPUTED]",
+        "    falsely_disputed = []",
+        "test_a_dispute_of_a_clean_card_is_a_false_dispute_not_a_false_contradiction",
+    ),
+    gold(
+        "a card whose gold is wrong is no false contradiction",
+        CAL,
+        " and card_labels[k] != CONTRADICTED_CARD\n",
+        "\n",
+        "test_a_contradiction_of_a_card_whose_gold_is_wrong_is_not_false",
     ),
 ]
 

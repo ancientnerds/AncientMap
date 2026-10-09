@@ -31,11 +31,15 @@ cards of the production export and a file of vetted shorts-v1 cards (`--base-car
               when the owner kept the tier: the role is registered to the verdict's model again and
               an applied owner move (`roles.APPLIED_ESCALATIONS`) names the decision and this
               calibration (`standing` then says "released (owner decision D36)").
+    dispute-list  read-only: the recorded VERIFIED cards a finished calibration's web verifier contradicted or
+              its adversarial reviewer failed, with the sources cited, for the orchestrator to label in
+              `teaser-gold/ADJUDICATION.json` (`verified_cards`: clean, disputed, contradicted).
     standing  how a role's verdict stands: passed, or released (a release that still rests on what
               it was made on). Refused otherwise - this is what a gate asks.
 
     T=scripts/remediation/teaser/calibrate.py     D=output/remediation/calibration/teaser-<id>
-    $T seal --run-dir $D [--candidate-role fact_checker --candidate-model claude-haiku-5-5]
+    $T seal --run-dir $D [--candidate-role fact_checker --candidate-model claude-haiku-5-5] \
+        [--adjudication output/remediation/calibration/teaser-gold/ADJUDICATION.json]
     $T jobs --run-dir $D --runs output/remediation/teaser/runs/wb-ws-2026-09-27-01 ... \\
         --export output/remediation/teaser/runs/<run>/EXPORT.jsonl --base-cards BASE.jsonl
     $T export --run-dir $D --role fact_checker --handoff output/remediation/handoff/cal-<id>-... \\
@@ -47,6 +51,7 @@ cards of the production export and a file of vetted shorts-v1 cards (`--base-car
     $T release --run-dir $D --role hook_rater --decided-by TEXT --reason TEXT --evidence FILE ... \\
         [--owner-decision D36]
     $T standing --run-dir $D --role hook_rater
+    $T dispute-list --run-dir $D --role web_verifier|adversarial
 
 **A candidate trial** (`seal --candidate-role R --candidate-model M`, owner decision D36's Haiku
 trial of the fact checker) calibrates role R with model M in this directory WITHOUT changing the
@@ -55,6 +60,14 @@ registry: the seal records the candidate, the agents are briefed with it and rec
 `--candidate-model` for that role, and the verdict names the model that passed. The seal binds the
 digest the role would have with M, so `standing` and `release` refuse the verdict for the registered
 role until an owner move has registered M. A failed trial carries no tier move.
+
+**The adjudication** (`seal --adjudication`, teaser-2026-10-10): the orchestrator's labels of the recorded
+answers the roles are measured against (`Adjudication`). Each recorded checker FAIL is substantive (scored),
+hair-split (either verdict accepted, not scored) or wrong (dropped, reported); each recorded VERIFIED card is clean
+(the default), disputed (the sources really disagree: a verifier's DISPUTED is right, its CONTRADICTED a false
+contradiction; the adversarial reviewer may pass or fail it) or contradicted (the gold is wrong). The seal binds the
+file by its sha256. A seeded defect of a subtle kind (`shorts_v1.SUBTLE_KINDS`) is caught only when the checker
+names its claim (`names_the_claim`).
 
 `BASE.jsonl` is one JSON object per line: `site_id, name, country, description, alt_names,
 pool_images, image_titles, card, anchors` and `"sample": true` on the eleven cards of the design's
@@ -189,6 +202,7 @@ THRESHOLDS: dict[str, Any] = {
                 "verifier_verified": {
                     "cases": 20,
                     "falsely_contradicted_max": 2,
+                    "falsely_disputed_max": 2,
                     "claim_coverage_min": 0.80,
                     "claim_agreement_min": 0.90,
                     "false_sources_max": 0,
@@ -280,6 +294,116 @@ def module_hashes(root: Path = ROOT, names: Iterable[str] | None = None) -> dict
     return {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in sorted(wanted)}
 
 
+# ------------------------------------------------------------------------------ the adjudication
+#: The orchestrator's labels of the gold the calibration is measured against (diagnosis of calibration
+#: teaser-2026-10-09b/c, `releases-evidence/fact_checker-gold-diagnosis.md`): the gold of
+#: `checker_fail_again` and `checker_agreement` is one unadjudicated recorded answer, and the recorded
+#: FAILs concentrate on a hair-splitting boundary (the recording model reproduces 9 of 30). The file is
+#: made by the orchestrator, committed and versioned; a seal records its sha256 and a seal made with a
+#: file that has changed is refused (`sealed`).
+ADJUDICATION_VERSION = "teaser-gold-adjudication-v1"
+ADJUDICATION_FILE = CALIBRATION_ROOT / "teaser-gold" / "ADJUDICATION.json"
+#: A recorded FAIL: SUBSTANTIVE (the card says more than its sentences), HAIR_SPLIT ("faithful
+#: paraphrase" against "inference" can go either way: either verdict is accepted, the case is not
+#: scored) or WRONG (the recorded FAIL is itself in error: the case is dropped and reported).
+SUBSTANTIVE, HAIR_SPLIT, WRONG = "substantive", "hair-split", "wrong"
+FAIL_LABELS = (SUBSTANTIVE, HAIR_SPLIT, WRONG)
+#: A recorded VERIFIED card, for the verifier and the adversarial reviewer: CLEAN (no claim of it is
+#: contradicted or disputed: the default), DISPUTED (reputable sources really disagree about a claim:
+#: a verifier's DISPUTED is right and its CONTRADICTED is a false contradiction; either verdict of the
+#: adversarial reviewer is accepted) or CONTRADICTED (the recorded gold is wrong: a real contradiction
+#: stands, and the reviewer is right to fail the card).
+CLEAN, DISPUTED_CARD, CONTRADICTED_CARD = "clean", "disputed", "contradicted"
+CARD_LABELS = (CLEAN, DISPUTED_CARD, CONTRADICTED_CARD)
+
+
+@dataclass(frozen=True)
+class Adjudication:
+    """The labels of a calibration's gold. `fails` maps `run/stage/site_id` of a recorded checker FAIL
+    to its label; `cards` maps `site_id` of a recorded VERIFIED card to its label, with the card's
+    text so that a label never lands on another card of the site."""
+
+    fails: Mapping[str, tuple[str, str]]
+    cards: Mapping[str, tuple[str, str]]
+
+    def fail_label(self, case: Mapping[str, Any]) -> str:
+        """The label of a recorded-FAIL case: every such case of the draw must be labelled."""
+        key = fail_key(case)
+        if key not in self.fails:
+            raise CalibrationError(
+                f"the adjudication does not label the recorded FAIL {key} ({case['name']}): "
+                "label every recorded FAIL of the draw"
+            )
+        label, card = self.fails[key]
+        if card != case["card"]:
+            raise CalibrationError(f"the adjudication of {key} names another card than the case's")
+        return label
+
+    def card_label(self, case: Mapping[str, Any]) -> str:
+        """The label of a recorded-VERIFIED card; a card nobody labelled is CLEAN."""
+        entry = self.cards.get(case["site_id"])
+        if entry is None or entry[1] != case["card"]:
+            return CLEAN
+        return entry[0]
+
+    def stray(self, fail_keys: Iterable[str], site_ids: Iterable[str]) -> list[str]:
+        """The entries that label no recorded FAIL (`run/stage/site_id`) and no recorded VERIFIED
+        card (site id) of the draw: a mistake in the file, refused by evaluate."""
+        fail_keys, site_ids = set(fail_keys), set(site_ids)
+        return sorted(
+            [
+                *(k for k in self.fails if k not in fail_keys),
+                *(k for k in self.cards if k not in site_ids),
+            ]
+        )
+
+
+def fail_key(case: Mapping[str, Any]) -> str:
+    """`run/stage/site_id` of the recorded FAIL a checker case re-asks."""
+    recorded = case["recorded"]
+    return f"{recorded['run']}/{recorded['stage']}/{case['site_id']}"
+
+
+def read_adjudication(path: Path) -> Adjudication:
+    """The adjudication file, refused unless it is exactly the versioned shape with known labels and
+    no entry twice."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if data.get("version") != ADJUDICATION_VERSION:
+        raise CalibrationError(
+            f"{path}: version {data.get('version')!r}, not {ADJUDICATION_VERSION}"
+        )
+    fails: dict[str, tuple[str, str]] = {}
+    for entry in data["checker_fails"]:
+        key = f"{entry['run']}/{entry['stage']}/{entry['site_id']}"
+        if entry["label"] not in FAIL_LABELS:
+            raise CalibrationError(f"{path}: {key} is labelled {entry['label']!r}: {FAIL_LABELS}")
+        if key in fails:
+            raise CalibrationError(f"{path}: {key} is labelled twice")
+        fails[key] = (entry["label"], entry["card"])
+    cards: dict[str, tuple[str, str]] = {}
+    for entry in data["verified_cards"]:
+        if entry["label"] not in CARD_LABELS:
+            raise CalibrationError(
+                f"{path}: {entry['site_id']} is labelled {entry['label']!r}: {CARD_LABELS}"
+            )
+        if entry["site_id"] in cards:
+            raise CalibrationError(f"{path}: {entry['site_id']} is labelled twice")
+        cards[entry["site_id"]] = (entry["label"], entry["card"])
+    return Adjudication(fails, cards)
+
+
+def sealed_adjudication(thresholds: Mapping[str, Any], root: Path = ROOT) -> Adjudication | None:
+    """The adjudication a calibration was sealed with, read from the file the seal hashed; `None`
+    for a calibration sealed without one. Refused when the file changed after the seal."""
+    entry = thresholds.get("adjudication")
+    if entry is None:
+        return None
+    path = root / entry["path"]
+    if not path.is_file() or _sha(path.read_text(encoding="utf-8")) != entry["sha256"]:
+        raise CalibrationError(f"{path} changed after the seal: seal a new calibration")
+    return read_adjudication(path)
+
+
 # ------------------------------------------------------------------------------ the seal
 def registry_entry(name: str, candidate: str | None = None) -> dict[str, Any]:
     """The registry entry of role `name` as a seal records it. A `candidate` model (a trial of D36)
@@ -307,11 +431,14 @@ def seal(
     now: Callable[[], str] = _now,
     root: Path = ROOT,
     candidates: Mapping[str, str] | None = None,
+    adjudication: Path | None = None,
 ) -> str:
     """Write THRESHOLDS.json and log its sha256 - before any case, answer or verdict exists in
     `run_dir`. The registry entries of the calibrated roles are sealed with it. `candidates` maps a
     calibrated role to the candidate model it is tried with (`registry_entry`); a role that is no
-    calibrated role of the table is refused."""
+    calibrated role of the table is refused. `adjudication` is the file of the orchestrator's labels
+    of the gold (`read_adjudication`): it is read here, so that a malformed file is refused before the
+    seal, and its sha256 is sealed with the thresholds."""
     candidates = dict(candidates or {})
     unknown = sorted(set(candidates) - set(thresholds["roles"]))
     if unknown:
@@ -322,8 +449,18 @@ def seal(
         raise CalibrationError(
             f"{run_dir} holds {present}: thresholds are sealed before the first case, not after"
         )
+    labels = None
+    if adjudication is not None:
+        read_adjudication(adjudication)
+        resolved = adjudication.resolve()
+        try:
+            shown = resolved.relative_to(root.resolve()).as_posix()
+        except ValueError:  # a file outside the checkout is sealed by its absolute path
+            shown = resolved.as_posix()
+        labels = {"path": shown, "sha256": _sha(adjudication.read_text(encoding="utf-8"))}
     sealed = {
         **thresholds,
+        "adjudication": labels,
         "modules": module_hashes(root),
         "registry": {
             name: registry_entry(name, candidates.get(name))
@@ -413,6 +550,7 @@ def sealed(run_dir: Path, *, root: Path = ROOT) -> tuple[dict[str, Any], str]:
     for name, entry in thresholds["registry"].items():
         if not _registry_as_sealed(name, entry):
             raise CalibrationError(f"the registry entry of role {name} changed after the seal")
+    sealed_adjudication(thresholds, root)
     return thresholds, digest
 
 
@@ -655,18 +793,24 @@ def build_jobs(
     base = _draw(sorted(base_cards, key=lambda r: r["site_id"]), needed, rng, "base cards")
     for number, row in enumerate(base, start=1):
         site = _base_basis(row)
-        kind, flawed = SV.canary_card(C.final_card(row["card"]), site, number)
+        seeded = SV.seeded_defect(C.final_card(row["card"]), site, number)
         jobs.append(
             _case(
                 "checker_defects",
                 number,
                 "checker_shorts",
                 row,
-                card=flawed,
+                card=seeded.card,
                 pool_images=row["pool_images"],
                 image_titles=row["image_titles"],
                 anchors=row["anchors"],
-                recorded={"defect": kind, "verdict": "FAIL"},
+                recorded={
+                    "defect": seeded.kind,
+                    "verdict": "FAIL",
+                    "subtle": seeded.subtle,
+                    "sentence": seeded.sentence,
+                    "witness": list(seeded.witness),
+                },
             )
         )
         jobs.append(
@@ -774,6 +918,14 @@ def fix_jobs(
 def sealed_jobs(run_dir: Path) -> list[dict[str, Any]]:
     """The fixed cases exactly as they were fixed."""
     sealed(run_dir)
+    return fixed_jobs(run_dir)
+
+
+def fixed_jobs(run_dir: Path) -> list[dict[str, Any]]:
+    """The fixed cases exactly as they were fixed, for a step that reads and judges nothing with the
+    modules (`dispute_list` reads a finished calibration of an older checkout): the seal's integrity
+    only."""
+    integrity(run_dir)
     fixed = sorted({e[FIXED_KEY] for e in _seal_log(run_dir) if FIXED_KEY in e})
     path = run_dir / JOBS_FILE
     if len(fixed) != 1 or not path.is_file() or _sha(path.read_text("utf-8")) != fixed[0]:
@@ -1160,19 +1312,66 @@ def _met(measured: float, floor: float) -> bool:
     return measured >= floor
 
 
+def fail_labels(
+    cases: Mapping[str, Mapping[str, Any]], adjudication: Adjudication | None
+) -> dict[str, str | None]:
+    """The label of each recorded-FAIL case (`SUBSTANTIVE` for all of them without an adjudication)
+    and `None` for a case whose recorded verdict is PASS."""
+    out: dict[str, str | None] = {}
+    for key, case in cases.items():
+        if case["recorded"]["verdict"] != A.FAILED:
+            out[key] = None
+        elif adjudication is None:
+            out[key] = SUBSTANTIVE
+        else:
+            out[key] = adjudication.fail_label(case)
+    return out
+
+
+def names_the_claim(check: Mapping[str, Any], case: Mapping[str, Any]) -> bool:
+    """Whether a checker's FAIL names the claim a subtle defect seeded: an unsupported claim or a
+    reason that either holds a witness word of the defect (a whole word) together with another content
+    word of the flawed sentence, or covers the flawed sentence (`_cover` at `CLAIM_MATCH`). A FAIL for
+    another reason - a tone finding, a hook - does not catch a defect it does not name."""
+    recorded = case["recorded"]
+    sentence = recorded["sentence"]
+    own = _content_words(sentence)
+    texts = [claim["claim"] for claim in check["claims"] if not claim["support"]]
+    texts += list(check["reasons"])
+    for text in texts:
+        if max(_cover(sentence, text)) >= CLAIM_MATCH:
+            return True
+        words = _content_words(text)
+        named = any(
+            re.search(rf"\b{re.escape(w)}\b", text, re.IGNORECASE) for w in recorded["witness"]
+        )
+        if named and len(own & words) >= 1:
+            return True
+    return False
+
+
 def evaluate_fact_checker(
     answers: Mapping[str, Mapping[str, tuple[dict[str, Any], OH.Answer]]],
     spec: Mapping[str, Mapping[str, Any]],
+    adjudication: Adjudication | None = None,
 ) -> dict[str, Any]:
+    """The checker's four sets. With an `adjudication` (calibration teaser-2026-10-10) the recorded
+    FAILs count only when SUBSTANTIVE: a HAIR_SPLIT case accepts either verdict and is not scored, a
+    WRONG one is dropped, and both are reported. A seeded defect of a subtle kind is caught only when
+    the checker FAILs and names the defect's claim (`names_the_claim`)."""
     out: dict[str, Any] = {}
     checked = _checks(answers["checker_agreement"])
-    agree = {k: str(c["verdict"]) for k, c in checked.items()}
     cases = {k: c for k, (c, _) in answers["checker_agreement"].items()}
+    again_cases = {k: c for k, (c, _) in answers["checker_fail_again"].items()}
+    labels = fail_labels(cases, adjudication)
+    again_labels = fail_labels(again_cases, adjudication)
+    scored = [k for k in cases if labels[k] in (None, SUBSTANTIVE)]
+    agree = {k: str(checked[k]["verdict"]) for k in scored}
     same = sum(1 for k, v in agree.items() if v == cases[k]["recorded"]["verdict"])
     claim_cover = ClaimCoverage()
-    for key, check in checked.items():
+    for key in scored:
         claim_cover += claim_coverage(
-            _supported(cases[key]["recorded"]["claims"]), _supported(check["claims"])
+            _supported(cases[key]["recorded"]["claims"]), _supported(checked[key]["claims"])
         )
     false_pass = [
         k
@@ -1187,31 +1386,26 @@ def evaluate_fact_checker(
         "verdict_agreement": round(same / len(agree), 4),
         **claim_cover.to_dict(),
         "false_pass": sorted(false_pass),
+        "unscored": _unscored(cases, labels, {k: str(c["verdict"]) for k, c in checked.items()}),
         "passed": _met(same / len(agree), rule["verdict_agreement_min"])
         and _met(claim_cover.coverage, rule["claim_coverage_min"])
         and _met(claim_cover.agreement, rule["claim_agreement_min"])
         and len(false_pass) <= rule["false_pass_max"],
     }
     again = _verdicts(answers["checker_fail_again"])
-    failed = sum(1 for v in again.values() if v == A.FAILED)
+    counted = [k for k, label in again_labels.items() if label == SUBSTANTIVE]
+    failed = sum(1 for k in counted if again[k] == A.FAILED)
+    rule_again = spec["checker_fail_again"]
+    required = -(-rule_again["fail_min"] * len(counted) // rule_again["cases"])
     out["checker_fail_again"] = {
         "cases": len(again),
+        "counted": len(counted),
         "failed_again": failed,
-        "passed": failed >= spec["checker_fail_again"]["fail_min"],
+        "failed_again_required": required,
+        "unscored": _unscored(again_cases, again_labels, again),
+        "passed": failed >= required,
     }
-    defects = _verdicts(answers["checker_defects"])
-    caught = sum(1 for v in defects.values() if v == A.FAILED)
-    missed = Counter(
-        answers["checker_defects"][k][0]["recorded"]["defect"]
-        for k, v in defects.items()
-        if v != A.FAILED
-    )
-    out["checker_defects"] = {
-        "cases": len(defects),
-        "caught": caught,
-        "missed_by_defect": dict(sorted(missed.items())),
-        "passed": caught >= spec["checker_defects"]["caught_min"],
-    }
+    out["checker_defects"] = _evaluate_defects(answers["checker_defects"], spec["checker_defects"])
     good = _verdicts(answers["checker_good"])
     passed = sum(1 for v in good.values() if v == A.PASSED)
     out["checker_good"] = {
@@ -1220,6 +1414,53 @@ def evaluate_fact_checker(
         "passed": passed >= spec["checker_good"]["pass_min"],
     }
     return out
+
+
+def _unscored(
+    cases: Mapping[str, Mapping[str, Any]],
+    labels: Mapping[str, str | None],
+    verdicts: Mapping[str, str],
+) -> dict[str, Any]:
+    """The recorded FAILs the adjudication kept out of the score: each hair-split case with the
+    checker's fresh verdict, each dropped (wrong) case by name."""
+    return {
+        HAIR_SPLIT: {
+            cases[k]["name"]: verdicts[k]
+            for k, label in sorted(labels.items())
+            if label == HAIR_SPLIT
+        },
+        WRONG: sorted(cases[k]["name"] for k, label in labels.items() if label == WRONG),
+    }
+
+
+def _evaluate_defects(
+    answers: Mapping[str, tuple[dict[str, Any], OH.Answer]], rule: Mapping[str, Any]
+) -> dict[str, Any]:
+    """The seeded defects: caught when the checker FAILs - and, for a subtle defect, names the claim
+    the defect changed. A blunt defect (an appended superlative) is caught by any FAIL."""
+    checks = _checks(answers)
+    caught: list[str] = []
+    named_not: list[str] = []
+    missed: Counter[str] = Counter()
+    for key, (case, _) in answers.items():
+        recorded = case["recorded"]
+        if checks[key]["verdict"] != A.FAILED:
+            missed[recorded["defect"]] += 1
+        elif recorded.get("subtle") and not names_the_claim(checks[key], case):
+            named_not.append(f"{key}: {recorded['defect']}")
+            missed[recorded["defect"]] += 1
+        else:
+            caught.append(key)
+    subtle = [k for k, (c, _) in answers.items() if c["recorded"].get("subtle")]
+    return {
+        "cases": len(answers),
+        "caught": len(caught),
+        "subtle_cases": len(subtle),
+        "caught_subtle": sum(1 for k in subtle if k in caught),
+        "failed_without_naming_the_claim": sorted(named_not),
+        "missed_by_defect": dict(sorted(missed.items())),
+        "passed": len(caught) >= rule["caught_min"],
+    }
 
 
 def _supported(claims: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
@@ -1359,6 +1600,7 @@ def evaluate_web_verifier(
     answers: Mapping[str, Mapping[str, tuple[dict[str, Any], OH.Answer]]],
     spec: Mapping[str, Mapping[str, Any]],
     client: httpx.Client | None,
+    adjudication: Adjudication | None = None,
 ) -> dict[str, Any]:
     """The verifier's answers with their quotes checked by machine (`run.prove_claims`) and the
     card's verification derived as a run derives it (`run.card_verification`).
@@ -1368,7 +1610,13 @@ def evaluate_web_verifier(
     left out of the `caught_min` denominator (the minimum scales with the cases that count). The
     claim measure is a coverage (`claim_coverage`) and the card-level verdict is reported beside
     it. A quote not found is told apart: `not_found_by_machine` (on the page up to typography) is
-    reported; only `fabricated` and a refused source are false sources."""
+    reported; only `fabricated` and a refused source are false sources.
+
+    A DISPUTED verdict (reputable sources disagree) is its own class (`run.card_verification`), scored
+    apart from a contradiction: on a recorded VERIFIED card the `adjudication` labels CLEAN (default;
+    CONTRADICTED and DISPUTED are both false), DISPUTED (the sources really disagree: DISPUTED is right,
+    CONTRADICTED is a false contradiction) or CONTRADICTED (the recorded gold is wrong: neither is
+    false). Only CLEAN cards enter the claim measure and the card-level agreement."""
     parsed: dict[str, tuple[dict[str, Any], tuple[A.Judged, ...]]] = {}
     for set_name in ROLE_SETS["web_verifier"]:
         for key, (case, answer) in answers[set_name].items():
@@ -1395,20 +1643,33 @@ def evaluate_web_verifier(
     caught = [k for k in counted if results[k][0] == R.CONTRADICTED]
     required = math.ceil(rule_c["caught_min"] * len(counted) / rule_c["cases"])
     verified = [k for k in results if parsed[k][0]["set"] == "verifier_verified"]
-    falsely = [k for k in verified if results[k][0] == R.CONTRADICTED]
+    card_labels = {
+        k: CLEAN if adjudication is None else adjudication.card_label(parsed[k][0])
+        for k in verified
+    }
+    clean = [k for k in verified if card_labels[k] == CLEAN]
+    falsely = [
+        k
+        for k in verified
+        if results[k][0] == R.CONTRADICTED and card_labels[k] != CONTRADICTED_CARD
+    ]
+    falsely_disputed = [k for k in clean if results[k][0] == R.DISPUTED]
+    rightly_disputed = [
+        k for k in verified if card_labels[k] == DISPUTED_CARD and results[k][0] == R.DISPUTED
+    ]
     claim_cover = ClaimCoverage()
-    for key in verified:
+    for key in clean:
         claim_cover += claim_coverage(parsed[key][0]["recorded"]["claims"], results[key][1])
     standing: dict[str, list[str]] = {MACHINE_MISS: [], FABRICATED: [], REFUSED: [], UNREADABLE: []}
     for key, (_, proven) in sorted(results.items()):
         for claim in proven:
-            if claim["verdict"] not in ("SUPPORTED", "CONTRADICTED"):
+            if claim["verdict"] not in ("SUPPORTED", "CONTRADICTED", "DISPUTED"):
                 continue
             how = quote_standing(claim, library)
             if how in standing:
                 standing[how].append(f"{key}: {claim['url']}")
     false_sources = [*standing[FABRICATED], *standing[REFUSED]]
-    card_agreement = sum(1 for k in verified if results[k][0] == R.VERIFIED)
+    card_agreement = sum(1 for k in clean if results[k][0] == R.VERIFIED)
     return {
         "verifier_contradicted": {
             "cases": len(contradicted),
@@ -1416,6 +1677,7 @@ def evaluate_web_verifier(
             "caught": len(caught),
             "caught_required": required,
             "missed": [f"{k}: {parsed[k][0]['name']}" for k in counted if k not in caught],
+            "missed_verdicts": {k: results[k][0] for k in counted if k not in caught},
             "disputed": {
                 k: {
                     "name": parsed[k][0]["name"],
@@ -1429,13 +1691,19 @@ def evaluate_web_verifier(
         "verifier_verified": {
             "cases": len(verified),
             "falsely_contradicted": sorted(falsely),
+            "falsely_disputed": sorted(falsely_disputed),
+            "rightly_disputed": sorted(rightly_disputed),
+            "gold_wrong": sorted(
+                k for k, label in card_labels.items() if label == CONTRADICTED_CARD
+            ),
             **claim_cover.to_dict(),
-            "card_verdict_agreement": round(card_agreement / len(verified), 4) if verified else 0.0,
+            "card_verdict_agreement": round(card_agreement / len(clean), 4) if clean else 0.0,
             "false_sources": false_sources,
             "not_found_by_machine": standing[MACHINE_MISS],
             "unreadable_pages": standing[UNREADABLE],
             "transient_failures": failing,
             "passed": len(falsely) <= rule_v["falsely_contradicted_max"]
+            and len(falsely_disputed) <= rule_v["falsely_disputed_max"]
             and claim_cover.coverage >= rule_v["claim_coverage_min"]
             and claim_cover.agreement >= rule_v["claim_agreement_min"]
             and len(false_sources) <= rule_v["false_sources_max"],
@@ -1487,15 +1755,31 @@ def evaluate_hook_rater(
 def evaluate_adversarial(
     answers: Mapping[str, Mapping[str, tuple[dict[str, Any], OH.Answer]]],
     spec: Mapping[str, Mapping[str, Any]],
+    adjudication: Adjudication | None = None,
 ) -> dict[str, Any]:
+    """The reviewer's agreement with what each case should get. A recorded VERIFIED card the
+    `adjudication` labels DISPUTED accepts either verdict (a card that states a claim the sources
+    dispute may rightly be failed, and is not wrongly failed) and is not scored; one it labels
+    CONTRADICTED (the recorded gold is wrong) should FAIL."""
     right = total = 0
     detail: dict[str, Any] = {}
     for set_name in ("adversarial_contradicted", "adversarial_clean"):
         verdicts = _verdicts(answers[set_name])
         expected = {k: c["expected"] for k, (c, _) in answers[set_name].items()}
-        hit = sum(1 for k, v in verdicts.items() if v == expected[k])
-        right, total = right + hit, total + len(verdicts)
-        detail[set_name] = {"cases": len(verdicts), "right": hit}
+        unscored: dict[str, str] = {}
+        if set_name == "adversarial_clean" and adjudication is not None:
+            for key, (case, _) in answers[set_name].items():
+                label = adjudication.card_label(case)
+                if label == DISPUTED_CARD:
+                    unscored[case["name"]] = verdicts[key]
+                    del expected[key]
+                elif label == CONTRADICTED_CARD:
+                    expected[key] = A.FAILED
+        hit = sum(1 for k, v in verdicts.items() if k in expected and v == expected[k])
+        right, total = right + hit, total + len(expected)
+        detail[set_name] = {"cases": len(expected), "right": hit}
+        if unscored:
+            detail[set_name]["unscored_disputed"] = dict(sorted(unscored.items()))
     agreement = right / total if total else 0.0
     detail["adversarial_agreement"] = {
         "agreement": round(agreement, 4),
@@ -1531,6 +1815,19 @@ def evaluate_card_writer(
             "passed": share >= rule["clean_first_min"],
         }
     }
+
+
+def _no_stray_labels(run_dir: Path, adjudication: Adjudication) -> None:
+    """Refuse an adjudication that labels something the fixed draw does not hold: its file was made
+    for another draw."""
+    jobs = sealed_jobs(run_dir)
+    fails = [fail_key(j) for j in jobs if j["set"] in ("checker_agreement", "checker_fail_again")
+             and j["recorded"]["verdict"] == A.FAILED]  # fmt: skip
+    cards = [j["site_id"] for j in jobs if j["set"] in ("verifier_verified", "adversarial_clean")]
+    if stray := adjudication.stray(fails, cards):
+        raise CalibrationError(
+            f"the adjudication labels {stray}, which the fixed draw does not hold"
+        )
 
 
 ROLE_SETS = {
@@ -1570,14 +1867,17 @@ def evaluate(
         answers = _answers(run_dir, role, thresholds)
         if role == "hook_rater":  # the reference is the pilot judge's, on the same cards
             answers |= _answers(run_dir, "pilot_judge", thresholds)
+        adjudication = sealed_adjudication(thresholds)
+        if adjudication is not None:
+            _no_stray_labels(run_dir, adjudication)
         if role == "fact_checker":
-            sets = evaluate_fact_checker(answers, spec)
+            sets = evaluate_fact_checker(answers, spec, adjudication)
         elif role == "web_verifier":
-            sets = evaluate_web_verifier(run_dir, answers, spec, client)
+            sets = evaluate_web_verifier(run_dir, answers, spec, client, adjudication)
         elif role == "hook_rater":
             sets = evaluate_hook_rater(answers, spec)
         else:
-            sets = evaluate_adversarial(answers, spec)
+            sets = evaluate_adversarial(answers, spec, adjudication)
     failed = [name for name, result in sets.items() if result.get("passed") is False]
     verdict: dict[str, Any] = {
         "calibration_id": run_dir.name,
@@ -1842,6 +2142,101 @@ def _resolve(path: Path) -> Path:
     return path if path.is_absolute() else ROOT / path
 
 
+# ------------------------------------------------------------------------------ the dispute list
+_URL = re.compile(r"https?://[^\s)\]\"'<>]+")
+
+
+def dispute_list(run_dir: Path, role: str) -> list[dict[str, Any]]:
+    """Read-only: the recorded VERIFIED cards a finished calibration's `role` (`web_verifier` or
+    `adversarial`) contradicted or failed, with the sources it cited, for the orchestrator to label
+    (`ADJUDICATION.json`, `verified_cards`: clean, disputed, contradicted). Nothing is judged here
+    and nothing is fetched: the quotes are checked against the pages the evaluation kept, and the
+    answers are read as recorded (the seal's integrity only - a calibration sealed with an older
+    checkout of the prompts can be listed from a newer one). One entry per card, each with a
+    `label_template` to complete."""
+    if role not in ("web_verifier", "adversarial"):
+        raise CalibrationError(
+            f"{role}: only the web verifier and the adversarial reviewer are listed"
+        )
+    jobs = [j for j in fixed_jobs(run_dir) if j["role"] == role]
+    exported = _handoffs(run_dir).get(role)
+    if exported is None:
+        raise CalibrationError(f"role {role} was never exported")
+    handoff = _resolve(Path(exported["handoff"]))
+    batch_of = {key: batch for batch, keys in exported["batches"].items() for key in keys}
+    library = Q.Library(ROOT, run_dir / "pages")
+    wanted = "verifier_verified" if role == "web_verifier" else "adversarial_clean"
+    listed = []
+    for case in sorted((j for j in jobs if j["set"] == wanted), key=lambda j: j["number"]):
+        line = OH.read_manifest(handoff, batch_of[case["key"]])[(STAGE, case["key"])]
+        answer = json.loads((handoff / line["answer_path"]).read_text(encoding="utf-8"))
+        parsed = parse_case(case, answer["text"])
+        template = {
+            "site_id": case["site_id"],
+            "name": case["name"],
+            "card": case["card"],
+            "label": None,
+            "note": "",
+        }
+        if role == "web_verifier":
+            proven = R.prove_claims(case["site_id"], parsed, library)
+            found = [c for c in proven if c["verdict"] == R.CONTRADICTED]
+            if not found:
+                continue
+            listed.append(
+                {
+                    "role": role,
+                    "key": case["key"],
+                    "site_id": case["site_id"],
+                    "name": case["name"],
+                    "country": case["country"],
+                    "card": case["card"],
+                    "fresh_verdict": R.card_verification(proven),
+                    "contradicted": [
+                        {k: c[k] for k in ("claim", "url", "quote", "quote_outcome", "proven")}
+                        for c in found
+                    ],
+                    "recorded_verification": [
+                        {k: c[k] for k in ("claim", "verdict", "url")}
+                        for c in case["recorded"]["claims"]
+                    ],
+                    "label_template": template,
+                }
+            )
+        else:
+            if parsed["verdict"] != A.FAILED:
+                continue
+            reasons = [
+                *parsed["reasons"],
+                *(c["claim"] for c in parsed["claims"] if not c["support"]),
+            ]
+            listed.append(
+                {
+                    "role": role,
+                    "key": case["key"],
+                    "site_id": case["site_id"],
+                    "name": case["name"],
+                    "country": case["country"],
+                    "card": case["card"],
+                    "reasons": parsed["reasons"],
+                    "unsupported_claims": [
+                        c["claim"] for c in parsed["claims"] if not c["support"]
+                    ],
+                    "tone_ok": parsed["tone_ok"],
+                    "this_site": parsed["this_site"],
+                    "sources_cited": sorted(
+                        {u.rstrip(".,;:") for text in reasons for u in _URL.findall(text)}
+                    ),
+                    "recorded_verification": [
+                        {k: c[k] for k in ("claim", "verdict", "url")}
+                        for c in case["verify"]["claims"]
+                    ],
+                    "label_template": template,
+                }
+            )
+    return listed
+
+
 # ------------------------------------------------------------------------------ the CLI
 def main(argv: Iterable[str] | None = None) -> int:
     """0: done (and a verdict passed). 1: the verdict is a fail. 2: refused."""
@@ -1851,6 +2246,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     for name in (
         "seal", "jobs", "export", "agents", "evaluate", "check-answer", "void", "release", "standing",
+        "dispute-list",
     ):  # fmt: skip
         command = sub.add_parser(name)
         command.add_argument("--run-dir", required=True, type=Path)
@@ -1866,7 +2262,16 @@ def main(argv: Iterable[str] | None = None) -> int:
     jobs.add_argument("--runs", required=True, nargs="+", type=Path)
     jobs.add_argument("--export", required=True, type=Path)
     jobs.add_argument("--base-cards", required=True, type=Path)
+    sub.choices["dispute-list"].add_argument(
+        "--role", required=True, choices=["web_verifier", "adversarial"]
+    )
     seal_cli = sub.choices["seal"]
+    seal_cli.add_argument(
+        "--adjudication",
+        type=Path,
+        default=None,
+        help="the orchestrator's labels of the gold (ADJUDICATION.json); sealed by its sha256",
+    )
     seal_cli.add_argument("--candidate-role", choices=sorted(THRESHOLDS["roles"]))
     seal_cli.add_argument("--candidate-model", choices=list(OH.NEW_ANSWER_MODELS))
     export = sub.choices["export"]
@@ -1906,7 +2311,10 @@ def main(argv: Iterable[str] | None = None) -> int:
             trial = (
                 {} if args.candidate_role is None else {args.candidate_role: args.candidate_model}
             )
-            payload: Any = {"thresholds_sha256": seal(run_dir, candidates=trial)}
+            labels = None if args.adjudication is None else _resolve(args.adjudication)
+            payload: Any = {
+                "thresholds_sha256": seal(run_dir, candidates=trial, adjudication=labels)
+            }
         elif args.command == "jobs":
             thresholds, _ = sealed(run_dir)
             runs = [_resolve(r) for r in args.runs]
@@ -1946,6 +2354,8 @@ def main(argv: Iterable[str] | None = None) -> int:
             )
         elif args.command == "standing":
             payload = standing(run_dir, args.role)
+        elif args.command == "dispute-list":
+            payload = dispute_list(run_dir, args.role)
         else:
             payload = evaluate(
                 run_dir,

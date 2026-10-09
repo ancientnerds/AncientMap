@@ -374,15 +374,38 @@ def _contradicted(claims: Sequence[Mapping[str, Any]]) -> str:
     return "\n".join(blocks)
 
 
+#: A claim on which reputable sources disagree is neither wrong nor proven: the card may keep it only
+#: hedged (`run.card_verification` sends such a card to the rewrite like a contradicted one and
+#: reports it separately; calibration teaser-2026-10-09b/c).
+DISPUTED_RULE = (
+    "Also: a DISPUTED claim above is one on which reputable sources disagree with each other. Do "
+    "not state either side as a fact: hedge it ('by one estimate', 'according to ...', 'sources "
+    "differ on ...') in words that a sentence of the description carries, or drop it. It is not "
+    "listed under rule 4.\n"
+)
+
+
+def disputed_block(claims: Sequence[Mapping[str, Any]]) -> str:
+    """The prompt's DISPUTED section (page and quote of each claim); empty when none is disputed."""
+    if not claims:
+        return ""
+    return (
+        "DISPUTED - reputable sources disagree with each other about these claims:\n"
+        f"{_contradicted(claims)}\n\n"
+    )
+
+
 def verify_rewrite_prompt(
     site: C.Basis,
     card: str,
     contradicted: Sequence[Mapping[str, Any]],
     unproven: Sequence[Mapping[str, Any]],
+    disputed: Sequence[Mapping[str, Any]] = (),
 ) -> str:
     """The one rewrite after a failed web verification: the writer's rules, the card, every claim
-    the verifier found contradicted (page, quote, whether the machine found the quote) or could not
-    prove, and the web facts (`site.web`) a contradicted claim may be corrected with."""
+    the verifier found contradicted (page, quote, whether the machine found the quote), disputed
+    (reputable sources disagree) or could not prove, and the web facts (`site.web`) a contradicted
+    claim may be corrected with."""
     not_proven = "\n".join(f"- {claim['claim']}" for claim in unproven) or "(none)"
     return (
         f"{PURPOSE}\n\nThe card below was accepted by a checker - every claim of it is in the "
@@ -393,6 +416,7 @@ def verify_rewrite_prompt(
         f"THE SITE\n{_site_block(site)}\n\n"
         f"THE CARD THE WEB CHECK DID NOT VERIFY ({len(card)} characters)\n{card}\n\n"
         f"CONTRADICTED - a page says otherwise:\n{_contradicted(contradicted)}\n\n"
+        f"{disputed_block(disputed)}"
         f"NOT PROVEN - the web check found no page that proves these:\n{not_proven}\n\n"
         "WHAT THE NEW CARD MUST DO\n"
         "1. Drop every contradicted claim, or correct it. Correct a claim only with a fact that a "
@@ -408,7 +432,8 @@ def verify_rewrite_prompt(
         "the claim that says what the site is. Prefer the facts the web check proved.\n"
         "4. For each contradicted claim above, in its order, name the sentence of the description "
         "that states it, or null if no sentence does: this lists the description's own errors for "
-        "their repair.\n\n"
+        "their repair.\n"
+        f"{DISPUTED_RULE if disputed else ''}\n"
         f"THE RULES\n{_numbered(RULES)}\n\nNEVER, for example:\n{_numbered(DONT)}\n\n"
         f"GOOD CARDS (other sites, each true to its own description):\n\n{_examples()}\n\n"
         f"{VERIFY_WRITER_FORMAT}\n"
@@ -445,6 +470,25 @@ def _worked_check() -> str:
     )
 
 
+#: The checker's step on the words that carry a claim's strength. Diagnosis of calibration
+#: teaser-2026-10-09b/c (2026-10-09): both Sonnet and Opus pass a card that drops 'largely' (Kit's Coty
+#: House), widens 'many' coins to all (Sexi), drops the saga's attribution (Broch of Mousa) or gives an
+#: original height as the current one (Pyramid G1-d): the card then says more than its sentence, and
+#: "a faithful paraphrase" was judged on the nouns alone.
+QUALIFIER_STEP = (
+    "   QUALIFIER STEP, for every claim: list the qualifiers, quantifiers, hedges, attributions and "
+    "time anchors of the sentence it rests on ('largely', 'many', 'some', 'probably', 'typically', "
+    "'among others', 'the earliest', 'according to the saga', 'originally', 'once', 'now', 'with "
+    "firm stratigraphic context') and confirm that each one survives in the card with the same "
+    "strength. A card that drops or sharpens one says more than its sentence does: the claim has "
+    "support []. Examples: the sentence says 'largely rebuilt' and the card says 'rebuilt'; the "
+    "sentence says 'many coins' and the card says 'the coins' (many became all); the sentence says "
+    "'according to the saga, the broch was besieged' and the card says 'the broch was besieged'; "
+    "the sentence says the pyramid 'originally stood 62 metres high' and the card says it 'stands "
+    "62 metres high' (an original size given as the current one).\n"
+)
+
+
 def _web_rule(site: C.Basis) -> str:
     """How a checker counts a web fact - only in the check of a rewrite that has some."""
     if not site.web:
@@ -476,6 +520,7 @@ def checker_prompt(site: C.Basis, card: str) -> str:
         "supported; an embellishment, a sharpened hedge, a computed number or an inference the "
         "sentences do not make is not. Use only the sentences above - not your own knowledge, "
         "even where you know the claim is true.\n"
+        f"{QUALIFIER_STEP}"
         f"{_web_rule(site)}"
         f"3. tone_ok: the card follows these rules:\n{_numbered(TONE_RULES)}\n"
         "4. this_site: the card is about this site - not a namesake, a neighbouring town, the "
@@ -484,15 +529,33 @@ def checker_prompt(site: C.Basis, card: str) -> str:
     )
 
 
+#: What a web judge may call a contradiction, and what is a dispute instead: the words of
+#: `web_rules.CONTRADICTION_RULE`, put as the verdicts of the answer shape. Calibration
+#: teaser-2026-10-09b/c (2026-10-09): the web verifier falsely contradicted 7 of 20 recorded VERIFIED
+#: cards (Opus) - a rounding, an overlapping range, a compatible estimate, a naming convention, a
+#: claim the sources really dispute - and the adversarial reviewer failed 12 of 25 clean cards.
+CONTRADICTION_STEP = (
+    "Decide CONTRADICTED only when a reputable source (an excavation report, a heritage register, a "
+    "museum or university page, a peer-reviewed paper, a better-sourced Wikipedia article) states "
+    "something incompatible with the claim as the text words it. These are NOT contradictions: a "
+    "rounding, a range that overlaps the claim's, another estimate that the text's own hedge "
+    "('about', 'possibly', 'by one estimate') already covers, a different spelling or naming "
+    "convention, the same fact in other words. Where reputable sources disagree among themselves "
+    "about the claim, decide DISPUTED, not CONTRADICTED: the text must then hedge the claim or drop "
+    "it."
+)
+
 JUDGE_FORMAT = (
     "Answer with ONLY this JSON object, nothing before or after it:\n"
     '{"claims": [{"claim": "<one claim>", "verdict": "SUPPORTED", "url": "https://...", '
     '"quote": "<the exact words of the page>"}]}\n'
-    '- "verdict": SUPPORTED (a page says it), CONTRADICTED (a page says otherwise) or '
+    '- "verdict": SUPPORTED (a page says it), CONTRADICTED (a reputable page says something '
+    "incompatible with it), DISPUTED (reputable pages disagree with each other about it) or "
     "UNVERIFIABLE (you found no page that settles it).\n"
-    '- SUPPORTED and CONTRADICTED need "url" and "quote": the quote is copied character for '
-    "character from that page's visible text, at least 20 characters, and it is checked by a "
-    'machine against the page. UNVERIFIABLE has "url": null and "quote": null.'
+    '- SUPPORTED, CONTRADICTED and DISPUTED need "url" and "quote": the quote is copied character '
+    "for character from that page's visible text, at least 20 characters, and it is checked by a "
+    "machine against the page; for DISPUTED it is the page that differs from the text. "
+    'UNVERIFIABLE has "url": null and "quote": null.'
 )
 
 
@@ -512,13 +575,14 @@ def judge_prompt(name: str, country: str, card: str) -> str:
         "claim without which the text would be about another place. Then each fact, number, date, "
         "name, place, material, size, function, superlative, and every statement or implication "
         "that something is unknown or mysterious.\n"
-        "2. For each, search the web and decide SUPPORTED, CONTRADICTED or UNVERIFIABLE. A page "
-        "that repeats a claim is not yet a check of it: the text above may have been written from "
-        "that very page. Before you decide SUPPORTED on a number, date, count, size, superlative, "
-        "name, a 'never', 'only', 'still' or 'first', or a present-tense state, look for a page "
-        "that could CONTRADICT it - an excavation report or heritage register, a museum or "
-        "university page, a scholarly paper, another-language Wikipedia - and read a page whole, "
-        "not its first paragraph, for statements that disagree with each other.\n"
+        "2. For each, search the web and decide SUPPORTED, CONTRADICTED, DISPUTED or UNVERIFIABLE. "
+        "A page that repeats a claim is not yet a check of it: the text above may have been "
+        "written from that very page. Before you decide SUPPORTED on a number, date, count, size, "
+        "superlative, name, a 'never', 'only', 'still' or 'first', or a present-tense state, look "
+        "for a page that could CONTRADICT it - an excavation report or heritage register, a "
+        "museum or university page, a scholarly paper, another-language Wikipedia - and read a "
+        "page whole, not its first paragraph, for statements that disagree with each other. "
+        f"{CONTRADICTION_STEP}\n"
         "3. Prefer pages that can be quoted: Wikipedia, national heritage registers, museum and "
         "university pages, published papers. Some sites refuse automated readers (Historic "
         "England and the Heritage Gateway answer 403, UNESCO often refuses, PDFs may be "
@@ -529,6 +593,23 @@ def judge_prompt(name: str, country: str, card: str) -> str:
     )
 
 
+def _clean(claim: Mapping[str, Any]) -> bool:
+    """A verified claim that is no finding: SUPPORTED, with a quote the machine found."""
+    return bool(claim["proven"]) and claim["verdict"] == "SUPPORTED"
+
+
+def _verify_finding(claim: Mapping[str, Any]) -> str:
+    """One web-check finding as the rewrite prompt and the outcomes show it."""
+    if claim["verdict"] == "CONTRADICTED":
+        return f'The web check contradicts: {claim["claim"]} ({claim["url"]}: "{claim["quote"]}")'
+    if claim["verdict"] == "DISPUTED":
+        return (
+            f"The web check finds the claim disputed (reputable sources disagree): {claim['claim']} "
+            f'({claim["url"]}: "{claim["quote"]}") - hedge it or drop it'
+        )
+    return f"The web check could not prove: {claim['claim']}"
+
+
 def findings_of(record: Mapping[str, Any]) -> tuple[str, ...]:
     """The reasons an attempt failed, as the rewrite prompt and the outcomes show them: the
     mechanical problems of a writer's record, the checker's unsupported claims, tone, site and
@@ -536,13 +617,7 @@ def findings_of(record: Mapping[str, Any]) -> tuple[str, ...]:
     if record["kind"] == "write":
         return tuple(record["problems"])
     if record["kind"] == "verify":
-        return tuple(
-            f'The web check contradicts: {claim["claim"]} ({claim["url"]}: "{claim["quote"]}")'
-            if claim["verdict"] == "CONTRADICTED"
-            else f"The web check could not prove: {claim['claim']}"
-            for claim in record["claims"]
-            if not claim["proven"] or claim["verdict"] != "SUPPORTED"
-        )
+        return tuple(_verify_finding(claim) for claim in record["claims"] if not _clean(claim))
     reasons = [
         f"No sentence of the description supports the claim: {claim['claim']}"
         for claim in record["claims"]
