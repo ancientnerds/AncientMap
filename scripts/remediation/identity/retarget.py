@@ -491,8 +491,6 @@ def parse_target(data: Any, ctx: Mapping[str, Any]) -> Target:
         raise AnswerError(f"target.name: longer than {NAME_CHARS} characters")
     if not any(_normal(name.value) in _normal(q["quote"]) for q in name.quotes):
         raise AnswerError("target.name: a quote holds the name word for word")
-    if not Q.is_url(url.value) or CONTROL_RE.search(url.value) or Q.not_fetchable(url.value):
-        raise AnswerError(f"target.source_url: {url.value!r} is not a fetchable public page")
     if url.value == ctx["source_url"]:
         raise AnswerError("target.source_url: it is the record's current source_url")
     if not A.cites(url.quotes, url.value):

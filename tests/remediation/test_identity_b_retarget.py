@@ -649,14 +649,18 @@ class TestTheEdges:
         with pytest.raises(R.AnswerError, match="longer than 500 characters"):
             parse(data)
 
-    @pytest.mark.parametrize(
-        "url",
-        ["ftp://example.org/kydonia", "http://localhost/kydonia", "https://example.org/a\x01b"],
-    )
-    def test_a_source_url_that_is_no_public_page_is_refused(self, url: str) -> None:
+    def test_a_source_url_with_a_control_character_is_refused(self) -> None:
+        url = "https://example.org/ab"
         data = answer()
         data["target"]["source_url"] = {"value": url, "quotes": [q(url, "Kydonia")]}
-        with pytest.raises(R.AnswerError):
+        with pytest.raises(R.AnswerError, match="carries a control character"):
+            parse(data)
+
+    @pytest.mark.parametrize("url", ["ftp://example.org/kydonia", "http://localhost/kydonia"])
+    def test_a_source_url_that_is_no_public_page_is_refused_with_its_quote(self, url: str) -> None:
+        data = answer()
+        data["target"]["source_url"] = {"value": url, "quotes": [q(url, "Kydonia")]}
+        with pytest.raises(R.AnswerError, match="URL of the page|never fetched here"):
             parse(data)
 
     @pytest.mark.parametrize("verdict", ["KEEP", "RETIRE"])
