@@ -226,7 +226,7 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
     <h4>Platform License</h4>
     <ul>
       <li>The Ancient Nerds Research Platform source code is provided under <strong>AGPL-3.0</strong>.</li>
-      <li>Original content (stories, weekly journals) and documentation are provided under <strong>CC BY-NC-SA 4.0</strong>.</li>
+      <li>Original content (curated site records, stories, weekly journals, research papers) and documentation are provided under <strong>CC BY 4.0</strong>.</li>
       <li>Site descriptions that carry a source line reproduce, shorten or translate text from the linked source revision (Wikipedia: <strong>CC BY-SA 4.0</strong>); the line states how an AI system was involved.</li>
       <li>See <a href="https://github.com/AncientNerds/AncientMap" target="_blank" rel="noopener noreferrer">GitHub</a> for full license details.</li>
     </ul>

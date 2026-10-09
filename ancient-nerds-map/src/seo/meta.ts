@@ -195,8 +195,7 @@ export function renderHead(m: PageMeta): string {
 <meta property="og:image" content="${img}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${t}">${twDescTag}
-<meta name="twitter:image" content="${img}">
-<meta name="twitter:site" content="@AncientNerdsDAO">${schemaTag}`
+<meta name="twitter:image" content="${img}">${schemaTag}`
 }
 
 // ---------------------------------------------------------------------------
