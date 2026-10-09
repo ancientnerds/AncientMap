@@ -3,8 +3,11 @@
 Every write of the final repair is a wave of at most 100 sites with a run stamp of its own, run
 through the gates in this order: emit, check, verify, rehearse, probe-guards, apply, read-back,
 rehearse-rollback, 0 deviations. A stamp is applied once, so a wave is **selected once**
-(`waves/<wave>/WAVE.json`, never replaced) and a site belongs to the first wave that took it; a site a
-wave could not write (a skip) is asked again in a later round, not carried in the old wave.
+(`waves/<wave>/WAVE.json`, never replaced) and a site belongs to the first wave that took it. A site
+a wave could not write (a skip: its state moved, another record carries its item, its name key is
+taken, its links have not landed) is not selected again: the lane's `result` lists it, with the
+wave and the reason, in `WAVE_SKIPS.jsonl` (and in the owner list where the lane has one), so no
+skip disappears with the wave that made it.
 
 `<lane dir>/waves/<wave>/` also holds the wave's plan files, written by the lane's own planner.
 """
@@ -12,12 +15,19 @@ wave could not write (a skip) is asked again in a later round, not carried in th
 from __future__ import annotations
 
 import json
-from collections.abc import Collection
+from collections.abc import Callable, Collection, Sequence
 from pathlib import Path
 from typing import Any
 
+from identity import common
+
 SITES_PER_WAVE = 100
 WAVE_FILE = "WAVE.json"
+SKIPS_FILE = "WAVE_SKIPS.jsonl"
+#: The skips that leave nothing to write: the state the question asked for is already there.
+NOTHING_LEFT = frozenset(
+    {"already-decided", "already-retired", "already-set", "name-unchanged", "same-as-name"}
+)
 
 
 class WaveError(ValueError):
@@ -72,3 +82,28 @@ def all_waves(lane_dir: Path) -> list[dict[str, Any]]:
         json.loads(p.read_text(encoding="utf-8"))
         for p in sorted((lane_dir / "waves").glob(f"*/{WAVE_FILE}"))
     ]
+
+
+def wave_skips(
+    lane_dir: Path, plan_skip_files: Callable[[str], Sequence[Path]]
+) -> list[dict[str, Any]]:
+    """The sites the plans of every wave left out, one row per site and wave (the first reason
+    wins): `wave`, `site_id`, `name`, `reason`, `note`. `plan_skip_files(wave)` names the wave's
+    skip files; a skip that leaves nothing to write (`NOTHING_LEFT`) is not listed."""
+    rows: list[dict[str, Any]] = []
+    for record in all_waves(lane_dir):
+        seen: set[str] = set()
+        for path in plan_skip_files(record["wave"]):
+            if not path.exists():
+                continue
+            for row in common.read_jsonl(path):
+                if row["site_id"] in seen or row["reason"] in NOTHING_LEFT:
+                    continue
+                seen.add(row["site_id"])
+                rows.append(
+                    {
+                        "wave": record["wave"],
+                        **{k: row[k] for k in ("site_id", "name", "reason", "note")},
+                    }
+                )
+    return rows

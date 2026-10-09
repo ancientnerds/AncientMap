@@ -27,6 +27,8 @@ from identity import rounds as R  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
 NOW = "2026-10-09T02:00:00+00:00"
+#: When a test calibration was decided: before `NOW`, the time its answers are given.
+DECIDED_AT = "2026-10-09T01:00:00+00:00"
 ENT = "https://www.wikidata.org/wiki/Special:EntityData/{}.json"
 WP = "https://en.wikipedia.org/wiki/"
 
@@ -131,3 +133,38 @@ def answer_all(
                 model=OH.ANSWER_MODELS[spec.model],
                 now=lambda: now,
             )
+
+
+def write_calibration(
+    root: Path, calibration_id: str, role: str, pool_stage: str, **verdict_over: Any
+) -> None:
+    """A passed calibration of `role` as `calibrate_claude.py` leaves it: a seal that binds the pool
+    (a handoff of `pool_stage` questions) and the bar of 0 false writes, and the verdict."""
+    pool = root / "pools" / calibration_id
+    OH.export(pool, batch_id="p-b01", stage=pool_stage, label="case", field=None, prompt="q")
+    root.mkdir(parents=True, exist_ok=True)
+    seals = root / R.THRESHOLDS_FILE
+    known = json.loads(seals.read_text("utf-8")) if seals.exists() else {}
+    known[calibration_id] = {
+        "calibration_id": calibration_id,
+        "role_sha256": RO.role_sha256(role),
+        "handoff": str(pool),
+        "batches": ["p-b01"],
+        "write_verdicts": sorted(R.WRITE_VERDICTS),
+        "max_false_writes": 0,
+    }
+    seals.write_text(json.dumps(known), encoding="utf-8")
+    verdict = {
+        "calibration_id": calibration_id,
+        "role": role,
+        "model": RO.role(role).model,
+        "passed": True,
+        "agreement": 0.95,
+        "tier_move": None,
+        "false_writes": 0,
+        "decided_at": DECIDED_AT,
+        **verdict_over,
+    }
+    path = root / R.VERDICTS_DIR / f"{calibration_id}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(verdict), encoding="utf-8")

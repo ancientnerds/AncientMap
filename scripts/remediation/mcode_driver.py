@@ -1489,8 +1489,11 @@ def _verdicts(text: str) -> tuple[tuple[str, str], ...] | None:
         key in data for key in ("fields", "sentences", "kept")
     ):
         # a one-verdict answer (the identity questions of the final repair: KEEP, RETARGET, ...):
-        # the verdict is the one unit, the evidence behind it is spot-checked, not compared
-        return (("verdict", data["verdict"]),)
+        # the verdict is a unit and so is every value the answer asks to be written - the item a
+        # RETARGET names, the year of a PERIOD_WRONG, the name of a RENAME, the spoken form: a role
+        # that picks the right verdict and writes another value has not agreed. The evidence behind
+        # them is spot-checked, not compared.
+        return (("verdict", data["verdict"]), *_written_values(data))
     if isinstance(data.get("fields"), dict):
         return _fill_units(data["fields"])
     if isinstance(data.get("sentences"), list):
@@ -1500,6 +1503,21 @@ def _verdicts(text: str) -> tuple[tuple[str, str], ...] | None:
     else:
         return None
     return tuple(pairs) + (("coherent", str(data.get("coherent"))),)
+
+
+#: The keys of a one-verdict answer that hold a value to be written; a re-target's item is the
+#: `value` of its `target.qid` cell (`_written_values`).
+_WRITTEN_KEYS = ("new_name", "period_start", "found_start", "spoken", "merge_with")
+
+
+def _written_values(data: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    units: list[tuple[str, str]] = []
+    target = data.get("target")
+    held = target.get("qid") if isinstance(target, dict) else None
+    if isinstance(held, dict) and held.get("value") is not None:
+        units.append(("target.qid", str(held["value"])))
+    units.extend((key, str(data[key])) for key in _WRITTEN_KEYS if data.get(key) is not None)
+    return tuple(units)
 
 
 def _fill_units(fields: Any) -> tuple[tuple[str, str], ...] | None:

@@ -25,6 +25,7 @@ for _p in (REPO, REPO / "scripts" / "remediation", REPO / "output" / "remediatio
 import opus_handoff as OH  # noqa: E402
 import qid_repair as QR  # noqa: E402
 import roles as RO  # noqa: E402
+from identity import common  # noqa: E402
 from identity import retarget as RT  # noqa: E402
 from identity import retarget_plan as RP  # noqa: E402
 from identity import rounds as R  # noqa: E402
@@ -41,6 +42,7 @@ from tests.remediation.identity_b_fixtures import (  # noqa: E402
     entity,
     html,
     store,
+    write_calibration,
 )
 from tests.remediation.identity_fixtures import export_of  # noqa: E402
 
@@ -55,22 +57,8 @@ def tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-def seal(root: Path, calibration_id: str, role: str) -> None:
-    root.mkdir(parents=True, exist_ok=True)
-    known = (
-        json.loads((root / "THRESHOLDS.json").read_text("utf-8"))
-        if (root / "THRESHOLDS.json").exists()
-        else {}
-    )
-    known[calibration_id] = {"role_sha256": RO.role_sha256(role)}
-    (root / "THRESHOLDS.json").write_text(json.dumps(known), encoding="utf-8")
-    verdicts = root / "verdicts"
-    verdicts.mkdir(exist_ok=True)
-    (verdicts / f"{calibration_id}.json").write_text(
-        json.dumps({"calibration_id": calibration_id, "role": role, "model": RO.role(role).model,
-                    "passed": True, "agreement": 0.95, "tier_move": None}),
-        encoding="utf-8",
-    )  # fmt: skip
+def seal(root: Path, calibration_id: str, role: str, stage: str = "scope-window-web") -> None:
+    write_calibration(root, calibration_id, role, stage)
 
 
 def go(tree: Path, *argv: str) -> int:
@@ -131,7 +119,7 @@ class TestTheScopeLane:
             )
             == 1
         )
-        assert "round 1 is exported already" in capsys.readouterr().err
+        assert "nothing to export" in capsys.readouterr().err
 
         assert (
             go(
@@ -293,6 +281,82 @@ class TestTheScopeLane:
                   "--calibration", "c", "--calibration-root", str(tree / "cal"))  # fmt: skip
         assert code == 1 and "recorded under adversarial" in capsys.readouterr().err
 
+    def test_the_import_refuses_answers_given_before_the_calibration_and_another_lane_s_pool(
+        self, tree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        run = tree / "identity"
+        monkeypatch.setattr(
+            SJ, "questions", lambda run_, root=None: [R.Question(TS.FORT, TS.context())]
+        )
+        handoff = tree / "h"
+        go(
+            tree,
+            "--lane",
+            "scope-window",
+            "export",
+            "--stage",
+            "scope-window-web",
+            "--handoff",
+            str(handoff),
+        )
+        out = R.stage_dir(run, SJ.web_spec())
+        answer_all(
+            handoff, R.find_round(out, "r1"), SJ.web_spec(), {TS.FORT: TS.answer("OUT_OF_WINDOW")}
+        )
+        seed_pages(out, {TS.FORT_PAGE: html(TS.FORT_TEXT)})
+        importing = ["--lane", "scope-window", "import", "--stage", "scope-window-web", "--round", "r1",
+                     "--calibration", "c", "--calibration-root", str(tree / "cal")]  # fmt: skip
+        write_calibration(
+            tree / "cal",
+            "c",
+            "web_verifier",
+            "scope-window-web",
+            decided_at="2026-10-10T00:00:00+00:00",
+        )
+        capsys.readouterr()
+        assert go(tree, *importing) == 1
+        assert "given before the calibration was decided (2026-10-10" in capsys.readouterr().err
+        assert not (out / R.DECISIONS_FILE).exists()
+        # a calibration measured on the retarget lane's questions is no gate of the scope window
+        write_calibration(tree / "cal", "other", "web_verifier", "retarget-web")
+        assert (
+            go(
+                tree,
+                *importing[:-4],
+                "--calibration",
+                "other",
+                "--calibration-root",
+                str(tree / "cal"),
+            )
+            == 1
+        )
+        assert "not on the lane's own scope-window-web" in capsys.readouterr().err
+
+    def test_the_rest_of_the_population_is_exported_after_a_pilot_was_imported(
+        self, tree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        run = tree / "identity"
+        sites = [f"{i:08d}-0000-4000-8000-000000000000" for i in range(4)]
+        monkeypatch.setattr(
+            SJ, "questions",
+            lambda run_, root=None: [R.Question(s, {**TS.context(), "site_id": s}) for s in sites],
+        )  # fmt: skip
+        export = ["--lane", "scope-window", "export", "--stage", "scope-window-web"]
+        assert go(tree, *export, "--handoff", str(tree / "h1"), "--pilot", "2") == 0
+        pilot = json.loads(capsys.readouterr().out)
+        assert (pilot["round"], pilot["sites"]) == ("r1", 2)
+        out = R.stage_dir(run, SJ.web_spec())
+        assert go(tree, *export, "--handoff", str(tree / "h2")) == 1
+        assert "not imported" in capsys.readouterr().err
+        (out / R.ANSWERS_DIR).mkdir()
+        (out / R.ANSWERS_DIR / "r1.jsonl").write_text("", encoding="utf-8")
+        assert go(tree, *export, "--handoff", str(tree / "h2")) == 0
+        rest = json.loads(capsys.readouterr().out)
+        assert (rest["round"], rest["sites"]) == ("r2", 2)
+        asked = [s for r in R.load_rounds(out) for s in r.sites]
+        assert sorted(asked) == sites and len(set(asked)) == 4
+        assert go(tree, *export, "--handoff", str(tree / "h3")) == 1
+
     def test_a_stage_that_does_not_exist_is_refused(
         self, tree: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
@@ -324,7 +388,7 @@ class TestTheScopeLane:
         )
         assert [q.site_id for q in RUN._pick(many, args)] == ["s03", "s01"]
         listed.write_text("s99\n", encoding="utf-8")
-        with pytest.raises(RUN.UsageError, match="not in the population"):
+        with pytest.raises(RUN.UsageError, match="not in the population still to ask"):
             RUN._pick(many, args)
 
 
@@ -421,7 +485,7 @@ class TestTheRetargetLane:
         answer_all(Path(record.handoff), record, spec, texts)
         seed_pages(out, PAGES, CONTENT_TYPES)
         (out / R.TITLES_FILE).write_text(json.dumps({"titles": TR.TITLES}), encoding="utf-8")
-        seal(tree / "cal", role_id, spec.role)
+        seal(tree / "cal", role_id, spec.role, "retarget-web")
         capsys.readouterr()
         code = go(tree, "--lane", "retarget", "import", "--stage", stage, "--round", "r1",
                   "--calibration", role_id, "--calibration-root", str(tree / "cal"))  # fmt: skip
@@ -502,6 +566,16 @@ class TestTheRetargetLane:
         name_out = tree / "lanes" / "mechanical_names" / "retarget-name" / W
         assert "links-not-landed" in (name_out / "SKIPPED.jsonl").read_text("utf-8")
 
+        # a site a wave skipped is not selected again: the result lists it, with the wave and why
+        code, listed, _ = run_json(tree, capsys, "--lane", "retarget", "result")
+        assert code == 0 and listed["wave_skips"] == 1 and listed["owner_list"] == 1
+        (skip,) = common.read_jsonl(run / "retarget" / "WAVE_SKIPS.jsonl")
+        assert (skip["wave"], skip["site_id"], skip["reason"]) == (W, TR.CHANIA, "links-not-landed")
+        (owner,) = common.read_jsonl(run / "retarget" / "OWNER_LIST.jsonl")
+        assert (
+            owner["state"] == "skipped-in-wave" and f"wave {W}: links-not-landed" in owner["reason"]
+        )
+
         # the links landed: the name and its alias are planned
         prod.stage = "links"
         assert not (name_out / "PLAN.jsonl").exists(), "a plan that writes nothing leaves no plan"
@@ -514,39 +588,51 @@ class TestTheRetargetLane:
         # nothing has finished the chain yet: no hand-off
         code, _, err = run_json(tree, capsys, "--lane", "retarget", "handoffs", "--wave", W)
         assert code == 1 and "has finished links, name and alias" in err
-        for stage, stamp in (
-            ("links", f"{W}_d13-links-001"),
-            ("name", f"{W}_mechanical-retarget-name"),
-            ("alias", f"name-alias-{W}-001"),
-        ):
-            code, _, _ = run_json(
-                tree,
-                capsys,
-                "--lane",
-                "retarget",
-                "chain-done",
-                "--wave",
-                W,
-                "--stage-name",
-                stage,
-                "--stamp",
-                stamp,
-            )
-            assert code == 0
+
+        def chain_done(stage: str, stamp: str) -> tuple[int, str]:
+            code_, _, err_ = run_json(tree, capsys, "--lane", "retarget", "chain-done", "--wave", W,
+                                      "--stage-name", stage, "--stamp", stamp)  # fmt: skip
+            return code_, err_
+
+        # a stage is recorded against production, not on trust: before the link step, and for the
+        # name while only the links landed, the record is refused
+        prod.stage = "before"
+        code, err = chain_done("links", f"{W}_d13-links-001")
+        assert code == 1 and "links has not landed" in err
+        prod.stage = "links"
+        skips = run / "retarget" / "waves" / W / "LINKS_SKIPPED.jsonl"
+        kept = skips.read_text("utf-8")
+        skips.write_text(
+            json.dumps({"site_id": TR.CHANIA, "reason": "name-key-taken", "note": "n"}) + "\n",
+            encoding="utf-8",
+        )
+        code, err = chain_done("links", f"{W}_d13-links-001")
+        assert code == 1 and "a plan skipped it: name-key-taken" in err
+        skips.write_text(kept, encoding="utf-8")
+        assert chain_done("links", f"{W}_d13-links-001")[0] == 0
+        code, err = chain_done("name", f"{W}_mechanical-retarget-name")
+        assert code == 1 and "name has not landed" in err
+        prod.stage = "done"
+        assert chain_done("name", f"{W}_mechanical-retarget-name")[0] == 0
+        assert chain_done("alias", f"retarget-name-alias-{W}-001")[0] == 0
         code, ready, _ = run_json(
             tree, capsys, "--lane", "retarget", "chain-ready", "--stage-name", "point_type"
         )
         assert (code, ready) == (0, [TR.CHANIA])
 
-        prod.stage = "done"
         code, verified, _ = run_json(tree, capsys, "--lane", "retarget", "verify", "--wave", W)
         assert (code, verified["landed"], verified["deviations"]) == (0, 1, 0)
         prod.stage = "links"
         code, verified, _ = run_json(tree, capsys, "--lane", "retarget", "verify", "--wave", W)
         assert code == 1 and verified["deviations"] == 1
 
+        # a site that finished the chain but no longer reads back as landed is handed on to no lane
+        code, _, err = run_json(tree, capsys, "--lane", "retarget", "handoffs", "--wave", W)
+        assert code == 1 and "reads back as landed" in err
+        assert not (run / "retarget" / "waves" / W / RP.HANDOFF_FILES["point_type"]).exists()
+        prod.stage = "done"
         code, counts, _ = run_json(tree, capsys, "--lane", "retarget", "handoffs", "--wave", W)
-        assert code == 0 and counts == dict.fromkeys(RP.HANDOFF_FILES, 1)
+        assert code == 0 and counts == {**dict.fromkeys(RP.HANDOFF_FILES, 1), "withheld": 0}
         code, table, _ = run_json(tree, capsys, "--lane", "retarget", "chain-status")
         assert code == 0 and table[0]["next"] == "point_type"
         code, _, err = run_json(
@@ -607,6 +693,74 @@ class TestTheNamesLane:
         code, _, _ = run_json(tree, capsys, *export, "--handoff", str(tree / "h2"))
         assert code == 0 and seen["exclude"] == []
 
+    def test_the_rule_made_renames_leave_out_the_records_d13_has_not_left_alone_too(
+        self, tree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        from identity import common
+        from identity import names_judge as NJ
+
+        from tests.remediation import test_identity_b_names as TN
+
+        seen: dict[str, Any] = {}
+
+        def fake(
+            run_: Path, root: Path | None = None, exclude: Any = (), rule_made: bool = False
+        ) -> list[R.Question]:
+            seen["exclude"], seen["rule_made"] = sorted(exclude), rule_made
+            return [R.Question(TN.ALBANIANA, TN.rule_ctx())]
+
+        monkeypatch.setattr(NJ, "clean_questions", fake)
+        (tree / "identity" / "retarget").mkdir()
+        common.write_jsonl(
+            tree / "identity" / "retarget" / "RESULT.jsonl",
+            [{"site_id": "a", "state": "keep", "verdict": "KEEP"},
+             {"site_id": "b", "state": "confirmed", "verdict": "RETARGET"}],
+        )  # fmt: skip
+        code, out, _ = run_json(
+            tree, capsys, "--lane", "names", "export", "--stage", "name-clean-recheck",
+            "--handoff", str(tree / "h"), "--exclude-retarget",
+        )  # fmt: skip
+        assert code == 0 and out["sites"] == 1
+        assert seen == {"exclude": ["b"], "rule_made": True}
+
+    def test_a_spoken_name_is_not_made_for_a_site_whose_name_another_lane_still_changes(
+        self, tree: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from identity import common
+        from identity import names_judge as NJ
+
+        run = tree / "identity"
+        monkeypatch.setattr(NJ, "clean_questions", lambda *a, **k: [R.Question("rule", {})])
+        (run / "retarget").mkdir()
+        common.write_jsonl(
+            run / "retarget" / "RESULT.jsonl",
+            [{"site_id": "kept", "state": "keep", "verdict": "KEEP"},
+             {"site_id": "moved", "state": "confirmed", "verdict": "RETARGET"}],
+        )  # fmt: skip
+        common.write_jsonl(
+            run / NJ.TRIAGE_FILE, [{"id": i} for i in ("settled", "renamed", "rule", "moved")]
+        )
+        web = R.stage_dir(run, NJ.clean_spec())
+        R.write_jsonl(
+            web / R.DECISIONS_FILE,
+            [{"site_id": "settled", "status": R.DECIDED, "data": {"verdict": "KEEP"}}],
+        )
+        # a record D13 holds, a name defect no one settled and a rule-made rename are left out;
+        # a KEEP and a record D13 leaves alone are not
+        assert RUN.spoken_exclusions(run, None) == ["moved", "renamed", "rule"]
+
+    def test_the_spoken_names_to_write_leave_out_the_sites_another_lane_still_renames(
+        self, tree: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        from identity import names_judge as NJ
+
+        rule = [{"id": s, "name": "Tiverton, Devon", "spoken": "Tiverton", "source": "name", "steps": []}
+                for s in ("a", "b")]  # fmt: skip
+        monkeypatch.setattr(NJ, "rule_spoken", lambda run_: rule)
+        monkeypatch.setattr(RUN, "spoken_exclusions", lambda run_, root: ["a"])
+        code, got, _ = run_json(tree, capsys, "--lane", "names", "--kind", "spoken", "result")
+        assert code == 0 and got["to_write"] == 1 and got["left_out"] == 1
+
     def test_a_names_command_needs_its_kind(
         self, tree: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
@@ -642,3 +796,31 @@ def test_a_pilot_answered_twice_is_compared_through_the_command_line(
     )  # fmt: skip
     assert code == 0 and got["shared"] == 1 and got["agree"] == 0
     assert got["disagree"][0]["first"] == "OUT_OF_WINDOW"
+
+
+def test_every_documented_run_command_line_parses() -> None:
+    """The command lines of the docstrings of `run.py` and `calibration.py` are the operator's: a
+    stage option before the subcommand, an alternative or an optional part left undeclared, would
+    exit 2 on the day it is typed."""
+    import re
+    import shlex
+
+    from identity import calibration as CAL
+
+    placeholders = {"L": "retarget", "S": "retarget-web", "W": "2026-10-12", "N": "20"}
+    lines = [
+        raw.strip()
+        for doc in (RUN.__doc__, CAL.__doc__)
+        for raw in (doc or "").splitlines()
+        if raw.strip().startswith("$PY $I/run.py")
+    ]
+    assert len(lines) >= 20
+    for line in lines:
+        words = shlex.split(re.sub(r"\[[^\]]*\]", "", line.split("  #")[0]))[2:]
+        argv = [placeholders.get(w, w.split("|")[0]) for w in words]
+        argv = [
+            "x" if w.isupper() and w not in ("L", "S") and not w.startswith("-") else w
+            for w in argv
+        ]
+        args = RUN.build_parser().parse_args(argv)
+        assert args.command in argv, line

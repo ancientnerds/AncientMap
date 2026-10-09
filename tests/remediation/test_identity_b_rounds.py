@@ -24,10 +24,12 @@ import roles as RO  # noqa: E402
 from identity import rounds as R  # noqa: E402
 
 from tests.remediation.identity_b_fixtures import (  # noqa: E402
+    DECIDED_AT,
     NOW,
     FakeClient,
     answer_all,
     resolver_of,
+    write_calibration,
 )
 
 PAGE = "https://example.org/page"
@@ -82,8 +84,9 @@ def out(tmp_path: Path) -> Path:
 
 def run_import(out: Path, name: str = "r1") -> dict[str, Any]:
     return R.import_round(
-        out, SPEC, name, http=FakeClient, resolver=resolver_of({}), now=lambda: NOW, pace=0
-    )
+        out, SPEC, name, decided_at=DECIDED_AT, http=FakeClient, resolver=resolver_of({}),
+        now=lambda: NOW, pace=0,
+    )  # fmt: skip
 
 
 class TestTheExport:
@@ -225,10 +228,50 @@ class TestTheImport:
                 {A_ID: {"site_id": A_ID, "ok": False}, B_ID: {"site_id": B_ID, "ok": False}},
             )
             run_import(out, f"r{number}")
-        with pytest.raises(R.RoundError, match="3 rounds are out"):
+        with pytest.raises(R.RoundError, match="2 re-ask rounds are out"):
             R.reask_sites(out)
         with pytest.raises(R.RoundError, match="not the newest"):
             run_import(out, "r1")
+
+    def test_a_follow_on_round_asks_the_sites_never_asked_after_the_first_is_imported(
+        self, out: Path, tmp_path: Path
+    ) -> None:
+        a, b = questions()
+        yes = {A_ID: {"site_id": A_ID, "ok": True}, B_ID: {"site_id": B_ID, "ok": True}}
+        first = R.export_round(out, SPEC, tmp_path / "h1", [a], now=lambda: NOW)
+        with pytest.raises(R.RoundError, match="not imported"):
+            R.export_round(out, SPEC, tmp_path / "h2", [b], now=lambda: NOW)
+        answer_all(tmp_path / "h1", first, SPEC, yes)
+        run_import(out)
+        with pytest.raises(R.RoundError, match="only sites never asked: 1 were"):
+            R.export_round(out, SPEC, tmp_path / "h2", [a, b], now=lambda: NOW)
+        second = R.export_round(out, SPEC, tmp_path / "h2", [b], now=lambda: NOW)
+        assert second.name == "r2" and second.earlier == {} and second.sites == [B_ID]
+        answer_all(tmp_path / "h2", second, SPEC, yes)
+        run_import(out, "r2")
+        assert {d["site_id"] for d in R.load_decisions(out)} == {A_ID, B_ID}
+
+    def test_a_follow_on_round_does_not_use_up_a_held_site_s_two_re_asks(
+        self, out: Path, tmp_path: Path
+    ) -> None:
+        a, b = questions()
+        no = {A_ID: {"site_id": A_ID, "ok": False}, B_ID: {"site_id": B_ID, "ok": False}}
+        first = R.export_round(out, SPEC, tmp_path / "h1", [a], now=lambda: NOW)
+        answer_all(tmp_path / "h1", first, SPEC, no)
+        run_import(out)
+        follow = R.export_round(out, SPEC, tmp_path / "h2", [b], now=lambda: NOW)
+        answer_all(tmp_path / "h2", follow, SPEC, no)
+        run_import(out, "r2")
+        for number in (3, 4):
+            held = R.reask_sites(out)
+            assert set(held) == {A_ID, B_ID}
+            again = R.export_round(
+                out, SPEC, tmp_path / f"h{number}", questions(), earlier=held, now=lambda: NOW
+            )
+            answer_all(tmp_path / f"h{number}", again, SPEC, no)
+            run_import(out, f"r{number}")
+        with pytest.raises(R.RoundError, match="2 re-ask rounds are out"):
+            R.reask_sites(out)
 
     def test_a_re_ask_asks_exactly_the_held_sites(self, out: Path, tmp_path: Path) -> None:
         record = R.export_round(out, SPEC, tmp_path / "h1", questions(), now=lambda: NOW)
@@ -292,57 +335,92 @@ class TestTheRoleCheck:
 
 
 class TestTheCalibrationGate:
-    def seal(self, root: Path, calibration_id: str, role: str, **over: Any) -> None:
-        seals = root / R.THRESHOLDS_FILE
-        entry = {"role_sha256": RO.role_sha256(role), "calibration_id": calibration_id, **over}
-        seals.parent.mkdir(parents=True, exist_ok=True)
-        known = json.loads(seals.read_text("utf-8")) if seals.exists() else {}
-        seals.write_text(json.dumps({**known, calibration_id: entry}), encoding="utf-8")
+    STAGE = "toy-web"
 
-    def verdict(self, root: Path, calibration_id: str, **over: Any) -> None:
-        body = {
-            "calibration_id": calibration_id,
-            "role": "web_verifier",
-            "model": "claude-sonnet-5-5",
-            "passed": True,
-            "tier_move": None,
-        }
-        body.update(over)
-        path = root / R.VERDICTS_DIR / f"{calibration_id}.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(body), encoding="utf-8")
+    def calibrate(self, root: Path, calibration_id: str, role: str, **verdict: Any) -> None:
+        write_calibration(root, calibration_id, role, self.STAGE, **verdict)
+
+    def reseal(self, root: Path, calibration_id: str, **over: Any) -> None:
+        seals = root / R.THRESHOLDS_FILE
+        known = json.loads(seals.read_text("utf-8"))
+        known[calibration_id].update(over)
+        seals.write_text(json.dumps(known), encoding="utf-8")
+
+    def gate(self, root: Path, calibration_id: str, role: str = "web_verifier") -> dict[str, Any]:
+        return R.require_calibration(root, calibration_id, role, self.STAGE)
 
     def test_a_passed_sealed_verdict_of_the_role_opens_the_gate(self, tmp_path: Path) -> None:
-        self.seal(tmp_path, "c1", "web_verifier")
-        self.verdict(tmp_path, "c1")
-        assert R.require_calibration(tmp_path, "c1", "web_verifier")["passed"] is True
+        self.calibrate(tmp_path, "c1", "web_verifier")
+        assert self.gate(tmp_path, "c1")["passed"] is True
 
     def test_no_verdict_a_failed_verdict_and_another_role_close_it(self, tmp_path: Path) -> None:
         with pytest.raises(R.RoundError, match="has no verdict"):
-            R.require_calibration(tmp_path, "c1", "web_verifier")
-        self.seal(tmp_path, "c1", "web_verifier")
-        self.verdict(tmp_path, "c1", passed=False, tier_move={"to": "claude-opus-5-5"})
+            self.gate(tmp_path, "c1")
+        self.calibrate(tmp_path, "c1", "web_verifier", passed=False, tier_move={"to": "x"})
         with pytest.raises(R.RoundError, match="did not pass"):
-            R.require_calibration(tmp_path, "c1", "web_verifier")
-        self.verdict(tmp_path, "c2")
-        self.seal(tmp_path, "c2", "web_verifier")
+            self.gate(tmp_path, "c1")
+        self.calibrate(tmp_path, "c2", "web_verifier")
         with pytest.raises(R.RoundError, match="measured role web_verifier, not adversarial"):
-            R.require_calibration(tmp_path, "c2", "adversarial")
+            self.gate(tmp_path, "c2", "adversarial")
 
     def test_a_verdict_of_another_model_or_under_another_registry_entry_is_stale(
         self, tmp_path: Path
     ) -> None:
-        self.seal(tmp_path, "c3", "web_verifier")
-        self.verdict(tmp_path, "c3", model="claude-haiku-5-5")
+        self.calibrate(tmp_path, "c3", "web_verifier", model="claude-haiku-5-5")
         with pytest.raises(R.RoundError, match="calibrate again"):
-            R.require_calibration(tmp_path, "c3", "web_verifier")
-        self.seal(tmp_path, "c4", "web_verifier", role_sha256="0" * 64)
-        self.verdict(tmp_path, "c4")
+            self.gate(tmp_path, "c3")
+        self.calibrate(tmp_path, "c4", "web_verifier")
+        self.reseal(tmp_path, "c4", role_sha256="0" * 64)
         with pytest.raises(R.RoundError, match="sealed under another registry entry"):
-            R.require_calibration(tmp_path, "c4", "web_verifier")
-        self.verdict(tmp_path, "c5")
+            self.gate(tmp_path, "c4")
+        self.calibrate(tmp_path, "c5", "web_verifier")
+        (tmp_path / R.THRESHOLDS_FILE).write_text("{}", encoding="utf-8")
         with pytest.raises(R.RoundError, match="sealed under another registry entry"):
-            R.require_calibration(tmp_path, "c5", "web_verifier")
+            self.gate(tmp_path, "c5")
+
+    def test_a_calibration_of_another_lane_s_pool_does_not_open_the_gate(
+        self, tmp_path: Path
+    ) -> None:
+        write_calibration(tmp_path, "other", "web_verifier", "scope-window-web")
+        with pytest.raises(R.RoundError, match="not on the lane's own toy-web"):
+            self.gate(tmp_path, "other")
+
+    @pytest.mark.parametrize(
+        ("seal_over", "verdict_over", "match"),
+        [
+            ({"write_verdicts": ["RETARGET"]}, {}, "bar of 0 false writes"),
+            ({"write_verdicts": []}, {}, "bar of 0 false writes"),
+            ({"max_false_writes": 1}, {}, "bar of 0 false writes"),
+            ({}, {"false_writes": 2}, "counted 2 false write"),
+            ({}, {"false_writes": None}, "counted None false write"),
+        ],
+    )
+    def test_a_calibration_without_the_bar_of_no_false_write_does_not_open_the_gate(
+        self, tmp_path: Path, seal_over: dict[str, Any], verdict_over: dict[str, Any], match: str
+    ) -> None:
+        self.calibrate(tmp_path, "w", "web_verifier", **verdict_over)
+        self.reseal(tmp_path, "w", **seal_over)
+        with pytest.raises(R.RoundError, match=match):
+            self.gate(tmp_path, "w")
+
+    def test_an_answer_given_before_the_calibration_was_decided_is_not_imported(
+        self, out: Path, tmp_path: Path
+    ) -> None:
+        record = R.export_round(out, SPEC, tmp_path / "h1", questions(), now=lambda: NOW)
+        yes = {A_ID: {"site_id": A_ID, "ok": True}, B_ID: {"site_id": B_ID, "ok": True}}
+        answer_all(tmp_path / "h1", record, SPEC, yes)
+        with pytest.raises(R.RoundError, match="2 answer.s. were given before the calibration"):
+            R.import_round(
+                out, SPEC, "r1", decided_at="2026-10-09T02:00:01+00:00", http=FakeClient,
+                resolver=resolver_of({}), now=lambda: NOW, pace=0,
+            )  # fmt: skip
+        assert not (out / R.DECISIONS_FILE).exists()
+        # decided at the very second the answers were given: not before
+        R.import_round(
+            out, SPEC, "r1", decided_at=NOW, http=FakeClient, resolver=resolver_of({}),
+            now=lambda: NOW, pace=0,
+        )  # fmt: skip
+        assert (out / R.DECISIONS_FILE).exists()
 
 
 class TestTheEdges:
@@ -375,7 +453,7 @@ class TestTheEdges:
             )
             answer_all(tmp_path / f"h{number}", again, SPEC, no)
             run_import(out, f"r{number}")
-        with pytest.raises(R.RoundError, match="at most 3"):
+        with pytest.raises(R.RoundError, match="2 re-ask rounds are out"):
             R.export_round(out, SPEC, tmp_path / "h4", questions(), earlier=R.held_sites(out))
 
     def test_a_title_the_resolver_does_not_answer_stops_the_import(
@@ -394,6 +472,7 @@ class TestTheEdges:
                 out,
                 titled,
                 "r1",
+                decided_at=DECIDED_AT,
                 http=FakeClient,
                 resolver=lambda wanted, client: {},
                 now=lambda: NOW,

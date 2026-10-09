@@ -435,14 +435,16 @@ class TestTheNames:
         assert first["change_key"] == f"retarget-name-{WAVE}:{CHANIA}:name"
         md = (tmp_path / "name" / "PLAN.md").read_text("utf-8")
         assert "| `" + CHANIA + "` | Chania | Kydonia | `kydonia` |" in md
-        paths = NW.write_alias_chunk(plan, WAVE, tmp_path / "alias")
+        paths = NW.write_alias_chunk(plan, "retarget-name", WAVE, tmp_path / "alias")
         assert [p.name for p in paths] == ["chunk-001"]
         chunk = CW.check_delivered(paths[0])
-        assert chunk.run_stamp == f"name-alias-{WAVE}-001" and chunk.changes[0].row_key == "7"
+        assert (
+            chunk.run_stamp == f"retarget-name-alias-{WAVE}-001" and chunk.changes[0].row_key == "7"
+        )
 
     def test_no_alias_no_chunk_and_a_wave_is_at_most_a_hundred_sites(self, tmp_path: Path) -> None:
         plan = self.names(landed_row(), name_rows={CHANIA: [{**LABEL_ROW, "name_type": "alias"}]})
-        assert NW.write_alias_chunk(plan, WAVE, tmp_path) == []
+        assert NW.write_alias_chunk(plan, "retarget-name", WAVE, tmp_path) == []
         many = NW.NamePlan(plan.lane)
         for i in range(101):
             many.verdicts += [
@@ -464,7 +466,17 @@ class TestTheNames:
 
     def test_a_bad_wave_label_is_refused(self) -> None:
         with pytest.raises(ValueError, match="wave label"):
-            NW.alias_lane("2026-10")
+            NW.alias_lane("retarget-name", "2026-10")
+
+    def test_the_two_rename_lanes_of_one_date_label_journal_their_aliases_under_their_own_stamp(
+        self,
+    ) -> None:
+        retarget, clean = NW.alias_lane("retarget-name", WAVE), NW.alias_lane("name-clean", WAVE)
+        assert retarget.stamp == f"retarget-name-alias-{WAVE}"
+        assert clean.stamp == f"name-clean-alias-{WAVE}"
+        assert retarget.name != clean.name
+        with pytest.raises(ValueError, match="not a rename lane"):
+            NW.alias_lane("spoken", WAVE)
 
 
 # ------------------------------------------------------------------------------ the hand-offs
@@ -492,6 +504,9 @@ class TestTheHandoffs:
 
 
 # ------------------------------------------------------------------------------ the chain
+LANDED: dict[str, list[str]] = {"s1": [], "s2": []}
+
+
 class TestTheChain:
     @pytest.fixture
     def run(self, tmp_path: Path) -> Path:
@@ -505,10 +520,10 @@ class TestTheChain:
     ) -> None:
         assert RP.chain_ready(run, "links") == ["s1", "s2"]
         assert RP.chain_ready(run, "name") == []
-        RP.chain_done(run, WAVE, "links", "stamp-l", at="t1")
+        RP.chain_done(run, WAVE, "links", "stamp-l", unfinished=LANDED, at="t1")
         assert RP.chain_ready(run, "name") == ["s1", "s2"] and RP.chain_ready(run, "links") == []
-        RP.chain_done(run, WAVE, "name", "stamp-n", ["s1"], at="t2")
-        RP.chain_done(run, WAVE, "alias", "stamp-a", ["s1"], at="t3")
+        RP.chain_done(run, WAVE, "name", "stamp-n", ["s1"], unfinished=LANDED, at="t2")
+        RP.chain_done(run, WAVE, "alias", "stamp-a", ["s1"], unfinished=LANDED, at="t3")
         assert RP.chain_ready(run, "point_type") == ["s1"] and RP.chain_ready(run, "name") == ["s2"]
         assert RP.chain_ready(run, "alias") == []
         table = {r["site_id"]: r for r in RP.chain_table(run)}
@@ -535,26 +550,81 @@ class TestTheChain:
         self, run: Path
     ) -> None:
         with pytest.raises(RP.ChainError, match="s1: name waits for links"):
-            RP.chain_done(run, WAVE, "name", "x")
-        RP.chain_done(run, WAVE, "links", "x")
+            RP.chain_done(run, WAVE, "name", "x", unfinished=LANDED)
+        RP.chain_done(run, WAVE, "links", "x", unfinished=LANDED)
         with pytest.raises(RP.ChainError, match="recorded already"):
-            RP.chain_done(run, WAVE, "links", "x")
+            RP.chain_done(run, WAVE, "links", "x", unfinished=LANDED)
         with pytest.raises(RP.ChainError, match="not sites of wave"):
-            RP.chain_done(run, WAVE, "name", "x", ["s9"])
+            RP.chain_done(run, WAVE, "name", "x", ["s9"], unfinished=LANDED)
         with pytest.raises(RP.ChainError, match="not a stage of the chain"):
             RP.chain_done(run, WAVE, "paint", "x")
         with pytest.raises(RP.ChainError, match="run stamp that wrote it"):
-            RP.chain_done(run, WAVE, "name", " ")
+            RP.chain_done(run, WAVE, "name", " ", unfinished=LANDED)
         with pytest.raises(RP.ChainError, match="not a stage of the chain"):
             RP.chain_ready(run, "paint")
 
     def test_a_refused_record_writes_nothing_for_any_site(self, run: Path) -> None:
-        RP.chain_done(run, WAVE, "links", "x", ["s1"])
+        RP.chain_done(run, WAVE, "links", "x", ["s1"], unfinished=LANDED)
         with pytest.raises(RP.ChainError, match="s2: name waits for links"):
-            RP.chain_done(run, WAVE, "name", "x")
+            RP.chain_done(run, WAVE, "name", "x", unfinished=LANDED)
         assert RP.chain_state(run) == {
             "s1": {"links": {"stamp": "x", "at": RP.chain_state(run)["s1"]["links"]["at"]}}
         }
+
+    def test_links_name_and_alias_are_recorded_only_against_a_read_back_of_production(
+        self, run: Path
+    ) -> None:
+        for stage in RP.READ_BACK_STAGES:
+            with pytest.raises(RP.ChainError, match="against a read-back of production"):
+                RP.chain_done(run, WAVE, stage, "x")
+        assert RP.chain_state(run) == {}
+
+    def test_a_site_that_has_not_landed_is_not_recorded_done_and_nothing_is_written(
+        self, run: Path
+    ) -> None:
+        with pytest.raises(RP.ChainError, match="s2: links has not landed: a plan skipped it"):
+            RP.chain_done(
+                run, WAVE, "links", "x", unfinished={"s1": [], "s2": ["a plan skipped it: gone"]}
+            )
+        with pytest.raises(RP.ChainError, match="s2: links has not landed: it was not read back"):
+            RP.chain_done(run, WAVE, "links", "x", unfinished={"s1": []})
+        assert RP.chain_state(run) == {}
+        RP.chain_done(run, WAVE, "links", "x", ["s1"], unfinished={"s1": []})
+        assert RP.chain_ready(run, "name") == ["s1"]
+
+
+class TestWhatKeepsAStageFromHavingLanded:
+    def unfinished(self, stage: str, row: dict[str, Any] | None, **over: Any):
+        rows = over.pop("rows", None)
+        name_rows = {CHANIA: rows if rows is not None else [
+            {"id": 7, "site_id": CHANIA, "name": "Chania", "name_normalized": "chania", "name_type": "alias"}]}  # fmt: skip
+        return RP.unfinished(
+            stage,
+            DECISIONS,
+            ASKED,
+            live(*([row] if row else []), keys={"Kydonia": "kydonia"}, name_rows=name_rows),
+            over.get("skipped", {}),
+        )[CHANIA]
+
+    def test_a_site_a_plan_skipped_or_that_is_gone_has_not_landed(self) -> None:
+        row = landed_row(name="Kydonia", name_normalized="kydonia")
+        assert self.unfinished("links", row, skipped={CHANIA: "links-not-landed: waits"}) == [
+            "a plan skipped it: links-not-landed: waits"
+        ]
+        assert self.unfinished("alias", None) == ["the row is gone"]
+
+    def test_each_stage_reads_back_itself_and_the_stages_before_it_only(self) -> None:
+        links_only = landed_row()  # links landed, name and alias not yet
+        assert self.unfinished("links", links_only) == []
+        assert [d.split(" is ")[0] for d in self.unfinished("name", links_only)] == ["name"]
+        assert self.unfinished("name", landed_row(name="Kydonia", name_normalized="kydonia")) == []
+        old_label = [{"id": 7, "site_id": CHANIA, "name": "Chania", "name_normalized": "chania", "name_type": "label"}]  # fmt: skip
+        named = landed_row(name="Kydonia", name_normalized="kydonia")
+        assert self.unfinished("name", named, rows=old_label) == []
+        assert "not searchable" in self.unfinished("alias", named, rows=old_label)[0]
+        assert self.unfinished("alias", named) == []
+        stale = landed_row(source_url=WP + "Chania", name="Kydonia", name_normalized="kydonia")
+        assert "source_url" in self.unfinished("alias", stale)[0]
 
 
 class TestTheReadBack:

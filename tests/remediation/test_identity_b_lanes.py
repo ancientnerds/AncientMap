@@ -89,6 +89,8 @@ class TestTheRegistry:
             "name-clean-2026-10",
             "spoken-2026-10-12bb",
             "name-alias-2026-10-12",
+            "retarget-name-alias-2026-10-12",
+            "name-clean-alias-2026-10-12",
             "retarget-name",
         ],
     )
@@ -311,10 +313,10 @@ class TestTheAliasChunk:
     def test_the_chunk_renders_with_the_name_row_guard_and_no_delete(self) -> None:
         from identity import name_write as NW
 
-        chunk = CW.chunk_changes(NW.alias_lane("2026-10-12"), [self.change()])[0]
+        chunk = CW.chunk_changes(NW.alias_lane("name-clean", "2026-10-12"), [self.change()])[0]
         sql = CW.render_statement(chunk)
         CW.lint_statement(sql)
         assert "guard 2b" in sql and "planned name row(s) do not belong to the site" in sql
-        assert "name-alias-2026-10-12-001" in sql and "'unified_site_names'" in sql
+        assert "name-clean-alias-2026-10-12-001" in sql and "'unified_site_names'" in sql
         assert "guard 2c" not in sql, "no match key is written"
         CW.lint_statement(CW.render_statement(chunk, rollback=True))

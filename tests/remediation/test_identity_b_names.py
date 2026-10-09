@@ -238,6 +238,23 @@ class TestTheCleanGates:
             and "is no English label or alias of the record's item" in got.reason
         )
 
+    def test_the_case_of_the_new_name_counts_like_the_rest_of_its_spelling(
+        self, library: Q.Library
+    ) -> None:
+        # the written value is the model's own string: a form in other case than the quote holds,
+        # or than any attested form, is not the attested one
+        with pytest.raises(R.AnswerError, match="quotes a page with the new name"):
+            parse(clean(new_name="MENGA DOLMEN"))
+        store(library.pages, WP + "Menga_Dolmen", html(DOLMEN_TEXT, "menga dolmen in lower case"))
+        low = clean(
+            new_name="menga dolmen", quotes=[q(WP + "Menga_Dolmen", "menga dolmen in lower case")]
+        )
+        got = decide(low, Q.Library(REPO, library.pages))
+        assert (
+            got.status == R.HELD
+            and "is no English label or alias of the record's item" in got.reason
+        )
+
     def test_a_quote_the_page_does_not_hold_holds_the_site(self, library: Q.Library) -> None:
         got = decide(clean(quotes=[q(WP + "Menga_Dolmen", "Menga Dolmen is in Peru")]), library)
         assert got.status == R.HELD and got.reason.startswith("quotes: a quote does not count")
@@ -323,6 +340,9 @@ class TestTheRecheck:
         elsewhere = {**good, "quotes": [q(WP + "Menga_Dolmen", "a megalithic burial monument")]}
         with pytest.raises(R.AnswerError, match="holds the new name"):
             NJ.parse_recheck(json.dumps(elsewhere), ctx)
+        shouted = {**good, "quotes": [q(WP + "Menga_Dolmen", "MENGA DOLMEN")]}
+        with pytest.raises(R.AnswerError, match="holds the new name"):
+            NJ.parse_recheck(json.dumps(shouted), {**ctx, "proposal": {"new_name": "Menga dolmen"}})
         reject = {**good, "verdict": "REJECT", "quotes": []}
         assert NJ.parse_recheck(json.dumps(reject), ctx).verdict == "REJECT"
         with pytest.raises(R.AnswerError, match="not CONFIRM or REJECT"):
@@ -543,6 +563,7 @@ class TestTheSpokenQuestion:
         )
         (got,) = NJ.spoken_questions(tmp_path)
         assert got.site_id == MENHIR
+        assert NJ.spoken_questions(tmp_path, exclude=[MENHIR]) == []
         assert got.context["homonyms"] == [
             {"name": "Menhir du Camp de César, Var", "country": "Greece"}
         ]

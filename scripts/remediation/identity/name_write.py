@@ -9,7 +9,7 @@ the English name) end in the same two writes, both through the shared writers an
   external ids the new name is attested by as the premise, and the lane's write invariant refusing a
   site whose key is not its name's key;
 * **the old name as an alias** - one chunk of the shared writer (`gallery_audit/chunk_writer.py`,
-  lane `name-alias-<wave>`): the `unified_site_names` row that holds the old name turns from
+  lane `<kind>-alias-<wave>`, one per rename lane): the `unified_site_names` row that holds the old name turns from
   `label` into `alias`, the only transition that writer allows for `name_type`. The search reads
   `name_type <> 'label'` (`api/routes/sites.py`), so a renamed site stays findable under its old
   name; Lyra's boot adds the new name as a `label` row. A site whose old name is already an alias
@@ -56,14 +56,21 @@ def name_rows_sql(site_ids: Sequence[str]) -> str:
     )
 
 
-def alias_lane(wave: str) -> CW.Lane:
-    """The old names of one wave: their `label` rows turned into `alias` rows by the chunk writer."""
+RENAME_KINDS = ("retarget-name", "name-clean")
+
+
+def alias_lane(kind: str, wave: str) -> CW.Lane:
+    """The old names of one rename lane's wave: their `label` rows turned into `alias` rows by the
+    chunk writer. The stamp carries the lane (`retarget-name-alias-<wave>`, `name-clean-alias-<wave>`):
+    both lanes may use the same date label, and a journal stamp is written once."""
+    if kind not in RENAME_KINDS:
+        raise ValueError(f"{kind!r} is not a rename lane: {', '.join(RENAME_KINDS)}")
     if re.fullmatch(WAVE, wave) is None:
         raise ValueError(f"{wave!r} is not a wave label like 2026-10-12 or 2026-10-12b")
     return CW.Lane(
-        name=f"name-alias-{wave}",
+        name=f"{kind}-alias-{wave}",
         test_id="D23/name-alias",
-        stamp=f"name-alias-{wave}",
+        stamp=f"{kind}-alias-{wave}",
         confidence="authoritative",
         label="D23 name alias",
     )
@@ -211,11 +218,12 @@ def write_name_plan(plan: NamePlan, built_at: str, out: Path) -> MP.Plan:
     return mech
 
 
-def write_alias_chunk(plan: NamePlan, wave: str, out: Path) -> list[Path]:
-    """The wave's alias chunk (one chunk: a wave is at most 100 sites), or nothing."""
+def write_alias_chunk(plan: NamePlan, kind: str, wave: str, out: Path) -> list[Path]:
+    """The wave's alias chunk of the rename lane `kind` (one chunk: a wave is at most 100 sites), or
+    nothing."""
     if not plan.aliases:
         return []
-    chunks = CW.chunk_changes(alias_lane(wave), plan.aliases)
+    chunks = CW.chunk_changes(alias_lane(kind, wave), plan.aliases)
     return CW.emit_chunks(out, chunks)
 
 

@@ -450,6 +450,23 @@ class TestTheMachineGates:
         got = decide(data, library2)
         assert got.status == R.HELD and "is no English label or alias of Q200" in got.reason
 
+    def test_the_case_of_the_name_counts_like_the_rest_of_its_spelling(
+        self, library: Q.Library
+    ) -> None:
+        # the written value is the model's own string: an all-caps or lower-case form that the
+        # quote does not hold, or that nothing attests, is not the attested one
+        shouted = target(name={"value": "KYDONIA", "quotes": [q(WP + "Kydonia", KYDONIA_TEXT)]})
+        with pytest.raises(R.AnswerError, match="holds the name word for word"):
+            parse(answer(target=shouted))
+        store(
+            library.pages, WP + "Kydonia", html(KYDONIA_TEXT, COORD_TEXT, "kydonia, in lower case")
+        )
+        low = target(
+            name={"value": "kydonia", "quotes": [q(WP + "Kydonia", "kydonia, in lower case")]}
+        )
+        got = decide(answer(target=low), Q.Library(REPO, library.pages))
+        assert got.status == R.HELD and "is no English label or alias of Q200" in got.reason
+
     def test_an_alias_of_the_item_or_the_article_s_title_is_an_attested_name(
         self, library: Q.Library
     ) -> None:

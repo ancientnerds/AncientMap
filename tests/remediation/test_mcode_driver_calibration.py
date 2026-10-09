@@ -658,3 +658,59 @@ def test_an_unknown_lane_type_is_refused(tmp_path: Path) -> None:
                 "--prepare-only",
             ]
         )
+
+
+class TestAOneVerdictAnswerIsMeasuredOnTheValueItWrites:
+    """The identity questions (D13, D20, D23): the verdict is a unit, and so is every value the
+    answer asks to be written. A role that picks the right verdict and another value has not agreed."""
+
+    @staticmethod
+    def answer(verdict: str, **extra: Any) -> str:
+        return json.dumps({"site_id": SITE, "verdict": verdict, "why": "w", **extra})
+
+    @staticmethod
+    def target(qid: str) -> dict[str, Any]:
+        return {"qid": {"value": qid, "quotes": []}, "name": {"value": "n", "quotes": []}}
+
+    def test_each_written_value_is_a_unit_next_to_the_verdict(self) -> None:
+        assert D._verdicts(self.answer("KEEP")) == (("verdict", "KEEP"),)
+        assert D._verdicts(self.answer("RETARGET", target=self.target("Q200"))) == (
+            ("verdict", "RETARGET"),
+            ("target.qid", "Q200"),
+        )
+        assert D._verdicts(self.answer("RENAME", new_name="Kydonia", attested_as="label")) == (
+            ("verdict", "RENAME"),
+            ("new_name", "Kydonia"),
+        )
+        assert D._verdicts(self.answer("PERIOD_WRONG", period_start=-500, found_start=-300)) == (
+            ("verdict", "PERIOD_WRONG"),
+            ("period_start", "-500"),
+            ("found_start", "-300"),
+        )
+        assert D._verdicts(self.answer("SPEAK", spoken="Kydonia")) == (
+            ("verdict", "SPEAK"),
+            ("spoken", "Kydonia"),
+        )
+        assert D._verdicts(self.answer("MERGE", merge_with="x")) == (
+            ("verdict", "MERGE"),
+            ("merge_with", "x"),
+        )
+
+    @pytest.mark.parametrize(
+        ("recorded", "fresh"),
+        [
+            (("RETARGET", {"target": {"qid": {"value": "Q200"}}}), ("RETARGET", {"target": {"qid": {"value": "Q300"}}})),
+            (("RENAME", {"new_name": "Kydonia"}), ("RENAME", {"new_name": "Cydonia"})),
+            (("PERIOD_WRONG", {"period_start": -500}), ("PERIOD_WRONG", {"period_start": -400})),
+            (("SPEAK", {"spoken": "Kydonia"}), ("SPEAK", {"spoken": "Chania"})),
+        ],
+    )  # fmt: skip
+    def test_the_right_verdict_with_another_value_is_a_disagreement(
+        self, recorded: tuple[str, dict], fresh: tuple[str, dict]
+    ) -> None:
+        got = D.compare_answers(
+            "x", [SITE], {SITE: self.answer(recorded[0], **recorded[1])},
+            {SITE: self.answer(fresh[0], **fresh[1])},
+        )  # fmt: skip
+        assert (got.units, got.agreed) == (2, 1)
+        assert got.disagreements[0].unit != "verdict"

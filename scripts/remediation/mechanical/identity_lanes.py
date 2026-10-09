@@ -13,7 +13,7 @@ label like `2026-10-12` or `2026-10-12b`; a stamp is applied once):
   transaction, the key computed by Postgres from the new name (`name-l5`'s `NAME_CELLS` and write
   invariant). Both rest on the external ids the new name is attested by: a retargeted site's name is
   planned after its link step landed, so the premise makes the order a guard. The old name becomes
-  an alias in `name-alias-<wave>`, a chunk of the shared writer (`identity.name_write`);
+  an alias in `<kind>-alias-<wave>`, a chunk of the shared writer (`identity.name_write`);
 * `spoken-<wave>` (D23) - `unified_sites.spoken_name` (migration 0029), filled where it is NULL, on
   the premise of the name it was derived from. A spoken name is never blank and never longer than
   `SPOKEN_MAX_CHARS`.

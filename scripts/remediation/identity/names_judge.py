@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import sys
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -308,10 +308,6 @@ class Clean:
     quotes: tuple[dict[str, str], ...]
 
 
-def _normal(text: str) -> str:
-    return Q.normalise(text).casefold()
-
-
 def parse_clean(text: str, ctx: Mapping[str, Any]) -> Clean:
     data = A.load_object(text, CLEAN_KEYS)
     if data["site_id"] != ctx["site_id"]:
@@ -331,7 +327,7 @@ def parse_clean(text: str, ctx: Mapping[str, Any]) -> Clean:
         raise AnswerError("new_name is the stored name - that is KEEP")
     if attested not in ATTESTED_AS:
         raise AnswerError(f"attested_as {attested!r} is not one of {', '.join(ATTESTED_AS)}")
-    if not any(_normal(new) in _normal(q["quote"]) for q in quotes):
+    if not any(Q.normalise(new) in Q.normalise(q["quote"]) for q in quotes):
         raise AnswerError("a RENAME quotes a page with the new name in the quote")
     return Clean(ctx["site_id"], RENAME, new, attested, why, quotes)
 
@@ -386,7 +382,7 @@ def decide_clean(answer: Clean, ctx: Mapping[str, Any], env: Env) -> Outcome:
         return Outcome(
             HELD, "name: the record carries no item and no article - nothing attests a name", data
         )
-    if _normal(str(answer.new_name)) not in {_normal(n) for n in names}:
+    if Q.normalise(str(answer.new_name)) not in {Q.normalise(n) for n in names}:
         shown = ", ".join(repr(n) for n in sorted(names)[:8])
         return Outcome(
             HELD,
@@ -499,7 +495,7 @@ def parse_recheck(text: str, ctx: Mapping[str, Any]) -> Review:
     why = A.text_of(data["why"], "why", max_chars=600)
     quotes = A.quotes_of(data["quotes"], "quotes", minimum=1 if data["verdict"] == CONFIRM else 0)
     if data["verdict"] == CONFIRM and not any(
-        _normal(ctx["proposal"]["new_name"]) in _normal(q["quote"]) for q in quotes
+        Q.normalise(ctx["proposal"]["new_name"]) in Q.normalise(q["quote"]) for q in quotes
     ):
         raise AnswerError("a CONFIRM quotes a page that holds the new name")
     return Review(ctx["site_id"], data["verdict"], why, quotes)
@@ -727,15 +723,19 @@ def rule_spoken(run: Path) -> list[dict[str, Any]]:
     ]
 
 
-def spoken_questions(run: Path, *, root: Path | None = None) -> list[Question]:
-    """The sites the rule could not make a spoken name for, that have a description."""
+def spoken_questions(
+    run: Path, *, root: Path | None = None, exclude: Collection[str] = ()
+) -> list[Question]:
+    """The sites the rule could not make a spoken name for, that have a description, except
+    `exclude` (the sites whose name another lane still changes)."""
     exported, by_id, _ext, cache = _load(run, root)
+    skip = set(exclude)
     cleaned: dict[str, list[Mapping[str, Any]]] = {}
     for row in exported.shown:
         cleaned.setdefault(names_triage.cleaned_name(row["name"])[0].casefold(), []).append(row)
     out = []
     for r in common.read_jsonl(run / SPOKEN_FILE):
-        if not r["needs_model"] or not r["has_description"]:
+        if not r["needs_model"] or not r["has_description"] or r["id"] in skip:
             continue
         key = names_triage.cleaned_name(r["name"])[0].casefold()
         homonyms = [

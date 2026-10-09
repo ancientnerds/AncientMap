@@ -186,3 +186,35 @@ class TestTheReadOnlyReader:
     ) -> None:
         (sql,) = self.sent(monkeypatch)
         assert sql == "SELECT row_to_json(t) FROM (SELECT 1 AS a) t"
+
+    def test_a_skip_of_any_wave_is_listed_with_its_wave_and_why_unless_nothing_is_left_to_write(
+        self, tmp_path: Path
+    ) -> None:
+        lane = tmp_path / "lane"
+        waves.select_wave(lane, "w1", {"a", "b", "c", "d"}, limit=3, built_at="t")
+        waves.select_wave(lane, "w2", {"a", "b", "c", "d"}, limit=3, built_at="t")
+
+        def row(site: str, reason: str) -> str:
+            return (
+                json.dumps({"site_id": site, "name": f"N{site}", "reason": reason, "note": "n"})
+                + "\n"
+            )
+
+        skips = {
+            "w1": [tmp_path / "w1-links.jsonl", tmp_path / "w1-names.jsonl"],
+            "w2": [tmp_path / "w2-names.jsonl"],
+        }
+        skips["w1"][0].write_text(
+            row("a", "changed-since-the-question") + row("b", "name-unchanged"), "utf-8"
+        )
+        skips["w1"][1].write_text(
+            row("a", "links-not-landed") + row("c", "name-key-taken"), "utf-8"
+        )
+        skips["w2"][0].write_text(row("d", "already-set") + row("d", "gone"), "utf-8")
+        got = waves.wave_skips(lane, lambda wave: skips[wave] + [tmp_path / "missing.jsonl"])
+        assert [(r["wave"], r["site_id"], r["reason"]) for r in got] == [
+            ("w1", "a", "changed-since-the-question"),
+            ("w1", "c", "name-key-taken"),
+            ("w2", "d", "gone"),
+        ]
+        assert set(got[0]) == {"wave", "site_id", "name", "reason", "note"}

@@ -20,17 +20,22 @@ So a pool here is built in two steps, and the gold is always a real model's:
 
 Then the role under test is sealed against the pool, re-answers a copy and is compared:
 
-    PY=./.venv/Scripts/python.exe; C=scripts/remediation/identity/calibration.py
-    $PY $C export  --lane retarget --pool DIR --handoff DIR-h [--seed 20261009]
-    $PY scripts/remediation/identity/run.py --lane retarget --stage retarget-web --stage-dir DIR \\
-        --as-role pilot_judge brief --round r1 --batch-id r1-b01          # the labelling agents
-    $PY $C status  --pool DIR                                    # 0 unanswered, or not fit to seal
-    $PY scripts/remediation/calibrate_claude.py seal --id ID --role web_verifier \\
-        --handoff DIR-h --batches r1-b01 ... --threshold 0.9
-    $PY $C prepare --id ID --pool DIR                            # the copy the role re-answers
+    PY=./.venv/Scripts/python.exe; C=scripts/remediation/identity/calibration.py; I=scripts/remediation/identity
+    CC=scripts/remediation/calibrate_claude.py
+    $PY $C export --lane retarget --pool DIR --handoff DIR-h [--seed 20261009]
+    $PY $I/run.py --lane retarget brief --stage retarget-web --stage-dir DIR --as-role pilot_judge --round r1 --batch-id r1-b01
+    $PY $C status --pool DIR                       # 0 unanswered, or not fit to seal
+    $PY $CC seal --id ID --role web_verifier --handoff DIR-h --batches r1-b01 ... --threshold 0.9 --write-verdicts NOT_A_SITE OUT_OF_WINDOW RETARGET RETIRE --max-false-writes 0
+    $PY $C prepare --id ID --pool DIR              # the copy the role re-answers
     ...                                   # agents run the brief printed for <root>/ID-run
-    $PY scripts/remediation/calibrate_claude.py compare --id ID
-    $PY scripts/remediation/calibrate_claude.py verdict --id ID --false-sources N
+    $PY $CC compare --id ID
+    $PY $CC verdict --id ID --false-sources N
+
+The comparison counts the verdict and every value it writes (the item of a re-target, the year of a
+`PERIOD_WRONG`, a new name, a spoken name) as units, and the seal's write verdicts
+(`rounds.WRITE_VERDICTS`) with `--max-false-writes 0` fail the verdict on any answer that writes
+what the pool does not support. The calibration of a stage is the one made on its own lane's pool:
+`run.py import` refuses another lane's calibration and any answer given before the verdict.
 """
 
 from __future__ import annotations

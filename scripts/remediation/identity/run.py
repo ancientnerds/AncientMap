@@ -9,19 +9,29 @@ probe-guards, apply, read-back, rehearse-rollback.
 
     PY=./.venv/Scripts/python.exe; I=scripts/remediation/identity; H=scripts/remediation/opus_handoff.py
 
+`--lane` (and `--kind` of lane names) come before the subcommand; `--stage`, `--stage-dir`,
+`--as-role` and the other options belong to the subcommand and come after it
+(`tests/remediation/test_identity_b_run.py` parses every command line below).
+
     # a question stage (--lane retarget --stage retarget-web | retarget-recheck,
     #                   --lane scope-window --stage scope-window-web | scope-window-recheck,
     #                   --lane names --stage name-clean-web | name-clean-recheck | spoken-model)
-    $PY $I/run.py --lane L --stage S export --handoff DIR [--pilot N | --sites-file F]
-    $PY $I/run.py --lane L --stage S brief --round r1 --batch-id r1-b01       # the agent's brief
-    $PY $I/run.py --lane L --stage S check-answer --round r1 --batch-id B --label SITE --text-file F
+    $PY $I/run.py --lane L export --stage S --handoff DIR [--pilot N | --sites-file F]
+    $PY $I/run.py --lane L brief --stage S --round r1 --batch-id r1-b01       # the agent's brief
+    $PY $I/run.py --lane L check-answer --stage S --round r1 --batch-id B --label SITE --text-file F
     $PY $H validate --dir DIR                        # every question answered, in shape, by the role
-    $PY $I/run.py --lane L --stage S import --round r1 --calibration ID       # needs a passed verdict
-    $PY $I/run.py --lane L --stage S export-reask --handoff DIR2              # the held sites, r2/r3
-    $PY $I/run.py --lane L --stage S status
+    $PY $I/run.py --lane L import --stage S --round r1 --calibration ID       # needs a passed verdict
+    $PY $I/run.py --lane L export-reask --stage S --handoff DIR2              # the held sites, r2/r3
+    $PY $I/run.py --lane L status --stage S
 
-    # the result and the lists the other lanes read
-    $PY $I/run.py --lane retarget result            # RESULT.jsonl, RETIRE_LIST, MERGE_LIST, OWNER_LIST
+    # a pilot is a first round; once it is imported, `export` again asks the sites never asked (a
+    # follow-on round); a held site is asked again at most twice (`export-reask`)
+    # names: pass --exclude-retarget to both name-clean stages (D13 first: `--lane retarget result`)
+    $PY $I/run.py --lane names export --stage name-clean-web --handoff DIR --exclude-retarget
+    $PY $I/run.py --lane names export --stage name-clean-recheck --handoff DIR --exclude-retarget
+
+    # the result and the lists the other lanes read; every wave's skips are in WAVE_SKIPS.jsonl
+    $PY $I/run.py --lane retarget result            # RESULT, RETIRE_LIST, MERGE_LIST, OWNER_LIST
     $PY $I/run.py --lane scope-window result
     $PY $I/run.py --lane names --kind clean result
 
@@ -33,10 +43,11 @@ probe-guards, apply, read-back, rehearse-rollback.
     $PY scripts/remediation/mechanical/apply.py --lane retarget-name-W --emit ...   # the name lane
     $PY scripts/remediation/gallery_audit/chunk_writer.py DIR/alias/chunk-001 --check ...  # the alias
     $PY $I/run.py --lane retarget verify --wave W            # read-only: plan = data, 0 deviations
-    $PY $I/run.py --lane retarget chain-done --wave W --stage links --stamp STAMP
-    $PY $I/run.py --lane retarget handoffs --wave W          # the lists for wd5, W/WN, images, card
+    # a stage is recorded done only when production reads back as landed for it (never a skipped site)
+    $PY $I/run.py --lane retarget chain-done --wave W --stage-name links --stamp STAMP [--sites ID ...]
+    $PY $I/run.py --lane retarget handoffs --wave W          # the landed sites, for wd5, W/WN, images, card
     $PY $I/run.py --lane scope-window wave|plan|verify --wave W       # apply.py --lane scope-window-W
-    $PY $I/run.py --lane names --kind clean|spoken wave|plan|verify --wave W
+    $PY $I/run.py --lane names --kind clean wave|plan|verify --wave W
 """
 
 from __future__ import annotations
@@ -67,7 +78,10 @@ from mechanical import plan as MP  # noqa: E402
 from mechanical.identity_lanes import WAVE, name_lane, spoken_lane  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
-from identity import (  # noqa: E402  # noqa: E402
+from identity import (  # noqa: E402
+    calibration as CAL,
+)
+from identity import (
     common,
     export,
     name_write,
@@ -139,17 +153,21 @@ def stage_def(args: argparse.Namespace, run: Path) -> StageDef:
         )
     if (lane, stage) == (names_judge.LANE, names_judge.CLEAN_RECHECK):
         web = R.stage_dir(run, names_judge.clean_spec())
+        skip = retarget_exclusions(run) if getattr(args, "exclude_retarget", False) else ()
         return StageDef(
             names_judge.recheck_spec(),
             lambda: names_judge.recheck_questions(
                 _asked(web),
                 R.decisions_by_site(web),
-                names_judge.clean_questions(run, root=root, rule_made=True),
+                names_judge.clean_questions(run, root=root, exclude=skip, rule_made=True),
             ),
         )
     if (lane, stage) == (names_judge.LANE, names_judge.SPOKEN):
         return StageDef(
-            names_judge.spoken_spec(), lambda: names_judge.spoken_questions(run, root=root)
+            names_judge.spoken_spec(),
+            lambda: names_judge.spoken_questions(
+                run, root=root, exclude=spoken_exclusions(run, root)
+            ),
         )
     raise UsageError(f"no stage {stage!r} in lane {lane!r}")
 
@@ -161,6 +179,25 @@ def retarget_exclusions(run: Path) -> list[str]:
     if not path.exists():
         raise UsageError(f"{path} does not exist: run `--lane retarget result` first")
     return [r["site_id"] for r in common.read_jsonl(path) if r["state"] != retarget.FINAL_KEEP]
+
+
+def spoken_exclusions(run: Path, root: Path | None) -> list[str]:
+    """The sites whose name another lane still changes, so a spoken name made from the stored name
+    would go stale: a record D13 re-targets, retires or merges (or has not settled), and a record
+    with a D23 name defect whose rename is not settled as a KEEP or a rejection. Their spoken names
+    are derived again from a fresh discovery once the name has landed."""
+    web = R.decisions_by_site(R.stage_dir(run, names_judge.clean_spec()))
+    second = R.decisions_by_site(R.stage_dir(run, names_judge.recheck_spec()))
+    rule_sites = sorted(
+        q.site_id for q in names_judge.clean_questions(run, root=root, rule_made=True)
+    )
+    settled = {
+        r["site_id"]
+        for r in names_judge.final_state(web, second, rule_sites)
+        if r["state"] in ("keep", "rejected")
+    }
+    defective = {t["id"] for t in common.read_jsonl(run / names_judge.TRIAGE_FILE)}
+    return sorted({*retarget_exclusions(run), *(defective - settled)})
 
 
 def _asked(stage_dir: Path) -> list[Question]:
@@ -181,7 +218,8 @@ def _pick(questions: list[Question], args: argparse.Namespace) -> list[Question]
         unknown = [s for s in wanted if s not in known]
         if unknown:
             raise UsageError(
-                f"{len(unknown)} site(s) of {args.sites_file} are not in the population: {unknown[:3]}"
+                f"{len(unknown)} site(s) of {args.sites_file} are not in the population still to "
+                f"ask: {unknown[:3]}"
             )
         return [known[s] for s in wanted]
     if args.pilot:
@@ -200,11 +238,10 @@ def cmd_stage(args: argparse.Namespace, run: Path) -> int:
     out = args.stage_dir or R.stage_dir(run, spec)
     command = args.command
     if command == "export":
-        if R.load_rounds(out):
-            raise UsageError("round 1 is exported already - re-ask with export-reask")
-        record = R.export_round(
-            out, spec, Path(args.handoff).resolve(), _pick(definition.population(), args)
-        )
+        # a first round (a pilot, or all), then follow-on rounds for the sites never asked
+        asked = {q.site_id for q in _asked(out)}
+        todo = [q for q in definition.population() if q.site_id not in asked]
+        record = R.export_round(out, spec, Path(args.handoff).resolve(), _pick(todo, args))
     elif command == "export-reask":
         held = R.reask_sites(out)
         stored = R.load_contexts(out)
@@ -224,8 +261,10 @@ def cmd_stage(args: argparse.Namespace, run: Path) -> int:
         _print({"ok": problem is None, "problem": problem})
         return 0 if problem is None else 1
     elif command == "import":
-        verdict = R.require_calibration(Path(args.calibration_root), args.calibration, spec.role)
-        summary = R.import_round(out, spec, args.round)
+        verdict = R.require_calibration(
+            Path(args.calibration_root), args.calibration, spec.role, CAL.spec_of(spec.lane).stage
+        )
+        summary = R.import_round(out, spec, args.round, decided_at=verdict["decided_at"])
         _print(
             {**summary, "calibration": verdict["calibration_id"], "agreement": verdict["agreement"]}
         )
@@ -286,6 +325,8 @@ def cmd_retarget(args: argparse.Namespace, run: Path) -> int:
                 reason = (web.get(sid) or {}).get("reason", "")
                 owner.append({"site_id": sid, "name": ctx["name"], "state": row["state"],
                               "verdict": row["verdict"], "reason": reason})  # fmt: skip
+        skips = _write_wave_skips(lane_dir, lambda w: _retarget_skip_files(run, w))
+        owner += _skip_owner_rows(skips, retarget.RETARGET)
         common.write_jsonl(lane_dir / "RETIRE_LIST.jsonl", retire)
         common.write_jsonl(lane_dir / "MERGE_LIST.jsonl", merge)
         common.write_jsonl(lane_dir / "OWNER_LIST.jsonl", owner)
@@ -294,7 +335,8 @@ def cmd_retarget(args: argparse.Namespace, run: Path) -> int:
             key = f"{row['verdict']}:{row['state']}"
             states[key] = states.get(key, 0) + 1
         _print({"asked": len(final), "by_verdict_and_state": dict(sorted(states.items())),
-                "retire_list": len(retire), "merge_list": len(merge), "owner_list": len(owner)})  # fmt: skip
+                "retire_list": len(retire), "merge_list": len(merge), "owner_list": len(owner),
+                "wave_skips": len(skips)})  # fmt: skip
         return 0
     if command == "wave":
         _print(
@@ -307,13 +349,8 @@ def cmd_retarget(args: argparse.Namespace, run: Path) -> int:
             )
         )
         return 0
-    if command in ("chain-done", "chain-ready", "chain-status"):
-        if command == "chain-done":
-            done = retarget_plan.chain_done(
-                run, args.wave, args.stage_name, args.stamp, args.sites or None
-            )
-            _print({"stage": args.stage_name, "sites": len(done)})
-        elif command == "chain-ready":
+    if command in ("chain-ready", "chain-status"):
+        if command == "chain-ready":
             _print(retarget_plan.chain_ready(run, args.stage_name))
         else:
             _print(retarget_plan.chain_table(run))
@@ -338,11 +375,22 @@ def cmd_retarget(args: argparse.Namespace, run: Path) -> int:
                 "skipped": len(plan.skipped), "step": None if out is None else str(out)})  # fmt: skip
         return 0
     live = retarget_plan.read_live(ids, items, names, reader, names=True)
+    if command == "chain-done":
+        unfinished = None
+        if args.stage_name in retarget_plan.READ_BACK_STAGES:
+            unfinished = retarget_plan.unfinished(
+                args.stage_name, decisions, asked, live, _skipped_sites(run, args.wave)
+            )
+        done = retarget_plan.chain_done(
+            run, args.wave, args.stage_name, args.stamp, args.sites or None, unfinished=unfinished
+        )
+        _print({"stage": args.stage_name, "sites": len(done)})
+        return 0
     if command == "plan-names":
         plan = retarget_plan.build_names(decisions, rechecks, live, args.wave)
         out = A.lane_dir(plan.lane)
         mech = name_write.write_name_plan(plan, _now(), out)
-        chunks = name_write.write_alias_chunk(plan, args.wave, out / "alias")
+        chunks = name_write.write_alias_chunk(plan, "retarget-name", args.wave, out / "alias")
         _print(
             {
                 **mech.counters,
@@ -364,18 +412,51 @@ def cmd_retarget(args: argparse.Namespace, run: Path) -> int:
         ready = [s for s in retarget_plan.chain_ready(run, "point_type") if s in decisions]
         if not ready:
             raise UsageError("no site of this wave has finished links, name and alias yet")
-        records = retarget_plan.handoff_records(decisions, asked, ready, args.wave)
-        _print(retarget_plan.write_handoffs(run, args.wave, records))
+        report = retarget_plan.verify_wave(decisions, asked, live, _skipped_sites(run, args.wave))
+        state = {r["site_id"]: r for r in report}
+        landed = [s for s in ready if state[s]["state"] == "landed"]
+        if not landed:
+            raise UsageError(
+                "no site that finished the chain reads back as landed from production: "
+                f"{[(s, state[s]['state']) for s in ready[:3]]}"
+            )
+        records = retarget_plan.handoff_records(decisions, asked, landed, args.wave)
+        counts = retarget_plan.write_handoffs(run, args.wave, records)
+        _print({**counts, "withheld": len(ready) - len(landed)})
         return 0
     raise UsageError(f"no command {command!r} in lane retarget")
+
+
+def _retarget_skip_files(run: Path, wave: str) -> list[Path]:
+    """The files a re-target wave's plans list their skips in: the link plan's and the name plan's."""
+    return [
+        retarget_plan.wave_dir(run, wave) / "LINKS_SKIPPED.jsonl",
+        A.lane_dir(name_lane("retarget-name", wave)) / "SKIPPED.jsonl",
+    ]
+
+
+def _write_wave_skips(
+    lane_dir: Path, plan_skip_files: Callable[[str], Sequence[Path]]
+) -> list[dict[str, Any]]:
+    """`WAVE_SKIPS.jsonl`: the sites the plans of every wave left out, so none is dropped with the
+    wave that skipped it (a site is in one wave only and a skip is not selected again)."""
+    skips = waves.wave_skips(lane_dir, plan_skip_files)
+    common.write_jsonl(lane_dir / waves.SKIPS_FILE, skips)
+    return skips
+
+
+def _skip_owner_rows(skips: Sequence[dict[str, Any]], verdict: str) -> list[dict[str, Any]]:
+    return [
+        {"site_id": s["site_id"], "name": s["name"], "state": "skipped-in-wave", "verdict": verdict,
+         "reason": f"wave {s['wave']}: {s['reason']}: {s['note']}"}
+        for s in skips
+    ]  # fmt: skip
 
 
 def _skipped_sites(run: Path, wave: str) -> dict[str, str]:
     """The sites a wave's plans left out, with why: the link plan's and the name plan's."""
     skipped: dict[str, str] = {}
-    files = [retarget_plan.wave_dir(run, wave) / "LINKS_SKIPPED.jsonl"]
-    name_skips = A.lane_dir(name_lane("retarget-name", wave)) / "SKIPPED.jsonl"
-    for path in (*files, name_skips):
+    for path in _retarget_skip_files(run, wave):
         if path.exists():
             for row in common.read_jsonl(path):
                 skipped.setdefault(row["site_id"], f"{row['reason']}: {row['note']}")
@@ -397,6 +478,10 @@ def cmd_scope(args: argparse.Namespace, run: Path) -> int:
              "verdict": r["verdict"], "reason": (web.get(r["site_id"]) or {}).get("reason", "")}
             for r in final if r["state"] in ("rejected", "held", "waiting-for-recheck")
         ]  # fmt: skip
+        skips = _write_wave_skips(
+            lane_dir, lambda w: [A.lane_dir(scope_judge.scope_window_lane(w)) / "SKIPPED.jsonl"]
+        )
+        owner += _skip_owner_rows(skips, "")
         common.write_jsonl(lane_dir / "OWNER_LIST.jsonl", owner)
         counts: dict[str, int] = {}
         for r in final:
@@ -407,6 +492,7 @@ def cmd_scope(args: argparse.Namespace, run: Path) -> int:
                 "asked": len(final),
                 "by_verdict_and_state": dict(sorted(counts.items())),
                 "owner_list": len(owner),
+                "wave_skips": len(skips),
             }
         )
         return 0
@@ -473,7 +559,16 @@ def cmd_names(args: argparse.Namespace, run: Path) -> int:
             for r in final:
                 key = f"{r['source']}:{r['state']}"
                 counts[key] = counts.get(key, 0) + 1
-            _print({"asked": len(final), "by_source_and_state": dict(sorted(counts.items()))})
+            skips = _write_wave_skips(
+                lane_dir, lambda w: [A.lane_dir(name_lane("name-clean", w)) / "SKIPPED.jsonl"]
+            )
+            _print(
+                {
+                    "asked": len(final),
+                    "by_source_and_state": dict(sorted(counts.items())),
+                    "wave_skips": len(skips),
+                }
+            )
             return 0
         renames = names_judge.confirmed_renames({}, web, rule_asked, second)
         if command == "wave":
@@ -498,7 +593,7 @@ def cmd_names(args: argparse.Namespace, run: Path) -> int:
                 picked, asked, live.sites, live.keys, live.key_holders, live.name_rows, args.wave
             )
             mech = name_write.write_name_plan(plan, _now(), out)
-            chunks = name_write.write_alias_chunk(plan, args.wave, out / "alias")
+            chunks = name_write.write_alias_chunk(plan, "name-clean", args.wave, out / "alias")
             _print(
                 {
                     **mech.counters,
@@ -514,15 +609,24 @@ def cmd_names(args: argparse.Namespace, run: Path) -> int:
         lane_dir = run / names_judge.LANE / "spoken"
         model = R.decisions_by_site(R.stage_dir(run, names_judge.spoken_spec()))
         asked = R.load_contexts(R.stage_dir(run, names_judge.spoken_spec()))
-        rows = names_judge.spoken_rows(names_judge.rule_spoken(run), model, asked)
+        left_out = set(spoken_exclusions(run, args.root))
+        rows = {
+            s: r
+            for s, r in names_judge.spoken_rows(names_judge.rule_spoken(run), model, asked).items()
+            if s not in left_out
+        }
         if command == "result":
             counts = dict(Counter(row["source"].split(":")[0] for row in rows.values()))
             none = sum(
                 d["status"] == R.DECIDED and d["data"]["verdict"] == names_judge.NONE
                 for d in model.values()
             )
+            skips = _write_wave_skips(
+                lane_dir, lambda w: [A.lane_dir(spoken_lane(w)) / "SKIPPED.jsonl"]
+            )
             _print({"to_write": len(rows), "by_source": counts, "model_none": none,
-                    "model_held": sum(d["status"] == R.HELD for d in model.values())})  # fmt: skip
+                    "model_held": sum(d["status"] == R.HELD for d in model.values()),
+                    "left_out": len(left_out), "wave_skips": len(skips)})  # fmt: skip
             return 0
         if command == "wave":
             _print(waves.select_wave(lane_dir, args.wave, rows, limit=args.limit, built_at=_now()))
@@ -603,7 +707,8 @@ def build_parser() -> argparse.ArgumentParser:
             cmd.add_argument(
                 "--exclude-retarget",
                 action="store_true",
-                help="name-clean-web: leave out the records D13 re-targets, retires, merges or holds",
+                help="name-clean-web and name-clean-recheck: leave out the records D13 re-targets, "
+                "retires, merges or holds (pass it to both stages)",
             )
     for name in ("brief", "check-answer"):
         cmd = stage_command(name, "the agent's brief / the shape of one answer")

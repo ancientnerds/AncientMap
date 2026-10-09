@@ -13,7 +13,7 @@ finishing a stage before the next dependent lane starts (`CHAIN`):
    key computed by Postgres. It is planned **after the link step landed** (`plan-names` refuses a
    site whose links have not): its premise is the external ids as the database prints them, so the
    order is a guard, not a convention.
-3. **alias** - `name-alias-<wave>`: the old name's `label` row becomes an `alias` row (the old name
+3. **alias** - `retarget-name-alias-<wave>`: the old name's `label` row becomes an `alias` row (the old name
    stays searchable, D13).
 4. the **hand-offs** to the lanes that own the rest, each a list of sites that finished the stage
    before: `point_type` (the sourced coordinates and the item's classes: lane wd5, with the relaxed
@@ -64,6 +64,8 @@ FINDING_TEST_ID = "D13/retarget-name"
 
 #: The chain, in order. A stage may start on a site only when every stage before it is done.
 CHAIN = ("links", "name", "alias", "point_type", "description", "gallery", "period", "card")
+#: The stages production is read back for before they are recorded done (`chain_done`).
+READ_BACK_STAGES = CHAIN[:3]
 HANDOFF_FILES = {
     "point_type": "HANDOFF_POINT_TYPE.jsonl",
     "description": "HANDOFF_DESCRIPTION.jsonl",
@@ -427,6 +429,36 @@ def build_names(
 
 
 # ------------------------------------------------------------------------------------ the read-back
+def _read_back(
+    target: Mapping[str, Any], old_name: str, sid: str, now: Mapping[str, Any], live: Live
+) -> dict[str, list[str]]:
+    """What differs between production and the plan for one live site, by the chain stage that
+    wrote it: `links` (the ids and the source_url), `name` (the name and its key) and `alias` (the
+    old name as a row that is no `label`)."""
+    links = stored_links(now["ext"])
+    parts: dict[str, list[str]] = {stage: [] for stage in READ_BACK_STAGES}
+    for kind, cell in (("wikidata_qid", "qid"), ("enwiki_title", "enwiki_title")):
+        if links[kind] != [target[cell]["value"]]:
+            parts["links"].append(
+                f"{kind} is {links[kind]}, the plan wrote {target[cell]['value']!r}"
+            )
+    if now["source_url"] != target["source_url"]["value"]:
+        parts["links"].append(f"source_url is {now['source_url']!r}")
+    new_name = target["name"]["value"]
+    if now["name"] != new_name:
+        parts["name"].append(f"name is {now['name']!r}, the plan wrote {new_name!r}")
+    elif live.keys.get(new_name) != now["name_normalized"]:
+        parts["name"].append(
+            f"name_normalized is {now['name_normalized']!r}, not the key of the name"
+        )
+    old_rows = [r for r in live.name_rows.get(sid, []) if r["name"] == old_name]
+    if old_name != new_name and not any(r["name_type"] != name_write.LABEL for r in old_rows):
+        parts["alias"].append(
+            f"the old name {old_name!r} is not searchable: no row of it is an alias"
+        )
+    return parts
+
+
 def verify_wave(
     decisions: Mapping[str, Mapping[str, Any]],
     asked: Mapping[str, Mapping[str, Any]],
@@ -441,31 +473,12 @@ def verify_wave(
         if sid in skipped:
             out.append({"site_id": sid, "state": "skipped", "why": skipped[sid], "deviations": []})
             continue
-        target = decisions[sid]["data"]["target"]
         now = live.sites.get(sid)
         if now is None:
             out.append({"site_id": sid, "state": "gone", "deviations": ["the row is gone"]})
             continue
-        links, deviations = stored_links(now["ext"]), []
-        for kind, cell in (("wikidata_qid", "qid"), ("enwiki_title", "enwiki_title")):
-            if links[kind] != [target[cell]["value"]]:
-                deviations.append(
-                    f"{kind} is {links[kind]}, the plan wrote {target[cell]['value']!r}"
-                )
-        if now["source_url"] != target["source_url"]["value"]:
-            deviations.append(f"source_url is {now['source_url']!r}")
-        new_name, old_name = target["name"]["value"], asked[sid]["name"]
-        if now["name"] != new_name:
-            deviations.append(f"name is {now['name']!r}, the plan wrote {new_name!r}")
-        elif live.keys.get(new_name) != now["name_normalized"]:
-            deviations.append(
-                f"name_normalized is {now['name_normalized']!r}, not the key of the name"
-            )
-        old_rows = [r for r in live.name_rows.get(sid, []) if r["name"] == old_name]
-        if old_name != new_name and not any(r["name_type"] != name_write.LABEL for r in old_rows):
-            deviations.append(
-                f"the old name {old_name!r} is not searchable: no row of it is an alias"
-            )
+        parts = _read_back(decisions[sid]["data"]["target"], asked[sid]["name"], sid, now, live)
+        deviations = [d for stage in READ_BACK_STAGES for d in parts[stage]]
         out.append(
             {
                 "site_id": sid,
@@ -473,6 +486,30 @@ def verify_wave(
                 "deviations": deviations,
             }
         )
+    return out
+
+
+def unfinished(
+    stage: str,
+    decisions: Mapping[str, Mapping[str, Any]],
+    asked: Mapping[str, Mapping[str, Any]],
+    live: Live,
+    skipped: Mapping[str, str],
+) -> dict[str, list[str]]:
+    """Per site of a wave, what keeps `stage` (links, name or alias) from having landed: a site a
+    plan skipped or that is gone has not landed, and every stage up to `stage` is read back from
+    production. An empty list is a site that landed."""
+    through = READ_BACK_STAGES[: READ_BACK_STAGES.index(stage) + 1]
+    out: dict[str, list[str]] = {}
+    for sid in sorted(decisions):
+        now = live.sites.get(sid)
+        if sid in skipped:
+            out[sid] = [f"a plan skipped it: {skipped[sid]}"]
+        elif now is None:
+            out[sid] = ["the row is gone"]
+        else:
+            parts = _read_back(decisions[sid]["data"]["target"], asked[sid]["name"], sid, now, live)
+            out[sid] = [d for part in through for d in parts[part]]
     return out
 
 
@@ -566,11 +603,14 @@ def chain_state(run: Path) -> dict[str, dict[str, dict[str, Any]]]:
 
 def chain_done(
     run: Path, wave: str, stage: str, stamp: str, sites: Sequence[str] | None = None,
-    *, at: str | None = None,
+    *, unfinished: Mapping[str, Sequence[str]] | None = None, at: str | None = None,
 ) -> list[str]:  # fmt: skip
     """Record that `stage` landed for the wave's sites (or the listed ones). Refused for a stage
     that is not in the chain, for a site of no wave, for a stage already done, and for a site whose
-    earlier stages are not all done: one site finishes the chain in order."""
+    earlier stages are not all done: one site finishes the chain in order. The links, name and alias
+    stages are recorded only against `unfinished` (`unfinished()`, the read-back of production):
+    a site that a plan skipped or whose stage has not landed is refused, so a skipped site never
+    reaches the hand-offs."""
     if stage not in CHAIN:
         raise ChainError(f"{stage!r} is not a stage of the chain {CHAIN}")
     if not stamp.strip():
@@ -580,10 +620,16 @@ def chain_done(
     stranger = [s for s in chosen if s not in wave_sites]
     if stranger:
         raise ChainError(f"{stranger[:3]} are not sites of wave {wave}")
+    if stage in READ_BACK_STAGES and unfinished is None:
+        raise ChainError(f"{stage} is recorded against a read-back of production, not on trust")
     state = chain_state(run)
     before = CHAIN[: CHAIN.index(stage)]
     for sid in chosen:
         done = state.get(sid, {})
+        if unfinished is not None:
+            open_points = unfinished.get(sid, ["it was not read back"])
+            if open_points:
+                raise ChainError(f"{sid}: {stage} has not landed: {'; '.join(open_points)}")
         if stage in done:
             raise ChainError(f"{sid}: {stage} is recorded already ({done[stage]['stamp']})")
         missing = [s for s in before if s not in done]

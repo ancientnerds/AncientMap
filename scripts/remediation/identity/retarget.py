@@ -102,10 +102,6 @@ def article_url(title: str) -> str:
     return ENWIKI + url_quote(title.replace(" ", "_"), safe="()',-._~:!*;@$")
 
 
-def _normal(text: str) -> str:
-    return Q.normalise(text).casefold()
-
-
 # ------------------------------------------------------------------------------------ the contexts
 def merge_candidates(
     site_id: str,
@@ -489,7 +485,7 @@ def parse_target(data: Any, ctx: Mapping[str, Any]) -> Target:
         raise AnswerError(f"target.enwiki_title: a quote cites {article_url(title.value)}")
     if len(name.value) > NAME_CHARS:
         raise AnswerError(f"target.name: longer than {NAME_CHARS} characters")
-    if not any(_normal(name.value) in _normal(q["quote"]) for q in name.quotes):
+    if not any(Q.normalise(name.value) in Q.normalise(q["quote"]) for q in name.quotes):
         raise AnswerError("target.name: a quote holds the name word for word")
     if url.value == ctx["source_url"]:
         raise AnswerError("target.source_url: it is the record's current source_url")
@@ -626,7 +622,9 @@ def check_target(
     cells["qid"]["note"] = (
         f"{item} ({record['en_label']!r}): {what} {metres:.0f} m from the point given"
     )
-    if _normal(target.name.value) not in {_normal(n) for n in attested_names(entity, title)}:
+    if Q.normalise(target.name.value) not in {
+        Q.normalise(n) for n in attested_names(entity, title)
+    }:
         shown = ", ".join(repr(n) for n in sorted(attested_names(entity, title))[:8])
         raise Hold(
             f"target.name: {target.name.value!r} is no English label or alias of {item} and no "

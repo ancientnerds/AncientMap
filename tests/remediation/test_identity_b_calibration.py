@@ -263,7 +263,7 @@ class TestTheCalibrationEndToEnd:
         manifest = CAL.load_manifest(pool)
         root = world["tmp"] / "cal"
         CC.seal(root, calibration_id="retarget-web", role="web_verifier", handoff=Path(manifest["handoff"]),
-                batches=manifest["batches"], threshold=0.9)  # fmt: skip
+                batches=manifest["batches"], threshold=0.9, write_verdicts=R.WRITE_VERDICTS)  # fmt: skip
         prepared = CAL.prepare(root, "retarget-web", pool)
         copy = Path(prepared["stage_dir"])
         assert prepared["questions"] == 4 and (copy / R.CONTEXTS_DIR / "r1.jsonl").exists()
@@ -294,16 +294,20 @@ class TestTheCalibrationEndToEnd:
         assert (report["units"], report["agreed"], report["unanswered"]) == (4, 4, [])
         verdict = CC.verdict(root, calibration_id="retarget-web", false_sources=0)
         assert verdict["passed"] is True and verdict["role"] == "web_verifier"
+        assert verdict["false_writes"] == 0
 
-        # ... and the verdict opens the import gate of the stage
-        assert R.require_calibration(root, "retarget-web", "web_verifier")["passed"] is True
+        # ... and the verdict opens the import gate of the stage, for this lane's pool only
+        gate = R.require_calibration(root, "retarget-web", "web_verifier", "retarget-web")
+        assert gate["passed"] is True
+        with pytest.raises(R.RoundError, match="not on the lane's own scope-window-web"):
+            R.require_calibration(root, "retarget-web", "web_verifier", "scope-window-web")
 
     def test_a_role_that_disagrees_fails_and_moves_up_one_tier(self, world: dict[str, Any]) -> None:
         pool = labelled_pool(world)
         manifest = CAL.load_manifest(pool)
         root = world["tmp"] / "cal"
         CC.seal(root, calibration_id="c", role="web_verifier", handoff=Path(manifest["handoff"]),
-                batches=manifest["batches"], threshold=0.9)  # fmt: skip
+                batches=manifest["batches"], threshold=0.9, write_verdicts=R.WRITE_VERDICTS)  # fmt: skip
         prepared = CAL.prepare(root, "c", pool)
         spec = CAL.spec_of("retarget")
         for batch_id, sids in R.find_round(Path(prepared["stage_dir"]), "r1").batches.items():
@@ -317,7 +321,7 @@ class TestTheCalibrationEndToEnd:
         assert verdict["passed"] is False and verdict["agreement"] == 0.75
         assert verdict["tier_move"]["to"] == "claude-opus-5-5"
         with pytest.raises(R.RoundError, match="did not pass"):
-            R.require_calibration(root, "c", "web_verifier")
+            R.require_calibration(root, "c", "web_verifier", "retarget-web")
 
     def test_a_pool_the_gold_of_which_is_a_minimax_answer_cannot_be_sealed(
         self, world: dict[str, Any]
@@ -332,3 +336,73 @@ class TestTheCalibrationEndToEnd:
         with pytest.raises(CC.CalibrationError, match="answered by MiniMax"):
             CC.seal(world["tmp"] / "cal", calibration_id="m", role="web_verifier", handoff=handoff,
                     batches=manifest["batches"], threshold=0.9)  # fmt: skip
+
+
+class TestNoFalseWrite:
+    def measure(
+        self,
+        world: dict[str, Any],
+        chania: dict[str, Any] | None = None,
+        other: dict[str, Any] | None = None,
+        *,
+        gold_chania: dict[str, Any] | None = None,
+    ) -> tuple[dict[str, Any], str]:
+        """Seal at a low bar (0.5) so that only the false-write bar can fail the verdict. The role
+        answers `chania` for Chania, `other` for the first other case of the pool (the gold keeps
+        it) and KEEP for the rest. Returns the verdict and that other case."""
+        pool = labelled_pool(world)
+        manifest = CAL.load_manifest(pool)
+        handoff = Path(manifest["handoff"])
+        if gold_chania is not None:
+            file = next(handoff.glob(f"*/retarget-web/{CHANIA}.answer.json"))
+            body = json.loads(file.read_text("utf-8"))
+            body["text"] = json.dumps(
+                {"site_id": CHANIA, "verdict": "RETARGET", "why": "gold", **gold_chania}
+            )
+            file.write_text(json.dumps(body), encoding="utf-8")
+        second = sorted(c["site_id"] for c in manifest["cases"] if c["site_id"] != CHANIA)[0]
+        fresh = {CHANIA: chania or {"verdict": "KEEP"}, second: other or {"verdict": "KEEP"}}
+        root = world["tmp"] / "cal"
+        CC.seal(root, calibration_id="fw", role="web_verifier", handoff=handoff,
+                batches=manifest["batches"], threshold=0.5, write_verdicts=R.WRITE_VERDICTS)  # fmt: skip
+        prepared = CAL.prepare(root, "fw", pool)
+        spec = CAL.spec_of("retarget")
+        for batch_id, sids in R.find_round(Path(prepared["stage_dir"]), "r1").batches.items():
+            for sid in sids:
+                body = fresh.get(sid, {"verdict": "KEEP"})
+                OH.write_answer(Path(prepared["prepared"]), batch_id=batch_id, stage=spec.stage, label=sid,
+                                text=json.dumps({"site_id": sid, "why": "x", **body}),
+                                answered_by=RO.answered_by("web_verifier", batch_id), model=OH.SONNET_MODEL,
+                                now=lambda: NOW)  # fmt: skip
+        CC.compare(root, calibration_id="fw")
+        return CC.verdict(root, calibration_id="fw", false_sources=0), second
+
+    def test_a_retarget_the_pool_does_not_support_fails_the_calibration_whatever_the_agreement(
+        self, world: dict[str, Any]
+    ) -> None:
+        got, other = self.measure(world, {"verdict": "RETARGET"}, {"verdict": "RETARGET"})
+        assert got["agreement"] == 0.75 >= got["threshold"]
+        assert got["passed"] is False and got["false_writes"] == 1
+        assert got["false_write_labels"] == [other]
+        assert got["tier_move"]["reason"].startswith("1 false write(s) counted, 0 allowed")
+        with pytest.raises(R.RoundError, match="did not pass"):
+            R.require_calibration(world["tmp"] / "cal", "fw", "web_verifier", "retarget-web")
+
+    def test_the_right_verdict_with_another_item_is_a_false_write(
+        self, world: dict[str, Any]
+    ) -> None:
+        gold = {"target": {"qid": {"value": "Q200", "quotes": []}}}
+        wrong = {"verdict": "RETARGET", "target": {"qid": {"value": "Q300", "quotes": []}}}
+        got, _ = self.measure(world, wrong, gold_chania=gold)
+        assert got["passed"] is False and got["false_write_labels"] == [CHANIA]
+
+    def test_the_same_retarget_with_the_same_item_is_no_false_write(
+        self, world: dict[str, Any]
+    ) -> None:
+        gold = {"target": {"qid": {"value": "Q200", "quotes": []}}}
+        got, _ = self.measure(world, {"verdict": "RETARGET", **gold}, gold_chania=gold)
+        assert got["passed"] is True and got["false_writes"] == 0
+
+    def test_a_missed_retarget_is_no_false_write(self, world: dict[str, Any]) -> None:
+        got, _ = self.measure(world)  # the role keeps Chania: it misses a write, writes nothing
+        assert got["false_writes"] == 0 and got["passed"] is True and got["agreement"] == 0.75

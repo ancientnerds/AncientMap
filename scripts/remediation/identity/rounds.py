@@ -16,11 +16,12 @@ stage's own parts injected:
     titles   the English Wikipedia titles the checks resolve.
 
 **A round** is one export into its own handoff directory (an exported question is never replaced):
-round `r1` asks every site of the stage's population; a re-ask round `r<n>` asks the sites whose
-latest answer was held, each prompt carrying why. The rounds are recorded in `ROUNDS.jsonl`, the
-stored contexts in `contexts/<round>.jsonl`; a round is imported once `answers/<round>.jsonl`
-exists. Only the newest round is imported, and there are at most `MAX_ROUNDS` rounds: round 1 and
-two re-asks.
+a first round `r1` asks the sites it is given (a pilot, or the whole population); a **follow-on**
+round asks sites never asked (the rest of the population after a pilot); a **re-ask** round asks
+the sites whose latest answer was held, each prompt carrying why. The rounds are recorded in
+`ROUNDS.jsonl`, the stored contexts in `contexts/<round>.jsonl`; a round is imported once
+`answers/<round>.jsonl` exists. Only the newest round is imported, and a held site is asked again
+at most `MAX_REASKS` times (two re-ask rounds).
 
 **The import** refuses, with nothing written, an answer that is not the stage's role's: the
 `answered_by` carries `<role>:<agent>` (`opus_handoff.py answer --role`), and the stamp must be the
@@ -29,8 +30,10 @@ decided or held), merges `DECISIONS.jsonl` (per site, the decision of its latest
 `TITLES.json` and `PAGES.jsonl`; the page bytes stay under `pages/`, not versioned.
 
 **Calibration first.** `require_calibration` refuses a role whose calibration (`calibrate_claude.py`)
-has no passed verdict, or whose verdict was reached under another registry entry: a role that has
-not passed is not a role to write from (D6).
+has no passed verdict, or whose verdict was reached under another registry entry, or whose pool is
+not the lane's own, or that was sealed without a bar of 0 false writes (`WRITE_VERDICTS`): a role
+that has not passed is not a role to write from (D6). `import_round` refuses an answer given before
+the verdict was decided: the calibration comes first, not after.
 """
 
 from __future__ import annotations
@@ -65,11 +68,14 @@ PAGES_FILE = "PAGES.jsonl"
 PAGES_DIR = "pages"
 ANSWERS_DIR = "answers"
 CONTEXTS_DIR = "contexts"
-#: Round 1 and at most two re-asks; what is held after them stays held.
-MAX_ROUNDS = 3
+#: At most two re-ask rounds; what is held after them stays held.
+MAX_REASKS = 2
 DECIDED, HELD = "decided", "held"
 VERDICTS_DIR = "verdicts"
 THRESHOLDS_FILE = "THRESHOLDS.json"
+#: The verdicts of the identity questions that cause a write (a re-target, a retirement): a
+#: calibration is sealed with these and a bar of 0 false ones (owner D13, D20).
+WRITE_VERDICTS = ("NOT_A_SITE", "OUT_OF_WINDOW", "RETARGET", "RETIRE")
 
 
 class RoundError(ValueError):
@@ -247,12 +253,12 @@ def held_sites(out: Path) -> dict[str, str]:
 
 def reask_sites(out: Path) -> dict[str, str]:
     """The held sites a new round asks, with their reasons - once the newest round is imported, and
-    only while fewer than `MAX_ROUNDS` rounds are out."""
-    rounds = latest_imported(out, "a re-ask")
-    if len(rounds) >= MAX_ROUNDS:
+    only while fewer than `MAX_REASKS` re-ask rounds are out."""
+    reasks = [r for r in latest_imported(out, "a re-ask") if r.earlier]
+    if len(reasks) >= MAX_REASKS:
         raise RoundError(
-            f"{len(rounds)} rounds are out: a held site is asked at most twice more - what stays "
-            "held goes to the owner list"
+            f"{len(reasks)} re-ask rounds are out: a held site is asked at most twice more - what "
+            "stays held goes to the owner list"
         )
     return held_sites(out)
 
@@ -284,8 +290,9 @@ def export_round(
     earlier: Mapping[str, str] | None = None,
     now: Callable[[], str] = now_utc,
 ) -> Round:
-    """Export one round of questions into a new handoff directory and record it. Round 1 asks the
-    questions it is given; a later round asks only the held sites of the round before (`earlier`)."""
+    """Export one round of questions into a new handoff directory and record it. The first round asks
+    the questions it is given; a later round without `earlier` is a follow-on and asks only sites
+    never asked; a later round with `earlier` is a re-ask and asks exactly the held sites."""
     earlier = dict(earlier or {})
     if not questions:
         raise RoundError("no question to ask - nothing to export")
@@ -299,11 +306,18 @@ def export_round(
     if number == 1 and earlier:
         raise RoundError("round 1 re-asks nothing")
     if number > 1:
-        if number > MAX_ROUNDS:
-            raise RoundError(f"{len(known)} rounds are out: at most {MAX_ROUNDS}")
-        latest_imported(out, "a re-ask")
-        if set(earlier) != set(ids) or not set(ids) <= set(held_sites(out)):
-            raise RoundError("a re-ask round asks exactly the held sites, each with its reason")
+        latest_imported(out, "another round")
+        if earlier:
+            if sum(1 for r in known if r.earlier) >= MAX_REASKS:
+                raise RoundError(
+                    f"{MAX_REASKS} re-ask rounds are out: a held site is asked at most twice more"
+                )
+            if set(earlier) != set(ids) or not set(ids) <= set(held_sites(out)):
+                raise RoundError("a re-ask round asks exactly the held sites, each with its reason")
+        elif asked := sorted(set(ids) & set(load_contexts(out))):
+            raise RoundError(
+                f"a follow-on round asks only sites never asked: {len(asked)} were, {asked[:3]}"
+            )
     name = f"r{number}"
     grouped = batches(ids, name, spec.per_batch)
     by_id = {q.site_id: q for q in questions}
@@ -407,12 +421,17 @@ def check_answer(
 
 
 # ------------------------------------------------------------------------------ the calibration
-def require_calibration(root: Path, calibration_id: str, role: str) -> dict[str, Any]:
+def require_calibration(
+    root: Path, calibration_id: str, role: str, pool_stage: str
+) -> dict[str, Any]:
     """The passed verdict of `calibration_id` for `role`, or `RoundError`.
 
     The verdict must exist and have passed, name this role and the model the registry holds for it
     now, and its seal must have been made under the role's current registry entry
-    (`roles.role_sha256`): a role moved up a tier after a failed calibration is calibrated again."""
+    (`roles.role_sha256`): a role moved up a tier after a failed calibration is calibrated again.
+    The sealed pool must be the lane's own (its questions are of `pool_stage`, the lane's web
+    stage), and the seal must hold the bar of 0 false writes over `WRITE_VERDICTS`, which the
+    verdict met."""
     verdict_path = root / VERDICTS_DIR / f"{calibration_id}.json"
     if not verdict_path.exists():
         raise RoundError(
@@ -439,6 +458,28 @@ def require_calibration(root: Path, calibration_id: str, role: str) -> dict[str,
         raise RoundError(
             f"calibration {calibration_id} was sealed under another registry entry of {role}: "
             "calibrate again"
+        )
+    stages = {
+        row["stage"]
+        for batch in seal["batches"]
+        for row in OH.read_manifest(Path(seal["handoff"]), batch).values()
+    }
+    if stages != {pool_stage}:
+        raise RoundError(
+            f"calibration {calibration_id} was measured on the questions of {sorted(stages)}, not "
+            f"on the lane's own {pool_stage}: seal a calibration of this lane's pool"
+        )
+    if (
+        not set(WRITE_VERDICTS) <= set(seal.get("write_verdicts", ()))
+        or seal.get("max_false_writes") != 0
+    ):
+        raise RoundError(
+            f"calibration {calibration_id} was not sealed with the bar of 0 false writes over "
+            f"{', '.join(WRITE_VERDICTS)}: seal it with --write-verdicts and --max-false-writes 0"
+        )
+    if verdict.get("false_writes") != 0:
+        raise RoundError(
+            f"calibration {calibration_id} counted {verdict.get('false_writes')} false write(s)"
         )
     return verdict
 
@@ -472,12 +513,14 @@ def import_round(
     spec: StageSpec,
     round_name: str,
     *,
+    decided_at: str,
     http: Callable[[], httpx.Client] = web.client,
     resolver: Callable[[list[str], httpx.Client], dict[str, dict[str, Any]]] = web.resolve_titles,
     now: Callable[[], str] = now_utc,
     pace: float = Q.PACE_SECONDS,
 ) -> dict[str, Any]:
-    """Parse, fetch, resolve and decide every answer of one round; merge the decisions."""
+    """Parse, fetch, resolve and decide every answer of one round; merge the decisions. Refused
+    when an answer was given before `decided_at`, the time the role's calibration was decided."""
     record = find_round(out, round_name)
     newest = load_rounds(out)[-1].name
     if record.name != newest:
@@ -511,6 +554,16 @@ def import_round(
         raise RoundError(
             f"{len(problems)} answer(s) are not the stage's role's - delete them from {root} and "
             f"have them answered again: " + "; ".join(problems[:5])
+        )
+
+    calibrated = datetime.fromisoformat(decided_at)
+    early = [
+        sid for sid, a in sorted(raw.items()) if datetime.fromisoformat(a.answered_at) < calibrated
+    ]
+    if early:
+        raise RoundError(
+            f"{len(early)} answer(s) were given before the calibration was decided ({decided_at}): "
+            f"delete them from {root} and have them answered again: {early[:3]}"
         )
 
     parsed: dict[str, Any] = {}
