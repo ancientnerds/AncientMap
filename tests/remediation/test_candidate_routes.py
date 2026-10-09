@@ -722,20 +722,51 @@ class TestThePool:
                 "answered_by": "dp",
             },
         ]
-        got = PL.denied_pairs(self._old(), pre, dep, {"a": {"s.jpg"}})
+        rck = [
+            {
+                "verdict": "other_site",
+                "shows": "a wall of another town",
+                "answered_by": "adversarial:rck-01-001",
+                "meta": {"site_id": "a", "file": "s.jpg"},
+            }
+        ]
+        got = PL.denied_pairs(self._old(), pre, dep, rck, {"a"})
         assert [(d["file"], d["verdict"]) for d in got] == [
             ("p.jpg", "not usable (map_or_document)"),
             ("q.jpg", "other_site"),
             ("s.jpg", "rejected by the re-check"),
         ]
+        assert got[2]["shows"] == "a wall of another town"
 
     def test_a_pair_claude_has_not_judged_yet_is_an_error(self) -> None:
         with pytest.raises(PL.PoolError, match="Claude has not judged it"):
-            PL.denied_pairs(self._old()[:1], [], [], {})
+            PL.denied_pairs(self._old()[:1], [], [], [], {"a"})
 
     def test_only_a_pair_minimax_called_depicts_can_be_denied(self) -> None:
         old = [{"site_id": "a", "file": "p.jpg", "verdict": "other_site"}]
-        assert PL.denied_pairs(old, [], [], {}) == []
+        assert PL.denied_pairs(old, [], [], [], {"a"}) == []
+
+    def test_a_written_hero_outside_the_pool_is_judged_by_its_recheck_alone(self) -> None:
+        """The 178 written heroes sit at sites that serve a picture now: no prefilter row, no depicts
+        row, and not an error - the re-check is their only judge."""
+        old = [{"site_id": "a", "file": f, "verdict": "depicts"} for f in ("w.jpg", "x.jpg")]
+        rck = [
+            {
+                "verdict": verdict,
+                "shows": "a coin",
+                "answered_by": "adversarial:rck-01-001",
+                "meta": {"site_id": "a", "file": file},
+            }
+            for file, verdict in (("w.jpg", "other_site"), ("x.jpg", "depicts"))
+        ]
+        got = PL.denied_pairs(old, [], [], rck, set())
+        assert [(d["file"], d["verdict"]) for d in got] == [("w.jpg", "rejected by the re-check")]
+
+    def test_a_depicts_the_claude_role_confirmed_needs_no_recheck_to_stay_undenied(self) -> None:
+        dep = [
+            {"site_id": "a", "file": "p.jpg", "verdict": "depicts", "note": "n", "answered_by": "d"}
+        ]
+        assert PL.denied_pairs(self._old()[:1], [], dep, [], {"a"}) == []
 
     def test_a_denied_pair_is_a_hero_only_where_the_page_serves_it(self, tmp_path: Path) -> None:
         run = tmp_path / "run"
@@ -771,3 +802,32 @@ class TestThePool:
         assert [(h["image_id"], h["site_id"], h["stage"], h["verdict"]) for h in got] == [
             (5, "a", "image-depicts", "other_site")
         ]  # row 6 is no hero: the page does not serve it
+
+    def test_a_live_hero_is_a_hero_row_that_is_not_excluded(self, tmp_path: Path) -> None:
+        run = tmp_path / "run"
+        run.mkdir()
+
+        def row(image_id: int, file: str, **over: Any) -> dict[str, Any]:
+            return {
+                "id": image_id, "site_id": "a", "filename": f"{image_id}.webp", "title": file,
+                "original_url": f"https://upload.wikimedia.org/wikipedia/commons/a/ab/{file}",
+                "commons_page_url": None, "is_hero": True, "is_lead": False,
+                "is_excluded": False, "sort_order": 0, "file_size_bytes": 1,
+            } | over  # fmt: skip
+
+        data = {
+            "read_at": "2026-10-09T00:00:00Z",
+            "sites": [{"id": "a", "name": "n", "country": "c", "site_type": "t", "lat": 1, "lon": 2, "thumbnail_url": None}],
+            "images": [
+                row(1, "Live.jpg"),
+                row(2, "Hidden.jpg", is_excluded=True),
+                row(3, "Plain.jpg", is_hero=False),
+            ],
+            "retired": [],
+        }  # fmt: skip
+        ST.write_read(run / "READ.json", data)
+        state = ST.load_read(run / "READ.json")
+        assert PL.live_hero_files(state) == {"a": {"Live.jpg"}}
+        assert PL.state_record(state, "a") == {
+            "site_id": "a", "name": "n", "country": "c", "site_type": "t", "lat": 1, "lon": 2,
+        }  # fmt: skip

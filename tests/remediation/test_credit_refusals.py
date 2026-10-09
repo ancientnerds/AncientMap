@@ -13,6 +13,7 @@ for _p in (REPO, REPO / "scripts" / "remediation"):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+import opus_handoff as OH  # noqa: E402
 from import_hero import credit_refusals as CR  # noqa: E402
 
 A, B, C, D = (f"{n}" * 8 + "-0000-0000-0000-000000000000" for n in "abcd")
@@ -82,13 +83,34 @@ class TestTheSitesToAskAgain:
         with pytest.raises(CR.CreditRefusalError, match="no insert"):
             CR.credit_refusals(tmp_path)
 
-    def test_the_sites_split_by_the_source_that_holds_their_file(self, tmp_path: Path) -> None:
-        (tmp_path / CR.TARGETS).write_text(
-            json.dumps({"site_id": A, "commons_file": "X.jpg"}) + "\n", encoding="utf-8"
+    def _candidate_run(self, root: Path, models: dict[str, str]) -> Path:
+        """A candidate run with one target per site, the verdict stamped by `models[site]`."""
+        (root / CR.TARGETS).write_text(
+            "".join(json.dumps({"site_id": s, "commons_file": "X.jpg"}) + "\n" for s in models),
+            encoding="utf-8",
         )
-        assert CR.by_source([A, D], tmp_path) == ([A], [D])
+        (root / "VERDICTS.jsonl").write_text(
+            "".join(
+                json.dumps({"site_id": s, "file": "X.jpg", "verdict": "depicts", "model": m}) + "\n"
+                for s, m in models.items()
+            ),
+            encoding="utf-8",
+        )
+        return root
+
+    def test_the_sites_split_by_the_source_that_holds_their_file(self, tmp_path: Path) -> None:
+        self._candidate_run(tmp_path, {A: OH.SONNET_MODEL})
+        assert CR.by_source([A, D], tmp_path) == ([A], [D], [])
         with pytest.raises(CR.CreditRefusalError, match="TARGETS"):
             CR.by_source([A], tmp_path / "nowhere")
+
+    def test_a_minimax_target_is_not_released_until_a_claude_recheck_confirmed_it(
+        self, tmp_path: Path
+    ) -> None:
+        """The candidate run of 2026-10-06 was judged by MiniMax alone (owner decisions D6, D10)."""
+        self._candidate_run(tmp_path, {A: OH.MINIMAX_MODEL, B: OH.MINIMAX_MODEL, C: OH.OPUS_MODEL})
+        assert CR.by_source([A, B, C, D], tmp_path) == ([C], [D], [A, B])
+        assert CR.by_source([A, B, C, D], tmp_path, {(A, "X.jpg")}) == ([A, C], [D], [B])
 
     def test_each_source_gets_its_own_wave_and_its_own_seed(self) -> None:
         both = CR.commands(
@@ -105,3 +127,16 @@ class TestTheSitesToAskAgain:
         assert all("--min-width 800 --min-height 300" in x for x in both if " fetch " in x)
         only = CR.commands(Path("c"), Path("w"), Path("c.txt"), None, Path("imp"))
         assert not any("insert-seed" in x for x in only)
+
+    def test_the_commands_name_the_recheck_run_and_the_sites_that_wait_for_claude(self) -> None:
+        lines = CR.commands(
+            Path("cand"),
+            Path("w"),
+            Path("c.txt"),
+            None,
+            Path("imp"),
+            [Path("pool-run")],
+            Path("claude.txt"),
+        )
+        assert any("--sites c.txt --recheck-run pool-run" in x for x in lines)
+        assert any(x.startswith("# claude.txt") and "MiniMax" in x for x in lines)

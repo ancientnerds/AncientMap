@@ -9,7 +9,9 @@ files, named by the sha256 of their rendering URL), so the re-judge costs no dow
 * `pool_sites` hands the old run's candidates of the sites that still serve no picture to the
   prefilter and the depicts role, each candidate with its picture's `path`; a candidate whose picture
   is gone is named, never skipped;
-* `target_picks` hands the 226 old targets to the adversarial re-check;
+* `target_picks` hands the old targets to the adversarial re-check - those of the pool's sites and
+  the 178 that were written as live heroes (their sites serve a picture now, so they are not in the
+  pool's population: their site record comes from the fresh read, `state_record`);
 * `denied_heroes` names the heroes MiniMax's `depicts` put on a page and Claude does not confirm, in
   the shape the served-image recheck reads (`served_image.recheck`), so that the swap goes through
   the same journalled writer as the 47 of D15.
@@ -78,6 +80,32 @@ def pool_sites(
     return sites, missing
 
 
+def live_hero_files(state: ST.State) -> dict[str, set[str]]:
+    """`{site id: Commons files}` of the live heroes of a fresh read: rows that are a hero and not
+    excluded. A hero whose row names no Commons file has none to list."""
+    out: dict[str, set[str]] = {}
+    for sid in state.site_ids():
+        for row in state.rows.get(sid, ()):
+            file = ST.file_of_row(row)
+            if file and row.get("is_hero") and not row.get("is_excluded"):
+                out.setdefault(sid, set()).add(file)
+    return out
+
+
+def state_record(state: ST.State, site_id: str) -> dict[str, Any]:
+    """A site as the re-check prompt reads it, from the fresh read: no identity and no description,
+    which the read does not carry (the prompt says so and the agent reads the cached page)."""
+    site = state.sites[site_id]
+    return {
+        "site_id": site_id,
+        "name": site["name"],
+        "country": site.get("country"),
+        "site_type": site.get("site_type"),
+        "lat": site["lat"],
+        "lon": site["lon"],
+    }
+
+
 def target_picks(
     old_run: Path, population: Sequence[Mapping[str, Any]], site_ids: Collection[str] | None = None
 ) -> list[dict[str, Any]]:
@@ -124,16 +152,22 @@ def denied_pairs(
     old_verdicts: Sequence[Mapping[str, Any]],
     prefiltered: Sequence[Mapping[str, Any]],
     depicts_rows: Sequence[Mapping[str, Any]],
-    rejected: Mapping[str, Collection[str]],
+    rechecks: Sequence[Mapping[str, Any]],
+    pool_sites: Collection[str],
 ) -> list[dict[str, Any]]:
     """The `(site, file)` pairs MiniMax called `depicts` that Claude does not confirm.
 
     Claude's judgement of a pair is, in order: the prefilter dropped it (`survives` false) - denied,
     with the kind it saw; the depicts role called it something else - denied, with that verdict; the
-    depicts role confirmed it but the adversarial re-check rejected it - denied. A pair Claude has not
-    judged yet is an error: the denial list is made after the re-judge, never before."""
+    adversarial re-check (`rechecks`, the rows of `RECHECK_NN.jsonl`) did not confirm it - denied,
+    with what the re-check saw. A pair with a re-check row needs nothing else: the old targets that
+    were written as heroes sit at sites outside the pool (`pool_sites`) and only the re-check judges
+    them. A pair of a pool site that Claude has not judged yet is an error: the denial list is made
+    after the re-judge, never before. A pair outside the pool without a re-check is no one's
+    business here (the page does not serve it, or `flow.denied` refuses it as an unchecked hero)."""
     pre = {(r["site_id"], r["file"]): r for r in prefiltered}
     dep = {(str(r["site_id"]), str(r["file"])): r for r in depicts_rows}
+    rck = {(str(r["meta"]["site_id"]), str(r["meta"]["file"])): r for r in rechecks}
     out = []
     for old in old_verdicts:
         if old.get("verdict") != CJ.DEPICTS:
@@ -149,29 +183,28 @@ def denied_pairs(
                     "answered_by": pre[key]["answered_by"],
                 }
             )
-        elif key in dep:
-            row = dep[key]
-            if row["verdict"] != CJ.DEPICTS:
-                out.append(
-                    {
-                        "site_id": key[0],
-                        "file": key[1],
-                        "verdict": row["verdict"],
-                        "shows": row["note"],
-                        "answered_by": row["answered_by"],
-                    }
-                )
-            elif key[1] in rejected.get(key[0], ()):
+        elif key in dep and dep[key]["verdict"] != CJ.DEPICTS:
+            out.append(
+                {
+                    "site_id": key[0],
+                    "file": key[1],
+                    "verdict": dep[key]["verdict"],
+                    "shows": dep[key]["note"],
+                    "answered_by": dep[key]["answered_by"],
+                }
+            )
+        elif key in rck:
+            if rck[key]["verdict"] != CJ.DEPICTS:
                 out.append(
                     {
                         "site_id": key[0],
                         "file": key[1],
                         "verdict": "rejected by the re-check",
-                        "shows": row["note"],
-                        "answered_by": row["answered_by"],
+                        "shows": rck[key]["shows"],
+                        "answered_by": rck[key]["answered_by"],
                     }
                 )
-        else:
+        elif key[0] in pool_sites and key not in dep:
             raise PoolError(
                 f"{key[0]}: {key[1]!r} was called depicts by MiniMax and Claude has not judged it"
             )

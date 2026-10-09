@@ -820,6 +820,8 @@ class TestTheIdentityFlags:
         ]
         got = ID.research_population(sites, ["d"])
         assert [s["site_id"] for s in got] == ["a", "d"]
+        # a site the verify stage asks about is left to it
+        assert [s["site_id"] for s in ID.research_population(sites, ["d"], {"d"})] == ["a"]
 
 
 class TestTheIdentityQuestions:

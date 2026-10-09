@@ -516,8 +516,55 @@ class TestTheRole:
         text = V.brief(run, handoff, "check-001", "adversarial")
         assert "running as claude-opus-5-5 in the role adversarial at effort high" in text
         assert "--role adversarial" in text
+        assert V.brief(run, handoff, "check-001") == text  # the recheck is bound to its role
+
+    def test_the_other_populations_keep_the_lane_s_original_brief(self, tmp_path: Path) -> None:
+        run, handoff, pictures = TS._setup(tmp_path)
+        state = ST.load_read(run / "READ.json")
+        V.export_check(run, handoff, state, PC.load_prechecks(run / "PRECHECK.jsonl"), pictures)
         legacy = V.brief(run, handoff, "check-001")
         assert "running as claude-sonnet-5-5." in legacy and "--role" not in legacy
+
+    def test_a_recheck_export_records_its_role(self, tmp_path: Path) -> None:
+        run, _, _ = _recheck_run(
+            tmp_path, {THASOS: "other_site", HABU: "depicts", BARE: "region_or_type"}
+        )
+        record = json.loads((run / V.EXPORT_CHECK).read_text(encoding="utf-8"))
+        assert record["role"] == "adversarial"
+
+    def test_a_recheck_refuses_a_brief_or_an_import_in_another_role(self, tmp_path: Path) -> None:
+        run, _, handoff = _recheck_run(
+            tmp_path, {THASOS: "other_site", HABU: "depicts", BARE: "region_or_type"}
+        )
+        with pytest.raises(
+            ST.StateError, match="answered in the role adversarial, not image_depicts"
+        ):
+            V.brief(run, handoff, "check-001", "image_depicts")
+        (run / V.CHECK).unlink()
+        with pytest.raises(
+            ST.StateError, match="answered in the role adversarial, not image_depicts"
+        ):
+            V.import_stage(run, V.STAGE_CHECK, "image_depicts")
+
+    def test_a_recheck_import_without_a_role_still_demands_the_adversarial_one(
+        self, tmp_path: Path
+    ) -> None:
+        """Sonnet's answers, recorded without a role, must not drive the swap of an owner's hero."""
+        run, handoff, pictures = TS._setup(tmp_path)
+        state = ST.load_read(run / "READ.json")
+        pre = PC.load_prechecks(run / "PRECHECK.jsonl")
+        V.export_check(
+            run, handoff, state, pre, pictures, population=V.RECHECK, sites=SITES,
+            context={sid: _context(sid) for sid in SITES},
+        )  # fmt: skip
+        for line in OH.manifest(handoff):
+            OH.write_answer(
+                handoff, batch_id=line["batch_id"], stage=V.STAGE_CHECK, label=line["label"],
+                text=_answer("depicts", basis="b"), answered_by=line["batch_id"],
+                model=OH.SONNET_MODEL, now=lambda: "2026-10-09T03:00:00+00:00",
+            )  # fmt: skip
+        with pytest.raises(ST.StateError, match="not in the role adversarial"):
+            V.import_stage(run, V.STAGE_CHECK)
 
     def test_an_unknown_role_is_refused(self, tmp_path: Path) -> None:
         run, _, handoff = _recheck_run(
@@ -532,10 +579,7 @@ class TestTheRole:
         run, handoff, pictures = TS._setup(tmp_path)
         state = ST.load_read(run / "READ.json")
         pre = PC.load_prechecks(run / "PRECHECK.jsonl")
-        V.export_check(
-            run, handoff, state, pre, pictures, population=V.RECHECK, sites=SITES,
-            context={sid: _context(sid) for sid in SITES},
-        )  # fmt: skip
+        V.export_check(run, handoff, state, pre, pictures)
         for line in OH.manifest(handoff):
             OH.write_answer(
                 handoff, batch_id=line["batch_id"], stage=V.STAGE_CHECK, label=line["label"],
@@ -590,6 +634,22 @@ class TestThePlan:
     def _expected(self, run: Path) -> dict[str, dict[str, Any]]:
         lines = (run / "chunks" / "EXPECTED.jsonl").read_text(encoding="utf-8").splitlines()
         return {e["site_id"]: e for e in map(json.loads, lines)}
+
+    def test_a_recheck_plan_refuses_an_answer_that_is_not_the_adversarial_role_s(
+        self, tmp_path: Path
+    ) -> None:
+        """Whatever the importer was told, the plan reads the stamps of CHECK.jsonl itself."""
+        run, _, _ = _recheck_run(tmp_path, {THASOS: "depicts", HABU: "depicts", BARE: "depicts"})
+        rows = [json.loads(x) for x in (run / V.CHECK).read_text(encoding="utf-8").splitlines()]
+        rows[0]["model"] = OH.SONNET_MODEL
+        (run / V.CHECK).write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        with pytest.raises(ST.StateError, match="not the adversarial role's"):
+            PL.write_plan(run)
+        rows[0]["model"] = OH.OPUS_MODEL
+        rows[0]["answered_by"] = "check-001"
+        (run / V.CHECK).write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        with pytest.raises(ST.StateError, match="not in the role adversarial"):
+            PL.write_plan(run)
 
     def test_region_or_type_keeps_the_hero_and_other_site_clears(self, tmp_path: Path) -> None:
         run, summary = self._planned(

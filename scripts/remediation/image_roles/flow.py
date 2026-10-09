@@ -97,20 +97,23 @@ def identity_export(
     far from the site's, or a label with no word of the name); `research` about the sites with no
     identity and the `found_nothing` ones (sites a first search found no file for)."""
     sites = _jsonl(run / PP.POPULATION_FILE)
-    if mode == "verify":
-        missing = entities.missing([s["qid"] for s in sites if s.get("qid")])
-        if missing:
-            raise FlowError(
-                f"{len(missing)} item(s) are in neither the harvest nor its delta (first "
-                f"{missing[0]}): `run.py fetch-entities` first"
-            )
-        asked = ID.verify_population(sites, entities)
-        spec = ID.VERIFY_SPEC
-    elif mode == "research":
-        asked = [dict(s) for s in ID.research_population(sites, found_nothing)]
-        spec = ID.RESEARCH_SPEC
-    else:
+    if mode not in ("verify", "research"):
         raise FlowError(f"mode {mode!r} is not 'verify' or 'research'")
+    missing = entities.missing([s["qid"] for s in sites if s.get("qid")])
+    if missing:
+        raise FlowError(
+            f"{len(missing)} item(s) are in neither the harvest nor its delta (first "
+            f"{missing[0]}): `run.py fetch-entities` first"
+        )
+    flagged = ID.verify_population(sites, entities)
+    if mode == "verify":
+        asked = flagged
+        spec = ID.VERIFY_SPEC
+    else:
+        # the sites the verify stage asks about are not asked again: one stage answers a site
+        verified = {str(s["site_id"]) for s in flagged}
+        asked = [dict(s) for s in ID.research_population(sites, found_nothing, verified)]
+        spec = ID.RESEARCH_SPEC
     if not asked:
         raise FlowError(f"no site to {mode}")
     questions = ID.build_questions(asked, mode=mode, cache=cache)
@@ -332,7 +335,13 @@ def recheck_export(
         if not state.to_check:
             raise FlowError("no site waits for a re-check: write the targets")
         picks = _picks_for(run, state.to_check, cache)
-    questions, pics = HR.build_questions(list(picks), read, round_number=round_number)
+    picks = [
+        pick
+        if "wikipedia_cache_file" in pick
+        else {**pick, "wikipedia_cache_file": _cache_file(cache, str(pick["site_id"]))}
+        for pick in picks
+    ]
+    questions, pics = HR.build_questions(picks, read, round_number=round_number)
     summary = SG.export(run, handoff, HR.spec_for_round(round_number), questions, pics)
     return summary | {"round": round_number, "picks": len(picks)}
 
@@ -379,20 +388,52 @@ def pool(run: Path, old_run: Path) -> dict[str, Any]:
     }
 
 
-def pool_picks(run: Path, old_run: Path) -> list[dict[str, Any]]:
-    """The old run's targets that are in this run's population, as picks for `recheck_export`."""
-    ids = {s["site_id"] for s in _population(run)}
-    return PL.target_picks(old_run, _population(run), ids)
+def pool_picks(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]]:
+    """The old run's targets that Claude has to re-check, as picks for `recheck_export`: those of
+    this run's population (sites that serve nothing), and those that are **live heroes** in the
+    fresh read `state` - the written ones (178 of the 192 first heroes), whose sites are no longer
+    in the population. A written hero's site record is the read's (`PL.state_record`)."""
+    population = _population(run)
+    in_population = {s["site_id"] for s in population}
+    heroes = PL.live_hero_files(state)
+    wanted: set[str] = set()
+    records = {str(s["site_id"]): s for s in population}
+    for target in _jsonl(old_run / CJ.TARGETS):
+        site_id = str(target["site_id"])
+        if site_id in in_population:
+            wanted.add(site_id)
+        elif ST.canonical_file(target["commons_file"]) in heroes.get(site_id, ()):
+            wanted.add(site_id)
+            records[site_id] = PL.state_record(state, site_id)
+    return PL.target_picks(old_run, list(records.values()), wanted)
 
 
 def denied(run: Path, old_run: Path, state: ST.State) -> list[dict[str, Any]]:
     """The live heroes MiniMax's `depicts` put on a page and this Claude run does not confirm, in the
-    shape `served_image.recheck` reads."""
-    rejected = HR.rejected(recheck_results(run))
+    shape `served_image.recheck` reads.
+
+    A live hero that is an old target must have a Claude re-check row (`pool-picks` +
+    `recheck-export`): the written heroes are judged by the re-check alone, since they were never in
+    the pool. One without a row is refused by name - it would stay on its page unjudged."""
+    rechecks = recheck_results(run)
+    judged = {(str(r["meta"]["site_id"]), str(r["meta"]["file"])) for r in rechecks}
+    heroes = PL.live_hero_files(state)
+    unchecked = sorted(
+        f"{t['site_id']}: {t['commons_file']}"
+        for t in _jsonl(old_run / CJ.TARGETS)
+        if ST.canonical_file(t["commons_file"]) in heroes.get(str(t["site_id"]), ())
+        and (str(t["site_id"]), str(t["commons_file"])) not in judged
+    )
+    if unchecked:
+        raise FlowError(
+            f"{len(unchecked)} live hero(es) were picked by MiniMax and no Claude re-check judged "
+            f"them (first {unchecked[0]}): `pool-picks` and `recheck-export` them first"
+        )
     pairs = PL.denied_pairs(
         _jsonl(old_run / CJ.VERDICTS),
         PF.judged(SG.read_results(run, PF.SPEC)),
         _jsonl(run / VERDICTS),
-        rejected,
+        rechecks,
+        {s["site_id"] for s in _population(run)},
     )
     return PL.denied_heroes(state, pairs)

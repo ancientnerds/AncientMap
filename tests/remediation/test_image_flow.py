@@ -368,6 +368,28 @@ class TestTheIdentityStep:
         )
         assert got["sites"] == 2
 
+    def test_a_site_the_verify_stage_asks_about_is_not_researched_as_well(
+        self, tmp_path: Path
+    ) -> None:
+        """A (flagged) is in the verify export; a first search that found nothing for it must not
+        put it into the research export too: `identity_apply` would refuse the double answer."""
+        run = self._run(tmp_path)
+        FL.identity_export(run, tmp_path / "h-v", "verify", entities=self._store(), cache=None)
+        got = FL.identity_export(
+            run,
+            tmp_path / "h-r",
+            "research",
+            entities=self._store(),
+            cache=None,
+            found_nothing=[A, C],
+        )
+        researched = {
+            s["site_id"]
+            for q in SG.load_questions(run, ID.RESEARCH_SPEC).values()
+            for s in q.meta["sites"]
+        }
+        assert got["sites"] == 2 and A not in researched and researched == {B, C}
+
     def test_an_item_nobody_holds_stops_the_verify_export(self, tmp_path: Path) -> None:
         run = self._run(tmp_path)
         with pytest.raises(FL.FlowError, match="in neither the harvest nor its delta"):
@@ -431,6 +453,27 @@ class TestTheIdentityStep:
         assert FL.judged_not_depicts([verdicts]) == {"a": ["claude-no.jpg"]}
 
 
+def served_state(tmp_path: Path, heroes: dict[str, list[tuple[int, str]]]) -> ST.State:
+    """A fresh read whose sites serve the given hero rows: `{site: [(image id, Commons file)]}`."""
+    run = tmp_path / "served"
+    run.mkdir()
+    data = {
+        "read_at": NOW,
+        "sites": [
+            {"id": sid, "name": f"Site {sid}", "country": "Italy", "site_type": "Tomb", "lat": 41.5, "lon": 12.5, "thumbnail_url": None}
+            for sid in heroes
+        ],
+        "images": [
+            {"id": image_id, "site_id": sid, "filename": f"{image_id}.webp", "title": file, "original_url": f"https://upload.wikimedia.org/wikipedia/commons/a/ab/{file}", "commons_page_url": None, "is_hero": True, "is_lead": False, "is_excluded": False, "sort_order": 0, "file_size_bytes": 1}
+            for sid, rows in heroes.items()
+            for image_id, file in rows
+        ],
+        "retired": [],
+    }  # fmt: skip
+    ST.write_read(run / "READ.json", data)
+    return ST.load_read(run / "READ.json")
+
+
 class TestThePoolStep:
     def test_the_old_pictures_are_the_input_of_the_same_steps(self, tmp_path: Path) -> None:
         from tests.remediation.test_candidate_routes import _pool_run
@@ -442,5 +485,72 @@ class TestThePoolStep:
         assert got == {"sites": 1, "pictures": 1, "pictures_gone": 2}
         sites = [json.loads(x) for x in (run / FL.PICTURES).read_text().splitlines()]
         assert [s["site_id"] for s in sites] == ["a"]
-        picks = FL.pool_picks(run, old)
+        picks = FL.pool_picks(run, old, served_state(tmp_path, {"b": []}))
         assert [p["file"] for p in picks] == ["Here.jpg"]
+
+    def test_a_written_hero_is_re_checked_with_the_site_record_of_the_read(
+        self, tmp_path: Path
+    ) -> None:
+        """The old target of site a was written as a live hero, so a is not in the population (b is):
+        the pick comes from the read - name, point - and not from `POPULATION.jsonl`."""
+        from tests.remediation.test_candidate_routes import _pool_run
+
+        old = _pool_run(tmp_path)
+        run = tmp_path / "pool"
+        FL.write_population(run, [read_line("b", "Site b")])
+        state = served_state(tmp_path, {"a": [(5, "Here.jpg")], "b": []})
+        (pick,) = FL.pool_picks(run, old, state)
+        assert (pick["site_id"], pick["file"], pick["name"], pick["lat"]) == (
+            "a",
+            "Here.jpg",
+            "Site a",
+            41.5,
+        )
+
+    def test_a_target_that_is_neither_pooled_nor_a_live_hero_is_no_pick(
+        self, tmp_path: Path
+    ) -> None:
+        from tests.remediation.test_candidate_routes import _pool_run
+
+        old = _pool_run(tmp_path)
+        run = tmp_path / "pool"
+        FL.write_population(run, [read_line("b", "Site b")])
+        state = served_state(tmp_path, {"a": [(5, "Other.jpg")], "b": []})
+        assert FL.pool_picks(run, old, state) == []
+
+    def _denial_run(self, tmp_path: Path, verdict: str | None) -> tuple[Path, Path, ST.State]:
+        from tests.remediation.test_candidate_routes import _pool_run
+
+        old = _pool_run(tmp_path)
+        run = tmp_path / "pool"
+        FL.write_population(run, [read_line("b", "Site b")])
+        for name in (PF.SPEC.result_file, FL.VERDICTS):
+            (run / name).write_text("", encoding="utf-8")
+        if verdict is not None:
+            row = {
+                "verdict": verdict,
+                "shows": "a coin of another town",
+                "basis": "https://commons.wikimedia.org/wiki/File:Here.jpg",
+                "answered_by": "adversarial:rck-01-001",
+                "model": OH.OPUS_MODEL,
+                "meta": {"site_id": "a", "file": "Here.jpg", "round": 1},
+            }
+            (run / "RECHECK_01.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+        return old, run, served_state(tmp_path, {"a": [(5, "Here.jpg")], "b": []})
+
+    def test_a_written_hero_the_recheck_rejects_is_denied(self, tmp_path: Path) -> None:
+        old, run, state = self._denial_run(tmp_path, "other_site")
+        got = FL.denied(run, old, state)
+        assert [(h["image_id"], h["site_id"], h["verdict"]) for h in got] == [
+            (5, "a", "rejected by the re-check")
+        ]
+        assert got[0]["shows"] == "a coin of another town"
+
+    def test_a_written_hero_the_recheck_confirms_is_not_denied(self, tmp_path: Path) -> None:
+        old, run, state = self._denial_run(tmp_path, "depicts")
+        assert FL.denied(run, old, state) == []
+
+    def test_a_written_hero_nobody_re_checked_is_refused_by_name(self, tmp_path: Path) -> None:
+        old, run, state = self._denial_run(tmp_path, None)
+        with pytest.raises(FL.FlowError, match="no Claude re-check judged"):
+            FL.denied(run, old, state)

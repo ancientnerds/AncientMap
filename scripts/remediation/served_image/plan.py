@@ -426,6 +426,19 @@ def _claims_a_file(prechecks: Mapping[str, Mapping[str, Any]]) -> bool:
     return any(pre["status"] == PC.NO_IMAGE and pre["qid"] for pre in prechecks.values())
 
 
+def _require_role(population: str, rows: Any, name: str) -> None:
+    """A recheck's answers are the adversarial role's, whatever the importer was told: the plan
+    reads the stamps of `name` itself (owner decision D6)."""
+    role = V.population_role(population)
+    if role is None:
+        return
+    problems = V.role_problems(list(rows), role)
+    if problems:
+        raise ST.StateError(
+            f"{len(problems)} answer(s) of {name} are not the {role} role's (first: {problems[0]})"
+        )
+
+
 def build(run: Path) -> tuple[list[SitePlan], dict[str, Any]]:
     state = ST.load_read(run / "READ.json")
     V.verify_precheck(run)
@@ -440,6 +453,7 @@ def build(run: Path) -> tuple[list[SitePlan], dict[str, Any]]:
             raise ST.StateError("CHECK was exported from another READ.json - re-run the lane")
         population = record["population"]
         checks = _by_site(V.read_jsonl(run / V.CHECK))
+        _require_role(population, checks.values(), V.CHECK)
     else:
         # A claim-only run: the served images were judged by the 2026-09-30 run and delivered, so
         # this plan may not touch them and must say that instead of claiming them as its own.
@@ -471,6 +485,7 @@ def build(run: Path) -> tuple[list[SitePlan], dict[str, Any]]:
             if replace_record["questions"] and (run / V.REPLACE).exists()
             else {}
         )
+        _require_role(population, replaces.values(), V.REPLACE)
         missing = {c["site_id"] for c in failed} - without - set(replaces)
         if missing:
             raise ST.StateError(f"{len(missing)} failed image(s) have no replacement answer")

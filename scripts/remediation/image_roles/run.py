@@ -23,7 +23,9 @@ The steps, in order, for one candidate run directory `C` (`flow.py` explains eac
 The MiniMax pool (D10, C4), with `C` the population's run directory and `OLD` the 2026-10-06 run:
 
     run.py pool            --run-dir C --old-run OLD             -> C/PICTURES.jsonl (pictures on disk)
-    run.py pool-picks      --run-dir C --old-run OLD --out FILE  the old targets as picks
+    run.py pool-picks      --run-dir C --old-run OLD --served-run S --out FILE
+                                       the old targets of the population's sites and the old targets
+                                       that are live heroes in S/READ.json (the written ones) as picks
     run.py recheck-export  --run-dir C --handoff H --picks FILE  Opus re-checks the old targets
     run.py denied          --run-dir C --old-run OLD --served-run S
                                        the heroes MiniMax put on a page and Claude does not confirm
@@ -249,7 +251,8 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("pool", "pool-picks", "denied"):
         commands[name].add_argument("--old-run", required=True, type=Path)
     commands["pool-picks"].add_argument("--out", required=True, type=Path)
-    commands["denied"].add_argument("--served-run", required=True, type=Path)
+    for name in ("pool-picks", "denied"):
+        commands[name].add_argument("--served-run", required=True, type=Path)
     return parser
 
 
@@ -297,7 +300,7 @@ def main(argv: list[str] | None = None) -> int:
         elif command == "pool":
             _print(FL.pool(run, args.old_run))
         elif command == "pool-picks":
-            picks = FL.pool_picks(run, args.old_run)
+            picks = FL.pool_picks(run, args.old_run, ST.load_read(args.served_run / "READ.json"))
             ST.write_text_once(args.out, ST.jsonl_text(picks))
             _print({"picks": len(picks), "file": str(args.out)})
         else:

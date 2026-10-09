@@ -263,14 +263,18 @@ class TestBuildingTheGold:
         thresholds["roles"]["image_prefilter"]["kind_cases"] = 2
         thresholds["roles"]["pilot_judge"]["per_class"] = 1
         pool = [
-            {"site_id": "pool1", "name": "Pool 1", "country": "Italy", "candidates": [
+            {"site_id": "site5", "name": "Pool 5", "country": "Italy", "candidates": [
                 {"file": "P1.jpg", "picture_url": "u1", "why": "a search"},
                 {"file": "P2.jpg", "picture_url": "u2", "why": "a search"},
-            ]}
+            ]},
+            {"site_id": "retired1", "name": "Gone", "country": "Italy", "candidates": [
+                {"file": "G1.jpg", "picture_url": "u1", "why": "a search"},
+            ]},
         ]  # fmt: skip
         pool_verdicts = [
-            {"site_id": "pool1", "file": "P1.jpg", "verdict": "depicts"},
-            {"site_id": "pool1", "file": "P2.jpg", "verdict": "other_site"},
+            {"site_id": "site5", "file": "P1.jpg", "verdict": "depicts"},
+            {"site_id": "site5", "file": "P2.jpg", "verdict": "other_site"},
+            {"site_id": "retired1", "file": "G1.jpg", "verdict": "depicts"},
         ]
         for url in ("u1", "u2"):  # the pictures of the pool are on disk
             (tmp_path / url).write_bytes(b"x")
@@ -312,6 +316,14 @@ class TestBuildingTheGold:
         # one adjudicated candidate per MiniMax class, with no truth yet
         assert sorted(c["file"] for c in groups["adjudicated"]) == ["P1.jpg", "P2.jpg"]
         assert all(c["truth"] is None for c in groups["adjudicated"])
+        # the site of an adjudicated case is the fresh read's, never an invented point; a pool site
+        # the read does not show (retired1) is left out
+        assert {c["site"]["site_id"] for c in groups["adjudicated"]} == {"site5"}
+        assert all(
+            (c["site"]["name"], c["site"]["lat"], c["site"]["lon"], c["site"]["site_type"])
+            == ("Site 5", 1.0, 2.0, "Tomb")
+            for c in groups["adjudicated"]
+        )
         assert {c["role"] for c in groups["adjudicated"]} == {"image_depicts"}
         # the production prompt reads the description and the lead
         assert groups["positive"][0]["site"]["wikipedia_lead"] is None
@@ -325,6 +337,40 @@ class TestBuildingTheGold:
         }
         ids = [c["case_id"] for c in cases]
         assert len(ids) == len(set(ids))
+
+
+class TestTheFirstHeroesAreNoGold:
+    def test_the_files_of_the_insert_waves_are_found_in_the_read(self, tmp_path: Path) -> None:
+        world = TestBuildingTheGold()._world(tmp_path)
+        chunk = tmp_path / "import_hero" / "insert-2026-10-06-001" / "chunk-001"
+        chunk.mkdir(parents=True)
+        written = [
+            {"site_id": "site1", "values": {"original_url": world["rows"][0]["original_url"]}},
+            {  # another file at a site the read knows: not a row of the read
+                "site_id": "site2",
+                "values": {"original_url": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Other.jpg"},
+            },
+        ]  # fmt: skip
+        (chunk / "INSERT.jsonl").write_text(
+            "".join(json.dumps(r) + "\n" for r in written), encoding="utf-8"
+        )
+        assert CAL.inserted_heroes(world["state"], tmp_path / "import_hero") == {101}
+
+    def test_a_root_without_a_wave_is_refused_by_name(self, tmp_path: Path) -> None:
+        world = TestBuildingTheGold()._world(tmp_path)
+        with pytest.raises(CAL.CalibrationError, match="INSERT.jsonl"):
+            CAL.inserted_heroes(world["state"], tmp_path / "nowhere")
+
+    def test_the_gold_command_cannot_be_started_without_its_exclusions(self) -> None:
+        with pytest.raises(SystemExit):
+            CAL.main(
+                [
+                    "gold", "--dir", "d", "--read", "r", "--c1-dir", "c", "--labels", "l",
+                    "--import-geojson", "i", "--served-run", "s", "--pool-run", "p",
+                    "--population", "po", "--identity-gold", "g", "--wiki-cache", "w",
+                    "--insert-root", "x",
+                ]
+            )  # fmt: skip
 
 
 # ===================================================================================== measuring

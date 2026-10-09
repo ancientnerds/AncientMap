@@ -516,7 +516,12 @@ def build_gold(
     }
     for v in pool_verdicts:
         key = (str(v["site_id"]), str(v["file"]))
-        if key in candidates and Path(pool_path(candidates[key][1])).is_file():
+        # a pool site the fresh read no longer shows (retired since) has no record to ask about
+        if (
+            key in candidates
+            and key[0] in state.sites
+            and Path(pool_path(candidates[key][1])).is_file()
+        ):
             by_class[str(v["verdict"])].append({"site_id": key[0], "file": key[1]})
     adjudicated = [
         item
@@ -524,17 +529,10 @@ def build_gold(
         for item in sample(by_class[cls], roles["pilot_judge"]["per_class"], seed)
     ]
     for item in adjudicated:
-        site, candidate = candidates[(item["site_id"], item["file"])]
-        info = population.get(item["site_id"]) or {
-            "site_id": item["site_id"],
-            "name": site["name"],
-            "country": site.get("country"),
-            "lat": 0.0,
-            "lon": 0.0,
-        }
+        _, candidate = candidates[(item["site_id"], item["file"])]
         case = depicts_case(
             "adjudicated",
-            {**info, "wikipedia_lead": lead(item["site_id"])},
+            _site_context(state.sites[item["site_id"]], context, lead),
             item["file"],
             pool_path(candidate),
             None,
@@ -553,6 +551,28 @@ def build_gold(
 
 
 # ---------------------------------------------------------------------------------- the questions
+def inserted_heroes(state: ST.State, insert_root: Path) -> set[int]:
+    """The image ids, in the fresh read `state`, of the first heroes the INSERT waves wrote (the 192
+    of the candidate search and the 2025 import): the files of the waves' own journal
+    (`insert-*/chunk-*/INSERT.jsonl`) that the read still holds at their site."""
+    files: set[tuple[str, str]] = set()
+    lines = sorted(insert_root.glob("insert-*/chunk-*/INSERT.jsonl"))
+    if not lines:
+        raise CalibrationError(f"{insert_root} holds no insert-*/chunk-*/INSERT.jsonl")
+    for path in lines:
+        for row in _jsonl(path):
+            name = ST.file_of_url(row["values"]["original_url"])
+            if name is None:
+                raise CalibrationError(f"{path}: {row['site_id']} names no Commons file")
+            files.add((str(row["site_id"]), name))
+    return {
+        int(r["id"])
+        for sid in state.site_ids()
+        for r in state.rows.get(sid, ())
+        if (sid, ST.file_of_row(r)) in files
+    }
+
+
 def questions_for(
     role: str, cases: Sequence[Mapping[str, Any]], read: Callable[[Mapping[str, Any]], bytes]
 ) -> tuple[list[SG.Question], dict[str, bytes]]:
@@ -884,8 +904,8 @@ def cmd_gold(directory: Path, args: argparse.Namespace) -> dict[str, Any]:
     images = Images()
     context = {str(r["site_id"]): r for r in pv.read_rows(DESCRIPTIONS_SQL)}
     cache = WikiCache(args.wiki_cache)
-    excluded: set[int] = set()
-    for path in args.exclude_heroes or ():
+    excluded = inserted_heroes(state, args.insert_root)
+    for path in args.exclude_heroes:
         excluded |= {int(r["image_id"]) for r in _jsonl(path)}
     population = {str(r["site_id"]): r for r in _jsonl(args.population)}
     gold = [
@@ -939,7 +959,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     gold.add_argument("--population", required=True, type=Path, help="POPULATION.jsonl")
     gold.add_argument("--identity-gold", required=True, type=Path, help="site_id, label wrong|good")
     gold.add_argument("--wiki-cache", required=True, type=Path)
-    gold.add_argument("--exclude-heroes", type=Path, nargs="*", help="OTHER_SITE_HEROES.jsonl")
+    gold.add_argument(
+        "--exclude-heroes",
+        type=Path,
+        nargs="+",
+        required=True,
+        help="OTHER_SITE_HEROES.jsonl of the D15 run: the 47 re-checked heroes are the lane's "
+        "subjects, never gold",
+    )
+    gold.add_argument(
+        "--insert-root",
+        type=Path,
+        required=True,
+        help="import_hero/ with the insert-* waves: the 192 first heroes are the lane's subjects",
+    )
     export = sub.choices["export"]
     export.add_argument("--role", required=True, choices=sorted(ROLE_SPECS))
     export.add_argument("--handoff", required=True, type=Path)

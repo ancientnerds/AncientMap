@@ -18,6 +18,7 @@ After `write-targets` the wave is an ordinary INSERT wave, in three steps that w
 
 ```bash
 $PY judge_run.py insert-claims --run-dir <this run> --insert-run <the INSERT wave's run dir>
+    [--recheck-run <the run whose Claude re-check confirmed a MiniMax-judged run's targets>]
 $PY import_hero/run.py read        --run-dir <the INSERT wave's run dir>
 $PY import_hero/run.py fetch       --run-dir <the INSERT wave's run dir> --root <offsite> --target insert
 ```
@@ -149,6 +150,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                 default=None,
                 help="only these targets (a file of site ids, one per line): a re-seed",
             )
+            command.add_argument(
+                "--recheck-run",
+                type=Path,
+                action="append",
+                default=[],
+                help="a run directory whose RECHECK_NN.jsonl confirms targets of a MiniMax-judged "
+                "run (`image_roles/run.py pool` + recheck); repeatable. A target judged by no "
+                "Claude model and confirmed by none is refused.",
+            )
     args = parser.parse_args(argv)
     try:
         if args.command == "judge-export":
@@ -188,7 +198,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     if line.strip()
                 ]
             )
-            summary = CJ.insert_claims(args.run_dir, args.insert_run, listed)
+            confirmed = {pair for run in args.recheck_run for pair in CJ.confirmed_by_recheck(run)}
+            summary = CJ.insert_claims(args.run_dir, args.insert_run, listed, confirmed)
     except (JudgeError, OSError, ValueError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 1

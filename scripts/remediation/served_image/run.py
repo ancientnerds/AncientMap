@@ -243,7 +243,8 @@ def main(argv: list[str] | None = None) -> int:
             "--role",
             default=None,
             help="a role of roles.ROLES (D6): the agents run as its model; an import refuses "
-            "an answer not given in it",
+            "an answer not given in it. A recheck run is bound to the adversarial role: a "
+            "different role is refused, and with none given that role applies",
         )
     commands["derive-sites"].add_argument("--verdicts-run", required=True, type=Path)
     commands["context"].add_argument(

@@ -10,9 +10,12 @@ refusal) and names them, so that one new wave can ask for them again:
     credit_refusals.py --import-root output/remediation/import_hero \\
         --candidate-run output/remediation/candidate_search/candidates-2026-10-06 --out R
 
-writes `R/CREDIT_SITES_CANDIDATE.txt` and `R/CREDIT_SITES_IMPORT.txt` (one site id per line) and
-prints the commands of the new waves. The INSERT waves of 2026-10-06/07 were built from two sources,
-and none of them still holds its `IMPORT_CLAIMS.json`: a site the candidate search confirmed gets
+writes `R/CREDIT_SITES_CANDIDATE.txt`, `R/CREDIT_SITES_IMPORT.txt` and `R/CREDIT_SITES_CLAUDE.txt`
+(one site id per line) and prints the commands of the new waves. The candidate run of 2026-10-06 was
+judged by MiniMax alone (owner decisions D6, D10): a site whose target no Claude model judged and no
+Claude re-check confirmed (`--recheck-run`) lands in `CREDIT_SITES_CLAUDE.txt` and is not released.
+
+The INSERT waves of 2026-10-06/07 were built from two sources, and none of them still holds its `IMPORT_CLAIMS.json`: a site the candidate search confirmed gets
 its claim written again from the candidate run (`judge_run.py insert-claims --sites`), a site the
 2025 import linked gets it from a regenerated import run (`run.py plan`, `insert-seed`). A refusal
 for anything else (size, upscale, a name the file system refuses, a file type) is not touched: it
@@ -25,13 +28,15 @@ import argparse
 import json
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from pathlib import Path
 
 _HERE = Path(__file__).resolve()
 for _path in (_HERE.parents[3], _HERE.parents[1]):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
+
+from candidate_search import judge as CJ  # noqa: E402
 
 from import_hero.plan import NULLABLE_FETCH_COLUMNS, ImportHeroError  # noqa: E402
 
@@ -86,14 +91,34 @@ def credit_refusals(import_root: Path) -> list[str]:
     return sorted(s for s, why in latest.items() if s not in fetched and is_credit_refusal(why))
 
 
-def by_source(sites: Sequence[str], candidate_run: Path) -> tuple[list[str], list[str]]:
-    """`(candidate sites, import sites)`: the sites the candidate run holds a confirmed target for,
-    and the rest - the waves that were seeded from the 2025 import's own links."""
+def by_source(
+    sites: Sequence[str], candidate_run: Path, confirmed: Collection[tuple[str, str]] = ()
+) -> tuple[list[str], list[str], list[str]]:
+    """`(candidate sites, import sites, sites for Claude)`.
+
+    The candidate sites are those the candidate run holds a target for whose `depicts` verdict a
+    Claude model gave, or a Claude re-check confirmed (`confirmed`). A site the run holds a target
+    for whose verdict is MiniMax's and unconfirmed goes to the third list: it is not released, it is
+    judged again first (owner decisions D6, D10; the candidate run of 2026-10-06 was judged by
+    MiniMax alone). The rest are the waves that were seeded from the 2025 import's own links."""
     path = candidate_run / TARGETS
     if not path.is_file():
         raise CreditRefusalError(f"{path} does not exist - the candidate run holds the targets")
-    targeted = {str(row["site_id"]) for row in _jsonl(path)}
-    return [s for s in sites if s in targeted], [s for s in sites if s not in targeted]
+    targets = [row for row in _jsonl(path) if str(row["site_id"]) in set(sites)]
+    verdicts_path = candidate_run / CJ.VERDICTS
+    if not verdicts_path.is_file():
+        raise CreditRefusalError(f"{verdicts_path} does not exist - the verdicts name the judge")
+    try:
+        waiting = CJ.targets_without_claude(targets, _jsonl(verdicts_path), confirmed)
+    except ValueError as exc:
+        raise CreditRefusalError(str(exc)) from exc
+    for_claude = {site_id for site_id, _file, _model in waiting}
+    targeted = {str(row["site_id"]) for row in targets}
+    return (
+        [s for s in sites if s in targeted and s not in for_claude],
+        [s for s in sites if s not in targeted],
+        [s for s in sites if s in for_claude],
+    )
 
 
 def commands(
@@ -102,6 +127,8 @@ def commands(
     sites_file: Path | None,
     import_sites_file: Path | None,
     import_run: Path,
+    recheck_runs: Sequence[Path] = (),
+    claude_sites_file: Path | None = None,
 ) -> list[str]:
     """The operator's commands, in order: one new wave per source (`<new_run>-cand` for the
     candidate search's targets, `<new_run>-import` for the 2025 import's links). The five writer
@@ -110,12 +137,20 @@ def commands(
     judge = "./.venv/Scripts/python.exe scripts/remediation/candidate_search/judge_run.py"
     fetch = "--root <offsite image root> --target insert --min-width 800 --min-height 300"
     lines: list[str] = []
+    if claude_sites_file is not None:
+        lines.append(
+            f"# {claude_sites_file}: the candidate run judged these by MiniMax alone; judge them "
+            "again with the Claude image roles (`image_roles/run.py pool` for these sites, then "
+            "prefilter, depicts and recheck), then run this command again with "
+            "--recheck-run <that run>"
+        )
     if sites_file is not None:
         run = Path(f"{new_run}-cand")
+        rechecks = "".join(f" --recheck-run {r}" for r in recheck_runs)
         lines += [
             f"{run_py} read --run-dir {run}",
             f"{judge} insert-claims --run-dir {candidate_run} --insert-run {run} "
-            f"--sites {sites_file}",
+            f"--sites {sites_file}{rechecks}",
             f"{run_py} fetch --run-dir {run} {fetch}",
             f"{run_py} insert-plan --run-dir {run}",
         ]
@@ -138,26 +173,52 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--import-root", required=True, type=Path)
     parser.add_argument("--candidate-run", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument(
+        "--recheck-run",
+        type=Path,
+        action="append",
+        default=[],
+        help="a run directory whose RECHECK_NN.jsonl confirms targets of the MiniMax-judged "
+        "candidate run; repeatable",
+    )
     parser.add_argument("--new-run", type=Path, default=Path("insert-2026-10-09"))
     parser.add_argument("--import-run", type=Path, default=Path("import-hero-2026-10-09"))
     args = parser.parse_args(argv)
     try:
         sites = credit_refusals(args.import_root)
-        candidate_sites, import_sites = by_source(sites, args.candidate_run)
+        confirmed = {pair for run in args.recheck_run for pair in CJ.confirmed_by_recheck(run)}
+        candidate_sites, import_sites, claude_sites = by_source(
+            sites, args.candidate_run, confirmed
+        )
     except CreditRefusalError as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 1
     args.out.mkdir(parents=True, exist_ok=True)
-    files: dict[str, Path | None] = {"candidate": None, "import": None}
-    for kind, group in (("candidate", candidate_sites), ("import", import_sites)):
+    files: dict[str, Path | None] = {"candidate": None, "import": None, "claude": None}
+    groups = (
+        ("candidate", candidate_sites),
+        ("import", import_sites),
+        ("claude", claude_sites),
+    )
+    for kind, group in groups:
         if group:
             files[kind] = args.out / f"CREDIT_SITES_{kind.upper()}.txt"
             text = "".join(f"{s}\n" for s in group)
             files[kind].write_text(text, encoding="utf-8", newline="\n")
-    summary = {"candidate": len(candidate_sites), "import": len(import_sites)}
+    summary = {
+        "candidate": len(candidate_sites),
+        "import": len(import_sites),
+        "needs_claude": len(claude_sites),
+    }
     print(json.dumps(summary, indent=1, sort_keys=True))
     lines = commands(
-        args.candidate_run, args.new_run, files["candidate"], files["import"], args.import_run
+        args.candidate_run,
+        args.new_run,
+        files["candidate"],
+        files["import"],
+        args.import_run,
+        args.recheck_run,
+        files["claude"],
     )
     print("\n".join(lines))
     return 0

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import re
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -100,14 +100,21 @@ def verify_population(sites: Sequence[Mapping[str, Any]], entities: Any) -> list
 
 
 def research_population(
-    sites: Sequence[Mapping[str, Any]], found_nothing: Sequence[str]
+    sites: Sequence[Mapping[str, Any]],
+    found_nothing: Sequence[str],
+    verified: Collection[str] = (),
 ) -> list[Mapping[str, Any]]:
-    """The sites to research: no item and no article, or a first search that found no file."""
+    """The sites to research: no item and no article, or a first search that found no file.
+
+    A site the verify stage asks about (`verified`) is not researched as well: the verify prompt
+    already finds its Commons category and local names, and `identity_rows` refuses a site answered
+    by both stages."""
     asked = set(found_nothing)
     return [
         s
         for s in sites
-        if (not s.get("qid") and not s.get("enwiki_title")) or str(s["site_id"]) in asked
+        if str(s["site_id"]) not in verified
+        and ((not s.get("qid") and not s.get("enwiki_title")) or str(s["site_id"]) in asked)
     ]
 
 

@@ -568,18 +568,18 @@ D17_CASES: list[Case] = [
         "test_what_claude_does_not_confirm_is_denied_with_the_reason",
         T_ROUTES,
     ),
-    g(
+    c(
         "d17: the depicts role's refusal denies",
         POOL,
-        '            if row["verdict"] != CJ.DEPICTS:',
+        '        elif key in dep and dep[key]["verdict"] != CJ.DEPICTS:',
+        "        elif False:",
         "test_what_claude_does_not_confirm_is_denied_with_the_reason",
         T_ROUTES,
     ),
-    c(
+    g(
         "d17: the re-check's rejection denies",
         POOL,
-        "            elif key[1] in rejected.get(key[0], ()):",
-        "            elif False:",
+        '            if rck[key]["verdict"] != CJ.DEPICTS:',
         "test_what_claude_does_not_confirm_is_denied_with_the_reason",
         T_ROUTES,
     ),
@@ -1039,8 +1039,8 @@ D17_CASES: list[Case] = [
     c(
         "d17: research asks the sites with no identity",
         IDENTITY,
-        '        if (not s.get("qid") and not s.get("enwiki_title")) or str(s["site_id"]) in asked',
-        '        if str(s["site_id"]) in asked',
+        '        and ((not s.get("qid") and not s.get("enwiki_title")) or str(s["site_id"]) in asked)',
+        '        and (str(s["site_id"]) in asked)',
         "test_the_research_population_is_no_identity_or_a_first_search_with_no_file",
         T_ROLES,
     ),
@@ -1048,7 +1048,7 @@ D17_CASES: list[Case] = [
     g(
         "d17: verify needs the items",
         FLOW,
-        "        if missing:",
+        "    if missing:",
         "test_an_item_nobody_holds_stops_the_verify_export",
         T_FLOW,
     ),
@@ -1356,7 +1356,255 @@ CACHE_CASES: list[Case] = [
     ),
 ]
 
-CASES: list[Case] = [*D18_CASES, *D15_CASES, *D17_CASES, *CACHE_CASES, *CAL_CASES]
+#: The fix round of the review of 2026-10-09: MiniMax-judged targets never go live without Claude
+#: (D6, D10), the written heroes are re-checked and can be denied, the D15 re-check is bound to its
+#: role, the calibration gold takes its sites from the read, and the identity stages never ask a
+#: site twice.
+FIX_CASES: list[Case] = [
+    # ------------------------------------------------------------ candidate_search/judge.py
+    g(
+        "fix: a target needs a Claude verdict or a Claude re-check",
+        JUDGE,
+        "    if unjudged:",
+        "test_a_minimax_target_is_never_claimed_without_a_claude_recheck",
+        T_JUDGE,
+    ),
+    c(
+        "fix: a re-check confirms a target",
+        JUDGE,
+        "        if models[key] not in stamps and key not in confirmed:",
+        "        if models[key] not in stamps:",
+        "test_a_minimax_target_is_never_claimed_without_a_claude_recheck",
+        T_JUDGE,
+    ),
+    g(
+        "fix: a target has a depicts verdict",
+        JUDGE,
+        "        if key not in models:",
+        "test_a_target_without_a_depicts_verdict_is_refused_by_name",
+        T_JUDGE,
+    ),
+    c(
+        "fix: only a Claude re-check confirms",
+        JUDGE,
+        '            if row["verdict"] == DEPICTS and row["model"] in stamps:',
+        '            if row["verdict"] == DEPICTS:',
+        "test_only_a_claude_stamped_recheck_confirms",
+        T_JUDGE,
+    ),
+    c(
+        "fix: only a depicts re-check confirms",
+        JUDGE,
+        '            if row["verdict"] == DEPICTS and row["model"] in stamps:',
+        '            if row["model"] in stamps:',
+        "test_only_a_claude_stamped_recheck_confirms",
+        T_JUDGE,
+    ),
+    # ------------------------------------------------------------ import_hero/credit_refusals.py
+    c(
+        "fix: a MiniMax target is not released by the credit re-seed",
+        CREDIT,
+        "        [s for s in sites if s in targeted and s not in for_claude],",
+        "        [s for s in sites if s in targeted],",
+        "test_a_minimax_target_is_not_released_until_a_claude_recheck_confirmed_it",
+        T_CREDIT,
+    ),
+    c(
+        "fix: the re-seed names the sites that wait for Claude",
+        CREDIT,
+        "        [s for s in sites if s in for_claude],",
+        "        [],",
+        "test_a_minimax_target_is_not_released_until_a_claude_recheck_confirmed_it",
+        T_CREDIT,
+    ),
+    # ------------------------------------------------------------ candidate_search/pool.py
+    c(
+        "fix: a re-check row judges a written hero",
+        POOL,
+        "        elif key in rck:",
+        "        elif False:",
+        "test_a_written_hero_outside_the_pool_is_judged_by_its_recheck_alone",
+        T_ROUTES,
+    ),
+    c(
+        "fix: only a pool pair can be unjudged",
+        POOL,
+        "        elif key[0] in pool_sites and key not in dep:",
+        "        elif key not in dep:",
+        "test_a_written_hero_outside_the_pool_is_judged_by_its_recheck_alone",
+        T_ROUTES,
+    ),
+    c(
+        "fix: a depicts pair needs no re-check to stay undenied",
+        POOL,
+        "        elif key[0] in pool_sites and key not in dep:",
+        "        elif key[0] in pool_sites:",
+        "test_a_depicts_the_claude_role_confirmed_needs_no_recheck_to_stay_undenied",
+        T_ROUTES,
+    ),
+    c(
+        "fix: a live hero is not excluded",
+        POOL,
+        '            if file and row.get("is_hero") and not row.get("is_excluded"):',
+        '            if file and row.get("is_hero"):',
+        "test_a_live_hero_is_a_hero_row_that_is_not_excluded",
+        T_ROUTES,
+    ),
+    c(
+        "fix: a live hero is a hero",
+        POOL,
+        '            if file and row.get("is_hero") and not row.get("is_excluded"):',
+        '            if file and not row.get("is_excluded"):',
+        "test_a_live_hero_is_a_hero_row_that_is_not_excluded",
+        T_ROUTES,
+    ),
+    # ------------------------------------------------------------ image_roles/flow.py
+    c(
+        "fix: a written hero is a pick",
+        FLOW,
+        '        elif ST.canonical_file(target["commons_file"]) in heroes.get(site_id, ()):',
+        "        elif False:",
+        "test_a_written_hero_is_re_checked_with_the_site_record_of_the_read",
+        T_FLOW,
+    ),
+    c(
+        "fix: only a pooled or live target is a pick",
+        FLOW,
+        '        elif ST.canonical_file(target["commons_file"]) in heroes.get(site_id, ()):',
+        "        else:",
+        "test_a_target_that_is_neither_pooled_nor_a_live_hero_is_no_pick",
+        T_FLOW,
+    ),
+    g(
+        "fix: a live hero of MiniMax needs its re-check",
+        FLOW,
+        "    if unchecked:",
+        "test_a_written_hero_nobody_re_checked_is_refused_by_name",
+        T_FLOW,
+    ),
+    c(
+        "fix: a research site is not verified as well",
+        FLOW,
+        "        asked = [dict(s) for s in ID.research_population(sites, found_nothing, verified)]",
+        "        asked = [dict(s) for s in ID.research_population(sites, found_nothing)]",
+        "test_a_site_the_verify_stage_asks_about_is_not_researched_as_well",
+        T_FLOW,
+    ),
+    c(
+        "fix: the picks carry the site's cached page",
+        FLOW,
+        '        else {**pick, "wikipedia_cache_file": _cache_file(cache, str(pick["site_id"]))}',
+        '        else {**pick, "wikipedia_cache_file": None}',
+        "test_a_pick_carries_the_site_its_picture_and_its_cached_wikipedia_page",
+        T_FLOW,
+    ),
+    # ------------------------------------------------------------ image_roles/identity.py
+    c(
+        "fix: the verified sites leave the research",
+        IDENTITY,
+        '        if str(s["site_id"]) not in verified\n',
+        "        if True\n",
+        "test_the_research_population_is_no_identity_or_a_first_search_with_no_file",
+        T_ROLES,
+    ),
+    # ------------------------------------------------------------ served_image/vision.py, plan.py
+    c(
+        "fix: a recheck is the adversarial role's",
+        V_PY,
+        "    return RECHECK_ROLE if population == RECHECK else None",
+        "    return None",
+        "test_a_recheck_export_records_its_role",
+        T_SERVED_RECHECK,
+    ),
+    g(
+        "fix: another role is refused for a recheck",
+        V_PY,
+        "    if bound is not None and role is not None and role != bound:",
+        "test_a_recheck_refuses_a_brief_or_an_import_in_another_role",
+        T_SERVED_RECHECK,
+    ),
+    c(
+        "fix: a recheck import binds the role without being told",
+        V_PY,
+        "    return bound if bound is not None else role",
+        "    return role",
+        "test_a_recheck_import_without_a_role_still_demands_the_adversarial_one",
+        T_SERVED_RECHECK,
+    ),
+    c(
+        "fix: the brief of a recheck names its role",
+        V_PY,
+        "    return bound if bound is not None else role",
+        "    return role",
+        "test_the_brief_names_the_role_and_the_recording_command_carries_it",
+        T_SERVED_RECHECK,
+    ),
+    c(
+        "fix: the plan holds a recheck to its role",
+        SERVED_PLAN,
+        '    if problems:\n        raise ST.StateError(\n            f"{len(problems)} answer(s) of {name}',
+        '    if False:\n        raise ST.StateError(\n            f"{len(problems)} answer(s) of {name}',
+        "test_a_recheck_plan_refuses_an_answer_that_is_not_the_adversarial_role_s",
+        T_SERVED_RECHECK,
+    ),
+    g(
+        "fix: a role answer is recorded in the role",
+        V_PY,
+        '        if RO.role_of(row["answered_by"]) != role:',
+        "test_a_recheck_plan_refuses_an_answer_that_is_not_the_adversarial_role_s",
+        T_SERVED_RECHECK,
+    ),
+    c(
+        "fix: a role answer carries the role's stamp",
+        V_PY,
+        "        if wrong is not None:\n            problems.append",
+        "        if False:\n            problems.append",
+        "test_a_recheck_plan_refuses_an_answer_that_is_not_the_adversarial_role_s",
+        T_SERVED_RECHECK,
+    ),
+    # ------------------------------------------------------------ image_roles/calibrate.py
+    c(
+        "fix: a retired pool site is left out of the gold",
+        CALIBRATE,
+        "            and key[0] in state.sites\n",
+        "",
+        "test_every_group_is_chosen_by_its_own_rule",
+        T_CAL,
+    ),
+    c(
+        "fix: an adjudicated case reads its site from the read",
+        CALIBRATE,
+        '            _site_context(state.sites[item["site_id"]], context, lead),',
+        '            {"site_id": item["site_id"], "name": "n", "country": None, "site_type": None, "lat": 0.0, "lon": 0.0, "description": None, "wikipedia_lead": None},',
+        "test_every_group_is_chosen_by_its_own_rule",
+        T_CAL,
+    ),
+    g(
+        "fix: the insert waves are found",
+        CALIBRATE,
+        "    if not lines:",
+        "test_a_root_without_a_wave_is_refused_by_name",
+        T_CAL,
+    ),
+    c(
+        "fix: the first heroes are the waves' files",
+        CALIBRATE,
+        "        if (sid, ST.file_of_row(r)) in files",
+        "        if sid in {f[0] for f in files}",
+        "test_the_files_of_the_insert_waves_are_found_in_the_read",
+        T_CAL,
+    ),
+    c(
+        "fix: the gold takes its exclusions",
+        CALIBRATE,
+        '        nargs="+",\n        required=True,',
+        '        nargs="+",',
+        "test_the_gold_command_cannot_be_started_without_its_exclusions",
+        T_CAL,
+    ),
+]
+
+CASES: list[Case] = [*D18_CASES, *D15_CASES, *D17_CASES, *CACHE_CASES, *CAL_CASES, *FIX_CASES]
 
 
 if __name__ == "__main__":

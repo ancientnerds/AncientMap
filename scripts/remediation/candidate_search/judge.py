@@ -40,6 +40,7 @@ for _path in (_ROOT, _ROOT / "scripts" / "remediation"):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+import opus_handoff as OH  # noqa: E402
 from served_image import state as ST  # noqa: E402
 
 CANDIDATES = "CANDIDATES.jsonl"
@@ -202,8 +203,58 @@ def export(
     }
 
 
+def claude_stamps() -> frozenset[str]:
+    """The answer stamps of the models a new answer may name (owner decision D6): the only stamps
+    whose `depicts` may put a picture on a page."""
+    return frozenset(OH.ANSWER_MODELS[model] for model in OH.NEW_ANSWER_MODELS)
+
+
+def confirmed_by_recheck(run: Path) -> set[tuple[str, str]]:
+    """The `(site id, file)` pairs a Claude adversarial re-check confirmed as `depicts`, from the
+    `RECHECK_NN.jsonl` files of one run directory (`image_roles/run.py recheck-import`). A re-check
+    row whose stamp is not a Claude stamp confirms nothing."""
+    stamps = claude_stamps()
+    out: set[tuple[str, str]] = set()
+    for path in sorted(run.glob("RECHECK_[0-9][0-9].jsonl")):
+        for row in _read_jsonl(path):
+            if row["verdict"] == DEPICTS and row["model"] in stamps:
+                out.add((str(row["meta"]["site_id"]), str(row["meta"]["file"])))
+    return out
+
+
+def targets_without_claude(
+    targets: Sequence[Mapping[str, Any]],
+    verdicts: Sequence[Mapping[str, Any]],
+    confirmed: Collection[tuple[str, str]] = (),
+) -> list[tuple[str, str, str]]:
+    """The targets whose `depicts` was not given by Claude and that no Claude re-check confirmed,
+    each as `(site id, file, the verdict's model)`.
+
+    A MiniMax verdict is never ground truth (owner decisions D6 and D10): the candidate run of
+    2026-10-06 picked its targets with MiniMax alone, so a target of it becomes a live hero only
+    after Claude's adversarial re-check (`hero_recheck`) confirmed that very file. A target with no
+    `depicts` verdict in `verdicts` is refused by name."""
+    stamps = claude_stamps()
+    models = {
+        (str(v["site_id"]), str(v["file"])): str(v.get("model") or "")
+        for v in verdicts
+        if v.get("verdict") == DEPICTS
+    }
+    unjudged = []
+    for target in targets:
+        key = (str(target["site_id"]), str(target["commons_file"]))
+        if key not in models:
+            raise ValueError(f"{key[0]}: target {key[1]!r} has no depicts verdict in {VERDICTS}")
+        if models[key] not in stamps and key not in confirmed:
+            unjudged.append((key[0], key[1], models[key]))
+    return unjudged
+
+
 def insert_claims(
-    out: Path, insert_run: Path, sites: Sequence[str] | None = None
+    out: Path,
+    insert_run: Path,
+    sites: Sequence[str] | None = None,
+    confirmed: Collection[tuple[str, str]] = (),
 ) -> dict[str, Any]:
     """The INSERT wave's own two records, from the `depicts` verdicts this run confirmed.
 
@@ -217,6 +268,11 @@ def insert_claims(
     Claims are merged, never replaced: a wave can be prepared in more than one go, and a site whose
     claim another lane already recorded keeps that URL - a second claim for one site is refused by
     name instead of silently overwriting the first.
+
+    A target whose `depicts` verdict was not given by Claude is refused unless its `(site, file)` is
+    in `confirmed` (the pairs a Claude re-check confirmed, `confirmed_by_recheck`): the candidate run
+    of 2026-10-06 was judged by MiniMax alone, and nothing it picked goes live without Claude
+    (owner decisions D6, D10).
     """
     targets = _read_jsonl(out / TARGETS)
     if sites is not None:
@@ -230,6 +286,13 @@ def insert_claims(
                 "there is no confirmed file to claim for them"
             )
         targets = [t for t in targets if str(t.get("site_id") or "") in wanted]
+    unjudged = targets_without_claude(targets, _read_jsonl(out / VERDICTS), confirmed)
+    if unjudged:
+        raise ValueError(
+            f"{len(unjudged)} target(s) were judged depicts by no Claude model and no Claude "
+            f"re-check confirmed them (first {unjudged[0][0]}: {unjudged[0][1]!r}, model {unjudged[0][2] or 'none'!r}): judge them again with the image "
+            "roles (`image_roles/run.py pool`) and pass the re-check's run with --recheck-run"
+        )
     candidates = {str(site["site_id"]): site for site in _read_jsonl(out / CANDIDATES)}
     claims_path = insert_run / "IMPORT_CLAIMS.json"
     refusals_path = insert_run / "IMPORT_HERO_REFUSALS.jsonl"

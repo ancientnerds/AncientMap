@@ -97,6 +97,10 @@ UNCONFIRMED_ONLY = "unconfirmed"
 #: `other_site` goes on to the replacement stage.
 RECHECK = "recheck"
 POPULATIONS = (ALL, UNCONFIRMED_ONLY, RECHECK)
+#: The role (`roles.ROLES`, owner decision D6) that judges a recheck, in both of its stages: the
+#: adversarial Opus. The export records it; `brief`, the import and the plan hold the run to it, so
+#: an answer by another model cannot drive the swap of an owner-linked hero.
+RECHECK_ROLE = "adversarial"
 
 QUESTIONS_CHECK = "QUESTIONS_CHECK.jsonl"
 QUESTIONS_REPLACE = "QUESTIONS_REPLACE.jsonl"
@@ -499,6 +503,43 @@ def _named_sites(sites: Sequence[str], prechecks: Mapping[str, Mapping[str, Any]
     return set(named)
 
 
+def population_role(population: str) -> str | None:
+    """The role a population's agents must answer in: `RECHECK_ROLE` for a recheck, else none (the
+    lane's other populations take any role the operator names, or none)."""
+    return RECHECK_ROLE if population == RECHECK else None
+
+
+def bound_role(run: Path, stage: str, role: str | None) -> str | None:
+    """The role the run's `stage` is answered in: the population's (`population_role`) when it has
+    one - a `role` the operator names that differs is refused - else the operator's."""
+    if role is not None:
+        RO.role(role)  # an unknown role is refused as such
+    population = _check_population(run)
+    bound = population_role(population)
+    if bound is not None and role is not None and role != bound:
+        raise ST.StateError(
+            f"the {stage} stage of a {population} run is answered in the role {bound}, not {role}"
+        )
+    return bound if bound is not None else role
+
+
+def role_problems(rows: Sequence[Mapping[str, Any]], role: str) -> list[str]:
+    """Why imported answers are not the role's: every answer a model gave (a mechanical row has no
+    model) must be recorded `<role>:<agent>` and carry the role's registered model's stamp."""
+    problems = []
+    for row in rows:
+        if row["model"] is None:
+            continue
+        who = f"{row['site_id']} (answered by {row['answered_by']!r})"
+        if RO.role_of(row["answered_by"]) != role:
+            problems.append(f"{who}: not in the role {role}")
+            continue
+        wrong = RO.answer_problem(row["answered_by"], row["model"])
+        if wrong is not None:
+            problems.append(f"{who}: {wrong}")
+    return problems
+
+
 def needs_replacement(check: Mapping[str, Any], population: str) -> bool:
     """Whether a checked image goes on to the replacement stage: it was not called `depicts` - and,
     in a recheck, was not called `region_or_type` either (D15: the owner's hero stays)."""
@@ -627,6 +668,7 @@ def export_check(
     summary = {
         "handoff": str(handoff),
         "population": population,
+        "role": population_role(population),
         "prompt_id": CHECK_PROMPT_V2_ID if context is not None else CHECK_PROMPT_ID,
         "sites": None if sites is None else list(sites),
         "questions": len(questions),
@@ -839,6 +881,7 @@ def export_replace(
     summary = {
         "handoff": str(handoff),
         "prompt_id": REPLACE_PROMPT_ID,
+        "role": population_role(population),
         "claimed_only": claimed_only,
         "sites": None if sites is None else list(sites),
         "failed": len(failed),
@@ -972,8 +1015,10 @@ def _shown(path: Path) -> str:
 def brief(run: Path, handoff: Path, batch_id: str, role: str | None = None) -> str:
     """The instruction of one batch's agent. With a `role` of the D6 registry (`roles.ROLES`) the
     agent runs as that role's model and records its answers `--role <role>`; without one the text is
-    the lane's original, Sonnet 5.5 and no role (the answers of 2026-09-30 were given so)."""
+    the lane's original, Sonnet 5.5 and no role (the answers of 2026-09-30 were given so). A recheck
+    run is bound to `RECHECK_ROLE` (`bound_role`): its brief names that role whatever is asked."""
     stage = stage_of(run, handoff)
+    role = bound_role(run, stage, role)
     answer_model = ANSWER_MODEL if role is None else RO.role(role).model
     labels = [label for batch, label in _questions(run, stage) if batch == batch_id]
     if not labels:
@@ -1003,7 +1048,9 @@ def import_stage(run: Path, stage: str, role: str | None = None) -> dict[str, An
     With a `role` every answer must have been recorded in it (`answered_by` = `<role>:<agent>`) by
     the role's registered model; an answer that names another role or carries another model's stamp
     stops the import. Without one, an answer that names a role still has to carry that role's
-    model's stamp (`roles.answer_problem`)."""
+    model's stamp (`roles.answer_problem`). A recheck run is bound to `RECHECK_ROLE`
+    (`bound_role`): a `role` that differs is refused, and with none given the bound role applies."""
+    role = bound_role(run, stage, role)
     record_path = run / (EXPORT_CHECK if stage == STAGE_CHECK else EXPORT_REPLACE)
     if not record_path.is_file():
         raise ST.StateError(f"{record_path} does not exist - export the stage first")
