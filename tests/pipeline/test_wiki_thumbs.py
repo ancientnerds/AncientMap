@@ -75,3 +75,19 @@ def test_a_thumbnail_goes_when_its_image_goes_or_turns_narrow(tmp_path):
     assert not (thumbs / "cccccccc" / "gone.webp").exists()
     assert not (thumbs / "cccccccc" / "shrunk.webp").exists()
     assert result.removed == 1 and result.narrow == 1
+
+
+def test_an_unreadable_image_is_named_and_the_run_goes_on(tmp_path):
+    """2026-10-09: one ".webp" Pillow refuses stopped the first full run after
+    25,883 thumbnails. It is reported by path now, and the others are written."""
+    wiki, thumbs = _trees(tmp_path)
+    broken = wiki / "dddddddd" / "broken.webp"
+    broken.parent.mkdir(parents=True)
+    broken.write_bytes(b"not an image at all")
+    _image(wiki / "dddddddd" / "fine.webp", 1600)
+
+    result = wt.sync(wiki, thumbs, workers=1)
+
+    assert result.written == 1
+    assert result.unreadable == (str(broken),)
+    assert not (thumbs / "dddddddd" / "broken.webp").exists()

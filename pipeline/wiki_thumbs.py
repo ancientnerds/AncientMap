@@ -51,6 +51,11 @@ class SyncResult:
     unchanged: int
     narrow: int
     removed: int
+    #: Images Pillow cannot read, by path: named so they can be fixed, and they
+    #: keep no thumbnail (nginx answers with the image itself). The first full
+    #: run on 2026-10-09 met a ".webp" that is a PNG with a text chunk over
+    #: Pillow's MAX_TEXT_CHUNK.
+    unreadable: tuple[str, ...] = ()
 
 
 def thumb_for(image: Path, wiki_dir: Path = WIKI_DIR, thumb_dir: Path = THUMB_DIR) -> Path:
@@ -80,7 +85,12 @@ def write_thumb(image: Path, thumb: Path) -> bool:
 
 def _job(paths: tuple[str, str]) -> str:
     image, thumb = Path(paths[0]), Path(paths[1])
-    return "written" if write_thumb(image, thumb) else "narrow"
+    try:
+        return "written" if write_thumb(image, thumb) else "narrow"
+    except (OSError, ValueError) as exc:
+        logger.warning("wiki thumbs: cannot read %s: %s", image, exc)
+        thumb.unlink(missing_ok=True)
+        return f"unreadable:{image}"
 
 
 def sync(wiki_dir: Path = WIKI_DIR, thumb_dir: Path = THUMB_DIR, workers: int = 2) -> SyncResult:
@@ -101,6 +111,7 @@ def sync(wiki_dir: Path = WIKI_DIR, thumb_dir: Path = THUMB_DIR, workers: int = 
         outcomes = [_job(paths) for paths in todo]
     written = outcomes.count("written")
     narrow = outcomes.count("narrow")
+    unreadable = tuple(o.split(":", 1)[1] for o in outcomes if o.startswith("unreadable:"))
     removed = 0
     wanted = {thumb_for(i, wiki_dir, thumb_dir) for i in images}
     if thumb_dir.exists():
@@ -108,7 +119,9 @@ def sync(wiki_dir: Path = WIKI_DIR, thumb_dir: Path = THUMB_DIR, workers: int = 
             if thumb.is_file() and thumb not in wanted:
                 thumb.unlink()
                 removed += 1
-    result = SyncResult(written=written, unchanged=unchanged, narrow=narrow, removed=removed)
+    result = SyncResult(
+        written=written, unchanged=unchanged, narrow=narrow, removed=removed, unreadable=unreadable
+    )
     logger.info("wiki thumbs: %s", result)
     return result
 
