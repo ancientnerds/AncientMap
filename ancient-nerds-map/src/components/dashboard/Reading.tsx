@@ -43,6 +43,12 @@ export function Reading({ state }: { state: Loaded<JourneysData> }) {
       {r && (
         <>
           <BarList items={r.pages.map(readingItem)} empty="Nobody scrolled a page in this window." />
+          {/* The ladder's legend stays visible: without it the numbers in each
+              row have no column names until the panel is opened. */}
+          <p className="dash-note">
+            Sessions reaching {r.steps.map(s => `${s} %`).join(' · ')} of the page; {fmtInt(r.readers)} scrolled at
+            all.
+          </p>
           <HowCounted>
             One row per page type: how many sessions reached {r.steps.map(s => `${s} %`).join(' · ')} of
             the page, in that order. Counts only — {fmtInt(r.readers)} sessions scrolled at all in this

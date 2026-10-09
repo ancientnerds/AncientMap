@@ -169,8 +169,119 @@ def daily_points(days: int = 22) -> dict:
     return {"days": points[:-1], "today": points[-1]}
 
 
+def search_days(days: int = 120) -> list[dict]:
+    """Search Console's daily line: impressions climbing out of a summer
+    trough, clicks at about 1.5 % of them."""
+    first = datetime(2026, 6, 9, tzinfo=UTC)
+    out = []
+    for i in range(days):
+        shown = int(600 + 25 * i + 300 * math.sin(i / 7 * 2 * math.pi))
+        out.append(
+            {
+                "day": (first + timedelta(days=i)).date().isoformat(),
+                "clicks": shown * 3 // 200,
+                "impressions": shown,
+                "position": round(20 - i / 10, 1),
+            }
+        )
+    return out
+
+
+SEARCH = {
+    "days": search_days(),
+    "current": {"start": "2026-09-09", "end": "2026-10-06", "clicks": 1056, "impressions": 76977, "ctr": 0.0137, "position": 8.93},
+    "previous": {"start": "2026-08-12", "end": "2026-09-08", "clicks": 569, "impressions": 38371, "ctr": 0.0148, "position": 21.46},
+    "queries": [
+        {"query": q, "clicks": c, "impressions": i, "position": pos}
+        for q, c, i, pos in (
+            ("ancient nerds", 38, 49, 1.0),
+            ("louis de cordier", 16, 504, 9.2),
+            ("xihuatoxtla", 4, 46, 3.1),
+            ("lathe turned pillars india", 3, 77, 6.0),
+            ("louis de cordier labyrinth", 3, 79, 7.4),
+        )
+    ],
+    "pages": [
+        {"path": p, "clicks": c, "impressions": i, "position": pos}
+        for p, c, i, pos in (
+            ("/", 56, 900, 3.0),
+            ("/news-archive/louis-de-cordiers-path-from-art-and-alternative-history-to-the-hawara-project-7650", 29, 1200, 7.1),
+            ("/research/the-squatter-man-petroglyph-and-auroral-sky-mythology", 19, 640, 6.4),
+            ("/globe.html", 17, 80, 2.0),
+        )
+    ],
+    "pages_shown": {"current": 4640, "previous": 4096},
+}  # fmt: skip
+
+WEEKS = [
+    (datetime(2026, 4, 25, tzinfo=UTC) + timedelta(days=7 * i)).date().isoformat()
+    for i in range(25)
+]
+
+FIELD_VITALS = {
+    "phone": {
+        "weeks": WEEKS,
+        "lcp": [3459 - 30 * i for i in range(25)],
+        "inp": [None if i % 6 == 5 else 635 - 8 * i for i in range(25)],
+        "cls": [0.03 + (i % 3) / 100 for i in range(25)],
+    },
+    "desktop": {
+        "weeks": WEEKS,
+        "lcp": [2968 - 50 * i for i in range(25)],
+        "inp": [None if i % 6 == 5 else 182 - 3 * i for i in range(25)],
+        "cls": [0.06 + (i % 4) / 100 for i in range(25)],
+    },
+}
+
+CRAWLER_BOTS = [
+    ("Googlebot", "google", "search", True, 1204, 980, {"2xx": 1173, "3xx": 12, "4xx": 19}),
+    ("Bingbot", "bing", "search", True, 410, 377, {"2xx": 402, "4xx": 8}),
+    ("GPTBot", "openai", "training", True, 220, 210, {"2xx": 220}),
+    ("ClaudeBot", "anthropic", "training", None, 160, 151, {"2xx": 158, "4xx": 2}),
+    ("OAI-SearchBot", "openai", "ai_search", True, 41, 39, {"2xx": 41}),
+    ("ChatGPT-User", "openai", "ai_user", True, 12, 9, {"2xx": 12}),
+    ("Perplexity-User", "perplexity", "ai_user", True, 3, 3, {"2xx": 3}),
+]
+
+CRAWLERS = {
+    "report": {
+        "covered_from": "2026-10-09T21:40:00+02:00",
+        "bots": [
+            {
+                "bot": b,
+                "operator": o,
+                "kind": k,
+                "verified": v,
+                "requests": n,
+                "pages": pg,
+                "statuses": st,
+            }
+            for b, o, k, v, n, pg, st in CRAWLER_BOTS
+        ],
+        "days": [],
+        "ai_user_pages": [
+            {
+                "path": "/sites/egypt/great-pyramid-of-giza-1a2b3c4d",
+                "bot": "ChatGPT-User",
+                "requests": 4,
+            },
+            {"path": "/sites/turkiye/gobekli-tepe-5e6f7a8b", "bot": "ChatGPT-User", "requests": 3},
+            {
+                "path": "/research/the-bosnian-pyramid-project",
+                "bot": "Perplexity-User",
+                "requests": 2,
+            },
+        ],
+        "impostors": [{"bot": "Googlebot", "requests": 37}],
+    },
+    "log_reason": None,
+}
+
 FIXTURES: dict[str, dict] = {
     "daily": daily_points(),
+    "search": SEARCH,
+    "field-vitals": FIELD_VITALS,
+    "crawlers": CRAWLERS,
     "countries": {
         "now": {
             "sessions": 3,
@@ -559,6 +670,23 @@ for _i, _row in enumerate(FIXTURES["problems"]["problems"]):
 EMPTY_FIXTURES: dict[str, dict] = {
     # The first morning after a deploy on a fresh tracker: no finished day yet.
     "daily": {"days": [], "today": {"day": "2026-09-18", "visitors": 0, "human": 0, "ai": 0}},
+    "search": {
+        "days": [],
+        "current": None,
+        "previous": None,
+        "queries": [],
+        "pages": [],
+        "pages_shown": None,
+    },
+    "field-vitals": {
+        ff: {"weeks": WEEKS[-1:], "lcp": [None], "inp": [None], "cls": [None]}
+        for ff in ("phone", "desktop")
+    },
+    # A development box: no crawler log at all, which the panel names.
+    "crawlers": {
+        "report": None,
+        "log_reason": "nginx's crawler log is not readable at /app/logs/crawlers.log.",
+    },
     "countries": {
         w: {"sessions": 0, "all": 0, "countries": []} for w in ("now", "today", "d7", "d30")
     },

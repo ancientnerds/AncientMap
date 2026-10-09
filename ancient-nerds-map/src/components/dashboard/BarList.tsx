@@ -9,6 +9,8 @@ export interface BarItem {
   /** 'warn' paints the row's hint red — a search that found nothing. */
   tone?: 'warn'
   href?: string
+  /** A URL path: wraps anywhere instead of ending in an ellipsis. */
+  path?: boolean
 }
 
 interface BarListProps {
@@ -28,7 +30,7 @@ export function BarList({ items, empty }: BarListProps) {
     <ul className="dash-bars">
       {items.map(item => (
         <li key={item.key} className="dash-bar">
-          <span className="dash-bar-label" title={item.label}>
+          <span className={item.path ? 'dash-bar-label dash-bar-label--path' : 'dash-bar-label'} title={item.label}>
             {item.href ? <a href={item.href}>{item.label}</a> : item.label}
           </span>
           <span className="dash-bar-value">{fmtInt(item.value)}</span>

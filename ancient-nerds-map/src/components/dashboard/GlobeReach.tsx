@@ -1,6 +1,6 @@
 import { type BarItem, BarList } from './BarList'
 import { fmtInt } from './format'
-import { HowCounted, Panel, Status } from './Panel'
+import { Explain, HowCounted, Panel, Status } from './Panel'
 import { Tile } from './Tile'
 import type { GlobeData, GlobeDevice, GlobeEndings, GlobeTimes } from './types'
 import type { Loaded } from './useStats'
@@ -135,10 +135,15 @@ export function GlobeReach({ state }: { state: Loaded<GlobeData> }) {
           {devicesLine(g.by_device) && <p className="dash-note">{devicesLine(g.by_device)}</p>}
           {gateLine(g) && <p className="dash-note">{gateLine(g)}</p>}
           <p className="dash-note">
-            {timesLine(g)} The denominator is page loads of /globe.html, not visitors — one person
-            reloading counts twice, on purpose. {visitorsLine(g)} Counted from the build of 24 Sep 2026
-            on, the first that reports how a load ends; loads of the earlier build are left out.
+            {timesLine(g)} {visitorsLine(g)}
           </p>
+          <Explain>
+            <p className="dash-note">
+              The denominator is page loads of /globe.html, not visitors — one person reloading counts twice,
+              on purpose. Counted from the build of 24 Sep 2026 on, the first that reports how a load ends;
+              loads of the earlier build are left out.
+            </p>
+          </Explain>
           {/* An answer without the split is an API older than this bundle — every
               deploy has that window, because ci.yml builds the frontend before it
               rebuilds the API. The tiles above stay; the split says so. */}

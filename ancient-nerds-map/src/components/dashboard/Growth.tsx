@@ -1,20 +1,12 @@
 import { fmtDay, fmtInt } from './format'
+import { LineChart } from './Lines'
 import { HowCounted, Panel, Status } from './Panel'
 import type { DailyData, DailyPoint } from './types'
 import type { Loaded } from './useStats'
 
-/** Height of the chart's viewBox; the CSS scales it to the panel's width. */
-const LINE_HEIGHT = 100
 /** Days on each side of the comparison: whole weeks, so a quiet weekend
  *  weighs the same on both sides. */
 const WEEK = 7
-
-/** One polyline's `points`: day i at x = i, the value measured up from the
- *  baseline against `max`. A zero max draws the line on the baseline. */
-export function linePoints(values: number[], max: number, height = LINE_HEIGHT): string {
-  const unit = height / Math.max(max, 1)
-  return values.map((v, i) => `${i},${height - v * unit}`).join(' ')
-}
 
 export interface WeekChange {
   /** Average per day over the first full week. */
@@ -65,30 +57,19 @@ function Trend({ days }: { days: DailyPoint[] }) {
 
 function Chart({ days }: { days: DailyPoint[] }) {
   const max = Math.max(...days.map(p => p.visitors), 1)
-  const width = days.length - 1
+  const first = fmtDay(days[0].day)
+  const last = fmtDay(days[days.length - 1].day)
   return (
-    <>
-      <svg
-        className="dash-line"
-        viewBox={`0 0 ${width} ${LINE_HEIGHT}`}
-        preserveAspectRatio="none"
-        role="img"
-        aria-label={`Visitors per day from ${fmtDay(days[0].day)} to ${fmtDay(days[width].day)}`}
-      >
-        <polyline className="dash-line-all" points={linePoints(days.map(p => p.visitors), max)} />
-        <polyline className="dash-line-human" points={linePoints(days.map(p => p.human), max)} />
-        {days.map((p, i) => (
-          <rect key={p.day} className="dash-line-hit" x={i - 0.5} width={1} y={0} height={LINE_HEIGHT}>
-            <title>{`${fmtDay(p.day)}: ${fmtInt(p.visitors)} visitors, ${fmtInt(p.human)} human, ${fmtInt(p.ai)} from AI`}</title>
-          </rect>
-        ))}
-      </svg>
-      <div className="dash-spark-axis">
-        <span>{fmtDay(days[0].day)}</span>
-        <span>Visitors per day, UTC · top {fmtInt(max)}</span>
-        <span>{fmtDay(days[width].day)}</span>
-      </div>
-    </>
+    <LineChart
+      series={[
+        { label: 'every visitor', values: days.map(p => p.visitors), className: 'dash-line-all' },
+        { label: 'confirmed human', values: days.map(p => p.human), className: 'dash-line-human' },
+      ]}
+      titles={days.map(p => `${fmtDay(p.day)}: ${fmtInt(p.visitors)} visitors, ${fmtInt(p.human)} human, ${fmtInt(p.ai)} from AI`)}
+      axis={[first, `Visitors per day, UTC · top ${fmtInt(max)}`, last]}
+      label={`Visitors per day from ${first} to ${last}`}
+      max={max}
+    />
   )
 }
 
@@ -111,8 +92,7 @@ export function Growth({ state }: { state: Loaded<DailyData> }) {
             <Chart days={d.days} />
             <Trend days={d.days} />
             <p className="dash-note">
-              Pale: every visitor. Bright: the confirmed humans among them. Today so far, not on the line yet:{' '}
-              {fmtInt(d.today.visitors)} visitors, {fmtInt(d.today.human)} human.
+              Today so far, not on the line yet: {fmtInt(d.today.visitors)} visitors, {fmtInt(d.today.human)} human.
             </p>
           </>
         ))}

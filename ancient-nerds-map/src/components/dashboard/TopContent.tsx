@@ -1,6 +1,6 @@
 import { BarList, type BarItem } from './BarList'
 import { fmtInt } from './format'
-import { Panel, Status } from './Panel'
+import { Explain, Panel, Status } from './Panel'
 import type { ContentData, ContentRow } from './types'
 import type { Loaded } from './useStats'
 
@@ -51,13 +51,12 @@ const WHY_EMPTY: Record<string, string> = {
   Sites: 'nobody opened a site in this window',
 }
 
-/** "Only what the site actually reports is listed." plus a clause per empty
- *  list — and nothing else when every list has rows. */
+/** "Nothing to show under Stories: …" with a clause per empty list — and
+ *  nothing at all when every list has rows. */
 export function emptyNote(titles: string[]): string {
-  const head = 'Only what the site actually reports is listed.'
-  if (titles.length === 0) return head
+  if (titles.length === 0) return ''
   const why = titles.map(t => `${t}: ${WHY_EMPTY[t]}`).join('; ')
-  return `${head} Nothing to show under ${why}.`
+  return `Nothing to show under ${why}.`
 }
 
 /** The most opened sites, and whatever else the site has actually reported. */
@@ -92,7 +91,10 @@ export function TopContent({ state }: { state: Loaded<ContentData> }) {
               ))}
             </div>
           )}
-          <p className="dash-note">{emptyNote(bare)}</p>
+          <Explain>
+            <p className="dash-note">Only what the site actually reports is listed.</p>
+          </Explain>
+          {bare.length > 0 && <p className="dash-note">{emptyNote(bare)}</p>}
         </>
       )}
     </Panel>

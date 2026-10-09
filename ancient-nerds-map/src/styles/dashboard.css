@@ -407,6 +407,97 @@ button {
   fill: var(--dash-line-soft);
 }
 
+/* Two stacked day lines in the search panel and one sparkline per vital. */
+.dash-line--small {
+  height: 72px;
+}
+
+.dash-vital .dash-line--small {
+  height: 36px;
+  margin-top: 6px;
+}
+
+/* Which line is which, beside the chart rather than behind the panel's click:
+   a swatch of each line's own stroke before its name. */
+.dash-line-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  color: var(--dash-muted);
+}
+
+.dash-line-legend li::before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.dash-line-all-key::before {
+  border-top: 2px solid var(--dash-dot-low);
+}
+
+.dash-line-human-key::before {
+  border-top: 3px solid var(--dash-green);
+}
+
+/* Field vitals: name, the newest p75 in Google's band colour, the band, and
+   half a year of weeks under it. */
+.dash-vitals {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dash-vital {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 10px;
+  align-items: baseline;
+}
+
+.dash-vital .dash-line,
+.dash-vital-band {
+  grid-column: 1 / -1;
+}
+
+.dash-vital-name {
+  font-size: 0.85rem;
+  color: var(--dash-paper);
+}
+
+.dash-vital-value {
+  font-family: var(--dash-mono);
+  font-size: 1rem;
+}
+
+.dash-vital-band {
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  color: var(--dash-muted);
+}
+
+.dash-vital--good {
+  color: var(--dash-green);
+}
+
+.dash-vital--ni {
+  color: var(--dash-amber);
+}
+
+.dash-vital--poor {
+  color: var(--dash-red-bright);
+}
+
 .dash-trend {
   margin-top: 12px;
   font-family: var(--dash-mono);
@@ -436,6 +527,15 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.9rem;
+}
+
+/* A URL path has no spaces to break at, and the end of it is the part that
+   names the page: it wraps anywhere instead of being cut to an ellipsis. */
+.dash-bar-label--path {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  font-family: var(--dash-mono);
+  font-size: 0.75rem;
 }
 
 .dash-bar-value {
@@ -841,32 +941,50 @@ button {
   }
 }
 
-/* ── How this is counted ───────────────────────────────────────────── */
+/* ── Explanations: closed until the panel is clicked ─────────────── */
+
+/* Owner, 2026-10-09: the numbers show, the texts that explain them open with
+   a click on the panel. The whole panel is the target, so it says so with the
+   cursor; the title is a button for the keyboard and carries the + / − mark. */
+.dash-panel {
+  cursor: pointer;
+}
+
+.dash-explain-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dash-explain-toggle::after {
+  content: '+';
+  margin-left: 10px;
+  color: var(--dash-muted);
+}
+
+.dash-explain-toggle[aria-expanded='true']::after {
+  content: '−';
+  color: var(--dash-green);
+}
+
+.dash-explain-toggle:focus-visible {
+  outline: 1px solid var(--dash-green);
+  outline-offset: 3px;
+}
 
 .dash-how {
   margin-top: 10px;
 }
 
-.dash-how summary {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  font-family: var(--dash-mono);
-  font-size: 0.65rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--dash-muted);
-  cursor: pointer;
-}
-
-.dash-how summary:hover,
-.dash-how summary:focus-visible {
+.dash-how b {
   color: var(--dash-green);
-  outline: none;
-}
-
-.dash-how[open] summary {
-  color: var(--dash-green);
+  font-weight: 500;
 }
 
 /* ── What needs attention ───────────────────────────────────────────── */

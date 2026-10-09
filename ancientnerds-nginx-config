@@ -66,6 +66,28 @@ map $http_user_agent $is_scraper {
     ~*(YouBot|meta-externalagent|Amazonbot|PetalBot|Barkrowler|MJ12bot|SemrushBot|AhrefsBot|DotBot|DataForSeoBot|BLEXBot) 1;
 }
 
+# Which search engines and AI systems fetch our pages (founders dashboard,
+# "Who crawls us?", api/services/crawler_log.py). The main access log is
+# 0640 www-data:adm, so the dashboard cannot read it; this log is the part it
+# needs, in a file the deploy user can read. Page requests only: a bot's
+# asset, data and image fetches would be most of the lines and answer nothing
+# the panel asks. The IP is logged because a user agent is only a claim - the
+# reader counts a line only when the IP is in the operator's published ranges.
+# The token list mirrors BOTS in crawler_log.py; a token missing here is a
+# bot the panel never sees.
+log_format crawler escape=json '{"t":"$time_iso8601","ip":"$remote_addr","req":"$request_method $request_uri","status":$status,"ua":"$http_user_agent"}';
+
+map $http_user_agent $crawler_ua {
+    default 0;
+    ~*(Googlebot|Google-InspectionTool|GoogleOther|bingbot|Applebot|DuckDuckBot|YandexBot|Baiduspider|PetalBot|ChatGPT-User|OAI-SearchBot|GPTBot|Claude-User|Claude-SearchBot|ClaudeBot|Perplexity-User|PerplexityBot|MistralAI-User|CCBot|Bytespider|meta-externalagent|Amazonbot) 1;
+}
+
+map $uri $log_crawler {
+    default $crawler_ua;
+    ~^/(assets|data|landing|fonts|icons)/ 0;
+    ~*\.(js|mjs|css|map|png|jpe?g|webp|avif|gif|svg|ico|woff2?|ttf|json|geojson|webmanifest|mp4|webm)$ 0;
+}
+
 server {
     server_name ancientnerds.com www.ancientnerds.com;
 
@@ -77,6 +99,7 @@ server {
     # referral log.
     access_log /var/log/nginx/access.log;
     access_log /var/www/ancientnerds/logs/referrals.log referral if=$log_referral;
+    access_log /var/www/ancientnerds/logs/crawlers.log crawler if=$log_crawler;
 
     # /etc/nginx/nginx.conf has `gzip on` but its gzip_types line is commented
     # out, so the default applied — text/html only. Result: 27 asset requests

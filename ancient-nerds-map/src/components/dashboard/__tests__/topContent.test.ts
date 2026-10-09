@@ -68,8 +68,10 @@ describe('TopContent note', () => {
     // The sentence used to be a constant: "story_open, paper_open and search
     // have never fired, not once" rendered directly under the ranked lists of
     // those very events — the state the repo's own screenshot fixture draws.
+    // "Only what the site actually reports is listed." explains the lists and
+    // moved into the panel's closed texts, so a note on full lists is empty.
     const note = emptyNote([])
-    expect(note).toBe('Only what the site actually reports is listed.')
+    expect(note).toBe('')
     expect(note).not.toContain('never fired')
   })
 

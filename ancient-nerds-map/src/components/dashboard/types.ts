@@ -37,6 +37,84 @@ export interface DailyData {
   today: DailyPoint
 }
 
+export interface SearchDay {
+  day: string
+  clicks: number
+  impressions: number
+  /** Average position that day; null on a day without an impression. */
+  position: number | null
+}
+
+export interface SearchWindow {
+  start: string
+  end: string
+  clicks: number
+  impressions: number
+  ctr: number
+  position: number | null
+}
+
+export interface SearchRow {
+  clicks: number
+  impressions: number
+  position: number
+}
+
+/** GET /api/stats/search — Google Search Console, cached an hour. */
+export interface SearchData {
+  /** Every day from the property's first data to its newest final day. */
+  days: SearchDay[]
+  /** The last 28 finished days and the 28 before them; null without data. */
+  current: SearchWindow | null
+  previous: SearchWindow | null
+  queries: Array<SearchRow & { query: string }>
+  pages: Array<SearchRow & { path: string }>
+  /** Pages Google showed at least once in each window. */
+  pages_shown: { current: number; previous: number } | null
+}
+
+export interface FormFactorVitals {
+  /** End date of each weekly 28-day window, oldest first. */
+  weeks: string[]
+  lcp: (number | null)[]
+  inp: (number | null)[]
+  cls: (number | null)[]
+}
+
+/** GET /api/stats/field-vitals — Google's CrUX history for the origin. */
+export interface FieldVitalsData {
+  phone: FormFactorVitals
+  desktop: FormFactorVitals
+}
+
+export type CrawlerKind = 'search' | 'ai_user' | 'ai_search' | 'training' | 'other'
+
+export interface CrawlerBot {
+  bot: string
+  operator: string
+  kind: CrawlerKind
+  /** True inside the operator's published ranges; null when it publishes none. */
+  verified: boolean | null
+  requests: number
+  pages: number
+  /** Requests per status class, "2xx" … "5xx". */
+  statuses: Record<string, number>
+}
+
+export interface CrawlerReport {
+  covered_from: string | null
+  bots: CrawlerBot[]
+  days: Array<{ day: string } & Record<CrawlerKind, number>>
+  ai_user_pages: Array<{ path: string; bot: string; requests: number }>
+  impostors: Array<{ bot: string; requests: number }>
+}
+
+/** GET /api/stats/crawlers?days=N */
+export interface CrawlersData {
+  report: CrawlerReport | null
+  log_reason: string | null
+}
+
 /** GET /api/stats/overview?days=N */
 export interface Overview {
   days: number

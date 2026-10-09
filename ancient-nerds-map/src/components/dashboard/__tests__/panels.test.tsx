@@ -14,8 +14,10 @@
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { Crawlers } from '../Crawlers'
 import { Devices } from '../Devices'
 import { FeedbackInbox } from '../FeedbackInbox'
+import { FieldVitals } from '../FieldVitals'
 import { GlobeReach } from '../GlobeReach'
 import { Growth } from '../Growth'
 import { LiveNow } from '../LiveNow'
@@ -25,6 +27,7 @@ import { Problems } from '../Problems'
 import { Pulse } from '../Pulse'
 import { Reading } from '../Reading'
 import { Scrapers } from '../Scrapers'
+import { SearchGoogle } from '../SearchGoogle'
 import { SessionTypes } from '../SessionTypes'
 import { Sources } from '../Sources'
 import { TopContent } from '../TopContent'
@@ -33,15 +36,18 @@ import type {
   ContentData,
   CountriesData,
   CountryWindow,
+  CrawlersData,
   DailyData,
   DevicesData,
   FeedbackData,
+  FieldVitalsData,
   GlobeData,
   JourneysData,
   LiveData,
   MembersData,
   Overview,
   ProblemsData,
+  SearchData,
   SourcesData,
 } from '../types'
 import type { Loaded } from '../useStats'
@@ -70,6 +76,15 @@ const EMPTY = {
   countries: { now: window0, today: window0, d7: window0, d30: window0 } as CountriesData,
   daily: { days: [], today: { day: '2026-09-19', visitors: 0, human: 0, ai: 0 } } as DailyData,
   map: { points: [] },
+  search: { days: [], current: null, previous: null, queries: [], pages: [], pages_shown: null } as SearchData,
+  vitals: {
+    phone: { weeks: ['2026-10-03'], lcp: [null], inp: [null], cls: [null] },
+    desktop: { weeks: ['2026-10-03'], lcp: [null], inp: [null], cls: [null] },
+  } as FieldVitalsData,
+  crawlers: {
+    report: { covered_from: null, bots: [], days: [], ai_user_pages: [], impostors: [] },
+    log_reason: null,
+  } as CrawlersData,
   live: {
     window_minutes: 30,
     lookback_hours: 24,
@@ -128,6 +143,9 @@ const EMPTY = {
 const emptyPanels: Array<[string, JSX.Element]> = [
   ['Pulse', <Pulse state={ok(EMPTY.overview)} countries={ok(EMPTY.countries)} />],
   ['Growth', <Growth state={ok(EMPTY.daily)} />],
+  ['SearchGoogle', <SearchGoogle state={ok(EMPTY.search)} />],
+  ['FieldVitals', <FieldVitals state={ok(EMPTY.vitals)} />],
+  ['Crawlers', <Crawlers state={ok(EMPTY.crawlers)} />],
   ['LiveNow', <LiveNow state={ok(EMPTY.live)} />],
   ['GlobeReach', <GlobeReach state={ok(EMPTY.globe)} />],
   ['Scrapers', <Scrapers state={ok(EMPTY.clusters)} overview={ok(EMPTY.overview)} />],
@@ -147,6 +165,9 @@ const emptyPanels: Array<[string, JSX.Element]> = [
 const failedPanels: Array<[string, JSX.Element]> = [
   ['Pulse', <Pulse state={failed} countries={failed} />],
   ['Growth', <Growth state={failed} />],
+  ['SearchGoogle', <SearchGoogle state={failed} />],
+  ['FieldVitals', <FieldVitals state={failed} />],
+  ['Crawlers', <Crawlers state={failed} />],
   ['LiveNow', <LiveNow state={failed} />],
   ['GlobeReach', <GlobeReach state={failed} />],
   ['Scrapers', <Scrapers state={failed} overview={failed} />],
@@ -211,6 +232,19 @@ describe('Pulse', () => {
     const html = renderToString(<Pulse state={failed} countries={ok(EMPTY.countries)} />)
     expect(html).toContain('Data unavailable.')
     expect(html).not.toContain('dash-spark')
+  })
+
+  it('keeps what the colours mean closed and the AI count in the open', () => {
+    // Owner, 2026-10-09: the texts that explain the numbers stay closed until
+    // the panel is clicked. Closed is `hidden`, not absent.
+    const overview = { ...EMPTY.overview, sessions: { all: 20, human: 8, ai: 3 } }
+    const html = renderToString(<Pulse state={ok(overview)} countries={ok(EMPTY.countries)} />).replace(/<!-- -->/g, '')
+    const closedBlock = /<div class="dash-explain" hidden="">([\s\S]*?)<\/div>/g
+    const closed = [...html.matchAll(closedBlock)].map(m => m[1]).join(' ')
+    const shown = html.replace(closedBlock, '')
+    expect(closed).toContain('Bright green is a confirmed human')
+    expect(shown).not.toContain('Bright green is a confirmed human')
+    expect(shown).toContain('AI assistants sent 3 of 20 sessions in this window.')
   })
 })
 

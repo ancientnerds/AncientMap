@@ -1,5 +1,5 @@
 /**
- * The founders dashboard at https://stats.ancientnerds.com/ — fifteen panels,
+ * The founders dashboard at https://stats.ancientnerds.com/ — nineteen panels,
  * each titled with the question it answers, fed by /api/stats/* behind the
  * an_stats cookie (api/routes/stats_access.py). Mobile first: one column,
  * two from 720 px. Umami itself stays one link away.
@@ -8,9 +8,11 @@ import { useState } from 'react'
 
 import anLogo from '../components/dashboard/an-logo-green.svg'
 import { Attention } from '../components/dashboard/Attention'
+import { Crawlers } from '../components/dashboard/Crawlers'
 
 import { Devices } from '../components/dashboard/Devices'
 import { FeedbackInbox } from '../components/dashboard/FeedbackInbox'
+import { FieldVitals } from '../components/dashboard/FieldVitals'
 import { GlobeReach } from '../components/dashboard/GlobeReach'
 import { Growth } from '../components/dashboard/Growth'
 import { LiveNow } from '../components/dashboard/LiveNow'
@@ -20,6 +22,7 @@ import { Problems } from '../components/dashboard/Problems'
 import { Pulse } from '../components/dashboard/Pulse'
 import { Reading } from '../components/dashboard/Reading'
 import { Scrapers } from '../components/dashboard/Scrapers'
+import { SearchGoogle } from '../components/dashboard/SearchGoogle'
 import { SessionTypes } from '../components/dashboard/SessionTypes'
 import { Sources } from '../components/dashboard/Sources'
 import { TopContent } from '../components/dashboard/TopContent'
@@ -27,9 +30,11 @@ import type {
   ClustersData,
   ContentData,
   CountriesData,
+  CrawlersData,
   DailyData,
   DevicesData,
   FeedbackData,
+  FieldVitalsData,
   GlobeData,
   JourneysData,
   LiveData,
@@ -37,6 +42,7 @@ import type {
   MembersData,
   Overview,
   ProblemsData,
+  SearchData,
   SourcesData,
 } from '../components/dashboard/types'
 import { useStats } from '../components/dashboard/useStats'
@@ -68,6 +74,7 @@ function Entry() {
 
 export default function DashboardPage() {
   const [days, setDays] = useState<Days>(7)
+  const [rangeHelp, setRangeHelp] = useState(false)
   const overview = useStats<Overview>(`overview?days=${days}`)
   const map = useStats<MapData>('map?days=1')
   // Fixed windows (now / today / 7 / 30) — the range switch does not touch them.
@@ -77,6 +84,11 @@ export default function DashboardPage() {
   // The whole history, cached five minutes on the server: a day's point only
   // grows during that day.
   const daily = useStats<DailyData>('daily', 300_000)
+  // Google's side: Search Console is read once an hour and CrUX once a week on
+  // the server, so asking every ten minutes and every hour is plenty.
+  const search = useStats<SearchData>('search', 600_000)
+  const vitals = useStats<FieldVitalsData>('field-vitals', 3_600_000)
+  const crawlers = useStats<CrawlersData>(`crawlers?days=${days}`, 300_000)
   const globe = useStats<GlobeData>(`globe?days=${days}`)
   // Five minutes: a scraper fingerprint does not change from minute to minute,
   // and this is the one query that has to sort every event in the window.
@@ -93,10 +105,10 @@ export default function DashboardPage() {
   const members = useStats<MembersData>('members', 300_000)
   // `members` is deliberately not in this array. It is the only route on a
   // different database behind a different dependency, and one hiccup there must
-  // not replace the other fourteen panels with "Session expired".
+  // not replace the other eighteen panels with "Session expired".
   const panels = [
-    overview, countries, daily, map, live, globe, clusters,
-    content, feedback, sources, journeys, problems, devices,
+    overview, countries, daily, search, vitals, crawlers, map, live, globe,
+    clusters, content, feedback, sources, journeys, problems, devices,
   ]
   const unauthorized = panels.some(s => s.error === 'unauthorized')
 
@@ -113,43 +125,60 @@ export default function DashboardPage() {
               {d} days
             </button>
           ))}
+          <button
+            type="button"
+            className="dash-range-help"
+            aria-expanded={rangeHelp}
+            aria-label="What the range changes"
+            onClick={() => setRangeHelp(o => !o)}
+          >
+            ?
+          </button>
         </div>
         <nav className="dash-nav" aria-label="Other pages">
           <a href={UMAMI_HREF}>Umami</a>
           <a href="/logout">Sign out</a>
         </nav>
       </header>
-      {/* Under the switch, because that is where it is read: the switch is
-          inert for six of the fifteen panels and, until 2026-10-17, returns
-          identical numbers for the other nine. Without this line a founder
-          concludes the switch is broken, which is the correct conclusion from
-          the evidence on screen. */}
-      <p className="dash-note">
-        The range drives nine panels. Live now, Where are the visitors, Is the audience growing, Members and
-        Feedback have windows of their own, and Who is here has four — only its last sentence follows the range. Until 17
-        October both settings return the same numbers everywhere: the tracker's first event is 17
-        September.
+      {/* Under the switch, because that is where it is read, and closed like
+          every other explanation on the page: the switch drives only the
+          panels that count visits in a window, and until 2026-10-17 both
+          settings return the same numbers. Without this line a founder would
+          conclude the switch is broken. */}
+      <p className="dash-note" hidden={!rangeHelp}>
+        The range drives the panels that count visits in a window. Is the audience growing, How does Google see
+        us, Are we fast for Google, Live now, Where are the visitors, Members and Feedback have windows of their
+        own, and Who is here has four — only its last sentence follows the range. Until 17 October both settings
+        return the same numbers everywhere: the tracker's first event is 17 September.
       </p>
       {unauthorized ? (
         <Entry />
       ) : (
         <div className="dash-grid">
-          <Attention problems={problems} globe={globe} content={content} />
-          <Pulse state={overview} countries={countries} />
+          {/* Most relevant first (owner, 2026-10-09: "je weiter ich runterscrolle,
+              desto unrelevanter"): what needs doing, whether the audience grows,
+              how Google sees us, then who is here and where they come from; the
+              detail and the curiosities last. The narrow panels go in pairs, so
+              the two-column grid has no hole before the last one. */}
+          <Attention problems={problems} globe={globe} content={content} search={search} vitals={vitals} />
           <Growth state={daily} />
-          <LiveNow state={live} />
-          <GlobeReach state={globe} />
-          <Scrapers state={clusters} overview={overview} />
-          <Problems state={problems} />
-          <VisitorMap state={map} />
+          <SearchGoogle state={search} />
+          <Pulse state={overview} countries={countries} />
           <Sources state={sources} />
-          <SessionTypes state={overview} />
-          <Members state={members} />
+          <TopContent state={content} />
+          <Problems state={problems} />
+          <FieldVitals state={vitals} />
+          <GlobeReach state={globe} />
+          <Crawlers state={crawlers} />
+          <FeedbackInbox state={feedback} />
           <Paths state={journeys} />
           <Reading state={journeys} />
+          <SessionTypes state={overview} />
           <Devices state={devices} />
-          <TopContent state={content} />
-          <FeedbackInbox state={feedback} />
+          <Members state={members} />
+          <LiveNow state={live} />
+          <VisitorMap state={map} />
+          <Scrapers state={clusters} overview={overview} />
         </div>
       )}
       <footer className="dash-footer">

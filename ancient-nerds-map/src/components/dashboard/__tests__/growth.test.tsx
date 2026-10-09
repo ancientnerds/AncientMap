@@ -1,7 +1,8 @@
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { Growth, linePoints, weekChange } from '../Growth'
+import { Growth, weekChange } from '../Growth'
+import { lineRuns, linePoints } from '../Lines'
 import type { DailyData, DailyPoint } from '../types'
 
 /** `n` days from 18 Sep, visitors from `visitors(i)`, humans half of them. */
@@ -31,6 +32,10 @@ describe('Growth linePoints', () => {
 
   it('draws an empty history on the baseline instead of dividing by zero', () => {
     expect(linePoints([0, 0], 0, H)).toBe('0,100 1,100')
+  })
+
+  it('breaks a line with gaps into runs and drops a lone point', () => {
+    expect(lineRuns([10, 20, null, 30, null, 40, 50], 50, H)).toEqual(['0,80 1,60', '5,20 6,0'])
   })
 })
 

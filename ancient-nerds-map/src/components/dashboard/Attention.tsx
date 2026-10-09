@@ -1,7 +1,9 @@
+import { BANDS, fmtVital, latest, NAMES, rating } from './FieldVitals'
 import { fmtInt } from './format'
 import { devicesLine } from './GlobeReach'
-import { Panel } from './Panel'
-import type { ContentData, GlobeData, ProblemsData } from './types'
+import { Explain, Panel } from './Panel'
+import { changeLine } from './SearchGoogle'
+import type { ContentData, FieldVitalsData, GlobeData, ProblemsData, SearchData } from './types'
 import type { Loaded } from './useStats'
 
 /** How many problems the summary names; the Problems panel ranks all of them. */
@@ -18,16 +20,28 @@ export interface AttentionLine {
 
 /**
  * The page's answer in a few lines, from what the other panels already loaded:
- * whether the globe comes up, the worst problems, the searches that found
- * nothing. Fourteen panels answer fourteen questions; a founder opening the
- * page wants to know first whether any of them needs doing (2026-09-25).
+ * how Google's clicks move, whether the globe comes up, the worst problems,
+ * the speed numbers Google rates below good, the searches that found nothing.
+ * Many panels answer many questions; a founder opening the page wants to know
+ * first whether any of them needs doing (2026-09-25).
  */
 export function attentionLines(
   problems: ProblemsData | null,
   globe: GlobeData | null,
   content: ContentData | null,
+  search: SearchData | null = null,
+  vitals: FieldVitalsData | null = null,
 ): AttentionLine[] {
   const lines: AttentionLine[] = []
+  if (search?.current && search.previous) {
+    const clicks = changeLine(search.current.clicks, search.previous.clicks)
+    const position = search.current.position === null ? '' : `, average position ${search.current.position.toFixed(1)}`
+    lines.push({
+      key: 'google',
+      text: `Google: ${fmtInt(search.current.clicks)} clicks in 28 days, ${clicks.text}${position}.`,
+      tone: search.current.clicks >= search.previous.clicks ? 'ok' : 'warn',
+    })
+  }
   if (globe && globe.loads > 0) {
     const share = globe.reached / globe.loads
     lines.push({
@@ -40,6 +54,20 @@ export function attentionLines(
     const broken = p.kind === 'js_error' || p.kind === 'webgl_lost' || p.kind === 'broken_link'
     lines.push({ key: `problem:${p.kind}:${p.label}`, text: `${p.label} — ${p.detail}`, tone: broken ? 'bad' : 'warn' })
   }
+  for (const [name, ff] of [['Phone', vitals?.phone], ['Desktop', vitals?.desktop]] as const) {
+    if (!ff) continue
+    for (const metric of ['lcp', 'inp', 'cls'] as const) {
+      const now = latest(ff[metric])
+      if (!now) continue
+      const r = rating(metric, now.value)
+      if (r === 'good') continue
+      lines.push({
+        key: `vital:${name}:${metric}`,
+        text: `${name} · ${NAMES[metric]} ${fmtVital(metric, now.value)} — Google rates it ${r === 'poor' ? 'poor' : 'needs improvement'}, good is up to ${fmtVital(metric, BANDS[metric].good)}.`,
+        tone: r === 'poor' ? 'bad' : 'warn',
+      })
+    }
+  }
   const dead = (content?.searches ?? []).filter(s => s.results === 0).map(s => `“${s.label}”`)
   if (dead.length > 0) {
     const named = dead.slice(0, DEAD_TERMS).join(', ')
@@ -49,18 +77,22 @@ export function attentionLines(
   return lines
 }
 
-/** What needs doing, before the fourteen questions. */
+/** What needs doing, before every other question. */
 export function Attention({
   problems,
   globe,
   content,
+  search,
+  vitals,
 }: {
   problems: Loaded<ProblemsData>
   globe: Loaded<GlobeData>
   content: Loaded<ContentData>
+  search: Loaded<SearchData>
+  vitals: Loaded<FieldVitalsData>
 }) {
-  const loading = !problems.data && !globe.data && !content.data
-  const lines = attentionLines(problems.data, globe.data, content.data)
+  const loading = !problems.data && !globe.data && !content.data && !search.data && !vitals.data
+  const lines = attentionLines(problems.data, globe.data, content.data, search.data, vitals.data)
   return (
     <Panel question="What needs attention?" wide>
       {loading ? (
@@ -76,6 +108,15 @@ export function Attention({
           ))}
         </ul>
       )}
+      <Explain>
+        <p className="dash-note">
+          These lines come from the panels further down: Google's clicks of the last 28 days against the 28
+          before (Search Console), whether the globe comes up, up to {PROBLEM_LINES} of the worst problems, every
+          speed number Google's own field data rates below good, and the searches that found nothing. Red breaks
+          something for a visitor, amber slows or misses them, green is Google's clicks holding or growing and a
+          globe that came up for at least 9 in 10 loads.
+        </p>
+      </Explain>
     </Panel>
   )
 }

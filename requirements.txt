@@ -45,6 +45,7 @@ anyascii>=0.3.2             # Unicode to ASCII transliteration (ISC license - co
 # HTTP & NETWORKING
 # =============================================================================
 httpx>=0.26.0               # Modern HTTP client (async support)
+google-auth[requests]>=2.40.0  # Search Console: scripts/gsc_report.py, api/services/search_console.py
 aiohttp>=3.9.0              # Async HTTP
 tenacity>=8.2.0             # Retry logic with backoff
 aiofiles>=23.2.0            # Async file operations

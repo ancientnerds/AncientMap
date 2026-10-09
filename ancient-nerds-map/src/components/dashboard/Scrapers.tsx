@@ -1,6 +1,6 @@
 import { BarList, type BarItem } from './BarList'
 import { fmtInt, fmtShare } from './format'
-import { HowCounted, Panel, Status } from './Panel'
+import { Explain, HowCounted, Panel, Status } from './Panel'
 import type { Cluster, ClustersData, Overview } from './types'
 import type { Loaded } from './useStats'
 
@@ -38,9 +38,11 @@ export function Scrapers({ state, overview }: { state: Loaded<ClustersData>; ove
           <p className="dash-note">
             {fmtInt(c.flagged)}
             {all === null ? '' : ` of ${fmtInt(all)} sessions (${fmtShare(c.flagged, all)})`} sat inside a
-            group that {c.min_ids} or more session ids reached on the same path in the same minute. Read
-            every other number on this page with that subtracted.
+            group that {c.min_ids} or more session ids reached on the same path in the same minute.
           </p>
+          <Explain>
+            <p className="dash-note">Read every other number on this page with that subtracted.</p>
+          </Explain>
           <HowCounted>
             The two numbers cover the same window but are up to five minutes apart — this panel refreshes
             every five minutes, the session count every minute. Declared crawlers never get this far: Umami

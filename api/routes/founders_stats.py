@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""The founders dashboard's data: fourteen endpoints under /api/stats, all
+"""The founders dashboard's data: seventeen endpoints under /api/stats, all
 behind the ``an_stats`` cookie (stats_access.require_stats_session). Umami rows
 come from pipeline.umami_db, the member counts from pipeline.members_stats,
-nginx's referral log from pipeline.referral_log, and every founder-level
-shaping from pipeline.stats_analysis.
+nginx's referral log from pipeline.referral_log, Google's view of us (Search
+Console, CrUX) and nginx's crawler log from api/services, and every
+founder-level shaping from pipeline.stats_analysis.
 
 ``fetch`` is imported as a module attribute on purpose: the tests replace
 ``fr.fetch`` and never touch a database.
@@ -11,6 +12,7 @@ shaping from pipeline.stats_analysis.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
@@ -19,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from api.cache import cached
 from api.routes.stats_access import require_stats_session
-from api.services import jwt_auth
+from api.services import crawler_log, crux, jwt_auth, search_console
 from pipeline import members_stats, referral_log
 from pipeline import stats_analysis as fs
 from pipeline.database import get_db
@@ -72,6 +74,11 @@ COUNTRY_TTL = 90
 #: How long the growth line is reused. A day's point only grows during that
 #: day, so five minutes is fresh enough, and the panel asks at that cadence.
 DAILY_TTL = 300
+#: Search Console's newest final day is two to three days old and moves once
+#: a day, so an hour is fresh; the first call after it costs six API requests.
+SEARCH_TTL = 3600
+#: CrUX publishes one new weekly window a week.
+FIELD_VITALS_TTL = 12 * 3600
 
 
 def _window(days: int) -> tuple[datetime, datetime]:
@@ -169,6 +176,52 @@ async def daily(
 ) -> dict[str, Any]:
     """Is the audience growing — visitors and confirmed humans per UTC day."""
     return await _daily_line()
+
+
+@cached("stats:search", ttl=SEARCH_TTL)
+async def _search_overview() -> dict[str, Any]:
+    """Six Search Console calls, run off the event loop: google-auth's session
+    is synchronous, and the first call after the hour takes seconds."""
+    return await asyncio.to_thread(search_console.search_overview, datetime.now(UTC).date())
+
+
+@router.get("/search")
+async def search(
+    _session: dict = Depends(require_stats_session),
+) -> dict[str, Any]:
+    """How Google shows us: impressions, clicks and position per day since the
+    property's first data, the last 28 finished days against the 28 before,
+    the top queries and pages, and how many pages Google showed at all."""
+    return await _search_overview()
+
+
+@cached("stats:field-vitals", ttl=FIELD_VITALS_TTL)
+async def _field_vitals() -> dict[str, Any]:
+    return await crux.field_vitals()
+
+
+@router.get("/field-vitals")
+async def field_vitals(
+    _session: dict = Depends(require_stats_session),
+) -> dict[str, Any]:
+    """Google's own speed numbers for the origin: CrUX p75 LCP, INP and CLS per
+    week, phone and desktop."""
+    return await _field_vitals()
+
+
+@router.get("/crawlers")
+async def crawlers(
+    days: int = Query(7, ge=1, le=90),
+    _session: dict = Depends(require_stats_session),
+) -> dict[str, Any]:
+    """Which search engines and AI systems fetched our pages in the window,
+    verified against their operators' published addresses."""
+    fetches = await asyncio.to_thread(crawler_log.read_fetches)
+    if fetches is None:
+        return {"report": None, "log_reason": crawler_log.unavailable_reason()}
+    since, _until = _window(days)
+    ranges = await crawler_log.published_ranges()
+    return {"report": crawler_log.crawler_report(fetches, ranges, since), "log_reason": None}
 
 
 @router.get("/map")

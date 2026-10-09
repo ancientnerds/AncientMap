@@ -1,5 +1,5 @@
 import { fmtDayHour, fmtInt, fmtShare } from './format'
-import { Panel, Status } from './Panel'
+import { Explain, Panel, Status } from './Panel'
 import { Tile } from './Tile'
 import type { CountriesData, CountryWindow, HourBucket, Overview } from './types'
 import type { Loaded } from './useStats'
@@ -68,10 +68,14 @@ function Strip({ o }: { o: Overview }) {
         <span>Sessions per hour, UTC</span>
         <span>{fmtDayHour(last)}</span>
       </div>
+      <Explain>
+        <p className="dash-note">
+          Bright green is a confirmed human — an interaction or a second page. The rest may be a bot, or a
+          person who read the headline and left; cookieless data cannot tell them apart.
+        </p>
+      </Explain>
       <p className="dash-note">
-        Bright green is a confirmed human — an interaction or a second page. The rest may be a bot, or a
-        person who read the headline and left; cookieless data cannot tell them apart. AI assistants sent{' '}
-        {fmtInt(o.sessions.ai)} of {fmtInt(o.sessions.all)} sessions in this window.
+        AI assistants sent {fmtInt(o.sessions.ai)} of {fmtInt(o.sessions.all)} sessions in this window.
       </p>
     </>
   )

@@ -86,7 +86,7 @@ def test_router_is_mounted_under_api_stats():
     # changed between the local and the CI version (a _IncludedRouter wrapper
     # without .path), while the schema is the documented contract either way.
     paths = set(app.openapi()["paths"])
-    for name in ("overview", "countries", "daily", "map", "live", "globe", "clusters", "devices", "content", "feedback", "sources", "journeys", "problems", "members"):  # fmt: skip
+    for name in ("overview", "countries", "daily", "search", "field-vitals", "crawlers", "map", "live", "globe", "clusters", "devices", "content", "feedback", "sources", "journeys", "problems", "members"):  # fmt: skip
         assert f"/api/stats/{name}" in paths, name
 
 
@@ -137,6 +137,38 @@ def test_daily_fetches_the_whole_history_once_and_ends_with_today(monkeypatch):
     assert len(out["days"]) == (now.date() - fs.TRACKER_FIRST_FULL_DAY).days
     assert len(fetch.calls) == 1
     assert fetch.calls[0][1] == datetime(2026, 9, 18, tzinfo=UTC)
+
+
+def test_crawlers_say_why_when_the_log_is_missing(monkeypatch):
+    from api.services import crawler_log
+
+    monkeypatch.setattr(crawler_log, "read_fetches", lambda: None)
+    out = asyncio.run(fr.crawlers(days=7, _session=SESSION))
+    assert out["report"] is None
+    assert "crawlers.log" in out["log_reason"]
+
+
+def test_crawlers_fold_the_window_against_the_published_ranges(monkeypatch):
+    import ipaddress
+    import json
+
+    from api.services import crawler_log
+
+    now = datetime.now(UTC)
+    lines = [
+        json.dumps({"t": (now - timedelta(days=d)).isoformat(), "ip": "66.249.66.1", "req": "GET /", "status": 200, "ua": "Googlebot/2.1"})
+        for d in (1, 10)
+    ]  # fmt: skip
+
+    async def ranges():
+        return {"google": [ipaddress.ip_network("66.249.64.0/19")]}
+
+    monkeypatch.setattr(crawler_log, "read_fetches", lambda: crawler_log.parse_lines(lines))
+    monkeypatch.setattr(crawler_log, "published_ranges", ranges)
+    out = asyncio.run(fr.crawlers(days=7, _session=SESSION))
+    # The ten-day-old fetch is outside the 7-day window.
+    assert out["report"]["bots"][0]["requests"] == 1
+    assert out["log_reason"] is None
 
 
 def test_map_returns_the_points_for_the_requested_days(monkeypatch):

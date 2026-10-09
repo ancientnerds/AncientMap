@@ -1,6 +1,6 @@
 import { BarList } from './BarList'
 import { fmtInt, fmtShare } from './format'
-import { Panel, Status } from './Panel'
+import { Explain, Panel, Status } from './Panel'
 import type { Overview, SessionKind } from './types'
 import type { Loaded } from './useStats'
 
@@ -30,8 +30,11 @@ export function SessionTypes({ state }: { state: Loaded<Overview> }) {
           />
           <p className="dash-note">
             Confirmed human: {fmtInt(o.sessions.human)} of {fmtInt(o.sessions.all)} sessions — an interaction or a
-            second page. The rest may be a bot, or a person who bounced.
+            second page.
           </p>
+          <Explain>
+            <p className="dash-note">The rest may be a bot, or a person who bounced.</p>
+          </Explain>
         </>
       )}
     </Panel>
