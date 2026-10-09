@@ -508,3 +508,203 @@ def test_the_cli_exits_two_on_a_refusal(tmp_path: Path, capsys: pytest.CaptureFi
     code = CC.main(["compare", "--root", str(tmp_path / "calibration"), "--id", "nope"])
     assert code == 2
     assert "REFUSED" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------------------- truth pools (wd5)
+def a_truth_handoff(tmp_path: Path) -> tuple[Path, Path]:
+    """Questions and no answer: the gold is a file that maps each case to the fact."""
+    handoff = tmp_path / "handoff"
+    for batch, site in (("wc-0001", SITE_A), ("wc-0002", SITE_B)):
+        stage = handoff / batch / "check"
+        stage.mkdir(parents=True)
+        (stage / f"{site}.prompt.txt").write_text(f"the question of {site}\n", encoding="utf-8")
+        (handoff / batch / "MANIFEST.jsonl").write_text("{}\n", encoding="utf-8")
+    truth = tmp_path / "TRUTH.json"
+    truth.write_text(json.dumps({SITE_A: "confirm", SITE_B: "reject"}), encoding="utf-8")
+    return handoff, truth
+
+
+def truth_sealed(tmp_path: Path, **over: Any) -> dict[str, Any]:
+    handoff, truth = a_truth_handoff(tmp_path)
+    kwargs: dict[str, Any] = {
+        "truth": truth,
+        "comparison": "truth-label",
+        "max_undecided_excess": 0.1,
+    }
+    kwargs.update(over)
+    return sealed(tmp_path, handoff=handoff, **kwargs)
+
+
+def test_a_truth_pool_is_sealed_with_its_questions_and_its_truth_file(tmp_path: Path) -> None:
+    seal = truth_sealed(tmp_path)
+    assert seal["case_ids"] == [f"wc-0001/{SITE_A}", f"wc-0002/{SITE_B}"]
+    assert seal["comparison"] == "truth-label" and seal["max_undecided_excess"] == 0.1
+    assert seal["truth"] == str((tmp_path / "TRUTH.json").resolve())
+    assert len(seal["pool_sha256"]) == 64
+
+
+def test_the_digest_of_a_truth_pool_follows_the_truth_file(tmp_path: Path) -> None:
+    handoff, truth = a_truth_handoff(tmp_path)
+    before = CC.pool_sha256(handoff, ["wc-0001", "wc-0002"], truth)
+    truth.write_text(json.dumps({SITE_A: "reject", SITE_B: "reject"}), encoding="utf-8")
+    assert before != CC.pool_sha256(handoff, ["wc-0001", "wc-0002"], truth)
+
+
+def test_a_truth_pool_that_carries_an_answer_is_refused(tmp_path: Path) -> None:
+    handoff, truth = a_truth_handoff(tmp_path)
+    put_answer(handoff, "wc-0001", SITE_A, check_answer(SITE_A, "KEEP"))
+    with pytest.raises(CC.CalibrationError, match="carries no recorded answer"):
+        sealed(tmp_path, handoff=handoff, truth=truth)
+
+
+def test_a_truth_file_must_name_exactly_the_cases(tmp_path: Path) -> None:
+    handoff, truth = a_truth_handoff(tmp_path)
+    truth.write_text(json.dumps({SITE_A: "confirm"}), encoding="utf-8")
+    with pytest.raises(CC.CalibrationError, match="maps exactly the pool's cases"):
+        sealed(tmp_path, handoff=handoff, truth=truth)
+    with pytest.raises(CC.CalibrationError, match="is not there"):
+        sealed(tmp_path, handoff=handoff, truth=tmp_path / "none.json")
+
+
+def test_a_truth_pool_with_no_question_is_refused(tmp_path: Path) -> None:
+    handoff = tmp_path / "handoff"
+    (handoff / "wc-0001").mkdir(parents=True)
+    truth = tmp_path / "TRUTH.json"
+    truth.write_text("{}", encoding="utf-8")
+    with pytest.raises(CC.CalibrationError, match="no question"):
+        sealed(tmp_path, handoff=handoff, batches=["wc-0001"], truth=truth)
+
+
+@pytest.mark.parametrize("bound", [-0.1, 1.5, True, "0.1"])
+def test_the_undecided_bound_is_a_share(tmp_path: Path, bound: Any) -> None:
+    with pytest.raises(CC.CalibrationError, match="max_undecided_excess"):
+        truth_sealed(tmp_path, max_undecided_excess=bound)
+
+
+def prepared_truth(tmp_path: Path) -> Path:
+    truth_sealed(tmp_path)
+    run = a_source_run(tmp_path, ())
+    CC.prepare(tmp_path / "calibration", calibration_id="cal-fact-1", run=run)
+    return tmp_path / "calibration" / "cal-fact-1"
+
+
+def test_a_truth_pool_is_prepared_without_a_recorded_answer(tmp_path: Path) -> None:
+    out = prepared_truth(tmp_path)
+    assert json.loads((out / "RECORDED.json").read_text(encoding="utf-8")) == {}
+    assert (out / "wc-0001" / "check" / f"{SITE_A}.prompt.txt").exists()
+
+
+def test_a_truth_pool_reports_its_cases_as_the_questions(tmp_path: Path) -> None:
+    truth_sealed(tmp_path)
+    run = a_source_run(tmp_path, ())
+    report = CC.prepare(tmp_path / "calibration", calibration_id="cal-fact-1", run=run)
+    assert report["questions"] == 2 and report["labels"] == sorted([SITE_A, SITE_B])
+
+
+def test_a_truth_file_that_changed_after_the_seal_is_refused_at_the_prepare(
+    tmp_path: Path,
+) -> None:
+    truth_sealed(tmp_path)
+    run = a_source_run(tmp_path, ())
+    (tmp_path / "TRUTH.json").write_text(
+        json.dumps({SITE_A: "reject", SITE_B: "reject"}), encoding="utf-8"
+    )
+    with pytest.raises(CC.CalibrationError, match="changed after the seal"):
+        CC.prepare(tmp_path / "calibration", calibration_id="cal-fact-1", run=run)
+    (tmp_path / "TRUTH.json").unlink()
+    with pytest.raises(CC.CalibrationError, match="is gone"):
+        CC.prepare(tmp_path / "calibration", calibration_id="cal-fact-1", run=run)
+
+
+def test_a_comparison_this_tool_does_not_make_is_refused_by_name(tmp_path: Path) -> None:
+    out = prepared_truth(tmp_path)
+    fresh(out, "wc-0001", SITE_A, check_answer(SITE_A, "KEEP"))
+    fresh(out, "wc-0002", SITE_B, check_answer(SITE_B, "KEEP"))
+    with pytest.raises(CC.CalibrationError, match="truth-label.*pools.py"):
+        CC.compare(tmp_path / "calibration", calibration_id="cal-fact-1")
+
+
+def test_the_tool_that_owns_the_comparison_makes_it(tmp_path: Path) -> None:
+    out = prepared_truth(tmp_path)
+    fresh(out, "wc-0001", SITE_A, check_answer(SITE_A, "KEEP"))
+    fresh(out, "wc-0002", SITE_B, check_answer(SITE_B, "KEEP"))
+    seen: dict[str, Any] = {}
+
+    def by_truth(
+        sealed_: dict[str, Any], recorded: dict[str, str], fresh_: dict[str, str], copy: Path
+    ) -> dict[str, Any]:
+        seen.update(sealed=sealed_, recorded=recorded, fresh=sorted(fresh_), copy=copy)
+        return {
+            "units": 2,
+            "agreed": 2,
+            "agreement": 1.0,
+            "unanswered": [],
+            "disagreements": [],
+            "undecided_excess": 0.0,
+        }
+
+    report = CC.compare(
+        tmp_path / "calibration", calibration_id="cal-fact-1", comparators={"truth-label": by_truth}
+    )
+    assert report["agreement"] == 1.0 and seen["recorded"] == {} and seen["copy"] == out
+    assert seen["sealed"]["truth"].endswith("TRUTH.json") and seen["fresh"] == [SITE_A, SITE_B]
+
+
+def verdict_with(tmp_path: Path, report: dict[str, Any]) -> dict[str, Any]:
+    out = prepared_truth(tmp_path)
+    fresh(out, "wc-0001", SITE_A, check_answer(SITE_A, "KEEP"))
+    fresh(out, "wc-0002", SITE_B, check_answer(SITE_B, "KEEP"))
+    CC.compare(
+        tmp_path / "calibration",
+        calibration_id="cal-fact-1",
+        comparators={"truth-label": lambda *_: report},
+    )
+    return CC.verdict(
+        tmp_path / "calibration", calibration_id="cal-fact-1", false_sources=0, now=lambda: NOW
+    )
+
+
+GOOD = {"units": 10, "agreed": 10, "agreement": 1.0, "unanswered": [], "disagreements": []}
+
+
+def test_the_verdict_bounds_the_undecided_rate_as_sealed(tmp_path: Path) -> None:
+    passed = verdict_with(tmp_path, {**GOOD, "undecided_excess": 0.1})
+    assert passed["passed"] is True and passed["undecided_excess"] == 0.1
+
+
+def test_a_fresh_rate_of_undecided_cells_above_the_bound_fails_the_role(tmp_path: Path) -> None:
+    failed = verdict_with(tmp_path, {**GOOD, "undecided_excess": 0.1001})
+    assert failed["passed"] is False
+    assert "undecided rate is 0.1001 above the gold's, 0.1 allowed" in failed["tier_move"]["reason"]
+
+
+def test_a_comparison_that_reports_no_undecided_rate_cannot_pass_a_sealed_bound(
+    tmp_path: Path,
+) -> None:
+    failed = verdict_with(tmp_path, GOOD)
+    assert failed["passed"] is False
+    assert "reports none" in failed["tier_move"]["reason"]
+
+
+def test_a_seal_without_a_bound_ignores_the_rate(tmp_path: Path) -> None:
+    compared(tmp_path, second="DROP")
+    result = CC.verdict(
+        tmp_path / "calibration", calibration_id="cal-fact-1", false_sources=0, now=lambda: NOW
+    )
+    assert result["passed"] is True and result["undecided_excess"] is None
+
+
+def test_the_cli_seals_a_truth_pool(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    handoff, truth = a_truth_handoff(tmp_path)
+    code = CC.main(
+        [
+            "seal", "--root", str(tmp_path / "calibration"), "--id", "cal-fact-1",
+            "--role", "fact_checker", "--handoff", str(handoff),
+            "--batches", "wc-0001", "wc-0002", "--threshold", "0.9",
+            "--truth", str(truth), "--comparison", "truth-label",
+            "--max-undecided-excess", "0.1",
+        ]
+    )  # fmt: skip
+    assert code == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["comparison"] == "truth-label" and printed["max_undecided_excess"] == 0.1

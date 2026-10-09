@@ -15,6 +15,12 @@ model or opens a socket.
              threshold, in `<root>/THRESHOLDS.json`: the cases, the sha256 of the recorded answers
              and of the role's registry entry and `roles.py`. Refused when the id is sealed, has a
              verdict or has begun, and for a pool a MiniMax agent answered (master plan X6).
+             A pool whose gold is not an answer but a fact (a bucket a hand check confirmed, an
+             audit's keep or revert) is sealed with `--truth FILE`: its batches carry only the
+             questions, the file maps each case to its expected value and is pinned with them.
+             `--comparison` names how `compare` measures it (`all` units, or one a tool registers,
+             `fields/pools.py`), `--max-undecided-excess` bounds how far the fresh rate of cells
+             nobody decided may lie above the gold's.
     prepare  copy the pool into `<root>/<id>` without its answers (the recorded ones go to
              `RECORDED.json`) and register the calibration run. Refused when the pool or the role
              changed after the seal.
@@ -25,7 +31,8 @@ model or opens a socket.
              disagreement's URL and quote (O18), made by the orchestrator, never assumed.
 
     python scripts/remediation/calibrate_claude.py seal --id ID --role ROLE --handoff DIR \\
-        --batches B [B ...] --threshold 0.9
+        --batches B [B ...] --threshold 0.9 [--truth FILE] [--comparison NAME] \\
+        [--max-undecided-excess 0.1]
     python scripts/remediation/calibrate_claude.py prepare --id ID --run RUN
     python scripts/remediation/calibrate_claude.py compare --id ID
     python scripts/remediation/calibrate_claude.py verdict --id ID --false-sources N
@@ -56,6 +63,11 @@ VERDICTS_DIR = "verdicts"
 RECORDED_FILE = "RECORDED.json"
 COMPARISON_FILE = "COMPARISON.json"
 ANSWER_SUFFIX = ".answer.json"
+PROMPT_SUFFIX = ".prompt.txt"
+#: How `compare` measures a pool: every judged unit (`mcode_driver.compare_answers`), the default.
+#: A pool whose gold is not a recorded answer, or that measures with a rule of its own, names another
+#: comparison at the seal and is compared by the tool that owns it (`compare(comparators=...)`).
+COMPARE_ALL = "all"
 #: O18: a calibration allows no false source.
 MAX_FALSE_SOURCES = 0
 
@@ -81,33 +93,64 @@ def _read(path: Path, what: str) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _answer_files(handoff: Path, batches: Sequence[str]) -> list[Path]:
-    """Every answer file of the batches, in path order."""
+def _files(handoff: Path, batches: Sequence[str], suffix: str) -> list[Path]:
+    """Every file with this suffix in the batches, in path order."""
     files: list[Path] = []
     for batch in batches:
         folder = handoff / OH._batch_component(batch)
         if not folder.is_dir():
             raise CalibrationError(f"{handoff} has no batch {batch}")
-        files.extend(sorted(f for f in folder.rglob(f"*{ANSWER_SUFFIX}") if f.is_file()))
+        files.extend(sorted(f for f in folder.rglob(f"*{suffix}") if f.is_file()))
     return files
 
 
-def case_ids(handoff: Path, batches: Sequence[str]) -> list[str]:
-    """`<batch>/<label>` of every recorded answer of the pool, in the order of `batches`."""
+def _answer_files(handoff: Path, batches: Sequence[str]) -> list[Path]:
+    """Every answer file of the batches, in path order."""
+    return _files(handoff, batches, ANSWER_SUFFIX)
+
+
+def case_ids(handoff: Path, batches: Sequence[str], *, truth: bool = False) -> list[str]:
+    """`<batch>/<label>` of every case of the pool, in the order of `batches`: every recorded answer,
+    or - for a pool whose gold is a truth file - every question."""
+    suffix = PROMPT_SUFFIX if truth else ANSWER_SUFFIX
     return [
-        f"{f.relative_to(handoff).parts[0]}/{f.name[: -len(ANSWER_SUFFIX)]}"
-        for f in _answer_files(handoff, batches)
+        f"{f.relative_to(handoff).parts[0]}/{f.name[: -len(suffix)]}"
+        for f in _files(handoff, batches, suffix)
     ]
 
 
-def pool_sha256(handoff: Path, batches: Sequence[str]) -> str:
+def pool_sha256(handoff: Path, batches: Sequence[str], truth: Path | None = None) -> str:
     """The sha256 of the pool: every recorded answer's path and bytes, so a changed answer, a added
-    case or a removed one changes it."""
+    case or a removed one changes it. A truth pool is its questions and its truth file."""
+    suffix = ANSWER_SUFFIX if truth is None else PROMPT_SUFFIX
     rows = [
         [f.relative_to(handoff).as_posix(), hashlib.sha256(f.read_bytes()).hexdigest()]
-        for f in _answer_files(handoff, batches)
+        for f in _files(handoff, batches, suffix)
     ]
+    if truth is not None:
+        rows.append(["truth", hashlib.sha256(truth.read_bytes()).hexdigest()])
     return hashlib.sha256(json.dumps(rows, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _check_truth_pool(handoff: Path, batches: Sequence[str], truth: Path) -> None:
+    """A truth pool carries the questions and no recorded answer, and its truth file names exactly
+    those cases: a case without a truth value measures nothing, a truth value without a case is a
+    different pool."""
+    if not truth.is_file():
+        raise CalibrationError(f"{truth} is not there")
+    if _answer_files(handoff, batches):
+        raise CalibrationError(
+            f"{handoff}: a truth pool carries no recorded answer - the gold is the truth file"
+        )
+    wanted = {f.name[: -len(PROMPT_SUFFIX)] for f in _files(handoff, batches, PROMPT_SUFFIX)}
+    if not wanted:
+        raise CalibrationError(f"{handoff}: no question in {list(batches)}")
+    held = json.loads(truth.read_text(encoding="utf-8"))
+    if not isinstance(held, dict) or set(held) != wanted:
+        raise CalibrationError(
+            f"{truth} names {sorted(set(held) ^ wanted)[:3]} that the questions of the pool do "
+            "not (or the other way round): it maps exactly the pool's cases"
+        )
 
 
 def _check_pool(handoff: Path, batches: Sequence[str]) -> None:
@@ -155,18 +198,29 @@ def seal(
     batches: Sequence[str],
     threshold: float,
     max_false_sources: int = MAX_FALSE_SOURCES,
+    max_undecided_excess: float | None = None,
+    comparison: str = COMPARE_ALL,
+    truth: Path | None = None,
     now: Callable[[], str] = utc_now,
 ) -> dict[str, Any]:
     """Seal `calibration_id` before its run, and return the seal.
 
     Refused: an id already sealed; a verdict for the id; a calibration copy of the id; a threshold
-    that is not a number in (0, 1]; a role that is not registered; a pool with a missing batch, no
-    recorded answer, or a MiniMax or unstamped answer."""
+    that is not a number in (0, 1]; an undecided-rate bound outside [0, 1]; a role that is not
+    registered; a pool with a missing batch, no recorded answer, or a MiniMax or unstamped answer;
+    a truth pool that carries an answer or whose truth file is not exactly its cases."""
     OH._component(calibration_id, "calibration id")
+    OH._component(comparison, "comparison")
     if isinstance(threshold, bool) or not isinstance(threshold, int | float):
         raise CalibrationError(f"threshold {threshold!r} is not a number")
     if not 0 < threshold <= 1:
         raise CalibrationError(f"threshold {threshold!r} is not in (0, 1]")
+    if max_undecided_excess is not None and (
+        isinstance(max_undecided_excess, bool)
+        or not isinstance(max_undecided_excess, int | float)
+        or not 0 <= max_undecided_excess <= 1
+    ):
+        raise CalibrationError(f"max_undecided_excess {max_undecided_excess!r} is not in [0, 1]")
     entry = RO.role(role)
     if (root / VERDICTS_DIR / f"{calibration_id}.json").exists():
         raise CalibrationError(
@@ -179,7 +233,10 @@ def seal(
     seals = _seals(root)
     if calibration_id in seals:
         raise CalibrationError(f"{calibration_id} is already sealed")
-    _check_pool(handoff, batches)
+    if truth is None:
+        _check_pool(handoff, batches)
+    else:
+        _check_truth_pool(handoff, batches, truth)
     sealed = {
         "calibration_id": calibration_id,
         "role": role,
@@ -188,8 +245,11 @@ def seal(
         "calibration_set": entry.calibration_set,
         "handoff": str(handoff.resolve()),
         "batches": list(batches),
-        "case_ids": case_ids(handoff, batches),
-        "pool_sha256": pool_sha256(handoff, batches),
+        "case_ids": case_ids(handoff, batches, truth=truth is not None),
+        "pool_sha256": pool_sha256(handoff, batches, truth),
+        "truth": None if truth is None else str(truth.resolve()),
+        "comparison": comparison,
+        "max_undecided_excess": max_undecided_excess,
         "role_sha256": RO.role_sha256(role),
         "roles_sha256": RO.registry_sha256(),
         "threshold": threshold,
@@ -213,7 +273,10 @@ def prepare(root: Path, *, calibration_id: str, run: Path) -> dict[str, Any]:
     sealed = _sealed(root, calibration_id)
     _need_unchanged_role(sealed)
     handoff = Path(sealed["handoff"])
-    if pool_sha256(handoff, sealed["batches"]) != sealed["pool_sha256"]:
+    truth = None if sealed.get("truth") is None else Path(sealed["truth"])
+    if truth is not None and not truth.is_file():
+        raise CalibrationError(f"the truth file of {calibration_id} is gone: {truth}")
+    if pool_sha256(handoff, sealed["batches"], truth) != sealed["pool_sha256"]:
         raise CalibrationError(f"the pool of {calibration_id} changed after the seal")
     out = root / calibration_id
     if out.exists():
@@ -225,8 +288,8 @@ def prepare(root: Path, *, calibration_id: str, run: Path) -> dict[str, Any]:
         "prepared": str(out),
         "calibration_run": str(calibration_run),
         "batches": list(sealed["batches"]),
-        "labels": sorted(recorded),
-        "questions": len(recorded),
+        "labels": sorted(recorded) or sorted(c.split("/", 1)[1] for c in sealed["case_ids"]),
+        "questions": len(recorded) or len(sealed["case_ids"]),
     }
 
 
@@ -246,17 +309,44 @@ def _fresh_answers(out: Path, sealed: dict[str, Any]) -> dict[str, str]:
     return fresh
 
 
-def compare(root: Path, *, calibration_id: str) -> dict[str, Any]:
+#: A comparison: the seal, the recorded answers by label, the fresh answers by label and the
+#: calibration copy -> the report `verdict` reads (`units`, `agreed`, `agreement`, `unanswered`,
+#: `disagreements`, and `undecided_excess` when the seal bounds it).
+Comparator = Callable[[dict[str, Any], dict[str, str], dict[str, str], Path], dict[str, Any]]
+
+
+def _compare_all(
+    sealed: dict[str, Any], recorded: dict[str, str], fresh: dict[str, str], out: Path
+) -> dict[str, Any]:
+    return D.compare_answers(sealed["role"], sorted(recorded), recorded, fresh).to_dict()
+
+
+COMPARATORS: dict[str, Comparator] = {COMPARE_ALL: _compare_all}
+
+
+def compare(
+    root: Path, *, calibration_id: str, comparators: dict[str, Comparator] | None = None
+) -> dict[str, Any]:
     """The role's fresh answers against the recorded ones, unit by unit (`compare_answers`); written
-    once to `COMPARISON.json`. A question without a fresh answer is unanswered, never agreement."""
+    once to `COMPARISON.json`. A question without a fresh answer is unanswered, never agreement.
+
+    A seal that names another comparison (`comparators` of the tool that owns it) is measured by
+    that one; a comparison nobody here knows is refused by name."""
     sealed = _sealed(root, calibration_id)
+    kind = sealed.get("comparison", COMPARE_ALL)
+    comparator = {**COMPARATORS, **(comparators or {})}.get(kind)
+    if comparator is None:
+        raise CalibrationError(
+            f"{calibration_id} is sealed for the comparison {kind!r}, which this tool does not "
+            "make: run the tool that owns it (scripts/remediation/fields/pools.py compare)"
+        )
     out = root / calibration_id
     recorded_path = out / RECORDED_FILE
     if not recorded_path.exists():
         raise CalibrationError(f"{calibration_id} is not prepared: {recorded_path} is missing")
     recorded = json.loads(recorded_path.read_text(encoding="utf-8"))
     fresh = _fresh_answers(out, sealed)
-    report = D.compare_answers(sealed["role"], sorted(recorded), recorded, fresh).to_dict()
+    report = comparator(sealed, recorded, fresh, out)
     _write_once(out / COMPARISON_FILE, report)
     return report
 
@@ -275,6 +365,15 @@ def _failures(report: dict[str, Any], sealed: dict[str, Any], false_sources: int
         failures.append(
             f"{false_sources} false source(s) counted, {sealed['max_false_sources']} allowed"
         )
+    bound = sealed.get("max_undecided_excess")
+    if bound is not None:
+        excess = report.get("undecided_excess")
+        if excess is None:
+            failures.append("the seal bounds the undecided rate and the comparison reports none")
+        elif excess > bound:
+            failures.append(
+                f"the fresh undecided rate is {excess} above the gold's, {bound} allowed"
+            )
     return failures
 
 
@@ -310,6 +409,7 @@ def verdict(
         "units": report["units"],
         "agreed": report["agreed"],
         "unanswered": report["unanswered"],
+        "undecided_excess": report.get("undecided_excess"),
         "false_sources": false_sources,
         "tier_move": None,
         "decided_at": now(),
@@ -323,6 +423,35 @@ def verdict(
             result["held"] = f"{exc}: the owner decides"
     _write_once(root / VERDICTS_DIR / f"{calibration_id}.json", result)
     return result
+
+
+def require_passed(root: Path, needs: Iterable[tuple[str, str]]) -> None:
+    """Refuse unless every `(role, comparison)` of `needs` has a passing verdict whose seal names the
+    role and the comparison and binds the role's registry entry as it is now: the calibration of a
+    role that was edited (a tier move) since its seal no longer vouches for it, and neither does a
+    failed one. All the unmet needs are named in one refusal."""
+    seals = _seals(root)
+    verdicts_dir = root / VERDICTS_DIR
+    passed = [
+        seals[path.stem]
+        for path in sorted(verdicts_dir.glob("*.json"))
+        if path.stem in seals and json.loads(path.read_text(encoding="utf-8"))["passed"]
+    ]
+    unmet = [
+        f"{role}/{comparison}"
+        for role, comparison in needs
+        if not any(
+            seal["role"] == role
+            and seal["comparison"] == comparison
+            and seal["role_sha256"] == RO.role_sha256(role)
+            for seal in passed
+        )
+    ]
+    if unmet:
+        raise CalibrationError(
+            f"no passing verdict under {verdicts_dir} for {', '.join(unmet)} (sealed against the "
+            "role's registry entry as it is now): calibrate before the lane writes"
+        )
 
 
 # ------------------------------------------------------------------------------------------ CLI
@@ -341,6 +470,14 @@ def main(argv: Iterable[str] | None = None) -> int:
     seal_cli.add_argument("--handoff", required=True, type=Path)
     seal_cli.add_argument("--batches", required=True, nargs="+")
     seal_cli.add_argument("--threshold", required=True, type=float)
+    seal_cli.add_argument("--comparison", default=COMPARE_ALL)
+    seal_cli.add_argument("--max-undecided-excess", type=float, default=None)
+    seal_cli.add_argument(
+        "--truth",
+        type=Path,
+        default=None,
+        help="a truth pool: the file mapping each case to its gold",
+    )
     sub.choices["prepare"].add_argument("--run", required=True, type=Path)
     sub.choices["verdict"].add_argument("--false-sources", required=True, type=int)
     args = parser.parse_args(list(argv) if argv is not None else None)
@@ -353,6 +490,9 @@ def main(argv: Iterable[str] | None = None) -> int:
                 handoff=args.handoff,
                 batches=args.batches,
                 threshold=args.threshold,
+                comparison=args.comparison,
+                max_undecided_excess=args.max_undecided_excess,
+                truth=args.truth,
             )
         elif args.command == "prepare":
             payload = prepare(args.root, calibration_id=args.calibration_id, run=args.run)

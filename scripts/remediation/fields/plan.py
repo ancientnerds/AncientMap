@@ -100,6 +100,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+import calibrate_claude as CC  # noqa: E402
 from mechanical import apply as MA  # noqa: E402
 from mechanical.lane import FIELDS_ROOTS, Lane, fields_lane, sql_literal  # noqa: E402
 from mechanical.period_name import SITES_TS, frontend_rule  # noqa: E402
@@ -121,6 +122,7 @@ from mechanical.plan import (  # noqa: E402
 from fields import answers as A  # noqa: E402
 from fields import classify as C  # noqa: E402
 from fields import handoff as HO  # noqa: E402
+from fields import pools as PL  # noqa: E402
 from fields import population as POP  # noqa: E402
 from fields import rule as R  # noqa: E402
 from pipeline.utils.text import UNDATED, categorize_period  # noqa: E402
@@ -185,6 +187,34 @@ def _sha256_text(path: Path) -> str:
 
 
 # ------------------------------------------------------------------------------ the wave
+def _require_calibrated() -> None:
+    """Lane wd5 writes only what calibrated roles answered (D6, map step 1): a passing verdict of the
+    general pool, the BP pool and the adversarial pool, each sealed against the role as it is now.
+    The check stands at the wave, the one path into production: the calibration runs themselves use
+    the export and the import."""
+    try:
+        CC.require_passed(REPO / "output" / "remediation" / "calibration", PL.WD5_CALIBRATIONS)
+    except CC.CalibrationError as exc:
+        raise PlanError(str(exc)) from exc
+
+
+def _require_adversarial(run: Path) -> None:
+    """Lane wd5 writes only what the Opus adversarial re-check has passed (D10, map step 6): the wave
+    is planned from the DECISIONS.jsonl the re-check was applied to (`adversarial.py apply`, which
+    pins that file's sha256), never from the researchers' decisions alone."""
+    applied = run / HO.ADV_APPLIED
+    if not applied.exists():
+        raise PlanError(
+            f"{applied} is missing: lane wd5 writes only what the adversarial re-check has passed "
+            "(adversarial.py select, export, import, apply)"
+        )
+    pinned = json.loads(applied.read_text(encoding="utf-8"))["decisions_sha256"]
+    if _sha256_text(run / HO.DECISIONS_FILE) != pinned:
+        raise PlanError(
+            f"{run / HO.DECISIONS_FILE} is not the file the adversarial re-check was applied to"
+        )
+
+
 def wants_write(
     decisions: Sequence[Mapping[str, Any]], line: Mapping[str, Any] | None, rule: R.Rule = R.DEFAULT
 ) -> bool:
@@ -227,6 +257,9 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
     decisions = HO._read_jsonl(fields_fn)
     if not decisions:
         raise PlanError(f"{fields_fn} holds no decision - import the handoff first")
+    if rule.recheck:
+        _require_calibrated()
+        _require_adversarial(run)
     derived_fn = run / DERIVED_FILE
     derived = HO._read_jsonl(derived_fn) if derived_fn.exists() else []
     decisions = [*decisions, *derived]
@@ -363,6 +396,8 @@ def _decision_evidence(decision: Mapping[str, Any], rule: R.Rule) -> list[dict[s
     }
     if rule.asks_open_fields:
         entry["model"] = decision["model"]
+    if "adversarial" in decision:
+        entry["adversarial"] = decision["adversarial"]
     return [*quoted, entry]
 
 

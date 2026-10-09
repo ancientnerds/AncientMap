@@ -448,15 +448,21 @@ def read_made(out: Path) -> dict[tuple[str, str], dict[str, Any]]:
     return made
 
 
+#: The runs after WD1 that hold decisions, in the order they ran: WD3's pilot (80 sites, answered
+#: before its run was built without them), WD3's run, WD4's.
+HISTORY_RUNS = ("wd3-pilot", R.ONE_FAMILY.stage, R.ONE_FAMILY_PERIOD.stage)
+
+
 def read_history(wd1: Wd1, fields_dir: Path = FIELDS_DIR) -> dict[tuple[str, str], dict[str, Any]]:
     """The latest decision of each (site, field) across the lanes in the order they ran: WD1's,
-    then WD3's, then WD4's `DECISIONS.jsonl` under `fields_dir`. A field a later lane asked again
-    is decided by the later lane; a rule row (`DERIVED.jsonl`) is not an answer and is not read."""
+    then WD3's pilot, WD3's and WD4's `DECISIONS.jsonl` under `fields_dir`. A field a later lane
+    asked again is decided by the later lane; a rule row (`DERIVED.jsonl`) is not an answer and is
+    not read."""
     history: dict[tuple[str, str], dict[str, Any]] = {
         cell: dict(row) for cell, row in wd1.decisions.items()
     }
-    for stage in (R.ONE_FAMILY.stage, R.ONE_FAMILY_PERIOD.stage):
-        for row in _read_jsonl(fields_dir / stage / "DECISIONS.jsonl"):
+    for run in HISTORY_RUNS:
+        for row in _read_jsonl(fields_dir / run / "DECISIONS.jsonl"):
             history[(str(row["site_id"]), str(row["field"]))] = row
     return history
 
