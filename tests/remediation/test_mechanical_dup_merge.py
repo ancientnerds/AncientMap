@@ -452,9 +452,9 @@ class TestTheDecidedSurvivorInvariant:
 
     def test_the_neighbour_is_the_nearest_curated_shown_site_that_is_not_planned(self) -> None:
         db = self.world()
-        sql = L.survivor_neighbour_sql(LOSER, SURVIVOR, [LOSER, SURVIVOR, LOSER2, SURVIVOR2])
+        sql = L.survivor_neighbour_sql(LOSER, SURVIVOR, [LOSER, LOSER2])
         assert db.execute(sql).fetchall() == [(self.NEIGHBOUR,)]
-        planned = L.survivor_neighbour_sql(LOSER, SURVIVOR, [LOSER, SURVIVOR, self.NEIGHBOUR])
+        planned = L.survivor_neighbour_sql(LOSER, SURVIVOR, [LOSER, self.NEIGHBOUR])
         assert db.execute(planned).fetchall() == []
         # a planned loser (retired inside the probe), a retired and a far site are no neighbours
         db.execute(
