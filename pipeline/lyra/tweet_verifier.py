@@ -11,6 +11,7 @@ from typing import Any
 
 from pipeline.database import NewsItem, NewsVideo, get_session
 from pipeline.lyra.config import (
+    _MINIMAX_ADAPTIVE_MAX_TOKENS_FLOOR,
     LyraAPIError,
     LyraSettings,
     _get_settings,
@@ -543,8 +544,15 @@ def web_verify_item(
     )
 
     try:
+        # The adaptive-thinking floor, not 4,096: on the contested stories the
+        # model reasons for up to ~9,000 tokens before it answers (Puma Punku,
+        # 2026-10-09), and at 4,096 three of five checks answered nothing.
         response_text = verifier.chat(
-            verifier.client, verifier.model, verifier.prompt, user_msg, 4096
+            verifier.client,
+            verifier.model,
+            verifier.prompt,
+            user_msg,
+            _MINIMAX_ADAPTIVE_MAX_TOKENS_FLOOR,
         )
     except Exception as e:
         logger.warning(f"Web verify failed for item {item.id}: {e}")
