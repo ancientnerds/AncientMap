@@ -772,7 +772,7 @@ class TestTheFactChecker:
         the agreement set is what a test asks about."""
         table = json.loads(json.dumps(TINY))
         rule = table["roles"]["fact_checker"]["sets"]["checker_agreement"]
-        rule.update({"claim_agreement_min": 0.0, **floors})
+        rule.update({"claim_coverage_min": 0.0, "claim_agreement_min": 0.0, **floors})
         return table
 
     def all_sets(self, run_dir: Path, **verdicts: Any) -> None:

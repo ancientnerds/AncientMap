@@ -63,6 +63,27 @@ CASES: list[Case] = [
         "if max(score) >= 2]",
         "test_the_five_claims_of_the_undavalli_card_are_covered_by_the_three_the_agent_listed",
     ),
+    c(
+        "the checker must agree on the covered claims",
+        CAL,
+        '        and _met(claim_cover.agreement, rule["claim_agreement_min"])\n',
+        "",
+        "test_claims_covered_with_the_other_support_fail_the_checker_alone",
+    ),
+    c(
+        "the verifier must cover the recorded claims",
+        CAL,
+        '            and claim_cover.coverage >= rule_v["claim_coverage_min"]\n',
+        "",
+        "test_a_verifier_that_lists_too_few_claims_covers_too_little",
+    ),
+    c(
+        "the verifier must agree on the covered claims",
+        CAL,
+        '            and claim_cover.agreement >= rule_v["claim_agreement_min"]\n',
+        "",
+        "test_covered_claims_with_another_verdict_fail_the_verifier",
+    ),
     # ------------------------------------------------------------------ the disputed gold
     c(
         "a disputed contradiction leaves the denominator",

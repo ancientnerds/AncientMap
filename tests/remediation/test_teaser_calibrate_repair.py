@@ -797,3 +797,54 @@ class TestClaimsThatDifferInVerdict:
         assert agreement["verdict_agreement"] == 1.0 and agreement["false_pass"] == []
         assert agreement["claim_coverage"] == 1.0 and agreement["claim_agreement"] < 0.9
         assert agreement["passed"] is False
+
+
+# ------------------------------------------------------------------------------ the verifier's gates
+class TestTheVerifierMeasureGates:
+    def verdict(self, tmp_path: Path, verified) -> dict[str, Any]:
+        run_dir = fixed_dir(tmp_path)
+        answer_role(
+            run_dir,
+            "web_verifier",
+            {"verifier_contradicted": contradicted_ok, "verifier_verified": verified},
+        )
+        return K.evaluate(run_dir, "web_verifier", client=judge_client())["sets"][
+            "verifier_verified"
+        ]
+
+    def test_a_verifier_that_lists_too_few_claims_covers_too_little(self, tmp_path: Path) -> None:
+        def one_claim(job: dict[str, Any]) -> str:
+            return json.dumps(
+                {
+                    "claims": [
+                        {
+                            "claim": "lived in from roughly 3180 BC",
+                            "verdict": "SUPPORTED",
+                            "url": PAGE,
+                            "quote": QUOTE,
+                        }
+                    ]
+                }
+            )
+
+        result = self.verdict(tmp_path, one_claim)
+        assert result["claim_coverage"] < 0.8 and result["claim_agreement"] == 1.0
+        assert result["falsely_contradicted"] == [] and result["false_sources"] == []
+        assert result["passed"] is False
+
+    def test_covered_claims_with_another_verdict_fail_the_verifier(self, tmp_path: Path) -> None:
+        def unverifiable(job: dict[str, Any]) -> str:
+            return json.dumps(
+                {
+                    "claims": [
+                        {"claim": c["claim"], "verdict": "UNVERIFIABLE", "url": None, "quote": None}
+                        for c in job["recorded"]["claims"]
+                    ]
+                }
+            )
+
+        result = self.verdict(tmp_path, unverifiable)
+        assert result["claim_coverage"] == 1.0 and result["claim_agreement"] == 0.0
+        assert result["falsely_contradicted"] == [] and result["false_sources"] == []
+        assert result["card_verdict_agreement"] == 0.0  # UNPROVEN, not VERIFIED
+        assert result["passed"] is False
