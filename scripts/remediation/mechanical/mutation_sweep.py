@@ -10965,7 +10965,9 @@ TEASER_SHORTS_CASES: list[Case] = [
     ),
     # ------------------------------------------------ the calibration (calibrate.py)
     *(
-        guard(f"teaser-shorts: calibration: {label}", CALIBRATE_SHORTS, needle, test, CALIBRATE_TESTS)
+        guard(
+            f"teaser-shorts: calibration: {label}", CALIBRATE_SHORTS, needle, test, CALIBRATE_TESTS
+        )
         for label, needle, test in (
             (
                 "nothing is sealed after a case or a verdict",
@@ -11100,7 +11102,14 @@ TEASER_SHORTS_CASES: list[Case] = [
         )
     ),
     *(
-        Case(f"teaser-shorts: calibration: {label}", CALIBRATE_SHORTS, old, new, test, CALIBRATE_TESTS)
+        Case(
+            f"teaser-shorts: calibration: {label}",
+            CALIBRATE_SHORTS,
+            old,
+            new,
+            test,
+            CALIBRATE_TESTS,
+        )
         for label, old, new, test in (
             (
                 "a false pass fails the checker",
@@ -11178,7 +11187,14 @@ TEASER_SHORTS_CASES: list[Case] = [
     ),
     # ------------------------------------------------ the fix round (2026-10-09, review of package cards)
     *(
-        Case(f"teaser-shorts: calibration: {label}", CALIBRATE_SHORTS, old, new, test, CALIBRATE_TESTS)
+        Case(
+            f"teaser-shorts: calibration: {label}",
+            CALIBRATE_SHORTS,
+            old,
+            new,
+            test,
+            CALIBRATE_TESTS,
+        )
         for label, old, new, test in (
             (
                 "a case key says nothing of its case",

@@ -23,8 +23,8 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
 
 import opus_handoff as OH  # noqa: E402
 from identity import common, dup_clusters  # noqa: E402
-from identity import label_rounds as rounds  # noqa: E402
 from identity import dup_judge as J
+from identity import label_rounds as rounds  # noqa: E402
 from identity.wiki import WikiIndex  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
