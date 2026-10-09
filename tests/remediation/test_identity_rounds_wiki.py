@@ -267,6 +267,18 @@ class TestTheCalibrationGate:
         with pytest.raises(rounds.RoundError, match="changed after the seal"):
             rounds.check_calibrated(["web_verifier"], CALIBRATED, root)
 
+    def test_a_candidate_trial_does_not_stand_for_the_registered_role(self, tmp_path: Path) -> None:
+        """A passed trial of another model says nothing about the model the registry holds."""
+        root = self.root(tmp_path)
+        seals = json.loads((root / "THRESHOLDS.json").read_text(encoding="utf-8"))
+        seal = seals["cal-web_verifier"]
+        seal["registered_role_sha256"] = seal["role_sha256"]
+        seal["candidate_model"] = "claude-haiku-5-5"
+        seal["role_sha256"] = "0" * 64
+        (root / "THRESHOLDS.json").write_text(json.dumps(seals), encoding="utf-8")
+        with pytest.raises(rounds.RoundError, match="trial of claude-haiku-5-5"):
+            rounds.check_calibrated(["web_verifier"], CALIBRATED, root)
+
     def test_a_verdict_without_a_seal_does_not(self, tmp_path: Path) -> None:
         root = self.root(tmp_path)
         (root / "THRESHOLDS.json").write_text("{}", encoding="utf-8")

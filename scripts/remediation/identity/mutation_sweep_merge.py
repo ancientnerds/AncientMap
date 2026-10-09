@@ -1671,8 +1671,8 @@ CASES: list[Case] = [
     swap(
         "rounds: a calibration is sealed and its role unchanged",
         ROUNDS,
-        "            CC._need_unchanged_role(CC._sealed(base, calibration_id))",
-        "            pass",
+        "                CC._need_unchanged_role(sealed)",
+        "                pass",
         "test_a_role_whose_registry_entry_changed_after_the_seal_does_not",
         T_RW,
     ),

@@ -243,7 +243,14 @@ def check_calibrated(
         if verdict["passed"] is not True:
             raise RoundError(f"calibration {calibration_id} of role {role} did not pass")
         try:
-            CC._need_unchanged_role(CC._sealed(base, calibration_id))
+            sealed = CC._sealed(base, calibration_id)
+            if sealed.get("candidate_model") is None:
+                CC._need_unchanged_role(sealed)
+            elif not CC.candidate_in_force(sealed):
+                raise CC.CalibrationError(
+                    f"it is a trial of {sealed['candidate_model']}, which is not the model of the "
+                    "role (an owner move puts it there)"
+                )
         except CC.CalibrationError as exc:
             raise RoundError(f"calibration {calibration_id} of role {role}: {exc}") from exc
 

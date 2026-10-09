@@ -718,8 +718,16 @@ def _binds(seal: dict[str, Any], role: str, comparison: str) -> bool:
         and seal["role_sha256"] == RO.role_sha256(role)
     ):
         return False
-    if seal.get("candidate_model") is None:
-        return True
+    return seal.get("candidate_model") is None or candidate_in_force(seal)
+
+
+def candidate_in_force(seal: dict[str, Any]) -> bool:
+    """Whether a candidate trial's model is the role's model now: the seal's entry is the registry's
+    and an owner move (never a tier move or an edit without a record) put the candidate there. A
+    trial seal while the registry holds the registered model vouches for nothing."""
+    role = seal["role"]
+    if seal["role_sha256"] != RO.role_sha256(role):
+        return False
     moved = RO.last_move(role)
     return (
         moved is not None

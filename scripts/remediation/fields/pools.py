@@ -442,7 +442,7 @@ def build_bp(
         line["open"] = {"period_start": line["open"]["period_start"]}
         lines.append(line)
     HO._write_jsonl(run / C.CLASSIFIED_FILE, lines)
-    result = HO.export(run, handoff, RESEARCHER_MODEL)
+    result = HO.export(run, handoff, RESEARCHER_MODEL, batch_size=HO.LEGACY_BATCH_SIZE)
     truth = {
         site: {
             "name": candidates[site].name,

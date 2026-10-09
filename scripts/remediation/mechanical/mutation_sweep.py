@@ -10076,6 +10076,30 @@ D36_CASES: list[Case] = [
         "test_a_tier_move_that_put_the_candidate_in_the_registry_is_no_owner_move",
         RELEASE_TESTS,
     ),
+    Case(
+        "d36: a trial stands only while the registry holds the candidate",
+        CALIBRATE,
+        '    if seal["role_sha256"] != RO.role_sha256(role):\n        return False\n    moved',
+        "    if False:\n        return False\n    moved",
+        "test_a_candidate_seal_is_in_force_only_once_an_owner_move_registered_the_candidate",
+        RELEASE_TESTS,
+    ),
+    Case(
+        "d36: the import gate refuses a trial of another model",
+        REPO / "scripts/remediation/identity/label_rounds.py",
+        "            elif not CC.candidate_in_force(sealed):",
+        "            elif False:",
+        "test_a_candidate_trial_does_not_stand_for_the_registered_role",
+        "tests/remediation/test_identity_rounds_wiki.py",
+    ),
+    Case(
+        "d36: the BP pool keeps its eights",
+        POOLS,
+        "RESEARCHER_MODEL, batch_size=HO.LEGACY_BATCH_SIZE)",
+        "RESEARCHER_MODEL)",
+        "test_the_pool_is_cut_into_eights_and_records_the_size",
+        POOL_TESTS,
+    ),
     # ---- the recorded batch sizes
     Case(
         "d36: a re-ask of an old fields run keeps its eight",

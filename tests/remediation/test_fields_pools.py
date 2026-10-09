@@ -531,6 +531,19 @@ class TestThePick:
         prompt = (out / "handoff" / manifest[0]["prompt_path"]).read_text(encoding="utf-8")
         assert "years before the present" in prompt and "lane wd5" in prompt
 
+    def test_the_pool_is_cut_into_eights_and_records_the_size(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A rebuild of a sealed pool must give the batches (and ids) it was sealed with."""
+        monkeypatch.setattr(PL, "NAMED_BP_SITES", ())
+        ages = {f"Cave {n}": (OLD, "unresolved") for n in range(20)}
+        ages["Edge Cave"] = (EDGE_TEXT, "unresolved")
+        built = PL.build_bp(tmp_path / "pool", seed=5, size=17, fields_dir=bp_world(tmp_path, ages))
+        record = HO.read_rounds(tmp_path / "pool" / "run")[0]
+        assert [len(labels) for labels in record["batches"].values()] == [8, 8, 1]
+        assert record["batch_size"] == HO.LEGACY_BATCH_SIZE == 8
+        assert len(built["batches"]) == 3
+
     def test_the_pool_seals_and_prepares_as_a_truth_pool(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

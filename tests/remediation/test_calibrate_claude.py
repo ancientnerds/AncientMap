@@ -1463,6 +1463,28 @@ def test_a_trial_may_still_be_prepared_after_an_owner_move_registered_the_candid
     CC.prepare(tmp_path / "calibration", calibration_id="cal-fact-1", run=run)
 
 
+def test_a_candidate_seal_is_in_force_only_once_an_owner_move_registered_the_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seal = candidate_sealed(tmp_path)
+    assert CC.candidate_in_force(seal) is False
+    changed = dict(RO.ROLES)
+    changed["enrich_writer"] = RO.Role("enrich_writer", HAIKU, "high", "enrich-writer")
+    move = {
+        **RO._d36_move("enrich_writer", "high", "a test move"),
+        "from": "claude-sonnet-5-5",
+        "to": HAIKU,
+    }
+    with monkeypatch.context() as edit:
+        edit.setattr(RO, "ROLES", changed)
+        assert CC.candidate_in_force(seal) is False  # an edit alone is no owner move
+    with monkeypatch.context() as record:
+        record.setattr(RO, "APPLIED_ESCALATIONS", (*RO.APPLIED_ESCALATIONS, move))
+        assert CC.candidate_in_force(seal) is False  # a move on paper, the registry unchanged
+        record.setattr(RO, "ROLES", changed)
+        assert CC.candidate_in_force(seal) is True
+
+
 def test_a_trial_refuses_a_registry_that_changed_to_something_else(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
