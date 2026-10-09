@@ -879,6 +879,14 @@ class TestTheCheckerShape:
         with pytest.raises(A.AnswerError, match="it must carry exactly"):
             AS.parse_checker(json.dumps(data), SITE)
 
+    def test_a_claim_is_exactly_its_shape_and_the_verdict_one_of_two(self) -> None:
+        with pytest.raises(A.AnswerError, match="claim 1 is not"):
+            self.parse(claims=[{"claim": "x"}])
+        with pytest.raises(A.AnswerError, match="verdict 'MAYBE' is not PASS or FAIL"):
+            self.parse(verdict="MAYBE")
+        with pytest.raises(A.AnswerError, match="reasons is not a list"):
+            self.parse(reasons="no")
+
     def test_a_claim_names_only_sentences_of_the_description(self) -> None:
         with pytest.raises(A.AnswerError, match="not sentence ids"):
             self.parse(claims=[{"claim": "x", "support": ["S99"]}])

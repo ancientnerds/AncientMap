@@ -8975,6 +8975,69 @@ TEASER_SHORTS_CASES: list[Case] = [
             ),
         )
     ),
+    *(
+        guard(f"teaser-shorts: {label}", ANSWERS_SHORTS, needle, test, SHORTS_RULE_TESTS)
+        for label, needle, test in (
+            (
+                "a variant is exactly its shape",
+                "    if not isinstance(data, dict) or set(data) != VARIANT_KEYS:",
+                "test_a_variant_with_another_key_is_refused",
+            ),
+            (
+                "a variant's anchors are phrases",
+                "    if not isinstance(anchors, list) or not all(isinstance(a, str) and a.strip() for a in anchors):",
+                "test_each_variant_is_exactly_its_shape",
+            ),
+            (
+                "a thin decline is told from three variants",
+                "    if set(data) == THIN_KEYS:",
+                "test_a_thin_decline_for_a_thin_description",
+            ),
+            (
+                "a repeats entry is null or a sentence of the description",
+                "        if entry is not None and entry not in site.described_ids:",
+                "test_the_repeats_follow_v1",
+            ),
+            (
+                "the ratings are a list",
+                "    if not isinstance(raw, list):",
+                "test_each_rating_is_exactly_its_shape",
+            ),
+            (
+                "the checker lists claims",
+                "    if not isinstance(raw_claims, list) or not raw_claims:",
+                "test_every_field_is_a_boolean_and_the_claims_a_list",
+            ),
+            (
+                "a claim is exactly its shape",
+                '        if not isinstance(raw, dict) or set(raw) != {"claim", "support"}:',
+                "test_a_claim_is_exactly_its_shape_and_the_verdict_one_of_two",
+            ),
+            (
+                "every judgement field is a boolean",
+                "        if not isinstance(data[key], bool):",
+                "test_every_field_is_a_boolean_and_the_claims_a_list",
+            ),
+            (
+                "the verdict is PASS or FAIL",
+                '    if data["verdict"] not in A.VERDICTS:',
+                "test_a_claim_is_exactly_its_shape_and_the_verdict_one_of_two",
+            ),
+            (
+                "the reasons are a list",
+                "    if not isinstance(raw_reasons, list):",
+                "test_a_claim_is_exactly_its_shape_and_the_verdict_one_of_two",
+            ),
+        )
+    ),
+    Case(
+        "teaser-shorts: a variant's reserve is null or a list",
+        ANSWERS_SHORTS,
+        "    if reserve is not None and (",
+        "    if False and (",
+        "test_each_variant_is_exactly_its_shape",
+        SHORTS_RULE_TESTS,
+    ),
     Case(
         "teaser-shorts: a FAIL needs a reason",
         ANSWERS_SHORTS,
