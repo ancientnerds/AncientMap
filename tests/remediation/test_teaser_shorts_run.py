@@ -180,6 +180,7 @@ def answer_round(
     *,
     canary: str = CANARY_CAUGHT,
     role: str | None = None,
+    canary_role: str | None = None,
     model: str | None = None,
 ) -> None:
     record = R._round(run, stage)
@@ -195,7 +196,7 @@ def answer_round(
                 batch_id,
                 record["canaries"][batch_id]["label"],
                 canary,
-                chosen,
+                canary_role or chosen,
                 model,
             )
 
@@ -792,6 +793,20 @@ class TestTheRoles:
         with pytest.raises(R.RunError, match="has answered rounds already"):
             R.escalate_role(other, "fact_checker", verdict)
 
+    def test_a_role_the_run_does_not_use_is_not_moved(self, tmp_path: Path) -> None:
+        run = make_run(tmp_path, [MP])
+        move = {
+            "role": "adversarial", "from": "claude-sonnet-5-5", "to": "claude-opus-5-5",
+            "calibration_id": "c", "reason": "r",
+        }  # fmt: skip
+        verdict = tmp_path / "adversarial.json"
+        verdict.write_text(
+            json.dumps({"role": "adversarial", "passed": False, "tier_move": move}),
+            encoding="utf-8",
+        )
+        with pytest.raises(R.RunError, match="answers no stage of this run"):
+            R.escalate_role(run, "adversarial", verdict)
+
     def test_an_escalation_needs_a_failed_verdict_of_that_role_one_tier_up(
         self, tmp_path: Path
     ) -> None:
@@ -923,8 +938,10 @@ class TestTheCanary:
         step(run, tmp_path, "rate", rates(run, NAMES))
         handoff = tmp_path / "handoff-check"
         R.export_stage(run, "check", handoff)
-        answer_round(run, "check", handoff, passes(NAMES), canary=CANARY_CAUGHT, role="hook_rater")
-        with pytest.raises(R.RunError, match="did not answer as role fact_checker"):
+        answer_round(run, "check", handoff, passes(NAMES), canary_role="hook_rater")
+        with pytest.raises(
+            R.RunError, match=r"canary-.*hook_rater:teaser-check-001.*role fact_checker"
+        ):
             R.import_stage(run, "check", fit=T.fit)
 
     def test_check_answer_takes_a_canary_label_as_any_check(self, tmp_path: Path) -> None:

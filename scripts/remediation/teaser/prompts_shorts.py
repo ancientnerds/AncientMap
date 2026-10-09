@@ -354,8 +354,10 @@ THIN_OPTION = (
 )
 
 
-def _tail(site: SV.ShortsBasis, format_text: str) -> str:
-    thin = f"{THIN_OPTION}\n\n" if site.thin else ""
+def _tail(site: SV.ShortsBasis, format_text: str, *, may_decline: bool = True) -> str:
+    """The rules, the anchor rule, the thin decline (offered only to a writer that may decline: not
+    to the rewrite after a failed verification, whose answer is one card), the examples, the format."""
+    thin = f"{THIN_OPTION}\n\n" if site.thin and may_decline else ""
     anchors = ANCHOR_RULE if site.shorts_eligible else NO_ANCHORS
     return (
         f"THE RULES\n{_numbered(RULES)}\n\n{anchors}\n\n{thin}NEVER, for example:\n"
@@ -434,7 +436,7 @@ def verify_rewrite_prompt(
         "4. For each contradicted claim above, in its order, name the sentence of the description "
         "that states it, or null if no sentence does: this lists the description's own errors for "
         "their repair.\n\n"
-        f"{_tail(site, VERIFY_WRITER_FORMAT)}"
+        f"{_tail(site, VERIFY_WRITER_FORMAT, may_decline=False)}"
     )
 
 

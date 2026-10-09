@@ -113,6 +113,7 @@ from phase4 import (
 )
 from phase4 import write4 as W4  # noqa: E402 - the exit line
 from prod_write import send  # noqa: E402
+from teaser import shorts_v1 as SV  # noqa: E402 - the name rule, run again against the live name
 
 from mechanical import card_disclosure_list as CORRECTED  # noqa: E402 - the 185 sites' pinned ids
 from mechanical.citations import canonical, premise_of, reprint  # noqa: E402
@@ -144,7 +145,6 @@ from mechanical.plan import (  # noqa: E402
     write_skipped_jsonl,
 )
 from pipeline.utils import card_provenance as CP  # noqa: E402
-from teaser import shorts_v1 as SV  # noqa: E402 - the name rule, run again against the live name
 
 ROOT_NAME = "mechanical_teaser"
 ROOT = REPO / "output" / "remediation" / ROOT_NAME

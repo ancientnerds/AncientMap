@@ -956,7 +956,7 @@ reveals "Name, Country." at the end. `shorts_v1.problems_shorts` checks, on the 
 | C7 | no form of the stored name, no `unified_site_names` alias (whole phrase; a single common word is exempt), no distinctive word of the name (3+ letters, not a type or function word; a name of generic words only is exempt) |
 | C8 | no country name or demonym (`COUNTRY_TERMS`), no administrative word in sentence 1 |
 | C9 | sentence 1 opens with no location preposition (unless a number follows), no `Located/It/This/...`, no "A/An/The + site noun" |
-| C10 | no `? ! ... ...`, no `you`, no call to action |
+| C10 | no question mark, exclamation mark or ellipsis, no `you`, no call to action |
 | C11 | a mystery or superlative word only where the description has the same stem |
 | C12 | present-state words are a **flag** for the checker, not a refusal |
 | C13 | every caption word at most 696 px, a proper noun of the description at most 1,000 px |

@@ -538,6 +538,12 @@ class TestFixingTheCases:
         with pytest.raises(K.CalibrationError, match="never rewritten"):
             K.fix_jobs(run_dir, again[:-1])
 
+    def test_cases_cannot_be_fixed_after_a_set_was_exported(self, tmp_path: Path) -> None:
+        run_dir = fixed_dir(tmp_path)
+        K.export_set(run_dir, "checker_good", tmp_path / "h-good")
+        with pytest.raises(K.CalibrationError, match="exists: the cases are fixed first"):
+            K.fix_jobs(run_dir, K.sealed_jobs(run_dir))
+
     def test_cases_cannot_be_fixed_before_the_seal(self, tmp_path: Path) -> None:
         with pytest.raises(K.CalibrationError, match="is not sealed"):
             K.fix_jobs(tmp_path / "x", [])
@@ -598,6 +604,52 @@ class TestTheQuestions:
         exported = K.export_set(run_dir, "verifier_verified", tmp_path / "h-ver")
         assert list(exported["batches"]) == ["verifier-verified-001"]
         assert K.WEB_SETS >= {"verifier_verified", "adversarial_clean"}
+
+    def test_the_agents_of_a_set_are_workflow_ready_jobs(self, tmp_path: Path) -> None:
+        run_dir = fixed_dir(tmp_path)
+        K.export_set(run_dir, "verifier_verified", tmp_path / "h-ver")
+        jobs = K.agent_jobs(run_dir, "verifier_verified")
+        assert len(jobs) == 1
+        job = jobs[0]
+        assert (job["role"], job["model"], job["effort"]) == (
+            "web_verifier",
+            "claude-sonnet-5-5",
+            "high",
+        )
+        assert (
+            job["cases"] == 2
+            and job["max_parallel"] == 3
+            and job["batch_id"] == "verifier-verified-001"
+        )
+        brief = job["brief"]
+        assert (
+            "answering as the role **web_verifier**" in brief and "**claude-sonnet-5-5**" in brief
+        )
+        assert "--stage verifier_verified" in brief and "--role web_verifier" in brief
+        assert (
+            "--model claude-sonnet-5-5" in brief
+            and "--answered-by cal-verifier-verified-001" in brief
+        )
+        assert "wiki_cache/INDEX.jsonl" in brief and "A 403 or 429 is NEVER a finding" in brief
+        json.dumps(jobs)
+        K.export_set(run_dir, "checker_good", tmp_path / "h-good")
+        plain = K.agent_jobs(run_dir, "checker_good")[0]
+        assert plain["max_parallel"] is None and "Wikipedia cache" not in plain["brief"]
+        assert (plain["role"], plain["model"]) == ("fact_checker", "claude-sonnet-5-5")
+
+    def test_the_reference_set_is_answered_by_the_pilot_judge(self, tmp_path: Path) -> None:
+        run_dir = fixed_dir(tmp_path)
+        K.export_set(run_dir, K.HOOK_REFERENCE, tmp_path / "h-ref")
+        job = K.agent_jobs(run_dir, K.HOOK_REFERENCE)[0]
+        assert (job["role"], job["model"], job["effort"]) == (
+            "pilot_judge",
+            "claude-opus-5-5",
+            "xhigh",
+        )
+
+    def test_a_set_never_exported_has_no_agents(self, tmp_path: Path) -> None:
+        with pytest.raises(K.CalibrationError, match="was never exported"):
+            K.agent_jobs(fixed_dir(tmp_path), "checker_good")
 
     def test_an_unknown_set_has_no_cases(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
@@ -661,6 +713,35 @@ class TestTheFactChecker:
             "role": "fact_checker", "from": "claude-sonnet-5-5", "to": "claude-opus-5-5",
             "calibration_id": "teaser-test", "reason": "failed: checker_agreement",
         }  # fmt: skip
+
+    def test_one_false_pass_fails_the_role_even_when_agreement_is_high(
+        self, tmp_path: Path
+    ) -> None:
+        lenient = json.loads(json.dumps(TINY))
+        lenient["roles"]["fact_checker"]["sets"]["checker_agreement"]["verdict_agreement_min"] = 0.6
+        run_dir = fixed_dir(tmp_path, lenient)
+        self.all_sets(run_dir, agreement="PASS")
+        agreement = K.evaluate(run_dir, "fact_checker")["sets"]["checker_agreement"]
+        assert agreement["verdict_agreement"] == pytest.approx(0.6667, abs=1e-3)
+        assert len(agreement["false_pass"]) == 1 and agreement["passed"] is False
+
+    def test_a_checker_that_fails_the_recorded_passes_disagrees(self, tmp_path: Path) -> None:
+        run_dir = fixed_dir(tmp_path)
+        self.all_sets(run_dir, agreement="FAIL")
+        agreement = K.evaluate(run_dir, "fact_checker")["sets"]["checker_agreement"]
+        assert agreement["false_pass"] == [] and agreement["verdict_agreement"] < 0.9
+        assert agreement["passed"] is False
+
+    def test_a_checker_that_passes_the_recorded_failures_fails(self, tmp_path: Path) -> None:
+        run_dir = fixed_dir(tmp_path)
+        self.all_sets(run_dir, again="PASS")
+        verdict = K.evaluate(run_dir, "fact_checker")
+        assert verdict["sets"]["checker_fail_again"] == {
+            "cases": 2,
+            "failed_again": 0,
+            "passed": False,
+        }
+        assert verdict["passed"] is False
 
     def test_a_defect_the_checker_passes_is_named_by_its_kind(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
@@ -750,7 +831,19 @@ class TestTheWebVerifier:
         answer_set(
             run_dir,
             "verifier_verified",
-            verifier_text(False, quote="a sentence that the page never says"),
+            lambda job: json.dumps(
+                {
+                    "claims": [
+                        {
+                            "claim": c["claim"],
+                            "verdict": "SUPPORTED",
+                            "url": PAGE,
+                            "quote": "a sentence that the page never says",
+                        }
+                        for c in job["recorded"]["claims"]
+                    ]
+                }
+            ),
         )
         verdict = K.evaluate(run_dir, "web_verifier", client=judge_client())
         verified = verdict["sets"]["verifier_verified"]
@@ -774,12 +867,15 @@ class TestTheWebVerifier:
         run_dir = fixed_dir(tmp_path)
         answer_set(run_dir, "verifier_contradicted", verifier_text(True))
         answer_set(run_dir, "verifier_verified", lambda job: json.dumps({"claims": [
-            {"claim": c["claim"], "verdict": "CONTRADICTED", "url": PAGE, "quote": QUOTE} for c in job["recorded"]["claims"]
+            *({"claim": c["claim"], "verdict": "SUPPORTED", "url": PAGE, "quote": QUOTE} for c in job["recorded"]["claims"]),
+            {"claim": "an extra claim", "verdict": "CONTRADICTED", "url": PAGE, "quote": QUOTE},
         ]}))  # fmt: skip
         verified = K.evaluate(run_dir, "web_verifier", client=judge_client())["sets"][
             "verifier_verified"
         ]
-        assert len(verified["falsely_contradicted"]) == 2 and verified["claim_agreement"] == 0.0
+        # every recorded claim agrees; only the card's verification is wrong
+        assert len(verified["falsely_contradicted"]) == 2 and verified["claim_agreement"] == 1.0
+        assert verified["passed"] is False
 
     def test_the_claim_agreement_matches_wording_once(self) -> None:
         recorded = [
@@ -911,6 +1007,16 @@ class TestTheCardWriter:
         verdict = K.evaluate(run_dir, "card_writer", writer_run=run)
         assert verdict["sets"]["writer_pilot"]["clean_first"] == 1 and verdict["passed"] is False
         assert verdict["tier_move"] is None and "no higher tier" in verdict["held"]
+
+    def test_a_pilot_written_by_another_model_is_refused(self, tmp_path: Path) -> None:
+        run = self.run_with_writes(tmp_path, bad=False)
+        rows = R.read_jsonl(run / "STAGE-write.jsonl")
+        rows[0]["model"] = OH.SONNET_MODEL
+        R.write_jsonl(run / "STAGE-write.jsonl", rows)
+        with pytest.raises(
+            K.CalibrationError, match=r"1 first answer.s. are not stamped claude-opus-5-5"
+        ):
+            K.evaluate(sealed_dir(tmp_path), "card_writer", writer_run=run)
 
     def test_the_pilot_must_have_its_sealed_number_of_sites(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, [MP])

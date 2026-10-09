@@ -27,6 +27,8 @@ cards of the production export and a file of vetted shorts-v1 cards (`--base-car
     $T jobs --run-dir $D --runs output/remediation/teaser/runs/wb-ws-2026-09-27-01 ... \\
         --export output/remediation/teaser/runs/<run>/EXPORT.jsonl --base-cards BASE.jsonl
     $T export --run-dir $D --set checker_agreement --handoff output/remediation/handoff/cal-<id>-...
+    $T agents --run-dir $D --set checker_good              one workflow job per batch: role, fixed
+        model id, effort, brief, how many may run at once (JSON)
     $T evaluate --run-dir $D --role fact_checker           (web_verifier: fetches the cited pages)
     $T evaluate --run-dir $D --role card_writer --writer-run output/remediation/teaser/runs/<pilot>
 
@@ -692,6 +694,82 @@ def export_set(run_dir: Path, set_name: str, handoff: Path) -> dict[str, Any]:
     return {"set": set_name, "role": SET_ROLE[set_name], "cases": len(jobs), "batches": batches}
 
 
+# ------------------------------------------------------------------------------ the agents
+BRIEF = """You are agent {batch} of calibration {calibration}, answering as the role **{role}**: your \
+model is **{model}**, effort {effort}. If your own system prompt names another model, stop now and \
+say so - an answer stamped with any other model is refused when the calibration is evaluated.
+
+This batch needs an agent that has answered no other batch of this calibration: if you have, stop \
+now and say so.
+
+Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per \
+question with its "label" and its "prompt_path" (relative to {handoff}). Open no other file of the \
+repository{web_files} - no other batch, nothing else under output/ or docs/, no database, no git \
+history.
+
+Skip every question whose "answer_path" (in the manifest, relative to {handoff}) exists already: an \
+earlier agent of this batch recorded it, and an answer is written once.
+
+For each other question:
+1. Read {handoff}/<prompt_path>.
+2. Answer exactly as the prompt asks: only the JSON object it specifies.
+3. Write your answer to a new UTF-8 file of your own: {scratch}/<label>.json
+4. Record it - an answer is written once:
+   ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
+--batch-id {batch} --stage {set_name} --label <label> --answered-by cal-{batch} --role {role} \
+--model {model} --text-file {scratch}/<label>.json
+{web_note}
+When every question of the batch is recorded, report how many answers you recorded.
+"""
+
+
+def agent_jobs(run_dir: Path, set_name: str) -> list[dict[str, Any]]:
+    """The workflow-ready jobs of one exported set: for each batch the agent that answers it - role,
+    the model id and effort the seal fixed for the role, the brief it is given and how many such
+    agents may run at the same time. A workflow starts one fresh agent per job, waits for them, and
+    `evaluate` reads the answers."""
+    thresholds, _ = sealed(run_dir)
+    exported = _handoffs(run_dir).get(set_name)
+    if exported is None:
+        raise CalibrationError(f"set {set_name} was never exported")
+    role = SET_ROLE[set_name]
+    fixed = thresholds["registry"][role]
+    web = set_name in WEB_SETS
+    handoff = Path(exported["handoff"])
+    shown = _shown(handoff)
+    return [
+        {
+            "batch_id": batch,
+            "set": set_name,
+            "role": role,
+            "model": fixed["model"],
+            "effort": fixed["effort"],
+            "cases": len(keys),
+            "max_parallel": R.MAX_PARALLEL_WEB if web else None,
+            "brief": BRIEF.format(
+                batch=batch,
+                calibration=run_dir.name,
+                role=role,
+                model=fixed["model"],
+                effort=fixed["effort"],
+                handoff=shown,
+                scratch=f"{shown}-scratch/{batch}",
+                set_name=set_name,
+                web_files=" except the Wikipedia cache named below" if web else "",
+                web_note=R._WEB_NOTE.format(cache=R.WIKI_CACHE) if web else "",
+            ),
+        }
+        for batch, keys in sorted(exported["batches"].items())
+    ]
+
+
+def _shown(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
 # ------------------------------------------------------------------------------ the answers
 def _answers(
     run_dir: Path, set_name: str, thresholds: Mapping[str, Any]
@@ -1053,7 +1131,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("seal", "jobs", "export", "evaluate"):
+    for name in ("seal", "jobs", "export", "agents", "evaluate"):
         command = sub.add_parser(name)
         command.add_argument("--run-dir", required=True, type=Path)
     jobs = sub.choices["jobs"]
@@ -1063,6 +1141,9 @@ def main(argv: Iterable[str] | None = None) -> int:
     export = sub.choices["export"]
     export.add_argument("--set", required=True, dest="set_name", choices=sorted(SET_ROLE))
     export.add_argument("--handoff", required=True, type=Path)
+    sub.choices["agents"].add_argument(
+        "--set", required=True, dest="set_name", choices=sorted(SET_ROLE)
+    )
     ev = sub.choices["evaluate"]
     ev.add_argument("--role", required=True, choices=sorted(THRESHOLDS["roles"]))
     ev.add_argument("--writer-run", type=Path)
@@ -1083,6 +1164,8 @@ def main(argv: Iterable[str] | None = None) -> int:
             payload = {"cases": len(made), "jobs_sha256": fix_jobs(run_dir, made)}
         elif args.command == "export":
             payload = export_set(run_dir, args.set_name, _resolve(args.handoff))
+        elif args.command == "agents":
+            payload = agent_jobs(run_dir, args.set_name)
         else:
             payload = evaluate(run_dir, args.role, writer_run=args.writer_run)
     except (CalibrationError, RO.RoleError, OH.HandoffError, R.RunError, PlanError) as exc:

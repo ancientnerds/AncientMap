@@ -343,6 +343,13 @@ class TestOpeners:
         card = BASE.replace("A bronze mirror lay", f"{head} bronze mirror lay")
         assert starts(problems(card), f"opener: sentence 1 opens with '{head.lower()}'")
 
+    def test_a_site_noun_is_only_a_bare_type_label_after_an_article(self) -> None:
+        card = BASE.replace(
+            "A bronze mirror lay in the gate passage behind",
+            "Farmers dug a tomb into the gate passage behind",
+        )
+        assert not starts(problems(card), "opener:")
+
     def test_a_bare_type_label_is_no_opener(self) -> None:
         card = BASE.replace(
             "A bronze mirror lay in the gate passage",
@@ -945,6 +952,21 @@ class TestThePrompts:
         assert PS.NO_ANCHORS in prompt and PS.ANCHOR_RULE not in prompt
         assert "THIN DESCRIPTION" in prompt and '"thin": true' in prompt
         assert "THIN DESCRIPTION" not in PS.writer_prompt(basis_of("Denbury Hill"))
+
+    def test_the_rewrite_after_a_failed_verification_offers_no_thin_decline(self) -> None:
+        thin = basis_of("Tregiffian Burial Chamber")
+        contradicted = [
+            {
+                "claim": "a rare grave",
+                "url": "https://x.org/a",
+                "quote": "It is a common grave.",
+                "proven": True,
+                "quote_outcome": "found",
+            }
+        ]
+        assert "THIN DESCRIPTION" in PS.writer_prompt(thin)
+        assert "THIN DESCRIPTION" in PS.rewrite_prompt(thin, [P.Finding(BASE, ("x",))])
+        assert "THIN DESCRIPTION" not in PS.verify_rewrite_prompt(thin, BASE, contradicted, [])
 
     def test_the_rewriter_sees_every_earlier_card_and_why(self) -> None:
         findings = [P.Finding(BASE, ("The hook rater rated its opening 2/5.",))]

@@ -9400,7 +9400,7 @@ TEASER_SHORTS_CASES: list[Case] = [
             (
                 "a re-check run has no description defects",
                 "    if spec_of(run).name == RECHECK:\n        return []",
-                "test_a_card_that_passes_check_verify_and_adversary_is_confirmed",
+                "test_any_failure_clears_the_card_with_its_reason",
             ),
             (
                 "the judge is bound to its role",
@@ -9556,8 +9556,17 @@ TEASER_SHORTS_CASES: list[Case] = [
             ),
             (
                 "a set is exported before it is answered",
-                "    if exported is None:",
+                "    if exported is None:\n"
+                '        raise CalibrationError(f"set {set_name} was never exported")\n'
+                '    handoff = Path(exported["handoff"])',
                 "test_a_set_never_exported_is_refused",
+            ),
+            (
+                "a set is exported before its agents are asked for",
+                "    if exported is None:\n"
+                '        raise CalibrationError(f"set {set_name} was never exported")\n'
+                "    role = SET_ROLE[set_name]",
+                "test_a_set_never_exported_has_no_agents",
             ),
             (
                 "every case is answered",
