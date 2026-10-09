@@ -10,6 +10,8 @@ each exported prompt byte for byte and refuse an answer to anything else.
 
 from __future__ import annotations
 
+import web_rules as WR
+
 #: The one question per site. `{site}` is the site block, `{sentences}` the numbered sentences,
 #: `{asked}` the sentence numbers to answer, `{reask}` empty in round 1 and the re-ask block after.
 CHECK_QUESTION = """\
@@ -117,19 +119,36 @@ Answer ONLY these sentences again. A page that failed to fetch stays failed: use
 
 #: What every brief says of the shared Wikipedia cache (`{wiki_cache}`: the repo-relative directory
 #: of `output/remediation/final-2026-10-08/wiki_cache`, filled once by one serial fetcher). The
-#: agents read the site's Wikipedia text from disk and fetch every other source live, a few requests
-#: at a time: four or more parallel fetchers got the office IP throttled (403/429) on 2026-10-07, and
+#: agents read the site's Wikipedia text from disk and fetch every other source live, one request at
+#: a time: four or more parallel fetchers got the office IP throttled (403/429) on 2026-10-07, and
 #: a throttled fetch is no finding. The cache is a reading aid only: code checks every quote against
 #: the live page it fetches itself. A brief is printed for the agent and is no part of an exported
 #: prompt, so a change here makes no answer stale.
-WIKI_CACHE_NOTE = """\
+#:
+#: What the agent may take from the cache depends on its role (`web_rules`, diagnosis of calibration
+#: teaser-2026-10-09): the text it checks was written from that very article, so a CHECKER, verifier
+#: or judge (`WIKI_CACHE_NOTE`) never counts the article as confirmation and searches outside it,
+#: without a cap on requests; a WRITER (`WIKI_CACHE_NOTE_WRITER`, lane WN and the enrichment) reads
+#: it first and needs a page from outside it for a fact the question asks it to establish.
+_WIKI_CACHE_LOOKUP = """\
 The Wikipedia article of each site is in a shared cache on disk: {wiki_cache}/INDEX.jsonl holds one \
 JSON line per site and page ({{"site_id", "lang", "title", "file"}}); the page is the JSON file \
 {wiki_cache}/<file> ({{"resolved_title", "revid", "text"}}; <file> is written with \\ or /). Read the \
-site's Wikipedia text from there FIRST - this cache is the only other place you may read. Fetch \
-every other source live: a few requests per question, one at a time. An HTTP 403 or 429 is never a \
-finding: fetch the page again yourself (curl) before you call a source unreachable or a quote \
-missing. Code still checks each quote against the live page it fetches itself."""
+site's Wikipedia text from there - this cache is the only other place you may read. """
+WIKI_CACHE_NOTE = (
+    _WIKI_CACHE_LOOKUP
+    + WR.VERIFIER_RULE
+    + " "
+    + WR.MARKER_NOTE
+    + " Code still checks each quote against the live page it fetches itself."
+)
+WIKI_CACHE_NOTE_WRITER = (
+    _WIKI_CACHE_LOOKUP
+    + WR.RESEARCHER_RULE
+    + " "
+    + WR.MARKER_NOTE
+    + " Code still checks each quote against the live page it fetches itself."
+)
 
 #: The instruction of the agent that answers one batch of check questions.
 CHECK_BRIEF = """You are {family} checker {batch} of the Ancient Nerds sentence check (lane WC, round \

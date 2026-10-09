@@ -3,8 +3,10 @@
 The final repair keeps one shared Wikipedia cache (`output/remediation/final-2026-10-08/wiki_cache/`,
 `INDEX.jsonl` with `site_id, lang, title, file`, one JSON per page with `resolved_title`, `revid`,
 `text`). A web-research prompt names the cached files of its site so the agent reads the Wikipedia
-text from there first and fetches other sources live (a few requests at most; a 403 or 429 is never a
-finding).
+text from there first and fetches other sources live - one request at a time, without a cap (a 403 or
+429 is never a finding). The cached article is where a record's value usually came from, so it is a
+reading aid and never the confirmation of a decision (`web_rules.VERIFIER_RULE`, calibration
+teaser-2026-10-09).
 """
 
 from __future__ import annotations
@@ -20,14 +22,20 @@ for _root in (str(_HERE.parents[3]), str(_HERE.parents[1])):
 from collections.abc import Mapping
 from typing import Any
 
+import web_rules as WR  # noqa: E402 - what an agent may take from the cache, and how it fetches
+
 from identity import common  # noqa: E402
 
 WIKI_CACHE_SUBDIR = Path("output") / "remediation" / "final-2026-10-08" / "wiki_cache"
 
-CACHE_NOTE = """
+CACHE_NOTE = (
+    """
 CACHED WIKIPEDIA (read the site's Wikipedia text here first; a JSON file with the field "text")
 {lines}
 """
+    + WR.VERIFIER_RULE
+    + "\n"
+)
 
 
 def wiki_cache_dir(root: Path | None = None) -> Path:

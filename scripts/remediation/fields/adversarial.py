@@ -67,6 +67,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
+import web_rules as WR  # noqa: E402 - what an agent may take from the cache, and how it fetches
 from acceptance.answers import AnswerError, _quotes, load_object  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
@@ -337,17 +338,20 @@ decision: confirm it only when you cannot. A wrong value in the database is wors
 field, so doubt is a reason to reject or to say unclear - never a reason to confirm.
 """
 
-HOW_TO_CHECK = """\
+HOW_TO_CHECK = (
+    """\
 ## How to check
 
 The passage and the head of the page are what the checker found the quote in. Read them as a sceptic: \
 is the page about this very site (its name AND its place), does the quote say what the researcher \
-says it says, is the value what the quote says? You may open other pages to test the decision - a few \
-requests at most; the site's cached Wikipedia text is `handoff.py wiki-text --label <site id>` \
-(the site id is the part of the label before the dot), and a 403 or 429 is a throttle, never a \
-finding. Whatever you reject, say what the page says instead or why the quote does not state the \
-value for this site, so that a reader can check it.
+says it says, is the value what the quote says? You may open other pages to test the decision; the \
+site's cached Wikipedia text is `handoff.py wiki-text --label <site id>` (the site id is the part \
+of the label before the dot). """
+    + WR.VERIFIER_RULE
+    + """ Whatever you reject, say what the page \
+says instead or why the quote does not state the value for this site, so that a reader can check it.
 """
+)
 
 ANSWER = """\
 ## Your answer
@@ -553,15 +557,18 @@ def check_answer(adv: Path, handoff: Path, batch_id: str, label: str, text: str)
     return {"ok": True, "problems": {}}
 
 
-BRIEF = """You are adversarial checker {batch} of the WD5 re-check of a curated database of ancient \
+BRIEF = (
+    """You are adversarial checker {batch} of the WD5 re-check of a curated database of ancient \
 sites. You answer {count} check question(s), each about another decision. Answer each one on its own, \
 as if it were the only one.
 
 Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per question \
 with its "label" and its "prompt_path" (relative to {handoff}). Open no other file of the repository - \
 no other batch, nothing else under output/ or docs/, no database, no git history. To test a decision \
-you may use the web (a few requests; 403 and 429 are a throttle, never a finding) and the cached \
-Wikipedia text of the site:
+you may use the web and the cached Wikipedia text of the site. """
+    + WR.VERIFIER_RULE
+    + """ The \
+cached text of the site:
    ./.venv/Scripts/python.exe scripts/remediation/fields/handoff.py wiki-text --label <site id>
 where the site id is the part of the question's label before the dot.
 
@@ -581,6 +588,7 @@ For each question:
 
 When every question of the batch is recorded, report how many answers you recorded.
 """
+)
 
 
 def brief(adv: Path, handoff: Path, batch_id: str) -> str:

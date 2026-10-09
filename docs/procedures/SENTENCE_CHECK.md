@@ -1355,9 +1355,13 @@ fact checker too: no writer role is registered. A MiniMax answer is never ground
   per stage, whatever the kind of run). The question texts are unchanged: no exported answer went stale.
 - **Every brief names the shared Wikipedia cache** (`WIKI_CACHE_NOTE`; `output/remediation/final-2026-10-08/
   wiki_cache`, filled once by `final-2026-10-08/tools/wiki_cache.py`): read the site's Wikipedia text from disk
-  first, fetch every other source live, a few requests at a time, a 403 or 429 is never a finding. A brief
+  first, fetch every other source live, one request at a time, a 403 or 429 is never a finding. A brief
   refuses to be printed while `INDEX.jsonl` is missing. The cache is a reading aid only: the import still
-  fetches every quoted page itself.
+  fetches every quoted page itself. **The cached article is never independent confirmation** for a checker,
+  verifier or judge (`WIKI_CACHE_NOTE`; `web_rules.VERIFIER_RULE`: look for a page outside the article before
+  SUPPORTED on a number, date, name, superlative or present-tense state; no cap on requests), and a writer
+  (`WIKI_CACHE_NOTE_WRITER`, lane WN and the enrichment) needs a page from outside it for what it must
+  establish. Re-pinned 2026-10-09.
 - **The importers take Claude's answers in the round's role only** (`cli._require_role`): `import`,
   `verify-import` and `judge-import` refuse an answer whose stamp is MiniMax's (the way back is `verify-void`
   below), one that names another role than the round's, and a role's answer carrying another model's stamp. Only

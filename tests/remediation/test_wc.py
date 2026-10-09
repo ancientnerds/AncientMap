@@ -812,6 +812,10 @@ def test_a_failed_fetch_is_recorded_and_its_quote_does_not_count(tmp_path: Path)
 #: (`roles.ROLES`: fact_checker, web_verifier, pilot_judge), the first line names the role's family,
 #: and every brief sends the agent to the shared Wikipedia cache first (`WIKI_CACHE_NOTE`, pinned
 #: too). Again a brief is no part of an exported prompt: no answer goes stale.
+#: `WIKI_CACHE_NOTE` re-pinned and `WIKI_CACHE_NOTE_WRITER` added 2026-10-09 (diagnosis of calibration
+#: teaser-2026-10-09): a checker, verifier or judge never takes the cached article for confirmation and
+#: may read as many outside pages as it needs; a writer reads the article first and needs a page from
+#: outside it for what the question asks it to establish. The three BRIEF templates are unchanged.
 PINS = {
     "CHECK_QUESTION": "7a7bec8e58f53f5e2f65f6c90ac02ecc345bab6da60cbd6ef78cd4ff9de971c7",
     "REASK_BLOCK": "e1c324db3e2571e70c42bf31f6d5594524014eec67ac0093b9afb0901c92960d",
@@ -820,7 +824,8 @@ PINS = {
     "VERIFY_BRIEF": "112343f6c4151e28e4b46e12747684d43e7f751062777e8f205b77a303a6afbc",
     "JUDGE_QUESTION": "6aba7d0af909bcfeb5a25766696404ecc0043ff1858bec231d247f00924d495d",
     "JUDGE_BRIEF": "84e03f52b104ee213367dd18958fca4cf6d49927a6b26573cc446b89d504a95d",
-    "WIKI_CACHE_NOTE": "93e4aef437cc9fe971cf47ca173da9bdeaa04a4586888f5cfcfd034e14daf61c",
+    "WIKI_CACHE_NOTE": "1007f7b88866910d433315f0b4b98ced1cf84c849839ad23876b5f1834347368",
+    "WIKI_CACHE_NOTE_WRITER": "746aa07c4f69f99ee1f7c19c91ccfffb7ea5ad427bc282479f9be71bb05fec1d",
 }
 
 

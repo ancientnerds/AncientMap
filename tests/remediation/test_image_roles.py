@@ -858,7 +858,8 @@ class TestTheIdentityQuestions:
             "'Lairg'",
             "cached Wikipedia text:",
             "p.json",
-            "403 or 429 is never a finding",
+            "403 or 429 is a throttle and NEVER a finding",
+            "NEVER independent confirmation",
             "evidence",
         ):
             assert part in q.prompt, part

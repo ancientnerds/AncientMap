@@ -11143,7 +11143,7 @@ TEASER_SHORTS_CASES: list[Case] = [
             ),
             (
                 "a contradiction must be caught",
-                '            "passed": caught >= rule_c["caught_min"],',
+                '            "passed": len(caught) >= required,',
                 '            "passed": True,',
                 "test_a_verifier_that_misses_a_contradiction_fails",
             ),
@@ -11222,7 +11222,7 @@ TEASER_SHORTS_CASES: list[Case] = [
             ),
             (
                 "the checker must agree on the claims",
-                '        and _met(claims, rule["claim_agreement_min"])\n',
+                '        and _met(claim_cover.coverage, rule["claim_coverage_min"])\n',
                 "",
                 "test_verdicts_that_agree_with_claims_that_do_not_fail_the_role",
             ),

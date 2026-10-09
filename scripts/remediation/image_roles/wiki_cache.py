@@ -3,8 +3,9 @@
 `output/remediation/final-2026-10-08/wiki_cache/` (main checkout, gitignored) holds the Wikipedia text
 of the sites: an `INDEX.jsonl` of `{site_id, lang, title, file}` lines and, per page, a JSON file
 `{resolved_title, revid, text}` under `<lang>/`. The web-research and verifier briefs tell their
-agents to read a site's text from it first and fetch anything else live (a few requests; a 403 or
-429 is never a finding). The image prompts use it for the one sentence a vision judge is given about
+agents to read a site's text from it first and fetch anything else live (one request at a time; a
+403 or 429 is never a finding); for a verifier the cached article is never the confirmation
+(`web_rules.VERIFIER_RULE`). The image prompts use it for the one sentence a vision judge is given about
 the site: the lead of its English article.
 """
 

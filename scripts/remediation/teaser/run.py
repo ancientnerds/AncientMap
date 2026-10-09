@@ -142,6 +142,7 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
 import opus_handoff as OH  # noqa: E402
 import research_web  # noqa: E402
 import roles as RO  # noqa: E402 - the registry: which model gives which answer (owner decision D6)
+import web_rules as WR  # noqa: E402 - how an agent uses the Wikipedia cache and the web
 from mechanical.plan import (  # noqa: E402
     PlanError,
     parse_tagged_export,
@@ -2040,17 +2041,25 @@ _ROLE_FIX = {
         "makes: then list every claim, each fact on its own. Fix the shape, never the finding."
     ),
 }
-#: Added to the brief of a web agent (a verifier, the pilot's judge): the site's Wikipedia text is
-#: cached once for all lanes (`wiki_cache/INDEX.jsonl`), the other pages are fetched live, and
-#: Wikimedia throttles this office IP at four parallel readers (memory 2026-10-07).
+#: Added to the brief of a web agent (a verifier, the pilot's judge, the adversarial reviewer): the
+#: site's Wikipedia text is cached once for all lanes (`wiki_cache/INDEX.jsonl`), the other pages are
+#: fetched live, and Wikimedia throttles this office IP at four parallel readers (memory 2026-10-07).
+#: The cached article is where the card came from, so for these roles it is a reading aid and never
+#: the confirmation (`web_rules.VERIFIER_RULE`: calibration teaser-2026-10-09, where no verifier
+#: searched outside it and 17 of 20 known contradictions were only on other pages).
 WIKI_CACHE = "output/remediation/final-2026-10-08/wiki_cache"
+WIKI_LOOKUP = (
+    "the label of each question is the site id; find its lines in {cache}/INDEX.jsonl (site_id, "
+    "lang, title, file - the file is relative to {cache}); the page file is JSON with "
+    "resolved_title, revid and text."
+)
 _WEB_NOTE = (
-    "\nWEB RESEARCH. Read the site's Wikipedia text from the shared cache first: the label of "
-    "each question is the site id; find its lines in {cache}/INDEX.jsonl (site_id, lang, title, "
-    "file - the file is relative to {cache}); the page file is JSON with resolved_title, revid and "
-    "text. Fetch every other source live, at most a few requests per site. A 403 or 429 is NEVER a "
-    "finding: try the page yourself with curl, or quote another page. A quote you give is checked "
-    "by a machine against the live page."
+    "\nWEB RESEARCH. The site's Wikipedia text is in the shared cache: "
+    + WIKI_LOOKUP
+    + " "
+    + WR.VERIFIER_RULE
+    + " "
+    + WR.QUOTE_RULE
 )
 
 BRIEF_ROLE = """{head}

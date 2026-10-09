@@ -69,7 +69,13 @@ def test_every_brief_sends_the_agent_to_the_shared_wikipedia_cache_first(tmp_pat
     ):
         assert note in text
         assert "the Wikipedia cache named below is the one exception" in text
-        assert "A 403 or 429" not in text and "HTTP 403 or 429 is never a finding" in text
+        assert (
+            "A 403 or 429" not in text
+            and "HTTP 403 or 429 is a throttle and NEVER a finding" in text
+        )
+        # a checker / verifier never takes the cached article for confirmation, and has no request cap
+        assert "NEVER independent confirmation" in text and "no cap on requests" in text
+        assert "a few requests" not in text and "sparingly" not in text
     assert cache.startswith(str(tmp_path)) or cache.endswith("wiki_cache")
 
 
@@ -124,7 +130,9 @@ def test_the_write_brief_of_lane_wn_is_the_fact_checkers_too(tmp_path: Path) -> 
         "--answered-by sonnet-write-wn-0001 --model claude-sonnet-5-5 --role fact_checker" in text
     )
     _no_braces_left(text)
-    assert P.WIKI_CACHE_NOTE.format(wiki_cache=C._shown(C.WIKI_CACHE)) in text
+    # a writer reads the article first; its text is no second witness for what it must establish
+    assert P.WIKI_CACHE_NOTE_WRITER.format(wiki_cache=C._shown(C.WIKI_CACHE)) in text
+    assert "NEVER independent confirmation" not in text and "needs a page from outside it" in text
 
 
 # ------------------------------------------------------------------------------ the imports

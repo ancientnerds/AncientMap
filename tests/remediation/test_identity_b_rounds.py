@@ -139,7 +139,10 @@ class TestTheBriefAndTheShapeCheck:
         ) in text
         assert "Be careful." in text
         assert "read the site's Wikipedia text from that cache first" in text
-        assert "a 403 or 429 is a refusal of the server, never a finding" in text
+        # the web_verifier role never takes the cached article for confirmation and has no cap
+        assert "An HTTP 403 or 429 is a throttle and NEVER a finding" in text
+        assert "NEVER independent confirmation" in text and "no cap on requests" in text
+        assert "a few requests" not in text
         with pytest.raises(R.RoundError, match="no batch"):
             R.brief(out, SPEC, "r1", "r9-b01")
 

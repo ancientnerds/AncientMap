@@ -5,10 +5,14 @@ evidence file or fetched page does not count; the row is judged again." This mod
 and nothing fuzzier.
 
 **Normalisation** (`normalise`), applied to the quote and to the text alike: Unicode NFC, then every
-maximal run of whitespace - the characters `str.isspace()` is true for, so a line break, a tab and a
-no-break space too - becomes one U+0020, then both ends are stripped. Nothing else: case,
-punctuation, quotation marks, dashes, ellipses, ligatures and citation markers are compared as they
-are.
+reference marker - `[22]`, `[22, 23]`, `[22-25]`, `[a]`, `[citation needed]`, `[note 3]` (`MARKER`),
+with the whitespace before it - is removed, then every maximal run of whitespace - the characters
+`str.isspace()` is true for, so a line break, a tab and a no-break space too - becomes one U+0020,
+then both ends are stripped. Nothing else: case, punctuation, quotation marks, dashes, ellipses and
+ligatures are compared as they are. The markers go because a Wikipedia page shows them
+(`<sup class="reference">[22]</sup>`) and the MediaWiki extract the lanes cache and read (TextExtracts)
+does not: one text rendering for both sides (calibration teaser-2026-10-09, six true quotes refused
+as "false sources"); a quote that holds a marker, copied from the page, still matches.
 
 **A quote is found** when its normalised text is a substring of the normalised text of one of its
 source's readings (`Source.texts`), and the reading that held it is recorded:
@@ -94,9 +98,18 @@ class AuditError(ValueError):
 
 
 # ------------------------------------------------------------------------------ the normaliser
+#: A footnote or editorial reference marker of a Wikipedia page, with the whitespace before it:
+#: `[22]`, `[22, 23]`, `[22-25]` (hyphen, en or em dash), `[a]`, `[citation needed]`, `[note 3]`.
+MARKER = re.compile(
+    r"\s*\[\s*(?:\d+(?:\s*[,\u2013\u2014-]\s*\d+)*|[a-z]|citation needed|note\s+\d+)\s*\]",
+    re.IGNORECASE,
+)
+
+
 def normalise(text: str) -> str:
-    """NFC, then every whitespace run one space, then stripped - and nothing else."""
-    return " ".join(unicodedata.normalize("NFC", text).split())
+    """NFC, then every reference marker (`MARKER`) removed, then every whitespace run one space,
+    then stripped - and nothing else."""
+    return " ".join(MARKER.sub("", unicodedata.normalize("NFC", text)).split())
 
 
 # ------------------------------------------------------------------------------ the readings

@@ -46,6 +46,12 @@ system prompt names it (`claude-opus-5-5`, `claude-sonnet-5-5` or `claude-haiku-
 `NEW_ANSWER_MODELS`). `--role` names the role the answer is given in (`roles.ROLES`): it is refused
 when the role's registered model is not `--model`, and it is recorded as `answered_by =
 "<role>:<AGENT>"`; the stored shape (`ANSWER_KEYS`) does not grow.
+
+`--check "COMMAND"` runs the lane's own answer check (its `check-answer`) before anything is written
+and records the answer only when the command exits 0 (`run_answer_check`: the command is split like
+a shell would, run without a shell, from the working directory; its output is shown on a refusal).
+The recorder otherwise validates the envelope only - a shape the lane's parser would refuse (calibration
+teaser-2026-10-09: seven answers recorded in another schema) was recorded without a word.
 """
 
 from __future__ import annotations
@@ -54,6 +60,8 @@ import argparse
 import hashlib
 import json
 import re
+import shlex
+import subprocess
 import sys
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -499,6 +507,21 @@ def validate(root: Path) -> Validation:
 # ------------------------------------------------------------------------------------------ the CLI
 
 
+def run_answer_check(command: str) -> None:
+    """Run the lane's answer check (`--check`) and refuse the answer unless it exits 0. The command
+    is split as a POSIX shell splits it (use forward slashes in paths) and run without a shell."""
+    argv = shlex.split(command)
+    if not argv:
+        raise HandoffError("--check names no command")
+    done = subprocess.run(argv, capture_output=True, check=False)  # noqa: S603 - the lane's own check
+    if done.returncode != 0:
+        output = (done.stdout + done.stderr).decode("utf-8", errors="replace").strip()
+        raise HandoffError(
+            f"the answer check failed (exit {done.returncode}) - nothing is recorded; fix the "
+            f"answer and record it again:\n{output}"
+        )
+
+
 def _print(payload: Mapping[str, Any]) -> None:
     print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))
 
@@ -530,6 +553,10 @@ def main(argv: Iterable[str] | None = None) -> int:
         "recorded as answered_by '<role>:<answered-by>'",
     )
     answer.add_argument("--text-file", required=True, help="the answer text, UTF-8, verbatim")
+    answer.add_argument(
+        "--check",
+        help="the lane's check-answer command: run first, the answer is recorded only on exit 0",
+    )
     args = parser.parse_args(list(argv) if argv is not None else None)
     root = Path(args.dir)
     if args.command == "validate":
@@ -544,6 +571,11 @@ def main(argv: Iterable[str] | None = None) -> int:
             roles.require_model(args.role, args.model)
             answered_by = roles.answered_by(args.role, args.answered_by)
         except roles.RoleError as exc:
+            parser.error(str(exc))
+    if args.check is not None:
+        try:
+            run_answer_check(args.check)
+        except HandoffError as exc:
             parser.error(str(exc))
     wrote = write_answer(
         root,

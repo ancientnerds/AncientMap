@@ -995,9 +995,16 @@ up one tier before its first round: first **commit the edit of `roles.ROLES`** (
 registry, and a registry change is sealed and calibrated again), then `run.py escalate --run R --role
 ROLE --verdict VERDICT-ROLE.json` records the move in each run that has not begun the role; `escalate`
 is refused while `ROLES` still names the old model. Web agents (verifier, judge, adversary) are
-told to read the site's Wikipedia text from `output/remediation/final-2026-10-08/wiki_cache/` first, to
-fetch other pages live at most a few requests per site, and that a 403 or 429 is never a finding;
-at most 3 run at the same time (Wikimedia throttles this IP from 4).
+told where the site's Wikipedia text is in `output/remediation/final-2026-10-08/wiki_cache/`, and that it
+is **never independent confirmation**: the card was written from that article, so before they decide
+SUPPORTED on a number, date, count, size, superlative, name, a never/only/still/first or a present-tense
+state they look for a page outside it (excavation report, heritage register, museum or university page,
+paper, other-language Wikipedia, WebSearch) and read the whole article for internal contradictions
+(`web_rules.VERIFIER_RULE`, the one text every lane's brief takes; the judge prompt says the same). There
+is no cap on requests; requests are one at a time with the lanes' User-Agent, a 403 or 429 is never a
+finding, and at most 3 agents run at the same time (Wikimedia throttles this IP from 4). A quote is checked
+on the live page, which shows footnote markers (`[22]`) the cache drops: the quote check ignores such markers
+on both sides, and `scripts/remediation/quote_check.py --url U --quote-file F` is the agent's own check.
 
 **The canary.** Every check batch carries one seeded-defect card (`shorts_v1.canary_card`: a removed
 hedge, an invented superlative, an implied unknown, a moved period or a word of the name), asked
@@ -1064,15 +1071,47 @@ pilot_judge`), paired by site.
 
 | role | set | pass threshold |
 | --- | --- | --- |
-| `fact_checker` | 45 recorded cards (30 PASS, 15 FAIL) under the v1 prompt | 90 % verdict agreement, 90 % claim agreement (a recorded claim matched by wording and by supported / unsupported), 0 PASS of a card with an unsupported claim |
+| `fact_checker` | 45 recorded cards (30 PASS, 15 FAIL) under the v1 prompt | 90 % verdict agreement, claim **coverage** 80 % (a recorded claim counts when some answered claim covers it) and 90 % agreement on the covered claims (supported / unsupported), 0 PASS of a card with an unsupported claim |
 | | 30 recorded FAIL | 27 FAIL again |
 | | 30 shorts-v1 cards with one seeded defect | 27 caught |
 | | the same 30 cards unflawed | 27 PASS |
-| `web_verifier` | 20 recorded proven contradictions | 18 CONTRADICTED |
-| | 20 recorded VERIFIED cards | at most 2 falsely CONTRADICTED, 90 % per-claim agreement, 0 false sources (a quote the machine did not find, or a refused page) |
+| `web_verifier` | 20 recorded proven contradictions (5 are `DISPUTED_CONTRADICTIONS`: reported, not counted) | 18 of 20 CONTRADICTED, scaled to the cases that count (14 of the 15) |
+| | 20 recorded VERIFIED cards | at most 2 falsely CONTRADICTED, claim coverage 80 %, 90 % agreement on the covered claims, 0 false sources (a **fabricated** quote - not on the page even loosely - or a refused page; a quote the machine did not find but the page holds up to typography is reported as `not_found_by_machine`) |
 | `hook_rater` | 11 sample openers against 13 live place-word openers | every strong rated above every weak; within one of the `pilot_judge`'s ratings on 80 % |
 | `card_writer` | the 40-site pilot | 80 % of first answers mechanically clean |
 | `adversarial` | 25 recorded contradictions (the web finding withheld from the evidence) and 25 clean cards | 90 % |
+
+**The repair of 2026-10-09** (Opus diagnosis of `teaser-2026-10-09`: the web verifier failed by brief and
+measure, not by model). What changed, and why each part is tested (`test_teaser_calibrate_repair.py`,
+sweep `teaser/mutation_sweep.py`):
+
+- *The brief.* No agent searched outside the site's cached Wikipedia article, because the brief said to
+  read the cache first and to fetch "at most a few requests per site"; 17 of 20 known contradictions stand
+  only on other pages. `web_rules.py` is now the one text every lane's brief takes: for a verifier, judge or
+  adversary the cached article is never independent confirmation (look for a page outside it, read the
+  whole article for contradictions, no cap on requests, one at a time); for a researcher or writer it is
+  the first reading and not a second witness. Calibration labels are opaque, so the web brief points at
+  the batch's `WIKI_MAP.jsonl` (label -> cached pages, no site id, no set) instead of "the label is the
+  site id".
+- *One text rendering.* The live page keeps `<sup>[22]</sup>` footnote markers that the MediaWiki extract
+  drops; six true quotes were counted as false sources. `opus_audit/quotes.normalise` removes
+  `[n]`, `[n, m]`, `[n-m]`, `[a]`, `[citation needed]`, `[note n]` (and the space before) from page and
+  quote alike, so every lane that checks a quote through it agrees. `scripts/remediation/quote_check.py
+  --url U --quote-file F` is the agent's own check on the live page.
+- *The measure.* A verifier case carries the claims floor of the check that accepted its card
+  (`claims_floor`, as production's import holds a verifier to); a claim is *covered* when some answered
+  claim's words cover it (many-to-one), agreement is measured on covered claims, the card-level verdict
+  is reported beside it. The one-to-one difflib pairing could not exceed 0.54 although all 59 matched
+  verdicts agreed.
+- *The record.* `calibrate.py check-answer --run-dir D --batch-id B --label K --text-file F` parses an
+  answer with the parser `evaluate` uses (`parse_case`), and the brief records through
+  `opus_handoff.py answer ... --check "<that command>"`, which writes nothing unless the check exits 0.
+  `calibrate.py void --run-dir D --role R --labels K1,K2 --reason TEXT` moves answers to
+  `<handoff>-void/`, logs them in `VOID.jsonl`, refuses an answer of another role and leaves the seal
+  alone; the question is then asked again.
+- *The seal* hashes `teaser/run.py`, `teaser/calibrate.py`, `opus_audit/quotes.py`, `wc/answers.py`,
+  `licenses.py`, `web_rules.py`, `quote_check.py` and `opus_handoff.py` beside the prompt modules. The
+  hashes are of the checkout's bytes (CRLF in the main checkout): seal in the checkout that runs it.
 
 ### 9.7 The runbook for one run of shorts-v1
 

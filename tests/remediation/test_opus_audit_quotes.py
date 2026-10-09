@@ -91,6 +91,93 @@ def test_nothing_but_whitespace_and_nfc_is_normalised() -> None:
         assert Q.normalise(quote) != Q.normalise(text)
 
 
+# ------------------------------------------------------------------------------ reference markers
+#: One text rendering (calibration teaser-2026-10-09, H2): a Wikipedia page keeps its footnote
+#: markers (`<sup class="reference">[22]</sup>`), the MediaWiki extract the lanes cache drops them, so
+#: a quote copied from the cache failed on the live page. Both sides lose them.
+MARKER_FIXTURE = REPO / "tests" / "remediation" / "fixtures" / "quote_markers_live_2026-10-09.json"
+
+
+@pytest.mark.parametrize(
+    "marked",
+    [
+        "skeleton,[22] having",
+        "skeleton, [22] having",
+        "skeleton,[22][23] having",
+        "skeleton,[22, 23] having",
+        "skeleton,[22,23] having",
+        "skeleton,[22-25] having",
+        "skeleton,[22–25] having",
+        "skeleton,[a] having",
+        "skeleton,[citation needed] having",
+        "skeleton,[Citation needed] having",
+        "skeleton,[note 3] having",
+        "skeleton, [ 22 ] having",
+    ],
+)
+def test_a_reference_marker_is_not_part_of_the_text(marked: str) -> None:
+    assert Q.normalise(marked) == "skeleton, having"
+
+
+def test_a_marker_before_punctuation_leaves_no_gap() -> None:
+    assert Q.normalise("the Garon [4], the Yzeron") == Q.normalise("the Garon, the Yzeron")
+
+
+@pytest.mark.parametrize(
+    "kept",
+    [
+        "the [sic] spelling",
+        "[Strabo] wrote",
+        "a [22nd] day",
+        "rows [1x]",
+        "list [a, b]",
+        "[]",
+        "x [ ] y",
+    ],
+)
+def test_a_bracket_that_is_not_a_reference_marker_is_kept(kept: str) -> None:
+    assert Q.normalise(kept) == kept
+
+
+def test_a_quote_with_a_marker_still_matches_the_page_with_it(tmp_path: Path) -> None:
+    """An old quote that contains the marker (the page's own text) keeps matching."""
+    _page(tmp_path, ES_URL, "<p>He is the oldest skeleton,<sup>[22]</sup> having been dated.</p>")
+    result = _check(tmp_path, (ES_URL, "oldest skeleton,[22] having been dated")).quotes[0]
+    assert result.outcome == Q.FOUND
+    result = _check(tmp_path, (ES_URL, "oldest skeleton, having been dated")).quotes[0]
+    assert result.outcome == Q.FOUND
+
+
+def test_a_marker_does_not_make_other_text_match(tmp_path: Path) -> None:
+    """Mutation case: dropping a marker is not dropping words."""
+    _page(tmp_path, ES_URL, "<p>He is the oldest skeleton,<sup>[22]</sup> having been dated.</p>")
+    assert (
+        _check(tmp_path, (ES_URL, "oldest skeleton, never having been dated")).quotes[0].outcome
+        == Q.NOT_FOUND
+    )
+
+
+def _marker_cases() -> list[dict[str, str]]:
+    return json.loads(MARKER_FIXTURE.read_text(encoding="utf-8"))
+
+
+def test_the_six_real_footnote_quotes_of_the_calibration_pass_the_live_page(
+    tmp_path: Path,
+) -> None:
+    """The six 'false sources' of calibration teaser-2026-10-09: each quote is the cache's text of a
+    paragraph whose live page carries `[n]` markers (the paragraph is the page's own HTML)."""
+    cases = _marker_cases()
+    assert len(cases) == 6
+    for case in cases:
+        html = case["html"]
+        assert "cite-bracket" in html or "reference" in html, case["page"]
+        url = case["url"]
+        _page(tmp_path, url, f"<html><body>{html}</body></html>")
+        # the markers are on the live page, in the visible text ... and the quote still counts
+        assert "[" in Q.visible_text(html), case["page"]
+        assert _check(tmp_path, (url, case["quote"])).counted, case["page"]
+
+
 # ------------------------------------------------------------------------------ evidence files
 def test_a_quote_is_found_in_the_decoded_text_of_a_json_evidence_file(tmp_path: Path) -> None:
     _evidence(

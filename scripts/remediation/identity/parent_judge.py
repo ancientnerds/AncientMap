@@ -41,6 +41,7 @@ for _root in (REPO, REPO / "scripts" / "remediation"):
         sys.path.insert(0, str(_root))
 
 import opus_handoff as OH  # noqa: E402
+import web_rules as WR  # noqa: E402 - what an agent may take from the cache, and how it fetches
 from fields import harvest as H  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
@@ -175,7 +176,8 @@ def load_context(
 
 
 # ------------------------------------------------------------------------------------- prompts
-VERDICT_TEMPLATE = """You are a web verifier of the D25 parent question of the Ancient Nerds sites \
+VERDICT_TEMPLATE = (
+    """You are a web verifier of the D25 parent question of the Ancient Nerds sites \
 remediation (owner decision of 2026-10-08). Below is one curated site record, the PARENT, and {n} \
 other records near it whose names contain its name. Decide for each of them whether it is a \
 COMPONENT of the parent site. Research on the open web; read the pages you cite.
@@ -187,9 +189,11 @@ THE CANDIDATE CHILDREN
 WHERE TO READ
 Wikipedia articles: each record names its cached article (a local text file, the article as plain \
 text). Read the cached file FIRST - Wikimedia throttles this office, so do not fetch Wikipedia pages \
-that are cached. Everything else (Wikidata, a museum, a ministry) is fetched live, a few requests, \
-one at a time; an HTTP 403 or 429 is a throttle and never a finding. When you cite a Wikipedia \
-article, cite its URL (https://en.wikipedia.org/wiki/<Title>) and quote its text.
+that are cached. """
+    + WR.VERIFIER_RULE
+    + """ Everything else (Wikidata, a museum, a ministry) is \
+fetched live. When you cite a Wikipedia article, cite its URL \
+(https://en.wikipedia.org/wiki/<Title>) and quote its text.
 
 THE RULES
 1. Give EVERY candidate child one verdict:
@@ -223,6 +227,7 @@ ANSWER with only this JSON object (one entry per candidate child):
  ]
 }}
 """
+)
 
 
 def _record_block(m: Mapping[str, Any], ctx: Context, *, extra: str = "") -> str:
@@ -297,7 +302,8 @@ def verdict_prompt(question: Mapping[str, Any], ctx: Context, earlier: str | Non
     )
 
 
-RECHECK_TEMPLATE = """You are the adversarial reader of the D25 parent question of the Ancient \
+RECHECK_TEMPLATE = (
+    """You are the adversarial reader of the D25 parent question of the Ancient \
 Nerds sites remediation (owner decision of 2026-10-08). A web verifier answered the question below; \
 your job is to try to REFUTE each "PART" it asserts - not to agree with it. A relation you cannot \
 refute with your own reading of the sources stands.
@@ -309,8 +315,9 @@ THE RELATIONS TO CHECK (each with the first answer's quotes and whether the mach
 {earlier}
 WHERE TO READ
 Wikipedia articles are cached as local files (listed per record): read the cached file FIRST, never \
-fetch a cached Wikipedia page. Everything else is fetched live, a few requests, one at a time; an HTTP \
-403 or 429 is a throttle, never a finding.
+fetch a cached Wikipedia page. """
+    + WR.VERIFIER_RULE
+    + """ Everything else is fetched live.
 
 THE RULES
 1. For EVERY relation listed, decide CONFIRM (the child is a component of exactly this parent) or \
@@ -331,6 +338,7 @@ ANSWER with only this JSON object (one entry per relation):
  ]
 }}
 """
+)
 
 
 def parts_of(decision: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -679,15 +687,17 @@ def write_decisions(run: Path, ctx: Context) -> dict[str, Any]:
     return {"children": len(records), **dict(counts)}
 
 
-BRIEF = """You are agent {batch} of the D25 parent question of the Ancient Nerds sites remediation \
+BRIEF = (
+    """You are agent {batch} of the D25 parent question of the Ancient Nerds sites remediation \
 (stage {stage}, round {round}), role {role}. You answer {count} question(s), each about one parent \
 site record and its candidate children. Answer each one on its own.
 
 Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per question \
 with its "label" (the parent id) and its "prompt_path" (relative to {handoff}), plus the cached \
 Wikipedia files and the web pages your prompt names. Open no other file of the repository, no database, \
-no git history. Fetch live at most a few requests, one at a time; an HTTP 403 or 429 is a throttle, \
-never a finding.
+no git history. """
+    + WR.VERIFIER_RULE
+    + """
 
 For each question:
 1. Read {handoff}/<prompt_path>.
@@ -704,6 +714,7 @@ For each question:
 
 When every question of the batch is recorded, report how many answers you recorded.
 """
+)
 
 
 def brief(
