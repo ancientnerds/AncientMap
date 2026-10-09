@@ -64,7 +64,9 @@ from served_image import vision as V  # noqa: E402
 LANE_NAME = "served-image"
 TEST_ID = "WD2/served-image"
 LABEL = "served image"
-RUN_RE = re.compile(r"served-image-(\d{4}-\d{2}-\d{2}[a-z]?)")
+#: `served-image-2026-09-26`, `...-26b` (a second run of the day) or `...-2026-10-08-os47` (a named
+#: run: the D15 re-check of the 47 heroes). The group is the journal stamp.
+RUN_RE = re.compile(r"served-image-(\d{4}-\d{2}-\d{2}(?:[a-z]|-[a-z0-9]+)?)")
 
 RULE_ALIGN = "wd2-align"
 RULE_HERO = "wd2-hero"
@@ -93,7 +95,7 @@ def lane_for(run: Path) -> CW.Lane:
     """The journal identity of a run: lane `served-image`, stamped with the run directory's date."""
     match = RUN_RE.fullmatch(run.name)
     if match is None:
-        raise ST.StateError(f"{run} is not a run directory (served-image-YYYY-MM-DD[a-z])")
+        raise ST.StateError(f"{run} is not a run directory (served-image-YYYY-MM-DD[a-z|-name])")
     return CW.Lane(LANE_NAME, TEST_ID, f"{LANE_NAME}-{match.group(1)}", "authoritative", LABEL)
 
 

@@ -1307,6 +1307,14 @@ CAL_CASES: list[Case] = [
 #: The cached Wikipedia page reaches the recheck prompts (D15 and the D17 hero re-check).
 CACHE_CASES: list[Case] = [
     c(
+        "d15: a named run is a run directory",
+        SERVED_PLAN,
+        '(?:[a-z]|-[a-z0-9]+)?)")',
+        '[a-z]?)")',
+        "test_a_named_run_names_the_journal_stamp_too",
+        T_SERVED,
+    ),
+    c(
         "d15: the context names the cached page",
         RECHECK_PY,
         '                "wikipedia_cache_file": cache_file(sid),',
