@@ -117,6 +117,8 @@ class TestTheWaves:
 
     def test_the_labels_are_the_date_then_letters(self) -> None:
         assert PA.wave_labels(WAVE, 2) == [WAVE, f"{WAVE}b"]
+        with pytest.raises(P.PlanError, match="split the date"):
+            PA.wave_labels(WAVE, 30)
         with pytest.raises(ValueError, match="not a wave label"):
             PA.wave_labels("soon", 1)
 
@@ -526,10 +528,19 @@ class TestTheFiles:
             directory / "PLAN.md"
         ).read_text(encoding="utf-8")
 
+    def test_the_held_children_are_written_and_listed_in_the_plan(self, tmp_path: Path) -> None:
+        plan, _ = plan_of()
+        held = [{"child": OTHER, "parent": PARENT, "name": "Forum", "reason": "another country"}]
+        PA.write_plan(plan, held, a_read(), tmp_path)
+        directory = tmp_path / LANE.out_dir_name
+        assert "## Held back" in (directory / "PLAN.md").read_text(encoding="utf-8")
+        assert json.loads((directory / PA.HELD_FILE).read_text(encoding="utf-8"))["child"] == OTHER
+
     def test_the_merged_losers_are_read_from_the_duplicate_decisions(self, tmp_path: Path) -> None:
         from identity import common
 
-        assert PA.merged_losers(tmp_path) == set()
+        with pytest.raises(P.PlanError, match="the parents come after the duplicates"):
+            PA.merged_losers(tmp_path)
         common.write_jsonl(
             tmp_path / "DUP_DECISIONS.jsonl", [{"merges": [{"site_id": CHILD}], "cluster_id": "c"}]
         )

@@ -44,6 +44,21 @@ def url_page(url: str) -> tuple[str, str] | None:
     return match.group(1), unquote(match.group(2)).replace("_", " ")
 
 
+def load_cache(root: Path | None = None) -> WikiIndex:
+    """The shared cache of the main checkout (or of `root`), or an `IdentityError` that says it is
+    missing: the questions name its files and the import reads from it, and a run without it would
+    send every verifier to Wikipedia - the throttle the cache exists to avoid."""
+    from identity import common
+
+    cache = (root or common.main_checkout()) / CACHE_SUBDIR
+    if not (cache / INDEX_FILE).exists():
+        raise common.IdentityError(
+            f"{cache / INDEX_FILE} does not exist: run tools/wiki_cache.py first (the verifier "
+            "agents read Wikipedia from it)"
+        )
+    return WikiIndex.load(cache)
+
+
 @dataclass(frozen=True)
 class CachedPage:
     lang: str
@@ -97,7 +112,5 @@ class WikiIndex:
     def for_url(self, url: str) -> CachedPage | None:
         """The cached page a Wikipedia URL names, if the cache holds it (and it is not missing)."""
         key = url_page(url)
-        if key is None:
-            return None
-        page = self.by_title.get(key)
+        page = None if key is None else self.by_title.get(key)
         return None if page is None or page.missing else page

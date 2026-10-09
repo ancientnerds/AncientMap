@@ -1061,6 +1061,32 @@ class TestTheBriefAndTheCheck:
         text = J.brief(run, J.STAGE_RECHECK, "r1", "r1-b01")
         assert "role adversarial" in text and "--model claude-opus-5-5 --role adversarial" in text
 
+    def test_a_brief_names_a_role_of_its_stage(self, tmp_path: Path) -> None:
+        run = self.exported(tmp_path)
+        with pytest.raises(rounds.RoundError, match="adversarial is no role of dup-verdict"):
+            J.brief(run, J.STAGE_VERDICT, "r1", "r1-b01", role="adversarial")
+        assert "role web_verifier" in J.brief(
+            run, J.STAGE_VERDICT, "r1", "r1-b01", role="web_verifier"
+        )
+
+    def test_the_pilot_judge_may_recheck_and_a_calibration_brief_points_at_its_copy(
+        self, tmp_path: Path
+    ) -> None:
+        run = self.exported(tmp_path)
+        write_answer(tmp_path / "h1", "r1-b01", J.STAGE_VERDICT, CID, a_merge_answer())
+        J.import_round(run, J.STAGE_VERDICT, "r1", CTX, fake_fetch(PAGES), now=lambda: NOW)
+        J.export_rechecks(run, CTX, tmp_path / "h2", now=lambda: NOW)
+        text = J.brief(
+            run, J.STAGE_RECHECK, "r1", "r1-b01", role="pilot_judge", handoff="calibration/copy"
+        )
+        assert "--model claude-opus-5-5 --role pilot_judge" in text
+        assert (
+            "calibration/copy/r1-b01/MANIFEST.jsonl" in text
+            and "calibration/copy-scratch/r1-b01" in text
+        )
+        with pytest.raises(rounds.RoundError, match="web_verifier is no role of dup-recheck"):
+            J.brief(run, J.STAGE_RECHECK, "r1", "r1-b01", role="web_verifier")
+
     def test_a_calibration_brief_has_no_shape_check(self, tmp_path: Path) -> None:
         run = self.exported(tmp_path)
         text = J.brief(run, J.STAGE_VERDICT, "r1", "r1-b01", check=False)
@@ -1099,6 +1125,11 @@ class TestTheContext:
                 lines.append(json.dumps({"kind": kind, "row": row}))
         lines.append(json.dumps({"kind": "snapshot", "row": {"exported_at": exported.exported_at}}))
         (run / common.EXPORT_FILE).write_text("\n".join(lines[1:]) + "\n", encoding="utf-8")
+        with pytest.raises(common.IdentityError, match="tools/wiki_cache.py first"):
+            J.load_context(run, root=tmp_path)
+        cache = tmp_path / "output" / "remediation" / "final-2026-10-08" / "wiki_cache"
+        cache.mkdir(parents=True)
+        (cache / "INDEX.jsonl").write_text("", encoding="utf-8")
         ctx = J.load_context(run, root=tmp_path)
-        assert len(ctx.clusters) == 1 and ctx.wiki is None and ctx.basis == exported.exported_at
+        assert len(ctx.clusters) == 1 and ctx.wiki is not None and ctx.basis == exported.exported_at
         assert ctx.names[A_ID] == ("Paneas",) and set(ctx.shown) == {A_ID, B_ID}

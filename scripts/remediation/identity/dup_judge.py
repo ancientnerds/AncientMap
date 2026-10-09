@@ -55,7 +55,7 @@ import opus_handoff as OH  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 
 from identity import common, export, rounds  # noqa: E402
-from identity.wiki import CACHE_SUBDIR, WikiIndex, article_url  # noqa: E402
+from identity.wiki import WikiIndex, article_url, load_cache  # noqa: E402
 
 STAGE_VERDICT = "dup-verdict"
 STAGE_RECHECK = "dup-recheck"
@@ -97,7 +97,7 @@ def dup_run(run: Path) -> Path:
 
 def load_context(run: Path, wiki: WikiIndex | None = None, *, root: Path | None = None) -> Context:
     """The context of a run: `DUP_CLUSTERS.jsonl` and `EXPORT.jsonl` of the identity run
-    directory, and the shared Wikipedia cache when it exists."""
+    directory, and the shared Wikipedia cache (`wiki`, or the main checkout's, which must exist)."""
     exported = export.load_export(run / common.EXPORT_FILE)
     records = common.read_jsonl(run / "DUP_CLUSTERS.jsonl")
     clusters = {r["cluster_id"]: r for r in records if r["record"] == "cluster"}
@@ -106,8 +106,7 @@ def load_context(run: Path, wiki: WikiIndex | None = None, *, root: Path | None 
     for row in exported.names:
         names.setdefault(row["site_id"], []).append(row["name"])
     if wiki is None:
-        cache = (root or common.main_checkout()) / CACHE_SUBDIR
-        wiki = WikiIndex.load(cache) if (cache / "INDEX.jsonl").exists() else None
+        wiki = load_cache(root)
     return Context(
         clusters=clusters,
         retired_losers=losers,
@@ -896,18 +895,29 @@ def brief(
     *,
     stage_run: Path | None = None,
     check: bool = True,
+    handoff: str | None = None,
+    role: str | None = None,
 ) -> str:
-    """The instruction of the agent that answers one batch of one round."""
+    """The instruction of the agent that answers one batch of one round.
+
+    `stage_run` and `handoff` point a calibration's brief at its own rounds and at the copy of the
+    pool the role re-answers into; `check=False` drops the shape check, which a copy has no run for;
+    `role` names the role the agent answers in when it is not the stage's first (the pilot judge
+    rechecks the first clusters)."""
     import roles as RO
 
     record = rounds.find_round(stage_run or dup_run(run), stage, round_name)
     if batch_id not in record.batches:
         raise rounds.RoundError(f"{batch_id} is no batch of {stage} round {round_name}")
-    role = ROLE_VERDICT if stage == STAGE_VERDICT else ROLES_RECHECK[0]
+    allowed = (ROLE_VERDICT,) if stage == STAGE_VERDICT else ROLES_RECHECK
+    role = role or allowed[0]
+    if role not in allowed:
+        raise rounds.RoundError(f"{role} is no role of {stage}: it asks {' or '.join(allowed)}")
+    where = handoff or record.handoff
     text = BRIEF.format(
         batch=batch_id, stage=stage, round=round_name, role=role, model=RO.role(role).model,
-        count=len(record.batches[batch_id]), handoff=record.handoff,
-        scratch=f"{record.handoff}-scratch/{batch_id}", python="./.venv/Scripts/python.exe",
+        count=len(record.batches[batch_id]), handoff=where,
+        scratch=f"{where}-scratch/{batch_id}", python="./.venv/Scripts/python.exe",
         run_tool="scripts/remediation/identity/dup_judge.py",
         handoff_tool="scripts/remediation/opus_handoff.py",
     )  # fmt: skip
@@ -967,6 +977,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     brief_cmd.add_argument("--stage", choices=(STAGE_VERDICT, STAGE_RECHECK), required=True)
     brief_cmd.add_argument("--round", required=True)
     brief_cmd.add_argument("--batch-id", required=True)
+    brief_cmd.add_argument(
+        "--role", help="the role the agent answers in (default: the stage's first)"
+    )
+    brief_cmd.add_argument("--stage-run", type=Path, help="a calibration's own rounds directory")
+    brief_cmd.add_argument("--handoff", help="the handoff directory the agent answers into")
+    brief_cmd.add_argument(
+        "--no-check", action="store_true", help="drop the shape check (a calibration copy)"
+    )
     check = sub.add_parser("check-answer")
     check.add_argument("--stage", choices=(STAGE_VERDICT, STAGE_RECHECK), required=True)
     check.add_argument("--round", required=True)
@@ -1000,7 +1018,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
         elif args.command == "brief":
-            print(brief(run, args.stage, args.round, args.batch_id))
+            print(
+                brief(
+                    run,
+                    args.stage,
+                    args.round,
+                    args.batch_id,
+                    stage_run=args.stage_run,
+                    check=not args.no_check,
+                    handoff=args.handoff,
+                    role=args.role,
+                )
+            )
         elif args.command == "check-answer":
             problem = check_answer(
                 run,

@@ -247,6 +247,10 @@ class TestTheRoundFiles:
         with pytest.raises(rounds.RoundError, match="asked twice"):
             self.export(tmp_path, ["c1", "c1"])
 
+    def test_a_reask_needs_a_round_to_re_ask(self, tmp_path: Path) -> None:
+        with pytest.raises(rounds.RoundError, match="no dup-verdict round is exported yet"):
+            rounds.newest_imported(tmp_path / "run", STAGE, "a re-ask")
+
     def test_an_unknown_round_is_named(self, tmp_path: Path) -> None:
         with pytest.raises(rounds.RoundError, match="no round 'r9'"):
             rounds.find_round(tmp_path / "run", STAGE, "r9")
@@ -331,14 +335,16 @@ class TestTheRoundFiles:
         assert rounds.parse_quotes([{"source": "https://example.org/a", "quote": "q"}], "w") == (
             {"source": "https://example.org/a", "quote": "q"},
         )
-        for bad in (
-            "x",
-            [1],
-            [{"source": "https://example.org/a"}],
-            [{"source": "https://example.org/a", "quote": " "}],
-            [{"source": "Wikipedia", "quote": "q"}],
-            [{"source": "https://ancientnerds.com/a", "quote": "q"}],
+        for bad, message in (
+            ("x", "quotes is not a list"),
+            (None, "quotes is not a list"),
+            (3, "quotes is not a list"),
+            ([1], "is not {source, quote}"),
+            ([{"source": "https://example.org/a"}], "is not {source, quote}"),
+            ([{"source": "https://example.org/a", "quote": " "}], "needs a source and a text"),
+            ([{"source": "Wikipedia", "quote": "q"}], "must be the URL of the page"),
+            ([{"source": "https://ancientnerds.com/a", "quote": "q"}], "is never fetched here"),
         ):
-            with pytest.raises(rounds.AnswerError):
+            with pytest.raises(rounds.AnswerError, match=message):
                 rounds.parse_quotes(bad, "w")
         assert rounds.quote_outcomes([], "k", Q.Library(REPO, Path("."))) == ([], None)

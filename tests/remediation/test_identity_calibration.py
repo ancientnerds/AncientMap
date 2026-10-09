@@ -481,11 +481,16 @@ class TestTheParentCases:
                 site(id=C_, name="Delphi", lat=38.4, lon=22.5), site(id=D_, name="Delphi Museum", lat=38.4005, lon=22.5)]  # fmt: skip
         cases = [
             C.Case("par-pos-1", "positive", A, B, None, "t"),
-            C.Case("par-neg-1", "negative", C_, D_, None, "t"),
+            C.Case("par-pos-2", "positive", C_, D_, None, "t"),
+            C.Case("par-neg-1", "negative", A, D_, None, "t"),
         ]
         ctx = C.parent_context(facts_of(rows), cases, None)
         record = C.export_parent_gold(tmp_path / "cal", ctx, cases, tmp_path / "gold")
-        verdicts = {"par-pos-1": ("PART", A, B), "par-neg-1": ("PART", C_, D_)}
+        verdicts = {
+            "par-pos-1": ("PART", A, B),
+            "par-pos-2": ("NOT_PART", C_, D_),
+            "par-neg-1": ("PART", A, D_),
+        }
         for batch, labels in record.batches.items():
             for label in labels:
                 verdict, parent, kid = verdicts[label]
@@ -508,7 +513,8 @@ class TestTheParentCases:
                     model=OPUS,
                 )
         report = C.parent_gold_check(tmp_path / "gold", ctx, cases, batches=record.batches)
-        assert report["answered"] == 2 and report["positive_not_part"] == []
+        assert report["answered"] == 3
+        assert [d["case"] for d in report["positive_not_part"]] == ["par-pos-2"]
         assert [d["case"] for d in report["negative_part"]] == ["par-neg-1"]
 
 
@@ -547,6 +553,7 @@ class TestTheComparedShapes:
             json.dumps({"members": [1]}),
             json.dumps({"members": [{"verdict": "MERGE"}]}),
             json.dumps({"members": [{"site_id": A}]}),
+            json.dumps({"foo": 1}),
         ],
     )
     def test_what_is_no_identity_answer_is_not_read_as_one(self, text: str) -> None:

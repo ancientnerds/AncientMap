@@ -123,6 +123,21 @@ class TestTheQuestions:
         for lost in (PARENT, KID_A):
             assert J.merge_questions(self.candidates(), [], CTX.shown, {}, {lost}) == {}
 
+    def test_a_part_of_verdict_names_a_site_a_merge_retires_or_one_not_shown(self) -> None:
+        part = [{"site_id": KID_C, "target": PARENT}]
+        assert J.merge_questions([], part, CTX.shown, {}, {KID_C}) == {}
+        assert J.merge_questions([], part, CTX.shown, {}, {PARENT}) == {}
+        gone = {k: v for k, v in CTX.shown.items() if k != KID_C}
+        assert J.merge_questions([], part, gone, {}, set()) == {}
+        without_parent = {k: v for k, v in CTX.shown.items() if k != PARENT}
+        assert J.merge_questions([], part, without_parent, {}, set()) == {}
+        assert list(J.merge_questions([], part, CTX.shown, {}, set())) == [PARENT]
+
+    def test_a_part_of_child_that_names_a_parent_already_is_not_asked(self) -> None:
+        part = [{"site_id": KID_C, "target": PARENT}]
+        shown = {**CTX.shown, KID_C: {**CTX.shown[KID_C], "parent_site_id": KID_A}}
+        assert J.merge_questions([], part, shown, {}, set()) == {}
+
     def test_a_child_that_names_a_parent_already_is_not_asked(self) -> None:
         shown = {**CTX.shown, KID_A: {**CTX.shown[KID_A], "parent_site_id": PARENT}}
         candidates = self.candidates()
@@ -604,6 +619,16 @@ class TestTheRounds:
         with pytest.raises(rounds.RoundError, match="is no question of"):
             J.check_answer(run, CTX, J.STAGE_VERDICT, "r1", "nope", "{}")
 
+    def test_a_brief_names_a_role_of_its_stage(self, tmp_path: Path) -> None:
+        run = tmp_path / "run"
+        J.export_verdicts(run, CTX, tmp_path / "h1", now=lambda: NOW)
+        with pytest.raises(rounds.RoundError, match="adversarial is no role of parent-verdict"):
+            J.brief(run, J.STAGE_VERDICT, "r1", "r1-b01", role="adversarial")
+        text = J.brief(
+            run, J.STAGE_VERDICT, "r1", "r1-b01", handoff="calibration/copy", check=False
+        )
+        assert "calibration/copy/r1-b01/MANIFEST.jsonl" in text and "check-answer" not in text
+
     def test_no_recheck_without_a_decided_part(self, tmp_path: Path) -> None:
         run = tmp_path / "run"
         with pytest.raises(rounds.RoundError, match="no parent has a decided PART"):
@@ -612,3 +637,44 @@ class TestTheRounds:
 
 def test_the_entity_helper_of_the_fixtures_is_what_the_harvest_reads() -> None:
     assert entity("Q1", p31=("Q2",))["id"] == "Q1"
+
+
+class TestTheContext:
+    def run_dir(self, tmp_path: Path, *, decisions: bool) -> Path:
+        from identity import common
+
+        from tests.remediation.identity_fixtures import export_of
+
+        run = tmp_path / "run"
+        run.mkdir()
+        shown = [site(id=PARENT, name="Pompeii"), site(id=KID_A, name="Theatre Area of Pompeii")]
+        exported = export_of(shown)
+        lines = [json.dumps({"kind": "shown", "row": row}) for row in exported.shown]
+        lines.append(json.dumps({"kind": "snapshot", "row": {"exported_at": exported.exported_at}}))
+        (run / common.EXPORT_FILE).write_text("\n".join(lines) + "\n", encoding="utf-8")
+        common.write_jsonl(run / "PARENT_CANDIDATES.jsonl", [])
+        if decisions:
+            common.write_jsonl(run / "DUP_DECISIONS.jsonl", [])
+        cache = tmp_path / "output" / "remediation" / "final-2026-10-08" / "wiki_cache"
+        cache.mkdir(parents=True)
+        (cache / "INDEX.jsonl").write_text("", encoding="utf-8")
+        return run
+
+    def test_the_parents_come_after_the_duplicates(self, tmp_path: Path) -> None:
+        from identity import common
+
+        run = self.run_dir(tmp_path, decisions=False)
+        with pytest.raises(common.IdentityError, match="the parents come after the duplicates"):
+            J.load_context(run, root=tmp_path)
+
+    def test_the_context_needs_the_wikipedia_cache(self, tmp_path: Path) -> None:
+        from identity import common
+
+        run = self.run_dir(tmp_path, decisions=True)
+        ctx = J.load_context(run, root=tmp_path)
+        assert ctx.questions == {} and ctx.wiki is not None and set(ctx.shown) == {PARENT, KID_A}
+        (
+            tmp_path / "output" / "remediation" / "final-2026-10-08" / "wiki_cache" / "INDEX.jsonl"
+        ).unlink()
+        with pytest.raises(common.IdentityError, match="tools/wiki_cache.py first"):
+            J.load_context(run, root=tmp_path)

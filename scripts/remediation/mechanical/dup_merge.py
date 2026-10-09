@@ -42,7 +42,7 @@ import json
 import logging
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -129,12 +129,13 @@ def decided_pairs(decisions: Sequence[Mapping[str, Any]]) -> list[WavePair]:
     pairs = []
     for r in decisions:
         for m in r["merges"]:
-            final, seen = m["target"], {m["site_id"]}
-            while final in target_of:
-                if final in seen:
-                    raise P.PlanError(f"{m['site_id']}: the decisions merge it in a circle")
-                seen.add(final)
+            final = m["target"]
+            for _ in range(len(target_of)):  # a chain is never longer than the merges are many
+                if final not in target_of:
+                    break
                 final = target_of[final]
+            else:
+                raise P.PlanError(f"{m['site_id']}: the decisions merge it in a circle")
             pairs.append(
                 WavePair(
                     loser=m["site_id"],
@@ -474,7 +475,21 @@ class MoveCell:
     note: str
 
 
-def move_cells(read: Read, pair: WavePair) -> tuple[list[MoveCell], dict[str, int]]:
+@dataclass
+class Taken:
+    """What the pairs of a wave planned before this one already move onto one survivor: a second
+    loser of the same survivor meets them as collisions (an image URL, a content link, a name key)
+    and as a hero the survivor has by then. Only a pair that is planned in full adds to it."""
+
+    urls: set[str] = field(default_factory=set)
+    links: set[tuple[str, str]] = field(default_factory=set)
+    names: set[str] = field(default_factory=set)
+    hero: bool = False
+
+
+def move_cells(
+    read: Read, pair: WavePair, taken: Taken | None = None
+) -> tuple[list[MoveCell], dict[str, int]]:
     """The cells that move one loser's rows onto its survivor, and the counts of what they do.
 
     * an image whose `original_url` the survivor holds stays on the loser (the unique key
@@ -486,6 +501,9 @@ def move_cells(read: Read, pair: WavePair) -> tuple[list[MoveCell], dict[str, in
     * the loser's name row (the row whose key is the key of the loser's name) becomes an alias of
       the survivor, unless the survivor already holds that key. A loser with no such row and a
       survivor without the key is `Held`: the alias needs an INSERT this lane does not make.
+
+    `taken` is what the wave's earlier pairs of the same survivor move: it counts as the survivor's
+    own for every check above, and is added to once this pair is planned.
     """
     loser, survivor = pair.loser, pair.survivor
     counts = {
@@ -496,9 +514,12 @@ def move_cells(read: Read, pair: WavePair) -> tuple[list[MoveCell], dict[str, in
         "links_stay": 0,
         "names": 0,
     }
+    taken = taken if taken is not None else Taken()
     cells: list[MoveCell] = []
-    s_urls = {i["original_url"] for i in read.images.get(survivor, ())}
-    s_has_hero = any(i["is_hero"] is True and live(i) for i in read.images.get(survivor, ()))
+    s_urls = {i["original_url"] for i in read.images.get(survivor, ())} | taken.urls
+    s_has_hero = taken.hero or any(
+        i["is_hero"] is True and live(i) for i in read.images.get(survivor, ())
+    )
     moved = []
     for image in sorted(read.images.get(loser, ()), key=lambda i: int(i["id"])):
         if image["original_url"] in s_urls:
@@ -521,7 +542,9 @@ def move_cells(read: Read, pair: WavePair) -> tuple[list[MoveCell], dict[str, in
         (i for i in moved if i["is_hero"] is True and live(i)),
         key=lambda i: (int(i["sort_order"] or 0), int(i["id"])),
     )
+    kept_hero = False
     for index, image in enumerate(heroes):
+        kept_hero = kept_hero or not (s_has_hero or index > 0)
         if s_has_hero or index > 0:
             counts["heroes_demoted"] += 1
             cells.append(
@@ -536,10 +559,13 @@ def move_cells(read: Read, pair: WavePair) -> tuple[list[MoveCell], dict[str, in
                 )  # fmt: skip
             )
     s_keys = {(c["content_source"], c["content_id"]) for c in read.links.get(survivor, ())}
+    s_keys |= taken.links
+    moved_links = set()
     for link in sorted(read.links.get(loser, ()), key=lambda c: int(c["id"])):
         if (link["content_source"], link["content_id"]) in s_keys:
             counts["links_stay"] += 1
             continue
+        moved_links.add((link["content_source"], link["content_id"]))
         counts["links"] += 1
         cells.append(
             MoveCell(
@@ -553,7 +579,10 @@ def move_cells(read: Read, pair: WavePair) -> tuple[list[MoveCell], dict[str, in
             )
         )
     key = read.sites[loser]["name_key"]
-    if not any(n["name_normalized"] == key for n in read.names.get(survivor, ())):
+    moves_name = key not in taken.names and not any(
+        n["name_normalized"] == key for n in read.names.get(survivor, ())
+    )
+    if moves_name:
         row = next(
             (
                 n
@@ -591,6 +620,11 @@ def move_cells(read: Read, pair: WavePair) -> tuple[list[MoveCell], dict[str, in
             )
         )
         counts["names"] += 1
+    taken.urls |= {i["original_url"] for i in moved}
+    taken.links |= moved_links
+    taken.hero = taken.hero or kept_hero
+    if moves_name:
+        taken.names.add(key)
     return cells, counts
 
 
@@ -604,6 +638,7 @@ def build_move(
     stamps = [move.run_stamp, move.rollback_run_stamp]
     changes: list[P.Verdict] = []
     held: list[dict[str, Any]] = []
+    taken: dict[str, Taken] = {}
     totals = dict.fromkeys(
         ("pairs", "images", "images_stay", "heroes_demoted", "links", "links_stay", "names"), 0
     )
@@ -616,7 +651,7 @@ def build_move(
                     f"the premise the database printed, {loser['move_premise']!r}, is not the one "
                     f"the read's rows give, {expected!r}"
                 )
-            cells, counts = move_cells(read, pair)
+            cells, counts = move_cells(read, pair, taken.setdefault(pair.survivor, Taken()))
         except Held as exc:
             held.append(
                 {
@@ -818,6 +853,12 @@ def plan_md(
         "```",
         "",
         "The reversal order is retire, then move.",
+        "",
+        "The loser's name row moves to the survivor as an alias. Lyra's boot (`_run_migrations`, "
+        "'Backfill AN Originals') inserts a label row for every site that has none under its own "
+        "name key, so after a Lyra restart the retired loser holds a new row with that key and the "
+        "rollback of the name row stops at `uq_usn`: roll the move back before the next Lyra "
+        "restart, or delete that one new row first.",
         "",
     ]
     return "\n".join(lines)

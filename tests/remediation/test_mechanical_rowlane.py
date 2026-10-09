@@ -413,6 +413,13 @@ class TestTheSyntaxInPostgres:
 
 
 # ------------------------------------------------------------------- the invariants in SQLite
+def fold(text: str) -> str:
+    """`unaccent` for SQLite: the letters without their accents."""
+    import unicodedata
+
+    return "".join(c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c))
+
+
 def sqlite_world() -> sqlite3.Connection:
     """The tables the row invariants read, with PostGIS's two point functions and the name key's two
     (`unaccent` is the identity here, `left` the first characters)."""
@@ -424,7 +431,7 @@ def sqlite_world() -> sqlite3.Connection:
         return 1000.0 * haversine_distance(lat1, lon1, lat2, lon2)
 
     db.create_function("ST_DistanceSphere", 2, sphere)
-    db.create_function("unaccent", 1, lambda text: text)
+    db.create_function("unaccent", 1, fold)
     db.create_function("left", 2, lambda text, n: text[:n])
     db.executescript(
         """
@@ -563,6 +570,13 @@ class TestTheInvariantsInSQL:
             "INSERT INTO unified_site_names VALUES (5, ?, 'Paneas', 'paneas', 'alias')", (SURVIVOR,)
         )
         assert bad(db, "alias-cells") == 1
+        # the key folds the accents: the loser's "Bániás" is the alias "banias", not "báníás"
+        db2 = world()
+        db2.execute("UPDATE unified_sites SET name = 'B\u00e1ni\u00e1s' WHERE id = ?", (LOSER,))
+        db2.execute(
+            "INSERT INTO unified_site_names VALUES (5, ?, 'Banias', 'banias', 'alias')", (SURVIVOR,)
+        )
+        assert bad(db2, "alias-cells") == 0
 
 
 # ------------------------------------------------------------------------------------- probes
@@ -809,8 +823,14 @@ class TestTheProbeRun:
     """`--probe-guards` against a production that refuses every probe the way its guard says."""
 
     def production(self, monkeypatch: pytest.MonkeyPatch, **kw: Any) -> ProbeProduction:
+        production = ProbeProduction(LANE, full_plan(), monkeypatch, foreign=FOREIGN, **kw)
         monkeypatch.setattr(R, "psql_json_reader", lambda: lambda sql: [FOREIGN])
-        return ProbeProduction(LANE, full_plan(), monkeypatch, foreign=FOREIGN, **kw)
+
+        def not_this_reader() -> Any:
+            raise AssertionError("a row lane reads its foreign row through rowlane.foreign_row")
+
+        monkeypatch.setattr(A, "psql_json_reader", not_this_reader)
+        return production
 
     def test_every_probe_is_proven_when_its_own_guard_refuses_it(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]

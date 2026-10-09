@@ -32,6 +32,8 @@ SURVIVOR = "ce7db300-8777-425d-917a-2f6d9f325b58"
 LOSER2 = "3ebb514f-ac4a-4913-b54b-409bcc29eff4"
 SURVIVOR2 = "51daf6c9-25d3-4818-8857-0543f1203c57"
 OTHER = "dafc7527-c6c8-45c3-8c7d-4813d20a4dcf"
+THIRD = "11111111-1111-4111-8111-111111111111"
+THIRD_SURVIVOR = "22222222-2222-4222-8222-222222222222"
 NOW = "2026-10-10T00:00:00+00:00"
 QUOTES = (
     {
@@ -318,6 +320,8 @@ class TestTheLaneFamily:
             (SURVIVOR, "Caesarea Philippi", 33.0 + 0.0189),
             (LOSER2, "Ancient Amathunta", 34.0),
             (SURVIVOR2, "Amathus", 34.0 + 0.0189),
+            (THIRD, "Third", 35.0),
+            (THIRD_SURVIVOR, "Third survivor", 35.0 + 0.0171),
         ):
             db.execute(
                 "INSERT INTO unified_sites VALUES (?, ?, 'ancient_nerds', NULL, NULL, ?, 35.0)",
@@ -331,17 +335,28 @@ class TestTheLaneFamily:
             "UPDATE unified_sites SET scope_reason = 'duplicate_of:' || ? WHERE id = ?",
             (SURVIVOR2, LOSER2),
         )
+        db.execute(
+            "UPDATE unified_sites SET scope_reason = 'duplicate_of:' || ? WHERE id = ?",
+            (THIRD_SURVIVOR, THIRD),
+        )
         wide = L.dup_merge_retire_lane(
-            WAVE, [L.MergePair(LOSER, SURVIVOR, 2500), L.MergePair(LOSER2, SURVIVOR2)]
+            WAVE,
+            [
+                L.MergePair(LOSER, SURVIVOR, 2500),
+                L.MergePair(LOSER2, SURVIVOR2),
+                L.MergePair(THIRD, THIRD_SURVIVOR),
+            ],
         )
         far = wide.site_invariants[2].predicate
         rows = dict(
             db.execute(
-                f"SELECT u.id, {far} FROM unified_sites u WHERE u.id IN (?, ?)", (LOSER, LOSER2)
+                f"SELECT u.id, {far} FROM unified_sites u WHERE u.id IN (?, ?, ?)",
+                (LOSER, LOSER2, THIRD),
             ).fetchall()
         )
-        # 2.1 km: inside the 2,500 m limit of the first pair, outside the 2,000 m default of the second
-        assert rows == {LOSER: 0, LOSER2: 1}
+        # 2.1 km: inside the 2,500 m limit of the first pair, outside the 2,000 m default of the
+        # second; 1.9 km: inside the default of the third, which the first pair's limit does not touch
+        assert rows == {LOSER: 0, LOSER2: 1, THIRD: 0}
 
 
 # ------------------------------------------------------------------------------- the checks
@@ -745,8 +760,13 @@ class TestTheRetirePlan:
                 "name is not among the survivor's",
             ),
             (
-                lambda r: {"images": {**r.images, SURVIVOR: ()}, "links": r.links},
-                "survivor lacks|survivor shows none",
+                lambda r: {
+                    "images": {
+                        **r.images,
+                        SURVIVOR: (img(10, SURVIVOR, "u/shared", excluded=True),),
+                    }
+                },
+                "loser shows an image and the survivor shows none",
             ),
             (
                 lambda r: {
@@ -779,8 +799,9 @@ class TestTheRetirePlan:
             retired(replace(read, sites=sites))
 
     def test_an_already_retired_loser_is_not_planned(self) -> None:
-        with pytest.raises(P.PlanError, match="no loser of the wave can be retired yet"):
+        with pytest.raises(P.PlanError, match="no loser of the wave can be retired yet") as refused:
             retired(pairs=[pair(already_retired=True)])
+        assert "\n  - " not in str(refused.value)  # skipped, not held back with a reason
 
     def test_the_cells_render_under_the_retire_lane(self) -> None:
         plan, _ = retired()
@@ -894,6 +915,7 @@ class TestTheFiles:
         assert (
             "The reversal order is retire, then move." in md
             and f"--lane {plan.lane.name} --rehearse-rollback" in md
+            and "stops at `uq_usn`" in md
         )
         A.emit(records, directory, plan.lane, plan_path=directory / "PLAN.jsonl")
         assert (directory / "APPLY.sql").exists()
@@ -1081,3 +1103,93 @@ class TestTheWavesCommandOnNothing:
         assert D.main(["--out", str(tmp_path / "out"), "waves", "--date", WAVE]) == 1
         assert "holds no decided MERGE" in capsys.readouterr().err
         assert not (tmp_path / "out").exists()
+
+
+class TestTwoLosersOneSurvivor:
+    """A survivor that two losers of one wave move onto is met by the second as the first left it."""
+
+    SECOND = "99999999-9999-4999-8999-999999999999"
+
+    def pairs(self) -> list[D.WavePair]:
+        return [pair(), pair(self.SECOND, SURVIVOR, loser_name="banias")]
+
+    def read(self, **over: Any) -> D.Read:
+        base: dict[str, Any] = {
+            "images": {
+                LOSER: (img(1, LOSER, "u/a", hero=True), img(2, LOSER, "u/both")),
+                self.SECOND: (img(3, self.SECOND, "u/b", hero=True), img(4, self.SECOND, "u/both")),
+                SURVIVOR: (img(10, SURVIVOR, "u/own"),),
+            },
+            "links": {
+                LOSER: (link(1, LOSER, content="x"),),
+                self.SECOND: (link(2, self.SECOND, content="x"),),
+                SURVIVOR: (),
+            },
+            "names": {
+                LOSER: (nm(5, LOSER, "Banias", "banias"),),
+                self.SECOND: (nm(6, self.SECOND, "banias", "banias"),),
+                SURVIVOR: (nm(9, SURVIVOR, "Caesarea Philippi", "caesarea philippi"),),
+            },
+        }
+        return a_read(self.pairs(), **{**base, **over})
+
+    def planned(self, **over: Any):
+        pairs = self.pairs()
+        move, _ = lanes(pairs)
+        plan, held, totals = D.build_move(self.read(**over), pairs, move, NOW)
+        return plan, held, totals
+
+    def cells(self, plan: P.Plan, site: str) -> set[tuple[str, str, str]]:
+        return {(v.table, v.row_id, v.column) for v in plan.changes if v.site_id == site}
+
+    def test_a_url_both_losers_hold_moves_once(self) -> None:
+        plan, _, totals = self.planned()
+        assert ("wiki_images", "2", "site_id") in self.cells(plan, LOSER)
+        assert ("wiki_images", "4", "site_id") not in self.cells(plan, self.SECOND)
+        assert totals["images"] == 3 and totals["images_stay"] == 1
+
+    def test_the_first_hero_stays_and_the_second_is_demoted(self) -> None:
+        plan, _, totals = self.planned()
+        assert ("wiki_images", "1", "is_hero") not in self.cells(plan, LOSER)
+        assert ("wiki_images", "3", "is_hero") in self.cells(plan, self.SECOND)
+        assert totals["heroes_demoted"] == 1
+
+    def test_a_content_link_both_hold_moves_once(self) -> None:
+        plan, _, totals = self.planned()
+        assert ("site_content_links", "1", "site_id") in self.cells(plan, LOSER)
+        assert ("site_content_links", "2", "site_id") not in self.cells(plan, self.SECOND)
+        assert totals["links"] == 1 and totals["links_stay"] == 1
+
+    def test_a_name_key_both_hold_moves_once(self) -> None:
+        plan, _, totals = self.planned()
+        assert ("unified_site_names", "5", "site_id") in self.cells(plan, LOSER)
+        assert not [c for c in self.cells(plan, self.SECOND) if c[0] == "unified_site_names"]
+        assert totals["names"] == 1
+
+    def test_a_survivor_with_a_hero_demotes_both(self) -> None:
+        images = {
+            LOSER: (img(1, LOSER, "u/a", hero=True),),
+            self.SECOND: (img(3, self.SECOND, "u/b", hero=True),),
+            SURVIVOR: (img(10, SURVIVOR, "u/own", hero=True),),
+        }
+        plan, _, totals = self.planned(images=images)
+        assert totals["heroes_demoted"] == 2
+        assert {
+            c for c in self.cells(plan, LOSER) | self.cells(plan, self.SECOND) if c[2] == "is_hero"
+        } == {
+            ("wiki_images", "1", "is_hero"),
+            ("wiki_images", "3", "is_hero"),
+        }
+
+    def test_a_held_pair_adds_nothing_to_what_the_next_one_meets(self) -> None:
+        names = {
+            LOSER: (),
+            self.SECOND: (nm(6, self.SECOND, "banias", "banias"),),
+            SURVIVOR: (nm(9, SURVIVOR, "Caesarea Philippi", "caesarea philippi"),),
+        }
+        plan, held, _ = self.planned(names=names)
+        assert [h["loser"] for h in held] == [LOSER]
+        assert ("wiki_images", "4", "site_id") in self.cells(
+            plan, self.SECOND
+        )  # not taken by the held pair
+        assert ("unified_site_names", "6", "site_id") in self.cells(plan, self.SECOND)

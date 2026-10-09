@@ -57,7 +57,7 @@ from mechanical import dups  # noqa: E402
 from mechanical import plan as P  # noqa: E402
 
 from identity import common, dup_clusters, dup_judge, export, parent_judge, rounds  # noqa: E402
-from identity.wiki import CACHE_SUBDIR, WikiIndex  # noqa: E402
+from identity.wiki import WikiIndex, load_cache  # noqa: E402
 
 CAL_DIR = "calibration"
 BCASES = common.REPO / "output" / "remediation" / "bcases"
@@ -130,8 +130,6 @@ def dup_cases(
     seen = {frozenset(c.sites()) for c in negatives}
     for klass in NEGATIVE_CLASSES:
         for pair in sorted((p for p in pairs if p["class"] == klass), key=_hash_order):
-            if len(negatives) >= n_negatives:
-                break
             key = frozenset((pair["a"], pair["b"]))
             if key in seen:
                 continue
@@ -469,11 +467,6 @@ def _load_cases(run: Path, kind: str) -> list[Case]:
     ]
 
 
-def _wiki(root: Path | None) -> WikiIndex | None:
-    cache = (root or common.main_checkout()) / CACHE_SUBDIR
-    return WikiIndex.load(cache) if (cache / "INDEX.jsonl").exists() else None
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
@@ -536,7 +529,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         cases = _load_cases(run, args.kind)
         ids = sorted({s for c in cases for s in c.sites()})
         facts = parse_facts((out / "READ.jsonl").read_text(encoding="utf-8"), ids)
-        wiki = _wiki(args.root)
+        wiki = load_cache(args.root)
         if args.command == "export":
             if args.kind == "dup":
                 record = export_gold(out, dup_context(facts, cases, wiki), cases, args.handoff)

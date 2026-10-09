@@ -46,7 +46,7 @@ from opus_audit import quotes as Q  # noqa: E402
 
 from identity import common, export, rounds  # noqa: E402
 from identity.entities import EntityStore  # noqa: E402
-from identity.wiki import CACHE_SUBDIR, WikiIndex, article_url  # noqa: E402
+from identity.wiki import WikiIndex, article_url, load_cache  # noqa: E402
 
 STAGE_VERDICT = "parent-verdict"
 STAGE_RECHECK = "parent-recheck"
@@ -151,19 +151,23 @@ def load_context(
     qids = export.qids_by_site(exported.ext_ids)
     candidates = common.read_jsonl(run / "PARENT_CANDIDATES.jsonl")
     decisions_path = run / "DUP_DECISIONS.jsonl"
-    decisions = common.read_jsonl(decisions_path) if decisions_path.exists() else []
+    if not decisions_path.exists():
+        raise common.IdentityError(
+            f"{decisions_path} does not exist: the parents come after the duplicates (D14) - a "
+            "site a merge retires must not be asked about as a parent or a child"
+        )
+    decisions = common.read_jsonl(decisions_path)
     losers = {m["site_id"] for r in decisions for m in r["merges"]}
     part_of = [m for r in decisions for m in r["part_of"]]
     names: dict[str, list[str]] = {}
     for row in exported.names:
         names.setdefault(row["site_id"], []).append(row["name"])
-    cache = (root or common.main_checkout()) / CACHE_SUBDIR
     return Context(
         questions=merge_questions(candidates, part_of, shown, qids, losers),
         shown=shown,
         names={k: tuple(sorted(set(v))) for k, v in names.items()},
         qids={k: tuple(v) for k, v in qids.items()},
-        wiki=WikiIndex.load(cache) if (cache / "INDEX.jsonl").exists() else None,
+        wiki=load_cache(root),
         store=store,
         basis=exported.exported_at,
     )
@@ -706,17 +710,24 @@ def brief(
     *,
     stage_run: Path | None = None,
     check: bool = True,
+    handoff: str | None = None,
+    role: str | None = None,
 ) -> str:
+    """The instruction of the agent that answers one batch of one round (see `dup_judge.brief`)."""
     import roles as RO
 
     record = rounds.find_round(stage_run or parent_run(run), stage, round_name)
     if batch_id not in record.batches:
         raise rounds.RoundError(f"{batch_id} is no batch of {stage} round {round_name}")
-    role = ROLE_VERDICT if stage == STAGE_VERDICT else ROLES_RECHECK[0]
+    allowed = (ROLE_VERDICT,) if stage == STAGE_VERDICT else ROLES_RECHECK
+    role = role or allowed[0]
+    if role not in allowed:
+        raise rounds.RoundError(f"{role} is no role of {stage}: it asks {' or '.join(allowed)}")
+    where = handoff or record.handoff
     text = BRIEF.format(
         batch=batch_id, stage=stage, round=round_name, role=role, model=RO.role(role).model,
-        count=len(record.batches[batch_id]), handoff=record.handoff,
-        scratch=f"{record.handoff}-scratch/{batch_id}", python="./.venv/Scripts/python.exe",
+        count=len(record.batches[batch_id]), handoff=where,
+        scratch=f"{where}-scratch/{batch_id}", python="./.venv/Scripts/python.exe",
         run_tool="scripts/remediation/identity/parent_judge.py",
         handoff_tool="scripts/remediation/opus_handoff.py",
     )  # fmt: skip
@@ -777,6 +788,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     brief_cmd.add_argument("--stage", choices=stages, required=True)
     brief_cmd.add_argument("--round", required=True)
     brief_cmd.add_argument("--batch-id", required=True)
+    brief_cmd.add_argument(
+        "--role", help="the role the agent answers in (default: the stage's first)"
+    )
+    brief_cmd.add_argument("--stage-run", type=Path, help="a calibration's own rounds directory")
+    brief_cmd.add_argument("--handoff", help="the handoff directory the agent answers into")
+    brief_cmd.add_argument(
+        "--no-check", action="store_true", help="drop the shape check (a calibration copy)"
+    )
     check = sub.add_parser("check-answer")
     check.add_argument("--stage", choices=stages, required=True)
     check.add_argument("--round", required=True)
@@ -810,7 +829,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
         elif args.command == "brief":
-            print(brief(run, args.stage, args.round, args.batch_id))
+            print(
+                brief(
+                    run,
+                    args.stage,
+                    args.round,
+                    args.batch_id,
+                    stage_run=args.stage_run,
+                    check=not args.no_check,
+                    handoff=args.handoff,
+                    role=args.role,
+                )
+            )
         elif args.command == "check-answer":
             problem = check_answer(
                 run,

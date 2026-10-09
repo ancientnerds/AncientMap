@@ -2623,7 +2623,7 @@ def parent_invariants(metres: int = PARENT_METRES) -> tuple[SiteInvariant, ...]:
         SiteInvariant(
             says="planned site(s) are their own parent or sit in a chain",
             predicate=(
-                "u.parent_site_id = u.id OR EXISTS (SELECT 1 FROM unified_sites s WHERE "
+                "EXISTS (SELECT 1 FROM unified_sites s WHERE "
                 "s.id = u.parent_site_id AND s.parent_site_id IS NOT NULL) OR EXISTS (SELECT 1 "
                 "FROM unified_sites c WHERE c.parent_site_id = u.id)"
             ),

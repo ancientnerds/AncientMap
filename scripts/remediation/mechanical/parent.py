@@ -407,11 +407,13 @@ def write_plan(plan: P.Plan, held: Sequence[Mapping[str, Any]], read: Read, root
 
 # ------------------------------------------------------------------------------------------ CLI
 def merged_losers(run: Path) -> set[str]:
-    """The sites a decided MERGE retires (`DUP_DECISIONS.jsonl`), empty while there is none."""
+    """The sites a decided MERGE retires (`DUP_DECISIONS.jsonl`). The file must exist: a merged
+    loser is no parent and no child, and a plan made without knowing them is made blind."""
+    from identity import common
+
     path = run / "DUP_DECISIONS.jsonl"
     if not path.exists():
-        return set()
-    from identity import common
+        raise P.PlanError(f"{path} does not exist: the parents come after the duplicates (D14)")
 
     return {m["site_id"] for r in common.read_jsonl(path) for m in r["merges"]}
 
