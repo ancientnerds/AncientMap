@@ -88,7 +88,7 @@ steps.
 chunk naming every earlier chunk not yet written in `--after`; each chunk is its own run, imported,
 built and written on its own, so the writes start while later chunks are still being answered.
 
-**Three kinds of run** (`run_kind`, recorded by `export` in `POPULATION.json` as `kind`; a run
+**Four kinds of run** (`run_kind`, recorded by `export` in `POPULATION.json` as `kind`; a run
 exported before 2026-10-01 records none and is a plain `wc` run, every prompt and brief of which is
 byte for byte what it was):
 
@@ -471,7 +471,7 @@ def check_prompt(
 
 # ------------------------------------------------------------------------------------ the rounds
 def run_kind(run: Path) -> str:
-    """The kind of the run (`KIND_WC`, `KIND_LIST`, `KIND_WN`), as `export` recorded it. A run
+    """The kind of the run (`KIND_WC`, `KIND_LIST`, `KIND_WN`, `KIND_ENRICH`), as `export` recorded it. A run
     exported before 2026-10-01 records none: it is a plain WC run."""
     record = json.loads((run / POPULATION_FILE).read_text(encoding="utf-8"))
     return record.get("kind", KIND_WC)

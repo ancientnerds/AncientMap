@@ -593,6 +593,16 @@ def compose(
     )
 
 
+def compose_append(
+    base: Base, decisions: Sequence[Decision], quotes: Mapping[int, Sequence[Quote]]
+) -> Composed:
+    """The enrichment's text (lane E): the stored text `base` with the kept sentences appended - the
+    old text and its `[n]` markers byte for byte, the stored citations verbatim, every new page numbered
+    from N+1 (N the highest number of the base) and a page the base already cites keeping its number.
+    `compose` with a base; `description` is `None` when nothing was kept."""
+    return compose(decisions, quotes, base=base)
+
+
 # ------------------------------------------------------------------------------ the verification
 #: The verification rounds, in order (owner decisions O5 and O2 of 2026-09-26: every published
 #: sentence is correct). A single check lets about one error in 50-60 kept sentences through (the
@@ -2133,7 +2143,7 @@ def enrichment_evidence_problems(
         classes = classes_of(evidence)
         if set(detail) != _ENRICH_DETAIL_KEYS:
             return [f"the journal evidence's enrichment block carries {sorted(detail)}"]
-        composed = compose(decisions, verified, base=base)
+        composed = compose_append(base, decisions, verified)
         disclosure = disclosure_problems(evidence["marking"], description, raw_data)
     except (KeyError, TypeError, ValueError) as exc:
         return [f"the journal evidence does not compose: {exc}"]

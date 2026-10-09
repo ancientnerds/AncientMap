@@ -764,7 +764,7 @@ def _enriched_problems(
         base = wc4.base_of(evidence)
         expected = wc4.enriched_provenance(
             old,
-            wc4.compose(decisions, quotes, base=base),
+            wc4.compose_append(base, decisions, quotes),
             base=base,
             ai_system=evidence["checker"],
             marking=wc4.Marking.PHASE4,

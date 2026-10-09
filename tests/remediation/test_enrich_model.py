@@ -76,6 +76,14 @@ def test_the_base_stays_byte_for_byte_and_the_new_pages_are_numbered_from_n_plus
     assert composed.citations[2]["domain"] == "example.edu"  # the host without www
 
 
+def test_compose_append_is_compose_with_a_base() -> None:
+    decisions = _kept(EF.FACT, EF.HOOK)
+    quotes = {1: [_quote(EF.RESEARCH)], 2: [_quote(EF.POSITIONS), _quote(EF.RESEARCH)]}
+    assert WC4.compose_append(_base(), decisions, quotes) == WC4.compose(
+        decisions, quotes, base=_base()
+    )
+
+
 def test_a_page_the_base_already_cites_keeps_its_number() -> None:
     quotes = {1: [_quote(CITATIONS[0]["url"])]}
     composed = WC4.compose(_kept(EF.FACT_PERMALINK), quotes, base=_base())
