@@ -324,13 +324,14 @@ def _classify(
     # a site-list run asks a Phase-4 text, a lane-N text and a text a check kept before as well
     listed = kind == KIND_LIST
     raw = site.raw_data or {}
+    if wc4.ENRICH_KEY in raw:
+        # enriched by lane E, whatever its marking: the enrichment moved the check record into
+        # `base_check`, so no check or list run asks the text (nor its Sonnet sentences) again
+        return "enriched-text", None, ()
     if wc4.CHECK_KEY in raw and not listed:
         return "checked-before", None, ()
     if M.PROVENANCE_KEY in raw:
         stored = raw[M.PROVENANCE_KEY]
-        if isinstance(stored, dict) and stored.get("lane") == M.Lane.E.value:
-            # extended by lane E: no check or list run asks it again
-            return "enriched-text", None, ()
         if not listed and isinstance(stored, dict) and stored.get("lane") in FULL_LANES:
             return "phase4-text", None, ()
         try:
@@ -2243,7 +2244,8 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
     way round. The WC pilot is a **plain** run's: a site-list run (`wc-list`) is approved by it and
     can never be it, so a pilot of Phase-4 texts does not approve plain chunks of March texts (a list
     run may itself be a judged pilot, named after the plain one). Everything else is as above, for
-    each."""
+    each. A lane-E pilot is approved only once the writer's calibration stands as well
+    (`enrich.require_writer_calibration`, read from `enrich.CALIBRATION_ROOT`)."""
     if not plans:
         raise WcRunError("no WC plan named")
     approvals: list[dict[str, str]] = []
@@ -2289,6 +2291,14 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
                 "open question(s) INVENTED (it must be measured and 0): a hook the sources do not "
                 "call open is never written"
             )
+        calibration: dict[str, str] = {}
+        if which == "ENRICH":
+            try:
+                calibration = {
+                    "calibration_sha256": E.require_writer_calibration(E.CALIBRATION_ROOT)
+                }
+            except E.EnrichError as exc:
+                raise WcRunError(f"{run}: {exc}") from None
         if which in ("WN", "ENRICH"):
             need = wn_pilot_minimum(population["asked"])
             measured = result["measured"]
@@ -2303,7 +2313,7 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
                 f"{plan}: not the plan the pilot's judge judged (RESULT.json plan_sha256 "
                 f"{result.get('plan_sha256')!r}): a plan is written only as it was judged"
             )
-        approvals.append({"run": _shown(run), "result_sha256": _sha256(path)})
+        approvals.append({"run": _shown(run), "result_sha256": _sha256(path), **calibration})
     return approvals
 
 

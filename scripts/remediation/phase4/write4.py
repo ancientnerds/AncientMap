@@ -730,10 +730,10 @@ def _phase4_problems(
     The disclosure it names is the one the journal evidence records as the checker's: derived from
     the models that answered when the outcome was built (owner decision D6, 2026-10-08), so the
     writer holds the stored provenance to the evidence, not to a constant."""
+    if evidence["decision"] == wc4.EVIDENCE_DECISION_ENRICH:
+        return _enriched_problems(marking, evidence, old, new)
     if marking != wc4.Marking.PHASE4.value or left is None:
         return []
-    if evidence["decision"] == wc4.EVIDENCE_DECISION_ENRICH:
-        return _enriched_problems(evidence, old, new)
     decisions, _ = wc4.decisions_of(evidence)
     if any(d.verdict is wc4.Verdict.KEEP_TRIMMED for d in decisions):
         return ["a Phase-4 text is only kept or dropped by sentence, never trimmed"]
@@ -753,13 +753,27 @@ def _phase4_problems(
 
 
 def _enriched_problems(
-    evidence: Mapping[str, Any], old: Mapping[str, Any] | None, new: Mapping[str, Any] | None
+    marking: str,
+    evidence: Mapping[str, Any],
+    old: Mapping[str, Any] | None,
+    new: Mapping[str, Any] | None,
 ) -> list[str]:
-    """A Phase-4 text that the enrichment lane extended (lane E, `wc4.enriched_provenance`) keeps the
-    old provenance whole - attribution, sources, the verbatim spans - and adds the appended sentences
-    to `added`: the provenance it leaves is exactly that, derived again from the old `raw_data` and
-    the evidence, whose disclosure is the one the models that answered give."""
+    """An enriched text (lane E, `wc4.enriched_provenance`), whatever it was marked as:
+
+    * the base the sentences were appended to is the stored text, its stored citations and its stored
+      check record (`wc4.enrichment_base_problems`) - not a base the evidence only claims;
+    * the enrichment record names the writer the evidence names (`evidence["checker"]`, derived from
+      the stamps of the answers), not one the stored record picked;
+    * the provenance it leaves is exactly the one derived again from the old `raw_data` and the
+      evidence: a Phase-4 text keeps the old provenance whole - attribution, sources, the verbatim
+      spans - and adds the appended sentences to `added`; a March text and a lane-N text name the
+      write that appended in their `ai_system`."""
+    record = (new or {}).get(wc4.ENRICH_KEY)
+    problems = []
+    if not isinstance(record, dict) or record.get("writer") != evidence["checker"]:
+        problems.append("the enrichment record's writer is not the evidence's checker")
     try:
+        problems.extend(wc4.enrichment_base_problems(evidence, old))
         decisions, quotes = wc4.decisions_of(evidence)
         base = wc4.base_of(evidence)
         expected = wc4.enriched_provenance(
@@ -767,13 +781,13 @@ def _enriched_problems(
             wc4.compose_append(base, decisions, quotes),
             base=base,
             ai_system=evidence["checker"],
-            marking=wc4.Marking.PHASE4,
+            marking=wc4.Marking(marking),
         ).to_dict()
     except (KeyError, ValueError) as exc:
-        return [f"the Phase-4 provenance cannot be extended by the appended sentences: {exc}"]
+        return [*problems, f"the provenance cannot be extended by the appended sentences: {exc}"]
     if (new or {}).get(M.PROVENANCE_KEY) != expected:
-        return ["the provenance is not the old Phase-4 one with the appended sentences added"]
-    return []
+        problems.append("the provenance is not the old one extended by the appended sentences")
+    return problems
 
 
 def _validate_raw_data(row: Row4) -> None:

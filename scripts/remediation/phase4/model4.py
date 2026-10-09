@@ -191,6 +191,22 @@ def ai_system_for(stamps: Iterable[str]) -> str:
 
 #: Lane L's `ai_system` and `basis`, verbatim from production_write.
 LEGACY_AI_SYSTEM = "2026-03 enrichment chain (LLM; model per site not recorded)"
+
+
+def legacy_enriched_ai_system(ai_system: str) -> str:
+    """The disclosure of a March text lane E appended sentences to: the March chain's own wording,
+    which wrote the base and names no model, and the disclosure of the write that appended (D6: the
+    stamp names the real model that answered)."""
+    if ai_system not in AI_SYSTEMS:
+        raise ValueError(f"legacy_enriched_ai_system: {ai_system!r} is no disclosure of AI_SYSTEMS")
+    return f"{LEGACY_AI_SYSTEM}; sentences appended by {ai_system}"
+
+
+#: What lane L's `ai_system` may be: the March chain alone, or (an enriched March text) the chain
+#: and the write that appended to it.
+LEGACY_AI_SYSTEMS = frozenset(
+    {LEGACY_AI_SYSTEM} | {legacy_enriched_ai_system(system) for system in AI_SYSTEMS}
+)
 LEGACY_BASIS = "description differs from pre-March snapshot d4526691 (plan section 15.3)"
 #: Lane WN's `basis`: what the disclosure says the text rests on (owner decision 2026-10-01, "Neu aus
 #: Webquellen": a site left without a description gets a short one an AI agent wrote only from
@@ -1623,7 +1639,7 @@ class LegacyProvenance(_JsonRecord):
             raise ValueError(f"legacy_provenance.lane: {self.lane!r} is not L")
         if self.ai is not AiMark.GENERATED:
             raise ValueError(f"legacy_provenance.ai: {self.ai!r} is not generated")
-        if self.ai_system != LEGACY_AI_SYSTEM:
+        if self.ai_system not in LEGACY_AI_SYSTEMS:
             raise ValueError(f"legacy_provenance.ai_system: {self.ai_system!r}")
         if self.basis != LEGACY_BASIS:
             raise ValueError(f"legacy_provenance.basis: {self.basis!r}")

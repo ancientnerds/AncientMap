@@ -24,6 +24,8 @@ module is what is specific to appending sentences to a text the site already has
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -35,6 +37,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
     if _root not in sys.path:
         sys.path.insert(0, _root)
 
+import calibrate_claude as CAL  # noqa: E402 - the sealed verdicts the writer's calibration leaves
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402 - the registry (owner decision D6)
 from phase4 import model4 as M  # noqa: E402
@@ -373,6 +376,63 @@ def enrichment_parts(
         marking=wc4.Marking(entry["marking"]),
     )
     return wc4.enriched_raw_data(site, composed, record, provenance)
+
+
+# ------------------------------------------------------------------------------ the calibration
+#: The calibration of the writer role for this lane (descriptions map: the 20 WN pilot sites through
+#: the full chain plus a leave-one-out on about 40 sites whose text already carries a sourced open
+#: question, the sentence removed and its recovery measured). It is sealed under this id
+#: (`calibrate_claude.py seal --id enrich-writer --role field_researcher ...`); the lane is approved
+#: for production only once its verdict passed.
+WRITER_CALIBRATION_ID = "enrich-writer"
+#: Where `calibrate_claude.py` keeps seals and verdicts (its `--root` default).
+CALIBRATION_ROOT = CAL.CALIBRATION_ROOT
+#: The least share the map allows the seal to name: a threshold sealed below it is no calibration.
+WRITER_SEAL_MINIMUM = 0.7
+
+
+def require_writer_calibration(root: Path) -> str:
+    """The sha256 of the passed verdict of the writer's calibration (`WRITER_CALIBRATION_ID`), or
+    `EnrichError`: nothing is approved on a writer that was not measured. The seal is the one made
+    before the run (threshold at least `WRITER_SEAL_MINIMUM`, the writer role's registry entry
+    unchanged since), the verdict is its own - the same role, model and threshold, passed, with no
+    unanswered question and no false source."""
+    seals_path = root / CAL.THRESHOLDS_FILE
+    verdict_path = root / CAL.VERDICTS_DIR / f"{WRITER_CALIBRATION_ID}.json"
+    if not seals_path.exists() or not verdict_path.exists():
+        raise EnrichError(
+            f"the writer's calibration {WRITER_CALIBRATION_ID!r} has no sealed passed verdict "
+            f"({seals_path} and {verdict_path} are needed): run calibrate_claude.py seal --id "
+            f"{WRITER_CALIBRATION_ID} --role {WRITER_ROLE}, prepare, compare and verdict first"
+        )
+    sealed = json.loads(seals_path.read_text(encoding="utf-8")).get(WRITER_CALIBRATION_ID)
+    verdict = json.loads(verdict_path.read_text(encoding="utf-8"))
+    if sealed is None:
+        raise EnrichError(f"{seals_path} does not seal {WRITER_CALIBRATION_ID!r}")
+    problems: list[str] = []
+    if sealed["role"] != WRITER_ROLE or verdict["role"] != WRITER_ROLE:
+        problems.append(f"it does not calibrate the writer role {WRITER_ROLE!r}")
+    if verdict["model"] != RO.role(WRITER_ROLE).model:
+        problems.append(f"its verdict names {verdict['model']!r}, not the role's registered model")
+    if sealed["role_sha256"] != RO.role_sha256(WRITER_ROLE):
+        problems.append("the writer role's registry entry changed after the seal")
+    if sealed["threshold"] < WRITER_SEAL_MINIMUM:
+        problems.append(
+            f"its threshold {sealed['threshold']} is sealed below {WRITER_SEAL_MINIMUM}"
+        )
+    if verdict["threshold"] != sealed["threshold"]:
+        problems.append("its verdict was measured against another threshold than the sealed one")
+    if verdict["passed"] is not True or verdict["unanswered"] or verdict["false_sources"] != 0:
+        problems.append(
+            f"its verdict did not pass (agreement {verdict['agreement']}, "
+            f"{len(verdict['unanswered'])} unanswered, {verdict['false_sources']} false source(s))"
+        )
+    if problems:
+        raise EnrichError(
+            f"the writer's calibration {WRITER_CALIBRATION_ID!r} does not stand: "
+            + "; ".join(problems)
+        )
+    return hashlib.sha256(verdict_path.read_bytes()).hexdigest()
 
 
 # ------------------------------------------------------------------------------ the roles

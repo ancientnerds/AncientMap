@@ -38,6 +38,16 @@ from tests.remediation.test_phase4_wc_write import (
 from tests.remediation.wc_fixtures import WC4
 
 
+@pytest.fixture(autouse=True)
+def _writer_calibrated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The gate asks pilot approval, which asks for the writer's calibration (review of 2026-10-09)."""
+    from wc import enrich as E
+
+    monkeypatch.setattr(
+        E, "CALIBRATION_ROOT", EF.write_writer_calibration(tmp_path / "calibration")
+    )
+
+
 @pytest.fixture(scope="module")
 def built(tmp_path_factory) -> dict[str, Any]:
     return EF.built(tmp_path_factory.mktemp("enrich-write"))
@@ -168,7 +178,27 @@ def _lane_l_for(description: str) -> dict[str, Any]:
          "lane-L provenance|AI disclosure"),
         (lambda rows, b: _edit_raw(rows, EF.SITE_W,
                                    lambda raw: raw[M.PROVENANCE_KEY].update(added=raw[M.PROVENANCE_KEY]["added"][:1])),
-         "old Phase-4 one with the appended sentences added"),
+         "old one extended by the appended sentences"),
+        # the model that wrote the sentences: the record names a writer no answer gave (D6), or the
+        # public AI system of an enriched March or lane-N text does not name the enriching write
+        (lambda rows, b: _edit_raw(rows, EF.SITE_W,
+                                   lambda raw: raw[WC4.ENRICH_KEY].update(writer=M.AI_SYSTEM)),
+         "writer is not the evidence's checker"),
+        (lambda rows, b: _edit_raw(rows, EF.SITE_L,
+                                   lambda raw: raw[WC4.ENRICH_KEY].update(writer=M.AI_SYSTEM)),
+         "writer is not the evidence's checker"),
+        (lambda rows, b: _edit_raw(rows, EF.SITE_N,
+                                   lambda raw: raw[WC4.ENRICH_KEY].update(writer=M.AI_SYSTEM)),
+         "writer is not the evidence's checker"),
+        (lambda rows, b: _edit_raw(rows, EF.SITE_L,
+                                   lambda raw: raw.update({M.PROVENANCE_KEY: _lane_l_for(b["outcomes"][EF.SITE_L].description)})),
+         "old one extended by the appended sentences"),
+        (lambda rows, b: _edit_raw(rows, EF.SITE_N,
+                                   lambda raw: raw[M.PROVENANCE_KEY].update(ai_system=M.AI_SYSTEM)),
+         "old one extended by the appended sentences"),
+        (lambda rows, b: _edit_raw(rows, EF.SITE_W,
+                                   lambda raw: raw[M.PROVENANCE_KEY].update(ai_system=M.AI_SYSTEM_OPUS)),
+         "old one extended by the appended sentences"),
         (lambda rows, b: _edit_raw(rows, EF.SITE_L,
                                    lambda raw: raw.pop(M.PROVENANCE_KEY)),
          "carries its provenance|AI disclosure"),
@@ -197,6 +227,68 @@ def test_every_enrichment_plan_rule_refuses_a_broken_plan(
     W4.validate_rows(W4.Group.WC, rows)
     with pytest.raises((W4.W.WriteRefused, ValueError), match=message):
         W4.validate_rows(W4.Group.WC, mutate(rows, built))
+
+
+def test_a_base_that_is_not_the_stored_text_is_refused_by_the_build_and_by_the_writer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, built: dict[str, Any]
+) -> None:
+    """Review of 2026-10-09: an enrichment whose evidence carries a base that differs from the stored
+    text (here one word of the Wikipedia sentence) composes a consistent description and used to
+    pass every check, while the provenance's verbatim spans claimed the Wikipedia words. The build
+    refuses it; the writer refuses it again, whatever plan it is handed."""
+    from wc import enrich as E
+    from wc.cli import WcRunError
+
+    real = E.entry_extras
+
+    def altered(site, existing):
+        extras = real(site, existing)
+        if site.site_id == EF.SITE_W:
+            extras["base"]["text"] = extras["base"]["text"].replace("The ", "The not ", 1)
+        return extras
+
+    monkeypatch.setattr(E, "entry_extras", altered)
+    with pytest.raises(WcRunError, match="base text is not the stored text"):
+        EF.built(tmp_path)
+    outcome = built["outcomes"][EF.SITE_W]
+    evidence = json.loads(json.dumps(outcome.evidence))
+    evidence[WC4.ENRICH_EVIDENCE_KEY]["base"]["text"] = "The not " + outcome.evidence["checked"]
+    old = next(r for r in built["rows"] if r["id"] == EF.SITE_W)["raw_data"]
+    problems = W4._enriched_problems("phase4", evidence, old, outcome.raw_data)
+    assert any("base text is not the stored text" in p for p in problems), problems
+
+
+def _edit_old(rows: list[W4.Row4], site: str, change) -> list[W4.Row4]:
+    out = []
+    for row in rows:
+        if row.site_id == site and row.column == "raw_data":
+            old = json.loads(row.old_value)
+            change(old)
+            row = _remade(row, old_value=json.dumps(old))
+        out.append(row)
+    return out
+
+
+@pytest.mark.parametrize(
+    ("site", "edit", "message"),
+    [
+        (EF.SITE_L, lambda old: old[M.CITATIONS_KEY][0].update(title="Another page"),
+         "base citations are not the stored"),
+        (EF.SITE_N, lambda old: old[M.CITATIONS_KEY][0].update(title="Another page"),
+         "base citations are not the stored"),
+        (EF.SITE_L, lambda old: old[WC4.CHECK_KEY].update(checker="someone else"),
+         "base check record is not the stored"),
+        (EF.SITE_N, lambda old: old[WC4.CHECK_KEY].update(checker="someone else"),
+         "base check record is not the stored"),
+    ],
+)  # fmt: skip
+def test_the_writer_holds_the_base_citations_and_check_record_to_the_rows_old_value(
+    built: dict[str, Any], site: str, edit, message: str
+) -> None:
+    rows = _rows(built)
+    W4.validate_rows(W4.Group.WC, rows)
+    with pytest.raises(W4.W.WriteRefused, match=message):
+        W4.validate_rows(W4.Group.WC, _edit_old(rows, site, edit))
 
 
 # ------------------------------------------------------------------------------ the statement

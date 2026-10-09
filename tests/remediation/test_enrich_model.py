@@ -227,7 +227,9 @@ def test_the_provenance_of_each_marking_is_the_one_its_lane_calls_for() -> None:
     legacy_raw = {M.PROVENANCE_KEY: M.LegacyProvenance(desc_sha256="a" * 64).to_dict()}
     assert WC4.enriched_provenance(
         legacy_raw, composed, base=_base(), ai_system=M.AI_SYSTEM_CLAUDE, marking=WC4.Marking.L
-    ) == M.LegacyProvenance(desc_sha256=digest)
+    ) == M.LegacyProvenance(
+        desc_sha256=digest, ai_system=M.legacy_enriched_ai_system(M.AI_SYSTEM_CLAUDE)
+    )
     web_raw = {
         M.PROVENANCE_KEY: M.WebProvenance(desc_sha256="a" * 64, ai_system=M.AI_SYSTEM).to_dict()
     }
@@ -246,6 +248,25 @@ def test_the_provenance_of_each_marking_is_the_one_its_lane_calls_for() -> None:
     with pytest.raises(WC4.WcError, match="carries lane L's provenance"):
         WC4.enriched_provenance(
             raw, composed, base=_base(), ai_system=M.AI_SYSTEM_CLAUDE, marking=WC4.Marking.L
+        )
+
+
+def test_a_march_text_that_was_enriched_names_the_write_that_appended_to_it() -> None:
+    plain = M.LegacyProvenance(desc_sha256="a" * 64)
+    assert plain.ai_system == M.LEGACY_AI_SYSTEM  # a text nothing was appended to is unchanged
+    for system in M.AI_SYSTEMS:
+        named = M.legacy_enriched_ai_system(system)
+        assert named.startswith(M.LEGACY_AI_SYSTEM) and system in named
+        assert (
+            M.LegacyProvenance.from_dict({**plain.to_dict(), "ai_system": named}).ai_system == named
+        )
+    with pytest.raises(ValueError, match="no disclosure"):
+        M.legacy_enriched_ai_system("some model")
+    with pytest.raises(ValueError, match="legacy_provenance.ai_system"):
+        M.LegacyProvenance(desc_sha256="a" * 64, ai_system=M.AI_SYSTEM_CLAUDE)  # no chain named
+    with pytest.raises(ValueError, match="legacy_provenance.ai_system"):
+        M.LegacyProvenance(
+            desc_sha256="a" * 64, ai_system=M.LEGACY_AI_SYSTEM + "; sentences appended by x"
         )
 
 
@@ -346,10 +367,15 @@ def test_a_checked_march_text_keeps_lane_l_and_its_old_check_record_moves_into_t
 ) -> None:
     outcome = built["outcomes"][EF.SITE_L]
     old = next(r for r in built["rows"] if r["id"] == EF.SITE_L)
+    # the public AI system names the March chain that wrote the base and the write that appended
     assert (
         outcome.raw_data[M.PROVENANCE_KEY]
-        == M.LegacyProvenance(desc_sha256=M.text_sha256(outcome.description)).to_dict()
+        == M.LegacyProvenance(
+            desc_sha256=M.text_sha256(outcome.description),
+            ai_system=M.legacy_enriched_ai_system(outcome.evidence["checker"]),
+        ).to_dict()
     )
+    assert outcome.evidence["checker"] in outcome.raw_data[M.PROVENANCE_KEY]["ai_system"]
     assert outcome.raw_data[WC4.ENRICH_KEY]["base_check"] == old["raw_data"][WC4.CHECK_KEY]
     assert outcome.description.startswith(old["description"] + " ")
     assert outcome.raw_data[M.CITATIONS_KEY][:2] == old["raw_data"][M.CITATIONS_KEY]
@@ -432,6 +458,34 @@ def test_the_journal_evidence_composes_the_text_and_every_edit_of_it_is_found(
     )
 
 
+def test_the_acceptance_holds_the_base_the_writer_and_the_disclosure_to_the_evidence(
+    built: dict[str, Any],
+) -> None:
+    for site in (EF.SITE_W, EF.SITE_L, EF.SITE_N):
+        outcome = built["outcomes"][site]
+        evidence, description = outcome.evidence, outcome.description
+
+        def problems(raw=None, ev=None):
+            return WC4.evidence_problems(ev or evidence, description, raw or outcome.raw_data)
+
+        assert problems() == []
+        # a record whose writer is not the models that answered (D6: the stamp names the real model)
+        forged = copy.deepcopy(outcome.raw_data)
+        forged[WC4.ENRICH_KEY]["writer"] = M.AI_SYSTEM
+        assert any("enrichment record" in p for p in problems(forged)), site
+        # a public AI system that does not name the write that appended (Opus alone does not name
+        # the Sonnet agent that wrote the sentences; the bare March chain names no write at all)
+        other = copy.deepcopy(outcome.raw_data)
+        other[M.PROVENANCE_KEY]["ai_system"] = (
+            M.LEGACY_AI_SYSTEM if site == EF.SITE_L else M.AI_SYSTEM_OPUS
+        )
+        assert any("ai_system" in p for p in problems(other)), site
+        # a base that is not the text the question asked
+        edited = copy.deepcopy(evidence)
+        edited[WC4.ENRICH_EVIDENCE_KEY]["base"]["text"] += " Extra words."
+        assert any("base text is not the stored text" in p for p in problems(ev=edited)), site
+
+
 def test_the_evidence_of_an_enrichment_carries_the_enrichment_block_and_no_other_does(
     built: dict[str, Any],
 ) -> None:
@@ -462,11 +516,15 @@ def test_the_verifier_was_shown_the_whole_text_so_its_round_records_the_new_text
     assert WC4.run_verification(decisions, quotes, given, base=base)[2] is WC4.VerifyStatus.VERIFIED
 
 
-def test_a_lane_e_text_is_never_asked_again_by_a_check_or_a_list_run(built: dict[str, Any]) -> None:
-    outcome = built["outcomes"][EF.SITE_W]
-    site = FX.plan_site(FX.row(EF.SITE_W, outcome.description, raw_data=outcome.raw_data))
+@pytest.mark.parametrize("site", [EF.SITE_W, EF.SITE_L, EF.SITE_N])
+@pytest.mark.parametrize("listed", [False, True])
+def test_an_enriched_text_is_never_asked_again_by_a_check_or_a_list_run(
+    built: dict[str, Any], site: str, listed: bool
+) -> None:
+    outcome = built["outcomes"][site]
+    stored = FX.plan_site(FX.row(site, outcome.description, raw_data=outcome.raw_data))
     with pytest.raises(WC4.WcError, match="neither a check nor a list run"):
-        WC4.old_marking(site, listed=True)
+        WC4.old_marking(stored, listed=listed)
 
 
 # ------------------------------------------------------------------------------ the answer

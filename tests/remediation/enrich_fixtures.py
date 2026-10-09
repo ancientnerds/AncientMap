@@ -348,3 +348,57 @@ def built(tmp_path: Path) -> dict[str, Any]:
         "batch": batches[0],
         "outcomes": outcomes[batches[0].batch_id],
     }
+
+
+def write_writer_calibration(
+    root: Path,
+    *,
+    threshold: float = 0.8,
+    passed: bool = True,
+    unanswered: Sequence[str] = (),
+    false_sources: int = 0,
+    role: str | None = None,
+    model: str | None = None,
+    seal: bool = True,
+) -> Path:
+    """The files `calibrate_claude.py` leaves for the writer's calibration (`enrich.py`
+    WRITER_CALIBRATION_ID): its seal in `THRESHOLDS.json` and its verdict in `verdicts/`. Written
+    directly, in the shape `seal` and `verdict` write them - the real steps need a recorded pool."""
+    import roles as RO
+    from wc import enrich as E
+
+    role = role or E.WRITER_ROLE
+    model = model or RO.role(E.WRITER_ROLE).model
+    root.mkdir(parents=True, exist_ok=True)
+    if seal:
+        sealed = {
+            "calibration_id": E.WRITER_CALIBRATION_ID,
+            "role": role,
+            "model": model,
+            "role_sha256": RO.role_sha256(role),
+            "threshold": threshold,
+            "max_false_sources": 0,
+        }
+        (root / "THRESHOLDS.json").write_text(
+            json.dumps({E.WRITER_CALIBRATION_ID: sealed}), encoding="utf-8"
+        )
+    (root / "verdicts").mkdir(exist_ok=True)
+    (root / "verdicts" / f"{E.WRITER_CALIBRATION_ID}.json").write_text(
+        json.dumps(
+            {
+                "calibration_id": E.WRITER_CALIBRATION_ID,
+                "role": role,
+                "model": model,
+                "passed": passed,
+                "agreement": 0.85,
+                "threshold": threshold,
+                "units": 40,
+                "agreed": 34,
+                "unanswered": list(unanswered),
+                "false_sources": false_sources,
+                "tier_move": None,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return root

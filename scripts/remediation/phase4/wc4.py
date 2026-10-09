@@ -1074,14 +1074,12 @@ def old_marking(site: M.PlanSite, *, listed: bool = False) -> Marking:
         if stale:
             raise WcError(f"no description beside {stale} in raw_data: a cleared site carries none")
         return Marking.NONE
+    if ENRICH_KEY in raw:
+        raise WcError("the stored text was enriched: neither a check nor a list run asks it again")
     if CHECK_KEY in raw and not listed:
         raise WcError("the stored text was checked sentence by sentence before")
     if M.PROVENANCE_KEY in raw:
         provenance = M.provenance_from_dict(raw[M.PROVENANCE_KEY])
-        if isinstance(provenance, M.EnrichedProvenance):
-            raise WcError(
-                "a lane-E text was enriched: neither a check nor a list run asks it again"
-            )
         if isinstance(provenance, M.LegacyProvenance):
             return Marking.L
         if not listed:
@@ -1991,7 +1989,8 @@ def enriched_provenance(
     marking: Marking,
 ) -> M.LegacyProvenance | M.WebProvenance | M.EnrichedProvenance:
     """The provenance the enriched text carries (`raw_data` is the stored object, orchestrator decision
-    X1): lane L's, hashing the new text, for a checked March text; lane N's for a lane-WN text, naming the writers of both writes;
+    X1): lane L's, hashing the new text and naming the March chain and the write that appended
+    (`model4.legacy_enriched_ai_system`), for a checked March text; lane N's for a lane-WN text, naming the writers of both writes;
     for a Phase-4 text of lane W or S lane E's - the old provenance kept (attribution, sources, the
     verbatim spans) with the appended sentences in `added`. Any other text is not enriched."""
     if composed.description is None:
@@ -2001,7 +2000,9 @@ def enriched_provenance(
     if marking is Marking.L:
         if not isinstance(old, M.LegacyProvenance):
             raise WcError("a lane-L text carries lane L's provenance")
-        return M.LegacyProvenance(desc_sha256=digest)
+        return M.LegacyProvenance(
+            desc_sha256=digest, ai_system=M.legacy_enriched_ai_system(ai_system)
+        )
     if marking is Marking.WEB:
         if not isinstance(old, M.WebProvenance):
             raise WcError("a lane-N text carries lane N's provenance")
@@ -2148,6 +2149,8 @@ def enrichment_evidence_problems(
     except (KeyError, TypeError, ValueError) as exc:
         return [f"the journal evidence does not compose: {exc}"]
     problems: list[str] = list(disclosure)
+    if base.text != evidence["checked"]:
+        problems.append("the enrichment's base text is not the stored text that was asked")
     if composed.description != description:
         problems.append("the description is not what the journal evidence composes")
     problems.extend(verification_problems(evidence, description))
@@ -2167,20 +2170,58 @@ def enrichment_evidence_problems(
             base=base,
             base_check=detail["base_check"],
             verification=evidence[VERIFICATION_KEY],
-            writer=stored.writer,
+            writer=evidence["checker"],
         )
     except (KeyError, TypeError, ValueError) as exc:
         return [*problems, f"the enrichment record does not read: {exc}"]
     if stored != expected:
-        problems.append("the enrichment record is not the one the evidence's decisions give")
+        problems.append(
+            "the enrichment record is not the one the evidence's decisions give (its writer is "
+            "the evidence's checker)"
+        )
     try:
         provenance = M.provenance_from_dict(raw.get(M.PROVENANCE_KEY))
     except ValueError:
         return problems  # `disclosure_problems` names a missing or unreadable one
+    problems.extend(_enriched_disclosure_problems(provenance, evidence["checker"]))
     if isinstance(provenance, M.EnrichedProvenance) and provenance.added != added_sentences(
         composed, base_sentences=base.sentences, sources=provenance.sources
     ):
         problems.append("the provenance's added list is not the evidence's appended sentences")
+    return problems
+
+
+def _enriched_disclosure_problems(provenance: Any, checker: str) -> list[str]:
+    """Does the enriched text's public AI system name the write that appended to it? Lane L's is
+    exactly the March chain plus that write; lane N's and E's are the union of the old one and that
+    write, so they cover it (`union_ai_system`)."""
+    if isinstance(provenance, M.LegacyProvenance):
+        if provenance.ai_system != M.legacy_enriched_ai_system(checker):
+            return ["the provenance's ai_system is not the March chain plus the enriching write's"]
+        return []
+    if union_ai_system(checker, provenance.ai_system) != provenance.ai_system:
+        return ["the provenance's ai_system does not name the enriching write's models"]
+    return []
+
+
+def enrichment_base_problems(
+    evidence: Mapping[str, Any], old_raw: Mapping[str, Any] | None
+) -> list[str]:
+    """Is the base an enrichment appended to the stored text and nothing else? The writer asks it of
+    the row's own old value: the base text is the checked (stored) description, its citations the
+    stored `description_citations` and its check record the stored one (it moved into `base_check`).
+    Without it the evidence could carry an altered base that the provenance's verbatim spans still
+    claim."""
+    base = base_of(evidence)
+    detail = evidence[ENRICH_EVIDENCE_KEY]
+    old = old_raw or {}
+    problems = []
+    if base.text != evidence["checked"]:
+        problems.append("the enrichment's base text is not the stored text that was asked")
+    if [dict(c) for c in base.citations] != [dict(c) for c in old.get(M.CITATIONS_KEY) or []]:
+        problems.append("the enrichment's base citations are not the stored ones")
+    if detail["base_check"] != old.get(CHECK_KEY):
+        problems.append("the enrichment's base check record is not the stored one")
     return problems
 
 

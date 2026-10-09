@@ -34,6 +34,14 @@ def built(tmp_path_factory) -> dict[str, Any]:
     return EF.built(tmp_path_factory.mktemp("enrich-cli"))
 
 
+@pytest.fixture
+def calibrated(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The writer's calibration stands (a sealed, passed verdict) in a calibration root of its own."""
+    root = EF.write_writer_calibration(tmp_path / "calibration")
+    monkeypatch.setattr(E, "CALIBRATION_ROOT", root)
+    return root
+
+
 def _rows(tmp_path: Path) -> tuple[list[dict[str, Any]], dict[str, str]]:
     return EF.standard_rows(tmp_path)
 
@@ -111,16 +119,22 @@ def test_a_list_names_curated_sites_only(tmp_path: Path) -> None:
                        seed=None, sites=listing, enrich=True)  # fmt: skip
 
 
-def test_a_lane_e_text_is_asked_by_no_check_and_no_list_run(built: dict[str, Any]) -> None:
-    done = built["outcomes"][EF.SITE_W]
-    row = FX.row(EF.SITE_W, done.description, raw_data=done.raw_data)
-    for kind, only in ((cli.KIND_WC, None), (cli.KIND_LIST, {EF.SITE_W})):
+@pytest.mark.parametrize("site", [EF.SITE_W, EF.SITE_L, EF.SITE_N])
+def test_an_enriched_text_is_asked_by_no_check_and_no_list_run(
+    built: dict[str, Any], site: str
+) -> None:
+    """Whatever the marking: the enrichment moved a March or lane-N text's check record into
+    `base_check`, so the `checked-before` guard no longer sees it (review of 2026-10-09: a plain WC
+    run asked such a text again as March AI text and replaced the enrichment record)."""
+    done = built["outcomes"][site]
+    row = FX.row(site, done.description, raw_data=done.raw_data)
+    for kind, only in ((cli.KIND_WC, None), (cli.KIND_LIST, {site})):
         asked, listed = cli.population([row], excluded=set(), earlier=set(), kind=kind, only=only)
-        assert asked == [] and listed == {"enriched-text": [EF.SITE_W]}, kind
+        assert listed == {"enriched-text": [site]}, (site, kind)
     asked, listed = cli.population(
-        [row], excluded=set(), earlier=set(), kind=cli.KIND_ENRICH, only={EF.SITE_W}
+        [row], excluded=set(), earlier=set(), kind=cli.KIND_ENRICH, only={site}
     )
-    assert asked == [] and listed == {"enriched-before": [EF.SITE_W]}  # and never twice
+    assert asked == [] and listed == {"enriched-before": [site]}  # and never twice
 
 
 # ------------------------------------------------------------------------------ the agent's aids
@@ -454,10 +468,11 @@ def test_the_judge_question_shows_the_old_text_and_marks_the_hook(built: dict[st
 
 
 def test_each_kind_of_text_has_its_own_pilot_and_an_enrichment_plan_never_rests_on_the_others(
-    tmp_path: Path, built: dict[str, Any]
+    tmp_path: Path, built: dict[str, Any], calibrated: Path
 ) -> None:
-    # the enrichment's own judged pilot approves its plan
+    # the enrichment's own judged pilot approves its plan once the writer's calibration stands
     (approval,) = cli.pilot_approval([built["plan"]])
+    assert approval["calibration_sha256"]
     assert approval["run"].endswith("enrich-test")
     # a chunk of the lane named first is not a pilot
     rows, answers = _rows(tmp_path)
@@ -474,6 +489,57 @@ def test_each_kind_of_text_has_its_own_pilot_and_an_enrichment_plan_never_rests_
     with pytest.raises(cli.WcRunError, match="first ENRICH plan named is the pilot's"):
         cli.pilot_approval([wn_plan, chunk_plan])
     assert len(cli.pilot_approval([wn_plan, built["plan"], chunk_plan])) == 2
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"seal": False}, "does not seal|has no sealed passed verdict"),
+        ({"passed": False}, "verdict did not pass"),
+        ({"unanswered": ["we-0001"]}, "verdict did not pass"),
+        ({"false_sources": 1}, "verdict did not pass"),
+        ({"threshold": 0.6}, "sealed below 0.7"),
+        ({"role": "web_verifier"}, "does not calibrate the writer role"),
+    ],
+)
+def test_a_lane_e_pilot_is_not_approved_on_a_writer_that_was_not_calibrated(
+    tmp_path: Path,
+    built: dict[str, Any],
+    change: dict[str, Any],
+    message: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review of 2026-10-09: pilot approval read only the judge's RESULT.json, so a lane could be
+    approved and written before its writer was measured (the map: leave-one-out on about 40 sites,
+    seal at 70 % or more)."""
+    monkeypatch.setattr(E, "CALIBRATION_ROOT", tmp_path / "none")
+    with pytest.raises(cli.WcRunError, match="no sealed passed verdict"):
+        cli.pilot_approval([built["plan"]])
+    monkeypatch.setattr(
+        E, "CALIBRATION_ROOT", EF.write_writer_calibration(tmp_path / "calibration", **change)
+    )
+    with pytest.raises(cli.WcRunError, match=message):
+        cli.pilot_approval([built["plan"]])
+
+
+def test_the_writers_calibration_is_void_once_its_registry_entry_changed(
+    built: dict[str, Any], calibrated: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert cli.pilot_approval([built["plan"]])
+    monkeypatch.setattr(E.RO, "role_sha256", lambda name: "0" * 64)
+    with pytest.raises(cli.WcRunError, match="registry entry changed after the seal"):
+        cli.pilot_approval([built["plan"]])
+
+
+def test_the_other_lanes_pilots_need_no_writer_calibration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(E, "CALIBRATION_ROOT", tmp_path / "none")
+    wn_plan = WX.build_wn_run(
+        tmp_path / "w", [WX.wn_row(WX.SITE_N)], {WX.SITE_N: WX.good(WX.SITE_N)}, name="wn-pilot"
+    )[1]
+    (approval,) = cli.pilot_approval([wn_plan])
+    assert "calibration_sha256" not in approval
 
 
 def test_the_gate_reads_the_hook_invented_count_again_so_a_forged_pass_does_not_pass(

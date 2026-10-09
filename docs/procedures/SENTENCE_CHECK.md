@@ -1192,8 +1192,10 @@ measured on no corpus: the pilot is where they are measured.
   - attribution of the pinned revision, sources, verbatim spans - `lane: E`, `base_lane`, `ai: generated`, the change note
   "sentences selected, shortened and extended", `card: null`, and `added`: per citation of each appended sentence its
   position in the whole text, the citation number and the source - the pinned source's id (`W`) when the cited page is
-  that source's own, else `E<n>`); a **checked March** text keeps **lane L** (hash moved); a **lane-N** text keeps **N**
-  (the `ai_system` names every model of both writes, `wc4.union_ai_system`). `api/services/description_provenance.py`
+  that source's own, else `E<n>`); a **checked March** text keeps **lane L** (hash moved; its `ai_system` is the March chain
+  and the write that appended, `model4.legacy_enriched_ai_system`: "2026-03 enrichment chain (LLM; model per site not
+  recorded); sentences appended by <the write's disclosure>" - D6, the stamp names the real model); a **lane-N** text keeps
+  **N** (the `ai_system` names every model of both writes, `wc4.union_ai_system`). `api/services/description_provenance.py`
   names lane E in `ATTRIBUTION_LANES` (`ENRICHMENT_LANE`): the CC BY-SA attribution line stays and the existing AI
   footnote shows (D11 keeps the footnote off the site page; the Shorts note and the data stay true).
 * **The transaction** (`write4._wc_invariants`, re-pinned): invariant 5 reads the enrichment record instead of the check
@@ -1224,9 +1226,14 @@ hooks=)` allows it for the hook only). Thresholds `cli.ENRICH_THRESHOLDS`: 0 WRO
 UNSUPPORTED, 0 incoherent texts, **0 hook invented**. `RESULT.json` records `measured.hook_invented`; `pilot_approval`
 reads it again (a forged `passed` with a missing or non-zero count is refused), and a lane-E mass plan is approved only by a
 **lane-E pilot** (own class `ENRICH`: a WC or WN pilot never approves it, nor the other way round).
-The map's second calibration of the writer - a leave-one-out on about 40 sites whose descriptions already carry a sourced
-open question, the sentence removed, recovery sealed at 70 % - has no tool in this package: build the throwaway read by
-hand (description and provenance rehashed), run it as a pilot and let the judge measure it.
+**The writer is calibrated before the lane is approved** (`enrich.require_writer_calibration`, called by `pilot_approval`
+for an ENRICH pilot): `output/remediation/calibration/` must hold a seal `enrich-writer` for role `field_researcher`
+(threshold at least 0.7, the role's registry entry unchanged since) and its passed verdict (`verdicts/enrich-writer.json`:
+same role, model and threshold, no unanswered question, 0 false sources). The map's calibration - the 20 WN pilot sites
+through the full chain plus a leave-one-out on about 40 sites whose descriptions already carry a sourced open question,
+the sentence removed, recovery sealed at 70 % - is built by hand (description and provenance rehashed), answered by the
+writer into a calibration copy and measured with `calibrate_claude.py seal --id enrich-writer --role field_researcher
+... --threshold 0.7`, `prepare`, `compare`, `verdict`. Until that verdict passes the gate refuses every lane-E plan.
 
 ### 14.6 Roles, independence and what is not counted
 
@@ -1281,6 +1288,7 @@ contract allows "debated" only when the description says so.
     $C verify-export --run-dir $RUNS/$R --handoff $H/enrich-$R-verify       # new agents: verify-brief, validate
     $C verify-import --run-dir $RUNS/$R --handoff $H/enrich-$R-verify      # prints to_verify2
     #   to_verify2 > 0 (once): verify-export --handoff $H/enrich-$R-verify2 ... verify-import
+    #   before the pilot can be approved: calibrate_claude.py seal/prepare/compare/verdict --id enrich-writer (14.5)
     $C build  --run-dir $RUNS/$R --first-batch <past every earlier plan, 4800+>
     $C judge-export --run-dir $RUNS/$R --handoff $H/enrich-$R-judge         # fresh Opus agents, role pilot_judge
     $C judge-import --run-dir $RUNS/$R --handoff $H/enrich-$R-judge        # RESULT.json, JUDGE_EXIT=
@@ -1310,6 +1318,12 @@ The prompts of the earlier runs are untouched (`prompts.py`, `prompts_sonnet.py`
 **Known limits.**
 - The SQL of invariants 5 and 6 is pinned (`WC_SQL_PINS` re-pinned) and was run on a throwaway Postgres 16
   (`pg_throwaway_check.py`); production's own `--rehearse` (ends in ROLLBACK) is still the first run against its data.
+- No plain WC, list or WN run asks an enriched text again: `_classify` lists it `enriched-text` and `old_marking` refuses
+  it whenever `_description_enrichment` stands in its `raw_data`, whatever its marking (the check record moved into
+  `base_check`, so the `checked-before` guard no longer sees it).
+- The writer refuses a base that is not the stored text: `wc4.enrichment_base_problems` holds the evidence's base text to
+  the checked description, its citations to the stored `description_citations` and its check record to the stored one;
+  the record's `writer` is the evidence's `checker` (the models that answered), never the stored record's own.
 - T and R texts, unclaimed texts and unchecked texts are not enriched (14.1); the Phase-5 card key of a W/S provenance is
   dropped when the text becomes lane E (lane WB writes the new card).
 - The numbers (thin = 300 characters, 3 facts, 220-character hook, 450 characters in all, the 12-word rule against the
