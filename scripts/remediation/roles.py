@@ -75,7 +75,10 @@ def _registry(*roles: Role) -> Mapping[str, Role]:
 #: 3.1c; `calibrate_claude.py seal` binds a role to the concrete cases of its pool.
 ROLES: Mapping[str, Role] = _registry(
     Role("card_writer", "claude-opus-5-5", "high", "wb_cards_accepted"),
-    Role("hook_rater", "claude-opus-5-5", "medium", "design_run_hand_drawn_60"),
+    # Effort xhigh since 2026-10-09: at medium it failed teaser-2026-10-09 (hook_pairs ordered right
+    # 0.7902 of a required 1.0, within one of the xhigh reference 1.0); Opus has no higher model
+    # tier, so the orchestrator raised the effort under D8 (AUDIT_LOG 2026-10-09).
+    Role("hook_rater", "claude-opus-5-5", "xhigh", "design_run_hand_drawn_60"),
     Role("fact_checker", "claude-sonnet-5-5", "high", "wb_check_verify_opus"),
     Role("web_verifier", "claude-sonnet-5-5", "high", "wb_check_verify_opus"),
     # Opus since the tier move of 2026-10-09 (`APPLIED_ESCALATIONS`): Sonnet failed fr-general-001.

@@ -14088,3 +14088,12 @@ the bar. The procedure is `docs/procedures/FIELDS_WD5.md` section 3.
 No agent was asked and nothing was sealed or answered by this change; the known-truth builder ran once on the run
 tree into a scratch directory outside the calibration root (50 cells, as above) to check it against the real data. The
 three new calibrations (`fr-general-002`, `fr-bp-002`, `adv-truth-001`) are the operator's next step.
+
+### 2026-10-09: cards calibration teaser-2026-10-09 - verdicts and what follows
+
+- adversarial (Opus high): PASS (agreement 0.92; clean 22/25, contradicted 24/25).
+- web_verifier (Sonnet high): FAIL (contradicted caught 1/20; claim agreement 0.4097; 6 false sources). Diagnosis (Opus, read-only): brief and measurement, not model - the shared cache note steered every agent to the site's own Wikipedia article (17 of 20 contradictions live on other pages), all 6 'false sources' were reference markers the cache text drops and the live-page checker keeps, one-to-one claim pairing capped agreement at 0.535. The recorded tier move to Opus is NOT applied; the causes are fixed (fix/db-final-p4-verify-fix: web_rules.py, marker-neutral quote check, coverage scoring, disputed gold marked, seal covers brief, scoring and checker) and the role is calibrated again in teaser-2026-10-09b.
+- fact_checker (Sonnet high): not evaluated - 7 answers of batch fact-checker-005 recorded in the v1 schema (the recorder checked the envelope only); recalibrated in teaser-2026-10-09b, whose brief records through check-answer.
+- hook_rater (Opus medium): FAIL (hook_pairs ordered right 0.7902 of 1.0; within one of the xhigh reference 1.0; held 'owner decides'). D6 escalation of effort medium to xhigh under D8 (no higher model tier); recalibrated in teaser-2026-10-09b.
+- Nothing was written to production.
+
