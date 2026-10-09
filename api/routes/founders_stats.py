@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""The founders dashboard's data: thirteen endpoints under /api/stats, all
+"""The founders dashboard's data: fourteen endpoints under /api/stats, all
 behind the ``an_stats`` cookie (stats_access.require_stats_session). Umami rows
 come from pipeline.umami_db, the member counts from pipeline.members_stats,
 nginx's referral log from pipeline.referral_log, and every founder-level
@@ -11,7 +11,7 @@ shaping from pipeline.stats_analysis.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -69,6 +69,9 @@ COUNTRY_DAYS = 30
 #: own. Worth having even though the query costs 10 ms today: it is the only
 #: one that will grow with the calendar rather than with the traffic.
 COUNTRY_TTL = 90
+#: How long the growth line is reused. A day's point only grows during that
+#: day, so five minutes is fresh enough, and the panel asks at that cadence.
+DAILY_TTL = 300
 
 
 def _window(days: int) -> tuple[datetime, datetime]:
@@ -145,6 +148,27 @@ async def visitor_countries(
 ) -> dict[str, Any]:
     """Who is here — sessions per country for now, today, 7 and 30 days."""
     return await _country_windows()
+
+
+@cached("stats:daily", ttl=DAILY_TTL)
+async def _daily_line() -> dict[str, Any]:
+    """The growth line: every day since the tracker's first full day.
+
+    One fetch of the whole history, cached like /countries because it is the
+    other query that grows with the calendar. Measured 2026-10-09: 16,800
+    events since 17 September, fetched in 0.27 s.
+    """
+    now = datetime.now(UTC)
+    since = datetime.combine(fs.TRACKER_FIRST_FULL_DAY, time.min, UTC)
+    return fs.daily_visitors(fetch(SQL_SESSION_EVENTS, since, now), now.date())
+
+
+@router.get("/daily")
+async def daily(
+    _session: dict = Depends(require_stats_session),
+) -> dict[str, Any]:
+    """Is the audience growing — visitors and confirmed humans per UTC day."""
+    return await _daily_line()
 
 
 @router.get("/map")

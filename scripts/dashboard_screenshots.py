@@ -151,7 +151,26 @@ def live_rows() -> list[dict]:
     ]
 
 
+def daily_points(days: int = 22) -> dict:
+    """The growth line: a weekly rhythm on a rising trend, so the line has a
+    shape and the week-on-week sentence has two full weeks to compare."""
+    first = datetime(2026, 9, 18, tzinfo=UTC)
+    points = []
+    for i in range(days + 1):
+        visitors = int(90 + 3.5 * i + 18 * math.sin(i / 7 * 2 * math.pi))
+        points.append(
+            {
+                "day": (first + timedelta(days=i)).date().isoformat(),
+                "visitors": visitors,
+                "human": visitors * 2 // 5,
+                "ai": i % 3,
+            }
+        )
+    return {"days": points[:-1], "today": points[-1]}
+
+
 FIXTURES: dict[str, dict] = {
+    "daily": daily_points(),
     "countries": {
         "now": {
             "sessions": 3,
@@ -467,6 +486,9 @@ FIXTURES: dict[str, dict] = {
             # (referral_log.UNKNOWN_HOST_MIN); 17 of them live on 2026-09-19.
             "unverified": 204,
             "prefetched": 1310,
+            # Arrivals over HTTP/1.x, which no current browser speaks
+            # (referral_log.HTTP1_PREFIX): 256 of 440 on 2026-10-09.
+            "scripted": 2410,
             "families": [
                 {"family": "search", "visits": 2914, "bots": 411},
                 {"family": "social", "visits": 388, "bots": 44},
@@ -535,6 +557,8 @@ for _i, _row in enumerate(FIXTURES["problems"]["problems"]):
 #: minutes, no clusters at all as soon as the scrapers leave, no referral log
 #: on any development box, and a members panel whose every act reads zero.
 EMPTY_FIXTURES: dict[str, dict] = {
+    # The first morning after a deploy on a fresh tracker: no finished day yet.
+    "daily": {"days": [], "today": {"day": "2026-09-18", "visitors": 0, "human": 0, "ai": 0}},
     "countries": {
         w: {"sessions": 0, "all": 0, "countries": []} for w in ("now", "today", "d7", "d30")
     },
@@ -569,6 +593,7 @@ EMPTY_FIXTURES: dict[str, dict] = {
             "lines": 0,
             "unverified": 0,
             "prefetched": 0,
+            "scripted": 0,
             "families": [],
             "hosts": [],
             "statuses": [],

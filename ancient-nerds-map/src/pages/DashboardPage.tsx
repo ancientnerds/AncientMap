@@ -1,5 +1,5 @@
 /**
- * The founders dashboard at https://stats.ancientnerds.com/ — fourteen panels,
+ * The founders dashboard at https://stats.ancientnerds.com/ — fifteen panels,
  * each titled with the question it answers, fed by /api/stats/* behind the
  * an_stats cookie (api/routes/stats_access.py). Mobile first: one column,
  * two from 720 px. Umami itself stays one link away.
@@ -12,6 +12,7 @@ import { Attention } from '../components/dashboard/Attention'
 import { Devices } from '../components/dashboard/Devices'
 import { FeedbackInbox } from '../components/dashboard/FeedbackInbox'
 import { GlobeReach } from '../components/dashboard/GlobeReach'
+import { Growth } from '../components/dashboard/Growth'
 import { LiveNow } from '../components/dashboard/LiveNow'
 import { Members } from '../components/dashboard/Members'
 import { Paths } from '../components/dashboard/Paths'
@@ -26,6 +27,7 @@ import type {
   ClustersData,
   ContentData,
   CountriesData,
+  DailyData,
   DevicesData,
   FeedbackData,
   GlobeData,
@@ -72,6 +74,9 @@ export default function DashboardPage() {
   const countries = useStats<CountriesData>('countries')
   // Fixed 30-minute window, same 60 s cadence as everything else on the page.
   const live = useStats<LiveData>('live')
+  // The whole history, cached five minutes on the server: a day's point only
+  // grows during that day.
+  const daily = useStats<DailyData>('daily', 300_000)
   const globe = useStats<GlobeData>(`globe?days=${days}`)
   // Five minutes: a scraper fingerprint does not change from minute to minute,
   // and this is the one query that has to sort every event in the window.
@@ -88,9 +93,9 @@ export default function DashboardPage() {
   const members = useStats<MembersData>('members', 300_000)
   // `members` is deliberately not in this array. It is the only route on a
   // different database behind a different dependency, and one hiccup there must
-  // not replace the other thirteen panels with "Session expired".
+  // not replace the other fourteen panels with "Session expired".
   const panels = [
-    overview, countries, map, live, globe, clusters,
+    overview, countries, daily, map, live, globe, clusters,
     content, feedback, sources, journeys, problems, devices,
   ]
   const unauthorized = panels.some(s => s.error === 'unauthorized')
@@ -115,13 +120,13 @@ export default function DashboardPage() {
         </nav>
       </header>
       {/* Under the switch, because that is where it is read: the switch is
-          inert for five of the fourteen panels and, until 2026-10-17, returns
+          inert for six of the fifteen panels and, until 2026-10-17, returns
           identical numbers for the other nine. Without this line a founder
           concludes the switch is broken, which is the correct conclusion from
           the evidence on screen. */}
       <p className="dash-note">
-        The range drives nine panels. Live now, Where are the visitors, Members and Feedback have windows
-        of their own, and Who is here has four — only its last sentence follows the range. Until 17
+        The range drives nine panels. Live now, Where are the visitors, Is the audience growing, Members and
+        Feedback have windows of their own, and Who is here has four — only its last sentence follows the range. Until 17
         October both settings return the same numbers everywhere: the tracker's first event is 17
         September.
       </p>
@@ -131,6 +136,7 @@ export default function DashboardPage() {
         <div className="dash-grid">
           <Attention problems={problems} globe={globe} content={content} />
           <Pulse state={overview} countries={countries} />
+          <Growth state={daily} />
           <LiveNow state={live} />
           <GlobeReach state={globe} />
           <Scrapers state={clusters} overview={overview} />

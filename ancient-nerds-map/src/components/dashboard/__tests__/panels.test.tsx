@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest'
 import { Devices } from '../Devices'
 import { FeedbackInbox } from '../FeedbackInbox'
 import { GlobeReach } from '../GlobeReach'
+import { Growth } from '../Growth'
 import { LiveNow } from '../LiveNow'
 import { Members } from '../Members'
 import { Paths } from '../Paths'
@@ -32,6 +33,7 @@ import type {
   ContentData,
   CountriesData,
   CountryWindow,
+  DailyData,
   DevicesData,
   FeedbackData,
   GlobeData,
@@ -66,6 +68,7 @@ const hour = { hour: '2026-09-19T08:00:00+00:00', sessions: 0, human: 0, ai: 0 }
 const EMPTY = {
   overview: { days: 7, sessions: { all: 0, human: 0, ai: 0 }, types: {}, hours: [hour, hour] } as Overview,
   countries: { now: window0, today: window0, d7: window0, d30: window0 } as CountriesData,
+  daily: { days: [], today: { day: '2026-09-19', visitors: 0, human: 0, ai: 0 } } as DailyData,
   map: { points: [] },
   live: {
     window_minutes: 30,
@@ -124,6 +127,7 @@ const EMPTY = {
 /** Every panel with an answer that carries nothing. */
 const emptyPanels: Array<[string, JSX.Element]> = [
   ['Pulse', <Pulse state={ok(EMPTY.overview)} countries={ok(EMPTY.countries)} />],
+  ['Growth', <Growth state={ok(EMPTY.daily)} />],
   ['LiveNow', <LiveNow state={ok(EMPTY.live)} />],
   ['GlobeReach', <GlobeReach state={ok(EMPTY.globe)} />],
   ['Scrapers', <Scrapers state={ok(EMPTY.clusters)} overview={ok(EMPTY.overview)} />],
@@ -142,6 +146,7 @@ const emptyPanels: Array<[string, JSX.Element]> = [
 /** The same panels with nothing at all — a 500 on their endpoint. */
 const failedPanels: Array<[string, JSX.Element]> = [
   ['Pulse', <Pulse state={failed} countries={failed} />],
+  ['Growth', <Growth state={failed} />],
   ['LiveNow', <LiveNow state={failed} />],
   ['GlobeReach', <GlobeReach state={failed} />],
   ['Scrapers', <Scrapers state={failed} overview={failed} />],

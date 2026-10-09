@@ -26,6 +26,12 @@ export function fmtStamp(iso: string): string {
   return `${dd} ${MONTHS[d.getUTCMonth()]} ${hh}:${mi}`
 }
 
+/** "18 Sep" for a UTC day given as "2026-09-18". */
+export function fmtDay(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`)
+  return `${String(d.getUTCDate()).padStart(2, '0')} ${MONTHS[d.getUTCMonth()]}`
+}
+
 /** "17 Sep 14:00" in UTC — a stamp without the minutes, for axis labels. */
 export function fmtDayHour(d: Date): string {
   const dd = String(d.getUTCDate()).padStart(2, '0')

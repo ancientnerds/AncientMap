@@ -371,6 +371,51 @@ button {
   color: var(--dash-muted);
 }
 
+/* The growth line: every visitor in the strip's pale green, the confirmed
+   humans in the panel's green, the same two strengths as the hourly strip.
+   The viewBox is stretched to the panel, so the strokes keep their width with
+   non-scaling-stroke; a transparent column per day carries the tooltip. */
+.dash-line {
+  display: block;
+  width: 100%;
+  height: 140px;
+  margin-top: 14px;
+  border-bottom: 1px solid var(--dash-line-soft);
+}
+
+.dash-line polyline {
+  fill: none;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dash-line-all {
+  stroke: var(--dash-dot-low);
+  stroke-width: 1.5;
+}
+
+.dash-line-human {
+  stroke: var(--dash-green);
+  stroke-width: 2.5;
+}
+
+.dash-line-hit {
+  fill: transparent;
+}
+
+.dash-line-hit:hover {
+  fill: var(--dash-line-soft);
+}
+
+.dash-trend {
+  margin-top: 12px;
+  font-family: var(--dash-mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  color: var(--dash-paper);
+}
+
 /* ── Bar lists ──────────────────────────────────────────────────────── */
 
 .dash-bars {

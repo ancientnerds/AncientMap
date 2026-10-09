@@ -86,7 +86,7 @@ def test_router_is_mounted_under_api_stats():
     # changed between the local and the CI version (a _IncludedRouter wrapper
     # without .path), while the schema is the documented contract either way.
     paths = set(app.openapi()["paths"])
-    for name in ("overview", "countries", "map", "live", "globe", "clusters", "devices", "content", "feedback", "sources", "journeys", "problems", "members"):  # fmt: skip
+    for name in ("overview", "countries", "daily", "map", "live", "globe", "clusters", "devices", "content", "feedback", "sources", "journeys", "problems", "members"):  # fmt: skip
         assert f"/api/stats/{name}" in paths, name
 
 
@@ -120,6 +120,23 @@ def test_overview_counts_and_types_come_from_the_session_rows(monkeypatch):
     assert out["sessions"] == {"all": 3, "human": 1, "ai": 1}
     assert out["types"] == {"explorer": 1}
     assert out["hours"][-1] == {"hour": t, "sessions": 3, "human": 1, "ai": 1}
+
+
+def test_daily_fetches_the_whole_history_once_and_ends_with_today(monkeypatch):
+    now = datetime.now(UTC)
+    rows = [
+        {"session_id": "a", "created_at": now, "event_type": 1, "event_name": None, "url_path": "/", "referrer_domain": None, "utm_source": None, "country": "DE", "device": "mobile", "data": None},
+    ]  # fmt: skip
+    fetch = Fetch(**{"ORDER BY e.session_id": rows})
+    monkeypatch.setattr(fr, "fetch", fetch)
+    # The unwrapped helper, for the same reason as /countries: it is cached.
+    out = asyncio.run(fr._daily_line.__wrapped__())
+    assert out["today"]["day"] == now.date().isoformat()
+    assert out["today"]["visitors"] == 1
+    assert out["days"][0]["day"] == fs.TRACKER_FIRST_FULL_DAY.isoformat()
+    assert len(out["days"]) == (now.date() - fs.TRACKER_FIRST_FULL_DAY).days
+    assert len(fetch.calls) == 1
+    assert fetch.calls[0][1] == datetime(2026, 9, 18, tzinfo=UTC)
 
 
 def test_map_returns_the_points_for_the_requested_days(monkeypatch):

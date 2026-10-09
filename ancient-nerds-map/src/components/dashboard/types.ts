@@ -19,6 +19,24 @@ export interface HourBucket {
   ai: number
 }
 
+export interface DailyPoint {
+  /** The UTC day, "2026-09-18". */
+  day: string
+  /** Distinct Umami ids seen that day — the number Umami's own chart shows. */
+  visitors: number
+  /** Of those, the ones confirmed human on that day. */
+  human: number
+  /** Of those, the ones an AI assistant sent. Overlaps `human`. */
+  ai: number
+}
+
+/** GET /api/stats/daily — every finished day since the tracker's first full
+ *  one, oldest first, and today on its own because it is still running. */
+export interface DailyData {
+  days: DailyPoint[]
+  today: DailyPoint
+}
+
 /** GET /api/stats/overview?days=N */
 export interface Overview {
   days: number

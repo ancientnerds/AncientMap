@@ -30,7 +30,7 @@ from __future__ import annotations
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 #: Events only a visitor can raise. A session with one of them and a page view
@@ -636,6 +636,45 @@ def hourly_sessions(
         }
         for hour, ids in sorted(buckets.items())
     ]
+
+
+#: The growth line's first day: the tracker's first full UTC day. Umami's first
+#: event is 2026-09-17 10:03 UTC, so the 17th holds fourteen hours and would
+#: start the line low and flatter every comparison with it.
+TRACKER_FIRST_FULL_DAY = date(2026, 9, 18)
+
+
+def daily_visitors(rows: list[dict[str, Any]], today: date) -> dict[str, Any]:
+    """Visitors per UTC day from TRACKER_FIRST_FULL_DAY on: `days` through
+    yesterday, newest last, one point for every day (a day without a row is a
+    zero, not a gap), and `today` on its own because it is still running.
+
+    Each day is folded on its own with sessions_from_rows, so "human" keeps its
+    one definition and is judged on what the visitor did that day. An Umami
+    session id lives for a calendar month (its salt is the month), so it names
+    the same browser on every day of a month: someone who comes back on
+    Tuesday is a visitor on Monday and on Tuesday, which is what a line per
+    day has to count. `visitors` is the distinct ids of the day, the number
+    Umami's own chart shows; `human` and `ai` are subsets of it that overlap.
+    """
+    by_day: defaultdict[date, list[dict[str, Any]]] = defaultdict(list)
+    for r in rows:
+        by_day[r["created_at"].astimezone(UTC).date()].append(r)
+
+    def point(day: date) -> dict[str, Any]:
+        sessions = sessions_from_rows(by_day[day])
+        return {
+            "day": day.isoformat(),
+            "visitors": len(sessions),
+            "human": sum(1 for s in sessions if s.human),
+            "ai": sum(1 for s in sessions if s.from_ai),
+        }
+
+    span = (today - TRACKER_FIRST_FULL_DAY).days
+    return {
+        "days": [point(TRACKER_FIRST_FULL_DAY + timedelta(days=i)) for i in range(span)],
+        "today": point(today),
+    }
 
 
 #: Below this many globe_ready samples the panel prints the times it has and
