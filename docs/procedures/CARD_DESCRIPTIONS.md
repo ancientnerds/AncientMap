@@ -16,6 +16,11 @@ wrong when it is read aloud:
 - O10: "ja wie bisher" - the AI disclosure: `data-card-ai` on the SiteCard, the AI footnote on the
   site page, the AI note in the shorts description.
 
+**Since 2026-10-09 section 9 (contract `shorts-v1`, owner decisions D1-D6 and D10 of 2026-10-08)
+supersedes sections 1.3-1.5 for every new card:** the card never names its site, has no question,
+is written in three variants and rated for its hook, every answer is given in a registered role by
+a registered model, and a failed site keeps its card. Version-1 runs stay importable.
+
 This file is the contract (sections 1-3; the web verification 2.1, the description defects it finds
 2.2), the measured population and costs (4), the runbook (5), the reasons behind the write path (6)
 and what the merge of the parallel lanes has to do (7). It supersedes the
@@ -909,6 +914,159 @@ included, is rewritten as a teaser by lane WB. The Phase-4 scope-v3 run writes i
 without cards (`pass: phase4-descriptions-only`, `provenance.card: null`; P5 refuses its sites). The
 P5 code stays for the record of the writes it made; its acceptance (`verify_writes4.py --lane p5`)
 describes production only until lane WB rewrites a site's card and nulls its Phase-5 key.
+
+## 9. Contract shorts-v1 and the Claude re-check (since 2026-10-09)
+
+The owner's request of 2026-10-08 ("ein teaser für die site, mysterious aber natürlich korrekt ...
+dieser kartentext soll dann für Youtube shorts genutzt werden ... ich will dass die viewer mehr über
+die site wissen wollen") and decisions D1-D6, D10 and D35 of
+`output/remediation/OWNER_DECISIONS_2026-10-08.md` replace parts of sections 1.3, 1.4 and 1.5 for
+every card written from now on, and the AUDIT_LOG note of 2026-10-07 ("the cards stay plain factual
+prose") with them. **What stays:** the fact basis (1.1), the claim rule (1.2), the length (160-190
+characters, D2), the checker (2), the web verification (2.1), the description defects (2.2) and the
+write path (5.4-5.6). **What is superseded:** the name rule (D1: the card never names its site), the
+one allowed question, the style rules, the AI note's model list (built from the provenance, D6) and
+the clear of a failed card (D5: it keeps its card).
+
+The v1 files `teaser/contract.py`, `prompts.py` and `answers.py` are **byte-frozen**: prompts are
+pinned by sha256 in every export, so editing them would make runs 01-06, the gap run and the pilots
+unimportable - they are also the calibration material. The new contract is a set of sibling modules,
+chosen by `RUN.json["contract"]` (`run.contract_of`; a v1 run holds an object there, its limits):
+
+| module | what |
+| --- | --- |
+| `teaser/shorts_v1.py` | the mechanical rules C3-C16, the seeded defects, `ShortsBasis` |
+| `teaser/prompts_shorts.py` | the writer's (three variants), the rewriter's, the hook rater's, the checker's, the web judge's and the adversarial reviewer's questions |
+| `teaser/answers_shorts.py` | their answer shapes |
+| `teaser/run.py` | the chain by contract (`Spec`): `v1`, `shorts-v1`, `recheck-v1` |
+| `teaser/calibrate.py` | the calibration of the roles (9.5) |
+| `pipeline/utils/card_provenance.py` | provenance version 3 |
+
+### 9.1 The card (design digest JUDGE, rules C1-C20)
+
+Nameless, two sentences, 160-190 characters; the Short shows the country from its first frame and
+reveals "Name, Country." at the end. `shorts_v1.problems_shorts` checks, on the final card:
+
+| rule | check |
+| --- | --- |
+| C3 | at most 2 numerals and 8 digits, at most 4 digits in sentence 1; no Roman numeral; every numeral grounded as in 1.3 |
+| C4 | the v1 mechanical contract (1.3) without its name, sentence-count and question rules; the font on the card alone |
+| C5 | exactly two sentences, each ending in a full stop; sentence 1 is 40-85 characters |
+| C6 | narration `6.04 + 0.0334 x characters + 0.318 x digits` at most 14.0 s |
+| C7 | no form of the stored name, no `unified_site_names` alias (whole phrase; a single common word is exempt), no distinctive word of the name (3+ letters, not a type or function word; a name of generic words only is exempt) |
+| C8 | no country name or demonym (`COUNTRY_TERMS`), no administrative word in sentence 1 |
+| C9 | sentence 1 opens with no location preposition (unless a number follows), no `Located/It/This/...`, no "A/An/The + site noun" |
+| C10 | no `? ! ... ...`, no `you`, no call to action |
+| C11 | a mystery or superlative word only where the description has the same stem |
+| C12 | present-state words are a **flag** for the checker, not a refusal |
+| C13 | every caption word at most 696 px, a proper noun of the description at most 1,000 px |
+| C14 | a Shorts-eligible site (6+ usable images, 300+ description characters): 1-3 anchors, verbatim once, anchor 1 ends in the last 25 characters of sentence 1, later anchors start at character 95+, 28+ apart; any other site: no anchors |
+| C15 | the reserve: description sentence ids the card does not use, or `reveal`; `null` means not `shorts_ready` |
+| C16 | at import of the rating: no repeated 5-word opening, no 3-word opening in more than 1 % of the run's cards (one is always allowed) |
+| C19 | a thin description (under 300 raw characters) may be declined instead of padded: `{"card": null, "thin": true, "reason": ...}`; the code refuses the decline for a longer text |
+
+### 9.2 The stages, the roles and the models (D6)
+
+`write`/`rewrite1`/`rewrite2` (writer: three variants) -> `rate`/`rate1`/`rate2` (hook rater; the
+best variant needs a rating of 3, else the round fails) -> `check`/`check1`/`check2` (checker) ->
+`verify` (web verifier; its first claim is the card's **identity-bearing** claim, since a nameless card
+names no place) -> on a failed verification `rewrite-v` -> `check-v` -> `verify2`. A variant with a
+mechanical problem is not rated; a round with no clean variant fails with the problems as findings.
+
+| role | stages | model, effort |
+| --- | --- | --- |
+| `card_writer` | write, rewrite1, rewrite2, rewrite-v | Opus 5.5 high |
+| `hook_rater` | rate, rate1, rate2 | Opus 5.5 medium |
+| `fact_checker` | check, check1, check2, check-v | Sonnet 5.5 high |
+| `web_verifier` | verify, verify2 | Sonnet 5.5 high |
+| `pilot_judge` | judge | Opus 5.5 xhigh |
+| `adversarial` | adversarial (re-check run only) | Opus 5.5 high |
+
+The run records the registry's models in `RUN.json["roles"]` at its start. The import refuses an
+answer whose `answered_by` is not `<role>:<agent>` of the stage's role, or whose stamp is not that
+role's model; `run.py brief` and `run.py agents` name the role, the fixed model id and the effort, and
+the recorder's flags (`opus_handoff.py answer --role R --model M`). A failed calibration moves a role
+up one tier before its first round (`run.py escalate`). Web agents (verifier, judge, adversary) are
+told to read the site's Wikipedia text from `output/remediation/final-2026-10-08/wiki_cache/` first, to
+fetch other pages live at most a few requests per site, and that a 403 or 429 is never a finding;
+at most 3 run at the same time (Wikimedia throttles this IP from 4).
+
+**The canary.** Every check batch carries one seeded-defect card (`shorts_v1.canary_card`: a removed
+hedge, an invented superlative, an implied unknown, a moved period or a word of the name), asked
+beside the real questions under a label of its own. A batch whose checker **passes** its canary is void:
+`run.py import` is refused with nothing written (`CanaryPassed`), `run.py void-batch` sets that batch's
+answers aside (`<handoff>-void/`) and a new agent answers it.
+
+### 9.3 Keep-on-fail (D5)
+
+A site whose chain fails (`failed-after-two-rewrites`, `contradicted-after-verify`,
+`unproven-after-verify`, `failed-after-verify-rewrite`) or whose writer declined its thin description
+(`thin-declined`) **keeps its card**: its outcome is `status: kept`, `mechanical/teaser.py` lists it as
+`kept` and writes no clear row. A site without a description that has a card is `kept` too. At plan
+time the name rule runs again against the **live** name, aliases and country (D13 and D23 can change
+them after a card was written): a card that gives its site away is listed `name-changed`.
+
+### 9.4 Provenance version 3 (D6)
+
+`v` 3 keeps every key of version 2 and adds `contract: "shorts-v1"`, `models` (the answer stamps of
+`write`, `rate`, `check`, `verify`; `rate` is `null` for the one card rewritten after a failed
+verification), `hook` (`type`, `rating` 1-5, `variant` 1-3; `null`/`null` for that rewrite), `anchors`,
+`reserve` and `shorts_ready` (an eligible site with a reserve and an anchor). `ai_system` is the string
+`model4.ai_system_for` derives from `models`; `mechanical/teaser.new_raw_data` refuses any other.
+Version 2 stays valid (the 2,830 live cards, still "generated" on the site page). `shorts_pin`, and so
+the Shorts gate S13, pins a **version-3 `shorts_ready` card with a fresh description only**; a
+version-2 card names its site and is never narrated. The next run of the new contract treats a
+version-2 card as a candidate again (`run.current_for`): only a version-3 card of the same contract is
+current. The Shorts description's AI note is built from the card's `ai_system`
+(`shorts_render.teaser_note`).
+
+### 9.5 The Claude re-check of the 167 MiniMax cards (D10)
+
+`run.py seed-live --run R --provenance-run wb-cardgap-2026-10-07` records every live card of that run
+as the seeded `write` stage of a `recheck-v1` run (`model` = MiniMax's stamp: the gap run's every
+answer was MiniMax's). `check` (Sonnet, the v1 checker prompt), `verify` (Sonnet, the v1 judge prompt)
+and `adversarial` (Opus; it may check the web; the checker's claim map and the verifier's evidence are
+in its prompt) follow. A card that passes all three is `confirmed` and stands; any failure clears it
+(`card-clear-recheck-<reason>`: `check-failed`, `contradicted`, `unproven`, `adversarial-failed`,
+`mechanical`) through the journal, and the replacement comes with shorts-v1.
+
+### 9.6 Calibration (D6; `teaser/calibrate.py`)
+
+Each role is measured against already-judged cases with a threshold **sealed before any answer**
+(`THRESHOLDS.json`, its sha256 in `SEAL.jsonl`, bound to the bytes of the prompt modules and the role
+registry). Cases come from the Opus-era runs (never a MiniMax answer), the production export and a
+file of vetted shorts-v1 cards. A failing role moves up one tier (`tier_move` in `VERDICT-<role>.json`).
+
+| role | set | pass threshold |
+| --- | --- | --- |
+| `fact_checker` | 45 recorded cards (30 PASS, 15 FAIL) under the v1 prompt | 90 % verdict agreement, 0 PASS of a card with an unsupported claim |
+| | 30 recorded FAIL | 27 FAIL again |
+| | 30 shorts-v1 cards with one seeded defect | 27 caught |
+| | the same 30 cards unflawed | 27 PASS |
+| `web_verifier` | 20 recorded proven contradictions | 18 CONTRADICTED |
+| | 20 recorded VERIFIED cards | at most 2 falsely CONTRADICTED, 90 % per-claim agreement, 0 false sources (a quote the machine did not find, or a refused page) |
+| `hook_rater` | 11 sample openers against 13 live place-word openers | every strong rated above every weak; within one of the `pilot_judge`'s ratings on 80 % |
+| `card_writer` | the 40-site pilot | 80 % of first answers mechanically clean |
+| `adversarial` | 25 recorded contradictions (the web finding withheld from the evidence) and 25 clean cards | 90 % |
+
+### 9.7 The runbook for one run of shorts-v1
+
+```bash
+T=./.venv/Scripts/python.exe scripts/remediation/teaser/run.py
+R=output/remediation/teaser/runs/<run>     H=output/remediation/handoff/teaser-<run>
+$T select --run $R --contract shorts-v1 --sites SITES.txt [--pilot 40 --seed N]   # read-only
+for each stage S in write rate check verify (then rewrite1 rate1 check1 ... while someone is due):
+  $T export  --run $R --stage S --handoff $H-S
+  $T agents  --run $R --handoff $H-S           # one workflow job per batch: role, model, effort, brief
+  #   start one fresh agent per job (agent(brief, {model, effort}), at most max_parallel at once)
+  opus_handoff.py validate --dir $H-S
+  $T import  --run $R --stage S                # CanaryPassed: void-batch, answer again
+$T outcomes --run $R                           # OUTCOMES.jsonl: accepted / kept
+$T judge-export --run $R --handoff $H-judge    # the pilot only: a fresh pilot_judge
+```
+
+The write steps are 5.4's (`mechanical/teaser.py plan`, `apply.py`, `accept`); journal stamps continue
+at `wb-teaser-prov-s035` / `wb-teaser-card-s035`.
 
 ## Retired
 

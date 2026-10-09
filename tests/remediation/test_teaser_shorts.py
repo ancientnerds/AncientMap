@@ -264,6 +264,12 @@ class TestNoName:
         assert any("the alias 'Sleeping Ox Fort'" in p for p in found)
         assert not any("alias" in p for p in problems())
 
+    def test_a_stored_name_among_the_aliases_is_reported_once(self) -> None:
+        found = SV.name_problems("Zorgat Hill stands.", "Zorgat Hill", ["Zorgat Hill"], "Atlantis")
+        assert len(found) == 2
+        assert starts(found, "name: the card holds the site's name")
+        assert starts(found[1:], "name: the card holds a word of the site's name")
+
     def test_a_single_common_word_alias_is_no_name(self) -> None:
         assert not any("alias" in p for p in problems(BASE.replace("The fort", "The Fort")))
 
@@ -747,6 +753,14 @@ class TestTheRaterShape:
         assert rated.best == 2 and rated.best_rating == 5
         assert rated.ratings[0] == (1, "A bronze mirror lay in", 3)
         assert rated.to_dict()["best"] == 2
+
+    def test_each_rating_is_exactly_its_shape(self) -> None:
+        bad = json.loads(rating((1, 3), (2, 4), cards=self.CARDS))
+        bad["ratings"][0]["extra"] = 1
+        with pytest.raises(A.AnswerError, match="a rating is not"):
+            AS.parse_rater(json.dumps(bad), list(self.CARDS.items()))
+        with pytest.raises(A.AnswerError, match="ratings is not a list"):
+            AS.parse_rater(json.dumps({"ratings": "x", "best": 1}), list(self.CARDS.items()))
 
     def test_one_rating_per_variant_shown(self) -> None:
         with pytest.raises(A.AnswerError, match="one rating per variant"):

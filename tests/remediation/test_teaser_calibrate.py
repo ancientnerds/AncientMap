@@ -223,14 +223,14 @@ def modules_root(tmp_path: Path) -> Path:
     return root
 
 
-def sealed_dir(tmp_path: Path) -> Path:
+def sealed_dir(tmp_path: Path, thresholds: dict[str, Any] = TINY) -> Path:
     run_dir = tmp_path / "calibration" / "teaser-test"
-    K.seal(run_dir, thresholds=TINY)
+    K.seal(run_dir, thresholds=thresholds)
     return run_dir
 
 
-def fixed_dir(tmp_path: Path) -> Path:
-    run_dir = sealed_dir(tmp_path)
+def fixed_dir(tmp_path: Path, thresholds: dict[str, Any] = TINY) -> Path:
+    run_dir = sealed_dir(tmp_path, thresholds)
     jobs = K.build_jobs(
         K.sealed(run_dir)[0],
         runs=[recorded_run(tmp_path)],
@@ -365,6 +365,16 @@ class TestTheSeal:
         with pytest.raises(K.CalibrationError, match=r"prompts_shorts.py.*changed after the seal"):
             K.sealed(run_dir, root=root)
 
+    def test_a_role_registry_that_changed_after_the_seal_refuses_the_calibration(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        run_dir = sealed_dir(tmp_path)
+        monkeypatch.setattr(RO, "role_sha256", lambda name: "moved")
+        with pytest.raises(
+            K.CalibrationError, match="registry entry of role .* changed after the seal"
+        ):
+            K.sealed(run_dir)
+
     def test_an_unsealed_directory_is_refused(self, tmp_path: Path) -> None:
         with pytest.raises(K.CalibrationError, match="is not sealed"):
             K.sealed(tmp_path)
@@ -456,6 +466,19 @@ class TestTheCases:
         unmarked = [{**c, "sample": False} for c in base_cards()]
         with pytest.raises(K.CalibrationError, match="0 card.s. marked sample, 2 sealed"):
             self.jobs(tmp_path, base_cards=unmarked)
+
+    def test_a_base_card_that_breaks_the_contract_is_refused(self, tmp_path: Path) -> None:
+        good = base_cards()
+        path = tmp_path / "BASE.jsonl"
+        write_jsonl(path, good)
+        assert len(K.read_base_cards(path, fit=T.fit)) == 3
+        named = [
+            {**good[0], "card": "Machu Picchu is a citadel of the Inca, high above a river valley."}
+        ]
+        write_jsonl(path, named)
+        with pytest.raises(K.CalibrationError, match="breaks the contract"):
+            K.read_base_cards(path, fit=T.fit)
+        assert K.read_base_cards(path)[0]["name"] == MP
 
     def test_the_weak_openers_are_live_cards_that_open_with_a_place_word(
         self, tmp_path: Path

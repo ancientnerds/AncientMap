@@ -285,6 +285,14 @@ class TestSelect:
         assert R.contract_of(run) == "v1" and R.spec_of(run) is R.V1_SPEC
         assert "roles" not in json.loads((run / "RUN.json").read_text("utf-8"))
 
+    def test_a_role_bound_run_records_its_roles(self, tmp_path: Path) -> None:
+        run = make_run(tmp_path, [MP])
+        record = json.loads((run / "RUN.json").read_text("utf-8"))
+        del record["roles"]
+        (run / "RUN.json").write_text(json.dumps(record), encoding="utf-8")
+        with pytest.raises(R.RunError, match="records no roles"):
+            R.run_roles(run)
+
     def test_an_unknown_contract_is_refused(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, [MP])
         record = json.loads((run / "RUN.json").read_text("utf-8"))
@@ -484,6 +492,59 @@ class TestTheFirstRound:
         step(run, tmp_path, "write", writes([MP]))
         step(run, tmp_path, "rate", rates(run, [MP], hooks=(3, 2, 2)))
         assert R.status(run)["states"] == {"due check": 1}
+
+    def test_a_stage_imported_again_after_it_was_rated_is_refused(self, tmp_path: Path) -> None:
+        run = make_run(tmp_path, [MP])
+        step(run, tmp_path, "write", writes([MP]))
+        step(run, tmp_path, "rate", rates(run, [MP]))
+        path = run / "STAGE-write.jsonl"
+        rows = R.read_jsonl(path)
+        rows[0]["variants"][0]["card"] = "Another card, written after the rating."
+        R.write_jsonl(path, rows)
+        with pytest.raises(
+            R.RunError, match="STAGE-rate rated another card than STAGE-write holds"
+        ):
+            R.states(run)
+
+    def test_a_repeated_opening_between_two_sites_fails_the_second_rating(
+        self, tmp_path: Path
+    ) -> None:
+        twin = production_row(MP, site_id="0b000000-0000-4000-8000-000000000009")
+        run = make_run(tmp_path, [], rows=[production_row(MP), twin])
+        both = {sid(MP): variants_json(MP), twin["site_id"]: variants_json(MP)}
+        step(run, tmp_path, "write", both)
+        shown = R.shown_variants(R.stage_records(run)["write"][sid(MP)])
+        result = step(run, tmp_path, "rate", dict.fromkeys(both, rate_json(shown, [4, 3, 2])))
+        assert result["diversity_failures"] == 1
+        rows = {r["site_id"]: r for r in R.read_jsonl(run / "STAGE-rate.jsonl")}
+        first, second = sorted(rows)
+        assert rows[first]["problems"] == []
+        assert rows[second]["problems"][0].startswith(
+            "diversity: another card of the run opens with"
+        )
+        assert R.status(run)["states"] == {"due check": 1, "due rewrite1": 1}
+
+    def test_check_answer_takes_a_rating(self, tmp_path: Path) -> None:
+        run = make_run(tmp_path, [MP])
+        step(run, tmp_path, "write", writes([MP]))
+        handoff = tmp_path / "handoff-rate"
+        R.export_stage(run, "rate", handoff)
+        shown = R.shown_variants(R.stage_records(run)["write"][sid(MP)])
+        checked = R.check_answer(
+            run, handoff, "rate-001", sid(MP), rate_json(shown, [2, 5, 4]), fit=T.fit
+        )
+        assert checked == {"ok": True, "problems": [], "best": 2, "hook": 5}
+        assert R.check_answer(run, handoff, "rate-001", sid(MP), "{}", fit=T.fit)["ok"] is False
+
+    def test_a_shorts_site_without_a_description_keeps_its_card(self, tmp_path: Path) -> None:
+        empty = production_row(
+            HUACA, description=None, lane=None, provenance_desc_sha256=None, pool_images=0
+        )
+        run = make_run(tmp_path, [], rows=[production_row(MP), empty])
+        chain(run, tmp_path, [MP])
+        R.outcomes(run)
+        row = outcome(run, HUACA)
+        assert (row["status"], row["reason"], row["card"]) == (R.KEPT, "no-description", None)
 
     def test_a_thin_decline_keeps_the_card_and_asks_no_more(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, [TREG, MP])
@@ -1022,6 +1083,19 @@ class TestTheBriefs:
             R.agent_jobs(run, handoff)
         assert "--role" not in R.brief(run, handoff, "write-001")
 
+    def test_the_pilots_judge_answers_in_its_role(self, tmp_path: Path) -> None:
+        run = make_run(tmp_path, [MP])
+        chain(run, tmp_path, [MP])
+        R.outcomes(run)
+        handoff = tmp_path / "handoff-judge"
+        R.export_judge(run, handoff)
+        put(handoff, "judge", "judge-001", sid(MP), VERIFIED_ANSWER, "web_verifier")
+        with pytest.raises(R.RunError, match="did not answer as role pilot_judge"):
+            R.import_judge(run, client=judge_client(), pace=0)
+        (handoff / OH.manifest(handoff)[0]["answer_path"]).unlink()
+        put(handoff, "judge", "judge-001", sid(MP), VERIFIED_ANSWER, "pilot_judge")
+        assert R.import_judge(run, client=judge_client(), pace=0)["pilot"] == "PASS"
+
     def test_the_pilot_judge_is_the_pilot_judge_role(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, [MP])
         chain(run, tmp_path, [MP])
@@ -1173,12 +1247,28 @@ class TestTheRecheckRun:
         with pytest.raises(R.RunError, match="nothing to re-check"):
             seed(tmp_path, [], extra=[production_row(MP)])
 
+    def test_a_recheck_run_is_seeded_once(self, tmp_path: Path) -> None:
+        run = seed(tmp_path, [MP])
+        export = T.tagged({"site": [gap_row(MP)]})
+
+        def read(path: Path) -> None:
+            path.write_text(export, encoding="utf-8", newline="\n")
+
+        with pytest.raises(R.RunError, match="selected already"):
+            R.seed_live(run, read=read, provenance_run=GAP_RUN, fit=T.fit)
+
     def test_the_write_stage_is_seeded_never_asked(self, tmp_path: Path) -> None:
         run = seed(tmp_path, [MP])
         with pytest.raises(R.RunError, match="is seeded"):
             R.export_stage(run, "write", tmp_path / "h")
         with pytest.raises(R.RunError, match="is no stage of lane WB contract recheck-v1"):
             R.export_stage(run, "rate", tmp_path / "h")
+
+    def test_a_recheck_run_without_its_seeded_card_is_refused(self, tmp_path: Path) -> None:
+        run = seed(tmp_path, [MP])
+        R.write_jsonl(run / "STAGE-write.jsonl", [])
+        with pytest.raises(R.RunError, match="no seeded card"):
+            R.status(run)
 
     def test_a_card_that_passes_check_verify_and_adversary_is_confirmed(
         self, tmp_path: Path
