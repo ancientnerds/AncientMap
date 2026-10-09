@@ -8,7 +8,8 @@ judgement, code screens, validates, fetches and checks:
     candidates        a shown site is a candidate when its description, its English Wikipedia text
                       (the shared cache), its Wikipedia categories (`fetch-categories`) or its site
                       type carry a dispute signal. A screen, not a verdict: it is meant to be broad.
-    export / import   RESEARCH: per candidate, one `field_researcher` (Sonnet, high) answers whether
+    export / import   RESEARCH: per candidate, one `field_researcher` (the registry's model: Opus, high, since the tier move of
+                      2026-10-09; it was Sonnet) answers whether
                       reputable sources hold two positions about the site, gives both with verbatim
                       quotes, and names the description sentences that state one side as fact. The
                       import fetches every page itself and checks every quote (`answers.quote_outcomes`):
@@ -70,7 +71,9 @@ from wc import cli  # noqa: E402
 from wc import enrich as E  # noqa: E402
 
 #: The roles of the screen (owner decision D6): the researcher is the web researcher, the adjudicator
-#: the adversarial re-check; the two answer in different names.
+#: the adversarial re-check; the two answer in different names. The researcher is `field_researcher`
+#: and so follows its registered model: Opus since the tier move of 2026-10-09 (`roles.py`), the
+#: web research that Sonnet failed to pass in fr-general-001.
 RESEARCH_ROLE = "field_researcher"
 ADJUDICATE_ROLE = "adversarial"
 RESEARCH_STAGE, ADJUDICATE_STAGE = "dispute", "adjudicate"
@@ -671,8 +674,11 @@ def brief(run: Path, handoff: Path, batch_id: str, *, stage: str = RESEARCH_STAG
     shown = cli._shown(handoff)
     research = stage == RESEARCH_STAGE
     role = RESEARCH_ROLE if research else ADJUDICATE_ROLE
+    model = RO.role(role).model
+    # the agent is called by the model the registry gives its role
+    family = OH.ANSWER_FAMILIES[model]
     return _BRIEF_HEAD.format(
-        agent_kind="Sonnet researcher" if research else "Opus adjudicator",
+        agent_kind=f"{family.capitalize()} {'researcher' if research else 'adjudicator'}",
         task="research" if research else "adjudication",
         batch=batch_id,
         count=len(record["batches"][batch_id]),
@@ -685,9 +691,9 @@ def brief(run: Path, handoff: Path, batch_id: str, *, stage: str = RESEARCH_STAG
         fetch=" (it fetches every page you quote, as the import will)" if research else "",
         check="check-answer" if research else "adjudicate-check-answer",
         stage=stage,
-        batch_agent=f"{'sonnet' if research else 'opus'}-{stage}-{batch_id}",
+        batch_agent=f"{family}-{stage}-{batch_id}",
         role=role,
-        model=RO.role(role).model,
+        model=model,
     )
 
 

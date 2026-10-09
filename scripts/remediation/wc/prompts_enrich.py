@@ -10,9 +10,10 @@ WC ones, derived by exact replacement from `prompts.py` where the sentence is th
 of the old template is an `ImportError`, never a silent drift.
 
 The briefs record each answer with `--role` and the role's registered model (`roles.ROLES`, owner
-decision D6): the writer runs as `field_researcher` (Sonnet 5.5, high), the verifier as `web_verifier`
-(Sonnet 5.5, high) and the pilot's judge as `pilot_judge` (Opus 5.5, xhigh); the import refuses an
-answer that names another role (`enrich.require_role`).
+decision D6): the writer runs as `enrich_writer` (Sonnet 5.5, high; a role of its own since
+2026-10-09, when `field_researcher` moved to Opus and the lane's writing was not measured there), the
+verifier as `web_verifier` (Sonnet 5.5, high) and the pilot's judge as `pilot_judge` (Opus 5.5,
+xhigh); the import refuses an answer that names another role (`enrich.require_role`).
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from __future__ import annotations
 from wc import prompts as P
 from wc import prompts_sonnet as P2
 
-WRITER_ROLE = "field_researcher"
+WRITER_ROLE = "enrich_writer"
 VERIFIER_ROLE = "web_verifier"
 JUDGE_ROLE = "pilot_judge"
 

@@ -1,6 +1,6 @@
 """Lane wd5, step 6 of the map: the Opus adversarial re-check of every cell the lane would write.
 
-The researchers of lane wd5 (Sonnet high, `roles.ROLES["field_researcher"]`) decide a field from one
+The researchers of lane wd5 (`roles.ROLES["field_researcher"]`: Opus high since 2026-10-09) decide a field from one
 quote of one source. Before any of it reaches production a second reader, Opus high
 (`roles.ROLES["adversarial"]`), is asked to break each decision that would be written: **every
 `replace`** (the cells the plan writes, the carried points among them) and **10 % of the `keep`s**
@@ -202,6 +202,17 @@ def packet(
     wiki: W.WikiCache | None,
 ) -> dict[str, Any]:
     """The frozen question about one decision: everything the prompt shows, as plain JSON."""
+    return framed(decision, line, [quote_packet(q, library) for q in decision["quotes"]], wiki)
+
+
+def framed(
+    decision: Mapping[str, Any],
+    line: Mapping[str, Any],
+    quotes: Sequence[Mapping[str, Any]],
+    wiki: W.WikiCache | None,
+) -> dict[str, Any]:
+    """`packet` for quotes already read in their pages (`quote_packet`'s shape): the calibration pool of
+    known-true and known-false cells (`pools.py`) reads some of them from the Wikipedia cache."""
     field = str(decision["field"])
     opened = line.get("open", {}).get(field) or {}
     return {
@@ -224,7 +235,7 @@ def packet(
         "made": opened.get("made"),
         "reasoning": str(decision["reasoning"])[:REASONING_SHOWN],
         "value_page": decision.get("value_page"),
-        "quotes": [quote_packet(q, library) for q in decision["quotes"]],
+        "quotes": [dict(q) for q in quotes],
         "wiki": None if wiki is None else wiki_lead(str(decision["site_id"]), wiki),
     }
 

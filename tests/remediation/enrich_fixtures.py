@@ -112,12 +112,12 @@ def record_enriched(
     handoff: Path,
     answers: Mapping[str, str],
     *,
-    role: str = "field_researcher",
+    role: str = "enrich_writer",
     model: str = OH.SONNET_MODEL,
     agent: str = "sonnet-enrich",
 ) -> None:
     """Write each site's answer where its question was exported, as `opus_handoff.py answer --role
-    field_researcher --model claude-sonnet-5-5` records it."""
+    enrich_writer --model claude-sonnet-5-5` records it."""
     for line in OH.manifest(handoff):
         if line["label"] in answers:
             OH.write_answer(

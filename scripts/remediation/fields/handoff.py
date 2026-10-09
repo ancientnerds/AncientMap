@@ -134,6 +134,9 @@ ADV_APPLIED = Path(ADV_DIR) / "APPLIED.json"
 #: which model that is, and an answer that names another role or another stamp is refused at import
 #: (the model census of 2026-10-01 found 8,471 answers stamped Opus that Sonnet had written).
 RULE_ROLE = {R.RECHECK.name: "field_researcher"}
+#: The model of lane wd5's brief is the registry's for that role, never written out again: a tier move
+#: (2026-10-09, Sonnet to Opus) would otherwise leave the brief naming a model the import refuses.
+RECHECK_MODEL = RO.role(RULE_ROLE[R.RECHECK.name]).model
 
 
 class HandoffStepError(ValueError):
@@ -1178,7 +1181,7 @@ BRIEF_PARTS = {
         "model": "claude-sonnet-5-5",
     },
     R.RECHECK.name: {
-        "role": "Sonnet researcher",
+        "role": f"{OH.ANSWER_FAMILIES[RECHECK_MODEL].capitalize()} researcher",
         "lane": "WD5",
         "work": "re-check",
         "evidence": (
@@ -1200,7 +1203,7 @@ BRIEF_PARTS = {
             "few requests at most, no search-engine crawling."
         ),
         "unsourced": 'is "unresolved"',
-        "model": "claude-sonnet-5-5",
+        "model": RECHECK_MODEL,
         "role_flag": f" --role {RULE_ROLE[R.RECHECK.name]}",
     },
 }

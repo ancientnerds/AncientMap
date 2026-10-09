@@ -51,7 +51,7 @@ def wd5_run(tmp_path: Path, *lines: dict[str, Any], rule: R.Rule = R.RECHECK) ->
 
 
 def record(handoff: Path, label: str, text: str, *, by: str = "field_researcher:wd5-r0-b0001",
-           model: str = OH.SONNET_MODEL, batch: str = "wd5-r0-b0001") -> None:  # fmt: skip
+           model: str = OH.OPUS_MODEL, batch: str = "wd5-r0-b0001") -> None:  # fmt: skip
     OH.write_answer(handoff, batch_id=batch, stage=STAGE, label=label, text=text,
                     answered_by=by, model=model)  # fmt: skip
 
@@ -192,7 +192,7 @@ class TestTheBrief:
         HO.export(run, tmp_path / "h-r0")
         text = HO.brief(run, tmp_path / "h-r0", "wd5-r0-b0001")
         assert "handoff.py wiki-text --label <label>" in text
-        assert "--model claude-sonnet-5-5 --role field_researcher" in text
+        assert "--model claude-opus-5-5 --role field_researcher" in text
         assert "403 and 429 are a throttle, never a finding" in text
 
     def test_the_older_lanes_briefs_name_no_role_and_no_cache(self, tmp_path: Path) -> None:
@@ -320,7 +320,7 @@ class TestTheRoleOfTheAnswers:
             self.imported(tmp_path, by="adversarial:wd5-r0-b0001")
 
     def test_an_answer_whose_stamp_is_not_the_roles_model_is_refused(self, tmp_path: Path) -> None:
-        with pytest.raises(HO.HandoffStepError, match="registered to claude-sonnet-5-5"):
+        with pytest.raises(HO.HandoffStepError, match="registered to claude-opus-5-5"):
             self.imported(tmp_path, model=OH.HAIKU_MODEL)
 
     def test_the_older_rules_take_the_answers_they_always_took(self, tmp_path: Path) -> None:

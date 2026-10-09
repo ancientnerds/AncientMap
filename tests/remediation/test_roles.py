@@ -23,13 +23,15 @@ if str(REMEDIATION) not in sys.path:
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
 
-#: D6, role by role: (model id, effort).
+#: D6, role by role: (model id, effort). `field_researcher` is Opus since the tier move of 2026-10-09
+#: (fr-general-001 failed on Sonnet); `enrich_writer` is the lane E writer that stayed on Sonnet.
 D6 = {
     "card_writer": ("claude-opus-5-5", "high"),
     "hook_rater": ("claude-opus-5-5", "medium"),
     "fact_checker": ("claude-sonnet-5-5", "high"),
     "web_verifier": ("claude-sonnet-5-5", "high"),
-    "field_researcher": ("claude-sonnet-5-5", "high"),
+    "field_researcher": ("claude-opus-5-5", "high"),
+    "enrich_writer": ("claude-sonnet-5-5", "high"),
     "adversarial": ("claude-opus-5-5", "high"),
     "image_prefilter": ("claude-haiku-5-5", "low"),
     "image_depicts": ("claude-sonnet-5-5", "medium"),
@@ -40,7 +42,7 @@ D6 = {
 }
 
 
-def test_the_registry_is_exactly_the_twelve_roles_of_decision_d6() -> None:
+def test_the_registry_is_exactly_the_roles_of_decision_d6_and_the_enrich_writer() -> None:
     assert {name: (r.model, r.effort) for name, r in RO.ROLES.items()} == D6
     assert all(name == role.name for name, role in RO.ROLES.items())
 
@@ -154,6 +156,58 @@ def test_an_escalation_needs_its_reason_and_its_calibration() -> None:
         RO.escalation("image_prefilter", calibration_id="", reason="x")
     with pytest.raises(RO.RoleError):
         RO.escalation("image_prefilter", calibration_id="c", reason=" ")
+
+
+def test_the_field_researcher_move_is_a_record_and_the_registry_stands_where_it_ends() -> None:
+    [move] = RO.APPLIED_ESCALATIONS
+    assert dict(move) == {
+        "role": "field_researcher",
+        "from": "claude-sonnet-5-5",
+        "to": "claude-opus-5-5",
+        "calibration_id": "fr-general-001",
+        "reason": "agreement 0.8636 is below the sealed threshold 0.9",
+    }
+    assert RO.ROLES["field_researcher"].model == move["to"]
+    RO.check_applied_escalations(RO.APPLIED_ESCALATIONS, RO.ROLES)
+
+
+def test_a_registry_that_moved_without_its_record_is_refused() -> None:
+    """The ROLES edit and its record go together: an edit of the model alone, a record alone, a move
+    of more than one tier, a chain that does not join, and a thin record are all refused."""
+    moves = RO.APPLIED_ESCALATIONS
+    moved = dict(RO.ROLES)
+    moved["field_researcher"] = RO.Role(
+        "field_researcher", "claude-sonnet-5-5", "high", "wd1_wd3_rounds_and_bp_set"
+    )
+    with pytest.raises(RO.RoleError, match="field_researcher is registered to claude-sonnet-5-5"):
+        RO.check_applied_escalations(moves, moved)
+    two_tiers = ({**moves[0], "from": "claude-haiku-5-5"},)
+    with pytest.raises(RO.RoleError, match="not one tier up"):
+        RO.check_applied_escalations(two_tiers, RO.ROLES)
+    with pytest.raises(RO.RoleError, match="does not start where the last one ended"):
+        RO.check_applied_escalations(
+            (*moves, {**moves[0], "from": "claude-haiku-5-5", "to": "claude-sonnet-5-5"}), RO.ROLES
+        )
+    with pytest.raises(RO.RoleError, match="unregistered role 'writer'"):
+        RO.check_applied_escalations(({**moves[0], "role": "writer"},), RO.ROLES)
+    with pytest.raises(RO.RoleError, match="carries exactly"):
+        RO.check_applied_escalations(({**moves[0], "reason": " "},), RO.ROLES)
+    with pytest.raises(RO.RoleError, match="carries exactly"):
+        RO.check_applied_escalations(
+            ({k: v for k, v in moves[0].items() if k != "calibration_id"},), RO.ROLES
+        )
+
+
+def test_the_enrich_writer_stays_on_sonnet_under_its_own_calibration_set() -> None:
+    """Lane E's writer was never measured on Opus: it does not follow the field researcher's move."""
+    writer = RO.ROLES["enrich_writer"]
+    assert (writer.model, writer.effort, writer.calibration_set) == (
+        "claude-sonnet-5-5",
+        "high",
+        "enrich-writer",
+    )
+    assert writer.threshold is None
+    assert RO.role_sha256("enrich_writer") != RO.role_sha256("field_researcher")
 
 
 def test_the_top_tier_has_nothing_to_escalate_to() -> None:

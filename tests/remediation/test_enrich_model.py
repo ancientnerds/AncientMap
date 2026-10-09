@@ -714,7 +714,7 @@ def test_each_brief_records_its_answer_in_the_role_d6_registers() -> None:
         assert "--model {model} --role {role}" in text
         assert "<the model id you run as" not in text
     assert {PE.WRITER_ROLE, PE.VERIFIER_ROLE, PE.JUDGE_ROLE} == {
-        "field_researcher",
+        "enrich_writer",
         "web_verifier",
         "pilot_judge",
     }

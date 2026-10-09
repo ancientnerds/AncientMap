@@ -14038,3 +14038,53 @@ registry), documented in 9.2; the checker calibration seals and measures claim a
 `select --exclude-run` refuses a run of another contract; the re-check seed carries the web facts of
 the card's provenance into the checker, verifier and adversary questions and into the mechanical
 check; a NULL country in the export is `""`, not the text "None". Nothing was written to production.
+
+
+## 2026-10-09 - Lane wd5: the first calibrations, the researcher's tier move and the adversarial redesign (branch fix/2026-10-08-db-final)
+
+**Three verdicts** (`output/remediation/calibration/verdicts/`, decided 07:59 UTC, 0 false sources in each):
+
+| calibration | role | agreement | threshold | result |
+|---|---|---|---|---|
+| `fr-general-001` | `field_researcher` (Sonnet 5.5 high) | 0.8636 (76 of 88 units), undecided excess 0.0331 | 0.9 sealed | **failed**: `tier_move` Sonnet to Opus |
+| `fr-bp-001` | `field_researcher` (Sonnet 5.5 high) | 0.92 | 0.9 sealed | **passed** |
+| `adv-001` | `adversarial` (Opus 5.5 high) | 0.575 (23 of 40 units) | 0.9 sealed | **failed, held**: no tier above Opus |
+
+**The tier move.** Owner decision D8 (autonomy) applies the sealed move: `field_researcher` is Opus 5.5, high
+(`roles.ROLES`), with the move recorded in `roles.APPLIED_ESCALATIONS` (calibration `fr-general-001`, reason "agreement
+0.8636 is below the sealed threshold 0.9"); the registry is held to those records when `roles.py` is imported, so the
+edit cannot stand without them. The role's digest changed, so `fr-bp-001`'s pass (sealed against the Sonnet entry) no
+longer satisfies `calibrate_claude.require_passed`: the wave gate now needs `fr-general-002` (`fields-decided`),
+`fr-bp-002` (`bp-bucket`, the same 25 sites) and `adv-truth-001` (`adv-known-truth`), each sealed against the role as
+it is. `fr-general-001` and `adv-001` stay recorded as failed; nothing of them was edited or deleted.
+
+**Every consumer of `field_researcher` was read.** The lane wd5 brief hard-coded `claude-sonnet-5-5` and "Sonnet
+researcher" for the role: it would have told the agents to record a model the import refuses (`RECHECK_MODEL` is now the
+registry's). The dispute screen's research brief did the same ("Sonnet researcher", `sonnet-` agent names beside the
+registry's model in the recording command): it now names the agent by the registry's model, and the dispute researcher
+follows the role to Opus (the web research Sonnet failed to pass). **The lane E description writer does not follow:**
+it is the new role `enrich_writer` (Sonnet 5.5 high, calibration set `enrich-writer`, threshold `None` until
+`enrich-writer` is sealed), and `wc/prompts_enrich.py`, `wc/enrich.py` and the lane's role checks point at it. The
+identity lanes use `web_verifier` and `adversarial`, not the researcher, and are unchanged. Tests: `test_roles.py`,
+`test_enrich*.py`, `test_disputes.py`, `test_fields_wd5*.py`, `test_fields_pools.py`; mutation cases `wd5 tier move`,
+`wd5 enrich writer`, `wd5 gate` and `wd5 truth pool` in `phase3/mutation_sweep.py`.
+
+**The adversarial redesign, and why.** `adv-001`'s gold was the `opus_audit` keep and revert verdicts on the DeepSeek
+Phase-3 writes - a different question on different evidence (the finder's quote and the audit's evidence files). Of its
+17 disagreements, 12 carry no source on either side, and a `confirm` given because no counter-quote was found is not
+"the value is right": `adv-001` measured the drift between two judgements, not the role. It is replaced by
+`pools.py build-adversarial-truth` (seed 20261010, 50 cells, 7 batches): 25 known-wrong cells (9 stored periods the
+2026-10-08 sample audit and the band rule made wrong - Lake Mungo, Broadbury Castle, Tappoch Broch, Hodson Stone Circle,
+Le Moustier, Bruniquel Cave, Cro-Magnon Rock Shelter, Apidima Cave, Eartham Pit Boxgrove, their ids read from production
+read-only - under a sentence of the site's own cached Wikipedia article, and 16 seeded perturbations of WD1 two-source
+keeps: a start 3 or more buckets away, a wrong canonical type, a point moved 40-120 km, each under the original quotes)
+and 25 known-right cells (WD1 two-source keeps as decided). All cells have one form, so the class is not readable from
+it. The comparison `adv-known-truth` is sealed at 0.9 for the reject rate on the known-wrong cells **and** the confirm
+rate on the known-right ones, 0 false sources; an `unclear` is a miss in its class. Tappoch Broch is the one
+contestable known-wrong cell (the article's "iron-age broch" reads as the table's -800); one miss in 25 stays within
+the bar. The procedure is `docs/procedures/FIELDS_WD5.md` section 3.
+
+**Nothing was written to production.** The only production access was one read-only `psql` query for the nine site ids.
+No agent was asked and nothing was sealed or answered by this change; the known-truth builder ran once on the run
+tree into a scratch directory outside the calibration root (50 cells, as above) to check it against the real data. The
+three new calibrations (`fr-general-002`, `fr-bp-002`, `adv-truth-001`) are the operator's next step.

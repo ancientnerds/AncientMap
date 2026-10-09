@@ -22,14 +22,18 @@ answers where the gold is an answer) and `<out>/run` (the source run that regist
   basis of each (`audit-confirmed`, `earlier-reasoning`, `edge`); it is not an answer, so no recorded
   answer is faked. A site passes when the fresh answer is counted - its quote found in its page at
   import - and lies in an accepted bucket; an unresolved answer is a miss.
-* **adversarial** - role `adversarial` on **40 cells** of `opus_audit/DECISIONS.jsonl`, 20 `keep` and
-  20 `revert` (half period, half type), asked in the form of the wd5 check (`adversarial.py`): keep
-  is `confirm`, revert is `reject`. It is Opus judging what Opus judged, so it measures stability
-  and the share of `unclear` answers, not truth.
+* **adversarial-truth** - role `adversarial` on about **50 cells whose truth is known**, asked in the
+  form of the wd5 check (`adversarial.py`): known-wrong cells (the periods the 2026-10-08 sample audit
+  confirmed wrong, the band-rule Palaeolithic caves at 500 BC, and seeded perturbations of WD1
+  two-source keeps - a start in a far bucket, a wrong canonical type, a point moved 40-120 km - each
+  under the original quotes) must be `reject`ed, known-right cells (WD1 two-source keeps as decided)
+  `confirm`ed. Its first design (`adv-001`, 40 cells of the DeepSeek audit's keep and revert verdicts)
+  measured the audit's verdicts, a different question on different evidence, and failed at 0.575
+  with 12 of 17 disagreements carrying no source on either side; see `FIELDS_WD5.md` section 3.
 
-    pools.py build-general     --out DIR --seed N
-    pools.py build-bp          --out DIR --seed N
-    pools.py build-adversarial --out DIR --seed N
+    pools.py build-general     --out DIR --seed N [--id fr-general-002]
+    pools.py build-bp          --out DIR --seed N [--id fr-bp-002]
+    pools.py build-adversarial-truth --out DIR --seed N [--id adv-truth-001]
     pools.py prepare --id ID --run DIR/run     calibrate_claude prepare + what the pool's tools read
     pools.py compare --id ID                   the comparison the seal names
     pools.py audit-quotes --id ID              the quotes to spot-check for false sources (O18)
@@ -41,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 import re
 import shutil
@@ -71,23 +76,30 @@ from fields import handoff as HO  # noqa: E402
 from fields import harvest as H  # noqa: E402
 from fields import population as POP  # noqa: E402
 from fields import rule as R  # noqa: E402
+from fields import wiki as W  # noqa: E402
 
 POOLS_ROOT = CC.CALIBRATION_ROOT / "pools"
-AUDIT_DIR = D.REPO / "output" / "remediation" / "opus_audit"
 GENERAL_SIZE = 60
 BP_SIZE = 25
-ADV_PER_CLASS = 20
 #: The sealed thresholds of the map: at least 90 % agreement on the cells both sides decide, no false
 #: source (`calibrate_claude.MAX_FALSE_SOURCES`), the fresh share of undecided cells at most 10
 #: points above the gold's.
 THRESHOLD = 0.9
 MAX_UNDECIDED_EXCESS = 0.10
-COMPARISON_DECIDED, COMPARISON_BP, COMPARISON_ADV = "fields-decided", "bp-bucket", "adv-truth"
-#: The calibrations lane wd5 needs passed before its first write: `(role, comparison)`.
+COMPARISON_DECIDED, COMPARISON_BP = "fields-decided", "bp-bucket"
+COMPARISON_ADV_KNOWN = "adv-known-truth"
+#: The calibration ids of the second round (2026-10-09, after the tier move of `field_researcher` and
+#: the redesign of the adversarial pool; the `-001` ones are recorded as run and stay).
+GENERAL_CALIBRATION_ID = "fr-general-002"
+BP_CALIBRATION_ID = "fr-bp-002"
+ADV_CALIBRATION_ID = "adv-truth-001"
+#: The calibrations lane wd5 needs passed before its first write: `(role, comparison)`. The seal of
+#: each must bind the role's registry entry as it is now, so the researcher's two pools are
+#: measured again on Opus, and the checker is measured on cells whose truth is known.
 WD5_CALIBRATIONS = (
     ("field_researcher", COMPARISON_DECIDED),
     ("field_researcher", COMPARISON_BP),
-    ("adversarial", COMPARISON_ADV),
+    ("adversarial", COMPARISON_ADV_KNOWN),
 )
 GENERAL_STAGE = "frg"
 #: The model the BP pool's round is exported for: the registry's, so the brief names it.
@@ -135,16 +147,19 @@ def _need_empty(out: Path) -> None:
 
 
 def _seal_command(
-    out: Path, *, role: str, batches: Sequence[str], comparison: str, truth: bool, kind: str
-) -> str:
+    out: Path, *, role: str, batches: Sequence[str], comparison: str, truth: bool,
+    calibration_id: str,
+) -> str:  # fmt: skip
     """The `calibrate_claude.py seal` command of a built pool, as the operator runs it."""
     parts = [
         "./.venv/Scripts/python.exe scripts/remediation/calibrate_claude.py seal",
-        f"--id {kind}-001 --role {role}",
+        f"--id {calibration_id} --role {role}",
         f"--handoff {HO._shown(out / 'handoff')}",
         f"--batches {' '.join(batches)}",
         f"--threshold {THRESHOLD}",
-        f"--max-undecided-excess {MAX_UNDECIDED_EXCESS}" if comparison != COMPARISON_BP else "",
+        f"--max-undecided-excess {MAX_UNDECIDED_EXCESS}"
+        if comparison == COMPARISON_DECIDED
+        else "",
         f"--comparison {comparison}",
         f"--truth {HO._shown(out / TRUTH_FILE)}" if truth else "",
     ]
@@ -233,8 +248,9 @@ def stratify(eligible: Mapping[str, Eligible], size: int, rng: random.Random) ->
 
 
 def build_general(
-    out: Path, *, seed: int, size: int = GENERAL_SIZE, fields_dir: Path = POP.FIELDS_DIR
-) -> dict[str, Any]:
+    out: Path, *, seed: int, size: int = GENERAL_SIZE, fields_dir: Path = POP.FIELDS_DIR,
+    calibration_id: str = GENERAL_CALIBRATION_ID,
+) -> dict[str, Any]:  # fmt: skip
     """`<out>/handoff` (batches of 8 sites by country and name, each question and its recorded answer
     byte for byte), `<out>/run` (RUN.json under WD1's rule, CLASSIFIED.jsonl, ROUNDS.jsonl)."""
     _need_empty(out)
@@ -293,7 +309,7 @@ def build_general(
         "drawn_for": dict(sorted(strata.items())),
         "seal": _seal_command(
             out, role="field_researcher", batches=batches, comparison=COMPARISON_DECIDED,
-            truth=False, kind="fr-general",
+            truth=False, calibration_id=calibration_id,
         ),
     }  # fmt: skip
 
@@ -408,8 +424,9 @@ def pick_bp(
 
 
 def build_bp(
-    out: Path, *, seed: int, size: int = BP_SIZE, fields_dir: Path = POP.FIELDS_DIR
-) -> dict[str, Any]:
+    out: Path, *, seed: int, size: int = BP_SIZE, fields_dir: Path = POP.FIELDS_DIR,
+    calibration_id: str = BP_CALIBRATION_ID,
+) -> dict[str, Any]:  # fmt: skip
     """`<out>/handoff` (wd5's question per site, its `period_start` alone, no answer), `<out>/run`
     (a wd5 run of those sites) and `<out>/TRUTH.json` (`{site: {expected, basis, ...}}`)."""
     _need_empty(out)
@@ -445,133 +462,399 @@ def build_bp(
         "export": result,
         "seal": _seal_command(
             out, role="field_researcher", batches=batches, comparison=COMPARISON_BP,
-            truth=True, kind="fr-bp",
+            truth=True, calibration_id=calibration_id,
         ),
     }  # fmt: skip
 
 
-# ------------------------------------------------------------------------------ the adversarial pool
-def audit_candidates(audit_dir: Path) -> list[dict[str, Any]]:
-    """The audit's decided, not superseded `keep` and `revert` rows of the two columns wd5 writes,
-    each joined to its input row (the finder's quote and evidence files)."""
-    inputs = {r["change_key"]: r for r in HO._read_jsonl(audit_dir / "INPUT.jsonl")}
-    rows = []
-    for d in HO._read_jsonl(audit_dir / "DECISIONS.jsonl"):
-        row = inputs.get(d["change_key"])
-        if (
-            row is not None
-            and not d["superseded"]
-            and d["decision"] in ("keep", "revert")
-            and d["column"] in ("period_start", "site_type")
-            and row["finder_quote"]
-            and row["evidence_files"]
-            and row["written_value"]
-        ):
-            rows.append({**row, "audit": d["decision"]})
-    return sorted(rows, key=lambda r: r["change_key"])
+# ------------------------------------------------------------------------------ the known-truth pool
+#: Cells whose truth is known, not judged by a model (the adversarial calibration of 2026-10-09; its
+#: first design, 40 cells of the DeepSeek audit's keep/revert verdicts, measured gold drift - the
+#: `adv-001` verdict - and was replaced). Every cell is presented in the one form: a stored value
+#: the researcher says stands on the quote(s) below ("keep"), with a neutral reasoning, so that
+#: nothing in a cell tells its class but the quotes and the value. `reject` is right for a
+#: known-wrong cell, `confirm` for a known-right one.
+KNOWN_WRONG, KNOWN_RIGHT = "known-wrong", "known-right"
+#: The two classes and the rate each is held to (`compare_adv_known`).
+CLASSES = {
+    KNOWN_WRONG: "reject rate on the known-wrong cells",
+    KNOWN_RIGHT: "confirm rate on the known-right cells",
+}
+EARTH_RADIUS_KM = 6371.0088
+SAMPLE_AUDIT, BAND_RULE = "sample-audit-2026-10-08", "band-rule-cave"
+WD1_KEEP = "wd1-two-source-keep"
+PERTURBED_PERIOD, PERTURBED_TYPE, PERTURBED_POINT = (
+    "perturbed-period", "perturbed-type", "perturbed-point"
+)  # fmt: skip
+#: The fields the pool asks, its cells per field and class (about 50 in all: 9 audit, 16 perturbed,
+#: 25 known-right).
+TRUTH_FIELDS = ("period_start", "site_type", "coordinates")
+PERTURBED_QUOTA = {"period_start": 6, "site_type": 5, "coordinates": 5}
+RIGHT_QUOTA = {"period_start": 9, "site_type": 8, "coordinates": 8}
+NEUTRAL_REASONING = "The stored value stands on the quote(s) below."
+#: A perturbed start lies at least this many buckets of the map's nine from the true one; a moved
+#: point at least this far (km) from the true one (and at most `MAX_MOVE_KM`, still on land).
+MIN_BUCKET_GAP = 3
+MIN_MOVE_KM, MAX_MOVE_KM = 40.0, 120.0
+#: A year in the middle of each bucket, to put a perturbed start in a chosen one.
+BUCKET_YEARS = {
+    "< 4500 BC": -6000,
+    "4500 - 3000 BC": -3800,
+    "3000 - 1500 BC": -2200,
+    "1500 - 500 BC": -1000,
+    "500 BC - 1 AD": -250,
+    "1 - 500 AD": 250,
+    "500 - 1000 AD": 750,
+    "1000 - 1500 AD": 1250,
+    "1500+ AD": 1700,
+}
+#: Canonical types no site of this corpus is mistaken for another's by a reader: a perturbed type
+#: is one of them that no quote of the cell holds a word of.
+WRONG_TYPES = (
+    "Shipwreck", "Impact crater", "Harbor", "Stadium", "Mine/quarry", "Museum", "Aqueduct",
+    "Bridge", "Well", "Magnetic anomaly", "Minaret/tower", "Mosque", "Stone cross", "Theatre",
+    "Quarry", "Elongated skulls",
+)  # fmt: skip
 
 
-def audit_cell(row: Mapping[str, Any], repo: Path) -> dict[str, Any]:
-    """The frozen check question of one audit row, in the wd5 form: the written value is the
-    decision under check, the finder's quote the quote, the evidence file the page. A row whose quote
-    is in none of its evidence files is refused (`AdversarialError`)."""
-    library = Q.Library(repo, repo / "output" / "remediation" / "_no_pages")
-    quotes = []
-    for found in row["finder_quote"]:
-        for rel in row["evidence_files"]:
-            try:
-                quote = AD.quote_packet({"source": rel, "quote": found["quote"]}, library)
-            except AD.AdversarialError:
-                continue
-            quotes.append({**quote, "url": found["url"]})
-            break
-    if not quotes:
-        raise AD.AdversarialError(f"{row['change_key']}: no finder quote in its evidence files")
+@dataclass(frozen=True)
+class KnownWrong:
+    """A stored period the sample audit of 2026-10-08 (30 sites, drawn 'draw-2026-10-08') confirmed
+    wrong, or a Palaeolithic cave the band rule dated at 500 BC. `quote` is a sentence of the
+    site's own cached English Wikipedia article, the page a researcher would stand the value on; it
+    does not state the value."""
+
+    site_id: str
+    name: str
+    value: int
+    basis: str
+    quote: str
+    why: str
+
+
+#: The site ids are production's (`unified_sites`, source ancient_nerds, read-only 2026-10-09).
+KNOWN_WRONG_PERIODS: tuple[KnownWrong, ...] = (
+    KnownWrong(
+        "68677772-b461-49a3-bf2b-376e2b0e970b", "Lake Mungo", -500, SAMPLE_AUDIT,
+        "These original inhabitants arrived approximately 50,000 years ago, and would have "
+        "consumed emus and marsupials, as well as aquatic life such as crustaceans, freshwater "
+        "mussels, and fish.",
+        "stored -500 (500 BC - 1 AD); the occupation is dated to about 50,000 years ago",
+    ),
+    KnownWrong(
+        "4caf5522-6a45-44b4-bba0-e98186c081f1", "Broadbury Castle", -4000, SAMPLE_AUDIT,
+        "Historic England state that it is the remains of a Roman marching camp, although firm "
+        "evidence for this is lacking and an alternative interpretation as an Iron Age or "
+        "Roman-British civilian settlement has also been proposed.",
+        "stored -4000 (Neolithic); the camp is Roman or Iron Age",
+    ),
+    KnownWrong(
+        "61f1e287-c3bc-40ad-b3fe-af956af4cb1b", "Tappoch Broch", -800, SAMPLE_AUDIT,
+        "Tappoch Broch, better known as Torwood Broch, is an iron-age broch located in a remote "
+        "spot in dense woodland near Falkirk, Scotland.",
+        "stored -800 (1500 - 500 BC); the audit found the broch dated to the last century or two "
+        "BC or the first century or two AD (Undiscovered Scotland); 'iron-age' names the class, "
+        "not the start of this broch",
+    ),
+    KnownWrong(
+        "c2cd2a6a-8f1d-4fce-9645-234908ef7d37", "Hodson Stone Circle", -4000, SAMPLE_AUDIT,
+        "The ring was part of a tradition of stone circle construction that spread throughout "
+        "much of Britain, Ireland, and Brittany during the Late Neolithic and Early Bronze Age, "
+        "over a period between 3300 and 900 BCE.",
+        "stored -4000 (4500 - 3000 BC); the article dates the class of stone circles, not this "
+        "lost circle",
+    ),
+    KnownWrong(
+        "73106998-2108-42c6-8b07-3a1c79783968", "Le Moustier", -500, BAND_RULE,
+        'The skeleton known as "Le Moustier" is estimated to be approximately 45,000 years old.',
+        "stored -500 by the band rule; a Middle Palaeolithic site, the skeleton is about 45,000 "
+        "years old",
+    ),
+    KnownWrong(
+        "9d58f665-8cc3-4438-9dc5-99885deb90d0", "Bruniquel Cave", -500, BAND_RULE,
+        "The constructions have been dated to approximately 176,500 years ago.",
+        "stored -500 by the band rule; the constructions are about 176,500 years old",
+    ),
+    KnownWrong(
+        "cb282d61-5c81-44f2-92dc-576a4ad1895e", "Cro-Magnon Rock Shelter", -500, BAND_RULE,
+        "Most notably, it is the site of the discovery of anatomically modern human remains, "
+        "apparently buried at the site, dated to about 28,000 years ago.",
+        "stored -500 by the band rule; an Upper Palaeolithic site, the remains are about 28,000 "
+        "years old",
+    ),
+    KnownWrong(
+        "996e0b32-f8ca-4d04-8900-ed937b729269", "Apidima Cave", -500, BAND_RULE,
+        "The second cranium, labeled Apidima 2 and dated more than 150 thousand years ago, is "
+        "more obviously related to Neanderthals",
+        "stored -500 by the band rule; the crania are more than 150,000 years old",
+    ),
+    KnownWrong(
+        "c070b6b0-3fd2-4d6c-acbe-105539188253", "Eartham Pit, Boxgrove", -500, BAND_RULE,
+        "The Boxgrove Palaeolithic site is a complex of internationally important Lower "
+        "Palaeolithic archaeological sites in the former Eartham Quarry, north-east of Boxgrove "
+        "in West Sussex, dating to around 480,000 years ago during the Middle Pleistocene.",
+        "stored -500 by the band rule; the site is about 480,000 years old",
+    ),
+)  # fmt: skip
+
+
+class PerturbationError(PoolError):
+    """A cell cannot be perturbed the way the pool asks (no wrong type free of the quotes, no wrong
+    bucket): the candidate is left out, never bent."""
+
+
+def wrong_year(true_year: int, rng: random.Random) -> int:
+    """A year in a bucket at least `MIN_BUCKET_GAP` buckets away from the true year's."""
+    here = C.BUCKETS.index(C.bucket(true_year))
+    far = [b for i, b in enumerate(C.BUCKETS) if abs(i - here) >= MIN_BUCKET_GAP]
+    return BUCKET_YEARS[rng.choice(far)]
+
+
+def wrong_type(true_type: str, line: Mapping[str, Any], quotes: Sequence[Mapping[str, Any]],
+               rng: random.Random) -> str:  # fmt: skip
+    """A canonical type that is not the true one, not one the item's classes name, and none of whose
+    stems a quote (or the passage around it, or the head of its page) holds a word of."""
+    named = set(line["fields"]["site_type"]["evidence"].get("types") or ())
+    texts = [t for q in quotes for t in (q["quote"], q["passage"], q["head"])]
+    options = [
+        t for t in WRONG_TYPES
+        if t != true_type and t not in named
+        and not any(A.holds_stem(text, stem) for text in texts for stem in A.type_stems(t))
+    ]  # fmt: skip
+    if not options:
+        raise PerturbationError(f"no wrong type free of the quotes for {true_type!r}")
+    return rng.choice(options)
+
+
+def moved_point(point: tuple[float, float], rng: random.Random) -> str:
+    """The point moved `MIN_MOVE_KM`..`MAX_MOVE_KM` km on a seeded bearing, written as the database
+    writes a stored point (`lat, lon`)."""
+    km = rng.uniform(MIN_MOVE_KM, MAX_MOVE_KM)
+    bearing = math.radians(rng.uniform(0, 360))
+    lat, lon = point
+    d = km / EARTH_RADIUS_KM
+    lat2 = math.asin(
+        math.sin(math.radians(lat)) * math.cos(d)
+        + math.cos(math.radians(lat)) * math.sin(d) * math.cos(bearing)
+    )
+    lon2 = math.radians(lon) + math.atan2(
+        math.sin(bearing) * math.sin(d) * math.cos(math.radians(lat)),
+        math.cos(d) - math.sin(math.radians(lat)) * math.sin(lat2),
+    )
+    moved = (math.degrees(lat2), (math.degrees(lon2) + 540) % 360 - 180)
+    if A._km(point, moved) < MIN_MOVE_KM - 1:
+        raise PerturbationError(f"the moved point is {A._km(point, moved):.1f} km away")
+    return f"{moved[0]:.6f}, {moved[1]:.6f}"
+
+
+def _wiki_quote(page: Mapping[str, Any], quote: str) -> dict[str, Any]:
+    """`adversarial.quote_packet`'s shape for a sentence of a cached Wikipedia article, which the
+    caller found in the article's text (`known_wrong_cells`), whitespace-normalised like the
+    machine's own reading."""
+    text = Q.normalise(str(page["text"]))
+    wanted = Q.normalise(quote)
     return {
-        "cell": AD.cell_id(row["site_id"], row["column"]),
-        "site_id": row["site_id"],
-        "field": row["column"],
-        "name": row["site_name"],
-        "country": row["country_now"],
-        "stored_point": None,
-        "qid": None,
-        "enwiki": None,
-        "stored": row["old_value"],
-        "decision": "replace",
-        "value": row["written_value"],
-        "via": "audit",
-        "round": 0,
-        "answered_by": "the Phase 3 finder",
-        "model": None,
-        "why_open": None,
-        "made": None,
-        "reasoning": str(row["reviewer_reason"])[: AD.REASONING_SHOWN],
-        "value_page": None,
-        "quotes": quotes,
-        "wiki": None,
+        "url": W.article_url(page),
+        "quote": quote,
+        "outcome": Q.FOUND,
+        "reading": "visible text",
+        "head": text[: AD.HEAD_CHARS],
+        "passage": AD.excerpt(text, wanted),
     }
 
 
-def build_adversarial(
+def _truth_cell(
+    line: Mapping[str, Any], field: str, *, stored: Any, value: Any,
+    quotes: Sequence[Mapping[str, Any]], wiki: W.WikiCache | None,
+    stored_point: str | None = None,
+) -> dict[str, Any]:  # fmt: skip
+    """One cell of the pool: the stored value kept on the quotes, under the neutral reasoning."""
+    decision = {
+        "site_id": line["site_id"], "field": field, "stored": stored, "decision": A.KEEP,
+        "value": value, "via": "counted", "round": 0, "answered_by": "the calibration pool",
+        "model": None, "reasoning": NEUTRAL_REASONING, "value_page": None,
+    }  # fmt: skip
+    cell = AD.framed(decision, line, quotes, wiki)
+    if stored_point is not None:
+        cell["stored_point"] = stored_point
+    return cell
+
+
+def known_wrong_cells(
+    fields_dir: Path, wiki: W.WikiCache, entries: Sequence[KnownWrong]
+) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """`[(cell, truth entry)]` of the sample audit's wrong periods and the band-rule caves: the
+    wd5 classification of the site (its name must be the entry's), the stored value, the article's
+    sentence. A site the wd5 run lacks, a name that differs, an article the cache lacks or a sentence
+    the article does not hold is refused by name."""
+    classified = HO.read_classified(fields_dir / R.RECHECK.stage)
+    out = []
+    for entry in entries:
+        line = classified.get(entry.site_id)
+        if line is None:
+            raise PoolError(f"{entry.name}: {entry.site_id} is not in the wd5 classification")
+        if line["name"] != entry.name:
+            raise PoolError(f"{entry.site_id} is {line['name']!r}, not {entry.name!r}")
+        pages = [p for p in wiki.pages(entry.site_id) if not p.get("missing")]
+        if not pages:
+            raise PoolError(f"{entry.name}: the Wikipedia cache holds no article of the site")
+        held = [p for p in pages if Q.normalise(entry.quote) in Q.normalise(str(p["text"]))]
+        if not held:
+            raise PoolError(f"{entry.name}: its sentence is in none of its cached articles")
+        cell = _truth_cell(line, "period_start", stored=entry.value, value=str(entry.value),
+                           quotes=[_wiki_quote(held[0], entry.quote)], wiki=wiki)  # fmt: skip
+        truth = {
+            "expected": AD.REJECT, "class": KNOWN_WRONG, "basis": entry.basis,
+            "column": "period_start", "name": entry.name, "why": entry.why,
+        }  # fmt: skip
+        out.append((cell, truth))
+    return out
+
+
+@dataclass(frozen=True)
+class Wd1Keep:
+    """A WD1 `keep` decided on two quotes of two source families (the rule `two-families`, found in
+    their pages by the machine): the stored value stands, with its sources."""
+
+    decision: Mapping[str, Any]
+    line: Mapping[str, Any]
+    pages: Path
+
+
+def wd1_keeps(fields_dir: Path) -> dict[str, list[Wd1Keep]]:
+    """`{field: keeps}` of the four WD1 runs, in site order: a counted `keep` of a field of
+    `TRUTH_FIELDS` whose every quote the machine found. A run that is not there is refused - a
+    missing run would shrink the pool unseen."""
+    out: dict[str, list[Wd1Keep]] = {f: [] for f in TRUTH_FIELDS}
+    seen: set[tuple[str, str]] = set()
+    for name in POP.WD1_RUN_NAMES:
+        run = fields_dir / name
+        classified = HO.read_classified(run)
+        for d in sorted(HO._read_jsonl(run / HO.DECISIONS_FILE), key=lambda d: d["site_id"]):
+            if (
+                d["via"] == "counted" and d["decision"] == A.KEEP and d["field"] in TRUTH_FIELDS
+                and len(d["quotes"]) >= 2 and all(q["outcome"] == Q.FOUND for q in d["quotes"])
+                and d["site_id"] in classified and d["value"] is not None
+                and d["stored"] is not None and (d["site_id"], d["field"]) not in seen
+            ):  # fmt: skip
+                out[d["field"]].append(Wd1Keep(d, classified[d["site_id"]], run / AD.PAGES_DIR))
+                seen.add((d["site_id"], d["field"]))
+    return out
+
+
+def _right_cell(keep: Wd1Keep, wiki: W.WikiCache | None) -> tuple[dict[str, Any], dict[str, Any]]:
+    d = keep.decision
+    quotes = [AD.quote_packet(q, Q.Library(D.REPO, keep.pages)) for q in d["quotes"]]
+    cell = _truth_cell(keep.line, d["field"], stored=d["stored"], value=d["value"], quotes=quotes,
+                       wiki=wiki)  # fmt: skip
+    truth = {
+        "expected": AD.CONFIRM, "class": KNOWN_RIGHT, "basis": WD1_KEEP, "column": d["field"],
+        "name": keep.line["name"],
+        "why": f"WD1 kept the stored {d['field']} on two quotes of two source families",
+    }  # fmt: skip
+    return cell, truth
+
+
+def _perturbed_cell(
+    keep: Wd1Keep, wiki: W.WikiCache | None, rng: random.Random
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The keep with its stored value replaced by a wrong one, under the original quotes (which state
+    the true value)."""
+    d = keep.decision
+    field = d["field"]
+    quotes = [AD.quote_packet(q, Q.Library(D.REPO, keep.pages)) for q in d["quotes"]]
+    stored_point = None
+    if field == "period_start":
+        wrong: Any = wrong_year(int(d["stored"]), rng)
+        stored, value, basis = wrong, str(wrong), PERTURBED_PERIOD
+        what = f"{d['stored']} (the quotes' year {d['value']}) moved to {wrong}"
+    elif field == "site_type":
+        wrong = wrong_type(str(d["stored"]), keep.line, quotes, rng)
+        stored, value, basis = wrong, wrong, PERTURBED_TYPE
+        what = f"{d['stored']!r} swapped to {wrong!r}"
+    else:
+        wrong = moved_point(_point(str(d["stored"])), rng)
+        stored, value, basis, stored_point = wrong, wrong, PERTURBED_POINT, wrong
+        what = f"{d['stored']} moved to {wrong}"
+    cell = _truth_cell(keep.line, field, stored=stored, value=value, quotes=quotes, wiki=wiki,
+                       stored_point=stored_point)  # fmt: skip
+    truth = {
+        "expected": AD.REJECT, "class": KNOWN_WRONG, "basis": basis, "column": field,
+        "name": keep.line["name"],
+        "why": f"{what}; the quotes are WD1's, two sources of two families, for the true value",
+    }  # fmt: skip
+    return cell, truth
+
+
+def build_adversarial_truth(
     out: Path,
     *,
     seed: int,
-    per_class: int = ADV_PER_CLASS,
-    audit_dir: Path = AUDIT_DIR,
-    repo: Path = D.REPO,
+    fields_dir: Path = POP.FIELDS_DIR,
+    wiki_root: Path = W.WIKI_CACHE,
+    known_wrong: Sequence[KnownWrong] | None = None,
+    perturbed: Mapping[str, int] | None = None,
+    right: Mapping[str, int] | None = None,
+    calibration_id: str = ADV_CALIBRATION_ID,
 ) -> dict[str, Any]:
-    """`<out>/handoff` (the check question per audit cell), `<out>/run` (CELLS.json, ROUNDS.jsonl, a
-    wd5 RUN.json) and `<out>/TRUTH.json` (`{cell: {expected: confirm|reject, ...}}`): `per_class`
-    keeps and `per_class` reverts, half of each from each column."""
-    if per_class % 2:
-        raise PoolError(f"{per_class} cells per class do not split in two columns")
+    """`<out>/handoff` (the check question per cell), `<out>/run` (CELLS.json, ROUNDS.jsonl, a wd5
+    RUN.json) and `<out>/TRUTH.json` (`{cell: {expected: confirm|reject, class, basis, why}}`).
+
+    **Known wrong**: the sample audit's wrong periods and the band-rule caves (`KNOWN_WRONG_PERIODS`)
+    and seeded perturbations of WD1 two-source keeps - a start in a bucket `MIN_BUCKET_GAP` away, a
+    wrong canonical type, a point moved 40-120 km - each under the original quotes. **Known right**:
+    other WD1 two-source keeps as they were decided. A site is in the pool once. The table and the
+    quotas are `KNOWN_WRONG_PERIODS`, `PERTURBED_QUOTA` and `RIGHT_QUOTA` unless given."""
     _need_empty(out)
+    known_wrong = KNOWN_WRONG_PERIODS if known_wrong is None else known_wrong
+    perturbed = PERTURBED_QUOTA if perturbed is None else perturbed
+    right = RIGHT_QUOTA if right is None else right
     rng = random.Random(seed)  # noqa: S311 - a seeded, recorded draw
-    rows = audit_candidates(audit_dir)
-    chosen: list[tuple[dict[str, Any], dict[str, Any]]] = []
-    for verdict in ("keep", "revert"):
-        for column in ("period_start", "site_type"):
-            pool = [r for r in rows if r["audit"] == verdict and r["column"] == column]
-            rng.shuffle(pool)
-            taken = 0
-            for row in pool:
-                if taken == per_class // 2:
-                    break
+    wiki = W.WikiCache(wiki_root)
+    keeps = wd1_keeps(fields_dir)
+    cells: list[tuple[dict[str, Any], dict[str, Any]]] = known_wrong_cells(
+        fields_dir, wiki, known_wrong
+    )
+    taken = {c["site_id"] for c, _ in cells}
+    for field in TRUTH_FIELDS:
+        pool = [k for k in keeps[field] if k.decision["site_id"] not in taken]
+        rng.shuffle(pool)
+        for kind, quota, make in (
+            ("right", right[field], lambda k: _right_cell(k, wiki)),
+            ("perturbed", perturbed[field], lambda k: _perturbed_cell(k, wiki, rng)),
+        ):
+            made = 0
+            while made < quota and pool:
+                keep = pool.pop()
                 try:
-                    chosen.append((row, audit_cell(row, repo)))
-                except AD.AdversarialError:
-                    continue
-                taken += 1
-            if taken < per_class // 2:
-                raise PoolError(
-                    f"only {taken} usable {verdict} rows of {column}, {per_class // 2} wanted"
-                )
+                    cells.append(make(keep))
+                except (AD.AdversarialError, PerturbationError):
+                    continue  # a page that cannot be read or a value that cannot be bent: left out
+                taken.add(keep.decision["site_id"])
+                made += 1
+            if made < quota:
+                raise PoolError(f"only {made} usable {kind} {field} cells, {quota} wanted")
+    ids = [cell["cell"] for cell, _ in cells]
+    if len(set(ids)) != len(ids):
+        raise PoolError("a cell is in the pool twice")
     run, handoff = out / "run", out / "handoff"
-    R.write_run(run, R.RECHECK, built_from={"pool": "adversarial", "seed": seed})
+    R.write_run(run, R.RECHECK, built_from={"pool": "adversarial-truth", "seed": seed})
     (run / C.CLASSIFIED_FILE).write_text("", encoding="utf-8", newline="\n")
-    cells = sorted((cell for _, cell in chosen), key=lambda c: c["cell"])
-    HO._write_json(run / AD.CELLS_FILE, {"seed": seed, "cells": cells})
-    AD._export_round(run, handoff, 0, [c["cell"] for c in cells], {})
-    truth = {
-        cell["cell"]: {
-            "expected": AD.CONFIRM if row["audit"] == "keep" else AD.REJECT,
-            "audit_decision": row["audit"],
-            "change_key": row["change_key"],
-            "column": row["column"],
-            "name": row["site_name"],
-        }
-        for row, cell in chosen
-    }
+    ordered = sorted(cells, key=lambda pair: pair[0]["cell"])
+    HO._write_json(run / AD.CELLS_FILE, {"seed": seed, "cells": [c for c, _ in ordered]})
+    AD._export_round(run, handoff, 0, [c["cell"] for c, _ in ordered], {})
+    truth = {cell["cell"]: entry for cell, entry in ordered}
     HO._write_json(out / TRUTH_FILE, truth)
     batches = list(AD.read_rounds(run)[0]["batches"])
     return {
-        "pool": "adversarial",
-        "cells": len(cells),
+        "pool": "adversarial-truth",
+        "cells": len(ordered),
         "expected": dict(sorted(Counter(t["expected"] for t in truth.values()).items())),
+        "basis": dict(sorted(Counter(t["basis"] for t in truth.values()).items())),
         "batches": batches,
         "seal": _seal_command(
-            out, role="adversarial", batches=batches, comparison=COMPARISON_ADV, truth=True,
-            kind="adv",
+            out, role="adversarial", batches=batches, comparison=COMPARISON_ADV_KNOWN, truth=True,
+            calibration_id=calibration_id,
         ),
     }  # fmt: skip
 
@@ -736,16 +1019,21 @@ def compare_bp(
     )  # fmt: skip
 
 
-def compare_adv(
+def compare_adv_known(
     sealed: dict[str, Any], recorded: dict[str, str], fresh: dict[str, str], out: Path
 ) -> dict[str, Any]:
-    """The adversarial pool: confirm against the audit's keep, reject against its revert, on the
-    cells the fresh answer decides; an `unclear` (or an answer not in shape) decides nothing and is
-    counted in the undecided rate, whose gold is 0."""
+    """The known-truth adversarial pool: `reject` is right for a known-wrong cell, `confirm` for a
+    known-right one. Every answered cell counts - an `unclear` (or an answer not in shape) is a
+    miss in its class, because a known-wrong cell that is not rejected is not caught. The seal's
+    threshold holds twice, as a rate per class: the reject rate on the known-wrong cells and the
+    confirm rate on the known-right ones (`lane_failures`, which `verdict` reads)."""
     truth = _truth(sealed)
-    units = agreed = undecided = 0
+    units = agreed = unclear = 0
     unanswered: list[str] = []
     disagreements: list[dict[str, Any]] = []
+    answered: Counter[str] = Counter()
+    hits: Counter[str] = Counter()
+    by_basis: Counter[str] = Counter()
     for cell in sorted(truth):
         if cell not in fresh:
             unanswered.append(cell)
@@ -754,30 +1042,38 @@ def compare_adv(
             verdict = AD.parse_answer(fresh[cell], cell.rsplit(".", 1)[1])[0]
         except AnswerError:
             verdict = AD.UNCLEAR
-        if verdict == AD.UNCLEAR:
-            undecided += 1
-            continue
+        entry = truth[cell]
         units += 1
-        if verdict == truth[cell]["expected"]:
+        answered[entry["class"]] += 1
+        if verdict == entry["expected"]:
             agreed += 1
+            hits[entry["class"]] += 1
+            by_basis[entry["basis"]] += 1
         else:
+            unclear += verdict == AD.UNCLEAR
             disagreements.append(
-                _disagreement(cell, "verdict", truth[cell]["expected"], verdict, fresh[cell])
+                _disagreement(cell, "verdict", entry["expected"], verdict, fresh[cell])
             )
-    answered = len(truth) - len(unanswered)
-    rate = undecided / answered if answered else 0.0
+    rates = {c: round(hits[c] / answered[c], 4) if answered[c] else None for c in CLASSES}
+    failures = [
+        f"no {c} cell was answered"
+        if rates[c] is None
+        else f"the {what} {rates[c]} is below the sealed threshold {sealed['threshold']}"
+        for c, what in CLASSES.items()
+        if rates[c] is None or rates[c] < sealed["threshold"]
+    ]
     return _report(
         sealed["role"], sorted(truth), units, agreed, unanswered, disagreements,
-        undecided={"gold": 0.0, "fresh": round(rate, 4), "gold_units": len(truth),
-                   "fresh_units": answered},
-        undecided_excess=round(rate, 4),
+        reject_rate_known_wrong=rates[KNOWN_WRONG], confirm_rate_known_right=rates[KNOWN_RIGHT],
+        answered_by_class=dict(sorted(answered.items())), unclear=unclear,
+        agreed_by_basis=dict(sorted(by_basis.items())), lane_failures=failures,
     )  # fmt: skip
 
 
 COMPARATORS: dict[str, CC.Comparator] = {
     COMPARISON_DECIDED: compare_decided,
     COMPARISON_BP: compare_bp,
-    COMPARISON_ADV: compare_adv,
+    COMPARISON_ADV_KNOWN: compare_adv_known,
 }
 
 
@@ -849,18 +1145,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     commands = {
         name: sub.add_parser(name)
-        for name in ("build-general", "build-bp", "build-adversarial", "prepare", "compare",
+        for name in ("build-general", "build-bp", "build-adversarial-truth", "prepare", "compare",
                      "audit-quotes")
     }  # fmt: skip
-    for name in ("build-general", "build-bp", "build-adversarial"):
+    builds = {
+        "build-general": GENERAL_CALIBRATION_ID,
+        "build-bp": BP_CALIBRATION_ID,
+        "build-adversarial-truth": ADV_CALIBRATION_ID,
+    }
+    for name, default_id in builds.items():
         commands[name].add_argument("--out", type=Path, required=True)
         commands[name].add_argument("--seed", type=int, required=True)
+        commands[name].add_argument("--id", default=default_id, dest="calibration_id")
+        commands[name].add_argument("--fields-dir", type=Path, default=POP.FIELDS_DIR)
     commands["build-general"].add_argument("--size", type=int, default=GENERAL_SIZE)
     commands["build-bp"].add_argument("--size", type=int, default=BP_SIZE)
-    commands["build-adversarial"].add_argument("--per-class", type=int, default=ADV_PER_CLASS)
-    for name in ("build-general", "build-bp"):
-        commands[name].add_argument("--fields-dir", type=Path, default=POP.FIELDS_DIR)
-    commands["build-adversarial"].add_argument("--audit-dir", type=Path, default=AUDIT_DIR)
+    commands["build-adversarial-truth"].add_argument("--wiki-root", type=Path, default=W.WIKI_CACHE)
     for name in ("prepare", "compare", "audit-quotes"):
         commands[name].add_argument("--root", type=Path, default=CC.CALIBRATION_ROOT)
         commands[name].add_argument("--id", required=True, dest="calibration_id")
@@ -869,14 +1169,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "build-general":
             result: Any = build_general(
-                args.out, seed=args.seed, size=args.size, fields_dir=args.fields_dir
-            )
+                args.out, seed=args.seed, size=args.size, fields_dir=args.fields_dir,
+                calibration_id=args.calibration_id,
+            )  # fmt: skip
         elif args.command == "build-bp":
-            result = build_bp(args.out, seed=args.seed, size=args.size, fields_dir=args.fields_dir)
-        elif args.command == "build-adversarial":
-            result = build_adversarial(
-                args.out, seed=args.seed, per_class=args.per_class, audit_dir=args.audit_dir
-            )
+            result = build_bp(
+                args.out, seed=args.seed, size=args.size, fields_dir=args.fields_dir,
+                calibration_id=args.calibration_id,
+            )  # fmt: skip
+        elif args.command == "build-adversarial-truth":
+            result = build_adversarial_truth(
+                args.out, seed=args.seed, fields_dir=args.fields_dir, wiki_root=args.wiki_root,
+                calibration_id=args.calibration_id,
+            )  # fmt: skip
         elif args.command == "prepare":
             result = prepare(args.root, calibration_id=args.calibration_id, run=args.run)
         elif args.command == "compare":

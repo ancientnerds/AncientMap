@@ -12,7 +12,8 @@ Every role passes a calibration against already-judged cases before its first an
 (`calibrate_claude.py`): the threshold is sealed in `THRESHOLDS.json` before the run, which is why
 `Role.threshold` here is `None` - the registry holds no number a run could move. A role that fails
 moves up one tier (Haiku to Sonnet to Opus; `next_tier`), and the move is a record
-(`escalation`), never a silent edit of this file.
+(`escalation`), never a silent edit of this file: the move is copied into `APPLIED_ESCALATIONS` with
+the commit that edits `ROLES`, and the registry is held to those records when the module is imported.
 
 The two code roles have no pool of cases (`calibration_set` is `None`): the gates and the Opus
 review judge them.
@@ -77,7 +78,12 @@ ROLES: Mapping[str, Role] = _registry(
     Role("hook_rater", "claude-opus-5-5", "medium", "design_run_hand_drawn_60"),
     Role("fact_checker", "claude-sonnet-5-5", "high", "wb_check_verify_opus"),
     Role("web_verifier", "claude-sonnet-5-5", "high", "wb_check_verify_opus"),
-    Role("field_researcher", "claude-sonnet-5-5", "high", "wd1_wd3_rounds_and_bp_set"),
+    # Opus since the tier move of 2026-10-09 (`APPLIED_ESCALATIONS`): Sonnet failed fr-general-001.
+    Role("field_researcher", "claude-opus-5-5", "high", "wd1_wd3_rounds_and_bp_set"),
+    # The description writer of lane E (`wc/prompts_enrich.py`). It rode on `field_researcher` until
+    # that role moved to Opus: the lane's writing was never measured on Opus and stays on Sonnet,
+    # under a calibration set of its own, sealed as `enrich-writer`.
+    Role("enrich_writer", "claude-sonnet-5-5", "high", "enrich-writer"),
     Role("adversarial", "claude-opus-5-5", "high", "opus_audit_934"),
     Role("image_prefilter", "claude-haiku-5-5", "low", "image_kind_135"),
     Role("image_depicts", "claude-sonnet-5-5", "medium", "gallery_audit_calibration_opus"),
@@ -86,6 +92,53 @@ ROLES: Mapping[str, Role] = _registry(
     Role("pilot_judge", "claude-opus-5-5", "xhigh", "canaries_10"),
     Role("operator", "claude-haiku-5-5", "low", "scripted_dry_run"),
 )
+
+
+#: The tier moves applied to `ROLES`, oldest first. A move is a record: the dict `escalation()` returns
+#: for the failed verdict (`verdicts/<calibration_id>.json` of the calibration root), copied here when
+#: the `ROLES` edit is committed, so the edit never stands without its calibration and its reason.
+#: `check_applied_escalations` holds the registry to them at import.
+APPLIED_ESCALATIONS: tuple[Mapping[str, str], ...] = (
+    MappingProxyType(
+        {
+            "role": "field_researcher",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "fr-general-001",
+            "reason": "agreement 0.8636 is below the sealed threshold 0.9",
+        }
+    ),
+)
+_ESCALATION_KEYS = frozenset({"role", "from", "to", "calibration_id", "reason"})
+
+
+def check_applied_escalations(
+    moves: tuple[Mapping[str, str], ...], roles: Mapping[str, Role]
+) -> None:
+    """Refuse a record of `moves` that is not a one-tier move of a registered role with its
+    calibration and reason, a chain that does not join (each move starts where the last one ended),
+    and a registry that is not where the last move of its role ended."""
+    ended: dict[str, str] = {}
+    for move in moves:
+        if set(move) != _ESCALATION_KEYS or not all(str(v).strip() for v in move.values()):
+            raise RoleError(
+                f"an applied escalation carries exactly {sorted(_ESCALATION_KEYS)}: {dict(move)}"
+            )
+        name = move["role"]
+        if name not in roles:
+            raise RoleError(f"an applied escalation names the unregistered role {name!r}")
+        if move["from"] != ended.get(name, move["from"]):
+            raise RoleError(
+                f"{name}: the move from {move['from']} does not start where the last one ended"
+            )
+        if move["to"] != next_tier(move["from"]):
+            raise RoleError(f"{name}: {move['from']} to {move['to']} is not one tier up")
+        ended[name] = move["to"]
+    for name, model in ended.items():
+        if roles[name].model != model:
+            raise RoleError(
+                f"{name} is registered to {roles[name].model}, but its applied moves end at {model}"
+            )
 
 
 def role(name: str) -> Role:
@@ -191,3 +244,6 @@ def role_sha256(name: str) -> str:
 def registry_sha256() -> str:
     """The sha256 of this file's bytes: the whole registry as a seal saw it."""
     return hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+
+
+check_applied_escalations(APPLIED_ESCALATIONS, ROLES)

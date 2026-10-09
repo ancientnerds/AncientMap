@@ -1124,10 +1124,12 @@ with a verbatim quote, added to the description so the page pays the hook off; *
 names both positions with sources, and its card asserts neither. Orchestrator decisions (`MASTER_PLAN.md`): **X1** the
 sentences appended to a Phase-4 (W/S) text need a provenance that can say so - a new lane `E`; **X2** D21 applies to
 shown sites, the retirements (Baltic Sea Anomaly, Yonaguni, the Bosnian pyramids, Richat) stand. Models are D6's:
-the writer runs as the role `field_researcher` (Sonnet 5.5, high), the verifier as `web_verifier` (Sonnet 5.5, high),
+the writer runs as the role `enrich_writer` (Sonnet 5.5, high), the verifier as `web_verifier` (Sonnet 5.5, high),
 the pilot's judge as `pilot_judge` (Opus 5.5, xhigh), the dispute's adjudicator as `adversarial` (Opus 5.5, high).
-The registry is unchanged (it is exactly D6's twelve roles): the enrichment reuses the role whose model and effort D6
-names for web research. No MiniMax answer is ever counted (section 14.6).
+The writer rode on `field_researcher` (D6's web research role) until 2026-10-09, when that role moved to Opus after
+`fr-general-001` failed on Sonnet; the writing was never measured on Opus, so it has a role of its own
+(`roles.ROLES["enrich_writer"]`: Sonnet 5.5 high, calibration set `enrich-writer`). The dispute researcher still runs
+as `field_researcher` and so, since that day, as Opus. No MiniMax answer is ever counted (section 14.6).
 
 ### 14.1 The population
 
@@ -1172,7 +1174,7 @@ measured on no corpus: the pilot is where they are measured.
   open; a dispute sentence only if the position is attributed to its holders and not stated as fact. `verify2` for a
   text a drop changed, drops only. A round's `text_sha256` is the sha256 of the **whole new text** (`wc4.compose(...,
   base=)` inside `run_verification`): what the verifier was shown and what the record hashes. Independence is by agent
-  name without the role (`wc4.agent_name`): `field_researcher:sonnet-x` and `web_verifier:sonnet-x` are one agent.
+  name without the role (`wc4.agent_name`): `enrich_writer:sonnet-x` and `web_verifier:sonnet-x` are one agent.
 * `build --first-batch N`: the composition is `wc4.compose(decisions, quotes, base=)`: the stored text stays byte for
   byte with its `[n]`, the citation list keeps the stored entries verbatim, a page the base already cites keeps its number,
   every other page is numbered from N+1 by first appearance. A site that got no sentence is `not_planned.unchanged`
@@ -1227,12 +1229,12 @@ UNSUPPORTED, 0 incoherent texts, **0 hook invented**. `RESULT.json` records `mea
 reads it again (a forged `passed` with a missing or non-zero count is refused), and a lane-E mass plan is approved only by a
 **lane-E pilot** (own class `ENRICH`: a WC or WN pilot never approves it, nor the other way round).
 **The writer is calibrated before the lane is approved** (`enrich.require_writer_calibration`, called by `pilot_approval`
-for an ENRICH pilot): `output/remediation/calibration/` must hold a seal `enrich-writer` for role `field_researcher`
+for an ENRICH pilot): `output/remediation/calibration/` must hold a seal `enrich-writer` for role `enrich_writer`
 (threshold at least 0.7, the role's registry entry unchanged since) and its passed verdict (`verdicts/enrich-writer.json`:
 same role, model and threshold, no unanswered question, 0 false sources). The map's calibration - the 20 WN pilot sites
 through the full chain plus a leave-one-out on about 40 sites whose descriptions already carry a sourced open question,
 the sentence removed, recovery sealed at 70 % - is built by hand (description and provenance rehashed), answered by the
-writer into a calibration copy and measured with `calibrate_claude.py seal --id enrich-writer --role field_researcher
+writer into a calibration copy and measured with `calibrate_claude.py seal --id enrich-writer --role enrich_writer
 ... --threshold 0.7`, `prepare`, `compare`, `verdict`. Until that verdict passes the gate refuses every lane-E plan.
 
 ### 14.6 Roles, independence and what is not counted
@@ -1248,7 +1250,7 @@ the verifiers and the judge are different agents (compared without the role). A 
     $D fetch-categories --run-dir $RUNS/$R                      # CATEGORIES.json: MediaWiki, 50 titles a query
     $D candidates --run-dir $RUNS/$R --wiki-cache output/remediation/final-2026-10-08/wiki_cache
     $D recall --run-dir $RUNS/$R                                # the screen vs the known positives, bar 0.9
-    $D export --run-dir $RUNS/$R --handoff $H/dispute-$R-r      # research: Sonnet, role field_researcher
+    $D export --run-dir $RUNS/$R --handoff $H/dispute-$R-r      # research: role field_researcher (Opus since 2026-10-09)
     $D brief --run-dir $RUNS/$R --handoff $H/dispute-$R-r --batch-id ds-000N     # per batch
     $D check-answer ... ; $OH validate --dir $H/dispute-$R-r ; $D import --run-dir $RUNS/$R --handoff $H/dispute-$R-r
     $D adjudicate-export --run-dir $RUNS/$R --handoff $H/dispute-$R-a            # Opus high, role adversarial
@@ -1261,8 +1263,8 @@ disputed, hoax, pseudo, natural, claimed, doubt), the English Wikipedia text of 
 controversies, hoaxes and forgeries, Lost City of Z, Rock formations, the esoteric/unexplained family) and the site type
 (anomaly, natural feature). Measured on the read of 2026-10-02 and the cache of 2026-10-08, **without** the categories: 226
 candidates; **with the categories of the eleven known positives** 10 of 11 (Pantelleria Vecchia Bank, whose description
-and article carry no signal, is the miss - the screen's bar of 0.9 is met by one name). The research then costs one Sonnet
-answer per candidate (plus the categories' roughly 90 MediaWiki queries).
+and article carry no signal, is the miss - the screen's bar of 0.9 is met by one name). The research then costs one answer
+of the researcher role (`field_researcher`: Opus since 2026-10-09, Sonnet before) per candidate (plus the categories' roughly 90 MediaWiki queries).
 *Research*: disputed or not; two positions (claim, holders, 1 to 4 verbatim quotes each) and the description sentences that
 state one position as fact. The import fetches every page itself and checks every quote (`answers.quote_outcomes`); a
 position with no checked quote ends the site as `unverified`. *Adjudication*: an independent Opus agent looks for the
@@ -1328,8 +1330,9 @@ The prompts of the earlier runs are untouched (`prompts.py`, `prompts_sonnet.py`
   dropped when the text becomes lane E (lane WB writes the new card).
 - The numbers (thin = 300 characters, 3 facts, 220-character hook, 450 characters in all, the 12-word rule against the
   existing text) are design numbers; the pilot measures them. Expect a hook yield of 35 to 55 %, not 100 %.
-- Roles: the registry has no description-writer role; the writer and the dispute researcher run as `field_researcher`
-  (same model and effort D6 names for web research) and the calibration set of that role is the field researcher's.
+- Roles: the description writer is the role `enrich_writer` (Sonnet 5.5, high; calibration set `enrich-writer`, threshold
+  sealed with the calibration); the dispute researcher runs as `field_researcher` (the model of the registry: Opus since
+  the tier move of 2026-10-09) and its brief calls the agent by that model.
 - The dispute screen's recall is measured on eleven names, ten of which it flags; it needs the categories fetched.
 - The static export, Qdrant and IndexNow follow every description write; this package runs none of them.
 

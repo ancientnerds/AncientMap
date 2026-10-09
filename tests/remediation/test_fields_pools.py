@@ -9,8 +9,10 @@ temporary directory, no model is called, no page is fetched.
 # ruff: noqa: S311 - the draws are seeded and recorded, they must repeat; nothing here is a secret
 from __future__ import annotations
 
+import dataclasses
 import json
 import random
+import shutil
 import sys
 from collections import Counter
 from pathlib import Path
@@ -26,6 +28,7 @@ if str(REPO / "scripts" / "remediation") not in sys.path:
 import calibrate_claude as CC  # noqa: E402
 import mcode_driver as D  # noqa: E402
 import opus_handoff as OH  # noqa: E402
+import roles as RO  # noqa: E402
 from fields import adversarial as AD  # noqa: E402
 from fields import classify as C  # noqa: E402
 from fields import handoff as HO  # noqa: E402
@@ -517,7 +520,7 @@ class TestThePick:
         assert len(manifest) == 6 and {m["stage"] for m in manifest} == {"wd5"}
         assert {m["field"] for m in manifest} == {"period_start"}
         record = HO.read_rounds(out / "run")[0]
-        assert record["model"] == "claude-sonnet-5-5"
+        assert record["model"] == "claude-opus-5-5"
         truth = json.loads((out / PL.TRUTH_FILE).read_text(encoding="utf-8"))
         assert set(truth) == {m["label"] for m in manifest}
         named = next(v for v in truth.values() if v["basis"] == PL.AUDIT_CONFIRMED)
@@ -545,7 +548,7 @@ class TestThePick:
         PL.prepare(root, calibration_id="fr-bp-001", run=out / "run")
         cal_run = D.calibration_run(root / "fr-bp-001")
         assert R.read_rule(cal_run) is R.RECHECK
-        assert HO.read_rounds(cal_run)[0]["model"] == "claude-sonnet-5-5"
+        assert HO.read_rounds(cal_run)[0]["model"] == "claude-opus-5-5"
 
 
 # ------------------------------------------------------------------------------ comparing the BP pool
@@ -636,187 +639,560 @@ class TestComparingTheBpPool:
             PL.compare_bp(sealed, {}, {}, copy)
 
 
-# ------------------------------------------------------------------------------ the audit pool
-def audit_world(tmp_path: Path, per: int = 2) -> tuple[Path, Path]:
-    """`opus_audit/` with `per` keeps and `per` reverts of each column, their evidence files under a
-    stand-in repository."""
-    repo = tmp_path / "repo"
-    audit = tmp_path / "opus_audit"
-    audit.mkdir()
-    decisions, inputs = [], []
-    number = 0
-    for verdict in ("keep", "revert"):
-        for column in ("period_start", "site_type"):
-            for _ in range(per):
-                number += 1
-                key = f"phase3:{number:04d}"
-                rel = f"evidence/{number}.txt"
-                (repo / "evidence").mkdir(parents=True, exist_ok=True)
-                (repo / rel).write_text(f"Page {number}. The temple was built in 449 BC. More.",
-                                        encoding="utf-8")  # fmt: skip
-                decisions.append({"change_key": key, "column": column, "decision": verdict,
-                                  "superseded": False})  # fmt: skip
-                inputs.append({
-                    "change_key": key, "site_id": site_id(number), "site_name": f"Site {number}",
-                    "column": column, "old_value": "-1500" if column == "period_start" else "Ruin",
-                    "written_value": "-449" if column == "period_start" else "Temple",
-                    "country_now": "Greece", "reviewer_reason": "r", "evidence_files": [rel],
-                    "finder_quote": [{"quote": "The temple was built in 449 BC.",
-                                      "url": "https://api/x"}],
-                })  # fmt: skip
-    HO._write_jsonl(audit / "DECISIONS.jsonl", decisions)
-    HO._write_jsonl(audit / "INPUT.jsonl", inputs)
-    return audit, repo
+# ------------------------------------------------------------------------------ the known-truth pool
+SENTENCE = "The Temple of Hephaestus was built in 449 BC."  # in TH.WIKI's page
+REGISTER_QUOTE = "Hephaisteion, a temple of the 5th century BC."  # in TH.REGISTER's page
+ARTICLE_QUOTE = "The cave was lived in about 40,000 years ago."
+ARTICLE = f"Cave {{n}} is a cave in France. {ARTICLE_QUOTE} It was excavated in 1900."
+SMALL = {"period_start": 1, "site_type": 1, "coordinates": 1}
 
 
-class TestTheAdversarialPool:
-    def test_only_a_decided_unsuperseded_row_of_a_wd5_column_with_a_quote_is_a_candidate(
-        self, tmp_path: Path
+def wiki_cache(root: Path, pages: dict[str, str]) -> Path:
+    """A Wikipedia cache (`fields/wiki.py`) with one English article per `{site: text}`."""
+    (root / "en").mkdir(parents=True)
+    index = []
+    for number, (site, text) in enumerate(sorted(pages.items())):
+        name = f"en/{number}.json"
+        (root / name).write_text(
+            json.dumps({"lang": "en", "title": f"Cave {number}", "resolved_title": f"Cave {number}",
+                        "revid": 1, "text": text}), encoding="utf-8")  # fmt: skip
+        index.append({"site_id": site, "lang": "en", "title": f"Cave {number}", "file": name})
+    HO._write_jsonl(root / "INDEX.jsonl", index)
+    return root
+
+
+class TruthWorld:
+    """The miniature of the run tree the known-truth pool reads: four WD1 runs of sites that each
+    kept all three fields on two quotes (their pages kept), the wd5 classification and a Wikipedia
+    cache of two audit sites."""
+
+    FIELD_VALUES = {"period_start": (-449, "-449"), "site_type": ("Temple", "Temple"),
+                    "coordinates": ("37.9755, 23.7215", "37.9755, 23.7215")}  # fmt: skip
+
+    def __init__(self, tmp_path: Path, per_run: int = 3) -> None:
+        self.fields = tmp_path / "checkout" / "output" / "remediation" / "fields"
+        self.wiki_root = tmp_path / "wiki"
+        self.sites = 0
+        self.audit = [(site_id(900 + n), f"Cave {n}") for n in range(2)]
+        self.known = tuple(PL.KnownWrong(site, name, -500, PL.BAND_RULE, ARTICLE_QUOTE,
+                                         "stored -500; about 40,000 years")
+                           for site, name in self.audit)  # fmt: skip
+        wd5 = self.fields / "wd5"
+        wd5.mkdir(parents=True)
+        lines = []
+        for site, name in self.audit:
+            line = wd1_line(site, ["period_start"], name)
+            line["fields"]["period_start"]["stored"] = -500
+            lines.append(line)
+        HO._write_jsonl(wd5 / C.CLASSIFIED_FILE, lines)
+        wiki_cache(self.wiki_root, {site: ARTICLE.format(n=n) for n, (site, _) in
+                                    enumerate(self.audit)})  # fmt: skip
+        for name in POP.WD1_RUN_NAMES:
+            self.run(name, per_run)
+
+    def run(self, name: str, count: int) -> Path:
+        run = self.fields / name
+        run.mkdir(parents=True)
+        lines, decisions = [], []
+        for _ in range(count):
+            self.sites += 1
+            site = site_id(self.sites)
+            lines.append(wd1_line(site, list(self.FIELD_VALUES), f"Site {self.sites}"))
+            for field, (stored, value) in self.FIELD_VALUES.items():
+                row = decision(site, field, "keep", value=value, name=f"Site {self.sites}")
+                row["stored"] = stored
+                row["quotes"] = [
+                    {"source": TH.WIKI, "quote": SENTENCE, "outcome": "found", "detail": ""},
+                    {"source": TH.REGISTER, "quote": REGISTER_QUOTE, "outcome": "found",
+                     "detail": ""},
+                ]  # fmt: skip
+                decisions.append(row)
+        HO._write_jsonl(run / C.CLASSIFIED_FILE, lines)
+        HO._write_jsonl(run / HO.DECISIONS_FILE, decisions)
+        for url in (TH.WIKI, TH.REGISTER):
+            Q.store_page(run / "pages", url, status=200, final_url=url, content_type="text/html",
+                         body=TH.PAGES[url].encode(), error="", fetched_at="t")  # fmt: skip
+        return run
+
+    def build(self, out: Path, seed: int = 1, **kw: Any) -> dict[str, Any]:
+        kw.setdefault("perturbed", SMALL)
+        kw.setdefault("right", SMALL)
+        kw.setdefault("known_wrong", self.known)
+        return PL.build_adversarial_truth(out, seed=seed, fields_dir=self.fields,
+                                          wiki_root=self.wiki_root, **kw)  # fmt: skip
+
+
+@pytest.fixture
+def truth_world(tmp_path: Path) -> TruthWorld:
+    return TruthWorld(tmp_path)
+
+
+def read_truth(out: Path) -> dict[str, Any]:
+    return json.loads((out / PL.TRUTH_FILE).read_text(encoding="utf-8"))
+
+
+def read_cells(out: Path) -> dict[str, Any]:
+    return AD.read_cells(out / "run")
+
+
+class TestThePerturbations:
+    def test_a_wrong_start_lies_at_least_three_buckets_from_the_true_one(self) -> None:
+        for year in (-6000, -449, 250, 1700):
+            for seed in range(20):
+                wrong = PL.wrong_year(year, random.Random(seed))
+                gap = abs(C.BUCKETS.index(C.bucket(wrong)) - C.BUCKETS.index(C.bucket(year)))
+                assert gap >= PL.MIN_BUCKET_GAP
+
+    def test_every_bucket_has_a_year_that_lies_in_it(self) -> None:
+        assert set(PL.BUCKET_YEARS) == set(C.BUCKETS)
+        assert all(C.bucket(year) == name for name, year in PL.BUCKET_YEARS.items())
+
+    def test_every_wrong_type_is_a_canonical_type(self) -> None:
+        from pipeline.normalizers.site_type import CANONICAL_TYPES
+
+        assert set(PL.WRONG_TYPES) <= set(CANONICAL_TYPES)
+
+    def test_a_wrong_type_is_none_a_quote_holds_a_word_of_nor_one_the_item_names(self) -> None:
+        line = wd1_line(site_id(1), ["site_type"], "S")
+        line["fields"]["site_type"]["evidence"]["types"] = ["Harbor"]
+        quotes = [{"quote": "a stone bridge over the stadium", "passage": "x", "head": "mine"}]
+        for seed in range(40):
+            wrong = PL.wrong_type("Temple", line, quotes, random.Random(seed))
+            assert wrong not in {"Temple", "Harbor", "Bridge", "Stadium", "Mine/quarry"}
+
+    def test_a_site_whose_quotes_hold_every_wrong_type_is_left_out_by_name(self) -> None:
+        line = wd1_line(site_id(1), ["site_type"], "S")
+        everything = " ".join(PL.WRONG_TYPES).replace("/", " ")
+        with pytest.raises(PL.PerturbationError, match="no wrong type free of the quotes"):
+            PL.wrong_type("Temple", line, [{"quote": everything, "passage": "", "head": ""}],
+                          random.Random(1))  # fmt: skip
+
+    def test_a_moved_point_is_forty_to_one_hundred_twenty_km_away(self) -> None:
+        for seed in range(50):
+            moved = PL.moved_point((37.9755, 23.7215), random.Random(seed))
+            km = PL.A._km((37.9755, 23.7215), PL._point(moved))
+            assert PL.MIN_MOVE_KM - 0.5 <= km <= PL.MAX_MOVE_KM + 0.5 and km >= 30
+
+    def test_a_point_moved_over_the_antimeridian_is_still_a_longitude(self) -> None:
+        for seed in range(30):
+            lat, lon = PL._point(PL.moved_point((10.0, 179.9), random.Random(seed)))
+            assert -180 <= lon <= 180 and -90 <= lat <= 90
+
+
+class TestTheKnownTruthPool:
+    def test_the_audit_cells_are_the_stored_rule_value_under_the_articles_own_sentence(
+        self, truth_world: TruthWorld, tmp_path: Path
     ) -> None:
-        audit, _ = audit_world(tmp_path, per=2)
-        rows = HO._read_jsonl(audit / "DECISIONS.jsonl")
-        rows[0]["superseded"] = True
-        rows[1]["decision"] = "wrong-both"
-        rows[2]["column"] = "country"
-        HO._write_jsonl(audit / "DECISIONS.jsonl", rows)
-        assert len(PL.audit_candidates(audit)) == 5
-        inputs = HO._read_jsonl(audit / "INPUT.jsonl")
-        inputs[3]["finder_quote"] = []
-        HO._write_jsonl(audit / "INPUT.jsonl", inputs)
-        assert len(PL.audit_candidates(audit)) == 4
-
-    def test_a_cell_is_the_written_value_under_the_finders_quote_and_its_page(
-        self, tmp_path: Path
-    ) -> None:
-        audit, repo = audit_world(tmp_path, per=1)
-        cell = PL.audit_cell(PL.audit_candidates(audit)[0], repo)
-        assert cell["decision"] == "replace" and cell["value"] == "-449"
-        assert cell["stored"] == "-1500" and cell["stored_point"] is None and cell["wiki"] is None
+        wiki = PL.W.WikiCache(truth_world.wiki_root)
+        pairs = PL.known_wrong_cells(truth_world.fields, wiki, truth_world.known)
+        assert len(pairs) == 2
+        cell, truth = pairs[0]
+        assert (
+            cell["field"] == "period_start" and cell["stored"] == -500 and cell["value"] == "-500"
+        )
+        assert cell["decision"] == "keep" and cell["reasoning"] == PL.NEUTRAL_REASONING
         [quote] = cell["quotes"]
-        assert quote["url"] == "https://api/x" and "449 BC" in quote["passage"]
-        text = AD.render_prompt(cell)
-        assert "stored point" not in text and "the checker found it in the page's as served" in text
+        assert (
+            quote["url"] == "https://en.wikipedia.org/wiki/Cave_0"
+            and ARTICLE_QUOTE in quote["passage"]
+        )
+        assert cell["wiki"]["lead"].startswith("Cave 0 is a cave")
+        assert truth["expected"] == "reject" and truth["class"] == PL.KNOWN_WRONG
+        assert truth["basis"] == PL.BAND_RULE and "40,000 years" in truth["why"]
 
-    def test_a_row_whose_quote_is_in_none_of_its_files_is_refused(self, tmp_path: Path) -> None:
-        audit, repo = audit_world(tmp_path, per=1)
-        row = PL.audit_candidates(audit)[0]
-        (repo / row["evidence_files"][0]).write_text("nothing here", encoding="utf-8")
-        with pytest.raises(AD.AdversarialError, match="no finder quote"):
-            PL.audit_cell(row, repo)
-
-    def test_the_pool_is_keeps_and_reverts_in_equal_halves_with_a_truth_file(
-        self, tmp_path: Path
+    @pytest.mark.parametrize(
+        ("change", "message"),
+        [
+            ({"name": "Another Cave"}, "is 'Cave 0', not 'Another Cave'"),
+            ({"quote": "A sentence the article does not hold."}, "its sentence is in none"),
+            ({"site_id": site_id(777)}, "is not in the wd5 classification"),
+        ],
+    )
+    def test_an_entry_that_is_not_the_site_or_the_article_it_names_is_refused(
+        self, truth_world: TruthWorld, change: dict[str, Any], message: str
     ) -> None:
-        audit, repo = audit_world(tmp_path, per=4)
+        entry = dataclasses.replace(truth_world.known[0], **change)
+        with pytest.raises(PL.PoolError, match=message):
+            PL.known_wrong_cells(truth_world.fields, PL.W.WikiCache(truth_world.wiki_root), [entry])
+
+    def test_a_site_the_wiki_cache_holds_no_article_of_is_refused(
+        self, truth_world: TruthWorld
+    ) -> None:
+        site = site_id(901)
+        index = truth_world.wiki_root / "INDEX.jsonl"
+        rows = [r for r in HO._read_jsonl(index) if r["site_id"] != site]
+        HO._write_jsonl(index, rows)
+        with pytest.raises(PL.PoolError, match="holds no article of the site"):
+            PL.known_wrong_cells(truth_world.fields, PL.W.WikiCache(truth_world.wiki_root),
+                                 truth_world.known)  # fmt: skip
+
+    def test_the_known_wrong_table_names_nine_sites_of_the_audit_once_each(self) -> None:
+        names = sorted(e.name for e in PL.KNOWN_WRONG_PERIODS)
+        assert names == sorted([
+            "Lake Mungo", "Broadbury Castle", "Tappoch Broch", "Hodson Stone Circle",
+            "Le Moustier", "Bruniquel Cave", "Cro-Magnon Rock Shelter", "Apidima Cave",
+            "Eartham Pit, Boxgrove",
+        ])  # fmt: skip
+        assert len({e.site_id for e in PL.KNOWN_WRONG_PERIODS}) == 9
+        by_name = {e.name: e.value for e in PL.KNOWN_WRONG_PERIODS}
+        assert by_name["Lake Mungo"] == -500 and by_name["Broadbury Castle"] == -4000
+        assert by_name["Tappoch Broch"] == -800 and by_name["Hodson Stone Circle"] == -4000
+        assert {e.value for e in PL.KNOWN_WRONG_PERIODS if e.basis == PL.BAND_RULE} == {-500}
+        assert {e.basis for e in PL.KNOWN_WRONG_PERIODS} == {PL.SAMPLE_AUDIT, PL.BAND_RULE}
+
+    def test_the_default_quotas_make_about_fifty_cells(self) -> None:
+        total = (len(PL.KNOWN_WRONG_PERIODS) + sum(PL.PERTURBED_QUOTA.values())
+                 + sum(PL.RIGHT_QUOTA.values()))  # fmt: skip
+        assert total == 50 and PL.THRESHOLD == 0.9
+
+    def test_wd1_keeps_are_the_counted_two_quote_keeps_whose_quotes_were_found(
+        self, truth_world: TruthWorld
+    ) -> None:
+        run = truth_world.fields / "wd1"
+        rows = HO._read_jsonl(run / HO.DECISIONS_FILE)
+        rows[0]["quotes"][0]["outcome"] = "not found"
+        rows[1]["quotes"] = rows[1]["quotes"][:1]
+        rows[2]["decision"] = "replace"
+        rows[3]["via"] = "exhausted"
+        rows[4]["stored"] = None
+        HO._write_jsonl(run / HO.DECISIONS_FILE, rows)
+        keeps = PL.wd1_keeps(truth_world.fields)
+        everything = sum(len(v) for v in keeps.values())
+        assert everything == 4 * 3 * 3 - 5
+        assert all(len(k.decision["quotes"]) >= 2 for v in keeps.values() for k in v)
+
+    def test_a_wd1_run_that_is_not_there_is_refused_not_skipped(
+        self, truth_world: TruthWorld
+    ) -> None:
+        (truth_world.fields / "wd1-rest" / C.CLASSIFIED_FILE).unlink()
+        with pytest.raises(HO.HandoffStepError, match="missing or empty"):
+            PL.wd1_keeps(truth_world.fields)
+
+    def test_the_pool_is_wrong_and_right_cells_a_truth_file_and_no_answer(
+        self, truth_world: TruthWorld, tmp_path: Path
+    ) -> None:
         out = tmp_path / "pool"
-        result = PL.build_adversarial(out, seed=1, per_class=4, audit_dir=audit, repo=repo)
-        assert result["cells"] == 8 and result["expected"] == {"confirm": 4, "reject": 4}
-        truth = json.loads((out / PL.TRUTH_FILE).read_text(encoding="utf-8"))
-        assert {t["column"] for t in truth.values()} == {"period_start", "site_type"}
-        assert sum(1 for t in truth.values() if t["audit_decision"] == "keep") == 4
-        assert all(t["expected"] == ("confirm" if t["audit_decision"] == "keep" else "reject")
+        result = truth_world.build(out)
+        truth = read_truth(out)
+        # 2 audit + 3 perturbed (one per field) known wrong; 3 known right
+        assert result["cells"] == 8 and result["expected"] == {"confirm": 3, "reject": 5}
+        assert result["basis"] == {
+            "band-rule-cave": 2, "perturbed-period": 1, "perturbed-point": 1,
+            "perturbed-type": 1, "wd1-two-source-keep": 3,
+        }  # fmt: skip
+        assert {t["class"] for t in truth.values()} == {"known-wrong", "known-right"}
+        assert all(t["expected"] == ("confirm" if t["class"] == "known-right" else "reject")
                    for t in truth.values())  # fmt: skip
+        assert all(t["why"] and t["name"] and t["column"] for t in truth.values())
         manifest = OH.manifest(out / "handoff")
-        assert {m["label"] for m in manifest} == set(truth)
+        assert {m["label"] for m in manifest} == set(truth) == set(read_cells(out))
         assert not list((out / "handoff").rglob("*.answer.json"))
-        assert "--role adversarial" in result["seal"] and "--comparison adv-truth" in result["seal"]
-        assert "--max-undecided-excess 0.1" in result["seal"]
+        assert R.read_rule(out / "run") is R.RECHECK
 
-    def test_the_draw_is_seeded(self, tmp_path: Path) -> None:
-        audit, repo = audit_world(tmp_path, per=4)
+    def test_the_seal_command_is_the_checkers_with_its_own_comparison_and_no_undecided_bound(
+        self, truth_world: TruthWorld, tmp_path: Path
+    ) -> None:
+        seal = truth_world.build(tmp_path / "pool")["seal"]
+        for word in ("--id adv-truth-001", "--role adversarial", "--threshold 0.9",
+                     "--comparison adv-known-truth", "--truth ", "--batches adv-r0-b0001"):  # fmt: skip
+            assert word in seal
+        assert "--max-undecided-excess" not in seal  # an unclear is a miss in its class
 
-        def cells(seed: int, sub: str) -> list[str]:
-            PL.build_adversarial(tmp_path / sub, seed=seed, per_class=4, audit_dir=audit, repo=repo)
-            return sorted(json.loads((tmp_path / sub / PL.TRUTH_FILE).read_text("utf-8")))
+    def test_a_cell_tells_nothing_but_its_value_and_its_quotes(
+        self, truth_world: TruthWorld, tmp_path: Path
+    ) -> None:
+        """Every cell is a keep under the same reasoning, with no open reason and no rule note: the
+        class of a cell is not readable from its form."""
+        out = tmp_path / "pool"
+        truth_world.build(out)
+        cells = read_cells(out)
+        assert {c["decision"] for c in cells.values()} == {"keep"}
+        assert {c["reasoning"] for c in cells.values()} == {PL.NEUTRAL_REASONING}
+        assert {c["why_open"] for c in cells.values()} == {None}
+        assert {c["made"] for c in cells.values()} == {None}
+        assert all(c["quotes"] for c in cells.values())
+        for label in cells:
+            prompt = next((out / "handoff").rglob(f"{label}.prompt.txt")).read_text("utf-8")
+            assert "This is a keep" in prompt
 
-        assert cells(1, "a") == cells(1, "b")
-        assert cells(1, "c") != cells(2, "d")
+    def test_a_perturbed_cell_keeps_the_original_quotes_and_changes_only_the_value(
+        self, truth_world: TruthWorld, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "pool"
+        truth_world.build(out)
+        truth, cells = read_truth(out), read_cells(out)
+        perturbed = {c: t for c, t in truth.items() if t["basis"].startswith("perturbed")}
+        assert len(perturbed) == 3
+        for label, entry in perturbed.items():
+            cell = cells[label]
+            assert [q["quote"] for q in cell["quotes"]] == [SENTENCE, REGISTER_QUOTE]
+            assert cell["stored"] == (cell["value"] if entry["column"] != "period_start"
+                                      else int(cell["value"]))  # fmt: skip
+            true_stored = TruthWorld.FIELD_VALUES[entry["column"]][0]
+            assert cell["stored"] != true_stored
+            if entry["column"] == "period_start":
+                gap = abs(
+                    C.BUCKETS.index(C.bucket(int(cell["value"]))) - C.BUCKETS.index(C.bucket(-449))
+                )
+                assert gap >= PL.MIN_BUCKET_GAP
+            if entry["column"] == "coordinates":
+                assert cell["stored_point"] == cell["value"]
+                assert PL.A._km(PL._point(cell["value"]), PL._point("37.9755, 23.7215")) >= 30
+            else:
+                assert cell["stored_point"] == "37.9755, 23.7215"
 
-    def test_too_few_usable_rows_are_refused_by_count(self, tmp_path: Path) -> None:
-        audit, repo = audit_world(tmp_path, per=1)
-        with pytest.raises(PL.PoolError, match="only 1 usable keep rows of period_start, 2 wanted"):
-            PL.build_adversarial(tmp_path / "p", seed=1, per_class=4, audit_dir=audit, repo=repo)
+    def test_a_known_right_cell_is_the_decided_keep_with_its_sources(
+        self, truth_world: TruthWorld, tmp_path: Path
+    ) -> None:
+        out = tmp_path / "pool"
+        truth_world.build(out)
+        truth, cells = read_truth(out), read_cells(out)
+        right = [c for c, t in truth.items() if t["class"] == PL.KNOWN_RIGHT]
+        assert len(right) == 3
+        for label in right:
+            cell = cells[label]
+            stored, value = TruthWorld.FIELD_VALUES[cell["field"]]
+            assert (cell["stored"], cell["value"]) == (stored, value)
+            assert [q["url"] for q in cell["quotes"]] == [TH.WIKI, TH.REGISTER]
 
-    def test_an_odd_class_size_does_not_split_in_two_columns(self, tmp_path: Path) -> None:
-        with pytest.raises(PL.PoolError, match="do not split"):
-            PL.build_adversarial(tmp_path / "p", seed=1, per_class=3)
+    def test_a_site_is_in_the_pool_once(self, tmp_path: Path) -> None:
+        world = TruthWorld(tmp_path, per_run=8)
+        out = tmp_path / "pool"
+        world.build(out, perturbed={"period_start": 3, "site_type": 3, "coordinates": 3},
+                    right={"period_start": 3, "site_type": 3, "coordinates": 3})  # fmt: skip
+        sites = [label.split(".")[0] for label in read_truth(out)]
+        assert len(sites) == len(set(sites)) == 2 + 9 + 9
 
-    def test_the_calibration_run_gets_the_frozen_cells_and_can_be_imported_and_compared(
+    def test_a_table_that_names_a_site_twice_is_refused(
+        self, truth_world: TruthWorld, tmp_path: Path
+    ) -> None:
+        with pytest.raises(PL.PoolError, match="a cell is in the pool twice"):
+            truth_world.build(
+                tmp_path / "pool", known_wrong=(*truth_world.known, truth_world.known[0])
+            )
+
+    def test_the_draw_is_seeded(self, truth_world: TruthWorld, tmp_path: Path) -> None:
+        def pool(seed: int, sub: str) -> dict[str, Any]:
+            truth_world.build(tmp_path / sub, seed=seed)
+            return {c: (t["basis"], t["why"]) for c, t in read_truth(tmp_path / sub).items()}
+
+        assert pool(1, "a") == pool(1, "b")
+        assert pool(1, "c") != pool(2, "d")
+
+    def test_a_pool_is_built_once_in_a_directory_of_its_own(
+        self, truth_world: TruthWorld, tmp_path: Path
+    ) -> None:
+        truth_world.build(tmp_path / "pool")
+        with pytest.raises(PL.PoolError, match="is not empty"):
+            truth_world.build(tmp_path / "pool")
+
+    def test_too_few_usable_keeps_are_refused_by_count_and_class(self, tmp_path: Path) -> None:
+        world = TruthWorld(tmp_path, per_run=1)  # four sites of each field, 2 + 2 wanted
+        with pytest.raises(
+            PL.PoolError, match="only 0 usable perturbed period_start cells, 5 wanted"
+        ):
+            world.build(tmp_path / "p", right={"period_start": 4, "site_type": 0, "coordinates": 0},
+                        perturbed={"period_start": 5, "site_type": 0, "coordinates": 0})  # fmt: skip
+
+    def test_a_quote_the_page_no_longer_holds_leaves_its_site_out_and_the_next_one_is_drawn(
         self, tmp_path: Path
     ) -> None:
-        audit, repo = audit_world(tmp_path, per=2)
+        world = TruthWorld(tmp_path, per_run=2)
+        run = world.fields / POP.WD1_RUN_NAMES[0]
+        for url in (TH.WIKI, TH.REGISTER):  # the pages of one run changed under the quotes
+            Q.store_page(run / "pages", url, status=200, final_url=url, content_type="text/html",
+                         body=b"<html><body><p>Nothing here.</p></body></html>", error="",
+                         fetched_at="t2")  # fmt: skip
         out = tmp_path / "pool"
-        built = PL.build_adversarial(out, seed=1, per_class=4, audit_dir=audit, repo=repo)
+        world.build(out)
+        assert len(read_truth(out)) == 8
+
+    def test_a_page_that_was_never_collected_is_refused_not_skipped(self, tmp_path: Path) -> None:
+        world = TruthWorld(tmp_path, per_run=2)
+        for name in POP.WD1_RUN_NAMES:
+            shutil.rmtree(world.fields / name / "pages")
+        with pytest.raises(Q.AuditError, match="was not collected"):
+            world.build(tmp_path / "pool")
+
+
+class TestTheKnownTruthPoolEndToEnd:
+    """Seal, prepare, answer, import, compare, verdict - the whole path with agents that answer."""
+
+    def prepared(
+        self, world: TruthWorld, tmp_path: Path
+    ) -> tuple[Path, Path, Path, dict[str, Any]]:
+        out = tmp_path / "pool"
+        built = world.build(out)
         root = tmp_path / "calibration"
-        seal = CC.seal(root, calibration_id="adv-001", role="adversarial", handoff=out / "handoff",
-                       batches=built["batches"], threshold=0.9, max_undecided_excess=0.1,
-                       comparison=PL.COMPARISON_ADV, truth=out / PL.TRUTH_FILE,
-                       now=lambda: NOW)  # fmt: skip
-        PL.prepare(root, calibration_id="adv-001", run=out / "run")
-        copy = root / "adv-001"
-        cal_run = D.calibration_run(copy)
-        assert (cal_run / AD.CELLS_FILE).exists()
-        truth = json.loads((out / PL.TRUTH_FILE).read_text(encoding="utf-8"))
-        # an Opus agent answers each question, recorded under the role
+        CC.seal(root, calibration_id=PL.ADV_CALIBRATION_ID, role="adversarial",
+                handoff=out / "handoff", batches=built["batches"], threshold=0.9,
+                comparison=PL.COMPARISON_ADV_KNOWN, truth=out / PL.TRUTH_FILE,
+                now=lambda: NOW)  # fmt: skip
+        PL.prepare(root, calibration_id=PL.ADV_CALIBRATION_ID, run=out / "run")
+        return out, root, root / PL.ADV_CALIBRATION_ID, read_truth(out)
+
+    @staticmethod
+    def answer(copy: Path, label: str, batch: str, verdict: str) -> None:
+        field = label.rsplit(".", 1)[1]
+        body = {"fields": {field: {"decision": verdict, "value": None, "quotes": [],
+                                   "reasoning": "x" * 40}}}  # fmt: skip
+        OH.write_answer(copy, batch_id=batch, stage=AD.STAGE, label=label, text=json.dumps(body),
+                        answered_by=f"adversarial:{batch}", model=OH.OPUS_MODEL)  # fmt: skip
+
+    def run(self, world: TruthWorld, tmp_path: Path, wrong: str, right: str) -> dict[str, Any]:
+        _, root, copy, truth = self.prepared(world, tmp_path)
         for line in OH.manifest(copy):
-            expected = truth[line["label"]]["expected"]
-            field = line["label"].rsplit(".", 1)[1]
-            body = {"fields": {field: {"decision": expected, "value": None, "quotes": [],
-                                       "reasoning": "x" * 40}}}  # fmt: skip
-            OH.write_answer(copy, batch_id=line["batch_id"], stage=AD.STAGE, label=line["label"],
-                            text=json.dumps(body), answered_by=f"adversarial:{line['batch_id']}",
-                            model=OH.OPUS_MODEL)  # fmt: skip
-        imported = AD.import_answers(cal_run, pace=0)
-        assert imported["states"] == {"confirm": 4, "reject": 4}
-        report = CC.compare(root, calibration_id="adv-001", comparators=PL.COMPARATORS)
-        assert report["agreement"] == 1.0 and report["units"] == 8
-        assert report["undecided_excess"] == 0.0
-        verdict = CC.verdict(root, calibration_id="adv-001", false_sources=0, now=lambda: NOW)
-        assert verdict["passed"] is True and seal["comparison"] == "adv-truth"
+            expected = truth[line["label"]]["class"]
+            self.answer(copy, line["label"], line["batch_id"],
+                        wrong if expected == PL.KNOWN_WRONG else right)  # fmt: skip
+        AD.import_answers(D.calibration_run(copy), pace=0)
+        CC.compare(root, calibration_id=PL.ADV_CALIBRATION_ID, comparators=PL.COMPARATORS)
+        return CC.verdict(root, calibration_id=PL.ADV_CALIBRATION_ID, false_sources=0,
+                          now=lambda: NOW)  # fmt: skip
+
+    def test_a_checker_that_rejects_the_wrong_and_confirms_the_right_passes(
+        self, truth_world: TruthWorld, tmp_path: Path
+    ) -> None:
+        verdict = self.run(truth_world, tmp_path, "reject", "confirm")
+        assert verdict["passed"] is True and verdict["agreement"] == 1.0 and verdict["units"] == 8
+        report = json.loads((tmp_path / "calibration" / PL.ADV_CALIBRATION_ID
+                             / CC.COMPARISON_FILE).read_text(encoding="utf-8"))  # fmt: skip
+        assert (
+            report["reject_rate_known_wrong"] == 1.0 and report["confirm_rate_known_right"] == 1.0
+        )
+        assert report["lane_failures"] == []
+
+    def test_a_checker_that_confirms_everything_fails_and_names_the_class(
+        self, truth_world: TruthWorld, tmp_path: Path
+    ) -> None:
+        verdict = self.run(truth_world, tmp_path, "confirm", "confirm")
+        assert verdict["passed"] is False and verdict["agreement"] == 0.375
+        assert verdict["tier_move"] is None and "no higher tier" in verdict["held"]  # the top
+        report = json.loads((tmp_path / "calibration" / PL.ADV_CALIBRATION_ID
+                             / CC.COMPARISON_FILE).read_text(encoding="utf-8"))  # fmt: skip
+        assert report["lane_failures"] == [
+            "the reject rate on the known-wrong cells 0.0 is below the sealed threshold 0.9"
+        ]
+
+    def test_a_checker_that_rejects_everything_fails_on_the_known_right_class(
+        self, truth_world: TruthWorld, tmp_path: Path
+    ) -> None:
+        verdict = self.run(truth_world, tmp_path, "reject", "reject")
+        assert verdict["passed"] is False
+        report = json.loads((tmp_path / "calibration" / PL.ADV_CALIBRATION_ID
+                             / CC.COMPARISON_FILE).read_text(encoding="utf-8"))  # fmt: skip
+        assert (
+            report["reject_rate_known_wrong"] == 1.0 and report["confirm_rate_known_right"] == 0.0
+        )
+        assert len(report["lane_failures"]) == 1 and "known-right" in report["lane_failures"][0]
 
 
-class TestComparingTheAdversarialPool:
-    def truth(self, tmp_path: Path) -> dict[str, Any]:
+class TestComparingTheKnownTruthPool:
+    def truth(self, tmp_path: Path, wrong: int = 5, right: int = 5) -> dict[str, Any]:
+        entries = {f"{site_id(n)}.period_start": {"expected": "reject", "class": "known-wrong",
+                                                  "basis": "perturbed-period"}
+                   for n in range(wrong)}  # fmt: skip
+        entries |= {f"{site_id(100 + n)}.period_start": {"expected": "confirm",
+                                                         "class": "known-right",
+                                                         "basis": "wd1-two-source-keep"}
+                    for n in range(right)}  # fmt: skip
         path = tmp_path / "TRUTH.json"
-        path.write_text(
-            json.dumps({f"{site_id(n)}.period_start": {"expected": e} for n, e in
-                        ((1, "confirm"), (2, "reject"), (3, "reject"), (4, "confirm"))}),
-            encoding="utf-8",
-        )  # fmt: skip
-        return {"role": "adversarial", "truth": str(path)}
+        path.write_text(json.dumps(entries), encoding="utf-8")
+        return {"role": "adversarial", "truth": str(path), "threshold": 0.9}
 
     @staticmethod
     def reply(verdict: str) -> str:
         return json.dumps({"fields": {"period_start": {"decision": verdict, "value": None,
                                                        "quotes": [], "reasoning": "x" * 40}}})  # fmt: skip
 
-    def cells(self, *verdicts: str) -> dict[str, str]:
-        return {
-            f"{site_id(n)}.period_start": self.reply(v) for n, v in enumerate(verdicts, start=1)
-        }
+    def fresh(self, sealed: dict[str, Any], by_cell: dict[str, str]) -> dict[str, str]:
+        truth = json.loads(Path(sealed["truth"]).read_text(encoding="utf-8"))
+        return {c: self.reply(by_cell.get(c, "confirm" if t["class"] == "known-right" else "reject"))
+                for c, t in truth.items()}  # fmt: skip
 
-    def test_agreement_is_over_the_cells_the_checker_decides(self, tmp_path: Path) -> None:
-        report = PL.compare_adv(self.truth(tmp_path), {}, self.cells("confirm", "reject", "confirm",
-                                                                    "unclear"), Path("."))  # fmt: skip
-        assert report["units"] == 3 and report["agreed"] == 2
+    def test_the_rate_of_each_class_is_its_own_and_both_must_hold(self, tmp_path: Path) -> None:
+        sealed = self.truth(tmp_path, wrong=10, right=10)
+        ok = PL.compare_adv_known(sealed, {}, self.fresh(sealed, {}), Path("."))
+        assert ok["lane_failures"] == [] and ok["agreement"] == 1.0
+        one_wrong = self.fresh(sealed, {f"{site_id(0)}.period_start": "confirm"})
+        report = PL.compare_adv_known(sealed, {}, one_wrong, Path("."))
+        assert report["reject_rate_known_wrong"] == 0.9 and report["lane_failures"] == []
+        two_wrong = self.fresh(sealed, {f"{site_id(n)}.period_start": "confirm" for n in (0, 1)})
+        report = PL.compare_adv_known(sealed, {}, two_wrong, Path("."))
+        assert report["reject_rate_known_wrong"] == 0.8
+        assert report["lane_failures"] == [
+            "the reject rate on the known-wrong cells 0.8 is below the sealed threshold 0.9"
+        ]
+        assert report["agreement"] == 0.9  # the overall bar holds while a class fails
+        rights = self.fresh(sealed, {f"{site_id(100 + n)}.period_start": "reject" for n in (0, 1)})
+        report = PL.compare_adv_known(sealed, {}, rights, Path("."))
+        assert report["confirm_rate_known_right"] == 0.8 and len(report["lane_failures"]) == 1
+        assert "known-right" in report["lane_failures"][0]
+
+    def test_an_unclear_or_malformed_answer_is_a_miss_in_its_class(self, tmp_path: Path) -> None:
+        sealed = self.truth(tmp_path)
+        fresh = self.fresh(sealed, {f"{site_id(0)}.period_start": "unclear"})
+        fresh[f"{site_id(1)}.period_start"] = "not json"
+        report = PL.compare_adv_known(sealed, {}, fresh, Path("."))
+        assert report["units"] == 10 and report["agreed"] == 8 and report["unclear"] == 2
+        assert report["reject_rate_known_wrong"] == 0.6
+        assert {d["fresh"] for d in report["disagreements"]} == {"unclear"}
         assert report["disagreements"][0]["recorded"] == "reject"
-        assert report["undecided"] == {
-            "gold": 0.0,
-            "fresh": 0.25,
-            "gold_units": 4,
-            "fresh_units": 4,
-        }
-        assert report["undecided_excess"] == 0.25
 
-    def test_an_answer_not_in_shape_is_undecided_and_a_missing_one_unanswered(
+    def test_a_cell_nobody_answered_is_unanswered_and_leaves_the_rates_alone(
         self, tmp_path: Path
     ) -> None:
-        fresh = self.cells("confirm", "reject", "reject")
-        fresh[f"{site_id(4)}.period_start"] = "not json"
-        del fresh[f"{site_id(3)}.period_start"]
-        report = PL.compare_adv(self.truth(tmp_path), {}, fresh, Path("."))
-        assert report["unanswered"] == [f"{site_id(3)}.period_start"]
-        assert report["units"] == 2 and report["undecided"]["fresh"] == round(1 / 3, 4)
+        sealed = self.truth(tmp_path)
+        fresh = self.fresh(sealed, {})
+        del fresh[f"{site_id(0)}.period_start"]
+        report = PL.compare_adv_known(sealed, {}, fresh, Path("."))
+        assert report["unanswered"] == [f"{site_id(0)}.period_start"] and report["units"] == 9
+        assert report["reject_rate_known_wrong"] == 1.0
+
+    def test_a_class_nobody_answered_fails_by_name(self, tmp_path: Path) -> None:
+        sealed = self.truth(tmp_path)
+        truth = json.loads(Path(sealed["truth"]).read_text(encoding="utf-8"))
+        fresh = {
+            c: r for c, r in self.fresh(sealed, {}).items() if truth[c]["class"] == "known-wrong"
+        }
+        report = PL.compare_adv_known(sealed, {}, fresh, Path("."))
+        assert report["lane_failures"] == ["no known-right cell was answered"]
+
+    def test_the_agreement_by_basis_is_reported(self, tmp_path: Path) -> None:
+        sealed = self.truth(tmp_path)
+        report = PL.compare_adv_known(sealed, {}, self.fresh(sealed, {}), Path("."))
+        assert report["agreed_by_basis"] == {"perturbed-period": 5, "wd1-two-source-keep": 5}
+
+
+class TestTheWaveGateNeedsTheNewCalibrations:
+    def test_the_gate_names_the_researchers_two_pools_and_the_known_truth_checker(self) -> None:
+        assert PL.WD5_CALIBRATIONS == (
+            ("field_researcher", "fields-decided"),
+            ("field_researcher", "bp-bucket"),
+            ("adversarial", "adv-known-truth"),
+        )
+        assert set(PL.COMPARATORS) == {c for _, c in PL.WD5_CALIBRATIONS}
+
+    def test_the_new_calibration_ids_are_the_second_round(self) -> None:
+        assert (PL.GENERAL_CALIBRATION_ID, PL.BP_CALIBRATION_ID, PL.ADV_CALIBRATION_ID) == (
+            "fr-general-002", "fr-bp-002", "adv-truth-001")  # fmt: skip
+
+    def test_a_passed_calibration_sealed_before_the_tier_move_no_longer_vouches(
+        self, tmp_path: Path
+    ) -> None:
+        """fr-bp-001 passed (0.92) against the Sonnet entry of `field_researcher`; the entry changed
+        (Opus), so the gate refuses it and the BP pool is measured again as fr-bp-002."""
+        sonnet_entry = "1e00fc31840d778071741f19b48a6165985e1595676532ccb41ec368dd927fec"
+        assert RO.role_sha256("field_researcher") != sonnet_entry
+        root = tmp_path / "calibration"
+        (root / CC.VERDICTS_DIR).mkdir(parents=True)
+        (root / CC.THRESHOLDS_FILE).write_text(json.dumps({"fr-bp-001": {
+            "role": "field_researcher", "comparison": "bp-bucket", "role_sha256": sonnet_entry,
+        }}), encoding="utf-8")  # fmt: skip
+        (root / CC.VERDICTS_DIR / "fr-bp-001.json").write_text(json.dumps({"passed": True}),
+                                                               encoding="utf-8")  # fmt: skip
+        with pytest.raises(CC.CalibrationError, match="field_researcher/bp-bucket"):
+            CC.require_passed(root, [("field_researcher", "bp-bucket")])
 
 
 class TestTheQuoteAudit:
@@ -857,16 +1233,30 @@ class TestTheCommandLine:
     def test_a_refusal_prints_and_exits_one(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        code = PL.main(["build-adversarial", "--out", str(tmp_path / "p"), "--seed", "1",
-                        "--per-class", "3"])  # fmt: skip
-        assert code == 1 and "REFUSED" in capsys.readouterr().err
+        # the known-wrong table names sites the miniature run tree does not hold
+        world = TruthWorld(tmp_path)
+        code = PL.main(["build-adversarial-truth", "--out", str(tmp_path / "p"), "--seed", "1",
+                        "--fields-dir", str(world.fields),
+                        "--wiki-root", str(world.wiki_root)])  # fmt: skip
+        assert code == 1 and "is not in the wd5 classification" in capsys.readouterr().err
 
-    def test_a_build_prints_the_seal_command(
+    def test_a_build_of_the_known_truth_pool_prints_its_seal_command(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        world = TruthWorld(tmp_path)
+        monkeypatch.setattr(PL, "KNOWN_WRONG_PERIODS", world.known)
+        monkeypatch.setattr(PL, "PERTURBED_QUOTA", SMALL)
+        monkeypatch.setattr(PL, "RIGHT_QUOTA", SMALL)
+        code = PL.main(["build-adversarial-truth", "--out", str(tmp_path / "p"), "--seed", "1",
+                        "--fields-dir", str(world.fields), "--wiki-root", str(world.wiki_root),
+                        "--id", "adv-truth-007"])  # fmt: skip
+        assert code == 0
+        printed = json.loads(capsys.readouterr().out)
+        assert printed["cells"] == 8 and "--id adv-truth-007" in printed["seal"]
+
+    def test_a_missing_seal_is_refused_by_the_compare_command(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        audit, repo = audit_world(tmp_path, per=2)
-        out = tmp_path / "p"
-        PL.build_adversarial(out, seed=1, per_class=4, audit_dir=audit, repo=repo)
         assert PL.main(["compare", "--root", str(tmp_path / "none"), "--id", "x"]) == 1
         assert "not sealed" in capsys.readouterr().err
 
@@ -911,7 +1301,7 @@ class TestTheBpPoolEndToEnd:
         for line in OH.manifest(copy):
             if line["batch_id"] in {b.name for b in copy.iterdir() if b.is_dir()}:
                 OH.write_answer(copy, batch_id=line["batch_id"], stage="wd5", label=line["label"],
-                                text=self.reply(quote), model=kw.get("model", OH.SONNET_MODEL),
+                                text=self.reply(quote), model=kw.get("model", OH.OPUS_MODEL),
                                 answered_by=kw.get("by", f"field_researcher:{line['batch_id']}"))  # fmt: skip
 
     def test_a_counted_answer_in_the_right_bucket_passes_the_pool(

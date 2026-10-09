@@ -213,7 +213,7 @@ def _lane_l_for(description: str) -> dict[str, Any]:
                                           lambda e: e.pop(WC4.ENRICH_EVIDENCE_KEY)),
          "does not read|compose"),
         (lambda rows, b: _evidence_edited(rows, EF.SITE_W,
-                                          lambda e: e[WC4.VERIFICATION_KEY]["rounds"][0].update(answered_by="field_researcher:sonnet-enrich-we-0001")),
+                                          lambda e: e[WC4.VERIFICATION_KEY]["rounds"][0].update(answered_by="enrich_writer:sonnet-enrich-we-0001")),
          "checked this site"),
         (lambda rows, b: _evidence_edited(rows, EF.SITE_W,
                                           lambda e: e[WC4.VERIFICATION_KEY]["rounds"][0].update(text_sha256="a" * 64)),

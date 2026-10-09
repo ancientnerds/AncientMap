@@ -142,7 +142,7 @@ def test_the_brief_records_the_answer_in_the_writers_role(tmp_path: Path) -> Non
     rows, _ = _rows(tmp_path)
     run, handoff = EF.start_enrich_run(tmp_path / "r", rows)
     text = cli.brief(run, handoff, "we-0001")
-    assert "--stage enrich" in text and "--model claude-sonnet-5-5 --role field_researcher" in text
+    assert "--stage enrich" in text and "--model claude-sonnet-5-5 --role enrich_writer" in text
     assert "--answered-by sonnet-enrich-we-0001" in text and "lane E" in text
     with pytest.raises(cli.WcRunError, match="no batch of"):
         cli.brief(run, handoff, "we-0009")
@@ -191,7 +191,7 @@ def _record(handoff: Path, answers: dict[str, str], **kwargs: Any) -> None:
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
-        ({"role": "web_verifier"}, "does not name the role 'field_researcher'"),
+        ({"role": "web_verifier"}, "does not name the role 'enrich_writer'"),
         ({"model": OH.OPUS_MODEL}, "registered to claude-sonnet-5-5"),
         ({"model": OH.MINIMAX_MODEL}, "registered to claude-sonnet-5-5"),
         ({"model": OH.HAIKU_MODEL}, "registered to claude-sonnet-5-5"),
@@ -353,7 +353,7 @@ def test_a_verifier_must_be_an_independent_agent_in_the_verifiers_role(tmp_path:
     record = cli._verify_round_of(run, tmp_path / "v")
     answers = {l: FX.verification(l, ["SUPPORTED"] * len(s)) for l, s in record["shown"].items()}
     for model, role, message in (
-        (OH.SONNET_MODEL, "field_researcher", "does not name the role 'web_verifier'"),
+        (OH.SONNET_MODEL, "enrich_writer", "does not name the role 'web_verifier'"),
         (OH.OPUS_MODEL, "web_verifier", "registered to claude-sonnet-5-5"),
     ):
         handoff = tmp_path / f"v-{role}-{model[:6]}"

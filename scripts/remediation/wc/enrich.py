@@ -382,7 +382,7 @@ def enrichment_parts(
 #: The calibration of the writer role for this lane (descriptions map: the 20 WN pilot sites through
 #: the full chain plus a leave-one-out on about 40 sites whose text already carries a sourced open
 #: question, the sentence removed and its recovery measured). It is sealed under this id
-#: (`calibrate_claude.py seal --id enrich-writer --role field_researcher ...`); the lane is approved
+#: (`calibrate_claude.py seal --id enrich-writer --role enrich_writer ...`); the lane is approved
 #: for production only once its verdict passed.
 WRITER_CALIBRATION_ID = "enrich-writer"
 #: Where `calibrate_claude.py` keeps seals and verdicts (its `--root` default).
