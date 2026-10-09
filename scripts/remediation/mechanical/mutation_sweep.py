@@ -8314,6 +8314,327 @@ WD5_CASES: list[Case] = [
 CASES += WD5_CASES
 
 
+# ------------- lane wd5, the readers of a quote in another language (2026-10-09): dates, points, periods
+DATES = FIELDS / "dates.py"
+POINTS = FIELDS / "points.py"
+PERIODS_PY = REPO / "pipeline/periods.py"
+DATES_TESTS = "tests/remediation/test_fields_dates.py"
+POINTS_TESTS = "tests/remediation/test_fields_points.py"
+PERIODS_TESTS = "tests/pipeline/test_periods.py"
+
+#: What the WD5 pilot's spot check asked for (a Hungarian century, a regional period name, a table
+#: with the longitude first, Russian hemisphere letters) and the guards that keep those readers from
+#: reading more than a quote says. Every label starts with "wd5l:", so the list runs on its own:
+#: `mutation_sweep.py wd5l:`.
+WD5L_CASES: list[Case] = [
+    # -- dates.py: BC phrases, ranges and the Czech age
+    guard(
+        "wd5l: a before word and an AD marker make a BC one",
+        DATES,
+        "        if found is None and self.toks[i].low in _BEFORE_WORDS and i + 1 < len(self.toks):",
+        "test_an_ad_abbreviation_after_a_before_word_is_a_bc_marker",
+        DATES_TESTS,
+    ),
+    guard(
+        "wd5l: a comma, bracket or full stop ends a range",
+        DATES,
+        "        if _BREAKS.search(gap):",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: a determiner alone is no range",
+        DATES,
+        "        return any(t.low in words for t in self.toks[end:start])",
+        "        return True",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: a run of years is joined by a range word, not by a determiner",
+        DATES,
+        "                    and self._joined(k - gap, at, CONNECTORS)\n",
+        "",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: Czech and Slovak vek is an age",
+        DATES,
+        "    if word in CENTURY_ABBREVIATIONS or word in CENTURY_OR_AGE_FORMS:\n        return CENTURY, True\n",
+        "    if word in CENTURY_ABBREVIATIONS:\n        return CENTURY, True\n"
+        "    if word in CENTURY_OR_AGE_FORMS:\n        return CENTURY, False\n",
+        "test_czech_and_slovak_age_is_no_century_word",
+        DATES_TESTS,
+    ),
+    # -- dates.py: the era is read, not assumed
+    guard(
+        "wd5l: ad, ce, sm and mo count in capitals only",
+        DATES,
+        "            if key in _UPPER_ONLY and not all(t.raw.isupper() for t in self.toks[i : i + length]):",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    guard(
+        "wd5l: Hungarian i. e. needs a Hungarian date",
+        DATES,
+        "            if key in _HUNGARIAN_ONLY and not hungarian:",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: a Hungarian ending is the ending of a Hungarian year",
+        DATES,
+        "            and toks[index + 1].low in _HUNGARIAN_ENDINGS",
+        "            and True",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    guard(
+        "wd5l: an abbreviated unit needs its marker",
+        DATES,
+        "                if abbreviated and found is None:",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    guard(
+        "wd5l: a unit glued to its number is a decade",
+        DATES,
+        "            if abbreviated and run and tok.start == self.toks[u - 1].end:",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: the last century is BC only",
+        DATES,
+        "        return [s for _, _, s in raw if not (s.last_century and s.era != BC)]",
+        "        return [s for _, _, s in raw]",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    guard(
+        "wd5l: a number below 100 beside no marker is no year",
+        DATES,
+        "                if era is None and not 100 <= n.value <= 2026:",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    guard(
+        "wd5l: joined numbers are ordinals",
+        DATES,
+        "                if run and gap and not number.ordinal:",
+        "test_a_quote_does_not_state_what_it_does_not_say",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: a lone i is a connector away from the unit word",
+        DATES,
+        '        if tok.low == "i":  # Roman one beside a unit word, "and" elsewhere',
+        "        if False:",
+        "test_a_quote_states_the_year_it_prints",
+        DATES_TESTS,
+    ),
+    guard(
+        "wd5l: a small Roman numeral beside the unit word",
+        DATES,
+        '        if adjacent and letters.upper() in ROMAN and letters != "i":',
+        "test_a_quote_states_the_year_it_prints",
+        DATES_TESTS,
+    ),
+    guard(
+        "wd5l: a statement takes the next one's marker",
+        DATES,
+        "            if s.era is None and nxt.era is not None and self._only_joints(s, end, start):",
+        "test_a_quote_states_the_year_it_prints",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: a minus sign is a BC year",
+        DATES,
+        "                era = BC if toks[n.first].minus else (found[0] if found else None)",
+        "                era = found[0] if found else None",
+        "test_a_quote_states_the_year_it_prints",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: a run of years ends where a marker begins",
+        DATES,
+        "                    and self._marker_at(k, False) is None\n",
+        "",
+        "test_a_marker_made_of_joint_words_ends_a_run_of_years",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: Roman numerals after a unit end at a marker",
+        DATES,
+        "            while k < len(self.toks) and self._marker_at(k, False) is None:",
+        "            while k < len(self.toks):",
+        "test_a_marker_goes_with_the_statement_before_it_not_the_number_after_it",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: the 50s are ten years",
+        DATES,
+        "        return 99 if n.value % 100 == 0 else 9 if n.value % 10 == 0 else 0",
+        "        return 0",
+        "test_a_quote_states_the_year_it_prints",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: AP counts in capitals only",
+        DATES,
+        '        r"antes\\s+do\\s+presente|prima\\s+del\\s+presente|(?-i:AP))\\b",',
+        '        r"antes\\s+do\\s+presente|prima\\s+del\\s+presente|AP)\\b",',
+        "test_a_phrase_without_both_number_and_unit_states_no_far_year",
+        DATES_TESTS,
+    ),
+    # -- answers.py: the readers are the answer's
+    Case(
+        "wd5l: a year is stated through the dates reader",
+        FIELDS / "answers.py",
+        "    return D.states_year(quote, year)",
+        "    return False",
+        "test_a_quote_states_the_year_it_prints",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: a unit word of any language is a date",
+        FIELDS / "answers.py",
+        "    return bool(set(fold(quote, keep_parentheses=True).split()) & DATE_WORDS) or D.has_unit_word(\n"
+        "        quote\n"
+        "    )\n",
+        "    return bool(set(fold(quote, keep_parentheses=True).split()) & DATE_WORDS)\n",
+        "test_a_foreign_quote_without_a_digit_is_a_date_through_its_unit_word",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: years before the present in other languages",
+        FIELDS / "answers.py",
+        "    for ages in D.bp_ages(quote):",
+        "    for ages in ():",
+        "test_years_before_the_present_are_read_in_other_languages",
+        DATES_TESTS,
+    ),
+    Case(
+        "wd5l: a coordinate quote is read by its url's language",
+        FIELDS / "answers.py",
+        "    lat, lon = PT.quote_point(quote, url)",
+        "    lat, lon = PT.quote_point(quote)",
+        "test_an_o_is_read_by_the_url_of_the_quote_in_an_answer",
+        POINTS_TESTS,
+    ),
+    Case(
+        "wd5l: the check hands the quote's url to the reader",
+        FIELDS / "answers.py",
+        "            off = quote_point_km(quote, value, url)",
+        "            off = quote_point_km(quote, value)",
+        "test_an_o_is_read_by_the_url_of_the_quote_in_an_answer",
+        POINTS_TESTS,
+    ),
+    # -- points.py
+    guard(
+        "wd5l: a grid reference is not read, labelled or not",
+        POINTS,
+        '        if refused.code == "grid-reference":',
+        "test_a_quote_whose_order_or_letters_are_not_decided_is_refused",
+        POINTS_TESTS,
+    ),
+    guard(
+        "wd5l: a hemisphere letter on a labelled pair is refused",
+        POINTS,
+        "    if _LONE_HEMISPHERE.search(text):",
+        "test_a_quote_whose_order_or_letters_are_not_decided_is_refused",
+        POINTS_TESTS,
+    ),
+    guard(
+        "wd5l: a labelled pair has two decimals and two labels",
+        POINTS,
+        "    if len(numbers) != 2 or len(labels) < 2:",
+        "test_a_quote_whose_order_or_letters_are_not_decided_is_refused",
+        POINTS_TESTS,
+    ),
+    guard(
+        "wd5l: labels that head a table row order its numbers",
+        POINTS,
+        "    if len(labels) == 2 and labels[1].end() <= numbers[0].start():",
+        "test_a_quote_is_read_as_the_page_prints_it",
+        POINTS_TESTS,
+    ),
+    Case(
+        "wd5l: a label after its number labels it",
+        POINTS,
+        "        elif after and _AFTER_NUMBER_LABEL.match(text[number.end() : after[0].start()]):",
+        "        elif False:",
+        "test_a_quote_is_read_as_the_page_prints_it",
+        POINTS_TESTS,
+    ),
+    guard(
+        "wd5l: a labelled pair is a point on Earth",
+        POINTS,
+        "    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):",
+        "test_a_quote_whose_order_or_letters_are_not_decided_is_refused",
+        POINTS_TESTS,
+    ),
+    Case(
+        "wd5l: O is east in German",
+        POINTS,
+        '    "O": {"de": "E", "nl": "E",',
+        '    "O": {"de": "W", "nl": "E",',
+        "test_a_quote_is_read_as_the_page_prints_it",
+        POINTS_TESTS,
+    ),
+    Case(
+        "wd5l: a decimal comma before the degree sign",
+        POINTS,
+        '    text = _DECIMAL_COMMA.sub(".", text)',
+        "    text = text",
+        "test_a_quote_is_read_as_the_page_prints_it",
+        POINTS_TESTS,
+    ),
+    Case(
+        "wd5l: a country domain gives the language",
+        POINTS,
+        '    return _LANGUAGE_TLD.get(host.rsplit(".", 1)[-1])',
+        "    return None",
+        "test_the_language_of_a_page_is_its_wikipedia_edition_or_its_country",
+        POINTS_TESTS,
+    ),
+    Case(
+        "wd5l: Cyrillic z. d. is west",
+        POINTS,
+        '    (r"з\\.?\\s?г\\.?\\s?д\\.?|зх\\.?\\s?д\\.?|з\\.?\\s?д\\.?|z\\.\\s?d\\.|ny\\.\\s?h\\.", "W"),',
+        '    (r"з\\.?\\s?г\\.?\\s?д\\.?|зх\\.?\\s?д\\.?|з\\.?\\s?д\\.?|z\\.\\s?d\\.|ny\\.\\s?h\\.", "E"),',
+        "test_a_quote_is_read_as_the_page_prints_it",
+        POINTS_TESTS,
+    ),
+    # -- periods.py
+    Case(
+        "wd5l: woodland is named capitalised",
+        PERIODS_PY,
+        '_PROPER = frozenset({"classic", "initial period", "woodland"})',
+        '_PROPER = frozenset({"classic", "initial period"})',
+        "test_the_small_spelling_and_a_longer_word_name_nothing",
+        PERIODS_TESTS,
+    ),
+    Case(
+        "wd5l: a sentence start names the period only with its next word capitalised",
+        PERIODS_PY,
+        "        if inside_sentence or _SENTENCE_START[key].match(quote, found.start()):",
+        "        if True:",
+        "test_the_small_spelling_and_a_longer_word_name_nothing",
+        PERIODS_TESTS,
+    ),
+    guard(
+        "wd5l: classic and the initial period are named capitalised",
+        PERIODS_PY,
+        "    if key in _PROPER and not _names_capitalised(key, quote):",
+        "test_the_small_spelling_and_a_longer_word_name_nothing",
+        PERIODS_TESTS,
+    ),
+]
+CASES += WD5L_CASES
+
+
 # ------------------- lane wd5, the adversarial re-check and the glue around it (2026-10-09)
 CARRY = FIELDS / "carry.py"
 WIKI_CACHE = FIELDS / "wiki.py"

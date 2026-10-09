@@ -31,7 +31,8 @@ Per field, beyond the shape (every rule here needs no page - `check_shape`):
 * **coordinates** - the value is `"lat, lon"` in decimal degrees. keep: within `KEEP_KM` of the stored
   point; replace: farther than that. Every quote must hold exactly two coordinates the owner-case
   web-witness parser reads (`bcases.web_witness.parse_coordinates`: signed decimals or degrees with a
-  hemisphere letter, nothing but labels around them), within `KEEP_KM` of the value - or within
+  hemisphere letter, nothing but labels around them), also as the page prints them in another
+  language or axis order (`points.quote_point`), within `KEEP_KM` of the value - or within
   half the grid the page's own digits are written on (`bcases.classify.grid_of`), which may be no
   coarser than whole arcminutes (`MAX_GRID`).
 * **period_start** - an integer year, negative for BC. keep: the stored value's bucket
@@ -65,12 +66,14 @@ from urllib.parse import urlsplit
 
 from acceptance.answers import AnswerError, _point, _quotes, _year, load_object, source_family
 from bcases.classify import fold, grid_name, grid_of
-from bcases.web_witness import Rejected, parse_coordinates
+from bcases.web_witness import Rejected
 from census.tests.t01_wikidata_claims import METRES_PER_DEGREE
 from opus_audit import quotes as Q
 
 from fields import classify as C
+from fields import dates as D
 from fields import harvest as H
+from fields import points as PT
 from fields import rule as R
 from pipeline import periods as P
 from pipeline.normalizers.site_type import CANONICAL_TYPES, normalize_site_type
@@ -118,34 +121,6 @@ DATE_WORDS = frozenset(
 )  # fmt: skip
 #: Words of a canonical type that name no kind of site.
 TYPE_STOPWORDS = frozenset({"and", "of", "the", "complex", "structures"})
-#: The words that make a number a century or a millennium, folded (`fold`: no accents, no case,
-#: no punctuation): "the 5th century BC", "au Ve siecle", "siglo V", "das 3. Jahrtausend". "c" and
-#: "cent" are the abbreviations "5th c." and "5th cent.".
-CENTURY_WORDS = frozenset(
-    {
-        "century", "centuries", "c", "cent", "siecle", "siecles", "secolo", "secoli", "siglo",
-        "siglos", "seculo", "seculos", "jahrhundert", "jahrhunderts", "eeuw", "wiek",
-    }
-)  # fmt: skip
-MILLENNIUM_WORDS = frozenset(
-    {
-        "millennium", "millennia", "millenaire", "millenaires", "millennio", "millenni",
-        "milenio", "milenios", "jahrtausend", "jahrtausends", "tysiaclecie",
-    }
-)  # fmt: skip
-#: A number of a century or millennium may stand this many words before its word ("the 5th or
-#: 4th century") or one word after it ("siglo V").
-ORDINAL_REACH = 3
-ORDINAL_WORDS = (
-    "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth",
-    "tenth", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth",
-    "seventeenth", "eighteenth", "nineteenth", "twentieth",
-)  # fmt: skip
-ORDINAL_SUFFIXES = ("", "st", "nd", "rd", "th", "e", "er", "eme", "o", "a")
-_ROMAN = (
-    (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"), (50, "l"),
-    (40, "xl"), (10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i"),
-)  # fmt: skip
 #: A digit group separator between thousands: "3,000", "3.000", "3 000" (also no-break spaces).
 _THOUSANDS = re.compile(r"(?<=\d)[,.\u00a0\u202f\u2009 ](?=\d{3}(?!\d))")
 
@@ -293,11 +268,13 @@ def _stored_point(line: Mapping[str, Any]) -> tuple[float, float]:
     return float(lat), float(lon)
 
 
-def quote_point_km(quote: str, value: tuple[float, float]) -> float:
+def quote_point_km(quote: str, value: tuple[float, float], url: str = "") -> float:
     """How far the one point a coordinate quote holds lies from `value`, less half the grid its
     digits are written on - `Rejected` when the quote holds no such point, `AnswerError` when its
-    digits are coarser than `MAX_GRID` and cannot place a site."""
-    lat, lon = parse_coordinates(quote)
+    digits are coarser than `MAX_GRID` and cannot place a site. The point is read as the page
+    prints it (`points.quote_point`): Cyrillic and other localised hemispheres, `url` for the
+    language of an `O`, a longitude-first pair when the quote labels its axes."""
+    lat, lon = PT.quote_point(quote, url)
     step = grid_of(lat, lon)
     if step > MAX_GRID * (1 + 1e-9):
         raise AnswerError(f"{quote!r} is written in {grid_name(step)}: too coarse to place a site")
@@ -308,7 +285,9 @@ def quote_point_km(quote: str, value: tuple[float, float]) -> float:
 def dated(quote: str) -> bool:
     if re.search(r"\d", quote):
         return True
-    return bool(set(fold(quote, keep_parentheses=True).split()) & DATE_WORDS)
+    return bool(set(fold(quote, keep_parentheses=True).split()) & DATE_WORDS) or D.has_unit_word(
+        quote
+    )
 
 
 def dated_period(quote: str, name: str) -> bool:
@@ -317,36 +296,6 @@ def dated_period(quote: str, name: str) -> bool:
     is the sentence 792 of WD3's 1,338 dropped answers were made of (measured 2026-10-04) - so the
     period is a dating quote beside the year, never instead of it."""
     return dated(quote) or P.states_period(quote, name)
-
-
-def _roman(number: int) -> str:
-    out = ""
-    for value, letters in _ROMAN:
-        while number >= value:
-            out += letters
-            number -= value
-    return out
-
-
-def ordinal_forms(number: int) -> frozenset[str]:
-    """How a folded text writes the n-th century or millennium: `5`, `5th`, `5e`, `v`, `ve`,
-    `fifth`."""
-    forms = {f"{number}{suffix}" for suffix in ORDINAL_SUFFIXES}
-    forms |= {_roman(number) + suffix for suffix in ("", "e", "er", "eme")}
-    if number <= len(ORDINAL_WORDS):
-        forms.add(ORDINAL_WORDS[number - 1])
-    return frozenset(forms)
-
-
-def _names_ordinal(words: Sequence[str], number: int, unit: frozenset[str]) -> bool:
-    forms = ordinal_forms(number)
-    for at, word in enumerate(words):
-        if word not in forms:
-            continue
-        after = words[at + 1 : at + 1 + ORDINAL_REACH]
-        if unit & set(after) or (at and words[at - 1] in unit):
-            return True
-    return False
 
 
 #: Years before the present are counted from 1950 ("BP" is "before present", the present being 1950
@@ -390,13 +339,23 @@ def bp_dates(quote: str) -> list[tuple[int, int]]:
     out: list[tuple[int, int]] = []
     for match in _BP_DATE.finditer(_THOUSANDS.sub("", quote)):
         multiplier = next(m for i, (_, m) in enumerate(_BP_UNITS) if match.group(f"u{i}"))
-        ages = [Decimal(t) * multiplier for t in (match.group(1), match.group(2)) if t is not None]
-        unit = min(10 ** age.normalize().as_tuple().exponent for age in ages)
         out.extend(
-            (BP_PRESENT - int(age), max(BP_FLOOR, min(int(unit), int(age) // BP_SHARE)))
-            for age in ages
+            _bp_years(
+                [Decimal(t) * multiplier for t in (match.group(1), match.group(2)) if t is not None]
+            )
         )
+    for ages in D.bp_ages(quote):  # "vor 12.000 Jahren", "il y a 12 000 ans", "12.000 anni fa"
+        out.extend(_bp_years(list(ages)))
     return out
+
+
+def _bp_years(ages: Sequence[Decimal]) -> list[tuple[int, int]]:
+    """Each age as `(year, tolerance)`; the tolerance is one unit of the finer end's last
+    significant digit."""
+    unit = min(10 ** age.normalize().as_tuple().exponent for age in ages)
+    return [
+        (BP_PRESENT - int(age), max(BP_FLOOR, min(int(unit), int(age) // BP_SHARE))) for age in ages
+    ]
 
 
 def states_bp(quote: str, year: int) -> bool:
@@ -414,23 +373,16 @@ def states_bp(quote: str, year: int) -> bool:
 
 
 def states_year(quote: str, year: int) -> bool:
-    """Whether the quote states `year` itself: the year as a whole number (thousands separators
-    read), or its century or millennium - a number (arabic, Roman, an English ordinal word) beside
-    a century or millennium word, or a number of years before the present (`states_bp`). The n-th
-    century BC runs from n x 100 BC to (n-1) x 100 + 1 BC (the prompt's "the 8th century BC" ->
-    -800), the n-th AD from (n-1) x 100 + 1."""
-    number = abs(year)
-    digits = _THOUSANDS.sub("", quote)
-    if number and re.search(rf"(?<!\d){number}(?!\d)", digits):
-        return True
+    """Whether the quote states `year` itself, in the language the page prints it (`dates`): the
+    year with its era marker ("449 BC", "AD 449", "um 3.000 v. Chr.", "776 г. до н. э."), or the
+    century or millennium it lies in with its marker ("the 5th century BC", "V secolo a.C.",
+    "i. e. 7. században"), or a number of years before the present (`states_bp`). A number with no
+    marker is AD: only a BC marker on the page states a negative year, and a quote marked BC does
+    not state a positive one. The n-th century BC runs from n x 100 BC to (n-1) x 100 + 1 BC, the
+    n-th AD from (n-1) x 100 + 1 (the prompt's "the 8th century BC" -> -800)."""
     if states_bp(quote, year):
         return True
-    words = fold(quote, keep_parentheses=True).split()
-    century = max(1, (number - 1) // 100 + 1)
-    millennium = max(1, (number - 1) // 1000 + 1)
-    return _names_ordinal(words, century, CENTURY_WORDS) or _names_ordinal(
-        words, millennium, MILLENNIUM_WORDS
-    )
+    return D.states_year(quote, year)
 
 
 def type_stems(site_type: str) -> list[str]:
@@ -459,7 +411,7 @@ def _check_coordinates(answer: FieldAnswer, line: Mapping[str, Any], _rule: R.Ru
         )
     for url, quote in answer.quotes:
         try:
-            off = quote_point_km(quote, value)
+            off = quote_point_km(quote, value, url)
         except Rejected as exc:
             raise AnswerError(f"coordinates: the quote on {url} holds no point: {exc}") from exc
         except AnswerError as exc:
