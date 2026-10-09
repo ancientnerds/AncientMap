@@ -37,6 +37,7 @@ for _path in (_HERE.parents[3], _HERE.parents[1]):
 
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
+import web_rules as WR  # noqa: E402 - what an agent may take from the cache, and how it fetches
 from phase3.fetch_stage import write_once  # noqa: E402
 from served_image import state as ST  # noqa: E402
 
@@ -212,10 +213,7 @@ For each question:
 When every question of the batch is recorded, report how many answers you recorded.
 """
 
-WEB_ALLOWED = (
-    "Where the prompt asks for it, research on the web - a few requests at most; a 403 or 429 is "
-    "never a finding, say so and try another source."
-)
+WEB_ALLOWED = "Where the prompt asks for it, research on the web."
 CACHE_FILES = " except the cached Wikipedia pages (JSON files) your prompts name"
 NO_WEB = "Do not use the web: the pictures and the prompt are all you need."
 
@@ -243,7 +241,7 @@ def brief(run: Path, handoff: Path, spec: Spec, batch_id: str) -> str:
         handoff=shown,
         scratch=f"{shown}-scratch/{batch_id}",
         run=_shown(run),
-        web=WEB_ALLOWED if spec.web else NO_WEB,
+        web=f"{WEB_ALLOWED} {WR.rule_for_role(spec.role)}" if spec.web else NO_WEB,
         named=CACHE_FILES if spec.web else "",
     )
 

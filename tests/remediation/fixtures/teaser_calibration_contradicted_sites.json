@@ -1,0 +1,105 @@
+{
+ "source": "output/remediation/calibration/teaser-2026-10-09/JOBS.jsonl, set verifier_contradicted",
+ "cases": [
+  {
+   "key": "a8eaf6e1-2844-463f-9269-8e09471ab99b",
+   "site_id": "3f512971-679b-4f40-8f5e-1467424ce605",
+   "name": "Dolmen de Viera"
+  },
+  {
+   "key": "0ad5aced-df36-47fe-aa39-0e0ff6e54db8",
+   "site_id": "5a8bd669-5e3c-44f3-80e7-0cb82af8999c",
+   "name": "Aqueduct of Diocletian"
+  },
+  {
+   "key": "c2bed0b9-50e5-444d-bb93-2d4b89f8453b",
+   "site_id": "cd8a601a-db65-43d3-82a5-afd0d7cf3e8f",
+   "name": "Aqueduct of the Gier"
+  },
+  {
+   "key": "5d686805-e5cd-4277-87ff-723e4bc5176d",
+   "site_id": "05d60350-c231-4179-851b-380505d30a87",
+   "name": "Lescudjack Hill Fort"
+  },
+  {
+   "key": "5ab17d98-12dc-4457-b65e-77e986ed0681",
+   "site_id": "2a87862a-98dc-4cbd-8d8e-89f7c1368e63",
+   "name": "Caer L\u00eab"
+  },
+  {
+   "key": "85860fda-c2ff-4a3e-81ce-9e5dee03b7d9",
+   "site_id": "9e723832-0a2b-43f9-90d1-3743b61b91ed",
+   "name": "Lot's Cave"
+  },
+  {
+   "key": "ea98235a-42f5-4a1d-ae39-75f07460f1d6",
+   "site_id": "b7cc5073-ffca-4cd3-a168-3062908d4959",
+   "name": "Beacon Hill, West Sussex"
+  },
+  {
+   "key": "40fdd39a-af3d-40ad-bd05-711a92804dc6",
+   "site_id": "4a42b149-b113-4896-a907-24b21f8b36ec",
+   "name": "Duloe Stone Circle"
+  },
+  {
+   "key": "ada87b20-19d4-4c6b-81a0-89d0b92fbb3d",
+   "site_id": "fd2f475b-845a-42ec-8183-264673911980",
+   "name": "Federsee"
+  },
+  {
+   "key": "c24aed98-e19a-4075-97e1-000b50c23451",
+   "site_id": "3842aca5-13d3-4166-80cf-92f8dac3514f",
+   "name": "Choquepuquio"
+  },
+  {
+   "key": "37a203d7-46ba-4f1d-b2f4-1e9199ecf23d",
+   "site_id": "5e7bfc36-038c-43e0-825c-c6b55f0dd78c",
+   "name": "Patallacta"
+  },
+  {
+   "key": "37d0fb76-0e07-41fc-bda5-c7f378ec6cbb",
+   "site_id": "e99aac35-d2da-448f-8cd2-d07c02ae007c",
+   "name": "Bosiliack Barrow"
+  },
+  {
+   "key": "f992be54-32f9-4418-a11e-252b77bb5ecf",
+   "site_id": "f7c6b78b-4d82-4443-bd30-ecda84f4bc6e",
+   "name": "Old Scatness"
+  },
+  {
+   "key": "15aa6120-243d-4b54-8d6b-88a8e98765d9",
+   "site_id": "082935cc-6367-40a7-86e5-dd01e0be5b1c",
+   "name": "Hampton Down Stone Circle"
+  },
+  {
+   "key": "ce3990d5-6f4e-4162-9fce-a974979478df",
+   "site_id": "96395824-9c31-477a-bf51-13ecb5035d56",
+   "name": "Pintia"
+  },
+  {
+   "key": "f98ef8c4-82d8-4353-8d4e-cae13f54e969",
+   "site_id": "d0b8b206-14b2-4b9d-856a-ee978836c7a8",
+   "name": "Silver Gate - Diocletian's Palace"
+  },
+  {
+   "key": "3957613d-1c08-459a-876a-a83b7d3c5b45",
+   "site_id": "64a2c786-64cc-43e4-945f-52bc889ac3b1",
+   "name": "Trebeni\u0161ta"
+  },
+  {
+   "key": "55a99800-d3fe-4d34-b863-dcb894196e21",
+   "site_id": "5be3cff9-8b07-4cfc-b667-933e2d0ae302",
+   "name": "Undavalli Caves"
+  },
+  {
+   "key": "5dee8ece-3ddc-46dc-aeb6-3db2e05a1c3b",
+   "site_id": "93dd77da-64ad-4947-96b3-8ead4d6c98c1",
+   "name": "Mormont"
+  },
+  {
+   "key": "94fb793a-cea3-4de7-8290-f4b6ef96c348",
+   "site_id": "abe8f81a-dcdb-42b8-9f99-a763c858fd7f",
+   "name": "Sagaholm"
+  }
+ ]
+}

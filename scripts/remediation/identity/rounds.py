@@ -56,6 +56,7 @@ for _root in (str(_HERE.parents[3]), str(_HERE.parents[1])):
 
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
+import web_rules as WR  # noqa: E402 - what an agent may take from the cache, and how it fetches
 from l5 import web  # noqa: E402 - the project's User-Agent and the title resolution
 from opus_audit import quotes as Q  # noqa: E402
 
@@ -356,9 +357,8 @@ each about another curated site of the map. Answer each one on its own.
 Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per question \
 with its "label" (the site id) and its "prompt_path" (relative to {handoff}). Open no other file of \
 the repository, no database, no git history - except the cached Wikipedia pages a prompt names: \
-read the site's Wikipedia text from that cache first, and fetch other sources live (a few requests \
-at most; a 403 or 429 is a refusal of the server, never a finding - test it yourself with curl \
-before you write that a page cannot be read). The machine fetches every URL you cite with a plain \
+read the site's Wikipedia text from that cache first, then research the question on the web. \
+{web_rule} The machine fetches every URL you cite with a plain \
 HTTP GET and looks for your quote in what it serves (for an HTML page: its visible text; for \
 Special:EntityData/<QID>.json: the JSON's strings) - quote verbatim, cite the page you quote, never \
 a search result page. Keep each quote short (one clause, about 5 to 25 words) and never let it run \
@@ -394,6 +394,7 @@ def brief(out: Path, spec: StageSpec, round_name: str, batch_id: str) -> str:
         round=round_name,
         role=spec.role,
         model=spec.model,
+        web_rule=WR.rule_for_role(spec.role),
         count=len(record.batches[batch_id]),
         handoff=record.handoff,
         scratch=f"{record.handoff}-scratch/{batch_id}",

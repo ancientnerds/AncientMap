@@ -52,6 +52,7 @@ TINY: dict[str, Any] = {
                     "pass_cases": 2,
                     "fail_cases": 1,
                     "verdict_agreement_min": 0.9,
+                    "claim_coverage_min": 0.8,
                     "claim_agreement_min": 0.9,
                     "false_pass_max": 0,
                 },
@@ -62,10 +63,11 @@ TINY: dict[str, Any] = {
         },
         "web_verifier": {
             "sets": {
-                "verifier_contradicted": {"cases": 2, "caught_min": 2},
+                "verifier_contradicted": {"cases": 2, "caught_min": 2, "disputed": {}},
                 "verifier_verified": {
                     "cases": 2,
                     "falsely_contradicted_max": 0,
+                    "claim_coverage_min": 0.8,
                     "claim_agreement_min": 0.9,
                     "false_sources_max": 0,
                 },
@@ -246,6 +248,38 @@ def fixed_dir(tmp_path: Path, thresholds: dict[str, Any] = TINY) -> Path:
 UUID4 = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 
 
+@pytest.fixture(autouse=True)
+def wiki_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A shared Wikipedia cache of the recorded sites 1-3 (site 1 in two languages); the rest have
+    no cached page. A web role cannot be exported without the cache (its brief would send the agent
+    to a directory that is not there)."""
+    root = tmp_path / "wiki_cache"
+    lines = []
+    for n, langs in ((1, ("en", "fr")), (2, ("en",)), (3, ("en",))):
+        for lang in langs:
+            file = f"{lang}/page{n}.json"
+            (root / lang).mkdir(parents=True, exist_ok=True)
+            (root / file).write_text(
+                json.dumps({"resolved_title": f"Zorgat {n}", "revid": n, "text": DESCRIPTION}),
+                encoding="utf-8",
+            )
+            title = f"Zorgat {n}"
+            lines.append(
+                {
+                    "site_id": site_row(n)["site_id"],
+                    "lang": lang,
+                    "title": title,
+                    # the real cache indexes its files with a backslash (written on Windows)
+                    "file": file.replace("/", chr(92)),
+                }
+            )
+    (root / "INDEX.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in lines), encoding="utf-8"
+    )
+    monkeypatch.setattr(R, "WIKI_CACHE", str(root))
+    return root
+
+
 def answer_role(
     run_dir: Path,
     role: str,
@@ -310,7 +344,7 @@ class TestTheSeal:
         sets = roles["fact_checker"]["sets"]
         assert sets["checker_agreement"] == {
             "pass_cases": 30, "fail_cases": 15, "verdict_agreement_min": 0.9,
-            "claim_agreement_min": 0.9, "false_pass_max": 0
+            "claim_coverage_min": 0.8, "claim_agreement_min": 0.9, "false_pass_max": 0
         }  # fmt: skip
         assert (
             sets["checker_fail_again"]["fail_min"] == 27
@@ -318,7 +352,10 @@ class TestTheSeal:
         )
         assert sets["checker_good"]["pass_min"] == 27
         web = roles["web_verifier"]["sets"]
-        assert web["verifier_contradicted"] == {"cases": 20, "caught_min": 18}
+        assert web["verifier_contradicted"]["caught_min"] == 18
+        assert web["verifier_contradicted"]["disputed"] == K.DISPUTED_CONTRADICTIONS
+        assert len(K.DISPUTED_CONTRADICTIONS) == 5
+        assert web["verifier_verified"]["claim_coverage_min"] == 0.8
         assert web["verifier_verified"]["falsely_contradicted_max"] == 2
         hooks = roles["hook_rater"]["sets"]["hook_pairs"]
         assert (hooks["strong"], hooks["weak"], hooks["ordered_right_min"]) == (11, 13, 1.0)
@@ -692,7 +729,14 @@ class TestTheQuestions:
             "--model claude-sonnet-5-5" in brief and "--answered-by cal-web-verifier-001" in brief
         )
         assert not any(name in brief for name in K.SET_ROLE)
-        assert "wiki_cache/INDEX.jsonl" in brief and "A 403 or 429 is NEVER a finding" in brief
+        assert "WIKI_MAP.jsonl" in brief and "NEVER a finding" in brief
+        # the cache is no confirmation, and the verifier may read as many pages as it needs
+        assert "NEVER independent confirmation" in brief and "no cap on" in brief.lower()
+        assert "a few requests" not in brief and "sparingly" not in brief
+        # opaque keys: production's "the label is the site id" must not be said here
+        assert "label of each question is the site id" not in brief
+        assert "calibrate.py check-answer" in brief and "--check" in brief
+        assert "quote_check.py" in brief
         json.dumps(jobs)
         K.export_role(run_dir, "fact_checker", tmp_path / "h-good")
         plain = K.agent_jobs(run_dir, "fact_checker")[0]
@@ -734,7 +778,7 @@ class TestTheFactChecker:
         the agreement set is what a test asks about."""
         table = json.loads(json.dumps(TINY))
         rule = table["roles"]["fact_checker"]["sets"]["checker_agreement"]
-        rule.update({"claim_agreement_min": 0.0, **floors})
+        rule.update({"claim_coverage_min": 0.0, "claim_agreement_min": 0.0, **floors})
         return table
 
     def all_sets(self, run_dir: Path, **verdicts: Any) -> None:
@@ -821,7 +865,7 @@ class TestTheFactChecker:
         agreement = K.evaluate(run_dir, "fact_checker")["sets"]["checker_agreement"]
         # every verdict equals the recorded one, but the recorded failures' claims are not found
         assert agreement["verdict_agreement"] == 1.0 and agreement["false_pass"] == []
-        assert agreement["claim_agreement"] < 0.9 and agreement["passed"] is False
+        assert agreement["claim_coverage"] < 0.8 and agreement["passed"] is False
 
     def test_the_claim_agreement_is_sealed_in_the_table(self) -> None:
         rule = K.THRESHOLDS["roles"]["fact_checker"]["sets"]["checker_agreement"]
@@ -959,11 +1003,13 @@ class TestTheWebVerifier:
             {"claim": c["claim"], "verdict": "SUPPORTED", "url": PAGE, "quote": QUOTE} for c in job["recorded"]["claims"]
         ]})})  # fmt: skip
         verdict = K.evaluate(run_dir, "web_verifier", client=judge_client())
-        assert verdict["sets"]["verifier_contradicted"] == {
-            "cases": 2,
-            "caught": 0,
-            "passed": False,
-        }
+        contradicted = verdict["sets"]["verifier_contradicted"]
+        assert (contradicted["cases"], contradicted["caught"], contradicted["passed"]) == (
+            2,
+            0,
+            False,
+        )
+        assert contradicted["caught_required"] == 2 and len(contradicted["missed"]) == 2
 
     def test_a_good_card_called_contradicted_is_counted(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
@@ -977,20 +1023,6 @@ class TestTheWebVerifier:
         # every recorded claim agrees; only the card's verification is wrong
         assert len(verified["falsely_contradicted"]) == 2 and verified["claim_agreement"] == 1.0
         assert verified["passed"] is False
-
-    def test_the_claim_agreement_matches_wording_once(self) -> None:
-        recorded = [
-            {"claim": "a ridge fort", "verdict": "SUPPORTED"},
-            {"claim": "the mirror", "verdict": "SUPPORTED"},
-        ]
-        fresh = [
-            {"claim": "A ridge fort.", "verdict": "SUPPORTED"},
-            {"claim": "a mirror was found", "verdict": "CONTRADICTED"},
-        ]
-        assert K.claim_agreement(recorded, fresh) == (1, 2)
-        assert K.claim_agreement(recorded, []) == (0, 2)
-        twice = [{"claim": "a ridge fort", "verdict": "SUPPORTED"}] * 2
-        assert K.claim_agreement(twice, [fresh[0]]) == (1, 2)
 
 
 # ------------------------------------------------------------------------------ the hook rater

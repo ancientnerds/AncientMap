@@ -74,6 +74,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
+import web_rules as WR  # noqa: E402 - what an agent may take from the cache, and how it fetches
 from acceptance.answers import AnswerError  # noqa: E402
 from acceptance.questions import RESEARCH, definitions  # noqa: E402
 from census.fetch import Fetcher  # noqa: E402
@@ -1199,8 +1200,11 @@ BRIEF_PARTS = {
             "--label <label>\n"
             "It prints the cached text of each such article with its own URL and revision. Quote "
             "from that text and cite that URL: the checker reads the live article at import, and "
-            "a quote must match it character for character. Everything else you fetch live - a "
-            "few requests at most, no search-engine crawling."
+            "a quote must match it character for character (footnote markers such as [22] are "
+            "ignored on both sides). Everything else you fetch live, no search-engine crawling.\n"
+            "\n"
+            "This is a re-check of a stored value, so the cached article is never your "
+            "confirmation of it. " + WR.VERIFIER_RULE
         ),
         "unsourced": 'is "unresolved"',
         "model": RECHECK_MODEL,

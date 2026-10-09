@@ -178,7 +178,8 @@ class TestTheQuestion:
         assert "do NOT pick the survivor by age or by count alone" in text
         assert "more than 2,000 m apart is held for the owner" in text
         assert "If you cannot PROVE two records are one site with quotes, answer DISTINCT" in text
-        assert "403 or 429 is a throttle and never a finding" in text
+        assert "403 or 429 is a throttle and NEVER a finding" in text
+        assert "NEVER independent confirmation" in text and "a few requests" not in text
         assert "never ancientnerds.com" in text
 
     def test_it_does_not_show_the_owner_case_class(self) -> None:

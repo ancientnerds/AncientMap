@@ -52,6 +52,7 @@ for _root in (REPO, REPO / "scripts" / "remediation"):
         sys.path.insert(0, str(_root))
 
 import opus_handoff as OH  # noqa: E402
+import web_rules as WR  # noqa: E402 - what an agent may take from the cache, and how it fetches
 from opus_audit import quotes as Q  # noqa: E402
 
 from identity import common, export  # noqa: E402
@@ -136,7 +137,8 @@ def metres_between(cluster: Mapping[str, Any]) -> dict[tuple[str, str], float]:
 
 
 # ------------------------------------------------------------------------------------- prompts
-VERDICT_TEMPLATE = """You are a web verifier of the D14 duplicate question of the Ancient Nerds \
+VERDICT_TEMPLATE = (
+    """You are a web verifier of the D14 duplicate question of the Ancient Nerds \
 sites remediation (owner decision of 2026-10-08). Below are {n} curated site records of the map that \
 may be ONE site under several records. Decide, for each record, whether it is a duplicate, a part of \
 another, a record with a wrong link, or an own site. Research on the open web; read the pages you cite.
@@ -151,9 +153,11 @@ WHY THESE RECORDS ARE ASKED TOGETHER
 WHERE TO READ
 Wikipedia articles: each record above names its cached article (a local text file, the article as \
 plain text). Read the cached file FIRST - Wikimedia throttles this office, so do not fetch Wikipedia \
-pages that are cached. Every other source (Wikidata, a museum, a ministry, a journal) is fetched live: \
-at most a few requests, one at a time; an HTTP 403 or 429 is a throttle and never a finding. When you \
-cite a Wikipedia article, cite its URL (https://en.wikipedia.org/wiki/<Title>) and quote its text.
+pages that are cached. """
+    + WR.VERIFIER_RULE
+    + """ Every other source (Wikidata, a museum, a \
+ministry, a journal) is fetched live. When you cite a Wikipedia article, cite its URL \
+(https://en.wikipedia.org/wiki/<Title>) and quote its text.
 
 THE RULES
 1. Give EVERY record above exactly one verdict:
@@ -204,6 +208,7 @@ the record it merges into>", "parent": null or "<id of the record it is part of>
 }}
 "survivor" goes with MERGE and only with it, "parent" with PART_OF and only with it.
 """
+)
 
 
 def _member_block(index: int, m: Mapping[str, Any], ctx: Context) -> str:
@@ -281,7 +286,8 @@ def verdict_prompt(cluster: Mapping[str, Any], ctx: Context, earlier: str | None
     )
 
 
-RECHECK_TEMPLATE = """You are the adversarial reader of the D14 duplicate question of the Ancient \
+RECHECK_TEMPLATE = (
+    """You are the adversarial reader of the D14 duplicate question of the Ancient \
 Nerds sites remediation (owner decision of 2026-10-08). A web verifier answered the question below; \
 your job is to try to REFUTE each relation it asserts - not to agree with it. A relation that you \
 cannot refute with your own reading of the sources stands.
@@ -296,8 +302,9 @@ THE FIRST ANSWER'S RELATIONS (each with its quotes and whether the machine found
 {earlier}
 WHERE TO READ
 Wikipedia articles are cached as local files (listed per record above): read the cached file FIRST, \
-never fetch a cached Wikipedia page. Everything else is fetched live, a few requests, one at a time; \
-an HTTP 403 or 429 is a throttle, never a finding.
+never fetch a cached Wikipedia page. """
+    + WR.VERIFIER_RULE
+    + """ Everything else is fetched live.
 
 THE RULES
 1. For EVERY relation listed above, decide:
@@ -327,6 +334,7 @@ ANSWER with only this JSON object (one entry per relation above):
  ]
 }}
 """
+)
 
 
 def relations_of(decision: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -870,15 +878,17 @@ def write_decisions(run: Path, ctx: Context) -> dict[str, Any]:
 
 
 # ----------------------------------------------------------------------------------- the brief
-BRIEF = """You are agent {batch} of the D14 duplicate question of the Ancient Nerds sites remediation \
+BRIEF = (
+    """You are agent {batch} of the D14 duplicate question of the Ancient Nerds sites remediation \
 (stage {stage}, round {round}), role {role}. You answer {count} question(s), each about one cluster \
 of site records. Answer each one on its own.
 
 Read ONLY your prompt files: {handoff}/{batch}/MANIFEST.jsonl lists them, one JSON line per \
 question with its "label" (the cluster id) and its "prompt_path" (relative to {handoff}), plus the \
 cached Wikipedia files and the web pages your prompt names. Open no other file of the repository, no \
-database, no git history. Fetch live at most a few requests, one at a time; an HTTP 403 or 429 is a \
-throttle, never a finding.
+database, no git history. """
+    + WR.VERIFIER_RULE
+    + """
 
 For each question:
 1. Read {handoff}/<prompt_path>.
@@ -895,6 +905,7 @@ For each question:
 
 When every question of the batch is recorded, report how many answers you recorded.
 """
+)
 
 
 def brief(

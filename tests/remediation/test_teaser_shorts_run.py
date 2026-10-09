@@ -1131,9 +1131,12 @@ class TestTheBriefs:
         text = R.brief(run, handoff, "verify-001")
         assert "output/remediation/final-2026-10-08/wiki_cache/INDEX.jsonl" in text
         assert "site_id, lang, title, file" in text and "resolved_title, revid and text" in text
-        assert (
-            "A 403 or 429 is NEVER a finding" in text and "at most a few requests per site" in text
-        )
+        assert "label of each question is the site id" in text
+        # the cached article is where the card came from: never the confirmation, no request cap
+        assert "NEVER independent confirmation" in text and "no cap on requests" in text
+        assert "An HTTP 403 or 429 is a throttle and NEVER a finding" in text
+        assert "a few requests" not in text and "sparingly" not in text
+        assert "quote_check.py" in text and "footnote markers such as [22]" in text
 
     def test_the_rater_is_told_it_does_not_know_the_facts(self, tmp_path: Path) -> None:
         run, handoff = self.exported(tmp_path, "rate")

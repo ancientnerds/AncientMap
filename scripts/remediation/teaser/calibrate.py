@@ -48,11 +48,15 @@ import difflib
 import functools
 import hashlib
 import json
+import math
 import random
+import re
 import sys
+import unicodedata
 import uuid
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -67,6 +71,8 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
 
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402
+import web_rules as WR  # noqa: E402 - how an agent uses the Wikipedia cache and the web
+from image_roles.wiki_cache import WikiCache  # noqa: E402
 from mechanical.plan import PlanError, parse_tagged_export  # noqa: E402
 from opus_audit import quotes as Q  # noqa: E402
 from phase3.run import read_jsonl  # noqa: E402
@@ -93,12 +99,38 @@ BATCH_SIZE = 15
 WEB_BATCH_SIZE = 5
 #: The stage every calibration question is exported and answered under: it names no set.
 STAGE = "calibration"
-#: A recorded claim is matched with a fresh one of the same card when their wording is at least this
-#: close (difflib ratio); an unmatched recorded claim counts as a disagreement.
+#: A fresh claim covers a recorded one of the same card when at least this share of the recorded
+#: claim's content words stand in the fresh claim, or the two read this close (difflib ratio). Many
+#: recorded claims may be covered by one fresh claim (an agent that lists a compound claim once).
 CLAIM_MATCH = 0.6
+#: Words that carry no claim: dropped before the content words of two claims are compared.
+STOP_WORDS = frozenset(
+    "the and was were are for with from that this its has had have been which into near also "
+    "his her their there than then when who whom whose".split()
+)
 
-#: The sealed table of plan `cards.md` 3.4. Every number is a threshold fixed before the first
-#: answer; the counts are the sizes of the fixed sample. `modules` is added at the seal.
+#: The recorded contradictions of the web verifier's sample that are disputed or hair-splitting, not
+#: plain errors of the card (Opus diagnosis of calibration teaser-2026-10-09, 2026-10-09): they stay
+#: in the sample and are reported, but do not count in the denominator of `caught_min`. Site id ->
+#: why. A key that is not the site id of a contradicted case of the draw is refused by the evaluation.
+DISPUTED_CONTRADICTIONS: dict[str, str] = {
+    "5be3cff9-8b07-4cfc-b667-933e2d0ae302": "Undavalli Caves: the 4th-5th century date is disputed "
+    "(the ASI dates the earliest phase to the 7th century); Wikipedia and Live History India agree "
+    "with the card",
+    "3f512971-679b-4f40-8f5e-1467424ce605": "Dolmen de Viera: the discoverers' surname (Fuentes "
+    "against Viera Fuentes) - a naming convention, not a wrong fact",
+    "9e723832-0a2b-43f9-90d1-3743b61b91ed": "Lot's Cave: April 606 (UNESCO, Wikipedia) against "
+    "605 or 607 (the excavator) - the sources differ by one year",
+    "93dd77da-64ad-4947-96b3-8ead4d6c98c1": "Mormont: 'burial pits' against the excavators' "
+    "'deposit pits' for the same 245 pits",
+    "b7cc5073-ffca-4cd3-a168-3062908d4959": "Beacon Hill, West Sussex: the tense of 'lie' about a "
+    "mound the sources say was ploughed out - a reading of the card, not a wrong fact",
+}
+
+#: The sealed table of plan `cards.md` 3.4, as amended by the diagnosis of calibration
+#: teaser-2026-10-09 (the claim measure is a coverage; the disputed contradictions are out of the
+#: `caught_min` denominator). Every number is a threshold fixed before the first answer; the counts
+#: are the sizes of the fixed sample. `modules` is added at the seal.
 THRESHOLDS: dict[str, Any] = {
     "version": "teaser-calibration-v1",
     "source": "output/remediation/final-2026-10-08/plans/cards.md section 3.4",
@@ -110,6 +142,7 @@ THRESHOLDS: dict[str, Any] = {
                     "pass_cases": 30,
                     "fail_cases": 15,
                     "verdict_agreement_min": 0.90,
+                    "claim_coverage_min": 0.80,
                     "claim_agreement_min": 0.90,
                     "false_pass_max": 0,
                 },
@@ -120,10 +153,15 @@ THRESHOLDS: dict[str, Any] = {
         },
         "web_verifier": {
             "sets": {
-                "verifier_contradicted": {"cases": 20, "caught_min": 18},
+                "verifier_contradicted": {
+                    "cases": 20,
+                    "caught_min": 18,
+                    "disputed": DISPUTED_CONTRADICTIONS,
+                },
                 "verifier_verified": {
                     "cases": 20,
                     "falsely_contradicted_max": 2,
+                    "claim_coverage_min": 0.80,
                     "claim_agreement_min": 0.90,
                     "false_sources_max": 0,
                 },
@@ -177,6 +215,17 @@ MODULES = (
     "scripts/remediation/teaser/shorts_v1.py",
     "scripts/remediation/teaser/prompts_shorts.py",
     "scripts/remediation/teaser/answers_shorts.py",
+    # the code the questions are built and the answers judged with (a change moves the measure)
+    "scripts/remediation/teaser/run.py",
+    "scripts/remediation/teaser/calibrate.py",
+    "scripts/remediation/opus_audit/quotes.py",
+    "scripts/remediation/wc/answers.py",  # the source rule `prove_claims` applies (url_problem)
+    "scripts/remediation/phase4/licences.py",  # `wc.answers.url_problem` -> `deny_family`
+    "pipeline/utils/card_provenance.py",  # MAX_UNPROVEN_CLAIMS: VERIFIED against UNPROVEN
+    "scripts/remediation/image_roles/wiki_cache.py",  # the WIKI_MAP the web agents read
+    "scripts/remediation/web_rules.py",
+    "scripts/remediation/quote_check.py",
+    "scripts/remediation/opus_handoff.py",
 )
 
 
@@ -196,10 +245,11 @@ def _text(data: Any) -> str:
     return json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
 
 
-def module_hashes(root: Path = ROOT) -> dict[str, str]:
-    return {
-        name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in sorted(MODULES)
-    }
+def module_hashes(root: Path = ROOT, names: Iterable[str] | None = None) -> dict[str, str]:
+    """The sha256 of each module's bytes in the checkout `root` - those of `MODULES` unless the
+    caller names others (a seal checks the modules it was sealed with)."""
+    wanted = MODULES if names is None else names
+    return {name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in sorted(wanted)}
 
 
 # ------------------------------------------------------------------------------ the seal
@@ -256,9 +306,10 @@ def _seal_log(run_dir: Path) -> list[dict[str, Any]]:
     return entries
 
 
-def sealed(run_dir: Path, *, root: Path = ROOT) -> tuple[dict[str, Any], str]:
-    """The sealed thresholds and their sha256 - refusing a file that is not the one the log sealed
-    and a calibration whose prompts, answer shapes or role registry changed after the seal."""
+def integrity(run_dir: Path) -> tuple[dict[str, Any], str]:
+    """The sealed thresholds and their sha256 - refusing only a file that is not the one the log
+    sealed. For a step that reads no prompt and judges no answer (`void_answers` moves a file aside),
+    so that it can serve a calibration sealed with an older checkout of the modules."""
     entries = [e for e in _seal_log(run_dir) if SEALED_KEY in e]
     if len({e[SEALED_KEY] for e in entries}) != 1:
         raise CalibrationError(f"{run_dir / SEAL_LOG} records more than one thresholds hash")
@@ -266,8 +317,16 @@ def sealed(run_dir: Path, *, root: Path = ROOT) -> tuple[dict[str, Any], str]:
     text = path.read_text(encoding="utf-8")
     if _sha(text) != entries[0][SEALED_KEY]:
         raise CalibrationError(f"{path} changed after it was sealed")
-    thresholds = json.loads(text)
-    moved = [n for n, digest in module_hashes(root).items() if thresholds["modules"][n] != digest]
+    return json.loads(text), _sha(text)
+
+
+def sealed(run_dir: Path, *, root: Path = ROOT) -> tuple[dict[str, Any], str]:
+    """The sealed thresholds and their sha256 - refusing a file that is not the one the log sealed
+    and a calibration whose prompts, answer shapes, quote check or role registry changed after the
+    seal (the modules the seal recorded are hashed in `root`)."""
+    thresholds, digest = integrity(run_dir)
+    sealed_with = module_hashes(root, thresholds["modules"])
+    moved = [n for n, recorded in thresholds["modules"].items() if sealed_with[n] != recorded]
     if moved:
         raise CalibrationError(
             f"{moved} changed after the seal: the prompts the cases are asked with are not the ones "
@@ -276,7 +335,7 @@ def sealed(run_dir: Path, *, root: Path = ROOT) -> tuple[dict[str, Any], str]:
     for name, entry in thresholds["registry"].items():
         if RO.role_sha256(name) != entry["sha256"]:
             raise CalibrationError(f"the registry entry of role {name} changed after the seal")
-    return thresholds, _sha(text)
+    return thresholds, digest
 
 
 # ------------------------------------------------------------------------------ the cases
@@ -396,6 +455,9 @@ def _verifier_job(set_name: str, number: int, item: Mapping[str, Any]) -> dict[s
         "judge_v1",
         item["site"],
         card=record["card"],
+        # the fewest claims the verifier may list: as many as the check that accepted the card
+        # listed, as `run.import_stage` holds a production verifier to (`claims_floor`)
+        floor=len(item["check"]["claims"]),
         recorded={
             "run": item["run"],
             "verdict": record["verdict"],
@@ -707,11 +769,29 @@ def export_batches(
     return batches
 
 
-def export_role(run_dir: Path, role: str, handoff: Path) -> dict[str, Any]:
+def wiki_map(group: Sequence[Mapping[str, Any]], cache: WikiCache) -> str:
+    """The batch's `WIKI_MAP.jsonl`: for each question, in the batch's own (shuffled) order, its label
+    and the pages of the shared cache for its site. A web agent finds the cache through this map
+    because a label is an opaque key. It carries nothing but label and pages - no site id, no set,
+    no number - so it tells no more about a case than the question does."""
+    lines = []
+    for job in group:
+        pages = [
+            {"lang": lang, "title": row["title"], "file": row["file"].replace("\\", "/")}
+            for lang, row in sorted(cache.pages.get(job["site_id"], {}).items())
+        ]
+        lines.append(json.dumps({"label": job["key"], "pages": pages}, ensure_ascii=False))
+    return "".join(line + "\n" for line in lines)
+
+
+def export_role(
+    run_dir: Path, role: str, handoff: Path, *, wiki_cache: Path | None = None
+) -> dict[str, Any]:
     """Every case of one role into a handoff directory of its own, to be answered by that role.
     The cases of all the role's sets are shuffled together under their opaque keys and one neutral
     stage name: the role is not told which kind of case a question is (a seeded flaw, a recorded
-    failure, a good card), so that a threshold met by the role proves reading, not label-reading."""
+    failure, a good card), so that a threshold met by the role proves reading, not label-reading.
+    A web role gets, beside each batch's manifest, the map from its labels to the cache's pages."""
     thresholds, _ = sealed(run_dir)
     jobs = [j for j in sealed_jobs(run_dir) if j["role"] == role]
     if not jobs:
@@ -722,7 +802,9 @@ def export_role(run_dir: Path, role: str, handoff: Path) -> dict[str, Any]:
         raise CalibrationError(f"role {role} is exported already: a role is asked once")
     if handoff.exists() and any(handoff.iterdir()):
         raise CalibrationError(f"{handoff} is not empty: a role gets a directory of its own")
-    size = WEB_BATCH_SIZE if any(j["set"] in WEB_SETS for j in jobs) else BATCH_SIZE
+    web = any(j["set"] in WEB_SETS for j in jobs)
+    size = WEB_BATCH_SIZE if web else BATCH_SIZE
+    cache = WikiCache(wiki_cache or ROOT / R.WIKI_CACHE) if web else None
     rng = random.Random(f"{thresholds['seed']}/{role}/deal")  # noqa: S311 - a sealed, seeded draw
     batches = {}
     for number, group in enumerate(export_batches(jobs, size, rng), start=1):
@@ -736,6 +818,10 @@ def export_role(run_dir: Path, role: str, handoff: Path) -> dict[str, Any]:
                 label=job["key"],
                 field="calibration",
                 prompt=job_prompt(job),
+            )
+        if cache is not None:
+            (handoff / batch / WIKI_MAP).write_text(
+                wiki_map(group, cache), encoding="utf-8", newline="\n"
             )
     exported[role] = {"handoff": str(handoff), "batches": batches}
     record_path.write_text(_text(exported), encoding="utf-8", newline="\n")
@@ -766,13 +852,40 @@ For each other question:
 1. Read {handoff}/<prompt_path>.
 2. Answer exactly as the prompt asks: only the JSON object it specifies.
 3. Write your answer to a new UTF-8 file of your own: {scratch}/<label>.json
-4. Record it - an answer is written once:
+4. Check it (nothing is recorded by this). The check reads your answer with the parser the \
+evaluation reads it with and prints "ok": true, or the problems - an answer that is not in the \
+shape the prompt asks for, and, for a web question, one that lists fewer claims than the card \
+makes (the floor: list every claim, each fact on its own):
+   {check}
+   Fix the shape until it prints "ok": true - never your finding.
+5. Record it - an answer is written once, and the recorder runs the same check first and refuses an \
+answer that fails it:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
 --batch-id {batch} --stage {stage} --label <label> --answered-by cal-{batch} --role {role} \
---model {model} --text-file {scratch}/<label>.json
+--model {model} --text-file {scratch}/<label>.json --check "{check}"
 {web_note}
 When every question of the batch is recorded, report how many answers you recorded.
 """
+
+#: What a calibration web brief says of the Wikipedia cache. The label of a question is opaque (a
+#: random UUID that names no site and no set), so the cache is reached through a map of the batch,
+#: not through the label (production's brief says the label is the site id; here it is not).
+CAL_WIKI_LOOKUP = (
+    "the labels of this calibration are opaque keys and name no site: {handoff}/{batch}/"
+    "WIKI_MAP.jsonl has one JSON line per question of your batch - its label and the pages of the "
+    "shared cache for that question's site ({{lang, title, file}}; the file is relative to {cache}; "
+    "the list is empty when the site has no cached page); the page file is JSON with "
+    "resolved_title, revid and text."
+)
+CAL_WEB_NOTE = (
+    "\nWEB RESEARCH. The site's Wikipedia text is in the shared cache: "
+    + CAL_WIKI_LOOKUP
+    + " "
+    + WR.VERIFIER_RULE
+    + " "
+    + WR.QUOTE_RULE
+)
+WIKI_MAP = "WIKI_MAP.jsonl"
 
 
 def agent_jobs(run_dir: Path, role: str) -> list[dict[str, Any]]:
@@ -805,12 +918,26 @@ def agent_jobs(run_dir: Path, role: str) -> list[dict[str, Any]]:
                 handoff=shown,
                 scratch=f"{shown}-scratch/{batch}",
                 stage=STAGE,
+                check=check_command(run_dir, batch, f"{shown}-scratch/{batch}"),
                 web_files=" except the Wikipedia cache named below" if web else "",
-                web_note=R._WEB_NOTE.format(cache=R.WIKI_CACHE) if web else "",
+                web_note=(
+                    CAL_WEB_NOTE.format(handoff=shown, batch=batch, cache=R.WIKI_CACHE)
+                    if web
+                    else ""
+                ),
             ),
         }
         for batch, keys in sorted(exported["batches"].items())
     ]
+
+
+def check_command(run_dir: Path, batch: str, scratch: str) -> str:
+    """The command an agent checks one answer with before it records it (`check_answer`)."""
+    return (
+        "./.venv/Scripts/python.exe scripts/remediation/teaser/calibrate.py check-answer "
+        f"--run-dir {_shown(run_dir)} --batch-id {batch} --label <label> "
+        f"--text-file {scratch}/<label>.json"
+    )
 
 
 def _shown(path: Path) -> str:
@@ -858,19 +985,68 @@ def _answers(
     return found
 
 
+def parse_case(case: Mapping[str, Any], text: str) -> Any:
+    """One answer parsed as its case's prompt asks - the single reading of an answer: `evaluate`
+    measures with it and `check-answer` tells the agent with it, so an answer that passes the one
+    parses in the other. Raises `A.AnswerError` for a shape that does not parse and, for a web
+    question (`judge_v1`), for fewer claims than the card makes (`run.claims_floor`, as production's
+    import holds a verifier to). Returns: the checker's `to_dict()` for a checker-shaped answer
+    (v1's, shorts-v1's, the adversary's), the claims (`A.Judged`) for a web judge, the rating for a
+    hook rater."""
+    kind = case["prompt_kind"]
+    if kind == "judge_v1":
+        claims = A.parse_judge(text)
+        short = R.claims_floor(len(claims), case["floor"])
+        if short is not None:
+            raise A.AnswerError(short)
+        return claims
+    if kind == "rate":
+        return AS.parse_rater(text, [(1, case["card"])])
+    basis = job_basis(case)
+    if kind == "checker_shorts":
+        assert isinstance(basis, SV.ShortsBasis)
+        return AS.parse_checker(text, basis).to_dict()
+    return A.parse_checker(text, basis).to_dict()
+
+
+def check_answer(run_dir: Path, batch_id: str, label: str, text: str) -> dict[str, Any]:
+    """The shape of one answer to one question of a calibration batch, read exactly as `evaluate`
+    reads it. Nothing is recorded. `{"ok": bool, "problems": [...]}`; for a web question also the
+    `floor` of claims and how many the answer lists."""
+    thresholds, _ = sealed(run_dir)  # the prompts the question was asked with are the sealed ones
+    handoffs = _handoffs(run_dir)
+    held = [r for r, e in handoffs.items() if label in e["batches"].get(batch_id, [])]
+    if not held:
+        raise CalibrationError(f"{batch_id}/{label} is no question of {run_dir}")
+    role = held[0]
+    case = next(j for j in sealed_jobs(run_dir) if j["key"] == label)
+    result: dict[str, Any] = {"ok": True, "problems": []}
+    try:
+        parsed = parse_case(case, text)
+    except A.AnswerError as exc:
+        result.update(ok=False, problems=[str(exc)])
+        parsed = None
+    if case["prompt_kind"] == "judge_v1":
+        try:
+            listed: int | None = len(A.parse_judge(text))
+        except A.AnswerError:
+            listed = None
+        result.update(floor=case["floor"], listed=listed)
+    elif parsed is not None and case["prompt_kind"] != "rate":
+        result["verdict"] = parsed["verdict"]
+    result["role"] = role
+    result["model"] = thresholds["registry"][role]["model"]
+    return result
+
+
 def _checks(
     answers: Mapping[str, tuple[dict[str, Any], OH.Answer]],
 ) -> dict[str, dict[str, Any]]:
     """Every checker-shaped answer (v1's or shorts-v1's shape) parsed: its verdict and claims."""
     out: dict[str, dict[str, Any]] = {}
     for key, (case, answer) in answers.items():
-        basis = job_basis(case)
         try:
-            if case["prompt_kind"] == "checker_shorts":
-                assert isinstance(basis, SV.ShortsBasis)
-                out[key] = AS.parse_checker(answer.text, basis).to_dict()
-            else:
-                out[key] = A.parse_checker(answer.text, basis).to_dict()
+            out[key] = parse_case(case, answer.text)
         except A.AnswerError as exc:
             raise CalibrationError(f"{key}: malformed answer ({exc})") from exc
     return out
@@ -896,13 +1072,11 @@ def evaluate_fact_checker(
     agree = {k: str(c["verdict"]) for k, c in checked.items()}
     cases = {k: c for k, (c, _) in answers["checker_agreement"].items()}
     same = sum(1 for k, v in agree.items() if v == cases[k]["recorded"]["verdict"])
-    agreed = total = 0
+    claim_cover = ClaimCoverage()
     for key, check in checked.items():
-        got, of = claim_agreement(
+        claim_cover += claim_coverage(
             _supported(cases[key]["recorded"]["claims"]), _supported(check["claims"])
         )
-        agreed, total = agreed + got, total + of
-    claims = agreed / total if total else 0.0
     false_pass = [
         k
         for k, v in agree.items()
@@ -914,10 +1088,11 @@ def evaluate_fact_checker(
     out["checker_agreement"] = {
         "cases": len(agree),
         "verdict_agreement": round(same / len(agree), 4),
-        "claim_agreement": round(claims, 4),
+        **claim_cover.to_dict(),
         "false_pass": sorted(false_pass),
         "passed": _met(same / len(agree), rule["verdict_agreement_min"])
-        and _met(claims, rule["claim_agreement_min"])
+        and _met(claim_cover.coverage, rule["claim_coverage_min"])
+        and _met(claim_cover.agreement, rule["claim_agreement_min"])
         and len(false_pass) <= rule["false_pass_max"],
     }
     again = _verdicts(answers["checker_fail_again"])
@@ -959,27 +1134,127 @@ def _supported(claims: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
     ]
 
 
-def claim_agreement(
+@dataclass(frozen=True)
+class ClaimCoverage:
+    """How a fresh claim list stands to a recorded one: `recorded` claims, how many of them a fresh
+    claim `covered`, and how many of the covered ones the covering claim `agreed` with in verdict.
+    Counts add up over cases."""
+
+    recorded: int = 0
+    covered: int = 0
+    agreed: int = 0
+
+    def __add__(self, other: ClaimCoverage) -> ClaimCoverage:
+        return ClaimCoverage(
+            self.recorded + other.recorded, self.covered + other.covered, self.agreed + other.agreed
+        )
+
+    @property
+    def coverage(self) -> float:
+        """The share of recorded claims some fresh claim covers (`not found by the agent`)."""
+        return self.covered / self.recorded if self.recorded else 0.0
+
+    @property
+    def agreement(self) -> float:
+        """The share of covered claims whose covering claim has the recorded verdict."""
+        return self.agreed / self.covered if self.covered else 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "claims_recorded": self.recorded,
+            "claims_covered": self.covered,
+            "claim_coverage": round(self.coverage, 4),
+            "claim_agreement": round(self.agreement, 4),
+        }
+
+
+def _content_words(claim: str) -> frozenset[str]:
+    """The words that carry a claim: letters and digits, case folded, no stop word, no word of one
+    or two letters (a digit string of any length stays)."""
+    words = re.findall(r"\w+", unicodedata.normalize("NFC", claim).casefold())
+    return frozenset(w for w in words if w not in STOP_WORDS and (len(w) > 2 or w.isdigit()))
+
+
+def _cover(recorded: str, fresh: str) -> tuple[float, float]:
+    """`(recall, ratio)`: the share of the recorded claim's content words that the fresh claim holds,
+    and the two claims' difflib ratio. A fresh claim covers the recorded one when either reaches
+    `CLAIM_MATCH`."""
+    words = _content_words(recorded)
+    recall = len(words & _content_words(fresh)) / len(words) if words else 0.0
+    ratio = difflib.SequenceMatcher(None, recorded.casefold(), fresh.casefold()).ratio()
+    return recall, ratio
+
+
+def claim_coverage(
     recorded: Sequence[Mapping[str, Any]], fresh: Sequence[Mapping[str, Any]]
-) -> tuple[int, int]:
-    """`(agreed, recorded)` claims: each recorded claim is matched to the closest fresh claim of
-    at least `CLAIM_MATCH` wording, once; it agrees when their verdicts are equal. An unmatched
-    claim is a disagreement."""
-    unused = list(range(len(fresh)))
-    agreed = 0
+) -> ClaimCoverage:
+    """Each recorded claim is covered when a fresh claim's wording covers it (`_cover`); one fresh
+    claim may cover several recorded ones, and a compound claim of the fresh list is no loss. The
+    claim agrees when the verdict of its best covering claim (most words, then closest wording) is
+    the recorded one. The old one-to-one pairing by wording counted a card the agent listed as three
+    claims against five recorded ones as two disagreements, and could not reach 0.54 although every
+    paired verdict agreed (calibration teaser-2026-10-09)."""
+    covered = agreed = 0
     for claim in recorded:
-        best, best_ratio = None, CLAIM_MATCH
-        for index in unused:
-            ratio = difflib.SequenceMatcher(
-                None, claim["claim"].lower(), fresh[index]["claim"].lower()
-            ).ratio()
-            if ratio >= best_ratio:
-                best, best_ratio = index, ratio
-        if best is None:
+        scored = [(_cover(claim["claim"], f["claim"]), f) for f in fresh]
+        covering = [(score, f) for score, f in scored if max(score) >= CLAIM_MATCH]
+        if not covering:
             continue
-        unused.remove(best)
-        agreed += int(fresh[best]["verdict"] == claim["verdict"])
-    return agreed, len(recorded)
+        covered += 1
+        _, best = max(covering, key=lambda item: item[0])
+        agreed += int(best["verdict"] == claim["verdict"])
+    return ClaimCoverage(len(recorded), covered, agreed)
+
+
+_DASHES = re.compile("[\u2010-\u2015\u2212]")
+_NUMBER_GLUE = re.compile(r"(?<=\d)\s*([.,-])\s*(?=\d)")
+#: Stand-ins for the `.`, `,` and `-` between two digits (private-use characters, so they survive
+#: the "letters and digits only" filter and are no punctuation of the text).
+_GLUE = {".": "\ue001", ",": "\ue002", "-": "\ue003"}
+
+
+def _loose(text: str) -> str:
+    """A text as a reader compares it: decomposed, accents and marks dropped, case folded, dash
+    variants one dash, letters and digits only - but a `.`, `,` or `-` between two digits stays, so a
+    changed number (3.5 against 35, 10-15 against 1015) is a different text. A quote that the strict
+    check misses and this one finds is on the page - it differs in typography, a quotation mark, a
+    dash, a line break - and was not made up."""
+    decomposed = unicodedata.normalize("NFKD", Q.normalise(text)).casefold()
+    glued = _NUMBER_GLUE.sub(lambda m: _GLUE[m.group(1)], _DASHES.sub("-", decomposed))
+    return "".join(ch for ch in glued if ch.isalnum() or ch in _GLUE.values())
+
+
+#: How a verifier's quote stands (`quote_standing`).
+FOUND, MACHINE_MISS, FABRICATED, REFUSED, UNREADABLE = (
+    "found",
+    "not found by machine",
+    "fabricated",
+    "source refused",
+    "page unreadable",
+)
+
+
+def quote_standing(claim: Mapping[str, Any], library: Q.Library) -> str | None:
+    """Where a SUPPORTED or CONTRADICTED claim's quote stands after `prove_claims`: `FOUND`; `REFUSED`
+    (the page is no source: an aggregator, a mirror, this project's site); `UNREADABLE` (the page
+    was not fetched or could not be read - no finding about the quote); `MACHINE_MISS` (the strict
+    check did not find it, the page holds it up to typography: the machine's miss); `FABRICATED` (not
+    on the page even loosely: the agent wrote what the page does not say). `None` for a claim
+    without a quote."""
+    outcome = claim["quote_outcome"]
+    if outcome is None:
+        return None
+    if outcome == Q.FOUND:
+        return FOUND
+    if str(outcome).startswith(R.SOURCE_REFUSED):
+        return REFUSED
+    if outcome != Q.NOT_FOUND:
+        return UNREADABLE
+    wanted = _loose(claim["quote"])
+    page = library.url(claim["url"])
+    if wanted and any(wanted in _loose(text) for _, text in page.texts):
+        return MACHINE_MISS
+    return FABRICATED
 
 
 def evaluate_web_verifier(
@@ -989,12 +1264,19 @@ def evaluate_web_verifier(
     client: httpx.Client | None,
 ) -> dict[str, Any]:
     """The verifier's answers with their quotes checked by machine (`run.prove_claims`) and the
-    card's verification derived as a run derives it (`run.card_verification`)."""
+    card's verification derived as a run derives it (`run.card_verification`).
+
+    Each answer is read as `check-answer` reads it, with the claims floor of production's import
+    (`parse_case`). The recorded contradictions the sealed table calls disputed are reported and
+    left out of the `caught_min` denominator (the minimum scales with the cases that count). The
+    claim measure is a coverage (`claim_coverage`) and the card-level verdict is reported beside
+    it. A quote not found is told apart: `not_found_by_machine` (on the page up to typography) is
+    reported; only `fabricated` and a refused source are false sources."""
     parsed: dict[str, tuple[dict[str, Any], tuple[A.Judged, ...]]] = {}
     for set_name in ROLE_SETS["web_verifier"]:
         for key, (case, answer) in answers[set_name].items():
             try:
-                parsed[key] = (case, A.parse_judge(answer.text))
+                parsed[key] = (case, parse_case(case, answer.text))
             except A.AnswerError as exc:
                 raise CalibrationError(f"{key}: malformed answer ({exc})") from exc
     urls = R.cited_pages(j for _, claims in parsed.values() for j in claims)
@@ -1003,40 +1285,62 @@ def evaluate_web_verifier(
     for key, (case, claims) in parsed.items():
         proven = R.prove_claims(case["site_id"], claims, library)
         results[key] = (R.card_verification(proven), proven)
+    rule_c, rule_v = spec["verifier_contradicted"], spec["verifier_verified"]
     contradicted = [k for k in results if parsed[k][0]["set"] == "verifier_contradicted"]
-    caught = sum(1 for k in contradicted if results[k][0] == R.CONTRADICTED)
+    drawn = {parsed[k][0]["site_id"] for k in contradicted}
+    if stray := sorted(set(rule_c["disputed"]) - drawn):
+        raise CalibrationError(
+            f"the sealed table calls {stray} disputed, but they are no site id of the contradicted set"
+        )
+    disputed = {k: rule_c["disputed"][parsed[k][0]["site_id"]] for k in contradicted
+                if parsed[k][0]["site_id"] in rule_c["disputed"]}  # fmt: skip
+    counted = [k for k in contradicted if k not in disputed]
+    caught = [k for k in counted if results[k][0] == R.CONTRADICTED]
+    required = math.ceil(rule_c["caught_min"] * len(counted) / rule_c["cases"])
     verified = [k for k in results if parsed[k][0]["set"] == "verifier_verified"]
     falsely = [k for k in verified if results[k][0] == R.CONTRADICTED]
-    agreed = total = 0
+    claim_cover = ClaimCoverage()
     for key in verified:
-        a, t = claim_agreement(parsed[key][0]["recorded"]["claims"], results[key][1])
-        agreed, total = agreed + a, total + t
-    false_sources = [
-        f"{k}: {c['url']}"
-        for k, (_, proven) in sorted(results.items())
-        for c in proven
-        if c["verdict"] in ("SUPPORTED", "CONTRADICTED")
-        and (
-            c["quote_outcome"] == Q.NOT_FOUND
-            or str(c["quote_outcome"]).startswith(R.SOURCE_REFUSED)
-        )
-    ]
-    rule_c, rule_v = spec["verifier_contradicted"], spec["verifier_verified"]
-    agreement = agreed / total if total else 0.0
+        claim_cover += claim_coverage(parsed[key][0]["recorded"]["claims"], results[key][1])
+    standing: dict[str, list[str]] = {MACHINE_MISS: [], FABRICATED: [], REFUSED: [], UNREADABLE: []}
+    for key, (_, proven) in sorted(results.items()):
+        for claim in proven:
+            if claim["verdict"] not in ("SUPPORTED", "CONTRADICTED"):
+                continue
+            how = quote_standing(claim, library)
+            if how in standing:
+                standing[how].append(f"{key}: {claim['url']}")
+    false_sources = [*standing[FABRICATED], *standing[REFUSED]]
+    card_agreement = sum(1 for k in verified if results[k][0] == R.VERIFIED)
     return {
         "verifier_contradicted": {
             "cases": len(contradicted),
-            "caught": caught,
-            "passed": caught >= rule_c["caught_min"],
+            "counted": len(counted),
+            "caught": len(caught),
+            "caught_required": required,
+            "missed": [f"{k}: {parsed[k][0]['name']}" for k in counted if k not in caught],
+            "disputed": {
+                k: {
+                    "name": parsed[k][0]["name"],
+                    "reason": why,
+                    "fresh_verdict": results[k][0],
+                }
+                for k, why in sorted(disputed.items())
+            },
+            "passed": len(caught) >= required,
         },
         "verifier_verified": {
             "cases": len(verified),
             "falsely_contradicted": sorted(falsely),
-            "claim_agreement": round(agreement, 4),
+            **claim_cover.to_dict(),
+            "card_verdict_agreement": round(card_agreement / len(verified), 4) if verified else 0.0,
             "false_sources": false_sources,
+            "not_found_by_machine": standing[MACHINE_MISS],
+            "unreadable_pages": standing[UNREADABLE],
             "transient_failures": failing,
             "passed": len(falsely) <= rule_v["falsely_contradicted_max"]
-            and agreement >= rule_v["claim_agreement_min"]
+            and claim_cover.coverage >= rule_v["claim_coverage_min"]
+            and claim_cover.agreement >= rule_v["claim_agreement_min"]
             and len(false_sources) <= rule_v["false_sources_max"],
         },
     }
@@ -1048,7 +1352,7 @@ def hook_ratings(
     out: dict[str, int] = {}
     for key, (case, answer) in answers.items():
         try:
-            out[key] = AS.parse_rater(answer.text, [(1, case["card"])]).best_rating
+            out[key] = parse_case(case, answer.text).best_rating
         except A.AnswerError as exc:
             raise CalibrationError(f"{key}: malformed answer ({exc})") from exc
     return out
@@ -1196,6 +1500,82 @@ def evaluate(
     return verdict
 
 
+VOID_FILE = "VOID.jsonl"
+
+
+def void_answers(
+    run_dir: Path,
+    role: str,
+    labels: Sequence[str],
+    reason: str,
+    *,
+    now: Callable[[], str] = _now,
+) -> list[dict[str, Any]]:
+    """Set aside the recorded answers to some questions of a role, so that new agents answer them:
+    each named answer file moves to `<handoff>-void/<batch>/...` (same relative path), a line per
+    answer goes to `VOID.jsonl` (who answered, the answer's sha256, why). The prompts, the manifest,
+    the sealed table, the cases and every other answer stay as they are - the seal is not touched,
+    so the voided questions are asked again under the thresholds sealed before the first answer.
+    The seal is checked for integrity only (`integrity`): nothing here reads a prompt or judges an
+    answer, so a calibration sealed with an older checkout of the modules can be repaired from a
+    newer one.
+
+    Refused, with nothing moved: no reason; a label that is no question of this role; a question
+    with no recorded answer; an answer recorded in another role; a void file already there (an
+    answer is voided once)."""
+    integrity(run_dir)
+    if not reason.strip():
+        raise CalibrationError("a void needs its reason: say why the answers are set aside")
+    exported = _handoffs(run_dir).get(role)
+    if exported is None:
+        raise CalibrationError(f"role {role} was never exported")
+    if not labels or len(set(labels)) != len(labels):
+        raise CalibrationError("name each label to void once, at least one")
+    handoff = Path(exported["handoff"])
+    batch_of = {key: batch for batch, keys in exported["batches"].items() for key in keys}
+    voided_to = handoff.with_name(handoff.name + "-void")
+    moves = []
+    for label in labels:
+        if label not in batch_of:
+            raise CalibrationError(f"{label} is no question of role {role}")
+        line = OH.read_manifest(handoff, batch_of[label])[(STAGE, label)]
+        source = handoff / line["answer_path"]
+        if not source.is_file():
+            raise CalibrationError(f"{label} has no recorded answer to void")
+        stored = json.loads(source.read_text(encoding="utf-8"))
+        named = RO.role_of(stored["answered_by"])
+        if named != role:
+            raise CalibrationError(
+                f"{label}: the answer was given by {stored['answered_by']!r}, not in role {role} "
+                "- it is not this role's to void"
+            )
+        target = voided_to / line["answer_path"]
+        if target.exists():
+            raise CalibrationError(f"{target} exists: an answer is voided once")
+        moves.append((label, batch_of[label], source, target, stored))
+    voided = []
+    for label, batch, source, target, stored in moves:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        source.replace(target)
+        voided.append(
+            {
+                "voided_at": now(),
+                "role": role,
+                "batch": batch,
+                "label": label,
+                "answered_by": stored["answered_by"],
+                "answer_sha256": digest,
+                "moved_to": _shown(target),
+                "reason": reason,
+            }
+        )
+    with (run_dir / VOID_FILE).open("a", encoding="utf-8", newline="\n") as handle:
+        for line_ in voided:
+            handle.write(json.dumps(line_, ensure_ascii=False, sort_keys=True) + "\n")
+    return voided
+
+
 def _resolve(path: Path) -> Path:
     return path if path.is_absolute() else ROOT / path
 
@@ -1207,9 +1587,17 @@ def main(argv: Iterable[str] | None = None) -> int:
         stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("seal", "jobs", "export", "agents", "evaluate"):
+    for name in ("seal", "jobs", "export", "agents", "evaluate", "check-answer", "void"):
         command = sub.add_parser(name)
         command.add_argument("--run-dir", required=True, type=Path)
+    check = sub.choices["check-answer"]
+    check.add_argument("--batch-id", required=True)
+    check.add_argument("--label", required=True)
+    check.add_argument("--text-file", required=True, type=Path)
+    void = sub.choices["void"]
+    void.add_argument("--role", required=True, choices=sorted(set(SET_ROLE.values())))
+    void.add_argument("--labels", required=True, help="comma-separated question keys")
+    void.add_argument("--reason", required=True)
     jobs = sub.choices["jobs"]
     jobs.add_argument("--runs", required=True, nargs="+", type=Path)
     jobs.add_argument("--export", required=True, type=Path)
@@ -1242,13 +1630,24 @@ def main(argv: Iterable[str] | None = None) -> int:
             payload = export_role(run_dir, args.role, _resolve(args.handoff))
         elif args.command == "agents":
             payload = agent_jobs(run_dir, args.role)
+        elif args.command == "check-answer":
+            payload = check_answer(
+                run_dir, args.batch_id, args.label, args.text_file.read_bytes().decode("utf-8")
+            )
+        elif args.command == "void":
+            payload = void_answers(
+                run_dir, args.role, [x.strip() for x in args.labels.split(",")], args.reason
+            )
         else:
             payload = evaluate(run_dir, args.role, writer_run=args.writer_run)
     except (CalibrationError, RO.RoleError, OH.HandoffError, R.RunError, PlanError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(payload, ensure_ascii=False, indent=1, sort_keys=True))
-    return 1 if args.command == "evaluate" and not payload["passed"] else 0
+    failed = (args.command == "evaluate" and not payload["passed"]) or (
+        args.command == "check-answer" and not payload["ok"]
+    )
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

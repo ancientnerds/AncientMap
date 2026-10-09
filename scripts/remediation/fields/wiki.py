@@ -12,7 +12,9 @@ and the agents of the field re-check read the file instead of the site:
 A page the machine's quote check reads is the live article, as fetched at import: the cached text is
 the same article's extract as of its revision, so a quote copied from it is checked against the live
 page and must match it character for character (footnote markers and tables are where the two can
-differ). Anything that is not Wikipedia is still fetched live, a few requests at most.
+differ; the live-page check ignores footnote markers such as [22] on both sides, `opus_audit/quotes`).
+Anything that is not Wikipedia is still fetched live. The cached article is where a stored value usually
+came from: a role that re-checks or verifies never counts it as confirmation (`web_rules`).
 
     handoff.py wiki-text --label SITE_ID        the cached articles of a site, for the agent
 """

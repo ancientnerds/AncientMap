@@ -517,11 +517,12 @@ def check_role(run: Path) -> str:
     return ROLE_ADVERSARIAL if run_adversarial(run) else ROLE_CHECK
 
 
-def _role_fields(role_name: str) -> dict[str, str]:
+def _role_fields(role_name: str, writer: bool = False) -> dict[str, str]:
     """What a brief prints of the role that answers it - the family of its model, the model id, the
-    role - and the note on the shared Wikipedia cache. The cache must exist: a brief that sends an
-    agent to a directory that is not there would send it to the live site, which is what the cache
-    is for."""
+    role - and the note on the shared Wikipedia cache: the checker's, verifier's and judge's note
+    (the cached article is never their confirmation), or, for the write briefs of lane WN and the
+    enrichment (`writer`), the writer's. The cache must exist: a brief that sends an agent to a
+    directory that is not there would send it to the live site, which is what the cache is for."""
     entry = RO.role(role_name)
     index = WIKI_CACHE / "INDEX.jsonl"
     if not index.is_file():
@@ -533,7 +534,9 @@ def _role_fields(role_name: str) -> dict[str, str]:
         "family": OH.ANSWER_FAMILIES[entry.model].capitalize(),
         "model": entry.model,
         "role": role_name,
-        "wiki_cache_note": P.WIKI_CACHE_NOTE.format(wiki_cache=_shown(WIKI_CACHE)),
+        "wiki_cache_note": (P.WIKI_CACHE_NOTE_WRITER if writer else P.WIKI_CACHE_NOTE).format(
+            wiki_cache=_shown(WIKI_CACHE)
+        ),
     }
 
 
@@ -911,7 +914,7 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
         "run": _shown(run),
         "python": Path(sys.executable).as_posix(),
         "repo": REPO.as_posix(),
-        **_role_fields(role_name),
+        **_role_fields(role_name, writer=kind in WRITTEN_KINDS),
     }
     if kind == KIND_WN:
         return P2.WRITE_BRIEF.format(

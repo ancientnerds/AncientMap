@@ -304,7 +304,8 @@ class TestThePrompt:
             "Thasos agora.jpg",  # the Wikipedia lead image
             "A walled city on an island.",
             "Its text is cached: read C:/cache/en/thasos.json first",
-            "a 403 or 429 is never a finding",
+            "403 or 429 is a throttle and NEVER a finding",
+            "NEVER independent confirmation",
             "latitude 40.78",
             "commons.wikimedia.org/...",
         ):

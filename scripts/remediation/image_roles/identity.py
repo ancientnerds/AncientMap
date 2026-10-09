@@ -16,8 +16,9 @@ have no identity at all. So before any picture is looked for, two questions go t
   the URL of every claim. Batches of four.
 
 The prompts tell the agent to read the site's Wikipedia text from the shared cache first
-(`output/remediation/final-2026-10-08/wiki_cache/`) and to fetch anything else live - a few requests,
-a 403 or 429 is never a finding. Nothing here writes the database: the answer feeds the second search
+(`output/remediation/final-2026-10-08/wiki_cache/`) and to fetch anything else live - one request at a
+time, without a cap (a 403 or 429 is never a finding). The cached article is the record's own source,
+so it is never the confirmation of a link (`web_rules.VERIFIER_RULE`). Nothing here writes the database: the answer feeds the second search
 pass (`merge_identity`), and an item the research found is the identity workstream's to write (D13).
 """
 
@@ -34,6 +35,7 @@ for _path in (_HERE.parents[3], _HERE.parents[1]):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+import web_rules as WR  # noqa: E402 - what an agent may take from the cache, and how it fetches
 from bcases.collect import claims_record  # noqa: E402
 from identity import common as IC  # noqa: E402
 from identity.entities import en_aliases  # noqa: E402
@@ -130,8 +132,7 @@ qid_status/enwiki_status: confirmed = the link given is this site; wrong = it is
 _FILES = (
     "For each site first read its cached Wikipedia text where the entry names a file (JSON with "
     "resolved_title, revid and text), then fetch what else you need live: Wikidata, Wikipedia, "
-    "Commons - a few requests per site; a 403 or 429 is never a finding, say so and use another "
-    "source."
+    "Commons. " + WR.VERIFIER_RULE
 )
 
 VERIFY_PROMPT = """You verify the identity links of archaeological sites. For each site below the database holds a Wikidata item and an English Wikipedia article; a check flagged the link as possibly wrong. Decide whether each link is this site - the same monument or place, not a namesake, a modern town around it, a museum or a part of a larger complex - and, while you are there, find the site's Commons category and its local names.

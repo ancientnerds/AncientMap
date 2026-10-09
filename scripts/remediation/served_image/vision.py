@@ -62,6 +62,7 @@ for _path in (ROOT, ROOT / "scripts" / "remediation"):
 
 import opus_handoff as OH  # noqa: E402
 import roles as RO  # noqa: E402 - the D6 registry: which model answers in which role
+import web_rules as WR  # noqa: E402 - what an agent may take from the cache, and how it fetches
 from gallery_audit.vision import Images, VisionError, pilot  # noqa: E402
 from phase3.fetch_stage import write_once  # noqa: E402 - the handoff's one write rule
 from phase3.run import read_jsonl  # noqa: E402 - the one JSONL reader
@@ -135,7 +136,8 @@ Return JSON only, no prose:
 """ + _VERDICT_TERMS.replace("{", "{{").replace("}", "}}")
 
 CHECK_PROMPT_V2_ID = "served-check-v2"
-CHECK_PROMPT_V2 = """You re-check a verdict. The picture {image} is, or is about to become, the main image of the page of the archaeological site "{name}" ({site_type}, {country}; latitude {lat}, longitude {lon}). It comes from: {source}
+CHECK_PROMPT_V2 = (
+    """You re-check a verdict. The picture {image} is, or is about to become, the main image of the page of the archaeological site "{name}" ({site_type}, {country}; latitude {lat}, longitude {lon}). It comes from: {source}
 The site's Wikidata item: {qid}
 An earlier check ({earlier_stage}, {earlier_answered_by}) called the picture {earlier_verdict}: {earlier_shows}
 The owner linked a picture for this site by hand in 2025: {owner_link}
@@ -143,7 +145,9 @@ The site's English Wikipedia article: {wikipedia}; its lead image: {lead}
 Its text is cached: read {cache} first
 The site's description begins: {description}
 
-Look at the picture itself, then check it against the web (a few requests at most; a 403 or 429 is never a finding - say so and use another source): the picture's Commons file page and its categories, the Wikipedia article (the cache first), the Wikidata item. You may overturn the earlier verdict or confirm it. Do not confirm it because it was said before, and do not overturn it because the picture looks plausible: a verdict rests on what the picture shows and on what the pages say.
+Look at the picture itself, then check it against the web: the picture's Commons file page and its categories, the Wikipedia article (the cache first), the Wikidata item. """
+    + WR.VERIFIER_RULE
+    + """ You may overturn the earlier verdict or confirm it. Do not confirm it because it was said before, and do not overturn it because the picture looks plausible: a verdict rests on what the picture shows and on what the pages say.
 If you answer other_site you must say in "shows" which monument or place the picture shows, and you must have opened the picture's Commons file page or category: put its address (commons.wikimedia.org/...) in "basis".
 
 Return JSON only, no prose:
@@ -151,7 +155,9 @@ Return JSON only, no prose:
  "shows": "<what the picture shows, at most 25 words>",
  "basis": "<what the verdict rests on - the visible feature, or the page and what it says - at most 60 words>"}}
 
-""" + _VERDICT_TERMS.replace("{", "{{").replace("}", "}}")
+"""
+    + _VERDICT_TERMS.replace("{", "{{").replace("}", "}}")
+)
 
 REPLACE_PROMPT_ID = "served-replace-v2"
 REPLACE_PROMPT = (
@@ -980,14 +986,17 @@ ANSWER_MODEL = "claude-sonnet-5-5"
 #: claims a file. The sites that serve an image were judged by the 2026-09-30 run and delivered;
 #: this plan may not touch them, and says so instead of claiming them for its own.
 CLAIMED_ONLY = "claimed-only"
-BRIEF = """You are agent {batch} of the served-image check ({what}), running as {answer_model}{as_role}. You answer {count} \
+BRIEF = (
+    """You are agent {batch} of the served-image check ({what}), running as {answer_model}{as_role}. You answer {count} \
 question(s), each about another archaeological site. Answer each one on its own.
 
 Read ONLY your own files: {handoff}/{batch}/MANIFEST.jsonl lists your questions, one JSON line \
 each with its "label" and its "prompt_path" (relative to {handoff}). Each prompt names its picture \
 file(s) under {handoff}/images/ - open every picture with your Read tool, which shows it to you. \
 Open no other file of the repository: no other batch, nothing else under output/ or docs/, no \
-database (except a cached Wikipedia text a prompt names). Where a prompt allows it, research on the web (a few requests at most; a 403 or 429 is never a finding - say so and use another source); a prompt that names a cached Wikipedia text (a JSON file) lets you read that file first.
+database (except a cached Wikipedia text a prompt names). Where a prompt allows it, research on the web; a prompt that names a cached Wikipedia text (a JSON file) lets you read that file first. """
+    + WR.VERIFIER_RULE
+    + """
 
 For each question:
 1. Read {handoff}/<prompt_path> and look at every picture it names.
@@ -1006,6 +1015,7 @@ For each question:
 
 When every question of the batch is recorded, report how many answers you recorded.
 """
+)
 
 
 def _shown(path: Path) -> str:
