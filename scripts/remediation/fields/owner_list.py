@@ -19,7 +19,8 @@ for every field a question asked, which ended in one of these states:
 * `unresolved` - no source could be quoted (the answer, or exhausted after three rounds): **listed**.
   Lane wd5 may have withdrawn the value on that answer (cleared to `Undated`, or restored from the
   journal): the reason then says so;
-* `held` - the pages the agents cited could not be read by the checker: **listed**, with the URLs - the
+* `held` - the pages the agents cited could not be read by the checker, or (lane wd5) the adversarial
+  re-check could not decide the cell: **listed**, with the URLs - the
   owner may read them;
 * `refused` - a `replace` the write plan refused (a point in another country, a start after the
   period's end, a value that moved since): **listed** with the plan's reason;
@@ -59,6 +60,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
 
 from mechanical.lane import FIELDS_ROOTS  # noqa: E402
 
+from fields import carry as CA  # noqa: E402
 from fields import classify as C  # noqa: E402
 from fields import plan as FP  # noqa: E402
 from fields import population as POP  # noqa: E402
@@ -269,8 +271,9 @@ def state_of(
 
 
 def asked_by_rounds(run: Path) -> set[tuple[str, str]] | None:
-    """The `(site, field)` pairs this run's rounds put to the model - `None` when it has no rounds,
-    and then the whole classification is the run's population.
+    """The `(site, field)` pairs this run's rounds put to the model, and the cells it carried instead
+    of asking (lane wd5, `carry.py`) - `None` when it has no rounds, and then the whole
+    classification is the run's population.
 
     A run classifies every site it can and then asks the model a part of that population: WD4
     classified 2,636 sites (3,551 questions) and put **144 sites / 260 questions** to the model over
@@ -283,7 +286,9 @@ def asked_by_rounds(run: Path) -> set[tuple[str, str]] | None:
     path = run / ROUNDS_FILE
     if not path.exists():
         return None
-    return {
+    # a carried decision (lane wd5, `carry.py`) answers its cell without a round: the cell is one of
+    # the run's questions all the same, and a re-check that rejected it must reach the list
+    return CA.carried_cells(run) | {
         (site, field)
         for entry in _rows(path)
         for site, fields in entry.get("fields", {}).items()
@@ -349,7 +354,7 @@ def build(runs: Sequence[Path], waves: Path | None) -> dict[str, Any]:
 STATE_TITLE = {
     RULE: "a start a rule made, found in no source",
     UNRESOLVED: "no source could be found",
-    HELD: "the pages the agents cited could not be read by the checker",
+    HELD: "the pages the agents cited could not be read by the checker, or the re-check could not decide",
     REFUSED: "a sourced value the write plan refused",
     NO_WRITE: "decided, nothing written",
     PENDING: "not finished yet",

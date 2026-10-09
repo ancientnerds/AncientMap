@@ -73,6 +73,7 @@ for _root in (str(REPO), str(REPO / "scripts" / "remediation")):
         sys.path.insert(0, _root)
 
 import opus_handoff as OH  # noqa: E402
+import roles as RO  # noqa: E402
 from acceptance.answers import AnswerError  # noqa: E402
 from acceptance.questions import RESEARCH, definitions  # noqa: E402
 from census.fetch import Fetcher  # noqa: E402
@@ -80,9 +81,11 @@ from opus_audit import quotes as Q  # noqa: E402
 from phase4.route_stage import wikipedia_title  # noqa: E402
 
 from fields import answers as A  # noqa: E402
+from fields import carry as CA  # noqa: E402
 from fields import classify as C  # noqa: E402
 from fields import harvest as H  # noqa: E402
 from fields import rule as R  # noqa: E402
+from fields import wiki as W  # noqa: E402
 from pipeline import periods as P  # noqa: E402
 
 #: WD1's handoff stage (`Rule.stage`); a run's own stage is its rule's.
@@ -120,6 +123,17 @@ PILOT_MAX_HELD_RATE = 0.20
 PILOT_MAX_COUNTRY_HELD_RATE = 0.30
 PILOT_MAX_HINTED_UNRESOLVED_RATE = 0.60
 PILOT_FILE = "PILOT.json"
+#: The adversarial re-check of lane wd5 (`adversarial.py`) is selected from DECISIONS.jsonl and then
+#: rewrites it: its files sit beside the run's own, and `import` refuses to write the decisions again
+#: from the handoffs once the cells are selected - the check was asked of those decisions, and the
+#: verdicts would be silently dropped. `plan.py wave` reads only the applied file.
+ADV_DIR = "adv"
+ADV_SELECTED = Path(ADV_DIR) / "CELLS.json"
+ADV_APPLIED = Path(ADV_DIR) / "APPLIED.json"
+#: The role that must have given every answer of a rule's rounds (`roles.ROLES`): the registry says
+#: which model that is, and an answer that names another role or another stamp is refused at import
+#: (the model census of 2026-10-01 found 8,471 answers stamped Opus that Sonnet had written).
+RULE_ROLE = {R.RECHECK.name: "field_researcher"}
 
 
 class HandoffStepError(ValueError):
@@ -185,8 +199,42 @@ def read_hints(run: Path) -> dict[str, dict[str, Any]]:
     file. A row that is not a hint row is refused: the join behind it was measured once, and a row
     of another shape is a file the owner has to look at."""
     path = run / HINTS_FILE
-    if not path.exists():
-        return {}
+    return parse_hints(path) if path.exists() else {}
+
+
+def copy_hints(run: Path, source: Path) -> dict[str, Any]:
+    """Copy the original import's period claims (`source`, WD4's own `ORIGINAL_PERIODS.jsonl`) into a
+    run, byte for byte and once - the run's prompts show them (`HINT_STAGES`), so they are fixed
+    before the first question is exported and never change after it.
+
+    Refused: a run whose rule shows no hint; a run that has a hint file already or has exported a
+    round; a source that is not hint rows (`parse_hints`). Returns how many hints there are and how
+    many of the run's period questions have one."""
+    rule = R.read_rule(run)
+    if rule.stage not in HINT_STAGES:
+        raise HandoffStepError(
+            f"{run} runs the {rule.name} rule, whose question shows no original-import claim"
+        )
+    target = run / HINTS_FILE
+    if target.exists():
+        raise HandoffStepError(f"{target} exists: a run's hints are copied once")
+    if read_rounds(run):
+        raise HandoffStepError(
+            f"{run} has exported a round: its prompts are pinned, the hints come before"
+        )
+    hints = parse_hints(source)
+    classified = read_classified(run)
+    target.write_bytes(source.read_bytes())
+    asked = [sid for sid, line in classified.items() if "period_start" in line["asked"]]
+    return {
+        "hints": len(hints),
+        "period_questions": len(asked),
+        "period_questions_with_a_hint": sum(1 for sid in asked if sid in hints),
+    }
+
+
+def parse_hints(path: Path) -> dict[str, dict[str, Any]]:
+    """`{site_id: hint}` of a hint file; a row that is not a hint row is refused."""
     out: dict[str, dict[str, Any]] = {}
     for row in _read_jsonl(path):
         if not isinstance(row, dict) or set(row) != HINT_KEYS:
@@ -986,7 +1034,13 @@ def export(
     if read_rounds(run):
         raise HandoffStepError("round 0 is exported already - re-asks go through export-reask")
     classified = read_classified(run)
-    fields_of = {sid: line["asked"] for sid, line in classified.items() if line["asked"]}
+    # a carried decision (`carry.py`, lane wd5) already answers its cell: it is not asked again
+    carried = CA.carried_cells(run)
+    fields_of = {
+        sid: [field for field in line["asked"] if (sid, field) not in carried]
+        for sid, line in classified.items()
+    }
+    fields_of = {sid: fields for sid, fields in fields_of.items() if fields}
     if sites is not None:
         fields_of = _cut(classified, fields_of, sites)
     return _export_round(run, handoff, 0, fields_of, {}, model)
@@ -1072,7 +1126,7 @@ source {unsourced}.
 5. Record it - an answer is written once:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
 --batch-id {batch} --stage {stage} --label <label> --answered-by {batch} \
---model {model} \
+--model {model}{role_flag} \
 --text-file {scratch}/<label>.json
 
 When every question of the batch is recorded, report how many answers you recorded.
@@ -1132,10 +1186,22 @@ BRIEF_PARTS = {
             "Wikidata item, its Wikipedia article in any language, its stored source_url and the "
             "pages listed in the prompt, then reputable sources - heritage registers, museums, "
             "universities, journals, Pleiades, excavation reports. Never ancientnerds.com, AI "
-            "content farms or Wikipedia mirrors."
+            "content farms or Wikipedia mirrors.\n"
+            "\n"
+            "**Read Wikipedia from the cache first.** Wikimedia throttles this office when several "
+            "agents fetch at once (403 and 429 are a throttle, never a finding), so the Wikipedia "
+            "articles the database ties to a site are on disk. For a question, before you fetch "
+            "any Wikipedia page, run\n"
+            "   ./.venv/Scripts/python.exe scripts/remediation/fields/handoff.py wiki-text "
+            "--label <label>\n"
+            "It prints the cached text of each such article with its own URL and revision. Quote "
+            "from that text and cite that URL: the checker reads the live article at import, and "
+            "a quote must match it character for character. Everything else you fetch live - a "
+            "few requests at most, no search-engine crawling."
         ),
         "unsourced": 'is "unresolved"',
         "model": "claude-sonnet-5-5",
+        "role_flag": f" --role {RULE_ROLE[R.RECHECK.name]}",
     },
 }
 
@@ -1149,6 +1215,7 @@ def brief(run: Path, handoff: Path, batch_id: str) -> str:
     # the stamp the round was exported with; a round exported before this was recorded keeps the
     # rule's own, which is what its answers were counted under
     parts = {
+        "role_flag": "",
         **BRIEF_PARTS[rule.name],
         "model": record.get("model") or BRIEF_PARTS[rule.name]["model"],
     }
@@ -1249,6 +1316,22 @@ def value_page(value: str, pages: Path, net: Fetcher | None) -> dict[str, Any]:
     return out
 
 
+def role_problem(rule: R.Rule, answer: OH.Answer) -> str | None:
+    """Why an answer is not the one the rule's role gives, or `None`: a rule with a role
+    (`RULE_ROLE`) takes only answers recorded under it (`opus_handoff.py answer --role`), by the
+    model the registry gives the role. A rule without a role (WD1, WD3, WD4) takes what it took."""
+    role = RULE_ROLE.get(rule.name)
+    if role is None:
+        return None
+    if RO.role_of(answer.answered_by) != role:
+        return (
+            f"answered_by {answer.answered_by!r} names no {role} role: the answer was recorded "
+            f"without `--role {role}`, so nothing says the registry's model wrote it - delete it "
+            "and answer again"
+        )
+    return RO.answer_problem(answer.answered_by, answer.model)
+
+
 def import_rounds(
     run: Path,
     *,
@@ -1258,6 +1341,12 @@ def import_rounds(
 ) -> dict[str, Any]:
     """Every round's answers: validated, parsed, quote-checked, decided."""
     rule = R.read_rule(run)
+    if (run / ADV_SELECTED).exists():
+        raise HandoffStepError(
+            f"{run / ADV_SELECTED} exists: the adversarial re-check was selected from this run's "
+            "DECISIONS.jsonl, and an import would write the decisions again from the handoffs and "
+            "drop its verdicts - delete adv/ and select again after the import"
+        )
     classified = read_classified(run)
     hints = read_hints(run)
     rounds = sorted(read_rounds(run), key=lambda r: r["round"])
@@ -1289,6 +1378,9 @@ def import_rounds(
             answer = OH.read_answer(
                 handoff, batch_id=batch_id, stage=rule.stage, label=label, prompt=prompt
             )
+            problem = role_problem(rule, answer)
+            if problem is not None:
+                raise HandoffStepError(f"{batch_id}/{label}: {problem}")
             try:
                 checked = A.check_shape(answer.text, fields, classified[label], rule)
             except AnswerError as exc:
@@ -1384,6 +1476,17 @@ def import_rounds(
             api.close()
 
     decisions, waiting = _decide(attempts, classified, counted_before, rule)
+    carried = CA.read_carried(run)
+    if carried:
+        asked = {(a["site_id"], a["field"]) for a in attempts}
+        twice = sorted(f"{c['site_id']}/{c['field']}" for c in carried
+                       if (c["site_id"], c["field"]) in asked)  # fmt: skip
+        if twice:
+            raise HandoffStepError(
+                f"{len(twice)} carried cell(s) were asked as well, e.g. {twice[0]}: a carried "
+                "decision is not asked again"
+            )
+        decisions = sorted([*decisions, *carried], key=lambda d: (d["site_id"], d["field"]))
     _write_jsonl(run / ATTEMPTS_FILE, attempts)
     _write_jsonl(run / DECISIONS_FILE, decisions)
     _write_json(run / REASK_FILE, {"after_round": rounds[-1]["round"], "fields": waiting})
@@ -1406,6 +1509,7 @@ def import_rounds(
         "waiting_fields": sum(len(v) for v in waiting.values()),
         "urls": len(urls),
         "refetched": refetched,
+        "carried": len(carried),
     }
 
 
@@ -1638,9 +1742,23 @@ def main(argv: list[str] | None = None) -> int:
         "import",
         "pilot-report",
         "status",
+        "copy-hints",
     ):
         commands[name] = sub.add_parser(name)
         commands[name].add_argument("--run", type=Path, default=C.DEFAULT_OUT)
+    commands["copy-hints"].add_argument(
+        "--from",
+        dest="source",
+        type=Path,
+        required=True,
+        help="the original import's period claims (WD4's own ORIGINAL_PERIODS.jsonl), copied into "
+        "the run before its first export",
+    )
+    wiki = sub.add_parser(
+        "wiki-text", help="the cached Wikipedia articles of a site, for the agents of lane wd5"
+    )
+    wiki.add_argument("--label", required=True, help="the question's label: the site id")
+    wiki.add_argument("--cache", type=Path, default=W.WIKI_CACHE)
     for name in ("export", "export-reask", "brief", "check-answer"):
         commands[name].add_argument("--handoff", type=Path, required=True)
     for name in ("brief", "check-answer"):
@@ -1661,6 +1779,13 @@ def main(argv: list[str] | None = None) -> int:
     commands["check-answer"].add_argument("--text-file", type=Path, required=True)
     commands["import"].add_argument("--pace", type=float, default=Q.PACE_SECONDS)
     args = parser.parse_args(argv)
+    if args.command == "wiki-text":
+        try:
+            print(W.render(args.label, W.WikiCache(args.cache).pages(args.label)), end="")
+        except W.WikiCacheError as exc:
+            print(f"REFUSED: {exc}", file=sys.stderr)
+            return 1
+        return 0
     run = _resolve(args.run)
     try:
         if args.command == "export":
@@ -1682,6 +1807,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result["ok"] else 1
         elif args.command == "import":
             result = import_rounds(run, pace=args.pace)
+        elif args.command == "copy-hints":
+            result = copy_hints(run, _resolve(args.source))
         elif args.command == "pilot-report":
             result = pilot_report(run)
             print(json.dumps(result, ensure_ascii=False, indent=1, sort_keys=True))

@@ -382,9 +382,27 @@ class TestTheRecheckPopulation:
                 tmp_path / stage / "DECISIONS.jsonl",
                 [decision("period_start", verdict, MINIMAX), decision("site_type", "keep")],
             )
+        HO._write_jsonl(tmp_path / "wd3-pilot" / "DECISIONS.jsonl", [])
         history = POP.read_history(earlier, tmp_path)
         assert history[(SITE_ID, "period_start")]["decision"] == "replace"  # wd4 over wd3 over wd1
         assert history[(SITE_ID, "site_type")]["decision"] == "keep"
+
+    def test_the_history_holds_the_decisions_of_wd3s_pilot_too(self, tmp_path: Path) -> None:
+        """The pilot's 80 sites were answered before the run was built without them, and a site
+        whose only later decision is the pilot's would otherwise look as if nobody had asked it."""
+        pilot = decision("coordinates", "keep", OH.SONNET_MODEL)
+        HO._write_jsonl(tmp_path / "wd3-pilot" / "DECISIONS.jsonl", [pilot])
+        for stage in ("wd3", "wd4"):
+            HO._write_jsonl(tmp_path / stage / "DECISIONS.jsonl", [])
+        history = POP.read_history(TW.wd1([]), tmp_path)
+        assert history[(SITE_ID, "coordinates")]["decision"] == "keep"
+        # a later lane that asked it again decides it
+        HO._write_jsonl(
+            tmp_path / "wd4" / "DECISIONS.jsonl", [decision("coordinates", "unresolved", MINIMAX)]
+        )
+        assert POP.read_history(TW.wd1([]), tmp_path)[(SITE_ID, "coordinates")]["decision"] == (
+            "unresolved"
+        )
 
 
 class TestTheRecheckRun:
@@ -694,6 +712,16 @@ class TestWhatItWithdraws:
 
 
 # ------------------------------------------------------------------------------ the wave and a step
+def pin_adversarial(run: Path) -> None:
+    """The marker `adversarial.py apply` leaves: the plan reads only the decisions it pins."""
+    marker = run / HO.ADV_APPLIED
+    marker.parent.mkdir(exist_ok=True)
+    marker.write_text(
+        json.dumps({"decisions_sha256": FP._sha256_text(run / HO.DECISIONS_FILE)}),
+        encoding="utf-8",
+    )
+
+
 class TestTheWaveAndTheStep:
     @pytest.fixture
     def repo(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -718,6 +746,7 @@ class TestTheWaveAndTheStep:
             {**wd5_decision("period_start", "unresolved", None, -4000), "site_id": TP.OTHER},
         ])  # fmt: skip
         HO._write_json(run / HO.REASK_FILE, {"after_round": 0, "fields": {}})
+        pin_adversarial(run)
         return tmp_path
 
     @staticmethod
@@ -754,6 +783,7 @@ class TestTheWaveAndTheStep:
         HO._write_jsonl(repo / "run" / HO.DECISIONS_FILE, [
             wd5_decision("coordinates", "unresolved", None, "35.1, 33.4"),
         ])  # fmt: skip
+        pin_adversarial(repo / "run")
         assert FP.build_wave(repo / "run", "2026-10-09a")["sites"] == 0
 
     def test_a_step_clears_the_rule_made_start_and_leaves_the_other_listed(

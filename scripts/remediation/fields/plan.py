@@ -185,6 +185,23 @@ def _sha256_text(path: Path) -> str:
 
 
 # ------------------------------------------------------------------------------ the wave
+def _require_adversarial(run: Path) -> None:
+    """Lane wd5 writes only what the Opus adversarial re-check has passed (D10, map step 6): the wave
+    is planned from the DECISIONS.jsonl the re-check was applied to (`adversarial.py apply`, which
+    pins that file's sha256), never from the researchers' decisions alone."""
+    applied = run / HO.ADV_APPLIED
+    if not applied.exists():
+        raise PlanError(
+            f"{applied} is missing: lane wd5 writes only what the adversarial re-check has passed "
+            "(adversarial.py select, export, import, apply)"
+        )
+    pinned = json.loads(applied.read_text(encoding="utf-8"))["decisions_sha256"]
+    if _sha256_text(run / HO.DECISIONS_FILE) != pinned:
+        raise PlanError(
+            f"{run / HO.DECISIONS_FILE} is not the file the adversarial re-check was applied to"
+        )
+
+
 def wants_write(
     decisions: Sequence[Mapping[str, Any]], line: Mapping[str, Any] | None, rule: R.Rule = R.DEFAULT
 ) -> bool:
@@ -227,6 +244,8 @@ def build_wave(run: Path, wave: str) -> dict[str, Any]:
     decisions = HO._read_jsonl(fields_fn)
     if not decisions:
         raise PlanError(f"{fields_fn} holds no decision - import the handoff first")
+    if rule.recheck:
+        _require_adversarial(run)
     derived_fn = run / DERIVED_FILE
     derived = HO._read_jsonl(derived_fn) if derived_fn.exists() else []
     decisions = [*decisions, *derived]
@@ -363,6 +382,8 @@ def _decision_evidence(decision: Mapping[str, Any], rule: R.Rule) -> list[dict[s
     }
     if rule.asks_open_fields:
         entry["model"] = decision["model"]
+    if "adversarial" in decision:
+        entry["adversarial"] = decision["adversarial"]
     return [*quoted, entry]
 
 
