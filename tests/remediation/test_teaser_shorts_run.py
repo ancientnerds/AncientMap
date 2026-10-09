@@ -267,7 +267,7 @@ class TestSelect:
             85,
         ]
         assert record["roles"]["card_writer"] == {"model": "claude-opus-5-5", "effort": "high"}
-        assert record["roles"]["hook_rater"] == {"model": "claude-opus-5-5", "effort": "medium"}
+        assert record["roles"]["hook_rater"] == {"model": "claude-opus-5-5", "effort": "xhigh"}
         assert record["roles"]["fact_checker"] == {"model": "claude-sonnet-5-5", "effort": "high"}
         assert record["roles"]["web_verifier"] == {"model": "claude-sonnet-5-5", "effort": "high"}
         assert record["roles"]["pilot_judge"] == {"model": "claude-opus-5-5", "effort": "xhigh"}
@@ -1110,7 +1110,7 @@ class TestTheBriefs:
     @pytest.mark.parametrize(
         ("stage", "role", "model", "effort"),
         [
-            ("rate", "hook_rater", "claude-opus-5-5", "medium"),
+            ("rate", "hook_rater", "claude-opus-5-5", "xhigh"),
             ("check", "fact_checker", "claude-sonnet-5-5", "high"),
             ("verify", "web_verifier", "claude-sonnet-5-5", "high"),
         ],

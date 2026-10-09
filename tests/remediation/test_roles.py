@@ -27,7 +27,7 @@ import roles as RO  # noqa: E402
 #: (fr-general-001 failed on Sonnet); `enrich_writer` is the lane E writer that stayed on Sonnet.
 D6 = {
     "card_writer": ("claude-opus-5-5", "high"),
-    "hook_rater": ("claude-opus-5-5", "medium"),
+    "hook_rater": ("claude-opus-5-5", "xhigh"),
     "fact_checker": ("claude-sonnet-5-5", "high"),
     "web_verifier": ("claude-sonnet-5-5", "high"),
     "field_researcher": ("claude-opus-5-5", "high"),
