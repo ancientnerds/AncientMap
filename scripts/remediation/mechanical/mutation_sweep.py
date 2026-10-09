@@ -9017,7 +9017,7 @@ WD5_ADV_CASES: list[Case] = [
         ADV_TESTS,
     ),
     guard(
-        "wd5-adv: an import refuses an answer outside the role",
+        "wd5-adv: the re-check import refuses an answer outside the role",
         ADVERSARIAL,
         "            if problem is not None:",
         "test_an_answer_recorded_without_the_role_is_refused_by_name",
