@@ -7406,10 +7406,10 @@ PHASE4_VERIFY_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 shorts_export: site.json drops the pinned card hash",
         SHORTS_EXPORT,
-        '        return row["card_text_sha256"], None, None\n',
-        "        return None, None, None  # mutant\n",
+        '        teaser.shorts_pin(provenance, row["description"]),\n',
+        "        None,  # mutant\n",
         SHORTS_TEST,
-        "test_s13_the_export_carries_the_pinned_hash_into_site_json",
+        "test_s13_a_teaser_card_is_pinned_by_its_own_provenance_and_marked_generated",
     ),
     (
         "p4 shorts_export: site.json drops the card's AI system",
