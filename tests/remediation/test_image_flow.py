@@ -304,6 +304,26 @@ class TestThePicksOfTheRecheck:
         assert picks[1]["wikipedia_cache_file"] is None
         assert Path(picks[0]["path"]).is_file() and picks[0]["name"] == "Tomb Alpha"
 
+    def test_picks_from_a_file_are_told_the_cached_page_of_their_site(self, tmp_path: Path) -> None:
+        """The old targets (`pool-picks`) come without a cache file; the export adds the site's."""
+        run = tmp_path / "pool"
+        FL.write_population(run, [read_line(A, "Tomb Alpha")])
+
+        class Cache:
+            def file_of(self, site_id: str) -> Path | None:
+                return Path(f"C:/cache/{site_id}.json")
+
+        pick = {
+            "site_id": A, "name": "Tomb Alpha", "lat": 40.0, "lon": 9.0, "file": "A-front.jpg",
+            "path": "unused", "picture_url": "https://example.org/a.jpg", "note": "the tomb",
+            "answered_by": "mcode-judge-1",
+        }  # fmt: skip
+        FL.recheck_export(
+            run, tmp_path / "h", cache=Cache(), picks=[pick], read=lambda _pick: jpeg()
+        )
+        (question,) = SG.load_questions(run, HR.spec_for_round(1)).values()
+        assert f"C:/cache/{A}.json" in question.prompt
+
     def test_a_pick_without_a_site_or_a_picture_is_refused(self, tmp_path: Path) -> None:
         run = search_run(tmp_path)
         FL.pictures(run, Client())

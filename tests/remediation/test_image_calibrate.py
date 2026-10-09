@@ -272,7 +272,7 @@ class TestBuildingTheGold:
             ]},
         ]  # fmt: skip
         pool_verdicts = [
-            {"site_id": "site5", "file": "P1.jpg", "verdict": "depicts"},
+            {"site_id": "site5", "file": "P1.jpg", "verdict": "region_or_type"},
             {"site_id": "site5", "file": "P2.jpg", "verdict": "other_site"},
             {"site_id": "retired1", "file": "G1.jpg", "verdict": "depicts"},
         ]
@@ -313,7 +313,8 @@ class TestBuildingTheGold:
             for g in ("foreign", "foreign_gold", "hard_negative")
             for c in groups[g]
         )
-        # one adjudicated candidate per MiniMax class, with no truth yet
+        # one adjudicated candidate per MiniMax class that has a candidate on disk at a shown site
+        # (the whole `depicts` class is the retired site's), with no truth yet
         assert sorted(c["file"] for c in groups["adjudicated"]) == ["P1.jpg", "P2.jpg"]
         assert all(c["truth"] is None for c in groups["adjudicated"])
         # the site of an adjudicated case is the fresh read's, never an invented point; a pool site

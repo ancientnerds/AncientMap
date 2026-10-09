@@ -750,6 +750,8 @@ class TestThePool:
         """The 178 written heroes sit at sites that serve a picture now: no prefilter row, no depicts
         row, and not an error - the re-check is their only judge."""
         old = [{"site_id": "a", "file": f, "verdict": "depicts"} for f in ("w.jpg", "x.jpg")]
+        # a depicts pair outside the pool that nobody re-checked is no pair to deny and no error
+        old.append({"site_id": "z", "file": "z.jpg", "verdict": "depicts"})
         rck = [
             {
                 "verdict": verdict,
