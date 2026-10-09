@@ -1017,14 +1017,16 @@ class ProbeProduction:
     ) -> None:
         self.lane = lane
         self.foreign = foreign or FOREIGN
+        monkeypatch.setattr(A, "psql_json_reader", lambda: lambda sql: [self.foreign])
+        # the neighbour a lane's probe names is read from production: here the foreign row's id
+        row = {**self.foreign, **A.neighbour_of(records, lane)}
         self.answers = {
             suffix: (A.PSQL_SCRIPT_ERROR, f"psql:<stdin>:52: ERROR:  {lane.label}: 1 {says}")
-            for suffix, _, _, says in A.probe_cases(records, lane, self.foreign)
+            for suffix, _, _, says in A.probe_cases(records, lane, row)
         }
         self.answers.update(answers or {})
         self.left = left or {}
         self.sent: list[str] = []
-        monkeypatch.setattr(A, "psql_json_reader", lambda: lambda sql: [self.foreign])
         monkeypatch.setattr(A, "run_psql", self.run_psql)
 
     def run_psql(self, sql: str, *, rows: bool = False, check: bool = True, **_: Any) -> Any:

@@ -234,6 +234,9 @@ class Verdict:
     column: str | None = None
     #: The journal row a reversal lane undoes.
     journal_id: int | None = None
+    #: A row lane's cell: the table written and the id of the row in it (`mechanical/rowlane.py`).
+    table: str | None = None
+    row_id: str | None = None
 
 
 def load_findings(path: Path) -> list[Finding]:
@@ -1049,6 +1052,10 @@ def plan_record(change: Verdict, plan: Plan) -> dict[str, Any]:
     on a column lane every line is exactly what it was before cell lanes existed.
     """
     lane = plan.lane
+    if lane.row_cells:
+        from mechanical import rowlane
+
+        return rowlane.plan_record(change, plan)
     column = change.column if lane.cells else lane.column
     if lane.cells:
         lane.cell(column)
@@ -1210,6 +1217,10 @@ def reversed_records(records: Sequence[Any], lane: Lane = T05) -> list[Any]:
     """
     from mechanical import apply as apply_mod
 
+    if lane.row_cells:
+        from mechanical import rowlane
+
+        return rowlane.reversed_records(records, lane)
     if lane.cells:
         # A cell's reversal restores its old value in its own column - NULL too, where the lane
         # filled an empty cell. The journal row it undoes is the write's own, unknown until the

@@ -16,6 +16,30 @@ from identity import entities, export  # noqa: E402
 
 _COUNTER = {"n": 0}
 
+#: The roles the identity stages' answers come from (`identity.dup_judge`, `parent_judge`).
+CALIBRATED_ROLES = ("web_verifier", "adversarial", "pilot_judge")
+#: The calibration id `passed_calibrations` gives each of them.
+CALIBRATED = {role: f"cal-{role}" for role in CALIBRATED_ROLES}
+
+
+def passed_calibrations(root: Path, roles: tuple[str, ...] = CALIBRATED_ROLES) -> dict[str, str]:
+    """A sealed, passed calibration per role under `root` (`calibrate_claude`'s files), as
+    `{role: calibration id}`: what an import must be given for the roles that answered."""
+    import roles as RO
+
+    ids = {role: CALIBRATED[role] for role in roles}
+    (root / "verdicts").mkdir(parents=True, exist_ok=True)
+    seals = {
+        cid: {"calibration_id": cid, "role": role, "role_sha256": RO.role_sha256(role)}
+        for role, cid in ids.items()
+    }
+    (root / "THRESHOLDS.json").write_text(json.dumps(seals), encoding="utf-8")
+    for role, cid in ids.items():
+        (root / "verdicts" / f"{cid}.json").write_text(
+            json.dumps({"calibration_id": cid, "role": role, "passed": True}), encoding="utf-8"
+        )
+    return ids
+
 
 def site(**over: Any) -> dict[str, Any]:
     """One `shown` row; every key `export.SHOWN_SQL` selects, with an unremarkable default."""

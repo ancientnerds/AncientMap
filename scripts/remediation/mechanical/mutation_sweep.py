@@ -1198,9 +1198,9 @@ CASES: list[Case] = [
         guard(f"cells: lane refuses {label}", LANE, needle, test, CELL_TESTS)
         for label, needle, test in (
             (
-                "a table not keyed by a site id",
+                "a table that is not a target",
                 "        if TARGET_KEYS.get(self.table) != self.key_column:",
-                "test_a_target_must_be_keyed_by_a_site_id",
+                "test_a_target_is_a_table_with_its_key",
             ),
             (
                 "u as anything but the site",
