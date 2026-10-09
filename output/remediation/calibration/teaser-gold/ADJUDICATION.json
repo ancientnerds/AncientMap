@@ -410,6 +410,140 @@
    "note": "what 'witness to' attaches to"
   }
  ],
- "verified_cards": [],
- "verified_cards_note": "To be filled by the orchestrator from `calibrate.py dispute-list` (the 7 + 12 Opus false contradictions of -09c): one entry per recorded VERIFIED card, label clean (the default for a card not listed), disputed or contradicted. A seal binds this file by its sha256: complete it BEFORE sealing teaser-2026-10-10."
+ "verified_cards": [
+  {
+   "card": "Paleolithic people once lived in Buzeyir Cave, where digs unearthed items of stone and sharpened animal bones. Found in 1985, it has yielded around 74 artefacts.",
+   "label": "clean",
+   "name": "Buzeyir Cave",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the web_verifier dispute list: az-wiki's 'hunted animal bones' and '63 stone items' are not incompatible with sharpened bones and about 74 artefacts in all",
+   "site_id": "c08d8ce8-6103-4f32-bb80-9e59c0a97a17"
+  },
+  {
+   "card": "Mankiala's stupa marks where, legend says, an earlier incarnation of Buddha fed seven hungry tiger cubs with part or all of his body. Relics were found 10 to 20 metres below its dome top.",
+   "label": "clean",
+   "name": "Mankiala",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the web_verifier dispute list: the first coins three feet down do not contradict relics found 10 to 20 m below the dome top",
+   "site_id": "fa579d23-36bc-469f-9351-2be5f11e180f"
+  },
+  {
+   "card": "Near modern Bali, on the north coast of Crete, lay Astale, a Roman town and the harbour of Axus. The Stadiasmus Maris Magni placed it 300 stadia from Herakleion.",
+   "label": "contradicted",
+   "name": "Astale",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the web_verifier dispute list: the Stadiasmus (topostext work 217) gives 100 stades from Astale to Herakleion, not 300",
+   "site_id": "6a8bc59c-77c3-4359-8f65-19f67ee0ac04"
+  },
+  {
+   "card": "On a terrace 300 feet above the Lycus river, Hierapolis was famous for its high quality woollen fabrics and dye products. In AD 17, under Tiberius, a major earthquake destroyed the city.",
+   "label": "disputed",
+   "name": "Hierapolis",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the web_verifier dispute list: 300 ft above the river vs 200 ft above the valley (1911 Britannica) - sources differ; the AD 17 earthquake accusation cites a passage that does not name Hierapolis",
+   "site_id": "4ce83e01-a19d-40d0-a739-d6b571b9e824"
+  },
+  {
+   "card": "Found in 2008, the North Bersted Man was a warrior buried in the first century BC with an exceptional set of objects, his helmet adorned with two crests that once ran down its back.",
+   "label": "contradicted",
+   "name": "North Bersted Man",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the web_verifier dispute list: one crest ran ear to ear and only one down the back (Current Archaeology)",
+   "site_id": "a2c6e1bf-1538-43c4-ad4a-65a0186193a7"
+  },
+  {
+   "card": "In the southern Alentejo lie the Roman Ruins of São Cucufate, the remains of a Roman-era farm in Vila de Frades. Jorge Alarcão and R. Etienne began the first excavations in 1979.",
+   "label": "contradicted",
+   "name": "Roman Ruins of São Cucufate",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the web_verifier dispute list: first excavated by D. Fernando de Almeida in 1970 (Portuguese heritage register), not 1979",
+   "site_id": "9c776b7e-cc75-46e4-a169-2aa16b47ae86"
+  },
+  {
+   "card": "The Brauroneion, sanctuary of Artemis on the Athenian Acropolis, had no formal temple, only a stoa. Pausanias records an over-life-sized bronze horse there, representing the Trojan Horse.",
+   "label": "disputed",
+   "name": "Brauroneion",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the web_verifier dispute list: temple traces are not preserved but a cult-statue head suggests one may have existed (Acropolis Museum): 'no formal temple' needs a hedge",
+   "site_id": "44354857-115b-44d3-b155-cae373565602"
+  },
+  {
+   "card": "The steep banks and ditches of Caesar's Camp, an Iron Age hill fort south of Bracknell, trace an oak leaf. At its tip, multiple banks and a sinuous road guard the main entrance.",
+   "label": "contradicted",
+   "name": "Caesar's Camp, Bracknell Forest",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the adversarial dispute list: Historic England 1016334: a single massive rampart bank, and the north entrance probably not original",
+   "site_id": "6799d014-2963-4be7-954d-6a50ebbdcbc4"
+  },
+  {
+   "card": "At Igeum-dong, the 63 burials of a megalithic cemetery are linked by low pavements of rounded river cobbles. The site also holds the two largest raised-floor buildings in Korean prehistory.",
+   "label": "disputed",
+   "name": "Igeum-dong",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the adversarial dispute list: NRICH counts 7 dolmens and 75 burial features against the card's 63 burials",
+   "site_id": "c434e091-07f2-4748-a298-2766e0717bb6"
+  },
+  {
+   "card": "On a large mound platform at the Chiripa Archaeological site, a sunken plaza with a carved stone at its centre is surrounded by thatched houses with double walls of cobble and adobe.",
+   "label": "disputed",
+   "name": "Chiripa Archaeological site",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the adversarial dispute list: the houses burned and the thatch is inferred (Penn Museum); the present tense needs a hedge",
+   "site_id": "c4dcfccd-1092-41dd-a29a-d3a0355bc325"
+  },
+  {
+   "card": "Built by King Ur-Nammu in the 21st century BC, the Great Ziggurat of Ur belonged to a temple complex of the moon god Nanna; its remains are mud brick faced with burnt bricks set in bitumen.",
+   "label": "clean",
+   "name": "Great Ziggurat of Ur",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the adversarial dispute list: begun by Ur-Nammu and finished by Shulgi; 'built by Ur-Nammu' is the standard attribution",
+   "site_id": "4ab1bd6e-a7fd-41c3-b341-9959d77d5a6e"
+  },
+  {
+   "card": "Writing and monumental architecture emerged in Uruk's Eanna district, dedicated to Inanna. The Lady of Uruk, a mask from 3100 BC, is one of the earliest representations of the human face.",
+   "label": "disputed",
+   "name": "Uruk",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the adversarial dispute list: 'one of the earliest faces' is the usual claim but older depictions exist (Venus of Brassempouy); 3100 BC lies inside 3200-3000 BC",
+   "site_id": "d0b9e72f-73a8-4671-a01f-5cafa6e53bf8"
+  },
+  {
+   "card": "At the end of the Avenue of the Dead rises the Pyramid of the Moon, a stage for ritual sacrifice and a burial ground for its victims: felines, birds of prey, snakes and humans.",
+   "label": "contradicted",
+   "name": "Teotihuacan - Pyramid of the Moon",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the adversarial dispute list: the source list ends 'and more' and Burial 6 also held canids: the card drops the qualifier and presents the list as complete",
+   "site_id": "5d975f0c-bbe4-4bd4-9436-5bf4f2bd59b6"
+  },
+  {
+   "card": "Over the Cakircak stream in ancient Caria, the Nysa Bridge runs some 100 m like a tunnel, though built entirely above ground: a Roman vault carrying the area before the city theatre.",
+   "label": "contradicted",
+   "name": "Nysa Bridge",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the adversarial dispute list: the bridge is collapsed between m 75 and 85; the present-tense 'runs some 100 m' is false",
+   "site_id": "e62c980a-351d-40c1-8297-05f52f72a59c"
+  },
+  {
+   "card": "Several decades before Hadrian's Wall, the Stanegate, the stone road, carried a Roman frontier through the valleys of the Tyne and Irthing, linking forts from Corbridge to Carlisle.",
+   "label": "disputed",
+   "name": "Stanegate",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the adversarial dispute list: the road predates Hadrian's Wall by decades, the frontier line (c. 105) by under two; the card's attachment is ambiguous",
+   "site_id": "861015a5-d704-4231-a835-069e4ee5b4a4"
+  },
+  {
+   "card": "In Trier, the Basilica of Constantine holds the largest extant hall from classical antiquity, 33 m high, built of solid brick between AD 300 and 310 with black-and-white marble floors.",
+   "label": "clean",
+   "name": "Basilica of Constantine",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the adversarial dispute list: AD 300-310 and 305-311 overlap; 33 m is the commonly cited height of the hall",
+   "site_id": "bfcc8547-38c2-4af1-bb54-79a47c79daea"
+  },
+  {
+   "card": "A ditch and ramparts ringed Becan, a Maya ceremonial center in Campeche where trade goods from Teotihuacan were found. Occupied about 550 BCE, it was probably abandoned by about 1200.",
+   "label": "disputed",
+   "name": "Becan",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the adversarial dispute list: decline from c. 1000; abandonment c. 1200 vs disappearance c. 1450 (es-wiki, INAH)",
+   "site_id": "ad61addd-d62b-4c88-972c-18ebf465a900"
+  },
+  {
+   "card": "Tenayuca holds the earliest Aztec double pyramid yet found. A double stairway climbs to where the temples of Tlaloc and Huitzilopochtli once stood, above a wall of serpents.",
+   "label": "disputed",
+   "name": "Tenayuca",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the adversarial dispute list: Chichimec foundation (1250), Aztec influence from stage three (1351): 'the earliest Aztec double pyramid' is contested",
+   "site_id": "852f3856-ecaa-4bab-82c8-a0ab2d11f94f"
+  },
+  {
+   "card": "On the summit of Knockmany Hill, the Knockmany Passage Tomb was built around 3000 BC. Of its 13 sandstone orthostats, three bear carved concentric circles, spirals and zigzags.",
+   "label": "disputed",
+   "name": "Knockmany Passage Tomb",
+   "note": "orchestrator (Claude Opus 5.5), 2026-10-09, from the adversarial dispute list: 3 of 13 vs 'at least six' carved stones (megalithicireland.com) vs 'several' (NI government)",
+   "site_id": "ef7d92df-a76b-4c2c-8160-32ad83100a71"
+  }
+ ],
+ "verified_cards_note": "Filled by the orchestrator on 2026-10-09 from `calibrate.py dispute-list` of teaser-2026-10-09c (7 web_verifier + 12 adversarial cases). Every other recorded VERIFIED card is clean by default."
 }
