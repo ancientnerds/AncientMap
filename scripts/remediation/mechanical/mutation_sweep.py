@@ -8859,8 +8859,8 @@ WD5_ADV_CASES: list[Case] = [
     Case(
         "wd5-adv: only a round 0 answer is gold",
         POOLS,
-        '                    and d["round"] == 0\n',
-        "                    and True\n",
+        '                    (d := decisions.get((label, f))) is not None and d["round"] == 0 for f in fields\n',
+        "                    (d := decisions.get((label, f))) is not None for f in fields\n",
         "test_a_field_counted_only_after_a_re_ask_makes_its_site_ineligible",
         POOL_TESTS,
     ),
