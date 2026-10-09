@@ -1330,12 +1330,13 @@ def fail_labels(
 
 def names_the_claim(check: Mapping[str, Any], case: Mapping[str, Any]) -> bool:
     """Whether a checker's FAIL names the claim a subtle defect seeded: an unsupported claim or a
-    reason that either holds a witness word of the defect (a whole word) together with another content
-    word of the flawed sentence, or covers the flawed sentence (`_cover` at `CLAIM_MATCH`). A FAIL for
-    another reason - a tone finding, a hook - does not catch a defect it does not name."""
+    reason that either holds a witness word of the defect (a whole word) together with a content word
+    of the flawed sentence that is not itself a witness word, or covers the flawed sentence (`_cover`
+    at `CLAIM_MATCH`). A FAIL for another reason - a tone finding, a hook - does not catch a defect it does not name."""
     recorded = case["recorded"]
     sentence = recorded["sentence"]
-    own = _content_words(sentence)
+    witness_words = frozenset().union(*(_content_words(w) for w in recorded["witness"]))
+    own = _content_words(sentence) - witness_words
     texts = [claim["claim"] for claim in check["claims"] if not claim["support"]]
     texts += list(check["reasons"])
     for text in texts:
@@ -1345,7 +1346,7 @@ def names_the_claim(check: Mapping[str, Any], case: Mapping[str, Any]) -> bool:
         named = any(
             re.search(rf"\b{re.escape(w)}\b", text, re.IGNORECASE) for w in recorded["witness"]
         )
-        if named and len(own & words) >= 1:
+        if named and own & words:
             return True
     return False
 

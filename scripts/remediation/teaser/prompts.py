@@ -542,7 +542,8 @@ CONTRADICTION_STEP = (
     "('about', 'possibly', 'by one estimate') already covers, a different spelling or naming "
     "convention, the same fact in other words. Where reputable sources disagree among themselves "
     "about the claim, decide DISPUTED, not CONTRADICTED: the text must then hedge the claim or drop "
-    "it."
+    "it. A claim the text already hedges ('possibly', 'by one estimate', 'some scholars') is "
+    "SUPPORTED when the sources really disagree: the text says no more than they do."
 )
 
 JUDGE_FORMAT = (

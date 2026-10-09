@@ -537,6 +537,22 @@ CASES: list[Case] = [
         "        elif False:",
         "test_a_fail_that_names_nothing_catches_no_subtle_defect",
     ),
+    gold(
+        "a witness word is not the other word of the flawed sentence",
+        CAL,
+        "    own = _content_words(sentence) - witness_words",
+        "    own = _content_words(sentence)",
+        "test_a_witness_word_alone_in_an_unrelated_reason_names_nothing",
+        T_SUBTLE,
+    ),
+    gold(
+        "a hedged claim is supported though the sources disagree",
+        PROMPTS,
+        '    "it. A claim the text already hedges',
+        '    "it. A claim the text already makes',
+        "test_a_judge_is_told_a_hedged_claim_is_supported",
+        T_DISPUTED,
+    ),
     # ------------------------------------------------------------------ the adjudicated gold
     gold(
         "a hair-split is not scored",

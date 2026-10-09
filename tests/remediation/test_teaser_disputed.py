@@ -237,6 +237,17 @@ class TestTheJudgePrompts:
         assert "NOT contradictions: a rounding, a range that overlaps" in prompt
         assert "decide DISPUTED, not CONTRADICTED" in prompt
 
+    @pytest.mark.parametrize(
+        "prompt",
+        [
+            P.judge_prompt("Skara Brae", "Scotland", "A card."),
+            PS.judge_prompt("Glaphyrae", "Greece", "A card."),
+        ],
+    )
+    def test_a_judge_is_told_a_hedged_claim_is_supported(self, prompt: str) -> None:
+        assert "A claim the text already hedges" in prompt
+        assert "is SUPPORTED when the sources really disagree" in prompt
+
     def test_the_adversary_is_told_what_is_no_finding(self) -> None:
         prompt = PS.adversarial_prompt(
             SHORTS_SITE,

@@ -207,3 +207,21 @@ class TestNamingTheClaim:
     def test_a_witness_inside_another_word_names_nothing(self) -> None:
         check = self.check([("x", ["S1"])], ["The small fort stands."])
         assert not K.names_the_claim(check, case("It was all rebuilt.", ["all"]))
+
+    def test_a_witness_word_alone_in_an_unrelated_reason_names_nothing(self) -> None:
+        # "all" is a witness word and a content word of the flawed sentence: it cannot be the other word
+        flawed = "All coins were struck in the town."
+        check = self.check([("x", ["S1"])], ["The tone is flat overall, all in all."])
+        assert not K.names_the_claim(check, case(flawed, ["all"]))
+        named = self.check(
+            [("x", ["S1"])], ["The card says all of it, but not every coin was struck."]
+        )
+        assert K.names_the_claim(named, case(flawed, ["all"]))
+
+    def test_the_words_of_a_multi_word_witness_are_not_the_other_word(self) -> None:
+        flawed = "Beneath the eastern wall of the old house lay a bronze coin."
+        check = self.check(
+            [("x", ["S1"])],
+            ["The hook is weak: beneath a dull opening, the eastern wall is only a background."],
+        )
+        assert not K.names_the_claim(check, case(flawed, ["beneath", "eastern wall"]))
