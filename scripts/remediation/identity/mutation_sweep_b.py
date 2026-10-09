@@ -46,6 +46,12 @@ CALIBRATION = IDENTITY / "calibration.py"
 RUN = IDENTITY / "run.py"
 PROMPTS = IDENTITY / "prompts.py"
 LANES = REPO / "scripts/remediation/mechanical/identity_lanes.py"
+CHUNK_WRITER = REPO / "scripts/remediation/gallery_audit/chunk_writer.py"
+MECHANICAL_PLAN = REPO / "scripts/remediation/mechanical/plan.py"
+MCODE_DRIVER = REPO / "scripts/remediation/mcode_driver.py"
+LANE_PY = REPO / "scripts/remediation/mechanical/lane.py"
+APPLY_PY = REPO / "scripts/remediation/mechanical/apply.py"
+L5_PLAN = REPO / "scripts/remediation/l5/plan.py"
 
 T = "tests/remediation/"
 T_ROUNDS = T + "test_identity_b_rounds.py"
@@ -1323,6 +1329,211 @@ CASES: list[Case] = [
         '    if False:\n        raise WaveError(f"{path} does not exist: select the wave first")',
         "test_a_wave_that_was_never_selected_is_refused",
         T_FILES,
+    ),
+    # ------------------------------------------------------------------ the seams in existing modules
+    Case(
+        "chunk_writer: name_type is written label -> alias only",
+        CHUNK_WRITER,
+        '    if (\n        change.column == "name_type"\n        and (change.old_value, change.new_value) != NAME_TYPE_TRANSITION\n    ):',
+        "    if (\n        False\n        and (change.old_value, change.new_value) != NAME_TYPE_TRANSITION\n    ):",
+        "test_no_other_transition_of_the_column_is_written",
+        T_LANES,
+    ),
+    Case(
+        "plan: a read-only reader opens the session read-only",
+        MECHANICAL_PLAN,
+        '    prefix = READ_ONLY_PREFIX if read_only else ""',
+        '    prefix = ""',
+        "test_a_read_only_reader_opens_the_session_read_only_and_quiet",
+        T_FILES,
+    ),
+    Case(
+        "mcode_driver: a bare verdict is one unit",
+        MCODE_DRIVER,
+        '    if isinstance(data.get("verdict"), str) and not any(',
+        "    if False and not any(",
+        "test_the_role_is_sealed_against_the_pool_re_answers_a_copy_and_is_measured",
+        T_CALIBRATION,
+    ),
+    Case(
+        "lane: an identity wave name resolves",
+        LANE_PY,
+        "    if IDENTITY_LANE.match(name):",
+        "    if False:",
+        "test_a_wave_name_resolves_to_its_lane_and_its_readback",
+        T_LANES,
+    ),
+    Case(
+        "apply: an identity wave has its own read-back",
+        APPLY_PY,
+        "    if IDENTITY_LANE.match(lane.name):",
+        "    if False:",
+        "test_a_wave_name_resolves_to_its_lane_and_its_readback",
+        T_LANES,
+    ),
+    Case(
+        "l5 plan: a rename carries the rule of the lane that makes it",
+        L5_PLAN,
+        '            rule=rule,\n            reason="",\n            note=note,',
+        '            rule="l5-name",\n            reason="",\n            note=note,',
+        "test_a_confirmed_rename_is_a_name_cell_pair_and_an_alias_change",
+        T_NAMES,
+    ),
+    # ------------------------------------------------------------------ the lanes' own fields
+    Case(
+        "lanes: scope window rests on the entry it judged",
+        LANES,
+        "        premise_sql=SCOPE_REVIEW_PREMISE_SQL,",
+        "        premise_sql=None,",
+        "test_it_writes_the_status_and_its_reason_and_owns_retired_and_in_scope",
+        T_LANES,
+    ),
+    Case(
+        "lanes: scope window owns retired and in_scope",
+        LANES,
+        '            Column("scope_status", "text", allowed_new_values=(RETIRED, IN_SCOPE), fills_null=True),',
+        '            Column("scope_status", "text", allowed_new_values=(), fills_null=True),',
+        "test_it_writes_the_status_and_its_reason_and_owns_retired_and_in_scope",
+        T_LANES,
+    ),
+    Case(
+        "lanes: a name rests on the external ids",
+        LANES,
+        "        premise_sql=NAME_FIX_PREMISE_SQL,",
+        "        premise_sql=None,",
+        "test_a_name_lane_is_name_l5_s_cells_conditioned_on_the_external_ids",
+        T_LANES,
+    ),
+    Case(
+        "lanes: a name carries its key invariant",
+        LANES,
+        "        write_invariant=_NAME_KEY_DIFFERS,",
+        "        write_invariant=None,",
+        "test_a_name_lane_is_name_l5_s_cells_conditioned_on_the_external_ids",
+        T_LANES,
+    ),
+    Case(
+        "lanes: a spoken name rests on the name",
+        LANES,
+        '        premise_sql="u.name",',
+        "        premise_sql=None,",
+        "test_it_fills_a_null_column_on_the_premise_of_the_name",
+        T_LANES,
+    ),
+    Case(
+        "lanes: a spoken name fills a NULL",
+        LANES,
+        '        cells=(Column("spoken_name", "text", fills_null=True),),',
+        '        cells=(Column("spoken_name", "text"),),',
+        "test_it_fills_a_null_column_on_the_premise_of_the_name",
+        T_LANES,
+    ),
+    Case(
+        "lanes: a spoken name is bounded in the transaction",
+        LANES,
+        '                    f"length(u.spoken_name) > {SPOKEN_MAX_CHARS}"',
+        '                    f"length(u.spoken_name) > {SPOKEN_MAX_CHARS + 1000}"',
+        "test_a_blank_or_too_long_spoken_name_is_refused_in_the_transaction",
+        T_LANES,
+    ),
+    # ------------------------------------------------------------------ the command line's gates
+    Case(
+        "run: an import needs a passed calibration",
+        RUN,
+        "        verdict = R.require_calibration(Path(args.calibration_root), args.calibration, spec.role)",
+        '        verdict = {"calibration_id": args.calibration, "agreement": None}',
+        "test_a_question_stage_a_calibration_gate_a_wave_a_plan_and_a_read_back",
+        T_RUN,
+    ),
+    # ------------------------------------------------------------------ the gates of a target
+    Case(
+        "retarget: the item lies within 1 km of the coordinates given",
+        RETARGET,
+        "    placed = [(what, m) for what, m in proofs if m <= GATE_M]",
+        "    placed = [(what, m) for what, m in proofs if m <= GATE_M * 1000]",
+        "test_an_item_not_at_the_coordinates_given_holds_the_site",
+        T_RETARGET,
+    ),
+    # ------------------------------------------------------------------ where each site stands
+    Case(
+        "retarget: a keep needs no re-check",
+        RETARGET,
+        "            if verdict == KEEP:\n                state = FINAL_KEEP",
+        "            if False:\n                state = FINAL_KEEP",
+        "test_a_site_is_final_only_when_both_stages_agree",
+        T_RETARGET,
+    ),
+    Case(
+        "retarget: no re-check is waiting",
+        RETARGET,
+        '            elif second is None or second["status"] != DECIDED:',
+        "            elif False:",
+        "test_a_site_is_final_only_when_both_stages_agree",
+        T_RETARGET,
+    ),
+    Case(
+        "retarget: a confirmation is a confirmation",
+        RETARGET,
+        '            elif second["data"]["verdict"] == CONFIRM:',
+        "            elif True:",
+        "test_a_site_is_final_only_when_both_stages_agree",
+        T_RETARGET,
+    ),
+    Case(
+        "scope_judge: a keep needs no re-check",
+        SCOPE_JUDGE,
+        '            if verdict not in RETIRING:\n                state = "kept"',
+        '            if False:\n                state = "kept"',
+        "test_the_final_state_of_each_kind_of_verdict",
+        T_SCOPE,
+    ),
+    Case(
+        "scope_judge: no re-check is waiting",
+        SCOPE_JUDGE,
+        '            elif second is None or second["status"] != DECIDED:',
+        "            elif False:",
+        "test_the_final_state_of_each_kind_of_verdict",
+        T_SCOPE,
+    ),
+    Case(
+        "scope_judge: a confirmation is a confirmation",
+        SCOPE_JUDGE,
+        '            elif second["data"]["verdict"] == CONFIRM:',
+        "            elif True:",
+        "test_the_final_state_of_each_kind_of_verdict",
+        T_SCOPE,
+    ),
+    Case(
+        "names_judge: a rule-made rename has no web decision",
+        NAMES_JUDGE,
+        "        if sid in web and sid not in rule_sites:",
+        "        if False:",
+        "test_the_final_state_of_a_model_made_and_a_rule_made_rename",
+        T_NAMES,
+    ),
+    Case(
+        "names_judge: a keep needs no re-check",
+        NAMES_JUDGE,
+        '            if decision["data"]["verdict"] == KEEP:',
+        "            if False:",
+        "test_the_final_state_of_a_model_made_and_a_rule_made_rename",
+        T_NAMES,
+    ),
+    Case(
+        "names_judge: no re-check is waiting",
+        NAMES_JUDGE,
+        '        if second is None or second["status"] != DECIDED:',
+        "        if False:",
+        "test_the_final_state_of_a_model_made_and_a_rule_made_rename",
+        T_NAMES,
+    ),
+    Case(
+        "names_judge: a confirmation is a confirmation",
+        NAMES_JUDGE,
+        '        elif second["data"]["verdict"] == CONFIRM:',
+        "        elif True:",
+        "test_the_final_state_of_a_model_made_and_a_rule_made_rename",
+        T_NAMES,
     ),
 ]
 
