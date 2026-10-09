@@ -16651,6 +16651,100 @@ MODEL_STAMP_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
 MUTATIONS += MODEL_STAMP_MUTATIONS
 
 
+# ── lane wd5 (2026-10-09): the truth pools of the calibration and the bound on undecided cells ──
+CLAUDE_CALIBRATION_TRUTH_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "claude calibration: a truth pool carries an answer",
+        "scripts/remediation/calibrate_claude.py",
+        "    if _answer_files(handoff, batches):\n",
+        "    if False:  # mutant\n",
+        "tests/remediation/test_calibrate_claude.py",
+        "test_a_truth_pool_that_carries_an_answer_is_refused",
+    ),
+    (
+        "claude calibration: a truth pool is not checked at all",
+        "scripts/remediation/calibrate_claude.py",
+        "        _check_truth_pool(handoff, batches, truth)\n",
+        "        pass  # mutant\n",
+        "tests/remediation/test_calibrate_claude.py",
+        "test_a_truth_pool_that_carries_an_answer_is_refused",
+    ),
+    (
+        "claude calibration: a truth file that is not there is read",
+        "scripts/remediation/calibrate_claude.py",
+        "    if not truth.is_file():\n",
+        "    if False:  # mutant\n",
+        "tests/remediation/test_calibrate_claude.py",
+        "test_a_truth_file_must_name_exactly_the_cases",
+    ),
+    (
+        "claude calibration: a truth pool with no question is sealed",
+        "scripts/remediation/calibrate_claude.py",
+        "    if not wanted:\n",
+        "    if False:  # mutant\n",
+        "tests/remediation/test_calibrate_claude.py",
+        "test_a_truth_pool_with_no_question_is_refused",
+    ),
+    (
+        "claude calibration: a truth file that names other cases is sealed",
+        "scripts/remediation/calibrate_claude.py",
+        "    if not isinstance(held, dict) or set(held) != wanted:\n",
+        "    if False:  # mutant\n",
+        "tests/remediation/test_calibrate_claude.py",
+        "test_a_truth_file_must_name_exactly_the_cases",
+    ),
+    (
+        "claude calibration: a bound outside zero and one is sealed",
+        "scripts/remediation/calibrate_claude.py",
+        "    if max_undecided_excess is not None and (\n",
+        "    if False and (\n",
+        "tests/remediation/test_calibrate_claude.py",
+        "test_the_undecided_bound_is_a_share",
+    ),
+    (
+        "claude calibration: a truth file that changed is prepared",
+        "scripts/remediation/calibrate_claude.py",
+        "    if truth is not None and not truth.is_file():\n",
+        "    if False:  # mutant\n",
+        "tests/remediation/test_calibrate_claude.py",
+        "test_a_truth_file_that_changed_after_the_seal_is_refused_at_the_prepare",
+    ),
+    (
+        "claude calibration: a comparison nobody makes is compared as all units",
+        "scripts/remediation/calibrate_claude.py",
+        "    if comparator is None:\n",
+        "    if False:  # mutant\n",
+        "tests/remediation/test_calibrate_claude.py",
+        "test_a_comparison_this_tool_does_not_make_is_refused_by_name",
+    ),
+    (
+        "claude calibration: the undecided bound is not read",
+        "scripts/remediation/calibrate_claude.py",
+        "    if bound is not None:\n",
+        "    if False:  # mutant\n",
+        "tests/remediation/test_calibrate_claude.py",
+        "test_a_fresh_rate_of_undecided_cells_above_the_bound_fails_the_role",
+    ),
+    (
+        "claude calibration: a comparison without an undecided rate passes a bound",
+        "scripts/remediation/calibrate_claude.py",
+        "        if excess is None:\n",
+        "        if False:  # mutant\n",
+        "tests/remediation/test_calibrate_claude.py",
+        "test_a_comparison_that_reports_no_undecided_rate_cannot_pass_a_sealed_bound",
+    ),
+    (
+        "claude calibration: a rate above the bound passes",
+        "scripts/remediation/calibrate_claude.py",
+        "        elif excess > bound:\n",
+        "        elif False:  # mutant\n",
+        "tests/remediation/test_calibrate_claude.py",
+        "test_a_fresh_rate_of_undecided_cells_above_the_bound_fails_the_role",
+    ),
+]
+MUTATIONS += CLAUDE_CALIBRATION_TRUTH_MUTATIONS
+
+
 # ── the Phase-4 pilot of 2026-09-24: searches off, the pilot's own batches, the draw ──────────────
 #: The pilot runs with no MiniMax search (owner order 2026-09-23, "everything with Opus"): a zero
 #: allowance builds no client and refuses every seam; `mass4 --searches-off` tells every routes
