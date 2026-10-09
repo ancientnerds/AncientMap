@@ -650,3 +650,17 @@ class TestThePlan:
         sql = SJ.live_sql([FORT])
         assert "concat_ws(' | ', u.name" in sql and f"'{FORT}'::uuid" in sql
         assert sql.lstrip().upper().startswith("SELECT")
+
+
+TS_OTHER = MUSEUM
+
+
+def test_a_re_check_answer_names_this_question_s_site() -> None:
+    raw = {
+        "site_id": TS_OTHER,
+        "verdict": "CONFIRM",
+        "why": "read",
+        "quotes": [q(FORT_PAGE, FORT_TEXT)],
+    }
+    with pytest.raises(R.AnswerError, match="is not this question's"):
+        SJ.parse_recheck(json.dumps(raw), {"site_id": FORT})

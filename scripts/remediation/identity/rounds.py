@@ -212,6 +212,21 @@ def load_contexts(out: Path) -> dict[str, Mapping[str, Any]]:
     return merged
 
 
+def agreement(first: Path, second: Path) -> dict[str, Any]:
+    """The verdicts of two imports of the same questions side by side - a pilot answered by the
+    stage's role and again by the pilot judge (`--as-role pilot_judge`, a stage directory of its own)."""
+    a, b = decisions_by_site(first), decisions_by_site(second)
+    shared = sorted(set(a) & set(b))
+    pairs = [(sid, a[sid]["data"].get("verdict"), b[sid]["data"].get("verdict")) for sid in shared]
+    return {
+        "shared": len(shared),
+        "agree": sum(1 for _, x, y in pairs if x == y),
+        "disagree": [{"site_id": sid, "first": x, "second": y} for sid, x, y in pairs if x != y],
+        "only_first": sorted(set(a) - set(b)),
+        "only_second": sorted(set(b) - set(a)),
+    }
+
+
 def latest_imported(out: Path, doing: str) -> list[Round]:
     """The rounds, only if the newest one is imported: `doing` would otherwise read decisions older
     than the answers already exported, and those answers could never be written."""

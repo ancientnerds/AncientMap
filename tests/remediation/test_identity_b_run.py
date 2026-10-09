@@ -612,3 +612,33 @@ class TestTheNamesLane:
     ) -> None:
         code, _, err = run_json(tree, capsys, "--lane", "names", "result")
         assert code == 1 and "needs --kind clean or --kind spoken" in err
+
+
+def test_a_wave_label_is_a_date_and_an_optional_letter() -> None:
+    import argparse
+
+    assert (
+        RUN.wave_label("2026-10-12") == "2026-10-12"
+        and RUN.wave_label("2026-10-12b") == "2026-10-12b"
+    )
+    for bad in ("2026-10-1", "x", "2026-10-12bb", "2026-10-12-s001", ""):
+        with pytest.raises(argparse.ArgumentTypeError, match="not a wave label"):
+            RUN.wave_label(bad)
+
+
+def test_a_pilot_answered_twice_is_compared_through_the_command_line(
+    tree: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    first, second = tree / "first", tree / "second"
+    for out, verdict in ((first, "OUT_OF_WINDOW"), (second, "NOT_A_SITE")):
+        out.mkdir()
+        R.write_jsonl(
+            out / R.DECISIONS_FILE,
+            [{"site_id": TS.FORT, "status": R.DECIDED, "data": {"verdict": verdict}}],
+        )
+    code, got, _ = run_json(
+        tree, capsys, "--lane", "scope-window", "agreement", "--stage", "scope-window-web",
+        "--stage-dir", str(first), "--other-stage-dir", str(second),
+    )  # fmt: skip
+    assert code == 0 and got["shared"] == 1 and got["agree"] == 0
+    assert got["disagree"][0]["first"] == "OUT_OF_WINDOW"

@@ -230,6 +230,9 @@ def cmd_stage(args: argparse.Namespace, run: Path) -> int:
             {**summary, "calibration": verdict["calibration_id"], "agreement": verdict["agreement"]}
         )
         return 0
+    elif command == "agreement":
+        _print(R.agreement(out, args.other_stage_dir))
+        return 0
     else:  # status
         decisions = R.load_decisions(out)
         _print(
@@ -617,6 +620,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     importer.add_argument("--calibration-root", type=Path, default=CC.CALIBRATION_ROOT)
     stage_command("status", "rounds and decisions of a stage")
+    agree = stage_command("agreement", "the verdicts of two imports of the same questions")
+    agree.add_argument("--other-stage-dir", required=True, type=Path)
 
     sub.add_parser("result", help="the stage results and the lists the other lanes read")
     for name in ("wave", "plan", "plan-links", "plan-names", "verify", "handoffs", "step"):
@@ -640,7 +645,15 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-STAGE_COMMANDS = {"export", "export-reask", "brief", "check-answer", "import", "status"}
+STAGE_COMMANDS = {
+    "export",
+    "export-reask",
+    "brief",
+    "check-answer",
+    "import",
+    "status",
+    "agreement",
+}
 
 
 def main(argv: Sequence[str] | None = None) -> int:

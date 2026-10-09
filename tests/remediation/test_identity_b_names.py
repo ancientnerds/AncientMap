@@ -751,3 +751,9 @@ class TestTheSpokenPlan:
     def test_the_live_read_asks_the_name_as_the_premise(self) -> None:
         sql = NJ.spoken_live_sql([MENHIR])
         assert "u.name AS premise" in sql and "u.spoken_name" in sql and f"'{MENHIR}'::uuid" in sql
+
+
+def test_a_name_re_check_answer_names_this_question_s_site() -> None:
+    raw = {"site_id": OTHER, "verdict": "REJECT", "why": "read", "quotes": []}
+    with pytest.raises(R.AnswerError, match="is not this question's"):
+        NJ.parse_recheck(json.dumps(raw), {"site_id": DOLMEN, "proposal": {"new_name": "x"}})

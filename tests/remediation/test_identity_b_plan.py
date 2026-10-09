@@ -555,3 +555,55 @@ class TestTheChain:
         assert RP.chain_state(run) == {
             "s1": {"links": {"stamp": "x", "at": RP.chain_state(run)["s1"]["links"]["at"]}}
         }
+
+
+class TestTheReadBack:
+    def verify(
+        self,
+        row: dict[str, Any] | None,
+        *,
+        skipped: dict[str, str] | None = None,
+        rows: list | None = None,
+    ):
+        keys = {"Kydonia": "kydonia"}
+        name_rows = {CHANIA: rows if rows is not None else [
+            {"id": 7, "site_id": CHANIA, "name": "Chania", "name_normalized": "chania", "name_type": "alias"}]}  # fmt: skip
+        return RP.verify_wave(
+            DECISIONS,
+            ASKED,
+            live(*([row] if row else []), keys=keys, name_rows=name_rows),
+            skipped or {},
+        )
+
+    def landed(self, **over: Any) -> dict[str, Any]:
+        return landed_row(**{"name": "Kydonia", "name_normalized": "kydonia", **over})
+
+    def test_a_wave_that_landed_has_no_deviation(self) -> None:
+        (got,) = self.verify(self.landed())
+        assert got == {"site_id": CHANIA, "state": "landed", "deviations": []}
+
+    def test_a_site_a_plan_skipped_is_reported_as_skipped_not_as_a_deviation(self) -> None:
+        (got,) = self.verify(None, skipped={CHANIA: "links-not-landed: waits"})
+        assert got["state"] == "skipped" and got["deviations"] == [] and "waits" in got["why"]
+
+    def test_a_row_that_is_gone_is_a_deviation(self) -> None:
+        (got,) = self.verify(None)
+        assert got["state"] == "gone" and got["deviations"] == ["the row is gone"]
+
+    @pytest.mark.parametrize(
+        ("row", "rows", "match"),
+        [
+            ({"ext": [{"kind": "wikidata_qid", "value": "Q100"}, {"kind": "enwiki_title", "value": "Kydonia"}]}, None, "wikidata_qid is"),
+            ({"ext": [{"kind": "wikidata_qid", "value": "Q200"}, {"kind": "enwiki_title", "value": "Chania"}]}, None, "enwiki_title is"),
+            ({"source_url": WP + "Chania"}, None, "source_url is"),
+            ({"name": "Chania", "name_normalized": "chania"}, None, "name is 'Chania'"),
+            ({"name_normalized": "chania"}, None, "name_normalized is 'chania'"),
+            ({}, [], "old name 'Chania' is not searchable"),
+            ({}, [{"id": 7, "site_id": CHANIA, "name": "Chania", "name_normalized": "chania", "name_type": "label"}], "not searchable"),
+        ],
+    )  # fmt: skip
+    def test_every_way_production_can_differ_from_the_plan(
+        self, row: dict[str, Any], rows: list | None, match: str
+    ) -> None:
+        (got,) = self.verify(self.landed(**row), rows=rows)
+        assert got["state"] == "deviates" and any(match in d for d in got["deviations"]), got

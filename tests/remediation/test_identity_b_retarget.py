@@ -618,3 +618,48 @@ class TestTheFinalState:
             "f": ("RETARGET", "waiting-for-recheck"),
         }
         assert NOW  # the fixtures' clock is shared
+
+
+class TestTheEdges:
+    def test_the_questions_are_the_funnel_records_and_an_unknown_site_is_refused(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        row = site(id=CHANIA, name="Chania")
+        monkeypatch.setattr(RT.export, "load_export", lambda path: export_of([row]))
+        monkeypatch.setattr(RT, "cache_entries", lambda cache: {})
+        monkeypatch.setattr(RT, "wiki_cache_dir", lambda root=None: tmp_path)
+        funnel = {"id": CHANIA, "tier": "A", "p31": ["city"], "p31_modern": ["city"], "sentence1": "Chania is a city.",
+                  "opening_match": "city", "shared_with": []}  # fmt: skip
+        (tmp_path / "IDENTITY_FUNNEL.jsonl").write_text(json.dumps(funnel) + "\n", encoding="utf-8")
+        (got,) = RT.web_questions(tmp_path)
+        assert (
+            got.site_id == CHANIA
+            and got.context["why"]["tier"] == "A"
+            and got.context["cache"] == []
+        )
+        assert RT.web_questions(tmp_path, exclude=[CHANIA]) == []
+        assert [q_.site_id for q_ in RT.web_questions(tmp_path, sites=[CHANIA])] == [CHANIA]
+        with pytest.raises(common.IdentityError, match="1 site.s. are not in the funnel"):
+            RT.web_questions(tmp_path, sites=["00000000-0000-4000-8000-00000000dead"])
+
+    def test_a_name_longer_than_a_name_column_is_refused(self) -> None:
+        long_name = "K" * 501
+        data = answer()
+        data["target"]["name"] = {"value": long_name, "quotes": [q(WP + "Kydonia", long_name)]}
+        with pytest.raises(R.AnswerError, match="longer than 500 characters"):
+            parse(data)
+
+    @pytest.mark.parametrize(
+        "url",
+        ["ftp://example.org/kydonia", "http://localhost/kydonia", "https://example.org/a\x01b"],
+    )
+    def test_a_source_url_that_is_no_public_page_is_refused(self, url: str) -> None:
+        data = answer()
+        data["target"]["source_url"] = {"value": url, "quotes": [q(url, "Kydonia")]}
+        with pytest.raises(R.AnswerError):
+            parse(data)
+
+    @pytest.mark.parametrize("verdict", ["KEEP", "RETIRE"])
+    def test_only_a_merge_names_a_record_to_merge_with(self, verdict: str) -> None:
+        with pytest.raises(R.AnswerError, match="merge_with is null unless the verdict is MERGE"):
+            parse(answer(verdict, merge_with=OTHER))

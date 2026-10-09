@@ -343,3 +343,104 @@ class TestTheCalibrationGate:
         self.verdict(tmp_path, "c5")
         with pytest.raises(R.RoundError, match="sealed under another registry entry"):
             R.require_calibration(tmp_path, "c5", "web_verifier")
+
+
+class TestTheEdges:
+    def test_a_re_ask_before_any_round_is_refused(self, out: Path) -> None:
+        with pytest.raises(R.RoundError, match="no round is exported yet"):
+            R.reask_sites(out)
+
+    def test_a_round_whose_stored_contexts_are_gone_cannot_be_checked(
+        self, out: Path, tmp_path: Path
+    ) -> None:
+        R.export_round(out, SPEC, tmp_path / "h1", questions(), now=lambda: NOW)
+        (out / R.CONTEXTS_DIR / "r1.jsonl").unlink()
+        ok = json.dumps({"site_id": A_ID, "ok": True})
+        with pytest.raises(R.RoundError, match="contexts were never stored"):
+            R.check_answer(out, SPEC, "r1", "r1-b01", A_ID, ok)
+
+    def test_a_fourth_round_is_never_exported(self, out: Path, tmp_path: Path) -> None:
+        record = R.export_round(out, SPEC, tmp_path / "h1", questions(), now=lambda: NOW)
+        no = {A_ID: {"site_id": A_ID, "ok": False}, B_ID: {"site_id": B_ID, "ok": False}}
+        answer_all(tmp_path / "h1", record, SPEC, no)
+        run_import(out)
+        for number in (2, 3):
+            again = R.export_round(
+                out,
+                SPEC,
+                tmp_path / f"h{number}",
+                questions(),
+                earlier=R.held_sites(out),
+                now=lambda: NOW,
+            )
+            answer_all(tmp_path / f"h{number}", again, SPEC, no)
+            run_import(out, f"r{number}")
+        with pytest.raises(R.RoundError, match="at most 3"):
+            R.export_round(out, SPEC, tmp_path / "h4", questions(), earlier=R.held_sites(out))
+
+    def test_a_title_the_resolver_does_not_answer_stops_the_import(
+        self, out: Path, tmp_path: Path
+    ) -> None:
+        import dataclasses
+
+        titled = dataclasses.replace(SPEC, titles=lambda p, c: {"Some Title"})
+        record = R.export_round(out, titled, tmp_path / "h1", questions(), now=lambda: NOW)
+        answer_all(
+            tmp_path / "h1", record, titled,
+            {A_ID: {"site_id": A_ID, "ok": True}, B_ID: {"site_id": B_ID, "ok": True}},
+        )  # fmt: skip
+        with pytest.raises(R.RoundError, match="1 title.s. came back unresolved"):
+            R.import_round(
+                out,
+                titled,
+                "r1",
+                http=FakeClient,
+                resolver=lambda wanted, client: {},
+                now=lambda: NOW,
+                pace=0,
+            )
+        assert not (out / R.DECISIONS_FILE).exists()
+
+
+class TestTheAgreement:
+    def decide_all(self, out: Path, tmp_path: Path, tag: str, verdicts: dict[str, bool]) -> None:
+        record = R.export_round(
+            out,
+            SPEC,
+            tmp_path / f"h-{tag}",
+            [q for q in questions() if q.site_id in verdicts],
+            now=lambda: NOW,
+        )
+        answer_all(
+            tmp_path / f"h-{tag}",
+            record,
+            SPEC,
+            {sid: {"site_id": sid, "ok": ok} for sid, ok in verdicts.items()},
+        )
+        run_import(out)
+
+    def test_two_imports_of_the_same_questions_are_compared_by_site(self, tmp_path: Path) -> None:
+        first, second = tmp_path / "a", tmp_path / "b"
+        self.decide_all(first, tmp_path, "a", {A_ID: True, B_ID: True})
+        self.decide_all(second, tmp_path, "b", {A_ID: True})
+        got = R.agreement(first, second)
+        # the toy decision records no verdict: both sides read None, so they agree
+        assert got == {
+            "shared": 1,
+            "agree": 1,
+            "disagree": [],
+            "only_first": [B_ID],
+            "only_second": [],
+        }
+
+    def test_a_different_verdict_is_listed(self, tmp_path: Path) -> None:
+        first, second = tmp_path / "a", tmp_path / "b"
+        for out, verdict in ((first, "KEEP"), (second, "RETARGET")):
+            out.mkdir()
+            R.write_jsonl(
+                out / R.DECISIONS_FILE,
+                [{"site_id": A_ID, "status": R.DECIDED, "data": {"verdict": verdict}}],
+            )
+        got = R.agreement(first, second)
+        assert got["shared"] == 1 and got["agree"] == 0
+        assert got["disagree"] == [{"site_id": A_ID, "first": "KEEP", "second": "RETARGET"}]
