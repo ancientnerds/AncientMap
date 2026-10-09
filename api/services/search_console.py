@@ -66,11 +66,14 @@ def _query(
 
 def _totals(session: AuthorizedSession, start: date, end: date) -> dict[str, Any]:
     """One window without dimensions: the property's own sums and average position."""
+    window = {"start": start.isoformat(), "end": end.isoformat()}
     rows = _query(session, start, end, [], rows=1)
-    row = rows[0] if rows else {"clicks": 0, "impressions": 0, "ctr": 0.0, "position": None}
+    if not rows:
+        # A window without a single impression: nothing shown, nothing clicked.
+        return {**window, "clicks": 0, "impressions": 0, "ctr": 0.0, "position": None}
+    row = rows[0]
     return {
-        "start": start.isoformat(),
-        "end": end.isoformat(),
+        **window,
         "clicks": int(row["clicks"]),
         "impressions": int(row["impressions"]),
         "ctr": row["ctr"],
