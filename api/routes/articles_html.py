@@ -52,9 +52,8 @@ def story_page_query(db: Session):
     The significance clause mirrors /api/news/feed (news.py) exactly. Until
     2026-09-11 this query asked only for post_text, so the 767 items the
     scorer had rejected with significance 1 — "not archaeology" — vanished
-    from the feed but kept a live, indexable page. significance IS NULL means
-    "not scored yet", not "rejected", so those keep their page like the feed
-    keeps them.
+    from the feed but kept a live, indexable page. Since 2026-10-09 an unscored
+    story (significance NULL) has no page yet either (news_visibility).
     """
     return db.query(NewsItem).join(NewsVideo).filter(*public_story_criteria())
 
@@ -368,12 +367,17 @@ async def story_page(slug: str, db: Session = Depends(get_db)):
         # rejected by the scorer, deduplicated, or out of period scope. Answer
         # 410 so crawlers drop it; a 404 gets re-crawled for months because it
         # reads as "maybe it comes back". Unknown ids stay 404.
-        withdrawn = (
-            db.query(NewsItem.id).filter(NewsItem.id == item_id).first()
+        row = (
+            db.query(NewsItem.post_text, NewsItem.significance)
+            .filter(NewsItem.id == item_id)
+            .first()
             if item_id is not None
             else None
         )
-        if withdrawn:
+        # A story the scorer has not reached yet is not published yet: a 404
+        # with a short cache, not a 410 that tells Google to drop it for good.
+        pending = row is not None and row.post_text is not None and row.significance is None
+        if row is not None and not pending:
             # The 410 stays (it is what makes Google drop the URL), but a
             # visitor who followed a search result gets a way on: the newest
             # stories, in the archive's own order, next to the archive search.

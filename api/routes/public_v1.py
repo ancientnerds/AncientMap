@@ -867,7 +867,7 @@ def create_public_api() -> FastAPI:
         # out-of-scope medieval ones withdrawn on 2026-09-11.
         where_parts = [
             "ni.post_text IS NOT NULL",
-            "(ni.significance IS NULL OR ni.significance >= 2)",
+            "ni.significance >= 2",
         ]
         params: dict = {"limit": page_size, "offset": offset}
 
