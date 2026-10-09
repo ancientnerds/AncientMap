@@ -31,6 +31,11 @@ prompts, answers, the run CLI), `scripts/remediation/mechanical/teaser.py` (the 
 `tests/api/test_ai_act_marking.py`, `tests/api/test_sites_html_ssr.py`,
 `tests/pipeline/video/test_shorts.py`, `ancient-nerds-map/src/seo/__tests__/render.test.tsx`; the
 mutation sweep's `teaser:` cases (`scripts/remediation/mechanical/mutation_sweep.py "teaser:"`).
+Contract shorts-v1 (section 9): `tests/remediation/test_teaser_shorts.py` (rules, shapes, prompts; the
+eleven pilot samples are fixtures in `tests/remediation/shorts_cases.py`),
+`test_teaser_shorts_run.py` (the chain, roles, canary, keep-on-fail, the re-check run),
+`test_mechanical_teaser_shorts.py`, `test_card_provenance_v3.py`, `test_teaser_calibrate.py`; the
+sweep's `teaser-shorts:` cases.
 
 ## 1. What a card is
 
