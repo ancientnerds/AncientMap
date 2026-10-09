@@ -50,6 +50,8 @@ class _Session:
     def __init__(self, items):
         self.items = {i.id: i for i in items}
         self.commits = self.rollbacks = 0
+        #: Every URL list handed to IndexNow; the tests never reach the network.
+        self.announced: list[list[str]] = []
 
     def commit(self):
         self.commits += 1
@@ -78,6 +80,7 @@ def _wave(monkeypatch, tmp_path, story, verdict=CORRECTED):
     monkeypatch.setattr(
         sr, "web_verify_item", lambda item, verifier, settings: ("ok", dict(verdict))
     )
+    monkeypatch.setattr(sr, "submit", lambda urls: session.announced.append(list(urls)) or True)
     return session
 
 
@@ -128,3 +131,43 @@ def test_a_failed_check_is_tried_again_by_a_later_wave(monkeypatch, tmp_path):
 
     assert sr.run_wave(limit=10, dry_run=False) == {"failed": 1}
     assert sr.journalled_ids(tmp_path / "journal.jsonl") == set()
+
+
+OLD_URL = "https://ancientnerds.com/news-archive/baalbeks-megaliths-predate-the-romans-6609"
+NEW_URL = (
+    "https://ancientnerds.com/news-archive/video-argues-baalbeks-megaliths-predate-the-romans-6609"
+)
+
+
+def test_a_correction_is_announced_under_its_new_and_its_old_url(monkeypatch, tmp_path):
+    """The hourly IndexNow step only sees new stories; a re-run's corrections
+    never reached Bing (Bing Webmaster Tools, 2026-10-09)."""
+    story = _story()
+    session = _wave(monkeypatch, tmp_path, story)
+
+    sr.run_wave(limit=10, dry_run=False)
+
+    assert session.announced == [[NEW_URL, OLD_URL, "https://ancientnerds.com/news-archive/"]]
+
+
+def test_a_verified_story_and_a_dry_run_announce_nothing(monkeypatch, tmp_path):
+    story = _story()
+    session = _wave(monkeypatch, tmp_path, story, verdict={"verdict": "VERIFIED", "reason": "fine"})
+    sr.run_wave(limit=10, dry_run=False)
+    assert session.announced == []
+
+    other = _story(item_id=7000)
+    session = _wave(monkeypatch, tmp_path, other)
+    sr.run_wave(limit=10, dry_run=True)
+    assert session.announced == []
+
+
+def test_a_rollback_announces_the_url_it_brings_back(monkeypatch, tmp_path):
+    story = _story()
+    session = _wave(monkeypatch, tmp_path, story)
+    sr.run_wave(limit=10, dry_run=False)
+    session.announced.clear()
+
+    sr.rollback(6609)
+
+    assert session.announced == [[OLD_URL, NEW_URL, "https://ancientnerds.com/news-archive/"]]

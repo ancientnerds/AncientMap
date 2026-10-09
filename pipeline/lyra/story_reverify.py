@@ -17,6 +17,12 @@ What a wave does with each story, by the verifier's verdict:
   verdict is journalled for a person to review.
 * VERIFIED - nothing changes; journalled.
 
+Every story a wave or a rollback changed is announced to IndexNow at the end,
+under its new URL and its old one (which now answers 301). The hourly
+orchestrator step announces only stories created or first verified in its
+two-hour window, so a re-run's corrections never reached Bing: on 2026-10-09
+Bing Webmaster Tools flagged a public story as never submitted.
+
 Every story a wave touches gets one journal line in
 /app/logs/story_reverify/journal.jsonl (logs/ on the host): the verdict, the
 reason and the headline, facts and post before and after. A story in the
@@ -41,6 +47,7 @@ from pathlib import Path
 from typing import Any
 
 from pipeline.database import NewsItem, NewsVideo, get_session
+from pipeline.indexnow import page_url, paths_for, submit
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.tweet_verifier import apply_web_verdict, open_web_verifier, web_verify_item
 from pipeline.news_visibility import public_story_criteria
@@ -96,6 +103,20 @@ def _snapshot(item: NewsItem) -> dict[str, Any]:
     return {f: getattr(item, f) for f in FIELDS}
 
 
+def announce(changed: list[tuple[int, str, str]]) -> int:
+    """IndexNow for the stories a wave or a rollback changed: (id, headline
+    before, headline after). Both URLs, because a new headline is a new slug
+    and the old one now redirects; the archive hub follows, as in the hourly
+    step. Returns the number of URLs sent."""
+    if not changed:
+        return 0
+    stories = [(item_id, after) for item_id, _before, after in changed]
+    stories += [(item_id, before) for item_id, before, after in changed if before != after]
+    urls = [page_url(path) for path in paths_for(stories, [], [], [])]
+    submit(urls)
+    return len(urls)
+
+
 def journalled_ids(journal: Path) -> set[int]:
     if not journal.exists():
         return set()
@@ -137,6 +158,7 @@ def run_wave(limit: int, dry_run: bool, alt_first: bool = True) -> Counter[str]:
     if verifier is None:
         raise SystemExit("story_reverify: MiniMax is not configured (no MiniMax key)")
     outcomes: Counter[str] = Counter()
+    changed: list[tuple[int, str, str]] = []
     with get_session() as session:
         for item in pick(session, limit, journalled_ids(journal), alt_first):
             before = _snapshot(item)
@@ -162,8 +184,11 @@ def run_wave(limit: int, dry_run: bool, alt_first: bool = True) -> Counter[str]:
                 session.rollback()
             else:
                 session.commit()
+                if line["after"]:
+                    changed.append((item.id, before["headline"], after["headline"]))
             outcomes[outcome] += 1
             logger.info("story %s: %s", item.id, outcome)
+    logger.info("IndexNow: %d URLs for %d changed stories", announce(changed), len(changed))
     return outcomes
 
 
@@ -177,9 +202,11 @@ def rollback(item_id: int) -> dict[str, Any]:
     entry = next(e for e in reversed(lines) if e["item_id"] == item_id)
     with get_session() as session:
         item = session.get(NewsItem, item_id)
+        headline_now = item.headline
         for field, value in entry["before"].items():
             setattr(item, field, value)
         session.commit()
+        announce([(item_id, headline_now, item.headline)])
     return entry["before"]
 
 
