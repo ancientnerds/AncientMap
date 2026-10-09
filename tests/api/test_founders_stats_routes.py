@@ -86,7 +86,7 @@ def test_router_is_mounted_under_api_stats():
     # changed between the local and the CI version (a _IncludedRouter wrapper
     # without .path), while the schema is the documented contract either way.
     paths = set(app.openapi()["paths"])
-    for name in ("overview", "countries", "daily", "search", "field-vitals", "crawlers", "server", "map", "live", "globe", "clusters", "devices", "content", "feedback", "sources", "journeys", "problems", "members"):  # fmt: skip
+    for name in ("overview", "countries", "daily", "search", "field-vitals", "crawlers", "server", "creators", "map", "live", "globe", "clusters", "devices", "content", "feedback", "sources", "journeys", "problems", "members"):  # fmt: skip
         assert f"/api/stats/{name}" in paths, name
 
 
@@ -137,6 +137,45 @@ def test_daily_fetches_the_whole_history_once_and_ends_with_today(monkeypatch):
     assert len(out["days"]) == (now.date() - fs.TRACKER_FIRST_FULL_DAY).days
     assert len(fetch.calls) == 1
     assert fetch.calls[0][1] == datetime(2026, 9, 18, tzinfo=UTC)
+
+
+def test_creators_name_the_channels_from_our_own_database(monkeypatch):
+    from datetime import date
+
+    rows = [
+        {
+            "event_name": "media_play",
+            "media": "vid00000001",
+            "day": date(2026, 10, 9),
+            "n": 3,
+            "visitors": 3,
+        }
+    ]
+    fetch = Fetch(**{"media_play": rows})
+    monkeypatch.setattr(fr, "fetch", fetch)
+
+    class Query:
+        def join(self, *a, **kw):
+            return self
+
+        def filter(self, *a, **kw):
+            return self
+
+        def all(self):
+            from types import SimpleNamespace
+
+            return [SimpleNamespace(id="vid00000001", name="Ancient Architects", title="Baalbek")]
+
+    class Db:
+        def query(self, *cols):
+            return Query()
+
+    out = asyncio.run(fr.creators(days=30, db=Db(), _session=SESSION))
+    assert out["channels"] == [
+        {"channel": "Ancient Architects", "starts": 3, "viewers": 3, "clicks": 0}
+    ]
+    assert fetch.calls[0][3] == {"clicks_since": fr.OUTBOUND_FIX}
+    assert out["clicks_since"] == "2026-10-09T06:42:00+00:00"
 
 
 def test_server_says_why_when_the_log_is_missing(monkeypatch):
@@ -233,7 +272,13 @@ def test_countries_still_slice_one_fetch_into_four_windows(monkeypatch):
     assert out["d30"]["sessions"] == 3 and out["d30"]["all"] == 3
     # One query for four tiles, and it reaches back thirty days.
     assert len(fetch.calls) == 1
-    assert fetch.calls[0][2] - fetch.calls[0][1] == timedelta(days=fr.COUNTRY_DAYS)
+    assert fetch.calls[0][2] - fetch.calls[0][1] == timedelta(days=fr.COMPARE_DAYS)
+    # A tile compares once the window before it lies after the tracker's first
+    # full day: the 7-day one from 2 October 2026, the 30-day one from 17 November.
+    first_day = datetime.combine(fs.TRACKER_FIRST_FULL_DAY, datetime.min.time(), UTC)
+    for tile, days in (("d7", 7), ("d30", 30)):
+        covered = now - timedelta(days=2 * days) >= first_day
+        assert (out[tile]["change"] is not None) == covered, tile
 
 
 def test_content_splits_the_rows_by_event_and_caps_the_lists(monkeypatch):

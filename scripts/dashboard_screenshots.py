@@ -155,6 +155,14 @@ def daily_points(days: int = 22) -> dict:
                 "visitors": visitors,
                 "human": visitors * 2 // 5,
                 "ai": i % 3,
+                "sources": {
+                    "google": visitors * 45 // 100,
+                    "direct": visitors * 25 // 100,
+                    "discord.com": visitors * 8 // 100,
+                    "youtube": visitors * 7 // 100,
+                    "ai": visitors * 5 // 100,
+                    "reddit.com": visitors - visitors * 90 // 100,
+                },
             }
         )
     return {"days": points[:-1], "today": points[-1]}
@@ -300,6 +308,41 @@ SERVER = {
 FIXTURES: dict[str, dict] = {
     "daily": daily_points(),
     "server": SERVER,
+    "creators": {
+        "totals": {"starts": 89, "viewers": 86, "clicks": 2, "channels": 25, "videos": 70},
+        "channels": [
+            {"channel": c, "starts": n, "viewers": n, "clicks": k}
+            for c, n, k in (
+                ("Universe Inside You", 13, 0),
+                ("DeDunking", 7, 0),
+                ("Michael Button", 7, 0),
+                ("Ancient Architects", 5, 1),
+                ("Anyextee", 5, 0),
+                ("MegalithomaniaUK", 5, 0),
+                ("not attributed", 0, 1),
+            )
+        ],
+        "videos": [
+            {"id": f"abcdefghij{i}", "title": t, "channel": c, "starts": n}
+            for i, (t, c, n) in enumerate(
+                (
+                    ("All Great Pyramid Construction Theories Explained", "Universe Inside You", 4),
+                    ("We Might Be Completely Wrong About the Great Pyramid", "Michael Button", 4),
+                    ("Egypt's Lost Labyrinth: New Evidence Beneath Hawara (2026)", "Anyextee", 4),
+                    ("The Olmec Golden Age", "Ancient Americas", 3),
+                )
+            )
+        ],
+        "days": [
+            {
+                "day": (datetime(2026, 9, 18, tzinfo=UTC) + timedelta(days=i)).date().isoformat(),
+                "starts": 2 + i % 6,
+                "clicks": 1 if i > 20 else 0,
+            }
+            for i in range(22)
+        ],
+        "clicks_since": "2026-10-09T06:42:00+00:00",
+    },
     "search": SEARCH,
     "field-vitals": FIELD_VITALS,
     "crawlers": CRAWLERS,
@@ -702,6 +745,13 @@ EMPTY_FIXTURES: dict[str, dict] = {
     "field-vitals": {
         ff: {"weeks": WEEKS[-1:], "lcp": [None], "inp": [None], "cls": [None]}
         for ff in ("phone", "desktop")
+    },
+    "creators": {
+        "totals": {"starts": 0, "viewers": 0, "clicks": 0, "channels": 0, "videos": 0},
+        "channels": [],
+        "videos": [],
+        "days": [],
+        "clicks_since": "2026-10-09T06:42:00+00:00",
     },
     "server": {
         "report": None,

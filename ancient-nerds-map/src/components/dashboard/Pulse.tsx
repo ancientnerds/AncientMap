@@ -1,4 +1,4 @@
-import { fmtDayHour, fmtInt, fmtShare } from './format'
+import { fmtDay, fmtDayHour, fmtInt, fmtShare } from './format'
 import { Explain, Panel, Status } from './Panel'
 import { Tile } from './Tile'
 import type { CountriesData, CountryWindow, HourBucket, Overview } from './types'
@@ -26,6 +26,28 @@ export function stackHour(h: HourBucket, max: number, height = STRIP_HEIGHT): Ho
   const humanH = h.human * unit
   const restH = (h.sessions - h.human) * unit
   return { humanY: height - humanH, humanH, restY: height - humanH - restH, restH }
+}
+
+/** The tracker's first full UTC day (pipeline/stats_analysis.py TRACKER_FIRST_FULL_DAY). */
+const FIRST_FULL_DAY = Date.UTC(2026, 8, 18)
+const DAY_MS = 86_400_000
+
+/** "+18 % on the 7 days before" for a tile that can compare, and what it is
+ *  waiting for when it cannot yet. */
+export function changeNote(w: CountryWindow, days: number): { text: string; cls?: string } | undefined {
+  if (w.change === undefined) return undefined
+  if (w.change === null) {
+    // The window before must start on or after the tracker's first full day.
+    const from = new Date(FIRST_FULL_DAY + 2 * days * DAY_MS).toISOString().slice(0, 10)
+    return { text: `compares from ${fmtDay(from)}` }
+  }
+  const { now, before } = w.change
+  if (before === 0) return { text: `none in the ${days} days before` }
+  const pct = Math.round((now / before - 1) * 100)
+  return {
+    text: `${pct >= 0 ? '+' : '−'}${Math.abs(pct)} % on the ${days} days before`,
+    cls: pct >= 0 ? 'dash-delta--up' : 'dash-delta--down',
+  }
 }
 
 /** "human sessions, 34 % of 154" — the same sentence for every closed window. */
@@ -96,8 +118,8 @@ export function Pulse({ state, countries }: { state: Loaded<Overview>; countries
         <div className="dash-tiles">
           <Tile label="Now" value={c.now.sessions} sub="sessions, last 5 min" countries={c.now.countries} />
           <Tile label="Today" value={c.today.sessions} sub={humanSub(c.today)} countries={c.today.countries} />
-          <Tile label="7 days" value={c.d7.sessions} sub={humanSub(c.d7)} countries={c.d7.countries} />
-          <Tile label="30 days" value={c.d30.sessions} sub={humanSub(c.d30)} countries={c.d30.countries} />
+          <Tile label="7 days" value={c.d7.sessions} sub={humanSub(c.d7)} countries={c.d7.countries} note={changeNote(c.d7, 7)} />
+          <Tile label="30 days" value={c.d30.sessions} sub={humanSub(c.d30)} countries={c.d30.countries} note={changeNote(c.d30, 30)} />
         </div>
       )}
       {/* Two resources, two statuses. /overview is the heaviest query on the

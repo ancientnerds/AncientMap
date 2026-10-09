@@ -143,6 +143,51 @@ button {
   outline: none;
 }
 
+/* ── Jump bar: one link per panel, kept in view while scrolling ──── */
+
+.dash-jumps {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 8px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--dash-ink);
+  border-bottom: 1px solid var(--dash-line-soft);
+}
+
+.dash-jumps::-webkit-scrollbar {
+  display: none;
+}
+
+.dash-jumps a {
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--dash-line-soft);
+  border-radius: 3px;
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dash-green);
+  text-decoration: none;
+}
+
+.dash-jumps a:hover,
+.dash-jumps a:focus-visible {
+  border-color: var(--dash-green);
+  color: var(--dash-paper);
+  outline: none;
+}
+
+/* A jump lands the panel's title below the sticky bar, not under it. */
+.dash-panel {
+  scroll-margin-top: 56px;
+}
+
 /* ── Grid and panels ────────────────────────────────────────────────── */
 
 .dash-grid {
@@ -472,6 +517,39 @@ button {
   opacity: 0.55;
 }
 
+.dash-bar-paper {
+  fill: var(--dash-paper);
+}
+
+.dash-bar-amber {
+  fill: var(--dash-amber);
+}
+
+.dash-bar-red {
+  fill: var(--dash-red-bright);
+}
+
+.dash-bar-muted {
+  fill: var(--dash-muted);
+  opacity: 0.6;
+}
+
+.dash-bar-red-key::before {
+  border-top: 8px solid var(--dash-red-bright);
+}
+
+.dash-bar-muted-key::before {
+  border-top: 8px solid var(--dash-muted);
+}
+
+.dash-bar-paper-key::before {
+  border-top: 8px solid var(--dash-paper);
+}
+
+.dash-bar-amber-key::before {
+  border-top: 8px solid var(--dash-amber);
+}
+
 .dash-bar-human-key::before {
   border-top: 8px solid var(--dash-green);
 }
@@ -643,6 +721,52 @@ button {
   color: var(--dash-paper);
 }
 
+/* The reading ladder: a column per scroll mark, the count over a bar whose
+   width is the share of the row's first mark - the drop-off reads left to right. */
+.dash-ladder {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--dash-mono);
+  font-size: 0.75rem;
+}
+
+.dash-ladder th {
+  padding: 4px 6px 6px 0;
+  font-weight: 400;
+  text-align: left;
+  color: var(--dash-muted);
+  letter-spacing: 0.04em;
+}
+
+.dash-ladder tbody th {
+  color: var(--dash-paper);
+  font-family: var(--dash-text);
+  font-size: 0.85rem;
+}
+
+.dash-ladder td {
+  padding: 6px 6px 6px 0;
+  vertical-align: bottom;
+}
+
+.dash-ladder-count {
+  display: block;
+  color: var(--dash-paper);
+}
+
+.dash-ladder-bar {
+  display: block;
+  height: 4px;
+  margin-top: 3px;
+  background: var(--dash-line-soft);
+}
+
+.dash-ladder-bar span {
+  display: block;
+  height: 100%;
+  background: var(--dash-green);
+}
+
 /* ── Bar lists ──────────────────────────────────────────────────────── */
 
 .dash-bars {
@@ -663,6 +787,12 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.9rem;
+}
+
+/* A long title (a creator's video) breaks between words: on a phone the
+   ellipsis cut the part that tells two videos apart. */
+.dash-bar-label--wrap {
+  white-space: normal;
 }
 
 /* A URL path has no spaces to break at, and the end of it is the part that

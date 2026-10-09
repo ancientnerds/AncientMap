@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""The founders dashboard's data: eighteen endpoints under /api/stats, all
+"""The founders dashboard's data: nineteen endpoints under /api/stats, all
 behind the ``an_stats`` cookie (stats_access.require_stats_session). Umami rows
 come from pipeline.umami_db, the member counts from pipeline.members_stats,
 nginx's referral log from pipeline.referral_log, Google's view of us (Search
@@ -24,12 +24,13 @@ from api.routes.stats_access import require_stats_session
 from api.services import crawler_log, crux, jwt_auth, search_console
 from pipeline import members_stats, referral_log, server_load
 from pipeline import stats_analysis as fs
-from pipeline.database import get_db
+from pipeline.database import NewsChannel, NewsVideo, get_db
 from pipeline.umami_db import (
     CLUSTER_MIN_IDS,
     GLOBE_PATH,
     SQL_CLUSTERS,
     SQL_CONTENT,
+    SQL_CREATOR,
     SQL_DEVICES,
     SQL_ERRORS,
     SQL_FEEDBACK,
@@ -65,6 +66,9 @@ LIVE_LOOKBACK = timedelta(hours=24)
 LIVE_LIMIT = 6
 #: The flag row's longest window. One fetch serves all four tiles.
 COUNTRY_DAYS = 30
+#: How far /countries reads: twice the longest tile, so the 7- and 30-day
+#: tiles can each be set against the window before them.
+COMPARE_DAYS = 2 * COUNTRY_DAYS
 #: How long /countries' thirty-day fold is reused. It must be LONGER than the
 #: dashboard's poll interval or it can never hit: useStats refreshes every
 #: 60 000 ms (ancient-nerds-map/src/components/dashboard/useStats.ts:10), and
@@ -132,9 +136,25 @@ async def _country_windows() -> dict[str, Any]:
     history. The cache is here for October, not for now.
     """
     now = datetime.now(UTC)
-    sessions = fs.sessions_from_rows(
-        fetch(SQL_SESSION_EVENTS, now - timedelta(days=COUNTRY_DAYS), now)
-    )
+    rows = fetch(SQL_SESSION_EVENTS, now - timedelta(days=COMPARE_DAYS), now)
+    month = now - timedelta(days=COUNTRY_DAYS)
+    sessions = fs.sessions_from_rows([r for r in rows if r["created_at"] >= month])
+    first_day = datetime.combine(fs.TRACKER_FIRST_FULL_DAY, time.min, UTC)
+
+    def humans(start: datetime, end: datetime) -> int:
+        """Confirmed humans among the ids seen in [start, end), folded on that
+        window alone - both sides of a comparison counted the same way."""
+        window = [r for r in rows if start <= r["created_at"] < end]
+        return sum(1 for s in fs.sessions_from_rows(window) if s.human)
+
+    def change(days: int) -> dict[str, int] | None:
+        """This window against the one before it; None while the one before
+        reaches back past the tracker's first full day."""
+        start = now - timedelta(days=2 * days)
+        if start < first_day:
+            return None
+        cut = now - timedelta(days=days)
+        return {"now": humans(cut, now), "before": humans(start, cut)}
 
     def block(since: datetime | None, human_only: bool = True) -> dict[str, Any]:
         rows = fs.countries(sessions, since=since, human_only=human_only)
@@ -149,8 +169,8 @@ async def _country_windows() -> dict[str, Any]:
     return {
         "now": block(now - LIVE_WINDOW, human_only=False),
         "today": block(midnight),
-        "d7": block(now - timedelta(days=7)),
-        "d30": block(None),
+        "d7": {**block(now - timedelta(days=7)), "change": change(7)},
+        "d30": {**block(None), "change": change(COUNTRY_DAYS)},
     }
 
 
@@ -420,6 +440,33 @@ async def live(
         "visitors": [fs.live_row(r, now) for r in here[:LIVE_LIMIT]],
         "last": fs.live_row(rows[0], now) if rows and not here else None,
     }
+
+
+#: When a click out to YouTube started to mean one (deploy 2556cc4, UTC):
+#: before it, a click on a story's video poster - played in place - was
+#: counted as an outbound click as well.
+OUTBOUND_FIX = datetime(2026, 10, 9, 6, 42, tzinfo=UTC)
+
+
+@router.get("/creators")
+async def creators(
+    days: int = Query(7, ge=1, le=ALL_DAYS_MAX),
+    db: Session = Depends(get_db),
+    _session: dict = Depends(require_stats_session),
+) -> dict[str, Any]:
+    """What the stories send the creators: videos started on our pages and
+    clicks out to YouTube, per channel, per day and per video."""
+    since, until = _window(days)
+    rows = fetch(SQL_CREATOR, since, until, clicks_since=OUTBOUND_FIX)
+    ids = {r["media"] for r in rows if r["media"]}
+    videos = {
+        v.id: (v.name, v.title)
+        for v in db.query(NewsVideo.id, NewsChannel.name, NewsVideo.title)
+        .join(NewsChannel, NewsVideo.channel_id == NewsChannel.id)
+        .filter(NewsVideo.id.in_(ids))
+        .all()
+    }
+    return {**fs.creator_traffic(rows, videos), "clicks_since": OUTBOUND_FIX.isoformat()}
 
 
 @router.get("/members")

@@ -1,5 +1,5 @@
 /**
- * The founders dashboard at https://stats.ancientnerds.com/ — twenty panels,
+ * The founders dashboard at https://stats.ancientnerds.com/ — twenty-one panels,
  * each titled with the question it answers, fed by /api/stats/* behind the
  * an_stats cookie (api/routes/stats_access.py). Mobile first: one column,
  * two from 720 px. Umami itself stays one link away.
@@ -7,6 +7,7 @@
 import anLogo from '../components/dashboard/an-logo-green.svg'
 import { Attention } from '../components/dashboard/Attention'
 import { Crawlers } from '../components/dashboard/Crawlers'
+import { Creators } from '../components/dashboard/Creators'
 
 import { Devices } from '../components/dashboard/Devices'
 import { FeedbackInbox } from '../components/dashboard/FeedbackInbox'
@@ -15,6 +16,7 @@ import { GlobeReach } from '../components/dashboard/GlobeReach'
 import { Growth } from '../components/dashboard/Growth'
 import { LiveNow } from '../components/dashboard/LiveNow'
 import { Members } from '../components/dashboard/Members'
+import { panelId } from '../components/dashboard/Panel'
 import { Paths } from '../components/dashboard/Paths'
 import { Problems } from '../components/dashboard/Problems'
 import { Pulse } from '../components/dashboard/Pulse'
@@ -30,6 +32,7 @@ import type {
   ContentData,
   CountriesData,
   CrawlersData,
+  CreatorsData,
   DailyData,
   DevicesData,
   FeedbackData,
@@ -70,6 +73,45 @@ const ALL_DAYS = Math.ceil((Date.now() - TRACKER_START) / DAY_MS) + 1
  *  would otherwise stay red in the list and in the warnings for good. */
 const PROBLEM_DAYS = 7
 
+/** The jump bar: a short name for every panel, in the page's order, linked to
+ *  the panel's anchor (panelId of its question). Twenty-one panels run to
+ *  11,000 px on a desktop and 16,000 on a phone; this is the way across. */
+const JUMPS: Array<[string, string]> = [
+  ['Now', 'Who is here right now?'],
+  ['Growth', 'Is the audience growing?'],
+  ['Google', 'How does Google see us?'],
+  ['Map', 'Where are the visitors?'],
+  ['Server', 'Is the server keeping up?'],
+  ['Sources', 'Where do they come from, and how many do we miss?'],
+  ['Content', 'What gets opened, what gets searched?'],
+  ['Creators', 'How much do we send to the creators?'],
+  ['Crawlers', 'Who crawls us?'],
+  ['Speed', 'Are we fast for Google?'],
+  ['Globe', 'Does the globe actually come up?'],
+  ['Paths', 'How do they move through the site, and where do they leave?'],
+  ['Reading', 'How far do they read?'],
+  ['Kinds', 'What do visitors do?'],
+  ['Devices', 'What do they browse with, and in what language?'],
+  ['Members', 'Who signed up, and did they come back?'],
+  ['Attention', 'What needs attention?'],
+  ['Problems', 'Where does the platform fail them?'],
+  ['Feedback', 'What do visitors say?'],
+  ['Live', 'What are they looking at right now?'],
+  ['Scrapers', 'How many of those are one machine?'],
+]
+
+function JumpBar() {
+  return (
+    <nav className="dash-jumps" aria-label="Panels">
+      {JUMPS.map(([name, question]) => (
+        <a key={name} href={`#${panelId(question)}`}>
+          {name}
+        </a>
+      ))}
+    </nav>
+  )
+}
+
 function Entry() {
   return (
     <section className="dash-panel dash-entry">
@@ -104,6 +146,7 @@ export default function DashboardPage() {
   // and this is the one query that has to sort every event in the window.
   const clusters = useStats<ClustersData>(`clusters?days=${ALL_DAYS}`, 300_000)
   const content = useStats<ContentData>(`content?days=${ALL_DAYS}`)
+  const creators = useStats<CreatorsData>(`creators?days=${ALL_DAYS}`, 300_000)
   const feedback = useStats<FeedbackData>(`feedback?days=${ALL_DAYS}`)
   const sources = useStats<SourcesData>(`sources?days=${ALL_DAYS}`)
   // One request for two panels: the scroll ladder travels inside /journeys, so
@@ -115,10 +158,10 @@ export default function DashboardPage() {
   const members = useStats<MembersData>('members', 300_000)
   // `members` is deliberately not in this array. It is the only route on a
   // different database behind a different dependency, and one hiccup there must
-  // not replace the other nineteen panels with "Session expired".
+  // not replace the other twenty panels with "Session expired".
   const panels = [
     overview, countries, daily, search, vitals, crawlers, server, map, live, globe,
-    clusters, content, feedback, sources, journeys, problems, devices,
+    clusters, content, creators, feedback, sources, journeys, problems, devices,
   ]
   const unauthorized = panels.some(s => s.error === 'unauthorized')
 
@@ -134,6 +177,7 @@ export default function DashboardPage() {
           <a href="/logout">Sign out</a>
         </nav>
       </header>
+      {!unauthorized && <JumpBar />}
       {unauthorized ? (
         <Entry />
       ) : (
@@ -148,8 +192,9 @@ export default function DashboardPage() {
           <SearchGoogle state={search} />
           <VisitorMap state={map} />
           <ServerLoad state={server} />
-          <Sources state={sources} />
+          <Sources state={sources} daily={daily} />
           <TopContent state={content} />
+          <Creators state={creators} />
           <Crawlers state={crawlers} />
           <FieldVitals state={vitals} />
           <GlobeReach state={globe} />

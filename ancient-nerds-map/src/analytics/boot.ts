@@ -190,13 +190,37 @@ export function linkClick(
   href: string,
   defaultPrevented: boolean,
   ownHost: string
-): { name: 'discord_click'; src: string } | { name: 'outbound_click'; host: string } | null {
+): { name: 'discord_click'; src: string } | { name: 'outbound_click'; host: string; media?: string } | null {
   if (defaultPrevented) return null
   if (href.startsWith('/goto/discord')) {
     return { name: 'discord_click', src: new URLSearchParams(href.split('?')[1] ?? '').get('src') ?? 'unknown' }
   }
   const host = outboundHost(href, ownHost)
-  return host ? { name: 'outbound_click', host } : null
+  if (!host) return null
+  const media = youtubeVideoId(href)
+  return media ? { name: 'outbound_click', host, media } : { name: 'outbound_click', host }
+}
+
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/
+
+/** The YouTube video a link opens - watch?v=, youtu.be/, /shorts/, /embed/ -
+ *  or null. A click out to a creator's video carries the id, so the stats
+ *  can credit the channel (founders dashboard, "How much do we send to the
+ *  creators?", 2026-10-10). */
+export function youtubeVideoId(href: string): string | null {
+  let url: URL
+  try {
+    url = new URL(href)
+  } catch {
+    return null
+  }
+  const host = url.hostname.replace(/^(www|m)\./, '')
+  let id: string | null = null
+  if (host === 'youtu.be') id = url.pathname.slice(1).split('/')[0]
+  else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    id = url.searchParams.get('v') ?? url.pathname.match(/^\/(?:shorts|embed|live)\/([^/]+)/)?.[1] ?? null
+  }
+  return id && YOUTUBE_ID.test(id) ? id : null
 }
 
 function installOutboundClicks(page: string): void {
@@ -207,7 +231,7 @@ function installOutboundClicks(page: string): void {
     // The Discord funnel redirect logs the click server-side as well; this
     // one puts it into the visitor's journey.
     if (click?.name === 'discord_click') track('discord_click', { src: click.src, page })
-    else if (click) track('outbound_click', { host: click.host, page })
+    else if (click) track('outbound_click', click.media ? { host: click.host, media: click.media, page } : { host: click.host, page })
   })
 }
 

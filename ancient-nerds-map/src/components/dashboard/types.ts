@@ -28,6 +28,9 @@ export interface DailyPoint {
   human: number
   /** Of those, the ones an AI assistant sent. Overlaps `human`. */
   ai: number
+  /** Visitors by where they arrived from (source_family; "none" without a
+   *  page view). Sums to `visitors`. Missing from an API older than this bundle. */
+  sources?: Record<string, number>
 }
 
 /** GET /api/stats/daily — every finished day since the tracker's first full
@@ -157,6 +160,27 @@ export interface ServerData {
   log_reason: string | null
 }
 
+export interface CreatorChannel {
+  channel: string
+  /** Videos of the channel started on our story pages. */
+  starts: number
+  /** Distinct sessions per video and day, added up. */
+  viewers: number
+  /** Clicks out to the channel's videos on YouTube (from `clicks_since`). */
+  clicks: number
+}
+
+/** GET /api/stats/creators?days=N */
+export interface CreatorsData {
+  totals: { starts: number; viewers: number; clicks: number; channels: number; videos: number }
+  channels: CreatorChannel[]
+  videos: Array<{ id: string; title: string; channel: string; starts: number }>
+  days: Array<{ day: string; starts: number; clicks: number }>
+  /** Clicks out to YouTube are counted from here on: before it, a click on a
+   *  story's video poster counted as one too. */
+  clicks_since: string
+}
+
 /** GET /api/stats/overview?days=N */
 export interface Overview {
   days: number
@@ -185,6 +209,10 @@ export interface CountryWindow {
   all: number
   /** Biggest first — the panel clips the row, so the order is what survives. */
   countries: CountryCount[]
+  /** Confirmed humans in this window against the one before it, each folded
+   *  alone; null while the one before reaches past the tracker's first day,
+   *  absent on the two windows that have no comparison (now, today). */
+  change?: { now: number; before: number } | null
 }
 
 /** GET /api/stats/countries — fixed windows, not the page's range switch. */

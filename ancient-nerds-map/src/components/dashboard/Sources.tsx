@@ -1,7 +1,8 @@
 import { BarList, type BarItem } from './BarList'
-import { fmtInt, fmtStamp } from './format'
+import { fmtDay, fmtInt, fmtStamp } from './format'
+import { AxisChart, niceMax } from './Lines'
 import { HowCounted, Panel, Status } from './Panel'
-import type { LogCoverage, LogFamily, LogHost, LogStatus, SourceRow, SourcesData } from './types'
+import type { DailyData, DailyPoint, LogCoverage, LogFamily, LogHost, LogStatus, SourceRow, SourcesData } from './types'
 import type { Loaded } from './useStats'
 
 export type SourceBucket = 'search' | 'ai' | 'discord' | 'youtube' | 'direct' | 'other'
@@ -16,6 +17,40 @@ const BUCKET_LABELS: Array<[SourceBucket, string]> = [
 ]
 
 const RAW_ROWS = 8
+
+/** Each bucket's colour in the per-day chart, bottom to top. */
+const BUCKET_BARS: Record<SourceBucket, string> = {
+  search: 'dash-bar-human',
+  ai: 'dash-bar-paper',
+  discord: 'dash-bar-amber',
+  youtube: 'dash-bar-red',
+  direct: 'dash-bar-rest',
+  other: 'dash-bar-muted',
+}
+
+/** One day's visitors in the six buckets. */
+export function dayBuckets(p: DailyPoint): Record<SourceBucket, number> {
+  const out: Record<SourceBucket, number> = { search: 0, ai: 0, discord: 0, youtube: 0, direct: 0, other: 0 }
+  for (const [family, n] of Object.entries(p.sources ?? {})) out[sourceBucket(family)] += n
+  return out
+}
+
+/** Where the visitors came from, day by day: whether a channel grows shows
+ *  here and nowhere else - the lists below add the whole history up. */
+function SourceChart({ days }: { days: DailyPoint[] }) {
+  const buckets = days.map(dayBuckets)
+  const first = fmtDay(days[0].day)
+  const last = fmtDay(days[days.length - 1].day)
+  return (
+    <AxisChart
+      left={{ max: niceMax(Math.max(...days.map(d => d.visitors), 1)), format: v => fmtInt(Math.round(v)) }}
+      bars={BUCKET_LABELS.map(([bucket, label]) => ({ label, values: buckets.map(b => b[bucket]), className: BUCKET_BARS[bucket] }))}
+      titles={days.map((d, i) => `${fmtDay(d.day)}: ${BUCKET_LABELS.map(([b, label]) => `${label} ${fmtInt(buckets[i][b])}`).join(', ')}`)}
+      axis={[first, 'Visitors per day, by where they came from', last]}
+      label={`Visitors per day by source from ${first} to ${last}`}
+    />
+  )
+}
 
 /** The founders' six buckets over pipeline/stats_analysis.py source_family(). */
 export function sourceBucket(family: string): SourceBucket {
@@ -143,11 +178,13 @@ function Coverage({ log }: { log: LogCoverage }) {
 }
 
 /** Where the sessions came from, and how many arrivals the tracker missed. */
-export function Sources({ state }: { state: Loaded<SourcesData> }) {
+export function Sources({ state, daily }: { state: Loaded<SourcesData>; daily?: Loaded<DailyData> }) {
   const s = state.data
+  const days = daily?.data?.days ?? []
   return (
     <Panel question="Where do they come from, and how many do we miss?" wide>
       <Status state={state} />
+      {days.length >= 2 && days.some(d => d.sources) && <SourceChart days={days} />}
       {s && (
         <>
           <div className="dash-lists">

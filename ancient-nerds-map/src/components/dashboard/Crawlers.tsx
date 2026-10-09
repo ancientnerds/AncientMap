@@ -1,8 +1,9 @@
 import { BarList, type BarItem } from './BarList'
-import { fmtInt, fmtStamp } from './format'
+import { fmtDay, fmtInt, fmtStamp } from './format'
+import { AxisChart, niceMax } from './Lines'
 import { HowCounted, Panel, Status } from './Panel'
 import { Tile } from './Tile'
-import type { CrawlerBot, CrawlerKind, CrawlersData } from './types'
+import type { CrawlerBot, CrawlerKind, CrawlerReport, CrawlersData } from './types'
 import type { Loaded } from './useStats'
 
 const SITE = 'https://ancientnerds.com'
@@ -15,6 +16,30 @@ const KIND_TILES: Array<[CrawlerKind, string, string]> = [
   ['ai_search', 'AI search indexes', 'OAI-SearchBot, PerplexityBot, Claude-SearchBot'],
   ['training', 'AI training', 'GPTBot, ClaudeBot, CCBot and others'],
 ]
+
+/** One bar segment per kind, stacked in the tiles' order. */
+const KIND_BARS: Array<[CrawlerKind, string, string]> = [
+  ['search', 'search engines', 'dash-bar-human'],
+  ['ai_user', 'AI for a person', 'dash-bar-paper'],
+  ['ai_search', 'AI search indexes', 'dash-bar-amber'],
+  ['training', 'AI training', 'dash-bar-rest'],
+]
+
+function CrawlChart({ days }: { days: CrawlerReport['days'] }) {
+  const totals = days.map(d => KIND_BARS.reduce((sum, [kind]) => sum + d[kind], 0))
+  const first = fmtDay(days[0].day)
+  const last = fmtDay(days[days.length - 1].day)
+  return (
+    <AxisChart
+      small
+      left={{ max: niceMax(Math.max(...totals, 1)), format: v => fmtInt(Math.round(v)) }}
+      bars={KIND_BARS.map(([kind, label, className]) => ({ label, values: days.map(d => d[kind]), className }))}
+      titles={days.map(d => `${fmtDay(d.day)}: ${KIND_BARS.map(([kind, label]) => `${label} ${fmtInt(d[kind])}`).join(', ')}`)}
+      axis={[first, 'Page fetches per day, by kind', last]}
+      label={`Crawler page fetches per day from ${first} to ${last}`}
+    />
+  )
+}
 
 /** "200: 1,204 · 410: 31" in the order 2xx, 3xx, 4xx, 5xx. */
 export function statusHint(bot: CrawlerBot): string {
@@ -48,6 +73,7 @@ export function Crawlers({ state }: { state: Loaded<CrawlersData> }) {
               <Tile key={kind} label={label} value={byKind(kind)} sub={sub} />
             ))}
           </div>
+          {r.days.length >= 2 && <CrawlChart days={r.days} />}
           <div className="dash-lists">
             <div>
               <h3>Fetches per bot</h3>

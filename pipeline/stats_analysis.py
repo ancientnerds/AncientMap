@@ -668,12 +668,76 @@ def daily_visitors(rows: list[dict[str, Any]], today: date) -> dict[str, Any]:
             "visitors": len(sessions),
             "human": sum(1 for s in sessions if s.human),
             "ai": sum(1 for s in sessions if s.from_ai),
+            # Where each of the day's visitors arrived from (source_family of
+            # their first page that day); "none" for an id without a page
+            # view. The panel folds these into its six buckets per day.
+            "sources": dict(Counter(s.entry or "none" for s in sessions)),
         }
 
     span = (today - TRACKER_FIRST_FULL_DAY).days
     return {
         "days": [point(TRACKER_FIRST_FULL_DAY + timedelta(days=i)) for i in range(span)],
         "today": point(today),
+    }
+
+
+#: Rows the creator panel lists per ranking.
+CREATOR_ROWS = 10
+#: The channel name for a click out to YouTube that carries no video id: the
+#: clicks between the outbound fix (2026-10-09) and boot.ts sending the id.
+UNATTRIBUTED = "not attributed"
+
+
+def creator_traffic(
+    rows: list[dict[str, Any]], videos: dict[str, tuple[str, str]]
+) -> dict[str, Any]:
+    """What the stories send the 39 creators, out of SQL_CREATOR's rows and a
+    map of YouTube id -> (channel, title): per channel the videos started on
+    our pages and the clicks out to YouTube, per day both counts, and the most
+    started videos. A video Lyra no longer knows keeps its id as its title.
+
+    `starts` counts plays, `viewers` adds each video's distinct sessions per
+    day - a person who starts two videos is two viewers, as each creator sees
+    one of them.
+    """
+    channels: defaultdict[str, dict[str, int]] = defaultdict(
+        lambda: {"starts": 0, "viewers": 0, "clicks": 0}
+    )
+    per_day: defaultdict[str, dict[str, int]] = defaultdict(lambda: {"starts": 0, "clicks": 0})
+    per_video: Counter[str] = Counter()
+    for r in rows:
+        media = r["media"]
+        channel = videos[media][0] if media in videos else UNATTRIBUTED
+        day = r["day"].isoformat()
+        if r["event_name"] == "media_play":
+            channels[channel]["starts"] += r["n"]
+            channels[channel]["viewers"] += r["visitors"]
+            per_day[day]["starts"] += r["n"]
+            if media:
+                per_video[media] += r["n"]
+        else:
+            channels[channel]["clicks"] += r["n"]
+            per_day[day]["clicks"] += r["n"]
+    ranked = sorted(channels.items(), key=lambda kv: (-kv[1]["starts"] - kv[1]["clicks"], kv[0]))
+    return {
+        "totals": {
+            "starts": sum(c["starts"] for c in channels.values()),
+            "viewers": sum(c["viewers"] for c in channels.values()),
+            "clicks": sum(c["clicks"] for c in channels.values()),
+            "channels": sum(1 for name in channels if name != UNATTRIBUTED),
+            "videos": len(per_video),
+        },
+        "channels": [{"channel": name, **c} for name, c in ranked[:CREATOR_ROWS]],
+        "videos": [
+            {
+                "id": media,
+                "title": videos[media][1] if media in videos else media,
+                "channel": videos[media][0] if media in videos else UNATTRIBUTED,
+                "starts": n,
+            }
+            for media, n in per_video.most_common(CREATOR_ROWS)
+        ],
+        "days": [{"day": day, **counts} for day, counts in sorted(per_day.items())],
     }
 
 

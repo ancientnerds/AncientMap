@@ -11,6 +11,8 @@ export interface BarItem {
   href?: string
   /** A URL path: wraps anywhere instead of ending in an ellipsis. */
   path?: boolean
+  /** A long title: wraps between words instead of ending in an ellipsis. */
+  wrap?: boolean
 }
 
 interface BarListProps {
@@ -30,7 +32,10 @@ export function BarList({ items, empty }: BarListProps) {
     <ul className="dash-bars">
       {items.map(item => (
         <li key={item.key} className="dash-bar">
-          <span className={item.path ? 'dash-bar-label dash-bar-label--path' : 'dash-bar-label'} title={item.label}>
+          <span
+            className={item.path ? 'dash-bar-label dash-bar-label--path' : item.wrap ? 'dash-bar-label dash-bar-label--wrap' : 'dash-bar-label'}
+            title={item.label}
+          >
             {item.href ? <a href={item.href}>{item.label}</a> : item.label}
           </span>
           <span className="dash-bar-value">{fmtInt(item.value)}</span>

@@ -15,6 +15,7 @@ import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { Crawlers } from '../Crawlers'
+import { Creators } from '../Creators'
 import { Devices } from '../Devices'
 import { FeedbackInbox } from '../FeedbackInbox'
 import { FieldVitals } from '../FieldVitals'
@@ -38,6 +39,7 @@ import type {
   CountriesData,
   CountryWindow,
   CrawlersData,
+  CreatorsData,
   DailyData,
   DevicesData,
   FeedbackData,
@@ -87,6 +89,13 @@ const EMPTY = {
     report: { covered_from: null, bots: [], days: [], ai_user_pages: [], impostors: [] },
     log_reason: null,
   } as CrawlersData,
+  creators: {
+    totals: { starts: 0, viewers: 0, clicks: 0, channels: 0, videos: 0 },
+    channels: [],
+    videos: [],
+    days: [],
+    clicks_since: '2026-10-09T06:42:00+00:00',
+  } as CreatorsData,
   server: { report: null, log_reason: 'The server load log is not readable here.' } as ServerData,
   live: {
     window_minutes: 30,
@@ -150,6 +159,7 @@ const emptyPanels: Array<[string, JSX.Element]> = [
   ['FieldVitals', <FieldVitals state={ok(EMPTY.vitals)} />],
   ['Crawlers', <Crawlers state={ok(EMPTY.crawlers)} />],
   ['ServerLoad', <ServerLoad state={ok(EMPTY.server)} />],
+  ['Creators', <Creators state={ok(EMPTY.creators)} />],
   ['LiveNow', <LiveNow state={ok(EMPTY.live)} />],
   ['GlobeReach', <GlobeReach state={ok(EMPTY.globe)} />],
   ['Scrapers', <Scrapers state={ok(EMPTY.clusters)} overview={ok(EMPTY.overview)} />],
@@ -173,6 +183,7 @@ const failedPanels: Array<[string, JSX.Element]> = [
   ['FieldVitals', <FieldVitals state={failed} />],
   ['Crawlers', <Crawlers state={failed} />],
   ['ServerLoad', <ServerLoad state={failed} />],
+  ['Creators', <Creators state={failed} />],
   ['LiveNow', <LiveNow state={failed} />],
   ['GlobeReach', <GlobeReach state={failed} />],
   ['Scrapers', <Scrapers state={failed} overview={failed} />],

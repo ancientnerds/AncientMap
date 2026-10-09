@@ -13,6 +13,15 @@ interface PanelProps {
 /** Whether the panel around a piece of text has its explanations open. */
 const ExplainOpen = createContext(false)
 
+/** The panel's anchor, from its question: "Is the audience growing?" →
+ *  "is-the-audience-growing". The page's jump bar links to it. */
+export function panelId(question: string): string {
+  return question
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
 /** What a click inside a panel does on its own; such a click does not also
  *  open or close the explanations. */
 const OWN_CLICK = 'a, button, summary, input, select, textarea, label'
@@ -33,7 +42,7 @@ export function Panel({ question, wide = false, children }: PanelProps) {
   }
   const classes = ['dash-panel', wide && 'dash-panel--wide', open && 'dash-panel--explained'].filter(Boolean)
   return (
-    <section className={classes.join(' ')} onClick={onPanelClick}>
+    <section id={panelId(question)} className={classes.join(' ')} onClick={onPanelClick}>
       <h2>
         <button type="button" className="dash-explain-toggle" aria-expanded={open} onClick={() => setOpen(o => !o)}>
           {question}

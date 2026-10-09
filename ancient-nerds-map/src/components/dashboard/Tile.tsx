@@ -11,13 +11,15 @@ interface TileProps {
   subCls?: string
   /** Flags filling the space beside the number. Omitted, the number is alone. */
   countries?: CountryCount[]
+  /** A second line under the sub-line, in its own colour: a comparison. */
+  note?: { text: string; cls?: string }
 }
 
 /**
  * One labelled number with its sub-line. The number keeps its size; anything
  * beside it gets whatever is left (owner, 2026-09-19).
  */
-export function Tile({ label, value, sub, subCls, countries }: TileProps) {
+export function Tile({ label, value, sub, subCls, countries, note }: TileProps) {
   return (
     <div className="dash-tile">
       <span className="dash-tile-label">{label}</span>
@@ -26,6 +28,7 @@ export function Tile({ label, value, sub, subCls, countries }: TileProps) {
         {countries && <Flags rows={countries} />}
       </div>
       <span className={subCls ? `dash-tile-sub ${subCls}` : 'dash-tile-sub'}>{sub}</span>
+      {note && <span className={note.cls ? `dash-tile-sub ${note.cls}` : 'dash-tile-sub'}>{note.text}</span>}
     </div>
   )
 }

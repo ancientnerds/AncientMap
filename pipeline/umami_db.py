@@ -65,6 +65,34 @@ WHERE e.website_id = :website_id AND e.event_type = 1
 GROUP BY s.country
 """
 
+#: What the stories send the creators: every video started on our pages
+#: (media_play kind=video, media = the YouTube id) and every click out to
+#: YouTube from :clicks_since on - before the 2026-10-09 fix a click on a
+#: story's video poster counted as an outbound click too (77 of 83 up to
+#: 2026-10-08 were plays), so older clicks are not clicks. Per video and UTC
+#: day; a click carries its video id from 2026-10-10 on (boot.ts).
+SQL_CREATOR = """
+WITH ev AS (
+    SELECT e.event_id, e.event_name, e.session_id, e.created_at,
+           max(d.string_value) FILTER (WHERE d.data_key = 'kind')  AS kind,
+           max(d.string_value) FILTER (WHERE d.data_key = 'media') AS media,
+           max(d.string_value) FILTER (WHERE d.data_key = 'host')  AS host
+    FROM website_event e
+    JOIN event_data d ON d.website_event_id = e.event_id
+    WHERE e.website_id = :website_id AND e.event_type = 2
+      AND e.created_at >= :since AND e.created_at < :until
+      AND e.event_name IN ('media_play', 'outbound_click')
+    GROUP BY e.event_id, e.event_name, e.session_id, e.created_at
+)
+SELECT event_name, media, (created_at AT TIME ZONE 'UTC')::date AS day,
+       count(*) AS n, count(DISTINCT session_id) AS visitors
+FROM ev
+WHERE (event_name = 'media_play' AND kind = 'video')
+   OR (event_name = 'outbound_click' AND host IN ('youtube.com', 'youtu.be')
+       AND created_at >= :clicks_since)
+GROUP BY 1, 2, 3
+"""
+
 SQL_SESSION_EVENTS = """
 SELECT e.session_id, e.created_at, e.event_type, e.event_name, e.url_path, e.referrer_domain,
        e.utm_source, s.country, s.device, s.browser,

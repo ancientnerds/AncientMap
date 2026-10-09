@@ -56,6 +56,30 @@ function SearchChart({ days }: { days: SearchDay[] }) {
   )
 }
 
+/** Google's average position per day, upside down so that up is better: the
+ *  climb from page three to page one is the clearest thing Search Console
+ *  says about us, and as a number on a tile it had no history. */
+function PositionChart({ days }: { days: SearchDay[] }) {
+  const position = days.map(d => d.position)
+  const top = niceMax(Math.max(...position.filter((v): v is number => v !== null), 1))
+  const flip = (v: number | null) => (v === null ? null : top - v)
+  const first = fmtDay(days[0].day)
+  const last = fmtDay(days[days.length - 1].day)
+  return (
+    <AxisChart
+      small
+      left={{ max: top, format: v => String(Math.max(1, Math.round(top - v))) }}
+      lines={[
+        { label: 'position per day', values: position.map(flip), className: 'dash-line-human-thin', unlisted: true },
+        { label: 'average position, 7-day average (1 is the top of the results)', values: rollingMean(position).map(flip), className: 'dash-line-human-bold' },
+      ]}
+      titles={days.map(d => `${fmtDay(d.day)}: ${d.position === null ? 'not shown' : `position ${d.position.toFixed(1)}`}`)}
+      axis={[first, 'Average position, upside down: up is better', last]}
+      label={`Google's average position per day from ${first} to ${last}`}
+    />
+  )
+}
+
 /**
  * How Google shows us — Search Console's side of the visit: how often a page
  * of ours appeared in Google's results, how often someone clicked, at which
@@ -96,6 +120,7 @@ export function SearchGoogle({ state }: { state: Loaded<SearchData> }) {
             newest finished day is {fmtDay(cur.end)}.
           </p>
           <SearchChart days={d.days} />
+          <PositionChart days={d.days} />
           <div className="dash-lists">
             <div>
               <h3>Queries that brought clicks</h3>
