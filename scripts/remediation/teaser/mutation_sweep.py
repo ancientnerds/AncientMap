@@ -285,8 +285,26 @@ CASES: list[Case] = [
     ),
     rel(
         "a held verdict stands only with its release",
-        '    if verdict["tier_move"] is not None or not release_path.is_file():',
+        '    if verdict["tier_move"] is not None or not verdict.get("held") or not release_path.is_file():',
         "test_a_held_verdict_without_its_release_does_not_stand",
+    ),
+    Case(
+        "teaser release: a failed verdict stands with a release only when it is held",
+        CAL,
+        '    if verdict["tier_move"] is not None or not verdict.get("held") or not release_path.is_file():',
+        '    if verdict["tier_move"] is not None or not release_path.is_file():',
+        "test_a_release_beside_a_failed_verdict_that_is_not_held_does_not_stand",
+        T_RELEASE,
+    ),
+    rel(
+        "the release names the calibration and the role",
+        '    if record["calibration_id"] != run_dir.name or record["role"] != role:',
+        "test_a_release_naming_another_calibration_or_role_does_not_stand",
+    ),
+    rel(
+        "a release rests on evidence",
+        '    if not record["evidence"]:',
+        "test_a_release_with_no_evidence_does_not_stand",
     ),
     rel(
         "the verdict is unchanged since the release",

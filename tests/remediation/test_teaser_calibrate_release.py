@@ -19,6 +19,7 @@ REPO = Path(__file__).resolve().parents[2]
 if str(REPO / "scripts" / "remediation") not in sys.path:
     sys.path.insert(0, str(REPO / "scripts" / "remediation"))
 
+import calibrate_claude as CC  # noqa: E402
 import roles as RO  # noqa: E402
 from teaser import calibrate as K  # noqa: E402
 from teaser import run as R  # noqa: E402
@@ -268,6 +269,74 @@ def test_a_release_whose_binding_changed_is_refused_by_name(tmp_path: Path, what
     expected = {"verdict": "verdict", "thresholds": "thresholds", "evidence": "evidence",
                 "gone": "evidence"}[what]  # fmt: skip
     with pytest.raises(K.CalibrationError, match=f"release of hook_rater.*{expected}"):
+        K.standing(run_dir, "hook_rater")
+
+
+def forged_release(
+    run_dir: Path, tmp_path: Path, file_role: str = "hook_rater", **over: Any
+) -> None:
+    """A release not made by `K.release_role`: hand-written with the right sha256 of the verdict,
+    the thresholds and the role."""
+    proof = evidence(tmp_path)
+    record: dict[str, Any] = {
+        "calibration_id": run_dir.name,
+        "role": file_role,
+        "verdict_sha256": CC.sha256_file(run_dir / K.VERDICT_FILE.format(role=file_role)),
+        "thresholds_sha256": K.integrity(run_dir)[1],
+        "role_sha256": RO.role_sha256(file_role),
+        "decided_by": "someone",
+        "reason": "a hand-written record",
+        "evidence": CC.evidence_records([proof]),
+        "decided_at": NOW,
+    }
+    record.update(over)
+    (run_dir / K.RELEASE_FILE.format(role=file_role)).write_text(
+        json.dumps(record), encoding="utf-8"
+    )
+
+
+def test_a_hand_written_release_of_a_held_verdict_stands(tmp_path: Path) -> None:
+    """The control of the forged cases below."""
+    run_dir = sealed_dir(tmp_path)
+    verdict_file(run_dir)
+    forged_release(run_dir, tmp_path)
+    assert K.standing(run_dir, "hook_rater")["standing"] == "released"
+
+
+def test_a_release_beside_a_verdict_with_a_tier_move_does_not_stand(tmp_path: Path) -> None:
+    run_dir = sealed_dir(tmp_path)
+    verdict_file(run_dir, "fact_checker", tier_move=A_MOVE)
+    forged_release(run_dir, tmp_path, "fact_checker")
+    with pytest.raises(K.CalibrationError, match="no passing verdict and no release"):
+        K.standing(run_dir, "fact_checker")
+
+
+def test_a_release_beside_a_failed_verdict_that_is_not_held_does_not_stand(
+    tmp_path: Path,
+) -> None:
+    run_dir = sealed_dir(tmp_path)
+    verdict_file(run_dir, held=None)
+    forged_release(run_dir, tmp_path)
+    with pytest.raises(K.CalibrationError, match="no passing verdict and no release"):
+        K.standing(run_dir, "hook_rater")
+
+
+def test_a_release_with_no_evidence_does_not_stand(tmp_path: Path) -> None:
+    run_dir = sealed_dir(tmp_path)
+    verdict_file(run_dir)
+    forged_release(run_dir, tmp_path, evidence=[])
+    with pytest.raises(K.CalibrationError, match="release of hook_rater.*no evidence"):
+        K.standing(run_dir, "hook_rater")
+
+
+@pytest.mark.parametrize("field", ["calibration_id", "role"])
+def test_a_release_naming_another_calibration_or_role_does_not_stand(
+    tmp_path: Path, field: str
+) -> None:
+    run_dir = sealed_dir(tmp_path)
+    verdict_file(run_dir)
+    forged_release(run_dir, tmp_path, **{field: "other"})
+    with pytest.raises(K.CalibrationError, match="release of hook_rater.*another calibration"):
         K.standing(run_dir, "hook_rater")
 
 

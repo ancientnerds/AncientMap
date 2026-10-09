@@ -1598,7 +1598,7 @@ def standing(run_dir: Path, role: str) -> dict[str, str]:
     if verdict["passed"]:
         return {**line, "standing": CC.PASSED}
     release_path = run_dir / RELEASE_FILE.format(role=role)
-    if verdict["tier_move"] is not None or not release_path.is_file():
+    if verdict["tier_move"] is not None or not verdict.get("held") or not release_path.is_file():
         raise CalibrationError(
             f"role {role} has no passing verdict and no release in {run_dir}: calibrate it "
             "again (a tier move) or release the held verdict"
@@ -1609,6 +1609,10 @@ def standing(run_dir: Path, role: str) -> dict[str, str]:
         raise CalibrationError(f"{moved}: the verdict changed after the release")
     if record["thresholds_sha256"] != digest or record["role_sha256"] != RO.role_sha256(role):
         raise CalibrationError(f"{moved}: the thresholds or the role changed after the release")
+    if record["calibration_id"] != run_dir.name or record["role"] != role:
+        raise CalibrationError(f"{moved}: it names another calibration or role")
+    if not record["evidence"]:
+        raise CalibrationError(f"{moved}: it rests on no evidence")
     try:
         CC.verify_evidence(record["evidence"], moved)
     except CC.CalibrationError as exc:

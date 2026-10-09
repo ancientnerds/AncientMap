@@ -989,6 +989,80 @@ def test_a_release_file_beside_a_pass_is_not_read(tmp_path: Path) -> None:
     assert CC.require_passed(root, NEEDS)[0]["standing"] == CC.PASSED
 
 
+def forged_release(tmp_path: Path, **over: Any) -> Path:
+    """A release record not made by `CC.release`: hand-written, with the right sha256 of the
+    verdict, the seal and the role, as a copied or later tool's record would carry them."""
+    root = tmp_path / "calibration"
+    seal = json.loads((root / CC.THRESHOLDS_FILE).read_text(encoding="utf-8"))["cal-held"]
+    proof = evidence_file(tmp_path)
+    record = {
+        "calibration_id": "cal-held",
+        "role": seal["role"],
+        "verdict_sha256": CC.sha256_file(root / CC.VERDICTS_DIR / "cal-held.json"),
+        "seal_sha256": CC.seal_sha256(seal),
+        "role_sha256": seal["role_sha256"],
+        "decided_by": "someone",
+        "reason": "a hand-written record",
+        "evidence": CC.evidence_records([proof]),
+        "decided_at": NOW,
+    }
+    record.update(over)
+    path = root / CC.RELEASES_DIR / "cal-held.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record), encoding="utf-8")
+    return path
+
+
+def test_a_hand_written_release_of_a_held_verdict_stands(tmp_path: Path) -> None:
+    """The control of the forged cases below: the same record beside a real held verdict."""
+    held_verdict(tmp_path)
+    forged_release(tmp_path)
+    assert CC.require_passed(tmp_path / "calibration", NEEDS)[0]["standing"] == CC.RELEASED
+
+
+def test_a_release_beside_a_verdict_with_a_tier_move_does_not_stand(tmp_path: Path) -> None:
+    move = {"role": "field_researcher", "from": "a", "to": "b", "calibration_id": "cal-held"}
+    held_verdict(tmp_path, tier_move=move)
+    forged_release(tmp_path)
+    with pytest.raises(CC.CalibrationError, match="release of cal-held.*tier move"):
+        CC.require_passed(tmp_path / "calibration", NEEDS)
+
+
+def test_a_release_beside_a_failed_verdict_that_is_not_held_does_not_stand(tmp_path: Path) -> None:
+    held_verdict(tmp_path, held=None)
+    forged_release(tmp_path)
+    with pytest.raises(CC.CalibrationError, match="release of cal-held.*not held"):
+        CC.require_passed(tmp_path / "calibration", NEEDS)
+
+
+def test_a_release_beside_a_passed_verdict_is_not_a_release(tmp_path: Path) -> None:
+    """`require_passed` takes the pass and never reads the release; the release itself is refused."""
+    held_verdict(tmp_path, passed=True)
+    forged_release(tmp_path)
+    root = tmp_path / "calibration"
+    assert CC.require_passed(root, NEEDS)[0]["standing"] == CC.PASSED
+    seal = json.loads((root / CC.THRESHOLDS_FILE).read_text(encoding="utf-8"))["cal-held"]
+    with pytest.raises(CC.CalibrationError, match="release of cal-held.*it passed"):
+        CC._check_release(root, "cal-held", seal)
+
+
+def test_a_release_with_no_evidence_does_not_stand(tmp_path: Path) -> None:
+    held_verdict(tmp_path)
+    forged_release(tmp_path, evidence=[])
+    with pytest.raises(CC.CalibrationError, match="release of cal-held.*no evidence"):
+        CC.require_passed(tmp_path / "calibration", NEEDS)
+
+
+@pytest.mark.parametrize("field", ["calibration_id", "role"])
+def test_a_release_naming_another_calibration_or_role_does_not_stand(
+    tmp_path: Path, field: str
+) -> None:
+    held_verdict(tmp_path)
+    forged_release(tmp_path, **{field: "other"})
+    with pytest.raises(CC.CalibrationError, match="release of cal-held.*another calibration"):
+        CC.require_passed(tmp_path / "calibration", NEEDS)
+
+
 def test_the_cli_releases_a_held_verdict(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

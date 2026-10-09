@@ -604,8 +604,19 @@ def _check_release(root: Path, calibration_id: str, seal: dict[str, Any]) -> dic
     path = root / RELEASES_DIR / f"{calibration_id}.json"
     record = _read(path, "the release")
     moved = f"the release of {calibration_id} ({path})"
-    if record["verdict_sha256"] != sha256_file(root / VERDICTS_DIR / f"{calibration_id}.json"):
+    verdict_path = root / VERDICTS_DIR / f"{calibration_id}.json"
+    if record["verdict_sha256"] != sha256_file(verdict_path):
         raise CalibrationError(f"{moved}: the verdict changed after the release")
+    if record["calibration_id"] != calibration_id or record["role"] != seal["role"]:
+        raise CalibrationError(f"{moved}: it names another calibration or role than the seal")
+    verdict = _read(verdict_path, "the verdict")
+    if verdict["passed"] or verdict["tier_move"] is not None or not verdict.get("held"):
+        raise CalibrationError(
+            f"{moved}: the verdict is not a failed one held at the top tier (it passed, carries a "
+            "tier move or is not held): only `release` makes a release, and it refuses such a verdict"
+        )
+    if not record["evidence"]:
+        raise CalibrationError(f"{moved}: it rests on no evidence")
     if record["seal_sha256"] != seal_sha256(seal) or record["role_sha256"] != seal["role_sha256"]:
         raise CalibrationError(f"{moved}: the seal changed after the release")
     verify_evidence(record["evidence"], moved)
