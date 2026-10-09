@@ -683,6 +683,8 @@ class TruthWorld:
         for site, name in self.audit:
             line = wd1_line(site, ["period_start"], name)
             line["fields"]["period_start"]["stored"] = -500
+            # the real wd5 lines of these sites carry the rule-made open reason
+            line["open"] = {"period_start": {"why": "rule-made", "made": "-500", "wd1": None}}
             lines.append(line)
         HO._write_jsonl(wd5 / C.CLASSIFIED_FILE, lines)
         wiki_cache(self.wiki_root, {site: ARTICLE.format(n=n) for n, (site, _) in
@@ -860,6 +862,41 @@ class TestTheKnownTruthPool:
         everything = sum(len(v) for v in keeps.values())
         assert everything == 4 * 3 * 3 - 5
         assert all(len(k.decision["quotes"]) >= 2 for v in keeps.values() for k in v)
+
+    def test_a_keep_whose_stored_value_is_not_the_quoted_one_is_no_known_right_cell(
+        self, truth_world: TruthWorld, tmp_path: Path
+    ) -> None:
+        """WD1 keeps a start of the quoted year's bucket and a point within a kilometre; a checker
+        that holds the stored value to the quote must reject those, so they are no gold."""
+        run = truth_world.fields / "wd1"
+        rows = HO._read_jsonl(run / HO.DECISIONS_FILE)
+        off: set[tuple[str, str]] = set()
+        for row in rows:
+            if len([k for k in off if k[1] == row["field"]]) >= 2:
+                continue
+            if row["field"] == "period_start":
+                row["stored"] = 1  # the bucket edge; the quotes say 449 BC
+            elif row["field"] == "coordinates":
+                row["stored"] = "37.9755, 23.7260"  # 0.4 km from the quoted point
+            else:
+                continue
+            off.add((row["site_id"], row["field"]))
+        HO._write_jsonl(run / HO.DECISIONS_FILE, rows)
+        for decided in rows:
+            keep = next(k for k in PL.wd1_keeps(truth_world.fields)[decided["field"]]
+                        if k.decision["site_id"] == decided["site_id"])  # fmt: skip
+            if (decided["site_id"], decided["field"]) in off:
+                with pytest.raises(PL.InexactKeepError, match="is not the quoted"):
+                    PL._right_cell(keep, None)
+            else:
+                PL._right_cell(keep, None)
+        out = tmp_path / "pool"
+        truth_world.build(out, right={"period_start": 3, "site_type": 3, "coordinates": 3},
+                          perturbed={"period_start": 0, "site_type": 0, "coordinates": 0})  # fmt: skip
+        cells = read_cells(out)
+        right = {(cells[c]["site_id"], cells[c]["field"]) for c, t in read_truth(out).items()
+                 if t["class"] == PL.KNOWN_RIGHT}  # fmt: skip
+        assert len(right) == 9 and not right & off
 
     def test_a_wd1_run_that_is_not_there_is_refused_not_skipped(
         self, truth_world: TruthWorld

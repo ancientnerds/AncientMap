@@ -496,6 +496,8 @@ NEUTRAL_REASONING = "The stored value stands on the quote(s) below."
 #: point at least this far (km) from the true one (and at most `MAX_MOVE_KM`, still on land).
 MIN_BUCKET_GAP = 3
 MIN_MOVE_KM, MAX_MOVE_KM = 40.0, 120.0
+#: A known-right point lies this close to the point its quotes give.
+EXACT_POINT_KM = 0.1
 #: A year in the middle of each bucket, to put a perturbed start in a chosen one.
 BUCKET_YEARS = {
     "< 4500 BC": -6000,
@@ -603,6 +605,12 @@ class PerturbationError(PoolError):
     bucket): the candidate is left out, never bent."""
 
 
+class InexactKeepError(PoolError):
+    """A WD1 keep whose stored value is not what its own quotes say (a period start only in the
+    same bucket, a point off the quoted one): no known-right cell, since a checker that holds the
+    stored value to the quote must reject it. The candidate is left out, never bent."""
+
+
 def wrong_year(true_year: int, rng: random.Random) -> int:
     """A year in a bucket at least `MIN_BUCKET_GAP` buckets away from the true year's."""
     here = C.BUCKETS.index(C.bucket(true_year))
@@ -675,6 +683,9 @@ def _truth_cell(
         "model": None, "reasoning": NEUTRAL_REASONING, "value_page": None,
     }  # fmt: skip
     cell = AD.framed(decision, line, quotes, wiki)
+    # the wd5 classification's open reason names the class of the cell ("rule-made"): a pool cell
+    # tells the checker its value and its quotes and nothing else
+    cell["why_open"] = cell["made"] = None
     if stored_point is not None:
         cell["stored_point"] = stored_point
     return cell
@@ -742,8 +753,24 @@ def wd1_keeps(fields_dir: Path) -> dict[str, list[Wd1Keep]]:
     return out
 
 
+def _exact(d: Mapping[str, Any]) -> bool:
+    """Whether a keep's stored value is the value its quotes give: the same start year (WD1 keeps a
+    start in the same bucket), a point within `EXACT_POINT_KM` (WD1 keeps one within 1 km), the same
+    type."""
+    if d["field"] == "period_start":
+        return int(d["stored"]) == int(d["value"])
+    if d["field"] == "coordinates":
+        return A._km(_point(str(d["stored"])), _point(str(d["value"]))) <= EXACT_POINT_KM
+    return str(d["stored"]) == str(d["value"])
+
+
 def _right_cell(keep: Wd1Keep, wiki: W.WikiCache | None) -> tuple[dict[str, Any], dict[str, Any]]:
     d = keep.decision
+    if not _exact(d):
+        raise InexactKeepError(
+            f"{keep.line['name']}: the stored {d['field']} {d['stored']!r} is not the quoted "
+            f"{d['value']!r}"
+        )
     quotes = [AD.quote_packet(q, Q.Library(D.REPO, keep.pages)) for q in d["quotes"]]
     cell = _truth_cell(keep.line, d["field"], stored=d["stored"], value=d["value"], quotes=quotes,
                        wiki=wiki)  # fmt: skip
@@ -828,7 +855,7 @@ def build_adversarial_truth(
                 keep = pool.pop()
                 try:
                     cells.append(make(keep))
-                except (AD.AdversarialError, PerturbationError):
+                except (AD.AdversarialError, PerturbationError, InexactKeepError):
                     continue  # a page that cannot be read or a value that cannot be bent: left out
                 taken.add(keep.decision["site_id"])
                 made += 1
