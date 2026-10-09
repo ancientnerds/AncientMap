@@ -9237,9 +9237,19 @@ TEASER_SHORTS_CASES: list[Case] = [
                 "test_the_candidates_carry_their_images_and_the_bases_their_names",
             ),
             (
-                "a run of another contract is not asked before",
-                "        if contract_of(_resolve(run)) != contract:",
-                "test_a_v1_run_is_not_asked_again_as_asked_before_by_a_shorts_run",
+                "a run of another contract is no exclusion",
+                "        if other != contract:",
+                "test_a_run_of_another_contract_is_no_exclusion_and_a_v1_site_is_asked_again",
+            ),
+            (
+                "a round that would be one batch is split for the canary",
+                "    if stage in spec.canary and len(groups) == 1 and len(groups[0]) > 1:",
+                "test_a_round_that_would_be_one_batch_is_split_so_each_canary_has_a_donor",
+            ),
+            (
+                "an escalation needs the registry to name the new model",
+                '    if RO.role(role).model != move["to"]:',
+                "test_an_escalation_needs_the_registry_to_name_the_new_model_first",
             ),
             (
                 "a re-check run is seeded not selected",
@@ -9334,11 +9344,11 @@ TEASER_SHORTS_CASES: list[Case] = [
             (
                 "a check batch carries a canary",
                 "    if stage not in spec.canary:",
-                "test_every_check_batch_carries_one_seeded_defect_beside_its_questions",
+                "test_every_check_batch_carries_one_blind_seeded_defect_beside_its_questions",
             ),
             (
                 "the canary is not imported as a site",
-                "        if site_id.startswith(CANARY_PREFIX):",
+                "        if (batch_id, site_id) in seeded:",
                 "test_a_checker_that_catches_its_canary_is_imported_without_it",
             ),
             (
@@ -9594,7 +9604,7 @@ TEASER_SHORTS_CASES: list[Case] = [
             (
                 "the cases are fixed before the first export",
                 '    if (run_dir / HANDOFFS_FILE).exists():\n        raise CalibrationError(f"{run_dir / HANDOFFS_FILE} exists',
-                "test_cases_cannot_be_fixed_after_a_set_was_exported",
+                "test_cases_cannot_be_fixed_after_a_role_was_exported",
             ),
             (
                 "a fixed sample is never rewritten",
@@ -9606,30 +9616,30 @@ TEASER_SHORTS_CASES: list[Case] = [
                 '    if len(fixed) != 1 or not path.is_file() or _sha(path.read_text("utf-8")) != fixed[0]:',
                 "test_a_case_file_changed_after_it_was_fixed_is_refused",
             ),
-            ("a set has cases", "    if not jobs:", "test_an_unknown_set_has_no_cases"),
+            ("a role has cases", "    if not jobs:", "test_a_role_without_cases_is_refused"),
             (
-                "a set is exported once",
-                "    if set_name in exported:",
-                "test_a_set_is_exported_once_into_a_directory_of_its_own",
+                "a role is exported once",
+                "    if role in exported:",
+                "test_a_role_is_exported_once_into_a_directory_of_its_own",
             ),
             (
-                "a set gets a directory of its own",
+                "a role gets a directory of its own",
                 "    if handoff.exists() and any(handoff.iterdir()):",
-                "test_a_set_is_exported_once_into_a_directory_of_its_own",
+                "test_a_role_is_exported_once_into_a_directory_of_its_own",
             ),
             (
-                "a set is exported before it is answered",
+                "a role is exported before it is answered",
                 "    if exported is None:\n"
-                '        raise CalibrationError(f"set {set_name} was never exported")\n'
+                '        raise CalibrationError(f"role {role} was never exported")\n'
                 '    handoff = Path(exported["handoff"])',
-                "test_a_set_never_exported_is_refused",
+                "test_a_role_never_exported_is_refused",
             ),
             (
-                "a set is exported before its agents are asked for",
+                "a role is exported before its agents are asked for",
                 "    if exported is None:\n"
-                '        raise CalibrationError(f"set {set_name} was never exported")\n'
-                "    role = SET_ROLE[set_name]",
-                "test_a_set_never_exported_has_no_agents",
+                '        raise CalibrationError(f"role {role} was never exported")\n'
+                '    fixed = thresholds["registry"][role]',
+                "test_a_role_never_exported_has_no_agents",
             ),
             (
                 "every case is answered",
@@ -9749,6 +9759,136 @@ TEASER_SHORTS_CASES: list[Case] = [
                 "test_a_writer_below_the_floor_is_held_at_the_top_tier",
             ),
         )
+    ),
+    # ------------------------------------------------ the fix round (2026-10-09, review of package cards)
+    *(
+        Case(f"teaser-shorts: calibration: {label}", CALIBRATE, old, new, test, CALIBRATE_TESTS)
+        for label, old, new, test in (
+            (
+                "a case key says nothing of its case",
+                "        key = str(uuid.UUID(int=rng.getrandbits(128), version=4))",
+                "        key = f\"{job['set']}-{job['number']:03d}\"",
+                "test_a_key_says_nothing_of_its_case",
+            ),
+            (
+                "the questions carry one neutral stage",
+                '                stage=STAGE,\n                label=job["key"],',
+                '                stage=job["set"],\n                label=job["key"],',
+                "test_the_questions_do_not_tell_the_role_what_kind_of_case_each_is",
+            ),
+            (
+                "a role's cases are shuffled together",
+                "    rng.shuffle(order)",
+                "    order = list(order)",
+                "test_the_questions_do_not_tell_the_role_what_kind_of_case_each_is",
+            ),
+            (
+                "a good card and its flawed twin are never in one batch",
+                '            if len(batch) < size and all(other["site_id"] != job["site_id"] for other in batch):',
+                "            if len(batch) < size:",
+                "test_the_questions_do_not_tell_the_role_what_kind_of_case_each_is",
+            ),
+            (
+                "the checker must agree on the claims",
+                '        and _met(claims, rule["claim_agreement_min"])\n',
+                "",
+                "test_verdicts_that_agree_with_claims_that_do_not_fail_the_role",
+            ),
+        )
+    ),
+    *(
+        Case(f"teaser-shorts: {label}", TEASER_RUN, old, new, test, SHORTS_RUN_TESTS)
+        for label, old, new, test in (
+            (
+                "the canary label is blind",
+                '            "label": str(uuid.uuid4()),',
+                '            "label": f"canary-{donor}",',
+                "test_every_check_batch_carries_one_blind_seeded_defect_beside_its_questions",
+            ),
+            (
+                "the canary card is a site outside the batch",
+                "        donor = groups[(index + 1) % len(groups)][1][0]  # one batch: its only site",
+                "        donor = groups[index][1][0]  # one batch: its only site",
+                "test_every_check_batch_carries_one_blind_seeded_defect_beside_its_questions",
+            ),
+            (
+                "the canary sits at a random place",
+                "            canary_at = random.SystemRandom().randrange(len(questions) + 1)",
+                "            canary_at = len(questions)",
+                "test_the_canary_sits_at_a_random_place_not_always_last",
+            ),
+            (
+                "a re-check outcome names the card it judged",
+                '            common["seeded_card_sha256"] = CP.text_sha256(state.writer["card"])',
+                '            common["seeded_card_sha256"] = None',
+                "test_any_failure_clears_the_card_with_its_reason",
+            ),
+            (
+                "a re-check outcome names the run that wrote the card",
+                '            common["seeded_run"] = seeded_run',
+                '            common["seeded_run"] = None',
+                "test_any_failure_clears_the_card_with_its_reason",
+            ),
+            (
+                "the seeded card keeps the web facts of its provenance",
+                '        "web_facts": [dict(fact) for fact in teaser["web_facts"]],',
+                '        "web_facts": [],',
+                "test_a_card_resting_on_a_web_fact_is_asked_with_that_fact",
+            ),
+            (
+                "a re-check question shows the web facts",
+                '        return site.with_web(C.WebFact(**fact) for fact in state.writer["web_facts"])',
+                "        return site",
+                "test_a_card_resting_on_a_web_fact_is_asked_with_that_fact",
+            ),
+            (
+                "the seeded card's figures may come from its web facts",
+                '    ).with_web(C.WebFact(**fact) for fact in teaser["web_facts"])',
+                "    )",
+                "test_a_card_resting_on_a_web_fact_is_asked_with_that_fact",
+            ),
+        )
+    ),
+    *(
+        guard(f"teaser-shorts: {label}", TEASER, needle, test, SHORTS_WRITE_TESTS)
+        for label, needle, test in (
+            (
+                "a re-check outcome is held to the card it judged",
+                '    if "seeded_card_sha256" in outcome:',
+                "test_a_card_written_after_the_seed_is_not_cleared_on_the_old_verdict",
+            ),
+            (
+                "a newer card is not cleared on the old verdict",
+                '        if live.card is None or CP.text_sha256(live.card) != outcome["seeded_card_sha256"]:',
+                "test_a_card_written_after_the_seed_is_not_cleared_on_the_old_verdict",
+            ),
+            (
+                "a seeded run is held to its card",
+                '        if outcome["seeded_run"] is not None:',
+                "test_a_card_of_another_run_with_the_same_text_is_not_cleared_either",
+            ),
+            (
+                "a card of another run is not cleared",
+                '            if not isinstance(written, dict) or written.get("run") != outcome["seeded_run"]:',
+                "test_a_card_of_another_run_with_the_same_text_is_not_cleared_either",
+            ),
+        )
+    ),
+    Case(
+        "teaser-shorts: a NULL country is no country",
+        TEASER,
+        '        country=r["country"] or "",',
+        '        country=str(r["country"]),',
+        "test_a_null_country_in_the_export_is_no_country",
+        SHORTS_WRITE_TESTS,
+    ),
+    Case(
+        "teaser-shorts: a card without a card provenance is not pinned",
+        REPO / "pipeline/video/shorts_export.py",
+        "        return None, None, None",
+        '        return row["card_text_sha256"], None, None',
+        "test_s13_a_card_without_a_card_provenance_is_never_pinned",
+        SHORTS_TESTS_VIDEO,
     ),
 ]
 CASES += TEASER_SHORTS_CASES

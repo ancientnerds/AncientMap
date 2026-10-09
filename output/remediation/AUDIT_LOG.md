@@ -14021,3 +14021,20 @@ name, aliases and country (`name-changed`); `seed-live` records the 167 MiniMax 
 the journal as `card-clear-recheck-<reason>`, a pass stands). The calibration is sealed before any
 answer (`teaser/calibrate.py`, `output/remediation/calibration/teaser-<id>/`). Nothing was written to
 production, nothing rendered or uploaded.
+
+
+## 2026-10-09 - Cards: the fix round after the review of package cards (branch fix/db-final-p2-cards)
+
+Eight findings of the review, each with a test and a `teaser-shorts:` mutation case: a re-check clear
+carries the card it judged and the run that wrote it (`seeded_card_sha256`, `seeded_run`), and the
+planner refuses `card-changed` for a live card that is another one (a shorts-v1 card written through
+the journal after `seed-live` no longer loses its card and provenance to the old verdict); the canary
+is blind (random UUID label, random place in the batch, the card of a site outside the batch, a round
+that would be one batch split in two); the calibration cases are exported by role, shuffled under
+opaque keys and one neutral stage, the key-to-set mapping in `JOBS.jsonl` alone; `shorts_export` pins
+only a shorts-ready version-3 card (the Phase-5 card key pinned cards that name their site, D1);
+`run.py escalate` is refused until `roles.ROLES` names the new model (the recorder checks the
+registry), documented in 9.2; the checker calibration seals and measures claim agreement (0.90);
+`select --exclude-run` refuses a run of another contract; the re-check seed carries the web facts of
+the card's provenance into the checker, verifier and adversary questions and into the mechanical
+check; a NULL country in the export is `""`, not the text "None". Nothing was written to production.

@@ -17,8 +17,11 @@ cards of the production export and a file of vetted shorts-v1 cards (`--base-car
     jobs      the fixed cases (JOBS.jsonl) drawn with the sealed seed from the recorded runs, the
               export and the base cards; fixed by its sha256 in SEAL.jsonl; never rewritten. Refused
               unless the seal is in place and the modules still hash to it.
-    export    one set of the cases into a handoff directory (batches of 15, of 5 for a web role), to be
-              answered by agents of the set's role.
+    export    every case of one ROLE into a handoff directory, shuffled and under opaque keys (batches
+              of 15, of 5 for a web role), to be answered by agents of that role. A role never sees
+              which kind of case it is asked: the keys, the batch ids and the stage name
+              (`calibration`) say nothing, and the case a key stands for is written in JOBS.jsonl
+              alone.
     evaluate  one role: every set measured against the sealed thresholds, VERDICT-<role>.json written
               once. A failing role carries its `tier_move` (`run.py escalate` applies it).
 
@@ -26,8 +29,8 @@ cards of the production export and a file of vetted shorts-v1 cards (`--base-car
     $T seal --run-dir $D
     $T jobs --run-dir $D --runs output/remediation/teaser/runs/wb-ws-2026-09-27-01 ... \\
         --export output/remediation/teaser/runs/<run>/EXPORT.jsonl --base-cards BASE.jsonl
-    $T export --run-dir $D --set checker_agreement --handoff output/remediation/handoff/cal-<id>-...
-    $T agents --run-dir $D --set checker_good              one workflow job per batch: role, fixed
+    $T export --run-dir $D --role fact_checker --handoff output/remediation/handoff/cal-<id>-...
+    $T agents --run-dir $D --role fact_checker             one workflow job per batch: role, fixed
         model id, effort, brief, how many may run at once (JSON)
     $T evaluate --run-dir $D --role fact_checker           (web_verifier: fetches the cited pages)
     $T evaluate --run-dir $D --role card_writer --writer-run output/remediation/teaser/runs/<pilot>
@@ -47,6 +50,7 @@ import hashlib
 import json
 import random
 import sys
+import uuid
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import UTC, datetime
@@ -87,6 +91,8 @@ VERDICT_FILE = "VERDICT-{role}.json"
 MINIMAX_CUTOVER = "2026-10-03"
 BATCH_SIZE = 15
 WEB_BATCH_SIZE = 5
+#: The stage every calibration question is exported and answered under: it names no set.
+STAGE = "calibration"
 #: A recorded claim is matched with a fresh one of the same card when their wording is at least this
 #: close (difflib ratio); an unmatched recorded claim counts as a disagreement.
 CLAIM_MATCH = 0.6
@@ -104,6 +110,7 @@ THRESHOLDS: dict[str, Any] = {
                     "pass_cases": 30,
                     "fail_cases": 15,
                     "verdict_agreement_min": 0.90,
+                    "claim_agreement_min": 0.90,
                     "false_pass_max": 0,
                 },
                 "checker_fail_again": {"cases": 30, "fail_min": 27},
@@ -295,7 +302,7 @@ def _case(
     set_name: str, number: int, prompt_kind: str, site: Mapping[str, Any], **extra: Any
 ) -> dict[str, Any]:
     return {
-        "key": f"{set_name}-{number:03d}",
+        "number": number,
         "set": set_name,
         "role": SET_ROLE[set_name],
         "prompt_kind": prompt_kind,
@@ -583,7 +590,20 @@ def build_jobs(
             _draw(verified, adv["adversarial_clean"]["cases"], rng, "clean cards"), start=1
         )
     ]
-    return sorted(jobs, key=lambda j: j["key"])
+    return opaque_keys(jobs, thresholds["seed"])
+
+
+def opaque_keys(jobs: Sequence[dict[str, Any]], seed: int) -> list[dict[str, Any]]:
+    """The cases with a key each that says nothing: a random version-4 UUID, drawn with the sealed
+    seed - the shape of a site id. The case a key stands for is written in JOBS.jsonl alone."""
+    rng = random.Random(f"{seed}/keys")  # noqa: S311 - a sealed, seeded draw
+    keyed = []
+    for job in sorted(jobs, key=lambda j: (j["set"], j["number"])):
+        key = str(uuid.UUID(int=rng.getrandbits(128), version=4))
+        keyed.append({"key": key, **job})
+    if len({j["key"] for j in keyed}) != len(keyed):
+        raise CalibrationError("two cases drew the same key")
+    return keyed
 
 
 def jobs_text(jobs: Iterable[Mapping[str, Any]]) -> str:
@@ -659,39 +679,71 @@ def job_prompt(job: Mapping[str, Any]) -> str:
 
 
 def _handoffs(run_dir: Path) -> dict[str, Any]:
-    """The sets exported so far and where; nothing before the first export."""
+    """The roles exported so far and where; nothing before the first export."""
     path = run_dir / HANDOFFS_FILE
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
-def export_set(run_dir: Path, set_name: str, handoff: Path) -> dict[str, Any]:
-    """One set of the cases into a handoff directory of its own, to be answered by its role."""
-    jobs = [j for j in sealed_jobs(run_dir) if j["set"] == set_name]
+def export_batches(
+    jobs: Sequence[Mapping[str, Any]], size: int, rng: random.Random
+) -> list[list[Mapping[str, Any]]]:
+    """The cases in a random order, dealt to batches of at most `size`; two cases of one site are
+    never in one batch (a good card and its flawed twin would show a checker which is which)."""
+    order = list(jobs)
+    rng.shuffle(order)
+    twins = max(Counter(job["site_id"] for job in order).values())
+    count = max(-(-len(order) // size), twins)
+    batches: list[list[Mapping[str, Any]]] = [[] for _ in range(count)]
+    for index, job in enumerate(order):
+        for step in range(count):
+            batch = batches[(index + step) % count]
+            if len(batch) < size and all(other["site_id"] != job["site_id"] for other in batch):
+                batch.append(job)
+                break
+        else:
+            raise CalibrationError(
+                f"the cases cannot be dealt to batches of {size} without a site twice in one"
+            )
+    return batches
+
+
+def export_role(run_dir: Path, role: str, handoff: Path) -> dict[str, Any]:
+    """Every case of one role into a handoff directory of its own, to be answered by that role.
+    The cases of all the role's sets are shuffled together under their opaque keys and one neutral
+    stage name: the role is not told which kind of case a question is (a seeded flaw, a recorded
+    failure, a good card), so that a threshold met by the role proves reading, not label-reading."""
+    thresholds, _ = sealed(run_dir)
+    jobs = [j for j in sealed_jobs(run_dir) if j["role"] == role]
     if not jobs:
-        raise CalibrationError(f"no case of set {set_name!r}")
+        raise CalibrationError(f"no case of role {role!r}")
     record_path = run_dir / HANDOFFS_FILE
     exported = _handoffs(run_dir)
-    if set_name in exported:
-        raise CalibrationError(f"set {set_name} is exported already: a set is asked once")
+    if role in exported:
+        raise CalibrationError(f"role {role} is exported already: a role is asked once")
     if handoff.exists() and any(handoff.iterdir()):
-        raise CalibrationError(f"{handoff} is not empty: a set gets a directory of its own")
-    size = WEB_BATCH_SIZE if set_name in WEB_SETS else BATCH_SIZE
+        raise CalibrationError(f"{handoff} is not empty: a role gets a directory of its own")
+    size = WEB_BATCH_SIZE if any(j["set"] in WEB_SETS for j in jobs) else BATCH_SIZE
+    rng = random.Random(f"{thresholds['seed']}/{role}/deal")  # noqa: S311 - a sealed, seeded draw
     batches = {}
-    for index in range(0, len(jobs), size):
-        batch = f"{set_name.replace('_', '-')}-{index // size + 1:03d}"
-        batches[batch] = [j["key"] for j in jobs[index : index + size]]
-        for job in jobs[index : index + size]:
+    for number, group in enumerate(export_batches(jobs, size, rng), start=1):
+        batch = f"{role.replace('_', '-')}-{number:03d}"
+        batches[batch] = [j["key"] for j in group]
+        for job in group:
             OH.export(
                 handoff,
                 batch_id=batch,
-                stage=set_name,
+                stage=STAGE,
                 label=job["key"],
                 field="calibration",
                 prompt=job_prompt(job),
             )
-    exported[set_name] = {"handoff": str(handoff), "batches": batches}
+    exported[role] = {"handoff": str(handoff), "batches": batches}
     record_path.write_text(_text(exported), encoding="utf-8", newline="\n")
-    return {"set": set_name, "role": SET_ROLE[set_name], "cases": len(jobs), "batches": batches}
+    return {
+        "role": role,
+        "cases": len(jobs),
+        "batches": {batch: len(keys) for batch, keys in batches.items()},
+    }
 
 
 # ------------------------------------------------------------------------------ the agents
@@ -716,31 +768,29 @@ For each other question:
 3. Write your answer to a new UTF-8 file of your own: {scratch}/<label>.json
 4. Record it - an answer is written once:
    ./.venv/Scripts/python.exe scripts/remediation/opus_handoff.py answer --dir {handoff} \
---batch-id {batch} --stage {set_name} --label <label> --answered-by cal-{batch} --role {role} \
+--batch-id {batch} --stage {stage} --label <label> --answered-by cal-{batch} --role {role} \
 --model {model} --text-file {scratch}/<label>.json
 {web_note}
 When every question of the batch is recorded, report how many answers you recorded.
 """
 
 
-def agent_jobs(run_dir: Path, set_name: str) -> list[dict[str, Any]]:
-    """The workflow-ready jobs of one exported set: for each batch the agent that answers it - role,
+def agent_jobs(run_dir: Path, role: str) -> list[dict[str, Any]]:
+    """The workflow-ready jobs of one exported role: for each batch the agent that answers it - role,
     the model id and effort the seal fixed for the role, the brief it is given and how many such
     agents may run at the same time. A workflow starts one fresh agent per job, waits for them, and
     `evaluate` reads the answers."""
     thresholds, _ = sealed(run_dir)
-    exported = _handoffs(run_dir).get(set_name)
+    exported = _handoffs(run_dir).get(role)
     if exported is None:
-        raise CalibrationError(f"set {set_name} was never exported")
-    role = SET_ROLE[set_name]
+        raise CalibrationError(f"role {role} was never exported")
     fixed = thresholds["registry"][role]
-    web = set_name in WEB_SETS
+    web = any(j["set"] in WEB_SETS for j in sealed_jobs(run_dir) if j["role"] == role)
     handoff = Path(exported["handoff"])
     shown = _shown(handoff)
     return [
         {
             "batch_id": batch,
-            "set": set_name,
             "role": role,
             "model": fixed["model"],
             "effort": fixed["effort"],
@@ -754,7 +804,7 @@ def agent_jobs(run_dir: Path, set_name: str) -> list[dict[str, Any]]:
                 effort=fixed["effort"],
                 handoff=shown,
                 scratch=f"{shown}-scratch/{batch}",
-                set_name=set_name,
+                stage=STAGE,
                 web_files=" except the Wikipedia cache named below" if web else "",
                 web_note=R._WEB_NOTE.format(cache=R.WIKI_CACHE) if web else "",
             ),
@@ -772,13 +822,14 @@ def _shown(path: Path) -> str:
 
 # ------------------------------------------------------------------------------ the answers
 def _answers(
-    run_dir: Path, set_name: str, thresholds: Mapping[str, Any]
-) -> dict[str, tuple[dict[str, Any], OH.Answer]]:
-    """The recorded answers of one set: `key -> (case, answer)`, each given in the set's role by the
-    model the seal fixed for it."""
-    exported = _handoffs(run_dir).get(set_name)
+    run_dir: Path, role: str, thresholds: Mapping[str, Any]
+) -> dict[str, dict[str, tuple[dict[str, Any], OH.Answer]]]:
+    """The recorded answers of one role: `set -> key -> (case, answer)`, each given in the role by
+    the model the seal fixed for it. The sets are told apart here, from the sealed cases, never in
+    the questions."""
+    exported = _handoffs(run_dir).get(role)
     if exported is None:
-        raise CalibrationError(f"set {set_name} was never exported")
+        raise CalibrationError(f"role {role} was never exported")
     handoff = Path(exported["handoff"])
     check = OH.validate(handoff)
     if not check.ok:
@@ -786,15 +837,14 @@ def _answers(
             f"{handoff}: {len(check.missing)} missing, {len(check.stale)} stale, "
             f"{len(check.malformed)} malformed - every case is answered first"
         )
-    role = SET_ROLE[set_name]
     model = thresholds["registry"][role]["model"]
-    cases = {j["key"]: j for j in sealed_jobs(run_dir) if j["set"] == set_name}
-    found: dict[str, tuple[dict[str, Any], OH.Answer]] = {}
+    cases = {j["key"]: j for j in sealed_jobs(run_dir) if j["role"] == role}
+    found: dict[str, dict[str, tuple[dict[str, Any], OH.Answer]]] = {}
     for batch, keys in exported["batches"].items():
         for key in keys:
             case = cases[key]
             answer = OH.read_answer(
-                handoff, batch_id=batch, stage=set_name, label=key, prompt=job_prompt(case)
+                handoff, batch_id=batch, stage=STAGE, label=key, prompt=job_prompt(case)
             )
             if RO.role_of(answer.answered_by) != role:
                 raise CalibrationError(
@@ -804,26 +854,33 @@ def _answers(
                 raise CalibrationError(
                     f"{key}: role {role} is sealed to {model}, the answer is stamped {answer.model!r}"
                 )
-            found[key] = (case, answer)
+            found.setdefault(case["set"], {})[key] = (case, answer)
     return found
 
 
-def _verdicts(
+def _checks(
     answers: Mapping[str, tuple[dict[str, Any], OH.Answer]],
-) -> dict[str, str]:
-    """PASS or FAIL of every checker-shaped answer (v1's or shorts-v1's shape)."""
-    out: dict[str, str] = {}
+) -> dict[str, dict[str, Any]]:
+    """Every checker-shaped answer (v1's or shorts-v1's shape) parsed: its verdict and claims."""
+    out: dict[str, dict[str, Any]] = {}
     for key, (case, answer) in answers.items():
         basis = job_basis(case)
         try:
             if case["prompt_kind"] == "checker_shorts":
                 assert isinstance(basis, SV.ShortsBasis)
-                out[key] = AS.parse_checker(answer.text, basis).verdict
+                out[key] = AS.parse_checker(answer.text, basis).to_dict()
             else:
-                out[key] = A.parse_checker(answer.text, basis).verdict
+                out[key] = A.parse_checker(answer.text, basis).to_dict()
         except A.AnswerError as exc:
             raise CalibrationError(f"{key}: malformed answer ({exc})") from exc
     return out
+
+
+def _verdicts(
+    answers: Mapping[str, tuple[dict[str, Any], OH.Answer]],
+) -> dict[str, str]:
+    """PASS or FAIL of every checker-shaped answer."""
+    return {key: str(check["verdict"]) for key, check in _checks(answers).items()}
 
 
 def _met(measured: float, floor: float) -> bool:
@@ -835,9 +892,17 @@ def evaluate_fact_checker(
     spec: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    agree = _verdicts(answers["checker_agreement"])
+    checked = _checks(answers["checker_agreement"])
+    agree = {k: str(c["verdict"]) for k, c in checked.items()}
     cases = {k: c for k, (c, _) in answers["checker_agreement"].items()}
     same = sum(1 for k, v in agree.items() if v == cases[k]["recorded"]["verdict"])
+    agreed = total = 0
+    for key, check in checked.items():
+        got, of = claim_agreement(
+            _supported(cases[key]["recorded"]["claims"]), _supported(check["claims"])
+        )
+        agreed, total = agreed + got, total + of
+    claims = agreed / total if total else 0.0
     false_pass = [
         k
         for k, v in agree.items()
@@ -849,8 +914,10 @@ def evaluate_fact_checker(
     out["checker_agreement"] = {
         "cases": len(agree),
         "verdict_agreement": round(same / len(agree), 4),
+        "claim_agreement": round(claims, 4),
         "false_pass": sorted(false_pass),
         "passed": _met(same / len(agree), rule["verdict_agreement_min"])
+        and _met(claims, rule["claim_agreement_min"])
         and len(false_pass) <= rule["false_pass_max"],
     }
     again = _verdicts(answers["checker_fail_again"])
@@ -881,6 +948,15 @@ def evaluate_fact_checker(
         "passed": passed >= spec["checker_good"]["pass_min"],
     }
     return out
+
+
+def _supported(claims: Sequence[Mapping[str, Any]]) -> list[dict[str, str]]:
+    """A checker's claims as `claim_agreement` compares them: a claim is SUPPORTED when it names a
+    sentence of the basis, UNSUPPORTED when it names none."""
+    return [
+        {"claim": c["claim"], "verdict": "SUPPORTED" if c["support"] else "UNSUPPORTED"}
+        for c in claims
+    ]
 
 
 def claim_agreement(
@@ -915,7 +991,7 @@ def evaluate_web_verifier(
     """The verifier's answers with their quotes checked by machine (`run.prove_claims`) and the
     card's verification derived as a run derives it (`run.card_verification`)."""
     parsed: dict[str, tuple[dict[str, Any], tuple[A.Judged, ...]]] = {}
-    for set_name in ("verifier_contradicted", "verifier_verified"):
+    for set_name in ROLE_SETS["web_verifier"]:
         for key, (case, answer) in answers[set_name].items():
             try:
                 parsed[key] = (case, A.parse_judge(answer.text))
@@ -927,9 +1003,9 @@ def evaluate_web_verifier(
     for key, (case, claims) in parsed.items():
         proven = R.prove_claims(case["site_id"], claims, library)
         results[key] = (R.card_verification(proven), proven)
-    contradicted = [k for k in results if k.startswith("verifier_contradicted")]
+    contradicted = [k for k in results if parsed[k][0]["set"] == "verifier_contradicted"]
     caught = sum(1 for k in contradicted if results[k][0] == R.CONTRADICTED)
-    verified = [k for k in results if k.startswith("verifier_verified")]
+    verified = [k for k in results if parsed[k][0]["set"] == "verifier_verified"]
     falsely = [k for k in verified if results[k][0] == R.CONTRADICTED]
     agreed = total = 0
     for key in verified:
@@ -986,15 +1062,13 @@ def evaluate_hook_rater(
     fresh = hook_ratings(answers["hook_pairs"])
     reference = hook_ratings(answers[HOOK_REFERENCE])
     grades = {k: c["grade"] for k, (c, _) in answers["hook_pairs"].items()}
+    judged = {answers[HOOK_REFERENCE][k][0]["site_id"]: hook for k, hook in reference.items()}
+    sites = {k: c["site_id"] for k, (c, _) in answers["hook_pairs"].items()}
     strong = [fresh[k] for k, g in grades.items() if g == "strong"]
     weak = [fresh[k] for k, g in grades.items() if g == "weak"]
     pairs = [(s, w) for s in strong for w in weak]
     right = sum(1 for s, w in pairs if s > w)
-    within = sum(
-        1
-        for key, hook in fresh.items()
-        if abs(hook - reference[key.replace("hook_pairs", HOOK_REFERENCE)]) <= 1
-    )
+    within = sum(1 for key, hook in fresh.items() if abs(hook - judged[sites[key]]) <= 1)
     ordered = right / len(pairs) if pairs else 0.0
     close = within / len(fresh)
     return {
@@ -1088,7 +1162,9 @@ def evaluate(
             )
         sets = evaluate_card_writer(_resolve(writer_run), spec, thresholds)
     else:
-        answers = {s: _answers(run_dir, s, thresholds) for s in ROLE_SETS[role]}
+        answers = _answers(run_dir, role, thresholds)
+        if role == "hook_rater":  # the reference is the pilot judge's, on the same cards
+            answers |= _answers(run_dir, "pilot_judge", thresholds)
         if role == "fact_checker":
             sets = evaluate_fact_checker(answers, spec)
         elif role == "web_verifier":
@@ -1139,10 +1215,10 @@ def main(argv: Iterable[str] | None = None) -> int:
     jobs.add_argument("--export", required=True, type=Path)
     jobs.add_argument("--base-cards", required=True, type=Path)
     export = sub.choices["export"]
-    export.add_argument("--set", required=True, dest="set_name", choices=sorted(SET_ROLE))
+    export.add_argument("--role", required=True, choices=sorted(set(SET_ROLE.values())))
     export.add_argument("--handoff", required=True, type=Path)
     sub.choices["agents"].add_argument(
-        "--set", required=True, dest="set_name", choices=sorted(SET_ROLE)
+        "--role", required=True, choices=sorted(set(SET_ROLE.values()))
     )
     ev = sub.choices["evaluate"]
     ev.add_argument("--role", required=True, choices=sorted(THRESHOLDS["roles"]))
@@ -1163,9 +1239,9 @@ def main(argv: Iterable[str] | None = None) -> int:
             )
             payload = {"cases": len(made), "jobs_sha256": fix_jobs(run_dir, made)}
         elif args.command == "export":
-            payload = export_set(run_dir, args.set_name, _resolve(args.handoff))
+            payload = export_role(run_dir, args.role, _resolve(args.handoff))
         elif args.command == "agents":
-            payload = agent_jobs(run_dir, args.set_name)
+            payload = agent_jobs(run_dir, args.role)
         else:
             payload = evaluate(run_dir, args.role, writer_run=args.writer_run)
     except (CalibrationError, RO.RoleError, OH.HandoffError, R.RunError, PlanError) as exc:

@@ -10,6 +10,7 @@ ones the new contracts add: the roles, the variants and the rating, the canary, 
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -139,6 +140,7 @@ def check_json(verdict: str = "PASS", **over: Any) -> str:
     return json.dumps({**fields, **over})
 
 
+UUID4 = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 CANARY_CAUGHT = check_json("FAIL", name_leak=True, reasons=["The seeded flaw."])
 VERIFIED_ANSWER = T.judge_answer()
 
@@ -328,7 +330,7 @@ class TestSelect:
         assert "AS pool_images" in sql and "AS image_titles" in sql and "LIMIT 12" in sql
         assert "pool_images" not in R.SITES_SQL
 
-    def test_a_v1_run_is_not_asked_again_as_asked_before_by_a_shorts_run(
+    def test_a_run_of_another_contract_is_no_exclusion_and_a_v1_site_is_asked_again(
         self, tmp_path: Path
     ) -> None:
         v1 = tmp_path / "runs" / "wb-v1"
@@ -341,9 +343,15 @@ class TestSelect:
 
         R.select(v1, read=read, sites_file=None, pilot=None, exclude=[])
         assert R.earlier_sites([v1]) == {sid(MP): T.sha(S.BY_NAME[MP]["description"])}
-        assert R.earlier_sites([v1], R.SHORTS) == {}
-        run = make_run(tmp_path / "second", [MP], exclude=[v1])
+        with pytest.raises(R.RunError, match="is a run of contract v1, not shorts-v1"):
+            R.earlier_sites([v1], R.SHORTS)
+        # a v1 run is no exclusion of a shorts-v1 selection: refused, never silently skipped
+        with pytest.raises(R.RunError, match="--exclude-run .*wb-v1 is a run of contract v1"):
+            make_run(tmp_path / "second", [MP], exclude=[v1])
+        run = make_run(tmp_path / "third", [MP])
         assert len(R.read_jsonl(run / "SITES.jsonl")) == 1
+        with pytest.raises(R.RunError, match="is a run of contract shorts-v1, not v1"):
+            R.earlier_sites([run])
 
     def test_only_a_version_3_card_of_the_contract_is_current(self) -> None:
         live = production_row(MP)
@@ -399,7 +407,10 @@ class TestTheFirstRound:
         assert prov["anchors"] == S.BY_NAME[MP]["anchors"] and prov["reserve"] == ["S3"]
         assert prov["shorts_ready"] is True and CP.describes(prov, mp["card"])
         assert mp["card"] == C.final_card(S.BY_NAME[MP]["card"])
-        assert prov["check"]["by"] == "fact_checker:teaser-check-001"
+        assert prov["check"]["by"] in {
+            "fact_checker:teaser-check-001",
+            "fact_checker:teaser-check-002",
+        }
         assert prov["verify"]["by"] == "web_verifier:teaser-verify-001"
         assert CP.shorts_pin(prov, S.BY_NAME[MP]["description"]) == CP.text_sha256(mp["card"])
 
@@ -759,8 +770,8 @@ class TestTheRoles:
             "pilot_judge",
         }
 
-    def test_a_failed_calibration_moves_a_role_up_one_tier_before_its_first_round(
-        self, tmp_path: Path
+    def test_an_escalation_needs_the_registry_to_name_the_new_model_first(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         run = make_run(tmp_path, [MP])
         verdict = tmp_path / "verdict.json"
@@ -768,6 +779,36 @@ class TestTheRoles:
         verdict.write_text(
             json.dumps({"role": "fact_checker", "passed": False, "tier_move": move}),
             encoding="utf-8",
+        )
+        # the recorder checks the registry: an escalated model it does not know would be refused
+        with pytest.raises(RO.RoleError, match="registered to claude-sonnet-5-5"):
+            RO.require_model("fact_checker", "claude-opus-5-5")
+        with pytest.raises(
+            R.RunError, match="registered to claude-sonnet-5-5, not claude-opus-5-5"
+        ):
+            R.escalate_role(run, "fact_checker", verdict)
+        assert "escalations" not in json.loads((run / "RUN.json").read_text("utf-8"))
+        moved = RO.Role("fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus")
+        monkeypatch.setattr(
+            RO, "ROLES", RO._registry(*{**RO.ROLES, "fact_checker": moved}.values())
+        )
+        RO.require_model("fact_checker", "claude-opus-5-5")  # the recorder takes it now
+        assert R.escalate_role(run, "fact_checker", verdict)["model"] == "claude-opus-5-5"
+
+    def test_a_failed_calibration_moves_a_role_up_one_tier_before_its_first_round(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        run = make_run(tmp_path, [MP])
+        other = make_run(tmp_path / "other", [MP])
+        verdict = tmp_path / "verdict.json"
+        move = RO.escalation("fact_checker", calibration_id="c-1", reason="agreement 0.8")
+        verdict.write_text(
+            json.dumps({"role": "fact_checker", "passed": False, "tier_move": move}),
+            encoding="utf-8",
+        )
+        moved = RO.Role("fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus")
+        monkeypatch.setattr(
+            RO, "ROLES", RO._registry(*{**RO.ROLES, "fact_checker": moved}.values())
         )
         result = R.escalate_role(run, "fact_checker", verdict)
         assert result == {
@@ -786,7 +827,6 @@ class TestTheRoles:
         answer_round(run, "check", handoff, passes([MP]), model="claude-sonnet-5-5")
         with pytest.raises(R.RunError, match="role fact_checker is recorded as claude-opus-5-5"):
             R.import_stage(run, "check", fit=T.fit)
-        other = make_run(tmp_path / "other", [MP])
         step(other, tmp_path / "other", "write", writes([MP]))
         step(other, tmp_path / "other", "rate", rates(other, [MP]))
         R.export_stage(other, "check", tmp_path / "other" / "handoff-check")
@@ -836,7 +876,16 @@ class TestTheRoles:
 
 # ------------------------------------------------------------------------------ the canary
 class TestTheCanary:
-    def test_every_check_batch_carries_one_seeded_defect_beside_its_questions(
+    def test_a_round_that_would_be_one_batch_is_split_so_each_canary_has_a_donor(
+        self, tmp_path: Path
+    ) -> None:
+        run = make_run(tmp_path, NAMES)
+        step(run, tmp_path, "write", writes(NAMES))
+        step(run, tmp_path, "rate", rates(run, NAMES))
+        exported = R.export_stage(run, "check", tmp_path / "handoff-check")
+        assert exported["batches"] == {"check-001": 2, "check-002": 2}
+
+    def test_every_check_batch_carries_one_blind_seeded_defect_beside_its_questions(
         self, tmp_path: Path
     ) -> None:
         run = make_run(tmp_path, NAMES)
@@ -844,37 +893,60 @@ class TestTheCanary:
         step(run, tmp_path, "rate", rates(run, NAMES))
         handoff = tmp_path / "handoff-check"
         exported = R.export_stage(run, "check", handoff)
-        assert exported["canaries"] == 1 and exported["questions"] == 4
+        assert exported["canaries"] == 2 and exported["questions"] == 4
         record = R._round(run, "check")
         assert record is not None
-        canary = record["canaries"]["check-001"]
-        assert (
-            canary["label"] == f"canary-{canary['site_id']}" and canary["kind"] in SV.DEFECT_KINDS
-        )
-        assert canary["site_id"] == record["batches"]["check-001"][0]
-        labels = {line["label"] for line in OH.manifest(handoff)}
-        assert canary["label"] in labels and len(labels) == 5
-        real = (
-            handoff
-            / next(l for l in OH.manifest(handoff) if l["label"] == canary["site_id"])[
-                "prompt_path"
-            ]
-        )
-        flawed = (
-            handoff
-            / next(l for l in OH.manifest(handoff) if l["label"] == canary["label"])["prompt_path"]
-        )
-        assert real.read_text("utf-8") != flawed.read_text("utf-8")
-        assert canary["card"] in flawed.read_text("utf-8") and canary["card"] not in real.read_text(
-            "utf-8"
-        )
+        lines = {(l["batch_id"], l["label"]): l for l in OH.manifest(handoff)}
+        for batch_id, other in (("check-001", "check-002"), ("check-002", "check-001")):
+            canary = record["canaries"][batch_id]
+            members = record["batches"][batch_id]
+            # blind: the label has the shape of a site id and tells nothing, the card is a site
+            # of the other batch, and no site of this batch is asked twice
+            assert re.fullmatch(UUID4, canary["label"])
+            assert "canary" not in canary["label"] and canary["kind"] in SV.DEFECT_KINDS
+            assert canary["site_id"] == record["batches"][other][0]
+            assert canary["site_id"] not in members
+            assert len([k for k in lines if k[0] == batch_id]) == len(members) + 1
+            flawed = handoff / lines[(batch_id, canary["label"])]["prompt_path"]
+            text = flawed.read_text("utf-8")
+            assert canary["card"] in text and "canary" not in flawed.as_posix().lower()
+            assert "canary" not in text.lower()
+            real = handoff / lines[(batch_id, members[0])]["prompt_path"]
+            assert canary["card"] not in real.read_text("utf-8")
+
+    def test_the_canary_sits_at_a_random_place_not_always_last(self, tmp_path: Path) -> None:
+        seen: set[int] = set()
+        for attempt in range(12):
+            base = tmp_path / str(attempt)
+            run = make_run(base, NAMES)
+            step(run, base, "write", writes(NAMES))
+            step(run, base, "rate", rates(run, NAMES))
+            handoff = base / "handoff-check"
+            R.export_stage(run, "check", handoff)
+            record = R._round(run, "check")
+            assert record is not None
+            order = [l["label"] for l in OH.manifest(handoff) if l["batch_id"] == "check-001"]
+            seen.add(order.index(record["canaries"]["check-001"]["label"]))
+        assert len(seen) > 1
+
+    def test_a_round_of_one_site_asks_that_site_s_flawed_card_beside_it(
+        self, tmp_path: Path
+    ) -> None:
+        run = make_run(tmp_path, NAMES[:1])
+        step(run, tmp_path, "write", writes(NAMES[:1]))
+        step(run, tmp_path, "rate", rates(run, NAMES[:1]))
+        exported = R.export_stage(run, "check", tmp_path / "handoff-check")
+        assert exported["canaries"] == 1 and exported["questions"] == 1
+        record = R._round(run, "check")
+        assert record is not None
+        assert record["canaries"]["check-001"]["site_id"] == sid(NAMES[0])
 
     def test_a_checker_that_catches_its_canary_is_imported_without_it(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, NAMES)
         step(run, tmp_path, "write", writes(NAMES))
         step(run, tmp_path, "rate", rates(run, NAMES))
         result = step(run, tmp_path, "check", passes(NAMES))
-        assert result["verdicts"] == {"PASS": 4} and result["canaries"] == 1
+        assert result["verdicts"] == {"PASS": 4} and result["canaries"] == 2
         assert len(R.stage_records(run)["check"]) == 4
 
     def test_a_checker_that_passes_its_canary_voids_the_batch_and_nothing_is_written(
@@ -887,10 +959,11 @@ class TestTheCanary:
         R.export_stage(run, "check", handoff)
         answer_round(run, "check", handoff, passes(NAMES), canary=check_json())
         with pytest.raises(
-            R.CanaryPassed, match=r"batch\(es\) check-001 passed the seeded-defect card"
+            R.CanaryPassed,
+            match=r"batch\(es\) check-001, check-002 passed the seeded-defect card",
         ) as caught:
             R.import_stage(run, "check", fit=T.fit)
-        assert caught.value.batches == ("check-001",)
+        assert caught.value.batches == ("check-001", "check-002")
         assert not (run / "STAGE-check.jsonl").exists()
 
     def test_a_voided_batch_is_answered_again_by_a_new_agent(self, tmp_path: Path) -> None:
@@ -901,12 +974,13 @@ class TestTheCanary:
         R.export_stage(run, "check", handoff)
         answer_round(run, "check", handoff, passes(NAMES), canary=check_json())
         moved = R.void_batch(run, handoff, "check-001", fit=T.fit)
-        assert moved["voided"] == "check-001" and moved["answers_moved"] == 5
-        assert OH.validate(handoff).missing and not list(handoff.glob("*/*/*.answer.json"))
+        assert moved["voided"] == "check-001" and moved["answers_moved"] == 3
+        assert OH.validate(handoff).missing
         voided = tmp_path / "handoff-check-void" / "check-001-1"
-        assert len(list(voided.rglob("*.answer.json"))) == 5
+        assert len(list(voided.rglob("*.answer.json"))) == 3
         record = R._round(run, "check")
         assert record is not None
+        R.void_batch(run, handoff, "check-002", fit=T.fit)
         for batch_id, members in record["batches"].items():
             for site_id in members:
                 put(handoff, "check", batch_id, site_id, check_json(), "fact_checker")
@@ -939,9 +1013,7 @@ class TestTheCanary:
         handoff = tmp_path / "handoff-check"
         R.export_stage(run, "check", handoff)
         answer_round(run, "check", handoff, passes(NAMES), canary_role="hook_rater")
-        with pytest.raises(
-            R.RunError, match=r"canary-.*hook_rater:teaser-check-001.*role fact_checker"
-        ):
+        with pytest.raises(R.RunError, match=r"hook_rater:teaser-check-001.*role fact_checker"):
             R.import_stage(run, "check", fit=T.fit)
 
     def test_check_answer_takes_a_canary_label_as_any_check(self, tmp_path: Path) -> None:
@@ -959,7 +1031,7 @@ class TestTheCanary:
         bad = R.check_answer(run, handoff, "check-001", label, "{}", fit=T.fit)
         assert bad["ok"] is False
         with pytest.raises(R.RunError, match="is no question"):
-            R.check_answer(run, handoff, "check-001", "canary-nobody", CANARY_CAUGHT, fit=T.fit)
+            R.check_answer(run, handoff, "check-001", "not-a-label", CANARY_CAUGHT, fit=T.fit)
 
 
 # ------------------------------------------------------------------------------ diversity at import
@@ -1139,30 +1211,35 @@ GAP_CARDS = {
 }
 
 
-def gap_row(name: str, **over: Any) -> dict[str, Any]:
-    """A live card written by the MiniMax gap run: v1 shape, naming its site."""
+#: A rewritten card rests on a web fact for a figure the description does not give.
+WEB_FACT = {"id": "W1", "url": "https://example.org/web-fact", "quote": "It stands 2,431 m high."}
+
+
+def gap_row(name: str, facts: bool = False, **over: Any) -> dict[str, Any]:
+    """A live card written by the MiniMax gap run: v1 shape, naming its site. With `facts` it is a
+    card rewritten after a failed verification, one claim resting on a web fact."""
     sample = S.BY_NAME[name]
-    card = GAP_CARDS[name]
+    card = GAP_CARDS[name].replace("2,430", "2,431") if facts else GAP_CARDS[name]
     row = production_row(name, card=card)
     row["card_provenance"] = CP.build(
         run=GAP_RUN,
         ai_system=M.AI_SYSTEM,
         card=card,
         description=sample["description"],
-        stage="check",
+        stage=CP.VERIFY_REWRITE_CHECK if facts else "check",
         checker="teaser-check-001",
         checked_at="2026-10-07T12:00:00+00:00",
-        claims=[{"claim": "the site", "support": ["S1", "S2"]}],
+        claims=[{"claim": "the site", "support": ["S1", "W1"] if facts else ["S1", "S2"]}],
         verify={
             "verdict": "VERIFIED",
-            "stage": "verify",
+            "stage": CP.SECOND_VERIFY if facts else "verify",
             "by": "teaser-verify-001",
             "at": "2026-10-07T13:00:00+00:00",
             "claims": 2,
             "unproven": 0,
             "text_sha256": CP.text_sha256(card),
         },  # fmt: skip
-        web_facts=[],
+        web_facts=[WEB_FACT] if facts else [],
     )
     return {**row, **over}
 
@@ -1309,6 +1386,9 @@ class TestTheRecheckRun:
         assert {(r["status"], r["reason"], r["provenance"]) for r in rows} == {
             (R.CONFIRMED, None, None)
         }
+        assert {(r["seeded_card_sha256"], r["seeded_run"]) for r in rows} == {
+            (CP.text_sha256(GAP_CARDS[n]), GAP_RUN) for n in (MP, DENBURY)
+        }
         assert (run / "DESCRIPTION_DEFECTS.jsonl").read_text("utf-8") == ""
         assert "confirmed 2" in (run / "OUTCOMES.md").read_text("utf-8")
 
@@ -1346,7 +1426,58 @@ class TestTheRecheckRun:
         R.outcomes(run)
         row = outcome(run, MP)
         assert (row["status"], row["reason"], row["card"]) == (R.CLEARED, reason, None)
+        # the clear names the card it judged and the run that wrote it, so the planner never
+        # clears a newer card on this verdict
+        assert (row["seeded_card_sha256"], row["seeded_run"]) == (
+            CP.text_sha256(GAP_CARDS[MP]),
+            GAP_RUN,
+        )
         assert row["findings"] and "card-clear-" + reason == f"card-clear-{row['reason']}"
+
+    def test_a_card_without_a_description_is_cleared_pinned_to_its_text(
+        self, tmp_path: Path
+    ) -> None:
+        empty = {
+            **gap_row(DENBURY),
+            "site_id": "0e000000-0000-4000-8000-000000000001",
+            "name": "Empty",
+            "description": None,
+        }
+        run = seed(tmp_path, [MP], extra=[empty])
+        ok = {sid(MP): T.checker_answer()}
+        recheck_step(run, tmp_path, "check", ok)
+        recheck_step(run, tmp_path, "verify", verifies([MP]))
+        recheck_step(run, tmp_path, "adversarial", ok)
+        R.outcomes(run)
+        row = next(r for r in R.read_outcomes(run) if r["name"] == "Empty")
+        assert (row["status"], row["reason"]) == (R.CLEARED, R.NO_DESCRIPTION)
+        assert (row["seeded_card_sha256"], row["seeded_run"]) == (
+            CP.text_sha256(GAP_CARDS[DENBURY]),
+            None,
+        )
+
+    def test_a_card_resting_on_a_web_fact_is_asked_with_that_fact(self, tmp_path: Path) -> None:
+        export = T.tagged({"site": [gap_row(MP, facts=True)]})
+        run = tmp_path / "runs" / "wb-recheck-test"
+
+        def read(path: Path) -> None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(export, encoding="utf-8", newline="\n")
+
+        R.seed_live(run, read=read, provenance_run=GAP_RUN, fit=T.fit)
+        (seeded,) = R.read_jsonl(run / "STAGE-write.jsonl")
+        assert seeded["web_facts"] == [WEB_FACT] and seeded["basis"] == ["S1"]
+        # the figure 2,431 is the web fact's alone: the seeded card is mechanically clean with it
+        assert "2,431" in seeded["card"] and seeded["problems"] == []
+        ok = {sid(MP): T.checker_answer(claims=[("the site", ["S1", "W1"])])}
+        recheck_step(run, tmp_path, "check", ok)
+        recheck_step(run, tmp_path, "verify", verifies([MP]))
+        recheck_step(run, tmp_path, "adversarial", ok)
+        for stage in ("check", "adversarial"):
+            handoff = tmp_path / f"handoff-{stage}"
+            prompt = (handoff / OH.manifest(handoff)[0]["prompt_path"]).read_text("utf-8")
+            assert WEB_FACT["quote"] in prompt and "W1" in prompt
+        assert R.status(run)["states"] == {"accepted": 1}
 
     def test_a_re_checked_card_with_a_mechanical_problem_is_cleared_without_a_question(
         self, tmp_path: Path

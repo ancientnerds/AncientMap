@@ -4,9 +4,8 @@ Checks the things a viewer would notice and a batch would silently get wrong:
 container/format, clip completeness, black frames, the loop seam, the audio
 timeline (voice from 0, spoken name in its window, silence at the loop point),
 loudness, the selection, and that the narrated card is the one its provenance
-pins (S13, `card_traced`: a lane-WB teaser's `_card_provenance` while its
-description is unchanged, else the Phase-5 card key of `_description_provenance`,
-as `shorts_export.card_pin_and_mark` reads them). Writes `audit.json` next
+pins (S13, `card_traced`: a shorts-ready version-3 `_card_provenance` while its
+description is unchanged, as `shorts_export.card_pin_and_mark` reads it). Writes `audit.json` next
 to the short; the `evaluate` helpers are pure and unit tested, `audit_site`
 does the probing.
 """
@@ -200,7 +199,8 @@ def evaluate(m: dict) -> list[Check]:
     )
     # S13 (plan §7, Phase-4 design card_texts "TRACEABILITY"): the narrated card
     # is the card its provenance pins. A card without card provenance - a held
-    # card, or one written before Phase 5 - is not shorts-eligible.
+    # card, or one written before Phase 5 - is not shorts-eligible (the Phase-5 key pinned
+    # cards that name their site).
     pinned = m["card_provenance_sha256"]
     checks.append(
         Check(
@@ -293,7 +293,7 @@ def _widest_caption(captions: list[dict], font_path: Path) -> tuple[str, int]:
 
 def card_sha256(card_text: str) -> str:
     """sha256 of the card's UTF-8 bytes, lowercase hex: the form of
-    `_description_provenance.card.text_sha256` (S13)."""
+    the card provenance's `text_sha256` (S13)."""
     return hashlib.sha256(card_text.encode("utf-8")).hexdigest()
 
 

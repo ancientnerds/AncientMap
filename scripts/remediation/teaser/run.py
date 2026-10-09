@@ -122,6 +122,7 @@ import json
 import random
 import statistics
 import sys
+import uuid
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
@@ -278,9 +279,6 @@ RECHECK_UNPROVEN = "recheck-unproven"
 RECHECK_ADVERSARIAL_FAILED = "recheck-adversarial-failed"
 #: Questions per rater batch, per adversarial batch.
 RATE_BATCH_SIZE = 25
-#: The label of a canary question (the seeded-defect card of a check batch) is this prefix and the
-#: site id its card was made from.
-CANARY_PREFIX = "canary-"
 JUDGE_ROLE = "pilot_judge"
 
 
@@ -640,11 +638,16 @@ def select_rows(
 
 def earlier_sites(runs: Sequence[Path], contract: str = V1) -> dict[str, str]:
     """Every site asked in the given runs of `contract`, with the description sha256 it was asked
-    with. A run of another contract is skipped: what a v1 run asked, a shorts-v1 run asks again."""
+    with. A run of another contract is refused, never skipped: what a v1 run asked, a shorts-v1 run
+    asks again, so a v1 (or a re-check) run does not belong to a shorts-v1 `--exclude-run`."""
     asked: dict[str, str] = {}
     for run in runs:
-        if contract_of(_resolve(run)) != contract:
-            continue
+        other = contract_of(_resolve(run))
+        if other != contract:
+            raise RunError(
+                f"--exclude-run {run} is a run of contract {other}, not {contract}: only runs of "
+                "the contract being selected are excluded"
+            )
         for site in read_jsonl(_resolve(run) / "SITES.jsonl"):
             asked[site["site_id"]] = site["desc_sha256"]
     return asked
@@ -1116,10 +1119,14 @@ def recorded_web_facts(record: Mapping[str, Any], state: Progress) -> tuple[C.We
     return recorded
 
 
-def basis_at(stage: str, site: C.Basis, state: Progress) -> C.Basis:
+def basis_at(stage: str, site: C.Basis, state: Progress, spec: Spec = V1_SPEC) -> C.Basis:
     """The fact basis a stage's question shows: with the first verification's web facts in the
     rewrite after it and, as that rewrite's record holds them, in its check; the description alone
-    everywhere else."""
+    everywhere else. A re-check run shows every stage the web facts the seeded card's provenance
+    recorded (`seed_record`): a claim of the live card may rest on one, as in v1's `check-v`."""
+    if spec.name == RECHECK:
+        assert state.writer is not None
+        return site.with_web(C.WebFact(**fact) for fact in state.writer["web_facts"])
     if stage == VERIFY_REWRITE:
         return site.with_web(web_facts(state.verified[0]))
     if stage == VERIFY_CHECK:
@@ -1136,7 +1143,7 @@ def shown_variants(written: Mapping[str, Any]) -> list[tuple[int, str]]:
 
 def contract_prompt(spec: Spec, stage: str, site: C.Basis, state: Progress) -> str:
     """The exact question of one site at one stage of a contract other than v1."""
-    shown = basis_at(stage, site, state)
+    shown = basis_at(stage, site, state, spec)
     if spec.name == RECHECK:
         assert state.card is not None
         if stage in spec.checkers:
@@ -1144,7 +1151,7 @@ def contract_prompt(spec: Spec, stage: str, site: C.Basis, state: Progress) -> s
         if stage in spec.verifiers:
             return P.judge_prompt(site.name, site.country, state.card)
         assert state.check is not None and state.verify is not None
-        return PS.adversarial_prompt(site, state.card, state.check, state.verify)
+        return PS.adversarial_prompt(shown, state.card, state.check, state.verify)
     assert isinstance(site, SV.ShortsBasis) and isinstance(shown, SV.ShortsBasis)
     if stage == "write":
         return PS.writer_prompt(site)
@@ -1192,7 +1199,9 @@ def _batches(
 ) -> list[tuple[str, list[str]]]:
     """Batches of one stage: writer stages by site id in chunks of 15, verify stages in chunks of 5
     (each card researched on the web; so is an adversarial review), a rating stage in chunks of 25;
-    a checker stage keeps each writer batch together, so one checker checks one writer's cards."""
+    a checker stage keeps each writer batch together, so one checker checks one writer's cards. A
+    round of a canary-bearing stage that would be one batch is split in two: the canary of each
+    batch is made from a site of the other, so that no site is asked twice in a batch."""
     if stage in spec.writers or stage in (*spec.verifiers, *spec.adversarial, *spec.raters):
         size = BATCH_SIZE
         if stage in (*spec.verifiers, *spec.adversarial):
@@ -1212,6 +1221,9 @@ def _batches(
             for _batch, members in sorted(by_writer.items())
             for i in range(0, len(members), BATCH_SIZE)
         ]
+    if stage in spec.canary and len(groups) == 1 and len(groups[0]) > 1:
+        half = (len(groups[0]) + 1) // 2  # a blind canary needs a site outside the batch
+        groups = [groups[0][:half], groups[0][half:]]
     return [(f"{stage}-{n:03d}", group) for n, group in enumerate(groups, start=1)]
 
 
@@ -1239,26 +1251,29 @@ def export_stage(run: Path, stage: str, handoff: Path) -> dict[str, Any]:
     groups = _batches(stage, due, spec)
     canaries = canary_questions(spec, stage, groups, sites, due)
     for batch_id, members in groups:
-        for site_id in members:
-            OH.export(
-                target,
-                batch_id=batch_id,
-                stage=stage,
-                label=site_id,
-                field="card_description",
-                prompt=prompt_for(stage, sites[site_id], due[site_id], spec),
-            )
-        if batch_id in canaries:
+        questions = [
+            (site_id, prompt_for(stage, sites[site_id], due[site_id], spec)) for site_id in members
+        ]
+        if batch_id in canaries:  # at a random place: the last question is no giveaway
             canary = canaries[batch_id]
+            canary_at = random.SystemRandom().randrange(len(questions) + 1)
+            questions.insert(
+                canary_at,
+                (
+                    canary["label"],
+                    canary_prompt(
+                        spec, stage, sites[canary["site_id"]], due[canary["site_id"]], canary
+                    ),
+                ),
+            )
+        for label, prompt in questions:
             OH.export(
                 target,
                 batch_id=batch_id,
                 stage=stage,
-                label=canary["label"],
+                label=label,
                 field="card_description",
-                prompt=canary_prompt(
-                    spec, stage, sites[canary["site_id"]], due[canary["site_id"]], canary
-                ),
+                prompt=prompt,
             )
     record = {
         "stage": stage,
@@ -1287,20 +1302,24 @@ def canary_questions(
     due: Mapping[str, Progress],
 ) -> dict[str, dict[str, Any]]:
     """One seeded-defect question for every batch of a checking stage that carries a canary
-    (`Spec.canary`): the card of the batch's first site with one flaw added
-    (`shorts_v1.canary_card`), asked beside the real questions under a label of its own. A checker
-    that passes it did not read the card: the batch is void (`import_stage`, `void_batch`)."""
+    (`Spec.canary`): the card of a site OUTSIDE the batch - the first of the next batch - with one
+    flaw added (`shorts_v1.canary_card`), asked beside the real questions under a random label that
+    has the shape of a site id. The question must be blind: no label, path or repeated site tells a
+    checker which question is the seeded one (the mapping lives in `ROUNDS.jsonl` alone). A round
+    that holds one site has no other site to take (the card is that site's own, flawed: two
+    questions the checker must read to tell apart). A checker that passes it did not read the card:
+    the batch is void (`import_stage`, `void_batch`)."""
     if stage not in spec.canary:
         return {}
     found: dict[str, dict[str, Any]] = {}
-    for index, (batch_id, members) in enumerate(groups):
-        site_id = members[0]
-        card = due[site_id].card
+    for index, (batch_id, _members) in enumerate(groups):
+        donor = groups[(index + 1) % len(groups)][1][0]  # one batch: its only site
+        card = due[donor].card
         assert card is not None
-        kind, defective = SV.canary_card(card, sites[site_id], index)
+        kind, defective = SV.canary_card(card, sites[donor], index)
         found[batch_id] = {
-            "label": f"{CANARY_PREFIX}{site_id}",
-            "site_id": site_id,
+            "label": str(uuid.uuid4()),
+            "site_id": donor,
             "kind": kind,
             "card": defective,
         }
@@ -1346,7 +1365,7 @@ def parse_contract_answer(
     with its mechanical problems) or thin decline, the rater's choice, the checker's wider verdict
     and the rewrite after a failed verification; a re-check run's checker and reviewer give v1's
     checker shape."""
-    shown = basis_at(stage, site, state)
+    shown = basis_at(stage, site, state, spec)
     offered = [asdict(fact) for fact in shown.web]
     if spec.name == RECHECK:
         record = {"kind": "check", "card": state.card, **A.parse_checker(text, shown).to_dict()}
@@ -1592,8 +1611,9 @@ def import_stage(
     roles = run_roles(run) if spec.roles else {}
     rows: list[dict[str, Any]] = []
     judged: dict[str, tuple[A.Judged, ...]] = {}
+    seeded = {(batch, canary["label"]) for batch, canary in canaries.items()}
     for (batch_id, site_id), line in sorted(manifest.items(), key=lambda kv: kv[0][1]):
-        if site_id.startswith(CANARY_PREFIX):
+        if (batch_id, site_id) in seeded:
             continue  # read below, once the real questions are known to be in order
         state = current[site_id]
         if state.status != DUE or state.stage != stage:
@@ -2301,6 +2321,11 @@ def outcome_rows(run: Path) -> list[dict[str, Any]]:
     due = sorted(site for site, p in current.items() if p.status == DUE)
     if due:
         raise RunError(f"{len(due)} site(s) are still due: {due[:3]} - finish every stage first")
+    seeded_run = (
+        json.loads((run / "RUN.json").read_text(encoding="utf-8"))["provenance_run"]
+        if spec.name == RECHECK
+        else None
+    )
     rows: list[dict[str, Any]] = []
     for site_id in sorted(sites):
         site, state = sites[site_id], current[site_id]
@@ -2320,6 +2345,12 @@ def outcome_rows(run: Path) -> list[dict[str, Any]]:
                 {key: verified[key] for key in _VERIFICATION_KEYS} for verified in state.verified
             ],
         }
+        if spec.name == RECHECK:
+            # the card this outcome judged and the run that wrote it: the planner clears only that
+            # card (`mechanical/teaser.py` `classify`), never a newer one written since the seed
+            assert state.writer is not None
+            common["seeded_card_sha256"] = CP.text_sha256(state.writer["card"])
+            common["seeded_run"] = seeded_run
         if state.status == ACCEPTED:
             writer = state.writer
             assert writer is not None
@@ -2360,6 +2391,11 @@ def outcome_rows(run: Path) -> list[dict[str, Any]]:
                     "card": None,
                     "writer": None,
                     "provenance": None,
+                    **(
+                        {"seeded_card_sha256": CP.text_sha256(listed["card"]), "seeded_run": None}
+                        if spec.name == RECHECK
+                        else {}
+                    ),
                 }
             )
     return sorted(rows, key=lambda r: r["site_id"])
@@ -2789,7 +2825,9 @@ def seed_record(
     row: Mapping[str, Any], provenance_run: str, seeded_at: str, fit: C.Fit
 ) -> dict[str, Any]:
     """The `write` record of a live card: the card as the writer's answer, its basis the sentences
-    its provenance's claims cite, and the mechanical problems v1's contract finds in it today. The
+    its provenance's claims cite, the web facts that provenance recorded (a claim of the card may
+    rest on one, and the re-check shows them to every stage) and the mechanical problems v1's
+    contract finds in it today. The
     writer's model is MiniMax's: the gap run was answered by MiniMax in every stage (AUDIT_LOG
     2026-10-07), which is why it is re-checked (owner decision D10)."""
     teaser = CP.validate(row["card_provenance"])
@@ -2799,7 +2837,7 @@ def seed_record(
         country=row["country"],
         description=row["description"],
         alt_names=row["alt_names"],
-    )
+    ).with_web(C.WebFact(**fact) for fact in teaser["web_facts"])
     cited = {s for claim in teaser["check"]["claims"] for s in claim["support"] if s[0] == "S"}
     return {
         "site_id": row["site_id"],
@@ -2814,6 +2852,7 @@ def seed_record(
         "written": row["card"],
         "card": row["card"],
         "basis": sorted(cited, key=lambda s: int(s[1:])),
+        "web_facts": [dict(fact) for fact in teaser["web_facts"]],
         "problems": C.problems(row["card"], site, fit=fit),
         "seeded": True,
     }
@@ -2924,8 +2963,11 @@ def escalate_role(run: Path, role: str, verdict_file: Path) -> dict[str, Any]:
     """Move one role of a run up one tier after its calibration failed (owner decision D6): the
     verdict (`calibrate_claude.py verdict` or `teaser/calibrate.py evaluate`) names the tier move;
     it is written into `RUN.json["roles"]` and `["escalations"]`. Refused for a verdict of another
-    role or one that did not fail, for a move other than one tier up, and once a stage of the role
-    was exported - its answers were given by the model the run recorded."""
+    role or one that did not fail, for a move other than one tier up, while `roles.ROLES` still
+    names the old model (the recorder `opus_handoff.py answer --role R --model M` checks the
+    registry: commit the `ROLES` edit first - `roles.py` - then escalate the runs that have not
+    begun the role), and once a stage of the role was exported - its answers were given by the
+    model the run recorded."""
     spec = spec_of(run)
     verdict = json.loads(_resolve(verdict_file).read_text(encoding="utf-8"))
     move = verdict.get("tier_move")
@@ -2940,6 +2982,12 @@ def escalate_role(run: Path, role: str, verdict_file: Path) -> dict[str, Any]:
         raise RunError(
             f"the tier move {move['from']} -> {move['to']} does not follow the model recorded "
             f"for role {role} ({recorded[role]['model']}) by one tier"
+        )
+    if RO.role(role).model != move["to"]:
+        raise RunError(
+            f"role {role} is registered to {RO.role(role).model}, not {move['to']}: the recorder "
+            "(`opus_handoff.py answer --role`) would refuse the escalated model - commit the "
+            "edit of `roles.ROLES` first (a registry change is sealed and calibrated again)"
         )
     begun = [r["stage"] for r in read_rounds(run) if spec.roles.get(r["stage"]) == role]
     if begun or (role == JUDGE_ROLE and _round(run, JUDGE_STAGE) is not None):

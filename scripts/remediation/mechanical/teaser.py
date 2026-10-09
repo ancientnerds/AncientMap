@@ -430,7 +430,7 @@ def _live(r: Mapping[str, Any]) -> Live:
         raw_data=r["raw_data"],
         has_card_row=bool(r["has_card_row"]),
         card=r["card"],
-        country=str(r["country"]),
+        country=r["country"] or "",
         alt_names=tuple(r["alt_names"]),
     )
 
@@ -463,10 +463,16 @@ KEPT = "kept"
 CONFIRMED = "confirmed"
 #: A version-3 card gives its site away against the live name, aliases or country.
 NAME_CHANGED = "name-changed"
+#: A re-check clear (contract recheck-v1) judged another card than the one the site holds now: a
+#: newer card was written through the journal after the run seeded the live one. The spelling is
+#: `teaser/run.py`'s `CARD_CHANGED` (a test pins it).
+CARD_CHANGED = "card-changed"
 REFUSAL_MEANING = {
     KEPT: "the site keeps its card: its chain failed or its writer declined its thin description "
     "(owner decision D5) - nothing is written, nothing is cleared",
     CONFIRMED: "a re-check run confirmed the live card: it stands (owner decision D10)",
+    CARD_CHANGED: "a re-check clear judged another card than the live one (a newer card was "
+    "written after the run seeded it): the live card is not cleared on the old verdict",
     NAME_CHANGED: "the card gives its site away against the live name, aliases or country (a name "
     "changed or an alias was added since it was written): write the card again",
     NOT_VERIFIED: "the accepted card carries no VERIFIED web verification (an outcome written "
@@ -620,6 +626,19 @@ def classify(
         return _refused(site_id, name, RAW_DATA_NOT_OBJECT, f"raw_data is a {type(raw).__name__}")
     if live.raw_data is not None and reprint(raw) != live.raw_data:
         return _refused(site_id, name, NOT_REPRINTED, "the journal would record another spelling")
+    # a re-check outcome names the card it judged and the run that wrote it
+    if "seeded_card_sha256" in outcome:
+        if live.card is None or CP.text_sha256(live.card) != outcome["seeded_card_sha256"]:
+            return _refused(site_id, name, CARD_CHANGED, "the live card is not the one re-checked")
+        if outcome["seeded_run"] is not None:
+            written = (raw or {}).get("_card_provenance")
+            if not isinstance(written, dict) or written.get("run") != outcome["seeded_run"]:
+                return _refused(
+                    site_id,
+                    name,
+                    CARD_CHANGED,
+                    f"the live card is not of run {outcome['seeded_run']}",
+                )
     for column, value in (("raw_data", canonical(live.raw_data)), ("card_description", live.card)):
         links = journal.get((site_id, column), ())
         if column == "raw_data":

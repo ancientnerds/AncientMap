@@ -991,16 +991,23 @@ The run records the registry's models in `RUN.json["roles"]` at its start. The i
 answer whose `answered_by` is not `<role>:<agent>` of the stage's role, or whose stamp is not that
 role's model; `run.py brief` and `run.py agents` name the role, the fixed model id and the effort, and
 the recorder's flags (`opus_handoff.py answer --role R --model M`). A failed calibration moves a role
-up one tier before its first round (`run.py escalate`). Web agents (verifier, judge, adversary) are
+up one tier before its first round: first **commit the edit of `roles.ROLES`** (the recorder checks the
+registry, and a registry change is sealed and calibrated again), then `run.py escalate --run R --role
+ROLE --verdict VERDICT-ROLE.json` records the move in each run that has not begun the role; `escalate`
+is refused while `ROLES` still names the old model. Web agents (verifier, judge, adversary) are
 told to read the site's Wikipedia text from `output/remediation/final-2026-10-08/wiki_cache/` first, to
 fetch other pages live at most a few requests per site, and that a 403 or 429 is never a finding;
 at most 3 run at the same time (Wikimedia throttles this IP from 4).
 
 **The canary.** Every check batch carries one seeded-defect card (`shorts_v1.canary_card`: a removed
 hedge, an invented superlative, an implied unknown, a moved period or a word of the name), asked
-beside the real questions under a label of its own. A batch whose checker **passes** its canary is void:
-`run.py import` is refused with nothing written (`CanaryPassed`), `run.py void-batch` sets that batch's
-answers aside (`<handoff>-void/`) and a new agent answers it.
+beside the real questions. The question is **blind**: its label is a random version-4 UUID (the shape
+of a site id; the label-to-site mapping is in `ROUNDS.jsonl` alone), it sits at a random place in the
+batch, and its card is made from a site **outside** the batch (the first site of the next batch; a round
+of two or more sites that would be one batch is split in two, so every batch has such a site; a round of
+one site asks that site's own flawed card beside it). A batch whose checker **passes** its canary is
+void: `run.py import` is refused with nothing written (`CanaryPassed`), `run.py void-batch` sets that
+batch's answers aside (`<handoff>-void/`) and a new agent answers it.
 
 ### 9.3 Keep-on-fail (D5)
 
@@ -1033,7 +1040,12 @@ answer was MiniMax's). `check` (Sonnet, the v1 checker prompt), `verify` (Sonnet
 and `adversarial` (Opus; it may check the web; the checker's claim map and the verifier's evidence are
 in its prompt) follow. A card that passes all three is `confirmed` and stands; any failure clears it
 (`card-clear-recheck-<reason>`: `check-failed`, `contradicted`, `unproven`, `adversarial-failed`,
-`mechanical`) through the journal, and the replacement comes with shorts-v1.
+`mechanical`) through the journal, and the replacement comes with shorts-v1. The seeded card keeps the
+web facts of its provenance (`web_facts`, as v1's `check-v` shows them): the check, the verification
+prompt's card and the adversary see them, and the mechanical check counts their figures. Each outcome
+names the card it judged (`seeded_card_sha256`) and the run that wrote it (`seeded_run`; `null` for a
+card of a site without a description): the planner refuses (`card-changed`) to clear a live card that
+is another one, a newer shorts-v1 card included.
 
 ### 9.6 Calibration (D6; `teaser/calibrate.py`)
 
@@ -1042,9 +1054,17 @@ Each role is measured against already-judged cases with a threshold **sealed bef
 registry). Cases come from the Opus-era runs (never a MiniMax answer), the production export and a
 file of vetted shorts-v1 cards. A failing role moves up one tier (`tier_move` in `VERDICT-<role>.json`).
 
+The cases are exported **by role**, not by set: `calibrate.py export --role R` puts every case of the
+role's sets into one handoff, shuffled together under random version-4 UUID keys, one neutral stage name
+(`calibration`) and batch ids that name the role; a good card and its flawed twin never share a batch.
+The key-to-set mapping is in `JOBS.jsonl` alone, which no agent reads, so a threshold met by the role
+proves reading, not label-reading. `agents --role R` gives the workflow jobs; `evaluate --role R`
+groups the answers by set. The hook rater's reference is the `pilot_judge` role (`export --role
+pilot_judge`), paired by site.
+
 | role | set | pass threshold |
 | --- | --- | --- |
-| `fact_checker` | 45 recorded cards (30 PASS, 15 FAIL) under the v1 prompt | 90 % verdict agreement, 0 PASS of a card with an unsupported claim |
+| `fact_checker` | 45 recorded cards (30 PASS, 15 FAIL) under the v1 prompt | 90 % verdict agreement, 90 % claim agreement (a recorded claim matched by wording and by supported / unsupported), 0 PASS of a card with an unsupported claim |
 | | 30 recorded FAIL | 27 FAIL again |
 | | 30 shorts-v1 cards with one seeded defect | 27 caught |
 | | the same 30 cards unflawed | 27 PASS |
@@ -1071,7 +1091,9 @@ $T judge-export --run $R --handoff $H-judge    # the pilot only: a fresh pilot_j
 ```
 
 The write steps are 5.4's (`mechanical/teaser.py plan`, `apply.py`, `accept`); journal stamps continue
-at `wb-teaser-prov-s035` / `wb-teaser-card-s035`.
+at `wb-teaser-prov-s035` / `wb-teaser-card-s035`. `select --exclude-run` takes only runs of the
+contract being selected: what a v1 or a re-check run asked, a shorts-v1 run asks again, and
+`earlier_sites` refuses a run of another contract instead of skipping it.
 
 ## Retired
 

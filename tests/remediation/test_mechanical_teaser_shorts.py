@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -117,16 +118,59 @@ class TestAnOutcomeThatWritesNothing:
         assert record["card"]["cells"] == 1 and record["prov"]["cells"] == 1
 
 
+SEEDED_RUN = "wb-cardgap-test"
+
+
+def recheck_clear(**over: Any) -> dict[str, Any]:
+    """A re-check clear: it names the card it judged (`T.OLD_CARD`) and the run that wrote it."""
+    fields: dict[str, Any] = {
+        "reason": "recheck-contradicted",
+        "card": None,
+        "provenance": None,
+        "seeded_card_sha256": T.sha(T.OLD_CARD),
+        "seeded_run": SEEDED_RUN,
+    }
+    return outcome(status=W.CLEARED, **{**fields, **over})
+
+
+def seeded_live(**over: Any) -> W.Live:
+    """The live site as the re-check run seeded it: `T.OLD_CARD` with a provenance of the gap run."""
+    held = live()
+    raw = json.loads(held.raw_data or "{}")
+    raw["_card_provenance"] = {"run": SEEDED_RUN}
+    return replace(held, raw_data=W.reprint(raw), **over)
+
+
 class TestAFailedReCheckIsAClear:
     def test_a_cleared_recheck_card_is_a_journalled_clear_with_its_reason(self) -> None:
-        cleared = outcome(
-            status=W.CLEARED, reason="recheck-contradicted", card=None, provenance=None
-        )
-        prov, card = W.classify(cleared, live(), {}, "wb-recheck")
+        prov, card = W.classify(recheck_clear(), seeded_live(), {}, "wb-recheck")
         assert (card.old_value, card.new_value) == (T.OLD_CARD, None)
         assert card.rule == "card-clear-recheck-contradicted"
         assert card.note == "card cleared (recheck-contradicted)"
         assert json.loads(prov.new_value)["_description_provenance"]["card"] is None
+        assert "_card_provenance" not in json.loads(prov.new_value)
+
+    def test_a_card_written_after_the_seed_is_not_cleared_on_the_old_verdict(self) -> None:
+        newer = seeded_live(card=NAMELESS)
+        refused = W.classify(recheck_clear(), newer, {}, "wb-recheck")
+        assert refused.reason == W.CARD_CHANGED and not refused.ok
+
+    def test_a_card_of_another_run_with_the_same_text_is_not_cleared_either(self) -> None:
+        held = seeded_live()
+        raw = json.loads(held.raw_data or "{}")
+        raw["_card_provenance"] = {"run": "wb-shorts-test"}
+        newer = replace(held, raw_data=W.reprint(raw))
+        refused = W.classify(recheck_clear(), newer, {}, "wb-recheck")
+        assert refused.reason == W.CARD_CHANGED and "wb-cardgap-test" in refused.note
+
+    def test_a_listed_site_without_a_description_pins_the_card_text_only(self) -> None:
+        listed = recheck_clear(reason="no-description", seeded_run=None)
+        assert W.classify(listed, live(), {}, "wb-recheck")[1].new_value is None
+        assert W.classify(listed, live(card=NAMELESS), {}, "wb-recheck").reason == W.CARD_CHANGED
+
+    def test_the_spelling_is_the_run_cli_s(self) -> None:
+        assert W.CARD_CHANGED == R.CARD_CHANGED
+        assert W.REFUSAL_MEANING[W.CARD_CHANGED]
 
 
 class TestAVersion3Card:
@@ -200,6 +244,17 @@ class TestTheNameRuleAgainstTheLiveName:
     def test_a_version_3_outcome_needs_the_country_in_the_export(self) -> None:
         with pytest.raises(W.PlanError, match="carries no country"):
             W.classify(shorts_outcome(), live(), {}, "wb-shorts-test")
+
+    def test_a_null_country_in_the_export_is_no_country(self) -> None:
+        """SQL NULL read as the text "None" would pass the rule's guard and be compared as a word."""
+        export = export_for([replace(live(), country="")]).replace(
+            '"country": ""', '"country": null'
+        )
+        parsed, _journal = W.parse_export(export)
+        (site,) = parsed.values()
+        assert site.country == ""
+        with pytest.raises(W.PlanError, match="carries no country"):
+            W.classify(shorts_outcome(), site, {}, "wb-shorts-test")
 
     def test_the_name_rule_is_run_after_the_description_check(self) -> None:
         decided = W.classify(

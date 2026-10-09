@@ -8,6 +8,7 @@ same keys, the answers go through `opus_handoff.write_answer` in the role of the
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -51,6 +52,7 @@ TINY: dict[str, Any] = {
                     "pass_cases": 2,
                     "fail_cases": 1,
                     "verdict_agreement_min": 0.9,
+                    "claim_agreement_min": 0.9,
                     "false_pass_max": 0,
                 },
                 "checker_fail_again": {"cases": 2, "fail_min": 2},
@@ -241,26 +243,42 @@ def fixed_dir(tmp_path: Path, thresholds: dict[str, Any] = TINY) -> Path:
     return run_dir
 
 
-def answer_set(
-    run_dir: Path, set_name: str, text_of: Any, *, role: str | None = None, model: str | None = None
+UUID4 = r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+
+
+def answer_role(
+    run_dir: Path,
+    role: str,
+    by_set: dict[str, Any],
+    *,
+    as_role: str | None = None,
+    model: str | None = None,
 ) -> Path:
-    """Export the set and answer every case as an agent of the set's role."""
-    handoff = run_dir.parent / f"handoff-{set_name}"
-    exported = K.export_set(run_dir, set_name, handoff)
-    chosen = role or K.SET_ROLE[set_name]
+    """Export the role's cases and answer every one as an agent of `as_role` (default: the role); the
+    text of a case comes from the function registered for its set."""
+    handoff = run_dir.parent / f"handoff-{role}"
+    K.export_role(run_dir, role, handoff)
+    chosen = as_role or role
     jobs = {j["key"]: j for j in K.sealed_jobs(run_dir)}
-    for batch, keys in exported["batches"].items():
+    for batch, keys in K._handoffs(run_dir)[role]["batches"].items():
         for key in keys:
             OH.write_answer(
                 handoff,
                 batch_id=batch,
-                stage=set_name,
+                stage=K.STAGE,
                 label=key,
-                text=text_of(jobs[key]),
+                text=by_set[jobs[key]["set"]](jobs[key]),
                 answered_by=RO.answered_by(chosen, f"cal-{batch}"),
                 model=OH.ANSWER_MODELS[model or RO.role(chosen).model],
             )
     return handoff
+
+
+def jobs_of(run_dir: Path, set_name: str) -> list[dict[str, Any]]:
+    """The cases of one set, in their number order (the keys say nothing)."""
+    return sorted(
+        (j for j in K.sealed_jobs(run_dir) if j["set"] == set_name), key=lambda j: j["number"]
+    )
 
 
 def checker_text(verdict: str):
@@ -291,7 +309,8 @@ class TestTheSeal:
         roles = K.THRESHOLDS["roles"]
         sets = roles["fact_checker"]["sets"]
         assert sets["checker_agreement"] == {
-            "pass_cases": 30, "fail_cases": 15, "verdict_agreement_min": 0.9, "false_pass_max": 0
+            "pass_cases": 30, "fail_cases": 15, "verdict_agreement_min": 0.9,
+            "claim_agreement_min": 0.9, "false_pass_max": 0
         }  # fmt: skip
         assert (
             sets["checker_fail_again"]["fail_min"] == 27
@@ -406,6 +425,14 @@ class TestTheCases:
             "pilot_judge",
             "adversarial",
         }
+
+    def test_a_key_says_nothing_of_its_case(self, tmp_path: Path) -> None:
+        jobs = self.jobs(tmp_path)
+        for job in jobs:
+            assert re.fullmatch(UUID4, job["key"])
+            assert job["set"] not in job["key"] and job["set"].split("_")[0] not in job["key"]
+        keys = [j["key"] for j in sorted(jobs, key=lambda j: (j["set"], j["number"]))]
+        assert keys != sorted(keys)  # the key order is not the set order either
 
     def test_the_draw_is_seeded_and_the_failures_do_not_overlap(self, tmp_path: Path) -> None:
         first, again = self.jobs(tmp_path), self.jobs(tmp_path)
@@ -538,9 +565,9 @@ class TestFixingTheCases:
         with pytest.raises(K.CalibrationError, match="never rewritten"):
             K.fix_jobs(run_dir, again[:-1])
 
-    def test_cases_cannot_be_fixed_after_a_set_was_exported(self, tmp_path: Path) -> None:
+    def test_cases_cannot_be_fixed_after_a_role_was_exported(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        K.export_set(run_dir, "checker_good", tmp_path / "h-good")
+        K.export_role(run_dir, "fact_checker", tmp_path / "h-good")
         with pytest.raises(K.CalibrationError, match="exists: the cases are fixed first"):
             K.fix_jobs(run_dir, K.sealed_jobs(run_dir))
 
@@ -558,57 +585,95 @@ class TestFixingTheCases:
     def test_no_case_is_exported_before_it_is_fixed(self, tmp_path: Path) -> None:
         run_dir = sealed_dir(tmp_path)
         with pytest.raises(K.CalibrationError, match="not the sample the seal log fixed"):
-            K.export_set(run_dir, "checker_good", tmp_path / "h")
+            K.export_role(run_dir, "fact_checker", tmp_path / "h")
 
 
 # ------------------------------------------------------------------------------ the questions
 class TestTheQuestions:
     def test_each_case_is_asked_with_the_lane_s_own_prompt(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        jobs = {j["key"]: j for j in K.sealed_jobs(run_dir)}
-        agreement = jobs["checker_agreement-001"]
+        agreement = jobs_of(run_dir, "checker_agreement")[0]
         assert K.job_prompt(agreement) == P.checker_prompt(
             K.job_basis(agreement), agreement["card"]
         )
-        good = jobs["checker_good-001"]
+        good = jobs_of(run_dir, "checker_good")[0]
         assert K.job_prompt(good) == PS.checker_prompt(
             K.job_basis(good), good["card"], good["anchors"]
         )
-        verifier = jobs["verifier_verified-001"]
+        verifier = jobs_of(run_dir, "verifier_verified")[0]
         assert K.job_prompt(verifier) == P.judge_prompt(
             verifier["name"], verifier["country"], verifier["card"]
         )
-        hook = jobs["hook_pairs-001"]
+        hook = jobs_of(run_dir, "hook_pairs")[0]
         assert K.job_prompt(hook) == PS.rate_prompt(
             hook["name"], hook["country"], [(1, hook["card"])]
         )
-        assert K.job_prompt(jobs["hook_reference-001"]) == K.job_prompt(hook)
-        adversary = jobs["adversarial_clean-001"]
+        assert K.job_prompt(jobs_of(run_dir, K.HOOK_REFERENCE)[0]) == K.job_prompt(hook)
+        adversary = jobs_of(run_dir, "adversarial_clean")[0]
         assert "find the reason it must NOT stay public" in K.job_prompt(adversary)
 
-    def test_a_set_is_exported_once_into_a_directory_of_its_own(self, tmp_path: Path) -> None:
+    def test_a_role_is_exported_once_into_a_directory_of_its_own(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        exported = K.export_set(run_dir, "checker_good", tmp_path / "h-good")
-        assert exported["cases"] == 3 and exported["role"] == "fact_checker"
-        assert exported["batches"] == {
-            "checker-good-001": ["checker_good-001", "checker_good-002", "checker_good-003"]
-        }
-        assert len(OH.manifest(tmp_path / "h-good")) == 3
+        exported = K.export_role(run_dir, "fact_checker", tmp_path / "h-checker")
+        assert exported["cases"] == 11 and exported["role"] == "fact_checker"
+        assert sum(exported["batches"].values()) == 11
+        assert len(OH.manifest(tmp_path / "h-checker")) == 11
         with pytest.raises(K.CalibrationError, match="exported already"):
-            K.export_set(run_dir, "checker_good", tmp_path / "h-good2")
+            K.export_role(run_dir, "fact_checker", tmp_path / "h-checker2")
         with pytest.raises(K.CalibrationError, match="not empty"):
-            K.export_set(run_dir, "checker_defects", tmp_path / "h-good")
+            K.export_role(run_dir, "hook_rater", tmp_path / "h-checker")
 
-    def test_a_web_set_is_asked_five_to_a_batch(self, tmp_path: Path) -> None:
+    def test_the_questions_do_not_tell_the_role_what_kind_of_case_each_is(
+        self, tmp_path: Path
+    ) -> None:
         run_dir = fixed_dir(tmp_path)
-        exported = K.export_set(run_dir, "verifier_verified", tmp_path / "h-ver")
-        assert list(exported["batches"]) == ["verifier-verified-001"]
+        handoff = tmp_path / "h-checker"
+        exported = K.export_role(run_dir, "fact_checker", handoff)
+        lines = OH.manifest(handoff)
+        sets = {j["set"] for j in K.sealed_jobs(run_dir) if j["role"] == "fact_checker"}
+        assert len(sets) == 4  # all the role's sets travel together, in one handoff
+        for line in lines:
+            assert line["stage"] == K.STAGE == "calibration"
+            assert re.fullmatch(UUID4, line["label"])
+            shown = " ".join([line["batch_id"], line["stage"], line["label"], line["prompt_path"]])
+            assert not any(name.split("_")[-1] in shown for name in sets), shown
+            assert not any(name in shown for name in sets)
+        assert all(not any(name in batch for name in sets) for batch in exported["batches"])
+        # shuffled: the cases of a batch are in no order of the sets
+        by_key = {j["key"]: j["set"] for j in K.sealed_jobs(run_dir)}
+        per_batch = [
+            [by_key[line["label"]] for line in lines if line["batch_id"] == batch]
+            for batch in exported["batches"]
+        ]
+        assert any(sequence != sorted(sequence) for sequence in per_batch)
+        # a good card and its flawed twin (one site) are never in one batch
+        for batch in K._handoffs(run_dir)["fact_checker"]["batches"].values():
+            sites = [j["site_id"] for j in K.sealed_jobs(run_dir) if j["key"] in batch]
+            assert len(sites) == len(set(sites))
+
+    def test_the_deal_is_seeded(self, tmp_path: Path) -> None:
+        (tmp_path / "a").mkdir()
+        (tmp_path / "b").mkdir()
+        one = fixed_dir(tmp_path / "a")
+        two = fixed_dir(tmp_path / "b")
+        first = K.export_role(one, "fact_checker", tmp_path / "ha")
+        second = K.export_role(two, "fact_checker", tmp_path / "hb")
+        assert first == second
+        assert (
+            K._handoffs(one)["fact_checker"]["batches"]
+            == K._handoffs(two)["fact_checker"]["batches"]
+        )
+
+    def test_a_web_role_is_asked_five_to_a_batch(self, tmp_path: Path) -> None:
+        run_dir = fixed_dir(tmp_path)
+        exported = K.export_role(run_dir, "web_verifier", tmp_path / "h-ver")
+        assert exported["batches"] == {"web-verifier-001": 4}
         assert K.WEB_SETS >= {"verifier_verified", "adversarial_clean"}
 
-    def test_the_agents_of_a_set_are_workflow_ready_jobs(self, tmp_path: Path) -> None:
+    def test_the_agents_of_a_role_are_workflow_ready_jobs(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        K.export_set(run_dir, "verifier_verified", tmp_path / "h-ver")
-        jobs = K.agent_jobs(run_dir, "verifier_verified")
+        K.export_role(run_dir, "web_verifier", tmp_path / "h-ver")
+        jobs = K.agent_jobs(run_dir, "web_verifier")
         assert len(jobs) == 1
         job = jobs[0]
         assert (job["role"], job["model"], job["effort"]) == (
@@ -616,48 +681,52 @@ class TestTheQuestions:
             "claude-sonnet-5-5",
             "high",
         )
-        assert (
-            job["cases"] == 2
-            and job["max_parallel"] == 3
-            and job["batch_id"] == "verifier-verified-001"
-        )
+        assert job["cases"] == 4 and job["max_parallel"] == 3
+        assert job["batch_id"] == "web-verifier-001"
         brief = job["brief"]
         assert (
             "answering as the role **web_verifier**" in brief and "**claude-sonnet-5-5**" in brief
         )
-        assert "--stage verifier_verified" in brief and "--role web_verifier" in brief
+        assert "--stage calibration" in brief and "--role web_verifier" in brief
         assert (
-            "--model claude-sonnet-5-5" in brief
-            and "--answered-by cal-verifier-verified-001" in brief
+            "--model claude-sonnet-5-5" in brief and "--answered-by cal-web-verifier-001" in brief
         )
+        assert not any(name in brief for name in K.SET_ROLE)
         assert "wiki_cache/INDEX.jsonl" in brief and "A 403 or 429 is NEVER a finding" in brief
         json.dumps(jobs)
-        K.export_set(run_dir, "checker_good", tmp_path / "h-good")
-        plain = K.agent_jobs(run_dir, "checker_good")[0]
+        K.export_role(run_dir, "fact_checker", tmp_path / "h-good")
+        plain = K.agent_jobs(run_dir, "fact_checker")[0]
         assert plain["max_parallel"] is None and "Wikipedia cache" not in plain["brief"]
         assert (plain["role"], plain["model"]) == ("fact_checker", "claude-sonnet-5-5")
+        assert not any(name in plain["brief"] for name in K.SET_ROLE)
 
-    def test_the_reference_set_is_answered_by_the_pilot_judge(self, tmp_path: Path) -> None:
+    def test_the_reference_is_answered_by_the_pilot_judge(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        K.export_set(run_dir, K.HOOK_REFERENCE, tmp_path / "h-ref")
-        job = K.agent_jobs(run_dir, K.HOOK_REFERENCE)[0]
+        K.export_role(run_dir, "pilot_judge", tmp_path / "h-ref")
+        job = K.agent_jobs(run_dir, "pilot_judge")[0]
         assert (job["role"], job["model"], job["effort"]) == (
             "pilot_judge",
             "claude-opus-5-5",
             "xhigh",
         )
 
-    def test_a_set_never_exported_has_no_agents(self, tmp_path: Path) -> None:
+    def test_a_role_never_exported_has_no_agents(self, tmp_path: Path) -> None:
         with pytest.raises(K.CalibrationError, match="was never exported"):
-            K.agent_jobs(fixed_dir(tmp_path), "checker_good")
+            K.agent_jobs(fixed_dir(tmp_path), "fact_checker")
 
-    def test_an_unknown_set_has_no_cases(self, tmp_path: Path) -> None:
+    def test_a_role_without_cases_is_refused(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        with pytest.raises(K.CalibrationError, match="no case of set"):
-            K.export_set(run_dir, "writer_pilot", tmp_path / "h")
+        with pytest.raises(K.CalibrationError, match="no case of role"):
+            K.export_role(run_dir, "card_writer", tmp_path / "h")
 
 
 # ------------------------------------------------------------------------------ the fact checker
+ALL_FAIL = {
+    name: checker_text("FAIL")
+    for name in ("checker_agreement", "checker_fail_again", "checker_defects", "checker_good")
+}
+
+
 class TestTheFactChecker:
     def all_sets(self, run_dir: Path, **verdicts: Any) -> None:
         good = verdicts.get("good", "PASS")
@@ -665,12 +734,22 @@ class TestTheFactChecker:
 
         def agreement(job: dict[str, Any]) -> str:
             verdict = recorded or job["recorded"]["verdict"]
+            if verdict == job["recorded"]["verdict"] and not verdicts.get("other_claims"):
+                claims = [(c["claim"], c["support"]) for c in job["recorded"]["claims"]]
+                reasons = job["recorded"]["reasons"]
+                return T.checker_answer(verdict, claims, reasons)
             return checker_text(verdict)(job)
 
-        answer_set(run_dir, "checker_agreement", agreement)
-        answer_set(run_dir, "checker_fail_again", checker_text(verdicts.get("again", "FAIL")))
-        answer_set(run_dir, "checker_defects", checker_text(verdicts.get("defects", "FAIL")))
-        answer_set(run_dir, "checker_good", checker_text(good))
+        answer_role(
+            run_dir,
+            "fact_checker",
+            {
+                "checker_agreement": agreement,
+                "checker_fail_again": checker_text(verdicts.get("again", "FAIL")),
+                "checker_defects": checker_text(verdicts.get("defects", "FAIL")),
+                "checker_good": checker_text(good),
+            },
+        )
 
     def test_a_checker_that_agrees_catches_and_passes_the_good_ones_passes(
         self, tmp_path: Path
@@ -683,6 +762,7 @@ class TestTheFactChecker:
         sets = verdict["sets"]
         assert (
             sets["checker_agreement"]["verdict_agreement"] == 1.0
+            and sets["checker_agreement"]["claim_agreement"] == 1.0
             and sets["checker_agreement"]["false_pass"] == []
         )
         assert (
@@ -725,6 +805,20 @@ class TestTheFactChecker:
         assert agreement["verdict_agreement"] == pytest.approx(0.6667, abs=1e-3)
         assert len(agreement["false_pass"]) == 1 and agreement["passed"] is False
 
+    def test_verdicts_that_agree_with_claims_that_do_not_fail_the_role(
+        self, tmp_path: Path
+    ) -> None:
+        run_dir = fixed_dir(tmp_path)
+        self.all_sets(run_dir, other_claims=True)
+        agreement = K.evaluate(run_dir, "fact_checker")["sets"]["checker_agreement"]
+        # every verdict equals the recorded one, but the recorded failures' claims are not found
+        assert agreement["verdict_agreement"] == 1.0 and agreement["false_pass"] == []
+        assert agreement["claim_agreement"] < 0.9 and agreement["passed"] is False
+
+    def test_the_claim_agreement_is_sealed_in_the_table(self) -> None:
+        rule = K.THRESHOLDS["roles"]["fact_checker"]["sets"]["checker_agreement"]
+        assert rule["claim_agreement_min"] == 0.9
+
     def test_a_checker_that_fails_the_recorded_passes_disagrees(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
         self.all_sets(run_dir, agreement="FAIL")
@@ -758,17 +852,13 @@ class TestTheFactChecker:
 
     def test_the_answers_must_be_the_roles_and_the_sealed_models(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_set(run_dir, "checker_good", checker_text("PASS"), role="hook_rater")
-        for name in ("checker_agreement", "checker_fail_again", "checker_defects"):
-            answer_set(run_dir, name, checker_text("FAIL"))
+        answer_role(run_dir, "fact_checker", ALL_FAIL, as_role="hook_rater")
         with pytest.raises(K.CalibrationError, match="did not answer as role fact_checker"):
             K.evaluate(run_dir, "fact_checker")
 
     def test_a_stamp_that_is_not_the_sealed_model_is_refused(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_set(run_dir, "checker_good", checker_text("PASS"), model="claude-opus-5-5")
-        for name in ("checker_agreement", "checker_fail_again", "checker_defects"):
-            answer_set(run_dir, name, checker_text("FAIL"))
+        answer_role(run_dir, "fact_checker", ALL_FAIL, model="claude-opus-5-5")
         with pytest.raises(
             K.CalibrationError, match="role fact_checker is sealed to claude-sonnet-5-5"
         ):
@@ -776,13 +866,13 @@ class TestTheFactChecker:
 
     def test_an_unanswered_case_is_no_agreement(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        K.export_set(run_dir, "checker_good", tmp_path / "handoff-checker_good")
-        for name in ("checker_agreement", "checker_fail_again", "checker_defects"):
-            answer_set(run_dir, name, checker_text("FAIL"))
-        with pytest.raises(K.CalibrationError, match="3 missing"):
+        handoff = answer_role(run_dir, "fact_checker", ALL_FAIL)
+        answer = next(handoff.glob("*/*/*.answer.json"))
+        answer.unlink()
+        with pytest.raises(K.CalibrationError, match="1 missing"):
             K.evaluate(run_dir, "fact_checker")
 
-    def test_a_set_never_exported_is_refused(self, tmp_path: Path) -> None:
+    def test_a_role_never_exported_is_refused(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
         with pytest.raises(K.CalibrationError, match="was never exported"):
             K.evaluate(run_dir, "fact_checker")
@@ -810,7 +900,6 @@ class TestTheWebVerifier:
         self, tmp_path: Path
     ) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_set(run_dir, "verifier_contradicted", verifier_text(True))
 
         def verified(job: dict[str, Any]) -> str:
             recorded = job["recorded"]["claims"]
@@ -818,7 +907,11 @@ class TestTheWebVerifier:
                 {"claim": c["claim"], "verdict": "SUPPORTED", "url": PAGE, "quote": QUOTE} for c in recorded
             ]})  # fmt: skip
 
-        answer_set(run_dir, "verifier_verified", verified)
+        answer_role(
+            run_dir,
+            "web_verifier",
+            {"verifier_contradicted": verifier_text(True), "verifier_verified": verified},
+        )
         verdict = K.evaluate(run_dir, "web_verifier", client=judge_client())
         assert verdict["passed"] is True and verdict["model"] == "claude-sonnet-5-5"
         assert verdict["sets"]["verifier_contradicted"]["caught"] == 2
@@ -827,23 +920,25 @@ class TestTheWebVerifier:
 
     def test_a_quote_the_page_does_not_hold_is_a_false_source(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_set(run_dir, "verifier_contradicted", verifier_text(True))
-        answer_set(
+        answer_role(
             run_dir,
-            "verifier_verified",
-            lambda job: json.dumps(
-                {
-                    "claims": [
-                        {
-                            "claim": c["claim"],
-                            "verdict": "SUPPORTED",
-                            "url": PAGE,
-                            "quote": "a sentence that the page never says",
-                        }
-                        for c in job["recorded"]["claims"]
-                    ]
-                }
-            ),
+            "web_verifier",
+            {
+                "verifier_contradicted": verifier_text(True),
+                "verifier_verified": lambda job: json.dumps(
+                    {
+                        "claims": [
+                            {
+                                "claim": c["claim"],
+                                "verdict": "SUPPORTED",
+                                "url": PAGE,
+                                "quote": "a sentence that the page never says",
+                            }
+                            for c in job["recorded"]["claims"]
+                        ]
+                    }
+                ),
+            },
         )
         verdict = K.evaluate(run_dir, "web_verifier", client=judge_client())
         verified = verdict["sets"]["verifier_verified"]
@@ -852,10 +947,9 @@ class TestTheWebVerifier:
 
     def test_a_verifier_that_misses_a_contradiction_fails(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_set(run_dir, "verifier_contradicted", verifier_text(False))
-        answer_set(run_dir, "verifier_verified", lambda job: json.dumps({"claims": [
+        answer_role(run_dir, "web_verifier", {"verifier_contradicted": verifier_text(False), "verifier_verified": lambda job: json.dumps({"claims": [
             {"claim": c["claim"], "verdict": "SUPPORTED", "url": PAGE, "quote": QUOTE} for c in job["recorded"]["claims"]
-        ]}))  # fmt: skip
+        ]})})  # fmt: skip
         verdict = K.evaluate(run_dir, "web_verifier", client=judge_client())
         assert verdict["sets"]["verifier_contradicted"] == {
             "cases": 2,
@@ -865,11 +959,10 @@ class TestTheWebVerifier:
 
     def test_a_good_card_called_contradicted_is_counted(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_set(run_dir, "verifier_contradicted", verifier_text(True))
-        answer_set(run_dir, "verifier_verified", lambda job: json.dumps({"claims": [
+        answer_role(run_dir, "web_verifier", {"verifier_contradicted": verifier_text(True), "verifier_verified": lambda job: json.dumps({"claims": [
             *({"claim": c["claim"], "verdict": "SUPPORTED", "url": PAGE, "quote": QUOTE} for c in job["recorded"]["claims"]),
             {"claim": "an extra claim", "verdict": "CONTRADICTED", "url": PAGE, "quote": QUOTE},
-        ]}))  # fmt: skip
+        ]})})  # fmt: skip
         verified = K.evaluate(run_dir, "web_verifier", client=judge_client())["sets"][
             "verifier_verified"
         ]
@@ -913,8 +1006,8 @@ class TestTheHookRater:
         self, tmp_path: Path
     ) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_set(run_dir, "hook_pairs", hook_text(5, 2))
-        answer_set(run_dir, K.HOOK_REFERENCE, hook_text(4, 2))
+        answer_role(run_dir, "hook_rater", {"hook_pairs": hook_text(5, 2)})
+        answer_role(run_dir, "pilot_judge", {K.HOOK_REFERENCE: hook_text(4, 2)})
         verdict = K.evaluate(run_dir, "hook_rater")
         hooks = verdict["sets"]["hook_pairs"]
         assert hooks["pairs_ordered_right"] == 1.0 and hooks["within_one_of_reference"] == 1.0
@@ -922,8 +1015,8 @@ class TestTheHookRater:
 
     def test_one_misordered_pair_fails_the_role(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_set(run_dir, "hook_pairs", hook_text(3, 3))
-        answer_set(run_dir, K.HOOK_REFERENCE, hook_text(3, 3))
+        answer_role(run_dir, "hook_rater", {"hook_pairs": hook_text(3, 3)})
+        answer_role(run_dir, "pilot_judge", {K.HOOK_REFERENCE: hook_text(3, 3)})
         verdict = K.evaluate(run_dir, "hook_rater")
         assert verdict["sets"]["hook_pairs"]["pairs_ordered_right"] == 0.0
         assert verdict["passed"] is False and verdict["held"].endswith("the owner decides")
@@ -931,16 +1024,18 @@ class TestTheHookRater:
 
     def test_a_rater_far_from_the_reference_fails(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_set(run_dir, "hook_pairs", hook_text(5, 1))
-        answer_set(run_dir, K.HOOK_REFERENCE, hook_text(3, 3))
+        answer_role(run_dir, "hook_rater", {"hook_pairs": hook_text(5, 1)})
+        answer_role(run_dir, "pilot_judge", {K.HOOK_REFERENCE: hook_text(3, 3)})
         hooks = K.evaluate(run_dir, "hook_rater")["sets"]["hook_pairs"]
         assert hooks["pairs_ordered_right"] == 1.0 and hooks["within_one_of_reference"] == 0.0
         assert hooks["passed"] is False
 
     def test_the_reference_is_the_pilot_judge_s(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_set(run_dir, "hook_pairs", hook_text(5, 2))
-        wrong = answer_set(run_dir, K.HOOK_REFERENCE, hook_text(4, 2), role="hook_rater")
+        answer_role(run_dir, "hook_rater", {"hook_pairs": hook_text(5, 2)})
+        wrong = answer_role(
+            run_dir, "pilot_judge", {K.HOOK_REFERENCE: hook_text(4, 2)}, as_role="hook_rater"
+        )
         assert wrong.is_dir()
         with pytest.raises(K.CalibrationError, match="did not answer as role pilot_judge"):
             K.evaluate(run_dir, "hook_rater")
@@ -952,20 +1047,27 @@ class TestTheAdversary:
         self, tmp_path: Path
     ) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_set(
+        answer_role(
             run_dir,
-            "adversarial_contradicted",
-            lambda job: T.checker_answer("FAIL", [("x", [])], ["The web says otherwise."]),
+            "adversarial",
+            {
+                "adversarial_contradicted": lambda job: T.checker_answer(
+                    "FAIL", [("x", [])], ["The web says otherwise."]
+                ),
+                "adversarial_clean": lambda job: T.checker_answer(),
+            },
         )
-        answer_set(run_dir, "adversarial_clean", lambda job: T.checker_answer())
         verdict = K.evaluate(run_dir, "adversarial")
         assert verdict["passed"] is True and verdict["model"] == "claude-opus-5-5"
         assert verdict["sets"]["adversarial_agreement"]["agreement"] == 1.0
 
     def test_a_reviewer_that_passes_everything_fails_the_role(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_set(run_dir, "adversarial_contradicted", lambda job: T.checker_answer())
-        answer_set(run_dir, "adversarial_clean", lambda job: T.checker_answer())
+        passes = {
+            "adversarial_contradicted": lambda job: T.checker_answer(),
+            "adversarial_clean": lambda job: T.checker_answer(),
+        }
+        answer_role(run_dir, "adversarial", passes)
         verdict = K.evaluate(run_dir, "adversarial")
         assert verdict["sets"]["adversarial_agreement"]["agreement"] == 0.5
         assert verdict["passed"] is False and "held" in verdict
@@ -1043,8 +1145,8 @@ class TestTheCommandLine:
                     "export",
                     "--run-dir",
                     str(tmp_path / "x"),
-                    "--set",
-                    "checker_good",
+                    "--role",
+                    "fact_checker",
                     "--handoff",
                     str(tmp_path / "h"),
                 ]
@@ -1067,3 +1169,4 @@ class TestTheCommandLine:
     def test_every_role_of_the_table_is_a_command_line_choice(self) -> None:
         assert set(K.THRESHOLDS["roles"]) == set(K.ROLE_SETS) | {"card_writer"}
         assert set(K.SET_ROLE) == {s for sets in K.ROLE_SETS.values() for s in sets}
+        assert set(K.SET_ROLE.values()) == set(K.ROLE_SETS) | {"pilot_judge"}
