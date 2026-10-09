@@ -72,7 +72,8 @@ STAGES = {
     DP.SPEC.name: DP.SPEC,
     HR.SPEC.name: HR.SPEC,
 }
-DEFAULT_WIKI_CACHE = IC.REPO / "output" / "remediation" / "final-2026-10-08" / "wiki_cache"
+#: The shared Wikipedia cache, relative to the main checkout (run data is gitignored, a worktree has none).
+WIKI_CACHE = Path("output") / "remediation" / "final-2026-10-08" / "wiki_cache"
 
 
 def _print(payload: Any) -> None:
@@ -84,15 +85,21 @@ def _spec(args: argparse.Namespace) -> SG.Spec:
     return HR.spec_for_round(args.round) if args.stage == HR.SPEC.name and args.round else spec
 
 
-def _entities(args: argparse.Namespace) -> IE.EntityStore:
+def _roots(args: argparse.Namespace) -> tuple[Path, Path]:
+    """The harvest and its delta: the arguments, else the main checkout's (found through git)."""
+    if args.harvest and args.delta:
+        return args.harvest, args.delta
     main = IC.main_checkout()
-    return IE.EntityStore(
-        args.harvest or IC.harvest_dir(main), args.delta or IE.delta_dir(IC.run_dir(main))
-    )
+    return args.harvest or IC.harvest_dir(main), args.delta or IE.delta_dir(IC.run_dir(main))
+
+
+def _entities(args: argparse.Namespace) -> IE.EntityStore:
+    harvest, delta = _roots(args)
+    return IE.EntityStore(harvest, delta)
 
 
 def _cache(path: Path | None) -> WikiCache:
-    return WikiCache(path or DEFAULT_WIKI_CACHE)
+    return WikiCache(path or IC.main_checkout() / WIKI_CACHE)
 
 
 def _commons(run: Path) -> CM.Commons:
@@ -106,10 +113,8 @@ def cmd_population(run: Path, sites: Path | None) -> dict[str, Any]:
 
 def cmd_fetch_entities(run: Path, args: argparse.Namespace) -> dict[str, Any]:
     qids = [s["qid"] for s in FL._population(run) if s.get("qid")]
-    main = IC.main_checkout()
-    return IE.fetch_delta(
-        qids, args.harvest or IC.harvest_dir(main), args.delta or IE.delta_dir(IC.run_dir(main))
-    )
+    harvest, delta = _roots(args)
+    return IE.fetch_delta(qids, harvest, delta)
 
 
 def cmd_identity_export(run: Path, args: argparse.Namespace) -> dict[str, Any]:

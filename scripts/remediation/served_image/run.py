@@ -35,7 +35,7 @@
     run.py derive-sites   --run-dir R --verdicts-run V
                                                D15: the live heroes the run V judged other_site ->
                                                R/OTHER_SITE_HEROES.jsonl, R/SITES.txt
-    run.py context        --run-dir R --import GEOJSON
+    run.py context        --run-dir R --import GEOJSON --wiki-cache DIR
                                                D15: the recheck's context per hero ->
                                                R/CONTEXT.jsonl (production read-only, Wikipedia)
     run.py no-image-report --run-dir R
@@ -64,6 +64,7 @@ import opus_handoff as OH  # noqa: E402
 import research_web  # noqa: E402
 import roles as RO  # noqa: E402
 from gallery_audit.vision import Images  # noqa: E402
+from image_roles.wiki_cache import WikiCache  # noqa: E402
 from import_hero import plan as IH  # noqa: E402
 from phase3.run import InputError, read_jsonl  # noqa: E402
 
@@ -172,15 +173,22 @@ def cmd_derive_sites(run: Path, verdicts_run: Path) -> dict[str, Any]:
     return RC.write_derivation(run, heroes)
 
 
-def cmd_context(run: Path, source: Path) -> dict[str, Any]:
+def cmd_context(run: Path, source: Path, wiki_cache: Path) -> dict[str, Any]:
     state = ST.load_read(run / READ)
     heroes = read_jsonl(run / RC.HEROES_FILE)
     owner_links = IH.join_import(state, IH.read_import(source))
+    cache = WikiCache(wiki_cache)
+
+    def cache_file(site_id: str) -> str | None:
+        path = cache.file_of(site_id)
+        return None if path is None else path.as_posix()
+
     records = RC.build_context(
         heroes,
         ST.CW.pv.read_rows(RC.context_sql([h["site_id"] for h in heroes])),
         owner_links,
         research_web.client(),
+        cache_file=cache_file,
     )
     return {"records": len(records), "sha256": RC.write_context(run, records)}
 
@@ -241,6 +249,12 @@ def main(argv: list[str] | None = None) -> int:
     commands["context"].add_argument(
         "--import", dest="source", required=True, type=Path, help="the 2025 import's GeoJSON"
     )
+    commands["context"].add_argument(
+        "--wiki-cache",
+        type=Path,
+        required=True,
+        help="the shared Wikipedia cache (main checkout: output/remediation/final-2026-10-08/wiki_cache)",
+    )
     for name in ("export-check", "export-replace", "brief", "check-answer"):
         commands[name].add_argument("--handoff", required=True, type=Path)
     commands["export-check"].add_argument(
@@ -277,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "derive-sites":
             _print(cmd_derive_sites(run, args.verdicts_run))
         elif args.command == "context":
-            _print(cmd_context(run, args.source))
+            _print(cmd_context(run, args.source, args.wiki_cache))
         elif args.command == "brief":
             print(V.brief(run, args.handoff, args.batch_id, args.role))
         elif args.command == "check-answer":

@@ -63,6 +63,7 @@ def build_questions(
                 "site_id": str(pick["site_id"]),
                 "description": pick.get("description"),
                 "wikipedia_title": pick.get("wikipedia_title"),
+                "wikipedia_cache_file": pick.get("wikipedia_cache_file"),
                 "wikipedia_lead_image": None,
                 "owner_link_url": None,
                 "owner_link_file": None,

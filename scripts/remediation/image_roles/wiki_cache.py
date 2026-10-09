@@ -55,6 +55,11 @@ class WikiCache:
             raise WikiCacheError(f"{path} is indexed but does not exist")
         return json.loads(path.read_text(encoding="utf-8"))
 
+    def file_of(self, site_id: str, lang: str = "en") -> Path | None:
+        """The absolute path of the site's cached page in a language, or None when it has none."""
+        row = self.pages.get(site_id, {}).get(lang)
+        return None if row is None else (self.root / Path(row["file"].replace("\\", "/"))).resolve()
+
     def lead(self, site_id: str, chars: int = LEAD_CHARS) -> str | None:
         """The opening of the site's English article, cut at a sentence end within `chars`, or None."""
         page = self.page(site_id, "en")

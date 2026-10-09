@@ -257,6 +257,8 @@ class TestTheTransport:
             SG.text_field("abcdef", "note", longest=5)
         with pytest.raises(SG.AnswerShapeError, match="not \\['a'\\]"):
             SG.json_object('{"b": 1}', frozenset({"a"}))
+        with pytest.raises(SG.AnswerShapeError, match="no JSON object"):
+            SG.json_object("no json here at all", frozenset({"a"}))
 
 
 # ======================================================================== the pictures
@@ -577,6 +579,13 @@ class TestTheHeroRecheck:
         assert "is, or is about to become, the main image" in q.prompt
         assert q.label == "a" and q.meta == {"site_id": "a", "file": "1.jpg", "round": 1}
 
+    def test_the_cached_wikipedia_page_is_named_in_the_prompt(self) -> None:
+        pick = _pick() | {"wikipedia_cache_file": "C:/cache/en/a.json"}
+        (q,), _ = HR.build_questions([pick], lambda p: jpeg(), round_number=1)
+        assert "Its text is cached: read C:/cache/en/a.json first" in q.prompt
+        (q,), _ = HR.build_questions([_pick()], lambda p: jpeg(), round_number=1)
+        assert "Its text is cached: read none first" in q.prompt
+
     def test_an_other_site_needs_the_monument_and_a_commons_page(self) -> None:
         good = json.dumps(
             {
@@ -699,6 +708,16 @@ class TestTheTargets:
             "height": 2000,
             "quality": 5,
         }
+
+    def test_the_sharp_small_file_beats_the_large_blurry_one_in_the_written_target(
+        self, tmp_path: Path
+    ) -> None:
+        rows = [_v("a", "blurry.jpg", 2, 6000, 4000), _v("a", "sharp.jpg", 5, 2000, 1500)]
+        CJ.write_targets(tmp_path, rows)
+        assert (
+            json.loads((tmp_path / CJ.TARGETS).read_text(encoding="utf-8"))["commons_file"]
+            == "sharp.jpg"
+        )
 
     def test_the_old_judge_s_rows_keep_their_largest_file_rule(self, tmp_path: Path) -> None:
         rows = [_v("a", "small.jpg", None, 800, 600), _v("a", "big.jpg", None, 4000, 3000)]
@@ -1022,6 +1041,11 @@ class TestTheWikiCache:
         (tmp_path / "INDEX.jsonl").write_text('{"site_id": "a"}\n', encoding="utf-8")
         with pytest.raises(WC.WikiCacheError, match="not an index line"):
             WC.WikiCache(tmp_path)
+
+    def test_the_cached_page_of_a_site_is_an_absolute_path_or_none(self, tmp_path: Path) -> None:
+        cache = self._cache(tmp_path)
+        assert cache.file_of("a") == (tmp_path / "en" / "p.json").resolve()
+        assert cache.file_of("a", "de") is None and cache.file_of("nobody") is None
 
     def test_an_empty_text_has_no_lead(self) -> None:
         assert WC.lead_of("   ") is None

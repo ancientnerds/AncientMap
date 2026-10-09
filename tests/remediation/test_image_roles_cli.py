@@ -144,9 +144,10 @@ class TestTheOtherCommands:
         args = CLI.build_parser().parse_args(["search", "--run-dir", "r"])
         assert (args.min_width, args.min_height, args.workers) == (800, 300, 1)
 
-    def test_the_wiki_cache_default_is_the_shared_one(self) -> None:
-        assert CLI.DEFAULT_WIKI_CACHE.name == "wiki_cache"
-        assert CLI.DEFAULT_WIKI_CACHE.parent.name == "final-2026-10-08"
+    def test_the_wiki_cache_default_is_the_shared_one_of_the_main_checkout(self) -> None:
+        assert CLI.WIKI_CACHE.name == "wiki_cache"
+        assert CLI.WIKI_CACHE.parent.name == "final-2026-10-08"
+        assert not CLI.WIKI_CACHE.is_absolute()
 
 
 class TestTheCalibrationCommands:

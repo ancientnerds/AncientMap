@@ -283,6 +283,12 @@ def next_round(run: Path) -> int:
     return len(list(run.glob("RECHECK_[0-9][0-9].jsonl"))) + 1
 
 
+def _cache_file(cache: WikiCache | None, site_id: str) -> str | None:
+    """Where the site's cached Wikipedia page is, as the agent is told to read it."""
+    path = None if cache is None else cache.file_of(site_id)
+    return None if path is None else path.as_posix()
+
+
 def _picks_for(
     run: Path, rows: Sequence[Mapping[str, Any]], cache: WikiCache | None
 ) -> list[dict[str, Any]]:
@@ -304,6 +310,7 @@ def _picks_for(
                 "note": row["note"],
                 "answered_by": row["answered_by"],
                 "wikipedia_title": site.get("enwiki_title"),
+                "wikipedia_cache_file": _cache_file(cache, key[0]),
             }
         )
     return picks

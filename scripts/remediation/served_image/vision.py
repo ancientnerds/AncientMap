@@ -136,9 +136,10 @@ The site's Wikidata item: {qid}
 An earlier check ({earlier_stage}, {earlier_answered_by}) called the picture {earlier_verdict}: {earlier_shows}
 The owner linked a picture for this site by hand in 2025: {owner_link}
 The site's English Wikipedia article: {wikipedia}; its lead image: {lead}
+Its text is cached: read {cache} first
 The site's description begins: {description}
 
-Look at the picture itself, then check it against the web: the picture's Commons file page and its categories, the Wikipedia article, the Wikidata item. You may overturn the earlier verdict or confirm it. Do not confirm it because it was said before, and do not overturn it because the picture looks plausible: a verdict rests on what the picture shows and on what the pages say.
+Look at the picture itself, then check it against the web (a few requests at most; a 403 or 429 is never a finding - say so and use another source): the picture's Commons file page and its categories, the Wikipedia article (the cache first), the Wikidata item. You may overturn the earlier verdict or confirm it. Do not confirm it because it was said before, and do not overturn it because the picture looks plausible: a verdict rests on what the picture shows and on what the pages say.
 If you answer other_site you must say in "shows" which monument or place the picture shows, and you must have opened the picture's Commons file page or category: put its address (commons.wikimedia.org/...) in "basis".
 
 Return JSON only, no prose:
@@ -274,6 +275,7 @@ class CheckQuestion:
                 earlier_shows=ctx["earlier_shows"],
                 owner_link=_or_none(ctx["owner_link_file"] or ctx["owner_link_url"]),
                 wikipedia=_or_none(ctx["wikipedia_title"]),
+                cache=_or_none(ctx["wikipedia_cache_file"]),
                 lead=_or_none(ctx["wikipedia_lead_image"]),
                 description=_or_none(ctx["description"]),
             )
@@ -942,7 +944,7 @@ Read ONLY your own files: {handoff}/{batch}/MANIFEST.jsonl lists your questions,
 each with its "label" and its "prompt_path" (relative to {handoff}). Each prompt names its picture \
 file(s) under {handoff}/images/ - open every picture with your Read tool, which shows it to you. \
 Open no other file of the repository: no other batch, nothing else under output/ or docs/, no \
-database. Where a prompt allows it, research on the web.
+database (except a cached Wikipedia text a prompt names). Where a prompt allows it, research on the web (a few requests at most; a 403 or 429 is never a finding - say so and use another source); a prompt that names a cached Wikipedia text (a JSON file) lets you read that file first.
 
 For each question:
 1. Read {handoff}/<prompt_path> and look at every picture it names.

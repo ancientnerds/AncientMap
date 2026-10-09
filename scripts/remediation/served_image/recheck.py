@@ -48,6 +48,7 @@ CONTEXT_KEYS = frozenset(
         "site_id",
         "description",
         "wikipedia_title",
+        "wikipedia_cache_file",
         "wikipedia_lead_image",
         "owner_link_url",
         "owner_link_file",
@@ -200,14 +201,16 @@ def build_context(
     owner_links: Mapping[str, Mapping[str, Any]],
     client: Any,
     *,
+    cache_file: Callable[[str], str | None],
     sleep: Callable[[float], None] = time.sleep,
 ) -> list[dict[str, Any]]:
     """One context record per hero: the description, the Wikipedia article and its lead image, the
     owner's 2025 link and what the earlier checker said.
 
     `rows` is the answer of `context_sql`; `owner_links` the import's join (`import_hero.plan.
-    join_import`, site id -> `{"image": url | None, ...}`). A hero whose site `rows` do not
-    answer is refused - the context is part of the question."""
+    join_import`, site id -> `{"image": url | None, ...}`); `cache_file(site_id)` is the path of the
+    site's page in the shared Wikipedia cache (None when it has none), which the agent reads first.
+    A hero whose site `rows` do not answer is refused - the context is part of the question."""
     by_site = {str(r["site_id"]): r for r in rows}
     out = []
     for hero in heroes:
@@ -226,6 +229,7 @@ def build_context(
                 "site_id": sid,
                 "description": str(row.get("description") or "").strip() or None,
                 "wikipedia_title": title,
+                "wikipedia_cache_file": cache_file(sid),
                 "wikipedia_lead_image": lead,
                 "owner_link_url": owner,
                 "owner_link_file": ST.file_of_url(owner) if owner else None,

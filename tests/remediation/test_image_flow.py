@@ -250,9 +250,67 @@ class TestTheChain:
         with pytest.raises(SG.StageError, match="import the stage first"):
             FL.depicts_export(run, tmp_path / "h", cache=None, read=lambda c: jpeg())
 
+    def test_a_fetched_site_the_population_does_not_hold_stops_the_depicts_export(
+        self, tmp_path: Path
+    ) -> None:
+        run = search_run(tmp_path)
+        FL.pictures(run, Client())
+        pre_handoff = tmp_path / "h-pre"
+        FL.prefilter_export(run, pre_handoff, read=lambda c: jpeg())
+        plan = dict.fromkeys(
+            ("A-front.jpg", "A-back.jpg", "C-good.jpg", "C-better.jpg", "B-map.jpg"),
+            ("site_photo", True),
+        )
+        answer(pre_handoff, PF.SPEC, {"pre-0001": kinds(run, plan)})
+        SG.import_answers(run, pre_handoff, PF.SPEC)
+        kept = [x for x in (run / "POPULATION.jsonl").read_text().splitlines() if A not in x]
+        (run / "POPULATION.jsonl").write_text("\n".join(kept) + "\n", encoding="utf-8")
+        with pytest.raises(FL.FlowError, match="no site record in the population"):
+            FL.depicts_export(run, tmp_path / "h-dep", cache=None, read=lambda c: jpeg())
+
     def test_a_run_step_without_its_input_names_the_step_before(self, tmp_path: Path) -> None:
         with pytest.raises(FL.FlowError, match="run the step before it"):
             FL.pictures(tmp_path, Client())
+
+
+class TestThePicksOfTheRecheck:
+    def test_a_pick_carries_the_site_its_picture_and_its_cached_wikipedia_page(
+        self, tmp_path: Path
+    ) -> None:
+        run = search_run(tmp_path)
+        FL.pictures(run, Client())
+
+        class Cache:
+            def file_of(self, site_id: str) -> Path | None:
+                return Path(f"C:/cache/{site_id}.json") if site_id == A else None
+
+        rows = [
+            {
+                "site_id": A,
+                "file": "A-front.jpg",
+                "note": "the tomb",
+                "answered_by": "image_depicts:dep-0001",
+            },
+            {
+                "site_id": C,
+                "file": "C-good.jpg",
+                "note": "the wall",
+                "answered_by": "image_depicts:dep-0001",
+            },
+        ]
+        picks = FL._picks_for(run, rows, Cache())
+        assert [p["site_id"] for p in picks] == [A, C]
+        assert picks[0]["wikipedia_cache_file"] == "C:/cache/" + A + ".json"
+        assert picks[1]["wikipedia_cache_file"] is None
+        assert Path(picks[0]["path"]).is_file() and picks[0]["name"] == "Tomb Alpha"
+
+    def test_a_pick_without_a_site_or_a_picture_is_refused(self, tmp_path: Path) -> None:
+        run = search_run(tmp_path)
+        FL.pictures(run, Client())
+        with pytest.raises(FL.FlowError, match="no site record or no picture"):
+            FL._picks_for(
+                run, [{"site_id": A, "file": "Nope.jpg", "note": "n", "answered_by": "x"}], None
+            )
 
 
 class TestTheIdentityStep:
@@ -290,6 +348,16 @@ class TestTheIdentityStep:
         assert [
             q.meta["sites"][0]["site_id"] for q in SG.load_questions(run, ID.RESEARCH_SPEC).values()
         ] == [B]
+
+    def test_a_mode_with_no_site_to_ask_is_refused_by_name(self, tmp_path: Path) -> None:
+        run = tmp_path / "c"
+        FL.write_population(
+            run, [read_line(A, "Fine Site", qids=["Q2"], enwiki_titles=["Fine Site"])]
+        )
+        with pytest.raises(FL.FlowError, match="no site to verify"):
+            FL.identity_export(run, tmp_path / "h", "verify", entities=self._store(), cache=None)
+        with pytest.raises(FL.FlowError, match="no site to research"):
+            FL.identity_export(run, tmp_path / "h2", "research", entities=self._store(), cache=None)
 
     def test_a_site_a_first_search_found_nothing_for_is_researched_too(
         self, tmp_path: Path

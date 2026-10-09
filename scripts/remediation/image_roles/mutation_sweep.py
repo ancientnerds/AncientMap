@@ -8,7 +8,7 @@ Run it from a parent process on a clean committed tree, never from inside a suba
 killed between applying a mutation and restoring it leaves the mutant behind):
 
     ./.venv/Scripts/python.exe scripts/remediation/image_roles/mutation_sweep.py            # all
-    ./.venv/Scripts/python.exe scripts/remediation/image_roles/mutation_sweep.py "img d18"  # by label
+    ./.venv/Scripts/python.exe scripts/remediation/image_roles/mutation_sweep.py "wd2 d18"  # by label
 
 `git status` must be clean afterwards: the sweep restores every file and checks its sha256.
 """
@@ -23,7 +23,7 @@ for _root in (str(_HERE.parents[3]), str(_HERE.parents[1])):
     if str(_root) not in sys.path:
         sys.path.insert(0, _root)
 
-from mechanical.mutation_sweep import REPO, Case, guard, main  # noqa: E402
+from mechanical.mutation_sweep import REPO, WD2_CASES, Case, guard, main  # noqa: E402
 
 REMEDIATION = REPO / "scripts/remediation"
 LICENSES = REMEDIATION / "licenses.py"
@@ -70,240 +70,9 @@ T_CREDIT = "tests/remediation/test_credit_refusals.py"
 T_ATTRIB = "tests/remediation/test_gallery_attribution.py"
 T_JUDGE = "tests/remediation/test_candidate_judge.py"
 
-D18_CASES: list[Case] = [
-    # ------------------------------------------------------------------ the rule (licenses.py)
-    guard(
-        "img d18: a free licence asks for no credit",
-        LICENSES,
-        "    if is_free(license_name):",
-        "test_a_public_domain_or_cc0_file_asks_for_no_credit",
-        T_LICENSES,
-    ),
-    Case(
-        "img d18: the free prefixes",
-        LICENSES,
-        "    return name in FREE_LICENSES or name.startswith(FREE_LICENSE_PREFIXES)",
-        "    return name in FREE_LICENSES",
-        "test_a_public_domain_or_cc0_file_asks_for_no_credit",
-        T_LICENSES,
-    ),
-    guard(
-        "img d18: Attribution asks for the author only",
-        LICENSES,
-        "    if license_name.strip().casefold() in AUTHOR_ONLY_LICENSES:",
-        "test_commons_attribution_asks_for_the_author_and_has_no_licence_page",
-        T_LICENSES,
-    ),
-    Case(
-        "img d18: the author_url is never demanded",
-        LICENSES,
-        '    return ("author", "license_url")',
-        '    return ("author", "author_url", "license_url")',
-        "test_the_author_url_is_never_demanded",
-        T_LICENSES,
-    ),
-    Case(
-        "img d18: the scope predicate leaves the free names out",
-        LICENSES,
-        "AND lower({column}) NOT IN ({exact}) AND NOT ({likes}))",
-        "AND lower({column}) NOT IN ({exact}))",
-        "test_the_sql_predicate_is_built_from_the_same_names",
-        T_LICENSES,
-    ),
-    # ------------------------------------------------------------------ the manifest
-    guard(
-        "img d18: the manifest names what a licence demands",
-        FETCH,
-        "    if missing:",
-        "test_the_author_is_required_where_the_licence_asks_for_attribution",
-        T_FETCH,
-    ),
-    Case(
-        "img d18: a manifest of a free licence may carry no credit",
-        FETCH,
-        '    required = required_columns(entry["license"])',
-        '    required = required_columns("CC BY 4.0")',
-        "test_a_free_licence_needs_neither_an_author_nor_a_licence_url",
-        T_FETCH,
-    ),
-    Case(
-        "img d18: the update path stores a missing credit as NULL",
-        IH_PLAN,
-        '        elif column in NULLABLE_FETCH_COLUMNS and str(value) == "":',
-        "        elif False:",
-        "test_the_hero_wave_stores_a_missing_credit_as_null",
-        T_FETCH,
-    ),
-    # ------------------------------------------------------------------ the INSERT lane
-    Case(
-        "img d18: a missing credit is NULL in the planned row",
-        INSERT,
-        '    return None if column in NULLABLE_FETCH_COLUMNS and text == "" else text',
-        "    return text",
-        "test_the_manifests_empty_credit_becomes_none_in_the_planned_row",
-        T_INSERT,
-    ),
-    Case(
-        "img d18: the temp table allows the NULL",
-        INSERT,
-        '        null = "" if column in NULLABLE_FETCH_COLUMNS else " NOT NULL"',
-        '        null = " NOT NULL"',
-        "test_the_statement_inserts_null_and_the_temp_table_allows_it",
-        T_INSERT,
-    ),
-    Case(
-        "img d18: a chunk file keeps None as None",
-        INSERT,
-        '            values={k: None if v is None else str(v) for k, v in dict(record["values"]).items()},',
-        '            values={k: str(v) for k, v in dict(record["values"]).items()},',
-        "test_a_chunk_file_keeps_none_as_none",
-        T_INSERT,
-    ),
-    guard(
-        "img d18: the read-back compares the credit",
-        INSERT_WRITER,
-        "            if held.get(column) != planned.values[column]:",
-        "test_the_readback_compares_null_with_null",
-        T_INSERT,
-    ),
-    Case(
-        "img d18: a re-seed keeps the source it was given",
-        INSERT,
-        '                    "source": str(refusal.get("source") or "")\n                    or (',
-        '                    "source": ""\n                    or (',
-        "test_a_source_refusal_with_a_source_of_its_own_keeps_it",
-        T_INSERT,
-    ),
-    guard(
-        "img d18: a named site must be a target",
-        JUDGE,
-        "        if absent:",
-        "test_a_named_site_that_is_no_target_is_refused_by_name",
-        T_JUDGE,
-    ),
-    Case(
-        "img d18: a re-seed claims only the named sites",
-        JUDGE,
-        '        targets = [t for t in targets if str(t.get("site_id") or "") in wanted]',
-        "        targets = targets",
-        "test_a_re_seed_claims_only_the_sites_it_names",
-        T_JUDGE,
-    ),
-    # ------------------------------------------------------------------ the credit refusals
-    Case(
-        "img d18: only credit columns make a credit refusal",
-        CREDIT,
-        "    return columns is not None and set(columns) <= set(NULLABLE_FETCH_COLUMNS)",
-        "    return columns is not None",
-        "test_only_credit_columns_make_a_credit_refusal",
-        T_CREDIT,
-    ),
-    Case(
-        "img d18: a fetched site is not asked again",
-        CREDIT,
-        "if s not in fetched and is_credit_refusal(why)",
-        "if is_credit_refusal(why)",
-        "test_a_site_a_later_wave_fetched_is_not_asked_again",
-        T_CREDIT,
-    ),
-    # ------------------------------------------------------------------ A5 and the scope
-    guard(
-        "img d18: A5 refuses a bot uploader",
-        ATTRIB,
-        "    if _BOT_NAME.search(user):",
-        "test_a5_refuses_a_bot_account_as_the_author",
-        T_ATTRIB,
-    ),
-    guard(
-        "img d18: A5 refuses a file with no upload version",
-        ATTRIB,
-        "    if not user:",
-        "test_a5_refuses_a_file_with_no_upload_version",
-        T_ATTRIB,
-    ),
-    guard(
-        "img d18: A5 waits for the upload history",
-        ATTRIB,
-        "    if not page.uploader_read:",
-        "test_a_self_licensed_file_with_no_author_anywhere_waits_for_its_upload_history",
-        T_ATTRIB,
-    ),
-    Case(
-        "img d18: an earlier route beats A5",
-        ATTRIB,
-        "        route_wikitext,\n        route_self_licensed,\n    ):",
-        "        route_self_licensed,\n        route_wikitext,\n    ):",
-        "test_an_earlier_route_beats_a5",
-        T_ATTRIB,
-    ),
-    guard(
-        "img d18: an own-work credit with no one named is A5",
-        ATTRIB,
-        "    if not users and not _ANCHOR.search(credit):",
-        "test_a5_takes_an_own_work_credit_that_names_no_one",
-        T_ATTRIB,
-    ),
-    guard(
-        "img d18: the plan stops on an unread history",
-        ATTRIB,
-        "        if isinstance(found, NeedsUploader):",
-        "test_a_plan_over_a_page_whose_history_was_not_read_stops",
-        T_ATTRIB,
-    ),
-    guard(
-        "img d18: a long history is refused",
-        ATTRIB,
-        '    if "continue" in answer:',
-        "test_a_history_longer_than_one_answer_is_refused",
-        T_ATTRIB,
-    ),
-    Case(
-        "img d18: the first version is the oldest",
-        ATTRIB,
-        "    oldest = versions[-1]",
-        "    oldest = versions[0]",
-        "test_the_upload_history_is_read_oldest_first_and_only_where_a5_applies",
-        T_ATTRIB,
-    ),
-    Case(
-        "img d18: the history is read only where A5 applies",
-        ATTRIB,
-        "        if isinstance(page, Page) and isinstance(resolve(page), NeedsUploader):",
-        "        if isinstance(page, Page):",
-        "test_the_upload_history_is_read_oldest_first_and_only_where_a5_applies",
-        T_ATTRIB,
-    ),
-    guard(
-        "img d18: the A5 evidence names the uploader",
-        ATTRIB,
-        '    if found.rule == "A5":',
-        "test_the_plan_writes_the_uploader_as_author_with_its_evidence",
-        T_ATTRIB,
-    ),
-    Case(
-        "img d18: only hero rows are listed for the swap",
-        ATTRIB,
-        "    hero = {row.id: row for row in rows if row.is_hero}",
-        "    hero = {row.id: row for row in rows}",
-        "test_a_hero_row_that_stays_uncredited_is_listed_for_the_swap",
-        T_ATTRIB,
-    ),
-    Case(
-        "img d18: the scope is the licences that ask for an author",
-        ATTRIB,
-        '{needs_attribution_sql("w.license")}',
-        "w.license LIKE 'CC BY%'",
-        "test_the_scope_is_every_licence_that_asks_for_an_author",
-        T_ATTRIB,
-    ),
-    guard(
-        "img d18: a run is dated",
-        ATTRIB,
-        '    if not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", date):',
-        "test_a_run_of_2026_10_08_is_stamped_attribution_and_its_date",
-        T_ATTRIB,
-    ),
-]
+#: The D18 cases live with the other WD2 cases (`mechanical/mutation_sweep.py`, label `wd2 d18:`): one
+#: definition, run by `mutation_sweep.py wd2` and by this module's `wd2 d18` filter alike.
+D18_CASES: list[Case] = [case for case in WD2_CASES if case.label.startswith("wd2 d18:")]
 
 
 def g(label: str, path: Path, needle: str, test: str, testfile: str) -> Case:
@@ -559,10 +328,11 @@ D15_CASES: list[Case] = [
         "test_a_hero_the_read_does_not_answer_is_refused",
         T_SERVED_RECHECK,
     ),
-    g(
+    c(
         "d15: a site without an article asks nobody",
         RECHECK_PY,
         "        if title:",
+        "        if True:",
         "test_a_site_without_an_article_has_no_lead_and_asks_nobody",
         T_SERVED_RECHECK,
     ),
@@ -657,10 +427,11 @@ D17_CASES: list[Case] = [
         "test_an_article_that_does_not_exist_is_noted_by_name",
         T_ROUTES,
     ),
-    g(
+    c(
         "d17: a vector lead image is no candidate",
         SEARCH,
         '            if article["lead"] and not article["lead"].lower().endswith(_NOT_FOR_PAGE):',
+        '            if article["lead"]:',
         "test_a_lead_image_that_is_vector_art_is_not_a_candidate",
         T_ROUTES,
     ),
@@ -728,7 +499,7 @@ D17_CASES: list[Case] = [
         "d17: one item is an identity",
         POPULATION,
         "    if len(distinct) == 1:",
-        "test_two_items_are_a_conflict_and_no_item",
+        "test_the_single_item_and_title_come_from_the_external_ids",
         T_ROUTES,
     ),
     g(
@@ -1259,17 +1030,10 @@ D17_CASES: list[Case] = [
         T_ROLES,
     ),
     g(
-        "d17: a confirmed link stays",
-        IDENTITY,
-        '    if status == "confirmed":',
-        "test_a_confirmed_link_stays_and_the_category_and_names_are_added",
-        T_ROLES,
-    ),
-    g(
         "d17: a wrong link is replaced",
         IDENTITY,
         '    if status == "wrong":',
-        "test_a_wrong_item_is_replaced_and_the_change_is_marked",
+        "test_a_wrong_item_replaced_by_null_routes_nothing_through_an_item",
         T_ROLES,
     ),
     c(
@@ -1292,7 +1056,7 @@ D17_CASES: list[Case] = [
         "d17: a mode has sites",
         FLOW,
         "    if not asked:",
-        "test_verify_asks_the_flagged_sites_and_research_the_nameless",
+        "test_a_mode_with_no_site_to_ask_is_refused_by_name",
         T_FLOW,
     ),
     g(
@@ -1314,7 +1078,7 @@ D17_CASES: list[Case] = [
         "d17: a site record is needed",
         FLOW,
         '        if site["lat"] is None:',
-        "test_the_depicts_role_needs_the_prefilter_first",
+        "test_a_fetched_site_the_population_does_not_hold_stops_the_depicts_export",
         T_FLOW,
     ),
     g(
@@ -1483,7 +1247,7 @@ CAL_CASES: list[Case] = [
         "cal: a false-depicts rate above its ceiling fails",
         CALIBRATE,
         '        if rate is None or rate > t["false_depicts_max"]:',
-        "test_the_adjudicated_candidates_take_the_pilot_judge_s_word_as_truth",
+        "test_a_false_depicts_rate_above_its_ceiling_fails_even_when_the_precision_holds",
         T_CAL,
     ),
     g(
@@ -1540,7 +1304,51 @@ CAL_CASES: list[Case] = [
     ),
 ]
 
-CASES: list[Case] = [*D18_CASES, *D15_CASES, *D17_CASES, *CAL_CASES]
+#: The cached Wikipedia page reaches the recheck prompts (D15 and the D17 hero re-check).
+CACHE_CASES: list[Case] = [
+    c(
+        "d15: the context names the cached page",
+        RECHECK_PY,
+        '                "wikipedia_cache_file": cache_file(sid),',
+        '                "wikipedia_cache_file": None,',
+        "test_the_cached_page_of_the_site_is_named_in_the_context",
+        T_SERVED_RECHECK,
+    ),
+    c(
+        "d15: the prompt tells the agent the cached page",
+        V_PY,
+        '                cache=_or_none(ctx["wikipedia_cache_file"]),',
+        '                cache="none",',
+        "test_the_recheck_carries_the_context_the_first_check_lacked",
+        T_SERVED_RECHECK,
+    ),
+    c(
+        "d17: the pick names the cached page",
+        HERO,
+        '                "wikipedia_cache_file": pick.get("wikipedia_cache_file"),',
+        '                "wikipedia_cache_file": None,',
+        "test_the_cached_wikipedia_page_is_named_in_the_prompt",
+        T_ROLES,
+    ),
+    c(
+        "d17: the picks carry the cached page",
+        FLOW,
+        '                "wikipedia_cache_file": _cache_file(cache, key[0]),',
+        '                "wikipedia_cache_file": None,',
+        "test_a_pick_carries_the_site_its_picture_and_its_cached_wikipedia_page",
+        T_FLOW,
+    ),
+    c(
+        "d17: a site's cached page is found",
+        WIKI,
+        '        return None if row is None else (self.root / Path(row["file"].replace("\\\\", "/"))).resolve()',
+        "        return None",
+        "test_the_cached_page_of_a_site_is_an_absolute_path_or_none",
+        T_ROLES,
+    ),
+]
+
+CASES: list[Case] = [*D18_CASES, *D15_CASES, *D17_CASES, *CACHE_CASES, *CAL_CASES]
 
 
 if __name__ == "__main__":

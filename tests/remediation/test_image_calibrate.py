@@ -461,6 +461,27 @@ class TestMeasuringTheDepictsRole:
         )  # 10 labelled + a2
         assert got["precision"]["k"] == 10 and got["precision"]["n"] == 11
 
+    def test_a_false_depicts_rate_above_its_ceiling_fails_even_when_the_precision_holds(
+        self,
+    ) -> None:
+        """100 labelled heroes all found, 40 negatives of which two are called depicts: precision
+        0.98 passes its floor, the false-depicts rate 0.05 does not pass its ceiling."""
+        cases = [
+            case(f"p{i}", "image_depicts", "positive", "depicts", f"p{i}.jpg") for i in range(100)
+        ]
+        cases += [
+            case(f"n{i}", "image_depicts", "hard_negative", "not_depicts", f"n{i}.jpg")
+            for i in range(40)
+        ]
+        verdicts = {
+            c["file"]: ("depicts" if c["file"].startswith("p") else "other_site") for c in cases
+        }
+        verdicts["n0.jpg"] = verdicts["n1.jpg"] = "depicts"
+        got = CAL.measure_depicts(cases, [depicts_result("s1", verdicts)], [], cp)
+        assert got["precision"]["rate"] >= 0.95 and got["false_depicts"]["rate"] == 0.05
+        failures = CAL.decide("image_depicts", json.loads(CAL.thresholds_text()), got)
+        assert failures == ["false_depicts 0.05 is above 0.03"]
+
     def test_an_adjudicated_case_without_the_pilot_judge_is_an_error(self) -> None:
         cases = [case("a1", "image_depicts", "adjudicated", None, "a1.jpg")]
         with pytest.raises(CAL.CalibrationError, match="has not adjudicated"):

@@ -325,12 +325,9 @@ def identity_rows(results: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, A
 
 
 def _resolved(held: str | None, status: str, proposed: str | None) -> str | None:
-    """The link a site is routed through after an answer: the database's when the answer confirms
-    it, the answer's when it says the database's is wrong, and - the answer could not decide - the
-    one it proposes with evidence, else the database's (flagged, unverified, and every picture it
-    routes is judged by the vision roles all the same)."""
-    if status == "confirmed":
-        return held
+    """The link a site is routed through after an answer: the answer's when it says the database's
+    is wrong (possibly none), the one it proposes with evidence when it could not decide, else the
+    database's. A `confirmed` link proposes the database's own (the parser requires it)."""
     if status == "wrong":
         return proposed
     return proposed if proposed is not None else held

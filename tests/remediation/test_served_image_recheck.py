@@ -68,6 +68,7 @@ def _context(site_id: str, **over: Any) -> dict[str, Any]:
         "site_id": site_id,
         "description": "A walled city on an island.",
         "wikipedia_title": "Thasos",
+        "wikipedia_cache_file": "C:/cache/en/thasos.json",
         "wikipedia_lead_image": "Thasos agora.jpg",
         "owner_link_url": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Thasos.jpg",
         "owner_link_file": "Thasos.jpg",
@@ -175,15 +176,45 @@ class TestTheContext:
         owner = {
             THASOS: {"image": "https://upload.wikimedia.org/wikipedia/commons/a/ab/Thasos_Gate.jpg"}
         }
-        (got,) = RC.build_context(self._heroes(), rows, owner, Client(), sleep=lambda _s: None)
+        (got,) = RC.build_context(
+            self._heroes(),
+            rows,
+            owner,
+            Client(),
+            cache_file=lambda sid: None,
+            sleep=lambda _s: None,
+        )
         assert asked == ["Thasos"]
         assert set(got) == RC.CONTEXT_KEYS
         assert got["wikipedia_lead_image"] == "Thasos agora.jpg"
         assert got["owner_link_file"] == "Thasos Gate.jpg"
+        assert got["wikipedia_cache_file"] is None
         assert (got["earlier_verdict"], got["earlier_shows"]) == (
             "other_site",
             "a view of another island",
         )
+
+    def test_the_cached_page_of_the_site_is_named_in_the_context(self) -> None:
+        class Client:
+            def get(self, url: str, params: dict[str, Any]) -> Any:
+                class Answer:
+                    status_code = 200
+
+                    def json(self) -> dict[str, Any]:
+                        return {"query": {"pages": [{"title": "Thasos"}]}}
+
+                return Answer()
+
+        rows = [{"site_id": THASOS, "description": "d", "wikipedia_title": "Thasos"}]
+        (got,) = RC.build_context(
+            self._heroes(),
+            rows,
+            {},
+            Client(),
+            cache_file=lambda sid: f"C:/cache/{sid}.json",
+            sleep=lambda _s: None,
+        )
+        assert got["wikipedia_cache_file"] == f"C:/cache/{THASOS}.json"
 
     def test_a_site_without_an_article_has_no_lead_and_asks_nobody(self) -> None:
         class Client:
@@ -191,7 +222,9 @@ class TestTheContext:
                 raise AssertionError("nothing to ask")
 
         rows = [{"site_id": THASOS, "description": "", "wikipedia_title": None}]
-        (got,) = RC.build_context(self._heroes(), rows, {}, Client(), sleep=lambda _s: None)
+        (got,) = RC.build_context(
+            self._heroes(), rows, {}, Client(), cache_file=lambda sid: None, sleep=lambda _s: None
+        )
         assert got["wikipedia_lead_image"] is None and got["description"] is None
         assert got["owner_link_url"] is None and got["owner_link_file"] is None
 
@@ -205,11 +238,20 @@ class TestTheContext:
 
         rows = [{"site_id": THASOS, "description": "d", "wikipedia_title": "Thasos"}]
         with pytest.raises(RC.RecheckError, match="HTTP 429"):
-            RC.build_context(self._heroes(), rows, {}, Client(), sleep=lambda _s: None)
+            RC.build_context(
+                self._heroes(),
+                rows,
+                {},
+                Client(),
+                cache_file=lambda sid: None,
+                sleep=lambda _s: None,
+            )
 
     def test_a_hero_the_read_does_not_answer_is_refused(self) -> None:
         with pytest.raises(RC.RecheckError, match="answered nothing"):
-            RC.build_context(self._heroes(), [], {}, object(), sleep=lambda _s: None)
+            RC.build_context(
+                self._heroes(), [], {}, object(), cache_file=lambda sid: None, sleep=lambda _s: None
+            )
 
     def test_the_context_file_is_written_once_in_its_exact_shape(self, tmp_path: Path) -> None:
         RC.write_context(tmp_path, [_context(THASOS)])
@@ -261,6 +303,8 @@ class TestThePrompt:
             "Thasos.jpg",  # the owner's 2025 link
             "Thasos agora.jpg",  # the Wikipedia lead image
             "A walled city on an island.",
+            "Its text is cached: read C:/cache/en/thasos.json first",
+            "a 403 or 429 is never a finding",
             "latitude 40.78",
             "commons.wikimedia.org/...",
         ):
