@@ -56,22 +56,25 @@ export default function StoryPage() {
         {/* Everything after the sources and before the Art.-50 footnote is
             this page's own tail — StoryArticle renders it as its children so
             the disclosure stays the last element on the page. */}
-        <StoryArticle story={story}>
-          {story.related.length > 0 && (
-            <div className="story-related">
-              <h2>{story.related[0].kind === 'site' && story.site_name
-                ? `More about ${story.site_name}`
-                : 'Related stories'}</h2>
-              <ul>
-                {story.related.map(r => (
-                  <li key={r.slug}>
-                    <a href={`/news-archive/${encodeURIComponent(r.slug)}`}>{r.headline}</a>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
+        <StoryArticle
+          story={story}
+          related={
+            story.related.length > 0 && (
+              <div className="story-related">
+                <h2>{story.related[0].kind === 'site' && story.site_name
+                  ? `More about ${story.site_name}`
+                  : 'Related stories'}</h2>
+                <ul>
+                  {story.related.map(r => (
+                    <li key={r.slug}>
+                      <a href={`/news-archive/${encodeURIComponent(r.slug)}`}>{r.headline}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          }
+        >
           <p className="story-back">
             <a href="/news-archive/">← All stories</a>
           </p>

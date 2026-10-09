@@ -134,7 +134,7 @@ export default function ResearchPaperPage() {
           Panel-Zeile verlinkt. */}
       <PageOpen event="paper_open" paper={`/research/${slug}`} method="landing" context="paper" />
       <PageHeader currentPage="theo">
-        <a href="/theo.html#research-library" className="page-header-title">Research</a>
+        <a href="/research/" className="page-header-title">Research</a>
       </PageHeader>
       <AiNoticeBanner message="Research paper text is AI-generated; images are from cited sources. Always verify claims with original sources." />
 
