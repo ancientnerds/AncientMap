@@ -551,6 +551,12 @@ def web_verify_item(
         return "failed", None
 
     if not response_text:
+        # MiniMax-M3.1-Flash can spend the whole budget reasoning and answer
+        # nothing: the long prompt of 2026-10-08 did so on every story it was
+        # given (reasoning_tokens = max_tokens, even at 12,000), silently, until
+        # the re-verify pilot of 2026-10-09 showed it. The short prompt answers;
+        # a story it still cannot settle (Baalbek's tonnage) is named here.
+        logger.warning(f"Web verify got no answer for item {item.id}: reasoning used the budget")
         return "failed", None
 
     # Parse JSON — handle markdown fencing

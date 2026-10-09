@@ -119,3 +119,12 @@ def test_rollback_restores_the_before_values(monkeypatch, tmp_path):
 
     assert story.headline == before["headline"] == "Baalbek's megaliths predate the Romans"
     assert story.facts == ["The stones predate the Romans by thousands of years."]
+
+
+def test_a_failed_check_is_tried_again_by_a_later_wave(monkeypatch, tmp_path):
+    story = _story()
+    _wave(monkeypatch, tmp_path, story)
+    monkeypatch.setattr(sr, "web_verify_item", lambda item, verifier, settings: ("failed", None))
+
+    assert sr.run_wave(limit=10, dry_run=False) == {"failed": 1}
+    assert sr.journalled_ids(tmp_path / "journal.jsonl") == set()

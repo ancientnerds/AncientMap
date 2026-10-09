@@ -48,6 +48,13 @@ from pipeline.news_visibility import public_story_criteria
 logger = logging.getLogger(__name__)
 
 JOURNAL_DIR = Path("/app/logs/story_reverify")
+#: When the summary prompt that attributes a video's claims went live (deploy
+#: 2556cc4, UTC): stories written since were born with it and need no re-run.
+SUMMARY_FIX_LIVE = datetime(2026, 10, 9, 8, 42)
+#: Outcomes that settle a story. A failed check or one without search results
+#: settled nothing, so a later wave tries the story again.
+SETTLED = ("corrected", "verified", "reject_held", "not_applied")
+
 #: The fields a correction may change (and the sources the check appends): what a rollback restores.
 FIELDS = ("headline", "facts", "post_text", "web_sources")
 #: Alt-history channels first (owner: "zuerst Alt-Kanäle"): 10 of 25 of their
@@ -92,11 +99,10 @@ def _snapshot(item: NewsItem) -> dict[str, Any]:
 def journalled_ids(journal: Path) -> set[int]:
     if not journal.exists():
         return set()
-    return {
-        json.loads(line)["item_id"]
-        for line in journal.read_text(encoding="utf-8").splitlines()
-        if line
-    }
+    entries = (
+        json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines() if line
+    )
+    return {e["item_id"] for e in entries if e["outcome"] in SETTLED}
 
 
 def pick(session, limit: int, done: set[int], alt_first: bool) -> list[NewsItem]:
@@ -108,7 +114,7 @@ def pick(session, limit: int, done: set[int], alt_first: bool) -> list[NewsItem]
         session.query(NewsItem.id, NewsChannel.name)
         .join(NewsVideo, NewsItem.video_id == NewsVideo.id)
         .join(NewsChannel, NewsVideo.channel_id == NewsChannel.id)
-        .filter(*public_story_criteria())
+        .filter(*public_story_criteria(), NewsItem.created_at < SUMMARY_FIX_LIVE)
         .order_by(NewsVideo.published_at.desc(), NewsItem.id.desc())
         .all()
     )
