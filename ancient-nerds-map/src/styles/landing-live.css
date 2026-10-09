@@ -156,6 +156,12 @@
 @media (prefers-reduced-motion: no-preference) { .ll-pulse { animation: ll-pulse 1.6s infinite; } }
 @keyframes ll-pulse { 50% { opacity: 0.35; } }
 
+/* The newest paper titles as plain links, between the Theo line and the foot. */
+.ll-latest { list-style: none; margin: 12px 0 0; padding: 0; font-size: 13px; }
+.ll-latest li { padding: 4px 0; border-bottom: 1px dashed var(--nerv-steel-dim); }
+.ll-latest a { color: var(--text-heading); text-decoration: none; }
+.ll-latest a:hover { color: var(--accent-primary); text-decoration: underline; }
+
 .ll-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--nerv-steel-dim); }
 .ll-foot a { color: var(--accent-primary); text-decoration: none; white-space: nowrap; }
 .ll-foot a:hover { text-decoration: underline; }

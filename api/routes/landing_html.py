@@ -41,6 +41,12 @@ from pipeline.article_html_renderer import render_error_html
 from pipeline.database import get_db
 from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
 
+# The newest papers the research portal links by title (owner, 2026-10-09). Since
+# 2026-09-10 papers hung on /research/ alone, which Googlebot fetched once in 14
+# days, and it fetched none of the ten newest papers (SEO audit 2026-10-08): a text
+# link from the homepage, which Google fetches often, is how a new paper is found.
+LATEST_PAPERS = 5
+
 
 def sites_compact(n: int) -> str:
     """1759673 → "1.76M", 999999 → "999K" (hero counter)."""
@@ -91,11 +97,26 @@ def fetch_landing_data(db: Session) -> dict:
         ).scalar()
         or 0
     )
+    latest_papers = [
+        {"slug": r.slug, "title": r.title}
+        for r in db.execute(
+            # nosemgrep: semgrep.api-sql-fstring-interpolation -- PUBLIC_PAPER_WHERE is a module-level constant, no user input
+            text(f"""
+                SELECT r.slug, COALESCE(r.result_json::jsonb->>'title', r.question) AS title
+                FROM research_requests r
+                WHERE {PUBLIC_PAPER_WHERE}
+                ORDER BY r.published_at DESC NULLS LAST
+                LIMIT :n
+            """),
+            {"n": LATEST_PAPERS},
+        ).fetchall()
+    ]
     news_stats = get_news_stats(db)
     if not isinstance(news_stats, dict):  # cache_get returns the dict, a cold call the model
         news_stats = news_stats.model_dump()
     return {
         "paper_total": paper_total,
+        "latest_papers": latest_papers,
         "journal_total": news_stats["total_articles"],
         "news_stats": news_stats,
     }
@@ -113,7 +134,7 @@ def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict
                 "started_at": theo_running["started_at"],
                 "sites_found": theo_running["sites_found"],
             }
-        papers = {"total": data["paper_total"], "theo": theo}
+        papers = {"total": data["paper_total"], "theo": theo, "latest": data["latest_papers"]}
     return {
         "type": "landing",
         "stats": {

@@ -351,7 +351,7 @@ export interface LandingRoute {
   /** null when there is no issue at all — the section is then not rendered. */
   journals: { total: number } | null
   /** null when no paper is public — the section is then not rendered. */
-  papers: { total: number; theo: TheoStatus | null } | null
+  papers: { total: number; theo: TheoStatus | null; latest: { slug: string; title: string }[] } | null
 }
 
 export type AnRoute =

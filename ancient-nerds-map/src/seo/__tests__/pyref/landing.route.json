@@ -16,6 +16,12 @@
       "question": "Water erosion evidence in the Osiris Shaft",
       "started_at": "2026-09-09T06:00:00Z",
       "sites_found": 1340
-    }
+    },
+    "latest": [
+      {
+        "slug": "water-erosion-evidence-in-the-osiris-shaft",
+        "title": "Water Erosion Evidence in the Osiris Shaft"
+      }
+    ]
   }
 }
