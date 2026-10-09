@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -436,6 +437,180 @@ def _web_correction(result: dict[str, Any]) -> dict[str, Any]:
     return fields
 
 
+@dataclass(frozen=True)
+class WebVerifier:
+    """What a web check needs: the MiniMax client, the prompt and the calls."""
+
+    client: Any
+    prompt: str
+    model: str
+    chat: Any
+    search: Any
+
+
+def open_web_verifier(settings: LyraSettings) -> WebVerifier | None:
+    """The MiniMax side of the web check, or None without a MiniMax key."""
+    try:
+        from pipeline.lyra.minimax_shared import (
+            MINIMAX_MODEL,
+            create_minimax_client,
+            minimax_chat,
+            minimax_search,
+        )
+    except ImportError:
+        logger.warning("MiniMax shared module not available, skipping web verification")
+        return None
+    if not settings.minimax_api_key:
+        return None
+    return WebVerifier(
+        client=create_minimax_client(settings.minimax_base_url, settings.minimax_api_key),
+        prompt=WEB_VERIFY_PROMPT_PATH.read_text(encoding="utf-8"),
+        model=MINIMAX_MODEL,
+        chat=minimax_chat,
+        search=minimax_search,
+    )
+
+
+def web_verify_item(
+    item: NewsItem, verifier: WebVerifier, settings: LyraSettings
+) -> tuple[str, dict[str, Any] | None]:
+    """Web-check one story: ("ok", verdict) or (why not, None).
+
+    "no_results" when the searches found nothing usable - nothing was checked;
+    "failed" when the model call or its answer failed. The search results are
+    saved to item.web_sources either way, before the verdict.
+    """
+    # Generate specific search queries from facts using LLM
+    # (pattern mirrors angle_image_queries.py for consistency)
+    queries: list[str] = []
+    try:
+        from pipeline.lyra.story_web_queries import generate_queries_for_item
+
+        queries = generate_queries_for_item(item.post_text or "", item.facts or [], settings)
+    except Exception:
+        pass
+
+    # Fall back to raw post_text if query generation failed
+    if not queries:
+        queries = [(item.post_text or item.headline or "")[:150]]
+
+    # Run each query through minimax_search and collect results
+    all_results: list = []
+    seen_urls: set[str] = set()
+
+    for query in queries:
+        results = verifier.search(verifier.client, query)
+        for r in results:
+            if r.url not in seen_urls:
+                all_results.append(r)
+                seen_urls.add(r.url)
+
+    if not all_results:
+        return "no_results", None
+
+    # Filter blocked domains
+    from urllib.parse import urlparse
+
+    from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS
+
+    all_results = [
+        r for r in all_results if urlparse(r.url).netloc.replace("www.", "") not in BLOCKED_DOMAINS
+    ]
+    if not all_results:
+        return "no_results", None
+
+    # Save web search sources IMMEDIATELY — don't wait for LLM verdict.
+    # Fresh list, NOT the tracked JSONB value — in-place mutation +
+    # reassigning the same object is invisible to SQLAlchemy's change
+    # detection (lost update on web_sources).
+    existing = list(item.web_sources or [])
+    seen = {s["url"] for s in existing if isinstance(s, dict)}
+    for r in all_results[:5]:
+        if r.url not in seen:
+            existing.append({"title": r.title, "url": r.url, "snippet": r.snippet})
+            seen.add(r.url)
+    item.web_sources = existing
+
+    search_text = "\n".join(f"- [{r.title}]({r.url}): {r.snippet}" for r in all_results[:5])
+    # All of them: a corrected list replaces the stored one as a whole.
+    facts_text = "\n".join(f"- {f}" for f in (item.facts or []))
+
+    user_msg = (
+        f"Headline: {item.headline or ''}\n\n"
+        f"Key facts:\n{facts_text}\n\n"
+        f"Post: {item.post_text or ''}\n\n"
+        f"Web search results:\n{search_text}"
+    )
+
+    try:
+        response_text = verifier.chat(
+            verifier.client, verifier.model, verifier.prompt, user_msg, 4096
+        )
+    except Exception as e:
+        logger.warning(f"Web verify failed for item {item.id}: {e}")
+        return "failed", None
+
+    if not response_text:
+        return "failed", None
+
+    # Parse JSON — handle markdown fencing
+    cleaned = response_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+        cleaned = cleaned.rsplit("```", 1)[0].strip()
+
+    try:
+        result = json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError):
+        logger.warning(f"Failed to parse web verify response for item {item.id}")
+        return "failed", None
+
+    if not isinstance(result, dict):
+        logger.warning(f"Web verify returned {type(result).__name__} for item {item.id}, skipping")
+        return "failed", None
+    return "ok", result
+
+
+def apply_web_verdict(item: NewsItem, result: dict[str, Any], *, withdraw_on_reject: bool) -> str:
+    """Apply a web check's verdict to the story; returns what happened.
+
+    "corrected" (headline, key facts and post replaced together), "not_applied"
+    (a correction with foreign script, or one without a usable part), "verified",
+    "rejected" (withdrawn: significance 1, the page answers 410) or "reject_held"
+    (withdraw_on_reject=False: a re-run never withdraws a published story).
+    """
+    verdict = result.get("verdict", "")
+    if verdict == "CORRECTED":
+        correction = _web_correction(result)
+        if not correction:
+            return "not_applied"
+        bleed = story_script_bleed(
+            correction.get("headline"),
+            [correction.get("post_text", ""), *correction.get("facts", [])],
+        )
+        if bleed:
+            logger.warning(
+                f"Web verify correction with foreign script for item {item.id}: "
+                f"{bleed[:3]!r}, not applied"
+            )
+            return "not_applied"
+        logger.info(
+            f"Web verify corrected item {item.id} ({', '.join(sorted(correction))}): "
+            f"{result.get('reason', '')}"
+        )
+        for field_name, value in correction.items():
+            setattr(item, field_name, value)
+        return "corrected"
+    if verdict == "REJECT":
+        if not withdraw_on_reject:
+            return "reject_held"
+        logger.info(f"Web verify unverified item {item.id}: {result.get('reason', '')}")
+        item.news_category = "unverified"
+        item.significance = 1
+        return "rejected"
+    return "verified"
+
+
 def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
     """Web fact-check high-significance items using MiniMax search.
 
@@ -450,144 +625,17 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
     if not eligible:
         return 0
 
-    try:
-        from pipeline.lyra.minimax_shared import (
-            MINIMAX_MODEL,
-            create_minimax_client,
-            minimax_chat,
-            minimax_search,
-        )
-    except ImportError:
-        logger.warning("MiniMax shared module not available, skipping web verification")
+    verifier = open_web_verifier(settings)
+    if verifier is None:
         return 0
-
-    if not settings.minimax_api_key:
-        return 0
-
-    client = create_minimax_client(settings.minimax_base_url, settings.minimax_api_key)
-    web_prompt = WEB_VERIFY_PROMPT_PATH.read_text(encoding="utf-8")
     checked = 0
 
     for item in eligible:
-        # Generate specific search queries from facts using LLM
-        # (pattern mirrors angle_image_queries.py for consistency)
-        queries: list[str] = []
-        try:
-            from pipeline.lyra.story_web_queries import generate_queries_for_item
-
-            queries = generate_queries_for_item(item.post_text or "", item.facts or [], settings)
-        except Exception:
-            pass
-
-        # Fall back to raw post_text if query generation failed
-        if not queries:
-            queries = [(item.post_text or item.headline or "")[:150]]
-
-        # Run each query through minimax_search and collect results
-        all_results: list = []
-        seen_urls: set[str] = set()
-
-        for query in queries:
-            results = minimax_search(client, query)
-            for r in results:
-                if r.url not in seen_urls:
-                    all_results.append(r)
-                    seen_urls.add(r.url)
-
-        if not all_results:
+        status, result = web_verify_item(item, verifier, settings)
+        if status == "no_results":
             continue
-
-        # Filter blocked domains
-        from urllib.parse import urlparse
-
-        from pipeline.lyra.blocked_domains import BLOCKED_DOMAINS
-
-        all_results = [
-            r
-            for r in all_results
-            if urlparse(r.url).netloc.replace("www.", "") not in BLOCKED_DOMAINS
-        ]
-        if not all_results:
-            continue
-
-        # Save web search sources IMMEDIATELY — don't wait for LLM verdict.
-        # Fresh list, NOT the tracked JSONB value — in-place mutation +
-        # reassigning the same object is invisible to SQLAlchemy's change
-        # detection (lost update on web_sources).
-        existing = list(item.web_sources or [])
-        seen = {s["url"] for s in existing if isinstance(s, dict)}
-        for r in all_results[:5]:
-            if r.url not in seen:
-                existing.append({"title": r.title, "url": r.url, "snippet": r.snippet})
-                seen.add(r.url)
-        item.web_sources = existing
-
-        search_text = "\n".join(f"- [{r.title}]({r.url}): {r.snippet}" for r in all_results[:5])
-        # All of them: a corrected list replaces the stored one as a whole.
-        facts_text = "\n".join(f"- {f}" for f in (item.facts or []))
-
-        user_msg = (
-            f"Headline: {item.headline or ''}\n\n"
-            f"Key facts:\n{facts_text}\n\n"
-            f"Post: {item.post_text or ''}\n\n"
-            f"Web search results:\n{search_text}"
-        )
-
-        try:
-            response_text = minimax_chat(client, MINIMAX_MODEL, web_prompt, user_msg, 4096)
-        except Exception as e:
-            logger.warning(f"Web verify failed for item {item.id}: {e}")
-            checked += 1
-            continue
-
-        if not response_text:
-            checked += 1
-            continue
-
-        # Parse JSON — handle markdown fencing
-        cleaned = response_text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
-            cleaned = cleaned.rsplit("```", 1)[0].strip()
-
-        try:
-            result = json.loads(cleaned)
-        except (json.JSONDecodeError, ValueError):
-            logger.warning(f"Failed to parse web verify response for item {item.id}")
-            checked += 1
-            continue
-
-        if not isinstance(result, dict):
-            logger.warning(
-                f"Web verify returned {type(result).__name__} for item {item.id}, skipping"
-            )
-            checked += 1
-            continue
-
-        verdict = result.get("verdict", "")
-
-        correction = _web_correction(result) if verdict == "CORRECTED" else {}
-        if correction:
-            bleed = story_script_bleed(
-                correction.get("headline"),
-                [correction.get("post_text", ""), *correction.get("facts", [])],
-            )
-            if bleed:
-                logger.warning(
-                    f"Web verify correction with foreign script for item {item.id}: "
-                    f"{bleed[:3]!r}, not applied"
-                )
-            else:
-                logger.info(
-                    f"Web verify corrected item {item.id} ({', '.join(sorted(correction))}): "
-                    f"{result.get('reason', '')}"
-                )
-                for field_name, value in correction.items():
-                    setattr(item, field_name, value)
-        elif verdict == "REJECT":
-            logger.info(f"Web verify unverified item {item.id}: {result.get('reason', '')}")
-            item.news_category = "unverified"
-            item.significance = 1
+        if result is not None:
+            apply_web_verdict(item, result, withdraw_on_reject=True)
         checked += 1
 
     if checked:
