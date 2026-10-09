@@ -111,13 +111,13 @@ export function periodDisplay(
 export function paperCardFooter(paper: {
   author: string | null
   published_at: string | null
-  sources_analyzed: number
+  cited_sources: number
   words: number | null
 }): string {
   return [
     `by ${paper.author ?? 'Theo'}`,
     paper.published_at && shortDate(paper.published_at),
-    `${paper.sources_analyzed.toLocaleString('en-US')} sources`,
+    paper.cited_sources > 0 && `${paper.cited_sources.toLocaleString('en-US')} cited sources`,
     paper.words != null && `${paper.words.toLocaleString('en-US')} words`,
   ]
     .filter(Boolean)

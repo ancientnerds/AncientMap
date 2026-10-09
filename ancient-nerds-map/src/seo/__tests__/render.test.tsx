@@ -177,8 +177,8 @@ describe('researchIndex (Task 12): echte Listenseite statt Redirect', () => {
       m => m[1],
     )
     expect(footers).toEqual([
-      'by Theo · Jul 2 · 1,204 sources · 5,300 words',
-      'by Dr. Jane Doe · 318 sources',
+      'by Theo · Jul 2 · 42 cited sources · 5,300 words',
+      'by Dr. Jane Doe · 18 cited sources',
     ])
   })
 

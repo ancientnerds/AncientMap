@@ -8,7 +8,7 @@
       "hero_image_url": "https://ancientnerds.com/data/research/obsidian/hero.webp",
       "author": null,
       "published_at": "2026-07-02T04:15:00",
-      "sources_analyzed": 1204,
+      "cited_sources": 42,
       "word_count": 5300
     },
     {
@@ -18,7 +18,7 @@
       "hero_image_url": null,
       "author": "Dr. Jane Doe",
       "published_at": null,
-      "sources_analyzed": 318,
+      "cited_sources": 18,
       "word_count": null
     }
   ]

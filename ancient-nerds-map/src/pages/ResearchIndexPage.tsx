@@ -50,7 +50,7 @@ export default function ResearchIndexPage() {
               footer={paperCardFooter({
                 author: p.author,
                 published_at: p.published_at,
-                sources_analyzed: p.sources_analyzed,
+                cited_sources: p.cited_sources,
                 words: p.word_count,
               })}
             />

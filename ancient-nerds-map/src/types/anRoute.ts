@@ -299,7 +299,8 @@ export interface ResearchIndexRoute {
     author: string | null
     /** Raw ISO timestamp; date display is a TS decision. */
     published_at: string | null
-    sources_analyzed: number
+    /** Entries of the paper's References section (count_references). */
+    cited_sources: number
     word_count: number | null
   }[]
 }

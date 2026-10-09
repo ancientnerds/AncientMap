@@ -25,6 +25,7 @@ from pipeline.database import get_db
 from pipeline.research_html_renderer import (
     PAPER_EXTRAS_COLUMNS,
     PUBLIC_PAPER_WHERE,
+    count_references,
     evidence_video_moments,
     format_image_captions_medium,
     inject_evidence_anchors,
@@ -52,7 +53,9 @@ async def research_listing(db: Session = Depends(get_db)):
     """HTML listing of all published research papers."""
     rows = db.execute(
         text(f"""
-            SELECT {PAPER_SUMMARY_COLUMNS}
+            SELECT {PAPER_SUMMARY_COLUMNS},
+                   r.result_json::jsonb->>'published_report' AS published_report,
+                   r.result_json::jsonb->>'report' AS report
             FROM research_requests r
             WHERE {PUBLIC_PAPER_WHERE}
             ORDER BY r.published_at DESC NULLS LAST
@@ -63,10 +66,17 @@ async def research_listing(db: Session = Depends(get_db)):
     # payload (researchIndexMeta + ResearchIndexPage); Python only fetches
     # data. The listing shows Theo's image cards (PaperCard.tsx) since
     # 2026-09-10, so the payload carries what such a card prints: the hero,
-    # the blurb and the footer line "by {author} · {date} · {n} sources ·
-    # {n} words". Nothing else — quality_score, license and the paper's own
+    # the blurb and the footer line "by {author} · {date} · {n} cited sources ·
+    # {n} words" - cited, counted in the text the page shows (count_references).
+    # Nothing else — quality_score, license and the paper's own
     # question belong to the detail page and /api/v1/research.
-    papers = [paper_summary_kwargs(row) for row in rows]
+    papers = [
+        {
+            **paper_summary_kwargs(row),
+            "cited_sources": count_references(row.published_report or row.report or ""),
+        }
+        for row in rows
+    ]
     return ssr_shell_response(
         "research.html",
         {
@@ -79,7 +89,7 @@ async def research_listing(db: Session = Depends(get_db)):
                     "hero_image_url": p["hero_image_url"],
                     "author": p["author"],
                     "published_at": p["published_at"],
-                    "sources_analyzed": p["sources_analyzed"],
+                    "cited_sources": p["cited_sources"],
                     "word_count": p["word_count"],
                 }
                 for p in papers

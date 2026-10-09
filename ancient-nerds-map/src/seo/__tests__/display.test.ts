@@ -103,21 +103,25 @@ describe('paperCardFooter', () => {
   const full = {
     author: 'theo',
     published_at: '2026-08-31T22:07:06',
-    sources_analyzed: 2748,
+    cited_sources: 59,
     words: 6466,
   }
 
   it('setzt die Fußzeile aus Autor, Datum, Quellen und Wörtern zusammen', () => {
-    expect(paperCardFooter(full)).toBe('by theo · Aug 31 · 2,748 sources · 6,466 words')
+    expect(paperCardFooter(full)).toBe('by theo · Aug 31 · 59 cited sources · 6,466 words')
   })
 
   it('ohne published_by schreibt Theo selbst — der Default lebt in der Anzeige', () => {
     expect(paperCardFooter({ ...full, author: null })).toContain('by Theo')
   })
 
+  it('a paper without a References section shows no source count', () => {
+    expect(paperCardFooter({ ...full, cited_sources: 0 })).toBe('by theo · Aug 31 · 6,466 words')
+  })
+
   it('lässt fehlende Teile weg, ohne dass ein Trenner hängen bleibt', () => {
     expect(paperCardFooter({ ...full, published_at: null, words: null })).toBe(
-      'by theo · 2,748 sources',
+      'by theo · 59 cited sources',
     )
   })
 })
