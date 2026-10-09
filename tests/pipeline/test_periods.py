@@ -15,6 +15,7 @@ pass in this checkout and fail in a clone.
 
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -120,6 +121,23 @@ REFUSED = {
     "roman british": "`romano british period` is the name this table holds",
     "thracian": "no conventionally cited start for a 'Thracian period'; the state would be the "
                 "Odrysian kingdom, which is another name",
+    # lane WD5 (2026-10-09): the regional names that two regions spell alike or that have no one
+    # start, kept out when the regional chronologies went in
+    "early dynastic": "Egypt's Early Dynastic Period starts c. 3000 BC, Mesopotamia's c. 2900 BC "
+                      "and a quote that says only the two words does not say which",
+    "late period": "Egypt's Late Period (664 BC) and every other region's 'late period' share the "
+                   "words",
+    "formative": "the Mesoamerican Formative (2000 BC, = Preclassic) and the Andean (Initial "
+                 "Period and Early Horizon, 1800 BC) are not one span",
+    "preceramic": "the Andean Preceramic, the Near Eastern Pre-Pottery Neolithic and the "
+                  "Archaic of the Americas share no start",
+    "islamic": "the conquest reached each region in another century",
+    "mousterian": "the start of a lithic industry differs by region and dating method: a "
+                  "calendar or BP date is the reader's job, not a table row",
+    "aurignacian": "as `mousterian`",
+    "magdalenian": "as `mousterian`",
+    "dilmun": "no conventional start was sourced for the Gulf civilisation",
+    "hohokam": "no conventional start was sourced",
 }
 
 
@@ -294,3 +312,150 @@ class TestTheIngester:
         assert mapped("LATE BRONZE AGE") == (-2500, -800)
         assert mapped("PREHISTORIC") == (-10000, -800)
         assert mapped("19TH CENTURY") == (None, None)
+
+
+#: The regional names lane WD5 added (2026-10-09), the span the source its comment in
+#: `pipeline/periods.py` names gives: `(name, (start, end), a quote that names it)`. The quote is
+#: the kind of sentence a page prints, so the table is held to what a source can state.
+REGIONAL = (
+    ("preclassic", (-2000, 250), "Kaminaljuyu is a Preclassic site"),
+    ("early preclassic", (-2000, -1000), "an Early Preclassic village"),
+    ("middle preclassic", (-1000, -400), "occupied from the Middle Preclassic period"),
+    ("late preclassic", (-400, 250), "a Late Preclassic temple platform"),
+    ("classic", (250, 900), "the city flourished in the Classic period"),
+    ("early classic", (250, 600),
+     "Chitinamit dates from the Early Classic through to the Late Postclassic periods"),
+    ("late classic", (600, 900), "its stelae are Late Classic"),
+    ("terminal classic", (800, 1000), "a Terminal Classic reoccupation"),
+    ("postclassic", (900, 1521), "a Postclassic fortified town"),
+    ("early postclassic", (900, 1200), "the Early Postclassic phase"),
+    ("late postclassic", (1200, 1521),
+     "Chitinamit dates from the Early Classic through to the Late Postclassic periods"),
+    ("initial period", (-1800, -900), "a ceremonial centre of the Initial Period"),
+    ("early horizon", (-900, -200), "Early Horizon pottery"),
+    ("early intermediate period", (-200, 600), "a cemetery of the Early Intermediate Period"),
+    ("middle horizon", (600, 1000), "a Middle Horizon administrative centre"),
+    ("late intermediate period", (1000, 1476), "built in the Late Intermediate period"),
+    ("late horizon", (1476, 1532), "two Andean settlements of the Late Horizon"),
+    ("chavin", (-900, -200), "a Chavin temple"),
+    ("wari", (600, 1100), "a Wari outpost"),
+    ("moche", (100, 800), "a Moche pyramid"),
+    ("woodland", (-1000, 1000), "a Woodland period burial mound"),
+    ("early woodland", (-1000, -200), "an Early Woodland camp"),
+    ("middle woodland", (-200, 500), "a Middle Woodland earthwork"),
+    ("late woodland", (500, 1000), "a Late Woodland village"),
+    ("mississippian", (1000, 1600), "a Mississippian town"),
+    ("predynastic", (-5300, -3000), "a Predynastic cemetery"),
+    ("first intermediate period", (-2181, -2055), "tombs of the First Intermediate Period"),
+    ("middle kingdom", (-2055, -1650), "a Middle Kingdom fortress"),
+    ("second intermediate period", (-1650, -1550), "the Second Intermediate Period capital"),
+    ("third intermediate period", (-1069, -664), "Third Intermediate Period burials"),
+    ("ptolemaic", (-305, -30), "a Ptolemaic temple"),
+    ("early minoan", (-3100, -2100), "an Early Minoan tomb"),
+    ("middle minoan", (-2100, -1600), "Middle Minoan pottery"),
+    ("late minoan", (-1600, -1100), "a Late Minoan villa"),
+    ("early helladic", (-3200, -2000), "an Early Helladic settlement"),
+    ("late helladic", (-1600, -1050), "a Late Helladic chamber tomb"),
+    ("early cycladic", (-3200, -2000), "an Early Cycladic cemetery"),
+    ("middle cycladic", (-2000, -1600), "a Middle Cycladic phase"),
+    ("late cycladic", (-1600, -1050), "a Late Cycladic phase"),
+    ("uruk", (-4000, -3100), "an Uruk period outpost"),
+    ("jemdet nasr", (-3100, -2900), "Jemdet Nasr tablets"),
+    ("akkadian", (-2334, -2154), "an Akkadian palace"),
+    ("ur iii", (-2112, -2004), "an Ur III temple"),
+    ("old babylonian", (-2004, -1595), "an Old Babylonian house"),
+    ("neo assyrian", (-911, -609), "a Neo-Assyrian palace"),
+    ("neo babylonian", (-626, -539), "a Neo-Babylonian temple"),
+    ("hittite", (-1650, -1178), "a Hittite fortress"),
+    ("seleucid", (-312, -63), "a Seleucid foundation"),
+    ("parthian", (-247, 224), "a Parthian fort"),
+    ("sasanian", (224, 651), "a Sasanian fire temple"),
+    ("sassanid", (224, 651), "a Sassanid fort"),
+    ("mauryan", (-322, -185), "a Mauryan pillar"),
+    ("kushan", (30, 375), "a Kushan stupa"),
+    ("kushana", (30, 375), "a Kushana monastery"),
+    ("gupta", (320, 550), "a Gupta temple"),
+    ("zhou", (-1046, -256), "a Zhou tomb"),
+    ("jomon", (-14000, -300), "a Jomon shell midden"),
+    ("yayoi", (-300, 300), "a Yayoi settlement"),
+    ("kofun", (300, 538), "a Kofun burial mound"),
+    ("three kingdoms of korea", (-57, 668), "a fortress of the Three Kingdoms of Korea"),
+    ("silla", (-57, 935), "a Silla tomb"),
+    ("goguryeo", (-37, 668), "a Goguryeo fortress"),
+    ("koguryo", (-37, 668), "a Koguryo mural tomb"),
+    ("baekje", (-18, 660), "a Baekje capital"),
+    ("roman republic", (-509, -27), "a Roman Republic colony"),
+    ("augustan", (-27, 14), "an Augustan theatre"),
+    ("flavian", (69, 96), "a Flavian amphitheatre"),
+)
+
+
+class TestTheRegionalChronologies:
+    @pytest.mark.parametrize(("name", "span", "quote"), REGIONAL)
+    def test_a_regional_name_has_its_span_and_a_quote_states_it(
+        self, name: str, span: tuple[int, int], quote: str
+    ) -> None:
+        assert P.period_of(name) == span, name
+        assert P.start_year(name) == span[0]
+        # the quote of a source names the period; the name an agent sends may be the bare word
+        assert P.states_period(quote, name), (name, quote)
+
+    def test_the_chitinamit_sentence_is_a_period_the_table_reads(self) -> None:
+        # the WD5 pilot's 'Chitinamit': three Wikipedias said it, and the table did not hold the name
+        quote = "Chitinamit dates from the Early Classic through to the Late Postclassic periods"
+        assert P.start_year("Early Classic") == 250
+        assert P.states_period(quote, "Early Classic period")
+        assert P.states_period(quote, "late postclassic")
+        assert not P.states_period(quote, "late classic")  # a neighbour is not named
+
+    def test_a_name_is_spelled_once_in_the_table(self) -> None:
+        # a dict literal that holds a key twice keeps the last value without a word
+        tree = ast.parse(Path(P.__file__).read_text(encoding="utf-8"))
+        literal = next(
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "PERIODS"
+        )
+        keys = [k.value for k in literal.keys if isinstance(k, ast.Constant)]
+        assert len(keys) == len(set(keys)) == len(P.PERIODS)
+        assert all(P.fold_name(k) == k for k in keys), "a key is its own folded spelling"
+
+    def test_every_regional_start_is_a_year_an_answer_can_carry(self) -> None:
+        for name, (start, end), _ in REGIONAL:
+            assert -3_000_000 <= start <= end <= 2026, name
+
+    def test_the_new_names_leave_canmore_s_old_mapping_alone(self) -> None:
+        # the ingester takes the first key its period contains: the new names are all behind the
+        # first seven, so a value that mapped before maps to the same range
+        for period, span in CANMORE.items():
+            assert mapped(period) == span
+        assert mapped("EARLY BRONZE AGE") == (-2500, -800)  # `bronze age` still comes first
+
+
+class TestTheOrdinaryWordsThatAreAlsoNames:
+    """`classic` and `initial period` are English words when small: only the capitalised spelling
+    of a source names the Mesoamerican and the Andean period."""
+
+    def test_the_capitalised_spelling_names_the_period(self) -> None:
+        assert P.states_period("the Classic period city of Tikal", "classic")
+        assert P.states_period("an Early Classic temple", "early classic")
+        assert P.states_period("a ceremonial centre of the Initial Period", "Initial Period")
+        assert P.states_period("a village of the Initial period", "initial period")
+        assert P.states_period("a village of the Initial period", "Initial")  # the bare word, read
+
+    @pytest.mark.parametrize(
+        ("quote", "name"),
+        [
+            ("a classic example of a platform mound", "classic"),
+            ("in the initial period of the excavation", "initial period"),
+            ("the initial period of occupation", "initial"),
+            ("the CLASSIC trench", "classic"),  # not the spelling of a source naming an era
+            ("a Classical temple", "classic"),  # another word that begins alike
+        ],
+    )
+    def test_the_small_spelling_and_a_longer_word_name_nothing(self, quote: str, name: str) -> None:
+        assert not P.states_period(quote, name)
+
+    def test_the_whole_of_the_name_is_needed_for_the_initial_period(self) -> None:
+        assert not P.states_period("an Initial design", "initial period")
+        assert not P.states_period("an Initial Perio", "initial period")

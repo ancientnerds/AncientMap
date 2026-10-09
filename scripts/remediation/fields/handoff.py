@@ -565,6 +565,25 @@ _WD5_BP = (
     '"< 4500 BC", the only thing the map shows of it: give the year the number works out to, '
     "or -4501, the band's own year."
 )
+#: The readers of a quote in another language (`dates.py`, `points.py`, 2026-10-09): the pilot's spot
+#: check found agents answering `unresolved` for a Hungarian century, a Russian hemisphere and a
+#: table with the longitude first, because they took the checker for English-only.
+_WD5_DATES_ANY_LANGUAGE = (
+    " A quote stays in the language of its page: a year, century or millennium with its BC/AD marker "
+    "is read in English, German, French, Spanish, Italian, Portuguese, Dutch, Polish, Czech, "
+    "Croatian/Serbian, Hungarian, Greek, Russian, Ukrainian, Bulgarian, Turkish and the Nordic "
+    'languages ("i. e. 7. században", "V secolo a.C.", "5. Jahrhundert v. Chr.", '
+    '"в V веке до н. э.", "MÖ 7. yüzyıl", "f.Kr."), and so are years before the present '
+    '("vor 12.000 Jahren", "il y a 12 000 ans", "hace 12.000 años"). A number with no marker is '
+    'read as AD, so a BC date needs its BC marker (or a minus sign, "-330") in the quote itself.'
+)
+_WD5_POINTS_ANY_LANGUAGE = (
+    " A quote may also hold the point as the page prints it in another language or order: "
+    'hemisphere letters of another language ("16°15′30″ ю. ш. 46°44′27″ з. д.", "é. sz.", '
+    '"s. š."; an O is read by the page\'s language), and two decimals whose axes the quote '
+    'labels - "Long. Lat." heading the numbers of a table row, "lon 65.58, lat 31.55" - longitude '
+    "first when the labels say so. Two unlabelled decimals are latitude first."
+)
 _WD5_UNRESOLVED_PERIOD = (
     "- unresolved: no source dates the start. What follows is this lane's own rule: a start that a "
     'rule made (the stored value says so above) becomes "Undated" with no year, and a start a '
@@ -577,11 +596,15 @@ _WD5_UNRESOLVED_PERIOD = (
 #: does said per field. Every other sentence is WD3's/WD4's own string, not a copy of it.
 FIELD_RULES_WD5 = {
     **{field: FIELD_RULES_WD4[field] + "\n" + note for field, note in _WD5_UNRESOLVED.items()},
+    "coordinates": FIELD_RULES_WD4["coordinates"]
+    + _WD5_POINTS_ANY_LANGUAGE
+    + "\n"
+    + _WD5_UNRESOLVED["coordinates"],
     "period_start": _swap(
         _swap(
             FIELD_RULES_WD4["period_start"],
             ' A year worked out from "4,500 years ago" or a BP date is not read.',
-            _WD5_BP,
+            _WD5_BP + _WD5_DATES_ANY_LANGUAGE,
         ),
         "- unresolved: no source dates the start. The field stays as it is - an empty one stays "
         "empty - and the site goes to the owner's list.\n",

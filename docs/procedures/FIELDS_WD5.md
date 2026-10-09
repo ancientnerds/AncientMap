@@ -316,3 +316,31 @@ sweep has the family `wd5-adv:` (`python scripts/remediation/mechanical/mutation
   adding the cut.
 - Kosovo, Narona, Heracleion, Achladia and Flevum are asked again, not carried (X3); the 73 collective entities are
   listed, not touched (X8).
+
+## 11. The readers of a quote in another language (2026-10-09, pilot spot check)
+
+The Opus spot check of the pilot (written wave `2026-10-09a`) found 5 of its 10 sampled `unresolved` fields where a
+source plainly stated the value and only a machine reader failed: a Hungarian sentence (Olympe, "már az i. e. 7.
+században is lakták a várost"), a period name the table did not hold (Chitinamit, "dates from the Early Classic"), a
+table with the longitude first (Said Qala Tepe, `Long. Lat.` / `K001 Said Qala Tepe 65.5795897 31.5520628 mound`) and
+a Russian hemisphere (Gruta do Gentio, `16°15′30″ ю. ш. 46°44′27″ з. д.`). For a rule-made start `unresolved` clears
+the value to `Undated` (D12), so a reader gap deletes a roughly right value although a source exists. The readers,
+all in `scripts/remediation/fields/`, tests `tests/remediation/test_fields_dates.py`, `test_fields_points.py` and
+`tests/pipeline/test_periods.py`, mutation family `wd5l:`:
+
+| reader | reads | refuses |
+|---|---|---|
+| `pipeline/periods.py` (`PERIODS`, 99 names before, 166 now) | 67 regional period names with the start their comment's source gives: Mesoamerica (Preclassic to Late Postclassic), the Andes (Initial Period to Late Horizon, Chavin, Wari, Moche), eastern North America (Woodland, Mississippian), Egypt (Predynastic, the Intermediate Periods, Middle Kingdom, Ptolemaic), the Aegean (Early/Middle/Late Minoan, Early/Late Helladic, Cycladic), the Near East (Uruk to Neo-Babylonian, Hittite, Seleucid, Parthian, Sasanian), South and East Asia (Mauryan, Kushan, Gupta, Zhou, Jomon, Yayoi, Kofun, Korea's three kingdoms), Roman Republic, Augustan, Flavian. `classic` and `initial period` count only capitalised (`_PROPER`). | `archaic`, `early dynastic`, `late period`, `formative`, `preceramic`, `islamic`, the lithic industries, `dilmun`, `hohokam` (named in `test_periods.REFUSED`: two regions share the word or no start was sourced) |
+| `dates.py` (`answers.states_year`, `answers.dated`) | a year, century or millennium **with its era marker**, in some twenty-five languages (`dates.py` lists them); a range or run; a decade ("the 50s BCE", "600-talet f.Kr."); years before the present in German, French, Spanish, Italian, Portuguese, Dutch, Polish, Russian (`answers.bp_dates`) | a number with no marker for a BC value (it is AD: a year in a sentence about a modern event never states an ancient year), a BC marker for an AD value, a bare number below 100, an abbreviated unit without a marker ("the 4th c."), a fraction ("the first half of the 5th century" is not the 1st), Hungarian `i. e.` outside a Hungarian date, `ad`/`ce` in lower case |
+| `points.py` (`answers.quote_point_km`) | what `parse_coordinates` read, unchanged; Cyrillic, Czech/Slovak and Hungarian hemisphere abbreviations; `O` by the page's language (a Wikipedia edition or a country domain); a decimal comma before the degree sign; two bare decimals whose axes the quote labels (`Long. Lat.` heading the numbers, `lon 65.58, lat 31.55`, `65.58 (lon), 31.55 (lat)`), with a table row's words around them | a pair with words around it and no labels, one label, a third decimal, a hemisphere letter on a labelled pair, a grid reference, an `O` whose language is unknown |
+
+`states_year` used to look at no era marker at all ("AD 449" stated -449) and to match the year's digits anywhere in
+the quote. Measured on the 3,375 period answers of wd1, wd1-rest, wd3, wd4 and the wd5 pilot that carry a year and a
+quote: the new reader refuses 14 of the answers the old one accepted (0.4 %), every one of them with a quote that
+carries no era marker, is cut off mid-word, or states the other sign ("the 4th c.", "(883-859)", "the 6th millennium
+BC" for -5000, "the 1st century AD" for -100); it accepts none the old one refused. The agents' wd5 prompt
+(`handoff.FIELD_RULES_WD5`) says quotes may stay in their language and that a BC date needs its marker.
+
+Known limits: a period name is read only in English (a French "Néolithique final" is not a name of the table);
+spelled-out ordinals ("cinquième siècle", "fünftes Jahrhundert") are read in English only; the Aurignacian,
+Mousterian and Magdalenian are not names (their starts differ by region and dating method: quote the BP date).

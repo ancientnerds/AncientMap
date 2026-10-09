@@ -200,6 +200,111 @@ PERIODS: dict[str, tuple[int, int]] = {
     # a conventional span, the source names no fixed boundary for either end
     "early modern": (1500, 1800),
     "slavic": (500, 1000),  # the early Slavs, c. the 5th to the 10th century AD
+    # --- the regional chronologies lane WD5 needed (2026-10-09). Measured on the 14,616 period
+    # texts of the earlier lanes' answers (wd1, wd3, wd4, wd5-pilot): the Maya and Andean sequences,
+    # the Aegean Bronze Age and the Kushan, Roman and Seleucid eras were named hundreds of times and
+    # were not names of this table, so a source that plainly said "dates from the Early Classic"
+    # could not be read and a rule-made start was cleared to `Undated` (D12). Every start is the
+    # one the source named in its comment gives; where the literature disagrees the line says so.
+    # A name that two regions use for different spans stays out (`archaic`, `early dynastic`, `late
+    # period`, `formative`): `tests/pipeline/test_periods.py::REFUSED` names each and why.
+    #
+    # Mesoamerica: the periodisation of Sharer and Traxler, The Ancient Maya (6th ed., 2006), and
+    # Evans, Ancient Mexico and Central America (3rd ed., 2013). "Preclassic" is the Formative.
+    "preclassic": (-2000, 250),  # the same era as `mesoamerican preclassic period` above
+    "early preclassic": (-2000, -1000),
+    "middle preclassic": (-1000, -400),
+    "late preclassic": (-400, 250),
+    "classic": (250, 900),  # the Classic period; read only capitalised (`_PROPER`)
+    "early classic": (250, 600),
+    "late classic": (600, 900),
+    # the Terminal Classic overlaps the Late Classic's end: c. AD 800-1000 in the Maya lowlands
+    "terminal classic": (800, 1000),
+    "postclassic": (900, 1521),  # to the Spanish conquest of Tenochtitlan
+    "early postclassic": (900, 1200),
+    "late postclassic": (1200, 1521),
+    # The Andes: Moseley, The Incas and Their Ancestors (2nd ed., 2001), after Rowe's horizons and
+    # intermediate periods. `inca` above is the state, c. 1438-1533; the Late Horizon is Rowe's
+    # 1476-1532.
+    # read only capitalised (`_PROPER`): "the initial period" of a dig is not it
+    "initial period": (-1800, -900),
+    "early horizon": (-900, -200),  # Chavin's horizon, 900-200 BC (Burger 1992, Chavin)
+    "early intermediate period": (-200, 600),
+    "middle horizon": (600, 1000),
+    "late intermediate period": (1000, 1476),
+    "late horizon": (1476, 1532),
+    "chavin": (-900, -200),  # Chavin de Huantar, 900-200 BC (Burger 1992)
+    "wari": (600, 1100),  # the Wari state, c. AD 600 to 1100 (the Middle Horizon ends at 1000)
+    "moche": (100, 800),  # the Moche culture of the north coast, c. AD 100-800
+    # Eastern North America: Fagan, Ancient North America (4th ed., 2005); the Woodland period and
+    # its three stages as the Wikipedia article `Woodland period` gives them.
+    "woodland": (-1000, 1000),
+    "early woodland": (-1000, -200),
+    "middle woodland": (-200, 500),
+    "late woodland": (500, 1000),
+    # the Mississippian period proper, c. AD 1000 to the 16th century; the Emergent Mississippian
+    # of AD 800-1000 is not counted
+    "mississippian": (1000, 1600),
+    # Egypt: the chronology of Shaw (ed.), The Oxford History of Ancient Egypt (2000), which
+    # `old kingdom` and `new kingdom` above already follow.
+    "predynastic": (-5300, -3000),
+    "first intermediate period": (-2181, -2055),
+    "middle kingdom": (-2055, -1650),
+    "second intermediate period": (-1650, -1550),
+    "third intermediate period": (-1069, -664),
+    "ptolemaic": (-305, -30),  # from Ptolemy I's kingship (305 BC) to the death of Cleopatra VII
+    # The Aegean Bronze Age: the conventional dates of Warren and Hankey, Aegean Bronze Age
+    # Chronology (1989) and Shelmerdine (ed.), The Cambridge Companion to the Aegean Bronze Age
+    # (2008); the Cyclades after Renfrew, The Emergence of Civilisation (1972). The three Minoan
+    # and Helladic names join `minoan` and `helladic` above, which hold the whole span.
+    "early minoan": (-3100, -2100),
+    "middle minoan": (-2100, -1600),
+    "late minoan": (-1600, -1100),
+    "early helladic": (-3200, -2000),
+    "late helladic": (-1600, -1050),
+    "early cycladic": (-3200, -2000),
+    "middle cycladic": (-2000, -1600),
+    "late cycladic": (-1600, -1050),
+    # The Near East: Van de Mieroop, A History of the Ancient Near East (3rd ed., 2016), the
+    # middle chronology; Rothman (ed.), Uruk Mesopotamia and its Neighbors (2001) for Uruk;
+    # Bryce, The Kingdom of the Hittites (2005) for the Hittites.
+    "uruk": (-4000, -3100),
+    "jemdet nasr": (-3100, -2900),
+    "akkadian": (-2334, -2154),  # the Akkadian Empire, Sargon to the Gutian conquest
+    "ur iii": (-2112, -2004),  # the Third Dynasty of Ur
+    # the period after the Ur III collapse to the Hittite sack of Babylon, middle chronology; the
+    # First Dynasty of Babylon alone begins c. 1894 BC
+    "old babylonian": (-2004, -1595),
+    "neo assyrian": (-911, -609),  # Adad-nirari II to the fall of Harran
+    "neo babylonian": (-626, -539),  # Nabopolassar to Cyrus's conquest
+    "hittite": (-1650, -1178),  # Labarna's Old Kingdom to the collapse of the empire
+    "seleucid": (-312, -63),  # the Seleucid Empire, to Pompey's annexation of Syria
+    "parthian": (-247, 224),  # the Arsacid dynasty, to Ardashir I
+    "sasanian": (224, 651),  # Ardashir I to the fall of Yazdegerd III
+    "sassanid": (224, 651),  # the same era, spelt as older English does
+    # South and East Asia. India: Thapar, Early India (2002), Gupta and Kushan after Wikipedia's
+    # Kushan Empire and Gupta Empire (30-375, 320-550), the standard dates of the cited histories.
+    # China: Shaughnessy (ed.), The Cambridge History of Ancient China (1999). Japan: Habu,
+    # Ancient Jomon of Japan (2004); the Yayoi and the Kofun bounds are the handbooks' usual
+    # 300 BC-AD 300 and AD 300-538. Korea: the traditional foundation years of Silla (57 BC), Goguryeo (37 BC) and
+    # Baekje (18 BC), as the Samguk sagi gives them.
+    "mauryan": (-322, -185),
+    "kushan": (30, 375),
+    "kushana": (30, 375),  # the same era, in the spelling the Archaeological Survey of India uses
+    "gupta": (320, 550),  # from the Gupta era's own epoch, AD 319/320 (Chandragupta I)
+    "zhou": (-1046, -256),
+    "jomon": (-14000, -300),
+    "yayoi": (-300, 300),
+    "kofun": (300, 538),
+    "three kingdoms of korea": (-57, 668),
+    "silla": (-57, 935),
+    "goguryeo": (-37, 668),
+    "koguryo": (-37, 668),  # the same state in the older romanisation
+    "baekje": (-18, 660),
+    # Rome beyond `roman imperial` above: the Republic, and the two reigns named most often.
+    "roman republic": (-509, -27),
+    "augustan": (-27, 14),
+    "flavian": (69, 96),
 }
 
 #: A name is read as its folded words: every run of punctuation or whitespace a space, accents
@@ -239,9 +344,27 @@ _BEFORE = re.compile(r"\bb\.?\s?c\.?\s?(?:e\.?)?\b", re.IGNORECASE)
 #: "period". Dropping that word is safe ("Romano-British" names the age); dropping "age" or "era" is
 #: not ("iron", "late"), so those names are quoted whole. `_key_of` reads a *name* the same way for
 #: a lookup, so the word has one reading and one place in this module.
+#: The names that are ordinary English words when written small: "the initial period of the dig", "a
+#: classic example". A quote names them only capitalised in its own spelling ("the Initial Period",
+#: "the Classic period", "Late Classic"); the folded comparison below would read both. Their forms
+#: stay whole, so "initial" alone is not the Initial Period.
+_PROPER = frozenset({"classic", "initial period"})
 _FORMS: dict[str, tuple[str, ...]] = {
-    key: ((key, key.removesuffix(" period").strip()) if key.endswith(" period") else (key,))
+    key: (
+        (key, key.removesuffix(" period").strip())
+        if key.endswith(" period") and key not in _PROPER
+        else (key,)
+    )
     for key in PERIODS
+}
+_CAPITALISED: dict[str, re.Pattern[str]] = {
+    key: re.compile(
+        r"(?<![^\W_])"
+        + re.escape(key.split()[0].capitalize())
+        + "".join(r"[\s-]+(?i:" + re.escape(word) + ")" for word in key.split()[1:])
+        + r"(?![^\W_])"
+    )
+    for key in _PROPER
 }
 
 
@@ -299,7 +422,11 @@ def states_period(quote: str, name: str) -> bool:
     if not text:
         return False
     key = _key_of(name)
-    return key is not None and any(f" {form} " in f" {text} " for form in _FORMS[key])
+    if key is None:
+        return False
+    if key in _PROPER and _CAPITALISED[key].search(quote) is None:
+        return False
+    return any(f" {form} " in f" {text} " for form in _FORMS[key])
 
 
 def century_range(text: str) -> tuple[int, int] | None:
