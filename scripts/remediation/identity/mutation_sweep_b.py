@@ -1614,7 +1614,7 @@ CASES: list[Case] = [
         RUN,
         "args.calibration, spec.role, CAL.spec_of(spec.lane).stage",
         "args.calibration, spec.role, spec.stage",
-        "test_the_import_refuses_answers_given_before_the_calibration_and_another_lane_s_pool",
+        "test_a_question_stage_a_calibration_gate_a_wave_a_plan_and_a_read_back",
         T_RUN,
     ),
     Case(
