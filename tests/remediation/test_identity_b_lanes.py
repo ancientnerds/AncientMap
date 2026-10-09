@@ -248,7 +248,9 @@ class TestTheSpokenLane:
             site_ids={SITE_A},
             lane=self.lane,
         )
-        assert "blank or too long" in sql and f"> {IL.SPOKEN_MAX_CHARS}" in sql
+        invariant = self.lane.site_invariants[0]
+        assert f"length(u.spoken_name) > {IL.SPOKEN_MAX_CHARS}" in invariant.predicate
+        assert "blank or too long" in sql and invariant.predicate in sql
         probes = {
             c[0]
             for c in A.probe_cases(
