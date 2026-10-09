@@ -3133,7 +3133,7 @@ IMAGE_CASES: list[Case] = [
     guard(
         "img attrib: a batch answer carries its query",
         ATTRIB,
-        '    if "query" not in answer:',
+        '    if "query" not in payload["json"]:',
         "test_a_batch_answer_without_a_query_stops_the_lane",
         ATTRIB_TESTS,
     ),
@@ -3161,10 +3161,8 @@ IMAGE_CASES: list[Case] = [
     Case(
         "img attrib: evidence is split at newlines only",
         ATTRIB,
-        '        json.loads(line) for line in pv.jsonl_lines(path.read_text(encoding="utf-8")) if'
-        " line.strip()",
-        '        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if'
-        " line.strip()",
+        '        for line in pv.jsonl_lines(path.read_text(encoding="utf-8"))',
+        '        for line in path.read_text(encoding="utf-8").splitlines()',
         "test_the_evidence_file_is_read_back_whole_when_a_span_carries_a_line_separator",
         ATTRIB_TESTS,
     ),
@@ -6594,16 +6592,16 @@ WD2_CASES: list[Case] = [
     Case(
         "wd2 img: a confirmed image aligns the thumbnail",
         SERVED / "plan.py",
-        "    changes = _thumb(site, target, RULE_ALIGN, reason, evidence)\n    return SitePlan(sid, CONFIRMED",
-        "    changes = []\n    return SitePlan(sid, CONFIRMED",
+        "    changes = _thumb(site, target, RULE_ALIGN, reason, evidence)\n    return SitePlan(sid, outcome",
+        "    changes = []\n    return SitePlan(sid, outcome",
         "test_a_confirmed_image_aligns_the_thumbnail",
         SERVED_TESTS,
     ),
     Case(
         "wd2 img: a repaired thumbnail gets its rendering",
         SERVED / "plan.py",
-        "        if repair is None:\n            return SitePlan(sid, CONFIRMED, None, thumb)",
-        "        if True:\n            return SitePlan(sid, CONFIRMED, None, thumb)",
+        "        if repair is None:\n            return SitePlan(sid, outcome, None, thumb)",
+        "        if True:\n            return SitePlan(sid, outcome, None, thumb)",
         "test_a_depicting_file_behind_a_broken_thumbnail_repairs_the_address",
         SERVED_TESTS,
     ),

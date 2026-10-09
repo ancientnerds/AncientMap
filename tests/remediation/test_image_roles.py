@@ -231,6 +231,24 @@ class TestTheTransport:
         with pytest.raises(SG.StageError, match="not the file the export recorded"):
             SG.import_answers(run, handoff, spec)
 
+    def test_a_question_that_names_other_bytes_than_it_was_given_is_refused(
+        self, tmp_path: Path
+    ) -> None:
+        q = SG.Question("b-001", "q1", "p", {}, (SG.image_ref("x", b"abc"),))
+        with pytest.raises(SG.StageError, match="names other bytes"):
+            SG.export(tmp_path / "r", tmp_path / "h", _tiny_spec(), [q], {"x": b"abd"})
+
+    def test_a_stage_that_was_not_exported_or_imported_names_the_step_to_run(
+        self, tmp_path: Path
+    ) -> None:
+        spec = _tiny_spec()
+        with pytest.raises(SG.StageError, match="export the stage first"):
+            SG.load_questions(tmp_path, spec)
+        with pytest.raises(SG.StageError, match="export the stage first"):
+            SG.brief(tmp_path, tmp_path / "h", spec, "b")
+        with pytest.raises(SG.StageError, match="import the stage first"):
+            SG.read_results(tmp_path, spec)
+
     def test_the_text_helpers_refuse_what_is_out_of_shape(self) -> None:
         assert SG.text_field("  a note ", "note") == "a note"
         with pytest.raises(SG.AnswerShapeError, match="non-empty"):

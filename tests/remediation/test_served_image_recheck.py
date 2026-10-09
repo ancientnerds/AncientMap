@@ -673,3 +673,41 @@ def test_the_command_derives_the_population_from_the_two_stages_of_a_run(tmp_pat
     (old / V.REPLACE).write_text(ST.jsonl_text([]), encoding="utf-8")
     assert SR.cmd_derive_sites(run, old)["sites"] == 1
     assert RC.read_sites(run / RC.SITES_FILE) == [THASOS]
+
+
+class TestTheRunsSites:
+    def test_a_run_without_an_export_examines_every_site(self, tmp_path: Path) -> None:
+        assert V.run_sites(tmp_path) is None
+
+    def test_the_check_and_the_replacement_export_must_name_the_same_sites(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / V.EXPORT_CHECK).write_text(json.dumps({"sites": ["a", "b"]}), encoding="utf-8")
+        (tmp_path / V.EXPORT_REPLACE).write_text(
+            json.dumps({"sites": ["b", "a"]}), encoding="utf-8"
+        )
+        assert sorted(V.run_sites(tmp_path) or []) == ["a", "b"]  # the order does not matter
+        (tmp_path / V.EXPORT_REPLACE).write_text(
+            json.dumps({"sites": ["a", "c"]}), encoding="utf-8"
+        )
+        with pytest.raises(ST.StateError, match="different sites"):
+            V.run_sites(tmp_path)
+
+    def test_an_unrestricted_stage_names_no_sites(self, tmp_path: Path) -> None:
+        (tmp_path / V.EXPORT_CHECK).write_text(json.dumps({"sites": None}), encoding="utf-8")
+        assert V.run_sites(tmp_path) is None
+
+
+def test_a_wikipedia_answer_of_two_pages_is_not_read_as_one_lead_image() -> None:
+    class Client:
+        def get(self, url: str, params: dict[str, Any]) -> Any:
+            class Answer:
+                status_code = 200
+
+                def json(self) -> dict[str, Any]:
+                    return {"query": {"pages": [{"title": "A"}, {"title": "B"}]}}
+
+            return Answer()
+
+    with pytest.raises(RC.RecheckError, match="2 pages"):
+        RC.lead_image(Client(), "A")
