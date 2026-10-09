@@ -115,6 +115,48 @@ export interface CrawlersData {
   log_reason: string | null
 }
 
+export type LoadLevel = 'ok' | 'warn' | 'bad'
+
+export interface ServerDay {
+  day: string
+  /** Share of all cores busy, averaged over the day's samples; null when unknown. */
+  cpu_avg: number | null
+  /** The busiest five (or, from sysstat's history, ten) minutes of the day. */
+  cpu_peak: number | null
+  load_peak: number | null
+  /** Memory the kernel could not hand out, at its peak (percent). */
+  mem_peak: number | null
+  /** Disk used at the day's peak; null before the sampler (sysstat keeps none). */
+  disk_used: number | null
+  /** Visitors that day (the growth line's count), for comparison. */
+  visitors: number | null
+}
+
+export interface ServerReport {
+  now: {
+    t: string
+    cpu: number | null
+    load5: number
+    mem_used: number
+    mem_total_mb: number | null
+    cores: number | null
+    disk_used: number | null
+    disk_free_gb: number | null
+  } | null
+  days: ServerDay[]
+  levels: { disk: LoadLevel; memory: LoadLevel; cpu: LoadLevel }
+  /** No sample for twenty minutes: the sampler in Lyra is not running. */
+  silent: boolean
+  /** [amber, red] in percent. */
+  limits: { disk: [number, number]; memory: [number, number]; cpu: [number, number] }
+}
+
+/** GET /api/stats/server */
+export interface ServerData {
+  report: ServerReport | null
+  log_reason: string | null
+}
+
 /** GET /api/stats/overview?days=N */
 export interface Overview {
   days: number

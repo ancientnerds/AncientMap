@@ -2080,6 +2080,12 @@ def main() -> None:
         should_generate_article,
     )
     from pipeline.lyra.journal_attempts import claim_attempt, finish_week
+    from pipeline.server_load import start_sampler
+
+    # One sample of the host every five minutes for the founders dashboard's
+    # "Is the server keeping up?" (pipeline/server_load.py). Only here, in the
+    # long-running loop: a --once or --step run would leave a gap anyway.
+    start_sampler()
 
     last_pipeline_run = 0.0
 

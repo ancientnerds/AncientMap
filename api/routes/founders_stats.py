@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""The founders dashboard's data: seventeen endpoints under /api/stats, all
+"""The founders dashboard's data: eighteen endpoints under /api/stats, all
 behind the ``an_stats`` cookie (stats_access.require_stats_session). Umami rows
 come from pipeline.umami_db, the member counts from pipeline.members_stats,
 nginx's referral log from pipeline.referral_log, Google's view of us (Search
@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 from api.cache import cached
 from api.routes.stats_access import require_stats_session
 from api.services import crawler_log, crux, jwt_auth, search_console
-from pipeline import members_stats, referral_log
+from pipeline import members_stats, referral_log, server_load
 from pipeline import stats_analysis as fs
 from pipeline.database import get_db
 from pipeline.umami_db import (
@@ -207,6 +207,24 @@ async def field_vitals(
     """Google's own speed numbers for the origin: CrUX p75 LCP, INP and CLS per
     week, phone and desktop."""
     return await _field_vitals()
+
+
+@router.get("/server")
+async def server(
+    _session: dict = Depends(require_stats_session),
+) -> dict[str, Any]:
+    """Is the server keeping up: the host's newest sample, its days since the
+    log began with the visitors of each day beside them, and the warning
+    levels. Its window is its own."""
+    samples = await asyncio.to_thread(server_load.read_samples)
+    if samples is None:
+        return {"report": None, "log_reason": server_load.unavailable_reason()}
+    report = server_load.load_report(samples, datetime.now(UTC))
+    daily = await _daily_line()
+    visitors = {p["day"]: p["visitors"] for p in [*daily["days"], daily["today"]]}
+    for day in report["days"]:
+        day["visitors"] = visitors.get(day["day"])
+    return {"report": report, "log_reason": None}
 
 
 @router.get("/crawlers")

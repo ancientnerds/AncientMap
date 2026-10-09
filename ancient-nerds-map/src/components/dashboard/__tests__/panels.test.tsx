@@ -28,6 +28,7 @@ import { Pulse } from '../Pulse'
 import { Reading } from '../Reading'
 import { Scrapers } from '../Scrapers'
 import { SearchGoogle } from '../SearchGoogle'
+import { ServerLoad } from '../ServerLoad'
 import { SessionTypes } from '../SessionTypes'
 import { Sources } from '../Sources'
 import { TopContent } from '../TopContent'
@@ -48,6 +49,7 @@ import type {
   Overview,
   ProblemsData,
   SearchData,
+  ServerData,
   SourcesData,
 } from '../types'
 import type { Loaded } from '../useStats'
@@ -85,6 +87,7 @@ const EMPTY = {
     report: { covered_from: null, bots: [], days: [], ai_user_pages: [], impostors: [] },
     log_reason: null,
   } as CrawlersData,
+  server: { report: null, log_reason: 'The server load log is not readable here.' } as ServerData,
   live: {
     window_minutes: 30,
     lookback_hours: 24,
@@ -146,6 +149,7 @@ const emptyPanels: Array<[string, JSX.Element]> = [
   ['SearchGoogle', <SearchGoogle state={ok(EMPTY.search)} />],
   ['FieldVitals', <FieldVitals state={ok(EMPTY.vitals)} />],
   ['Crawlers', <Crawlers state={ok(EMPTY.crawlers)} />],
+  ['ServerLoad', <ServerLoad state={ok(EMPTY.server)} />],
   ['LiveNow', <LiveNow state={ok(EMPTY.live)} />],
   ['GlobeReach', <GlobeReach state={ok(EMPTY.globe)} />],
   ['Scrapers', <Scrapers state={ok(EMPTY.clusters)} overview={ok(EMPTY.overview)} />],
@@ -168,6 +172,7 @@ const failedPanels: Array<[string, JSX.Element]> = [
   ['SearchGoogle', <SearchGoogle state={failed} />],
   ['FieldVitals', <FieldVitals state={failed} />],
   ['Crawlers', <Crawlers state={failed} />],
+  ['ServerLoad', <ServerLoad state={failed} />],
   ['LiveNow', <LiveNow state={failed} />],
   ['GlobeReach', <GlobeReach state={failed} />],
   ['Scrapers', <Scrapers state={failed} overview={failed} />],

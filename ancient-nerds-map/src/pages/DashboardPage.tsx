@@ -1,5 +1,5 @@
 /**
- * The founders dashboard at https://stats.ancientnerds.com/ — nineteen panels,
+ * The founders dashboard at https://stats.ancientnerds.com/ — twenty panels,
  * each titled with the question it answers, fed by /api/stats/* behind the
  * an_stats cookie (api/routes/stats_access.py). Mobile first: one column,
  * two from 720 px. Umami itself stays one link away.
@@ -23,6 +23,7 @@ import { Pulse } from '../components/dashboard/Pulse'
 import { Reading } from '../components/dashboard/Reading'
 import { Scrapers } from '../components/dashboard/Scrapers'
 import { SearchGoogle } from '../components/dashboard/SearchGoogle'
+import { ServerLoad } from '../components/dashboard/ServerLoad'
 import { SessionTypes } from '../components/dashboard/SessionTypes'
 import { Sources } from '../components/dashboard/Sources'
 import { TopContent } from '../components/dashboard/TopContent'
@@ -43,6 +44,7 @@ import type {
   Overview,
   ProblemsData,
   SearchData,
+  ServerData,
   SourcesData,
 } from '../components/dashboard/types'
 import { useStats } from '../components/dashboard/useStats'
@@ -89,6 +91,8 @@ export default function DashboardPage() {
   const search = useStats<SearchData>('search', 600_000)
   const vitals = useStats<FieldVitalsData>('field-vitals', 3_600_000)
   const crawlers = useStats<CrawlersData>(`crawlers?days=${days}`, 300_000)
+  // The host samples itself every five minutes; asking more often shows nothing new.
+  const server = useStats<ServerData>('server', 300_000)
   const globe = useStats<GlobeData>(`globe?days=${days}`)
   // Five minutes: a scraper fingerprint does not change from minute to minute,
   // and this is the one query that has to sort every event in the window.
@@ -105,9 +109,9 @@ export default function DashboardPage() {
   const members = useStats<MembersData>('members', 300_000)
   // `members` is deliberately not in this array. It is the only route on a
   // different database behind a different dependency, and one hiccup there must
-  // not replace the other eighteen panels with "Session expired".
+  // not replace the other nineteen panels with "Session expired".
   const panels = [
-    overview, countries, daily, search, vitals, crawlers, map, live, globe,
+    overview, countries, daily, search, vitals, crawlers, server, map, live, globe,
     clusters, content, feedback, sources, journeys, problems, devices,
   ]
   const unauthorized = panels.some(s => s.error === 'unauthorized')
@@ -160,13 +164,14 @@ export default function DashboardPage() {
               how Google sees us, then who is here and where they come from; the
               detail and the curiosities last. The narrow panels go in pairs, so
               the two-column grid has no hole before the last one. */}
-          <Attention problems={problems} globe={globe} content={content} search={search} vitals={vitals} />
+          <Attention problems={problems} globe={globe} content={content} search={search} vitals={vitals} server={server} />
           <Growth state={daily} />
           <SearchGoogle state={search} />
           <Pulse state={overview} countries={countries} />
           <Sources state={sources} />
           <TopContent state={content} />
           <Problems state={problems} />
+          <ServerLoad state={server} />
           <FieldVitals state={vitals} />
           <GlobeReach state={globe} />
           <Crawlers state={crawlers} />

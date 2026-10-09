@@ -3,7 +3,8 @@ import { fmtInt } from './format'
 import { devicesLine } from './GlobeReach'
 import { Explain, Panel } from './Panel'
 import { changeLine } from './SearchGoogle'
-import type { ContentData, FieldVitalsData, GlobeData, ProblemsData, SearchData } from './types'
+import { serverAttention } from './ServerLoad'
+import type { ContentData, FieldVitalsData, GlobeData, ProblemsData, SearchData, ServerData } from './types'
 import type { Loaded } from './useStats'
 
 /** How many problems the summary names; the Problems panel ranks all of them. */
@@ -31,8 +32,11 @@ export function attentionLines(
   content: ContentData | null,
   search: SearchData | null = null,
   vitals: FieldVitalsData | null = null,
+  server: ServerData | null = null,
 ): AttentionLine[] {
   const lines: AttentionLine[] = []
+  // The server first: a full disk or memory takes every other panel down with it.
+  lines.push(...serverAttention(server?.report ?? null))
   if (search?.current && search.previous) {
     const clicks = changeLine(search.current.clicks, search.previous.clicks)
     const position = search.current.position === null ? '' : `, average position ${search.current.position.toFixed(1)}`
@@ -84,15 +88,17 @@ export function Attention({
   content,
   search,
   vitals,
+  server,
 }: {
   problems: Loaded<ProblemsData>
   globe: Loaded<GlobeData>
   content: Loaded<ContentData>
   search: Loaded<SearchData>
   vitals: Loaded<FieldVitalsData>
+  server: Loaded<ServerData>
 }) {
-  const loading = !problems.data && !globe.data && !content.data && !search.data && !vitals.data
-  const lines = attentionLines(problems.data, globe.data, content.data, search.data, vitals.data)
+  const loading = !problems.data && !globe.data && !content.data && !search.data && !vitals.data && !server.data
+  const lines = attentionLines(problems.data, globe.data, content.data, search.data, vitals.data, server.data)
   return (
     <Panel question="What needs attention?" wide>
       {loading ? (
@@ -110,8 +116,8 @@ export function Attention({
       )}
       <Explain>
         <p className="dash-note">
-          These lines come from the panels further down: Google's clicks of the last 28 days against the 28
-          before (Search Console), whether the globe comes up, up to {PROBLEM_LINES} of the worst problems, every
+          These lines come from the panels further down: the server's disk, memory and CPU once they pass their
+          amber limit, Google's clicks of the last 28 days against the 28 before (Search Console), whether the globe comes up, up to {PROBLEM_LINES} of the worst problems, every
           speed number Google's own field data rates below good, and the searches that found nothing. Red breaks
           something for a visitor, amber slows or misses them, green is Google's clicks holding or growing and a
           globe that came up for at least 9 in 10 loads.

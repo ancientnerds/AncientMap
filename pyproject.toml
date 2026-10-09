@@ -102,6 +102,9 @@ ignore_imports = [
     # All-time member counts off our own database for the dashboard's members
     # panel; under pipeline/ for the same reason (2026-09-19).
     "api.** -> pipeline.members_stats",
+    # The host's load samples Lyra writes for the dashboard's server panel;
+    # stdlib only, under pipeline/ because Lyra writes them (2026-10-10).
+    "api.** -> pipeline.server_load",
 ]
 
 # =============================================================================

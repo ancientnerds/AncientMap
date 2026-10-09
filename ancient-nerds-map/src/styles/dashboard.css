@@ -448,6 +448,17 @@ button {
   border-top: 3px solid var(--dash-green);
 }
 
+/* A third line where a chart needs one (the server's disk): paper, dashed. */
+.dash-line-ink {
+  stroke: var(--dash-paper);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.dash-line-ink-key::before {
+  border-top: 2px dashed var(--dash-paper);
+}
+
 /* Field vitals: name, the newest p75 in Google's band colour, the band, and
    half a year of weeks under it. */
 .dash-vitals {

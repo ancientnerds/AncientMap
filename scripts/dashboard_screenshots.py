@@ -277,8 +277,38 @@ CRAWLERS = {
     "log_reason": None,
 }
 
+
+def server_days(days: int = 10) -> list[dict]:
+    """The host's days: idle with a deploy-day peak, as measured 2026-10-01..09."""
+    first = datetime(2026, 9, 30, tzinfo=UTC)
+    return [
+        {
+            "day": (first + timedelta(days=i)).date().isoformat(),
+            "cpu_avg": 3.0 + (i % 3) / 2,
+            "cpu_peak": 14.0 + (i * 7) % 23,
+            "load_peak": 1.2 + (i % 4) / 3,
+            "mem_peak": 33.0 + i % 4,
+            "disk_used": None if i < 9 else 59.1,
+            "visitors": 110 + 8 * i,
+        }
+        for i in range(days)
+    ]
+
+
+SERVER = {
+    "report": {
+        "now": {"t": "2026-10-09T21:55:00+00:00", "cpu": 3.1, "load5": 0.3, "mem_used": 34.4, "mem_total_mb": 11960, "cores": 6, "disk_used": 59.1, "disk_free_gb": 79.8},
+        "days": server_days(),
+        "levels": {"disk": "ok", "memory": "ok", "cpu": "ok"},
+        "silent": False,
+        "limits": {"disk": [80.0, 90.0], "memory": [85.0, 95.0], "cpu": [80.0, 95.0]},
+    },
+    "log_reason": None,
+}  # fmt: skip
+
 FIXTURES: dict[str, dict] = {
     "daily": daily_points(),
+    "server": SERVER,
     "search": SEARCH,
     "field-vitals": FIELD_VITALS,
     "crawlers": CRAWLERS,
@@ -681,6 +711,10 @@ EMPTY_FIXTURES: dict[str, dict] = {
     "field-vitals": {
         ff: {"weeks": WEEKS[-1:], "lcp": [None], "inp": [None], "cls": [None]}
         for ff in ("phone", "desktop")
+    },
+    "server": {
+        "report": None,
+        "log_reason": "The server load log is not readable at /app/logs/server_load.jsonl.",
     },
     # A development box: no crawler log at all, which the panel names.
     "crawlers": {

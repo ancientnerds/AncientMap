@@ -86,7 +86,7 @@ def test_router_is_mounted_under_api_stats():
     # changed between the local and the CI version (a _IncludedRouter wrapper
     # without .path), while the schema is the documented contract either way.
     paths = set(app.openapi()["paths"])
-    for name in ("overview", "countries", "daily", "search", "field-vitals", "crawlers", "map", "live", "globe", "clusters", "devices", "content", "feedback", "sources", "journeys", "problems", "members"):  # fmt: skip
+    for name in ("overview", "countries", "daily", "search", "field-vitals", "crawlers", "server", "map", "live", "globe", "clusters", "devices", "content", "feedback", "sources", "journeys", "problems", "members"):  # fmt: skip
         assert f"/api/stats/{name}" in paths, name
 
 
@@ -137,6 +137,33 @@ def test_daily_fetches_the_whole_history_once_and_ends_with_today(monkeypatch):
     assert len(out["days"]) == (now.date() - fs.TRACKER_FIRST_FULL_DAY).days
     assert len(fetch.calls) == 1
     assert fetch.calls[0][1] == datetime(2026, 9, 18, tzinfo=UTC)
+
+
+def test_server_says_why_when_the_log_is_missing(monkeypatch):
+    from pipeline import server_load
+
+    monkeypatch.setattr(server_load, "read_samples", lambda: None)
+    out = asyncio.run(fr.server(_session=SESSION))
+    assert out["report"] is None and "server_load.jsonl" in out["log_reason"]
+
+
+def test_server_puts_each_day_s_visitors_beside_its_load(monkeypatch):
+    from pipeline import server_load
+
+    now = datetime.now(UTC)
+    sample = {"t": now - timedelta(minutes=3), "cpu": 3.0, "load1": 0.2, "load5": 0.3, "mem_used": 31.0, "mem_total_mb": 11960, "disk_used": 59.0, "disk_free_gb": 80.0, "cores": 6}  # fmt: skip
+    monkeypatch.setattr(server_load, "read_samples", lambda: [sample])
+
+    async def daily():
+        return {
+            "days": [],
+            "today": {"day": now.date().isoformat(), "visitors": 42, "human": 9, "ai": 1},
+        }
+
+    monkeypatch.setattr(fr, "_daily_line", daily)
+    out = asyncio.run(fr.server(_session=SESSION))
+    assert out["report"]["days"][-1]["visitors"] == 42
+    assert out["report"]["now"]["disk_used"] == 59.0
 
 
 def test_crawlers_say_why_when_the_log_is_missing(monkeypatch):
