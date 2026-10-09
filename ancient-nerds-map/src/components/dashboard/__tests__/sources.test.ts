@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import { bucketTotals, familyItem, hostItem, prefetchLine, sourceBucket, spamLine, statusItem } from '../Sources'
+import {
+  bucketTotals,
+  familyItem,
+  hostItem,
+  prefetchLine,
+  scriptedLine,
+  sourceBucket,
+  spamLine,
+  statusItem,
+} from '../Sources'
 
 describe('source buckets', () => {
   it('folds the API families into the six founder buckets', () => {
@@ -94,5 +103,14 @@ describe('prefetchLine', () => {
     expect(prefetchLine(279)).toContain('279 pages that Chrome prefetched for a Google result page')
     expect(prefetchLine(1)).toContain('1 page that Chrome prefetched')
     expect(prefetchLine(0)).toBe('')
+  })
+})
+
+describe('scriptedLine', () => {
+  it('names the page requests over HTTP/1.x, and nothing when there are none', () => {
+    // 2,604 requests of the 47.79.0.0/16 scraper, 26 Sep - 8 Oct 2026, all HTTP/1.1
+    expect(scriptedLine(2604)).toContain('2,604 page requests over HTTP/1.x')
+    expect(scriptedLine(1)).toContain('1 page request over HTTP/1.x')
+    expect(scriptedLine(0)).toBe('')
   })
 })

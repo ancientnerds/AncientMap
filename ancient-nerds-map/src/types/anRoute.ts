@@ -151,12 +151,20 @@ export interface SiteRoute {
   /** The AI mark of the site's card (a lane-WB teaser: 'generated'); null when no card
    *  provenance hashes the card. The card is not on the page - its SiteCard opens it. */
   card_ai: DescriptionAi | null
+  /** The site's Wikidata item and English Wikipedia title (site_external_ids), each only
+   *  when no other shown curated site carries the same one: the head names them as the
+   *  place's identity (sameAs), and a shared value would claim a false one. */
+  wikidata_qid: string | null
+  enwiki_title: string | null
   alt_names: string[]
   /** Hero from wiki_images with its Commons attribution (licence!). */
   image: {
     url: string
     author: string | null
     license: string | null
+    /** The licence deed, for the ImageObject; null on public-domain files and rows the
+     *  credit backfill has not reached. */
+    license_url: string | null
     commons_url: string | null
     /** Pixelmasse für `<img width height>` — ohne sie springt das Layout. */
     width: number | null

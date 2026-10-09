@@ -441,7 +441,7 @@ def _related_content(row, db: Session) -> dict:
     image = None
     img_row = db.execute(
         text("""
-            SELECT filename, author, license, commons_page_url, width, height
+            SELECT filename, author, license, license_url, commons_page_url, width, height
             FROM wiki_images
             WHERE site_id = :sid AND (is_excluded = false OR is_excluded IS NULL)
             ORDER BY is_hero DESC, is_lead DESC, sort_order
@@ -454,6 +454,7 @@ def _related_content(row, db: Session) -> dict:
             "url": f"/data/images/wiki/{site_id_short(row.id)}/{img_row.filename}",
             "author": img_row.author,
             "license": img_row.license,
+            "license_url": img_row.license_url,
             "commons_url": img_row.commons_page_url,
             # NULL, solange scripts/backfill_image_dimensions.py für die Zeile
             # nicht gelaufen ist — SiteRecord lässt die Attribute dann weg,
@@ -509,6 +510,29 @@ def _related_content(row, db: Session) -> dict:
         ).fetchall()
     ]
 
+    # The page names these as the place's identity (Place.sameAs and identifier,
+    # src/seo/meta.ts), so a value another shown curated site carries too would claim a
+    # false one: 43 QIDs sat on 98 curated sites on 2026-10-08, among them class items like
+    # Q927825 "mortuary temple" on three different temples, and 115 curated rows share an
+    # enwiki title (SEO audit 2026-10-08). Such a value is left out.
+    external = {
+        r.kind: r.value
+        for r in db.execute(
+            text(f"""
+                SELECT e.kind, e.value
+                FROM site_external_ids e
+                WHERE e.site_id = CAST(:sid AS uuid)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM site_external_ids o
+                      JOIN unified_sites u ON u.id = o.site_id
+                      WHERE o.kind = e.kind AND o.value = e.value
+                        AND o.site_id <> e.site_id AND {curated_page("u")}
+                  )
+            """),
+            {"sid": row.id},
+        ).fetchall()
+    }
+
     return {
         "alt_names": alt_names,
         "image": image,
@@ -516,4 +540,6 @@ def _related_content(row, db: Session) -> dict:
         "links": links,
         "parent": parent,
         "siblings": siblings,
+        "wikidata_qid": external.get("wikidata_qid"),
+        "enwiki_title": external.get("enwiki_title"),
     }

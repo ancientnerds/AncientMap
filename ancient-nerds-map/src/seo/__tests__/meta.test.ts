@@ -228,6 +228,58 @@ describe('research-Autorschaft im JSON-LD (Art.-50-Fälle aus test_ai_act_notice
     expect(JSON.parse(schema)['@type']).toBe('Place')
   })
 
+  it('names the video a story is based on, and nothing without a video id', () => {
+    const story = JSON.parse(storyMeta(FIXTURES.story).schema!)
+    expect(story.isBasedOn['@type']).toBe('VideoObject')
+    expect(story.isBasedOn.embedUrl).toMatch(/^https:\/\/www\.youtube-nocookie\.com\/embed\//)
+    const bare = JSON.parse(storyMeta({ ...FIXTURES.story, youtube_url: 'https://www.youtube.com/' }).schema!)
+    expect(bare.isBasedOn).toBeUndefined()
+  })
+
+  it('names the place by its Wikidata item and Wikipedia article when the payload hands them', () => {
+    const place = JSON.parse(
+      siteMeta({ ...pyrefRoute('site'), wikidata_qid: 'Q1934', enwiki_title: 'Göbekli Tepe' } as never).schema!,
+    )
+    expect(place.sameAs).toEqual([
+      'https://www.wikidata.org/wiki/Q1934',
+      'https://en.wikipedia.org/wiki/G%C3%B6bekli_Tepe',
+    ])
+    expect(place.identifier).toEqual({ '@type': 'PropertyValue', propertyID: 'Wikidata', value: 'Q1934' })
+    // A value another site shares arrives as null and claims nothing.
+    const bare = JSON.parse(siteMeta(pyrefRoute('site') as never).schema!)
+    expect(bare.sameAs).toBeUndefined()
+    expect(bare.identifier).toBeUndefined()
+  })
+
+  it('gives the hero as an ImageObject with its licence and an encoded URL', () => {
+    const meta = siteMeta({
+      ...pyrefRoute('site'),
+      image: {
+        url: '/data/images/wiki/9c8b7a65/Gobekli Tepe pillar.webp',
+        author: 'A. Fotograf',
+        license: 'CC BY-SA 4.0',
+        license_url: 'https://creativecommons.org/licenses/by-sa/4.0/',
+        commons_url: 'https://commons.wikimedia.org/wiki/File:X.jpg',
+        width: 1600,
+        height: 900,
+      },
+    } as never)
+    const image = JSON.parse(meta.schema!).image
+    const url = 'https://ancientnerds.com/data/images/wiki/9c8b7a65/Gobekli%20Tepe%20pillar.webp'
+    expect(image).toEqual({
+      '@type': 'ImageObject',
+      contentUrl: url,
+      width: 1600,
+      height: 900,
+      license: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      acquireLicensePage: 'https://commons.wikimedia.org/wiki/File:X.jpg',
+      creditText: 'A. Fotograf',
+      creator: { '@type': 'Person', name: 'A. Fotograf' },
+    })
+    // A raw space ended og:image for every parser (989 heroes, 2026-10-08).
+    expect(meta.image).toBe(url)
+  })
+
   it('Snippet und JSON-LD tragen keine Fußnotenmarker', () => {
     // Google druckte "…Giza Governorate of Egypt [1]." ins Suchergebnis:
     // im Snippet gibt es keine Referenzliste, an der die 1 hängen könnte.

@@ -4,11 +4,20 @@
 User-agent: *
 Allow: /
 
-# Sitemap location
+# Sitemap location: the index, and its content parts by name. Bing reads all
+# seven parts from the index, but GPTBot and ClaudeBot fetched only the index
+# and never a part in the 14 days to 2026-10-08 (SEO audit), so each part is
+# named here as well. sitemap-legacy.xml stays in the index only: its URLs are
+# redirects, listed so Google processes them.
 Sitemap: https://ancientnerds.com/sitemap.xml
+Sitemap: https://ancientnerds.com/sitemap-static.xml
+Sitemap: https://ancientnerds.com/sitemap-sites.xml
+Sitemap: https://ancientnerds.com/sitemap-countries.xml
+Sitemap: https://ancientnerds.com/sitemap-stories.xml
+Sitemap: https://ancientnerds.com/sitemap-research.xml
+Sitemap: https://ancientnerds.com/sitemap-articles.xml
 
-# Guide for AI crawlers and assistants. GPTBot fetched 13,017 URLs here
-# between 31.07. and 09.08.2026 — more than Googlebot (10,227).
+# Guide for AI crawlers and assistants:
 # https://ancientnerds.com/llms.txt
 
 # No Crawl-delay: it capped Bing/Yandex at ~1 URL/sec, which is far too slow
@@ -21,6 +30,12 @@ Disallow: /data/historical/
 
 # Measurement redirects (Discord CTA click counting) are not content
 Disallow: /goto/
+
+# The globe opened on one site (/globe.html?focus=<uuid>, from the site cards):
+# one WebGL page under 1,885 crawled URLs in 14 days (bingbot, DotBot,
+# Perplexity; SEO audit 2026-10-08). Each site has its own page under /sites/;
+# /globe.html itself stays open.
+Disallow: /globe.html?
 
 # BUT: Google's renderer obeys robots.txt for subresources too. The site
 # detail pages fetch /api/sites/{id} after hydration; with it blocked, the
@@ -66,3 +81,4 @@ Disallow: /api/
 Disallow: /data/basemaps/
 Disallow: /data/historical/
 Disallow: /goto/
+Disallow: /globe.html?

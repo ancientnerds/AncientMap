@@ -238,6 +238,9 @@ export interface LogCoverage {
   /** Pages Chrome prefetched for a Google result page (Sec-Purpose), which
    *  nobody has looked at yet — never an arrival (pipeline/referral_log.py). */
   prefetched: number
+  /** Page requests over HTTP/1.x, which no browser arriving here makes — a
+   *  scraper forging a Google referer (pipeline/referral_log.py). */
+  scripted: number
   families: LogFamily[]
   hosts: LogHost[]
   statuses: LogStatus[]

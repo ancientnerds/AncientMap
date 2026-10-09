@@ -208,25 +208,73 @@ class TestVerification:
 class TestWebVerification:
     """tweet_verifier._web_verify_items: a web-corrected text is gated the same way."""
 
-    def _run(self, monkeypatch, corrected_text):
+    def _run(self, monkeypatch, corrected_text, **answer):
         from pipeline.lyra import minimax_shared, story_web_queries, tweet_verifier
 
         hit = SimpleNamespace(url="https://example.org/a", title="t", snippet="s")
+        sent: list[str] = []
+
+        def chat(client, model, system, user_msg, max_tokens):
+            sent.append(user_msg)
+            return json.dumps({"verdict": "CORRECTED", "corrected_text": corrected_text, **answer})
+
         monkeypatch.setattr(minimax_shared, "create_minimax_client", lambda *a, **kw: object())
         monkeypatch.setattr(minimax_shared, "minimax_search", lambda *a, **kw: [hit])
-        monkeypatch.setattr(
-            minimax_shared,
-            "minimax_chat",
-            lambda *a, **kw: json.dumps({"verdict": "CORRECTED", "corrected_text": corrected_text}),
-        )
+        monkeypatch.setattr(minimax_shared, "minimax_chat", chat)
         monkeypatch.setattr(story_web_queries, "generate_queries_for_item", lambda *a, **kw: ["q"])
 
         item = _item(1, "Headline", post_text="Original post.", significance=7)
+        item.facts = ["Fact one.", "Fact two."]
         settings = SimpleNamespace(
             story_web_verify_min_significance=5, minimax_api_key="k", minimax_base_url="u"
         )
         tweet_verifier._web_verify_items([item], settings)
+        item.sent = sent
         return item
+
+    def test_headline_facts_and_post_are_checked_together(self, monkeypatch):
+        item = self._run(monkeypatch, "Corrected post.")
+        assert "Headline: Headline" in item.sent[0]
+        assert "- Fact one.\n- Fact two." in item.sent[0]
+
+    def test_a_disputed_claim_is_corrected_in_headline_and_facts_too(self, monkeypatch):
+        """6189 (SEO audit 2026-10-08): the post said the evidence does not
+        support cast stone, headline and facts still stated it as fact."""
+        item = self._run(
+            monkeypatch,
+            "The video argues the Osireion blocks were cast; geologists read them as quarried granite.",
+            corrected_headline="Video argues the Osireion was built of cast stone",
+            corrected_facts=[
+                "The video argues the blocks were cast.",
+                "The blocks are quarried granite.",
+            ],
+        )
+        assert item.headline == "Video argues the Osireion was built of cast stone"
+        assert item.facts == [
+            "The video argues the blocks were cast.",
+            "The blocks are quarried granite.",
+        ]
+        assert item.post_text.startswith("The video argues")
+
+    def test_a_part_the_answer_cannot_fill_keeps_its_value(self, monkeypatch, caplog):
+        with caplog.at_level(logging.WARNING):
+            item = self._run(
+                monkeypatch,
+                "Corrected post.",
+                corrected_headline="x" * 101,
+                corrected_facts=["ok", 3],
+            )
+        assert item.post_text == "Corrected post."
+        assert item.headline == "Headline"
+        assert item.facts == ["Fact one.", "Fact two."]
+        assert "over 100 chars" in caplog.text
+
+    def test_a_foreign_script_in_any_part_stops_the_whole_correction(self, monkeypatch, caplog):
+        with caplog.at_level(logging.WARNING):
+            item = self._run(monkeypatch, "Corrected post.", corrected_facts=[CYRILLIC_FACT])
+        assert item.post_text == "Original post."
+        assert item.facts == ["Fact one.", "Fact two."]
+        assert "foreign script" in caplog.text
 
     def test_clean_correction_is_applied(self, monkeypatch):
         assert self._run(monkeypatch, "Corrected post.").post_text == "Corrected post."

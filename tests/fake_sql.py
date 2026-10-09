@@ -57,6 +57,12 @@ class FakeResult:
         # Result.tuples() is a typing filter: the same rows, the same object.
         return self
 
+    def keys(self) -> list[str]:
+        # CursorResult has keys(), the column names - so dict(result) takes a result for a
+        # mapping and subscripts it. /api/v1/stats answered 500 on exactly that until
+        # 2026-10-08, while this fake, without keys(), let dict() iterate the pairs.
+        return list(self._rows[0]._fields) if self._rows else []
+
     def mappings(self) -> FakeResult:
         return FakeResult([dict(vars(r)) if hasattr(r, "__dict__") else r for r in self._rows])
 

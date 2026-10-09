@@ -1,6 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { applyTrackingChoice, errorProps, isForeignError, newDepthSteps, outboundHost, TRACKING_OFF_KEY, vitalProps } from '../boot'
+import {
+  applyTrackingChoice,
+  errorProps,
+  isForeignError,
+  linkClick,
+  newDepthSteps,
+  outboundHost,
+  pageScrollBox,
+  TRACKING_OFF_KEY,
+  vitalProps,
+} from '../boot'
 import { _queuedForTests, _resetForTests, cleanProps, MAX_VALUE_CHARS, pageType, searchTerm, track } from '../index'
 
 // vitest runs in node: no DOM, so the tests install a minimal fake `window`.
@@ -123,6 +133,39 @@ describe('boot helpers', () => {
     expect(outboundHost('/sites/peru', 'ancientnerds.com')).toBeNull()
     expect(outboundHost('mailto:x@y.z', 'ancientnerds.com')).toBeNull()
     expect(outboundHost('javascript:void(0)', 'ancientnerds.com')).toBeNull()
+  })
+})
+
+describe('pageScrollBox', () => {
+  it('measures the container a story or site page scrolls, not only the document', () => {
+    // .story-page: 100vh tall, 3,681 px scrolled - the window never moved
+    const page = { scrollTop: 3681, clientHeight: 844, scrollHeight: 4525 }
+    expect(pageScrollBox(page, 844)).toBe(page)
+    expect(newDepthSteps(page.scrollTop, page.clientHeight, page.scrollHeight, new Set())).toEqual([25, 50, 75, 100])
+  })
+  it('ignores a strip inside the page and a missing target', () => {
+    expect(pageScrollBox({ scrollTop: 300, clientHeight: 120, scrollHeight: 900 }, 844)).toBeNull()
+    expect(pageScrollBox(null, 844)).toBeNull()
+  })
+})
+
+describe('linkClick', () => {
+  it('reports nothing for a link whose handler took the click over', () => {
+    // the video poster of a story: a youtube.com link that plays in place
+    expect(linkClick('https://www.youtube.com/watch?v=1', true, 'ancientnerds.com')).toBeNull()
+    expect(linkClick('/goto/discord?src=story', true, 'ancientnerds.com')).toBeNull()
+  })
+  it('reports outbound and Discord clicks that navigate', () => {
+    expect(linkClick('https://www.youtube.com/watch?v=1', false, 'ancientnerds.com')).toEqual({
+      name: 'outbound_click',
+      host: 'youtube.com',
+    })
+    expect(linkClick('/goto/discord?src=landing', false, 'ancientnerds.com')).toEqual({
+      name: 'discord_click',
+      src: 'landing',
+    })
+    expect(linkClick('/goto/discord', false, 'ancientnerds.com')).toEqual({ name: 'discord_click', src: 'unknown' })
+    expect(linkClick('/sites/peru', false, 'ancientnerds.com')).toBeNull()
   })
 })
 

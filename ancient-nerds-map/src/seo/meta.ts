@@ -31,6 +31,7 @@ import type {
 } from '../types/anRoute'
 import {
   latestCorrectionDate,
+  youtubeIdOf,
   youtubeThumbnailUrl,
   youtubeWatchUrl,
 } from '../components/theo/paperExtras'
@@ -202,6 +203,25 @@ export function renderHead(m: PageMeta): string {
 // Die neun Seitentypen
 // ---------------------------------------------------------------------------
 
+/**
+ * The video a story summarises, as `isBasedOn`: the story is a secondary text about it,
+ * and the link names the creator's video as its source for search engines and assistants
+ * (no story had one before the SEO audit of 2026-10-08). Nothing without a video id.
+ */
+function storyVideo(route: StoryRoute): string {
+  const id = youtubeIdOf(route.youtube_url)
+  if (!id) return ''
+  return (
+    ', "isBasedOn": {"@type": "VideoObject", ' +
+    `"name": ${jsonStr(route.video_title)}, ` +
+    `"description": ${jsonStr(`Video by ${route.channel_name} on YouTube`)}, ` +
+    `"uploadDate": "${isoDate(route.published_at)}", ` +
+    `"thumbnailUrl": "${youtubeThumbnailUrl(id)}", ` +
+    `"embedUrl": "https://www.youtube-nocookie.com/embed/${id}", ` +
+    `"url": "${youtubeWatchUrl(id)}"}`
+  )
+}
+
 /** story_page(): Description aus post_text (nicht summary), unter 150 Zeichen gar keine. */
 export function storyMeta(route: StoryRoute): PageMeta {
   const canonical = `${BASE_URL}${storyPath(route.headline, route.id)}`
@@ -217,7 +237,7 @@ export function storyMeta(route: StoryRoute): PageMeta {
     '"author": {"@type": "Organization", "name": "Ancient Nerds", ' +
     `"url": "${BASE_URL}"}, ` +
     `"publisher": ${PUBLISHER}, ` +
-    `"mainEntityOfPage": "${canonical}", "url": "${canonical}"}`
+    `"mainEntityOfPage": "${canonical}", "url": "${canonical}"${storyVideo(route)}}`
   const postText = collapse(route.post_text)
   // Under 150 chars of post text the summary carries the snippet; only when
   // both are missing does the tag stay away so Google writes its own.
@@ -265,7 +285,9 @@ export function siteMeta(route: SiteRoute): PageMeta {
   // Snippet und JSON-LD sind maschinenlesbar und haben keine Referenzliste,
   // an der ein [n] hängen könnte — siehe stripCitations().
   const description = stripCitations((route.description || '').trim())
-  const ogImage = route.image ? `${BASE_URL}${route.image.url}` : undefined
+  // Encoded per segment: 989 hero files have a space in the name, and a raw space ends
+  // the URL for every parser of og:image and JSON-LD (Amazonbot: 1,005 x 404, 2026-10-08).
+  const ogImage = route.image ? `${BASE_URL}${encodePath(route.image.url)}` : undefined
 
   const place = [
     '"@type": "Place"',
@@ -280,7 +302,35 @@ export function siteMeta(route: SiteRoute): PageMeta {
         `"longitude": ${route.lon}}`,
     )
   }
-  if (ogImage) place.push(`"image": "${ogImage}"`)
+  // The place's identity for search engines and assistants: Wikidata and the English
+  // Wikipedia article, only where the payload hands a value no other site shares.
+  const sameAs: string[] = []
+  if (route.wikidata_qid) sameAs.push(`https://www.wikidata.org/wiki/${route.wikidata_qid}`)
+  if (route.enwiki_title) {
+    sameAs.push(`https://en.wikipedia.org/wiki/${encodeURIComponent(route.enwiki_title.replace(/ /g, '_'))}`)
+  }
+  if (sameAs.length) place.push(`"sameAs": [${sameAs.map(jsonStr).join(', ')}]`)
+  if (route.wikidata_qid) {
+    place.push(
+      `"identifier": {"@type": "PropertyValue", "propertyID": "Wikidata", "value": ${jsonStr(route.wikidata_qid)}}`,
+    )
+  }
+  // The hero as an ImageObject with its Commons credit: Google shows licence details in
+  // image results only from these properties, and 1,970 image impressions brought no
+  // click in 28 days (SEO audit 2026-10-08).
+  if (route.image && ogImage) {
+    const img = ['"@type": "ImageObject"', `"contentUrl": "${ogImage}"`]
+    if (route.image.width && route.image.height) {
+      img.push(`"width": ${route.image.width}`, `"height": ${route.image.height}`)
+    }
+    if (route.image.license_url) img.push(`"license": ${jsonStr(route.image.license_url)}`)
+    if (route.image.commons_url) img.push(`"acquireLicensePage": ${jsonStr(route.image.commons_url)}`)
+    if (route.image.author) {
+      img.push(`"creditText": ${jsonStr(route.image.author)}`)
+      img.push(`"creator": {"@type": "Person", "name": ${jsonStr(route.image.author)}}`)
+    }
+    place.push(`"image": {${img.join(', ')}}`)
+  }
   // The description as a CreativeWork about the place (Place itself has no licence or
   // source properties): isBasedOn and license for text adapted from a Wikipedia revision
   // (CC BY-SA 4.0 section 3(a)); the IPTC type for text an AI system wrote, as on the

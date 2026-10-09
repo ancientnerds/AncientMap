@@ -61,6 +61,14 @@ Six things the parser has to get right, each of them measured:
   UNKNOWN_HOST_MIN times in the window before it counts as an arrival.
 * A prefetch carries a browser UA, a search referer and a 200: only the
   Sec-Purpose header marks it (see above).
+* A scraper can forge all of that too. From 2026-09-26 one from
+  47.79.0.0/16 sent a Google referer and a Chrome 130-133 UA, 80 % of the
+  Google lines on 2026-10-08; it is why nginx counted 1,295 search arrivals
+  against Umami's 553 that week (SEO audit 2026-10-08). Every one of its
+  2,604 requests spoke HTTP/1.1, while 673 of 699 real Google arrivals spoke
+  HTTP/2. So nginx logs the protocol ("proto"), and a page request over
+  HTTP/1.x is scripted, not an arrival. A line from before nginx logged it is
+  not read by coverage_report (Visit.http1 is None).
 
 Read-only. Nothing here writes into /app/logs.
 
@@ -247,6 +255,10 @@ def is_page(req: str) -> bool:
 #: tracker like any page, so Umami sees it where it is a visit.
 PREFETCH_PURPOSE = "prefetch"
 
+#: $server_protocol of a request no browser arriving here makes: "HTTP/1.0"
+#: or "HTTP/1.1" (module docstring).
+HTTP1_PREFIX = "HTTP/1."
+
 
 @dataclass(frozen=True, slots=True)
 class Visit:
@@ -259,6 +271,9 @@ class Visit:
     #: Sec-Purpose said prefetch. None on a line logged before nginx wrote the
     #: header: such a line cannot be told apart, and coverage_report skips it.
     prefetch: bool | None = False
+    #: The request spoke HTTP/1.x, which no browser arriving here does (module
+    #: docstring). None on a line logged before nginx wrote the protocol.
+    http1: bool | None = False
 
 
 def parse_lines(lines: Iterable[str]) -> list[Visit]:
@@ -278,6 +293,7 @@ def parse_lines(lines: Iterable[str]) -> list[Visit]:
         if not host or host in OWN_HOSTS:
             continue
         purpose = entry.get("purpose")
+        proto = entry.get("proto")
         out.append(
             Visit(
                 at=datetime.fromisoformat(entry["t"]),
@@ -287,6 +303,7 @@ def parse_lines(lines: Iterable[str]) -> list[Visit]:
                 bot=bool(BOT_UA_RE.search(entry.get("ua", ""))),
                 page=is_page(entry["req"]),
                 prefetch=None if purpose is None else purpose.startswith(PREFETCH_PURPOSE),
+                http1=None if proto is None else proto.startswith(HTTP1_PREFIX),
             )
         )
     return out
@@ -336,12 +353,13 @@ def aggregate(
 
     Scanners send fake referers to paths that do not exist (/wp-admin/ from
     "binance.com"): a page view needs a page, so errors only count with --all.
-    A prefetch is nobody arriving and never counts; a line from before nginx
-    logged Sec-Purpose still does here, where the whole history is the point.
+    A prefetch is nobody arriving and never counts, nor does a request over
+    HTTP/1.x; a line from before nginx logged Sec-Purpose or the protocol
+    still does here, where the whole history is the point.
     """
     result: dict[str, dict[str, Counter]] = defaultdict(lambda: defaultdict(Counter))
     for v in visits:
-        if v.at < since or v.prefetch:
+        if v.at < since or v.prefetch or v.http1:
             continue
         if pages_only and (v.status >= 400 or not v.page):
             continue
@@ -382,10 +400,19 @@ def coverage_report(visits: Iterable[Visit], since: datetime, until: datetime) -
     Only lines that carry the Sec-Purpose field are read; the ones from before
     cannot be told apart, so `covered_from` starts at the first line that
     carries it and the window fills up over the following days.
+
+    A fifth came on 2026-10-08: a page request over HTTP/1.x is scripted, not
+    an arrival (module docstring), and `scripted` says how many there were.
+    Same rule for old lines: only those that carry the protocol are read.
     """
-    marked = [v for v in visits if since <= v.at < until and v.prefetch is not None]
+    marked = [
+        v
+        for v in visits
+        if since <= v.at < until and v.prefetch is not None and v.http1 is not None
+    ]
     prefetched = sum(1 for v in marked if v.prefetch and v.page)
-    window = [v for v in marked if not v.prefetch]
+    scripted = sum(1 for v in marked if v.http1 and not v.prefetch and v.page)
+    window = [v for v in marked if not v.prefetch and not v.http1]
     pages = [v for v in window if v.page]
     families: Counter[str] = Counter()
     bots: Counter[str] = Counter()
@@ -413,6 +440,7 @@ def coverage_report(visits: Iterable[Visit], since: datetime, until: datetime) -
         "lines": len(marked),
         "unverified": unverified,
         "prefetched": prefetched,
+        "scripted": scripted,
         "families": [
             {"family": f, "visits": n, "bots": bots.get(f, 0)}
             for f, n in sorted(families.items(), key=lambda kv: (-kv[1], kv[0]))

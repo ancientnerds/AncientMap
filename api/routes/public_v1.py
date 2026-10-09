@@ -778,7 +778,7 @@ def create_public_api() -> FastAPI:
         """),
             {"source_id": source_id},
         )
-        types = dict(type_result.tuples())
+        types = dict(type_result.all())
 
         # Period breakdown
         period_result = db.execute(
@@ -804,7 +804,7 @@ def create_public_api() -> FastAPI:
         """),
             {"source_id": source_id},
         )
-        periods = dict(period_result.tuples())
+        periods = dict(period_result.all())
 
         name = source_id.replace("_", " ").title()
         color = _SOURCE_COLORS.get(source_id, _SOURCE_COLORS["default"])
@@ -1028,7 +1028,9 @@ def create_public_api() -> FastAPI:
             ORDER BY count DESC
         """)
         )
-        by_source = dict(result.tuples())
+        # .all(), a list of rows: a CursorResult has keys(), so dict(result) takes it for a mapping
+        # and subscripts it - a 500 on every call until 2026-10-08.
+        by_source = dict(result.all())
 
         last_updated_row = db.execute(
             text("SELECT MAX(COALESCE(updated_at, created_at)) FROM unified_sites WHERE " + _SHOWN)

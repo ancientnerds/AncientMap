@@ -181,6 +181,7 @@ def test_site_detail_hands_the_full_raw_payload():
             filename="hero.webp",
             author="J. Fotograf",
             license="CC BY-SA 4.0",
+            license_url="https://creativecommons.org/licenses/by-sa/4.0/",
             commons_page_url="https://commons.wikimedia.org/wiki/File:Borremose.jpg",
             width=1600,
             height=900,
@@ -193,6 +194,10 @@ def test_site_detail_hands_the_full_raw_payload():
     ]
     sibling_rows = [
         SimpleNamespace(id="99887766-0000-4000-8000-000000000000", name="Lindholm Høje")
+    ]
+    external_rows = [
+        SimpleNamespace(kind="wikidata_qid", value="Q3352612"),
+        SimpleNamespace(kind="enwiki_title", value="Borremose"),
     ]
     # public_stories_query ist eine ORM-Query — FakeDb kann sie nicht liefern.
     news_chain = MagicMock()
@@ -210,7 +215,9 @@ def test_site_detail_hands_the_full_raw_payload():
             site_detail(
                 "denmark",
                 "borremose-5281654c",
-                db=FakeDb([_borremose_row()], alt_rows, img_rows, link_rows, sibling_rows),
+                db=FakeDb(
+                    [_borremose_row()], alt_rows, img_rows, link_rows, sibling_rows, external_rows
+                ),
             )
         )
 
@@ -242,6 +249,7 @@ def test_site_detail_hands_the_full_raw_payload():
         "url": "/data/images/wiki/5281654c/hero.webp",
         "author": "J. Fotograf",
         "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0/",
         "commons_url": "https://commons.wikimedia.org/wiki/File:Borremose.jpg",
         # Pixelmasse für `<img width height>` — ohne sie springt das Layout
         # (CLS). Altbestand ohne Masse liefert None, siehe
@@ -259,6 +267,9 @@ def test_site_detail_hands_the_full_raw_payload():
     assert route["siblings"] == [
         {"name": "Lindholm Høje", "path": "/sites/denmark/lindholm-høje-99887766"}
     ]
+    # The place's identity for sameAs: only values no other shown site shares reach here.
+    assert route["wikidata_qid"] == "Q3352612"
+    assert route["enwiki_title"] == "Borremose"
 
 
 def test_site_detail_hands_the_disclosure_of_the_description_it_serves():
@@ -288,7 +299,7 @@ def test_site_detail_hands_the_disclosure_of_the_description_it_serves():
     }
     news_chain = MagicMock()
     news_chain.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
-    db = FakeDb([row], [], [], [], [])
+    db = FakeDb([row], [], [], [], [], [])
     render, shell = _patched()
     with (
         render as render_mock,
@@ -317,7 +328,9 @@ def _teaser_route(row: SimpleNamespace) -> dict:
         shell,
         patch("api.routes.sites_html.public_stories_query", return_value=news_chain),
     ):
-        asyncio.run(site_detail("denmark", "borremose-5281654c", db=FakeDb([row], [], [], [], [])))
+        asyncio.run(
+            site_detail("denmark", "borremose-5281654c", db=FakeDb([row], [], [], [], [], []))
+        )
     return render_mock.call_args[0][0]
 
 

@@ -32,7 +32,13 @@ upstream an_api {
 # tracker tag (17 paths checked) - so the gap is either a browser that refused
 # to run the script or one that never arrived. These two fields decide which.
 # The panel does not have to read them yet: a week of log lines is the proof.
-log_format referral escape=json '{"t":"$time_iso8601","ref":"$http_referer","req":"$request_method $request_uri","status":$status,"ua":"$http_user_agent","purpose":"$http_sec_purpose","dnt":"$http_dnt","gpc":"$http_sec_gpc"}';
+# It was neither (SEO audit 2026-10-08): a scraper from 47.79.0.0/16 forges a
+# Google referer and a Chrome 130-133 UA since 2026-09-26, 80 % of the Google
+# lines on 2026-10-08, and every one of its 2,604 requests spoke HTTP/1.1,
+# while 673 of 699 real Google arrivals spoke HTTP/2. Without it, nginx and
+# Umami agree (1.03). "proto" is that protocol; the panel counts a page request
+# over HTTP/1.x as scripted, not as an arrival (pipeline/referral_log.py).
+log_format referral escape=json '{"t":"$time_iso8601","ref":"$http_referer","req":"$request_method $request_uri","status":$status,"ua":"$http_user_agent","purpose":"$http_sec_purpose","dnt":"$http_dnt","gpc":"$http_sec_gpc","proto":"$server_protocol"}';
 
 map $http_referer $external_referral {
     default 1;

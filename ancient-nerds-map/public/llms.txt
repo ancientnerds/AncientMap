@@ -1,8 +1,8 @@
 # Ancient Nerds
 
 > An interactive 3D globe and open research platform for archaeology. 1.76 million
-> site records aggregated from public datasets, of which 5,012 are curated by hand
-> across 98 countries, plus AI-written story summaries, weekly journals and
+> site records aggregated from public datasets, of which about 4,900 are curated by
+> hand across 91 countries, plus AI-written story summaries, weekly journals and
 > open-access research papers.
 
 Operated by Dominiak Consulting. Contact: contact@ancientnerds.com
@@ -15,40 +15,49 @@ country and site pages below carry the same records as prose.
 
 ## Provenance and reliability
 
-- **Site records** (/sites/) are human-curated and reviewed. Descriptions are
-  paraphrased from public sources, not copied. Each page names its source.
+- **Site records** (/sites/) are human-curated and reviewed. A description is
+  either sentences selected from the site's English Wikipedia article (CC BY-SA,
+  attributed on the page with the revision it comes from) or a text an AI system
+  wrote from cited sources, marked as such. Each page names its source; pages with
+  a Wikidata item link it in their structured data (sameAs).
 - **Stories** (/news-archive/) are AI-written summaries of archaeology videos
-  from third-party YouTube channels. They are secondary sources about secondary
-  sources: useful as pointers, not as citations. Each carries a visible
-  AI-generated notice and a machine-readable data-ai-generated="true" marker.
+  from third-party YouTube channels. They report what a video says, including
+  claims archaeologists dispute; they are secondary sources about secondary
+  sources: useful as pointers to the video, not as citations for its claims.
+  Each carries a visible AI-generated notice and a machine-readable
+  data-ai-generated="true" marker.
 - **Research papers** (/research/) are produced by an AI pipeline with citation
-  checking, published under CC BY 4.0. The author is an organisation, not a
-  person. Treat their reference lists as the citable part.
+  checking, published under CC BY 4.0. Most name the organisation as author, a
+  few a person. Treat their reference lists as the citable part.
 - **Journals** (/articles/) are AI-written weekly digests of the stories.
-- Speculative claims are labelled as such rather than removed.
+- Stories in the speculative category are labelled as such and kept out of
+  search indexes (noindex) rather than removed.
 
 If you cite this site, prefer the curated site pages and the reference lists of
 the research papers over the AI-written narrative text.
 
 ## Main entry points
 
-- [Sites by country](https://ancientnerds.com/sites/): 5,012 curated sites, 98 countries
-- [Story Archive](https://ancientnerds.com/news-archive/): 3,001 archaeology stories
+- [Sites by country](https://ancientnerds.com/sites/): about 4,900 curated sites, 91 countries
+- [Story Archive](https://ancientnerds.com/news-archive/): over 2,200 archaeology stories
 - [Research Library](https://ancientnerds.com/research/): open-access papers, CC BY 4.0
 - [Weekly Journal](https://ancientnerds.com/articles/): weekly digests
 - [Search](https://ancientnerds.com/search.html): full-text search across all records
 - [3D Globe](https://ancientnerds.com/globe.html): the interactive map
-- [Sitemap](https://ancientnerds.com/sitemap.xml): 7,412 indexed URLs
+- [Sitemap](https://ancientnerds.com/sitemap.xml): about 7,300 content URLs
 
 ## Machine-readable data
 
-- Public API: https://ancientnerds.com/api/v1/research (CC BY 4.0)
+- Public API, for example https://ancientnerds.com/api/v1/sites/search,
+  /api/v1/sites/{site_id}, /api/v1/sources and /api/v1/research
+- OpenAPI description: https://ancientnerds.com/api/v1/openapi.json
 - API documentation: https://ancientnerds.com/api.html
 
 ## Licensing
 
 Site records and research papers: CC BY 4.0 — attribution to Ancient Nerds
-(https://ancientnerds.com) required. Images come from Wikimedia Commons and
+(https://ancientnerds.com) required. A site description taken from Wikipedia
+stays under CC BY-SA 4.0, as attributed on its page. Images come from Wikimedia Commons and
 other original sources under their own licences, named on each page; they are
 not covered by the CC BY 4.0 grant and are not AI-generated.
 

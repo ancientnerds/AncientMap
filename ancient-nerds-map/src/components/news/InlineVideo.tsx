@@ -72,7 +72,7 @@ export default function InlineVideo({
   return (
     <div className={embedClassName} onClick={e => e.stopPropagation()}>
       <iframe
-        src={`https://www.youtube.com/embed/${videoId}?start=${startSeconds || 0}&autoplay=1`}
+        src={`https://www.youtube-nocookie.com/embed/${videoId}?start=${startSeconds || 0}&autoplay=1`}
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
         referrerPolicy="strict-origin-when-cross-origin"
         allowFullScreen
