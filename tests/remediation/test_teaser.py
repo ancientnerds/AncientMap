@@ -1369,7 +1369,7 @@ class TestTheVerification:
         assert "| site | status | verification | card |" in report
 
     def test_a_sentence_checked_text_s_defect_is_lane_wc_s(self) -> None:
-        assert R.OWNER_LANE == {"R": "WA", "S": "WA", "T": "WA", "W": "WA", "WC": "WC"}
+        assert R.OWNER_LANE == {"R": "WA", "S": "WA", "T": "WA", "W": "WA", "E": "WE", "WC": "WC"}
 
     def test_still_contradicted_after_the_rewrite_the_site_gets_no_card(
         self, tmp_path: Path

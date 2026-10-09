@@ -65,6 +65,9 @@ class Lane(StrEnum):
     ZERO = "0"  #: nothing usable: held as `no-source`
     L = "L"  #: legacy disclosure of held March-LLM text; never an assignment
     N = "N"  #: lane WN: a new description written from web pages (owner, 2026-10-01); never assigned
+    #: lane E (orchestrator decision X1, 2026-10-08): a W or S text with sentences added from web
+    #: pages by the enrichment lane (owner decisions D3, D4, D21); never assigned
+    E = "E"
 
 
 #: The lanes S1b can assign. L is written only by `phase4/legacy4.py`.
@@ -96,6 +99,8 @@ class Changes(StrEnum):
     SELECTED_AND_SHORTENED = "sentences selected and shortened"
     TRANSLATED = "translated"
     FACTS_RESTATED = "facts restated"
+    #: lane E: the selected Wikipedia sentences stay, further sentences were added by an AI system
+    SELECTED_AND_EXTENDED = "sentences selected, shortened and extended"
 
 
 #: The change note is a function of the lane.
@@ -186,6 +191,22 @@ def ai_system_for(stamps: Iterable[str]) -> str:
 
 #: Lane L's `ai_system` and `basis`, verbatim from production_write.
 LEGACY_AI_SYSTEM = "2026-03 enrichment chain (LLM; model per site not recorded)"
+
+
+def legacy_enriched_ai_system(ai_system: str) -> str:
+    """The disclosure of a March text lane E appended sentences to: the March chain's own wording,
+    which wrote the base and names no model, and the disclosure of the write that appended (D6: the
+    stamp names the real model that answered)."""
+    if ai_system not in AI_SYSTEMS:
+        raise ValueError(f"legacy_enriched_ai_system: {ai_system!r} is no disclosure of AI_SYSTEMS")
+    return f"{LEGACY_AI_SYSTEM}; sentences appended by {ai_system}"
+
+
+#: What lane L's `ai_system` may be: the March chain alone, or (an enriched March text) the chain
+#: and the write that appended to it.
+LEGACY_AI_SYSTEMS = frozenset(
+    {LEGACY_AI_SYSTEM} | {legacy_enriched_ai_system(system) for system in AI_SYSTEMS}
+)
 LEGACY_BASIS = "description differs from pre-March snapshot d4526691 (plan section 15.3)"
 #: Lane WN's `basis`: what the disclosure says the text rests on (owner decision 2026-10-01, "Neu aus
 #: Webquellen": a site left without a description gets a short one an AI agent wrote only from
@@ -1618,7 +1639,7 @@ class LegacyProvenance(_JsonRecord):
             raise ValueError(f"legacy_provenance.lane: {self.lane!r} is not L")
         if self.ai is not AiMark.GENERATED:
             raise ValueError(f"legacy_provenance.ai: {self.ai!r} is not generated")
-        if self.ai_system != LEGACY_AI_SYSTEM:
+        if self.ai_system not in LEGACY_AI_SYSTEMS:
             raise ValueError(f"legacy_provenance.ai_system: {self.ai_system!r}")
         if self.basis != LEGACY_BASIS:
             raise ValueError(f"legacy_provenance.basis: {self.basis!r}")
@@ -1700,7 +1721,187 @@ class WebProvenance(_JsonRecord):
         )
 
 
-def provenance_from_dict(data: Any) -> Provenance | LegacyProvenance | WebProvenance:
+#: The source id of a page an enrichment cites that is none of the base text's pinned sources:
+#: `E<n>`, n the page's citation number in `description_citations` (`AddedSentence.src`).
+_ADDED_SOURCE = re.compile(r"E[1-9][0-9]*")
+
+
+@dataclass(frozen=True, kw_only=True)
+class AddedSentence(_JsonRecord):
+    """`enriched_provenance.added[i]`: one citation of one sentence the enrichment lane added.
+
+    `sentence` is the 1-based position of the sentence in the whole published text (the base text's
+    sentences come first, so it is greater than the number of `sentences`), `n` the citation
+    number its marker carries (`raw_data.description_citations`) and `src` the source that citation
+    is: the id of one of the provenance's pinned sources when the page is that source's own
+    (`W`), else `E<n>` - a page of the web, quoted and checked by code and verified by a second
+    agent, which the record `_description_enrichment` keeps by the sha256 of its quote."""
+
+    sentence: int
+    n: int
+    src: str
+
+    def __post_init__(self) -> None:
+        _need_int(self.sentence, "added.sentence", minimum=1)
+        _need_int(self.n, "added.n", minimum=1)
+        _need_text(self.src, "added.src")
+        if _ADDED_SOURCE.fullmatch(self.src):
+            if self.src != f"E{self.n}":
+                raise ValueError(f"added.src: {self.src!r} must be E{self.n} for citation {self.n}")
+        else:
+            _need_source_id(self.src, "added.src")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"sentence": self.sentence, "n": self.n, "src": self.src}
+
+    @classmethod
+    def from_dict(cls, data: Any) -> Self:
+        d = _obj(data, "added", frozenset({"sentence", "n", "src"}))
+        return cls(sentence=d["sentence"], n=d["n"], src=d["src"])
+
+
+_ENRICHED_KEYS = frozenset(
+    {
+        "v", "run", "lane", "base_lane", "ai", "ai_system", "licence", "attribution", "sources",
+        "sentences", "added", "card", "desc_sha256",
+    }
+)  # fmt: skip
+#: The lanes a text can be enriched from: its own English article (W) or a shared one (S). T and R
+#: are not enriched (their attribution is a translation or names restricted pages).
+ENRICHABLE_LANES = frozenset({Lane.W, Lane.S})
+
+
+@dataclass(frozen=True, kw_only=True)
+class EnrichedProvenance(_JsonRecord):
+    """Lane E (orchestrator decision X1, 2026-10-08): a W or S text that the enrichment lane added
+    sentences to. Everything of the Phase-4 provenance stays true of the sentences that were there -
+    the attribution of the pinned Wikipedia revision, its licence, the verbatim spans of
+    `sentences` - and what was added is listed in `added`; the AI wrote words, so `ai` is
+    `generated` (the lane W/S mark `selected` would no longer be true of the whole text). The card
+    is `None`: lane WB writes the new card from the new text. A reader that needs the CC BY-SA
+    attribution (`api/services/description_provenance.py`, `ATTRIBUTION_LANES`) reads it from here
+    exactly as for W and S."""
+
+    run: str
+    base_lane: Lane
+    ai_system: str
+    licence: Licence
+    attribution: Attribution
+    sources: tuple[SourceRef, ...]
+    sentences: tuple[PublishedSentence, ...]
+    added: tuple[AddedSentence, ...]
+    desc_sha256: str
+    v: int = PROVENANCE_VERSION
+    lane: Lane = Lane.E
+    ai: AiMark = AiMark.GENERATED
+
+    def __post_init__(self) -> None:
+        _need_version(self.v, "enriched_provenance")
+        if self.lane is not Lane.E:
+            raise ValueError(f"enriched_provenance.lane: {self.lane!r} is not E")
+        if self.ai is not AiMark.GENERATED:
+            raise ValueError(f"enriched_provenance.ai: {self.ai!r} is not generated")
+        _need_text(self.run, "enriched_provenance.run")
+        _need_member(self.base_lane, Lane, "enriched_provenance.base_lane")
+        if self.base_lane not in ENRICHABLE_LANES:
+            raise ValueError(
+                f"enriched_provenance.base_lane: {self.base_lane.value} is not enrichable "
+                f"({sorted(lane.value for lane in ENRICHABLE_LANES)})"
+            )
+        if self.ai_system not in AI_SYSTEMS:
+            raise ValueError(
+                f"enriched_provenance.ai_system: {self.ai_system!r} is not one of "
+                f"{sorted(AI_SYSTEMS)!r}"
+            )
+        _need_member(self.licence, Licence, "enriched_provenance.licence")
+        if self.licence is not PUBLISHED_LICENCE:
+            raise ValueError(f"enriched_provenance.licence: published text is {PUBLISHED_LICENCE}")
+        if not isinstance(self.attribution, Attribution):
+            raise ValueError("enriched_provenance.attribution is not an Attribution")
+        if self.attribution.changes is not Changes.SELECTED_AND_EXTENDED:
+            raise ValueError(
+                f"enriched_provenance.attribution.changes is {Changes.SELECTED_AND_EXTENDED!r}"
+            )
+        if self.attribution.licence_url != PUBLISHED_LICENCE_URL:
+            raise ValueError(f"attribution.licence_url is not {PUBLISHED_LICENCE_URL}")
+        _need_tuple_of(self.sources, SourceRef, "enriched_provenance.sources")
+        source_ids = [source.id for source in self.sources]
+        if not source_ids or len(set(source_ids)) != len(source_ids):
+            raise ValueError(f"enriched_provenance.sources: empty or an id repeats: {source_ids}")
+        if self.attribution.url not in {source.url for source in self.sources}:
+            raise ValueError("attribution.url is not the url of a cited source")
+        _need_tuple_of(self.sentences, PublishedSentence, "enriched_provenance.sentences")
+        if not self.sentences:
+            raise ValueError("enriched_provenance.sentences: no sentence")
+        unknown = sorted({s.src for s in self.sentences} - set(source_ids))
+        if unknown:
+            raise ValueError(f"enriched_provenance.sentences: sources {unknown} are not in sources")
+        _need_tuple_of(self.added, AddedSentence, "enriched_provenance.added")
+        if not self.added:
+            raise ValueError("enriched_provenance.added: an enrichment adds at least one sentence")
+        for item in self.added:
+            if item.sentence <= len(self.sentences):
+                raise ValueError(
+                    f"enriched_provenance.added: sentence {item.sentence} is one of the "
+                    f"{len(self.sentences)} sentences the pinned source gave"
+                )
+            if not _ADDED_SOURCE.fullmatch(item.src) and item.src not in source_ids:
+                raise ValueError(f"enriched_provenance.added: source {item.src!r} is not pinned")
+        order = [item.sentence for item in self.added]
+        if order != sorted(order):
+            raise ValueError("enriched_provenance.added: not in sentence order")
+        _need_hex(self.desc_sha256, "enriched_provenance.desc_sha256")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "v": self.v,
+            "run": self.run,
+            "lane": self.lane.value,
+            "base_lane": self.base_lane.value,
+            "ai": self.ai.value,
+            "ai_system": self.ai_system,
+            "licence": self.licence.value,
+            "attribution": self.attribution.to_dict(),
+            "sources": [source.to_dict() for source in self.sources],
+            "sentences": [sentence.to_dict() for sentence in self.sentences],
+            "added": [item.to_dict() for item in self.added],
+            "card": None,
+            "desc_sha256": self.desc_sha256,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Any) -> Self:
+        d = _obj(data, "enriched_provenance", _ENRICHED_KEYS)
+        if d["card"] is not None:
+            raise ValueError("enriched_provenance.card: lane WB writes the card, this one is null")
+        return cls(
+            v=d["v"],
+            run=d["run"],
+            lane=_coerce(Lane, d["lane"], "enriched_provenance.lane"),
+            base_lane=_coerce(Lane, d["base_lane"], "enriched_provenance.base_lane"),
+            ai=_coerce(AiMark, d["ai"], "enriched_provenance.ai"),
+            ai_system=d["ai_system"],
+            licence=_coerce(Licence, d["licence"], "enriched_provenance.licence"),
+            attribution=Attribution.from_dict(d["attribution"]),
+            sources=tuple(
+                SourceRef.from_dict(source)
+                for source in _list(d["sources"], "enriched_provenance.sources")
+            ),
+            sentences=tuple(
+                PublishedSentence.from_dict(sentence)
+                for sentence in _list(d["sentences"], "enriched_provenance.sentences")
+            ),
+            added=tuple(
+                AddedSentence.from_dict(item)
+                for item in _list(d["added"], "enriched_provenance.added")
+            ),
+            desc_sha256=d["desc_sha256"],
+        )
+
+
+def provenance_from_dict(
+    data: Any,
+) -> Provenance | LegacyProvenance | WebProvenance | EnrichedProvenance:
     """Read `raw_data._description_provenance` of any shape; the lane decides which."""
     if not isinstance(data, dict):
         raise ValueError(f"provenance: expected a JSON object, got {type(data).__name__}")
@@ -1708,6 +1909,8 @@ def provenance_from_dict(data: Any) -> Provenance | LegacyProvenance | WebProven
         return LegacyProvenance.from_dict(data)
     if data.get("lane") == Lane.N.value:
         return WebProvenance.from_dict(data)
+    if data.get("lane") == Lane.E.value:
+        return EnrichedProvenance.from_dict(data)
     return Provenance.from_dict(data)
 
 

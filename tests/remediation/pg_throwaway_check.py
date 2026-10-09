@@ -7,7 +7,7 @@ real, by a production rehearsal. This renders the very statements the gate sends
 fixtures and runs them in a container with nothing of the project in it: no host port, no data, no
 secret. It is the first real execution of invariant 6's `CASE` (lane N for a lane-WN text, the old
 lane for a Phase-4 text), of guard 4 with a NULL and a blank old description, and of the reversal that
-writes NULL back.
+writes NULL back; since 2026-10-09 also of lane E's invariants (`check_enrichment`).
 
     PYTHONPATH="<repo>;<repo>/scripts/remediation" <repo>/.venv/Scripts/python.exe \\
         tests/remediation/pg_throwaway_check.py
@@ -173,7 +173,36 @@ def check(db: Container) -> None:
     )
     assert "break the provenance or clear invariant" in out, out
     print("a provenance of another lane than the marking's stops at invariant 6")
+    check_enrichment(db, tmp)
     print("ALL OK")
+
+
+def check_enrichment(db: Container, tmp: Path) -> None:
+    """Lane E (2026-10-09): a W text becomes lane E, a checked March text keeps lane L and a lane-N
+    text keeps N, all under the enrichment record's hashes - the first real execution of invariant 5's
+    and invariant 6's `CASE` on `p.evidence ->> 'decision'`."""
+    from tests.remediation import enrich_fixtures as EF
+    from tests.remediation.wc_fixtures import WC4
+
+    rows, answers = EF.standard_rows(tmp / "e")
+    plan = EF.build_enrich_run(tmp / "er", rows, answers, name="enrich-pilot")[1]
+    chunk = run_chunk(db, plan, rows, "lane E (a W text to E, a checked L text, a lane-N text)")
+    sql = W4.render_apply(chunk, rehearse=True)
+    # invariant 6: the enriched Phase-4 text must carry lane E, not the old lane
+    db.load(rows)
+    out = db.psql(sql.replace('"lane": "E"', '"lane": "W"'), check=False)
+    assert "break the provenance or clear invariant" in out, out
+    print("an enriched Phase-4 text with the old lane stops at invariant 6")
+    # invariant 5: the enrichment record must hash the description
+    outcome = W4.load_wc_plan([plan])[1]
+    (batch_outcomes,) = outcome.values()
+    digest = batch_outcomes[EF.SITE_W].raw_data[WC4.ENRICH_KEY]["verified_sha256"]
+    marker = f'"verified_sha256": "{digest}"'
+    assert sql.count(marker) >= 1
+    db.load(rows)
+    out = db.psql(sql.replace(marker, '"verified_sha256": "' + "a" * 64 + '"'), check=False)
+    assert "break the check record sha256 invariant" in out, out
+    print("an enrichment record that names another verified text stops at invariant 5")
 
 
 if __name__ == "__main__":

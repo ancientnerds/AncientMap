@@ -451,18 +451,37 @@ def _git(*argv: str) -> subprocess.CompletedProcess[str]:
     return git_env.run_git(LANE_N_REPO, *argv)
 
 
-def lane_n_commit() -> str:
-    """The commit that put lane N into the API's disclosure (the oldest one that added
-    `NO_LICENCE_LANES`): found in the history, never typed. An uncommitted change is refused - the
-    deploy ships commits."""
-    done = _git("log", "--reverse", "--format=%H", f"-S{LANE_N_MARK}", "--", LANE_N_FILE)
+#: Lane E (a Phase-4 text with sentences added by the enrichment lane, `model4.EnrichedProvenance`,
+#: orchestrator decision X1 of 2026-10-08) is a lane the API's disclosure must name in
+#: `ATTRIBUTION_LANES` (through `ENRICHMENT_LANE`): its pages carry the Wikipedia attribution line.
+LANE_E_MARK = "ENRICHMENT_LANE"
+#: A planned text is lane E's when it is an enrichment (the evidence's decision) of a Phase-4 text.
+LANE_E_DECISION = WC4.EVIDENCE_DECISION_ENRICH
+LANE_E_MARKING = WC4.Marking.PHASE4.value
+
+
+def _lane_commit(label: str, mark: str, broken: str) -> str:
+    """The commit that put a lane into the API's disclosure (the oldest one that added `mark` to
+    `description_provenance.py`): found in the history, never typed. An uncommitted change is
+    refused - the deploy ships commits."""
+    done = _git("log", "--reverse", "--format=%H", f"-S{mark}", "--", LANE_N_FILE)
     commits = done.stdout.split()
     if done.returncode or not commits:
         raise SystemExit(
-            f"lane N: no commit of {LANE_N_FILE} adds {LANE_N_MARK} (git exit {done.returncode}): "
-            "the API change that lets the pages of a lane-N text render is not committed"
+            f"{label}: no commit of {LANE_N_FILE} adds {mark} (git exit {done.returncode}): "
+            f"the API change that lets {broken} is not committed"
         )
     return commits[0]
+
+
+def lane_n_commit() -> str:
+    """The commit that put lane N into the API's disclosure (`NO_LICENCE_LANES`)."""
+    return _lane_commit("lane N", LANE_N_MARK, "the pages of a lane-N text render")
+
+
+def lane_e_commit() -> str:
+    """The commit that put lane E into the API's disclosure (`ENRICHMENT_LANE`)."""
+    return _lane_commit("lane E", LANE_E_MARK, "the pages of an enriched text show its attribution")
 
 
 def read_api_commit(host: str) -> str:
@@ -472,31 +491,40 @@ def read_api_commit(host: str) -> str:
     )
     if done.returncode:
         raise SystemExit(
-            f"lane N: {API_ROOT_URL} on {host} did not answer (exit {done.returncode})"
+            f"the live API: {API_ROOT_URL} on {host} did not answer (exit {done.returncode})"
         )
     return str(json.loads(done.stdout)["commit"])
 
 
-def require_lane_n_api(host: str, *, api_commit: Any) -> str:
-    """Refuse unless the live API's commit contains the lane-N change (`lane_n_commit`): a lane-N
-    description reaches production only after the deploy that lets its pages render - the order of
-    the work in docs/procedures/SENTENCE_CHECK.md, section 12.6, made a check. Returns the line the
-    gate prints."""
-    needed = lane_n_commit()
+def _require_lane_api(label: str, mark: str, needed: str, host: str, *, api_commit: Any) -> str:
+    """Refuse unless the live API's commit contains the lane's change (`needed`, from
+    `_lane_commit`): a description of the lane reaches production only after the deploy that lets
+    its pages render - the order of the work in docs/procedures/SENTENCE_CHECK.md, sections 12.6 and
+    14, made a check. Returns the line the gate prints."""
     live = api_commit(host)
     done = _git("merge-base", "--is-ancestor", needed, live)
     if done.returncode == 1:
         raise SystemExit(
-            f"lane N: the live API runs {live[:12]}, which does not contain {needed[:12]} "
-            f"({LANE_N_MARK} in {LANE_N_FILE}): a lane-N text would break the pages of its site. "
+            f"{label}: the live API runs {live[:12]}, which does not contain {needed[:12]} "
+            f"({mark} in {LANE_N_FILE}): a {label} text would break the pages of its site. "
             "Deploy first and check the commit at / (docs/procedures/SENTENCE_CHECK.md, 12.6)."
         )
     if done.returncode:
         raise SystemExit(
-            f"lane N: git cannot relate the live API's commit {live!r} to {needed[:12]}: "
+            f"{label}: git cannot relate the live API's commit {live!r} to {needed[:12]}: "
             f"{done.stderr.strip()} (git fetch, then run again)"
         )
-    return f"lane N: the live API runs {live[:12]}, which contains {needed[:12]} ({LANE_N_MARK})"
+    return f"{label}: the live API runs {live[:12]}, which contains {needed[:12]} ({mark})"
+
+
+def require_lane_n_api(host: str, *, api_commit: Any) -> str:
+    """Refuse unless the live API's commit contains the lane-N change (`lane_n_commit`)."""
+    return _require_lane_api("lane N", LANE_N_MARK, lane_n_commit(), host, api_commit=api_commit)
+
+
+def require_lane_e_api(host: str, *, api_commit: Any) -> str:
+    """Refuse unless the live API's commit contains the lane-E change (`lane_e_commit`)."""
+    return _require_lane_api("lane E", LANE_E_MARK, lane_e_commit(), host, api_commit=api_commit)
 
 
 #: The first line of `wc_live_sql`: how the tests' fake psql recognises the read.
@@ -1141,6 +1169,13 @@ def _run(
         for outcome in wc_outcomes[batch.batch_id].values()
     ):
         print(require_lane_n_api(args.host, api_commit=api_commit or read_api_commit))
+    if group is W4.Group.WC and any(
+        outcome.evidence["decision"] == LANE_E_DECISION
+        and outcome.evidence["marking"]["old"] == LANE_E_MARKING
+        for batch in batches
+        for outcome in wc_outcomes[batch.batch_id].values()
+    ):
+        print(require_lane_e_api(args.host, api_commit=api_commit or read_api_commit))
     options: dict[str, Any]
     if group is W4.Group.L:
         print(LEGACY_UNSCOPED)

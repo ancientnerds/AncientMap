@@ -127,15 +127,21 @@ RUNS = ROOT / "output" / "remediation" / "teaser" / "runs"
 CURATED_SOURCE = "ancient_nerds"
 RETIRED = "retired"
 #: The description provenances a teaser may be written from: the Phase-4 lanes, whose text is
-#: assembled from a pinned source (W, S) or restated from one (T, R). Lane L alone is the March text
+#: assembled from a pinned source (W, S) or restated from one (T, R), and lane E, a W or S text that
+#: the enrichment lane extended with web-sourced sentences, each quoted, checked and verified
+#: (`wc4.EnrichedProvenance`, orchestrator decision X1). Lane L alone is the March text
 #: (unverified), and a text without provenance is unclaimed (HUMAN_ONLY D7): both wait for lane WC.
-BASIS_LANES = frozenset({"W", "S", "T", "R"})
+BASIS_LANES = frozenset({"W", "S", "T", "R", "E"})
 #: Lane WC's sentence check (owner decision O5): `raw_data._description_check`, whose `desc_sha256`
 #: hashes the text that stayed after every sentence was checked against a quoted source. Such a text
 #: keeps lane L's provenance (its hash moved) or none, so the check record is what makes it a basis.
 #: The spelling is `phase4/wc4.py:CHECK_KEY` of `wip/wc`; the merge of lane WC replaces this literal
 #: with an import of it (CARD_DESCRIPTIONS.md, "Merging").
 CHECK_KEY = "_description_check"
+#: Lane E's record for a checked March text or a lane-N text that was enriched
+#: (`phase4/wc4.py:ENRICH_KEY`): it replaces the check record, and its `desc_sha256` hashes the whole
+#: new text, so it is the basis exactly as the check record's was (`SITES_SQL`, `basis_of`).
+ENRICH_KEY = "_description_enrichment"
 #: The basis a candidate's description is (`SITES.jsonl` "basis"): a Phase-4 lane, or lane WC's check.
 SENTENCE_CHECKED = "WC"
 #: What `select --basis` may restrict a run to.
@@ -174,8 +180,13 @@ NAME_UNDRAWABLE = "name-undrawable"
 #: rewrite after a web verification, whose card passed the name and font checks already.
 DECLINING_STAGES = tuple(writer for writer, _ in CHECK_ROUNDS)
 #: Whose text a contradicted description sentence is (DESCRIPTION_DEFECTS.jsonl "owner_lane"): a
-#: Phase-4 text is lane WA's (Phase 4, scope v3), a sentence-checked March text lane WC's.
-OWNER_LANE = {**dict.fromkeys(sorted(BASIS_LANES), "WA"), SENTENCE_CHECKED: "WC"}
+#: Phase-4 text is lane WA's (Phase 4, scope v3), a sentence-checked March text lane WC's, an enriched
+#: Phase-4 text (lane E) the enrichment lane's (WE).
+OWNER_LANE = {
+    **dict.fromkeys(sorted(BASIS_LANES - {"E"}), "WA"),
+    "E": "WE",
+    SENTENCE_CHECKED: "WC",
+}
 #: The web requests of the verify imports and of the pilot judge's: the lanes' one User-Agent, no
 #: personal data. The bare `AncientMapRemediation/1.0 (research)` drew 403 from Wikimedia through
 #: httpx on every page of pilot wb-pilot-2026-09-26 (its robot policy wants a contact; the project
@@ -242,7 +253,8 @@ SITES_SQL = (
     "SELECT u.id::text AS site_id, u.name, u.country, u.description, u.scope_status, "
     "u.raw_data -> '_description_provenance' ->> 'lane' AS lane, "
     "u.raw_data -> '_description_provenance' ->> 'desc_sha256' AS provenance_desc_sha256, "
-    f"u.raw_data -> '{CHECK_KEY}' ->> 'desc_sha256' AS check_desc_sha256, "
+    f"coalesce(u.raw_data -> '{ENRICH_KEY}' ->> 'desc_sha256', "
+    f"u.raw_data -> '{CHECK_KEY}' ->> 'desc_sha256') AS check_desc_sha256, "
     "u.raw_data -> '_card_provenance' AS card_provenance, "
     "(c.site_id IS NOT NULL) AS has_card_row, c.card_description AS card, "
     "coalesce((SELECT json_agg(n.name ORDER BY n.name) FROM unified_site_names n "

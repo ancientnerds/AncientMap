@@ -33,6 +33,15 @@ citation marker, no copy of 12 words or more of its own quotes), 1 to 4 quotes e
 answer's quote shape), distinct, and the whole text splitting back into exactly those sentences - or
 no sentence at all (the site stays empty), with the note saying what was searched.
 
+**An enrich answer** (`parse_enrich`, lane E, 2026-10-09) is `{site_id, sentences, note}` where each
+sentence is `{class, text, quotes, note}`: sentences an agent wants appended to a description the
+site already has, in the classes `fact` (up to 3, only for a thin text), `dispute_a` and `dispute_b`
+(both or neither, only for a site with a dispute brief) and `open_question` (at most one, the hook, at
+most 220 characters), read in that order. Each sentence is a write answer's (`_written`: 25 to 400
+characters, one sentence that stands alone, no citation marker, no run of 12 words of its quotes) and
+none repeats a sentence the text has (the same words, or a run of 12 words of it); the added text is
+at most 450 characters. No sentence at all is an answer: the site is left as it is.
+
 **A judge answer** (`parse_judge`) is `{site_id, kept, dropped, coherent, note}`: one verdict per kept
 sentence (`SUPPORTED`, `UNSUPPORTED`, `WRONG` - a quote needed) and per dropped one (`DROP_OK`,
 `DROP_WRONG` - a quote needed), quotes `{url, quote}`.
@@ -96,6 +105,11 @@ JUDGE_QUOTE_KEYS = frozenset({"url", "quote"})
 VERIFY_KEYS = frozenset({"site_id", "kept", "coherent", "broken", "note"})
 KEPT_VERDICTS = wc4.VERIFY_VERDICTS
 DROPPED_VERDICTS = ("DROP_OK", "DROP_WRONG")
+#: The one verdict only the judge of an enrichment may give, and only for the open question: the
+#: sentence may be true, yet no reputable source frames the matter as open - the writer made the
+#: mystery up ("hook invented", measured at 0 by the pilot).
+INVENTED = "INVENTED"
+ENRICH_KEPT_VERDICTS = (*KEPT_VERDICTS, INVENTED)
 MAX_QUOTES = 4
 MIN_QUOTE_CHARS = 20
 MAX_QUOTE_CHARS = 500
@@ -104,6 +118,13 @@ MAX_NOTE_CHARS = 600
 #: Lane WN's write answer: how many sentences, how long, and how much of a quote it may repeat.
 WRITE_KEYS = frozenset({"site_id", "sentences", "note"})
 WRITTEN_KEYS = frozenset({"text", "quotes", "note"})
+#: Lane E's enrich answer (2026-10-09): the write answer's shape with a class on each sentence, how
+#: much it may add at most and how long the hook is. Design numbers, measured on no corpus: the
+#: description is a few sentences, so a long addition is a rewrite, and a hook is a teaser's length.
+ENRICHED_KEYS = frozenset({"class", "text", "quotes", "note"})
+MAX_ADDED_CHARS = 450
+MAX_HOOK_CHARS = 220
+MAX_HOOKS = 1
 MIN_SENTENCES = 2
 MAX_SENTENCES = 6
 MIN_SENTENCE_CHARS = wc4.MIN_TRIMMED_CHARS
@@ -401,6 +422,117 @@ def parse_write(text: str, *, site_id: str) -> WriteAnswer:
     return WriteAnswer(written, note)
 
 
+# ------------------------------------------------------------------------------ the enrich answer
+@dataclass(frozen=True)
+class EnrichedSentence:
+    """One sentence an agent wants appended to a site's description: its class, its words and the
+    quotes it rests on."""
+
+    kind: str
+    text: str
+    quotes: tuple[wc4.Quote, ...]
+    note: str
+
+
+@dataclass(frozen=True)
+class EnrichAnswer:
+    """An enrich answer: the sentences in reading order (none: the site is left as it is) and what
+    was searched."""
+
+    sentences: tuple[EnrichedSentence, ...]
+    note: str
+
+    def as_check(self) -> tuple[SentenceAnswer, ...]:
+        """The sentences as lane WC's check answer: each one a KEEP on its quotes, numbered from 1
+        among the NEW sentences - what the import's record, the verification and the build read."""
+        return tuple(
+            SentenceAnswer(n, wc4.Verdict.KEEP, None, None, sentence.quotes, sentence.note)
+            for n, sentence in enumerate(self.sentences, start=1)
+        )
+
+
+def _repeats(text: str, existing: Sequence[str]) -> str | None:
+    """The existing sentence `text` repeats - the same words, or a run of `MAX_SHARED_RUN` words of
+    it - else `None`."""
+    for old in existing:
+        if text.casefold().strip() == old.casefold().strip() or shared_run(text, old):
+            return old
+    return None
+
+
+def parse_enrich(
+    text: str, *, site_id: str, existing: Sequence[str], max_facts: int, dispute: bool
+) -> EnrichAnswer:
+    """An enrich answer about a site whose description holds the sentences `existing` (markers out):
+    no sentence, or sentences of the classes `wc4.ENRICH_CLASSES` in that order - at most `max_facts`
+    facts, both positions of a dispute or neither (`dispute`: the site has a brief; without one none),
+    at most one open question - each a write answer's sentence (`_written`) that repeats no existing
+    one, together at most `MAX_ADDED_CHARS`, the hook at most `MAX_HOOK_CHARS`."""
+    data = load_object(text, WRITE_KEYS)
+    if data["site_id"] != site_id:
+        raise AnswerError(f"the answer names site {data['site_id']!r}, the question {site_id}")
+    items = data["sentences"]
+    if not isinstance(items, list):
+        raise AnswerError("sentences is not a list")
+    note = _text(data["note"], "note", limit=MAX_NOTE_CHARS)
+    if not items:
+        return EnrichAnswer((), note)
+    written: list[EnrichedSentence] = []
+    for number, item in enumerate(items, start=1):
+        if not isinstance(item, dict) or set(item) != ENRICHED_KEYS:
+            keys = sorted(item) if isinstance(item, dict) else item
+            raise AnswerError(f"sentence {number} carries {keys!r}, not {sorted(ENRICHED_KEYS)}")
+        kind = item["class"]
+        if kind not in wc4.ENRICH_CLASSES:
+            raise AnswerError(
+                f"sentence {number}: class {kind!r} is not one of {list(wc4.ENRICH_CLASSES)}"
+            )
+        body = _written({key: item[key] for key in WRITTEN_KEYS}, number)
+        old = _repeats(body.text, existing)
+        if old is not None:
+            raise AnswerError(
+                f"sentence {number}: it repeats a sentence the description has: {old!r}"
+            )
+        if kind == wc4.OPEN_QUESTION and len(body.text) > MAX_HOOK_CHARS:
+            raise AnswerError(
+                f"sentence {number}: the open question is {len(body.text)} characters, at most "
+                f"{MAX_HOOK_CHARS}"
+            )
+        written.append(EnrichedSentence(kind, body.text, body.quotes, body.note))
+    kinds = [sentence.kind for sentence in written]
+    order = [wc4.ENRICH_CLASSES.index(kind) for kind in kinds]
+    if order != sorted(order):
+        raise AnswerError(f"the classes {kinds} are not in the order {list(wc4.ENRICH_CLASSES)}")
+    if kinds.count(wc4.FACT) > max_facts:
+        raise AnswerError(
+            f"{kinds.count(wc4.FACT)} fact sentence(s); this description may take {max_facts}"
+        )
+    if kinds.count(wc4.OPEN_QUESTION) > MAX_HOOKS:
+        raise AnswerError(f"{kinds.count(wc4.OPEN_QUESTION)} open questions; at most {MAX_HOOKS}")
+    positions = (kinds.count(wc4.DISPUTE_A), kinds.count(wc4.DISPUTE_B))
+    if positions not in ((0, 0), (1, 1)):
+        raise AnswerError(
+            f"a dispute names both positions or neither: {positions[0]} of dispute_a and "
+            f"{positions[1]} of dispute_b"
+        )
+    if positions == (1, 1) and not dispute:
+        raise AnswerError(
+            "this site has no dispute brief: write no dispute_a or dispute_b sentence"
+        )
+    if positions == (0, 0) and dispute:
+        raise AnswerError(
+            "this site has a dispute brief: write both positions (dispute_a, dispute_b), or no "
+            "sentence at all when no reputable page states them"
+        )
+    texts = [sentence.text for sentence in written]
+    if len({t.casefold() for t in texts}) != len(texts):
+        raise AnswerError("a sentence is written twice")
+    added = sum(len(t) for t in texts)
+    if added > MAX_ADDED_CHARS:
+        raise AnswerError(f"{added} characters added; at most {MAX_ADDED_CHARS}")
+    return EnrichAnswer(tuple(written), note)
+
+
 # ------------------------------------------------------------------------------ the quote check
 @dataclass(frozen=True)
 class QuoteOutcome:
@@ -574,22 +706,30 @@ def parse_verify(text: str, *, site_id: str, kept: int) -> VerifyAnswer:
     )
 
 
-def parse_judge(text: str, *, site_id: str, kept: int, dropped: int) -> JudgeAnswer:
-    """A judge answer about a site with `kept` kept and `dropped` dropped sentences."""
+def parse_judge(
+    text: str, *, site_id: str, kept: int, dropped: int, hooks: Sequence[int] | None = None
+) -> JudgeAnswer:
+    """A judge answer about a site with `kept` kept and `dropped` dropped sentences. `hooks` (an
+    enrichment's judge: the K numbers of the open questions among the kept sentences) lets exactly
+    those be judged `INVENTED` too."""
     data = load_object(text, JUDGE_KEYS)
     if data["site_id"] != site_id:
         raise AnswerError(f"the answer names site {data['site_id']!r}, the question {site_id}")
     if not isinstance(data["coherent"], bool):
         raise AnswerError("coherent is true or false")
+    kept_items = _judge_items(
+        data["kept"],
+        key="kept",
+        keys=JUDGE_KEPT_KEYS,
+        verdicts=KEPT_VERDICTS if hooks is None else ENRICH_KEPT_VERDICTS,
+        count=kept,
+        needs="WRONG",
+    )
+    for item in kept_items:
+        if item.verdict == INVENTED and item.number not in (hooks or ()):
+            raise AnswerError(f"K{item.number}: INVENTED is a verdict of an open question only")
     return JudgeAnswer(
-        kept=_judge_items(
-            data["kept"],
-            key="kept",
-            keys=JUDGE_KEPT_KEYS,
-            verdicts=KEPT_VERDICTS,
-            count=kept,
-            needs="WRONG",
-        ),
+        kept=kept_items,
         dropped=_judge_items(
             data["dropped"],
             key="dropped",

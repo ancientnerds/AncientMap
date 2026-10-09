@@ -730,6 +730,8 @@ def _phase4_problems(
     The disclosure it names is the one the journal evidence records as the checker's: derived from
     the models that answered when the outcome was built (owner decision D6, 2026-10-08), so the
     writer holds the stored provenance to the evidence, not to a constant."""
+    if evidence["decision"] == wc4.EVIDENCE_DECISION_ENRICH:
+        return _enriched_problems(marking, evidence, old, new)
     if marking != wc4.Marking.PHASE4.value or left is None:
         return []
     decisions, _ = wc4.decisions_of(evidence)
@@ -748,6 +750,44 @@ def _phase4_problems(
     if (new or {}).get(M.PROVENANCE_KEY) != expected:
         return ["the provenance is not the old Phase-4 one filtered to the kept sentences"]
     return []
+
+
+def _enriched_problems(
+    marking: str,
+    evidence: Mapping[str, Any],
+    old: Mapping[str, Any] | None,
+    new: Mapping[str, Any] | None,
+) -> list[str]:
+    """An enriched text (lane E, `wc4.enriched_provenance`), whatever it was marked as:
+
+    * the base the sentences were appended to is the stored text, its stored citations and its stored
+      check record (`wc4.enrichment_base_problems`) - not a base the evidence only claims;
+    * the enrichment record names the writer the evidence names (`evidence["checker"]`, derived from
+      the stamps of the answers), not one the stored record picked;
+    * the provenance it leaves is exactly the one derived again from the old `raw_data` and the
+      evidence: a Phase-4 text keeps the old provenance whole - attribution, sources, the verbatim
+      spans - and adds the appended sentences to `added`; a March text and a lane-N text name the
+      write that appended in their `ai_system`."""
+    record = (new or {}).get(wc4.ENRICH_KEY)
+    problems = []
+    if not isinstance(record, dict) or record.get("writer") != evidence["checker"]:
+        problems.append("the enrichment record's writer is not the evidence's checker")
+    try:
+        problems.extend(wc4.enrichment_base_problems(evidence, old))
+        decisions, quotes = wc4.decisions_of(evidence)
+        base = wc4.base_of(evidence)
+        expected = wc4.enriched_provenance(
+            old,
+            wc4.compose_append(base, decisions, quotes),
+            base=base,
+            ai_system=evidence["checker"],
+            marking=wc4.Marking(marking),
+        ).to_dict()
+    except (KeyError, ValueError) as exc:
+        return [*problems, f"the provenance cannot be extended by the appended sentences: {exc}"]
+    if (new or {}).get(M.PROVENANCE_KEY) != expected:
+        problems.append("the provenance is not the old one extended by the appended sentences")
+    return problems
 
 
 def _validate_raw_data(row: Row4) -> None:
@@ -1779,20 +1819,27 @@ def _wc_invariants(label: str) -> list[str]:
     raw_data. NULL on both sides of `IS DISTINCT FROM` is a cleared site's, and not distinct."""
     keys = ", ".join(W._sql_text(key) for key in sorted(wc4.WC_KEYS))
     digest = "encode(sha256(convert_to(u.description, 'UTF8')), 'hex')"
-    check = W._sql_text(wc4.CHECK_KEY)
+    # the record the plan row's evidence calls for: an enrichment (lane E) replaces the check record
+    # with `_description_enrichment`, whose hashes are those of the whole new text
+    enriched = f"p.evidence ->> 'decision' = {W._sql_text(wc4.EVIDENCE_DECISION_ENRICH)}"
+    record = (
+        f"(u.raw_data -> (CASE WHEN {enriched} THEN {W._sql_text(wc4.ENRICH_KEY)} "
+        f"ELSE {W._sql_text(wc4.CHECK_KEY)} END))"
+    )
     return [
-        "    -- invariant 5 (WC): the check record's desc_sha256 and verified_sha256 are the sha256",
-        "    -- of the description",
+        "    -- invariant 5 (WC): the check record's (an enrichment's: the enrichment record's)",
+        "    -- desc_sha256 and verified_sha256 are the sha256 of the description",
         "    SELECT count(*) INTO bad",
         f"      FROM {PLAN_TABLE} p JOIN unified_sites u ON u.id = p.site_id",
         "     WHERE p.column_name = 'raw_data'",
-        f"       AND ((u.raw_data -> {check} ->> 'desc_sha256') IS DISTINCT FROM {digest}",
-        f"            OR (u.raw_data -> {check} ->> 'verified_sha256') IS DISTINCT FROM {digest});",
+        f"       AND (({record} ->> 'desc_sha256') IS DISTINCT FROM {digest}",
+        f"            OR ({record} ->> 'verified_sha256') IS DISTINCT FROM {digest});",
         *_raise_if(f"{label}: % site(s) break the check record sha256 invariant"),
         "",
         "    -- invariant 6 (WC): a provenance beside a checked text hashes it and is the lane the",
         "    -- recorded marking calls for (L for a March text, N for a lane-WN text, the old lane for",
-        "    -- a Phase-4 text); a cleared description leaves none of the WC keys in raw_data.",
+        "    -- a Phase-4 text, E for an enriched one); a cleared description leaves none of the WC",
+        "    -- keys in raw_data.",
         "    SELECT count(*) INTO bad",
         f"      FROM {PLAN_TABLE} p JOIN unified_sites u ON u.id = p.site_id",
         "     WHERE p.column_name = 'raw_data' AND (",
@@ -1800,7 +1847,9 @@ def _wc_invariants(label: str) -> list[str]:
         "               (u.raw_data -> '_description_provenance' ->> 'lane') IS DISTINCT FROM",
         "                   CASE p.evidence -> 'marking' ->> 'old'",
         "                       WHEN 'none' THEN 'N' WHEN 'web' THEN 'N'",
-        "                       WHEN 'phase4' THEN CASE WHEN p.column_name = 'raw_data'",
+        "                       WHEN 'phase4' THEN CASE",
+        f"                           WHEN {enriched} THEN {W._sql_text(wc4.ENRICHED_LANE)}",
+        "                           WHEN p.column_name = 'raw_data'",
         "                           THEN (p.old_value::jsonb",
         "                               -> '_description_provenance' ->> 'lane') END",
         "                       ELSE 'L' END",
