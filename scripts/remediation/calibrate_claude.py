@@ -58,6 +58,9 @@ COMPARISON_FILE = "COMPARISON.json"
 ANSWER_SUFFIX = ".answer.json"
 #: O18: a calibration allows no false source.
 MAX_FALSE_SOURCES = 0
+#: The name a lane WC handoff starts with (`wc-pilot-2026-09-27-r1`): its pools carry the lane's
+#: conditions (`seal(lane=...)`).
+LANE_WC_PREFIX = "wc-"
 
 
 class CalibrationError(ValueError):
@@ -155,13 +158,18 @@ def seal(
     batches: Sequence[str],
     threshold: float,
     max_false_sources: int = MAX_FALSE_SOURCES,
+    lane: dict[str, Any] | None = None,
     now: Callable[[], str] = utc_now,
 ) -> dict[str, Any]:
-    """Seal `calibration_id` before its run, and return the seal.
+    """Seal `calibration_id` before its run, and return the seal. `lane` is a lane's own pass
+    conditions (lane WC: the known errors and the verdict merge, `wc/calibration.py seal`), sealed
+    with the threshold: `compare` of this module refuses such a calibration and `verdict` refuses one
+    whose comparison does not carry the lane's `lane_failures`.
 
     Refused: an id already sealed; a verdict for the id; a calibration copy of the id; a threshold
     that is not a number in (0, 1]; a role that is not registered; a pool with a missing batch, no
-    recorded answer, or a MiniMax or unstamped answer."""
+    recorded answer, or a MiniMax or unstamped answer; a pool of lane WC (a handoff named `wc-...`)
+    without the lane's conditions."""
     OH._component(calibration_id, "calibration id")
     if isinstance(threshold, bool) or not isinstance(threshold, int | float):
         raise CalibrationError(f"threshold {threshold!r} is not a number")
@@ -179,6 +187,11 @@ def seal(
     seals = _seals(root)
     if calibration_id in seals:
         raise CalibrationError(f"{calibration_id} is already sealed")
+    if handoff.name.startswith(LANE_WC_PREFIX) and lane is None:
+        raise CalibrationError(
+            f"{handoff.name} is a lane WC pool: seal it with `wc/calibration.py seal`, which seals "
+            "the known errors with the threshold"
+        )
     _check_pool(handoff, batches)
     sealed = {
         "calibration_id": calibration_id,
@@ -196,6 +209,8 @@ def seal(
         "max_false_sources": max_false_sources,
         "sealed_at": now(),
     }
+    if lane is not None:
+        sealed["lane"] = lane
     root.mkdir(parents=True, exist_ok=True)
     path = root / THRESHOLDS_FILE
     path.write_text(
@@ -258,6 +273,11 @@ def compare(root: Path, *, calibration_id: str) -> dict[str, Any]:
     """The role's fresh answers against the recorded ones, unit by unit (`compare_answers`); written
     once to `COMPARISON.json`. A question without a fresh answer is unanswered, never agreement."""
     sealed = _sealed(root, calibration_id)
+    if "lane" in sealed:
+        raise CalibrationError(
+            f"{calibration_id} was sealed with its lane's conditions: compare it with the lane's "
+            "own command (`wc/calibration.py compare`)"
+        )
     out = root / calibration_id
     recorded_path = out / RECORDED_FILE
     if not recorded_path.exists():
@@ -310,6 +330,11 @@ def verdict(
     if not comparison_path.exists():
         raise CalibrationError(f"{calibration_id} is not compared: {comparison_path} is missing")
     report = json.loads(comparison_path.read_text(encoding="utf-8"))
+    if "lane" in sealed and "lane_failures" not in report:
+        raise CalibrationError(
+            f"{calibration_id} was sealed with its lane's conditions, but its comparison carries no "
+            "`lane_failures`: it was not compared with the lane's command"
+        )
     failures = _failures(report, sealed, false_sources)
     result: dict[str, Any] = {
         "calibration_id": calibration_id,

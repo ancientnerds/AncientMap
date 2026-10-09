@@ -7,6 +7,7 @@ more than the recorded one did. No socket, no model, no database.
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -84,39 +85,107 @@ def _pilot(tmp_path: Path) -> Path:
     return run
 
 
+def _handoff(tmp_path: Path, name: str) -> Path:
+    return tmp_path / "handoff" / f"wc-test-{name}"
+
+
+#: The pool of each kind in a `_pilot` run: the handoff's name and its batches.
+POOLS = {
+    "check": ("r1", ["wc-0001"]),
+    "verify": ("verify", ["verify-0001"]),
+    "judge": ("judge", ["judge-0001"]),
+}
+
+
+def _seal(
+    tmp_path: Path,
+    run: Path,
+    kind: str,
+    *,
+    cid: str = "c1",
+    threshold: float = 0.9,
+    root: Path | None = None,
+) -> Path:
+    """Seal a pool of the pilot with its known errors; returns the calibration root."""
+    name, batches = POOLS[kind]
+    root = root or tmp_path / "calibration"
+    K.seal(
+        root, calibration_id=cid, kind=kind, handoff=_handoff(tmp_path, name), batches=batches,
+        threshold=threshold, runs=[run], now=lambda: NOW,
+    )  # fmt: skip
+    return root
+
+
+def _prepare(root: Path, run: Path, cid: str = "c1") -> Path:
+    return Path(K.prepare(root, calibration_id=cid, run=run)["prepared"])
+
+
 def test_the_known_errors_are_what_the_pilots_judges_found_wrong_or_incoherent(
     tmp_path: Path,
 ) -> None:
     run = _pilot(tmp_path)
-    # site A keeps sentences 1, 2 (trimmed) and 3: the judge's third kept sentence is sentence 3
+    # site A keeps sentences 1, 2 (trimmed) and 3: the judge's third kept sentence is sentence 3; a
+    # sentence the judge found WRONG may be neither kept whole nor kept trimmed; site B's text was
+    # incoherent, which a check answer can only repeat or not repeat
     assert K.expectations("check", [run]) == [
-        {"label": FX.SITE_A, "unit": "sentence-3", "must_not_be": ["KEEP"]}
+        {"label": FX.SITE_A, "unit": "sentence-3", "must_not_be": ["KEEP", "KEEP_TRIMMED"]},
+        {"label": FX.SITE_B, "unit": "kept-text", "must_differ_from_recorded": True},
     ]
     assert K.expectations("judge", [run]) == [
         {"label": FX.SITE_A, "unit": "kept-3", "must_be": ["WRONG"]},
         {"label": FX.SITE_B, "unit": "coherent", "must_be": ["False"]},
     ]
-    with pytest.raises(K.WcCalibrationError, match="none of check, judge"):
+    # the verification shows the same sentences: sentence 3 is its third
+    assert K.expectations("verify", [run], handoff=_handoff(tmp_path, "verify")) == [
+        {"label": FX.SITE_A, "unit": "kept-3", "must_be": ["UNSUPPORTED", "WRONG"]},
+        {"label": FX.SITE_B, "unit": "coherent", "must_be": ["False"]},
+    ]
+    assert K.expectations("judge", [run], labels={FX.SITE_B}) == [
+        {"label": FX.SITE_B, "unit": "coherent", "must_be": ["False"]}
+    ]
+    with pytest.raises(K.WcCalibrationError, match="names the verification round"):
         K.expectations("verify", [run])
+    with pytest.raises(K.WcCalibrationError, match="none of check, verify, judge"):
+        K.expectations("dispute", [run])
 
 
-def _sealed_check(tmp_path: Path, run: Path) -> tuple[Path, Path]:
-    root = tmp_path / "calibration"
-    handoff = tmp_path / "handoff" / "wc-test-r1"
-    CC.seal(
-        root, calibration_id="wc-check-c1", role="fact_checker", handoff=handoff,
-        batches=["wc-0001"], threshold=0.9, now=lambda: NOW,
-    )  # fmt: skip
-    prepared = CC.prepare(root, calibration_id="wc-check-c1", run=run)
-    return root, Path(prepared["prepared"])
+def test_a_judged_sentence_the_verification_did_not_show_stops_the_command(tmp_path: Path) -> None:
+    run = _pilot(tmp_path)
+    path = run / "verify" / "round-1" / "ROUND.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["shown"][FX.SITE_A] = [1, 2]
+    path.write_text(json.dumps(record), encoding="utf-8")
+    with pytest.raises(K.WcCalibrationError, match="not among the sentences"):
+        K.expectations("verify", [run], handoff=_handoff(tmp_path, "verify"))
+
+
+def test_a_known_error_kept_in_trimmed_form_is_still_kept() -> None:
+    known = [{"label": "s", "unit": "sentence-3", "must_not_be": sorted(K.MERGED)}]
+    recorded = {"s": _check("s", "KEEP", "KEEP", "KEEP")}
+    for verdict, missed in (("KEEP", True), ("KEEP_TRIMMED", True), ("DROP", False)):
+        rows, failures = K._known(known, {"s": _check("s", "KEEP", "KEEP", verdict)}, recorded)
+        assert rows[0]["missed"] is missed and bool(failures) is missed
+
+
+def test_a_check_that_repeats_the_verdicts_which_built_an_incoherent_text_has_missed_it() -> None:
+    known = [{"label": "s", "unit": "kept-text", "must_differ_from_recorded": True}]
+    recorded = {"s": _check("s", "KEEP_TRIMMED", "DROP", "KEEP")}
+    for fresh, missed in (
+        ({"s": _check("s", "KEEP_TRIMMED", "DROP", "KEEP")}, True),
+        ({"s": _check("s", "KEEP_TRIMMED", "DROP", "DROP")}, False),
+        ({}, True),
+    ):
+        rows, failures = K._known(known, fresh, recorded)
+        assert rows[0]["missed"] is missed and bool(failures) is missed
 
 
 def test_the_check_pool_agrees_with_keep_and_trimmed_as_one_and_misses_a_known_error(
     tmp_path: Path,
 ) -> None:
     run = _pilot(tmp_path)
-    root, out = _sealed_check(tmp_path, run)
-    known = K.expectations("check", [run])
+    root = _seal(tmp_path, run, "check")
+    assert CC._sealed(root, "c1")["lane"]["merge"] is True
+    out = _prepare(root, run)
     # the fresh role keeps sentence 2 whole (the recorded one trimmed it) and keeps the known error
     fresh = {
         FX.SITE_A: _check(FX.SITE_A, "KEEP", "KEEP", "KEEP"),
@@ -124,64 +193,192 @@ def test_the_check_pool_agrees_with_keep_and_trimmed_as_one_and_misses_a_known_e
         FX.SITE_C: _check(FX.SITE_C, "DROP", "DROP"),
     }
     FX.record_answers(out, fresh, by="fact_checker:sonnet-check-r1", model=OH.SONNET_MODEL)
-    report = K.compare(root, calibration_id="wc-check-c1", merge_check=True, known=known)
-    assert report["agreement"] == 1.0 and report["merged"] is True
+    report = K.compare(root, calibration_id="c1")
+    assert report["agreement"] == 1.0 and report["merged"] is True and report["kind"] == "check"
     assert report["extra_wrong"] == 0
     assert report["lane_failures"] and "known error" in report["lane_failures"][0]
     assert report["known"][0]["fresh"] == "KEEP" and report["known"][0]["missed"] is True
-    result = CC.verdict(root, calibration_id="wc-check-c1", false_sources=0, now=lambda: NOW)
+    result = CC.verdict(root, calibration_id="c1", false_sources=0, now=lambda: NOW)
     assert result["passed"] is False and result["tier_move"]["to"] == "claude-opus-5-5"
     assert "known error" in result["tier_move"]["reason"]
 
 
-def test_without_the_merge_a_trimmed_sentence_the_role_keeps_whole_is_a_disagreement(
+def test_a_check_pool_that_finds_every_known_error_passes_and_only_a_dropped_sentence_differs(
     tmp_path: Path,
 ) -> None:
     run = _pilot(tmp_path)
-    root, out = _sealed_check(tmp_path, run)
+    root = _seal(tmp_path, run, "check")
+    out = _prepare(root, run)
+    recorded = json.loads((out / CC.RECORDED_FILE).read_text(encoding="utf-8"))
     fresh = {
         FX.SITE_A: _check(FX.SITE_A, "KEEP", "KEEP", "DROP"),
-        FX.SITE_B: _check(FX.SITE_B, "KEEP", "KEEP"),
+        # a different pattern than the recorded one at site B, whose text came out incoherent
+        FX.SITE_B: _check(FX.SITE_B, "DROP", "KEEP"),
         FX.SITE_C: _check(FX.SITE_C, "DROP", "DROP"),
     }
+    assert K._sentences(fresh[FX.SITE_B]) != K._sentences(recorded[FX.SITE_B])
     FX.record_answers(out, fresh, by="fact_checker:sonnet-check-r1", model=OH.SONNET_MODEL)
-    report = K.compare(root, calibration_id="wc-check-c1", known=K.expectations("check", [run]))
-    assert report["merged"] is False and report["lane_failures"] == []
-    assert [d["unit"] for d in report["disagreements"]] == ["sentence-2", "sentence-3"]
-    # the same answers, merged: only the sentence the role dropped differs
-    again = _pilot(tmp_path / "again")
-    root2, out2 = _sealed_check(tmp_path / "again", again)
-    FX.record_answers(out2, fresh, by="fact_checker:sonnet-check-r1", model=OH.SONNET_MODEL)
-    merged = K.compare(root2, calibration_id="wc-check-c1", merge_check=True)
-    assert [d["unit"] for d in merged["disagreements"]] == ["sentence-3"]
+    report = K.compare(root, calibration_id="c1")
+    assert report["lane_failures"] == []
+    assert [d["unit"] for d in report["disagreements"]][0] == "sentence-3"
 
 
-def test_an_expectation_about_a_label_outside_the_pool_stops_the_command(tmp_path: Path) -> None:
+def test_the_pass_conditions_are_the_seals_and_no_other_command_compares_a_lane_pool(
+    tmp_path: Path,
+) -> None:
     run = _pilot(tmp_path)
-    root, out = _sealed_check(tmp_path, run)
+    handoff = _handoff(tmp_path, "r1")
+    with pytest.raises(CC.CalibrationError, match="lane WC pool"):
+        CC.seal(
+            tmp_path / "plain", calibration_id="p", role="fact_checker", handoff=handoff,
+            batches=["wc-0001"], threshold=0.9, now=lambda: NOW,
+        )  # fmt: skip
+    assert not (tmp_path / "plain").exists()
+    root = _seal(tmp_path, run, "check")
+    out = _prepare(root, run)
     FX.record_answers(
         out, {FX.SITE_A: _check(FX.SITE_A, "KEEP", "KEEP", "DROP")}, by="x", model=OH.SONNET_MODEL
     )
+    with pytest.raises(CC.CalibrationError, match="lane's own command"):
+        CC.compare(root, calibration_id="c1")
+    # a comparison that did not come from the lane's command cannot close the calibration
+    CC._write_once(
+        out / CC.COMPARISON_FILE, {"agreement": 1.0, "units": 3, "agreed": 3, "unanswered": []}
+    )
+    with pytest.raises(CC.CalibrationError, match="carries no `lane_failures`"):
+        CC.verdict(root, calibration_id="c1", false_sources=0, now=lambda: NOW)
+
+
+def test_a_pool_sealed_without_the_lanes_conditions_or_with_them_changed_is_refused(
+    tmp_path: Path,
+) -> None:
+    run = _pilot(tmp_path)
+    copied = tmp_path / "handoff" / "plain-r1"
+    shutil.copytree(_handoff(tmp_path, "r1"), copied)
+    root = tmp_path / "calibration"
+    CC.seal(
+        root, calibration_id="bare", role="fact_checker", handoff=copied, batches=["wc-0001"],
+        threshold=0.9, now=lambda: NOW,
+    )  # fmt: skip
+    with pytest.raises(K.WcCalibrationError, match="sealed without the lane's conditions"):
+        K.prepare(root, calibration_id="bare", run=run)
+    sealed = _seal(tmp_path, run, "check", cid="edited")
+    path = sealed / CC.THRESHOLDS_FILE
+    seals = json.loads(path.read_text(encoding="utf-8"))
+    seals["edited"]["lane"]["expectations"] = []
+    path.write_text(json.dumps(seals), encoding="utf-8")
+    with pytest.raises(K.WcCalibrationError, match="were changed"):
+        K.prepare(sealed, calibration_id="edited", run=run)
+
+
+def test_a_known_error_of_a_site_outside_the_pool_is_named_in_the_seal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = _pilot(tmp_path)
+    real = K.expectations
+
+    def with_stranger(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        return [
+            *real(*args, **kwargs),
+            {"label": "zzz", "unit": "sentence-1", "must_not_be": ["KEEP"]},
+        ]
+
+    monkeypatch.setattr(K, "expectations", with_stranger)
+    root = _seal(tmp_path, run, "check")
+    lane = CC._sealed(root, "c1")["lane"]
+    assert lane["outside_pool"] == ["zzz"] and all(
+        e["label"] != "zzz" for e in lane["expectations"]
+    )
+    assert lane["expectations_sha256"] == K._sha256(lane["expectations"])
+
+
+def test_an_expectation_about_a_label_outside_the_pool_stops_the_comparison() -> None:
     with pytest.raises(K.WcCalibrationError, match="not in the pool"):
-        K.compare(
-            root,
-            calibration_id="wc-check-c1",
-            known=[{"label": "zzz", "unit": "sentence-1", "must_not_be": ["KEEP"]}],
-        )
+        K._known([{"label": "zzz", "unit": "sentence-1", "must_not_be": ["KEEP"]}], {}, {"a": "x"})
+
+
+def test_the_kind_fixes_the_role_and_whether_the_verdicts_merge(tmp_path: Path) -> None:
+    run = _pilot(tmp_path)
+    for kind, role, merged in (
+        ("check", "fact_checker", True),
+        ("verify", "web_verifier", False),
+        ("judge", "pilot_judge", False),
+    ):
+        sealed = K.seal(
+            tmp_path / f"cal-{kind}", calibration_id="c1", kind=kind,
+            handoff=_handoff(tmp_path, POOLS[kind][0]), batches=POOLS[kind][1], threshold=0.9,
+            runs=[run], now=lambda: NOW,
+        )  # fmt: skip
+        assert sealed["role"] == role and sealed["lane"]["merge"] is merged
+
+
+# ------------------------------------------------------------------------------ a verify pool
+def test_a_fresh_verification_must_not_support_what_the_judge_found_wrong(tmp_path: Path) -> None:
+    run = _pilot(tmp_path)
+    root = _seal(tmp_path, run, "verify", threshold=0.5)
+    out = _prepare(root, run)
+    fresh = {
+        FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED", "SUPPORTED", "SUPPORTED"]),
+        FX.SITE_B: FX.verification(FX.SITE_B, ["SUPPORTED", "SUPPORTED"]),
+    }
+    FX.record_answers(out, fresh, by="web_verifier:sonnet-wc", model=OH.SONNET_MODEL)
+    report = K.compare(root, calibration_id="c1")
+    assert [row["missed"] for row in report["known"]] == [
+        True,
+        True,
+    ]  # kept-3 supported; B coherent
+    assert len(report["lane_failures"]) == 2
+    assert (
+        CC.verdict(root, calibration_id="c1", false_sources=0, now=lambda: NOW)["passed"] is False
+    )
+
+
+def test_a_fresh_verification_that_finds_both_known_errors_passes(tmp_path: Path) -> None:
+    run = _pilot(tmp_path)
+    root = _seal(tmp_path, run, "verify", threshold=0.5)
+    out = _prepare(root, run)
+    fresh = {
+        FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED", "SUPPORTED", "UNSUPPORTED"]),
+        FX.SITE_B: FX.verification(
+            FX.SITE_B, ["SUPPORTED", "SUPPORTED"], coherent=False, broken=[2]
+        ),
+    }
+    FX.record_answers(out, fresh, by="web_verifier:sonnet-wc", model=OH.SONNET_MODEL)
+    report = K.compare(root, calibration_id="c1")
+    assert report["lane_failures"] == [] and report["merged"] is False
+    assert CC.verdict(root, calibration_id="c1", false_sources=0, now=lambda: NOW)["passed"] is True
 
 
 # ------------------------------------------------------------------------------ a judge pool
-def _sealed_judge(tmp_path: Path, run: Path) -> tuple[Path, Path, Path]:
-    root = tmp_path / "calibration"
-    handoff = tmp_path / "handoff" / "wc-test-judge"
-    CC.seal(
-        root, calibration_id="wc-judge-c1", role="pilot_judge", handoff=handoff,
-        batches=["judge-0001"], threshold=0.9, now=lambda: NOW,
-    )  # fmt: skip
-    prepared = CC.prepare(
-        root, calibration_id="wc-judge-c1", run=run, register=K.register_judge_pool
+def test_a_judge_pool_is_registered_so_that_the_judge_briefs_and_checks_its_answers(
+    tmp_path: Path,
+) -> None:
+    run = _pilot(tmp_path)
+    # the pilots' judge rounds were exported before a round recorded its plan: a calibration is tied to none
+    path = run / "judge" / "ROUND.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    del record["plan_sha256"]
+    path.write_text(json.dumps(record), encoding="utf-8")
+    root = _seal(tmp_path, run, "judge")
+    prepared = K.prepare(root, calibration_id="c1", run=run)
+    out, calibration_run = Path(prepared["prepared"]), Path(prepared["calibration_run"])
+    record = json.loads((calibration_run / "judge" / "ROUND.json").read_text(encoding="utf-8"))
+    assert record["calibration"] is True and list(record["batches"]) == ["judge-0001"]
+    assert "plan_sha256" not in record
+    text = C.judge_brief(calibration_run, out, "judge-0001")
+    assert "--role pilot_judge" in text and "You are Opus judge" in text
+    final = C._finals(calibration_run)[FX.SITE_A]
+    kept, dropped = C._judge_counts(final)
+    problem = C.judge_check_answer(
+        calibration_run,
+        out,
+        "judge-0001",
+        FX.SITE_A,
+        _judgement(FX.SITE_A, ["SUPPORTED"] * kept, dropped),
     )
-    return root, Path(prepared["prepared"]), Path(prepared["calibration_run"])
+    assert problem is None
+    with pytest.raises(C.WcRunError, match="a calibration round"):
+        C.cmd_judge_import(calibration_run, out, client=FX.FakeClient(), pace=0.0)
 
 
 def _judgement(site: str, kept: list[str], dropped: int, coherent: bool = True) -> str:
@@ -202,34 +399,10 @@ def _judgement(site: str, kept: list[str], dropped: int, coherent: bool = True) 
     )
 
 
-def test_a_judge_pool_is_registered_so_that_the_judge_briefs_and_checks_its_answers(
-    tmp_path: Path,
-) -> None:
-    run = _pilot(tmp_path)
-    root, out, calibration_run = _sealed_judge(tmp_path, run)
-    record = json.loads((calibration_run / "judge" / "ROUND.json").read_text(encoding="utf-8"))
-    assert record["calibration"] is True and list(record["batches"]) == ["judge-0001"]
-    text = C.judge_brief(calibration_run, out, "judge-0001")
-    assert "--role pilot_judge" in text and "You are Opus judge" in text
-    final = C._finals(calibration_run)[FX.SITE_A]
-    kept, dropped = C._judge_counts(final)
-    problem = C.judge_check_answer(
-        calibration_run,
-        out,
-        "judge-0001",
-        FX.SITE_A,
-        _judgement(FX.SITE_A, ["SUPPORTED"] * kept, dropped),
-    )
-    assert problem is None
-    with pytest.raises(C.WcRunError, match="a calibration round"):
-        C.cmd_judge_import(calibration_run, out, client=FX.FakeClient(), pace=0.0)
-
-
 def test_a_fresh_judge_must_find_the_known_findings_again_and_may_add_one_wrong(
     tmp_path: Path,
 ) -> None:
     run = _pilot(tmp_path)
-    known = K.expectations("judge", [run])
     finals = C._finals(run)
     sizes = {s: C._judge_counts(f) for s, f in finals.items()}
 
@@ -247,20 +420,11 @@ def test_a_fresh_judge_must_find_the_known_findings_again_and_may_add_one_wrong(
         return out
 
     def run_case(name: str, answers: dict[str, str]) -> dict[str, Any]:
-        base = tmp_path / name
-        root = base / "calibration"
-        handoff = tmp_path / "handoff" / "wc-test-judge"
-        CC.seal(
-            root, calibration_id="j", role="pilot_judge", handoff=handoff,
-            batches=["judge-0001"], threshold=0.5, now=lambda: NOW,
-        )  # fmt: skip
-        out = Path(
-            CC.prepare(root, calibration_id="j", run=run, register=K.register_judge_pool)[
-                "prepared"
-            ]
-        )
+        base = tmp_path / name / "calibration"
+        root = _seal(tmp_path, run, "judge", threshold=0.5, root=base)
+        out = _prepare(root, run)
         FX.record_answers(out, answers, by="pilot_judge:opus-judge", model=OH.OPUS_MODEL)
-        return K.compare(root, calibration_id="j", known=known)
+        return K.compare(root, calibration_id="c1")
 
     passing = run_case("ok", fresh(extra_wrong=1))  # site C: one extra WRONG, allowed
     assert passing["extra_wrong"] == 1 and passing["lane_failures"] == []
@@ -271,12 +435,25 @@ def test_a_fresh_judge_must_find_the_known_findings_again_and_may_add_one_wrong(
     assert len(missed["lane_failures"]) == 2
 
 
-def test_the_command_line_prints_the_expectations_and_refuses_with_exit_two(
+def test_the_command_line_seals_prints_the_expectations_and_refuses_with_exit_two(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     run = _pilot(tmp_path)
     assert K.main(["known", "--kind", "check", "--run", str(run)]) == 0
     printed = json.loads(capsys.readouterr().out)
-    assert printed == [{"label": FX.SITE_A, "unit": "sentence-3", "must_not_be": ["KEEP"]}]
+    assert [(e["label"], e["unit"]) for e in printed] == [
+        (FX.SITE_A, "sentence-3"),
+        (FX.SITE_B, "kept-text"),
+    ]
+    root = tmp_path / "cal"
+    sealed = [
+        "seal", "--root", str(root), "--id", "cli", "--kind", "check",
+        "--handoff", str(_handoff(tmp_path, "r1")), "--batches", "wc-0001",
+        "--threshold", "0.9", "--run", str(run),
+    ]  # fmt: skip
+    assert K.main(sealed) == 0
+    assert len(json.loads(capsys.readouterr().out)["lane"]["expectations"]) == 2
     assert K.main(["compare", "--root", str(tmp_path / "nowhere"), "--id", "nope"]) == 2
     assert "REFUSED" in capsys.readouterr().err
+    assert K.main(["compare", "--root", str(root), "--id", "cli"]) == 2  # sealed, not prepared
+    assert "is not prepared" in capsys.readouterr().err

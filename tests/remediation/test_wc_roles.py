@@ -28,7 +28,7 @@ from wc import prompts_sonnet as P2  # noqa: E402
 
 from tests.remediation import wc_fixtures as FX  # noqa: E402
 from tests.remediation import wn_fixtures as WX  # noqa: E402
-from tests.remediation.test_wc import _run  # noqa: E402
+from tests.remediation.test_wc import _judgement, _run  # noqa: E402
 from tests.remediation.test_wc_verify import _answers, _checked, _hv, _rows  # noqa: E402
 from tests.remediation.wc_fixtures import OH, M, wiki_cache  # noqa: E402,F401
 
@@ -477,3 +477,143 @@ def test_the_command_line_takes_the_new_options() -> None:
     )
     assert export.adversarial is True
     assert parser.parse_args(["export", "--run-dir", "r", "--handoff", "h"]).adversarial is False
+
+
+# ------------------------------------------------------------------------------ the role is named
+NEW = "2026-10-09T09:00:00+00:00"  # after the registry (2026-10-08)
+
+
+def _check_round(tmp_path: Path) -> tuple[Path, Path]:
+    run, handoff = tmp_path / "runs" / "wc-test", tmp_path / "handoff" / "wc-test-r1"
+    run.mkdir(parents=True)
+    C.cmd_read(run, runner=FX.ReadRunner(_rows()))
+    C.cmd_export(run, handoff, batch_size=5, exclude=None, after=[], pilot=None, seed=None)
+    return run, handoff
+
+
+@pytest.mark.parametrize("model", [OH.HAIKU_MODEL, OH.SONNET_MODEL, OH.OPUS_MODEL])
+def test_an_answer_given_now_names_the_rounds_role_whatever_its_model(
+    tmp_path: Path, model: str
+) -> None:
+    """Without `--role` a Haiku answer could enter any round: the stamp was never compared."""
+    run, handoff = _check_round(tmp_path)
+    FX.record_answers(handoff, _answers(), by="anyname-wc", model=model, at=NEW)
+    with pytest.raises(C.WcRunError, match="names no role.*answer --role fact_checker"):
+        C.cmd_import(run, handoff, client=FX.FakeClient(), pace=0.0)
+    assert not (run / "round-1" / "ANSWERS.jsonl").exists()
+
+
+def test_the_verification_and_the_judge_name_their_role_from_the_registry_day_on(
+    tmp_path: Path,
+) -> None:
+    run = _checked(tmp_path)
+    handoff = _hv(tmp_path)
+    C.cmd_verify_export(run, handoff, batch_size=5)
+    answers = {
+        FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED"] * 3),
+        FX.SITE_B: FX.verification(FX.SITE_B, ["SUPPORTED"] * 2),
+    }
+    FX.record_answers(handoff, answers, by="anyname", model=OH.HAIKU_MODEL, at=NEW)
+    with pytest.raises(C.WcRunError, match="names no role.*answer --role web_verifier"):
+        C.cmd_verify_import(run, handoff, client=FX.FakeClient(), pace=0.0)
+    pilot = FX.build_run(tmp_path / "j", _rows(), _answers(), pilot=True, judged=False)[0]
+    judge = tmp_path / "handoff" / "judge"
+    C.cmd_judge_export(pilot, judge, batch_size=5)
+    FX.record_answers(judge, _judge_answers(pilot), by="anyname", model=OH.SONNET_MODEL, at=NEW)
+    with pytest.raises(C.WcRunError, match="names no role.*answer --role pilot_judge"):
+        C.cmd_judge_import(pilot, judge, client=FX.FakeClient(), pace=0.0)
+
+
+# ------------------------------------------------------------------------ one agent, one role
+def test_one_agent_cannot_check_and_then_verify_the_same_site_under_two_role_prefixes(
+    tmp_path: Path,
+) -> None:
+    run, handoff = _check_round(tmp_path)
+    FX.record_answers(handoff, _answers(), by="fact_checker:agent-7", model=OH.SONNET_MODEL, at=NEW)
+    C.cmd_import(run, handoff, client=FX.FakeClient(), pace=0.0)
+    verify = tmp_path / "handoff" / "wc-test-verify"
+    C.cmd_verify_export(run, verify, batch_size=5)
+    answers = {
+        FX.SITE_A: FX.verification(FX.SITE_A, ["SUPPORTED"] * 3),
+        FX.SITE_B: FX.verification(FX.SITE_B, ["SUPPORTED"] * 2),
+    }
+    FX.record_answers(verify, answers, by="web_verifier:agent-7", model=OH.SONNET_MODEL, at=NEW)
+    # the checkers are fact_checker:agent-7-wc-0001; this verifier is the same agent in another role
+    for line in OH.manifest(verify):
+        path = verify / line["answer_path"]
+        stored = json.loads(path.read_text(encoding="utf-8"))
+        stored["answered_by"] = "web_verifier:agent-7-wc-0001"
+        path.write_text(json.dumps(stored), encoding="utf-8")
+    with pytest.raises(C.WcRunError, match="checked or verified this site before"):
+        C.cmd_verify_import(run, verify, client=FX.FakeClient(), pace=0.0)
+    assert not (run / "verify" / "round-1" / "VERIFIED.jsonl").exists()
+
+
+def test_a_judge_who_is_a_checker_under_another_role_prefix_is_not_independent(
+    tmp_path: Path,
+) -> None:
+    run = FX.build_run(tmp_path, _rows(), _answers(), pilot=True, judged=False)[0]
+    handoff = tmp_path / "handoff" / "judge"
+    C.cmd_judge_export(run, handoff, batch_size=5)
+    # the checkers answered as `opus-check-wc-0001` (recorded before the registry)
+    FX.record_answers(handoff, _judge_answers(run), by="pilot_judge:x", model=OH.OPUS_MODEL, at=NEW)
+    for line in OH.manifest(handoff):
+        path = handoff / line["answer_path"]
+        stored = json.loads(path.read_text(encoding="utf-8"))
+        stored["answered_by"] = "pilot_judge:opus-check-wc-0001"
+        path.write_text(json.dumps(stored), encoding="utf-8")
+    result = C.cmd_judge_import(run, handoff, client=FX.FakeClient(), pace=0.0)
+    assert result["measured"]["independent"] == 0
+    assert any("judged by a checker or verifier of the run" in f for f in result["failures"])
+
+
+# ------------------------------------------------------- a chunk is written after its sampled judge
+def _approved_chunk(tmp_path: Path) -> tuple[Path, Path, Path]:
+    pilot = FX.build_run(tmp_path / "p", _rows(), _answers(), pilot=True)[1]
+    run, plan = FX.build_run(tmp_path / "c", _rows(), _answers(), pilot=False)
+    return pilot, run, plan
+
+
+def _sample_answers(run: Path, handoff: Path, *, wrong: bool) -> dict[str, str]:
+    record = json.loads((run / "judge" / "ROUND.json").read_text(encoding="utf-8"))
+    asked = {label for labels in record["batches"].values() for label in labels}
+    answers = {label: a for label, a in _judge_answers(run).items() if label in asked}
+    if wrong:
+        counts = {label: C._judge_counts(C._finals(run)[label]) for label in sorted(asked)}
+        label = next(label for label, (kept, _) in counts.items() if kept)
+        kept, dropped = counts[label]
+        answers[label] = _judgement(
+            label, ["SUPPORTED"] * (kept - 1) + ["WRONG"], ["DROP_OK"] * dropped
+        )
+    return answers
+
+
+def test_a_chunk_whose_sampled_judge_is_unanswered_failed_or_for_another_plan_is_not_written(
+    tmp_path: Path,
+) -> None:
+    pilot, run, plan = _approved_chunk(tmp_path)
+    assert len(C.pilot_approval([pilot, plan])) == 1  # no judge round: the sample is the operator's
+    handoff = tmp_path / "handoff" / "sample"
+    C.cmd_judge_export(run, handoff, batch_size=5, sample=2, seed=3)
+    with pytest.raises(C.WcRunError, match="exported and not imported"):
+        C.pilot_approval([pilot, plan])
+    FX.record_answers(handoff, _sample_answers(run, handoff, wrong=True), by="opus-judge")
+    assert C.cmd_judge_import(run, handoff, client=FX.FakeClient(), pace=0.0)["passed"] is False
+    with pytest.raises(C.WcRunError, match="sampled judge did not pass"):
+        C.pilot_approval([pilot, plan])
+
+
+def test_a_chunk_whose_sampled_judge_passed_on_this_plan_is_written_and_only_this_plan(
+    tmp_path: Path,
+) -> None:
+    pilot, run, plan = _approved_chunk(tmp_path)
+    handoff = tmp_path / "handoff" / "sample"
+    C.cmd_judge_export(run, handoff, batch_size=5, sample=2, seed=3)
+    FX.record_answers(handoff, _sample_answers(run, handoff, wrong=False), by="opus-judge")
+    assert C.cmd_judge_import(run, handoff, client=FX.FakeClient(), pace=0.0)["passed"] is True
+    assert len(C.pilot_approval([pilot, plan])) == 1
+    result_path = run / "judge" / "RESULT.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    result_path.write_text(json.dumps({**result, "plan_sha256": "0" * 64}), encoding="utf-8")
+    with pytest.raises(C.WcRunError, match="not the plan the sampled judge judged"):
+        C.pilot_approval([pilot, plan])

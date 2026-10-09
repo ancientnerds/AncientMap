@@ -209,9 +209,15 @@ Q_ZAMMIT_WIKI = quote(WIKI, "excavated by Themistocles Zammit between 1915 and 1
 
 
 def record_answers(
-    handoff: Path, answers: Mapping[str, str], *, by: str = "opus-check", model: str = OH.OPUS_MODEL
+    handoff: Path,
+    answers: Mapping[str, str],
+    *,
+    by: str = "opus-check",
+    model: str = OH.OPUS_MODEL,
+    at: str = "2026-09-26T12:00:00+00:00",
 ) -> None:
-    """Write each site's answer where its question was exported, as `opus_handoff.py answer`."""
+    """Write each site's answer where its question was exported, as `opus_handoff.py answer`; `at`
+    is the answer's time (before the role registry of 2026-10-08 by default)."""
     for line in OH.manifest(handoff):
         if line["label"] in answers:
             OH.write_answer(
@@ -222,7 +228,7 @@ def record_answers(
                 label=line["label"],
                 text=answers[line["label"]],
                 answered_by=f"{by}-{line['batch_id']}",
-                now=lambda: "2026-09-26T12:00:00+00:00",
+                now=lambda: at,
             )
 
 

@@ -1143,9 +1143,16 @@ fact checker too: no writer role is registered. A MiniMax answer is never ground
   fetches every quoted page itself.
 - **The importers take Claude's answers in the round's role only** (`cli._require_role`): `import`,
   `verify-import` and `judge-import` refuse an answer whose stamp is MiniMax's (the way back is `verify-void`
-  below), one that names another role than the round's, and a role's answer carrying another model's stamp. An
-  answer recorded before the registry names no role and is valid when its stamp is a Claude one; the adversarial
-  check alone requires its role to be named.
+  below), one that names another role than the round's, and a role's answer carrying another model's stamp. Only
+  an answer given before 2026-10-08 (`answered_at`, the registry's day) may name no role, and then its stamp must
+  be a Claude one; **every answer given from that day on names the round's role** (`answer --role`; without it a
+  Haiku answer could enter an Opus round, because the stamp is compared only with a named role). The adversarial
+  check never had the exemption.
+- **One agent is one agent in every role.** The independence rules compare the agent part of `answered_by`
+  (`<role>:<agent>` -> `<agent>`): a verifier whose name checked or verified the site before is refused
+  (`verify-import`), and a judge whose name checked or verified any site of the run is not independent
+  (`judge-import`), whatever role prefix the two names carry. Fact checker and web verifier are both Sonnet high,
+  so the model stamp does not separate them.
 - **`verify-void`** (`wc/void.py`, 15.3) - **`judge-export --sample N --seed S`** (15.4) - the adversarial second
   check (`export --adversarial`, `defect-kept-sites`, `defect-closure`, 15.5) - **`minimax-sites`** (15.6) -
   `wc/calibration.py` (15.2).
@@ -1156,38 +1163,49 @@ Variables as in 11.3, run from the merged main checkout. `CAL=output/remediation
 `K="$PY scripts/remediation/wc/calibration.py"`; `CC="$PY scripts/remediation/calibrate_claude.py"`. A pool is
 batches of an answered handoff whose answers are no MiniMax's (`seal` refuses one); the threshold is sealed
 **before** the copy is made and the agents run. The known errors are what the pilots' judges found (Cloghanmore,
-the Paris aqueduct "carved", Nyons incoherent; measured 2026-10-09): `known` derives them from the pilots' own
-`JUDGED.jsonl`; a role that misses one fails whatever its agreement is (`lane_failures`, counted by `verdict`).
+the Paris aqueduct "carved", Nyons incoherent; measured 2026-10-09): `wc/calibration.py seal` derives them from the
+pilots' own `JUDGED.jsonl` and **seals them with the threshold**, before the copy is made and before any agent
+answers: the kind of pool (which fixes the role and whether KEEP and KEEP_TRIMMED are one verdict), the list of
+known errors, its sha256 and the known errors of sites outside the pool (`outside_pool`, named, never dropped).
+`compare` takes no setting: it reads merge and expectations from the seal, `calibrate_claude.py compare` refuses a
+lane pool, `calibrate_claude.py seal` refuses a `wc-...` handoff without the lane's conditions, and `verdict`
+refuses a lane pool whose `COMPARISON.json` carries no `lane_failures`. A role that misses a known error fails
+whatever its agreement is (`lane_failures`, counted by `verdict`). What counts as a known error, by pool:
+check - a sentence the judge found WRONG may be neither KEEP nor KEEP_TRIMMED, and a site whose kept text the judge
+found incoherent must not get the recorded verdict pattern again (a check answer carries no coherence flag; the
+spot check of the disagreements stays the orchestrator's); verify - that sentence must be WRONG or UNSUPPORTED
+(`kept-k` of the verification round the pool is, `--handoff`) and an incoherent text must be found incoherent;
+judge - the WRONG sentence is found again, the incoherent text is found incoherent, at most one extra WRONG.
+Measured 2026-10-09: the verify pools hold no judged-WRONG site (pilot-27c's judge found none, mass-02 was not
+judged), so their list is empty and the verify bar is the agreement of 95 % plus the O18 spot check.
 
     # fact checker (Sonnet, high): 6 batches, 30 sites of the three pilots; KEEP and KEEP_TRIMMED are one verdict
-    $CC seal --id wc-fc-1  --role fact_checker --handoff $H/wc-pilot-2026-09-27-r1  --batches wc-0001 wc-0002 --threshold 0.9
-    $CC seal --id wc-fc-2  --role fact_checker --handoff $H/wc-pilot-2026-09-27b-r1 --batches wc-0001 wc-0003 wc-0004 --threshold 0.9
-    $CC seal --id wc-fc-3  --role fact_checker --handoff $H/wc-pilot-2026-09-27c-r1 --batches wc-0001 --threshold 0.9
-    $K known --kind check --run $RUNS/pilot-2026-09-27  > $CAL/known-wc-fc-1.json   # Cloghanmore
-    $K known --kind check --run $RUNS/pilot-2026-09-27b > $CAL/known-wc-fc-2.json   # the Paris aqueduct
-    echo '[]' > $CAL/known-wc-fc-3.json
-    $K prepare --id wc-fc-1 --run $RUNS/pilot-2026-09-27     # and -2 with pilot-2026-09-27b, -3 with -27c
+    $K seal --id wc-fc-1 --kind check --handoff $H/wc-pilot-2026-09-27-r1  --batches wc-0001 wc-0002 --threshold 0.9 --run $RUNS/pilot-2026-09-27     # Cloghanmore
+    $K seal --id wc-fc-2 --kind check --handoff $H/wc-pilot-2026-09-27b-r1 --batches wc-0001 wc-0003 wc-0004 --threshold 0.9 --run $RUNS/pilot-2026-09-27b  # the Paris aqueduct, Nyons
+    $K seal --id wc-fc-3 --kind check --handoff $H/wc-pilot-2026-09-27c-r1 --batches wc-0001 --threshold 0.9 --run $RUNS/pilot-2026-09-27c
+    #   read the "lane" of each seal in $CAL/THRESHOLDS.json (the known errors, outside_pool) before the copy is made
+    $K prepare --id wc-fc-N --run $RUNS/pilot-2026-09-27     # -2 with pilot-2026-09-27b, -3 with -27c
     #   one Sonnet agent per batch of $CAL/wc-fc-N, its instruction: $C brief --run-dir $CAL/wc-fc-N-run --handoff $CAL/wc-fc-N --batch-id wc-000N
     $OH validate --dir $CAL/wc-fc-N     # the calibrated batches only are answered: the other batches of the copy keep theirs
-    $K compare --id wc-fc-N --merge --known $CAL/known-wc-fc-N.json
+    $K compare --id wc-fc-N
     #   spot-check the URL and quote of every disagreement in COMPARISON.json (O18), count the false ones
     $CC verdict --id wc-fc-N --false-sources <n>
 
     # web verifier (Sonnet, high): the pilot-27c verification (Opus-answered, 20 sites) and the 15 questions of mass-02
-    $CC seal --id wc-wv-1 --role web_verifier --handoff $H/wc-pilot-2026-09-27c-verify --batches verify-0001 verify-0002 verify-0003 verify-0004 --threshold 0.95
-    $CC seal --id wc-wv-2 --role web_verifier --handoff $H/wc-mass-2026-09-27-02-verify --batches verify-0003 verify-0004 verify-0005 --threshold 0.95
+    $K seal --id wc-wv-1 --kind verify --handoff $H/wc-pilot-2026-09-27c-verify --batches verify-0001 verify-0002 verify-0003 verify-0004 --threshold 0.95 --run $RUNS/pilot-2026-09-27c
+    $K seal --id wc-wv-2 --kind verify --handoff $H/wc-mass-2026-09-27-02-verify --batches verify-0003 verify-0004 verify-0005 --threshold 0.95
     $K prepare --id wc-wv-1 --run $RUNS/pilot-2026-09-27c   # and wc-wv-2 with --run $RUNS/mass-2026-09-27-02
     #   the batches are answered with $C verify-brief --run-dir $CAL/wc-wv-N-run --handoff $CAL/wc-wv-N --batch-id verify-000N
     $K compare --id wc-wv-N ; $CC verdict --id wc-wv-N --false-sources <n>
 
     # pilot judge (Opus, xhigh): the pilots' judge questions, the known findings recalled, at most one extra WRONG
-    $CC seal --id wc-pj-1 --role pilot_judge --handoff $H/wc-pilot-2026-09-27-judge  --batches judge-0002 --threshold 0.9
-    $CC seal --id wc-pj-2 --role pilot_judge --handoff $H/wc-pilot-2026-09-27b-judge --batches judge-0001 judge-0004 --threshold 0.9
-    $K known --kind judge --run $RUNS/pilot-2026-09-27  > $CAL/known-wc-pj-1.json
-    $K known --kind judge --run $RUNS/pilot-2026-09-27b > $CAL/known-wc-pj-2.json
+    $K seal --id wc-pj-1 --kind judge --handoff $H/wc-pilot-2026-09-27-judge  --batches judge-0002 --threshold 0.9 --run $RUNS/pilot-2026-09-27
+    $K seal --id wc-pj-2 --kind judge --handoff $H/wc-pilot-2026-09-27b-judge --batches judge-0001 judge-0004 --threshold 0.9 --run $RUNS/pilot-2026-09-27b
     $K prepare --id wc-pj-1 --run $RUNS/pilot-2026-09-27     # the judge pool is registered here (judge/ROUND.json)
     #   $C judge-brief --run-dir $CAL/wc-pj-N-run --handoff $CAL/wc-pj-N --batch-id judge-000N
-    $K compare --id wc-pj-N --known $CAL/known-wc-pj-N.json ; $CC verdict --id wc-pj-N --false-sources <n>
+    $K compare --id wc-pj-N ; $CC verdict --id wc-pj-N --false-sources <n>
+
+`$K known --kind K --run R [--handoff H]` prints what `seal` would derive, to look at it first.
 
 A calibration run's rounds are marked `calibration`: no import reads them (`verify-import`, `judge-import`
 refuse). A role that fails is moved up one tier by a committed edit of `roles.ROLES`, sealed and calibrated again;
@@ -1236,7 +1254,11 @@ A chunk that is no pilot is judged by a seeded sample of the sites it will write
 `RESULT.json` carries the draw (`sample: {sites, seed, of}`); the thresholds are the pilot's, the WN minimum does
 not apply to a sample. A list run's site that is not written (`unchanged`, `defect-kept`) is not drawn. A pilot is
 judged whole (`--sample` is refused for one) and a sampled result approves no plan (`pilot_approval`). A failed
-sample is a finding about the chunk: `revert4` its stamp, or clear the sentences by a list run, before the next step.
+sample is a finding about the chunk: **the gate refuses to write it** (`pilot_approval`: a chunk whose `judge/ROUND.json`
+exists needs a `RESULT.json` that passed on exactly this plan - a judge exported and not imported, a failed one and a
+plan built again after its judge all stop the write). Fix the cause (`revert4` the stamp, or clear the sentences by a
+list run) and judge a rebuilt plan again. A chunk with no judge round at all is not asked by the gate: the sample is
+the operator's step.
 
 ### 15.5 The 141 defect sites (D25b)
 

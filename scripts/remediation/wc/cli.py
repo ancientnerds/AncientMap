@@ -131,6 +131,7 @@ import math
 import sys
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -181,6 +182,10 @@ JUDGE_DIR = "judge"
 #: refuse an answer that names another role or carries another role's stamp (`_require_role`).
 ROLE_CHECK, ROLE_VERIFY, ROLE_JUDGE = "fact_checker", "web_verifier", "pilot_judge"
 ROLE_ADVERSARIAL = "adversarial"
+#: The day the role registry went live (owner decision D6, 2026-10-08). An answer given before it may
+#: name no role; every answer given from this day on names the role of the round it answers
+#: (`_require_role`), so a Haiku or Sonnet answer cannot enter an Opus round by leaving `--role` off.
+ROLE_REGISTRY_FROM = datetime(2026, 10, 8, tzinfo=UTC)
 #: The shared Wikipedia cache of the final repair (`tools/wiki_cache.py`): the briefs send the
 #: agents to it first, so no more than a few of them fetch Wikipedia live at the same time.
 WIKI_CACHE = REPO / "output" / "remediation" / "final-2026-10-08" / "wiki_cache"
@@ -500,22 +505,34 @@ def _agent_family(role_name: str) -> str:
     return OH.ANSWER_FAMILIES[RO.role(role_name).model]
 
 
+def _agent_of(answered_by: str) -> str:
+    """The agent an `answered_by` names: `<role>:<agent>` is the agent, a name without a role is
+    itself. The independence checks compare agents, never the whole string: `fact_checker:agent-7`
+    and `web_verifier:agent-7` are one agent."""
+    return answered_by.partition(":")[2] or answered_by
+
+
 def _require_role(answer: OH.Answer, *, role_name: str, where: str) -> None:
     """An answer enters a lane WC round only as the round's role's, from a Claude model: never a
     MiniMax answer (owner decisions D6 and D10; master plan X6 - `verify-void` moves such an answer
     aside and the batch is answered again), never an answer given in another role, never a role's
-    answer carrying another model's stamp. An answer recorded before the registry names no role and
-    is valid when its stamp is a Claude one."""
+    answer carrying another model's stamp. Only an answer given before the registry
+    (`ROLE_REGISTRY_FROM`) may name no role, and then its stamp must be a Claude one; every later
+    answer names the round's role."""
     if answer.model == OH.MINIMAX_MODEL:
         raise WcRunError(
             f"{where}: answered by MiniMax ({answer.answered_by}) - a MiniMax answer is never "
             "imported (D10): `verify-void` moves it aside, a Claude agent answers the question again"
         )
     named = RO.role_of(answer.answered_by)
-    if named is None and role_name == ROLE_ADVERSARIAL:
+    if named is None and (
+        role_name == ROLE_ADVERSARIAL
+        or datetime.fromisoformat(answer.answered_at) >= ROLE_REGISTRY_FROM
+    ):
         raise WcRunError(
-            f"{where}: {answer.answered_by} names no role - an adversarial second check is "
-            f"answered with `answer --role {ROLE_ADVERSARIAL}` (Opus, not a recorded legacy name)"
+            f"{where}: {answer.answered_by} names no role - an answer given from "
+            f"{ROLE_REGISTRY_FROM.date()} on is answered with `answer --role {role_name}` "
+            "(the brief prints the command)"
         )
     if named is not None and named != role_name:
         raise WcRunError(
@@ -1783,8 +1800,10 @@ def cmd_verify_import(
             raise WcRunError(f"{batch_id}/{label}: the exported prompt is not this question's")
         answer = OH.read_answer(handoff, batch_id=batch_id, stage=stage, label=label, prompt=prompt)
         _require_role(answer, role_name=ROLE_VERIFY, where=f"{batch_id}/{label}")
-        others = site.checkers | {given["answered_by"] for given in earlier.get(label, [])}
-        if answer.answered_by in others:
+        others = {_agent_of(name) for name in site.checkers} | {
+            _agent_of(given["answered_by"]) for given in earlier.get(label, [])
+        }
+        if _agent_of(answer.answered_by) in others:
             raise WcRunError(
                 f"{batch_id}/{label}: {answer.answered_by} checked or verified this site before - "
                 "a verification is an independent agent's; have the batch answered again by a new "
@@ -2011,11 +2030,11 @@ def cmd_judge_import(
     sites = read_sites(run)
     run_of = run_kind(run)
     workers = {
-        attempt["answered_by"]
+        _agent_of(attempt["answered_by"])
         for final in finals.values()
         for attempt in final["evidence"]["answers"]
     } | {
-        r["answered_by"]
+        _agent_of(r["answered_by"])
         for final in finals.values()
         for r in final["evidence"][wc4.VERIFICATION_KEY]["rounds"]
     }
@@ -2051,7 +2070,7 @@ def cmd_judge_import(
                 "site_id": label,
                 "batch_id": batch_id,
                 "answered_by": answer.answered_by,
-                "independent": answer.answered_by not in workers,
+                "independent": _agent_of(answer.answered_by) not in workers,
                 "coherent": parsed.coherent,
                 "note": parsed.note,
                 "items": rows,
@@ -2138,6 +2157,33 @@ def judge_result(
     }
 
 
+def _require_sampled_judge_passed(run: Path, plan: Path) -> None:
+    """A chunk whose sampled judge was exported is written only when that judge passed on exactly
+    this plan (master plan, descriptions map: a plan whose judge failed is never in the root). A
+    judge exported and not imported has no verdict, a failed one is a finding about the chunk, and a
+    plan built again after its judge is not the judged one. A chunk with no judge round at all is
+    not asked here: the sample is the operator's step (SENTENCE_CHECK.md 15.4)."""
+    if not (run / JUDGE_DIR / "ROUND.json").exists():
+        return
+    path = run / JUDGE_DIR / "RESULT.json"
+    if not path.exists():
+        raise WcRunError(
+            f"{run}: the sampled judge was exported and not imported (judge-import writes "
+            f"{path.name}): a chunk is written after its judge passed"
+        )
+    result = json.loads(path.read_text(encoding="utf-8"))
+    if result["passed"] is not True:
+        raise WcRunError(
+            f"{run}: the sampled judge did not pass ({result['failures']}): the chunk is never "
+            "written - revert its stamp or clear the sentences by a list run"
+        )
+    if result.get("plan_sha256") != _sha256(plan):
+        raise WcRunError(
+            f"{plan}: not the plan the sampled judge judged (RESULT.json plan_sha256 "
+            f"{result.get('plan_sha256')!r}): a plan is written only as it was judged"
+        )
+
+
 def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
     """The pilot verdict every WC plan the gate writes rests on (`write_gate4.wc_batches`; the review
     of 2026-09-26: nothing tied a mass plan to a passed pilot). Each plan is `<run>/WC4.jsonl`. The
@@ -2177,6 +2223,7 @@ def pilot_approval(plans: Sequence[Path]) -> list[dict[str, str]]:
                     "plain chunks - name the WC pilot first"
                 )
         if pilot is None:
+            _require_sampled_judge_passed(run, plan)
             continue
         if which == "WN" and pilot["sites"] != wn_pilot_size(population["population"]):
             raise WcRunError(
