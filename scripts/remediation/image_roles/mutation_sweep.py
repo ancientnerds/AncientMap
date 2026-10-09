@@ -1495,7 +1495,7 @@ FIX_CASES: list[Case] = [
         FLOW,
         '        else {**pick, "wikipedia_cache_file": _cache_file(cache, str(pick["site_id"]))}',
         '        else {**pick, "wikipedia_cache_file": None}',
-        "test_a_pick_carries_the_site_its_picture_and_its_cached_wikipedia_page",
+        "test_picks_from_a_file_are_told_the_cached_page_of_their_site",
         T_FLOW,
     ),
     # ------------------------------------------------------------ image_roles/identity.py
