@@ -310,6 +310,29 @@ class TestDisputedGold:
         for name in ("Undavalli", "Viera", "Lot's Cave", "Mormont", "Beacon Hill"):
             assert name in names
 
+    def test_the_real_table_is_keyed_by_the_site_ids_of_the_contradicted_set(self) -> None:
+        """The first table was keyed by case labels and excluded nothing in a real evaluation."""
+        fixture = json.loads(
+            (Path(__file__).parent / "fixtures" / "teaser_calibration_contradicted_sites.json")
+            .read_text(encoding="utf-8")
+        )  # fmt: skip
+        drawn = {c["site_id"]: c["name"] for c in fixture["cases"]}
+        assert len(drawn) == 20
+        assert set(K.DISPUTED_CONTRADICTIONS) <= set(drawn)
+        for site_id, why in K.DISPUTED_CONTRADICTIONS.items():
+            assert drawn[site_id].split(",")[0] in why
+
+    def test_a_disputed_entry_that_is_no_site_of_the_contradicted_set_is_refused(
+        self, tmp_path: Path
+    ) -> None:
+        run_dir = fixed_dir(tmp_path, disputed_table(["00000000-0000-4000-8000-000000000000"]))
+        answer_role(
+            run_dir, "web_verifier",
+            {"verifier_contradicted": miss_all, "verifier_verified": verified_text},
+        )  # fmt: skip
+        with pytest.raises(K.CalibrationError, match="no site id of the contradicted set"):
+            K.evaluate(run_dir, "web_verifier", client=judge_client())
+
     def test_a_disputed_contradiction_the_verifier_missed_leaves_the_denominator(
         self, tmp_path: Path
     ) -> None:
@@ -385,6 +408,51 @@ def contradicted_ok(job: dict[str, Any]) -> str:
         {"claim": "lived in from roughly 3180 BC", "verdict": "SUPPORTED", "url": PAGE, "quote": QUOTE},
         {"claim": "built by the Inca", "verdict": "CONTRADICTED", "url": PAGE, "quote": QUOTE},
     ]})  # fmt: skip
+
+
+class _Page:
+    def __init__(self, text: str) -> None:
+        self.texts = (("reading", text),)
+
+
+class _Library:
+    def __init__(self, text: str) -> None:
+        self.page = _Page(text)
+
+    def url(self, url: str) -> _Page:
+        return self.page
+
+
+class TestALoosenedNumberIsFabricated:
+    @staticmethod
+    def standing(quote: str, page: str) -> str | None:
+        claim = {"quote": quote, "url": PAGE, "quote_outcome": K.Q.NOT_FOUND}
+        return K.quote_standing(claim, _Library(page))  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize(
+        ("quote", "page"),
+        [
+            ("the cave is 3.5 m deep", "The cave is 35 m deep."),
+            ("dated 10-15 BC", "It is dated 1015 BC."),
+            ("1,000 men", "about 1000 men"),
+            ("rebuilt in [1854]", "The temple was rebuilt in 1923 by the bishop."),
+        ],
+    )
+    def test_a_changed_number_is_not_the_machines_miss(self, quote: str, page: str) -> None:
+        assert self.standing(quote, page) == K.FABRICATED
+
+    @pytest.mark.parametrize(
+        ("quote", "page"),
+        [
+            ("The cave is 3.5 m deep", "the cave is 3.5 m deep"),
+            ("dated 10–15 BC", "It is dated 10-15 BC."),
+            ("dated 10 - 15 BC", "It is dated 10–15 BC."),
+            ("“the Inca” built it", 'The "Inca" built it'),
+            ("café at 3.5 km", "Cafe at 3.5 km"),
+        ],
+    )
+    def test_typography_alone_is_the_machines_miss(self, quote: str, page: str) -> None:
+        assert self.standing(quote, page) == K.MACHINE_MISS
 
 
 class TestTheQuoteStanding:
@@ -705,6 +773,9 @@ class TestTheSealCoversTheCodeThatJudges:
         "scripts/remediation/wc/answers.py",
         "scripts/remediation/quote_check.py",
         "scripts/remediation/web_rules.py",
+        "scripts/remediation/phase4/licences.py",  # the rule behind `url_problem`
+        "pipeline/utils/card_provenance.py",  # MAX_UNPROVEN_CLAIMS: VERIFIED against UNPROVEN
+        "scripts/remediation/image_roles/wiki_cache.py",  # the WIKI_MAP the agents read
     )
 
     def test_the_modules_hash_the_question_builder_the_judge_and_the_quote_check(self) -> None:

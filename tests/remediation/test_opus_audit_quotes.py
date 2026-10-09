@@ -133,10 +133,21 @@ def test_a_marker_before_punctuation_leaves_no_gap() -> None:
         "list [a, b]",
         "[]",
         "x [ ] y",
+        "the temple was rebuilt in [1854]",
+        "[T]he temple",
+        "Phase [A] and [B]",
+        "list [1854, 1923]",
+        "range [1000-2000]",
     ],
 )
 def test_a_bracket_that_is_not_a_reference_marker_is_kept(kept: str) -> None:
     assert Q.normalise(kept) == kept
+
+
+def test_a_quote_with_an_invented_bracketed_year_is_not_found(tmp_path: Path) -> None:
+    _page(tmp_path, ES_URL, "<p>The temple was rebuilt in 1923 by the bishop.</p>")
+    result = _check(tmp_path, (ES_URL, "the temple was rebuilt in [1854]")).quotes[0]
+    assert result.outcome == Q.NOT_FOUND
 
 
 def test_a_quote_with_a_marker_still_matches_the_page_with_it(tmp_path: Path) -> None:

@@ -112,18 +112,18 @@ STOP_WORDS = frozenset(
 #: The recorded contradictions of the web verifier's sample that are disputed or hair-splitting, not
 #: plain errors of the card (Opus diagnosis of calibration teaser-2026-10-09, 2026-10-09): they stay
 #: in the sample and are reported, but do not count in the denominator of `caught_min`. Site id ->
-#: why. Only the sites the seeded draw holds matter; one the draw does not hold is ignored.
+#: why. A key that is not the site id of a contradicted case of the draw is refused by the evaluation.
 DISPUTED_CONTRADICTIONS: dict[str, str] = {
-    "55a99800-d3fe-4d34-b863-dcb894196e21": "Undavalli Caves: the 4th-5th century date is disputed "
+    "5be3cff9-8b07-4cfc-b667-933e2d0ae302": "Undavalli Caves: the 4th-5th century date is disputed "
     "(the ASI dates the earliest phase to the 7th century); Wikipedia and Live History India agree "
     "with the card",
-    "a8eaf6e1-2844-463f-9269-8e09471ab99b": "Dolmen de Viera: the discoverers' surname (Fuentes "
+    "3f512971-679b-4f40-8f5e-1467424ce605": "Dolmen de Viera: the discoverers' surname (Fuentes "
     "against Viera Fuentes) - a naming convention, not a wrong fact",
-    "85860fda-c2ff-4a3e-81ce-9e5dee03b7d9": "Lot's Cave: April 606 (UNESCO, Wikipedia) against "
+    "9e723832-0a2b-43f9-90d1-3743b61b91ed": "Lot's Cave: April 606 (UNESCO, Wikipedia) against "
     "605 or 607 (the excavator) - the sources differ by one year",
-    "5dee8ece-3ddc-46dc-aeb6-3db2e05a1c3b": "Mormont: 'burial pits' against the excavators' "
+    "93dd77da-64ad-4947-96b3-8ead4d6c98c1": "Mormont: 'burial pits' against the excavators' "
     "'deposit pits' for the same 245 pits",
-    "ea98235a-42f5-4a1d-ae39-75f07460f1d6": "Beacon Hill, West Sussex: the tense of 'lie' about a "
+    "b7cc5073-ffca-4cd3-a168-3062908d4959": "Beacon Hill, West Sussex: the tense of 'lie' about a "
     "mound the sources say was ploughed out - a reading of the card, not a wrong fact",
 }
 
@@ -220,7 +220,9 @@ MODULES = (
     "scripts/remediation/teaser/calibrate.py",
     "scripts/remediation/opus_audit/quotes.py",
     "scripts/remediation/wc/answers.py",  # the source rule `prove_claims` applies (url_problem)
-    "scripts/remediation/licenses.py",
+    "scripts/remediation/phase4/licences.py",  # `wc.answers.url_problem` -> `deny_family`
+    "pipeline/utils/card_provenance.py",  # MAX_UNPROVEN_CLAIMS: VERIFIED against UNPROVEN
+    "scripts/remediation/image_roles/wiki_cache.py",  # the WIKI_MAP the web agents read
     "scripts/remediation/web_rules.py",
     "scripts/remediation/quote_check.py",
     "scripts/remediation/opus_handoff.py",
@@ -1204,12 +1206,22 @@ def claim_coverage(
     return ClaimCoverage(len(recorded), covered, agreed)
 
 
+_DASHES = re.compile("[\u2010-\u2015\u2212]")
+_NUMBER_GLUE = re.compile(r"(?<=\d)\s*([.,-])\s*(?=\d)")
+#: Stand-ins for the `.`, `,` and `-` between two digits (private-use characters, so they survive
+#: the "letters and digits only" filter and are no punctuation of the text).
+_GLUE = {".": "\ue001", ",": "\ue002", "-": "\ue003"}
+
+
 def _loose(text: str) -> str:
-    """A text as a reader compares it: decomposed, accents and marks dropped, case folded, letters
-    and digits only. A quote that the strict check misses and this one finds is on the page - it
-    differs in typography, a quotation mark, a dash, a line break - and was not made up."""
+    """A text as a reader compares it: decomposed, accents and marks dropped, case folded, dash
+    variants one dash, letters and digits only - but a `.`, `,` or `-` between two digits stays, so a
+    changed number (3.5 against 35, 10-15 against 1015) is a different text. A quote that the strict
+    check misses and this one finds is on the page - it differs in typography, a quotation mark, a
+    dash, a line break - and was not made up."""
     decomposed = unicodedata.normalize("NFKD", Q.normalise(text)).casefold()
-    return "".join(ch for ch in decomposed if ch.isalnum())
+    glued = _NUMBER_GLUE.sub(lambda m: _GLUE[m.group(1)], _DASHES.sub("-", decomposed))
+    return "".join(ch for ch in glued if ch.isalnum() or ch in _GLUE.values())
 
 
 #: How a verifier's quote stands (`quote_standing`).
@@ -1275,6 +1287,11 @@ def evaluate_web_verifier(
         results[key] = (R.card_verification(proven), proven)
     rule_c, rule_v = spec["verifier_contradicted"], spec["verifier_verified"]
     contradicted = [k for k in results if parsed[k][0]["set"] == "verifier_contradicted"]
+    drawn = {parsed[k][0]["site_id"] for k in contradicted}
+    if stray := sorted(set(rule_c["disputed"]) - drawn):
+        raise CalibrationError(
+            f"the sealed table calls {stray} disputed, but they are no site id of the contradicted set"
+        )
     disputed = {k: rule_c["disputed"][parsed[k][0]["site_id"]] for k in contradicted
                 if parsed[k][0]["site_id"] in rule_c["disputed"]}  # fmt: skip
     counted = [k for k in contradicted if k not in disputed]

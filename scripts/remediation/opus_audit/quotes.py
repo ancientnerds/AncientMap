@@ -99,10 +99,10 @@ class AuditError(ValueError):
 
 # ------------------------------------------------------------------------------ the normaliser
 #: A footnote or editorial reference marker of a Wikipedia page, with the whitespace before it:
-#: `[22]`, `[22, 23]`, `[22-25]` (hyphen, en or em dash), `[a]`, `[citation needed]`, `[note 3]`.
+#: `[22]`, `[22, 23]`, `[22-25]` (hyphen, en or em dash; numbers of at most three digits, so a bracketed
+#: year stays), a lowercase `[a]`, `[citation needed]`, `[note 3]`. An editorial `[T]` or `[A]` stays.
 MARKER = re.compile(
-    r"\s*\[\s*(?:\d+(?:\s*[,\u2013\u2014-]\s*\d+)*|[a-z]|citation needed|note\s+\d+)\s*\]",
-    re.IGNORECASE,
+    r"\s*\[\s*(?:\d{1,3}(?:\s*[,\u2013\u2014-]\s*\d{1,3})*|[a-z]|(?i:citation needed|note\s+\d+))\s*\]"
 )
 
 
