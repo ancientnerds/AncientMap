@@ -15,6 +15,8 @@ The steps, in order, for one candidate run directory `C` (`flow.py` explains eac
     run.py brief | check-answer | import  ... --stage image-depicts   (writes C/VERDICTS.jsonl)
     run.py recheck-export  --run-dir C --handoff H               Opus, round N (the next one)
     run.py brief | check-answer | import  ... --stage image-recheck [--round N]
+    (a calibration directory uses the same three commands with --stage image-prefilter,
+     image-depicts-calibration, image-adjudicate, image-recheck or identity-verify)
     run.py write-targets   --run-dir C                           -> C/TARGETS.jsonl (confirmed picks)
     run.py prune-pictures  --run-dir C                           delete the pictures, keep their hashes
 
@@ -57,6 +59,7 @@ from served_image import commons as CM  # noqa: E402
 from served_image import recheck as RC  # noqa: E402
 from served_image import state as ST  # noqa: E402
 
+from image_roles import calibrate as CAL  # noqa: E402
 from image_roles import depicts as DP  # noqa: E402
 from image_roles import flow as FL  # noqa: E402
 from image_roles import hero_recheck as HR  # noqa: E402
@@ -66,6 +69,8 @@ from image_roles import stage as SG  # noqa: E402
 from image_roles.wiki_cache import WikiCache  # noqa: E402
 
 STAGES = {
+    CAL.DEPICTS_CAL_SPEC.name: CAL.DEPICTS_CAL_SPEC,
+    CAL.ADJUDICATE_SPEC.name: CAL.ADJUDICATE_SPEC,
     ID.VERIFY_SPEC.name: ID.VERIFY_SPEC,
     ID.RESEARCH_SPEC.name: ID.RESEARCH_SPEC,
     PF.SPEC.name: PF.SPEC,

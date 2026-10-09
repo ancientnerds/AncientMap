@@ -110,6 +110,15 @@ THRESHOLDS: dict[str, Any] = {
 #: Photo-like kinds for the prefilter's photo versus non-photo agreement.
 PHOTO_KINDS = ("site_photo", "artifact")
 
+#: The depicts role in a calibration directory: the same prompt, parser and role as `DP.SPEC`, a stage
+#: name of its own so that `run.py import` records its answers without the lane's `VERDICTS.jsonl`.
+DEPICTS_CAL_SPEC = replace(
+    DP.SPEC,
+    name="image-depicts-calibration",
+    questions_file="QUESTIONS_DEPICTS_CAL.jsonl",
+    export_file="EXPORT_DEPICTS_CAL.json",
+    result_file="DEPICTS_CAL.jsonl",
+)
 ADJUDICATE_SPEC = replace(
     DP.SPEC,
     name="image-adjudicate",
@@ -123,7 +132,7 @@ ADJUDICATE_SPEC = replace(
 RECHECK_SPEC = HR.spec_for_round(1)
 ROLE_SPECS: dict[str, SG.Spec] = {
     "image_prefilter": PF.SPEC,
-    "image_depicts": DP.SPEC,
+    "image_depicts": DEPICTS_CAL_SPEC,
     "pilot_judge": ADJUDICATE_SPEC,
     "adversarial": RECHECK_SPEC,
     "web_verifier": ID.VERIFY_SPEC,

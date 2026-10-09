@@ -615,6 +615,43 @@ class TestEvaluating:
         answer(self.handoff, PF.SPEC, {question.label: json.dumps({"items": items})})
         SG.import_answers(directory, self.handoff, PF.SPEC)
 
+    def test_the_depicts_role_is_evaluated_from_a_calibration_directory(
+        self, tmp_path: Path
+    ) -> None:
+        directory = tmp_path / "cal"
+        CAL.seal(directory, now=lambda: "2026-10-09T00:00:00Z")
+        cases = [
+            case(f"p{i}", "image_depicts", "positive", "depicts", f"p{i}.jpg") for i in range(10)
+        ]
+        cases += [
+            case(f"f{i}", "image_depicts", "foreign", "not_depicts", f"f{i}.jpg") for i in range(4)
+        ]
+        CAL.fix_gold(directory, cases, now=lambda: FIXED)
+        spec = CAL.ROLE_SPECS["image_depicts"]
+        assert spec.name == "image-depicts-calibration" and spec.role == "image_depicts"
+        questions, pictures = CAL.questions_for("image_depicts", cases, read)
+        handoff = tmp_path / "h-dep"
+        SG.export(directory, handoff, spec, questions, pictures)
+        text = json.dumps(
+            {
+                "candidates": {
+                    f"C{i}": (
+                        {"verdict": "depicts", "quality": 4, "note": "the tomb"}
+                        if c["truth"] == "depicts"
+                        else {"verdict": "other_site", "quality": None, "note": "elsewhere"}
+                    )
+                    for i, c in enumerate(cases, 1)
+                }
+            }
+        )
+        answer(handoff, spec, {q.label: text for q in questions})
+        SG.import_answers(
+            directory, handoff, spec
+        )  # the generic import: no VERDICTS.jsonl of a lane
+        assert not (directory / "VERDICTS.jsonl").exists()
+        verdict = CAL.evaluate(directory, "image_depicts", cp=cp)
+        assert verdict["passed"] and verdict["metrics"]["foreign_called_depicts"] == []
+
     def test_a_role_that_passes_is_written_once(self, tmp_path: Path) -> None:
         directory = self._prepared(tmp_path)
         self._answer(directory, {c["case_id"]: c["truth"] for c in self.cases})

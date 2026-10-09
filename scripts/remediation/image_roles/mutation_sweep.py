@@ -899,7 +899,7 @@ D17_CASES: list[Case] = [
         JUDGE,
         "        if current is None or rank_key(row) > rank_key(current):",
         '        if current is None or row.get("width", 0) > current.get("width", 0):',
-        "test_the_best_quality_wins_not_the_largest_file",
+        "test_the_sharp_small_file_beats_the_large_blurry_one_in_the_written_target",
         T_ROLES,
     ),
     g(

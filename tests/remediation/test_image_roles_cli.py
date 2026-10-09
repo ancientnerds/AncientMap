@@ -105,6 +105,8 @@ class TestTheStageCommands:
             "image-prefilter": "image_prefilter",
             "image-depicts": "image_depicts",
             "image-recheck": "adversarial",
+            "image-depicts-calibration": "image_depicts",
+            "image-adjudicate": "pilot_judge",
         }
 
     def test_a_recheck_round_selects_its_own_files(self, tmp_path: Path) -> None:
