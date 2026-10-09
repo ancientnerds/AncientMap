@@ -8833,7 +8833,7 @@ TEASER_SHORTS_CASES: list[Case] = [
                 "C9 a bare type label needs an article",
                 "    if head in ARTICLES:",
                 "    if True:",
-                "test_a_bare_type_label_is_no_opener",
+                "test_a_site_noun_is_only_a_bare_type_label_after_an_article",
             ),
             (
                 "C11 a stem the description has is allowed",
@@ -9331,7 +9331,7 @@ TEASER_SHORTS_CASES: list[Case] = [
             (
                 "a role of the run moves",
                 "    if role not in recorded:",
-                "test_an_escalation_needs_a_failed_verdict_of_that_role_one_tier_up",
+                "test_a_role_the_run_does_not_use_is_not_moved",
             ),
             (
                 "a role moves one tier",
@@ -9623,7 +9623,7 @@ TEASER_SHORTS_CASES: list[Case] = [
                 "the checker must agree",
                 '        "passed": _met(same / len(agree), rule["verdict_agreement_min"])',
                 '        "passed": True',
-                "test_a_pass_of_a_card_with_an_unsupported_claim_is_a_false_pass_and_fails_the_role",
+                "test_a_checker_that_fails_the_recorded_passes_disagrees",
             ),
             (
                 "a recorded failure must fail again",
