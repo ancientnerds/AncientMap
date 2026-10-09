@@ -104,7 +104,7 @@ export function Attention({
       {loading ? (
         <p className="dash-status">Loading…</p>
       ) : lines.length === 0 ? (
-        <p className="dash-empty">Nothing in this window.</p>
+        <p className="dash-empty">Nothing needs attention.</p>
       ) : (
         <ul className="dash-attention">
           {lines.map(l => (

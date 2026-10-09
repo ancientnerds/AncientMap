@@ -1,5 +1,5 @@
 import { fmtDay, fmtInt, fmtStamp } from './format'
-import { LineChart } from './Lines'
+import { AxisChart, niceMax } from './Lines'
 import { HowCounted, Panel, Status } from './Panel'
 import { Tile } from './Tile'
 import type { LoadLevel, ServerData, ServerReport } from './types'
@@ -89,29 +89,22 @@ export function ServerLoad({ state }: { state: Loaded<ServerData> }) {
             </p>
           )}
           {days.length >= 2 && (
-            <>
-              <LineChart
-                series={[
-                  { label: 'CPU, busiest minutes', values: days.map(x => x.cpu_peak), className: 'dash-line-human' },
-                  { label: 'memory peak', values: days.map(x => x.mem_peak), className: 'dash-line-all' },
-                  { label: 'disk used', values: days.map(x => x.disk_used), className: 'dash-line-ink' },
-                ]}
-                titles={days.map(
-                  x =>
-                    `${fmtDay(x.day)}: CPU ${pct(x.cpu_avg)} on average, ${pct(x.cpu_peak)} at peak · memory ${pct(x.mem_peak)} · disk ${pct(x.disk_used)}`
-                )}
-                axis={[fmtDay(days[0].day), 'Percent per day, 0-100', fmtDay(days[days.length - 1].day)]}
-                label={`Server load per day from ${fmtDay(days[0].day)}`}
-                max={100}
-              />
-              <LineChart
-                small
-                series={[{ label: 'visitors', values: days.map(x => x.visitors), className: 'dash-line-all' }]}
-                titles={days.map(x => `${fmtDay(x.day)}: ${x.visitors === null ? 'no count' : `${fmtInt(x.visitors)} visitors`}`)}
-                axis={[fmtDay(days[0].day), 'Visitors per day, for comparison', fmtDay(days[days.length - 1].day)]}
-                label="Visitors per day over the same days"
-              />
-            </>
+            <AxisChart
+              left={{ max: 100, format: v => `${v} %` }}
+              right={{ max: niceMax(Math.max(...days.map(x => x.visitors ?? 0), 1)), format: v => fmtInt(Math.round(v)) }}
+              lines={[
+                { label: 'CPU, busiest minutes', values: days.map(x => x.cpu_peak), className: 'dash-line-human-bold' },
+                { label: 'memory peak', values: days.map(x => x.mem_peak), className: 'dash-line-all-bold' },
+                { label: 'disk used', values: days.map(x => x.disk_used), className: 'dash-line-ink' },
+                { label: 'visitors (right axis)', values: days.map(x => x.visitors), className: 'dash-line-dot', side: 'right' },
+              ]}
+              titles={days.map(
+                x =>
+                  `${fmtDay(x.day)}: CPU ${pct(x.cpu_avg)} on average, ${pct(x.cpu_peak)} at peak · memory ${pct(x.mem_peak)} · disk ${pct(x.disk_used)} · ${x.visitors === null ? 'no visitor count' : `${fmtInt(x.visitors)} visitors`}`
+              )}
+              axis={[fmtDay(days[0].day), 'Per day: load in percent (left), visitors (right)', fmtDay(days[days.length - 1].day)]}
+              label={`Server load and visitors per day from ${fmtDay(days[0].day)}`}
+            />
           )}
         </>
       )}

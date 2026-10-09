@@ -1,11 +1,11 @@
 /**
  * Pure helpers behind the visitor map: an equirectangular projection onto a
  * 1000×500 canvas, GeoJSON rings as SVG path strings, and the per-country
- * session weights for one hour of the day. No DOM, so vitest covers them.
+ * dot sizes. No DOM, so vitest covers them.
  */
 
-/** One row of GET /api/stats/map: sessions per country, city and UTC hour. */
-export type MapPoint = { country: string; city: string | null; hour: number; sessions: number }
+/** One row of GET /api/stats/map: the sessions of one country over the whole history. */
+export type MapPoint = { country: string; sessions: number }
 
 /** A Natural Earth land feature: rings of [lon, lat] pairs. */
 export const MAP_W = 1000
@@ -31,17 +31,9 @@ export function ringPath(ring: number[][]): string {
   )
 }
 
-/** Sessions per country for one UTC hour, or for the whole day when `hour` is null. */
-export function hourWeights(points: MapPoint[], hour: number | null): Record<string, number> {
-  const out: Record<string, number> = {}
-  for (const p of points) {
-    if (hour !== null && p.hour !== hour) continue
-    out[p.country] = (out[p.country] ?? 0) + p.sessions
-  }
-  return out
-}
-
-/** Dot radius in canvas units: readable at one session, not a blob at a hundred. */
-export function dotRadius(sessions: number): number {
-  return 4 + 3 * Math.sqrt(sessions)
+/** Dot radius in canvas units, by area against the busiest country: readable
+ *  at one session, and the busiest country a dot, not a continent - the map
+ *  counts the whole history, so a fixed scale would grow without end. */
+export function dotRadius(sessions: number, max: number): number {
+  return 4 + 22 * Math.sqrt(sessions / Math.max(max, 1))
 }

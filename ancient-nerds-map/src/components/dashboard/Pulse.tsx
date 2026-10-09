@@ -75,7 +75,7 @@ function Strip({ o }: { o: Overview }) {
         </p>
       </Explain>
       <p className="dash-note">
-        AI assistants sent {fmtInt(o.sessions.ai)} of {fmtInt(o.sessions.all)} sessions in this window.
+        AI assistants sent {fmtInt(o.sessions.ai)} of {fmtInt(o.sessions.all)} sessions since tracking began.
       </p>
     </>
   )
@@ -83,8 +83,8 @@ function Strip({ o }: { o: Overview }) {
 
 /**
  * Four windows of one question — who is here now, today, this week, this month
- * — each with its total and the countries behind it. The windows are fixed:
- * the page's range switch drives the other panels, not this one.
+ * — each with its total and the countries behind it. The windows are fixed,
+ * because the question is who is here now.
  */
 export function Pulse({ state, countries }: { state: Loaded<Overview>; countries: Loaded<CountriesData> }) {
   const o = state.data

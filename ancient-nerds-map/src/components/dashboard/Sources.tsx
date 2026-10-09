@@ -101,7 +101,7 @@ export function scriptedLine(n: number): string {
  *  answered 200 (pipeline/referral_log.py UNKNOWN_HOST_MIN). */
 export function spamLine(n: number): string {
   const what = n === 1 ? '1 arrival' : `${fmtInt(n)} arrivals`
-  return `A status alone does not catch everything: ${what} in this window came from a host in no known family that we saw exactly once, which is what SEO referrer spam looks like — one request per throwaway domain, asking for the front page and answered 200 — so they are out of both lists and counted only here.`
+  return `A status alone does not catch everything: ${what} so far came from a host in no known family that we saw exactly once, which is what SEO referrer spam looks like — one request per throwaway domain, asking for the front page and answered 200 — so they are out of both lists and counted only here.`
 }
 
 function Coverage({ log }: { log: LogCoverage }) {
@@ -110,7 +110,7 @@ function Coverage({ log }: { log: LogCoverage }) {
       <div className="dash-lists">
         <div>
           <h3>Arrivals nginx saw</h3>
-          <BarList items={log.families.map(familyItem)} empty="No referred arrival in this window." />
+          <BarList items={log.families.map(familyItem)} empty="No referred arrival so far." />
         </div>
         <div>
           <h3>Answers nothing else can see</h3>
@@ -118,7 +118,7 @@ function Coverage({ log }: { log: LogCoverage }) {
         </div>
       </div>
       <h3>Hosts nginx saw</h3>
-      <BarList items={log.hosts.map(hostItem)} empty="No referred arrival in this window." />
+      <BarList items={log.hosts.map(hostItem)} empty="No referred arrival so far." />
       <HowCounted>
         The upper half of this panel is Umami: sessions whose browser ran our script. This half is nginx:
         every request that arrived with a foreign referer, over {log.covered_days} days of the log (
@@ -155,7 +155,7 @@ export function Sources({ state }: { state: Loaded<SourcesData> }) {
               <h3>Umami sessions by bucket</h3>
               <BarList
                 items={bucketTotals(s.sources).map(([bucket, label, n]) => ({ key: bucket, label, value: n }))}
-                empty="No sessions in this window."
+                empty="No sessions so far."
               />
             </div>
             <div>

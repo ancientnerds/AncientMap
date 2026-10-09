@@ -61,21 +61,12 @@ def hour_buckets(hours: int = 48) -> list[dict]:
 
 
 def map_points() -> list[dict]:
-    """Sessions per country and hour: a dot for every hour of the day, SG has no centroid."""
+    """Sessions per country over the whole history; SG has no centroid."""
     weights = {
-        "DE": 9, "US": 14, "GB": 6, "FR": 4, "PE": 3, "EG": 2, "TR": 5, "IN": 4,
-        "BR": 3, "AU": 2, "MX": 2, "IT": 3, "NL": 2, "CA": 3, "JP": 1, "SG": 1,
+        "US": 312, "DE": 214, "GB": 168, "FR": 77, "IN": 71, "TR": 58, "CA": 49, "BR": 41,
+        "IT": 38, "NL": 26, "AU": 24, "MX": 19, "PE": 12, "EG": 9, "JP": 6, "SG": 3,
     }  # fmt: skip
-    return [
-        {
-            "country": code,
-            "city": None,
-            "hour": hour,
-            "sessions": max(1, w // (1 + (hour * 7 + i) % 4)),
-        }
-        for i, (code, w) in enumerate(weights.items())
-        for hour in range(24)
-    ]
+    return [{"country": code, "sessions": n} for code, n in weights.items()]
 
 
 def rows(event: str, pairs: list[tuple[str, int]]) -> list[dict]:

@@ -67,8 +67,8 @@ describe('Growth', () => {
 
   it('draws both lines and says how the last week compares with the first', () => {
     const html = text(renderToString(<Growth state={ok({ days: days(21, i => (i < 7 ? 100 : 150)), today })} />))
-    expect(html).toContain('dash-line-all')
-    expect(html).toContain('dash-line-human')
+    expect(html).toContain('dash-bar-human')
+    expect(html).toContain('dash-line-trend')
     expect(html).toContain('+50 %')
     expect(html).toContain('First week (18 Sep–24 Sep): 100 a day, 50 human')
     expect(html).toContain('Last week (02 Oct–08 Oct): <b>150</b> visitors a day')
@@ -81,9 +81,9 @@ describe('Growth', () => {
     expect(html).toContain('−20 %')
   })
 
-  it('draws the line and counts the days it still needs before comparing', () => {
+  it('draws the bars and counts the days it still needs before comparing', () => {
     const html = text(renderToString(<Growth state={ok({ days: days(5, () => 10), today })} />))
-    expect(html).toContain('dash-line-human')
+    expect(html).toContain('dash-bar-human')
     expect(html).toContain('there are 5')
   })
 })

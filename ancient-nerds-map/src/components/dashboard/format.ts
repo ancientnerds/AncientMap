@@ -12,11 +12,6 @@ export function fmtShare(part: number, whole: number): string {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-/** "14:00" for a UTC hour of the day. */
-export function fmtHour(hour: number): string {
-  return `${String(hour).padStart(2, '0')}:00`
-}
-
 /** "17 Sep 14:05" in UTC. */
 export function fmtStamp(iso: string): string {
   const d = new Date(iso)

@@ -58,12 +58,11 @@ WHERE website_id = :website_id AND created_at >= :since AND created_at < :until
 """
 
 SQL_MAP = """
-SELECT s.country, s.city, date_part('hour', e.created_at AT TIME ZONE 'UTC')::int AS hour,
-       count(DISTINCT e.session_id) AS sessions
+SELECT s.country, count(DISTINCT e.session_id) AS sessions
 FROM website_event e JOIN session s ON s.session_id = e.session_id
 WHERE e.website_id = :website_id AND e.event_type = 1
   AND e.created_at >= :since AND e.created_at < :until
-GROUP BY 1, 2, 3
+GROUP BY s.country
 """
 
 SQL_SESSION_EVENTS = """

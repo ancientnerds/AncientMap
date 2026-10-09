@@ -249,7 +249,7 @@ describe('Pulse', () => {
     const shown = html.replace(closedBlock, '')
     expect(closed).toContain('Bright green is a confirmed human')
     expect(shown).not.toContain('Bright green is a confirmed human')
-    expect(shown).toContain('AI assistants sent 3 of 20 sessions in this window.')
+    expect(shown).toContain('AI assistants sent 3 of 20 sessions since tracking began.')
   })
 })
 
@@ -311,7 +311,7 @@ describe('GlobeReach', () => {
   it('prints one sentence instead of an all-zero list when every load arrived', () => {
     const all = { ...some, reached: 12, gave_up: 0, not_reached: EMPTY.globe.not_reached }
     const html = renderToString(<GlobeReach state={ok(all)} />)
-    expect(html).toContain('Every load in this window reached the globe.')
+    expect(html).toContain('Every load so far reached the globe.')
     expect(html).not.toContain('<h3>')
   })
 
@@ -347,7 +347,7 @@ describe('TopContent', () => {
     // search fires since 2026-09-20 (useSiteSearch settles on a term); the old
     // sentence blamed ticket T2 for a list that was simply empty
     const html = renderToString(<TopContent state={ok(EMPTY.content)} />)
-    expect(html).toContain('Search terms: nobody searched in this window')
+    expect(html).toContain('Search terms: nobody searched so far')
     expect(html).not.toContain('ticket T2')
   })
 })
@@ -364,16 +364,16 @@ describe('Sources', () => {
 
   it('says so in words when the log holds no referred arrival', () => {
     const html = renderToString(<Sources state={ok(EMPTY.sources)} />)
-    expect(html).toContain('No referred arrival in this window.')
+    expect(html).toContain('No referred arrival so far.')
     expect(html).toContain('Every referred visitor got a page.')
-    expect(html).toContain('No sessions in this window.')
+    expect(html).toContain('No sessions so far.')
   })
 
   it('counts referrer spam out of the lists and names it in the note', () => {
     const html = renderToString(
       <Sources state={ok({ ...EMPTY.sources, log: { ...EMPTY.sources.log!, unverified: 17 } })} />
     )
-    expect(html).toContain('17 arrivals in this window')
+    expect(html).toContain('17 arrivals so far')
     expect(html).not.toContain('Bots and our own development server are out of every list')
   })
 })

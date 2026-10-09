@@ -42,7 +42,7 @@ export function Reading({ state }: { state: Loaded<JourneysData> }) {
       {state.data && !r && <p className="dash-status dash-status--error">Data unavailable.</p>}
       {r && (
         <>
-          <BarList items={r.pages.map(readingItem)} empty="Nobody scrolled a page in this window." />
+          <BarList items={r.pages.map(readingItem)} empty="Nobody scrolled a page so far." />
           {/* The ladder's legend stays visible: without it the numbers in each
               row have no column names until the panel is opened. */}
           <p className="dash-note">

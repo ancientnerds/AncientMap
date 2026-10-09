@@ -4,8 +4,6 @@
  * an_stats cookie (api/routes/stats_access.py). Mobile first: one column,
  * two from 720 px. Umami itself stays one link away.
  */
-import { useState } from 'react'
-
 import anLogo from '../components/dashboard/an-logo-green.svg'
 import { Attention } from '../components/dashboard/Attention'
 import { Crawlers } from '../components/dashboard/Crawlers'
@@ -60,7 +58,17 @@ const NOTRACK_ON_HREF = 'https://ancientnerds.com/news.html?notrack=0'
 /** Umami's own UI on this host; the deploy names the website id in .env. */
 const UMAMI_HREF = `/websites/${import.meta.env.VITE_UMAMI_WEBSITE_ID ?? ''}`
 
-type Days = 7 | 30
+/** The tracker's first event (Umami, 2026-09-17 10:03 UTC). Every panel that
+ *  counts visits reads the whole history from here (owner, 2026-10-10: "ich
+ *  will immer alle Werte sehen, nicht die letzten x Tage"). */
+const TRACKER_START = Date.UTC(2026, 8, 17)
+const DAY_MS = 86_400_000
+/** Days back to the tracker's first event, today included; the page loads
+ *  once, and a day's growth while it stays open is the next load's. */
+const ALL_DAYS = Math.ceil((Date.now() - TRACKER_START) / DAY_MS) + 1
+/** The one panel that keeps a window: a JavaScript error fixed a month ago
+ *  would otherwise stay red in the list and in the warnings for good. */
+const PROBLEM_DAYS = 7
 
 function Entry() {
   return (
@@ -75,11 +83,9 @@ function Entry() {
 }
 
 export default function DashboardPage() {
-  const [days, setDays] = useState<Days>(7)
-  const [rangeHelp, setRangeHelp] = useState(false)
-  const overview = useStats<Overview>(`overview?days=${days}`)
-  const map = useStats<MapData>('map?days=1')
-  // Fixed windows (now / today / 7 / 30) — the range switch does not touch them.
+  const overview = useStats<Overview>(`overview?days=${ALL_DAYS}`)
+  const map = useStats<MapData>(`map?days=${ALL_DAYS}`)
+  // Fixed windows (now / today / 7 / 30): the question is who is here.
   const countries = useStats<CountriesData>('countries')
   // Fixed 30-minute window, same 60 s cadence as everything else on the page.
   const live = useStats<LiveData>('live')
@@ -90,21 +96,21 @@ export default function DashboardPage() {
   // the server, so asking every ten minutes and every hour is plenty.
   const search = useStats<SearchData>('search', 600_000)
   const vitals = useStats<FieldVitalsData>('field-vitals', 3_600_000)
-  const crawlers = useStats<CrawlersData>(`crawlers?days=${days}`, 300_000)
+  const crawlers = useStats<CrawlersData>(`crawlers?days=${ALL_DAYS}`, 300_000)
   // The host samples itself every five minutes; asking more often shows nothing new.
   const server = useStats<ServerData>('server', 300_000)
-  const globe = useStats<GlobeData>(`globe?days=${days}`)
+  const globe = useStats<GlobeData>(`globe?days=${ALL_DAYS}`)
   // Five minutes: a scraper fingerprint does not change from minute to minute,
   // and this is the one query that has to sort every event in the window.
-  const clusters = useStats<ClustersData>(`clusters?days=${days}`, 300_000)
-  const content = useStats<ContentData>(`content?days=${days}`)
-  const feedback = useStats<FeedbackData>('feedback?days=30')
-  const sources = useStats<SourcesData>(`sources?days=${days}`)
+  const clusters = useStats<ClustersData>(`clusters?days=${ALL_DAYS}`, 300_000)
+  const content = useStats<ContentData>(`content?days=${ALL_DAYS}`)
+  const feedback = useStats<FeedbackData>(`feedback?days=${ALL_DAYS}`)
+  const sources = useStats<SourcesData>(`sources?days=${ALL_DAYS}`)
   // One request for two panels: the scroll ladder travels inside /journeys, so
   // Paths and Reading share this state and Reading costs no query of its own.
-  const journeys = useStats<JourneysData>(`journeys?days=${days}`)
-  const problems = useStats<ProblemsData>(`problems?days=${days}`)
-  const devices = useStats<DevicesData>(`devices?days=${days}`)
+  const journeys = useStats<JourneysData>(`journeys?days=${ALL_DAYS}`)
+  const problems = useStats<ProblemsData>(`problems?days=${PROBLEM_DAYS}`)
+  const devices = useStats<DevicesData>(`devices?days=${ALL_DAYS}`)
   // Five minutes, all-time counts: five members do not move in sixty seconds.
   const members = useStats<MembersData>('members', 300_000)
   // `members` is deliberately not in this array. It is the only route on a
@@ -123,66 +129,39 @@ export default function DashboardPage() {
           <img className="dash-logo" src={anLogo} alt="" width={22} height={20} />
           <b>Ancient Nerds</b> · Founders
         </a>
-        <div className="dash-range" role="group" aria-label="Time range">
-          {([7, 30] as Days[]).map(d => (
-            <button key={d} type="button" aria-pressed={days === d} onClick={() => setDays(d)}>
-              {d} days
-            </button>
-          ))}
-          <button
-            type="button"
-            className="dash-range-help"
-            aria-expanded={rangeHelp}
-            aria-label="What the range changes"
-            onClick={() => setRangeHelp(o => !o)}
-          >
-            ?
-          </button>
-        </div>
         <nav className="dash-nav" aria-label="Other pages">
           <a href={UMAMI_HREF}>Umami</a>
           <a href="/logout">Sign out</a>
         </nav>
       </header>
-      {/* Under the switch, because that is where it is read, and closed like
-          every other explanation on the page: the switch drives only the
-          panels that count visits in a window, and until 2026-10-17 both
-          settings return the same numbers. Without this line a founder would
-          conclude the switch is broken. */}
-      <p className="dash-note" hidden={!rangeHelp}>
-        The range drives the panels that count visits in a window. Is the audience growing, How does Google see
-        us, Are we fast for Google, Live now, Where are the visitors, Members and Feedback have windows of their
-        own, and Who is here has four — only its last sentence follows the range. Until 17 October both settings
-        return the same numbers everywhere: the tracker's first event is 17 September.
-      </p>
       {unauthorized ? (
         <Entry />
       ) : (
         <div className="dash-grid">
-          {/* Most relevant first (owner, 2026-10-09: "je weiter ich runterscrolle,
-              desto unrelevanter"): what needs doing, whether the audience grows,
-              how Google sees us, then who is here and where they come from; the
-              detail and the curiosities last. The narrow panels go in pairs, so
-              the two-column grid has no hole before the last one. */}
-          <Attention problems={problems} globe={globe} content={content} search={search} vitals={vitals} server={server} />
+          {/* Owner, 2026-10-10: the charts, the map and the bar lists first -
+              who is here, whether the audience grows, Google, the map - then
+              the rest of the pictures, and the panels that are mostly text
+              last. The narrow panels go in pairs, so the two-column grid has
+              no hole before the last one. */}
+          <Pulse state={overview} countries={countries} />
           <Growth state={daily} />
           <SearchGoogle state={search} />
-          <Pulse state={overview} countries={countries} />
+          <VisitorMap state={map} />
+          <ServerLoad state={server} />
           <Sources state={sources} />
           <TopContent state={content} />
-          <Problems state={problems} />
-          <ServerLoad state={server} />
+          <Crawlers state={crawlers} />
           <FieldVitals state={vitals} />
           <GlobeReach state={globe} />
-          <Crawlers state={crawlers} />
-          <FeedbackInbox state={feedback} />
           <Paths state={journeys} />
           <Reading state={journeys} />
           <SessionTypes state={overview} />
           <Devices state={devices} />
           <Members state={members} />
+          <Attention problems={problems} globe={globe} content={content} search={search} vitals={vitals} server={server} />
+          <Problems state={problems} />
+          <FeedbackInbox state={feedback} />
           <LiveNow state={live} />
-          <VisitorMap state={map} />
           <Scrapers state={clusters} overview={overview} />
         </div>
       )}

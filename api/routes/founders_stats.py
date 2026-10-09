@@ -47,6 +47,11 @@ from pipeline.umami_db import (
 
 router = APIRouter()
 
+#: The longest window a panel may ask for. The dashboard asks every panel for
+#: the whole history since the tracker's first event (owner, 2026-10-10), so
+#: this is a sanity bound, not a choice: ten years.
+ALL_DAYS_MAX = 3650
+
 #: "Live" on the pulse tile: sessions with an event in the last five minutes.
 LIVE_WINDOW = timedelta(minutes=5)
 #: The live panel's own window, and how far back it looks for the last visitor
@@ -88,7 +93,7 @@ def _window(days: int) -> tuple[datetime, datetime]:
 
 @router.get("/overview")
 async def overview(
-    days: int = Query(7, ge=1, le=90),
+    days: int = Query(7, ge=1, le=ALL_DAYS_MAX),
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
     """One fetch, three panels: the pulse strip, the session types and the
@@ -229,7 +234,7 @@ async def server(
 
 @router.get("/crawlers")
 async def crawlers(
-    days: int = Query(7, ge=1, le=90),
+    days: int = Query(7, ge=1, le=ALL_DAYS_MAX),
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
     """Which search engines and AI systems fetched our pages in the window,
@@ -244,7 +249,7 @@ async def crawlers(
 
 @router.get("/map")
 async def visitor_map(
-    days: int = Query(1, ge=1, le=30),
+    days: int = Query(1, ge=1, le=ALL_DAYS_MAX),
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
     since, until = _window(days)
@@ -264,7 +269,7 @@ CONTENT_KEYS = ("event_name", "label", "country", "results", "n", "visitors")
 
 @router.get("/content")
 async def content(
-    days: int = Query(7, ge=1, le=90),
+    days: int = Query(7, ge=1, le=ALL_DAYS_MAX),
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
     since, until = _window(days)
@@ -286,7 +291,7 @@ async def content(
 
 @router.get("/journeys")
 async def journeys(
-    days: int = Query(7, ge=1, le=90),
+    days: int = Query(7, ge=1, le=ALL_DAYS_MAX),
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
     since, until = _window(days)
@@ -305,7 +310,7 @@ async def journeys(
 
 @router.get("/problems")
 async def problems(
-    days: int = Query(7, ge=1, le=90),
+    days: int = Query(7, ge=1, le=ALL_DAYS_MAX),
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
     since, until = _window(days)
@@ -324,7 +329,7 @@ async def problems(
 
 @router.get("/feedback")
 async def feedback(
-    days: int = Query(30, ge=1, le=365),
+    days: int = Query(30, ge=1, le=ALL_DAYS_MAX),
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
     since, until = _window(days)
@@ -333,7 +338,7 @@ async def feedback(
 
 @router.get("/sources")
 async def sources(
-    days: int = Query(7, ge=1, le=90),
+    days: int = Query(7, ge=1, le=ALL_DAYS_MAX),
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
     """Where the sessions came from, and how many arrivals the tracker missed.
@@ -365,7 +370,7 @@ async def sources(
 
 @router.get("/globe")
 async def globe(
-    days: int = Query(7, ge=1, le=90),
+    days: int = Query(7, ge=1, le=ALL_DAYS_MAX),
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
     """Does the globe come up, how long does it take when it does, and how the
@@ -377,7 +382,7 @@ async def globe(
 
 @router.get("/clusters")
 async def clusters(
-    days: int = Query(7, ge=1, le=90),
+    days: int = Query(7, ge=1, le=ALL_DAYS_MAX),
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
     """Browser fingerprints that are one machine, not several people. The
@@ -389,7 +394,7 @@ async def clusters(
 
 @router.get("/devices")
 async def devices(
-    days: int = Query(7, ge=1, le=90),
+    days: int = Query(7, ge=1, le=ALL_DAYS_MAX),
     _session: dict = Depends(require_stats_session),
 ) -> dict[str, Any]:
     """Phone or not, and which language the browser asked for — one scan over

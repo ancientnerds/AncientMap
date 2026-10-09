@@ -199,8 +199,8 @@ def test_crawlers_fold_the_window_against_the_published_ranges(monkeypatch):
 
 
 def test_map_returns_the_points_for_the_requested_days(monkeypatch):
-    pts = [{"country": "DE", "city": "Berlin", "hour": 8, "sessions": 2}]
-    fetch = Fetch(**{"date_part('hour'": pts})
+    pts = [{"country": "DE", "sessions": 2}]
+    fetch = Fetch(**{"GROUP BY s.country": pts})
     monkeypatch.setattr(fr, "fetch", fetch)
     out = asyncio.run(fr.visitor_map(days=2, _session=SESSION))
     assert out == {"points": pts}

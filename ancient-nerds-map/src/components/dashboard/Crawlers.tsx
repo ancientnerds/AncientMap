@@ -29,7 +29,7 @@ export function botItem(bot: CrawlerBot): BarItem {
 
 /**
  * Who crawls us — which search engines and AI systems fetched our pages in
- * the range, from nginx's crawler log, each line checked against the
+ * the whole log, from nginx's crawler log, each line checked against the
  * operator's published addresses.
  */
 export function Crawlers({ state }: { state: Loaded<CrawlersData> }) {
@@ -51,7 +51,7 @@ export function Crawlers({ state }: { state: Loaded<CrawlersData> }) {
           <div className="dash-lists">
             <div>
               <h3>Fetches per bot</h3>
-              <BarList items={r.bots.map(botItem)} empty="No crawler fetched a page in this window." />
+              <BarList items={r.bots.map(botItem)} empty="No crawler fetched a page so far." />
             </div>
             <div>
               <h3>Pages AI assistants read for someone</h3>
@@ -59,7 +59,7 @@ export function Crawlers({ state }: { state: Loaded<CrawlersData> }) {
                 items={r.ai_user_pages.map(
                   (p): BarItem => ({ key: `ai:${p.path}:${p.bot}`, label: p.path, value: p.requests, hint: p.bot, href: `${SITE}${p.path}`, path: true })
                 )}
-                empty="No assistant fetched a page for a person in this window."
+                empty="No assistant fetched a page for a person so far."
               />
             </div>
           </div>

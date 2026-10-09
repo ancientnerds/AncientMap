@@ -59,7 +59,7 @@ describe('ServerLoad', () => {
     expect(html).toContain('of 6 cores · peak today 37 %')
     expect(html).toContain('79.8 GB free')
     expect(html).toContain('dash-line-ink')
-    expect(html).toContain('Visitors per day, for comparison')
+    expect(html).toContain('visitors (right axis)')
   })
 
   it('says when the sampler is silent', () => {

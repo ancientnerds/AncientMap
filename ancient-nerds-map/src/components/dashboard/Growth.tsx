@@ -1,5 +1,5 @@
 import { fmtDay, fmtInt } from './format'
-import { LineChart } from './Lines'
+import { AxisChart, niceMax, rollingMean } from './Lines'
 import { HowCounted, Panel, Status } from './Panel'
 import type { DailyData, DailyPoint } from './types'
 import type { Loaded } from './useStats'
@@ -56,19 +56,23 @@ function Trend({ days }: { days: DailyPoint[] }) {
 }
 
 function Chart({ days }: { days: DailyPoint[] }) {
-  const max = Math.max(...days.map(p => p.visitors), 1)
+  const visitors = days.map(p => p.visitors)
+  const scale = { max: niceMax(Math.max(...visitors, 1)), format: (v: number) => fmtInt(Math.round(v)) }
   const first = fmtDay(days[0].day)
   const last = fmtDay(days[days.length - 1].day)
+  // Bars carry each day, the thick line the trend: a week's rhythm (quieter
+  // weekends) hides growth in the daily bars and shows none in the average.
   return (
-    <LineChart
-      series={[
-        { label: 'every visitor', values: days.map(p => p.visitors), className: 'dash-line-all' },
-        { label: 'confirmed human', values: days.map(p => p.human), className: 'dash-line-human' },
+    <AxisChart
+      left={scale}
+      bars={[
+        { label: 'confirmed human', values: days.map(p => p.human), className: 'dash-bar-human' },
+        { label: 'other visitors', values: days.map(p => p.visitors - p.human), className: 'dash-bar-rest' },
       ]}
+      lines={[{ label: '7-day average, all visitors', values: rollingMean(visitors), className: 'dash-line-trend' }]}
       titles={days.map(p => `${fmtDay(p.day)}: ${fmtInt(p.visitors)} visitors, ${fmtInt(p.human)} human, ${fmtInt(p.ai)} from AI`)}
-      axis={[first, `Visitors per day, UTC · top ${fmtInt(max)}`, last]}
-      label={`Visitors per day from ${first} to ${last}`}
-      max={max}
+      axis={[first, 'Visitors per day, UTC', last]}
+      label={`Visitors per day from ${first} to ${last}, with the 7-day average`}
     />
   )
 }
@@ -77,7 +81,7 @@ function Chart({ days }: { days: DailyPoint[] }) {
  * Is the audience growing — one point per finished day since the tracker's
  * first full day, every visitor (pale) and the confirmed humans among them
  * (bright), and one sentence that compares the last week with the first.
- * Its window is its own: the whole history, not the page's range switch.
+ * Its window is the whole history, like every panel but the live ones.
  */
 export function Growth({ state }: { state: Loaded<DailyData> }) {
   const d = state.data

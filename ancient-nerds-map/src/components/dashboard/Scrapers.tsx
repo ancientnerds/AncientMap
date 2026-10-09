@@ -33,7 +33,7 @@ export function Scrapers({ state, overview }: { state: Loaded<ClustersData>; ove
         <>
           <BarList
             items={c.clusters.map(clusterItem)}
-            empty="No path was touched by several session ids inside one minute in this window."
+            empty="No path was touched by several session ids inside one minute so far."
           />
           <p className="dash-note">
             {fmtInt(c.flagged)}

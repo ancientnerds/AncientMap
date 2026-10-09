@@ -1,6 +1,6 @@
 import { BarList, type BarItem } from './BarList'
 import { fmtDay, fmtInt } from './format'
-import { LineChart } from './Lines'
+import { AxisChart, niceMax, rollingMean } from './Lines'
 import { HowCounted, Panel, Status } from './Panel'
 import { Tile } from './Tile'
 import type { SearchData, SearchDay, SearchRow } from './types'
@@ -31,18 +31,27 @@ function rowHint(r: SearchRow): string {
   return `${fmtInt(r.impressions)} shown · pos ${r.position.toFixed(1)}`
 }
 
-function DayLine({ days, pick, label, cls }: { days: SearchDay[]; pick: 'clicks' | 'impressions'; label: string; cls: string }) {
-  const max = Math.max(...days.map(d => d[pick]), 1)
+/** Shown and clicked on one chart, each against its own axis - impressions
+ *  run in thousands, clicks in tens, and on one scale the clicks would be a
+ *  flat line on the floor. Thin: each day; thick: the 7-day average. */
+function SearchChart({ days }: { days: SearchDay[] }) {
+  const shown = days.map(d => d.impressions)
+  const clicks = days.map(d => d.clicks)
   const first = fmtDay(days[0].day)
   const last = fmtDay(days[days.length - 1].day)
   return (
-    <LineChart
-      small
-      series={[{ label, values: days.map(d => d[pick]), className: cls }]}
-      titles={days.map(d => `${fmtDay(d.day)}: ${fmtInt(d.clicks)} clicks, ${fmtInt(d.impressions)} shown`)}
-      axis={[first, `${label} per day · top ${fmtInt(max)}`, last]}
-      label={`${label} per day from ${first} to ${last}`}
-      max={max}
+    <AxisChart
+      left={{ max: niceMax(Math.max(...shown, 1)), format: v => fmtInt(Math.round(v)) }}
+      right={{ max: niceMax(Math.max(...clicks, 1)), format: v => fmtInt(Math.round(v)) }}
+      lines={[
+        { label: 'shown per day', values: shown, className: 'dash-line-all-thin', unlisted: true },
+        { label: 'clicks per day', values: clicks, className: 'dash-line-human-thin', side: 'right', unlisted: true },
+        { label: 'shown, 7-day average (left axis)', values: rollingMean(shown), className: 'dash-line-all-bold' },
+        { label: 'clicks, 7-day average (right axis)', values: rollingMean(clicks), className: 'dash-line-human-bold', side: 'right' },
+      ]}
+      titles={days.map(d => `${fmtDay(d.day)}: shown ${fmtInt(d.impressions)}, ${fmtInt(d.clicks)} clicks${d.position === null ? '' : `, position ${d.position.toFixed(1)}`}`)}
+      axis={[first, 'Per day; thin lines each day, thick the 7-day average', last]}
+      label={`Google impressions and clicks per day from ${first} to ${last}`}
     />
   )
 }
@@ -86,8 +95,7 @@ export function SearchGoogle({ state }: { state: Loaded<SearchData> }) {
             {fmtDay(cur.start)}–{fmtDay(cur.end)} against {fmtDay(prev.start)}–{fmtDay(prev.end)}. Search Console's
             newest finished day is {fmtDay(cur.end)}.
           </p>
-          <DayLine days={d.days} pick="impressions" label="Shown" cls="dash-line-all" />
-          <DayLine days={d.days} pick="clicks" label="Clicks" cls="dash-line-human" />
+          <SearchChart days={d.days} />
           <div className="dash-lists">
             <div>
               <h3>Queries that brought clicks</h3>

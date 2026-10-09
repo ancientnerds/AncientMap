@@ -27,7 +27,7 @@ function spread(t: GlobeTimes, low: string, high: string): string {
  */
 export function timesLine(g: GlobeData): string {
   const t = g.ready_ms
-  if (t.samples === 0) return 'No globe came up in this window.'
+  if (t.samples === 0) return 'No globe came up so far.'
   // One report is not a best and a worst. Eleven globe_ready events in the
   // live seven-day window (2026-09-19) and eight two days earlier: a quiet
   // week reaches one, and "9.4 s at best, 9.4 s at worst" out of a single
@@ -112,7 +112,7 @@ export function gateLine(g: GlobeData): string {
  *  in every /globe response whether or not anything prints it. */
 export function visitorsLine(g: GlobeData): string {
   const { reached, all } = g.sessions
-  if (all === 0) return 'Nobody opened the globe in this window.'
+  if (all === 0) return 'Nobody opened the globe so far.'
   return `${fmtInt(reached)} of ${fmtInt(all)} visitors who opened it got there.`
 }
 
@@ -151,7 +151,7 @@ export function GlobeReach({ state }: { state: Loaded<GlobeData> }) {
           {g.not_reached && g.gave_up > 0 && (
             <>
               <h3>How the other loads ended</h3>
-              <BarList items={endingItems(g)} empty="No load ended without the globe in this window." />
+              <BarList items={endingItems(g)} empty="No load ended without the globe so far." />
               {g.abandon_ms.samples > 0 && <p className="dash-note">{abandonLine(g)}</p>}
               <HowCounted>
                 {g.abandon_ms.samples > 0 && CLOCKS_NOTE} Counts per load, but Umami ties an event to a visitor and never to one
@@ -162,7 +162,7 @@ export function GlobeReach({ state }: { state: Loaded<GlobeData> }) {
             </>
           )}
           {g.not_reached && g.gave_up === 0 && g.loads > 0 && (
-            <p className="dash-note">Every load in this window reached the globe.</p>
+            <p className="dash-note">Every load so far reached the globe.</p>
           )}
         </>
       )}

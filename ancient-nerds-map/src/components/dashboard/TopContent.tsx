@@ -45,10 +45,10 @@ export function item(row: ContentRow): BarItem {
  *  events fire since 2026-09-20 (story_open and paper_open from the lists,
  *  search once a visitor stops typing), so an empty list is a quiet window. */
 const WHY_EMPTY: Record<string, string> = {
-  Stories: 'nobody opened a story from a list in this window',
-  Papers: 'nobody opened a paper from a list in this window',
-  'Search terms': 'nobody searched in this window',
-  Sites: 'nobody opened a site in this window',
+  Stories: 'nobody opened a story from a list so far',
+  Papers: 'nobody opened a paper from a list so far',
+  'Search terms': 'nobody searched so far',
+  Sites: 'nobody opened a site so far',
 }
 
 /** "Nothing to show under Stories: …" with a clause per empty list — and
@@ -80,7 +80,7 @@ export function TopContent({ state }: { state: Loaded<ContentData> }) {
       {c && (
         <>
           {filled.length === 0 ? (
-            <p className="dash-empty">Nothing was opened in this window.</p>
+            <p className="dash-empty">Nothing was opened so far.</p>
           ) : (
             <div className="dash-lists">
               {filled.map(([title, rows, empty]) => (

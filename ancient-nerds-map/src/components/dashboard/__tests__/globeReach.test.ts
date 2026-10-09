@@ -38,7 +38,7 @@ describe('GlobeReach timesLine', () => {
       ready_ms: { min: null, median: null, max: null, samples: 0 },
     }
     // globe_ready fires when the overlay fades (sites, layers, focus), not at the layers
-    expect(timesLine(none)).toBe('No globe came up in this window.')
+    expect(timesLine(none)).toBe('No globe came up so far.')
   })
 
   it('names only best and worst below the median floor, and never prints null', () => {
@@ -78,7 +78,7 @@ describe('GlobeReach visitorsLine', () => {
 
   it('says nobody opened it rather than dividing by nothing', () => {
     expect(visitorsLine({ ...live, sessions: { all: 0, reached: 0 } })).toBe(
-      'Nobody opened the globe in this window.'
+      'Nobody opened the globe so far.'
     )
   })
 })

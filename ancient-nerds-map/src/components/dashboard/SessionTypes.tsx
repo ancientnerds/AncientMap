@@ -26,7 +26,7 @@ export function SessionTypes({ state }: { state: Loaded<Overview> }) {
               const n = o.types[kind] ?? 0
               return { key: kind, label, value: n, hint: fmtShare(n, o.sessions.human) }
             })}
-            empty="No sessions in this window."
+            empty="No sessions so far."
           />
           <p className="dash-note">
             Confirmed human: {fmtInt(o.sessions.human)} of {fmtInt(o.sessions.all)} sessions — an interaction or a
