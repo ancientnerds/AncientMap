@@ -558,8 +558,8 @@ button {
   border-top: 8px solid var(--dash-dot-low);
 }
 
-/* A trend over bars or over a thin daily line: thick paper, or the measure's
-   own colour when two measures share the chart. */
+/* A trend over bars: thick paper; the bold pair draws two measures that share
+   a chart in their own colours. */
 .dash-line-trend {
   stroke: var(--dash-paper);
   stroke-width: 3;
@@ -567,18 +567,6 @@ button {
 
 .dash-line-trend-key::before {
   border-top: 3px solid var(--dash-paper);
-}
-
-.dash-line-all-thin {
-  stroke: var(--dash-dot-low);
-  stroke-width: 1;
-  opacity: 0.6;
-}
-
-.dash-line-human-thin {
-  stroke: var(--dash-green);
-  stroke-width: 1;
-  opacity: 0.45;
 }
 
 .dash-line-all-bold {

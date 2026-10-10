@@ -1,6 +1,6 @@
 import { BarList, type BarItem } from './BarList'
 import { fmtDay, fmtInt } from './format'
-import { AxisChart, niceMax, rollingMean } from './Lines'
+import { AxisChart, niceMax } from './Lines'
 import { HowCounted, Panel, Status } from './Panel'
 import { Tile } from './Tile'
 import type { SearchData, SearchDay, SearchRow } from './types'
@@ -33,7 +33,7 @@ function rowHint(r: SearchRow): string {
 
 /** Shown and clicked on one chart, each against its own axis - impressions
  *  run in thousands, clicks in tens, and on one scale the clicks would be a
- *  flat line on the floor. Thin: each day; thick: the 7-day average. */
+ *  flat line on the floor. One point per day, no smoothing (owner, 2026-10-10). */
 function SearchChart({ days }: { days: SearchDay[] }) {
   const shown = days.map(d => d.impressions)
   const clicks = days.map(d => d.clicks)
@@ -44,13 +44,11 @@ function SearchChart({ days }: { days: SearchDay[] }) {
       left={{ max: niceMax(Math.max(...shown, 1)), format: v => fmtInt(Math.round(v)) }}
       right={{ max: niceMax(Math.max(...clicks, 1)), format: v => fmtInt(Math.round(v)) }}
       lines={[
-        { label: 'shown per day', values: shown, className: 'dash-line-all-thin', unlisted: true },
-        { label: 'clicks per day', values: clicks, className: 'dash-line-human-thin', side: 'right', unlisted: true },
-        { label: 'shown, 7-day average (left axis)', values: rollingMean(shown), className: 'dash-line-all-bold' },
-        { label: 'clicks, 7-day average (right axis)', values: rollingMean(clicks), className: 'dash-line-human-bold', side: 'right' },
+        { label: 'shown per day (left axis)', values: shown, className: 'dash-line-all' },
+        { label: 'clicks per day (right axis)', values: clicks, className: 'dash-line-human', side: 'right' },
       ]}
       titles={days.map(d => `${fmtDay(d.day)}: shown ${fmtInt(d.impressions)}, ${fmtInt(d.clicks)} clicks${d.position === null ? '' : `, position ${d.position.toFixed(1)}`}`)}
-      axis={[first, 'Per day; thin lines each day, thick the 7-day average', last]}
+      axis={[first, 'Shown and clicked per day', last]}
       label={`Google impressions and clicks per day from ${first} to ${last}`}
     />
   )
@@ -70,8 +68,7 @@ function PositionChart({ days }: { days: SearchDay[] }) {
       small
       left={{ max: top, format: v => String(Math.max(1, Math.round(top - v))) }}
       lines={[
-        { label: 'position per day', values: position.map(flip), className: 'dash-line-human-thin', unlisted: true },
-        { label: 'average position, 7-day average (1 is the top of the results)', values: rollingMean(position).map(flip), className: 'dash-line-human-bold' },
+        { label: 'average position per day (1 is the top of the results)', values: position.map(flip), className: 'dash-line-human' },
       ]}
       titles={days.map(d => `${fmtDay(d.day)}: ${d.position === null ? 'not shown' : `position ${d.position.toFixed(1)}`}`)}
       axis={[first, 'Average position, upside down: up is better', last]}
