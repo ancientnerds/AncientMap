@@ -171,3 +171,82 @@ def test_a_rollback_announces_the_url_it_brings_back(monkeypatch, tmp_path):
     sr.rollback(6609)
 
     assert session.announced == [[OLD_URL, NEW_URL, "https://ancientnerds.com/news-archive/"]]
+
+
+def _withdrawn(item_id=6937):
+    return _story(
+        item_id,
+        significance=1,
+        news_category="unverified",
+        speculative_tag=None,
+        score_reason=None,
+    )
+
+
+def _reinstate(monkeypatch, tmp_path, story, verdict, score):
+    session = _wave(monkeypatch, tmp_path, story, verdict)
+    monkeypatch.setattr(sr, "score_item", lambda s, item, settings: score)
+    return session
+
+
+SCORE_OK = {"significance": 4, "news_category": "architecture", "reason": "solid"}
+
+
+def test_a_withdrawn_story_that_passes_is_scored_and_public_again(monkeypatch, tmp_path):
+    story = _withdrawn()
+    session = _reinstate(monkeypatch, tmp_path, story, CORRECTED, SCORE_OK)
+
+    assert sr.reinstate([6937], dry_run=False) == {"reinstated": 1}
+
+    assert (story.significance, story.news_category) == (4, "architecture")
+    assert story.headline == CORRECTED["corrected_headline"]
+    assert session.commits == 1
+    assert session.announced and session.announced[0][0].endswith("-6937")
+
+
+def test_a_reject_or_a_scorer_one_keeps_the_story_withdrawn(monkeypatch, tmp_path):
+    story = _withdrawn()
+    _reinstate(monkeypatch, tmp_path, story, {"verdict": "REJECT"}, SCORE_OK)
+    assert sr.reinstate([6937], dry_run=False) == {"still_withdrawn": 1}
+    assert story.significance == 1
+
+    other = _withdrawn(7278)
+    session = _reinstate(
+        monkeypatch,
+        tmp_path,
+        other,
+        {"verdict": "VERIFIED"},
+        {"significance": 1, "news_category": "general", "reason": "not archaeology"},
+    )
+    assert sr.reinstate([7278], dry_run=False) == {"still_withdrawn": 1}
+    assert other.significance == 1
+    assert session.announced == []
+
+
+def test_a_failed_rescore_commits_nothing_and_is_tried_again(monkeypatch, tmp_path):
+    story = _withdrawn()
+    session = _reinstate(monkeypatch, tmp_path, story, CORRECTED, None)
+
+    assert sr.reinstate([6937], dry_run=False) == {"rescore_failed": 1}
+
+    assert session.commits == 0 and session.rollbacks == 1
+    assert sr.journalled_ids(tmp_path / "journal.jsonl") == set()
+
+
+def test_a_public_story_is_not_touched_by_reinstate(monkeypatch, tmp_path):
+    story = _story()
+    session = _reinstate(monkeypatch, tmp_path, story, CORRECTED, SCORE_OK)
+
+    assert sr.reinstate([6609], dry_run=False) == {"skipped": 1}
+    assert session.commits == 0
+
+
+def test_rollback_withdraws_a_reinstated_story_again(monkeypatch, tmp_path):
+    story = _withdrawn()
+    _reinstate(monkeypatch, tmp_path, story, CORRECTED, SCORE_OK)
+    sr.reinstate([6937], dry_run=False)
+
+    sr.rollback(6937)
+
+    assert (story.significance, story.news_category) == (1, "unverified")
+    assert story.headline == "Baalbek's megaliths predate the Romans"

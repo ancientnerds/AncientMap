@@ -60,6 +60,28 @@ def _load_prompt() -> str:
     return PROMPT_PATH.read_text(encoding="utf-8")
 
 
+def apply_rescore(item: NewsItem, result: dict) -> int:
+    """Write a scorer verdict onto the story; returns the new significance.
+
+    Shared with story_reverify's reinstatement, which scores a withdrawn story
+    again after it passed the web check."""
+    new_sig = max(1, min(10, result["significance"]))
+    new_cat = result["news_category"]
+    if new_cat not in VALID_CATEGORIES:
+        new_cat = "general"
+    item.significance = new_sig
+    item.news_category = new_cat
+    # Save speculative subcategory tag (only when category is speculative)
+    if new_cat == "speculative":
+        tag = result.get("speculative_tag")
+        item.speculative_tag = tag if tag in VALID_SPECULATIVE_TAGS else None
+    else:
+        item.speculative_tag = None
+    # Save editorial judgment
+    item.score_reason = result.get("reason")
+    return new_sig
+
+
 def rescore_pending_items(settings: LyraSettings) -> int:
     """Re-score significance for items from verified videos that haven't been rescored.
 
@@ -120,24 +142,9 @@ def rescore_pending_items(settings: LyraSettings) -> int:
                     skipped += 1
                     continue
 
-                new_sig = max(1, min(10, result["significance"]))
-                new_cat = result["news_category"]
-                if new_cat not in VALID_CATEGORIES:
-                    new_cat = "general"
-
                 old_sig = item.significance
-                item.significance = new_sig
-                item.news_category = new_cat
-
-                # Save speculative subcategory tag (only when category is speculative)
-                if new_cat == "speculative":
-                    tag = result.get("speculative_tag")
-                    item.speculative_tag = tag if tag in VALID_SPECULATIVE_TAGS else None
-                else:
-                    item.speculative_tag = None
-
-                # Save editorial judgment
-                item.score_reason = result.get("reason")
+                new_sig = apply_rescore(item, result)
+                new_cat = item.news_category
 
                 if new_sig == 1:
                     logger.info(
@@ -175,6 +182,16 @@ def rescore_pending_items(settings: LyraSettings) -> int:
 
     logger.info(f"Re-scored {total_rescored} items from {len(videos)} videos")
     return total_rescored
+
+
+def score_item(session, item: NewsItem, settings: LyraSettings) -> dict | None:
+    """The scorer's verdict on one story, outside the per-video cycle: the
+    video and channel it needs are read through `session`."""
+    video = session.get(NewsVideo, item.video_id)
+    channel = session.get(NewsChannel, video.channel_id)
+    return _rescore_item(
+        item, video, channel.name if channel else video.channel_id, _load_prompt(), settings
+    )
 
 
 def _rescore_item(
