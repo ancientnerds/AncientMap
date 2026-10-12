@@ -24,8 +24,6 @@ import Breadcrumbs from '../components/layout/Breadcrumbs'
 import ThumbsFeedback from '../components/feedback/ThumbsFeedback'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
-import PageStatsBar from '../components/layout/PageStatsBar'
-import type { StatItem } from '../components/layout/PageStatsBar'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import { useRoute } from '../seo/RouteContext'
 import type { ArticleIndexRoute, ArticleRoute } from '../types/anRoute'
@@ -655,8 +653,9 @@ function ArticlesStandalone() {
       setSelectedArticle(match)
       setView('reading')
     } else {
-      setView('listing')
-      setSelectedArticle(null)
+      // No hash, or one that names no issue: the hub lives at /articles/ and
+      // this page does not draw a listing of its own any more (2026-10-13).
+      window.location.replace('/articles/')
     }
   }, [])
 
@@ -765,29 +764,16 @@ function ArticlesStandalone() {
         onAvatarClick={() => setShowLyraProfile(true)}
         currentPage="articles"
       >
-        {view === 'listing' ? (
-          <span className="page-header-title">Weekly Journal</span>
-        ) : (
-          <button className="articles-page-back-btn" onClick={backToListing}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            All Journals
-          </button>
-        )}
+        {/* Diese Seite zeichnet keine Liste mehr: ohne Hash, der zu einer
+            Ausgabe gehört, springt resolveHash sofort nach /articles/. Der
+            Zurück-Knopf ist deshalb ein echter Link auf den kanonischen Hub. */}
+        <a className="articles-page-back-btn" href="/articles/">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          All Journals
+        </a>
       </PageHeader>
-
-      {/* Stats bar — listing view only */}
-      {view === 'listing' && !loading && !error && articles.length > 0 && (
-        <PageStatsBar items={[
-          { value: articles.length, label: 'journals' } as StatItem,
-          { value: formatDateRange(articles[articles.length - 1].week_start, articles[0].week_end), label: '', sep: '·' } as StatItem,
-        ]} />
-      )}
-
-      {view === 'listing' && (
-        <AiNoticeBanner message="Journal text is AI-generated from YouTube video content; images are from the original sources. Always verify with original sources." />
-      )}
 
       {view === 'reading' && (
         <>
