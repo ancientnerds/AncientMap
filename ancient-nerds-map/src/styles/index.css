@@ -17843,6 +17843,16 @@ div.lyra-inline-video-wrap {
   margin-bottom: 12px;
 }
 
+/* Seit 2026-10-12 ist die Karte selbst der Link (JournalHub rendert
+   <a class="articles-hero">, <a class="articles-grid-card"> mit Titel und
+   Blurb darin) — vorher trug der Titel den <a>. Ohne diese Regel
+   unterstreicht der Browser Überschrift und Blurb der ganzen Karte. */
+.articles-hero,
+.articles-grid-card {
+  color: inherit;
+  text-decoration: none;
+}
+
 .articles-hero-title a,
 .articles-grid-card-title a {
   color: inherit;
