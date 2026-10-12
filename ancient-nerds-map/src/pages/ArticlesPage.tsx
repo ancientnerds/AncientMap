@@ -27,7 +27,6 @@ import PageHeader from '../components/layout/PageHeader'
 import PageStatsBar from '../components/layout/PageStatsBar'
 import type { StatItem } from '../components/layout/PageStatsBar'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
-import SeoCardList from '../components/layout/SeoCardList'
 import { useRoute } from '../seo/RouteContext'
 import type { ArticleIndexRoute, ArticleRoute } from '../types/anRoute'
 
@@ -35,6 +34,8 @@ const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 import type { NewsItemData } from '../types/news'
 import { ArticleScreenshot, formatTimestamp } from '../components/news/ArticleBody'
 import JournalArticle from '../components/news/JournalArticle'
+import JournalHub from '../components/news/JournalHub'
+import JournalQualityReportPanel from '../components/news/JournalQualityReport'
 import { newsItemToCardProps } from '../components/news/NewsCard'
 import '../components/news/news-cards.css'
 import '../styles/story-page.css'
@@ -528,6 +529,9 @@ function ArticleFromPayload({ article }: { article: ArticleRoute }) {
               </div>
             }
           >
+            {article.quality_report && (
+              <JournalQualityReportPanel report={article.quality_report} />
+            )}
             <footer className="articles-reader-footer">
               <ThumbsFeedback
                 prompt="journal_end"
@@ -560,13 +564,7 @@ function ArticleIndexFromPayload({ route }: { route: ArticleIndexRoute }) {
         <Breadcrumbs trail={[{ name: 'Home', path: '/' }, { name: 'Journal' }]} />
         <h1 className="story-title">Weekly Archaeology Journal</h1>
         <div className="story-meta">{route.articles.length} issues</div>
-        <SeoCardList
-          items={route.articles.map(a => ({
-            href: `/articles/${a.slug}`,
-            title: a.title,
-            summary: a.summary,
-          }))}
-        />
+        <JournalHub cards={route.articles} />
         <CommunityCta />
       </main>
     </div>

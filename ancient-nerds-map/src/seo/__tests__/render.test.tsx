@@ -428,6 +428,17 @@ describe('article-Seite (Task 13): der SSR-Body trägt den Python-Fragment-Inhal
     expect(html).toContain('href="/articles/"')
     expect(html).toContain('Keep exploring')
   })
+
+  it('das Qualitäts-Audit steht auf der indexierten Seite, nicht nur in der SPA', () => {
+    // Seit 2026-10-12 gab es dafür nur noch diesen Ort: vorher stand das
+    // Panel ausschließlich im Standalone-Leser von /articles.html.
+    const text = html.replace(/<!-- -->/g, '')
+    expect(html).toContain('class="articles-quality-report"')
+    expect(text).toContain('Quality Audit — 9/10')
+    expect(text).toContain('21 sources')
+    expect(text).toContain('Viking silver hoard on Gotland')
+    expect(text).toContain('Source quality: a blog → an excavation report')
+  })
 })
 
 describe('articleIndex (Task 13): der crawlbare Journal-Hub aus dem Payload', () => {
@@ -443,6 +454,37 @@ describe('articleIndex (Task 13): der crawlbare Journal-Hub aus dem Payload', ()
     expect(html).toContain('href="/articles/week-30-mummies-and-mosaics"')
     expect(html).toContain('Week 30: Mummies &amp; Mosaics')
     expect(html).toContain('New Saqqara burials')
+  })
+
+  it('das neueste Journal als Hero mit Bild, der Rest als Thumbnail-Grid', () => {
+    // Seit 2026-10-12 zieht der Hub dasselbe Layout wie die alte /articles.html
+    // aus dem Payload: vorher stand hier eine nackte Textliste ohne Bild.
+    expect(html).toContain('class="articles-hero"')
+    expect(html).toContain('class="articles-hero-img"')
+    expect(html).toContain('/data/news/screenshots/hoard01_120.webp')
+    expect(html).toContain('class="articles-grid"')
+    expect(html).toContain('class="articles-grid-card-img"')
+    expect(html).toContain('/data/news/screenshots/mosaic02_88.webp')
+  })
+
+  it('jede Karte ist ein echter Link auf die kanonische Artikelseite', () => {
+    expect(html).toContain('class="articles-hero" href="/articles/week-31-hoards-and-harbours"')
+    expect(html).toContain(
+      'class="articles-grid-card" href="/articles/week-30-mummies-and-mosaics"'
+    )
+  })
+
+  it('Lesezeit und Wochenzeitraum aus dem Payload', () => {
+    // React setzt zwischen Textknoten <!-- --> — deshalb der Regex.
+    expect(html).toMatch(/articles-reader-readtime">~<!-- -->9<!-- --> min read/)
+    expect(html).toContain('Jul 27 – Aug 2')
+  })
+
+  it('die Bild-Karte steht über ihrem Text, wie im alten SPA-Markup', () => {
+    const card = html.slice(html.indexOf('articles-grid-card"'))
+    expect(card.indexOf('articles-grid-card-img')).toBeLessThan(
+      card.indexOf('articles-grid-card-title')
+    )
   })
 
   it('Art.-50-Banner und CommunityCta', () => {

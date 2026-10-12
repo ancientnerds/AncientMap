@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from api.seo_shell import ssr_shell_response
 from pipeline.article_html_renderer import (
+    journal_thumbnail,
     markdown_to_html,
+    reading_minutes,
     render_error_html,
     render_medium_copy_html,
     story_recovery_html,
@@ -79,13 +81,27 @@ async def articles_listing(db: Session = Depends(get_db)):
 
     # Since react-ssr Task 13 the sidecar renders head and body from this
     # payload (articleIndexMeta + ArticleIndexFromPayload); Python only
-    # fetches data. The cards need slug, title and summary — nothing more.
+    # fetches data. The cards carry the same fields the listing has always
+    # shown — slug, title, summary, week range — plus the issue's own lead
+    # picture and reading time. Until 2026-10-12 the payload held only the
+    # first three, so the hub rendered as a bare text list while /articles.html
+    # drew hero image and thumbnails; journal_thumbnail() is now the single
+    # definition of which picture stands for an issue.
     return ssr_shell_response(
         "articles.html",
         {
             "type": "articleIndex",
             "articles": [
-                {"slug": slugify(a.title), "title": a.title, "summary": a.summary} for a in articles
+                {
+                    "slug": slugify(a.title),
+                    "title": a.title,
+                    "summary": a.summary,
+                    "thumbnail_url": journal_thumbnail(a.content, a.title),
+                    "week_start": a.week_start.isoformat() if a.week_start else None,
+                    "week_end": a.week_end.isoformat() if a.week_end else None,
+                    "reading_minutes": reading_minutes(a.content),
+                }
+                for a in articles
             ],
         },
         _HTML_HEADERS,
@@ -117,15 +133,23 @@ async def article_page(slug: str, db: Session = Depends(get_db)):
     # finished HTML instead of re-rendering the markdown. Journals carry no
     # hero image; og:image falls back to the default, exactly like the
     # Python fragment did.
+    #
+    # `id` and `quality_report` arrived with the reader consolidation
+    # (2026-10-12): the index page needs `id` for the citation popovers'
+    # /news/articles/{id}/citations, and the quality_report panel the owner
+    # reads used to live only in the standalone SPA reader, which is being
+    # retired. The column is the row's own JSONB, passed through as stored.
     return ssr_shell_response(
         "articles.html",
         {
             "type": "article",
             "slug": slug,
+            "id": article.id,
             "title": article.title,
             "summary": article.summary,
             "published_at": (article.published_at.isoformat() if article.published_at else None),
             "hero_image_url": None,
+            "quality_report": article.quality_report,
             "body_html": markdown_to_html(article.content),
         },
         _HTML_HEADERS,

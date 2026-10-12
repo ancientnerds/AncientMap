@@ -53,7 +53,13 @@ def _article(**overrides) -> SimpleNamespace:
 def test_articles_listing_hands_the_article_list():
     render, shell = _patched()
     with render as render_mock, shell as shell_mock:
-        resp = asyncio.run(articles_listing(db=_orm_db([_article()])))
+        resp = asyncio.run(
+            articles_listing(
+                db=_orm_db(
+                    [_article(content="![A silver hoard](https://a.example/h.webp)\n\nx " * 40)]
+                )
+            )
+        )
 
     assert resp.status_code == 200
     assert shell_mock.call_args[0][0] == "articles.html"
@@ -65,15 +71,35 @@ def test_articles_listing_hands_the_article_list():
                 "slug": "week-31-hoards-harbours",
                 "title": "Week 31: Hoards & Harbours",
                 "summary": "A Viking silver hoard on Gotland.",
+                "thumbnail_url": "https://a.example/h.webp",
+                "week_start": "2026-07-27",
+                "week_end": "2026-08-02",
+                "reading_minutes": 1,
             }
         ],
     }
 
 
+def test_articles_listing_keeps_a_journal_without_a_picture_playable():
+    """Ohne Bild darf die Karte nicht kaputtgehen — nur ohne thumbnail_url."""
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(articles_listing(db=_orm_db([_article(content="Nur Text, kein Bild.")])))
+
+    card = render_mock.call_args[0][0]["articles"][0]
+    assert card["thumbnail_url"] is None
+    assert card["reading_minutes"] == 1
+
+
 def test_article_page_hands_the_full_raw_payload():
     render, shell = _patched()
     with render as render_mock, shell as shell_mock:
-        resp = asyncio.run(article_page("week-31-hoards-harbours", db=_orm_db([_article()])))
+        resp = asyncio.run(
+            article_page(
+                "week-31-hoards-harbours",
+                db=_orm_db([_article(quality_report={"assessment_score": 9, "total_sources": 21})]),
+            )
+        )
 
     assert resp.status_code == 200
     assert shell_mock.call_args[0][0] == "articles.html"
@@ -84,12 +110,24 @@ def test_article_page_hands_the_full_raw_payload():
     assert route["title"] == "Week 31: Hoards & Harbours"
     assert route["summary"] == "A Viking silver hoard on Gotland."
     assert route["published_at"] == "2026-08-03T00:00:00"
+    # Die Zitat-Popovers fragen /news/articles/{id}/citations ab.
+    assert route["id"] == 31
+    # Das Qualitäts-Panel stand bis 2026-10-12 nur im SPA-Leser.
+    assert route["quality_report"] == {"assessment_score": 9, "total_sources": 21}
     # Journals tragen kein Hero-Bild — og:image fällt in articleMeta auf den
     # Default zurück, exakt wie im Python-Fragment.
     assert route["hero_image_url"] is None
     # body_html: das Artikel-Markdown, Python-markdown-gerendert.
     assert "<h2" in route["body_html"]
     assert "A silver hoard surfaced." in route["body_html"]
+
+
+def test_article_page_without_a_quality_report_passes_none():
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(article_page("week-31-hoards-harbours", db=_orm_db([_article()])))
+
+    assert render_mock.call_args[0][0]["quality_report"] is None
 
 
 def test_unknown_article_is_a_404_without_touching_the_renderer():

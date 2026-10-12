@@ -314,18 +314,54 @@ export interface ResearchIndexRoute {
 export interface ArticleRoute {
   type: 'article'
   slug: string
+  /** Row id — the citation popovers read /news/articles/{id}/citations. */
+  id: number
   title: string
   summary: string | null
   /** Raw ISO timestamp from the row; date display is a TS decision. */
   published_at: string | null
   /** Journals carry no hero today — og:image falls back to the default. */
   hero_image_url: string | null
+  /** The row's own JSONB, null for an issue written before the audit. */
+  quality_report: JournalQualityReport | null
   body_html: string
+}
+
+/** The pipeline's assessment block (news_articles.quality_report). */
+export interface JournalQualityReport {
+  assessment_score: number
+  assessment_iterations: number
+  assessment_dimensions: Record<string, boolean>
+  fixes_applied: Array<Record<string, unknown>>
+  research_clusters: Record<
+    string,
+    { score: number; sources: number; elapsed: number; status: string }
+  >
+  total_sources: number
+  total_elapsed_seconds: number
+}
+
+/**
+ * One card on the journal hub. `thumbnail_url` and `reading_minutes` come
+ * from Python (pipeline/article_html_renderer.py::journal_thumbnail /
+ * reading_minutes) — the same fields the /articles.html listing derived in
+ * the browser, so the hub draws the same lead picture whichever URL serves
+ * it. `thumbnail_url` is null for an issue without any screenshot.
+ */
+export interface JournalIndexCard {
+  slug: string
+  title: string
+  summary: string | null
+  thumbnail_url: string | null
+  /** Raw ISO dates of the covered week; the card formats the range. */
+  week_start: string | null
+  week_end: string | null
+  reading_minutes: number
 }
 
 export interface ArticleIndexRoute {
   type: 'articleIndex'
-  articles: { slug: string; title: string; summary: string | null }[]
+  articles: JournalIndexCard[]
 }
 
 /**
