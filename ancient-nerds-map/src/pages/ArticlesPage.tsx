@@ -555,12 +555,17 @@ function ArticleFromPayload({ article }: { article: ArticleRoute }) {
 /** /articles/ rendered from the route payload — the crawlable journal hub. */
 function ArticleIndexFromPayload({ route }: { route: ArticleIndexRoute }) {
   return (
-    <div className="story-page">
+    // articles-page / articles-page-content, nicht story-page / story-main:
+    // .story-main ist die 820-px-Lesespalte einer Story und .story-page erzwingt
+    // height:100vh mit eigenem Scrollbereich. Beides quetschte den Hub (Hero
+    // 900 px, Grid 1100 px) in eine Lesebreite. Der Journal-Hub steht in
+    // denselben Containern wie die Artikel-Seite und wie die alte /articles.html.
+    <div className="articles-page">
       <PageHeader currentPage="articles">
         <span className="page-header-title">Weekly Journal</span>
       </PageHeader>
       <AiNoticeBanner message="Journal text is AI-generated from YouTube video content; images are from the original sources. Always verify with original sources." />
-      <main className="story-main">
+      <main className="articles-page-content">
         <Breadcrumbs trail={[{ name: 'Home', path: '/' }, { name: 'Journal' }]} />
         <h1 className="story-title">Weekly Archaeology Journal</h1>
         <div className="story-meta">{route.articles.length} issues</div>
