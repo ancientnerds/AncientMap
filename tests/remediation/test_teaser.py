@@ -107,11 +107,20 @@ def padded(card: str) -> str:
 
 
 #: The one-word and hyphenated names whose caption word is wider than the frame at the caption
-#: size, measured on the live WB mass run (Orbitron 700 at 92 px: 1,001 to 1,409 px); the first
-#: two are one name, as stored and transliterated. `La Chapelle-aux-Saints` (its word
-#: `Chapelle-aux-Saints`, 1,075 px) stalled run wb-ws-2026-09-27-02 the same way.
+#: size, measured on the live WB mass run (Orbitron 700 at 92 px); `La Chapelle-aux-Saints` (its
+#: word `Chapelle-aux-Saints`) stalled run wb-ws-2026-09-27-02 the same way. The first two entries
+#: of the old list were one name as stored and transliterated; only the transliteration stayed.
+#:
+#: Measured again on 2026-10-17 with the brand fonts this machine holds
+#: (`video-assets/fonts`, gitignored, cut by `shorts_brand.ensure_fonts` from Orbitron[wght].ttf
+#: on Google Fonts' unpinned `main` branch): 1,007 to 1,409 px - the top of the range still lands
+#: on the recorded 1,409 px for `Mecklenburg-Vorpommern`. `Sammallahdenmäki` no longer belongs
+#: here: it measures exactly 1,000.000 px, the frame width, and the fixture asks for strictly
+#: wider. The card is legal either way (the contract is `drawn_px <= MAX_CAPTION_PX`, and
+#: `problems()` answers `[]`), but a name that exactly fits does not show what this test shows.
+#: It was 1,001 px when the list was recorded, one unit of one glyph away, and the font source is
+#: not pinned - so the honest fixture keeps only names with a margin.
 LONG_NAMES = (
-    "Sammallahdenmäki",
     "Sammallahdenmaeki",
     "Hohlenstein-Stadel",
     "Saint-Pierre-aux-Nonnains",
@@ -250,10 +259,11 @@ class TestTheMechanicalChecks:
         assert fit.drawn_px <= C.V.MAX_CAPTION_PX < fit.px
 
     def test_the_long_names_of_the_mass_run_pass_with_the_brand_fonts(self) -> None:
-        """The names that stalled the writer batches of runs wb-ws-2026-09-27-01, -02 and -04
-        (1,001-1,409 px at 92 px in Orbitron 700), measured with the real brand fonts by
-        `verify4.card_fit`. One test for all of them, so a machine without the fonts (CI) reports
-        one skip, not one per name."""
+        """The names that stalled the writer batches of runs wb-ws-2026-09-27-01, -02 and -04,
+        measured with the real brand fonts by `verify4.card_fit`: 1,007-1,409 px at 92 px in
+        Orbitron 700 today (see LONG_NAMES on the recorded range and the one name that left it).
+        One test for all of them, so a machine without the fonts (CI) reports one skip, not one
+        per name."""
         fonts = [C.V.shorts_brand.FONT_DIR / file for file in C.V.shorts_brand.FONTS]
         if not all(path.exists() for path in fonts):
             pytest.skip("the brand fonts (video-assets/fonts, gitignored) are not on this machine")
