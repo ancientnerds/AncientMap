@@ -276,7 +276,7 @@ class TestSelect:
             85,
         ]
         assert record["roles"]["card_writer"] == {"model": "claude-sonnet-5-5", "effort": "high"}
-        assert record["roles"]["hook_rater"] == {"model": "claude-sonnet-5-5", "effort": "medium"}
+        assert record["roles"]["hook_rater"] == {"model": "claude-opus-5-5", "effort": "medium"}
         assert record["roles"]["card_fact_checker"] == {
             "model": "claude-opus-5-5",
             "effort": "high",
@@ -456,7 +456,7 @@ class TestTheFirstRound:
         )
         assert prov["models"] == {
             "write": SONNET,
-            "rate": SONNET,
+            "rate": OPUS,
             "check": OPUS,
             "verify": OPUS,
         }
@@ -811,7 +811,7 @@ class TestTheRoles:
         shown = R.shown_variants(R.stage_records(run)["rewrite1"][sid(MP)])
         OH.write_answer(
             handoff, batch_id="rate1-001", stage="rate1", label=sid(MP), text=rate_json(shown, [4, 3, 2]),
-            answered_by="hook_rater:teaser-rate-001", model=SONNET,
+            answered_by="hook_rater:teaser-rate-001", model=OPUS,
         )  # fmt: skip
         with pytest.raises(R.RunError, match="wrote or checked this site before"):
             R.import_stage(run, "rate1", fit=T.fit)
@@ -1177,7 +1177,7 @@ class TestTheBriefs:
     @pytest.mark.parametrize(
         ("stage", "role", "model", "effort"),
         [
-            ("rate", "hook_rater", "claude-sonnet-5-5", "medium"),
+            ("rate", "hook_rater", "claude-opus-5-5", "medium"),
             ("check", "card_fact_checker", "claude-opus-5-5", "high"),
             ("verify", "card_web_verifier", "claude-opus-5-5", "high"),
         ],

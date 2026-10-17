@@ -31,7 +31,7 @@ import roles as RO  # noqa: E402
 #: (2026-10-17) added the card lane's own checkers on Opus.
 D6 = {
     "card_writer": ("claude-sonnet-5-5", "high"),
-    "hook_rater": ("claude-sonnet-5-5", "medium"),
+    "hook_rater": ("claude-opus-5-5", "medium"),
     "fact_checker": ("claude-sonnet-5-5", "high"),
     "web_verifier": ("claude-sonnet-5-5", "high"),
     "card_fact_checker": ("claude-opus-5-5", "high"),
@@ -170,7 +170,8 @@ def test_an_escalation_needs_its_reason_and_its_calibration() -> None:
 def test_the_applied_moves_are_records_and_the_registry_stands_where_they_end() -> None:
     """Three tier moves, oldest first, each copied from the failed verdict that named it
     (`verdicts/fr-general-001.json`, `VERDICT-fact_checker.json` and `VERDICT-web_verifier.json` of
-    teaser-2026-10-09b), then the seven owner moves of D36 (`test_the_owner_moves_of_d36...`)."""
+    teaser-2026-10-09b), then the seven owner moves of D36 (`test_the_owner_moves_of_d36...`), then the
+    hook rater's tier move of teaser-2026-10-10 (`VERDICT-hook_rater.json`)."""
     moves = [dict(move) for move in RO.APPLIED_ESCALATIONS[:3]]
     assert moves == [
         {
@@ -196,7 +197,14 @@ def test_the_applied_moves_are_records_and_the_registry_stands_where_they_end() 
         },
     ]
     RO.check_applied_escalations(RO.APPLIED_ESCALATIONS, RO.ROLES)
-    assert all(m.get("kind") == "owner" for m in RO.APPLIED_ESCALATIONS[3:])
+    assert all(m.get("kind") == "owner" for m in RO.APPLIED_ESCALATIONS[3:-1])
+    assert dict(RO.APPLIED_ESCALATIONS[-1]) == {
+        "role": "hook_rater",
+        "from": "claude-sonnet-5-5",
+        "to": "claude-opus-5-5",
+        "calibration_id": "teaser-2026-10-10",
+        "reason": "failed: hook_pairs",
+    }
 
 
 def test_a_registry_that_moved_without_its_record_is_refused() -> None:
@@ -281,7 +289,9 @@ def test_the_owner_moves_of_d36_put_seven_roles_from_opus_to_sonnet() -> None:
             "D36",
         )
         assert move["evidence"] and move["reason"].startswith("weekly Claude quota at 69 %")
-        assert RO.ROLES[move["role"]].model == "claude-sonnet-5-5"
+        # the hook rater moved on up one tier after D36 (teaser-2026-10-10); its move ends there
+        if move["role"] != "hook_rater":
+            assert RO.ROLES[move["role"]].model == "claude-sonnet-5-5"
         assert RO.ROLES[move["role"]].effort == move["effort"]
     # the roles D36 left alone carry no owner move
     for name in ("pilot_judge", "enrich_writer", "image_prefilter", "image_depicts", "operator"):
@@ -355,7 +365,7 @@ def test_a_registry_that_left_its_owner_move_is_refused_in_model_and_in_effort()
         RO.check_applied_escalations(moves, other_model)
     other_effort = dict(RO.ROLES)
     other_effort["hook_rater"] = RO.Role(
-        "hook_rater", "claude-sonnet-5-5", "xhigh", "design_run_hand_drawn_60"
+        "hook_rater", "claude-opus-5-5", "xhigh", "design_run_hand_drawn_60"
     )
     with pytest.raises(RO.RoleError, match="hook_rater is registered at effort xhigh"):
         RO.check_applied_escalations(moves, other_effort)

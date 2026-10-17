@@ -1105,9 +1105,8 @@ class TestTheHookRater:
         answer_role(run_dir, "pilot_judge", {K.HOOK_REFERENCE: hook_text(3, 3)})
         verdict = K.evaluate(run_dir, "hook_rater")
         assert verdict["sets"]["hook_pairs"]["pairs_ordered_right"] == 0.0
-        # Sonnet since D36: a failing rater moves up one tier, to Opus
-        assert verdict["passed"] is False and verdict["tier_move"]["to"] == "claude-opus-5-5"
-        assert "held" not in verdict
+        # Opus since teaser-2026-10-10: the top tier, so a failing rater is held for the owner
+        assert verdict["passed"] is False and verdict["tier_move"] is None and verdict["held"]
 
     def test_a_rater_far_from_the_reference_fails(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)

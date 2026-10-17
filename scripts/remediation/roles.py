@@ -94,8 +94,9 @@ ROLES: Mapping[str, Role] = _registry(
     # role stood on Opus before that, the tier move up is the earlier record of its chain.
     Role("card_writer", "claude-sonnet-5-5", "high", "wb_cards_accepted"),
     # Effort xhigh from 2026-10-09 (at medium it failed teaser-2026-10-09, hook_pairs ordered right
-    # 0.7902 of a required 1.0), medium again on Sonnet under D36: it is calibrated again on Sonnet.
-    Role("hook_rater", "claude-sonnet-5-5", "medium", "design_run_hand_drawn_60"),
+    # 0.7902 of a required 1.0), medium again on Sonnet under D36. Sonnet failed teaser-2026-10-10
+    # (0.8601), so the D6 rule moves it up one tier to Opus, calibrated again in teaser-2026-10-18.
+    Role("hook_rater", "claude-opus-5-5", "medium", "design_run_hand_drawn_60"),
     # Sonnet failed teaser-2026-10-09b (tier move to Opus), Opus showed no gain in teaser-2026-10-09c;
     # D36 puts the role back on Sonnet, and the failed 09b verdict is released under that decision.
     Role("fact_checker", "claude-sonnet-5-5", "high", "wb_check_verify_opus"),
@@ -224,6 +225,15 @@ APPLIED_ESCALATIONS: tuple[Mapping[str, Any], ...] = (
         "code_review",
         "high",
         "a role without a pool of cases: the gates judge the code, the review runs on Sonnet",
+    ),
+    MappingProxyType(
+        {
+            "role": "hook_rater",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "calibration_id": "teaser-2026-10-10",
+            "reason": "failed: hook_pairs",
+        }
     ),
 )
 _ESCALATION_KEYS = frozenset({"role", "from", "to", "calibration_id", "reason"})
