@@ -48,4 +48,15 @@ paths = [
     # 2026-10-06 in run import-hero-2026-10-06-004, commit 2b6081fe, which blocked the SAST gate for
     # every push afterwards.
     '''output/remediation/import_hero/.*ACCEPTANCE\.json''',
+    # The card calibration's adjudicated gold
+    # (tests/remediation/fixtures/teaser_calibration_contradicted_sites.json: the 20 contradicted sites of
+    # teaser-2026-10-09c). Every case carries "key" - the label teaser/calibrate.py:886 draws for it
+    # (a random uuid4 from the run's own RNG, so a rater reads the case without knowing the site, the
+    # same blind label opus_handoff exports per question) - and "site_id", the site's own uuid. The
+    # default generic-api-key rule reads a JSON field whose name ends in `key` followed by an
+    # entropy-looking value as a credential. Neither value is one: a per-run label and a site id,
+    # public in every page of this site. Same finding as the import-hero PLAN.jsonl and
+    # ACCEPTANCE.json above. First flagged in the push of 5447abc: 20 findings, all of them, every one
+    # the "key" field of a case.
+    '''tests/remediation/fixtures/teaser_calibration_contradicted_sites\.json''',
 ]
