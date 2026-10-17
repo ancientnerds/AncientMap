@@ -5,6 +5,13 @@ the tools are named as MiniMax Code spells them, `todowrite`, `read`, `edit`, `b
 
 ## Where the 2026-09 sites remediation stands
 
+**The live state is `output/remediation/remediation_change_log.md`, not this file and not
+`output/remediation/HANDOVER.md`** (that one is the handover of 2026-09-25 and describes a state three
+weeks gone: it still lists lane L as running, the `wip/p4-pilot` merge as open and "Phase 6 incl.
+Push #2"). The plan of the closing run is
+`output/remediation/final-2026-10-08/MASTER_PLAN.md`, its resume point is at the end of that file, and
+the session brief of 2026-10-17 is `output/remediation/GOAL_2026-10-17.md`.
+
 All 5,004 `ancient_nerds` sites have been examined. In production (2026-09-25, every write journalled,
 0 deviations): Phase 3's 994 field writes, of which 499 stand (Opus re-judged the 934 DeepSeek decided:
 481 kept, 453 reverted by `journal-reversal-3`); further lanes (wrong-both, coordinates, ids, images,
@@ -13,9 +20,15 @@ Every model judgement runs through agents via `scripts/remediation/opus_handoff.
 Pi or opencode (owner, 2026-09-23). Since 2026-10-03 the owner replaces Claude Code with MiniMax Code
 (`mcode`, model `MiniMax-M3.1-Flash-Preview`); MiniMax answers enter production only after the answer
 stamp and the public AI disclosure name MiniMax truthfully (`ANSWER_MODELS`, `model4.AI_SYSTEM`) and a
-calibration against already-answered batches has passed. Start with `output/remediation/HANDOVER.md` (state,
-next steps in order, traps); evidence `AUDIT_LOG.md`, owner items `HUMAN_ONLY.md`. Open: lane L
-(running), the `wip/p4-pilot` merge, Phase 6 incl. Push #2 and the final acceptance.
+calibration against already-answered batches has passed.
+
+**A MiniMax Code session therefore cannot answer the DB repair's remaining questions**: owner decision
+D6 (2026-10-08) limits a new answer to `opus_handoff.NEW_ANSWER_MODELS` — `claude-opus-5-5`,
+`claude-sonnet-5-5`, `claude-haiku-5-5` — and `fields/handoff.py` refuses every other stamp at import,
+so the WD5 main run, the card pilot and the image lanes need a Claude Code session (they are driven by
+Claude agents, not by an API call from the code). D40 ("`fact_checker`/`web_verifier` to Opus") was
+**superseded by D36** (2026-10-09: the calibrations measured no Opus advantage and the weekly quota stood
+at 69 %); `roles.py` carries both roles on Sonnet and a plan step that re-applies D40 is wrong.
 
 ## Code Quality Standards
 

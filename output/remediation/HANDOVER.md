@@ -1,5 +1,20 @@
 # Handover: the 2026-09 remediation of all 5,004 sites
 
+> **Superseded 2026-10-17. Do not resume from this file.**
+> Everything below describes the state of 2026-09-25/26: lane L is long done, `wip/p4-pilot` is
+> merged, "Phase 6 incl. Push #2" is history, and the acceptance run of 2026-09-25 was ended by the
+> owner as a measurement. It is kept as the evidence trail of that fortnight, not as instructions.
+>
+> Where to start instead:
+> - live state and every decision since: `remediation_change_log.md` (this directory)
+> - the closing run's plan and its resume point: `final-2026-10-08/MASTER_PLAN.md`
+> - the session brief of 2026-10-17, with the work that is still open: `GOAL_2026-10-17.md`
+> - the journal: has one reader (2026-10-17)
+> - the story verifier: its rate-limit cause and its journal reasons (2026-10-17)
+>
+> One thing below is still true and is the trap most likely to be re-learned: a write is journalled,
+> rehearsed, read back and rolled back before it is accepted, and a recorded answer is write-once.
+
 Written 2026-09-22 at the end of the Phase-3 write and brought up to date on 2026-09-25 after the
 Phase-4 mass run, for a session that does not have this one's context -
 possibly in another harness. Read this first; `AUDIT_LOG.md` carries the evidence behind every number
