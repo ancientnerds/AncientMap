@@ -78,7 +78,7 @@ def _wave(monkeypatch, tmp_path, story, verdict=CORRECTED):
         sr, "pick", lambda s, limit, done, alt_first: [story] if story.id not in done else []
     )
     monkeypatch.setattr(
-        sr, "web_verify_item", lambda item, verifier, settings: ("ok", dict(verdict))
+        sr, "web_verify_item", lambda item, verifier, settings: ("ok", dict(verdict), None)
     )
     monkeypatch.setattr(sr, "submit", lambda urls: session.announced.append(list(urls)) or True)
     return session
@@ -127,10 +127,35 @@ def test_rollback_restores_the_before_values(monkeypatch, tmp_path):
 def test_a_failed_check_is_tried_again_by_a_later_wave(monkeypatch, tmp_path):
     story = _story()
     _wave(monkeypatch, tmp_path, story)
-    monkeypatch.setattr(sr, "web_verify_item", lambda item, verifier, settings: ("failed", None))
+    monkeypatch.setattr(
+        sr,
+        "web_verify_item",
+        lambda item, verifier, settings: ("failed", None, "model call failed: 429"),
+    )
 
     assert sr.run_wave(limit=10, dry_run=False) == {"failed": 1}
     assert sr.journalled_ids(tmp_path / "journal.jsonl") == set()
+
+
+def test_a_failed_check_says_why_in_the_journal(monkeypatch, tmp_path):
+    """The six failed stories of 2026-10-12 were journalled with reason null,
+    which reads like a check that never ran: only the container log explained
+    them (a Token Plan 429 the old httpx path gave up on after nine seconds)."""
+    story = _story()
+    _wave(monkeypatch, tmp_path, story)
+    monkeypatch.setattr(
+        sr,
+        "web_verify_item",
+        lambda item, verifier, settings: ("failed", None, "model call failed: 429 Token Plan"),
+    )
+
+    sr.run_wave(limit=10, dry_run=False)
+
+    [line] = [
+        json.loads(x) for x in (tmp_path / "journal.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert line["outcome"] == "failed"
+    assert line["reason"] == "model call failed: 429 Token Plan"
 
 
 OLD_URL = "https://ancientnerds.com/news-archive/baalbeks-megaliths-predate-the-romans-6609"

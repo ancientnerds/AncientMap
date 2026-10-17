@@ -178,7 +178,7 @@ def run_wave(limit: int, dry_run: bool, alt_first: bool = True) -> Counter[str]:
     with get_session() as session:
         for item in pick(session, limit, journalled_ids(journal), alt_first):
             before = _snapshot(item)
-            status, result = web_verify_item(item, verifier, settings)
+            status, result, detail = web_verify_item(item, verifier, settings)
             outcome = (
                 apply_web_verdict(item, result, withdraw_on_reject=False)
                 if result is not None
@@ -189,7 +189,7 @@ def run_wave(limit: int, dry_run: bool, alt_first: bool = True) -> Counter[str]:
                 "at": datetime.now(UTC).isoformat(),
                 "item_id": item.id,
                 "outcome": outcome,
-                "reason": (result or {}).get("reason"),
+                "reason": (result or {}).get("reason") or detail,
                 "before": before,
                 "after": {f: v for f, v in after.items() if v != before[f]},
                 "dry_run": dry_run,
@@ -211,9 +211,9 @@ def run_wave(limit: int, dry_run: bool, alt_first: bool = True) -> Counter[str]:
 def _reinstate_one(session, item: NewsItem, verifier, settings) -> tuple[str, str | None]:
     """Web check, then the scorer; returns (outcome, reason). Leaves the
     session dirty for the caller to commit or roll back."""
-    status, result = web_verify_item(item, verifier, settings)
+    status, result, detail = web_verify_item(item, verifier, settings)
     if result is None:
-        return status, None
+        return status, detail
     verdict = apply_web_verdict(item, result, withdraw_on_reject=False)
     if verdict not in ("corrected", "verified"):
         return "still_withdrawn", result.get("reason")

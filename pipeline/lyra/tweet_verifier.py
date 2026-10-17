@@ -449,13 +449,34 @@ class WebVerifier:
     search: Any
 
 
+def plan_aware_web_chat(
+    client: Any, model: str, system: str, user_message: str, max_tokens: int
+) -> str:
+    """The web verifier's chat call on the Anthropic SDK path.
+
+    The httpx path (`minimax_shared.minimax_chat`) retries a 429 three times at
+    3, 6 and 9 seconds and then gives up: on a Token Plan a 429 is a quota
+    state that needs a minute, not nine seconds. Six stories of the 2026-10-12
+    reinstate wave ended as `failed` exactly there (Lyra log, 12.10.).
+    `minimax_chat_anthropic` waits 60 s per attempt, reports the Token Plan
+    message and raises the adaptive thinking floor, which is what the caller
+    asks for on the contested stories.
+
+    `client` and `model` are the httpx path's arguments and are unused: the SDK
+    path builds its own client from the settings and pins MINIMAX_MODEL. The
+    signature stays because WebVerifier is injected with fakes.
+    """
+    from pipeline.lyra.minimax_shared import minimax_chat_anthropic
+
+    return minimax_chat_anthropic(system, user_message, max_tokens, thinking={"type": "adaptive"})
+
+
 def open_web_verifier(settings: LyraSettings) -> WebVerifier | None:
     """The MiniMax side of the web check, or None without a MiniMax key."""
     try:
         from pipeline.lyra.minimax_shared import (
             MINIMAX_MODEL,
             create_minimax_client,
-            minimax_chat,
             minimax_search,
         )
     except ImportError:
@@ -467,19 +488,25 @@ def open_web_verifier(settings: LyraSettings) -> WebVerifier | None:
         client=create_minimax_client(settings.minimax_base_url, settings.minimax_api_key),
         prompt=WEB_VERIFY_PROMPT_PATH.read_text(encoding="utf-8"),
         model=MINIMAX_MODEL,
-        chat=minimax_chat,
+        chat=plan_aware_web_chat,
         search=minimax_search,
     )
 
 
 def web_verify_item(
     item: NewsItem, verifier: WebVerifier, settings: LyraSettings
-) -> tuple[str, dict[str, Any] | None]:
-    """Web-check one story: ("ok", verdict) or (why not, None).
+) -> tuple[str, dict[str, Any] | None, str | None]:
+    """Web-check one story: ("ok", verdict, None) or (why not, None, why).
 
     "no_results" when the searches found nothing usable - nothing was checked;
-    "failed" when the model call or its answer failed. The search results are
-    saved to item.web_sources either way, before the verdict.
+    "failed" when the model call or its answer failed, with the detail naming
+    which. The search results are saved to item.web_sources either way, before
+    the verdict.
+
+    The detail is what the journal records. Before it existed a failed check
+    wrote `reason: null`, which reads exactly like a check that never ran - the
+    six failed stories of 2026-10-12 could only be explained by reading the
+    container log.
     """
     # Generate specific search queries from facts using LLM
     # (pattern mirrors angle_image_queries.py for consistency)
@@ -507,7 +534,7 @@ def web_verify_item(
                 seen_urls.add(r.url)
 
     if not all_results:
-        return "no_results", None
+        return "no_results", None, "the searches returned nothing"
 
     # Filter blocked domains
     from urllib.parse import urlparse
@@ -518,7 +545,7 @@ def web_verify_item(
         r for r in all_results if urlparse(r.url).netloc.replace("www.", "") not in BLOCKED_DOMAINS
     ]
     if not all_results:
-        return "no_results", None
+        return "no_results", None, "every search result is on the blocked-domains list"
 
     # Save web search sources IMMEDIATELY — don't wait for LLM verdict.
     # Fresh list, NOT the tracked JSONB value — in-place mutation +
@@ -556,7 +583,7 @@ def web_verify_item(
         )
     except Exception as e:
         logger.warning(f"Web verify failed for item {item.id}: {e}")
-        return "failed", None
+        return "failed", None, f"model call failed: {e}"
 
     if not response_text:
         # MiniMax-M3.1-Flash can spend the whole budget reasoning and answer
@@ -565,7 +592,7 @@ def web_verify_item(
         # the re-verify pilot of 2026-10-09 showed it. The short prompt answers;
         # a story it still cannot settle (Baalbek's tonnage) is named here.
         logger.warning(f"Web verify got no answer for item {item.id}: reasoning used the budget")
-        return "failed", None
+        return "failed", None, "no answer: reasoning used the whole token budget"
 
     # Parse JSON — handle markdown fencing
     cleaned = response_text.strip()
@@ -577,12 +604,12 @@ def web_verify_item(
         result = json.loads(cleaned)
     except (json.JSONDecodeError, ValueError):
         logger.warning(f"Failed to parse web verify response for item {item.id}")
-        return "failed", None
+        return "failed", None, f"the answer is not JSON: {cleaned[:120]!r}"
 
     if not isinstance(result, dict):
         logger.warning(f"Web verify returned {type(result).__name__} for item {item.id}, skipping")
-        return "failed", None
-    return "ok", result
+        return "failed", None, f"the answer is {type(result).__name__}, not an object"
+    return "ok", result, None
 
 
 def apply_web_verdict(item: NewsItem, result: dict[str, Any], *, withdraw_on_reject: bool) -> str:
@@ -645,11 +672,14 @@ def _web_verify_items(items: list[NewsItem], settings: LyraSettings) -> int:
     checked = 0
 
     for item in eligible:
-        status, result = web_verify_item(item, verifier, settings)
+        status, result, detail = web_verify_item(item, verifier, settings)
         if status == "no_results":
+            logger.info(f"Web verify skipped item {item.id}: {detail}")
             continue
         if result is not None:
             apply_web_verdict(item, result, withdraw_on_reject=True)
+        elif detail:
+            logger.info(f"Web verify left item {item.id} unchanged: {detail}")
         checked += 1
 
     if checked:
