@@ -130,6 +130,41 @@ def test_article_page_without_a_quality_report_passes_none():
     assert render_mock.call_args[0][0]["quality_report"] is None
 
 
+def test_article_page_serves_the_citation_links_the_reader_can_follow():
+    """Die Route verdrahtet die Anker, nicht nur der Renderer sie kann.
+
+    Ohne den Aufruf in der Route bliebe die indexierte Seite bei reinem Text
+    ("[1]"), weil der Link bisher nur im Browser gebaut wurde - dieser Test
+    fällt dann, statt das erst der Crawler zu zeigen.
+    """
+    render, shell = _patched()
+    content = (
+        "## Gotland\n\n"
+        "The hoard was moved with a sledge [1], the video says [6, 7].\n\n"
+        "The temple itself is older [V2].\n\n"
+        "### Sources\n\n"
+        "1. [A sledge at Gotland](https://a.example/sledge)\n"
+        "2. [Not cited](https://a.example/uncited)\n"
+    )
+    with render as render_mock, shell:
+        asyncio.run(
+            article_page("week-31-hoards-harbours", db=_orm_db([_article(content=content)]))
+        )
+
+    body = render_mock.call_args[0][0]["body_html"]
+    assert (
+        '<a class="article-citation-link" data-citation="1" href="https://a.example/sledge" '
+        'target="_blank" rel="noopener noreferrer">[1]</a>' in body
+    )
+    # Die Video-Zitatnummer zeigt auf die Quellenliste, wo ihre Karte steht.
+    assert '<a class="article-citation-link" data-citation="V2" href="#sources">[V2]</a>' in body
+    # Die Gruppenmarke wird vor dem Markdown gesprengt: beide Nummern verlinkt.
+    assert 'data-citation="6"' in body and 'data-citation="7"' in body
+    assert "[6, 7]" not in body
+    # Die Quellenliste bleibt im HTML, wo ein Crawler sie liest.
+    assert 'href="https://a.example/uncited"' in body
+
+
 def test_unknown_article_is_a_404_without_touching_the_renderer():
     render, shell = _patched()
     with render as render_mock, shell as shell_mock:
