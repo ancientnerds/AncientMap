@@ -24,10 +24,7 @@ import Breadcrumbs from '../components/layout/Breadcrumbs'
 import ThumbsFeedback from '../components/feedback/ThumbsFeedback'
 import CommunityCta from '../components/layout/CommunityCta'
 import PageHeader from '../components/layout/PageHeader'
-import PageStatsBar from '../components/layout/PageStatsBar'
-import type { StatItem } from '../components/layout/PageStatsBar'
 import AiNoticeBanner from '../components/layout/AiNoticeBanner'
-import SeoCardList from '../components/layout/SeoCardList'
 import { useRoute } from '../seo/RouteContext'
 import type { ArticleIndexRoute, ArticleRoute } from '../types/anRoute'
 
@@ -35,6 +32,8 @@ const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
 import type { NewsItemData } from '../types/news'
 import { ArticleScreenshot, formatTimestamp } from '../components/news/ArticleBody'
 import JournalArticle from '../components/news/JournalArticle'
+import JournalHub from '../components/news/JournalHub'
+import JournalQualityReportPanel from '../components/news/JournalQualityReport'
 import { newsItemToCardProps } from '../components/news/NewsCard'
 import '../components/news/news-cards.css'
 import '../styles/story-page.css'
@@ -528,6 +527,9 @@ function ArticleFromPayload({ article }: { article: ArticleRoute }) {
               </div>
             }
           >
+            {article.quality_report && (
+              <JournalQualityReportPanel report={article.quality_report} />
+            )}
             <footer className="articles-reader-footer">
               <ThumbsFeedback
                 prompt="journal_end"
@@ -551,22 +553,21 @@ function ArticleFromPayload({ article }: { article: ArticleRoute }) {
 /** /articles/ rendered from the route payload — the crawlable journal hub. */
 function ArticleIndexFromPayload({ route }: { route: ArticleIndexRoute }) {
   return (
-    <div className="story-page">
+    // articles-page / articles-page-content, nicht story-page / story-main:
+    // .story-main ist die 820-px-Lesespalte einer Story und .story-page erzwingt
+    // height:100vh mit eigenem Scrollbereich. Beides quetschte den Hub (Hero
+    // 900 px, Grid 1100 px) in eine Lesebreite. Der Journal-Hub steht in
+    // denselben Containern wie die Artikel-Seite und wie die alte /articles.html.
+    <div className="articles-page">
       <PageHeader currentPage="articles">
         <span className="page-header-title">Weekly Journal</span>
       </PageHeader>
       <AiNoticeBanner message="Journal text is AI-generated from YouTube video content; images are from the original sources. Always verify with original sources." />
-      <main className="story-main">
+      <main className="articles-page-content">
         <Breadcrumbs trail={[{ name: 'Home', path: '/' }, { name: 'Journal' }]} />
         <h1 className="story-title">Weekly Archaeology Journal</h1>
         <div className="story-meta">{route.articles.length} issues</div>
-        <SeoCardList
-          items={route.articles.map(a => ({
-            href: `/articles/${a.slug}`,
-            title: a.title,
-            summary: a.summary,
-          }))}
-        />
+        <JournalHub cards={route.articles} />
         <CommunityCta />
       </main>
     </div>
@@ -652,8 +653,9 @@ function ArticlesStandalone() {
       setSelectedArticle(match)
       setView('reading')
     } else {
-      setView('listing')
-      setSelectedArticle(null)
+      // No hash, or one that names no issue: the hub lives at /articles/ and
+      // this page does not draw a listing of its own any more (2026-10-13).
+      window.location.replace('/articles/')
     }
   }, [])
 
@@ -762,29 +764,16 @@ function ArticlesStandalone() {
         onAvatarClick={() => setShowLyraProfile(true)}
         currentPage="articles"
       >
-        {view === 'listing' ? (
-          <span className="page-header-title">Weekly Journal</span>
-        ) : (
-          <button className="articles-page-back-btn" onClick={backToListing}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            All Journals
-          </button>
-        )}
+        {/* Diese Seite zeichnet keine Liste mehr: ohne Hash, der zu einer
+            Ausgabe gehört, springt resolveHash sofort nach /articles/. Der
+            Zurück-Knopf ist deshalb ein echter Link auf den kanonischen Hub. */}
+        <a className="articles-page-back-btn" href="/articles/">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          All Journals
+        </a>
       </PageHeader>
-
-      {/* Stats bar — listing view only */}
-      {view === 'listing' && !loading && !error && articles.length > 0 && (
-        <PageStatsBar items={[
-          { value: articles.length, label: 'journals' } as StatItem,
-          { value: formatDateRange(articles[articles.length - 1].week_start, articles[0].week_end), label: '', sep: '·' } as StatItem,
-        ]} />
-      )}
-
-      {view === 'listing' && (
-        <AiNoticeBanner message="Journal text is AI-generated from YouTube video content; images are from the original sources. Always verify with original sources." />
-      )}
 
       {view === 'reading' && (
         <>

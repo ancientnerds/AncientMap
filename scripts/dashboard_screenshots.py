@@ -61,21 +61,12 @@ def hour_buckets(hours: int = 48) -> list[dict]:
 
 
 def map_points() -> list[dict]:
-    """Sessions per country and hour: a dot for every hour of the day, SG has no centroid."""
+    """Sessions per country over the whole history; SG has no centroid."""
     weights = {
-        "DE": 9, "US": 14, "GB": 6, "FR": 4, "PE": 3, "EG": 2, "TR": 5, "IN": 4,
-        "BR": 3, "AU": 2, "MX": 2, "IT": 3, "NL": 2, "CA": 3, "JP": 1, "SG": 1,
+        "US": 312, "DE": 214, "GB": 168, "FR": 77, "IN": 71, "TR": 58, "CA": 49, "BR": 41,
+        "IT": 38, "NL": 26, "AU": 24, "MX": 19, "PE": 12, "EG": 9, "JP": 6, "SG": 3,
     }  # fmt: skip
-    return [
-        {
-            "country": code,
-            "city": None,
-            "hour": hour,
-            "sessions": max(1, w // (1 + (hour * 7 + i) % 4)),
-        }
-        for i, (code, w) in enumerate(weights.items())
-        for hour in range(24)
-    ]
+    return [{"country": code, "sessions": n} for code, n in weights.items()]
 
 
 def rows(event: str, pairs: list[tuple[str, int]]) -> list[dict]:
@@ -151,7 +142,210 @@ def live_rows() -> list[dict]:
     ]
 
 
+def daily_points(days: int = 22) -> dict:
+    """The growth line: a weekly rhythm on a rising trend, so the line has a
+    shape and the week-on-week sentence has two full weeks to compare."""
+    first = datetime(2026, 9, 18, tzinfo=UTC)
+    points = []
+    for i in range(days + 1):
+        visitors = int(90 + 3.5 * i + 18 * math.sin(i / 7 * 2 * math.pi))
+        points.append(
+            {
+                "day": (first + timedelta(days=i)).date().isoformat(),
+                "visitors": visitors,
+                "human": visitors * 2 // 5,
+                "ai": i % 3,
+                "sources": {
+                    "google": visitors * 45 // 100,
+                    "direct": visitors * 25 // 100,
+                    "discord.com": visitors * 8 // 100,
+                    "youtube": visitors * 7 // 100,
+                    "ai": visitors * 5 // 100,
+                    "reddit.com": visitors - visitors * 90 // 100,
+                },
+            }
+        )
+    return {"days": points[:-1], "today": points[-1]}
+
+
+def search_days(days: int = 120) -> list[dict]:
+    """Search Console's daily line: impressions climbing out of a summer
+    trough, clicks at about 1.5 % of them."""
+    first = datetime(2026, 6, 9, tzinfo=UTC)
+    out = []
+    for i in range(days):
+        shown = int(600 + 25 * i + 300 * math.sin(i / 7 * 2 * math.pi))
+        out.append(
+            {
+                "day": (first + timedelta(days=i)).date().isoformat(),
+                "clicks": shown * 3 // 200,
+                "impressions": shown,
+                "position": round(20 - i / 10, 1),
+            }
+        )
+    return out
+
+
+SEARCH = {
+    "days": search_days(),
+    "current": {"start": "2026-09-09", "end": "2026-10-06", "clicks": 1056, "impressions": 76977, "ctr": 0.0137, "position": 8.93},
+    "previous": {"start": "2026-08-12", "end": "2026-09-08", "clicks": 569, "impressions": 38371, "ctr": 0.0148, "position": 21.46},
+    "queries": [
+        {"query": q, "clicks": c, "impressions": i, "position": pos}
+        for q, c, i, pos in (
+            ("ancient nerds", 38, 49, 1.0),
+            ("louis de cordier", 16, 504, 9.2),
+            ("xihuatoxtla", 4, 46, 3.1),
+            ("lathe turned pillars india", 3, 77, 6.0),
+            ("louis de cordier labyrinth", 3, 79, 7.4),
+        )
+    ],
+    "pages": [
+        {"path": p, "clicks": c, "impressions": i, "position": pos}
+        for p, c, i, pos in (
+            ("/", 56, 900, 3.0),
+            ("/news-archive/louis-de-cordiers-path-from-art-and-alternative-history-to-the-hawara-project-7650", 29, 1200, 7.1),
+            ("/research/the-squatter-man-petroglyph-and-auroral-sky-mythology", 19, 640, 6.4),
+            ("/globe.html", 17, 80, 2.0),
+        )
+    ],
+    "pages_shown": {"current": 4640, "previous": 4096},
+}  # fmt: skip
+
+WEEKS = [
+    (datetime(2026, 4, 25, tzinfo=UTC) + timedelta(days=7 * i)).date().isoformat()
+    for i in range(25)
+]
+
+FIELD_VITALS = {
+    "phone": {
+        "weeks": WEEKS,
+        "lcp": [3459 - 30 * i for i in range(25)],
+        "inp": [None if i % 6 == 5 else 635 - 8 * i for i in range(25)],
+        "cls": [0.03 + (i % 3) / 100 for i in range(25)],
+    },
+    "desktop": {
+        "weeks": WEEKS,
+        "lcp": [2968 - 50 * i for i in range(25)],
+        "inp": [None if i % 6 == 5 else 182 - 3 * i for i in range(25)],
+        "cls": [0.06 + (i % 4) / 100 for i in range(25)],
+    },
+}
+
+CRAWLER_BOTS = [
+    ("Googlebot", "google", "search", True, 1204, 980, {"2xx": 1173, "3xx": 12, "4xx": 19}),
+    ("Bingbot", "bing", "search", True, 410, 377, {"2xx": 402, "4xx": 8}),
+    ("GPTBot", "openai", "training", True, 220, 210, {"2xx": 220}),
+    ("ClaudeBot", "anthropic", "training", None, 160, 151, {"2xx": 158, "4xx": 2}),
+    ("OAI-SearchBot", "openai", "ai_search", True, 41, 39, {"2xx": 41}),
+    ("ChatGPT-User", "openai", "ai_user", True, 12, 9, {"2xx": 12}),
+    ("Perplexity-User", "perplexity", "ai_user", True, 3, 3, {"2xx": 3}),
+]
+
+CRAWLERS = {
+    "report": {
+        "covered_from": "2026-10-09T21:40:00+02:00",
+        "bots": [
+            {
+                "bot": b,
+                "operator": o,
+                "kind": k,
+                "verified": v,
+                "requests": n,
+                "pages": pg,
+                "statuses": st,
+            }
+            for b, o, k, v, n, pg, st in CRAWLER_BOTS
+        ],
+        "days": [],
+        "ai_user_pages": [
+            {
+                "path": "/sites/egypt/great-pyramid-of-giza-1a2b3c4d",
+                "bot": "ChatGPT-User",
+                "requests": 4,
+            },
+            {"path": "/sites/turkiye/gobekli-tepe-5e6f7a8b", "bot": "ChatGPT-User", "requests": 3},
+            {
+                "path": "/research/the-bosnian-pyramid-project",
+                "bot": "Perplexity-User",
+                "requests": 2,
+            },
+        ],
+        "impostors": [{"bot": "Googlebot", "requests": 37}],
+    },
+    "log_reason": None,
+}
+
+
+def server_days(days: int = 10) -> list[dict]:
+    """The host's days: idle with a deploy-day peak, as measured 2026-10-01..09."""
+    first = datetime(2026, 9, 30, tzinfo=UTC)
+    return [
+        {
+            "day": (first + timedelta(days=i)).date().isoformat(),
+            "cpu_avg": 3.0 + (i % 3) / 2,
+            "cpu_peak": 14.0 + (i * 7) % 23,
+            "load_peak": 1.2 + (i % 4) / 3,
+            "mem_peak": 33.0 + i % 4,
+            "disk_used": None if i < 9 else 59.1,
+            "visitors": 110 + 8 * i,
+        }
+        for i in range(days)
+    ]
+
+
+SERVER = {
+    "report": {
+        "now": {"t": "2026-10-09T21:55:00+00:00", "cpu": 3.1, "load5": 0.3, "mem_used": 34.4, "mem_total_mb": 11960, "cores": 6, "disk_used": 59.1, "disk_free_gb": 79.8},
+        "days": server_days(),
+        "levels": {"disk": "ok", "memory": "ok", "cpu": "ok"},
+        "silent": False,
+        "limits": {"disk": [80.0, 90.0], "memory": [85.0, 95.0], "cpu": [80.0, 95.0]},
+    },
+    "log_reason": None,
+}  # fmt: skip
+
 FIXTURES: dict[str, dict] = {
+    "daily": daily_points(),
+    "server": SERVER,
+    "creators": {
+        "totals": {"starts": 89, "viewers": 86, "clicks": 2, "channels": 25, "videos": 70},
+        "channels": [
+            {"channel": c, "starts": n, "viewers": n, "clicks": k}
+            for c, n, k in (
+                ("Universe Inside You", 13, 0),
+                ("DeDunking", 7, 0),
+                ("Michael Button", 7, 0),
+                ("Ancient Architects", 5, 1),
+                ("Anyextee", 5, 0),
+                ("MegalithomaniaUK", 5, 0),
+                ("not attributed", 0, 1),
+            )
+        ],
+        "videos": [
+            {"id": f"abcdefghij{i}", "title": t, "channel": c, "starts": n}
+            for i, (t, c, n) in enumerate(
+                (
+                    ("All Great Pyramid Construction Theories Explained", "Universe Inside You", 4),
+                    ("We Might Be Completely Wrong About the Great Pyramid", "Michael Button", 4),
+                    ("Egypt's Lost Labyrinth: New Evidence Beneath Hawara (2026)", "Anyextee", 4),
+                    ("The Olmec Golden Age", "Ancient Americas", 3),
+                )
+            )
+        ],
+        "days": [
+            {
+                "day": (datetime(2026, 9, 18, tzinfo=UTC) + timedelta(days=i)).date().isoformat(),
+                "starts": 2 + i % 6,
+                "clicks": 1 if i > 20 else 0,
+            }
+            for i in range(22)
+        ],
+        "clicks_since": "2026-10-09T06:42:00+00:00",
+    },
+    "search": SEARCH,
+    "field-vitals": FIELD_VITALS,
+    "crawlers": CRAWLERS,
     "countries": {
         "now": {
             "sessions": 3,
@@ -467,6 +661,9 @@ FIXTURES: dict[str, dict] = {
             # (referral_log.UNKNOWN_HOST_MIN); 17 of them live on 2026-09-19.
             "unverified": 204,
             "prefetched": 1310,
+            # Arrivals over HTTP/1.x, which no current browser speaks
+            # (referral_log.HTTP1_PREFIX): 256 of 440 on 2026-10-09.
+            "scripted": 2410,
             "families": [
                 {"family": "search", "visits": 2914, "bots": 411},
                 {"family": "social", "visits": 388, "bots": 44},
@@ -535,6 +732,36 @@ for _i, _row in enumerate(FIXTURES["problems"]["problems"]):
 #: minutes, no clusters at all as soon as the scrapers leave, no referral log
 #: on any development box, and a members panel whose every act reads zero.
 EMPTY_FIXTURES: dict[str, dict] = {
+    # The first morning after a deploy on a fresh tracker: no finished day yet.
+    "daily": {"days": [], "today": {"day": "2026-09-18", "visitors": 0, "human": 0, "ai": 0}},
+    "search": {
+        "days": [],
+        "current": None,
+        "previous": None,
+        "queries": [],
+        "pages": [],
+        "pages_shown": None,
+    },
+    "field-vitals": {
+        ff: {"weeks": WEEKS[-1:], "lcp": [None], "inp": [None], "cls": [None]}
+        for ff in ("phone", "desktop")
+    },
+    "creators": {
+        "totals": {"starts": 0, "viewers": 0, "clicks": 0, "channels": 0, "videos": 0},
+        "channels": [],
+        "videos": [],
+        "days": [],
+        "clicks_since": "2026-10-09T06:42:00+00:00",
+    },
+    "server": {
+        "report": None,
+        "log_reason": "The server load log is not readable at /app/logs/server_load.jsonl.",
+    },
+    # A development box: no crawler log at all, which the panel names.
+    "crawlers": {
+        "report": None,
+        "log_reason": "nginx's crawler log is not readable at /app/logs/crawlers.log.",
+    },
     "countries": {
         w: {"sessions": 0, "all": 0, "countries": []} for w in ("now", "today", "d7", "d30")
     },
@@ -569,6 +796,7 @@ EMPTY_FIXTURES: dict[str, dict] = {
             "lines": 0,
             "unverified": 0,
             "prefetched": 0,
+            "scripted": 0,
             "families": [],
             "hosts": [],
             "statuses": [],

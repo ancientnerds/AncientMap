@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { pageType } from '../../analytics'
 import { fmtStamp } from './format'
-import { Panel, Status } from './Panel'
+import { Explain, Panel, Status } from './Panel'
 import type { FeedbackData, FeedbackItem } from './types'
 import type { Loaded } from './useStats'
 
@@ -127,6 +127,13 @@ export function FeedbackInbox({ state }: { state: Loaded<FeedbackData> }) {
           })}
         </ul>
       )}
+      <Explain>
+        <p className="dash-note">
+          Every answer to the site's feedback prompts in the last 30 days, newest first; a vote and the
+          comment sent with it within five minutes are one row. Criticism is a thumbs down or any written
+          comment, and the list opens on it.
+        </p>
+      </Explain>
     </Panel>
   )
 }

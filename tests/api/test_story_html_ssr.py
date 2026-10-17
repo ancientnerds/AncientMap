@@ -291,13 +291,12 @@ def test_rejected_story_keeps_no_page(monkeypatch):
     conditions = q.filter.call_args[0]
     assert len(conditions) == 2, "post_text UND significance müssen gefiltert werden"
     # literal_binds, sonst rendert der Schwellwert als :significance_1 und die
-    # Zusicherung überlebt jede Mutation: >= 1 statt >= 2, AND statt OR (der
-    # Filter wäre unerfüllbar → JEDE Story 410) oder ein weggefallener
-    # IS-NULL-Zweig (→ 410 für alles noch nicht Bewertete).
+    # Zusicherung überlebt jede Mutation (>= 1 statt >= 2). Seit 2026-10-09 ohne
+    # IS-NULL-Zweig: eine noch nicht bewertete Story hat noch keine Seite.
     compiled = [str(c.compile(compile_kwargs={"literal_binds": True})) for c in conditions]
     assert compiled == [
         "news_items.post_text IS NOT NULL",
-        "news_items.significance IS NULL OR news_items.significance >= 2",
+        "news_items.significance >= 2",
     ]
 
 
@@ -310,7 +309,10 @@ def test_withdrawn_story_is_410_not_404():
     db = _orm_db()
     # 1. Aufruf: die gefilterte Story-Query findet nichts. 2. Aufruf: die
     # Existenzprüfung findet die Zeile trotzdem.
-    db.query.return_value.first.side_effect = [None, (8270,)]
+    db.query.return_value.first.side_effect = [
+        None,
+        SimpleNamespace(post_text="A tapestry.", significance=1),
+    ]
 
     render, shell = _patched()
     with render as render_mock, shell as shell_mock:
@@ -328,13 +330,35 @@ def test_withdrawn_story_is_410_not_404():
     shell_mock.assert_not_called()
 
 
+def test_a_story_the_scorer_has_not_reached_is_404_not_410():
+    """Since 2026-10-09 a story is public from the scorer's verdict on. Before it
+    the URL is not published yet: a 404 with a short cache, never the 410 that
+    tells Google to drop the URL for good."""
+    db = _orm_db()
+    db.query.return_value.first.side_effect = [
+        None,
+        SimpleNamespace(post_text="A fresh story.", significance=None),
+    ]
+
+    render, shell = _patched()
+    with render as render_mock, shell:
+        resp = asyncio.run(story_page("fresh-story-9001", db=db))
+
+    assert resp.status_code == 404
+    assert b"withdrawn" not in resp.body
+    render_mock.assert_not_called()
+
+
 def test_withdrawn_story_page_offers_a_way_out():
     """Wer aus einer Suche auf einer zurückgezogenen Story landet (2026-10-01:
     12 % aller Story-Aufrufe, 24 % der Google-Klicks auf Story-Seiten), findet
     die Archivsuche, die neuesten Stories und den Globus — der Status bleibt 410."""
     newest = _item(id=4600, headline="Trundholm bog survey planned")
     db = _orm_db(rows=[newest])
-    db.query.return_value.first.side_effect = [None, (8270,)]
+    db.query.return_value.first.side_effect = [
+        None,
+        SimpleNamespace(post_text="A tapestry.", significance=1),
+    ]
 
     render, shell = _patched()
     with render, shell:

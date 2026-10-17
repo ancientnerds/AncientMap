@@ -254,6 +254,41 @@ def _heading_anchors(html: str) -> str:
     return _HEADING_RE.sub(anchor, html)
 
 
+_MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\((\S+?)\)")
+#: A headline word must be LONGER than this to count ("the", "week" must not
+#: match every alt text). Same bound the SPA listing used: w.length > 4.
+_TITLE_WORD_MIN_LEN = 4
+
+
+def journal_thumbnail(content_md: str, title: str) -> str | None:
+    """
+    The picture that stands for one journal issue on /articles/.
+
+    Journals have no thumbnail column: the pipeline writes the screenshots
+    into the body markdown. Same rule the SPA listing used to apply in the
+    browser (firstImageUrl) — the first image whose alt text shares a word
+    with the headline, else the first image at all — so the hub shows the
+    journal's own lead picture instead of whatever came first in the text.
+    """
+    title_words = [w for w in title.lower().split() if len(w) > _TITLE_WORD_MIN_LEN]
+    first: str | None = None
+    best: str | None = None
+    best_score = 0
+    for alt, url in _MD_IMAGE_RE.findall(content_md or ""):
+        if first is None:
+            first = url
+        alt = alt.lower()
+        score = sum(1 for word in title_words if word in alt)
+        if score > best_score:
+            best, best_score = url, score
+    return best or first
+
+
+def reading_minutes(content_md: str) -> int:
+    """Minutes for a journal, at the 200-words-a-minute rate the SPA used."""
+    return max(1, -(-len((content_md or "").split()) // 200))
+
+
 def markdown_to_html(content_md: str, *, toc: bool = True) -> str:
     """
     Markdown -> sanitized HTML with external links opened in a new tab.

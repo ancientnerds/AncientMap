@@ -54,10 +54,10 @@ describe('storyHrefFor', () => {
     expect(storyHrefFor(item())).toContain('-8270')
   })
 
-  it('links a story the scorer has not reached yet', () => {
-    // significance === null heißt "noch nicht bewertet", nicht "verworfen" —
-    // story_page_query lässt diese Zeilen ebenfalls durch.
-    expect(storyHrefFor(item({ significance: null }))).toContain('-8270')
+  it('does not link a story the scorer has not reached yet', () => {
+    // Since 2026-10-09 a story has a page from the scorer's verdict on
+    // (pipeline/news_visibility.py); before it, its URL answers 404.
+    expect(storyHrefFor(item({ significance: null }))).toBeNull()
   })
 
   it('refuses a story without a body', () => {

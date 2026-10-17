@@ -379,11 +379,12 @@ export default memo(NewsCard)
  * journal citation route (/api/news/articles/{id}/citations) resolves items
  * by video id alone, so a rejected story can still reach a card. Since
  * 2026-09-11 its page answers 410, and a card must not link there.
- * significance === null means "not scored yet", not "rejected".
+ * An unscored story (significance === null) has no page yet either: since
+ * 2026-10-09 a story is public from the scorer's verdict on (news_visibility.py).
  */
 export function storyHrefFor(item: NewsItemData): string | null {
   if (!item.post_text) return null
-  if (item.significance !== null && item.significance < 2) return null
+  if (item.significance === null || item.significance < 2) return null
   return storyPath(item.headline, item.id)
 }
 

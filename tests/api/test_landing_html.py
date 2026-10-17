@@ -73,6 +73,7 @@ def test_apply_stats_raises_when_the_shell_lost_a_marker():
 def _landing_data():
     return {
         "paper_total": 24,
+        "latest_papers": [{"slug": "osiris-shaft", "title": "Water in the Osiris Shaft"}],
         "journal_total": 23,
         "news_stats": {"total_items": 3189, "total_articles": 23},
     }
@@ -129,11 +130,12 @@ def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
     # itself, so no row of either ships any more.
     assert set(route) == {"type", "stats", "journals", "papers"}
     assert route["journals"] == {"total": 23}
-    # Papers is a count and the agent line, nothing else: the cards live on
-    # /research/ and the homepage shows them through its portal.
+    # Papers is a count, the agent line and the newest titles as links: the cards
+    # live on /research/, the titles give Google a path to a new paper.
     assert route["papers"] == {
         "total": 24,
         "theo": {"question": "Osiris", "started_at": "2026-09-09T06:00:00", "sites_found": 12},
+        "latest": [{"slug": "osiris-shaft", "title": "Water in the Osiris Shaft"}],
     }
 
 

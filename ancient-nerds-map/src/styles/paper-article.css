@@ -96,8 +96,12 @@
   width: 100%;
   margin: 0 0 24px;
 }
+/* A fixed ratio reserves the box before the image arrives: without it the
+   paper text jumped down on load, CLS 0.26 on phones (SEO audit 2026-10-08).
+   object-fit: cover crops to the ratio as it already cropped to max-height. */
 .theo-paper-hero-img {
   width: 100%;
+  aspect-ratio: 16 / 9;
   max-height: 420px;
   object-fit: cover;
   display: block;

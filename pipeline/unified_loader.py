@@ -62,8 +62,8 @@ SOURCE_CONFIG = {
         "category": "Primary",
         "file_pattern": "ancient_nerds_original.geojson",
         "format": "geojson_ancient_nerds",
-        "license": "CC BY-SA 4.0",
-        "attribution": "Ancient Nerds Research Team",
+        "license": "CC BY 4.0",
+        "attribution": "Ancient Nerds (ancientnerds.com)",
         "is_primary": True,
         "enabled_by_default": True,
         "priority": 0,  # Highest priority

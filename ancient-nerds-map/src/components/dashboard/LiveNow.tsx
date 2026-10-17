@@ -81,6 +81,8 @@ export function LiveNow({ state }: { state: Loaded<LiveData> }) {
               ))}
             </ul>
           )}
+          {/* The warning stays in the open with the count: closed, it would be
+              read after the screenshot, not before. */}
           <p className="dash-note">
             {fmtInt(l.total)} in the last {l.window_minutes} minutes, {fmtInt(l.shown)} shown. Do not
             screenshot this panel into a public channel.

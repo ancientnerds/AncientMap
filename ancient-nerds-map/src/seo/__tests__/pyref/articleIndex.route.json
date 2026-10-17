@@ -4,12 +4,20 @@
     {
       "slug": "week-31-hoards-and-harbours",
       "title": "Week 31: Hoards & Harbours",
-      "summary": "A Viking silver hoard on Gotland and a submerged Bronze Age harbour off Crete."
+      "summary": "A Viking silver hoard on Gotland and a submerged Bronze Age harbour off Crete.",
+      "thumbnail_url": "/data/news/screenshots/hoard01_120.webp",
+      "week_start": "2026-07-27",
+      "week_end": "2026-08-02",
+      "reading_minutes": 9
     },
     {
       "slug": "week-30-mummies-and-mosaics",
       "title": "Week 30: Mummies & Mosaics",
-      "summary": "New Saqqara burials and a four-season mosaic under an Antakya hotel."
+      "summary": "New Saqqara burials and a four-season mosaic under an Antakya hotel.",
+      "thumbnail_url": "/data/news/screenshots/mosaic02_88.webp",
+      "week_start": "2026-07-20",
+      "week_end": "2026-07-26",
+      "reading_minutes": 7
     }
   ]
 }

@@ -106,7 +106,6 @@ button {
   color: var(--dash-green);
 }
 
-.dash-range,
 .dash-nav {
   display: flex;
   gap: 8px;
@@ -116,9 +115,7 @@ button {
   margin-left: auto;
 }
 
-.dash-range button,
-.dash-nav a,
-.dash-toggle {
+.dash-nav a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -136,21 +133,59 @@ button {
   white-space: nowrap;
 }
 
-.dash-range button:hover,
-.dash-range button:focus-visible,
 .dash-nav a:hover,
-.dash-nav a:focus-visible,
-.dash-toggle:hover,
-.dash-toggle:focus-visible,
-.dash-range button[aria-pressed='true'],
-.dash-toggle[aria-pressed='true'] {
+.dash-nav a:focus-visible {
   /* The bright red, not --dash-red: black on #bb0a0a is 3.16:1 and fails
-     WCAG AA, and this is the state that says which range every number on the
-     page belongs to — and the keyboard focus ring. Black on #ff2a2a is 5.6:1
+     WCAG AA, and this is the keyboard focus ring. Black on #ff2a2a is 5.6:1
      and keeps the palette black/red. */
   background: var(--dash-red-bright);
   color: #000;
   outline: none;
+}
+
+/* ── Jump bar: one link per panel, kept in view while scrolling ──── */
+
+.dash-jumps {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 8px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--dash-ink);
+  border-bottom: 1px solid var(--dash-line-soft);
+}
+
+.dash-jumps::-webkit-scrollbar {
+  display: none;
+}
+
+.dash-jumps a {
+  flex: none;
+  padding: 6px 10px;
+  border: 1px solid var(--dash-line-soft);
+  border-radius: 3px;
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dash-green);
+  text-decoration: none;
+}
+
+.dash-jumps a:hover,
+.dash-jumps a:focus-visible {
+  border-color: var(--dash-green);
+  color: var(--dash-paper);
+  outline: none;
+}
+
+/* A jump lands the panel's title below the sticky bar, not under it. */
+.dash-panel {
+  scroll-margin-top: 56px;
 }
 
 /* ── Grid and panels ────────────────────────────────────────────────── */
@@ -371,6 +406,367 @@ button {
   color: var(--dash-muted);
 }
 
+/* The growth line: every visitor in the strip's pale green, the confirmed
+   humans in the panel's green, the same two strengths as the hourly strip.
+   The viewBox is stretched to the panel, so the strokes keep their width with
+   non-scaling-stroke; a transparent column per day carries the tooltip. */
+.dash-line {
+  display: block;
+  width: 100%;
+  height: 140px;
+  margin-top: 14px;
+  border-bottom: 1px solid var(--dash-line-soft);
+}
+
+.dash-line polyline {
+  fill: none;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dash-line-all {
+  stroke: var(--dash-dot-low);
+  stroke-width: 1.5;
+}
+
+.dash-line-human {
+  stroke: var(--dash-green);
+  stroke-width: 2.5;
+}
+
+.dash-line-hit {
+  fill: transparent;
+}
+
+.dash-line-hit:hover {
+  fill: var(--dash-line-soft);
+}
+
+/* A chart with axes: tick labels as HTML columns beside the picture (text in
+   a stretched viewBox would stretch), gridlines and bars inside it. */
+.dash-chart {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  /* One row of exactly the chart's height: without it the row sizes to its
+     content and the svg takes its height from the viewBox's aspect ratio -
+     a 21-day chart drew 4,700 px tall over the panels below. */
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0 8px;
+  height: 200px;
+  margin-top: 14px;
+}
+
+.dash-chart--small {
+  height: 120px;
+}
+
+.dash-chart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: visible;
+}
+
+.dash-chart-ticks {
+  position: relative;
+  min-width: 2.6em;
+  font-family: var(--dash-mono);
+  font-size: 0.6rem;
+  color: var(--dash-muted);
+}
+
+.dash-chart-ticks span {
+  position: absolute;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.dash-chart-ticks--left span {
+  right: 0;
+}
+
+.dash-chart-ticks--right span {
+  left: 0;
+}
+
+.dash-chart-grid {
+  stroke: var(--dash-line-soft);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.dash-chart polyline {
+  fill: none;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+/* The axis row lines up with the picture, not with the tick columns. */
+.dash-chart-axis {
+  padding: 0 3.4em;
+}
+
+/* Bars: the confirmed humans bright on the baseline, the rest pale above. */
+.dash-bar-human {
+  fill: var(--dash-green);
+}
+
+.dash-bar-rest {
+  fill: var(--dash-dot-low);
+  opacity: 0.55;
+}
+
+.dash-bar-paper {
+  fill: var(--dash-paper);
+}
+
+.dash-bar-amber {
+  fill: var(--dash-amber);
+}
+
+.dash-bar-red {
+  fill: var(--dash-red-bright);
+}
+
+.dash-bar-muted {
+  fill: var(--dash-muted);
+  opacity: 0.6;
+}
+
+.dash-bar-red-key::before {
+  border-top: 8px solid var(--dash-red-bright);
+}
+
+.dash-bar-muted-key::before {
+  border-top: 8px solid var(--dash-muted);
+}
+
+.dash-bar-paper-key::before {
+  border-top: 8px solid var(--dash-paper);
+}
+
+.dash-bar-amber-key::before {
+  border-top: 8px solid var(--dash-amber);
+}
+
+.dash-bar-human-key::before {
+  border-top: 8px solid var(--dash-green);
+}
+
+.dash-bar-rest-key::before {
+  border-top: 8px solid var(--dash-dot-low);
+}
+
+/* A trend over bars or over a thin daily line: thick paper, or the measure's
+   own colour when two measures share the chart. */
+.dash-line-trend {
+  stroke: var(--dash-paper);
+  stroke-width: 3;
+}
+
+.dash-line-trend-key::before {
+  border-top: 3px solid var(--dash-paper);
+}
+
+.dash-line-all-thin {
+  stroke: var(--dash-dot-low);
+  stroke-width: 1;
+  opacity: 0.6;
+}
+
+.dash-line-human-thin {
+  stroke: var(--dash-green);
+  stroke-width: 1;
+  opacity: 0.45;
+}
+
+.dash-line-all-bold {
+  stroke: var(--dash-paper);
+  stroke-width: 3;
+}
+
+.dash-line-all-bold-key::before {
+  border-top: 3px solid var(--dash-paper);
+}
+
+.dash-line-human-bold {
+  stroke: var(--dash-green);
+  stroke-width: 3;
+}
+
+.dash-line-human-bold-key::before {
+  border-top: 3px solid var(--dash-green);
+}
+
+.dash-line-dot {
+  stroke: var(--dash-amber);
+  stroke-width: 2;
+  stroke-dasharray: 1 4;
+  stroke-linecap: round;
+}
+
+.dash-line-dot-key::before {
+  border-top: 2px dotted var(--dash-amber);
+}
+
+/* Two stacked day lines in the search panel and one sparkline per vital. */
+.dash-line--small {
+  height: 72px;
+}
+
+.dash-vital .dash-line--small {
+  height: 36px;
+  margin-top: 6px;
+}
+
+/* Which line is which, beside the chart rather than behind the panel's click:
+   a swatch of each line's own stroke before its name. */
+.dash-line-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  color: var(--dash-muted);
+}
+
+.dash-line-legend li::before {
+  content: '';
+  display: inline-block;
+  width: 16px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.dash-line-all-key::before {
+  border-top: 2px solid var(--dash-dot-low);
+}
+
+.dash-line-human-key::before {
+  border-top: 3px solid var(--dash-green);
+}
+
+/* A third line where a chart needs one (the server's disk): paper, dashed. */
+.dash-line-ink {
+  stroke: var(--dash-paper);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.dash-line-ink-key::before {
+  border-top: 2px dashed var(--dash-paper);
+}
+
+/* Field vitals: name, the newest p75 in Google's band colour, the band, and
+   half a year of weeks under it. */
+.dash-vitals {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dash-vital {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 10px;
+  align-items: baseline;
+}
+
+.dash-vital .dash-line,
+.dash-vital-band {
+  grid-column: 1 / -1;
+}
+
+.dash-vital-name {
+  font-size: 0.85rem;
+  color: var(--dash-paper);
+}
+
+.dash-vital-value {
+  font-family: var(--dash-mono);
+  font-size: 1rem;
+}
+
+.dash-vital-band {
+  font-family: var(--dash-mono);
+  font-size: 0.65rem;
+  color: var(--dash-muted);
+}
+
+.dash-vital--good {
+  color: var(--dash-green);
+}
+
+.dash-vital--ni {
+  color: var(--dash-amber);
+}
+
+.dash-vital--poor {
+  color: var(--dash-red-bright);
+}
+
+.dash-trend {
+  margin-top: 12px;
+  font-family: var(--dash-mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  color: var(--dash-paper);
+}
+
+/* The reading ladder: a column per scroll mark, the count over a bar whose
+   width is the share of the row's first mark - the drop-off reads left to right. */
+.dash-ladder {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--dash-mono);
+  font-size: 0.75rem;
+}
+
+.dash-ladder th {
+  padding: 4px 6px 6px 0;
+  font-weight: 400;
+  text-align: left;
+  color: var(--dash-muted);
+  letter-spacing: 0.04em;
+}
+
+.dash-ladder tbody th {
+  color: var(--dash-paper);
+  font-family: var(--dash-text);
+  font-size: 0.85rem;
+}
+
+.dash-ladder td {
+  padding: 6px 6px 6px 0;
+  vertical-align: bottom;
+}
+
+.dash-ladder-count {
+  display: block;
+  color: var(--dash-paper);
+}
+
+.dash-ladder-bar {
+  display: block;
+  height: 4px;
+  margin-top: 3px;
+  background: var(--dash-line-soft);
+}
+
+.dash-ladder-bar span {
+  display: block;
+  height: 100%;
+  background: var(--dash-green);
+}
+
 /* ── Bar lists ──────────────────────────────────────────────────────── */
 
 .dash-bars {
@@ -391,6 +787,21 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.9rem;
+}
+
+/* A long title (a creator's video) breaks between words: on a phone the
+   ellipsis cut the part that tells two videos apart. */
+.dash-bar-label--wrap {
+  white-space: normal;
+}
+
+/* A URL path has no spaces to break at, and the end of it is the part that
+   names the page: it wraps anywhere instead of being cut to an ellipsis. */
+.dash-bar-label--path {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  font-family: var(--dash-mono);
+  font-size: 0.75rem;
 }
 
 .dash-bar-value {
@@ -461,34 +872,6 @@ button {
 
 .dash-map-dot:hover {
   fill-opacity: 1;
-}
-
-.dash-map-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.dash-map-controls input[type='range'] {
-  flex: 1;
-  min-width: 0;
-  height: 44px;
-  accent-color: var(--dash-red-bright);
-  cursor: pointer;
-}
-
-.dash-map-controls input[type='range']:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.dash-map-hour {
-  font-family: var(--dash-mono);
-  font-size: 0.8rem;
-  letter-spacing: 0.04em;
-  min-width: 9ch;
-  text-align: center;
 }
 
 /* ── Feedback inbox ─────────────────────────────────────────────────── */
@@ -796,32 +1179,50 @@ button {
   }
 }
 
-/* ── How this is counted ───────────────────────────────────────────── */
+/* ── Explanations: closed until the panel is clicked ─────────────── */
+
+/* Owner, 2026-10-09: the numbers show, the texts that explain them open with
+   a click on the panel. The whole panel is the target, so it says so with the
+   cursor; the title is a button for the keyboard and carries the + / − mark. */
+.dash-panel {
+  cursor: pointer;
+}
+
+.dash-explain-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dash-explain-toggle::after {
+  content: '+';
+  margin-left: 10px;
+  color: var(--dash-muted);
+}
+
+.dash-explain-toggle[aria-expanded='true']::after {
+  content: '−';
+  color: var(--dash-green);
+}
+
+.dash-explain-toggle:focus-visible {
+  outline: 1px solid var(--dash-green);
+  outline-offset: 3px;
+}
 
 .dash-how {
   margin-top: 10px;
 }
 
-.dash-how summary {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  font-family: var(--dash-mono);
-  font-size: 0.65rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--dash-muted);
-  cursor: pointer;
-}
-
-.dash-how summary:hover,
-.dash-how summary:focus-visible {
+.dash-how b {
   color: var(--dash-green);
-  outline: none;
-}
-
-.dash-how[open] summary {
-  color: var(--dash-green);
+  font-weight: 500;
 }
 
 /* ── What needs attention ───────────────────────────────────────────── */
@@ -864,14 +1265,13 @@ button {
   color: var(--dash-green);
 }
 
-/* ── Header on a phone: the mark on its own row, then range and links ─ */
+/* ── Header on a phone: the mark on its own row, then the links ────── */
 
 @media (max-width: 719px) {
   .dash-mark {
     flex-basis: 100%;
   }
 
-  .dash-range button,
   .dash-nav a {
     padding: 0 10px;
     font-size: 0.7rem;
@@ -879,9 +1279,7 @@ button {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .dash-range button,
   .dash-nav a,
-  .dash-toggle,
   .dash-btn,
   .dash-bar-fill {
     transition: background 0.15s, color 0.15s, width 0.3s;

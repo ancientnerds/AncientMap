@@ -10,6 +10,7 @@ import {
   pageScrollBox,
   TRACKING_OFF_KEY,
   vitalProps,
+  youtubeVideoId,
 } from '../boot'
 import { _queuedForTests, _resetForTests, cleanProps, MAX_VALUE_CHARS, pageType, searchTerm, track } from '../index'
 
@@ -166,6 +167,34 @@ describe('linkClick', () => {
     })
     expect(linkClick('/goto/discord', false, 'ancientnerds.com')).toEqual({ name: 'discord_click', src: 'unknown' })
     expect(linkClick('/sites/peru', false, 'ancientnerds.com')).toBeNull()
+  })
+  it("names the YouTube video a click goes to, so the creator's channel gets the credit", () => {
+    expect(linkClick('https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42', false, 'ancientnerds.com')).toEqual({
+      name: 'outbound_click',
+      host: 'youtube.com',
+      media: 'dQw4w9WgXcQ',
+    })
+    expect(linkClick('https://en.wikipedia.org/wiki/Giza', false, 'ancientnerds.com')).toEqual({
+      name: 'outbound_click',
+      host: 'en.wikipedia.org',
+    })
+  })
+})
+
+describe('youtubeVideoId', () => {
+  it('reads the id from every link form YouTube uses', () => {
+    expect(youtubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ')
+    expect(youtubeVideoId('https://m.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ')
+    expect(youtubeVideoId('https://youtu.be/dQw4w9WgXcQ?t=10')).toBe('dQw4w9WgXcQ')
+    expect(youtubeVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ')
+    expect(youtubeVideoId('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ')
+  })
+
+  it('answers null for a channel page, another host or no URL at all', () => {
+    expect(youtubeVideoId('https://www.youtube.com/@AncientArchitects')).toBeNull()
+    expect(youtubeVideoId('https://vimeo.com/123')).toBeNull()
+    expect(youtubeVideoId('/sites/peru')).toBeNull()
+    expect(youtubeVideoId('https://www.youtube.com/watch?v=short')).toBeNull()
   })
 })
 

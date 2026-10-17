@@ -269,6 +269,25 @@ class TestWebVerification:
         assert item.facts == ["Fact one.", "Fact two."]
         assert "over 100 chars" in caplog.text
 
+    def test_an_empty_answer_is_reported_and_changes_nothing(self, monkeypatch, caplog):
+        """M3.1-Flash can reason away the whole budget and answer nothing; the
+        long prompt of 2026-10-08 did so on every story, silently."""
+        from pipeline.lyra import minimax_shared, story_web_queries, tweet_verifier
+
+        hit = SimpleNamespace(url="https://example.org/a", title="t", snippet="s")
+        monkeypatch.setattr(minimax_shared, "create_minimax_client", lambda *a, **kw: object())
+        monkeypatch.setattr(minimax_shared, "minimax_search", lambda *a, **kw: [hit])
+        monkeypatch.setattr(minimax_shared, "minimax_chat", lambda *a, **kw: "")
+        monkeypatch.setattr(story_web_queries, "generate_queries_for_item", lambda *a, **kw: ["q"])
+        item = _item(1, "Headline", post_text="Original post.", significance=7)
+        settings = SimpleNamespace(
+            story_web_verify_min_significance=5, minimax_api_key="k", minimax_base_url="u"
+        )
+        with caplog.at_level(logging.WARNING):
+            tweet_verifier._web_verify_items([item], settings)
+        assert item.post_text == "Original post."
+        assert "got no answer" in caplog.text
+
     def test_a_foreign_script_in_any_part_stops_the_whole_correction(self, monkeypatch, caplog):
         with caplog.at_level(logging.WARNING):
             item = self._run(monkeypatch, "Corrected post.", corrected_facts=[CYRILLIC_FACT])

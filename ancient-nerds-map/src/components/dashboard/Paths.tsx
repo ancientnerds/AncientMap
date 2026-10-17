@@ -96,7 +96,7 @@ export function Paths({ state }: { state: Loaded<JourneysData> }) {
           </div>
           <h3>Most walked paths</h3>
           {j.chains.length === 0 ? (
-            <p className="dash-empty">No journeys in this window.</p>
+            <p className="dash-empty">No journeys so far.</p>
           ) : (
             <ol className="dash-journeys">
               {j.chains.map(c => (
@@ -119,7 +119,7 @@ export function Paths({ state }: { state: Loaded<JourneysData> }) {
             </ol>
           )}
           <h3>Links out of the site</h3>
-          <BarList items={j.outbound.slice(0, OUTBOUND_ROWS).map(outboundItem)} empty="No outbound click in this window." />
+          <BarList items={j.outbound.slice(0, OUTBOUND_ROWS).map(outboundItem)} empty="No outbound click so far." />
           {outboundRest(j.outbound) && <p className="dash-note">{outboundRest(j.outbound)}</p>}
           <p className="dash-note">
             Of {fmtInt(j.pages.sessions)} human sessions, {fmtInt(j.pages.one_page)} loaded exactly one page

@@ -59,8 +59,8 @@ describe('TopContent item', () => {
 describe('TopContent note', () => {
   it('names only the lists that are actually empty', () => {
     const note = emptyNote(['Stories', 'Papers'])
-    expect(note).toContain('Stories: nobody opened a story from a list in this window')
-    expect(note).toContain('Papers: nobody opened a paper from a list in this window')
+    expect(note).toContain('Stories: nobody opened a story from a list so far')
+    expect(note).toContain('Papers: nobody opened a paper from a list so far')
     expect(note).not.toContain('Search terms')
   })
 
@@ -68,12 +68,14 @@ describe('TopContent note', () => {
     // The sentence used to be a constant: "story_open, paper_open and search
     // have never fired, not once" rendered directly under the ranked lists of
     // those very events — the state the repo's own screenshot fixture draws.
+    // "Only what the site actually reports is listed." explains the lists and
+    // moved into the panel's closed texts, so a note on full lists is empty.
     const note = emptyNote([])
-    expect(note).toBe('Only what the site actually reports is listed.')
+    expect(note).toBe('')
     expect(note).not.toContain('never fired')
   })
 
   it('calls an empty search list a quiet window', () => {
-    expect(emptyNote(['Search terms'])).toContain('Search terms: nobody searched in this window')
+    expect(emptyNote(['Search terms'])).toContain('Search terms: nobody searched so far')
   })
 })

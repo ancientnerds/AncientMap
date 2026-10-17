@@ -37,7 +37,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from pipeline.database import NewsArticle, NewsItem, get_session
@@ -163,9 +163,16 @@ def recent_public_paths(session: Session, since: datetime) -> list[str]:
     """What became public or changed since ``since``, by the sitemap's rules:
     public_story_criteria for stories, is_public + slug for papers, every
     journal, shown curated sites with a country (journaled writes included)."""
+    # A story is public from the scorer's verdict on (news_visibility), which
+    # follows its creation by minutes - but by more than WINDOW for 7 of 315
+    # stories in the 30 days to 2026-10-09. verified_at (the verify step, right
+    # before rescore) catches those late ones.
     stories = (
         session.query(NewsItem.id, NewsItem.headline)
-        .filter(*public_story_criteria(), NewsItem.created_at >= since)
+        .filter(
+            *public_story_criteria(),
+            or_(NewsItem.created_at >= since, NewsItem.verified_at >= since),
+        )
         .all()
     )
     papers = session.execute(

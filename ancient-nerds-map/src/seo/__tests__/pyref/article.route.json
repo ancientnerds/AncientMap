@@ -1,9 +1,21 @@
 {
   "type": "article",
   "slug": "week-31-hoards-and-harbours",
+  "id": 31,
   "title": "Week 31: Hoards & Harbours",
   "summary": "A Viking silver hoard on Gotland and a submerged Bronze Age harbour off Crete.",
   "published_at": "2026-08-03T00:00:00",
   "hero_image_url": null,
+  "quality_report": {
+    "assessment_score": 9,
+    "assessment_iterations": 2,
+    "assessment_dimensions": { "D5_source_quality": true, "D2_citation": false },
+    "fixes_applied": [{ "dimension": "D5", "find": "a blog", "replace": "an excavation report" }],
+    "research_clusters": {
+      "Viking silver hoard on Gotland": { "score": 78, "sources": 9, "elapsed": 214.0, "status": "partial" }
+    },
+    "total_sources": 21,
+    "total_elapsed_seconds": 431
+  },
   "body_html": "<p>body</p>"
 }

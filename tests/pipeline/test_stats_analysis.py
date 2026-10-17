@@ -661,6 +661,66 @@ def test_hourly_sessions_ignores_rows_outside_the_strip():
     assert sum(r["sessions"] for r in out) == 1
 
 
+# ---- daily_visitors -------------------------------------------------------
+
+
+def _on_day(row, days):
+    """The row moved `days` days past T (17 Sep, 12:00 UTC)."""
+    return {**row, "created_at": row["created_at"] + timedelta(days=days)}
+
+
+def test_daily_visitors_draws_every_day_from_the_first_full_one_and_keeps_today_apart():
+    first = fs.TRACKER_FIRST_FULL_DAY
+    rows = [_on_day(ev("a", path="/"), 1), _on_day(ev("b", path="/"), 4)]
+    out = fs.daily_visitors(rows, first + timedelta(days=3))
+    # 18, 19 and 20 Sep are done; the 21st is still running and stands apart.
+    assert [p["day"] for p in out["days"]] == ["2026-09-18", "2026-09-19", "2026-09-20"]
+    assert out["days"][1] == {
+        "day": "2026-09-19",
+        "visitors": 0,
+        "human": 0,
+        "ai": 0,
+        "sources": {},
+    }
+    assert out["days"][0]["visitors"] == 1
+    assert out["today"] == {
+        "day": "2026-09-21",
+        "visitors": 1,
+        "human": 0,
+        "ai": 0,
+        "sources": {"direct": 1},
+    }
+
+
+def test_daily_visitors_leaves_out_the_tracker_s_first_half_day():
+    rows = [ev("early", path="/"), _on_day(ev("a", path="/"), 1)]
+    out = fs.daily_visitors(rows, fs.TRACKER_FIRST_FULL_DAY + timedelta(days=1))
+    assert [p["day"] for p in out["days"]] == ["2026-09-18"]
+    assert sum(p["visitors"] for p in out["days"]) + out["today"]["visitors"] == 1
+
+
+def test_daily_visitors_counts_a_returning_id_on_each_day_and_judges_each_day_alone():
+    # Umami's session id lives for the month: the same browser on two days.
+    rows = [
+        _on_day(ev("same", path="/news-archive/x-1"), 1),
+        _on_day(ev("same", path="/news-archive/y-2", minute=1), 1),
+        _on_day(ev("same", path="/news-archive/x-1"), 2),
+        _on_day(ev("ai", path="/sites/peru/x-1", utm_source="chatgpt.com"), 2),
+    ]
+    out = fs.daily_visitors(rows, fs.TRACKER_FIRST_FULL_DAY + timedelta(days=2))
+    # Two pages on the 18th make a human; one page on the 19th does not.
+    assert out["days"] == [
+        {"day": "2026-09-18", "visitors": 1, "human": 1, "ai": 0, "sources": {"direct": 1}},
+        {
+            "day": "2026-09-19",
+            "visitors": 2,
+            "human": 0,
+            "ai": 1,
+            "sources": {"direct": 1, "ai": 1},
+        },
+    ]
+
+
 # ---- globe ----------------------------------------------------------------
 
 
@@ -1228,3 +1288,64 @@ def test_a_slow_page_names_where_it_usually_loses_the_time():
         if p["kind"] == "slow_page"
     ]
     assert old["detail"] == "p75 1908 ms against a 200 ms budget, 19 samples"
+
+
+# ---- creator_traffic ------------------------------------------------------
+
+
+def _creator_row(event, media, n, visitors=None, day="2026-10-09"):
+    from datetime import date
+
+    return {
+        "event_name": event,
+        "media": media,
+        "day": date.fromisoformat(day),
+        "n": n,
+        "visitors": visitors if visitors is not None else n,
+    }
+
+
+def test_creator_traffic_credits_each_channel_with_its_starts_and_clicks():
+    videos = {
+        "vid00000001": ("Universe Inside You", "Pyramid theories"),
+        "vid00000002": ("DeDunking", "Sphinx panel"),
+    }
+    rows = [
+        _creator_row("media_play", "vid00000001", 4, 3),
+        _creator_row("media_play", "vid00000001", 2, 2, day="2026-10-08"),
+        _creator_row("media_play", "vid00000002", 1),
+        _creator_row("outbound_click", "vid00000002", 2),
+        # A click from before boot.ts sent the id, and a video Lyra no longer knows.
+        _creator_row("outbound_click", None, 1),
+        _creator_row("media_play", "gone0000000", 1),
+    ]
+    out = fs.creator_traffic(rows, videos)
+    assert out["totals"] == {"starts": 8, "viewers": 7, "clicks": 3, "channels": 2, "videos": 3}
+    assert out["channels"][0] == {
+        "channel": "Universe Inside You",
+        "starts": 6,
+        "viewers": 5,
+        "clicks": 0,
+    }
+    assert {c["channel"] for c in out["channels"]} == {
+        "Universe Inside You",
+        "DeDunking",
+        fs.UNATTRIBUTED,
+    }
+    assert out["videos"][0] == {
+        "id": "vid00000001",
+        "title": "Pyramid theories",
+        "channel": "Universe Inside You",
+        "starts": 6,
+    }
+    assert out["videos"][-1]["title"] == "gone0000000"
+    assert out["days"] == [
+        {"day": "2026-10-08", "starts": 2, "clicks": 0},
+        {"day": "2026-10-09", "starts": 6, "clicks": 3},
+    ]
+
+
+def test_creator_traffic_of_nothing_is_zero_everywhere():
+    out = fs.creator_traffic([], {})
+    assert out["totals"] == {"starts": 0, "viewers": 0, "clicks": 0, "channels": 0, "videos": 0}
+    assert out["channels"] == out["videos"] == out["days"] == []

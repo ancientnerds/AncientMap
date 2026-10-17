@@ -99,7 +99,7 @@ def test_research_index_hands_the_paper_list():
                 "hero_image_url": "https://ancientnerds.com/data/research/obsidian/hero.webp",
                 "author": "Theo",
                 "published_at": "2026-07-02T04:15:00",
-                "sources_analyzed": 12,
+                "cited_sources": 0,
                 "word_count": 4200,
             }
         ],

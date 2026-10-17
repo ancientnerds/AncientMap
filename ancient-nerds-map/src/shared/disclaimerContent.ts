@@ -43,7 +43,7 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
       <div class="license-group">
         <h4>Creative Commons Attribution (CC BY)</h4>
         <ul>
-          <li><strong>CC BY 4.0:</strong> <a href="https://eamena.org/" target="_blank" rel="noopener noreferrer">EAMENA</a>, <a href="https://opencontext.org/" target="_blank" rel="noopener noreferrer">Open Context</a>, <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a>, <a href="https://volcano.si.edu/" target="_blank" rel="noopener noreferrer">HolVol Volcanic</a>, <a href="https://zenodo.org/records/10473706" target="_blank" rel="noopener noreferrer">LIST Latin Inscriptions</a>, <a href="https://zenodo.org/records/17128262" target="_blank" rel="noopener noreferrer">Luwian Studies Atlas</a>, <a href="https://www.archaeology.ie/" target="_blank" rel="noopener noreferrer">Ireland NMS</a>, <a href="https://github.com/Vperipato/ade2541" target="_blank" rel="noopener noreferrer">Pre-Columbian Amazon</a> (Peripato et al. 2023)</li>
+          <li><strong>CC BY 4.0:</strong> <a href="https://ancientnerds.com" target="_blank" rel="noopener noreferrer">Ancient Nerds (Original)</a> (includes curated Rock Art sites), <a href="https://eamena.org/" target="_blank" rel="noopener noreferrer">EAMENA</a>, <a href="https://opencontext.org/" target="_blank" rel="noopener noreferrer">Open Context</a>, <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer">GeoNames</a>, <a href="https://volcano.si.edu/" target="_blank" rel="noopener noreferrer">HolVol Volcanic</a>, <a href="https://zenodo.org/records/10473706" target="_blank" rel="noopener noreferrer">LIST Latin Inscriptions</a>, <a href="https://zenodo.org/records/17128262" target="_blank" rel="noopener noreferrer">Luwian Studies Atlas</a>, <a href="https://www.archaeology.ie/" target="_blank" rel="noopener noreferrer">Ireland NMS</a>, <a href="https://github.com/Vperipato/ade2541" target="_blank" rel="noopener noreferrer">Pre-Columbian Amazon</a> (Peripato et al. 2023)</li>
           <li><strong>CC BY 3.0:</strong> <a href="https://pleiades.stoa.org/" target="_blank" rel="noopener noreferrer">Pleiades</a>, <a href="http://nomisma.org/" target="_blank" rel="noopener noreferrer">Nomisma Coins</a></li>
           <li><strong>CC BY:</strong> <a href="https://github.com/Seshat-Global-History-Databank/cliopatria" target="_blank" rel="noopener noreferrer">Cliopatria Dataset</a> (empire boundaries, Nature Scientific Data)</li>
         </ul>
@@ -51,7 +51,7 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
       <div class="license-group">
         <h4>Creative Commons Attribution-ShareAlike (CC BY-SA)</h4>
         <ul>
-          <li><strong>CC BY-SA 4.0:</strong> <a href="https://ancientnerds.com" target="_blank" rel="noopener noreferrer">Ancient Nerds (Original)</a> (includes curated Rock Art sites), <a href="https://www.helladic.info/" target="_blank" rel="noopener noreferrer">Mycenaean Atlas</a>, <a href="https://www.roceeh.uni-tuebingen.de/roadweb/" target="_blank" rel="noopener noreferrer">ROCEEH ROAD</a></li>
+          <li><strong>CC BY-SA 4.0:</strong> <a href="https://www.helladic.info/" target="_blank" rel="noopener noreferrer">Mycenaean Atlas</a>, <a href="https://www.roceeh.uni-tuebingen.de/roadweb/" target="_blank" rel="noopener noreferrer">ROCEEH ROAD</a></li>
           <li><strong>CC BY-SA 3.0:</strong> <a href="https://imperium.ahlfeldt.se/" target="_blank" rel="noopener noreferrer">DARE</a>, <a href="https://vici.org/" target="_blank" rel="noopener noreferrer">Vici.org</a></li>
         </ul>
       </div>
@@ -226,7 +226,7 @@ export function getDisclaimerHTML(buildHash?: string, buildTime?: string): strin
     <h4>Platform License</h4>
     <ul>
       <li>The Ancient Nerds Research Platform source code is provided under <strong>AGPL-3.0</strong>.</li>
-      <li>Original content (stories, weekly journals) and documentation are provided under <strong>CC BY-NC-SA 4.0</strong>.</li>
+      <li>Original content (curated site records, stories, weekly journals, research papers) and documentation are provided under <strong>CC BY 4.0</strong>.</li>
       <li>Site descriptions that carry a source line reproduce, shorten or translate text from the linked source revision (Wikipedia: <strong>CC BY-SA 4.0</strong>); the line states how an AI system was involved.</li>
       <li>See <a href="https://github.com/AncientNerds/AncientMap" target="_blank" rel="noopener noreferrer">GitHub</a> for full license details.</li>
     </ul>

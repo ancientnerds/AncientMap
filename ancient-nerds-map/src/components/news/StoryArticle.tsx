@@ -67,9 +67,11 @@ function storySources(raw: StoryRoute['web_sources']) {
 interface StoryArticleProps {
   story: StoryRoute
   children?: React.ReactNode
+  /** Related stories, placed after the key facts and before the sources. */
+  related?: React.ReactNode
 }
 
-export default function StoryArticle({ story, children }: StoryArticleProps) {
+export default function StoryArticle({ story, related, children }: StoryArticleProps) {
   // post_text is tweet copy: the prose ends with a bare source URL. It reads
   // as dead text mid-article, so it moves down into Sources as a real link.
   const { paragraphs, links: postLinks } = splitPostText(story.post_text)
@@ -206,29 +208,9 @@ export default function StoryArticle({ story, children }: StoryArticleProps) {
         </figure>
       )}
 
-      {/* No summary paragraph. news_items.summary is not written prose —
-          summarizer.py composes it as headline + the first three facts
-          joined with spaces, so it repeated the H1 verbatim and then the
-          "Key facts" list two blocks further down. Nothing was lost by
-          dropping it; the field still feeds the JSON-LD description. */}
-
-      <div className="story-body">
-        {paragraphs.map((p, i) => (
-          <p key={i}>{p}</p>
-        ))}
-      </div>
-
-      {facts.length > 0 && (
-        <>
-          <h2>Key facts</h2>
-          <ul className="story-facts">
-            {facts.map((f, i) => (
-              <li key={i}>{f}</li>
-            ))}
-          </ul>
-        </>
-      )}
-
+      {/* The site right under the video: below the facts and the body, 1 of 657
+          readers who came from search went on to the site page (SEO audit
+          2026-10-08; owner decision 2026-10-09). */}
       {story.site_name && (
         <div className="story-site">
           <h2>Site mentioned</h2>
@@ -256,6 +238,31 @@ export default function StoryArticle({ story, children }: StoryArticleProps) {
           </div>
         </div>
       )}
+
+      {/* No summary paragraph. news_items.summary is not written prose —
+          summarizer.py composes it as headline + the first three facts
+          joined with spaces, so it repeated the H1 verbatim and then the
+          "Key facts" list two blocks further down. Nothing was lost by
+          dropping it; the field still feeds the JSON-LD description. */}
+
+      <div className="story-body">
+        {paragraphs.map((p, i) => (
+          <p key={i}>{p}</p>
+        ))}
+      </div>
+
+      {facts.length > 0 && (
+        <>
+          <h2>Key facts</h2>
+          <ul className="story-facts">
+            {facts.map((f, i) => (
+              <li key={i}>{f}</li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {related}
 
       {sources.length > 0 && (
         <div className="story-sources">

@@ -41,7 +41,7 @@ export type EventName =
   | 'vital' // Core Web Vital sample — name, value, rating, page
   | 'js_error' // uncaught error / rejection — message, source, page
   | 'scroll_depth' // 25/50/75/100 % of a content page — depth, page
-  | 'outbound_click' // link to another host — host, page
+  | 'outbound_click' // link to another host — host, page; media = the YouTube video id for a YouTube link
   | 'feedback' // micro-feedback at a dead end — prompt, answer, text (≤ 100 chars), page
   | 'not_found' // a 404 page was shown — path, referrer host (raised by the server-rendered page, pipeline/article_html_renderer.py)
 

@@ -27,6 +27,7 @@ from pipeline.database import (
     UnifiedSite,
     get_db,
 )
+from pipeline.news_visibility import public_story_criteria
 from pipeline.utils.country_lookup import country_name_variants, normalize_country
 from pipeline.utils.text import PERIOD_BUCKETS, categorize_period
 
@@ -218,10 +219,7 @@ def get_news_feed(
             joinedload(NewsItem.video).joinedload(NewsVideo.channel),
             joinedload(NewsItem.site),
         )
-        .filter(
-            NewsItem.post_text.isnot(None),
-            (NewsItem.significance.is_(None)) | (NewsItem.significance >= 2),
-        )
+        .filter(*public_story_criteria())
     )
 
     if channel_id:
@@ -739,13 +737,7 @@ def get_news_stats(db: Session = Depends(get_db)):
         # are unreachable in the feed and answer 410 on their own URL. They are
         # accounted for under rejected.low_significance below.
         total_items = (
-            db.query(func.count(NewsItem.id))
-            .filter(
-                NewsItem.post_text.isnot(None),
-                (NewsItem.significance.is_(None)) | (NewsItem.significance >= 2),
-            )
-            .scalar()
-            or 0
+            db.query(func.count(NewsItem.id)).filter(*public_story_criteria()).scalar() or 0
         )
         total_videos = db.query(func.count(distinct(NewsItem.video_id))).scalar() or 0
         total_channels = (

@@ -80,12 +80,12 @@ export function Devices({ state }: { state: Loaded<DevicesData> }) {
           <h3>Devices</h3>
           <BarList
             items={d.devices.map(x => deviceItem(x, d.sessions))}
-            empty="No session in this window."
+            empty="No session so far."
           />
           <h3>Languages</h3>
           <BarList
             items={d.languages.slice(0, LANGUAGE_ROWS).map(languageItem)}
-            empty="No browser sent a language tag in this window."
+            empty="No browser sent a language tag so far."
           />
           <p className="dash-note">
             {mobileLine(d)} {groupLine(d.language_groups, d.sessions)}

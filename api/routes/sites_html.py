@@ -187,8 +187,10 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
             "site_type": row.site_type,
             "period_name": row.period_name,
             "period_start": row.period_start,
+            # The card shows the hero's 480 px copy (pipeline/wiki_thumbs.py): the
+            # England hub alone lists 1,044 sites.
             "thumbnail_url": (
-                f"/data/images/wiki/{site_id_short(row.id)}/{row.hero_filename}"
+                f"/data/images/wiki-thumbs/{site_id_short(row.id)}/{row.hero_filename}"
                 if row.hero_filename
                 else row.thumbnail_url
             ),

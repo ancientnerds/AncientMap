@@ -2,15 +2,18 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { config } from '../../config'
 import { getAuthToken, subscribeAuthToken } from '../../contexts/authToken'
 
+// Journal and Research lead to the server-rendered hubs, which link every journal and
+// paper: the app shells behind them are empty without JS, and since 2026-09-10 papers hung
+// on /research/ alone, which Googlebot fetched once in 14 days (SEO audit 2026-10-08).
 const NAV_ITEMS = [
   { page: 'globe', label: 'Globe', href: '/globe.html', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10A15 15 0 0 1 12 2z' },
   { page: 'search', label: 'Search', href: '/search.html', icon: 'M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0z' },
   { page: 'news', label: 'Stories', href: '/news.html', icon: 'M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V7m2 13a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2' },
   { page: 'story-archive', label: 'Story Archive', href: '/news-archive/', icon: 'M20 21v-8H4v8M4 13l1.5-9h13L20 13M9 8h6M9 17h6' },
   { page: 'radar', label: 'Radar', href: '/radar.html', icon: 'M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83' },
-  { page: 'articles', label: 'Journal', href: '/articles.html', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z' },
+  { page: 'articles', label: 'Journal', href: '/articles/', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z' },
   { page: 'lyra', label: 'Lyra', href: '/lyra.html', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
-  { page: 'theo', label: 'Research', href: '/theo.html#research-library', icon: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4' },
+  { page: 'theo', label: 'Research', href: '/research/', icon: 'M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4' },
   { page: 'knowledge', label: 'Knowledge', href: '/knowledge.html', icon: 'M6 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM6 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM18 21a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM7.8 7.3l8.4 9.4M16.2 7.3l-8.4 9.4M8.5 5.5h7M8.5 18.5h7' },
   { page: 'library', label: 'Library', href: '/library.html', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
   { page: 'db', label: 'Database', href: '/db.html', icon: 'M12 2C6.48 2 2 3.79 2 6v12c0 2.21 4.48 4 10 4s10-1.79 10-4V6c0-2.21-4.48-4-10-4zM2 12c0 2.21 4.48 4 10 4s10-1.79 10-4' },

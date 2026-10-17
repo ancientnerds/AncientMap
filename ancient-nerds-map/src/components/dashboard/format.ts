@@ -12,11 +12,6 @@ export function fmtShare(part: number, whole: number): string {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-/** "14:00" for a UTC hour of the day. */
-export function fmtHour(hour: number): string {
-  return `${String(hour).padStart(2, '0')}:00`
-}
-
 /** "17 Sep 14:05" in UTC. */
 export function fmtStamp(iso: string): string {
   const d = new Date(iso)
@@ -24,6 +19,12 @@ export function fmtStamp(iso: string): string {
   const hh = String(d.getUTCHours()).padStart(2, '0')
   const mi = String(d.getUTCMinutes()).padStart(2, '0')
   return `${dd} ${MONTHS[d.getUTCMonth()]} ${hh}:${mi}`
+}
+
+/** "18 Sep" for a UTC day given as "2026-09-18". */
+export function fmtDay(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`)
+  return `${String(d.getUTCDate()).padStart(2, '0')} ${MONTHS[d.getUTCMonth()]}`
 }
 
 /** "17 Sep 14:00" in UTC — a stamp without the minutes, for axis labels. */

@@ -17843,6 +17843,21 @@ div.lyra-inline-video-wrap {
   margin-bottom: 12px;
 }
 
+/* Seit 2026-10-12 ist die Karte selbst der Link (JournalHub rendert
+   <a class="articles-hero">, <a class="articles-grid-card"> mit Titel und
+   Blurb darin) — vorher trug der Titel den <a>. Zwei Folgen daraus, beide
+   gemessen: der Browser unterstrich Überschrift und Blurb der ganzen Karte,
+   und .articles-hero verlor als <section> seinen Block-Status — ein <a> ist
+   inline und ignoriert Breite, Höhe und Außenabstand, der Panel-Rahmen lief
+   deshalb über die Hero-Höhe hinaus. .articles-grid-card bringt sein
+   display:flex aus der eigenen Regel schon mit. */
+.articles-hero,
+.articles-grid-card {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
 .articles-hero-title a,
 .articles-grid-card-title a {
   color: inherit;

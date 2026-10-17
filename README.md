@@ -4,11 +4,11 @@ The one and only platform with all ancient archaeological sites in one place for
 
 ## Project Overview
 
-This project aggregates data from 30+ open-source archaeological databases into a unified dataset of 750,000+ sites, displayed on an interactive 3D globe. It includes:
+This project aggregates data from 30+ open-source archaeological databases into a unified dataset of 1.76 million site records, about 4,900 of them curated by hand, displayed on an interactive 3D globe. It includes:
 
-- **3D Globe**: Three.js + Mapbox GL interactive visualization with 750K+ site markers
+- **3D Globe**: Three.js + Mapbox GL interactive visualization with 1.76 million site markers
 - **Lyra AI Agent**: MiniMax-powered research assistant with tool use (site search, news lookup, map navigation)
-- **News Pipeline**: Automated archaeological news discovery from 18+ YouTube channels (hourly cycle)
+- **News Pipeline**: Automated archaeological news discovery from 39 YouTube channels (hourly cycle)
 - **Radar**: AI-discovered archaeological sites not yet in the main database
 - **Data Pipeline**: Python ingesters for 30+ external data sources
 - **PostgreSQL + PostGIS Database**: Unified storage with spatial indexing
@@ -170,7 +170,7 @@ python -m pipeline.main preview pleiades --limit 20
 
 **Source code**: [AGPL-3.0](LICENSE) — you may use, modify, and redistribute, but any derivative work (including server-side use) must also be released under AGPL-3.0.
 
-**Original content & data compilation**: [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) — non-commercial use with attribution to Ancient Nerds.
+**Original content** (curated site records, stories, journals, research papers): [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — any use, with attribution to Ancient Nerds. Site descriptions taken from Wikipedia stay under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 
 **Third-party data**: This project aggregates data from 30+ sources, each with its own license (CC BY, CC0, ODbL, CC BY-NC, etc.). See [ATTRIBUTION.md](ATTRIBUTION.md) for the full list. Please respect each source's terms.
 

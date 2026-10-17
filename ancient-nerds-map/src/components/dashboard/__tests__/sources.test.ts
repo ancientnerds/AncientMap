@@ -91,9 +91,9 @@ describe('nginx log rows', () => {
   it('states the rule that keeps referrer spam out, in the singular too', () => {
     // The panel used to promise "Bots ... are out of every list" while its
     // third-largest family was 17 forged-referer hits on GET /.
-    expect(spamLine(17)).toContain('17 arrivals in this window')
-    expect(spamLine(1)).toContain('1 arrival in this window')
-    expect(spamLine(0)).toContain('0 arrivals in this window')
+    expect(spamLine(17)).toContain('17 arrivals so far')
+    expect(spamLine(1)).toContain('1 arrival so far')
+    expect(spamLine(0)).toContain('0 arrivals so far')
   })
 })
 

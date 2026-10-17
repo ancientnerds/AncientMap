@@ -121,7 +121,6 @@ def paper_summary_kwargs(row) -> dict:
         "id": row.id,
         "slug": row.slug,
         "title": row.title or row.question,
-        "question": row.question,
         "summary": row.card_description or None,
         "author": row.published_by,
         "published_at": row.published_at.isoformat() if row.published_at else None,
@@ -868,7 +867,7 @@ def create_public_api() -> FastAPI:
         # out-of-scope medieval ones withdrawn on 2026-09-11.
         where_parts = [
             "ni.post_text IS NOT NULL",
-            "(ni.significance IS NULL OR ni.significance >= 2)",
+            "ni.significance >= 2",
         ]
         params: dict = {"limit": page_size, "offset": offset}
 

@@ -40,6 +40,24 @@ _BARE_URL_RE = re.compile(r"(?<![(<\[])(https?://[^\s<>()\[\]]+)")
 _DOI_RE = re.compile(r"\bDOI:\s*(10\.\S+?)(?=[\s,;]|$)")
 
 
+# One entry of a References section: "[3] ...", "3. ..." or "- ...".
+_REFERENCE_ENTRY_RE = re.compile(r"^\s*(?:\[\d+\]|\d+\.|[-*])\s+\S", re.M)
+
+
+def count_references(content_md: str) -> int:
+    """The entries of a paper's References section: the sources it cites.
+
+    The library card printed `sites_found` as "N sources", the sources the
+    research run retrieved: 0 on the nine papers of 05.-07.10. that cite 12-59,
+    four digits on older ones (SEO audit 2026-10-08). A paper without a
+    References heading cites nothing countable and gets 0.
+    """
+    m = _REFERENCES_HEADING_RE.search(content_md)
+    if not m:
+        return 0
+    return len(_REFERENCE_ENTRY_RE.findall(content_md[m.end() :]))
+
+
 def format_references_md(content_md: str) -> str:
     """
     Rework the References section of a paper for clean rendering.

@@ -62,6 +62,15 @@ export default function LandingLive() {
           foot={{ note: 'papers publish when the citation gate passes · all titles are listed below', link: 'research library →' }}
         >
           {papers.theo && <TheoLine theo={papers.theo} />}
+          {papers.latest.length > 0 && (
+            <ul className="ll-latest" aria-label="Newest research papers">
+              {papers.latest.map(p => (
+                <li key={p.slug}>
+                  <a href={`/research/${encodeURIComponent(p.slug)}`}>{p.title}</a>
+                </li>
+              ))}
+            </ul>
+          )}
         </PortalSection>
       )}
       <PortalSection

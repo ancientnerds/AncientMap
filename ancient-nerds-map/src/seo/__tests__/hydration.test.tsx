@@ -26,7 +26,7 @@
  * der sich eine Abweichung faengt, nicht der Beweis fuer Chromium.
  */
 import { renderToString } from 'react-dom/server'
-import { hydrateRoot } from 'react-dom/client'
+import { hydrateRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AuthProvider } from '../../contexts/AuthContext'
@@ -56,6 +56,11 @@ function settle(): Promise<void> {
 
 describe('Hydration der Produktions-Payloads einer Site-Seite', () => {
   let root: HTMLElement
+  // The hydrated root of the running test. Left mounted, a concurrent render
+  // still pending after settle() committed after the file's jsdom was torn
+  // down: "window is not defined" from getActiveElementDeep, an unhandled
+  // error that failed CI's frontend job on 2026-10-09 (timing-dependent).
+  let hydrated: Root | null = null
 
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }))
@@ -64,6 +69,8 @@ describe('Hydration der Produktions-Payloads einer Site-Seite', () => {
   })
 
   afterEach(() => {
+    hydrated?.unmount()
+    hydrated = null
     vi.unstubAllGlobals()
   })
 
@@ -81,7 +88,7 @@ describe('Hydration der Produktions-Payloads einer Site-Seite', () => {
       root.innerHTML = renderToString(tree(route))
 
       const recoverable: string[] = []
-      hydrateRoot(root, tree(route), {
+      hydrated = hydrateRoot(root, tree(route), {
         onRecoverableError: error => recoverable.push(String(error)),
       })
       await settle()

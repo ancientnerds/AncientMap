@@ -14,9 +14,13 @@
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
+import { Crawlers } from '../Crawlers'
+import { Creators } from '../Creators'
 import { Devices } from '../Devices'
 import { FeedbackInbox } from '../FeedbackInbox'
+import { FieldVitals } from '../FieldVitals'
 import { GlobeReach } from '../GlobeReach'
+import { Growth } from '../Growth'
 import { LiveNow } from '../LiveNow'
 import { Members } from '../Members'
 import { Paths } from '../Paths'
@@ -24,6 +28,8 @@ import { Problems } from '../Problems'
 import { Pulse } from '../Pulse'
 import { Reading } from '../Reading'
 import { Scrapers } from '../Scrapers'
+import { SearchGoogle } from '../SearchGoogle'
+import { ServerLoad } from '../ServerLoad'
 import { SessionTypes } from '../SessionTypes'
 import { Sources } from '../Sources'
 import { TopContent } from '../TopContent'
@@ -32,14 +38,20 @@ import type {
   ContentData,
   CountriesData,
   CountryWindow,
+  CrawlersData,
+  CreatorsData,
+  DailyData,
   DevicesData,
   FeedbackData,
+  FieldVitalsData,
   GlobeData,
   JourneysData,
   LiveData,
   MembersData,
   Overview,
   ProblemsData,
+  SearchData,
+  ServerData,
   SourcesData,
 } from '../types'
 import type { Loaded } from '../useStats'
@@ -66,7 +78,25 @@ const hour = { hour: '2026-09-19T08:00:00+00:00', sessions: 0, human: 0, ai: 0 }
 const EMPTY = {
   overview: { days: 7, sessions: { all: 0, human: 0, ai: 0 }, types: {}, hours: [hour, hour] } as Overview,
   countries: { now: window0, today: window0, d7: window0, d30: window0 } as CountriesData,
+  daily: { days: [], today: { day: '2026-09-19', visitors: 0, human: 0, ai: 0 } } as DailyData,
   map: { points: [] },
+  search: { days: [], current: null, previous: null, queries: [], pages: [], pages_shown: null } as SearchData,
+  vitals: {
+    phone: { weeks: ['2026-10-03'], lcp: [null], inp: [null], cls: [null] },
+    desktop: { weeks: ['2026-10-03'], lcp: [null], inp: [null], cls: [null] },
+  } as FieldVitalsData,
+  crawlers: {
+    report: { covered_from: null, bots: [], days: [], ai_user_pages: [], impostors: [] },
+    log_reason: null,
+  } as CrawlersData,
+  creators: {
+    totals: { starts: 0, viewers: 0, clicks: 0, channels: 0, videos: 0 },
+    channels: [],
+    videos: [],
+    days: [],
+    clicks_since: '2026-10-09T06:42:00+00:00',
+  } as CreatorsData,
+  server: { report: null, log_reason: 'The server load log is not readable here.' } as ServerData,
   live: {
     window_minutes: 30,
     lookback_hours: 24,
@@ -124,6 +154,12 @@ const EMPTY = {
 /** Every panel with an answer that carries nothing. */
 const emptyPanels: Array<[string, JSX.Element]> = [
   ['Pulse', <Pulse state={ok(EMPTY.overview)} countries={ok(EMPTY.countries)} />],
+  ['Growth', <Growth state={ok(EMPTY.daily)} />],
+  ['SearchGoogle', <SearchGoogle state={ok(EMPTY.search)} />],
+  ['FieldVitals', <FieldVitals state={ok(EMPTY.vitals)} />],
+  ['Crawlers', <Crawlers state={ok(EMPTY.crawlers)} />],
+  ['ServerLoad', <ServerLoad state={ok(EMPTY.server)} />],
+  ['Creators', <Creators state={ok(EMPTY.creators)} />],
   ['LiveNow', <LiveNow state={ok(EMPTY.live)} />],
   ['GlobeReach', <GlobeReach state={ok(EMPTY.globe)} />],
   ['Scrapers', <Scrapers state={ok(EMPTY.clusters)} overview={ok(EMPTY.overview)} />],
@@ -142,6 +178,12 @@ const emptyPanels: Array<[string, JSX.Element]> = [
 /** The same panels with nothing at all — a 500 on their endpoint. */
 const failedPanels: Array<[string, JSX.Element]> = [
   ['Pulse', <Pulse state={failed} countries={failed} />],
+  ['Growth', <Growth state={failed} />],
+  ['SearchGoogle', <SearchGoogle state={failed} />],
+  ['FieldVitals', <FieldVitals state={failed} />],
+  ['Crawlers', <Crawlers state={failed} />],
+  ['ServerLoad', <ServerLoad state={failed} />],
+  ['Creators', <Creators state={failed} />],
   ['LiveNow', <LiveNow state={failed} />],
   ['GlobeReach', <GlobeReach state={failed} />],
   ['Scrapers', <Scrapers state={failed} overview={failed} />],
@@ -207,6 +249,19 @@ describe('Pulse', () => {
     expect(html).toContain('Data unavailable.')
     expect(html).not.toContain('dash-spark')
   })
+
+  it('keeps what the colours mean closed and the AI count in the open', () => {
+    // Owner, 2026-10-09: the texts that explain the numbers stay closed until
+    // the panel is clicked. Closed is `hidden`, not absent.
+    const overview = { ...EMPTY.overview, sessions: { all: 20, human: 8, ai: 3 } }
+    const html = renderToString(<Pulse state={ok(overview)} countries={ok(EMPTY.countries)} />).replace(/<!-- -->/g, '')
+    const closedBlock = /<div class="dash-explain" hidden="">([\s\S]*?)<\/div>/g
+    const closed = [...html.matchAll(closedBlock)].map(m => m[1]).join(' ')
+    const shown = html.replace(closedBlock, '')
+    expect(closed).toContain('Bright green is a confirmed human')
+    expect(shown).not.toContain('Bright green is a confirmed human')
+    expect(shown).toContain('AI assistants sent 3 of 20 sessions since tracking began.')
+  })
 })
 
 describe('Reading', () => {
@@ -267,7 +322,7 @@ describe('GlobeReach', () => {
   it('prints one sentence instead of an all-zero list when every load arrived', () => {
     const all = { ...some, reached: 12, gave_up: 0, not_reached: EMPTY.globe.not_reached }
     const html = renderToString(<GlobeReach state={ok(all)} />)
-    expect(html).toContain('Every load in this window reached the globe.')
+    expect(html).toContain('Every load so far reached the globe.')
     expect(html).not.toContain('<h3>')
   })
 
@@ -303,7 +358,7 @@ describe('TopContent', () => {
     // search fires since 2026-09-20 (useSiteSearch settles on a term); the old
     // sentence blamed ticket T2 for a list that was simply empty
     const html = renderToString(<TopContent state={ok(EMPTY.content)} />)
-    expect(html).toContain('Search terms: nobody searched in this window')
+    expect(html).toContain('Search terms: nobody searched so far')
     expect(html).not.toContain('ticket T2')
   })
 })
@@ -320,16 +375,16 @@ describe('Sources', () => {
 
   it('says so in words when the log holds no referred arrival', () => {
     const html = renderToString(<Sources state={ok(EMPTY.sources)} />)
-    expect(html).toContain('No referred arrival in this window.')
+    expect(html).toContain('No referred arrival so far.')
     expect(html).toContain('Every referred visitor got a page.')
-    expect(html).toContain('No sessions in this window.')
+    expect(html).toContain('No sessions so far.')
   })
 
   it('counts referrer spam out of the lists and names it in the note', () => {
     const html = renderToString(
       <Sources state={ok({ ...EMPTY.sources, log: { ...EMPTY.sources.log!, unverified: 17 } })} />
     )
-    expect(html).toContain('17 arrivals in this window')
+    expect(html).toContain('17 arrivals so far')
     expect(html).not.toContain('Bots and our own development server are out of every list')
   })
 })

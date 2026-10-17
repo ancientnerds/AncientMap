@@ -65,7 +65,7 @@ export function Problems({ state }: { state: Loaded<ProblemsData> }) {
       {p && (
         <>
           {p.problems.length === 0 ? (
-            <p className="dash-empty">No problems in this window.</p>
+            <p className="dash-empty">No problems in the last 7 days.</p>
           ) : (
             <ol className="dash-problems">
               {p.problems.map(item => (
