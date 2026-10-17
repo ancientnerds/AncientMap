@@ -50,6 +50,15 @@ OPUS = OH.OPUS_MODEL
 SONNET = OH.SONNET_MODEL
 
 
+def _checker_on_sonnet(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The card checkers are registered on Opus (D40, D45), the top tier; the escalation tests
+    need a checker one tier below, so the registry is put back to Sonnet for them."""
+    sonnet = RO.Role("card_fact_checker", "claude-sonnet-5-5", "high", "wb_check_verify_opus")
+    monkeypatch.setattr(
+        RO, "ROLES", RO._registry(*{**RO.ROLES, "card_fact_checker": sonnet}.values())
+    )
+
+
 def sid(name: str) -> str:
     return str(S.BY_NAME[name]["site_id"])
 
@@ -268,8 +277,14 @@ class TestSelect:
         ]
         assert record["roles"]["card_writer"] == {"model": "claude-sonnet-5-5", "effort": "high"}
         assert record["roles"]["hook_rater"] == {"model": "claude-sonnet-5-5", "effort": "medium"}
-        assert record["roles"]["fact_checker"] == {"model": "claude-sonnet-5-5", "effort": "high"}
-        assert record["roles"]["web_verifier"] == {"model": "claude-sonnet-5-5", "effort": "high"}
+        assert record["roles"]["card_fact_checker"] == {
+            "model": "claude-opus-5-5",
+            "effort": "high",
+        }
+        assert record["roles"]["card_web_verifier"] == {
+            "model": "claude-opus-5-5",
+            "effort": "high",
+        }
         assert record["roles"]["pilot_judge"] == {"model": "claude-opus-5-5", "effort": "xhigh"}
         assert R.spec_of(run) is R.SHORTS_SPEC
         assert record["batch_sizes"] == {"main": 15, "judge": 8, "rate": 25}
@@ -404,9 +419,9 @@ class TestSelect:
         )  # fmt: skip
         v3 = CP.build_v3(
             run="wb-new", ai_system=M.AI_SYSTEM_CLAUDE, card=live["card"], description=live["description"],
-            stage="check", checker="fact_checker:t-1", checked_at="2026-10-09T12:00:00+00:00",
+            stage="check", checker="card_fact_checker:t-1", checked_at="2026-10-09T12:00:00+00:00",
             claims=[{"claim": "c", "support": ["S1"]}],
-            verify={"verdict": "VERIFIED", "stage": "verify", "by": "web_verifier:t-2", "at": "2026-10-09T13:00:00+00:00",
+            verify={"verdict": "VERIFIED", "stage": "verify", "by": "card_web_verifier:t-2", "at": "2026-10-09T13:00:00+00:00",
                     "claims": 1, "unproven": 0, "text_sha256": CP.text_sha256(live["card"])},
             web_facts=[], models={"write": stamp, "rate": stamp, "check": stamp, "verify": stamp},
             hook={"type": "object", "rating": 4, "variant": 1}, anchors=["x"], reserve=["S2"], shorts_ready=True,
@@ -442,8 +457,8 @@ class TestTheFirstRound:
         assert prov["models"] == {
             "write": SONNET,
             "rate": SONNET,
-            "check": SONNET,
-            "verify": SONNET,
+            "check": OPUS,
+            "verify": OPUS,
         }
         assert prov["ai_system"] == M.AI_SYSTEM_CLAUDE
         assert prov["hook"] == {"type": "object", "rating": 4, "variant": 1}
@@ -451,10 +466,10 @@ class TestTheFirstRound:
         assert prov["shorts_ready"] is True and CP.describes(prov, mp["card"])
         assert mp["card"] == C.final_card(S.BY_NAME[MP]["card"])
         assert prov["check"]["by"] in {
-            "fact_checker:teaser-check-001",
-            "fact_checker:teaser-check-002",
+            "card_fact_checker:teaser-check-001",
+            "card_fact_checker:teaser-check-002",
         }
-        assert prov["verify"]["by"] == "web_verifier:teaser-verify-001"
+        assert prov["verify"]["by"] == "card_web_verifier:teaser-verify-001"
         assert CP.shorts_pin(prov, S.BY_NAME[MP]["description"]) == CP.text_sha256(mp["card"])
 
     def test_shorts_ready_needs_an_eligible_site_a_reserve_and_an_anchor(
@@ -702,7 +717,7 @@ class TestTheFirstRound:
         R.outcomes(run)
         prov = outcome(run, MP)["provenance"]
         assert prov["check"]["stage"] == "check-v" and prov["verify"]["stage"] == "verify2"
-        assert prov["models"] == {"write": SONNET, "rate": None, "check": SONNET, "verify": SONNET}
+        assert prov["models"] == {"write": SONNET, "rate": None, "check": OPUS, "verify": OPUS}
         assert prov["hook"] == {"type": "object", "rating": None, "variant": None}
         assert [d["claim"] for d in R.read_jsonl(run / "DESCRIPTION_DEFECTS.jsonl")] == []
 
@@ -804,63 +819,68 @@ class TestTheRoles:
     def test_the_run_fixes_its_models_at_its_start(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, [MP])
         record = json.loads((run / "RUN.json").read_text("utf-8"))
-        assert record["roles"]["fact_checker"]["model"] == RO.role("fact_checker").model
+        assert record["roles"]["card_fact_checker"]["model"] == RO.role("card_fact_checker").model
         assert set(record["roles"]) == {
             "card_writer",
             "hook_rater",
-            "fact_checker",
-            "web_verifier",
+            "card_fact_checker",
+            "card_web_verifier",
             "pilot_judge",
         }
 
     def test_an_escalation_needs_the_registry_to_name_the_new_model_first(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        _checker_on_sonnet(monkeypatch)
         run = make_run(tmp_path, [MP])
         verdict = tmp_path / "verdict.json"
-        move = RO.escalation("fact_checker", calibration_id="c-1", reason="agreement 0.8")
+        move = RO.escalation("card_fact_checker", calibration_id="c-1", reason="agreement 0.8")
         verdict.write_text(
-            json.dumps({"role": "fact_checker", "passed": False, "tier_move": move}),
+            json.dumps({"role": "card_fact_checker", "passed": False, "tier_move": move}),
             encoding="utf-8",
         )
         # the recorder checks the registry: an escalated model it does not know would be refused
         with pytest.raises(RO.RoleError, match="registered to claude-sonnet-5-5"):
-            RO.require_model("fact_checker", "claude-opus-5-5")
+            RO.require_model("card_fact_checker", "claude-opus-5-5")
         with pytest.raises(
             R.RunError, match="registered to claude-sonnet-5-5, not claude-opus-5-5"
         ):
-            R.escalate_role(run, "fact_checker", verdict)
+            R.escalate_role(run, "card_fact_checker", verdict)
         assert "escalations" not in json.loads((run / "RUN.json").read_text("utf-8"))
-        moved = RO.Role("fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus")
+        moved = RO.Role("card_fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus")
         monkeypatch.setattr(
-            RO, "ROLES", RO._registry(*{**RO.ROLES, "fact_checker": moved}.values())
+            RO, "ROLES", RO._registry(*{**RO.ROLES, "card_fact_checker": moved}.values())
         )
-        RO.require_model("fact_checker", "claude-opus-5-5")  # the recorder takes it now
-        assert R.escalate_role(run, "fact_checker", verdict)["model"] == "claude-opus-5-5"
+        RO.require_model("card_fact_checker", "claude-opus-5-5")  # the recorder takes it now
+        assert R.escalate_role(run, "card_fact_checker", verdict)["model"] == "claude-opus-5-5"
 
     def test_a_failed_calibration_moves_a_role_up_one_tier_before_its_first_round(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        _checker_on_sonnet(monkeypatch)
         run = make_run(tmp_path, [MP])
         other = make_run(tmp_path / "other", [MP])
         verdict = tmp_path / "verdict.json"
-        move = RO.escalation("fact_checker", calibration_id="c-1", reason="agreement 0.8")
+        move = RO.escalation("card_fact_checker", calibration_id="c-1", reason="agreement 0.8")
         verdict.write_text(
-            json.dumps({"role": "fact_checker", "passed": False, "tier_move": move}),
+            json.dumps({"role": "card_fact_checker", "passed": False, "tier_move": move}),
             encoding="utf-8",
         )
-        moved = RO.Role("fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus")
+        moved = RO.Role("card_fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus")
         monkeypatch.setattr(
-            RO, "ROLES", RO._registry(*{**RO.ROLES, "fact_checker": moved}.values())
+            RO, "ROLES", RO._registry(*{**RO.ROLES, "card_fact_checker": moved}.values())
         )
-        result = R.escalate_role(run, "fact_checker", verdict)
+        result = R.escalate_role(run, "card_fact_checker", verdict)
         assert result == {
-            "role": "fact_checker",
+            "role": "card_fact_checker",
             "model": "claude-opus-5-5",
             "from": "claude-sonnet-5-5",
         }
         record = json.loads((run / "RUN.json").read_text("utf-8"))
-        assert record["roles"]["fact_checker"] == {"model": "claude-opus-5-5", "effort": "high"}
+        assert record["roles"]["card_fact_checker"] == {
+            "model": "claude-opus-5-5",
+            "effort": "high",
+        }
         assert record["escalations"][0]["calibration_id"] == "c-1"
         step(run, tmp_path, "write", writes([MP]))
         step(run, tmp_path, "rate", rates(run, [MP]))
@@ -868,13 +888,15 @@ class TestTheRoles:
         handoff = tmp_path / "handoff-check"
         R.export_stage(run, "check", handoff)
         answer_round(run, "check", handoff, passes([MP]), model="claude-sonnet-5-5")
-        with pytest.raises(R.RunError, match="role fact_checker is recorded as claude-opus-5-5"):
+        with pytest.raises(
+            R.RunError, match="role card_fact_checker is recorded as claude-opus-5-5"
+        ):
             R.import_stage(run, "check", fit=T.fit)
         step(other, tmp_path / "other", "write", writes([MP]))
         step(other, tmp_path / "other", "rate", rates(other, [MP]))
         R.export_stage(other, "check", tmp_path / "other" / "handoff-check")
         with pytest.raises(R.RunError, match="has answered rounds already"):
-            R.escalate_role(other, "fact_checker", verdict)
+            R.escalate_role(other, "card_fact_checker", verdict)
 
     def test_a_role_the_run_does_not_use_is_not_moved(self, tmp_path: Path) -> None:
         run = make_run(tmp_path, [MP])
@@ -896,23 +918,23 @@ class TestTheRoles:
         run = make_run(tmp_path, [MP])
         good = tmp_path / "good.json"
         good.write_text(
-            json.dumps({"role": "fact_checker", "passed": True, "tier_move": None}), "utf-8"
+            json.dumps({"role": "card_fact_checker", "passed": True, "tier_move": None}), "utf-8"
         )
         with pytest.raises(R.RunError, match="not a failed calibration"):
-            R.escalate_role(run, "fact_checker", good)
+            R.escalate_role(run, "card_fact_checker", good)
         wrong = tmp_path / "wrong.json"
         move = {
-            "role": "fact_checker",
+            "role": "card_fact_checker",
             "from": "claude-haiku-5-5",
             "to": "claude-sonnet-5-5",
             "calibration_id": "c",
             "reason": "r",
         }
         wrong.write_text(
-            json.dumps({"role": "fact_checker", "passed": False, "tier_move": move}), "utf-8"
+            json.dumps({"role": "card_fact_checker", "passed": False, "tier_move": move}), "utf-8"
         )
         with pytest.raises(R.RunError, match="does not follow the model recorded"):
-            R.escalate_role(run, "fact_checker", wrong)
+            R.escalate_role(run, "card_fact_checker", wrong)
         with pytest.raises(R.RunError, match="not a failed calibration"):
             R.escalate_role(run, "hook_rater", wrong)
 
@@ -1026,14 +1048,14 @@ class TestTheCanary:
         R.void_batch(run, handoff, "check-002", fit=T.fit)
         for batch_id, members in record["batches"].items():
             for site_id in members:
-                put(handoff, "check", batch_id, site_id, check_json(), "fact_checker")
+                put(handoff, "check", batch_id, site_id, check_json(), "card_fact_checker")
             put(
                 handoff,
                 "check",
                 batch_id,
                 record["canaries"][batch_id]["label"],
                 CANARY_CAUGHT,
-                "fact_checker",
+                "card_fact_checker",
             )
         assert R.import_stage(run, "check", fit=T.fit)["verdicts"] == {"PASS": 4}
 
@@ -1056,7 +1078,9 @@ class TestTheCanary:
         handoff = tmp_path / "handoff-check"
         R.export_stage(run, "check", handoff)
         answer_round(run, "check", handoff, passes(NAMES), canary_role="hook_rater")
-        with pytest.raises(R.RunError, match=r"hook_rater:teaser-check-001.*role fact_checker"):
+        with pytest.raises(
+            R.RunError, match=r"hook_rater:teaser-check-001.*role card_fact_checker"
+        ):
             R.import_stage(run, "check", fit=T.fit)
 
     def test_check_answer_takes_a_canary_label_as_any_check(self, tmp_path: Path) -> None:
@@ -1154,8 +1178,8 @@ class TestTheBriefs:
         ("stage", "role", "model", "effort"),
         [
             ("rate", "hook_rater", "claude-sonnet-5-5", "medium"),
-            ("check", "fact_checker", "claude-sonnet-5-5", "high"),
-            ("verify", "web_verifier", "claude-sonnet-5-5", "high"),
+            ("check", "card_fact_checker", "claude-opus-5-5", "high"),
+            ("verify", "card_web_verifier", "claude-opus-5-5", "high"),
         ],
     )
     def test_each_stage_names_the_role_the_registry_fixed(
@@ -1192,8 +1216,8 @@ class TestTheBriefs:
         assert [j["batch_id"] for j in jobs] == ["verify-001"]
         job = jobs[0]
         assert (job["role"], job["model"], job["effort"], job["stage"]) == (
-            "web_verifier",
-            "claude-sonnet-5-5",
+            "card_web_verifier",
+            "claude-opus-5-5",
             "high",
             "verify",
         )
@@ -1224,7 +1248,7 @@ class TestTheBriefs:
         R.outcomes(run)
         handoff = tmp_path / "handoff-judge"
         R.export_judge(run, handoff)
-        put(handoff, "judge", "judge-001", sid(MP), VERIFIED_ANSWER, "web_verifier")
+        put(handoff, "judge", "judge-001", sid(MP), VERIFIED_ANSWER, "card_web_verifier")
         with pytest.raises(R.RunError, match="did not answer as role pilot_judge"):
             R.import_judge(run, client=judge_client(), pace=0)
         (handoff / OH.manifest(handoff)[0]["answer_path"]).unlink()
@@ -1339,8 +1363,8 @@ class TestTheRecheckRun:
         assert record["contract"] == "recheck-v1" and record["provenance_run"] == GAP_RUN
         assert record["sites"] == 2 and record["listed"] == {"not-of-run": 1}
         assert set(record["roles"]) == {
-            "fact_checker",
-            "web_verifier",
+            "card_fact_checker",
+            "card_web_verifier",
             "adversarial",
             "pilot_judge",
         }
@@ -1540,7 +1564,7 @@ class TestTheRecheckRun:
         run = seed(tmp_path, [MP])
         handoff = tmp_path / "handoff-check"
         R.export_stage(run, "check", handoff)
-        put(handoff, "check", "check-001", sid(MP), T.checker_answer(), "web_verifier")
+        put(handoff, "check", "check-001", sid(MP), T.checker_answer(), "card_web_verifier")
         record = R._round(run, "check")
         assert record is not None
         put(
@@ -1549,13 +1573,13 @@ class TestTheRecheckRun:
             "check-001",
             record["canaries"]["check-001"]["label"],
             CANARY_CAUGHT_V1,
-            "web_verifier",
+            "card_web_verifier",
         )
-        with pytest.raises(R.RunError, match="did not answer as role fact_checker"):
+        with pytest.raises(R.RunError, match="did not answer as role card_fact_checker"):
             R.import_stage(run, "check", fit=T.fit)
         text = R.brief(run, handoff, "check-001")
-        assert "**fact_checker**" in text and "--model claude-sonnet-5-5" in text
-        assert R.agent_jobs(run, handoff)[0]["role"] == "fact_checker"
+        assert "**card_fact_checker**" in text and "--model claude-opus-5-5" in text
+        assert R.agent_jobs(run, handoff)[0]["role"] == "card_fact_checker"
 
     def test_a_pilot_judge_is_refused_for_a_recheck_run(self, tmp_path: Path) -> None:
         run = seed(tmp_path, [MP])

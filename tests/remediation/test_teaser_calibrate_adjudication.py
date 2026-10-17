@@ -140,7 +140,7 @@ def answer_checker(
 ) -> None:
     answer_role(
         run_dir,
-        "fact_checker",
+        "card_fact_checker",
         {
             "checker_agreement": agreement,
             "checker_fail_again": again,
@@ -227,7 +227,7 @@ class TestTheSeal:
 
     def test_the_real_table_asks_for_a_disputed_maximum(self) -> None:
         assert (
-            K.THRESHOLDS["roles"]["web_verifier"]["sets"]["verifier_verified"][
+            K.THRESHOLDS["roles"]["card_web_verifier"]["sets"]["verifier_verified"][
                 "falsely_disputed_max"
             ]
             == 2
@@ -246,7 +246,7 @@ class TestTheAdjudicatedFactChecker:
         run_dir = adjudicated_dir(tmp_path, write_adjudication(tmp_path, jobs, fails))
         # the checker passes the hair-split card the record failed, and agrees on all the rest
         answer_checker(run_dir, agreement=lambda j: flipped(j) if is_fail(j) else mirror(j))
-        verdict = K.evaluate(run_dir, "fact_checker")
+        verdict = K.evaluate(run_dir, "card_fact_checker")
         agreement = verdict["sets"]["checker_agreement"]
         assert agreement["passed"] is True and agreement["verdict_agreement"] == 1.0
         (name,) = agreement["unscored"][K.HAIR_SPLIT]
@@ -258,7 +258,7 @@ class TestTheAdjudicatedFactChecker:
 
         run_dir = fixed_dir(tmp_path)
         answer_checker(run_dir, agreement=lambda j: flipped(j) if is_fail(j) else mirror(j))
-        agreement = K.evaluate(run_dir, "fact_checker")["sets"]["checker_agreement"]
+        agreement = K.evaluate(run_dir, "card_fact_checker")["sets"]["checker_agreement"]
         assert agreement["passed"] is False and agreement["verdict_agreement"] < 1.0
 
     def test_a_substantive_fail_the_checker_passes_still_fails_the_role(
@@ -267,7 +267,7 @@ class TestTheAdjudicatedFactChecker:
         jobs = draw(tmp_path)
         run_dir = adjudicated_dir(tmp_path, write_adjudication(tmp_path, jobs))
         answer_checker(run_dir, agreement=lambda j: flipped(j) if is_fail(j) else mirror(j))
-        agreement = K.evaluate(run_dir, "fact_checker")["sets"]["checker_agreement"]
+        agreement = K.evaluate(run_dir, "card_fact_checker")["sets"]["checker_agreement"]
         assert agreement["passed"] is False and agreement["false_pass"]
 
     def test_a_wrong_record_is_dropped_and_reported_by_name(self, tmp_path: Path) -> None:
@@ -286,7 +286,7 @@ class TestTheAdjudicatedFactChecker:
             run_dir,
             again=lambda j: checker_text("PASS" if j["number"] == wrong["number"] else "FAIL")(j),
         )
-        again = K.evaluate(run_dir, "fact_checker")["sets"]["checker_fail_again"]
+        again = K.evaluate(run_dir, "card_fact_checker")["sets"]["checker_fail_again"]
         assert again["counted"] == 1 and again["failed_again"] == 1
         assert again["failed_again_required"] == 1 and again["passed"] is True
         assert again["unscored"][K.WRONG] == [wrong["name"]]
@@ -300,7 +300,7 @@ class TestTheAdjudicatedFactChecker:
         }
         run_dir = adjudicated_dir(tmp_path, write_adjudication(tmp_path, jobs, fails))
         answer_checker(run_dir, again=checker_text("PASS"))
-        again = K.evaluate(run_dir, "fact_checker")["sets"]["checker_fail_again"]
+        again = K.evaluate(run_dir, "card_fact_checker")["sets"]["checker_fail_again"]
         assert (again["counted"], again["failed_again_required"], again["failed_again"]) == (
             1,
             1,
@@ -317,7 +317,7 @@ class TestTheAdjudicatedFactChecker:
         run_dir = adjudicated_dir(tmp_path, path)
         answer_checker(run_dir)
         with pytest.raises(K.CalibrationError, match="does not label the recorded FAIL"):
-            K.evaluate(run_dir, "fact_checker")
+            K.evaluate(run_dir, "card_fact_checker")
 
     def test_a_label_for_a_case_the_draw_does_not_hold_is_refused(self, tmp_path: Path) -> None:
         jobs = draw(tmp_path)
@@ -330,7 +330,7 @@ class TestTheAdjudicatedFactChecker:
         run_dir = adjudicated_dir(tmp_path, path)
         answer_checker(run_dir)
         with pytest.raises(K.CalibrationError, match="which the fixed draw does not hold"):
-            K.evaluate(run_dir, "fact_checker")
+            K.evaluate(run_dir, "card_fact_checker")
 
     def test_a_label_on_another_card_than_the_case_is_refused(self, tmp_path: Path) -> None:
         jobs = draw(tmp_path)
@@ -341,7 +341,7 @@ class TestTheAdjudicatedFactChecker:
         run_dir = adjudicated_dir(tmp_path, path)
         answer_checker(run_dir)
         with pytest.raises(K.CalibrationError, match="names another card"):
-            K.evaluate(run_dir, "fact_checker")
+            K.evaluate(run_dir, "card_fact_checker")
 
 
 def is_fail(job: dict[str, Any]) -> bool:
@@ -364,14 +364,14 @@ class TestTheSubtleDefectsAreCaughtOnlyWhenTheClaimIsNamed:
     def test_a_checker_that_names_the_claim_catches_every_defect(self, tmp_path: Path) -> None:
         run_dir = self.run_dir(tmp_path)
         answer_checker(run_dir)
-        defects = K.evaluate(run_dir, "fact_checker")["sets"]["checker_defects"]
+        defects = K.evaluate(run_dir, "card_fact_checker")["sets"]["checker_defects"]
         assert defects["caught"] == 3 and defects["caught_subtle"] == defects["subtle_cases"] > 0
         assert defects["failed_without_naming_the_claim"] == []
 
     def test_a_fail_that_names_nothing_catches_no_subtle_defect(self, tmp_path: Path) -> None:
         run_dir = self.run_dir(tmp_path)
         answer_checker(run_dir, defects=defect_text("FAIL", naming=False))
-        defects = K.evaluate(run_dir, "fact_checker")["sets"]["checker_defects"]
+        defects = K.evaluate(run_dir, "card_fact_checker")["sets"]["checker_defects"]
         assert defects["caught"] == 3 - defects["subtle_cases"]
         assert len(defects["failed_without_naming_the_claim"]) == defects["subtle_cases"]
         assert defects["passed"] is False
@@ -383,7 +383,7 @@ class TestTheSubtleDefectsAreCaughtOnlyWhenTheClaimIsNamed:
             pytest.skip("every tiny base card took a subtle defect")
         run_dir = self.run_dir(tmp_path)
         answer_checker(run_dir, defects=defect_text("FAIL", naming=False))
-        defects = K.evaluate(run_dir, "fact_checker")["sets"]["checker_defects"]
+        defects = K.evaluate(run_dir, "card_fact_checker")["sets"]["checker_defects"]
         assert defects["caught"] >= len(blunt)
 
 
@@ -423,13 +423,13 @@ class TestTheDisputedVerdictIsScoredApart:
         )
         answer_role(
             run_dir,
-            "web_verifier",
+            "card_web_verifier",
             {
                 "verifier_contradicted": contradicted_answer,
                 "verifier_verified": verified_answer(verdict),
             },
         )
-        return K.evaluate(run_dir, "web_verifier", client=judge_client())["sets"][
+        return K.evaluate(run_dir, "card_web_verifier", client=judge_client())["sets"][
             "verifier_verified"
         ]
 
@@ -515,14 +515,14 @@ class TestTheDisputeList:
         run_dir = adjudicated_dir(tmp_path, write_adjudication(tmp_path, draw(tmp_path)))
         answer_role(
             run_dir,
-            "web_verifier",
+            "card_web_verifier",
             {
                 "verifier_contradicted": contradicted_answer,
                 "verifier_verified": contradicted_answer,
             },
         )
-        K.evaluate(run_dir, "web_verifier", client=judge_client())  # keeps the cited pages
-        listed = K.dispute_list(run_dir, "web_verifier")
+        K.evaluate(run_dir, "card_web_verifier", client=judge_client())  # keeps the cited pages
+        listed = K.dispute_list(run_dir, "card_web_verifier")
         assert len(listed) == 2
         entry = listed[0]
         assert entry["contradicted"] == [
@@ -567,15 +567,15 @@ class TestTheDisputeList:
         run_dir = adjudicated_dir(tmp_path, write_adjudication(tmp_path, draw(tmp_path)))
         answer_role(
             run_dir,
-            "web_verifier",
+            "card_web_verifier",
             {
                 "verifier_contradicted": contradicted_answer,
                 "verifier_verified": contradicted_answer,
             },
         )
-        K.evaluate(run_dir, "web_verifier", client=judge_client())  # keeps the cited pages
+        K.evaluate(run_dir, "card_web_verifier", client=judge_client())  # keeps the cited pages
         before = sorted((p, p.read_bytes()) for p in tmp_path.rglob("*") if p.is_file())
-        K.dispute_list(run_dir, "web_verifier")
+        K.dispute_list(run_dir, "card_web_verifier")
         assert before == sorted((p, p.read_bytes()) for p in tmp_path.rglob("*") if p.is_file())
 
     def test_it_serves_a_calibration_whose_modules_moved_after_the_seal(
@@ -584,25 +584,25 @@ class TestTheDisputeList:
         run_dir = adjudicated_dir(tmp_path, write_adjudication(tmp_path, draw(tmp_path)))
         answer_role(
             run_dir,
-            "web_verifier",
+            "card_web_verifier",
             {
                 "verifier_contradicted": contradicted_answer,
                 "verifier_verified": contradicted_answer,
             },
         )
-        K.evaluate(run_dir, "web_verifier", client=judge_client())  # keeps the cited pages
+        K.evaluate(run_dir, "card_web_verifier", client=judge_client())  # keeps the cited pages
         # the checkout's prompts are no longer the sealed ones: a judgement would be refused
         monkeypatch.setattr(
             K, "module_hashes", lambda root=K.ROOT, names=None: dict.fromkeys(names, "0" * 64)
         )
         with pytest.raises(K.CalibrationError, match="changed after the seal"):
             K.sealed(run_dir)
-        assert K.dispute_list(run_dir, "web_verifier")
+        assert K.dispute_list(run_dir, "card_web_verifier")
 
     def test_only_the_web_roles_are_listed(self, tmp_path: Path) -> None:
         run_dir = adjudicated_dir(tmp_path, write_adjudication(tmp_path, draw(tmp_path)))
         with pytest.raises(K.CalibrationError, match="only the web verifier and the adversarial"):
-            K.dispute_list(run_dir, "fact_checker")
+            K.dispute_list(run_dir, "card_fact_checker")
 
     def test_a_role_never_exported_is_refused(self, tmp_path: Path) -> None:
         run_dir = adjudicated_dir(tmp_path, write_adjudication(tmp_path, draw(tmp_path)))

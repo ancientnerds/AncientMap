@@ -38,20 +38,20 @@ cards of the production export and a file of vetted shorts-v1 cards (`--base-car
               it was made on). Refused otherwise - this is what a gate asks.
 
     T=scripts/remediation/teaser/calibrate.py     D=output/remediation/calibration/teaser-<id>
-    $T seal --run-dir $D [--candidate-role fact_checker --candidate-model claude-haiku-5-5] \
+    $T seal --run-dir $D [--candidate-role card_fact_checker --candidate-model claude-haiku-5-5] \
         [--adjudication output/remediation/calibration/teaser-gold/ADJUDICATION.json]
     $T jobs --run-dir $D --runs output/remediation/teaser/runs/wb-ws-2026-09-27-01 ... \\
         --export output/remediation/teaser/runs/<run>/EXPORT.jsonl --base-cards BASE.jsonl
-    $T export --run-dir $D --role fact_checker --handoff output/remediation/handoff/cal-<id>-... \\
+    $T export --run-dir $D --role card_fact_checker --handoff output/remediation/handoff/cal-<id>-... \\
         [--batch-size N] [--candidate-model MODEL_ID]
-    $T agents --run-dir $D --role fact_checker [--candidate-model M]   one workflow job per batch: role, fixed
+    $T agents --run-dir $D --role card_fact_checker [--candidate-model M]   one workflow job per batch: role, fixed
         model id, effort, brief, how many may run at once (JSON)
-    $T evaluate --run-dir $D --role fact_checker [--candidate-model M]   (web_verifier: fetches pages)
+    $T evaluate --run-dir $D --role card_fact_checker [--candidate-model M]   (card_web_verifier: fetches pages)
     $T evaluate --run-dir $D --role card_writer --writer-run output/remediation/teaser/runs/<pilot>
     $T release --run-dir $D --role hook_rater --decided-by TEXT --reason TEXT --evidence FILE ... \\
         [--owner-decision D36]
     $T standing --run-dir $D --role hook_rater
-    $T dispute-list --run-dir $D --role web_verifier|adversarial
+    $T dispute-list --run-dir $D --role card_web_verifier|adversarial
 
 **A candidate trial** (`seal --candidate-role R --candidate-model M`, owner decision D36's Haiku
 trial of the fact checker) calibrates role R with model M in this directory WITHOUT changing the
@@ -177,7 +177,7 @@ THRESHOLDS: dict[str, Any] = {
     "source": "output/remediation/final-2026-10-08/plans/cards.md section 3.4",
     "seed": 20261009,
     "roles": {
-        "fact_checker": {
+        "card_fact_checker": {
             "sets": {
                 "checker_agreement": {
                     "pass_cases": 30,
@@ -192,7 +192,7 @@ THRESHOLDS: dict[str, Any] = {
                 "checker_good": {"cases": 30, "pass_min": 27},
             }
         },
-        "web_verifier": {
+        "card_web_verifier": {
             "sets": {
                 "verifier_contradicted": {
                     "cases": 20,
@@ -233,12 +233,12 @@ THRESHOLDS: dict[str, Any] = {
 HOOK_REFERENCE = "hook_reference"
 #: Which role answers which set of cases, and with which prompt.
 SET_ROLE: dict[str, str] = {
-    "checker_agreement": "fact_checker",
-    "checker_fail_again": "fact_checker",
-    "checker_defects": "fact_checker",
-    "checker_good": "fact_checker",
-    "verifier_contradicted": "web_verifier",
-    "verifier_verified": "web_verifier",
+    "checker_agreement": "card_fact_checker",
+    "checker_fail_again": "card_fact_checker",
+    "checker_defects": "card_fact_checker",
+    "checker_good": "card_fact_checker",
+    "verifier_contradicted": "card_web_verifier",
+    "verifier_verified": "card_web_verifier",
     "hook_pairs": "hook_rater",
     HOOK_REFERENCE: "pilot_judge",
     "adversarial_contradicted": "adversarial",
@@ -776,7 +776,7 @@ def build_jobs(
     jobs: list[dict[str, Any]] = []
 
     passes, fails = recorded_checks(runs)
-    spec = roles["fact_checker"]["sets"]
+    spec = roles["card_fact_checker"]["sets"]
     agree, again = spec["checker_agreement"], spec["checker_fail_again"]
     drawn_pass = _draw(passes, agree["pass_cases"], rng, "recorded checker PASS")
     drawn_fail = _draw(fails, agree["fail_cases"] + again["cases"], rng, "recorded checker FAIL")
@@ -828,7 +828,7 @@ def build_jobs(
         )
 
     verified, contradicted = recorded_verifications(runs)
-    web = roles["web_verifier"]["sets"]
+    web = roles["card_web_verifier"]["sets"]
     jobs += [
         _verifier_job("verifier_contradicted", n, i)
         for n, i in enumerate(
@@ -1619,7 +1619,7 @@ def evaluate_web_verifier(
     CONTRADICTED is a false contradiction) or CONTRADICTED (the recorded gold is wrong: neither is
     false). Only CLEAN cards enter the claim measure and the card-level agreement."""
     parsed: dict[str, tuple[dict[str, Any], tuple[A.Judged, ...]]] = {}
-    for set_name in ROLE_SETS["web_verifier"]:
+    for set_name in ROLE_SETS["card_web_verifier"]:
         for key, (case, answer) in answers[set_name].items():
             try:
                 parsed[key] = (case, parse_case(case, answer.text))
@@ -1832,8 +1832,13 @@ def _no_stray_labels(run_dir: Path, adjudication: Adjudication) -> None:
 
 
 ROLE_SETS = {
-    "fact_checker": ("checker_agreement", "checker_fail_again", "checker_defects", "checker_good"),
-    "web_verifier": ("verifier_contradicted", "verifier_verified"),
+    "card_fact_checker": (
+        "checker_agreement",
+        "checker_fail_again",
+        "checker_defects",
+        "checker_good",
+    ),
+    "card_web_verifier": ("verifier_contradicted", "verifier_verified"),
     "hook_rater": ("hook_pairs", HOOK_REFERENCE),
     "adversarial": ("adversarial_contradicted", "adversarial_clean"),
 }
@@ -1871,9 +1876,9 @@ def evaluate(
         adjudication = sealed_adjudication(thresholds)
         if adjudication is not None:
             _no_stray_labels(run_dir, adjudication)
-        if role == "fact_checker":
+        if role == "card_fact_checker":
             sets = evaluate_fact_checker(answers, spec, adjudication)
-        elif role == "web_verifier":
+        elif role == "card_web_verifier":
             sets = evaluate_web_verifier(run_dir, answers, spec, client, adjudication)
         elif role == "hook_rater":
             sets = evaluate_hook_rater(answers, spec)
@@ -2148,14 +2153,14 @@ _URL = re.compile(r"https?://[^\s)\]\"'<>]+")
 
 
 def dispute_list(run_dir: Path, role: str) -> list[dict[str, Any]]:
-    """Read-only: the recorded VERIFIED cards a finished calibration's `role` (`web_verifier` or
+    """Read-only: the recorded VERIFIED cards a finished calibration's `role` (`card_web_verifier` or
     `adversarial`) contradicted or failed, with the sources it cited, for the orchestrator to label
     (`ADJUDICATION.json`, `verified_cards`: clean, disputed, contradicted). Nothing is judged here
     and nothing is fetched: the quotes are checked against the pages the evaluation kept, and the
     answers are read as recorded (the seal's integrity only - a calibration sealed with an older
     checkout of the prompts can be listed from a newer one). One entry per card, each with a
     `label_template` to complete."""
-    if role not in ("web_verifier", "adversarial"):
+    if role not in ("card_web_verifier", "adversarial"):
         raise CalibrationError(
             f"{role}: only the web verifier and the adversarial reviewer are listed"
         )
@@ -2166,7 +2171,7 @@ def dispute_list(run_dir: Path, role: str) -> list[dict[str, Any]]:
     handoff = _resolve(Path(exported["handoff"]))
     batch_of = {key: batch for batch, keys in exported["batches"].items() for key in keys}
     library = Q.Library(ROOT, run_dir / "pages")
-    wanted = "verifier_verified" if role == "web_verifier" else "adversarial_clean"
+    wanted = "verifier_verified" if role == "card_web_verifier" else "adversarial_clean"
     listed = []
     for case in sorted((j for j in jobs if j["set"] == wanted), key=lambda j: j["number"]):
         line = OH.read_manifest(handoff, batch_of[case["key"]])[(STAGE, case["key"])]
@@ -2179,7 +2184,7 @@ def dispute_list(run_dir: Path, role: str) -> list[dict[str, Any]]:
             "label": None,
             "note": "",
         }
-        if role == "web_verifier":
+        if role == "card_web_verifier":
             proven = R.prove_claims(case["site_id"], parsed, library)
             found = [c for c in proven if c["verdict"] == R.CONTRADICTED]
             if not found:
@@ -2264,7 +2269,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     jobs.add_argument("--export", required=True, type=Path)
     jobs.add_argument("--base-cards", required=True, type=Path)
     sub.choices["dispute-list"].add_argument(
-        "--role", required=True, choices=["web_verifier", "adversarial"]
+        "--role", required=True, choices=["card_web_verifier", "adversarial"]
     )
     seal_cli = sub.choices["seal"]
     seal_cli.add_argument(

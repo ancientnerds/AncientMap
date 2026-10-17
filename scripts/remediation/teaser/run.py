@@ -366,8 +366,8 @@ SHORTS_SPEC = Spec(
         {
             **dict.fromkeys((*(w for w, _, _ in SHORTS_ROUNDS), VERIFY_REWRITE), "card_writer"),
             **dict.fromkeys((r for _, r, _ in SHORTS_ROUNDS), "hook_rater"),
-            **dict.fromkeys(_SHORTS_CHECKERS, "fact_checker"),
-            **dict.fromkeys(VERIFY_STAGES, "web_verifier"),
+            **dict.fromkeys(_SHORTS_CHECKERS, "card_fact_checker"),
+            **dict.fromkeys(VERIFY_STAGES, "card_web_verifier"),
         }
     ),
     canary=_SHORTS_CHECKERS,
@@ -383,7 +383,11 @@ RECHECK_SPEC = Spec(
     adversarial=(ADVERSARIAL,),
     seeded=(SEEDED_WRITE,),
     roles=MappingProxyType(
-        {"check": "fact_checker", FIRST_VERIFY: "web_verifier", ADVERSARIAL: "adversarial"}
+        {
+            "check": "card_fact_checker",
+            FIRST_VERIFY: "card_web_verifier",
+            ADVERSARIAL: "adversarial",
+        }
     ),
     canary=("check",),
 )

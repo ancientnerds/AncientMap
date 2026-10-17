@@ -26,9 +26,11 @@ calibration against already-answered batches has passed.
 D6 (2026-10-08) limits a new answer to `opus_handoff.NEW_ANSWER_MODELS` — `claude-opus-5-5`,
 `claude-sonnet-5-5`, `claude-haiku-5-5` — and `fields/handoff.py` refuses every other stamp at import,
 so the WD5 main run, the card pilot and the image lanes need a Claude Code session (they are driven by
-Claude agents, not by an API call from the code). D40 ("`fact_checker`/`web_verifier` to Opus") was
-**superseded by D36** (2026-10-09: the calibrations measured no Opus advantage and the weekly quota stood
-at 69 %); `roles.py` carries both roles on Sonnet and a plan step that re-applies D40 is wrong.
+Claude agents, not by an API call from the code). D40 ("`fact_checker`/`web_verifier` to Opus") came
+**after** D36 (it followed the calibration teaser-2026-10-10, in which no Sonnet checker passed) and the
+owner confirmed it on 2026-10-17 (D42), scoped to the card lane (D45): the card lane has checkers of
+its own on Opus (`card_fact_checker`, `card_web_verifier`), while the shared `fact_checker` and
+`web_verifier` stay on Sonnet. D44 keeps D6 closed to MiniMax.
 
 ## Code Quality Standards
 

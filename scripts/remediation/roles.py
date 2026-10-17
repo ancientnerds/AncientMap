@@ -100,6 +100,12 @@ ROLES: Mapping[str, Role] = _registry(
     # D36 puts the role back on Sonnet, and the failed 09b verdict is released under that decision.
     Role("fact_checker", "claude-sonnet-5-5", "high", "wb_check_verify_opus"),
     Role("web_verifier", "claude-sonnet-5-5", "high", "wb_check_verify_opus"),
+    # The card lane's own checkers. Owner decision D40 (after teaser-2026-10-10, in which no Sonnet
+    # checker passed and the Haiku trial was weaker) put the card checks on Opus; D45 (2026-10-17)
+    # scoped it to the card lane, so `fact_checker` (lane WC) and `web_verifier` (identity, lane E,
+    # image identity) stay on Sonnet. New roles, not moves: they are calibrated before first use.
+    Role("card_fact_checker", "claude-opus-5-5", "high", "wb_check_verify_opus"),
+    Role("card_web_verifier", "claude-opus-5-5", "high", "wb_check_verify_opus"),
     # Sonnet failed fr-general-001 at 0.8636 (tier move to Opus); Opus reached 0.871 in
     # fr-general-002; D36 puts the role back on Sonnet under a release of fr-general-001.
     Role("field_researcher", "claude-sonnet-5-5", "high", "wd1_wd3_rounds_and_bp_set"),

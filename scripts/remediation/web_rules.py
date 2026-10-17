@@ -99,7 +99,16 @@ QUOTE_RULE = (
 #: confirms or rejects (the fact checker, the web verifier, the adversarial reviewer, the pilot
 #: judge) or one that researches or writes. A role added to the registry is classified here before
 #: a brief for it can be built - there is no default.
-VERIFIER_ROLES = frozenset({"fact_checker", "web_verifier", "adversarial", "pilot_judge"})
+VERIFIER_ROLES = frozenset(
+    {
+        "fact_checker",
+        "web_verifier",
+        "card_fact_checker",
+        "card_web_verifier",
+        "adversarial",
+        "pilot_judge",
+    }
+)
 RESEARCHER_ROLES = frozenset({"field_researcher", "card_writer", "enrich_writer"})
 
 

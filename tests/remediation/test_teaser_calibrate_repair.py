@@ -125,7 +125,7 @@ class TestTheCacheMap:
     ) -> None:
         run_dir = fixed_dir(tmp_path)
         handoff = tmp_path / "h-ver"
-        exported = K.export_role(run_dir, "web_verifier", handoff)
+        exported = K.export_role(run_dir, "card_web_verifier", handoff)
         jobs = {j["key"]: j for j in K.sealed_jobs(run_dir)}
         for batch, count in exported["batches"].items():
             lines = [
@@ -151,10 +151,10 @@ class TestTheCacheMap:
     def test_a_site_without_a_cached_page_has_a_line_with_no_pages(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
         handoff = tmp_path / "h-ver"
-        K.export_role(run_dir, "web_verifier", handoff)
+        K.export_role(run_dir, "card_web_verifier", handoff)
         lines = [
             json.loads(raw)
-            for batch in K._handoffs(run_dir)["web_verifier"]["batches"]
+            for batch in K._handoffs(run_dir)["card_web_verifier"]["batches"]
             for raw in (handoff / batch / K.WIKI_MAP).read_text("utf-8").splitlines()
         ]
         assert any(line["pages"] == [] for line in lines)  # the recorded sites 4-8 have none
@@ -163,10 +163,10 @@ class TestTheCacheMap:
     def test_the_map_names_no_site_no_set_and_no_number(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
         handoff = tmp_path / "h-ver"
-        K.export_role(run_dir, "web_verifier", handoff)
+        K.export_role(run_dir, "card_web_verifier", handoff)
         text = "".join(
             (handoff / batch / K.WIKI_MAP).read_text("utf-8")
-            for batch in K._handoffs(run_dir)["web_verifier"]["batches"]
+            for batch in K._handoffs(run_dir)["card_web_verifier"]["batches"]
         )
         jobs = K.sealed_jobs(run_dir)
         assert not any(j["site_id"] in text for j in jobs)
@@ -177,7 +177,7 @@ class TestTheCacheMap:
     def test_a_role_without_web_gets_no_map(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
         handoff = tmp_path / "h-checker"
-        exported = K.export_role(run_dir, "fact_checker", handoff)
+        exported = K.export_role(run_dir, "card_fact_checker", handoff)
         assert not any((handoff / batch / K.WIKI_MAP).exists() for batch in exported["batches"])
 
     def test_a_web_role_cannot_be_exported_without_the_cache(
@@ -186,13 +186,13 @@ class TestTheCacheMap:
         run_dir = fixed_dir(tmp_path)
         monkeypatch.setattr(K.R, "WIKI_CACHE", str(tmp_path / "no-cache"))
         with pytest.raises(Exception, match="INDEX.jsonl does not exist"):
-            K.export_role(run_dir, "web_verifier", tmp_path / "h-ver")
+            K.export_role(run_dir, "card_web_verifier", tmp_path / "h-ver")
 
     def test_the_brief_points_at_the_map_of_its_own_batch(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
         handoff = tmp_path / "h-ver"
-        K.export_role(run_dir, "web_verifier", handoff)
-        job = K.agent_jobs(run_dir, "web_verifier")[0]
+        K.export_role(run_dir, "card_web_verifier", handoff)
+        job = K.agent_jobs(run_dir, "card_web_verifier")[0]
         assert f"{K._shown(handoff)}/{job['batch_id']}/WIKI_MAP.jsonl" in job["brief"]
         assert "opaque" in job["brief"]
 
@@ -236,10 +236,10 @@ class TestTheClaimsFloor:
 
     def test_check_answer_names_the_floor_of_a_short_answer(self, tmp_path: Path) -> None:
         run_dir = run_with_claims(tmp_path, 3)
-        K.export_role(run_dir, "web_verifier", tmp_path / "h-ver")
-        job = next(j for j in K.sealed_jobs(run_dir) if j["role"] == "web_verifier")
+        K.export_role(run_dir, "card_web_verifier", tmp_path / "h-ver")
+        job = next(j for j in K.sealed_jobs(run_dir) if j["role"] == "card_web_verifier")
         batch = next(
-            b for b, keys in K._handoffs(run_dir)["web_verifier"]["batches"].items()
+            b for b, keys in K._handoffs(run_dir)["card_web_verifier"]["batches"].items()
             if job["key"] in keys
         )  # fmt: skip
         short = K.check_answer(run_dir, batch, job["key"], judge_text(2))
@@ -254,12 +254,12 @@ class TestTheClaimsFloor:
         run_dir = run_with_claims(tmp_path, 3)
         answer_role(
             run_dir,
-            "web_verifier",
+            "card_web_verifier",
             {"verifier_contradicted": lambda job: judge_text(2),
              "verifier_verified": lambda job: judge_text(3)},
         )  # fmt: skip
         with pytest.raises(K.CalibrationError, match="malformed answer.*at least 3"):
-            K.evaluate(run_dir, "web_verifier", client=judge_client())
+            K.evaluate(run_dir, "card_web_verifier", client=judge_client())
 
     def test_a_short_answer_passes_no_floor_it_was_not_given(self) -> None:
         job = {"prompt_kind": "judge_v1", "floor": 1}
@@ -271,7 +271,7 @@ class TestTheClaimsFloor:
 # ------------------------------------------------------------------------------ disputed gold
 def disputed_table(site_ids: list[str]) -> dict[str, Any]:
     table = json.loads(json.dumps(TINY))
-    rule = table["roles"]["web_verifier"]["sets"]["verifier_contradicted"]
+    rule = table["roles"]["card_web_verifier"]["sets"]["verifier_contradicted"]
     rule.update(cases=2, caught_min=2, disputed={sid: f"why {sid[-2:]}" for sid in site_ids})
     return table
 
@@ -327,11 +327,11 @@ class TestDisputedGold:
     ) -> None:
         run_dir = fixed_dir(tmp_path, disputed_table(["00000000-0000-4000-8000-000000000000"]))
         answer_role(
-            run_dir, "web_verifier",
+            run_dir, "card_web_verifier",
             {"verifier_contradicted": miss_all, "verifier_verified": verified_text},
         )  # fmt: skip
         with pytest.raises(K.CalibrationError, match="no site id of the contradicted set"):
-            K.evaluate(run_dir, "web_verifier", client=judge_client())
+            K.evaluate(run_dir, "card_web_verifier", client=judge_client())
 
     def test_a_disputed_contradiction_the_verifier_missed_leaves_the_denominator(
         self, tmp_path: Path
@@ -355,10 +355,10 @@ class TestDisputedGold:
             ]})  # fmt: skip
 
         answer_role(
-            run_dir, "web_verifier",
+            run_dir, "card_web_verifier",
             {"verifier_contradicted": contradicted, "verifier_verified": verified_text},
         )  # fmt: skip
-        result = K.evaluate(run_dir, "web_verifier", client=judge_client())["sets"][
+        result = K.evaluate(run_dir, "card_web_verifier", client=judge_client())["sets"][
             "verifier_contradicted"
         ]
         assert (result["cases"], result["counted"], result["caught"]) == (2, 1, 1)
@@ -372,10 +372,10 @@ class TestDisputedGold:
     def test_an_undisputed_miss_still_fails_the_role(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path, disputed_table([]))
         answer_role(
-            run_dir, "web_verifier",
+            run_dir, "card_web_verifier",
             {"verifier_contradicted": miss_all, "verifier_verified": verified_text},
         )  # fmt: skip
-        result = K.evaluate(run_dir, "web_verifier", client=judge_client())["sets"][
+        result = K.evaluate(run_dir, "card_web_verifier", client=judge_client())["sets"][
             "verifier_contradicted"
         ]
         assert result["passed"] is False and len(result["missed"]) == 2
@@ -460,10 +460,10 @@ class TestTheQuoteStanding:
         run_dir = fixed_dir(tmp_path)
         answer_role(
             run_dir,
-            "web_verifier",
+            "card_web_verifier",
             {"verifier_contradicted": contradicted_ok, "verifier_verified": text_verified(quote)},
         )
-        return K.evaluate(run_dir, "web_verifier", client=judge_client())["sets"][
+        return K.evaluate(run_dir, "card_web_verifier", client=judge_client())["sets"][
             "verifier_verified"
         ]
 
@@ -494,10 +494,10 @@ class TestTheQuoteStanding:
             return text_verified(QUOTE)(job).replace(PAGE, "https://example.org/gone")
 
         answer_role(
-            run_dir, "web_verifier",
+            run_dir, "card_web_verifier",
             {"verifier_contradicted": contradicted_ok, "verifier_verified": missing},
         )  # fmt: skip
-        result = K.evaluate(run_dir, "web_verifier", client=judge_client())["sets"][
+        result = K.evaluate(run_dir, "card_web_verifier", client=judge_client())["sets"][
             "verifier_verified"
         ]
         assert result["false_sources"] == [] and result["unreadable_pages"]
@@ -524,12 +524,12 @@ class TestCheckAnswer:
     def test_an_answer_in_the_old_five_field_schema_is_refused_for_a_shorts_case(
         self, tmp_path: Path
     ) -> None:
-        """The seven fact_checker answers of teaser-2026-10-09 were recorded in v1's 5-field shape
+        """The seven card_fact_checker answers of teaser-2026-10-09 were recorded in v1's 5-field shape
         for shorts-v1 questions; the recorder never read them."""
-        run_dir, batch_of = self.exported(tmp_path, "fact_checker")
+        run_dir, batch_of = self.exported(tmp_path, "card_fact_checker")
         case = next(
             j for j in K.sealed_jobs(run_dir)
-            if j["role"] == "fact_checker" and j["prompt_kind"] == "checker_shorts"
+            if j["role"] == "card_fact_checker" and j["prompt_kind"] == "checker_shorts"
         )  # fmt: skip
         old = T.checker_answer("PASS", [("a ridge fort", ["S1"])])
         result = K.check_answer(run_dir, batch_of[case["key"]], case["key"], old)
@@ -538,10 +538,10 @@ class TestCheckAnswer:
         assert new["ok"] is True and new["verdict"] == "PASS"
 
     def test_a_v1_case_is_read_as_a_v1_check(self, tmp_path: Path) -> None:
-        run_dir, batch_of = self.exported(tmp_path, "fact_checker")
+        run_dir, batch_of = self.exported(tmp_path, "card_fact_checker")
         case = next(
             j for j in K.sealed_jobs(run_dir)
-            if j["role"] == "fact_checker" and j["prompt_kind"] == "checker_v1"
+            if j["role"] == "card_fact_checker" and j["prompt_kind"] == "checker_v1"
         )  # fmt: skip
         assert K.check_answer(
             run_dir, batch_of[case["key"]], case["key"], T.checker_answer("PASS")
@@ -559,7 +559,7 @@ class TestCheckAnswer:
         assert isinstance(K.check_answer(run_dir, batch, key, good)["ok"], bool)
 
     def test_a_question_of_no_batch_is_refused(self, tmp_path: Path) -> None:
-        run_dir, batch_of = self.exported(tmp_path, "fact_checker")
+        run_dir, batch_of = self.exported(tmp_path, "card_fact_checker")
         key = next(iter(batch_of))
         with pytest.raises(K.CalibrationError, match="is no question"):
             K.check_answer(run_dir, "fact-checker-999", key, "{}")
@@ -574,10 +574,10 @@ class TestCheckAnswer:
     def test_the_command_prints_json_and_exits_one_for_an_answer_that_is_not_ok(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        run_dir, batch_of = self.exported(tmp_path, "fact_checker")
+        run_dir, batch_of = self.exported(tmp_path, "card_fact_checker")
         case = next(
             j for j in K.sealed_jobs(run_dir)
-            if j["role"] == "fact_checker" and j["prompt_kind"] == "checker_v1"
+            if j["role"] == "card_fact_checker" and j["prompt_kind"] == "checker_v1"
         )  # fmt: skip
         file = tmp_path / "a.json"
         file.write_text(T.checker_answer("PASS"), encoding="utf-8")
@@ -591,8 +591,8 @@ class TestCheckAnswer:
 
     def test_the_brief_has_the_check_step_before_the_record_step(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        K.export_role(run_dir, "fact_checker", tmp_path / "h-checker")
-        brief = K.agent_jobs(run_dir, "fact_checker")[0]["brief"]
+        K.export_role(run_dir, "card_fact_checker", tmp_path / "h-checker")
+        brief = K.agent_jobs(run_dir, "card_fact_checker")[0]["brief"]
         check = brief.index("calibrate.py check-answer")
         record = brief.index("opus_handoff.py answer")
         assert check < record and '"ok": true' in brief
@@ -606,7 +606,7 @@ class TestTheRecorderHook:
     def prepare(self, tmp_path: Path) -> tuple[Path, str, str, str]:
         run_dir = fixed_dir(tmp_path)
         handoff = tmp_path / "h-checker"
-        K.export_role(run_dir, "fact_checker", handoff)
+        K.export_role(run_dir, "card_fact_checker", handoff)
         line = OH.manifest(handoff)[0]
         return handoff, line["batch_id"], line["label"], line["stage"]
 
@@ -615,8 +615,8 @@ class TestTheRecorderHook:
     ) -> int:
         return OH.main(
             ["answer", "--dir", str(handoff), "--batch-id", batch, "--stage", stage,
-             "--label", label, "--answered-by", "agent", "--role", "fact_checker",
-             "--model", "claude-sonnet-5-5", "--text-file", str(file), *extra]
+             "--label", label, "--answered-by", "agent", "--role", "card_fact_checker",
+             "--model", "claude-opus-5-5", "--text-file", str(file), *extra]
         )  # fmt: skip
 
     def test_a_failing_check_stops_the_record(
@@ -651,7 +651,7 @@ class TestVoid:
         run_dir = fixed_dir(tmp_path)
         handoff = answer_role(
             run_dir,
-            "fact_checker",
+            "card_fact_checker",
             {s: (lambda j: T.checker_answer("PASS")) for s in
              ("checker_agreement", "checker_fail_again", "checker_defects", "checker_good")},
         )  # fmt: skip
@@ -664,7 +664,7 @@ class TestVoid:
         run_dir, handoff, keys = self.answered(tmp_path)
         before = {line["label"]: line for line in OH.manifest(handoff)}
         manifest = (handoff / before[keys[0]]["batch_id"] / "MANIFEST.jsonl").read_bytes()
-        voided = K.void_answers(run_dir, "fact_checker", keys[:2], "old five-field schema")
+        voided = K.void_answers(run_dir, "card_fact_checker", keys[:2], "old five-field schema")
         assert [v["label"] for v in voided] == keys[:2]
         for key in keys[:2]:
             line = before[key]
@@ -677,13 +677,17 @@ class TestVoid:
 
     def test_every_void_is_a_line_of_the_log(self, tmp_path: Path) -> None:
         run_dir, handoff, keys = self.answered(tmp_path)
-        K.void_answers(run_dir, "fact_checker", keys[:2], "old five-field schema", now=lambda: "T")
+        K.void_answers(
+            run_dir, "card_fact_checker", keys[:2], "old five-field schema", now=lambda: "T"
+        )
         lines = [json.loads(x) for x in (run_dir / K.VOID_FILE).read_text("utf-8").splitlines()]
         assert [x["label"] for x in lines] == keys[:2]
         for entry in lines:
-            assert entry["role"] == "fact_checker" and entry["reason"] == "old five-field schema"
+            assert (
+                entry["role"] == "card_fact_checker" and entry["reason"] == "old five-field schema"
+            )
             assert entry["voided_at"] == "T" and len(entry["answer_sha256"]) == 64
-            assert entry["answered_by"].startswith("fact_checker:cal-")
+            assert entry["answered_by"].startswith("card_fact_checker:cal-")
 
     def test_the_seal_is_untouched_and_the_question_can_be_answered_again(
         self, tmp_path: Path
@@ -691,14 +695,14 @@ class TestVoid:
         run_dir, handoff, keys = self.answered(tmp_path)
         files = [K.THRESHOLDS_FILE, K.SEAL_LOG, K.JOBS_FILE, K.HANDOFFS_FILE]
         before = {f: (run_dir / f).read_bytes() for f in files}
-        K.void_answers(run_dir, "fact_checker", keys[:1], "again")
+        K.void_answers(run_dir, "card_fact_checker", keys[:1], "again")
         assert {f: (run_dir / f).read_bytes() for f in files} == before
         K.sealed(run_dir)  # still the sealed calibration
         line = next(x for x in OH.manifest(handoff) if x["label"] == keys[0])
         assert OH.write_answer(
             handoff, batch_id=line["batch_id"], stage=K.STAGE, label=keys[0],
-            text=T.checker_answer("PASS"), answered_by=RO.answered_by("fact_checker", "again"),
-            model=OH.ANSWER_MODELS[RO.role("fact_checker").model],
+            text=T.checker_answer("PASS"), answered_by=RO.answered_by("card_fact_checker", "again"),
+            model=OH.ANSWER_MODELS[RO.role("card_fact_checker").model],
         )  # fmt: skip
 
     def test_an_answer_of_another_role_is_refused(self, tmp_path: Path) -> None:
@@ -706,59 +710,59 @@ class TestVoid:
         line = next(x for x in OH.manifest(handoff) if x["label"] == keys[0])
         path = handoff / line["answer_path"]
         stored = json.loads(path.read_text("utf-8"))
-        stored["answered_by"] = RO.answered_by("web_verifier", "intruder")
+        stored["answered_by"] = RO.answered_by("card_web_verifier", "intruder")
         path.write_text(json.dumps(stored), encoding="utf-8")
-        with pytest.raises(K.CalibrationError, match="not in role fact_checker"):
-            K.void_answers(run_dir, "fact_checker", keys[:2], "no")
+        with pytest.raises(K.CalibrationError, match="not in role card_fact_checker"):
+            K.void_answers(run_dir, "card_fact_checker", keys[:2], "no")
         assert (
             path.is_file() and not (handoff.parent / f"{handoff.name}-void").exists()
         )  # nothing moved
 
     def test_a_question_of_another_role_is_refused(self, tmp_path: Path) -> None:
         run_dir, handoff, keys = self.answered(tmp_path)
-        other = next(j["key"] for j in K.sealed_jobs(run_dir) if j["role"] == "web_verifier")
-        K.export_role(run_dir, "web_verifier", tmp_path / "h-ver")
-        with pytest.raises(K.CalibrationError, match="is no question of role fact_checker"):
-            K.void_answers(run_dir, "fact_checker", [other], "wrong role")
+        other = next(j["key"] for j in K.sealed_jobs(run_dir) if j["role"] == "card_web_verifier")
+        K.export_role(run_dir, "card_web_verifier", tmp_path / "h-ver")
+        with pytest.raises(K.CalibrationError, match="is no question of role card_fact_checker"):
+            K.void_answers(run_dir, "card_fact_checker", [other], "wrong role")
 
     def test_a_question_without_an_answer_a_missing_reason_and_a_repeat_are_refused(
         self, tmp_path: Path
     ) -> None:
         run_dir = fixed_dir(tmp_path)
         handoff = tmp_path / "h-checker"
-        K.export_role(run_dir, "fact_checker", handoff)
+        K.export_role(run_dir, "card_fact_checker", handoff)
         label = OH.manifest(handoff)[0]["label"]
         with pytest.raises(K.CalibrationError, match="no recorded answer"):
-            K.void_answers(run_dir, "fact_checker", [label], "x")
+            K.void_answers(run_dir, "card_fact_checker", [label], "x")
         run_dir2, handoff2, keys = self.answered(tmp_path / "second")
         with pytest.raises(K.CalibrationError, match="needs its reason"):
-            K.void_answers(run_dir2, "fact_checker", keys[:1], "  ")
+            K.void_answers(run_dir2, "card_fact_checker", keys[:1], "  ")
         with pytest.raises(K.CalibrationError, match="once"):
-            K.void_answers(run_dir2, "fact_checker", [keys[0], keys[0]], "x")
+            K.void_answers(run_dir2, "card_fact_checker", [keys[0], keys[0]], "x")
 
     def test_a_role_never_exported_is_refused(self, tmp_path: Path) -> None:
         with pytest.raises(K.CalibrationError, match="was never exported"):
-            K.void_answers(fixed_dir(tmp_path), "fact_checker", ["k"], "x")
+            K.void_answers(fixed_dir(tmp_path), "card_fact_checker", ["k"], "x")
 
     def test_an_answer_is_voided_once(self, tmp_path: Path) -> None:
         """A question voided, answered again and voided again would overwrite the first void."""
         run_dir, handoff, keys = self.answered(tmp_path)
-        K.void_answers(run_dir, "fact_checker", keys[:1], "first")
+        K.void_answers(run_dir, "card_fact_checker", keys[:1], "first")
         line = next(x for x in OH.manifest(handoff) if x["label"] == keys[0])
         OH.write_answer(
             handoff, batch_id=line["batch_id"], stage=K.STAGE, label=keys[0],
-            text=T.checker_answer("PASS"), answered_by=RO.answered_by("fact_checker", "again"),
-            model=OH.ANSWER_MODELS[RO.role("fact_checker").model],
+            text=T.checker_answer("PASS"), answered_by=RO.answered_by("card_fact_checker", "again"),
+            model=OH.ANSWER_MODELS[RO.role("card_fact_checker").model],
         )  # fmt: skip
         with pytest.raises(K.CalibrationError, match="is voided once"):
-            K.void_answers(run_dir, "fact_checker", keys[:1], "second")
+            K.void_answers(run_dir, "card_fact_checker", keys[:1], "second")
         assert (handoff / line["answer_path"]).is_file()  # the new answer stays
 
     def test_the_command_voids_and_prints_the_log_lines(
         self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
     ) -> None:
         run_dir, handoff, keys = self.answered(tmp_path)
-        code = K.main(["void", "--run-dir", str(run_dir), "--role", "fact_checker",
+        code = K.main(["void", "--run-dir", str(run_dir), "--role", "card_fact_checker",
                        "--labels", ",".join(keys[:2]), "--reason", "schema"])  # fmt: skip
         assert code == 0
         assert [x["label"] for x in json.loads(capsys.readouterr().out)] == keys[:2]
@@ -806,16 +810,16 @@ class TestAnOlderSeal:
         monkeypatch.setattr(K, "module_hashes", lambda root=K.ROOT, names=None: dict.fromkeys(names or K.MODULES, "moved"))  # fmt: skip
         with pytest.raises(K.CalibrationError, match="changed after the seal"):
             K.sealed(run_dir)
-        assert [v["label"] for v in K.void_answers(run_dir, "fact_checker", keys[:1], "x")] == keys[
-            :1
-        ]
+        assert [
+            v["label"] for v in K.void_answers(run_dir, "card_fact_checker", keys[:1], "x")
+        ] == keys[:1]
 
     def test_a_tampered_seal_still_stops_a_void(self, tmp_path: Path) -> None:
         run_dir, handoff, keys = TestVoid().answered(tmp_path)
         path = run_dir / K.THRESHOLDS_FILE
         path.write_text(path.read_text("utf-8").replace('"seed": 7', '"seed": 9'), encoding="utf-8")
         with pytest.raises(K.CalibrationError, match="changed after it was sealed"):
-            K.void_answers(run_dir, "fact_checker", keys[:1], "x")
+            K.void_answers(run_dir, "card_fact_checker", keys[:1], "x")
 
     def test_a_seal_made_before_the_new_modules_are_checked_for_the_modules_it_has(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -857,7 +861,7 @@ class TestClaimsThatDifferInVerdict:
         run_dir = fixed_dir(tmp_path)
         answer_role(
             run_dir,
-            "fact_checker",
+            "card_fact_checker",
             {
                 "checker_agreement": flipped_support,
                 "checker_fail_again": checker_text("FAIL"),
@@ -865,7 +869,7 @@ class TestClaimsThatDifferInVerdict:
                 "checker_good": checker_text("PASS"),
             },
         )
-        agreement = K.evaluate(run_dir, "fact_checker")["sets"]["checker_agreement"]
+        agreement = K.evaluate(run_dir, "card_fact_checker")["sets"]["checker_agreement"]
         assert agreement["verdict_agreement"] == 1.0 and agreement["false_pass"] == []
         assert agreement["claim_coverage"] == 1.0 and agreement["claim_agreement"] < 0.9
         assert agreement["passed"] is False
@@ -877,10 +881,10 @@ class TestTheVerifierMeasureGates:
         run_dir = fixed_dir(tmp_path)
         answer_role(
             run_dir,
-            "web_verifier",
+            "card_web_verifier",
             {"verifier_contradicted": contradicted_ok, "verifier_verified": verified},
         )
-        return K.evaluate(run_dir, "web_verifier", client=judge_client())["sets"][
+        return K.evaluate(run_dir, "card_web_verifier", client=judge_client())["sets"][
             "verifier_verified"
         ]
 

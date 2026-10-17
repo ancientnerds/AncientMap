@@ -119,8 +119,8 @@ final report.
 
 ## RESUME POINT - paused 2026-10-09 about 20:30 UTC (owner: weekly quota 95 %) - SUPERSEDED 2026-10-17, see the last section
 
-Two of its instructions are history: the run tree is merged and live on `main` at `fc32f37`, and item 2 (D40)
-was reversed by the newer owner decision D36 - do not re-apply it.
+One of its instructions is history: the run tree is merged and live on `main` at `fc32f37`. Item 2 (D40) stands:
+D40 came after D36, and the owner confirmed it on 2026-10-17 (D42).
 
 Nothing is half-written in production: the only write is the WD5 pilot wave 2026-10-09a (92 cells at 45 sites,
 accepted, 0 deviations). Run tree = main checkout on `run/2026-10-09-db-final` = `fix/2026-10-08-db-final`; the
@@ -171,8 +171,10 @@ State of the run, unchanged and complete:
    answers are write-once and are skipped, so the run resumes by asking only the open cells. The workflow
    `wf_cc685b15-849` still stops after the r0 import (remove that `return` for the re-asks, the Sonnet
    re-check of `adv-truth-002` at 0.96, the backup drill and wave 2026-10-10a).
-2. ~~**D40**~~ - obsolete, do not apply. D36 (2026-10-09) put `fact_checker` and `web_verifier` back on Sonnet;
-   `roles.py` carries the move up in `APPLIED_ESCALATIONS` and the move back in `_d36_move`.
+2. **D40**, scoped by D45 to the card lane - the card lane's own roles `card_fact_checker` and `card_web_verifier`
+   on Opus in `roles.py`, calibrated before first use; the shared `fact_checker`/`web_verifier` stay Sonnet; `card_writer`
+   stays Sonnet. (Corrected 2026-10-17, owner decision D42: this item first called
+   D40 obsolete, but D40 came after D36.)
 3. **Card pilot** (40 sites), the D10 re-check of the 167 MiniMax cards, then the waves. The six cards the
    2026-10-09 adjudication found wrong (Astale, North Bersted Man, Roman Ruins of Sao Cucufate, Caesar's
    Camp, Teotihuacan - Pyramid of the Moon, Nysa Bridge) are replaced by the rewrite.
@@ -191,3 +193,8 @@ quota falls below 30 %, or when a query fails. Start: 2,644 open, 91 % weekly qu
 To watch: `ssh ancientnerds 'tail -f /home/deploy/story_backbone.log'`. To stop:
 `ssh ancientnerds 'pkill -f story_backbone.sh'` - the waves are journalled and `story_reverify --rollback`
 exists. Every write is journalled, so an interrupted wave costs at most the items it had not journalled yet.
+## Owner decisions 2026-10-17 (Claude Code session)
+
+D42 D40 stands (checkers on Opus, card_writer Sonnet); D45 scopes it to the card lane (own roles
+`card_fact_checker`, `card_web_verifier`). D43 run Phase C now, autonomously, until about 90 % of the
+weekly Claude quota, then pause cleanly. D44 D6 stays closed to MiniMax. Recorded in `OWNER_DECISIONS_2026-10-08.md`.

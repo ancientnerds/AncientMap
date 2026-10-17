@@ -80,3 +80,16 @@ no OAuth setup until the owner says so. The Shorts decisions below (D26-D34) are
 | D40 | Quality control of the new card texts after calibration teaser-2026-10-10 (no Sonnet role passed; the Haiku trial was weaker than Sonnet) | **Opus for the checkers**: fact_checker and web_verifier on Opus 5.5, the card writer stays Sonnet. |
 | D41 | Weekly quota at 95 % on 2026-10-09 (about 22:30 Berlin) | **Pause everything** until the reset. |
 
+
+## Follow-up decisions of 2026-10-17 (asked in a Claude Code session, Opus 5.5)
+
+The 2026-10-17 MiniMax session recorded D40 as "superseded by D36". The order is the reverse: D36
+(Sonnet instead of Opus) was decided first on 2026-10-09; D40 followed after the calibration
+teaser-2026-10-10, in which no Sonnet checker passed. D40 was never registered in `roles.py`.
+
+| # | question | decision |
+| --- | --- | --- |
+| D42 | D36 or D40 for the card checkers | **D40 stands** (rec): the card checks on Opus 5.5; `card_writer` stays Sonnet. How far it reaches: D45. The 2026-10-17 notes calling D40 obsolete are wrong. |
+| D43 | Run Phase C now (WD5 main run, card pilot, re-asks, further lanes in MASTER_PLAN order) | **Yes, until about 90 % of the weekly Claude quota** (rec), autonomous under D8/D39, then a clean pause with a resume point. |
+| D44 | Open D6 for MiniMax answers | **No, D6 stays** (rec): new answers of the DB repair come only from Claude models; the DB lanes run only in Claude Code sessions. |
+| D45 | Scope of D40 (`web_verifier` also serves identity, lane E and image identity, ~14,000 web checks) | **Card lane only** (rec): the card lane gets roles of its own on Opus; `web_verifier` (and every other lane's role) stays on Sonnet and is calibrated per lane. |

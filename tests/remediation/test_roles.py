@@ -27,12 +27,15 @@ import roles as RO  # noqa: E402
 #: (model id, effort). `field_researcher`, `fact_checker` and `web_verifier` went to Opus by tier move
 #: and back to Sonnet by owner move; `card_writer`, `hook_rater`, `adversarial` and `code_review` went
 #: to Sonnet by owner move (the hook rater at medium); `pilot_judge` is the small spot check that
-#: stays on Opus; `enrich_writer` is the lane E writer that never left Sonnet.
+#: stays on Opus; `enrich_writer` is the lane E writer that never left Sonnet. D40 as scoped by D45
+#: (2026-10-17) added the card lane's own checkers on Opus.
 D6 = {
     "card_writer": ("claude-sonnet-5-5", "high"),
     "hook_rater": ("claude-sonnet-5-5", "medium"),
     "fact_checker": ("claude-sonnet-5-5", "high"),
     "web_verifier": ("claude-sonnet-5-5", "high"),
+    "card_fact_checker": ("claude-opus-5-5", "high"),
+    "card_web_verifier": ("claude-opus-5-5", "high"),
     "field_researcher": ("claude-sonnet-5-5", "high"),
     "enrich_writer": ("claude-sonnet-5-5", "high"),
     "adversarial": ("claude-sonnet-5-5", "high"),

@@ -46,7 +46,7 @@ TINY: dict[str, Any] = {
     "source": "test",
     "seed": 7,
     "roles": {
-        "fact_checker": {
+        "card_fact_checker": {
             "sets": {
                 "checker_agreement": {
                     "pass_cases": 2,
@@ -61,7 +61,7 @@ TINY: dict[str, Any] = {
                 "checker_good": {"cases": 3, "pass_min": 3},
             }
         },
-        "web_verifier": {
+        "card_web_verifier": {
             "sets": {
                 "verifier_contradicted": {"cases": 2, "caught_min": 2, "disputed": {}},
                 "verifier_verified": {
@@ -365,7 +365,7 @@ def judge_client() -> httpx.Client:
 class TestTheSeal:
     def test_the_real_table_is_the_plan_s(self) -> None:
         roles = K.THRESHOLDS["roles"]
-        sets = roles["fact_checker"]["sets"]
+        sets = roles["card_fact_checker"]["sets"]
         assert sets["checker_agreement"] == {
             "pass_cases": 30, "fail_cases": 15, "verdict_agreement_min": 0.9,
             "claim_coverage_min": 0.8, "claim_agreement_min": 0.9, "false_pass_max": 0
@@ -375,7 +375,7 @@ class TestTheSeal:
             and sets["checker_defects"]["caught_min"] == 27
         )
         assert sets["checker_good"]["pass_min"] == 27
-        web = roles["web_verifier"]["sets"]
+        web = roles["card_web_verifier"]["sets"]
         assert web["verifier_contradicted"]["caught_min"] == 18
         assert web["verifier_contradicted"]["disputed"] == K.DISPUTED_CONTRADICTIONS
         assert len(K.DISPUTED_CONTRADICTIONS) == 5
@@ -389,8 +389,8 @@ class TestTheSeal:
         assert adv["adversarial_contradicted"]["cases"] == adv["adversarial_clean"]["cases"] == 25
         assert adv["adversarial_agreement"]["agreement_min"] == 0.9
         assert set(roles) == {
-            "fact_checker",
-            "web_verifier",
+            "card_fact_checker",
+            "card_web_verifier",
             "hook_rater",
             "card_writer",
             "adversarial",
@@ -408,7 +408,7 @@ class TestTheSeal:
         thresholds, again = K.sealed(run_dir)
         assert again == digest and thresholds["seed"] == 7
         assert set(thresholds["modules"]) == set(K.MODULES)
-        assert thresholds["registry"]["fact_checker"]["model"] == "claude-sonnet-5-5"
+        assert thresholds["registry"]["card_fact_checker"]["model"] == "claude-opus-5-5"
         assert thresholds["registry"]["pilot_judge"]["effort"] == "xhigh"
 
     def test_a_directory_with_a_case_or_a_verdict_cannot_be_sealed(self, tmp_path: Path) -> None:
@@ -417,7 +417,7 @@ class TestTheSeal:
             K.seal(run_dir, thresholds=TINY)
         other = tmp_path / "other"
         other.mkdir()
-        (other / "VERDICT-fact_checker.json").write_text("{}", encoding="utf-8")
+        (other / "VERDICT-card_fact_checker.json").write_text("{}", encoding="utf-8")
         with pytest.raises(K.CalibrationError, match="sealed before the first case"):
             K.seal(other, thresholds=TINY)
 
@@ -480,8 +480,8 @@ class TestTheCases:
         }  # fmt: skip
         assert len({j["key"] for j in jobs}) == len(jobs)
         assert {j["role"] for j in jobs} == {
-            "fact_checker",
-            "web_verifier",
+            "card_fact_checker",
+            "card_web_verifier",
             "hook_rater",
             "pilot_judge",
             "adversarial",
@@ -536,8 +536,8 @@ class TestTheCases:
         )
 
     def test_a_pool_smaller_than_the_sealed_set_is_refused(self, tmp_path: Path) -> None:
-        big = {**TINY, "roles": {**TINY["roles"], "web_verifier": {"sets": {
-            "verifier_contradicted": {"cases": 5, "caught_min": 5}, "verifier_verified": TINY["roles"]["web_verifier"]["sets"]["verifier_verified"]}}}}  # fmt: skip
+        big = {**TINY, "roles": {**TINY["roles"], "card_web_verifier": {"sets": {
+            "verifier_contradicted": {"cases": 5, "caught_min": 5}, "verifier_verified": TINY["roles"]["card_web_verifier"]["sets"]["verifier_verified"]}}}}  # fmt: skip
         with pytest.raises(K.CalibrationError, match="recorded contradictions: 2 recorded case"):
             K.build_jobs(
                 big,
@@ -628,7 +628,7 @@ class TestFixingTheCases:
 
     def test_cases_cannot_be_fixed_after_a_role_was_exported(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        K.export_role(run_dir, "fact_checker", tmp_path / "h-good")
+        K.export_role(run_dir, "card_fact_checker", tmp_path / "h-good")
         with pytest.raises(K.CalibrationError, match="exists: the cases are fixed first"):
             K.fix_jobs(run_dir, K.sealed_jobs(run_dir))
 
@@ -646,7 +646,7 @@ class TestFixingTheCases:
     def test_no_case_is_exported_before_it_is_fixed(self, tmp_path: Path) -> None:
         run_dir = sealed_dir(tmp_path)
         with pytest.raises(K.CalibrationError, match="not the sample the seal log fixed"):
-            K.export_role(run_dir, "fact_checker", tmp_path / "h")
+            K.export_role(run_dir, "card_fact_checker", tmp_path / "h")
 
 
 # ------------------------------------------------------------------------------ the questions
@@ -675,12 +675,12 @@ class TestTheQuestions:
 
     def test_a_role_is_exported_once_into_a_directory_of_its_own(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        exported = K.export_role(run_dir, "fact_checker", tmp_path / "h-checker")
-        assert exported["cases"] == 11 and exported["role"] == "fact_checker"
+        exported = K.export_role(run_dir, "card_fact_checker", tmp_path / "h-checker")
+        assert exported["cases"] == 11 and exported["role"] == "card_fact_checker"
         assert sum(exported["batches"].values()) == 11
         assert len(OH.manifest(tmp_path / "h-checker")) == 11
         with pytest.raises(K.CalibrationError, match="exported already"):
-            K.export_role(run_dir, "fact_checker", tmp_path / "h-checker2")
+            K.export_role(run_dir, "card_fact_checker", tmp_path / "h-checker2")
         with pytest.raises(K.CalibrationError, match="not empty"):
             K.export_role(run_dir, "hook_rater", tmp_path / "h-checker")
 
@@ -689,9 +689,9 @@ class TestTheQuestions:
     ) -> None:
         run_dir = fixed_dir(tmp_path)
         handoff = tmp_path / "h-checker"
-        exported = K.export_role(run_dir, "fact_checker", handoff)
+        exported = K.export_role(run_dir, "card_fact_checker", handoff)
         lines = OH.manifest(handoff)
-        sets = {j["set"] for j in K.sealed_jobs(run_dir) if j["role"] == "fact_checker"}
+        sets = {j["set"] for j in K.sealed_jobs(run_dir) if j["role"] == "card_fact_checker"}
         assert len(sets) == 4  # all the role's sets travel together, in one handoff
         for line in lines:
             assert line["stage"] == K.STAGE == "calibration"
@@ -708,7 +708,7 @@ class TestTheQuestions:
         ]
         assert any(sequence != sorted(sequence) for sequence in per_batch)
         # a good card and its flawed twin (one site) are never in one batch
-        for batch in K._handoffs(run_dir)["fact_checker"]["batches"].values():
+        for batch in K._handoffs(run_dir)["card_fact_checker"]["batches"].values():
             sites = [j["site_id"] for j in K.sealed_jobs(run_dir) if j["key"] in batch]
             assert len(sites) == len(set(sites))
 
@@ -717,53 +717,55 @@ class TestTheQuestions:
         (tmp_path / "b").mkdir()
         one = fixed_dir(tmp_path / "a")
         two = fixed_dir(tmp_path / "b")
-        first = K.export_role(one, "fact_checker", tmp_path / "ha")
-        second = K.export_role(two, "fact_checker", tmp_path / "hb")
+        first = K.export_role(one, "card_fact_checker", tmp_path / "ha")
+        second = K.export_role(two, "card_fact_checker", tmp_path / "hb")
         assert first == second
         assert (
-            K._handoffs(one)["fact_checker"]["batches"]
-            == K._handoffs(two)["fact_checker"]["batches"]
+            K._handoffs(one)["card_fact_checker"]["batches"]
+            == K._handoffs(two)["card_fact_checker"]["batches"]
         )
 
     def test_a_web_role_is_asked_eight_to_a_batch_and_the_size_is_recorded(
         self, tmp_path: Path
     ) -> None:
         run_dir = fixed_dir(tmp_path)
-        exported = K.export_role(run_dir, "web_verifier", tmp_path / "h-ver")
-        assert exported["batches"] == {"web-verifier-001": 4}
+        exported = K.export_role(run_dir, "card_web_verifier", tmp_path / "h-ver")
+        assert exported["batches"] == {"card-web-verifier-001": 4}
         assert exported["batch_size"] == K.WEB_BATCH_SIZE == 8
-        assert K._handoffs(run_dir)["web_verifier"]["batch_size"] == 8
+        assert K._handoffs(run_dir)["card_web_verifier"]["batch_size"] == 8
         assert K.WEB_SETS >= {"verifier_verified", "adversarial_clean"}
 
     def test_the_batch_size_is_an_explicit_export_parameter(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        exported = K.export_role(run_dir, "web_verifier", tmp_path / "h-ver", batch_size=2)
+        exported = K.export_role(run_dir, "card_web_verifier", tmp_path / "h-ver", batch_size=2)
         assert exported["batch_size"] == 2 and len(exported["batches"]) == 2
-        assert K._handoffs(run_dir)["web_verifier"]["batch_size"] == 2
+        assert K._handoffs(run_dir)["card_web_verifier"]["batch_size"] == 2
         for size in (0, -3, True):
             with pytest.raises(K.CalibrationError, match="not a count of 1 or more"):
-                K.export_role(run_dir, "fact_checker", tmp_path / f"h-{size}", batch_size=size)
+                K.export_role(run_dir, "card_fact_checker", tmp_path / f"h-{size}", batch_size=size)
 
     def test_the_agents_of_a_role_are_workflow_ready_jobs(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        K.export_role(run_dir, "web_verifier", tmp_path / "h-ver")
-        jobs = K.agent_jobs(run_dir, "web_verifier")
+        K.export_role(run_dir, "card_web_verifier", tmp_path / "h-ver")
+        jobs = K.agent_jobs(run_dir, "card_web_verifier")
         assert len(jobs) == 1
         job = jobs[0]
         assert (job["role"], job["model"], job["effort"]) == (
-            "web_verifier",
-            "claude-sonnet-5-5",
+            "card_web_verifier",
+            "claude-opus-5-5",
             "high",
         )
         assert job["cases"] == 4 and job["max_parallel"] == 3
-        assert job["batch_id"] == "web-verifier-001"
+        assert job["batch_id"] == "card-web-verifier-001"
         brief = job["brief"]
         assert (
-            "answering as the role **web_verifier**" in brief and "**claude-sonnet-5-5**" in brief
+            "answering as the role **card_web_verifier**" in brief
+            and "**claude-opus-5-5**" in brief
         )
-        assert "--stage calibration" in brief and "--role web_verifier" in brief
+        assert "--stage calibration" in brief and "--role card_web_verifier" in brief
         assert (
-            "--model claude-sonnet-5-5" in brief and "--answered-by cal-web-verifier-001" in brief
+            "--model claude-opus-5-5" in brief
+            and "--answered-by cal-card-web-verifier-001" in brief
         )
         assert not any(name in brief for name in K.SET_ROLE)
         assert "WIKI_MAP.jsonl" in brief and "NEVER a finding" in brief
@@ -775,10 +777,10 @@ class TestTheQuestions:
         assert "calibrate.py check-answer" in brief and "--check" in brief
         assert "quote_check.py" in brief
         json.dumps(jobs)
-        K.export_role(run_dir, "fact_checker", tmp_path / "h-good")
-        plain = K.agent_jobs(run_dir, "fact_checker")[0]
+        K.export_role(run_dir, "card_fact_checker", tmp_path / "h-good")
+        plain = K.agent_jobs(run_dir, "card_fact_checker")[0]
         assert plain["max_parallel"] is None and "Wikipedia cache" not in plain["brief"]
-        assert (plain["role"], plain["model"]) == ("fact_checker", "claude-sonnet-5-5")
+        assert (plain["role"], plain["model"]) == ("card_fact_checker", "claude-opus-5-5")
         assert not any(name in plain["brief"] for name in K.SET_ROLE)
 
     def test_the_reference_is_answered_by_the_pilot_judge(self, tmp_path: Path) -> None:
@@ -793,7 +795,7 @@ class TestTheQuestions:
 
     def test_a_role_never_exported_has_no_agents(self, tmp_path: Path) -> None:
         with pytest.raises(K.CalibrationError, match="was never exported"):
-            K.agent_jobs(fixed_dir(tmp_path), "fact_checker")
+            K.agent_jobs(fixed_dir(tmp_path), "card_fact_checker")
 
     def test_a_role_without_cases_is_refused(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
@@ -814,7 +816,7 @@ class TestTheFactChecker:
         """The table with the claim floor off (and any other floor as given), so that one rule of
         the agreement set is what a test asks about."""
         table = json.loads(json.dumps(TINY))
-        rule = table["roles"]["fact_checker"]["sets"]["checker_agreement"]
+        rule = table["roles"]["card_fact_checker"]["sets"]["checker_agreement"]
         rule.update({"claim_coverage_min": 0.0, "claim_agreement_min": 0.0, **floors})
         return table
 
@@ -832,7 +834,7 @@ class TestTheFactChecker:
 
         answer_role(
             run_dir,
-            "fact_checker",
+            "card_fact_checker",
             {
                 "checker_agreement": agreement,
                 "checker_fail_again": checker_text(verdicts.get("again", "FAIL")),
@@ -848,9 +850,9 @@ class TestTheFactChecker:
     ) -> None:
         run_dir = fixed_dir(tmp_path)
         self.all_sets(run_dir)
-        verdict = K.evaluate(run_dir, "fact_checker")
+        verdict = K.evaluate(run_dir, "card_fact_checker")
         assert verdict["passed"] is True and verdict["tier_move"] is None
-        assert verdict["model"] == "claude-sonnet-5-5" and verdict["effort"] == "high"
+        assert verdict["model"] == "claude-opus-5-5" and verdict["effort"] == "high"
         sets = verdict["sets"]
         assert (
             sets["checker_agreement"]["verdict_agreement"] == 1.0
@@ -862,29 +864,30 @@ class TestTheFactChecker:
             and sets["checker_defects"]["caught"] == 3
         )
         assert sets["checker_good"]["passed_cards"] == 3
-        assert (run_dir / "VERDICT-fact_checker.json").is_file()
-        assert json.loads((run_dir / "VERDICT-fact_checker.json").read_text("utf-8")) == verdict
+        assert (run_dir / "VERDICT-card_fact_checker.json").is_file()
+        assert (
+            json.loads((run_dir / "VERDICT-card_fact_checker.json").read_text("utf-8")) == verdict
+        )
 
     def test_a_verdict_is_written_once(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
         self.all_sets(run_dir)
-        K.evaluate(run_dir, "fact_checker")
+        K.evaluate(run_dir, "card_fact_checker")
         with pytest.raises(K.CalibrationError, match="a verdict is written once"):
-            K.evaluate(run_dir, "fact_checker")
+            K.evaluate(run_dir, "card_fact_checker")
 
     def test_a_pass_of_a_card_with_an_unsupported_claim_is_a_false_pass_and_fails_the_role(
         self, tmp_path: Path
     ) -> None:
         run_dir = fixed_dir(tmp_path)
         self.all_sets(run_dir, agreement="PASS")
-        verdict = K.evaluate(run_dir, "fact_checker")
+        verdict = K.evaluate(run_dir, "card_fact_checker")
         agreement = verdict["sets"]["checker_agreement"]
         assert len(agreement["false_pass"]) == 1 and agreement["passed"] is False
         assert verdict["passed"] is False
-        assert verdict["tier_move"] == {
-            "role": "fact_checker", "from": "claude-sonnet-5-5", "to": "claude-opus-5-5",
-            "calibration_id": "teaser-test", "reason": "failed: checker_agreement",
-        }  # fmt: skip
+        # Opus since D40/D45: the top tier, so a failing checker is held for the owner, not moved
+        assert verdict["tier_move"] is None
+        assert verdict["held"] == "no higher tier than claude-opus-5-5: the owner decides"
 
     def test_one_false_pass_fails_the_role_even_when_agreement_is_high(
         self, tmp_path: Path
@@ -892,7 +895,7 @@ class TestTheFactChecker:
         lenient = self.lenient(verdict_agreement_min=0.6)
         run_dir = fixed_dir(tmp_path, lenient)
         self.all_sets(run_dir, agreement="PASS")
-        agreement = K.evaluate(run_dir, "fact_checker")["sets"]["checker_agreement"]
+        agreement = K.evaluate(run_dir, "card_fact_checker")["sets"]["checker_agreement"]
         assert agreement["verdict_agreement"] == pytest.approx(0.6667, abs=1e-3)
         assert len(agreement["false_pass"]) == 1 and agreement["passed"] is False
 
@@ -901,26 +904,26 @@ class TestTheFactChecker:
     ) -> None:
         run_dir = fixed_dir(tmp_path)
         self.all_sets(run_dir, other_claims=True)
-        agreement = K.evaluate(run_dir, "fact_checker")["sets"]["checker_agreement"]
+        agreement = K.evaluate(run_dir, "card_fact_checker")["sets"]["checker_agreement"]
         # every verdict equals the recorded one, but the recorded failures' claims are not found
         assert agreement["verdict_agreement"] == 1.0 and agreement["false_pass"] == []
         assert agreement["claim_coverage"] < 0.8 and agreement["passed"] is False
 
     def test_the_claim_agreement_is_sealed_in_the_table(self) -> None:
-        rule = K.THRESHOLDS["roles"]["fact_checker"]["sets"]["checker_agreement"]
+        rule = K.THRESHOLDS["roles"]["card_fact_checker"]["sets"]["checker_agreement"]
         assert rule["claim_agreement_min"] == 0.9
 
     def test_a_checker_that_fails_the_recorded_passes_disagrees(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path, self.lenient())  # the claim floor has its own test
         self.all_sets(run_dir, agreement="FAIL")
-        agreement = K.evaluate(run_dir, "fact_checker")["sets"]["checker_agreement"]
+        agreement = K.evaluate(run_dir, "card_fact_checker")["sets"]["checker_agreement"]
         assert agreement["false_pass"] == [] and agreement["verdict_agreement"] < 0.9
         assert agreement["passed"] is False
 
     def test_a_checker_that_passes_the_recorded_failures_fails(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
         self.all_sets(run_dir, again="PASS")
-        verdict = K.evaluate(run_dir, "fact_checker")
+        verdict = K.evaluate(run_dir, "card_fact_checker")
         assert verdict["sets"]["checker_fail_again"] == {
             "cases": 2,
             "counted": 2,
@@ -934,43 +937,43 @@ class TestTheFactChecker:
     def test_a_defect_the_checker_passes_is_named_by_its_kind(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
         self.all_sets(run_dir, defects="PASS")
-        verdict = K.evaluate(run_dir, "fact_checker")
+        verdict = K.evaluate(run_dir, "card_fact_checker")
         missed = verdict["sets"]["checker_defects"]["missed_by_defect"]
         assert sum(missed.values()) == 3
         assert set(missed) <= {*SV.DEFECT_KINDS, *SV.SUBTLE_KINDS}
-        assert verdict["tier_move"]["reason"] == "failed: checker_defects"
+        assert verdict["tier_move"] is None and verdict["held"]
 
     def test_a_checker_that_fails_the_good_cards_fails(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
         self.all_sets(run_dir, good="FAIL")
-        assert K.evaluate(run_dir, "fact_checker")["sets"]["checker_good"]["passed"] is False
+        assert K.evaluate(run_dir, "card_fact_checker")["sets"]["checker_good"]["passed"] is False
 
     def test_the_answers_must_be_the_roles_and_the_sealed_models(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_role(run_dir, "fact_checker", ALL_FAIL, as_role="hook_rater")
-        with pytest.raises(K.CalibrationError, match="did not answer as role fact_checker"):
-            K.evaluate(run_dir, "fact_checker")
+        answer_role(run_dir, "card_fact_checker", ALL_FAIL, as_role="hook_rater")
+        with pytest.raises(K.CalibrationError, match="did not answer as role card_fact_checker"):
+            K.evaluate(run_dir, "card_fact_checker")
 
     def test_a_stamp_that_is_not_the_sealed_model_is_refused(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_role(run_dir, "fact_checker", ALL_FAIL, model="claude-opus-5-5")
+        answer_role(run_dir, "card_fact_checker", ALL_FAIL, model="claude-sonnet-5-5")
         with pytest.raises(
-            K.CalibrationError, match="role fact_checker is sealed to claude-sonnet-5-5"
+            K.CalibrationError, match="role card_fact_checker is sealed to claude-opus-5-5"
         ):
-            K.evaluate(run_dir, "fact_checker")
+            K.evaluate(run_dir, "card_fact_checker")
 
     def test_an_unanswered_case_is_no_agreement(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        handoff = answer_role(run_dir, "fact_checker", ALL_FAIL)
+        handoff = answer_role(run_dir, "card_fact_checker", ALL_FAIL)
         answer = next(handoff.glob("*/*/*.answer.json"))
         answer.unlink()
         with pytest.raises(K.CalibrationError, match="1 missing"):
-            K.evaluate(run_dir, "fact_checker")
+            K.evaluate(run_dir, "card_fact_checker")
 
     def test_a_role_never_exported_is_refused(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
         with pytest.raises(K.CalibrationError, match="was never exported"):
-            K.evaluate(run_dir, "fact_checker")
+            K.evaluate(run_dir, "card_fact_checker")
 
 
 # ------------------------------------------------------------------------------ the web verifier
@@ -1004,11 +1007,11 @@ class TestTheWebVerifier:
 
         answer_role(
             run_dir,
-            "web_verifier",
+            "card_web_verifier",
             {"verifier_contradicted": verifier_text(True), "verifier_verified": verified},
         )
-        verdict = K.evaluate(run_dir, "web_verifier", client=judge_client())
-        assert verdict["passed"] is True and verdict["model"] == "claude-sonnet-5-5"
+        verdict = K.evaluate(run_dir, "card_web_verifier", client=judge_client())
+        assert verdict["passed"] is True and verdict["model"] == "claude-opus-5-5"
         assert verdict["sets"]["verifier_contradicted"]["caught"] == 2
         assert verdict["sets"]["verifier_verified"]["claim_agreement"] == 1.0
         assert verdict["sets"]["verifier_verified"]["false_sources"] == []
@@ -1017,7 +1020,7 @@ class TestTheWebVerifier:
         run_dir = fixed_dir(tmp_path)
         answer_role(
             run_dir,
-            "web_verifier",
+            "card_web_verifier",
             {
                 "verifier_contradicted": verifier_text(True),
                 "verifier_verified": lambda job: json.dumps(
@@ -1035,17 +1038,17 @@ class TestTheWebVerifier:
                 ),
             },
         )
-        verdict = K.evaluate(run_dir, "web_verifier", client=judge_client())
+        verdict = K.evaluate(run_dir, "card_web_verifier", client=judge_client())
         verified = verdict["sets"]["verifier_verified"]
         assert len(verified["false_sources"]) >= 2 and verified["passed"] is False
-        assert verdict["passed"] is False and verdict["tier_move"]["to"] == "claude-opus-5-5"
+        assert verdict["passed"] is False and verdict["tier_move"] is None and verdict["held"]
 
     def test_a_verifier_that_misses_a_contradiction_fails(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_role(run_dir, "web_verifier", {"verifier_contradicted": verifier_text(False), "verifier_verified": lambda job: json.dumps({"claims": [
+        answer_role(run_dir, "card_web_verifier", {"verifier_contradicted": verifier_text(False), "verifier_verified": lambda job: json.dumps({"claims": [
             {"claim": c["claim"], "verdict": "SUPPORTED", "url": PAGE, "quote": QUOTE} for c in job["recorded"]["claims"]
         ]})})  # fmt: skip
-        verdict = K.evaluate(run_dir, "web_verifier", client=judge_client())
+        verdict = K.evaluate(run_dir, "card_web_verifier", client=judge_client())
         contradicted = verdict["sets"]["verifier_contradicted"]
         assert (contradicted["cases"], contradicted["caught"], contradicted["passed"]) == (
             2,
@@ -1056,11 +1059,11 @@ class TestTheWebVerifier:
 
     def test_a_good_card_called_contradicted_is_counted(self, tmp_path: Path) -> None:
         run_dir = fixed_dir(tmp_path)
-        answer_role(run_dir, "web_verifier", {"verifier_contradicted": verifier_text(True), "verifier_verified": lambda job: json.dumps({"claims": [
+        answer_role(run_dir, "card_web_verifier", {"verifier_contradicted": verifier_text(True), "verifier_verified": lambda job: json.dumps({"claims": [
             *({"claim": c["claim"], "verdict": "SUPPORTED", "url": PAGE, "quote": QUOTE} for c in job["recorded"]["claims"]),
             {"claim": "an extra claim", "verdict": "CONTRADICTED", "url": PAGE, "quote": QUOTE},
         ]})})  # fmt: skip
-        verified = K.evaluate(run_dir, "web_verifier", client=judge_client())["sets"][
+        verified = K.evaluate(run_dir, "card_web_verifier", client=judge_client())["sets"][
             "verifier_verified"
         ]
         # every recorded claim agrees; only the card's verification is wrong
@@ -1230,7 +1233,7 @@ class TestTheCommandLine:
                     "--run-dir",
                     str(tmp_path / "x"),
                     "--role",
-                    "fact_checker",
+                    "card_fact_checker",
                     "--handoff",
                     str(tmp_path / "h"),
                 ]

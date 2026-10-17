@@ -981,12 +981,18 @@ mechanical problem is not rated; a round with no clean variant fails with the pr
 
 | role | stages | model, effort |
 | --- | --- | --- |
-| `card_writer` | write, rewrite1, rewrite2, rewrite-v | Opus 5.5 high |
-| `hook_rater` | rate, rate1, rate2 | Opus 5.5 medium |
-| `fact_checker` | check, check1, check2, check-v | Sonnet 5.5 high |
-| `web_verifier` | verify, verify2 | Sonnet 5.5 high |
+| `card_writer` | write, rewrite1, rewrite2, rewrite-v | Sonnet 5.5 high |
+| `hook_rater` | rate, rate1, rate2 | Sonnet 5.5 medium |
+| `card_fact_checker` | check, check1, check2, check-v | Opus 5.5 high |
+| `card_web_verifier` | verify, verify2 | Opus 5.5 high |
 | `pilot_judge` | judge | Opus 5.5 xhigh |
-| `adversarial` | adversarial (re-check run only) | Opus 5.5 high |
+| `adversarial` | adversarial (re-check run only) | Sonnet 5.5 high |
+
+The models are those of `roles.ROLES` on 2026-10-17: owner decision D36 put the writer, the rater
+and the adversarial reviewer on Sonnet; D40, scoped to this lane by D45, gave the card lane checkers
+of its own on Opus (`card_fact_checker`, `card_web_verifier`). The shared `fact_checker` (lane WC) and
+`web_verifier` (identity, lane E, image identity) stay on Sonnet. A calibration sealed before
+2026-10-17 names the shared roles and does not stand for the card checkers.
 
 The run records the registry's models in `RUN.json["roles"]` at its start. The import refuses an
 answer whose `answered_by` is not `<role>:<agent>` of the stage's role, or whose stamp is not that
@@ -1072,11 +1078,11 @@ pilot_judge`), paired by site.
 
 | role | set | pass threshold |
 | --- | --- | --- |
-| `fact_checker` | 45 recorded cards (30 PASS, 15 FAIL) under the v1 prompt | 90 % verdict agreement, claim **coverage** 80 % (a recorded claim counts when some answered claim covers it) and 90 % agreement on the covered claims (supported / unsupported), 0 PASS of a card with an unsupported claim |
+| `card_fact_checker` | 45 recorded cards (30 PASS, 15 FAIL) under the v1 prompt | 90 % verdict agreement, claim **coverage** 80 % (a recorded claim counts when some answered claim covers it) and 90 % agreement on the covered claims (supported / unsupported), 0 PASS of a card with an unsupported claim |
 | | 30 recorded FAIL | 27 FAIL again |
 | | 30 shorts-v1 cards with one seeded defect | 27 caught |
 | | the same 30 cards unflawed | 27 PASS |
-| `web_verifier` | 20 recorded proven contradictions (5 are `DISPUTED_CONTRADICTIONS`: reported, not counted) | 18 of 20 CONTRADICTED, scaled to the cases that count (14 of the 15) |
+| `card_web_verifier` | 20 recorded proven contradictions (5 are `DISPUTED_CONTRADICTIONS`: reported, not counted) | 18 of 20 CONTRADICTED, scaled to the cases that count (14 of the 15) |
 | | 20 recorded VERIFIED cards | at most 2 falsely CONTRADICTED, claim coverage 80 %, 90 % agreement on the covered claims, 0 false sources (a **fabricated** quote - not on the page even loosely - or a refused page; a quote the machine did not find but the page holds up to typography is reported as `not_found_by_machine`) |
 | `hook_rater` | 11 sample openers against 13 live place-word openers | every strong rated above every weak; within one of the `pilot_judge`'s ratings on 80 % |
 | `card_writer` | the 40-site pilot | 80 % of first answers mechanically clean |
