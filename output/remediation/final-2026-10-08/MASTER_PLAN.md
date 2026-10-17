@@ -117,7 +117,10 @@ final report.
   weekly quota), WD5 pilot written (wave 2026-10-09a: 92 cells at 45 sites, 0 deviations), readers for foreign-language
   dates / regional periods / table coordinates merged (6f1b7e9); WD5 main run started; cards fine-tuning building.
 
-## RESUME POINT - paused 2026-10-09 about 20:30 UTC (owner: weekly quota 95 %)
+## RESUME POINT - paused 2026-10-09 about 20:30 UTC (owner: weekly quota 95 %) - SUPERSEDED 2026-10-17, see the last section
+
+Two of its instructions are history: the run tree is merged and live on `main` at `fc32f37`, and item 2 (D40)
+was reversed by the newer owner decision D36 - do not re-apply it.
 
 Nothing is half-written in production: the only write is the WD5 pilot wave 2026-10-09a (92 cells at 45 sites,
 accepted, 0 deviations). Run tree = main checkout on `run/2026-10-09-db-final` = `fix/2026-10-08-db-final`; the
@@ -140,3 +143,51 @@ In order after the reset:
 Live cards the 2026-10-09 adjudication found wrong (the rewrite replaces them): Astale, North Bersted Man, Roman
 Ruins of Sao Cucufate, Caesar's Camp (Bracknell Forest), Teotihuacan - Pyramid of the Moon, Nysa Bridge.
 
+## Progress log - 2026-10-17
+
+- Journal consolidated onto one reader (`b850cd7`, `fc32f37`): 80 citation anchors and 14 popover cards measured
+  in a real browser on the live site, `articles-grid` gone, `/articles.html#slug` redirects in the browser.
+- Story lane root cause fixed (429 on the httpx path): `tweet_verifier.plan_aware_web_chat` +
+  a third `detail` return value so `story_reverify` writes a reason (`bc697d7`); the six `failed` stories of
+  2026-10-12 re-run green (1 corrected, 5 verified), journal 103 -> 109 lines, IndexNow accepted 8 URLs.
+- Worktrees: 10 removed after an audit (`ccby`, `globeload`, `journal`, `model`, `nerv`, `db-rebase`,
+  `journal-hub`, `p4-verify-fix`, `p5-wd5-lane`, `p6-cards-tune`); 6 remain - `p4-pilot` holds ~143 MB of
+  Phase-4 row sets the main checkout never received (`V3_ROWS`, `V3D_ROWS`, `LEGACY4*`, `PLAN4.v3*`; its
+  ledger delta is saved as `output/remediation/patches/p4-pilot-ledger-2026-10-17.patch`), plus the four
+  worktrees this plan protects (`mcode-driver`, `haiku55`, `studio`, `google-avg`) and `db-final`.
+
+## RESUME POINT - paused 2026-10-17 about 20:35 UTC (MiniMax Code session; owner: weekly quota 91 %)
+
+**C1, C3-C7 are blocked, not unfinished: they need a Claude Code session.** Owner decision D6 (2026-10-08)
+restricts a new answer to `opus_handoff.NEW_ANSWER_MODELS` = `claude-opus-5-5`, `claude-sonnet-5-5`,
+`claude-haiku-5-5`; `opus_handoff.py answer` offers exactly those as argparse `choices` and
+`fields/handoff.py::_answering_model` raises `HandoffStepError` for anything else, so a MiniMax stamp cannot
+even be recorded. `mcode_driver.py` knows the lanes `wd3`, `wc`, `calibrate` - there is no `wd5` lane. Start a
+Claude Code session, or have the owner change D6 (then a MiniMax stamp plus a fresh calibration is required).
+
+State of the run, unchanged and complete:
+1. **WD5 main run** (`output/remediation/fields/wd5`, 1,767 sites): round r0 exported (146 batches under
+   `output/remediation/handoff/fields-wd5-r0/wd5-r0-b00NN`), **997 of 1,752 answered**, **755 open**. Recorded
+   answers are write-once and are skipped, so the run resumes by asking only the open cells. The workflow
+   `wf_cc685b15-849` still stops after the r0 import (remove that `return` for the re-asks, the Sonnet
+   re-check of `adv-truth-002` at 0.96, the backup drill and wave 2026-10-10a).
+2. ~~**D40**~~ - obsolete, do not apply. D36 (2026-10-09) put `fact_checker` and `web_verifier` back on Sonnet;
+   `roles.py` carries the move up in `APPLIED_ESCALATIONS` and the move back in `_d36_move`.
+3. **Card pilot** (40 sites), the D10 re-check of the 167 MiniMax cards, then the waves. The six cards the
+   2026-10-09 adjudication found wrong (Astale, North Bersted Man, Roman Ruins of Sao Cucufate, Caesar's
+   Camp, Teotihuacan - Pyramid of the Moon, Nysa Bridge) are replaced by the rewrite.
+4. Pilot re-asks: Olympe, Chitinamit, Shypyntsi.
+5. Then WC finish and the 141 defects, identity (D14, D13, D23, D20 after wd5, D25), descriptions (WN 28+,
+   D21, D3, D4), images D17 for the 952 plus the D15 clears, close-out phase 8.
+6. The 38 high-demand in-scope sites without a curated page, each per `docs/procedures/ENRICHMENT_AUDIT.md`,
+   inputs `output/seo-audit-2026-10-08/scratch/demand/agg_inscope_candidates.csv` and `proposals_by_demand.csv`.
+7. After every accepted image wave `python -m pipeline.wiki_thumbs`; after every content wave the locked
+   static-export CLI, the freshness check, then the IndexNow catch-up.
+
+**Running in production, no owner action needed:** the story backbone works through the open backlog in waves
+of 30 (`story_backbone.sh` on the VPS, log `story_backbone.log`, journal
+`logs/story_reverify/journal.jsonl`). It stops by itself when the backlog is empty, when the weekly MiniMax
+quota falls below 30 %, or when a query fails. Start: 2,644 open, 91 % weekly quota, journal 109 lines.
+To watch: `ssh ancientnerds 'tail -f /home/deploy/story_backbone.log'`. To stop:
+`ssh ancientnerds 'pkill -f story_backbone.sh'` - the waves are journalled and `story_reverify --rollback`
+exists. Every write is journalled, so an interrupted wave costs at most the items it had not journalled yet.
