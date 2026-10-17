@@ -13,6 +13,14 @@ import { useMemo } from 'react'
 import SanitizedMarkdownHtml from '../../seo/SanitizedMarkdownHtml'
 import type { NewsItemData } from '../../types/news'
 import InlineVideo from './InlineVideo'
+import { newsItemToCardProps } from './NewsCard'
+import {
+  CitationPopoverLayer,
+  markPopoverLinks,
+  SourcesAttribution,
+  useCitationCards,
+  useCitationPopovers,
+} from './JournalCitations'
 
 import '../../styles/journal-article.css'
 
@@ -127,38 +135,59 @@ const FIGURE_ALT_RE = /<img[^>]*alt="([^"]*)"/
  * sanitisierte HTML wie bisher, für jede Figure die echte Komponente. Der
  * Server rendert denselben Baum, ein Crawler sieht also weiterhin Bild und
  * Bildunterschrift.
+ *
+ * `articleId` schaltet die Zitatkarten an: die Marker im HTML sind bereits
+ * Links (pipeline/article_html_renderer.journal_citation_anchors), und die
+ * Karte holt JournalCitations über /news/articles/{id}/citations nach. Ohne
+ * articleId — das Homepage-Fenster — bleibt der Körper, was er war.
  */
-export default function ArticleBody({ html, className, citationItems }: {
+export default function ArticleBody({ html, className, citationItems, articleId }: {
   html: string
   className?: string
   citationItems?: Map<string, NewsItemData>
+  articleId?: number | null
 }) {
+  const fetched = useCitationCards(articleId)
+  const cards = citationItems ?? fetched
+  const popovers = useCitationPopovers(cards)
+
   const parts = useMemo(() => {
+    const decorated = markPopoverLinks(html, cards)
     const out: Array<{ kind: 'html' | 'figure'; value: string }> = []
     let last = 0
-    for (const match of html.matchAll(FIGURE_RE)) {
-      if (match.index! > last) out.push({ kind: 'html', value: html.slice(last, match.index) })
+    for (const match of decorated.matchAll(FIGURE_RE)) {
+      if (match.index! > last) out.push({ kind: 'html', value: decorated.slice(last, match.index) })
       out.push({ kind: 'figure', value: match[0] })
       last = match.index! + match[0].length
     }
-    if (last < html.length) out.push({ kind: 'html', value: html.slice(last) })
+    if (last < decorated.length) out.push({ kind: 'html', value: decorated.slice(last) })
     return out
-  }, [html])
+  }, [html, cards])
 
   return (
-    <div className={className}>
+    <div className={className} {...popovers.handlers}>
       {parts.map((part, i) =>
         part.kind === 'figure' ? (
           <ArticleScreenshot
             key={i}
             src={(part.value.match(FIGURE_SRC_RE) || [])[1] || ''}
             alt={(part.value.match(FIGURE_ALT_RE) || [])[1] || ''}
-            citationItems={citationItems}
+            citationItems={cards}
           />
         ) : (
           <SanitizedMarkdownHtml key={i} html={part.value} />
         ),
       )}
+      {cards.size > 0 && <SourcesAttribution cards={cards} />}
+      <CitationPopoverLayer
+        cards={cards}
+        hover={popovers.hover}
+        pinned={popovers.pinned}
+        onMouseEnter={popovers.cancelHoverClose}
+        onMouseLeave={popovers.scheduleHoverClose}
+        onUnpin={popovers.unpin}
+        toCardProps={newsItemToCardProps}
+      />
     </div>
   )
 }

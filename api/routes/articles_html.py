@@ -14,8 +14,11 @@ from sqlalchemy.orm import Session, joinedload
 
 from api.seo_shell import ssr_shell_response
 from pipeline.article_html_renderer import (
+    journal_citation_anchors,
     journal_thumbnail,
     markdown_to_html,
+    normalize_citation_markers,
+    parse_web_citations,
     reading_minutes,
     render_error_html,
     render_medium_copy_html,
@@ -139,6 +142,12 @@ async def article_page(slug: str, db: Session = Depends(get_db)):
     # /news/articles/{id}/citations, and the quality_report panel the owner
     # reads used to live only in the standalone SPA reader, which is being
     # retired. The column is the row's own JSONB, passed through as stored.
+    #
+    # The citations are linked here, in the served HTML, so a crawler and a
+    # reader without JavaScript get the links the SPA reader used to build in
+    # the browser. Grouped markers ("[6, 7]") are split before the Markdown, the
+    # anchors are injected after the sanitizer (journal_citation_anchors).
+    body_md = normalize_citation_markers(article.content)
     return ssr_shell_response(
         "articles.html",
         {
@@ -150,7 +159,9 @@ async def article_page(slug: str, db: Session = Depends(get_db)):
             "published_at": (article.published_at.isoformat() if article.published_at else None),
             "hero_image_url": None,
             "quality_report": article.quality_report,
-            "body_html": markdown_to_html(article.content),
+            "body_html": journal_citation_anchors(
+                markdown_to_html(body_md), parse_web_citations(body_md)
+            ),
         },
         _HTML_HEADERS,
     )

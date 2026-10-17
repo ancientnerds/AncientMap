@@ -16,7 +16,7 @@ import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { AuthProvider } from '../../contexts/AuthContext'
-import ArticlesPage from '../../pages/ArticlesPage'
+import ArticlesPage, { legacyTarget } from '../../pages/ArticlesPage'
 import type { AnRoute } from '../../types/anRoute'
 import { renderHead, siteMeta } from '../meta'
 import { SeoRoute } from '../registry'
@@ -768,13 +768,15 @@ describe('storyArchive (Task 14): das paginierte Listing aus dem Rohpayload', ()
   })
 })
 
-describe('Standalone-SPA-Modus (/articles.html ohne Payload)', () => {
-  // Produktentscheidung 2026-08: /articles.html (indexiert) und /articles/
-  // bleiben BEIDE bestehen, 301 erst nach Indexierung des neuen Hubs —
-  // articlesMain rendert ohne Payload deshalb ArticlesPage direkt statt
-  // umzuleiten. Der Baum entspricht articlesMain.tsx: RouteProvider ohne
-  // value, ArticlesPage holt ihre Daten selbst.
-  it('rendert ArticlesPage ohne Route und ohne Browser-APIs', () => {
+describe('/articles.html ohne Payload', () => {
+  // Produktentscheidung 2026-08 (beide URLs bestehen) ist überholt: seit dem
+  // 17.10.2026 gibt es nur noch den Hub /articles/ und die Ausgabe
+  // /articles/{slug}. /articles.html ist der alte SPA-Einstieg und leitet
+  // im Browser weiter — im Server-Render bleibt nichts übrig, denn ein
+  // Fragment erreicht den Server nie und die Weiterleitung braucht
+  // window.location. Der Test sagt das fest, damit der Leer-Render nicht
+  // wieder als Fehler auffällt.
+  it('rendert eine leere Hülle, weil die Weiterleitung im Browser läuft', () => {
     const html = renderToString(
       <RouteProvider>
         <AuthProvider>
@@ -782,7 +784,28 @@ describe('Standalone-SPA-Modus (/articles.html ohne Payload)', () => {
         </AuthProvider>
       </RouteProvider>,
     )
-    expect(html.length).toBeGreaterThan(50)
+    expect(html).toBe('')
+  })
+})
+
+describe('die Weiterleitung des alten Eintrags', () => {
+  it('schickt ein Fragment auf die Ausgabe, die es benennt', () => {
+    expect(legacyTarget('#sacsayhuamán')).toBe('/articles/sacsayhuamán')
+  })
+
+  it('dekodiert das prozentkodierte Fragment, das location.hash liefert', () => {
+    expect(legacyTarget('#sacsayhuam%C3%A1n')).toBe('/articles/sacsayhuamán')
+  })
+
+  it('schickt alles ohne Fragment auf den Hub', () => {
+    expect(legacyTarget('')).toBe('/articles/')
+    expect(legacyTarget('#')).toBe('/articles/')
+  })
+
+  it('erkennt ein kaputtes Fragment als das, was es ist: keine Ausgabe', () => {
+    expect(legacyTarget('#%')).toBe('/articles/')
+    expect(legacyTarget('#a b')).toBe('/articles/')
+    expect(legacyTarget('#../../etc/passwd')).toBe('/articles/')
   })
 })
 

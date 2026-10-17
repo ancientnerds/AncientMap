@@ -18,6 +18,9 @@ import '../../styles/journal-article.css'
 
 /** The fields /articles/{slug} carries. */
 export interface JournalArticleData {
+  /** The issue's row id: the citation cards are fetched by it. Absent on the
+   *  homepage window, which shows the body without cards. */
+  id?: number | null
   title: string
   summary: string | null
   published_at: string | null
@@ -49,7 +52,11 @@ export default function JournalArticle({ article, lead, actions, children }: Pro
           <strong>{summary}</strong>
         </p>
       )}
-      <ArticleBody html={article.body_html} className="articles-reader-body" />
+      <ArticleBody
+        html={article.body_html}
+        className="articles-reader-body"
+        articleId={article.id ?? null}
+      />
       {children}
     </article>
   )

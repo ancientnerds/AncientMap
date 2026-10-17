@@ -15,11 +15,8 @@
  * Share URLs use the canonical SEO path: /articles/{slug}
  */
 
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
-import ReactMarkdown, { type Components } from 'react-markdown'
-import { config } from '../config'
+import { useState, useEffect, useMemo } from 'react'
 import { useIsFounder } from '../hooks/useIsFounder'
-import CitationPopover from '../components/news/CitationPopover'
 import Breadcrumbs from '../components/layout/Breadcrumbs'
 import ThumbsFeedback from '../components/feedback/ThumbsFeedback'
 import CommunityCta from '../components/layout/CommunityCta'
@@ -28,136 +25,15 @@ import AiNoticeBanner from '../components/layout/AiNoticeBanner'
 import { useRoute } from '../seo/RouteContext'
 import type { ArticleIndexRoute, ArticleRoute } from '../types/anRoute'
 
-const LyraProfileModal = lazy(() => import('../components/LyraProfileModal'))
-import type { NewsItemData } from '../types/news'
-import { ArticleScreenshot, formatTimestamp } from '../components/news/ArticleBody'
 import JournalArticle from '../components/news/JournalArticle'
 import JournalHub from '../components/news/JournalHub'
 import JournalQualityReportPanel from '../components/news/JournalQualityReport'
-import { newsItemToCardProps } from '../components/news/NewsCard'
 import '../components/news/news-cards.css'
 import '../styles/story-page.css'
-import { discordCtaUrl } from '../constants/brand'
 import { slugify } from '../seo/meta'
 import { shareOrCopy } from '../utils/share'
-import { articleForHash } from '../utils/articleHash'
 
-interface QualityReport {
-  assessment_score: number
-  assessment_iterations: number
-  assessment_dimensions: Record<string, boolean>
-  fixes_applied: Array<Record<string, unknown>>
-  research_clusters: Record<string, { score: number; sources: number; elapsed: number; status: string }>
-  total_sources: number
-  total_elapsed_seconds: number
-}
-
-interface Article {
-  id: number
-  title: string
-  content: string
-  summary: string | null
-  week_start: string
-  week_end: string
-  published_at: string | null
-  quality_report: QualityReport | null
-}
-
-function formatDateRange(start: string, end: string): string {
-  const s = new Date(start)
-  const e = new Date(end)
-  const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
-  const yearOpts: Intl.DateTimeFormatOptions = { ...opts, year: 'numeric' }
-  if (s.getFullYear() !== e.getFullYear()) {
-    return `${s.toLocaleDateString('en-US', yearOpts)} – ${e.toLocaleDateString('en-US', yearOpts)}`
-  }
-  return `${s.toLocaleDateString('en-US', opts)} – ${e.toLocaleDateString('en-US', yearOpts)}`
-}
-
-/** Convert bare [1] references to clickable anchor links pointing to #sources. */
-/** Parse the Sources list and return a map of citation number → URL for web sources (non-YouTube). */
-function parseWebCitations(content: string): Map<number, string> {
-  const webCites = new Map<number, string>()
-  const sourcesIdx = content.indexOf('### Sources')
-  if (sourcesIdx === -1) return webCites
-  const sourcesList = content.slice(sourcesIdx)
-  // Match: "N. [title](url)" — extract number and URL
-  const pattern = /^(\d+)\.\s+\[.*?\]\((https?:\/\/\S+?)\)/gm
-  let m: RegExpExecArray | null
-  while ((m = pattern.exec(sourcesList)) !== null) {
-    const num = parseInt(m[1], 10)
-    const url = m[2]
-    // YouTube sources handled by rich attribution — only map non-YouTube URLs
-    if (!url.includes('youtu.be') && !url.includes('youtube.com')) {
-      webCites.set(num, url)
-    }
-  }
-  return webCites
-}
-
-function enrichCitations(content: string, webCites: Map<number, string>): string {
-  // Normalize multi-citations: [6, 7] → [6] [7], [3][5] → [3] [5]
-  content = content.replace(/\[(\d+)(?:\s*,\s*(\d+))+\]/g, (match) => {
-    const nums = match.match(/\d+/g) || []
-    return nums.map(n => `[${n}]`).join(' ')
-  })
-  content = content.replace(/\](\[)/g, '] [')
-  // Replace [N] and [VN] with markdown links.
-  // Link text uses Unicode brackets ［N］ / ［VN］ to avoid markdown parsing issues,
-  // then the 'a' renderer displays them as normal [N] / [VN].
-  return content.replace(/(?<!\[)\[(V?\d+)\](?!\()/g, (_match, key: string) => {
-    if (key.startsWith('V')) {
-      // YouTube video citation → links to #sources for hover card
-      return `[［${key}］](#sources)`
-    }
-    const num = parseInt(key, 10)
-    const webUrl = webCites.get(num)
-    if (webUrl) {
-      return `[［${num}］](${webUrl})`
-    }
-    return `[［${num}］](#sources)`
-  })
-}
-
-/** Strip the ### Videos section from markdown (rich attribution handles it).
- *  Keeps ### Sources (web references) visible in the rendered output. */
-function stripSourcesList(content: string, _webCites: Map<number, string>): string {
-  // Remove ### Videos section — the rich attribution component renders it
-  const videosIdx = content.indexOf('### Videos')
-  if (videosIdx !== -1) {
-    // Find the --- separator before ### Videos and strip from there
-    const sepBefore = content.lastIndexOf('---', videosIdx)
-    if (sepBefore !== -1 && videosIdx - sepBefore < 20) {
-      content = content.slice(0, sepBefore).trimEnd()
-    } else {
-      content = content.slice(0, videosIdx).trimEnd()
-    }
-  }
-  return content
-}
-
-function firstImageUrl(article: Article): string | null {
-  // Try to find an image whose alt text matches the headline topic
-  const titleWords = article.title.toLowerCase().split(/\s+/).filter(w => w.length > 4)
-  const imagePattern = /!\[([^\]]*)\]\((\S+?)\)/g
-  let bestMatch: string | null = null
-  let bestScore = 0
-  let firstImage: string | null = null
-  let match: RegExpExecArray | null
-  while ((match = imagePattern.exec(article.content)) !== null) {
-    if (!firstImage) firstImage = match[2]
-    const alt = match[1].toLowerCase()
-    const score = titleWords.filter(w => alt.includes(w)).length
-    if (score > bestScore) {
-      bestScore = score
-      bestMatch = match[2]
-    }
-  }
-  return bestMatch || firstImage
-}
-
-// Share/copy/Medium need only the title — payload views (ArticleRoute)
-// and the standalone SPA (Article) both feed them.
+// Share/copy/Medium need only the title; both payload views carry it.
 function articlePath(article: { title: string }): string {
   return `/articles/${slugify(article.title)}`
 }
@@ -166,120 +42,6 @@ function shareUrl(article: { title: string }): string {
   return `https://ancientnerds.com${articlePath(article)}`
 }
 
-function readingTime(content: string): number {
-  return Math.max(1, Math.ceil(content.split(/\s+/).length / 200))
-}
-
-/** Extract ## headings from article content for the TOC. */
-function extractHeadings(content: string): { text: string; slug: string }[] {
-  const headings: { text: string; slug: string }[] = []
-  for (const line of content.split('\n')) {
-    const m = line.match(/^##\s+(.+)$/)
-    if (m) {
-      const text = m[1].trim()
-      headings.push({ text, slug: slugify(text) })
-    }
-  }
-  return headings
-}
-
-/** Convert an API NewsItemData into NewsCardProps for CitationPopover. */
-const itemToCardProps = newsItemToCardProps
-
-
-function SourcesAttribution({ citationItems }: { citationItems: Map<string, NewsItemData> }) {
-  // Group citations by channel
-  const channelGroups = useMemo(() => {
-    const groups = new Map<string, { channelName: string; channelId: string; items: { num: string; item: NewsItemData }[] }>()
-    for (const [num, item] of citationItems) {
-      const key = item.video.channel_id || item.video.channel_name
-      if (!groups.has(key)) {
-        groups.set(key, {
-          channelName: item.video.channel_name,
-          channelId: item.video.channel_id || '',
-          items: [],
-        })
-      }
-      groups.get(key)!.items.push({ num, item })
-    }
-    // Sort groups by earliest citation number
-    return [...groups.values()].sort((a, b) => a.items[0].num.localeCompare(b.items[0].num))
-  }, [citationItems])
-
-  if (channelGroups.length === 0) return null
-
-  return (
-    <div className="articles-attribution">
-      <h3 id="sources" className="articles-attribution-heading">Sources & Attribution</h3>
-      <p className="articles-attribution-thanks">
-        This journal wouldn&rsquo;t exist without these incredible creators who bring archaeology and ancient
-        history to life. We are deeply grateful for their work &mdash; please visit their channels, like,
-        subscribe, and support them.
-      </p>
-
-      <div className="articles-attribution-cards">
-        {channelGroups.map(group => (
-          <div key={group.channelId || group.channelName} className="articles-attribution-channel">
-            <div className="articles-attribution-channel-header">
-              <a
-                href={`https://www.youtube.com/channel/${group.channelId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="articles-attribution-channel-name"
-              >
-                {group.channelName}
-              </a>
-              <span className="articles-attribution-count">
-                {group.items.length} citation{group.items.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            <div className="articles-attribution-items">
-              {group.items.map(({ num, item }) => (
-                <a
-                  key={num}
-                  className="articles-attribution-item"
-                  href={item.youtube_deep_url || item.youtube_url || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <span className="articles-attribution-num">[{num}]</span>
-                  <span className="articles-attribution-video-title">{item.video.title}</span>
-                  {item.timestamp_seconds != null && (
-                    <span className="articles-attribution-ts">
-                      {formatTimestamp(item.timestamp_seconds)}
-                    </span>
-                  )}
-                </a>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="articles-attribution-optout">
-        <p>
-          Are you a YouTube creator? If you&rsquo;d like your channel excluded, reach out with
-          subject &ldquo;Channel Opt-Out&rdquo;.
-        </p>
-        <div className="contact-links">
-          <a href="mailto:ancient.nerds@protonmail.com?subject=Channel%20Opt-Out" target="_blank" rel="noopener noreferrer">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="2" y="4" width="20" height="16" rx="2" />
-              <path d="M22 7l-10 6L2 7" />
-            </svg>
-            Email
-          </a>
-          <a href={discordCtaUrl('app')} target="_blank" rel="noopener noreferrer">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.095 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
-            </svg>
-            Discord
-          </a>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 /** TOC sidebar component. */
 /**
@@ -362,58 +124,6 @@ function TableOfContents({ headings, activeSlug }: {
   )
 }
 
-function makeArticleComponents(
-  citationItems: Map<string, NewsItemData>,
-  onCitationEnter: (key: string, rect: DOMRect) => void,
-  onCitationLeave: () => void,
-  onCitationClick: (key: string, rect: DOMRect) => void,
-  renderSources: boolean,
-): Components {
-  return {
-    img: ({ src, alt }) => (
-      <ArticleScreenshot src={src || ''} alt={alt || ''} citationItems={citationItems} />
-    ),
-    a: ({ href, children }) => {
-      // Detect citation links — both YouTube (#sources) and web (external URL)
-      const text = String(children).trim()
-      const numMatch = text.match(/[［\[]*(V?\d+)[］\]]*/)
-      if (numMatch && (href === '#sources' || /^V?\d+$/.test(text.replace(/[[\]／（））［］\\]/g, '')))) {
-        const key = numMatch[1]
-        const displayText = `[${key}]`
-        const hasCard = citationItems.has(key)
-        const isYoutube = href === '#sources'
-        return (
-          <a
-            href={href}
-            target={isYoutube ? undefined : '_blank'}
-            rel={isYoutube ? undefined : 'noopener noreferrer'}
-            className={`article-citation-link${hasCard ? ' has-popover' : ''}`}
-            onMouseEnter={hasCard ? (e) => onCitationEnter(key, e.currentTarget.getBoundingClientRect()) : undefined}
-            onMouseLeave={hasCard ? onCitationLeave : undefined}
-            onClick={hasCard ? (e) => { e.preventDefault(); onCitationClick(key, e.currentTarget.getBoundingClientRect()) } : undefined}
-          >
-            {displayText}
-          </a>
-        )
-      }
-      return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
-    },
-    h2: ({ children }) => {
-      const text = String(children)
-      return <h2 id={slugify(text)}>{children}</h2>
-    },
-    h3: ({ children }) => {
-      const text = String(children)
-      if (text === 'Sources') {
-        if (renderSources) {
-          return <SourcesAttribution citationItems={citationItems} />
-        }
-        return <h3 id="sources">{children}</h3>
-      }
-      return <h3>{children}</h3>
-    },
-  }
-}
 
 function ShareButton({ article }: { article: { title: string } }) {
   const [copied, setCopied] = useState(false)
@@ -575,445 +285,48 @@ function ArticleIndexFromPayload({ route }: { route: ArticleIndexRoute }) {
 }
 
 export default function ArticlesPage() {
-  // Registry entry for both journal route types; without a payload the
-  // standalone /articles.html SPA takes over (hash routing, self-fetch).
+  // Registry entry for both journal route types. Without a payload the URL is
+  // the legacy /articles.html entry, which only forwards to the pages that
+  // exist (ArticlesLegacyRedirect).
   const route = useRoute()
   if (route?.type === 'article') return <ArticleFromPayload article={route} />
   if (route?.type === 'articleIndex') return <ArticleIndexFromPayload route={route} />
-  return <ArticlesStandalone />
+  return <ArticlesLegacyRedirect />
 }
 
-function ArticlesStandalone() {
-  const isFounder = useIsFounder()
-  const [articles, setArticles] = useState<Article[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [view, setView] = useState<'listing' | 'reading'>('listing')
-  const [selectedArticle, setSelectedArticle] = useState<Article | null>(null)
-  const [readProgress, setReadProgress] = useState(0)
-  const [showLyraProfile, setShowLyraProfile] = useState(false)
 
-  // Citation hover + pinned state
-  const [citationItems, setCitationItems] = useState<Map<string, NewsItemData>>(new Map())
-  const [hoverCitation, setHoverCitation] = useState<{ num: string; rect: DOMRect } | null>(null)
-  const [pinnedCitations, setPinnedCitations] = useState<{ num: string; rect: DOMRect }[]>([])
-  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+/**
+ * /articles.html was the standalone reader's entry until 2026-10-17. It now
+ * only forwards: the hub lives at /articles/ and one issue at /articles/{slug},
+ * so a visitor who kept the old link lands on the page that answers it.
+ *
+ * The fragment IS the slug the canonical URL is built from (articlePath =
+ * `/articles/${slugify(title)}`), so `#sacsayhuamán` becomes
+ * `/articles/sacsayhuamán` — the percent-encoded form is decoded first, the
+ * same way articleForHash read it.
+ *
+ * The redirect runs here and not on the server: a fragment never reaches the
+ * server, so no 301 can see it. A fragment that is not a slug (`#%`, `#a b`)
+ * names no journal and goes to the hub, as the reader's resolveHash did.
+ */
+function ArticlesLegacyRedirect() {
+  useEffect(() => {
+    window.location.replace(legacyTarget(window.location.hash))
+  }, [])
+  return null
+}
 
-
-  const cancelHoverClose = () => {
-    if (hoverTimeout.current) {
-      clearTimeout(hoverTimeout.current)
-      hoverTimeout.current = null
-    }
+/** Where /articles.html#fragment leads. Exported for its test. */
+export function legacyTarget(hash: string): string {
+  const raw = hash.replace(/^#/, '')
+  if (!raw) return '/articles/'
+  let slug: string
+  try {
+    slug = decodeURIComponent(raw)
+  } catch (e) {
+    if (e instanceof URIError) return '/articles/'
+    throw e
   }
-
-  const scheduleHoverClose = useCallback(() => {
-    cancelHoverClose()
-    hoverTimeout.current = setTimeout(() => setHoverCitation(null), 150)
-  }, [])
-
-  const handleCitationEnter = useCallback((num: string, rect: DOMRect) => {
-    cancelHoverClose()
-    setHoverCitation({ num, rect })
-  }, [])
-
-  const handleCitationClick = useCallback((num: string, rect: DOMRect) => {
-    setHoverCitation(null)
-    cancelHoverClose()
-    // Toggle: if already pinned, unpin; otherwise add
-    setPinnedCitations(prev => {
-      if (prev.some(p => p.num === num)) return prev.filter(p => p.num !== num)
-      return [...prev, { num, rect }]
-    })
-  }, [])
-
-  const dismissPinnedNum = useCallback((num: string) => {
-    setPinnedCitations(prev => prev.filter(p => p.num !== num))
-  }, [])
-
-  // Click-outside listener for pinned citations
-  useEffect(() => {
-    if (pinnedCitations.length === 0) return
-    const onMouseDown = (e: MouseEvent) => {
-      const popovers = document.querySelectorAll('.citation-popover--pinned')
-      for (const popover of popovers) {
-        if (popover.contains(e.target as Node)) return
-      }
-      // Clicked outside all pinned cards — dismiss all
-      setPinnedCitations([])
-    }
-    document.addEventListener('mousedown', onMouseDown)
-    return () => document.removeEventListener('mousedown', onMouseDown)
-  }, [pinnedCitations])
-
-  // Resolve hash → article once articles are loaded
-  const resolveHash = useCallback((articleList: Article[]) => {
-    const match = articleForHash(window.location.hash, articleList)
-    if (match) {
-      setSelectedArticle(match)
-      setView('reading')
-    } else {
-      // No hash, or one that names no issue: the hub lives at /articles/ and
-      // this page does not draw a listing of its own any more (2026-10-13).
-      window.location.replace('/articles/')
-    }
-  }, [])
-
-  useEffect(() => {
-    fetch(`${config.api.baseUrl}/news/articles?limit=50`)
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        return r.json()
-      })
-      .then((data: Article[]) => {
-        setArticles(data)
-        setLoading(false)
-        resolveHash(data)
-      })
-      .catch(e => {
-        setError(e instanceof Error ? e.message : 'Failed to load')
-        setLoading(false)
-      })
-  }, [resolveHash])
-
-  // Listen for hash changes (browser back/forward)
-  useEffect(() => {
-    const onHashChange = () => resolveHash(articles)
-    window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
-  }, [articles, resolveHash])
-
-  const openArticle = (article: Article) => {
-    window.location.hash = slugify(article.title)
-  }
-
-  const backToListing = () => {
-    history.pushState(null, '', window.location.pathname + window.location.search)
-    setView('listing')
-    setSelectedArticle(null)
-    window.scrollTo(0, 0)
-  }
-
-  // Fetch citation items when entering reading view
-  useEffect(() => {
-    if (view !== 'reading' || !selectedArticle) {
-      setCitationItems(new Map())
-      setHoverCitation(null)
-      setPinnedCitations([])
-      return
-    }
-    let cancelled = false
-    fetch(`${config.api.baseUrl}/news/articles/${selectedArticle.id}/citations`)
-      .then(r => r.ok ? r.json() : {})
-      .then((data: Record<string, NewsItemData>) => {
-        if (cancelled) return
-        const map = new Map<string, NewsItemData>()
-        for (const [key, item] of Object.entries(data)) {
-          map.set(key, item)
-        }
-        setCitationItems(map)
-      })
-      .catch(() => { /* non-critical — popover just won't show */ })
-    return () => { cancelled = true }
-  }, [view, selectedArticle])
-
-  // Scroll to top when entering reading view + track read progress
-  useEffect(() => {
-    if (view === 'reading') {
-      window.scrollTo(0, 0)
-      setReadProgress(0)
-      const onScroll = () => {
-        const scrollable = document.documentElement.scrollHeight - window.innerHeight
-        setReadProgress(scrollable > 0 ? Math.min(100, (window.scrollY / scrollable) * 100) : 0)
-      }
-      window.addEventListener('scroll', onScroll, { passive: true })
-      return () => window.removeEventListener('scroll', onScroll)
-    }
-    setReadProgress(0)
-  }, [view])
-
-  // IntersectionObserver for TOC active heading tracking
-  const headings = useMemo(
-    () => selectedArticle ? extractHeadings(selectedArticle.content) : [],
-    [selectedArticle],
-  )
-
-  // TOC active heading tracking — derselbe Hook wie in der SEO-Ansicht.
-  const activeHeading = useActiveHeading(headings, view === 'reading')
-
-
-
-  // Determine if we have citations loaded (for rich source rendering)
-  const hasCitations = citationItems.size > 0
-
-  // Memoize ReactMarkdown components to avoid remounting on every render
-  const mdComponents = useMemo(
-    () => makeArticleComponents(
-      citationItems, handleCitationEnter, scheduleHoverClose, handleCitationClick, hasCitations,
-    ),
-    [citationItems, hasCitations, handleCitationEnter, scheduleHoverClose, handleCitationClick],
-  )
-
-  const hero = articles[0] ?? null
-  const older = articles.slice(1)
-
-  return (
-    <div className="articles-page">
-      <PageHeader
-        speechBubble="I write a weekly journal from the latest archaeology videos"
-        onAvatarClick={() => setShowLyraProfile(true)}
-        currentPage="articles"
-      >
-        {/* Diese Seite zeichnet keine Liste mehr: ohne Hash, der zu einer
-            Ausgabe gehört, springt resolveHash sofort nach /articles/. Der
-            Zurück-Knopf ist deshalb ein echter Link auf den kanonischen Hub. */}
-        <a className="articles-page-back-btn" href="/articles/">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          All Journals
-        </a>
-      </PageHeader>
-
-      {view === 'reading' && (
-        <>
-          <div className="articles-progress-track">
-            <div className="articles-progress-bar" style={{ width: `${readProgress}%` }} />
-          </div>
-          <AiNoticeBanner message="This journal's text is AI-generated from YouTube video content; images are from the original sources. Always verify with original sources." />
-        </>
-      )}
-
-      <main className="articles-page-content">
-        {loading && <div className="articles-page-loading">Loading journals...</div>}
-        {error && (
-          <div className="articles-page-error">
-            {error}
-            <button onClick={() => window.location.reload()}>Retry</button>
-          </div>
-        )}
-        {!loading && !error && articles.length === 0 && (
-          <div className="articles-page-empty">No journals yet. Check back soon.</div>
-        )}
-
-        {/* ── Listing view: hero + grid ── */}
-        {view === 'listing' && !loading && !error && hero && (
-          <>
-            <section className="articles-hero" onClick={() => openArticle(hero)}>
-              {/* Real href for crawlers and middle-click; a plain click bubbles
-                  to the card and opens the in-page reader as before. */}
-              <h1 className="articles-hero-title">
-                <a href={articlePath(hero)} onClick={e => e.preventDefault()}>{hero.title}</a>
-              </h1>
-              <span className="articles-hero-date">
-                {formatDateRange(hero.week_start, hero.week_end)}
-                <span className="articles-reader-readtime">~{readingTime(hero.content)} min read</span>
-              </span>
-              <div className="articles-hero-body">
-                {hero.summary && (
-                  <p className="articles-hero-summary">{hero.summary}</p>
-                )}
-                {(() => {
-                  const img = firstImageUrl(hero)
-                  return img ? (
-                    <img
-                      src={img}
-                      alt={hero.title}
-                      className="articles-hero-img"
-                      loading="lazy"
-                    />
-                  ) : null
-                })()}
-              </div>
-              <div className="articles-hero-actions">
-                <button className="articles-hero-cta" onClick={(e) => { e.stopPropagation(); openArticle(hero) }}>
-                  Read Journal
-                </button>
-                <div onClick={e => e.stopPropagation()}>
-                  <ShareButton article={hero} />
-                </div>
-              </div>
-            </section>
-
-            {older.length > 0 && (
-              <section className="articles-grid-section">
-                <span className="articles-grid-label">PREVIOUS JOURNALS</span>
-                <div className="articles-grid">
-                  {older.map(article => (
-                    <article
-                      key={article.id}
-                      className="articles-grid-card"
-                      onClick={() => openArticle(article)}
-                    >
-                      {(() => {
-                        const img = firstImageUrl(article)
-                        return img ? (
-                          <img
-                            src={img}
-                            alt={article.title}
-                            className="articles-grid-card-img"
-                            loading="lazy"
-                          />
-                        ) : null
-                      })()}
-                      <h2 className="articles-grid-card-title">
-                        <a href={articlePath(article)} onClick={e => e.preventDefault()}>{article.title}</a>
-                      </h2>
-                      <span className="articles-grid-card-date">
-                        {formatDateRange(article.week_start, article.week_end)}
-                        <span className="articles-reader-readtime">~{readingTime(article.content)} min read</span>
-                      </span>
-                      {article.summary && (
-                        <p className="articles-grid-card-summary">{article.summary}</p>
-                      )}
-                      <div className="articles-grid-card-footer" onClick={e => e.stopPropagation()}>
-                        <ShareButton article={article} />
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            )}
-          </>
-        )}
-
-        {/* ── Reading view: full-page article ── */}
-        {view === 'reading' && selectedArticle && (
-          <div className="articles-reader-layout">
-            <TableOfContents headings={headings} activeSlug={activeHeading} />
-            <article className="articles-reader">
-              <h1 className="articles-reader-title">{selectedArticle.title}</h1>
-              <div className="articles-reader-meta">
-                <span className="articles-reader-date">
-                  {formatDateRange(selectedArticle.week_start, selectedArticle.week_end)}
-                  <span className="articles-reader-readtime">~{readingTime(selectedArticle.content)} min read</span>
-                </span>
-                <div className="articles-reader-meta-actions">
-                  <ShareButton article={selectedArticle} />
-                  <CopyLinkButton article={selectedArticle} />
-                  {isFounder && <MediumButton article={selectedArticle} />}
-                </div>
-              </div>
-              <div className="articles-reader-body">
-                <ReactMarkdown components={mdComponents}>
-                  {(() => {
-                    const webCites = parseWebCitations(selectedArticle.content)
-                    const body = hasCitations ? stripSourcesList(selectedArticle.content, webCites) : selectedArticle.content
-                    return enrichCitations(body, webCites)
-                  })()}
-                </ReactMarkdown>
-              </div>
-              {selectedArticle.quality_report && (
-                <details className="articles-quality-report">
-                  <summary className="articles-quality-summary">
-                    Quality Audit — {selectedArticle.quality_report.assessment_score}/10
-                    {selectedArticle.quality_report.assessment_score === 10 && ' ✓'}
-                  </summary>
-                  <div className="articles-quality-body">
-                    <p className="articles-quality-meta">
-                      Converged in {selectedArticle.quality_report.assessment_iterations} iteration{selectedArticle.quality_report.assessment_iterations !== 1 ? 's' : ''}
-                      {' · '}{selectedArticle.quality_report.total_sources} sources
-                      {selectedArticle.quality_report.total_elapsed_seconds > 0
-                        ? ` · ${Math.round(selectedArticle.quality_report.total_elapsed_seconds / 60)} min generation time`
-                        : ' · retroactive assessment'}
-                    </p>
-                    <div className="articles-quality-dimensions">
-                      <h4>Quality Dimensions</h4>
-                      {Object.entries(selectedArticle.quality_report.assessment_dimensions).map(([dim, passed]) => (
-                        <span key={dim} className={`articles-quality-dim ${passed ? 'pass' : 'fail'}`}>
-                          {passed ? '✓' : '✗'} {dim.replace(/_/g, ' ').replace(/^D\d+\s*/, '')}
-                        </span>
-                      ))}
-                    </div>
-                    {Object.keys(selectedArticle.quality_report.research_clusters).length > 0 && (
-                      <div className="articles-quality-clusters">
-                        <h4>Research Clusters</h4>
-                        {Object.entries(selectedArticle.quality_report.research_clusters).map(([name, data]) => (
-                          <div key={name} className="articles-quality-cluster">
-                            <span className={`articles-quality-score ${data.score >= 72 ? 'pass' : 'fail'}`}>
-                              {data.score}
-                            </span>
-                            <span className="articles-quality-cluster-name">{name}</span>
-                            <span className="articles-quality-cluster-meta">{data.sources} sources · {Math.round(data.elapsed)}s</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {selectedArticle.quality_report.fixes_applied.length > 0 && (
-                      <div className="articles-quality-fixes">
-                        <h4>Fixes Applied</h4>
-                        {selectedArticle.quality_report.fixes_applied.map((fix, i) => {
-                          const dimName: Record<string, string> = {
-                            D1: 'Proper noun', D2: 'Citation', D3: 'Academic style',
-                            D4: 'Screenshot', D5: 'Source quality', D6: 'Spelling',
-                            D7: 'Citation format', D8: 'Week date', D9: 'Summary', D10: 'Balance',
-                          }
-                          const label = dimName[String(fix.dimension)] || String(fix.dimension)
-                          return (
-                            <span key={i} className="articles-quality-fix">
-                              {label}: {fix.find ? `${String(fix.find).slice(0, 40)} → ${String(fix.replace).slice(0, 40)}` : 'corrected'}
-                            </span>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </details>
-              )}
-              <footer className="articles-reader-footer">
-                <button className="articles-reader-back-link" onClick={backToListing}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 18 9 12 15 6" />
-                  </svg>
-                  Back to all journals
-                </button>
-              </footer>
-            </article>
-          </div>
-        )}
-
-        {/* Pinned citation popovers (multiple) */}
-        {pinnedCitations.map(pin => citationItems.has(pin.num) && (
-          <CitationPopover
-            key={pin.num}
-            cardProps={itemToCardProps(citationItems.get(pin.num)!)}
-            anchorRect={pin.rect}
-            onMouseEnter={() => {}}
-            onMouseLeave={() => {}}
-            pinned
-            onClose={() => dismissPinnedNum(pin.num)}
-          />
-        ))}
-
-        {/* Hover citation popover */}
-        {hoverCitation && citationItems.has(hoverCitation.num) && (
-          <CitationPopover
-            cardProps={itemToCardProps(citationItems.get(hoverCitation.num)!)}
-            anchorRect={hoverCitation.rect}
-            onMouseEnter={cancelHoverClose}
-            onMouseLeave={scheduleHoverClose}
-          />
-        )}
-      </main>
-
-      {/* Back-to-top button */}
-      {view === 'reading' && (
-        <button
-          className={`articles-back-to-top${readProgress > 30 ? ' visible' : ''}`}
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          title="Back to top"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="18 15 12 9 6 15" />
-          </svg>
-        </button>
-      )}
-
-      {showLyraProfile && (
-        <Suspense fallback={null}>
-          <LyraProfileModal onClose={() => setShowLyraProfile(false)} />
-        </Suspense>
-      )}
-    </div>
-  )
+  // slugify keeps letters, digits, '_' and '-'; anything else names no journal.
+  return /^[\p{L}\p{N}_-]+$/u.test(slug) ? `/articles/${slug}` : '/articles/'
 }

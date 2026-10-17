@@ -7,6 +7,7 @@ proper meta tags, and styling matching the site's dark theme.
 
 import os
 import re
+from collections.abc import Mapping
 from datetime import datetime
 from html import escape, unescape
 
@@ -252,6 +253,94 @@ def _heading_anchors(html: str) -> str:
         return f'<{tag} id="{escape(slug)}">{inner}</{tag}>'
 
     return _HEADING_RE.sub(anchor, html)
+
+
+# --- Journal citations -------------------------------------------------------
+# A journal issue cites its sources inline: [6] for a web source, [V2] for a
+# video. The standalone SPA reader turned those into links in the browser
+# (enrichCitations / makeArticleComponents in
+# ancient-nerds-map/src/pages/ArticlesPage.tsx), so the canonical page
+# /articles/{slug} — the one a crawler and a reader without JavaScript see —
+# carried them as plain text. These three mirror that reader: same marker, same
+# class, same link text, so both render the same anchors.
+_JOURNAL_SOURCE_RE = re.compile(r"^(\d+)\.\s+\[.*?\]\((https?://\S+?)\)", re.MULTILINE)
+_JOURNAL_CITE_RE = re.compile(r"(?<!\[)\[(V?\d+)\](?!\()")
+#: "[6, 7]" and "[6 7]": a group of numbers in one pair of brackets.
+_JOURNAL_CITE_GROUP_RE = re.compile(r"\[(\d+(?:[,\s]+\d+)+)\]")
+_TAG_SPLIT_RE = re.compile(r"(<[^>]+>)")
+_TAG_NAME_RE = re.compile(r"^</?([a-zA-Z][\w-]*)")
+#: No citation is looked for inside these: a marker there belongs to a code
+#: sample or to a link that exists already.
+_NO_CITATION_TAGS = frozenset({"a", "code", "pre", "script", "style"})
+#: Where a citation without a source of its own points: the issue's source list.
+JOURNAL_CITATION_FALLBACK_HREF = "#sources"
+
+
+def parse_web_citations(markdown_text: str) -> dict[int, str]:
+    """The issue's web sources: citation number -> URL.
+
+    The "N. [title](url)" lines of the source list, the same lines
+    `parseWebCitations` reads in the reader.
+    """
+    return {int(number): url for number, url in _JOURNAL_SOURCE_RE.findall(markdown_text or "")}
+
+
+def normalize_citation_markers(markdown_text: str) -> str:
+    """Every number of a grouped marker on its own: "[6, 7]" becomes "[6] [7]",
+    "[3][5]" becomes "[3] [5]".
+
+    The reader did this in the browser. On the canonical page it has to happen
+    before the Markdown runs, or the grouped marker survives as one link that
+    names two sources.
+    """
+    text = _JOURNAL_CITE_GROUP_RE.sub(
+        lambda match: " ".join(f"[{n}]" for n in re.findall(r"\d+", match.group(0))),
+        markdown_text or "",
+    )
+    return text.replace("][", "] [")
+
+
+def _citation_link(key: str, web_cites: Mapping[int, str]) -> str:
+    """One marker's link. A video citation has no URL of its own: it points at
+    the source list, where the hover card finds it."""
+    video = key.startswith("V")
+    href = JOURNAL_CITATION_FALLBACK_HREF if video else web_cites.get(int(key), "")
+    if not href:
+        href = JOURNAL_CITATION_FALLBACK_HREF
+    target = "" if video else ' target="_blank" rel="noopener noreferrer"'
+    return (
+        f'<a class="article-citation-link" data-citation="{escape(key)}" '
+        f'href="{escape(href)}"{target}>[{escape(key)}]</a>'
+    )
+
+
+def journal_citation_anchors(html: str, web_cites: Mapping[int, str]) -> str:
+    """Turn the journal's "[N]" / "[VN]" markers into links in served HTML.
+
+    Runs after the sanitizer, like `_heading_anchors`: nh3 keeps no `data-*`
+    attribute, so the anchors are injected here from the text that survived it.
+    The reader binds the hover card to `data-citation` on the client.
+
+    Only text is rewritten, and never inside a link, a code sample or a script:
+    a marker in those is part of what it says, not a citation.
+    """
+    out: list[str] = []
+    inside = 0
+    for part in _TAG_SPLIT_RE.split(html):
+        if part.startswith("<") and part.endswith(">"):
+            match = _TAG_NAME_RE.match(part)
+            name = match.group(1).lower() if match else ""
+            if name in _NO_CITATION_TAGS:
+                if part.startswith("</"):
+                    inside = max(0, inside - 1)
+                elif not part.endswith("/>"):
+                    inside += 1
+            out.append(part)
+        elif inside:
+            out.append(part)
+        else:
+            out.append(_JOURNAL_CITE_RE.sub(lambda m: _citation_link(m.group(1), web_cites), part))
+    return "".join(out)
 
 
 _MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\((\S+?)\)")
