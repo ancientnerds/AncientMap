@@ -58,6 +58,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
@@ -75,15 +76,20 @@ from mechanical.plan import psql_json_reader, sql_ids  # noqa: E402
 
 from fields import answers as A  # noqa: E402
 from fields import classify as C  # noqa: E402
+from fields import dates as D  # noqa: E402
 from fields import harvest as H  # noqa: E402
 from fields import rule as R  # noqa: E402
+from pipeline import periods as P  # noqa: E402
 
 WHY_EMPTY, WHY_UNRESOLVED, WHY_HELD, WHY_UNSOURCED = "empty", "unresolved", "held", "unsourced"
 #: The reasons of lane wd5 (`recheck_fields`).
 WHY_RULE_MADE, WHY_MINIMAX, WHY_UNSOURCED_POINT = "rule-made", "minimax-answered", "unsourced-point"
+#: The reason of a wd5 run built with `--reask-cleared` / `--sites` (`reader_gap_fields`): an empty
+#: period a counted Claude answer left `unresolved` although its reasoning names a dated value.
+WHY_READER_GAP = "reader-gap"
 WHYS = (
     WHY_EMPTY, WHY_UNRESOLVED, WHY_HELD, WHY_UNSOURCED,
-    WHY_RULE_MADE, WHY_MINIMAX, WHY_UNSOURCED_POINT,
+    WHY_RULE_MADE, WHY_MINIMAX, WHY_UNSOURCED_POINT, WHY_READER_GAP,
 )  # fmt: skip
 HELD = "held"  # `handoff.HELD`, the import's decision for a field whose pages could not be read
 
@@ -453,18 +459,26 @@ def read_made(out: Path) -> dict[tuple[str, str], dict[str, Any]]:
 HISTORY_RUNS = ("wd3-pilot", R.ONE_FAMILY.stage, R.ONE_FAMILY_PERIOD.stage)
 
 
+def read_answers(
+    wd1: Wd1, fields_dir: Path = FIELDS_DIR, runs: Sequence[str] = HISTORY_RUNS
+) -> dict[tuple[str, str], list[tuple[str, Mapping[str, Any]]]]:
+    """Every decision of each (site, field) as `(run, row)`, oldest first: WD1's, then the
+    `DECISIONS.jsonl` of each of `runs` under `fields_dir`, in the order given."""
+    answers: dict[tuple[str, str], list[tuple[str, Mapping[str, Any]]]] = {}
+    for cell, row in wd1.decisions.items():
+        answers.setdefault(cell, []).append((str(row["run"]), dict(row)))
+    for run in runs:
+        for row in _read_jsonl(fields_dir / run / "DECISIONS.jsonl"):
+            answers.setdefault((str(row["site_id"]), str(row["field"])), []).append((run, row))
+    return answers
+
+
 def read_history(wd1: Wd1, fields_dir: Path = FIELDS_DIR) -> dict[tuple[str, str], dict[str, Any]]:
     """The latest decision of each (site, field) across the lanes in the order they ran: WD1's,
     then WD3's pilot, WD3's and WD4's `DECISIONS.jsonl` under `fields_dir`. A field a later lane
     asked again is decided by the later lane; a rule row (`DERIVED.jsonl`) is not an answer and is
     not read."""
-    history: dict[tuple[str, str], dict[str, Any]] = {
-        cell: dict(row) for cell, row in wd1.decisions.items()
-    }
-    for run in HISTORY_RUNS:
-        for row in _read_jsonl(fields_dir / run / "DECISIONS.jsonl"):
-            history[(str(row["site_id"]), str(row["field"]))] = row
-    return history
+    return {cell: dict(rows[-1][1]) for cell, rows in read_answers(wd1, fields_dir).items()}
 
 
 def column_kind(column: str, stored: Mapping[str, Any], made: Mapping[tuple[str, str], Any],
@@ -588,6 +602,198 @@ def _point_unsourced(line: Mapping[str, Any], decision: Mapping[str, Any] | None
     return decision["decision"] != A.KEEP
 
 
+# ------------------------------------------------------------------------------ the reader gap
+#: The decisions a reader-gap build reads beyond WD1's: the pilot and the rest run of lane wd5,
+#: whose `unresolved` answers cleared the periods this path asks again.
+REASK_HISTORY_RUNS = (*HISTORY_RUNS, "wd5-pilot", R.RECHECK.stage)
+#: The directory of the reader-gap run itself under `fields_dir`: a site it has decided is never
+#: asked a second time by a later build.
+REASK_RUN = "wd5-reask"
+#: The latest year a dated value may state to count as an ancient one (the scope rule: nothing after
+#: 1500 AD): "in 1998" is a modern year, not a start.
+READER_GAP_LATEST_YEAR = 1500
+READER_GAP_BP, READER_GAP_STATEMENT = "bp-age", "dated-statement"
+READER_GAP_PERIOD, READER_GAP_LISTED = "period-name", "listed"
+#: What an answer says when a machine reader, not the sources, is why it gave up: "none states it
+#: in a form the check reads", "the checker cannot read ...", "not a period name this lane's table
+#: holds". The three periods wd5's pilot cleared to Undated (2026-10-09) said it in these words.
+READER_BLAME = re.compile(
+    r"\bthe check(?:er)?\b|\bchecker\b|\bthe machine\b|\bthe reader\b|"
+    r"\blane'?s? (?:period )?(?:table|reader|vocabulary)\b|\bperiod (?:table|reader)\b|"
+    r"\b(?:does|do|did) not read\b|\b(?:can ?not|can'?t|could ?not) (?:be )?read\b|"
+    r"\bthe import (?:does|cannot|refuses|reads)\b",
+    re.IGNORECASE,
+)
+READER_GAP_SHOWN_CHARS = 400
+#: Why a site a reader-gap build looked at is left alone (counted in COUNTS.json).
+SKIP_NOT_EMPTY, SKIP_SOURCED, SKIP_ALREADY = "not-empty", "sourced", "already-reasked"
+
+
+def _answered_by_claude(decision: Mapping[str, Any]) -> bool:
+    return "claude" in str(decision.get("model") or "").lower()
+
+
+def _answer_text(decision: Mapping[str, Any]) -> str:
+    """What an answer wrote: its reasoning and the sentences it quoted."""
+    quoted = [str(q.get("quote") or "") for q in decision.get("quotes") or ()]
+    return "\n".join([str(decision["reasoning"]), *quoted])
+
+
+def readable_date(text: str) -> tuple[str, str] | None:
+    """The first dated value the readers of today read in `text`, as `(kind, what)`: an age in years
+    before the present (`answers.bp_dates`: "12,000 BP", "vor 12.000 Jahren"), or a year, century
+    or millennium with its era marker (`dates.statements`) not later than `READER_GAP_LATEST_YEAR`.
+    A number with no era marker is a modern year and counts for nothing. A period of
+    `pipeline.periods` named in the text (`READER_GAP_PERIOD`) counts last."""
+    bp = A.bp_dates(text)
+    if bp:
+        year, tolerance = bp[0]
+        return READER_GAP_BP, f"an age in years before the present: {year} (+-{tolerance} years)"
+    for statement in D.statements(text):
+        if statement.era is not None and statement.hi <= READER_GAP_LATEST_YEAR:
+            return (
+                READER_GAP_STATEMENT,
+                f"the {statement.kind} {statement.number} {statement.era} "
+                f"({statement.lo} to {statement.hi})",
+            )
+    for name, (start, _end) in P.PERIODS.items():
+        if P.states_period(text, name):
+            return READER_GAP_PERIOD, f"the period {name!r} (a start of {start})"
+    return None
+
+
+def reader_gap_reading(
+    answers: Sequence[tuple[str, Mapping[str, Any]]],
+) -> tuple[str, str, str] | None:
+    """Whether the period answers of a site (oldest first, `read_answers`) are a reader gap, as
+    `(run, kind, what)`: the latest is a counted `unresolved` of a Claude agent (an adversarial
+    rejection is not: a source was read and a checker refused it), it blames a machine reader for
+    giving up (`READER_BLAME`) and it names a value the readers of today read (`readable_date`).
+    Both are asked of the answer's own words: a date in a reasoning that blames no reader is a lead
+    the agent weighed and dropped, and wd5's rest run asked 409 such sites after the readers were
+    fixed (measured 2026-10-18)."""
+    if not answers:
+        return None
+    run, latest = answers[-1]
+    if (
+        latest["decision"] != A.UNRESOLVED
+        or latest.get("via") != "counted"
+        or not _answered_by_claude(latest)
+    ):
+        return None
+    if READER_BLAME.search(str(latest["reasoning"])) is None:
+        return None
+    found = readable_date(_answer_text(latest))
+    return None if found is None else (run, *found)
+
+
+def reader_gap_fields(
+    line: Mapping[str, Any],
+    stored: Mapping[str, Any],
+    answers: Sequence[tuple[str, Mapping[str, Any]]],
+    made: Mapping[tuple[str, str], Mapping[str, Any]],
+    *,
+    listed: str | None,
+    detect: bool,
+) -> tuple[dict[str, dict[str, Any]], str | None]:
+    """The one field a reader-gap run asks of a site, `{"period_start": {"why", "wd1", "made"}}`
+    (empty when the site is not one), and the reason it is left alone (`SKIP_NOT_EMPTY`: a period is
+    stored now; `SKIP_SOURCED`: the newest journal row of the period is another lane's sourced
+    write), or None. A site is asked when `listed` names it (the orchestrator's reason) or, with
+    `detect`, when its period answers are a reader gap (`reader_gap_reading`)."""
+    site = str(line["site_id"])
+    reading = reader_gap_reading(answers) if detect else None
+    if listed is None and reading is None:
+        return {}, None
+    if not is_empty("period_start", stored):
+        return {}, SKIP_NOT_EMPTY
+    if column_kind("period_start", stored, made, site) == SOURCED:
+        return {}, SKIP_SOURCED
+    if listed is not None:
+        kind = READER_GAP_LISTED
+        note = f"the orchestrator listed this site for a second look: {listed}"
+    else:
+        run, kind, what = reading  # type: ignore[misc]  # not None: listed is None and reading is not
+        said = str(answers[-1][1]["reasoning"])[:READER_GAP_SHOWN_CHARS]
+        note = (
+            f"the period is empty: the pass of {run} answered unresolved ({said}), and an answer "
+            f"about this site names a dated value - {what} - that the readers of that day could "
+            "not read and today's read. A source may state the start: look for it, quote it"
+        )
+    opened = {"why": WHY_READER_GAP, "wd1": None, "made": note, "reader_gap": kind}
+    return {"period_start": opened}, None
+
+
+def read_listed(path: Path) -> dict[str, str]:
+    """`--sites FILE`: one JSON object per line, `{"site_id": <id>, "reason": <text>}`. A line of
+    another shape, an empty reason, a site named twice and an empty file are refused."""
+    if not path.exists():
+        raise PopulationError(f"{path} is missing")
+    listed: dict[str, str] = {}
+    for number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not raw.strip():
+            continue
+        row = json.loads(raw)
+        if not isinstance(row, dict) or set(row) != {"site_id", "reason"}:
+            raise PopulationError(f'{path}:{number} is not {{"site_id", "reason"}}: {raw[:120]}')
+        site, reason = str(row["site_id"]), str(row["reason"]).strip()
+        if not reason:
+            raise PopulationError(f"{path}:{number}: {site} comes with no reason")
+        if site in listed:
+            raise PopulationError(f"{path}:{number}: {site} is listed twice")
+        listed[site] = reason
+    if not listed:
+        raise PopulationError(f"{path} lists no site")
+    return listed
+
+
+@dataclass(frozen=True)
+class Reask:
+    """What a reader-gap build is: the period answers it reads (`read_answers` over
+    `REASK_HISTORY_RUNS`), whether it detects the sites (`--reask-cleared`), the sites the
+    orchestrator listed with their reasons (`--sites`) and the sites an earlier reader-gap run
+    decided (`already`, never asked twice)."""
+
+    answers: Mapping[tuple[str, str], Sequence[tuple[str, Mapping[str, Any]]]]
+    detect: bool
+    listed: Mapping[str, str]
+    already: frozenset[str]
+
+
+def check_listed(
+    listed: Mapping[str, str],
+    stored: Mapping[str, Mapping[str, Any]],
+    made: Mapping[tuple[str, str], Mapping[str, Any]],
+) -> None:
+    """Refuses (every offender named, nothing written) a listed site that is no curated site of the
+    export, a retired one, one whose period is not empty now and one whose period's newest journal
+    row is another lane's sourced write."""
+    bad = []
+    for site in sorted(listed):
+        row = stored.get(site)
+        if row is None:
+            bad.append(f"{site}: not a curated site of {C.STORED_FILE}")
+        elif row["scope_status"] == "retired":
+            bad.append(f"{site}: retired")
+        elif not is_empty("period_start", row):
+            bad.append(f"{site}: holds period_start {row['period_start']!r} now")
+        elif column_kind("period_start", row, made, site) == SOURCED:
+            bad.append(f"{site}: its period was written by another lane's sourced write")
+    if bad:
+        raise PopulationError("the listed site(s) cannot be asked again: " + "; ".join(bad))
+
+
+def decided_by_reask(fields_dir: Path = FIELDS_DIR) -> frozenset[str]:
+    """The sites a reader-gap run of `REASK_RUN` decided a period of, once it has decisions: a site
+    is asked by a reader-gap run once. No decisions file is a run not answered yet."""
+    path = fields_dir / REASK_RUN / "DECISIONS.jsonl"
+    if not path.exists():
+        return frozenset()
+    return frozenset(
+        str(row["site_id"]) for row in _read_jsonl(path) if row["field"] == "period_start"
+    )
+
+
 def export(out: Path, *, reader: Callable[[str], list[dict[str, Any]]]) -> dict[str, Any]:
     """STORED.jsonl (`classify.export_stored`), LINKS.jsonl, POINTS.jsonl, MADE.jsonl and the empty
     SEEDS.jsonl a run needs."""
@@ -610,13 +816,19 @@ def build(
     pilot: tuple[int, int] | None = None,
     without: Path | None = None,
     history: Mapping[tuple[str, str], Mapping[str, Any]] | None = None,
+    reask: Reask | None = None,
 ) -> dict[str, Any]:
     """RUN.json, CLASSIFIED.jsonl and COUNTS.json of the population (or of its pilot, or of the
     population less a pilot): every live curated site with an open field, each with exactly those.
     `stage` picks the rule `RUN.json` pins: `wd3` fills open fields, `wd4` asks the same question
     and adds the answer kind `period_name`, `wd5` asks the values no source stands behind
     (`recheck_fields`; it needs `history`, the latest decision of every field, and reads MADE.jsonl),
-    and a run pinned to another rule is refused."""
+    and a run pinned to another rule is refused.
+
+    `reask` (stage wd5 only) makes the run a **reader-gap** run: it asks `period_start` and nothing
+    else, of the empty periods a counted Claude answer left `unresolved` although it names a dated
+    value (`reader_gap_fields`) and of the sites the orchestrator listed. It is one run: no pilot,
+    no `without`."""
     rule = R.BY_STAGE.get(stage)
     if rule is None:
         raise R.RuleError(f"stage {stage!r} is not one of {sorted(R.BY_STAGE)}")
@@ -624,12 +836,27 @@ def build(
         raise PopulationError(
             "a wd5 run is built from the decisions of WD1, WD3 and WD4: no history"
         )
+    if reask is not None and not rule.recheck:
+        raise PopulationError(f"a reader-gap run is a stage wd5 run, not {stage!r}")
+    if reask is not None and (pilot is not None or without is not None):
+        raise PopulationError("a reader-gap run is one run of its own: no pilot, no --without")
+    if reask is not None and not (reask.detect or reask.listed):
+        raise PopulationError("a reader-gap run needs --reask-cleared or --sites")
     if (out / "ROUNDS.jsonl").exists():
         raise PopulationError(f"{out} was asked already (ROUNDS.jsonl): a run is built once")
-    C.read_stored(out)  # refused here, before anything is pinned, when the export is missing
+    stored_all = C.read_stored(out)  # refused here, before anything is pinned, when it is missing
     links = read_links(out)
     points = read_points(out)
     made = read_made(out) if rule.recheck else {}
+    if reask is not None:
+        check_listed(reask.listed, stored_all, made)
+        again = sorted(set(reask.listed) & reask.already)
+        if again:
+            raise PopulationError(
+                f"the listed site(s) were decided by {REASK_RUN} already: {', '.join(again)}"
+            )
+    gap_asked: Counter[str] = Counter()
+    gap_skipped: Counter[str] = Counter()
     unseen: set[str] = set()
     journal_sourced: set[str] = set()
     skipped_sourced: Counter[str] = Counter()
@@ -637,7 +864,19 @@ def build(
 
     def refine(line: Mapping[str, Any], stored: Mapping[str, Any]) -> dict[str, Any] | None:
         site = str(line["site_id"])
-        if rule.recheck:
+        if reask is not None:
+            wrong = []
+            if site in reask.already:
+                gap_skipped[SKIP_ALREADY] += 1
+                return None
+            opened, skipped = reader_gap_fields(
+                line, stored, reask.answers.get((site, "period_start"), ()), made,
+                listed=reask.listed.get(site), detect=reask.detect,
+            )  # fmt: skip
+            if skipped is not None:
+                gap_skipped[skipped] += 1
+            gap_asked.update(o["reader_gap"] for o in opened.values())
+        elif rule.recheck:
             opened, sourced = recheck_fields(line, stored, history or {}, made, wd1)
             skipped_sourced.update(sourced)
             wrong = []
@@ -665,6 +904,13 @@ def build(
             "wd1_runs": list(wd1.runs),
             "wd1_waves": list(wd1.waves),
         },
+        reask=None
+        if reask is None
+        else {
+            "detect": reask.detect,
+            "listed": dict(sorted(reask.listed.items())),
+            "reads": list(REASK_HISTORY_RUNS),
+        },
         pilot=None if pilot is None else {"size": pilot[0], "seed": pilot[1]},
         without=None if without is None else _shown(without),
     )
@@ -684,6 +930,14 @@ def build(
             site: fields for site, fields in sorted(contradictions.items()) if site in mine
         },
     }
+    if reask is not None:
+        counts["reader_gap"] = {
+            "asked": dict(sorted(gap_asked.items())),
+            "skipped": dict(sorted(gap_skipped.items())),
+            "detect": reask.detect,
+            "listed": len(reask.listed),
+            "already_decided_sites": len(reask.already),
+        }
     counts["wd1"] = {
         "runs": list(wd1.runs),
         "waves": list(wd1.waves),
@@ -751,6 +1005,19 @@ def main(argv: list[str] | None = None) -> int:
     cut.add_argument("--pilot", type=int, help="a pilot: this many of the population's sites")
     cut.add_argument("--without", type=Path, help="the population less this pilot run's sites")
     run.add_argument("--seed", type=int, help="the pilot's draw (with --pilot)")
+    run.add_argument(
+        "--reask-cleared",
+        action="store_true",
+        help="stage wd5: a reader-gap run (see `reader_gap_fields`) - ask period_start again of "
+        "every empty period whose latest decision is a counted Claude unresolved that names a "
+        "dated value today's readers read; one run, no --pilot, no --without",
+    )
+    run.add_argument(
+        "--sites",
+        type=Path,
+        help='stage wd5: a reader-gap run of the sites in FILE (JSON lines {"site_id", "reason"}); '
+        "with --reask-cleared, those sites are added to the detected ones",
+    )
     args = parser.parse_args(argv)
     try:
         if args.command == "export":
@@ -758,7 +1025,18 @@ def main(argv: list[str] | None = None) -> int:
         else:
             if (args.pilot is None) != (args.seed is None):
                 parser.error("--pilot and --seed go together")
+            if (args.reask_cleared or args.sites is not None) and args.stage != R.RECHECK.stage:
+                parser.error("--reask-cleared and --sites are for --stage wd5")
+            listed = {} if args.sites is None else read_listed(args.sites)
             wd1 = read_wd1(*wd1_files(args.wd1_dir))
+            reask = None
+            if args.reask_cleared or args.sites is not None:
+                reask = Reask(
+                    read_answers(wd1, args.wd1_dir, REASK_HISTORY_RUNS),
+                    args.reask_cleared,
+                    listed,
+                    decided_by_reask(args.wd1_dir),
+                )
             result = build(
                 args.root,
                 args.out,
@@ -768,6 +1046,7 @@ def main(argv: list[str] | None = None) -> int:
                 pilot=None if args.pilot is None else (args.pilot, args.seed),
                 without=args.without,
                 history=read_history(wd1, args.wd1_dir) if args.stage == R.RECHECK.stage else None,
+                reask=reask,
             )
     except (PopulationError, R.RuleError, C.ClassifyError, H.HarvestError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)

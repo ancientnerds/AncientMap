@@ -339,10 +339,15 @@ sweep has the family `wd5-adv:` (`python scripts/remediation/mechanical/mutation
 
 - A quote taken from the cache text must match the live article at import; footnote markers and tables are where the
   two can differ. A quote that fails there is asked again like any other.
-- **BP-lost periods that wd5 does not ask.** 92 sites (measured 2026-10-09) whose last period decision is a Claude-answered
-  `unresolved` on an empty period, with an age in years before the present in an earlier answer's reasoning, are not
-  in the wd5 population (nobody made their value; they are empty). The 55 MiniMax-answered ones are. If D12 is to
-  reach them, `population.recheck_fields` needs a reason for an empty period whose earlier reasoning names a BP age.
+- **Periods cleared although a source states the value (the reader-gap run, 2026-10-18).** A rule-made start that
+  the researcher answered `unresolved` is cleared to `Undated` (D12). Where the answer itself names a dated value
+  and says a machine reader is why it gave up ("none states it in a form the check reads", "the checker cannot read
+  ..."), the clear was a reader gap, not a finding: the pilot of 2026-10-09 cleared Olympe, Chitinamit and
+  Shypyntsi that way (section 11). The earlier note of this section - 92 sites with a BP age in an earlier answer
+  that wd5 would never ask - did not hold on the files: the 92 are the sites whose latest pre-wd5 decision is a
+  Claude `unresolved` with a BP word in an answer, and every one of them was a rule-made start that wd5 **did**
+  ask (checked 2026-10-18 on the files: 57 ended in a `keep` or `replace`, 30 in an `unresolved`, 5 in a `held`), so no BP reason is needed. What is
+  left is the empty periods of the paragraph above, built as a run of their own (section 12).
 - The priority order of the writes (caves and the Americas first) needs a site cut at `plan.py wave`; it has none: a
   run is one wave. Cut by running the answers in that order and writing wave by wave from the same run only after
   adding the cut.
@@ -386,3 +391,48 @@ capitalised, and a sentence-initial `Classic`, `Initial Period` or `Woodland` ne
 Re-measured on the 3,557 period answers of wd1, wd1-rest, wd3, wd4 and the wd5 pilot that carry a year and a quote: the
 old reader accepted 3,472, the reviewed commit 3,454, this one 3,454; 18 old accepts refused (0.5 %), none gained, and
 this round changes none of the 3,557.
+
+## 12. The reader-gap run (`--reask-cleared`, `--sites`)
+
+`population.py build --stage wd5 --reask-cleared [--sites FILE]` builds a wd5 run that asks `period_start` and nothing
+else, with the open reason `reader-gap` (`population.WHY_READER_GAP`; `handoff.OPEN_TEXT` says it to the agent and
+`open[period_start]["made"]` carries the previous answer: the run, the first 400 characters of its reasoning and the
+value the readers now read). It is a normal wd5 run otherwise: the same rule (`RUN.json` pins `recheck`, and records
+`reask`: `detect`, `listed`, the runs it read), export, import, adversarial re-check and wave path, built into a fresh
+directory, one run (no `--pilot`, no `--without`). An `unresolved` answer writes nothing (the field is empty already;
+the plan lists it); a `replace` fills the empty start and its label; a period another lane wrote since is refused at
+the write (`moved-since-classification`).
+
+A site is asked when its period is **empty now** and
+
+* `--reask-cleared`: its latest period decision (WD1, WD3 pilot, WD3, WD4, wd5 pilot, wd5 - `read_answers` over
+  `REASK_HISTORY_RUNS`) is a **counted** `unresolved` of a **Claude** agent (not `adversarial`: a source was read and a
+  checker refused it; not MiniMax; not `exhausted`), its reasoning **blames a machine reader** (`READER_BLAME`) and
+  names a value the readers of today read (`readable_date`: an age BP, a year, century or millennium with its era
+  marker not later than 1500 AD, or a period of `pipeline.periods`); the kind is recorded (`bp-age`,
+  `dated-statement`, `period-name`);
+* `--sites FILE`: it is named in FILE, one JSON object per line `{"site_id": ..., "reason": ...}` (the reason is shown to
+  the agent). The build refuses, naming every offender and writing nothing, a listed site that is no curated site of
+  the export, is retired, holds a period now, or whose period's newest journal row is another lane's sourced write;
+  a detected site in that state is skipped and counted (`reader_gap.skipped`). A site the reader-gap run itself decided
+  (`output/remediation/fields/wd5-reask/DECISIONS.jsonl`) is never asked a second time.
+
+`COUNTS.json` has `reader_gap` (`asked` by kind, `skipped` by reason, `detect`, `listed`, `already_decided_sites`) and
+`population.why`.
+
+```bash
+R=output/remediation/fields/wd5-reask
+mkdir -p $R && cp $W5/STORED.jsonl $W5/LINKS.jsonl $W5/POINTS.jsonl $W5/MADE.jsonl $W5/SEEDS.jsonl $R/   # refreshed by
+# `population.py --out $R export` instead when the export of $W5 is older than its last wave
+$PY $F/population.py --out $R build --root $W5/harvest --stage wd5 --reask-cleared [--sites FILE]
+$PY $F/handoff.py copy-hints --run $R --from output/remediation/fields/wd4/ORIGINAL_PERIODS.jsonl
+```
+
+The export must be refreshed (`population.py --out $R export`, production read-only, then `harvest.py ... export` as in
+section 4) after the last wd5 wave: the build reads the emptiness of each period from it. Measured 2026-10-18 on the
+main checkout's files (the export of 2026-10-09 with the waves' `PLAN.jsonl` period writes applied, read-only):
+**89 sites** - 60 `dated-statement`, 28 `period-name`, 1 `bp-age`; 5 from the wd5 pilot (Olympe, Chitinamit, Shypyntsi,
+Tremeca, Chongbang Fortress) and 84 from the rest run. Some of the 84 give up for a reason the readers still do not
+cover (a Spanish period name, a date of the fortification and not of the start): the fresh agent decides, and an
+`unresolved` costs nothing but its question. Tests: `tests/remediation/test_fields_wd5_reask.py`; mutation family
+`wd5r:`.
