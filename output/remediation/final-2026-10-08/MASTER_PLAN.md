@@ -198,3 +198,38 @@ exists. Every write is journalled, so an interrupted wave costs at most the item
 D42 D40 stands (checkers on Opus, card_writer Sonnet); D45 scopes it to the card lane (own roles
 `card_fact_checker`, `card_web_verifier`). D43 run Phase C now, autonomously, until about 90 % of the
 weekly Claude quota, then pause cleanly. D44 D6 stays closed to MiniMax. Recorded in `OWNER_DECISIONS_2026-10-08.md`.
+
+## RESUME POINT - 2026-10-18 (Claude Code session, Opus 5.5; owner away)
+
+Owner decisions D42-D45 (2026-10-17/18, `OWNER_DECISIONS_2026-10-08.md`): D40 stands, scoped to the card lane (D45:
+own roles `card_fact_checker`, `card_web_verifier` on Opus; shared `fact_checker`/`web_verifier` stay Sonnet);
+Phase C runs in Claude Code sessions to ~90 % weekly quota (D43); D6 stays closed to MiniMax (D44). Details and
+numbers: AUDIT_LOG 2026-10-18.
+
+Done:
+1. **WD5 main run** - finished and live: wave 2026-10-17a, 10 steps, 1,795 cells at 867 sites, 0 deviations,
+   journal recounted; static export fresh (0 differing), IndexNow 938 URLs. 163 cells on `wd5/adv/OWNER.jsonl`.
+2. **Card roles calibrated on Opus and released under D40** (top tier, held): `card_fact_checker` teaser-2026-10-18,
+   `hook_rater` (tier move after -10) and `card_web_verifier` teaser-2026-10-18b. Note: any edit of a sealed module
+   (`roles.py`, `web_rules.py`, `teaser/*`) makes `agents` of those calibration dirs refuse; `standing` still holds.
+3. **Reader-gap re-ask lane built** (`935c3d5`, FIELDS_WD5.md section 12): run `output/remediation/fields/wd5-reask`
+   is exported and built - 89 sites (60 dated-statement, 28 period-name, 1 bp-age; Olympe, Chitinamit, Shypyntsi in),
+   hints copied. Section 10's "92 BP-lost" premise was wrong (wd5 asked them).
+
+In order next:
+1. **Card pilot** `output/remediation/teaser/runs/wb-shorts-pilot-2026-10-18` (40 sites, seed 20261018; nothing
+   written): state at 2026-10-18 ~13:00 local: 17 accepted, 17 cleared, 6 due verify2 (workflow `wf_a2fb7c9e-455` still running at handover); check `teaser/run.py status`, finish the stages from `verify` on (verify, rewrite-v,
+   check-v, verify2), `outcomes`, `judge-export`/`judge-import`, then `calibrate.py evaluate --role card_writer
+   --writer-run <pilot>` and the pilot gate of plans/cards.md 3.6. Measured so far: checker PASS at attempt 1 is
+   23/39 (59 %, gate 70 %) - the findings are real writer faults (dropped hedges, a town in sentence 1, a name the
+   listener can assemble, an ambiguous "it", generic cards), 10 of 40 cleared after two rewrites (they keep their
+   card, D5). If the gate fails on the first-attempt share only, tune the writer prompt with those findings and run a
+   second pilot; never lower the checker.
+2. **wd5-reask research**: export r0 (`handoff.py export --run $R --handoff output/remediation/handoff/fields-wd5-reask-r0`),
+   then the rounds, adversarial re-check, backup drill and wave as the WD5 main run (workflow script
+   `wd5-main-resume` of this session is the template; seed, wave id `2026-10-18r` or the day's). Web width <= 3 in
+   total across all running lanes.
+3. D10 re-check of the 167 MiniMax cards (recheck-v1: check/verify on the card roles; `adversarial` failed
+   teaser-2026-10-10 on Sonnet with a tier move - decide its card calibration before the re-check).
+4. Then the card waves (after a passed pilot), WC finish + 141 defects, identity (D14, D13, D23, D20, D25),
+   descriptions (WN, D21, D3, D4), images D17 + D15, the 38 high-demand sites, close-out phase 8 - MASTER_PLAN order.
