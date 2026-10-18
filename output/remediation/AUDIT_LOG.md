@@ -14160,3 +14160,46 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
 - Tests: `test_teaser_disputed.py` (48: rule, verdict, route, prompts, qualifier step), `test_teaser_subtle_defects.py` (31), `test_teaser_calibrate_adjudication.py` (37: file, seal, scoring of all four sets of the checker, the verifier, the adversary, the dispute list); `test_teaser_calibrate.py` follows the new shape (`falsely_disputed_max` in its table, the defect answers name the flawed claim). 18 new cases in `teaser/mutation_sweep.py` (`teaser gold:`); three cases of `mechanical/mutation_sweep.py` re-anchored to the changed lines (`verify: still contradicted is its own reason`, `a recorded failure must fail again`, `a seeded defect must be caught`); `test_wc.py` re-pins `WIKI_CACHE_NOTE` (the wc brief now carries the contradiction rule; the other pins are unchanged and no exported prompt of lane WC moved). Backend `tests/remediation` (full run, `-m "not integration and not live_llm"`): 10104 passed, 2 failed, 116 skipped; the two failures were the `test_wc.py` pin and `test_mechanical_sweep.py` (the three re-anchored needles), and both pass after the repair (262 passed in the files touched since).
 - Review fix round: `names_the_claim` now takes the overlap with the flawed sentence without the witness words (a witness word such as "all" is itself a content word of the sentence and could be its own second word); the web judge's `CONTRADICTION_STEP` (v1 and shorts) tells the judge that a claim the text already hedges is SUPPORTED when the sources disagree, so hedge-or-drop can end in VERIFIED.
 - The 19 Opus cases of `-09c` (`dispute-list` on `teaser-2026-10-09c`, 7 verifier and 12 adversary) are in the builder's report to the orchestrator with their sources; none is labelled.
+
+## 2026-10-18 - Owner decisions D42-D45, the card lane's own checkers on Opus, WD5 resumed (Claude Code session, Opus 5.5)
+
+- **D42-D45** (`OWNER_DECISIONS_2026-10-08.md`): D40 came after D36 (the 2026-10-17 notes had the order reversed) and
+  stands, scoped to the card lane (D45); Phase C runs in this session to ~90 % of the weekly quota (D43; 8 % used at
+  the start); D6 stays closed to MiniMax (D44). Code `efadc3c`: roles `card_fact_checker` and `card_web_verifier`
+  (Opus 5.5 high) answer the card lane's check/verify stages; `fact_checker` (WC) and `web_verifier` (identity, lane E,
+  image identity) stay Sonnet. A global move had failed 182 tests across those lanes - the measure of its reach.
+  `tests/remediation` 10,517 passed, 6 skipped.
+- **Adjudication, the two labels left for the orchestrator** (entry of 2026-10-09): confirmed **substantive** both.
+  Kriemhildenstuhl: the basis says "individual" Arbeitskoepfe, the card "each" (a widened quantifier). Caves of Poco
+  Velho: "evidence points to their use as a necropolis" became "held a necropolis" (a dropped hedge), and the schist
+  slabs became an example of limestone offerings. The file is unchanged; its labels already said substantive.
+- **WD5 main run resumed** as workflow `wf_043be6d4-9dd`: r0 had 755 of 1,752 questions open in 64 batches
+  (b0083-b0146); the old script's stop after the r0 import is removed; wave id 2026-10-17a, backup
+  `2026-10-17_remediation`.
+- **Calibration teaser-2026-10-18** (`wf_f6388f01-1af`): `card_fact_checker` on Opus over the sets of -10 (same runs,
+  `teaser-base-2026-10-10/BASE.jsonl`, the adjudicated gold); `card_web_verifier` sealed and exported, answered once
+  WD5's research frees the web width.
+- **card_fact_checker on Opus, teaser-2026-10-18:** FAIL, held at the top tier. Against Sonnet -10 on the same
+  adjudicated sets: fail_again 15/15 (passed) vs 13/15, defects 25/30 (13 of 18 subtle) vs 24/30, false passes 1 vs 4,
+  checker_good 24/30 vs 29/30 (stricter). **Released** by the orchestrator under D8/D40/D42/D45 (`RELEASE-card_fact_checker.json`,
+  standing `released`); residual risk named in the release: an original size or state made current (4 seeded misses).
+- **hook_rater tier move** (D6 rule): Sonnet failed teaser-2026-10-10 (pairs ordered right 0.8601 of 1.0) with a tier
+  move to Opus; applied as a record in `APPLIED_ESCALATIONS` (registry Opus medium). Opus medium had reached 0.7902 in
+  teaser-2026-10-09, so the move is the rule, not a measured gain; it is calibrated in teaser-2026-10-18b (a seal after
+  the registry edit - -18 sealed the Sonnet entry). `tests/remediation` 10,517 passed.
+- **hook_rater on Opus, teaser-2026-10-18b:** pairs ordered right 0.8531 (Sonnet -10 0.8601, Opus -09 0.7902), within
+  one of the Opus xhigh reference 1.0; held at the top tier and **released** (D8, D37): no tier meets the sealed 1.0,
+  the rater only orders a card's own variants, the pilot judge judges every pilot hook.
+- **WD5 main run finished** (`wf_043be6d4-9dd`): r0 1,752 answered, re-asks r1 (123 sites) and r2 (16), import decisions
+  period_start keep 593 / replace 429 / unresolved 432 / held 2, coordinates keep 171 / replace 48 / unresolved 333 /
+  held 2, site_type keep 81 / replace 10, source_url keep 4 / replace 3. Adversarial re-check (gate: fr-general-001
+  released D36, fr-bp-001 passed, adv-truth-002 passed) on 575 cells, one re-ask round of 97: confirm 412, reject 112,
+  unclear 51, 163 on the owner list. Backup `2026-10-17_remediation` (894,547,167 bytes), drill row-for-row equal.
+  **Wave 2026-10-17a**: 10 steps, all accepted with 0 deviations; production journal recounted: 1,795 rows
+  (`run_stamp` `2026-10-17a_fields-wd5-s001..s010`, test_id `WD5/structured-fields`) at 867 sites.
+  Then `api.services.rebuild_static` (205 s), `static_export_check.py`: 0 differing sites; IndexNow
+  `--lastmod-since 2026-10-18`: 938 URLs accepted (HTTP 200).
+- **card_web_verifier on Opus, teaser-2026-10-18b** (-18 refused: `roles.py` changed after its seal by the hook rater's
+  tier move): contradictions caught 12/15 counted (required 14; Sonnet -10: 4/15), 0 false sources, 1 falsely
+  contradicted (limit 2), 4 falsely DISPUTED, 3 gold labels wrong, claim agreement 0.8911 (0.9); held, **released**
+  (D8/D40/D42/D45).
