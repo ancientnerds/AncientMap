@@ -7827,8 +7827,8 @@ WD5_CASES: list[Case] = [
     Case(
         "wd5: a later lane's decision overrides an earlier one",
         FIELDS / "population.py",
-        '            history[(str(row["site_id"]), str(row["field"]))] = row',
-        '            history.setdefault((str(row["site_id"]), str(row["field"])), row)',
+        '            answers.setdefault((str(row["site_id"]), str(row["field"])), []).append((run, row))',
+        '            answers.setdefault((str(row["site_id"]), str(row["field"])), []).insert(0, (run, row))',
         "test_the_history_runs_wd1_then_wd3_then_wd4",
         WD5_TESTS,
     ),
@@ -12317,6 +12317,155 @@ TEASER_SHORTS_CASES: list[Case] = [
     ),
 ]
 CASES += TEASER_SHORTS_CASES
+
+#: The reader-gap run of lane wd5 (`population.py build --stage wd5 --reask-cleared | --sites`): which
+#: answers are a gap, what a build refuses and what it leaves alone. Every label starts with
+#: "wd5r:", so the list runs on its own: `mutation_sweep.py wd5r:`.
+WD5R_TESTS = "tests/remediation/test_fields_wd5_reask.py"
+WD5R_CASES: list[Case] = [
+    # -- which answers are a reader gap
+    guard(
+        "wd5r: an answer that blames no reader is a dropped lead",
+        FIELDS / "population.py",
+        '    if READER_BLAME.search(str(latest["reasoning"])) is None:',
+        "test_a_date_in_an_answer_that_blames_no_reader_is_a_lead_the_agent_dropped",
+        WD5R_TESTS,
+    ),
+    Case(
+        "wd5r: only a counted answer is a gap",
+        FIELDS / "population.py",
+        '        or latest.get("via") != "counted"\n',
+        "        or False\n",
+        "test_an_adversarial_rejection_is_a_source_that_was_read",
+        WD5R_TESTS,
+    ),
+    Case(
+        "wd5r: only a Claude answer is a gap",
+        FIELDS / "population.py",
+        "        or not _answered_by_claude(latest)\n",
+        "        or False\n",
+        "test_a_minimax_answer_or_one_without_a_model_is_not_a_claude_answer",
+        WD5R_TESTS,
+    ),
+    Case(
+        "wd5r: only an unresolved answer is a gap",
+        FIELDS / "population.py",
+        '        latest["decision"] != A.UNRESOLVED\n',
+        "        False\n",
+        "test_a_keep_is_not_a_gap",
+        WD5R_TESTS,
+    ),
+    Case(
+        "wd5r: a year with no era marker states no start",
+        FIELDS / "population.py",
+        "        if statement.era is not None and statement.hi <= READER_GAP_LATEST_YEAR:",
+        "        if statement.hi <= READER_GAP_LATEST_YEAR:",
+        "test_a_modern_year_and_a_late_one_state_no_start",
+        WD5R_TESTS,
+    ),
+    Case(
+        "wd5r: a year after the scope states no start",
+        FIELDS / "population.py",
+        "        if statement.era is not None and statement.hi <= READER_GAP_LATEST_YEAR:",
+        "        if statement.era is not None:",
+        "test_a_modern_year_and_a_late_one_state_no_start",
+        WD5R_TESTS,
+    ),
+    # -- what a site is left alone for
+    guard(
+        "wd5r: a period stored since is not asked",
+        FIELDS / "population.py",
+        '    if not is_empty("period_start", stored):',
+        "test_a_period_stored_since_is_left_alone_and_counted",
+        WD5R_TESTS,
+    ),
+    guard(
+        "wd5r: another lane's sourced period is not asked",
+        FIELDS / "population.py",
+        '    if column_kind("period_start", stored, made, site) == SOURCED:',
+        "test_another_lanes_sourced_write_is_never_asked",
+        WD5R_TESTS,
+    ),
+    guard(
+        "wd5r: a site the reader-gap run decided is not asked again",
+        FIELDS / "population.py",
+        "            if site in reask.already:",
+        "test_a_site_a_reader_gap_run_decided_is_skipped_and_counted",
+        WD5R_TESTS,
+    ),
+    # -- what a build refuses
+    guard(
+        "wd5r: a reader-gap run is a wd5 run",
+        FIELDS / "population.py",
+        "    if reask is not None and not rule.recheck:",
+        "test_a_reader_gap_run_is_one_run_of_the_recheck_rule",
+        WD5R_TESTS,
+    ),
+    guard(
+        "wd5r: a reader-gap run has no pilot",
+        FIELDS / "population.py",
+        "    if reask is not None and (pilot is not None or without is not None):",
+        "test_a_reader_gap_run_is_one_run_of_the_recheck_rule",
+        WD5R_TESTS,
+    ),
+    guard(
+        "wd5r: a reader-gap run asks something",
+        FIELDS / "population.py",
+        "    if reask is not None and not (reask.detect or reask.listed):",
+        "test_a_reader_gap_run_is_one_run_of_the_recheck_rule",
+        WD5R_TESTS,
+    ),
+    guard(
+        "wd5r: a listed site must be askable",
+        FIELDS / "population.py",
+        "    if bad:",
+        "test_a_listed_site_must_be_askable",
+        WD5R_TESTS,
+    ),
+    guard(
+        "wd5r: a listed site is a curated site",
+        FIELDS / "population.py",
+        "        if row is None:\n            bad.append",
+        "test_a_listed_site_must_be_askable",
+        WD5R_TESTS,
+    ),
+    guard(
+        "wd5r: a listed site was decided by the reader-gap run",
+        FIELDS / "population.py",
+        "        if again:",
+        "test_a_listed_site_that_cannot_be_asked_refuses_before_anything_is_written",
+        WD5R_TESTS,
+    ),
+    guard(
+        "wd5r: a listed site comes with a reason",
+        FIELDS / "population.py",
+        "        if not reason:",
+        "test_a_malformed_file_is_refused_by_line",
+        WD5R_TESTS,
+    ),
+    guard(
+        "wd5r: a site is listed once",
+        FIELDS / "population.py",
+        "        if site in listed:",
+        "test_a_malformed_file_is_refused_by_line",
+        WD5R_TESTS,
+    ),
+    guard(
+        "wd5r: a listed file lists a site",
+        FIELDS / "population.py",
+        "    if not listed:",
+        "test_a_malformed_file_is_refused_by_line",
+        WD5R_TESTS,
+    ),
+    guard(
+        "wd5r: the flags are for stage wd5",
+        FIELDS / "population.py",
+        "            if (args.reask_cleared or args.sites is not None) and args.stage != R.RECHECK.stage:",
+        "test_the_main_refuses_the_flags_of_another_stage",
+        WD5R_TESTS,
+    ),
+]
+CASES += WD5R_CASES
 
 
 # ------------------------------------------------------------------------------ the mutation

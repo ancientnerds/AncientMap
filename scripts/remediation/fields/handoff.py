@@ -648,6 +648,12 @@ OPEN_TEXT = {
     "value it wrote, a value it kept, or no value - no reliable pass has checked a source for it",
     "unsourced-point": "the stored point has no source: earlier passes found none for it, or "
     "found a better point that a guard refused",
+    # lane wd5, a reader-gap run (`population.reader_gap_fields`): the period is empty
+    "reader-gap": "the start is empty: an earlier Claude pass answered unresolved, yet its own "
+    "answer names a dated value. The readers that checked its quotes then could not read the "
+    "sentence (another language, a period name, a BP age); they read it now. A source that states "
+    "the start is an answer - quote it in its own language; the empty field stays empty only when "
+    "none can be quoted",
 }
 WD1_SHOWN_CHARS = 600
 #: How many of a site's own links a WD3 question lists (best first).
