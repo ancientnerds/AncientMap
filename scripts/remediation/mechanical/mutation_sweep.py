@@ -12174,7 +12174,7 @@ TEASER_SHORTS_CASES: list[Case] = [
                 "the writer's first answers are clean",
                 '            "passed": share >= rule["clean_first_min"],',
                 '            "passed": True,',
-                "test_a_writer_below_the_floor_moves_up_a_tier",
+                "test_a_writer_below_the_floor_is_held_for_the_owner_on_the_top_tier",
             ),
         )
     ),

@@ -51,10 +51,20 @@ RULES: tuple[str, ...] = (
     "number follows, nor with Located, Situated, Set, This, It, Its, Here or They.",
     "Landscape yes, address no. Say what the camera sees (a ridge, a hilltop, a valley, 'about "
     "3,800 metres up'), never where on the map: no province, district, region, county, parish or "
-    "'near the village of ...'.",
+    "'near the village of ...'. No settlement name in sentence 1 at all - not as a museum's city "
+    "('a museum in Cardiff') and not inside a person's title ('the bishop of Remesiana'): say 'a "
+    "national museum', 'a fourth-century bishop'.",
     "Every fact comes from the numbered sentences of the description - nothing else: not your "
     "own knowledge, not what 'everybody knows' about the site. A hedge in the description "
     "('possibly', 'believed', 'by one estimate', 'about') stays a hedge in the card.",
+    "Keep each fact's exact scope, as the sentence words it: 'appear to be' never becomes 'is'; a "
+    "qualifier stays ('3.1 metres high on its outer face', not '3.1 metres high'); a range stays a "
+    "range ('dates range from 500 AD to 1445 AD', never one end of it); a list the sentence leaves "
+    "open ('and more', 'among them') is never made complete. 'First', 'discovered', 'uncovered' "
+    "and 'found in <year>' say exactly what the sentence says happened then, nothing more. Call "
+    "the site ancient, prehistoric or Roman only where a sentence dates it so.",
+    "Every fact is about THIS site, not its whole kind: not 'Roman curse tablets often name a "
+    "theft' but 'the curse tablets found at this temple often name a theft'.",
     "These are CLAIMS and need a sentence that says them: that something is unknown, unexplained, "
     "secret, lost, hidden or mysterious; superlatives ('oldest', 'largest', 'first', 'only', "
     "'unique', 'rare', 'most'); numbers, dates and periods; names of people, peoples and places; "
@@ -69,13 +79,23 @@ RULES: tuple[str, ...] = (
     "no Roman numerals. The whole card is read in at most 14 seconds: 6.04 + 0.0334 x characters + "
     "0.318 x digits.",
     "Short, common words, for all ages and vivid active verbs. Each word is shown alone on the "
-    "screen: avoid words of twelve letters or more and long hyphenated compounds. No marketing "
-    "phrases ('hidden gem', 'step back in time').",
+    "screen: avoid words of twelve letters or more and long hyphenated compounds. No technical or "
+    "Latin term (oppidum, temenos, castrum, cist): use the plain word ('Iron Age town', 'stone "
+    "box grave'). No marketing phrases ('hidden gem', 'step back in time').",
+    "Read aloud, every 'it', 'its' and 'they' points at the noun nearest before it. When that "
+    "noun is not the site (a hill, a stream, a setback, a bishop), name the site again: 'the "
+    "sanctuary', 'the fort', 'the complex'.",
     "No question mark, no exclamation mark, no ellipsis, no 'you' or 'your', and no word that "
     "talks about the video or sends the viewer anywhere: link, description, comment, subscribe, "
     "guess, find out, discover, learn more, watch, click, video.",
     "Sentence 1 must also read naturally straight after the spoken 'Name, Country.' - the Short "
-    "loops - and the card must fit this site only, not ten sites of the same kind.",
+    "loops - and the card must fit this site only, not ten sites of the same kind. Test each "
+    "variant: would it be true of ten other forts, hillforts, cities or rock-art sites? A bank and "
+    "ditch, a stadium, a stoa, a bishopric, 'a strategic spot' are shared by dozens; use the "
+    "detail only this site has. No pair of words lets a listener assemble the name before it is "
+    "spoken ('a valley' with 'seven temples' gives away 'Valley of the Temples').",
+    "End on a concrete image or the open thread - never on a bare date, and never by repeating "
+    "what sentence 1 told.",
     "The card's open thread must be answered on the site's page: name in RESERVE the ids of "
     "description sentences you did NOT use that answer or extend it, or 'reveal' when the spoken "
     "name itself answers it (a name that means something). If nothing answers it, the reserve is "
@@ -85,7 +105,8 @@ RULES: tuple[str, ...] = (
 ANCHOR_RULE = (
     "PHOTO ANCHORS (this site can be a Short). The Short cuts its pictures on the words you name. "
     "Copy 1-3 phrases from your card, exactly as written, each a concrete thing a photograph can "
-    "show (the IMAGE TITLES hint at what exists, they are no fact). Anchor 1 ends in the last 25 "
+    "show, and one the IMAGE TITLES suggest a photo of exists (they hint at what exists, they are "
+    "no fact; when the titles show excavation details, anchor those). Anchor 1 ends in the last 25 "
     "characters of sentence 1; every later anchor starts at character 95 or later; two anchors "
     "start at least 28 characters apart."
 )

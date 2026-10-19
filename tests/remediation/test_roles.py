@@ -28,9 +28,10 @@ import roles as RO  # noqa: E402
 #: and back to Sonnet by owner move; `card_writer`, `hook_rater`, `adversarial` and `code_review` went
 #: to Sonnet by owner move (the hook rater at medium); `pilot_judge` is the small spot check that
 #: stays on Opus; `enrich_writer` is the lane E writer that never left Sonnet. D40 as scoped by D45
-#: (2026-10-17) added the card lane's own checkers on Opus.
+#: (2026-10-17) added the card lane's own checkers on Opus; D46 (2026-10-19) moved `card_writer` back
+#: to Opus after its Sonnet pilot.
 D6 = {
-    "card_writer": ("claude-sonnet-5-5", "high"),
+    "card_writer": ("claude-opus-5-5", "high"),
     "hook_rater": ("claude-opus-5-5", "medium"),
     "fact_checker": ("claude-sonnet-5-5", "high"),
     "web_verifier": ("claude-sonnet-5-5", "high"),
@@ -197,8 +198,8 @@ def test_the_applied_moves_are_records_and_the_registry_stands_where_they_end() 
         },
     ]
     RO.check_applied_escalations(RO.APPLIED_ESCALATIONS, RO.ROLES)
-    assert all(m.get("kind") == "owner" for m in RO.APPLIED_ESCALATIONS[3:-1])
-    assert dict(RO.APPLIED_ESCALATIONS[-1]) == {
+    assert all(m.get("kind") == "owner" for m in RO.APPLIED_ESCALATIONS[3:-2])
+    assert dict(RO.APPLIED_ESCALATIONS[-2]) == {
         "role": "hook_rater",
         "from": "claude-sonnet-5-5",
         "to": "claude-opus-5-5",
@@ -279,7 +280,9 @@ def owner_move(**over: object) -> dict[str, object]:
 
 
 def test_the_owner_moves_of_d36_put_seven_roles_from_opus_to_sonnet() -> None:
-    owner = [m for m in RO.APPLIED_ESCALATIONS if m.get("kind") == "owner"]
+    owner = [
+        m for m in RO.APPLIED_ESCALATIONS if m.get("kind") == "owner" and m["decision"] == "D36"
+    ]
     assert {m["role"]: m["effort"] for m in owner} == D36_ROLES
     assert len(owner) == len(D36_ROLES)
     for move in owner:
@@ -289,8 +292,9 @@ def test_the_owner_moves_of_d36_put_seven_roles_from_opus_to_sonnet() -> None:
             "D36",
         )
         assert move["evidence"] and move["reason"].startswith("weekly Claude quota at 69 %")
-        # the hook rater moved on up one tier after D36 (teaser-2026-10-10); its move ends there
-        if move["role"] != "hook_rater":
+        # the hook rater moved on up one tier after D36 (teaser-2026-10-10) and the card writer
+        # back to Opus by D46; their moves end there
+        if move["role"] not in ("hook_rater", "card_writer"):
             assert RO.ROLES[move["role"]].model == "claude-sonnet-5-5"
         assert RO.ROLES[move["role"]].effort == move["effort"]
     # the roles D36 left alone carry no owner move
@@ -359,9 +363,9 @@ def test_a_registry_that_left_its_owner_move_is_refused_in_model_and_in_effort()
     moves = RO.APPLIED_ESCALATIONS
     other_model = dict(RO.ROLES)
     other_model["card_writer"] = RO.Role(
-        "card_writer", "claude-opus-5-5", "high", "wb_cards_accepted"
+        "card_writer", "claude-sonnet-5-5", "high", "wb_cards_accepted"
     )
-    with pytest.raises(RO.RoleError, match="card_writer is registered to claude-opus-5-5"):
+    with pytest.raises(RO.RoleError, match="card_writer is registered to claude-sonnet-5-5"):
         RO.check_applied_escalations(moves, other_model)
     other_effort = dict(RO.ROLES)
     other_effort["hook_rater"] = RO.Role(
@@ -376,7 +380,7 @@ def test_an_owner_move_that_does_not_follow_the_chain_is_refused() -> None:
         RO.check_applied_escalations(
             (
                 *RO.APPLIED_ESCALATIONS,
-                owner_move(role="card_writer", **{"from": "claude-opus-5-5"}),
+                owner_move(role="card_writer", **{"from": "claude-sonnet-5-5"}),
             ),
             RO.ROLES,
         )
@@ -645,3 +649,17 @@ def test_an_owner_decision_does_not_reach_past_a_later_move_of_the_role(
         RO.require_owner_move(
             "fact_checker", "D36", model="claude-opus-5-5", calibration_id="teaser-2026-10-09b"
         )
+
+
+def test_the_owner_move_of_d46_puts_the_card_writer_on_opus() -> None:
+    """D46 (2026-10-19): the writer goes back to Opus after its Sonnet pilot, as the last record of
+    its chain - D36 had moved it from Opus to Sonnet."""
+    move = RO.owner_move("card_writer", "D46")
+    assert move is not None and RO.last_move("card_writer") == move
+    assert (move["from"], move["to"], move["effort"]) == (
+        "claude-sonnet-5-5",
+        "claude-opus-5-5",
+        "high",
+    )
+    assert move["evidence"] == ("wb-shorts-pilot-2026-10-18",)
+    assert RO.ROLES["card_writer"].model == "claude-opus-5-5"

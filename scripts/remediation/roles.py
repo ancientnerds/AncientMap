@@ -92,7 +92,9 @@ ROLES: Mapping[str, Role] = _registry(
     # Sonnet since owner decision D36 of 2026-10-09 (`APPLIED_ESCALATIONS`, owner moves): the weekly
     # quota stood at 69 % after one day, and the calibrations measured no Opus advantage. Where a
     # role stood on Opus before that, the tier move up is the earlier record of its chain.
-    Role("card_writer", "claude-sonnet-5-5", "high", "wb_cards_accepted"),
+    # Opus since owner decision D46 of 2026-10-19: on Sonnet the checker passed 23 of 39 first
+    # drafts of pilot wb-shorts-pilot-2026-10-18 (59 %, gate 70 %); the second pilot measures Opus.
+    Role("card_writer", "claude-opus-5-5", "high", "wb_cards_accepted"),
     # Effort xhigh from 2026-10-09 (at medium it failed teaser-2026-10-09, hook_pairs ordered right
     # 0.7902 of a required 1.0), medium again on Sonnet under D36. Sonnet failed teaser-2026-10-10
     # (0.8601), so the D6 rule moves it up one tier to Opus, calibrated again in teaser-2026-10-18.
@@ -233,6 +235,20 @@ APPLIED_ESCALATIONS: tuple[Mapping[str, Any], ...] = (
             "to": "claude-opus-5-5",
             "calibration_id": "teaser-2026-10-10",
             "reason": "failed: hook_pairs",
+        }
+    ),
+    MappingProxyType(
+        {
+            "kind": OWNER_KIND,
+            "role": "card_writer",
+            "from": "claude-sonnet-5-5",
+            "to": "claude-opus-5-5",
+            "effort": "high",
+            "decision": "D46",
+            "reason": "owner, 2026-10-19 (spare weekly quota): the Sonnet writer of pilot "
+            "wb-shorts-pilot-2026-10-18 had 23 of 39 first drafts pass the Opus checker (59 %, "
+            "gate 70 %), its findings real writer faults; the checkers are never lowered",
+            "evidence": ("wb-shorts-pilot-2026-10-18",),
         }
     ),
 )

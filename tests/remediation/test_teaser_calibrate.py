@@ -1179,9 +1179,12 @@ class TestTheCardWriter:
             verdict["passed"] is True
             and verdict["sets"]["writer_pilot"]["clean_first_share"] == 1.0
         )
-        assert verdict["effort"] == "high" and verdict["model"] == "claude-sonnet-5-5"
+        # owner decision D46 (2026-10-19) registers the writer on Opus
+        assert verdict["effort"] == "high" and verdict["model"] == "claude-opus-5-5"
 
-    def test_a_writer_below_the_floor_moves_up_a_tier(self, tmp_path: Path) -> None:
+    def test_a_writer_below_the_floor_is_held_for_the_owner_on_the_top_tier(
+        self, tmp_path: Path
+    ) -> None:
         strict = {
             **TINY,
             "roles": {
@@ -1194,15 +1197,16 @@ class TestTheCardWriter:
         K.seal(run_dir, thresholds=strict)
         verdict = K.evaluate(run_dir, "card_writer", writer_run=run)
         assert verdict["sets"]["writer_pilot"]["clean_first"] == 1 and verdict["passed"] is False
-        assert verdict["tier_move"]["to"] == "claude-opus-5-5" and "held" not in verdict
+        # on Opus there is no tier above: the failed verdict is held, the owner decides
+        assert verdict["tier_move"] is None and verdict["held"]
 
     def test_a_pilot_written_by_another_model_is_refused(self, tmp_path: Path) -> None:
         run = self.run_with_writes(tmp_path, bad=False)
         rows = R.read_jsonl(run / "STAGE-write.jsonl")
-        rows[0]["model"] = OH.OPUS_MODEL
+        rows[0]["model"] = "claude-sonnet-5-5"
         R.write_jsonl(run / "STAGE-write.jsonl", rows)
         with pytest.raises(
-            K.CalibrationError, match=r"1 first answer.s. are not stamped claude-sonnet-5-5"
+            K.CalibrationError, match=r"1 first answer.s. are not stamped claude-opus-5-5"
         ):
             K.evaluate(sealed_dir(tmp_path), "card_writer", writer_run=run)
 

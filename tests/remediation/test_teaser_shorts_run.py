@@ -275,7 +275,7 @@ class TestSelect:
             40,
             85,
         ]
-        assert record["roles"]["card_writer"] == {"model": "claude-sonnet-5-5", "effort": "high"}
+        assert record["roles"]["card_writer"] == {"model": "claude-opus-5-5", "effort": "high"}
         assert record["roles"]["hook_rater"] == {"model": "claude-opus-5-5", "effort": "medium"}
         assert record["roles"]["card_fact_checker"] == {
             "model": "claude-opus-5-5",
@@ -455,7 +455,7 @@ class TestTheFirstRound:
             prov["v"] == 3 and prov["contract"] == "shorts-v1" and prov["run"] == "wb-shorts-test"
         )
         assert prov["models"] == {
-            "write": SONNET,
+            "write": OPUS,
             "rate": OPUS,
             "check": OPUS,
             "verify": OPUS,
@@ -717,7 +717,7 @@ class TestTheFirstRound:
         R.outcomes(run)
         prov = outcome(run, MP)["provenance"]
         assert prov["check"]["stage"] == "check-v" and prov["verify"]["stage"] == "verify2"
-        assert prov["models"] == {"write": SONNET, "rate": None, "check": OPUS, "verify": OPUS}
+        assert prov["models"] == {"write": OPUS, "rate": None, "check": OPUS, "verify": OPUS}
         assert prov["hook"] == {"type": "object", "rating": None, "variant": None}
         assert [d["claim"] for d in R.read_jsonl(run / "DESCRIPTION_DEFECTS.jsonl")] == []
 
@@ -794,9 +794,9 @@ class TestTheRoles:
             sid(MP),
             variants_json(MP),
             "card_writer",
-            model="claude-opus-5-5",
+            model="claude-sonnet-5-5",
         )
-        with pytest.raises(R.RunError, match="role card_writer is recorded as claude-sonnet-5-5"):
+        with pytest.raises(R.RunError, match="role card_writer is recorded as claude-opus-5-5"):
             R.import_stage(run, "write", fit=T.fit)
 
     def test_a_rater_that_rated_the_site_before_is_refused(self, tmp_path: Path) -> None:
@@ -1167,8 +1167,8 @@ class TestTheBriefs:
         run, handoff = self.exported(tmp_path, "write")
         text = R.brief(run, handoff, "write-001")
         assert "You are writer write-001 of lane WB, contract shorts-v1" in text
-        assert "**card_writer**: your model is **claude-sonnet-5-5**, effort high" in text
-        assert "--role card_writer" in text and "--model claude-sonnet-5-5" in text
+        assert "**card_writer**: your model is **claude-opus-5-5**, effort high" in text
+        assert "--role card_writer" in text and "--model claude-opus-5-5" in text
         assert "--answered-by teaser-write-001" in text and "--stage write" in text
         assert "an answer stamped with any other model is refused" in text
         assert "accepts the decline the prompt offers" in text
