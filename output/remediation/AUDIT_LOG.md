@@ -14218,3 +14218,23 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   `accept --step 35`: RESULT 0 deviation(s). Undo: card ROLLBACK.sql first, then prov.
   Then `api.services.rebuild_static` (268 s), `static_export_check.py`: 0 differing sites; IndexNow
   `--lastmod-since 2026-10-19`: 14 URLs accepted (HTTP 200).
+- **Sonnet card pilot wb-shorts-pilot-2026-10-18 closed - gate FAILED.** The 4 missing pilot_judge answers by fresh
+  Opus xhigh agents; `judge-import`: 21 cards, 131 claims, 120 supported, 2 contradicted (1 wrong card: Las Mercedes,
+  "the railroad first uncovered the site in 1871"), 2 disputed (Cerro del Villar, Pisarissos), 7 unproven (5.34 %,
+  limit 5 %), pilot FAIL. `calibrate.py evaluate --role card_writer` (teaser-2026-10-18b): clean_first 38/40 = 0.9744,
+  passed. Checker PASS at attempt 1 23/39 (59 %, gate 70 %). Gate failed -> D46.
+  Pitfall: a `git checkout` of a sealed module writes CRLF (core.autocrlf=true) and the seals hash the LF bytes
+  (roles.py a9aa3ecc...): evaluate refused "changed after the seal" until the file was rewritten from `git show`.
+- **D46 (`5ee717e`)**: `card_writer` -> Opus by owner move (APPLIED_ESCALATIONS, evidence the pilot); writer RULES
+  extended with the pilot's fault classes (scope/hedges, settlement in sentence 1, pronouns, generic, assembled
+  names, date endings, Latin terms, anchors vs image titles); checkers unchanged. Suite: 10,558 passed after the
+  test updates. Noted, not changed: `model4.ai_system_for` discloses "Opus and Sonnet" for an all-Opus chain (the
+  family-wide convention; an exact disclosure is an owner question).
+- **Pilot 2 wb-shorts-pilot2-2026-10-19** (40 sites, seed 20261019, pilot 1 excluded, writer Opus): offline stages
+  done - write 40 (thin 4, mechanical failures 0), check PASS at attempt 1 28/36 (78 %), after the rewrite rounds
+  35 due verify, 5 kept. Web stages and the judge running.
+- **wd5-reask (reader-gap run, 89 sites)**: r0 89 answered (replace 30, unresolved 57, 2 re-asked), r1 2; decisions
+  replace 32 / unresolved 57; adversarial (seed 20261019) 32 cells: confirm 24, reject 4, unclear 4 (8 to the owner
+  list). Backup 2026-10-19_remediation (895 MB) drill passed. **Wave 2026-10-19r**: 1 step, 48 cells
+  (period_start + period_name) at 24 sites, accepted 0 deviations; journal recounted 48 rows / 24 sites.
+  `rebuild_static` 277 s, freshness 0 differing, IndexNow 98 URLs accepted.
