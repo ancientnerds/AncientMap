@@ -93,3 +93,19 @@ teaser-2026-10-10, in which no Sonnet checker passed. D40 was never registered i
 | D43 | Run Phase C now (WD5 main run, card pilot, re-asks, further lanes in MASTER_PLAN order) | **Yes, until about 90 % of the weekly Claude quota** (rec), autonomous under D8/D39, then a clean pause with a resume point. |
 | D44 | Open D6 for MiniMax answers | **No, D6 stays** (rec): new answers of the DB repair come only from Claude models; the DB lanes run only in Claude Code sessions. |
 | D45 | Scope of D40 (`web_verifier` also serves identity, lane E and image identity, ~14,000 web checks) | **Card lane only** (rec): the card lane gets roles of its own on Opus; `web_verifier` (and every other lane's role) stays on Sonnet and is calibrated per lane. |
+
+## Follow-up decisions of 2026-10-19 (asked in a Claude Code session, Opus 5.5)
+
+Owner: "viel Quote übrig, wir könnten für alles Opus nehmen falls das hilft". An adversarial check
+against D1-D45/X1-X11 found eight candidate questions already decided; these six were open.
+
+| # | question | decision |
+| --- | --- | --- |
+| D46 | `card_writer` after the pilot (checker PASS at attempt 1: 23/39 = 59 %, gate 70 %) | **Opus writes** (rec): `card_writer` moves to Opus 5.5 (supersedes the Sonnet part of D36/D42); tune the prompt with the pilot findings, calibrate, then a second 40-site pilot. The checkers are never lowered. |
+| D47 | The 6 cards adjudicated wrong on 2026-10-09 (Astale, North Bersted Man, Roman Ruins of São Cucufate, Caesar's Camp, Teotihuacan – Pyramid of the Moon, Nysa Bridge) | **Clear them now** (rec), journalled and reversible; a checked rewrite replaces them later. D5 does not cover cards proven wrong. |
+| D48 | Strip, broken and small heroes (19 strips, 22 broken/hotlinked thumbs, 20 lead rows without hero flag, 433 small) | **Swap strips and broken ones** (rec) in the D15 pass where a checked larger row of the same site exists, incl. the 20 unflagged; the 433 small heroes only go on the owner list. |
+| D49 | ~300 attribution-licensed images without any author (48 heroes) | **Swap the heroes, show the rest** (rec): a hero moves to a fully attributed row where one exists; the rest stay in the gallery and stay barred from Shorts (D28). |
+| D50 | Retired "mystery" sites (Baltic Sea Anomaly, the Bosnian pyramids, Yonaguni, Richat) vs D21 | **All return as disputed sites** (owner, not the rec): un-retire them through the scope lane, journalled; each description states the scholarly position and the claim, both sourced; no card or page asserts the claim. Supersedes X2 and HUMAN_ONLY B2-B for these sites. |
+| D51 | Move further roles to Opus because quota is spare | **Only where a gate fails** (rec): roles that passed on Sonnet stay; a role that fails its calibration or gate moves to Opus (the D6 tier rule). |
+
+Start: the owner asked to continue Phase C in this session now (D43 pause at ~90 % weekly quota stands).
