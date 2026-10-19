@@ -14203,3 +14203,18 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   tier move): contradictions caught 12/15 counted (required 14; Sonnet -10: 4/15), 0 false sources, 1 falsely
   contradicted (limit 2), 4 falsely DISPUTED, 3 gold labels wrong, claim agreement 0.8911 (0.9); held, **released**
   (D8/D40/D42/D45).
+
+## 2026-10-19 - Claude Code session (Opus 5.5): owner decisions D46-D51, D47 applied
+
+- Open-question sweep (workflow, 6 agents, read-only): 13 candidate owner questions, 8 already decided by
+  D1-D45/X1-X11 (adversarial verify), 6 asked; answers recorded as D46-D51 in OWNER_DECISIONS_2026-10-08.md (`1e6742b`).
+- **D47 applied - the 6 cards adjudicated wrong (teaser-gold/ADJUDICATION.json, 2026-10-09) cleared.** Run
+  `teaser/runs/owner-d47-2026-10-19`: OUTCOMES.jsonl built from a read-only production read; each live card was
+  asserted equal to the adjudicated card text, outcome `cleared`, reason `owner-d47-contradicted`, with
+  `seeded_card_sha256` and `seeded_run` (wb-ws-2026-09-27-02/04/05/06) so the planner clears only that card.
+  Step 35 (`mechanical/teaser.py plan --step 35`): 6 provenance + 6 card cells, 0 listed; check-primitive, emit,
+  rehearse, probe-guards (each guard refused), apply prov then card - both "APPLY OK: the read-back matches the plan,
+  row for row", journal 6 + 6 rows (`wb-teaser-prov-s035`, `wb-teaser-card-s035`); rehearse-rollback clean;
+  `accept --step 35`: RESULT 0 deviation(s). Undo: card ROLLBACK.sql first, then prov.
+  Then `api.services.rebuild_static` (268 s), `static_export_check.py`: 0 differing sites; IndexNow
+  `--lastmod-since 2026-10-19`: 14 URLs accepted (HTTP 200).
