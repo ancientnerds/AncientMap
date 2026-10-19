@@ -339,7 +339,7 @@ async def problems(
         "problems": fs.problems(
             sessions,
             not_found=fetch(SQL_NOT_FOUND, since, until),
-            vitals=fetch(SQL_VITALS, since, until),
+            vitals=fetch(SQL_VITALS, since, until, sessions=fs.human_ids(sessions)),
             errors=fetch(SQL_ERRORS, since, until),
             searches=[r for r in fetch(SQL_CONTENT, since, until) if r["event_name"] == "search"],
             webgl=fetch(SQL_WEBGL_LOST, since, until),
@@ -442,10 +442,10 @@ async def live(
     }
 
 
-#: When a click out to YouTube started to mean one (deploy 2556cc4, UTC):
-#: before it, a click on a story's video poster - played in place - was
-#: counted as an outbound click as well.
-OUTBOUND_FIX = datetime(2026, 10, 9, 6, 42, tzinfo=UTC)
+#: When a click out to YouTube started to mean one (deploy 2556cc4, the same
+#: deploy as the scroll capture): before it, a click on a story's video
+#: poster - played in place - was counted as an outbound click as well.
+OUTBOUND_FIX = fs.CAPTURE_FIX
 
 
 @router.get("/creators")

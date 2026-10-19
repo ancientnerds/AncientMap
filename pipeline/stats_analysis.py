@@ -13,7 +13,8 @@ feed them fixtures.
 The rules are the ones locked in the plan (2026-09-17):
 
 * human = at least one page view, plus either an interaction event or a
-  second page view; everything else is "unconfirmed" (a stealth scraper or a
+  second URL - from CAPTURE_FIX on, a second URL counts only for a session
+  that arrived from somewhere (Session.human); everything else is "unconfirmed" (a stealth scraper or a
   bouncing human — cookieless data cannot tell them apart, so both counts are
   shown). An interaction has to be the visitor's own act: ``site_open`` fires
   by itself on a server-rendered site page and does not count there
@@ -70,6 +71,10 @@ AUTO_SITE_OPEN_CONTEXT = "site"
 AUTO_OPEN_METHOD = "landing"
 #: The events a page fires by itself with `method=AUTO_OPEN_METHOD`.
 LANDING_OPEN_EVENTS = ("story_open", "paper_open")
+#: Deploy 2556cc4 (UTC), which made scroll_depth fire on the story and site
+#: pages (boot.ts pageScrollBox): before it, 29 of 901 story sessions had ever
+#: sent a depth, so a reader who scrolled left no trace of it.
+CAPTURE_FIX = datetime(2026, 10, 9, 6, 42, tzinfo=UTC)
 #: Custom events that appear as steps in a journey (page types fill the rest).
 JOURNEY_EVENTS = {
     "site_open",
@@ -231,7 +236,15 @@ class Session:
         # /clusters proves are a single machine.
         if not self.page_steps:
             return False
-        if len(self.urls) >= 2:
+        # A second URL proves a person only where a scraper does not supply
+        # one. From CAPTURE_FIX on, a reader scrolls the page and says so;
+        # a direct session that walks several URLs without one act of its own
+        # is the CN/SG desktop crawl - measured 2026-10-09..10-19: 263 such
+        # multi-URL sessions, 228 direct, 235 on a laptop, 156 from CN/SG,
+        # and site -> site the most common path. The 34 of them that came from
+        # a search or an assistant went home -> globe, two pages that send no
+        # scroll depth, and stay human (SEO evaluation 2026-10-19, traffic-2).
+        if len(self.urls) >= 2 and (self.entry != "direct" or self.started < CAPTURE_FIX):
             return True
         return sum(self.events[n] for n in INTERACTIONS) > self.auto_opens
 
@@ -256,6 +269,11 @@ class Session:
         if pages & {"story", "journal"}:
             return "reader"
         return "other"
+
+
+def human_ids(sessions: list[Session]) -> list[str]:
+    """The ids of the human sessions, in the form SQL_VITALS' `:sessions` takes."""
+    return [str(s.id) for s in sessions if s.human]
 
 
 def sessions_from_rows(rows: list[dict[str, Any]]) -> list[Session]:
@@ -935,7 +953,10 @@ def entry_exit_pages(sessions: list[Session]) -> dict[str, Any]:
         exits[s.page_steps[-1]] += 1
         for page in s.page_steps:
             views[page] += 1
-        if len(s.page_steps) == 1:
+        # One URL, however often it was loaded: a reload or the same result
+        # clicked twice is no step on (Session.urls; SEO evaluation
+        # 2026-10-19, roadmap-12, counted those as "moving").
+        if len(s.urls) == 1:
             one_page += 1
             stopped[s.page_steps[0]] += 1
     return {

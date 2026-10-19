@@ -263,6 +263,10 @@ LIMIT 50
 #: 2026-09-26, src/analytics/boot.ts vitalProps): the longest part of it and
 #: the element. The row names the most frequent of each among its slow
 #: samples - where the page usually loses the time.
+#: `:sessions` are the human sessions of the window (stats_analysis.human_ids):
+#: a bot's vitals are no visitor's wait. Measured 2026-10-15/16: 796 globe LCP
+#: samples from an 800x600 bot burst made the globe row 5,228 ms; over human
+#: sessions it is 1,268 ms on a phone (SEO evaluation 2026-10-19, cwv-11).
 SQL_VITALS = (
     """
 WITH ev AS (
@@ -279,6 +283,7 @@ WITH ev AS (
     JOIN session s ON s.session_id = e.session_id
     WHERE e.website_id = :website_id AND e.event_name = 'vital'
       AND e.created_at >= :since AND e.created_at < :until
+      AND e.session_id = ANY(CAST(:sessions AS uuid[]))
     GROUP BY e.event_id, e.session_id, e.created_at, s.country, s.device, s.browser
 )
 SELECT

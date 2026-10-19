@@ -1011,6 +1011,44 @@ def test_clusters_report_the_flagged_total_and_the_fingerprints():
     assert set(out) == {"min_ids", "flagged", "clusters"}
 
 
+def _after_fix(row, **change):
+    return {**row, "created_at": fs.CAPTURE_FIX + timedelta(hours=1, minutes=row["created_at"].minute), **change}
+
+
+def test_a_direct_session_needs_an_act_of_its_own_after_the_capture_fix():
+    # Der CN/SG-Desktop-Crawl: direkt, Ort -> Ort, kein Scrollen.
+    crawl = [_after_fix(ev("c", path="/sites/peru/a-1")), _after_fix(ev("c", path="/sites/peru/b-2", minute=1))]
+    reader = [
+        _after_fix(ev("r", path="/sites/peru/a-1")),
+        _after_fix(ev("r", "scroll_depth", event_type=2, data={"depth": 25}, minute=1)),
+        _after_fix(ev("r", path="/sites/peru/b-2", minute=2)),
+    ]
+    searched = [
+        _after_fix(ev("g", path="/", referrer="www.google.com")),
+        _after_fix(ev("g", path="/globe.html", minute=1)),
+    ]
+    by_id = {s.id: s for s in fs.sessions_from_rows(crawl + reader + searched)}
+    assert not by_id["c"].human
+    assert by_id["r"].human
+    # Startseite -> Globus schickt keine Scrolltiefe; wer aus der Suche kommt, zaehlt.
+    assert by_id["g"].human
+
+
+def test_a_direct_session_with_two_urls_before_the_fix_stays_human():
+    rows = [ev("old", path="/sites/peru/a-1"), ev("old", path="/sites/peru/b-2", minute=1)]
+    assert fs.sessions_from_rows(rows)[0].human
+
+
+def test_a_reload_is_no_step_on():
+    rows = [
+        ev("reload", path="/news-archive/x-1"),
+        ev("reload", "scroll_depth", event_type=2, data={"depth": 50}, minute=1),
+        ev("reload", path="/news-archive/x-1", minute=2),
+    ]
+    out = fs.entry_exit_pages(fs.sessions_from_rows(rows))
+    assert (out["sessions"], out["one_page"], out["moving"]) == (1, 1, 0)
+
+
 # ---- entries, exits, outbound ---------------------------------------------
 
 

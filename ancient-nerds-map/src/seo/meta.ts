@@ -37,7 +37,7 @@ import {
 } from '../components/theo/paperExtras'
 import { isoDate } from './display'
 import { periodSpan, typeSections } from './grouping'
-import { blurb, collapse, cut, stripCitations } from './text'
+import { blurb, collapse, cut, snippet, stripCitations } from './text'
 
 const BASE_URL = 'https://ancientnerds.com'
 const DEFAULT_OG_IMAGE = `${BASE_URL}/landing/og-image.png`
@@ -176,7 +176,7 @@ export function encodePath(path: string): string {
  */
 export function renderHead(m: PageMeta): string {
   const t = esc(m.title)
-  const d = esc(cut(collapse(m.description), 300))
+  const d = esc(snippet(collapse(m.description), 300))
   const img = esc(m.image ?? DEFAULT_OG_IMAGE)
   const canonical = esc(m.canonical)
   const schemaTag = m.schema

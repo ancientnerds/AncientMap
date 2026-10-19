@@ -24,6 +24,29 @@ export function cut(text: string, limit: number): string {
   return points.length <= limit ? text : points.slice(0, limit).join('')
 }
 
+/** Ein Satzende vor Leerraum - nicht der Punkt einer Abkürzung ("St. Mary",
+ *  "ca. 3000 BC", "e.g. pottery"). */
+const SENTENCE_END = /(?<!\b(?:St|Mt|Dr|Mr|Mrs|Ms|ca|c|cf|approx|e\.g|i\.e|vs|No|Fig))[.!?…](?=\s)/g
+
+/**
+ * Kappen für die Meta-Description: am letzten Satzende vor `limit`, wenn es
+ * mindestens die halbe Länge stehen lässt, sonst an der Wortgrenze mit
+ * Ellipse. Bis 19.10.2026 schnitt renderHead() hart bei 300 Codepoints:
+ * 265 von 298 Orts-Descriptions endeten ohne Satzende, bis zu 215 mitten im
+ * Wort (SEO-Auswertung 2026-10-19, tech-4). Codepoints wie cut().
+ */
+export function snippet(text: string, limit: number): string {
+  const points = Array.from(text)
+  if (points.length <= limit) return text
+  const head = points.slice(0, limit + 1).join('')
+  const ends = [...head.matchAll(SENTENCE_END)]
+  const last = ends.length ? Array.from(head.slice(0, ends[ends.length - 1].index + 1)) : []
+  if (last.length >= limit / 2) return last.join('')
+  const sliced = points.slice(0, limit - 1).join('')
+  const space = sliced.lastIndexOf(' ')
+  return (space === -1 ? sliced : sliced.slice(0, space)).replace(/[\s,;:–—-]+$/, '') + '…'
+}
+
 /**
  * Fußnotenmarker aus Fließtext entfernen: "… in Egypt [1]." → "… in Egypt."
  *

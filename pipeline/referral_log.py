@@ -94,17 +94,14 @@ from urllib.parse import parse_qs, urlsplit
 #: environment variable exists so the CLI and the tests can point elsewhere.
 LOG_PATH = Path(os.getenv("REFERRAL_LOG_PATH", "/app/logs/referrals.log"))
 
-#: How much of the tail is ever read. Measured inside ancient_nerds_api on
-#: 2026-09-19: 408 lines / 110 KB parse in 8.6 ms, i.e. 21 us per line and
-#: ~80 ms per megabyte. The log grows ~56 KB a day at today's rate, so one
-#: megabyte is about 19 days of history and costs about 80 ms to parse.
-#: That parse blocks the event loop of whichever API container serves
-#: /sources, once per CACHE_MIN_SECONDS, so the ceiling is a deliberate
-#: trade and not a round number: 19 days comfortably covers the panel's
-#: 7-day default, and the response carries covered_days so a founder asking
-#: for 30 or 90 days can see how far back the log actually reaches. Ticket
-#: T10 moves the parse onto asyncio.to_thread when this stops being enough.
-MAX_TAIL_BYTES = 1024 * 1024
+#: The log is read once from its first byte and from then on only from where
+#: the last read stopped. Measured inside ancient_nerds_api on 2026-09-19:
+#: ~80 ms of parse per megabyte. Reading a fixed one-megabyte tail instead
+#: (the rule until 2026-10-19) covered 5.3 days of a 4.4 MB log that reaches
+#: back to 2026-09-17, so every window past five days was a silent lower bound
+#: (SEO evaluation 2026-10-19, traffic-15). An appended file costs the new
+#: lines only; a replaced or truncated one (another inode, a smaller size) is
+#: read from the start again.
 
 #: The parse is skipped unless the file changed AND this long has passed. The
 #: file identity alone is not enough: at ten times today's traffic a new line
@@ -278,8 +275,8 @@ class Visit:
 
 def parse_lines(lines: Iterable[str]) -> list[Visit]:
     """Every line the log can answer for. A line without a JSON object, with
-    broken JSON or without an attributable host is skipped - the tail is read
-    from a byte offset, so the first line is regularly half a line."""
+    broken JSON or without an attributable host is skipped - nginx rotating or
+    a crash can leave half a line behind."""
     out: list[Visit] = []
     for raw in lines:
         line = raw.strip()
@@ -309,31 +306,54 @@ def parse_lines(lines: Iterable[str]) -> list[Visit]:
     return out
 
 
-_cache: tuple[tuple[int, int], float, list[Visit]] | None = None
+@dataclass
+class _Followed:
+    """How far read_visits has read the log, and what it found up to there."""
+
+    inode: int
+    offset: int
+    mtime_ns: int
+    size: int
+    parsed_at: float
+    visits: list[Visit]
+
+
+_cache: _Followed | None = None
 
 
 def read_visits() -> list[Visit] | None:
-    """The log's tail, parsed. None when the file is not there - every dev box.
+    """Every visit the log holds, parsed. None when the file is not there -
+    every dev box.
 
-    Re-parsed only when the file changed and at least CACHE_MIN_SECONDS have
-    passed since the last parse, so a busy log cannot turn the dashboard's
-    once-a-minute refresh into a once-a-minute file read.
+    Re-read only when the file changed and at least CACHE_MIN_SECONDS have
+    passed since the last read, so a busy log cannot turn the dashboard's
+    once-a-minute refresh into a once-a-minute file read. A read takes the
+    bytes after the last complete line it already holds; a line nginx is
+    still writing waits for the next read.
     """
     global _cache
     try:
         stat = LOG_PATH.stat()
     except OSError:
         return None
-    identity = (stat.st_mtime_ns, stat.st_size)
     now = time.monotonic()
-    if _cache is not None and (_cache[0] == identity or now - _cache[1] < CACHE_MIN_SECONDS):
-        return _cache[2]
+    if _cache is not None and (
+        (_cache.mtime_ns, _cache.size) == (stat.st_mtime_ns, stat.st_size)
+        or now - _cache.parsed_at < CACHE_MIN_SECONDS
+    ):
+        return _cache.visits
+    if _cache is None or _cache.inode != stat.st_ino or stat.st_size < _cache.offset:
+        offset, visits = 0, []
+    else:
+        offset, visits = _cache.offset, _cache.visits
     with LOG_PATH.open("rb") as fh:
-        if stat.st_size > MAX_TAIL_BYTES:
-            fh.seek(stat.st_size - MAX_TAIL_BYTES)
+        fh.seek(offset)
         blob = fh.read()
-    visits = parse_lines(blob.decode("utf-8", "replace").splitlines())
-    _cache = (identity, now, visits)
+    complete = blob[: blob.rfind(b"\n") + 1]
+    visits = visits + parse_lines(complete.decode("utf-8", "replace").splitlines())
+    _cache = _Followed(
+        stat.st_ino, offset + len(complete), stat.st_mtime_ns, stat.st_size, now, visits
+    )
     return visits
 
 

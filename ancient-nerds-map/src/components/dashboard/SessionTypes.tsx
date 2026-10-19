@@ -29,8 +29,8 @@ export function SessionTypes({ state }: { state: Loaded<Overview> }) {
             empty="No sessions so far."
           />
           <p className="dash-note">
-            Confirmed human: {fmtInt(o.sessions.human)} of {fmtInt(o.sessions.all)} sessions — an interaction or a
-            second page.
+            Confirmed human: {fmtInt(o.sessions.human)} of {fmtInt(o.sessions.all)} sessions — an interaction, or a
+            second page after arriving from a search, an assistant or a link.
           </p>
           <Explain>
             <p className="dash-note">The rest may be a bot, or a person who bounced.</p>

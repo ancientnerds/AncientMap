@@ -253,11 +253,12 @@ def test_countries_still_slice_one_fetch_into_four_windows(monkeypatch):
         # Still clicking: counts in every window, including "now".
         {"session_id": "live", "created_at": now, "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "DE", **common},
         {"session_id": "live", "created_at": now, "event_type": 2, "event_name": "search", "url_path": "/globe.html", "data": {"q": "x"}, "country": "DE", **common},
-        # Yesterday: in 7 and 30 days, not in today or now.
-        {"session_id": "old", "created_at": now - timedelta(days=1), "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "US", **common},
+        # Yesterday: in 7 and 30 days, not in today or now. Two URLs make a
+        # person only for a session that came from somewhere (Session.human).
+        {"session_id": "old", "created_at": now - timedelta(days=1), "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "US", **common, "referrer_domain": "www.google.com"},
         {"session_id": "old", "created_at": now - timedelta(days=1), "event_type": 1, "event_name": None, "url_path": "/", "data": None, "country": "US", **common},
         # Three weeks back: only the 30-day tile.
-        {"session_id": "ancient", "created_at": now - timedelta(days=21), "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "PE", **common},
+        {"session_id": "ancient", "created_at": now - timedelta(days=21), "event_type": 1, "event_name": None, "url_path": "/globe.html", "data": None, "country": "PE", **common, "referrer_domain": "www.google.com"},
         {"session_id": "ancient", "created_at": now - timedelta(days=21), "event_type": 1, "event_name": None, "url_path": "/", "data": None, "country": "PE", **common},
     ]  # fmt: skip
     fetch = Fetch(**{"ORDER BY e.session_id": rows})

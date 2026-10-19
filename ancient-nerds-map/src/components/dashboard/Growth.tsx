@@ -102,12 +102,12 @@ export function Growth({ state }: { state: Loaded<DailyData> }) {
         ))}
       <HowCounted>
         A visitor is one browser on one UTC day — Umami's id, which lives for a calendar month, so someone who
-        comes back on another day counts on both days. Confirmed human means an interaction or a second page that
-        day, the same rule as everywhere on this page. The line starts on 18 September, the tracker's first full
+        comes back on another day counts on both days. Confirmed human means an interaction, or a second page that
+        day for a visitor who arrived from a search, an assistant or a link, the same rule as everywhere on this page. The line starts on 18 September, the tracker's first full
         day. Umami counts browsers that run its script: a scraper without JavaScript and a founder who switched
         tracking off are not in it. The human line has a step on 9 October: from that deploy on the tracker also
-        sees scrolling inside panels and every link click, so more of the same visitors prove they are people. The
-        visitor line has no such step.
+        sees scrolling inside panels and every link click, so more of the same visitors prove they are people, and a
+        direct visitor's second page no longer proves it on its own. The visitor line has no such step.
       </HowCounted>
     </Panel>
   )

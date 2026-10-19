@@ -92,7 +92,8 @@ function Strip({ o }: { o: Overview }) {
       </div>
       <Explain>
         <p className="dash-note">
-          Bright green is a confirmed human — an interaction or a second page. The rest may be a bot, or a
+          Bright green is a confirmed human — an interaction, or a second page after arriving from a search, an
+          assistant or a link. The rest may be a bot, or a
           person who read the headline and left; cookieless data cannot tell them apart.
         </p>
       </Explain>

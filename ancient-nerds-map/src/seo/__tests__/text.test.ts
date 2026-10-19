@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { blurb, collapse, cut, stripCitations } from '../text'
+import { blurb, collapse, cut, snippet, stripCitations } from '../text'
 
 describe('blurb — Portierung von seo_pages.blurb', () => {
   it('lässt kurze Texte unangetastet, kollabiert aber Whitespace', () => {
@@ -63,5 +63,33 @@ describe('stripCitations — Fußnotenmarker aus Snippet-Text', () => {
 describe('collapse — " ".join(s.split())', () => {
   it('kollabiert Whitespace-Läufe und trimmt', () => {
     expect(collapse('  a\t b \n c ')).toBe('a b c')
+  })
+})
+
+describe('snippet — Meta-Description am Satz- oder Wortende', () => {
+  it('lässt einen Text bis zur Grenze stehen', () => {
+    expect(snippet('Kurz. Genug.', 300)).toBe('Kurz. Genug.')
+  })
+
+  it('endet am letzten Satzende, das die halbe Länge stehen lässt', () => {
+    const text = 'A temple of the Old Kingdom. It stands on a terrace above the river and was rebuilt twice.'
+    expect(snippet(text, 50)).toBe('A temple of the Old Kingdom.')
+  })
+
+  it('nimmt sonst die Wortgrenze mit Ellipse, nie mitten im Wort', () => {
+    const text = 'Hi. A long sentence that runs on and on without any full stop in reach of the limit'
+    const out = snippet(text, 40)
+    expect(out).toBe('Hi. A long sentence that runs on and…')
+    expect(Array.from(out).length).toBeLessThanOrEqual(40)
+  })
+
+  it('hält den Punkt einer Abkürzung für kein Satzende', () => {
+    const text = 'Settlement of the Bronze Age, ca. 3000 BC, near St. Mary on the hill above the old ford'
+    expect(snippet(text, 50)).toBe('Settlement of the Bronze Age, ca. 3000 BC, near…')
+  })
+
+  it('zählt Codepoints und bleibt unter der Grenze', () => {
+    const text = '𓂀 '.repeat(200)
+    expect(Array.from(snippet(text, 300)).length).toBeLessThanOrEqual(300)
   })
 })
