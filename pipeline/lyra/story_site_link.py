@@ -9,8 +9,8 @@ is written: a line without that mark is skipped.
 Each line names the story, the site and the site the story had when the
 proposal was made (``current_site_id``, null for none). A line is written only
 while the story still has that site - the hourly match step or a person may
-have linked it since - and only to a curated site that is not retired, the
-sites with a page of their own (articles_html.site_curated).
+have linked it since - and only to a curated site with a country that is not
+retired, the sites with a page of their own (public_sites.curated_page).
 
 Every line read gets one journal entry in
 /app/logs/story_site_link/journal.jsonl (logs/ on the host): the outcome, the
@@ -68,7 +68,14 @@ def _outcome(session, proposal: dict[str, Any]) -> tuple[str, NewsItem | None, U
     if item is None:
         return "missing_story", None, None
     target = session.get(UnifiedSite, uuid.UUID(proposal["site_id"]))
-    if target is None or target.source_id != CURATED_SOURCE or target.scope_status == RETIRED:
+    # The rule of public_sites.curated_page(), on the loaded row: a curated site
+    # without a country has no /sites page, and a story chip to it would 404.
+    if (
+        target is None
+        or target.source_id != CURATED_SOURCE
+        or not target.country
+        or target.scope_status == RETIRED
+    ):
         return "not_curated", item, None
     if item.site_id == target.id:
         return "already_linked", item, target
@@ -87,27 +94,31 @@ def apply(proposals: Iterable[dict[str, Any]], dry_run: bool) -> Counter[str]:
         for proposal in proposals:
             outcome, item, target = _outcome(session, proposal)
             before = str(item.site_id) if item is not None and item.site_id else None
-            if outcome == "linked":
-                item.site_id = target.id
-            _journal(
-                out,
-                {
-                    "at": datetime.now(UTC).isoformat(),
-                    "item_id": int(proposal["story_id"]),
-                    "outcome": outcome,
-                    "before": {"site_id": before},
-                    "after": {"site_id": str(target.id)} if outcome == "linked" else {},
-                    "site_name": proposal.get("site_name"),
-                    "match_reason": proposal.get("match_reason"),
-                    "evidence_snippet": proposal.get("evidence_snippet"),
-                    "dry_run": dry_run,
-                },
-            )
+            entry = {
+                "at": datetime.now(UTC).isoformat(),
+                "item_id": int(proposal["story_id"]),
+                "outcome": outcome,
+                "before": {"site_id": before},
+                "after": {"site_id": str(target.id)} if outcome == "linked" else {},
+                "site_name": proposal.get("site_name"),
+                "match_reason": proposal.get("match_reason"),
+                "evidence_snippet": proposal.get("evidence_snippet"),
+                "dry_run": dry_run,
+            }
             if outcome == "linked" and not dry_run:
-                session.commit()
+                # The journal says what committed: a 'linked' entry is written
+                # only after the commit, so --rollback never trusts a write that
+                # never landed. A failed commit is journalled and stops the run.
+                item.site_id = target.id
+                try:
+                    session.commit()
+                except Exception:
+                    _journal(out, {**entry, "outcome": "commit_failed", "after": {}})
+                    raise
                 changed.append((item.id, item.headline))
             else:
                 session.rollback()
+            _journal(out, entry)
             outcomes[outcome] += 1
             logger.info("story %s: %s", proposal["story_id"], outcome)
     logger.info("IndexNow: %d URLs for %d linked stories", announce(changed), len(changed))

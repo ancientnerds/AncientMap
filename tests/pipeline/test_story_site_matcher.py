@@ -12,6 +12,7 @@ import pytest
 
 from pipeline.lyra import story_site_matcher as ssm
 from pipeline.lyra.story_site_matcher import StoryText, build_lexicon, match_story
+from pipeline.utils.public_sites import curated_page
 
 
 def fold(words):
@@ -241,8 +242,11 @@ class TestPostgresSide:
         assert "site_key_sql('w')" in src
         assert "pipeline.utils.text" not in inspect.getsource(ssm)
 
-    def test_the_lexicon_holds_curated_sites_that_are_not_retired(self):
-        assert ssm.LEXICON_SQL.count("u.source_id = 'ancient_nerds'") == 2
+    def test_the_lexicon_holds_the_curated_sites_with_a_page(self):
+        """public_sites.curated_page(): curated, with a country, not retired. A
+        curated site without a country has no /sites page to link to."""
+        assert ssm.LEXICON_SQL.count(curated_page("u")) == 2
+        assert ssm.LEXICON_SQL.count("u.country IS NOT NULL AND u.country != ''") == 2
         assert ssm.LEXICON_SQL.count("u.scope_status IS DISTINCT FROM 'retired'") == 2
 
     def test_the_keyer_batches_and_caches(self):

@@ -14,17 +14,21 @@ CURATED = uuid.UUID(int=1)
 RETIRED_SITE = uuid.UUID(int=2)
 BULK = uuid.UUID(int=3)
 OTHER = uuid.UUID(int=4)
+NO_COUNTRY = uuid.UUID(int=5)
 
 
 class _Session:
-    def __init__(self, items, sites):
+    def __init__(self, items, sites, commit_error=None):
         self.objects = {NewsItem: {i.id: i for i in items}, UnifiedSite: {s.id: s for s in sites}}
         self.commits = self.rollbacks = 0
+        self.commit_error = commit_error
 
     def get(self, model, key):
         return self.objects[model].get(key)
 
     def commit(self):
+        if self.commit_error is not None:
+            raise self.commit_error
         self.commits += 1
 
     def rollback(self):
@@ -33,10 +37,16 @@ class _Session:
 
 def _sites():
     return [
-        SimpleNamespace(id=CURATED, source_id="ancient_nerds", scope_status=None),
-        SimpleNamespace(id=RETIRED_SITE, source_id="ancient_nerds", scope_status="retired"),
-        SimpleNamespace(id=BULK, source_id="wikidata", scope_status=None),
-        SimpleNamespace(id=OTHER, source_id="ancient_nerds", scope_status="in_scope"),
+        SimpleNamespace(id=CURATED, source_id="ancient_nerds", country="Egypt", scope_status=None),
+        SimpleNamespace(
+            id=RETIRED_SITE, source_id="ancient_nerds", country="Egypt", scope_status="retired"
+        ),
+        SimpleNamespace(id=BULK, source_id="wikidata", country="Egypt", scope_status=None),
+        SimpleNamespace(
+            id=OTHER, source_id="ancient_nerds", country="Egypt", scope_status="in_scope"
+        ),
+        # Curated but without a country: no /sites page (public_sites.curated_page).
+        SimpleNamespace(id=NO_COUNTRY, source_id="ancient_nerds", country=None, scope_status=None),
     ]
 
 
@@ -113,12 +123,26 @@ def test_a_relink_from_a_bulk_imported_site_names_it(env):
     assert _lines(env.journal)[0]["before"] == {"site_id": str(BULK)}
 
 
-@pytest.mark.parametrize("site", [RETIRED_SITE, BULK, uuid.UUID(int=99)])
-def test_only_a_curated_site_that_is_not_retired_is_a_target(env, site):
+@pytest.mark.parametrize("site", [RETIRED_SITE, BULK, NO_COUNTRY, uuid.UUID(int=99)])
+def test_only_a_curated_site_with_a_page_is_a_target(env, site):
     story = _story()
     env.session = _Session([story], _sites())
     assert sl.apply([_proposal(site=site)], dry_run=False) == {"not_curated": 1}
     assert story.site_id is None
+
+
+def test_a_failed_commit_journals_no_link(env):
+    """The journal tells what committed: --rollback trusts its 'linked' entries."""
+    story = _story()
+    env.session = _Session([story], _sites(), commit_error=RuntimeError("connection lost"))
+    with pytest.raises(RuntimeError, match="connection lost"):
+        sl.apply([_proposal(), _proposal(item_id=7651)], dry_run=False)
+    (line,) = _lines(env.journal)
+    assert line["outcome"] == "commit_failed"
+    assert line["after"] == {}
+    assert env.announced == []
+    with pytest.raises(SystemExit, match="no link of story 7650"):
+        sl.rollback(7650)
 
 
 def test_a_dry_run_changes_nothing_and_journals_apart(env):

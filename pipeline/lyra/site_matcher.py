@@ -6,7 +6,7 @@ import re
 import uuid
 from datetime import datetime
 
-from sqlalchemy import text
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from pipeline.database import (
@@ -321,7 +321,8 @@ def match_sites_for_pending_items() -> int:
     matcher's tolerance ("Great Pyramid of Giza" is "The Great Pyramid of
     Giza": 105 public stories sat on a bulk-imported or retired site that way
     on 2026-10-20). A story without an extracted name is read by the text
-    matcher alone.
+    matcher alone. A story created since TEXT_MATCH_SINCE waits until the
+    'posts' step has written its post_text.
 
     Returns number of items matched.
     """
@@ -343,12 +344,25 @@ def match_sites_for_pending_items() -> int:
 
         # Match untried items first. Already-tried items only retry if new sites
         # were recently promoted (checked via promoted_ids changing).
+        #
+        # A story the text matcher reads waits for its post_text. This step runs
+        # before 'posts' (STEP_ORDER), so a new story arrives here with post_text
+        # NULL, and site_match_tried would end it before the text existed. The
+        # matcher's guards read post_text (a lower-case use anywhere, an unsettled
+        # second name in the body): over the 2,869 public stories on 2026-10-20,
+        # 68 of those without a site matched without post_text against 78 with
+        # it (review, measured read-only), and 4 of the 68 were links the full text refuses ("second Sphinx
+        # ... unsubstantiated" -> Great Sphinx of Giza). The story is picked up
+        # the cycle after 'posts' wrote its text; one that never gets a post has
+        # no public page and stays untried.
+        has_text = or_(NewsItem.created_at < TEXT_MATCH_SINCE, NewsItem.post_text.isnot(None))
         items = (
             session.query(NewsItem)
             .filter(
                 NewsItem.site_name_extracted.isnot(None),
                 NewsItem.site_id.is_(None),
                 NewsItem.site_match_tried.is_(False),
+                has_text,
             )
             .all()
         )
@@ -359,6 +373,7 @@ def match_sites_for_pending_items() -> int:
                 NewsItem.site_id.is_(None),
                 NewsItem.site_match_tried.is_(False),
                 NewsItem.created_at >= TEXT_MATCH_SINCE,
+                NewsItem.post_text.isnot(None),
             )
             .all()
         )

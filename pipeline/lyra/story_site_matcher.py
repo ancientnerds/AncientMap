@@ -68,7 +68,7 @@ from pipeline.utils.country_lookup import (
     NAME_TO_ISO,
     SUBNATIONAL_NAME_TO_ISO,
 )
-from pipeline.utils.public_sites import not_retired
+from pipeline.utils.public_sites import curated_page
 
 #: raw words -> their match key. The production keyer asks Postgres
 #: (postgres_keyer); the tests pass a Python fold.
@@ -656,11 +656,11 @@ def postgres_keyer(session: Session) -> Keyer:
 LEXICON_SQL = f"""
     SELECT u.id, u.name, u.country, u.name, 'site'
     FROM unified_sites u
-    WHERE u.source_id = 'ancient_nerds' AND {not_retired("u")}
+    WHERE {curated_page("u")}
     UNION ALL
     SELECT u.id, u.name, u.country, usn.name, usn.name_type
     FROM unified_site_names usn JOIN unified_sites u ON u.id = usn.site_id
-    WHERE u.source_id = 'ancient_nerds' AND {not_retired("u")}
+    WHERE {curated_page("u")}
 """
 
 
