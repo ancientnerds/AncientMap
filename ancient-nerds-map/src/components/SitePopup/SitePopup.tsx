@@ -70,6 +70,7 @@ import ModelViewer from '../ModelViewer'
 import { usePopupWindow, WindowControls, ResizeHandles, MinimizedBar } from './window'
 import { useGalleryData, useEmpireGalleryData, GalleryTabs, GalleryContent, ConnectorStatus } from './gallery'
 import { useAdminMode, AdminEditPanel } from './admin'
+import { servedHeroSrcSet } from './servedHeroSrcSet'
 import {
   HeroHeader,
   LocationSection,
@@ -609,11 +610,7 @@ export default function SitePopup({
           <HeroHeader
             title={displaySite.title}
             heroImageSrc={galleryHook.heroImageSrc}
-            // The srcset belongs to the hero the page was served with (the `site` prop): a
-            // hero an admin sets or edits, or another source's picture, has no phone copy.
-            heroImageSrcSet={
-              site && galleryHook.heroImageSrc === site.image ? site.imageSrcSet : undefined
-            }
+            heroImageSrcSet={servedHeroSrcSet(site, galleryHook.heroImageSrc)}
             isLoadingImages={galleryHook.isLoadingImages}
             isSettingHero={isSettingHero}
             sourceInfo={sourceInfo}

@@ -26,6 +26,8 @@ IMAGE_DIR = Path("/app/public/data/images/wiki")
 #: narrower source is kept at its own width: an upscale adds pixels, not detail.
 HERO_WIDTH = 1600
 WEBP_QUALITY = 82
+#: The trees of small copies beside IMAGE_DIR (pipeline/wiki_thumbs.py THUMB_DIR, HERO_DIR).
+DERIVED_TREES = ("wiki-thumbs", "wiki-800")
 
 #: The image's site is not retired (E4, migration 0020): a retired site shows no images,
 #: as in the public API (public_v1, /sites/{id}/images). Concatenated, never formatted in.
@@ -151,6 +153,13 @@ async def set_hero(
 
         hero_path.write_bytes(webp)
         print(f"[set-hero] Saved hero to {hero_path}", flush=True)
+        # The small copies of the old hero.webp (pipeline.wiki_thumbs: the 480 px gallery tile,
+        # the 800 px phone hero the site page's srcset names since 2026-10-20) carry the same
+        # name and would keep showing the replaced picture until the next sync; with them gone
+        # nginx serves the new original. Plain paths, no import of pipeline.wiki_thumbs (the
+        # layer contract of pyproject.toml); a test keeps DERIVED_TREES in line with it.
+        for derived_tree in DERIVED_TREES:
+            (IMAGE_DIR.parent / derived_tree / site_id_short / "hero.webp").unlink(missing_ok=True)
 
         import time
 
