@@ -45,7 +45,8 @@ logger = logging.getLogger(__name__)
 # cascaded into user data.
 # A site-owned table whose site_id sits in its PRIMARY KEY cannot
 # have NOT NULL dropped: site_external_ids crash-looped the API on
-# deploy (2026-09-15) until it was listed here. Every new
+# deploy (2026-09-15) until it was listed here, and research_paper_sites
+# (migration 0031) did the same on 2026-10-20. Every new
 # site-owned CASCADE table goes into this tuple AND into
 # tests/api/test_fk_policy_exemptions.py.
 _CASCADE_FKS_ONTO_SITES = """
@@ -62,7 +63,7 @@ _CASCADE_FKS_ONTO_SITES = """
       AND rc.delete_rule = 'CASCADE'
       AND tc.table_name NOT IN (
           'unified_site_names', 'site_content_links', 'wiki_images', 'card_stats',
-          'site_external_ids')
+          'site_external_ids', 'research_paper_sites')
 """
 
 # The rewrite loops over exactly the rows the check counts: one query, two uses, so the check

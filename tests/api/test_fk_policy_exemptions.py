@@ -12,6 +12,7 @@ here AND there.
 
 import inspect
 import re
+from pathlib import Path
 
 from api import boot_schema
 from pipeline import database
@@ -22,6 +23,7 @@ SITE_OWNED_CASCADE_TABLES = {
     "wiki_images",
     "card_stats",
     "site_external_ids",
+    "research_paper_sites",
 }
 
 
@@ -45,6 +47,24 @@ def test_models_with_cascade_onto_unified_sites_match_the_list():
         for fk in table.foreign_keys:
             if fk.column.table.name == "unified_sites" and fk.ondelete == "CASCADE":
                 cascading.add(table.name)
+    assert cascading <= _exemption_tuple(), (
+        f"unexempted CASCADE tables: {cascading - _exemption_tuple()}"
+    )
+
+
+def test_migrations_with_cascade_onto_unified_sites_match_the_list():
+    """A table created by a migration alone has no model, so the test above cannot see
+    it: research_paper_sites (migration 0031) crash-looped the API on 2026-10-20."""
+    migrations = Path(__file__).resolve().parents[2] / "migrations"
+    cascading = set()
+    for sql in migrations.glob("[0-9][0-9][0-9][0-9]_*.sql"):
+        text = sql.read_text(encoding="utf-8")
+        for table, body in re.findall(
+            r"CREATE TABLE(?: IF NOT EXISTS)?\s+([a-z_]+)\s*\((.*?)\);", text, re.S | re.I
+        ):
+            if re.search(r"REFERENCES\s+unified_sites\s*\([^)]*\)\s+ON DELETE CASCADE", body, re.I):
+                cascading.add(table.lower())
+    assert "research_paper_sites" in cascading
     assert cascading <= _exemption_tuple(), (
         f"unexempted CASCADE tables: {cascading - _exemption_tuple()}"
     )
