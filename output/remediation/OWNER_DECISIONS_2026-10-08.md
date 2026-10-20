@@ -109,3 +109,4 @@ against D1-D45/X1-X11 found eight candidate questions already decided; these six
 | D51 | Move further roles to Opus because quota is spare | **Only where a gate fails** (rec): roles that passed on Sonnet stay; a role that fails its calibration or gate moves to Opus (the D6 tier rule). |
 
 Start: the owner asked to continue Phase C in this session now (D43 pause at ~90 % weekly quota stands).
+| D52 | Pilot 2 (Opus writer) failed only "0 contradicted": 1 of 29 cards wrong (Black Pyramid "is ... in a limestone casing", the description's Wikipedia present tense; the card_web_verifier restated the claim in the past and verified it), all other criteria met (checker PASS at attempt 1 78 %, unproven 2.6 %) | **Sharpen the verifier, then pilot 3** (rec): a claim's tense and present-state wording are part of the claim and are never restated; recalibrate `card_web_verifier`; a third 40-site pilot under the unchanged gate (0 contradicted). |
