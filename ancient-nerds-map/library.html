@@ -7,7 +7,11 @@
     <title>Library - Sources & Citations | Ancient Nerds</title>
     <meta name="description" content="Browse the Ancient Nerds citation library. Thousands of academic papers, news sources, museum collections, and references organized by historical period." />
     <meta name="robots" content="index, follow" />
-    <link rel="canonical" href="https://ancientnerds.com/library.html" />
+    <!-- Canonical on /research/, the server-rendered hub (the research library): this client-rendered
+         shell and the hub were both self-canonical and indexed for the same intent
+         (SEO evaluation 2026-10-19, tech-6). Owner decision 2026-10-20: canonical and
+         out of sitemap-static.xml, no 301 - the page stays usable as it is. -->
+    <link rel="canonical" href="https://ancientnerds.com/research/" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
@@ -16,7 +20,7 @@
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://ancientnerds.com/library.html" />
+    <meta property="og:url" content="https://ancientnerds.com/research/" />
     <meta property="og:site_name" content="Ancient Nerds" />
     <meta property="og:title" content="Library - Sources & Citations | Ancient Nerds" />
     <meta property="og:description" content="Browse thousands of curated citations and references organized by historical period." />
@@ -36,8 +40,11 @@
       </div>
     </noscript>
     <div id="root">
+      <!-- h2, not h1: the <noscript> block above carries the page's one h1, and a
+           parser without scripts read both (2 h1, SEO evaluation 2026-10-19, tech-6).
+           .seo-boot h2 below keeps the size the h1 had. -->
       <div class="seo-boot">
-        <h1>Citation Library</h1>
+        <h2>Citation Library</h2>
         <p>The Ancient Nerds citation library collects thousands of sources referenced across the
         platform: peer-reviewed journal articles, excavation reports, museum collections, news
         coverage, and archival documents — organized by historical period from the Paleolithic to
@@ -51,7 +58,7 @@
     </div>
     <style>
       .seo-boot{max-width:800px;margin:0 auto;padding:40px 20px;background:#0a1a1f;color:#d0d0d0;font-family:'Inter',sans-serif;line-height:1.7}
-      .seo-boot h1{color:#fff}
+      .seo-boot h2{color:#fff;font-size:2em}
       .seo-boot a{color:#c02023}
     </style>
     <div class="crt-glow"></div>

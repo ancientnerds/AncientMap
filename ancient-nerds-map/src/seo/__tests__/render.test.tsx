@@ -104,6 +104,16 @@ describe('research-Seiten (Task 12): der SSR-Body trägt den Python-Fragment-Inh
     expect(html).toContain('Obsidian Trade Networks in Neolithic Anatolia')
   })
 
+  it('genau ein <main>, und es umschließt Hero, Titel und Text (tech-10, 2026-10-19)', () => {
+    expect(html.match(/<main[\s>]/g)).toHaveLength(1)
+    const main = html.slice(html.indexOf('<main>'), html.indexOf('</main>'))
+    expect(main).toContain('theo-paper-hero')
+    expect(main).toContain('<h1')
+    expect(main).toContain('<p>body</p>')
+    // Header and AI notice stay outside, as on the story and site pages.
+    expect(main).not.toContain('data-ai-generated="true"')
+  })
+
   it('Art.-50-Hinweis sichtbar UND maschinenlesbar (data-ai-generated)', () => {
     expect(html).toContain('data-ai-generated="true"')
     expect(html).toContain('AI-generated')

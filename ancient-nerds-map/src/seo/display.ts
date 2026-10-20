@@ -40,6 +40,75 @@ export function isoDate(value: string | null | undefined): string {
   return value ? value.slice(0, 10) : ''
 }
 
+const NAIVE_ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/
+
+/**
+ * Ein zonenloser Payload-Timestamp als ISO 8601 mit UTC-Offset, z. B.
+ * "2026-10-18T14:03:00+00:00". Die Spalten sind `timestamp without time
+ * zone` und halten UTC (Server-Zeitzone Etc/UTC, psql 2026-10-20; Python
+ * isoformat() schreibt sie ohne Offset). Google wertete das blosse Datum im
+ * VideoObject als "Datetime property uploadDate is missing a timezone"
+ * (GSC 16.-19.10.2026, tech-3). Ein String mit Offset oder ohne Uhrzeit ist
+ * ein Fehler im Payload-Builder und soll auffallen, wie bei shortDate.
+ */
+export function utcDateTime(value: string): string {
+  if (!NAIVE_ISO_DATETIME.test(value)) {
+    throw new Error(`utcDateTime: not a zoneless ISO date-time: ${value}`)
+  }
+  return `${value}+00:00`
+}
+
+/**
+ * Kurze Lesefassung der site_type-Taxonomie fuer den Seitentitel. Der
+ * Rohwert ("City/town/settlement", "Cave Structures") stand bis 2026-10-20
+ * im <title> und verlaengerte ihn: 286 der 4.900 Ortstitel waren laenger als
+ * 60 Zeichen (ohne " | Ancient Nerds"), mit diesen Labels sind es 98 und ohne
+ * Typ, wo er nicht mehr passt, 14 (psql 2026-10-20). Die Schluessel sind
+ * alle 87 Werte der gezeigten ancient_nerds-Orte am 2026-10-20; ein Wert,
+ * der hier fehlt, ist schon ein kurzer Name ("Temple", "Dolmen") und steht
+ * unveraendert im Titel. Die sichtbare Typzeile der Seite bleibt beim Rohwert.
+ */
+export const SITE_TYPE_LABELS: Readonly<Record<string, string>> = {
+  'City/town/settlement': 'Settlement',
+  'City/town/settlement, Pyramid complex': 'Settlement',
+  'Fortress/citadel': 'Fortress',
+  'Cave Structures': 'Cave site',
+  'Necropolis/tombs complex': 'Necropolis',
+  'Residence/villa/farmhouse': 'Residence',
+  'Megalithic stones': 'Megaliths',
+  'Megalithic structures': 'Megalithic site',
+  Megalithic: 'Megalithic site',
+  'Gate/archway/bridge': 'Gate or bridge',
+  'Mound/tumulus': 'Tumulus',
+  'Road/avenue/trackway': 'Ancient road',
+  Road: 'Ancient road',
+  'Rock relief/carving': 'Rock relief',
+  'Reservoir/aqueduct/canal': 'Waterworks',
+  'Minaret/tower': 'Tower',
+  'Castle/palace': 'Castle or palace',
+  'Mine/quarry': 'Mine or quarry',
+  'Church/cathedral': 'Church',
+  'Geological interest': 'Geological site',
+  'Natural feature': 'Natural site',
+  'Underwater structures': 'Underwater site',
+  'Sculptured stone': 'Carved stone',
+  Bath: 'Baths',
+  Burial: 'Burial site',
+  Funerary: 'Funerary site',
+  Religious: 'Religious site',
+  Military: 'Military site',
+  Ruin: 'Ruins',
+  Urban: 'City',
+  Theater: 'Theatre',
+  Harbor: 'Harbour',
+}
+
+/** Der Typ im Titel: das Label der Taxonomie, ohne Typ "Archaeological site". */
+export function siteTypeLabel(siteType: string | null): string {
+  if (!siteType) return 'Archaeological site'
+  return SITE_TYPE_LABELS[siteType] ?? siteType
+}
+
 const MONTHS = [
   'January',
   'February',

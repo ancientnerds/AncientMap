@@ -394,3 +394,73 @@ def test_site_detail_404s_a_malformed_slug_without_touching_the_db():
     assert resp.status_code == 404
     render_mock.assert_not_called()
     shell_mock.assert_not_called()
+
+
+def test_image_paths_reach_the_page_percent_encoded_once():
+    """989 of 3,808 shown heroes have a space in the file name, and 67 of 298 sampled pages
+    printed it raw in <img src> (SEO evaluation 2026-10-19, tech-7). The payload encodes the
+    paths it builds from a wiki_images file name; an external thumbnail_url (already encoded
+    by Wikimedia) passes through untouched."""
+    img_rows = [
+        SimpleNamespace(
+            filename="Troy National Park (Çanakkale).webp",
+            author=None,
+            license=None,
+            license_url=None,
+            commons_page_url=None,
+            width=None,
+            height=None,
+        )
+    ]
+    news_chain = MagicMock()
+    news_chain.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
+    render, shell = _patched()
+    with (
+        render as render_mock,
+        shell,
+        patch("api.routes.sites_html.public_stories_query", return_value=news_chain),
+    ):
+        asyncio.run(
+            site_detail(
+                "denmark",
+                "borremose-5281654c",
+                db=FakeDb([_borremose_row()], [], img_rows, [], [], []),
+            )
+        )
+    assert render_mock.call_args[0][0]["image"]["url"] == (
+        "/data/images/wiki/5281654c/Troy%20National%20Park%20%28%C3%87anakkale%29.webp"
+    )
+
+    external = "https://upload.wikimedia.org/wikipedia/commons/a/ab/G%C3%B6bekli_Tepe.jpg"
+    site_rows = [
+        SimpleNamespace(
+            id="5281654c-0000-4000-8000-000000000000",
+            name="Borremose",
+            site_type=None,
+            period_name=None,
+            period_start=None,
+            description=None,
+            thumbnail_url=None,
+            hero_filename="Brane burial chamber - geograph.org.uk - 1040.webp",
+        ),
+        SimpleNamespace(
+            id="7a1b2c3d-0000-4000-8000-000000000000",
+            name="Trelleborg",
+            site_type=None,
+            period_name=None,
+            period_start=None,
+            description=None,
+            thumbnail_url=external,
+            hero_filename=None,
+        ),
+    ]
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(
+            sites_by_country("denmark", db=FakeDb([SimpleNamespace(country="Denmark")], site_rows))
+        )
+    thumbs = [s["thumbnail_url"] for s in render_mock.call_args[0][0]["sites"]]
+    assert thumbs == [
+        "/data/images/wiki-thumbs/5281654c/Brane%20burial%20chamber%20-%20geograph.org.uk%20-%201040.webp",
+        external,
+    ]

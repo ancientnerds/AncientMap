@@ -35,12 +35,31 @@ import {
   youtubeThumbnailUrl,
   youtubeWatchUrl,
 } from '../components/theo/paperExtras'
-import { isoDate } from './display'
+import { isoDate, siteTypeLabel, utcDateTime } from './display'
 import { periodSpan, typeSections } from './grouping'
 import { blurb, collapse, cut, snippet, stripCitations } from './text'
 
 const BASE_URL = 'https://ancientnerds.com'
 const DEFAULT_OG_IMAGE = `${BASE_URL}/landing/og-image.png`
+
+export interface Feed {
+  title: string
+  href: string
+}
+
+/**
+ * The Atom feeds (api/routes/feeds.py), one per type like the sitemap parts. The hubs and
+ * the homepage name them as rel=alternate, so feed readers and crawlers find them; before
+ * 2026-10-20 there was none (/feed.xml, /atom.xml, /rss.xml: 404, roadmap W13).
+ */
+export const STORIES_FEED: Feed = {
+  title: 'Ancient Nerds — Archaeology Stories',
+  href: `${BASE_URL}/feeds/stories.xml`,
+}
+export const RESEARCH_FEED: Feed = {
+  title: 'Ancient Nerds — Research Papers',
+  href: `${BASE_URL}/feeds/research.xml`,
+}
 
 // One publisher object for NewsArticle, Article and ScholarlyArticle. The logo
 // is the 180px PNG the site already ships (Google wants a raster, not the SVG).
@@ -67,6 +86,8 @@ export interface PageMeta {
    * "ancient astronauts" ranking under our name is not what we want.
    */
   robots?: string
+  /** Atom feeds of the page, as <link rel="alternate" type="application/atom+xml">. */
+  feeds?: Feed[]
 }
 
 const ROBOTS_INDEX = 'index, follow, max-image-preview:large'
@@ -185,9 +206,16 @@ export function renderHead(m: PageMeta): string {
   const descTag = d ? `\n<meta name="description" content="${d}">` : ''
   const ogDescTag = d ? `\n<meta property="og:description" content="${d}">` : ''
   const twDescTag = d ? `\n<meta name="twitter:description" content="${d}">` : ''
+  const feedTags = (m.feeds ?? [])
+    .map(
+      f =>
+        `\n<link rel="alternate" type="application/atom+xml" title="${esc(f.title)}" ` +
+        `href="${esc(f.href)}">`,
+    )
+    .join('')
   return `<title>${t} | Ancient Nerds</title>${descTag}
 <meta name="robots" content="${m.robots ?? ROBOTS_INDEX}">
-<link rel="canonical" href="${canonical}">
+<link rel="canonical" href="${canonical}">${feedTags}
 <meta property="og:type" content="${m.ogType ?? 'website'}">
 <meta property="og:url" content="${canonical}">
 <meta property="og:site_name" content="Ancient Nerds">
@@ -206,6 +234,9 @@ export function renderHead(m: PageMeta): string {
  * The video a story summarises, as `isBasedOn`: the story is a secondary text about it,
  * and the link names the creator's video as its source for search engines and assistants
  * (no story had one before the SEO audit of 2026-10-08). Nothing without a video id.
+ * uploadDate is the full UTC time with its offset: the bare date drew "uploadDate is missing
+ * a timezone" on all 3 stories Google crawled after 2026-10-09 (GSC 2026-10-19, tech-3), and
+ * published_at is the video's own publish time wherever the video row has one.
  */
 function storyVideo(route: StoryRoute): string {
   const id = youtubeIdOf(route.youtube_url)
@@ -214,7 +245,7 @@ function storyVideo(route: StoryRoute): string {
     ', "isBasedOn": {"@type": "VideoObject", ' +
     `"name": ${jsonStr(route.video_title)}, ` +
     `"description": ${jsonStr(`Video by ${route.channel_name} on YouTube`)}, ` +
-    `"uploadDate": "${isoDate(route.published_at)}", ` +
+    `"uploadDate": "${utcDateTime(route.published_at)}", ` +
     `"thumbnailUrl": "${youtubeThumbnailUrl(id)}", ` +
     `"embedUrl": "https://www.youtube-nocookie.com/embed/${id}", ` +
     `"url": "${youtubeWatchUrl(id)}"}`
@@ -274,19 +305,38 @@ export function storyArchiveMeta(route: StoryArchiveRoute): PageMeta {
     // Suchergebnisse (?q=) sind für Menschen: unendlicher URL-Raum, nie in
     // den Index.
     robots: q ? ROBOTS_NOINDEX : undefined,
+    feeds: [STORIES_FEED],
   }
+}
+
+/**
+ * The longest a site title runs before the type goes (without " | Ancient Nerds"): Google
+ * shows about 60 characters, and the type is the part a searcher needs least.
+ */
+export const SITE_TITLE_MAX = 60
+
+/**
+ * "Name — Country · Type" with the readable type label (siteTypeLabel), or "Name — Country"
+ * where the type would take it past SITE_TITLE_MAX: 98 of 4,900 titles, of which 14 stay
+ * longer through the name alone (psql 2026-10-20). Counted in code points, like blurb().
+ */
+export function siteTitle(route: Pick<SiteRoute, 'name' | 'country' | 'site_type'>): string {
+  const place = `${route.name} — ${route.country}`
+  const full = `${place} · ${siteTypeLabel(route.site_type)}`
+  return Array.from(full).length <= SITE_TITLE_MAX ? full : place
 }
 
 /** site_detail_page(): das Payload trägt die rohe Zeile — Defaults entstehen hier. */
 export function siteMeta(route: SiteRoute): PageMeta {
   const canonical = `${BASE_URL}${encodePath(sitePath(route.country, route.name, route.id))}`
-  const siteType = route.site_type || 'Archaeological site'
   // Snippet und JSON-LD sind maschinenlesbar und haben keine Referenzliste,
   // an der ein [n] hängen könnte — siehe stripCitations().
   const description = stripCitations((route.description || '').trim())
-  // Encoded per segment: 989 hero files have a space in the name, and a raw space ends
-  // the URL for every parser of og:image and JSON-LD (Amazonbot: 1,005 x 404, 2026-10-08).
-  const ogImage = route.image ? `${BASE_URL}${encodePath(route.image.url)}` : undefined
+  // The payload hands the path percent-encoded (api/routes/sites_html.py, encode_path):
+  // 989 hero files have a space in the name, a raw space ends the URL for every parser of
+  // og:image and JSON-LD (Amazonbot: 1,005 x 404, 2026-10-08), and SitePage prints the
+  // same path in <img src>, which carried it raw on 67/298 pages until 2026-10-20.
+  const ogImage = route.image ? `${BASE_URL}${route.image.url}` : undefined
 
   const place = [
     '"@type": "Place"',
@@ -357,7 +407,7 @@ export function siteMeta(route: SiteRoute): PageMeta {
   const schema = `{"@context": "https://schema.org", ${place.join(', ')}}`
 
   return {
-    title: `${route.name} — ${route.country} · ${siteType}`,
+    title: siteTitle(route),
     description,
     canonical,
     ogType: 'place',
@@ -420,7 +470,9 @@ export function countryMeta(route: CountryRoute): PageMeta {
 /**
  * One schema.org VideoObject per registered video of a paper. The thumbnail
  * is YouTube's own: crawler metadata only (the page never loads it), and it
- * exists for every video, with or without our own poster.
+ * exists for every video, with or without our own poster. uploadDate goes out as stored:
+ * theo_publishing.check_video_shape refuses a published_at without its UTC offset, so it is
+ * already the full ISO 8601 time Google asks for (tech-3, 2026-10-19).
  */
 function videoObject(video: ResearchVideo, paperTitle: string): string {
   return (
@@ -484,6 +536,7 @@ export function researchIndexMeta(route: ResearchIndexRoute): PageMeta {
       `${route.papers.length} open-access archaeological research papers with full citations, ` +
       'published under CC BY 4.0.',
     canonical: `${BASE_URL}/research/`,
+    feeds: [RESEARCH_FEED],
   }
 }
 
@@ -536,5 +589,6 @@ export function landingMeta(route: LandingRoute): PageMeta {
     // Kein ogType/image: renderHead() setzt genau diese beiden Werte als
     // Default ('website' und DEFAULT_OG_IMAGE = /landing/og-image.png).
     canonical: `${BASE_URL}/`,
+    feeds: [STORIES_FEED, RESEARCH_FEED],
   }
 }

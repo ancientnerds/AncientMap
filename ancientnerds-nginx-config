@@ -404,6 +404,16 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
     }
 
+    # Atom feeds of the stories and the papers (api/routes/feeds.py, 2026-10-20):
+    # /feeds/stories.xml -> /api/feeds/stories.xml. Without this block the path
+    # fell through to `location /` and answered the 404 shell. The API sets
+    # Cache-Control and application/atom+xml.
+    location ~ ^/feeds/(stories|research)\.xml$ {
+        proxy_pass http://an_api/api$request_uri;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
     # Legacy site URL. /sites/{country}/{slug} is now the canonical page and
     # serves identical content to every user agent, so the old parameter URL
     # just 301s there (the API resolves the uuid to its slug). This also

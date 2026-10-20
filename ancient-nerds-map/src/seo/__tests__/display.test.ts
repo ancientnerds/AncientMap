@@ -7,7 +7,16 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { coordDisplay, longDate, paperCardFooter, periodDisplay, shortDate } from '../display'
+import {
+  SITE_TYPE_LABELS,
+  coordDisplay,
+  longDate,
+  paperCardFooter,
+  periodDisplay,
+  shortDate,
+  siteTypeLabel,
+  utcDateTime,
+} from '../display'
 
 describe('coordDisplay', () => {
   it('formatiert Nord/Ost mit vier Nachkommastellen', () => {
@@ -123,5 +132,69 @@ describe('paperCardFooter', () => {
     expect(paperCardFooter({ ...full, published_at: null, words: null })).toBe(
       'by theo · 59 cited sources',
     )
+  })
+})
+
+describe('utcDateTime', () => {
+  it('gives a zoneless payload timestamp its UTC offset (uploadDate, GSC 2026-10-19)', () => {
+    expect(utcDateTime('2026-10-18T14:03:00')).toBe('2026-10-18T14:03:00+00:00')
+    expect(utcDateTime('2026-10-18T14:03:00.123456')).toBe('2026-10-18T14:03:00.123456+00:00')
+  })
+
+  it('refuses what the payload builder never sends, instead of guessing', () => {
+    expect(() => utcDateTime('2026-10-18')).toThrow(/zoneless/)
+    expect(() => utcDateTime('2026-10-18T14:03:00+02:00')).toThrow(/zoneless/)
+    expect(() => utcDateTime('')).toThrow(/zoneless/)
+  })
+})
+
+// Every site_type of the shown ancient_nerds sites, psql 2026-10-20: 86 values, plus NULL
+// (the empty case below). A new value with a slash fails here, not in a live title.
+const MEASURED_SITE_TYPES = [
+  'City/town/settlement', 'Fortress/citadel', 'Temple complex', 'Archaeological site',
+  'Cave Structures', 'Necropolis/tombs complex', 'Fort', 'Residence/villa/farmhouse',
+  'Settlement', 'Dolmen', 'City', 'Megalithic stones', 'Stone circle', 'Gate/archway/bridge',
+  'Temple', 'Barrow', 'Earthwork', 'Rock art', 'Tomb', 'Cairn', 'Pyramid complex',
+  'Mound/tumulus', 'Monument', 'Road/avenue/trackway', 'Theatre', 'Petroglyphs', 'Sanctuary',
+  'Cemetery', 'Rock relief/carving', 'Megalithic structures', 'Reservoir/aqueduct/canal',
+  'Museum', 'Village', 'Minaret/tower', 'Fortification', 'Bath', 'Castle/palace',
+  'Mine/quarry', 'Amphitheatre', 'Henge', 'Wall', 'Palace', 'Geological interest',
+  'Monastery', 'Fortress', 'Cave', 'Burial', 'Standing stone', 'Church/cathedral',
+  'Natural feature', 'Sacred site', 'Villa', 'Town', 'Religious', 'Megalithic statues',
+  'Necropolis', 'Gate', 'Castle', 'Geoglyphs', 'Stadium', 'Church', 'Aqueduct', 'Funerary',
+  'Inscription', 'Underwater structures', 'Bridge', 'Timber circle', 'Sculptured stone',
+  'Forum', 'Megalithic walls', 'Well', 'Megalithic', 'Military',
+  'City/town/settlement, Pyramid complex', 'Quarry', 'Road', 'Citadel', 'Ruin', 'Urban',
+  'Infrastructure', 'Mine', 'Heritage site', 'Theater', 'Shipwreck', 'Magnetic anomaly',
+  'Harbor',
+]
+
+describe('siteTypeLabel', () => {
+  it('turns the raw taxonomy into a short readable label', () => {
+    expect(siteTypeLabel('City/town/settlement')).toBe('Settlement')
+    expect(siteTypeLabel('Fortress/citadel')).toBe('Fortress')
+    expect(siteTypeLabel('Cave Structures')).toBe('Cave site')
+    expect(siteTypeLabel('Temple complex')).toBe('Temple complex')
+  })
+
+  it('keeps the page default for a site without a type', () => {
+    expect(siteTypeLabel(null)).toBe('Archaeological site')
+    expect(siteTypeLabel('')).toBe('Archaeological site')
+  })
+
+  it('has a slash-free, comma-free, short label for every measured value', () => {
+    expect(MEASURED_SITE_TYPES).toHaveLength(86)
+    for (const raw of MEASURED_SITE_TYPES) {
+      const label = siteTypeLabel(raw)
+      expect(label, raw).not.toMatch(/[/,]/)
+      expect(label.length, raw).toBeLessThanOrEqual(19)
+      expect(label[0], raw).toBe(label[0].toUpperCase())
+    }
+  })
+
+  it('maps only values that exist (no stale keys)', () => {
+    for (const key of Object.keys(SITE_TYPE_LABELS)) {
+      expect(MEASURED_SITE_TYPES, key).toContain(key)
+    }
   })
 })

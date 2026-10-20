@@ -19,7 +19,9 @@
  * and /articles/ both stay; a 301 comes only once Google has indexed the
  * new hub. A location.replace would also drop #slug deep links, which the
  * standalone page itself writes (ArticlesPage.tsx, openArticle).
- * Do not re-unify this.
+ * Do not re-unify this. Since owner decision 2026-10-20 (SEO evaluation
+ * 2026-10-19, tech-6) /articles.html names /articles/ as its rel=canonical
+ * and is out of sitemap-static.xml - still no redirect, the page works as is.
  *
  * No OfflineProvider: nothing under ArticlesPage consumes useOffline()
  * (only Globe, FilterPanel and SitePopup do).

@@ -311,8 +311,13 @@ def create_public_api() -> FastAPI:
 
     public_app = FastAPI(
         title="Ancient Nerds Map — Public API",
+        # "750K+" stood here until 2026-10-20, from before the database grew to 1.76 million
+        # records (llms.txt); info.license and info.contact were empty (SEO evaluation
+        # 2026-10-19, roadmap S7). The licence follows terms.html: no single licence covers
+        # the aggregate, so the API points to the terms, as the homepage Dataset schema does.
         description=(
-            "Access archaeological site data from 750K+ sites worldwide.\n\n"
+            "Access more than 1.7 million archaeological site records worldwide, about "
+            "4,900 of them curated by hand.\n\n"
             "Standard endpoints are rate-limited to **10 requests per minute** per IP "
             "address. The Knowledge-Graph read endpoints (`/graph`, "
             "`/knowledge/activity`, `/knowledge/claims`) get a higher **60 requests "
@@ -325,8 +330,20 @@ def create_public_api() -> FastAPI:
             "requirement.\n\n"
             "All news, article, and research content on this API is AI-generated "
             "and carries machine-readable `ai_generated` / `ai_system` fields "
-            "(Art. 50 EU AI Act)."
+            "(Art. 50 EU AI Act).\n\n"
+            "Licensing: original Ancient Nerds content (curated site records, stories, "
+            "journals, research papers) is CC BY 4.0; records from third-party databases keep "
+            "their source licences."
         ),
+        contact={
+            "name": "Ancient Nerds",
+            "url": "https://ancientnerds.com/api.html",
+            "email": "contact@ancientnerds.com",
+        },
+        license_info={
+            "name": "CC BY 4.0 for Ancient Nerds content; source licences for third-party records",
+            "url": "https://ancientnerds.com/terms.html",
+        },
         version="1.2.0",
         docs_url="/docs",
         redoc_url="/redoc",

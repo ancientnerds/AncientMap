@@ -188,9 +188,15 @@ async def sites_by_country(slug: str, db: Session = Depends(get_db)):
             "period_name": row.period_name,
             "period_start": row.period_start,
             # The card shows the hero's 480 px copy (pipeline/wiki_thumbs.py): the
-            # England hub alone lists 1,044 sites.
+            # England hub alone lists 1,044 sites. The path is percent-encoded here
+            # (encode_path), because it lands verbatim in <img src> and og:image: 989
+            # of 3,808 shown heroes have a space in the file name, and 67 of 298
+            # sampled pages printed it raw (SEO evaluation 2026-10-19, tech-7). The
+            # thumbnail_url column is either an already-encoded Wikimedia URL or,
+            # for 0 curated sites without a hero (psql 2026-10-20), a local path
+            # with a character that needs encoding.
             "thumbnail_url": (
-                f"/data/images/wiki-thumbs/{site_id_short(row.id)}/{row.hero_filename}"
+                encode_path(f"/data/images/wiki-thumbs/{site_id_short(row.id)}/{row.hero_filename}")
                 if row.hero_filename
                 else row.thumbnail_url
             ),
@@ -453,7 +459,9 @@ def _related_content(row, db: Session) -> dict:
     ).fetchone()
     if img_row:
         image = {
-            "url": f"/data/images/wiki/{site_id_short(row.id)}/{img_row.filename}",
+            # Percent-encoded once, here: the page prints it in <img src>, og:image and
+            # the ImageObject alike (tech-7, 2026-10-19; see the hub thumbnails above).
+            "url": encode_path(f"/data/images/wiki/{site_id_short(row.id)}/{img_row.filename}"),
             "author": img_row.author,
             "license": img_row.license,
             "license_url": img_row.license_url,

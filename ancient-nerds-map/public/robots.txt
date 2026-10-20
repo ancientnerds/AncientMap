@@ -20,8 +20,13 @@ Sitemap: https://ancientnerds.com/sitemap-articles.xml
 # Guide for AI crawlers and assistants:
 # https://ancientnerds.com/llms.txt
 
+# Atom feeds of the newest stories and research papers (robots.txt has no feed
+# directive; both paths are open under Allow: /):
+# https://ancientnerds.com/feeds/stories.xml
+# https://ancientnerds.com/feeds/research.xml
+
 # No Crawl-delay: it capped Bing/Yandex at ~1 URL/sec, which is far too slow
-# for a 7,300-URL sitemap (Google ignores the directive entirely).
+# for a 7,400-URL sitemap (Google ignores the directive entirely).
 
 # Disallow API endpoints from being indexed
 Disallow: /api/

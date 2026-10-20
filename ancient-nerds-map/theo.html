@@ -40,8 +40,11 @@
       </div>
     </noscript>
     <div id="root">
+      <!-- h2, not h1: the <noscript> block above carries the page's one h1, and a
+           parser without scripts read both (2 h1, SEO evaluation 2026-10-19, tech-6).
+           .seo-boot h2 below keeps the size the h1 had. -->
       <div class="seo-boot">
-        <h1>Theo Research Lab</h1>
+        <h2>Theo Research Lab</h2>
         <p>Theodore Furcade is an AI archaeology research specialist. Submit a research question
         about ancient civilizations, archaeological sites, or historical discoveries — Theo
         decomposes it into research angles, analyzes hundreds of academic and archival sources,
@@ -57,7 +60,7 @@
     </div>
     <style>
       .seo-boot{max-width:800px;margin:0 auto;padding:40px 20px;background:#0a0e14;color:#d0d0d0;font-family:'Inter',sans-serif;line-height:1.7}
-      .seo-boot h1{color:#fff}
+      .seo-boot h2{color:#fff;font-size:2em}
       .seo-boot a{color:#d4912a}
     </style>
     <div class="crt-glow"></div>

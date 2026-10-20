@@ -8,7 +8,11 @@
     <meta name="description" content="Daily archaeology stories curated by AI from top YouTube channels. New discoveries, excavation updates, ancient civilization finds, and expert analysis. Never miss a breakthrough in archaeological research." />
     <meta name="keywords" content="archaeology news, archaeological discoveries, new excavations, ancient history news, archaeology YouTube, latest finds, ancient civilizations, archaeological research updates" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
-    <link rel="canonical" href="https://ancientnerds.com/news.html" />
+    <!-- Canonical on /news-archive/, the server-rendered hub (the story archive): this client-rendered
+         shell and the hub were both self-canonical and indexed for the same intent
+         (SEO evaluation 2026-10-19, tech-6). Owner decision 2026-10-20: canonical and
+         out of sitemap-static.xml, no 301 - the page stays usable as it is. -->
+    <link rel="canonical" href="https://ancientnerds.com/news-archive/" />
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
@@ -17,7 +21,7 @@
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://ancientnerds.com/news.html" />
+    <meta property="og:url" content="https://ancientnerds.com/news-archive/" />
     <meta property="og:site_name" content="Ancient Nerds" />
     <meta property="og:title" content="Archaeology Stories - Latest Discoveries | Ancient Nerds" />
     <meta property="og:description" content="Daily AI-curated archaeology news from top YouTube channels. New discoveries, excavations, and ancient civilization research." />
@@ -29,7 +33,7 @@
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content="https://ancientnerds.com/news.html" />
+    <meta name="twitter:url" content="https://ancientnerds.com/news-archive/" />
     <meta name="twitter:title" content="Archaeology Stories - Latest Discoveries | Ancient Nerds" />
     <meta name="twitter:description" content="Daily AI-curated archaeology news. New discoveries, excavations, and ancient civilization research." />
     <meta name="twitter:image" content="https://ancientnerds.com/landing/og-image.png" />

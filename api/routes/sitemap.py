@@ -134,10 +134,8 @@ _COUNTRIES_SQL = text(
 # studio spec 2026-09-26 §2.7); neither touches published_at, so the lastmod is
 # the latest of the three. registered_at is an ISO string with its UTC offset,
 # folded to UTC like published_at. GREATEST ignores the NULL of a paper without
-# corrections or videos.
-_RESEARCH_SQL = text("""
-    SELECT slug,
-           GREATEST(
+# corrections or videos. The Atom feed's <updated> is the same value (feeds.py).
+PAPER_LASTMOD_SQL = """GREATEST(
                COALESCE(published_at, created_at),
                (SELECT MAX((c->>'date')::date)::timestamp
                 FROM jsonb_array_elements(
@@ -147,7 +145,10 @@ _RESEARCH_SQL = text("""
                 FROM jsonb_array_elements(
                     COALESCE(result_json::jsonb->'videos', '[]'::jsonb)
                 ) v)
-           ) AS lastmod
+           )"""
+_RESEARCH_SQL = text(f"""
+    SELECT slug,
+           {PAPER_LASTMOD_SQL} AS lastmod
     FROM research_requests
     WHERE is_public = TRUE AND status = 'completed' AND slug IS NOT NULL
     ORDER BY published_at DESC NULLS LAST
@@ -182,15 +183,23 @@ async def sitemap_index():
 # /research/, /articles/) live in their per-type part files instead — no URL
 # may appear in two parts. No lastmod: nothing in the data tracks when these
 # shells change, and stamping "today" would falsely signal daily changes.
+#
+# Not listed (owner decision 2026-10-20): /news.html, /articles.html and /library.html.
+# Their rel=canonical names the server-rendered hub (/news-archive/, /articles/,
+# /research/), and a sitemap URL whose canonical points elsewhere is a conflicting
+# signal; the shells and their hubs were both indexed for the same intent (SEO
+# evaluation 2026-10-19, tech-6). CANONICALISED_SHELLS is that mapping, for the test.
+CANONICALISED_SHELLS = {
+    "/news.html": "/news-archive/",
+    "/articles.html": "/articles/",
+    "/library.html": "/research/",
+}
 _STATIC_PAGES = (
     "/globe.html",
-    "/news.html",
     "/lyra.html",
     "/radar.html",
-    "/articles.html",
     "/search.html",
     "/theo.html",
-    "/library.html",
     "/api.html",
 )
 

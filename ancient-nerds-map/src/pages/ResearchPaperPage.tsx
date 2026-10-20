@@ -138,72 +138,78 @@ export default function ResearchPaperPage() {
       </PageHeader>
       <AiNoticeBanner message="Research paper text is AI-generated; images are from cited sources. Always verify claims with original sources." />
 
-      <PaperArticle
-        paper={paper}
-        lead={
-          <Breadcrumbs
-            trail={[
-              { name: 'Home', path: '/' },
-              { name: 'Research', path: '/research/' },
-              { name: title },
-            ]}
-          />
-        }
-        actions={
-          <>
-            <button className="theo-report-share" onClick={handleShare} title="Share paper" aria-label="Share paper">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            </button>
-            {isFounder && (
-              <button
-                className="theo-report-share"
-                onClick={() => window.open(`/research/${slug}/medium`, '_blank')}
-                title="Copy for Medium (founders only)"
-                aria-label="Copy for Medium"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13.54 12a6.8 6.8 0 01-6.77 6.82A6.8 6.8 0 010 12a6.8 6.8 0 016.77-6.82A6.8 6.8 0 0113.54 12zM20.96 12c0 3.54-1.51 6.42-3.38 6.42-1.87 0-3.39-2.88-3.39-6.42s1.52-6.42 3.39-6.42 3.38 2.88 3.38 6.42M24 12c0 3.17-.53 5.75-1.19 5.75-.66 0-1.19-2.58-1.19-5.75s.53-5.75 1.19-5.75C23.47 6.25 24 8.83 24 12z"/></svg>
+      {/* The paper as the page's main content: the paper pages were the one SSR template
+          without a <main> (SEO evaluation 2026-10-19, tech-10; the story, site and hub
+          pages have theirs). No class: .theo-page is a plain block scroller and no rule
+          selects `main` or a child of .theo-page, so the layout does not move. */}
+      <main>
+        <PaperArticle
+          paper={paper}
+          lead={
+            <Breadcrumbs
+              trail={[
+                { name: 'Home', path: '/' },
+                { name: 'Research', path: '/research/' },
+                { name: title },
+              ]}
+            />
+          }
+          actions={
+            <>
+              <button className="theo-report-share" onClick={handleShare} title="Share paper" aria-label="Share paper">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
               </button>
-            )}
-            {ttsStatus?.has_audio && (
-              <div className="tts-audio-player">
+              {isFounder && (
                 <button
                   className="theo-report-share"
-                  onClick={handlePlayPause}
-                  title={isPlaying ? 'Pause narration' : 'Play narration'}
-                  aria-label={isPlaying ? 'Pause narration' : 'Play narration'}
-                  style={{ color: isPlaying ? 'var(--brand-primary)' : undefined }}
+                  onClick={() => window.open(`/research/${slug}/medium`, '_blank')}
+                  title="Copy for Medium (founders only)"
+                  aria-label="Copy for Medium"
                 >
-                  {isPlaying ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-                  )}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13.54 12a6.8 6.8 0 01-6.77 6.82A6.8 6.8 0 010 12a6.8 6.8 0 016.77-6.82A6.8 6.8 0 0113.54 12zM20.96 12c0 3.54-1.51 6.42-3.38 6.42-1.87 0-3.39-2.88-3.39-6.42s1.52-6.42 3.39-6.42 3.38 2.88 3.38 6.42M24 12c0 3.17-.53 5.75-1.19 5.75-.66 0-1.19-2.58-1.19-5.75s.53-5.75 1.19-5.75C23.47 6.25 24 8.83 24 12z"/></svg>
                 </button>
-                {isPlaying && audioProgress > 0 && (
-                  <div className="tts-progress-bar">
-                    <div className="tts-progress-fill" style={{ width: `${audioProgress}%` }} />
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        }
-      >
-        {/* Back to the research library */}
-        <div style={{ textAlign: 'center', padding: '32px 0' }}>
-          <a href="/research/" style={{ color: 'var(--brand-primary)', fontSize: 13, textDecoration: 'none' }}>
-            ← All research papers
-          </a>
-        </div>
-        <ThumbsFeedback
-          prompt="paper_end"
-          target={slug}
-          question="Was this paper useful?"
-          placeholder="What was missing or wrong?"
-          extra={{ paper: slug }}
-        />
-        <CommunityCta />
-      </PaperArticle>
+              )}
+              {ttsStatus?.has_audio && (
+                <div className="tts-audio-player">
+                  <button
+                    className="theo-report-share"
+                    onClick={handlePlayPause}
+                    title={isPlaying ? 'Pause narration' : 'Play narration'}
+                    aria-label={isPlaying ? 'Pause narration' : 'Play narration'}
+                    style={{ color: isPlaying ? 'var(--brand-primary)' : undefined }}
+                  >
+                    {isPlaying ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+                    )}
+                  </button>
+                  {isPlaying && audioProgress > 0 && (
+                    <div className="tts-progress-bar">
+                      <div className="tts-progress-fill" style={{ width: `${audioProgress}%` }} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          }
+        >
+          {/* Back to the research library */}
+          <div style={{ textAlign: 'center', padding: '32px 0' }}>
+            <a href="/research/" style={{ color: 'var(--brand-primary)', fontSize: 13, textDecoration: 'none' }}>
+              ← All research papers
+            </a>
+          </div>
+          <ThumbsFeedback
+            prompt="paper_end"
+            target={slug}
+            question="Was this paper useful?"
+            placeholder="What was missing or wrong?"
+            extra={{ paper: slug }}
+          />
+          <CommunityCta />
+        </PaperArticle>
+      </main>
     </div>
   )
 }

@@ -159,6 +159,8 @@ export interface SiteRoute {
   alt_names: string[]
   /** Hero from wiki_images with its Commons attribution (licence!). */
   image: {
+    /** Percent-encoded site path (encode_path in sites_html.py): used verbatim in <img src>,
+     *  og:image and the ImageObject, never encoded a second time. */
     url: string
     author: string | null
     license: string | null
@@ -195,6 +197,8 @@ export interface CountrySite {
   site_type: string | null
   period_name: string | null
   period_start: number | null
+  /** The local hero thumbnail as a percent-encoded path (encode_path), else the row's
+   *  thumbnail_url (an encoded Wikimedia URL): printed verbatim in <img src> and og:image. */
   thumbnail_url: string | null
 }
 
