@@ -14238,3 +14238,17 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   list). Backup 2026-10-19_remediation (895 MB) drill passed. **Wave 2026-10-19r**: 1 step, 48 cells
   (period_start + period_name) at 24 sites, accepted 0 deviations; journal recounted 48 rows / 24 sites.
   `rebuild_static` 277 s, freshness 0 differing, IndexNow 98 URLs accepted.
+- **Pilot 2 closed - gate FAILED on one criterion.** Web stages: verify VERIFIED 20 / CONTRADICTED 8 / DISPUTED 6 /
+  UNPROVEN 1, rewrite-v 15, check-v PASS 12 FAIL 3, verify2 12; outcomes 29 accepted, 11 kept (thin 4,
+  failed-after-verify-rewrite 3, contradicted/disputed/unproven-after-verify 1 each, failed-after-two-rewrites 1),
+  10 description defects. Judge (one malformed answer - 5 claims for a 6-claim card - set aside to `-judge-void/` and
+  re-answered by a fresh agent): 29 cards, 196 claims, 186 supported, 1 contradicted, 4 disputed, unproven 2.55 %,
+  pilot FAIL. The wrong card: Black Pyramid "is mud brick and clay in a limestone casing" - the description's own
+  Wikipedia present tense; the card_web_verifier restated it as "had a limestone casing" and verified it.
+  Writer: `evaluate --role card_writer` on teaser-2026-10-20 (new seal; -18b refuses after the prompt edits):
+  clean_first 36/36 = 1.0, passed. Checker PASS at attempt 1 28/36 (78 %).
+- **D52** (owner): sharpen the verifier, recalibrate, pilot 3. `9f824ba`: the shorts judge/verifier prompt keeps a
+  claim's own tense, 'still'/'today' and qualifiers, and carries v1's repeating-page / present-tense rule.
+  Calibration teaser-2026-10-20 sealed (adjudication teaser-gold), jobs identical to -18b (273 cases,
+  jobs_sha256 17655dc4...), card_web_verifier exported (40 cases, 5 batches). Pilot 3 wb-shorts-pilot3-2026-10-20
+  selected (seed 20261020, pilots 1 and 2 excluded). Running: recalibration and pilot 3's offline stages.
