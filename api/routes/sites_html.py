@@ -560,7 +560,10 @@ def _related_content(row, db: Session) -> dict:
     }
 
     # Research on this site: 0 of 298 sampled site pages linked a paper (SEO evaluation
-    # 2026-10-19, A2); the links are reviewed rows, not a name match (migration 0031).
+    # 2026-10-19, A2); the links are reviewed rows, not a name match (migration 0031). The key
+    # joins the payload only for a site with a paper, like a paper's own extras
+    # (research_html.py): the payload of every other site stays byte-identical, and the SSR
+    # sidecar, restarted before the API on a deploy, renders an older payload unchanged.
     papers = [
         {"slug": r.slug, "title": r.title}
         for r in db.execute(_SITE_PAPERS_SQL, {"sid": row.id}).fetchall()
@@ -570,7 +573,7 @@ def _related_content(row, db: Session) -> dict:
         "alt_names": alt_names,
         "image": image,
         "news": news,
-        "papers": papers,
+        **({"papers": papers} if papers else {}),
         "links": links,
         "parent": parent,
         "siblings": siblings,

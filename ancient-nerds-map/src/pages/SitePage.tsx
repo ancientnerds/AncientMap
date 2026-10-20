@@ -175,7 +175,7 @@ function SiteRelatedContent({ site }: { site: SiteRoute }) {
       )}
       {/* Owner decision 2026-10-20 (SEO evaluation 2026-10-19, A2): 0 of 298 site
           pages linked a paper. The links are reviewed rows (migration 0031). */}
-      {site.papers.length > 0 && (
+      {site.papers && site.papers.length > 0 && (
         <section className="story-related">
           <h2>Research on this site</h2>
           <ul>

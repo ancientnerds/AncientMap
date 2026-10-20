@@ -473,3 +473,9 @@ def test_the_site_papers_query_reads_public_papers_of_the_reviewed_links():
     assert "FROM research_paper_sites ps JOIN research_requests r ON r.id = ps.request_id" in sql
     assert "ps.site_id = CAST(:sid AS uuid)" in sql
     assert "r.is_public = TRUE AND r.status = 'completed' AND r.slug IS NOT NULL" in sql
+
+
+def test_a_site_without_papers_gets_no_papers_key():
+    """Like a paper's extras: the payload of a site no paper treats stays byte-identical."""
+    row = _borremose_row()
+    assert "papers" not in _teaser_route(row)

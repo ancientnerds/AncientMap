@@ -175,8 +175,9 @@ export interface SiteRoute {
   } | null
   news: { slug: string; headline: string }[]
   /** The public Theo papers that treat the site, newest first: reviewed links
-   *  (migration 0031), shown as "Research on this site". */
-  papers: { slug: string; title: string }[]
+   *  (migration 0031), shown as "Research on this site". Present only when the site has
+   *  one (api/routes/sites_html.py), like the parts of a ResearchRoute. */
+  papers?: { slug: string; title: string }[]
   links: { title: string | null; url: string; content_type: string | null }[]
   parent: { name: string; path: string } | null
   siblings: { name: string; path: string }[]
