@@ -186,6 +186,42 @@ def test_research_paper_links_the_references():
     assert '<a href="https://doi.org/10.1234/abcd"' in body
 
 
+def _rendered_references(references: str) -> str:
+    report = "## Findings\n\nObsidian moved far.\n\n## References\n\n" + references
+    render, shell = _patched()
+    with render as render_mock, shell:
+        asyncio.run(
+            research_paper_page(
+                "obsidian-trade-networks-anatolia",
+                db=FakeDb([_paper_row(published_report=report)]),
+            )
+        )
+    return render_mock.call_args[0][0]["body_html"]
+
+
+def test_reference_url_keeps_its_balanced_parentheses():
+    """the-watched-pot-and-the-willing-mind [15]/[16] linked to
+    .../Observer_effect_ and left "(physics)" as text (2026-10-20): the bare-URL
+    pattern stopped at "(". A ")" that closes a "(" of the URL belongs to it;
+    the " (accessed ...)" after the space does not."""
+    body = _rendered_references(
+        "[15] Observer effect (physics) — https://en.wikipedia.org/wiki/Observer_effect_(physics)"
+        " (accessed 2026-10-06) [Reputable]\n"
+        "[16] Observer (quantum physics) — https://en.wikipedia.org/wiki/Observer_(quantum_physics)"
+        " (accessed 2026-10-06) [Reputable]"
+    )
+    assert '<a href="https://en.wikipedia.org/wiki/Observer_effect_(physics)"' in body
+    assert '<a href="https://en.wikipedia.org/wiki/Observer_(quantum_physics)"' in body
+    assert "(physics)</a> (accessed 2026-10-06)" in body
+    assert "(quantum_physics)</a> (accessed 2026-10-06)" in body
+
+
+def test_reference_url_leaves_an_unbalanced_paren_and_full_stop_outside():
+    body = _rendered_references("[1] Roe, R. (2021). Exchange spheres (see https://example.com/a).")
+    assert '<a href="https://example.com/a"' in body
+    assert "https://example.com/a</a>)." in body
+
+
 def test_unknown_paper_is_a_404_without_touching_the_renderer():
     render, shell = _patched()
     with render as render_mock, shell as shell_mock:
