@@ -9,7 +9,7 @@ import logging
 
 from fastapi import APIRouter, Depends, Response
 from fastapi.responses import RedirectResponse
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
 from api.seo_shell import ssr_shell_response
@@ -326,12 +326,20 @@ def _related_stories(db: Session, item: NewsItem) -> list[dict]:
     candidates = [
         _story_row(*r)
         for r in public_stories_query(db)
-        .outerjoin(UnifiedSite, NewsItem.site_id == UnifiedSite.id)
+        # A retired site has no page and no place in the scope (E4): its name and
+        # country do not make two stories related.
+        .outerjoin(
+            UnifiedSite,
+            and_(
+                NewsItem.site_id == UnifiedSite.id,
+                UnifiedSite.scope_status.is_distinct_from(RETIRED),
+            ),
+        )
         .with_entities(
             NewsItem.id,
             NewsItem.headline,
             NewsItem.tags,
-            NewsItem.site_id,
+            UnifiedSite.id,
             NewsItem.site_name_extracted,
             UnifiedSite.name,
             UnifiedSite.country,
@@ -341,12 +349,12 @@ def _related_stories(db: Session, item: NewsItem) -> list[dict]:
         )
         .all()
     ]
-    site = item.site
+    site = item.site if item.site and item.site.scope_status != RETIRED else None
     story = _story_row(
         item.id,
         item.headline,
         item.tags,
-        item.site_id,
+        site.id if site else None,
         item.site_name_extracted,
         site.name if site else None,
         site.country if site else None,
