@@ -14252,3 +14252,12 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   Calibration teaser-2026-10-20 sealed (adjudication teaser-gold), jobs identical to -18b (273 cases,
   jobs_sha256 17655dc4...), card_web_verifier exported (40 cases, 5 batches). Pilot 3 wb-shorts-pilot3-2026-10-20
   selected (seed 20261020, pilots 1 and 2 excluded). Running: recalibration and pilot 3's offline stages.
+- **card_web_verifier on Opus with the D52 tense rule, teaser-2026-10-20:** held (top tier) - caught 13/15 counted
+  (required 14; -18b 12/15), missed 2 (3), card verdict agreement 0.7333 (0.5333), claim agreement 0.9158 (threshold
+  0.9; 0.8911), falsely disputed 3 (4), 0 false sources (0), falsely contradicted 2 (limit 2; 1), coverage 0.8716
+  (0.9266), gold_wrong 3 (3). **Released** by the orchestrator under D8/D40/D45/D52 (`RELEASE-card_web_verifier.json`,
+  standing `released`): not worse than the released -18b on any gate measure but one falsely contradicted card within
+  its limit. Note: Beacon Hill's "lie" about a ploughed-out mound is now CONTRADICTED (the gold's adjudication calls it a
+  reading, not a wrong fact; the D52 rule reads it as a state that no longer holds).
+- **Pilot 3 offline stages:** write 40 (thin 2, mechanical failures 0), check PASS at attempt 1 29/38 (76 %), rewrite
+  rounds imported. Web stages and judge running after the release.

@@ -1,0 +1,58 @@
+{
+ "card_web_verifier": {
+  "batch_size": 8,
+  "batches": {
+   "card-web-verifier-001": [
+    "15aa6120-243d-4b54-8d6b-88a8e98765d9",
+    "0ad5aced-df36-47fe-aa39-0e0ff6e54db8",
+    "131c4aa5-ca45-4256-ac2f-f3afd9ad52b5",
+    "7dc9aadf-28c4-4081-a917-8663b6f92926",
+    "a8eaf6e1-2844-463f-9269-8e09471ab99b",
+    "1963df72-bc20-4b48-a669-f3156fbd9a80",
+    "3d757530-4604-4feb-93d1-774b397dbd8f",
+    "2d4682ae-6b84-47be-878b-82ffebd1fded"
+   ],
+   "card-web-verifier-002": [
+    "3957613d-1c08-459a-876a-a83b7d3c5b45",
+    "46e99336-ca30-4fcc-8676-bc269d6a5e40",
+    "c2bed0b9-50e5-444d-bb93-2d4b89f8453b",
+    "5ab17d98-12dc-4457-b65e-77e986ed0681",
+    "85860fda-c2ff-4a3e-81ce-9e5dee03b7d9",
+    "54273dda-5714-4d7a-ac4f-962ed96e2309",
+    "f992be54-32f9-4418-a11e-252b77bb5ecf",
+    "1c73dc07-d220-45d8-898a-1fdd694f5b3e"
+   ],
+   "card-web-verifier-003": [
+    "f98ef8c4-82d8-4353-8d4e-cae13f54e969",
+    "51cd4a18-790f-4aae-9521-815d4fdaad00",
+    "37d0fb76-0e07-41fc-bda5-c7f378ec6cbb",
+    "cb74b802-db47-46bd-8e49-0f7fc1b9d508",
+    "d8280d44-f379-4bdf-be59-33fed4932192",
+    "fba000cb-113a-4b7c-a76c-23adcad701f7",
+    "800cdc92-d435-494b-b151-27fc48d54db8",
+    "ea98235a-42f5-4a1d-ae39-75f07460f1d6"
+   ],
+   "card-web-verifier-004": [
+    "05d8787d-abb2-4a93-b5cf-b32f972be150",
+    "e2161209-a3cc-4df4-aaff-f7931c0f0cbb",
+    "40fdd39a-af3d-40ad-bd05-711a92804dc6",
+    "d1be7d93-e7a0-4f3a-b8d8-11e167592de3",
+    "5d686805-e5cd-4277-87ff-723e4bc5176d",
+    "5dee8ece-3ddc-46dc-aeb6-3db2e05a1c3b",
+    "37a203d7-46ba-4f1d-b2f4-1e9199ecf23d",
+    "4c10fa18-99f3-410e-addd-4578352e5866"
+   ],
+   "card-web-verifier-005": [
+    "9379c2d8-5d08-4a34-ad40-105aa52d2dea",
+    "0f5dc4bd-2950-4ec6-88b1-43827754d62f",
+    "ce3990d5-6f4e-4162-9fce-a974979478df",
+    "ed1b0fa2-7c86-4cb5-a90e-6d4bd373f618",
+    "ada87b20-19d4-4c6b-81a0-89d0b92fbb3d",
+    "c24aed98-e19a-4075-97e1-000b50c23451",
+    "55a99800-d3fe-4d34-b863-dcb894196e21",
+    "94fb793a-cea3-4de7-8290-f4b6ef96c348"
+   ]
+  },
+  "handoff": "C:\\PythonProjects\\AncientMap\\output\\remediation\\handoff\\cal-teaser-2026-10-20-card_web_verifier"
+ }
+}

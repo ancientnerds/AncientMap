@@ -1,0 +1,140 @@
+{
+ "adjudication": {
+  "path": "output/remediation/calibration/teaser-gold/ADJUDICATION.json",
+  "sha256": "7deded75623fdbd63d9aa4222c52aab60bb6d5a3f0339ed558b9b3ea51a52410"
+ },
+ "modules": {
+  "pipeline/utils/card_provenance.py": "dc4b557a8a04412225280924e4373ee7a952aedeacc9b4ac0a400779f033eb5d",
+  "scripts/remediation/image_roles/wiki_cache.py": "699df7957e106514a5261cdeb9a39a5a6ce53a1709695b7806380bb028dbf616",
+  "scripts/remediation/opus_audit/quotes.py": "c27efc245026bda5eec51d4e9d11bc777befb580eaa9312d72657796afc9305b",
+  "scripts/remediation/opus_handoff.py": "fb9616b73d0f5c6cd81ca4b62b49fad9d11cc03fc34770f926094d798f53e07a",
+  "scripts/remediation/phase4/licences.py": "8d1469f151964bd88abbcfd702c24cc44d156a9afd654caaa3607167b2d12ca7",
+  "scripts/remediation/quote_check.py": "571e2964243b21edfb2f7047bb804d2ac352add89d82794c3347d151409885bf",
+  "scripts/remediation/roles.py": "2551c3600a4b2c5e0fdc8bb99001132fb3dca63d184ccc6ff9bd012193457266",
+  "scripts/remediation/teaser/answers.py": "5d362a7a619e7e7f975637bcad26129ae2a4308028c7c15dac5240ac7d7d4873",
+  "scripts/remediation/teaser/answers_shorts.py": "3cf6abdc5bf426f3d6376fca892188f0cd6b2097c90ebd9783797d274b3cba22",
+  "scripts/remediation/teaser/calibrate.py": "f74260af8b66e0ea54fc49f42d922ce0c0b0ad7ceecfd0586051e6ad0c9f0872",
+  "scripts/remediation/teaser/contract.py": "c344038a029ac14c1794e05d09f5de84c05eba3fac44fe356e0b813ed64748fb",
+  "scripts/remediation/teaser/prompts.py": "0cb5d28ccddda8796d30e5a673ccb5e75a0eaad10ef8d844bec4b4b90abe5a5d",
+  "scripts/remediation/teaser/prompts_shorts.py": "923a89e0718b9680dd1e84c447ffbd80eb91a36ff3fe728e36269067642f2c1a",
+  "scripts/remediation/teaser/run.py": "e5d71057266489fc2274095e9991dc6e7221383755e2c034fdb53bce71316e53",
+  "scripts/remediation/teaser/shorts_v1.py": "e440a64c6106ff9c9d4ee19a4e8f2f17266687a7cfecaf08901da136c9735285",
+  "scripts/remediation/wc/answers.py": "bdabc7db028a0c210c35d772d09439fe34af2ce303dab2e734b9ad6d88514db3",
+  "scripts/remediation/web_rules.py": "bd6c52e1ed8a268db3b7bb5f47e01a357e42a589bfb5b70ac58ad0e9a58af9b7"
+ },
+ "registry": {
+  "adversarial": {
+   "effort": "high",
+   "model": "claude-sonnet-5-5",
+   "sha256": "b4d1c5aa09765c11f36b058c144a6c18bc765724a616dc2011838adee2c3d72b"
+  },
+  "card_fact_checker": {
+   "effort": "high",
+   "model": "claude-opus-5-5",
+   "sha256": "3635521f7b4e681d116f1b35437d909f6a31bffdb0b70d7b5aaad1faba927ac1"
+  },
+  "card_web_verifier": {
+   "effort": "high",
+   "model": "claude-opus-5-5",
+   "sha256": "74df46ce8f3e9d1ba0aff10b02ed39b403238f8d4ce8b871b21fc5030e994d93"
+  },
+  "card_writer": {
+   "effort": "high",
+   "model": "claude-opus-5-5",
+   "sha256": "edd953a6931b2315640a3c4f9422ec94d0352ea00ac17241ea1bf75b683abdc1"
+  },
+  "hook_rater": {
+   "effort": "medium",
+   "model": "claude-opus-5-5",
+   "sha256": "e46b781608234645a35f5da02256215e910dea228c66862535ac9016f8a14902"
+  },
+  "pilot_judge": {
+   "effort": "xhigh",
+   "model": "claude-opus-5-5",
+   "sha256": "a56efaa54c33b6c9a6acdc31098eaf632b114cab92bf8ef632cc01433f109e3b"
+  }
+ },
+ "roles": {
+  "adversarial": {
+   "sets": {
+    "adversarial_agreement": {
+     "agreement_min": 0.9
+    },
+    "adversarial_clean": {
+     "cases": 25
+    },
+    "adversarial_contradicted": {
+     "cases": 25
+    }
+   }
+  },
+  "card_fact_checker": {
+   "sets": {
+    "checker_agreement": {
+     "claim_agreement_min": 0.9,
+     "claim_coverage_min": 0.8,
+     "fail_cases": 15,
+     "false_pass_max": 0,
+     "pass_cases": 30,
+     "verdict_agreement_min": 0.9
+    },
+    "checker_defects": {
+     "cases": 30,
+     "caught_min": 27
+    },
+    "checker_fail_again": {
+     "cases": 30,
+     "fail_min": 27
+    },
+    "checker_good": {
+     "cases": 30,
+     "pass_min": 27
+    }
+   }
+  },
+  "card_web_verifier": {
+   "sets": {
+    "verifier_contradicted": {
+     "cases": 20,
+     "caught_min": 18,
+     "disputed": {
+      "3f512971-679b-4f40-8f5e-1467424ce605": "Dolmen de Viera: the discoverers' surname (Fuentes against Viera Fuentes) - a naming convention, not a wrong fact",
+      "5be3cff9-8b07-4cfc-b667-933e2d0ae302": "Undavalli Caves: the 4th-5th century date is disputed (the ASI dates the earliest phase to the 7th century); Wikipedia and Live History India agree with the card",
+      "93dd77da-64ad-4947-96b3-8ead4d6c98c1": "Mormont: 'burial pits' against the excavators' 'deposit pits' for the same 245 pits",
+      "9e723832-0a2b-43f9-90d1-3743b61b91ed": "Lot's Cave: April 606 (UNESCO, Wikipedia) against 605 or 607 (the excavator) - the sources differ by one year",
+      "b7cc5073-ffca-4cd3-a168-3062908d4959": "Beacon Hill, West Sussex: the tense of 'lie' about a mound the sources say was ploughed out - a reading of the card, not a wrong fact"
+     }
+    },
+    "verifier_verified": {
+     "cases": 20,
+     "claim_agreement_min": 0.9,
+     "claim_coverage_min": 0.8,
+     "false_sources_max": 0,
+     "falsely_contradicted_max": 2,
+     "falsely_disputed_max": 2
+    }
+   }
+  },
+  "card_writer": {
+   "sets": {
+    "writer_pilot": {
+     "clean_first_min": 0.8,
+     "sites": 40
+    }
+   }
+  },
+  "hook_rater": {
+   "sets": {
+    "hook_pairs": {
+     "ordered_right_min": 1.0,
+     "reference_within_one_min": 0.8,
+     "strong": 11,
+     "weak": 13
+    }
+   }
+  }
+ },
+ "seed": 20261009,
+ "source": "output/remediation/final-2026-10-08/plans/cards.md section 3.4",
+ "version": "teaser-calibration-v1"
+}

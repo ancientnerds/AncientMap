@@ -1,0 +1,96 @@
+{
+ "calibration_id": "teaser-2026-10-20",
+ "decided_at": "2026-10-20T15:32:15Z",
+ "effort": "high",
+ "held": "no higher tier than claude-opus-5-5: the owner decides",
+ "model": "claude-opus-5-5",
+ "passed": false,
+ "role": "card_web_verifier",
+ "sets": {
+  "verifier_contradicted": {
+   "cases": 20,
+   "caught": 13,
+   "caught_required": 14,
+   "counted": 15,
+   "disputed": {
+    "55a99800-d3fe-4d34-b863-dcb894196e21": {
+     "fresh_verdict": "DISPUTED",
+     "name": "Undavalli Caves",
+     "reason": "Undavalli Caves: the 4th-5th century date is disputed (the ASI dates the earliest phase to the 7th century); Wikipedia and Live History India agree with the card"
+    },
+    "5dee8ece-3ddc-46dc-aeb6-3db2e05a1c3b": {
+     "fresh_verdict": "CONTRADICTED",
+     "name": "Mormont",
+     "reason": "Mormont: 'burial pits' against the excavators' 'deposit pits' for the same 245 pits"
+    },
+    "85860fda-c2ff-4a3e-81ce-9e5dee03b7d9": {
+     "fresh_verdict": "CONTRADICTED",
+     "name": "Lot's Cave",
+     "reason": "Lot's Cave: April 606 (UNESCO, Wikipedia) against 605 or 607 (the excavator) - the sources differ by one year"
+    },
+    "a8eaf6e1-2844-463f-9269-8e09471ab99b": {
+     "fresh_verdict": "DISPUTED",
+     "name": "Dolmen de Viera",
+     "reason": "Dolmen de Viera: the discoverers' surname (Fuentes against Viera Fuentes) - a naming convention, not a wrong fact"
+    },
+    "ea98235a-42f5-4a1d-ae39-75f07460f1d6": {
+     "fresh_verdict": "CONTRADICTED",
+     "name": "Beacon Hill, West Sussex",
+     "reason": "Beacon Hill, West Sussex: the tense of 'lie' about a mound the sources say was ploughed out - a reading of the card, not a wrong fact"
+    }
+   },
+   "missed": [
+    "f98ef8c4-82d8-4353-8d4e-cae13f54e969: Silver Gate - Diocletian's Palace",
+    "37a203d7-46ba-4f1d-b2f4-1e9199ecf23d: Patallacta"
+   ],
+   "missed_verdicts": {
+    "37a203d7-46ba-4f1d-b2f4-1e9199ecf23d": "VERIFIED",
+    "f98ef8c4-82d8-4353-8d4e-cae13f54e969": "DISPUTED"
+   },
+   "passed": false
+  },
+  "verifier_verified": {
+   "card_verdict_agreement": 0.7333,
+   "cases": 20,
+   "claim_agreement": 0.9158,
+   "claim_coverage": 0.8716,
+   "claims_covered": 95,
+   "claims_recorded": 109,
+   "false_sources": [],
+   "falsely_contradicted": [
+    "1963df72-bc20-4b48-a669-f3156fbd9a80",
+    "3d757530-4604-4feb-93d1-774b397dbd8f"
+   ],
+   "falsely_disputed": [
+    "05d8787d-abb2-4a93-b5cf-b32f972be150",
+    "0f5dc4bd-2950-4ec6-88b1-43827754d62f",
+    "7dc9aadf-28c4-4081-a917-8663b6f92926"
+   ],
+   "gold_wrong": [
+    "51cd4a18-790f-4aae-9521-815d4fdaad00",
+    "e2161209-a3cc-4df4-aaff-f7931c0f0cbb",
+    "fba000cb-113a-4b7c-a76c-23adcad701f7"
+   ],
+   "not_found_by_machine": [],
+   "passed": false,
+   "rightly_disputed": [
+    "1c73dc07-d220-45d8-898a-1fdd694f5b3e"
+   ],
+   "transient_failures": [
+    "http://old.archaeology.nsc.ru/en/publish/journal/doc/2023/513.pdf",
+    "https://coflein.gov.uk/en/site/95536/details/",
+    "https://cornishbirdblog.com/bosiliack-chambered-cairn/"
+   ],
+   "unreadable_pages": [
+    "37d0fb76-0e07-41fc-bda5-c7f378ec6cbb: https://cornishbirdblog.com/bosiliack-chambered-cairn/",
+    "3d757530-4604-4feb-93d1-774b397dbd8f: http://old.archaeology.nsc.ru/en/publish/journal/doc/2023/513.pdf",
+    "3d757530-4604-4feb-93d1-774b397dbd8f: http://old.archaeology.nsc.ru/en/publish/journal/doc/2023/513.pdf",
+    "5ab17d98-12dc-4457-b65e-77e986ed0681: https://coflein.gov.uk/en/site/95536/details/",
+    "5ab17d98-12dc-4457-b65e-77e986ed0681: https://coflein.gov.uk/en/site/95536/details/",
+    "5ab17d98-12dc-4457-b65e-77e986ed0681: https://coflein.gov.uk/en/site/95536/details/"
+   ]
+  }
+ },
+ "thresholds_sha256": "99878509e9be85d6ecac10c2d47280df94c73adc6c12d945a0fcdaf814df3d97",
+ "tier_move": null
+}
