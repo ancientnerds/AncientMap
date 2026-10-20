@@ -491,7 +491,7 @@ def _related_content(row, db: Session) -> dict:
             # so the copy is offered only when that width is known and wider than the copy -
             # an image of 800 px or less has none, and nginx would answer with the image itself.
             "url_800": (
-                f"/data/images/wiki-800/{site_id_short(row.id)}/{img_row.filename}"
+                encode_path(f"/data/images/wiki-800/{site_id_short(row.id)}/{img_row.filename}")
                 if img_row.width and img_row.width > _HERO_800_WIDTH
                 else None
             ),

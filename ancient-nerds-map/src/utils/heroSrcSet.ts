@@ -20,15 +20,6 @@ const HERO_COPY_WIDTH = 800
  */
 export const HERO_SIZES = '100vw'
 
-/**
- * One srcset candidate: srcset splits on whitespace and commas, and hero file names carry
- * both (1,019 of 3,887 heroes with a space, 499 with a comma, 0 with a '%', production
- * 2026-10-20), so every path segment is percent-encoded.
- */
-export function srcsetPath(path: string): string {
-  return path.split('/').map(encodeURIComponent).join('/')
-}
-
 export interface HeroImage {
   url: string
   url_800: string | null
@@ -38,5 +29,8 @@ export interface HeroImage {
 /** The hero's srcset, or undefined where it has no phone copy (the page keeps one file). */
 export function heroSrcSet(image: HeroImage): string | undefined {
   if (!image.url_800 || !image.width) return undefined
-  return `${srcsetPath(image.url_800)} ${HERO_COPY_WIDTH}w, ${srcsetPath(image.url)} ${image.width}w`
+  // Both paths arrive percent-encoded once (encode_path in api/routes/sites_html.py):
+  // srcset splits on whitespace and commas, and 1,019 of 3,887 hero file names carry a
+  // space, 499 a comma (production 2026-10-20).
+  return `${image.url_800} ${HERO_COPY_WIDTH}w, ${image.url} ${image.width}w`
 }
