@@ -233,7 +233,7 @@ ssh ancientnerds docker exec -i ancient_nerds_api python -m pipeline.lyra.theo_p
 No studio code calls an LLM by itself: the model makes every judgement (writing, claim check,
 image check, case file, script) and hands it over as files - in the session, or through one
 `mcode exec` per task inside `python -m pipeline.studio mcode …` (`pipeline/studio/mcode.py`:
-model `MiniMax-M3.1-Flash-Preview`, effort max, two runs at a time and more while no 429, a
+model `MiniMax-M3.1-Flash`, effort max, two runs at a time and more while no 429, a
 10 % weekly-plan stop, and a `git status` guard that voids a batch whose runs wrote into the
 checkout). The code validates, compiles and transports. The one paid call inside the code is
 the narration: `episode voice` sends each beat's text to MiniMax's speech model after a
@@ -260,7 +260,7 @@ weekly-plan stop.
   starts the weekly paper session by hand with `/theo-write`; episodes follow `studio-video` and
   `studio-casefile`. The four checks run through the Python driver
   `python -m pipeline.studio mcode {claim-check,image-check,marker-check,casefile-verify}`,
-  one `mcode exec` per task on `MiniMax-M3.1-Flash-Preview` (see `pipeline/studio/mcode.py`).
+  one `mcode exec` per task on `MiniMax-M3.1-Flash` (see `pipeline/studio/mcode.py`).
 - **Paper**: `paper pull` → this session writes `draft.md`, `paper_meta.json`, `evidence.json` →
   `number` → `claims-export`, `mcode claim-check`, `claims-import` → the same for images → `check`
   → `bundle` → `publish` (images uploaded by verified scp, dry run, apply once every gate passes;

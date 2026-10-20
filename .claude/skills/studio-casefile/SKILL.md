@@ -110,7 +110,7 @@ names its crop files, and the checks pass every id through shell commands).
 8. **Markers.** `box` is `[x, y, w, h]` as fractions of the stored pixels, tight on the object
    its `label` names; `"verified": "crop-check"` is required by the format, the proof is step 10.
 9. **Verify evidence.** Run **`studio mcode casefile-verify <slug>`** (one `mcode exec` per item,
-   model `MiniMax-M3.1-Flash-Preview`). It checks each item that is not yet `verified` by one of
+   model `MiniMax-M3.1-Flash`). It checks each item that is not yet `verified` by one of
    three routes and writes `verification = {status, by, at, method}` (`method` is the route),
    leaving every other key untouched:
    - `paper evidence`: the item has a `paper_anchor`; its quote is checked against that entry of
