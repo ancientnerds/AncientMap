@@ -26,6 +26,7 @@ from api.seo_shell import ssr_shell_response
 from api.services.description_provenance import card_ai, description_disclosure
 from pipeline.article_html_renderer import render_error_html
 from pipeline.database import NewsItem, get_db
+from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
 from pipeline.sites_html_renderer import (
     country_path,
     country_slug,
@@ -50,6 +51,19 @@ router = APIRouter()
 _HTML_HEADERS = {"Cache-Control": "public, max-age=3600"}
 
 _CURATED_WHERE = curated_page()
+
+#: The width of the hero's phone copy, HERO_WIDTH of pipeline/wiki_thumbs.py (not imported:
+#: api may not use that module family; tests/api/test_sites_html_ssr.py keeps the two equal).
+_HERO_800_WIDTH = 800
+
+# The public papers that treat the site: reviewed links (migration 0031), newest first.
+_SITE_PAPERS_SQL = text(f"""
+    SELECT r.slug, COALESCE(NULLIF(r.result_json::jsonb->>'title', ''), r.question) AS title
+    FROM research_paper_sites ps
+    JOIN research_requests r ON r.id = ps.request_id
+    WHERE ps.site_id = CAST(:sid AS uuid) AND {PUBLIC_PAPER_WHERE}
+    ORDER BY r.published_at DESC NULLS LAST, r.slug
+""")
 
 # Plain concatenation of two module constants — the id is bound, never formatted in.
 _LEGACY_SITE_SQL = text(
@@ -463,6 +477,16 @@ def _related_content(row, db: Session) -> dict:
             # statt eine falsche Zahl zu raten.
             "width": img_row.width,
             "height": img_row.height,
+            # The hero's 800 px copy for phones (pipeline/wiki_thumbs.py, owner decision
+            # 2026-10-20): the 1600 px file was shown 412 px wide, 534-557 KiB of it wasted
+            # (SEO audit 2026-10-19, cwv-6). The page's srcset names the original by its width,
+            # so the copy is offered only when that width is known and wider than the copy -
+            # an image of 800 px or less has none, and nginx would answer with the image itself.
+            "url_800": (
+                f"/data/images/wiki-800/{site_id_short(row.id)}/{img_row.filename}"
+                if img_row.width and img_row.width > _HERO_800_WIDTH
+                else None
+            ),
         }
 
     # Same filter the /news-archive/{slug} route serves, so every link resolves.
@@ -535,10 +559,18 @@ def _related_content(row, db: Session) -> dict:
         ).fetchall()
     }
 
+    # Research on this site: 0 of 298 sampled site pages linked a paper (SEO evaluation
+    # 2026-10-19, A2); the links are reviewed rows, not a name match (migration 0031).
+    papers = [
+        {"slug": r.slug, "title": r.title}
+        for r in db.execute(_SITE_PAPERS_SQL, {"sid": row.id}).fetchall()
+    ]
+
     return {
         "alt_names": alt_names,
         "image": image,
         "news": news,
+        "papers": papers,
         "links": links,
         "parent": parent,
         "siblings": siblings,

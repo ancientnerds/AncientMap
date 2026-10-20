@@ -33,12 +33,23 @@ from pipeline.research_html_renderer import (
     paper_extras,
     paper_markdown,
 )
+from pipeline.sites_html_renderer import site_path
+from pipeline.utils.public_sites import curated_page
 from pipeline.utils.slugs import BASE_URL
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _HTML_HEADERS = {"Cache-Control": "public, max-age=1800"}
+
+# The curated sites the paper treats: reviewed links (migration 0031), in name order, each with
+# a page. One json array in the paper's own statement, NULL when it has none.
+_PAPER_SITES_COLUMN = f"""
+    (SELECT json_agg(json_build_object('id', u.id::text, 'name', u.name, 'country', u.country)
+                     ORDER BY u.name)
+     FROM research_paper_sites ps JOIN unified_sites u ON u.id = ps.site_id
+     WHERE ps.request_id = r.id AND {curated_page("u")}) AS paper_sites
+"""
 
 
 @router.get("/research.html")
@@ -106,7 +117,8 @@ def fetch_paper(slug: str, db: Session):
             SELECT {PAPER_SUMMARY_COLUMNS},
                    r.result_json::jsonb->>'published_report' AS published_report,
                    r.result_json::jsonb->>'report' AS report,
-                   {PAPER_EXTRAS_COLUMNS}
+                   {PAPER_EXTRAS_COLUMNS},
+                   {_PAPER_SITES_COLUMN}
             FROM research_requests r
             WHERE r.slug = :slug AND {PUBLIC_PAPER_WHERE}
         """),
@@ -171,9 +183,26 @@ async def research_paper_page(slug: str, db: Session = Depends(get_db)):
             "hero_image_url": paper["hero_image_url"],
             "body_html": body_html,
             **page_extras_payload(extras),
+            **_sites_payload(row.paper_sites),
         },
         _HTML_HEADERS,
     )
+
+
+def _sites_payload(paper_sites: list[dict] | None) -> dict:
+    """The paper's sites as page links (SEO evaluation 2026-10-19, A2: no paper linked a site).
+
+    The key joins the payload only when the paper has a site, like the extras above, so the
+    payload of every other paper stays byte-identical.
+    """
+    if not paper_sites:
+        return {}
+    return {
+        "sites": [
+            {"name": s["name"], "path": site_path(s["country"], s["name"], s["id"])}
+            for s in paper_sites
+        ]
+    }
 
 
 @router.get("/research/{slug}/medium")

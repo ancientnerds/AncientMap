@@ -3,10 +3,12 @@ import type { HeroHeaderProps, AlternateSource } from '../types'
 import { MetadataBadge } from '../../metadata'
 import LazyImage from '../../LazyImage'
 import { useSiteInteractions } from '../../../hooks/useSiteInteractions'
+import { HERO_SIZES } from '../../../utils/heroSrcSet'
 
 export function HeroHeader({
   title,
   heroImageSrc,
+  heroImageSrcSet,
   isLoadingImages = false,
   isSettingHero = false,
   sourceInfo,
@@ -172,6 +174,7 @@ export function HeroHeader({
         <LazyImage
           overlay
           src={heroImageSrc}
+          {...(heroImageSrcSet ? { srcSet: heroImageSrcSet, sizes: HERO_SIZES } : {})}
           alt={title}
           className="popup-hero-bg"
           draggable={false}

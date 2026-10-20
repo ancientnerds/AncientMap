@@ -344,6 +344,7 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
         commons_url: null,
         width: null,
         height: null,
+        url_800: null,
       },
     })
     expect(bare).toContain('/data/images/wiki/9c8b7a65/hero.webp')
@@ -365,6 +366,7 @@ describe('site-Detailseite (Task 11): der SSR-Body trägt den Python-Fragment-In
         commons_url: 'https://commons.wikimedia.org/wiki/File:X.jpg',
         width: 1600,
         height: 900,
+        url_800: null,
       },
     })
     expect(html).toMatch(/<img[^>]*width="1600"[^>]*height="900"/)
@@ -861,5 +863,74 @@ describe('research: Claude-written paper extras (studio spec 2026-09-26 §2.7, �
     ]) {
       expect(plain).not.toContain(marker)
     }
+  })
+})
+
+describe('site <-> paper links (owner decision 2026-10-20, SEO evaluation 2026-10-19 A2)', () => {
+  it('the site page lists the papers that treat it, as links to their pages', () => {
+    const html = renderRoute({
+      ...FIXTURES.site,
+      papers: [
+        { slug: 'induced-emf-in-ancient-megalithic-stone-structures', title: 'Induced EMF in Ancient Megalithic Stone Structures' },
+        { slug: 'geomagnetic-excursions-and-pole-shift-catastrophism', title: 'Geomagnetic Excursions and Pole Shift Catastrophism' },
+      ],
+    })
+    expect(html).toContain('<h2>Research on this site</h2>')
+    expect(html).toContain('href="/research/induced-emf-in-ancient-megalithic-stone-structures"')
+    expect(html).toContain('Geomagnetic Excursions and Pole Shift Catastrophism</a>')
+  })
+
+  it('a site no paper treats shows no research block', () => {
+    expect(renderRoute(FIXTURES.site)).not.toContain('Research on this site')
+  })
+
+  it('the paper page lists its sites, as links to their pages', () => {
+    const html = renderRoute({
+      ...FIXTURES.research,
+      sites: [
+        { name: 'Göbekli Tepe', path: '/sites/türkiye/göbekli-tepe-d953e9b3' },
+        { name: 'Stonehenge', path: '/sites/england/stonehenge-21b2278e' },
+      ],
+    })
+    expect(html).toContain('class="theo-paper-sites"')
+    expect(html).toContain('Sites in this paper')
+    expect(html).toContain('href="/sites/türkiye/göbekli-tepe-d953e9b3"')
+    expect(html).toContain('>Stonehenge</a>')
+    expect(html.match(/<h1/g)).toHaveLength(1)
+  })
+
+  it('a paper without sites renders no sites block', () => {
+    expect(renderRoute(FIXTURES.research)).not.toContain('theo-paper-sites')
+  })
+})
+
+describe('the site hero srcset (owner decision 2026-10-20, SEO audit 2026-10-19 cwv-6)', () => {
+  const image = {
+    url: '/data/images/wiki/d953e9b3/Göbekli Tepe, Urfa.webp',
+    author: null,
+    license: null,
+    license_url: null,
+    commons_url: null,
+    width: 1600,
+    height: 1062,
+    url_800: '/data/images/wiki-800/d953e9b3/Göbekli Tepe, Urfa.webp',
+  }
+
+  it('offers the 800 px copy and the original by its width, the src stays the original', () => {
+    const html = renderRoute({ ...FIXTURES.site, image })
+    const img = html.match(/<img[^>]*fetchPriority="high"[^>]*>/)?.[0] ?? ''
+    expect(img).toContain('src="/data/images/wiki/d953e9b3/Göbekli Tepe, Urfa.webp"')
+    // A space and a comma in a srcset URL would split the candidate: both are encoded.
+    expect(img).toContain(
+      'srcSet="/data/images/wiki-800/d953e9b3/G%C3%B6bekli%20Tepe%2C%20Urfa.webp 800w, ' +
+        '/data/images/wiki/d953e9b3/G%C3%B6bekli%20Tepe%2C%20Urfa.webp 1600w"',
+    )
+    expect(img).toContain('sizes="100vw"')
+  })
+
+  it('a hero without a phone copy keeps the single file', () => {
+    const html = renderRoute({ ...FIXTURES.site, image: { ...image, url_800: null } })
+    expect(html).not.toMatch(/srcSet=/i)
+    expect(html).not.toContain('sizes=')
   })
 })

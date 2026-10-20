@@ -28,7 +28,8 @@
     "author": "Teomancimit",
     "license": "CC BY-SA 3.0",
     "commons_url": "https://commons.wikimedia.org/wiki/File:G%C3%B6bekli_Tepe.jpg",
-    "license_url": null
+    "license_url": null,
+    "url_800": null
   },
   "news": [
     {
@@ -36,6 +37,7 @@
       "headline": "Göbekli Tepe dig resumes"
     }
   ],
+  "papers": [],
   "links": [
     {
       "title": "UNESCO World Heritage listing",

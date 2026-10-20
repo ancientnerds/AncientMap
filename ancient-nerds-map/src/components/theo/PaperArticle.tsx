@@ -16,8 +16,9 @@
  * A Claude-written paper (studio spec 2026-09-26 §2.7, §3.7) adds three
  * optional parts: the writer disclosure under the meta line, its videos
  * between summary and body, and the corrections log after the body. Its
- * evidence anchors are already inside body_html. A paper without these
- * fields renders exactly the markup it always did.
+ * evidence anchors are already inside body_html. The curated sites a paper
+ * treats (migration 0031) close the body as links to their pages. A paper
+ * without these fields renders exactly the markup it always did.
  */
 
 import SanitizedMarkdownHtml from '../../seo/SanitizedMarkdownHtml'
@@ -25,6 +26,7 @@ import { isoDate } from '../../seo/display'
 import type { ResearchCorrection, ResearchVideo, ResearchWriter } from '../../types/anRoute'
 import PaperCorrections from './PaperCorrections'
 import PaperDisclosure from './PaperDisclosure'
+import PaperSites from './PaperSites'
 import PaperVideo from './PaperVideo'
 import { latestCorrectionDate } from './paperExtras'
 
@@ -43,6 +45,7 @@ export interface PaperArticleData {
   videos?: ResearchVideo[]
   corrections?: ResearchCorrection[]
   writer?: ResearchWriter
+  sites?: { name: string; path: string }[]
 }
 
 interface Props {
@@ -136,6 +139,8 @@ export default function PaperArticle({ paper, lead, actions, children }: Props) 
         />
 
         {corrections.length > 0 && <PaperCorrections corrections={corrections} />}
+
+        {paper.sites && paper.sites.length > 0 && <PaperSites sites={paper.sites} />}
 
         {children}
       </div>

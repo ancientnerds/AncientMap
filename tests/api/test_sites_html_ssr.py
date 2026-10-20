@@ -199,6 +199,9 @@ def test_site_detail_hands_the_full_raw_payload():
         SimpleNamespace(kind="wikidata_qid", value="Q3352612"),
         SimpleNamespace(kind="enwiki_title", value="Borremose"),
     ]
+    paper_rows = [
+        SimpleNamespace(slug="bog-fortresses-of-jutland", title="Bog Fortresses of Jutland")
+    ]
     # public_stories_query ist eine ORM-Query — FakeDb kann sie nicht liefern.
     news_chain = MagicMock()
     news_chain.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [
@@ -216,7 +219,13 @@ def test_site_detail_hands_the_full_raw_payload():
                 "denmark",
                 "borremose-5281654c",
                 db=FakeDb(
-                    [_borremose_row()], alt_rows, img_rows, link_rows, sibling_rows, external_rows
+                    [_borremose_row()],
+                    alt_rows,
+                    img_rows,
+                    link_rows,
+                    sibling_rows,
+                    external_rows,
+                    paper_rows,
                 ),
             )
         )
@@ -256,6 +265,9 @@ def test_site_detail_hands_the_full_raw_payload():
         # scripts/backfill_image_dimensions.py.
         "width": 1600,
         "height": 900,
+        # The phone copy for the srcset (pipeline/wiki_thumbs.py), named only because the
+        # original's width is known and wider than it (owner decision 2026-10-20).
+        "url_800": "/data/images/wiki-800/5281654c/hero.webp",
     }
     assert route["news"] == [
         {"slug": "bog-body-found-at-borremose-4321", "headline": "Bog body found at Borremose"}
@@ -266,6 +278,10 @@ def test_site_detail_hands_the_full_raw_payload():
     assert route["parent"] is None
     assert route["siblings"] == [
         {"name": "Lindholm Høje", "path": "/sites/denmark/lindholm-høje-99887766"}
+    ]
+    # Research on this site: the reviewed links of migration 0031, public papers only.
+    assert route["papers"] == [
+        {"slug": "bog-fortresses-of-jutland", "title": "Bog Fortresses of Jutland"}
     ]
     # The place's identity for sameAs: only values no other shown site shares reach here.
     assert route["wikidata_qid"] == "Q3352612"
@@ -299,7 +315,7 @@ def test_site_detail_hands_the_disclosure_of_the_description_it_serves():
     }
     news_chain = MagicMock()
     news_chain.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
-    db = FakeDb([row], [], [], [], [], [])
+    db = FakeDb([row], [], [], [], [], [], [])
     render, shell = _patched()
     with (
         render as render_mock,
@@ -329,7 +345,7 @@ def _teaser_route(row: SimpleNamespace) -> dict:
         patch("api.routes.sites_html.public_stories_query", return_value=news_chain),
     ):
         asyncio.run(
-            site_detail("denmark", "borremose-5281654c", db=FakeDb([row], [], [], [], [], []))
+            site_detail("denmark", "borremose-5281654c", db=FakeDb([row], [], [], [], [], [], []))
         )
     return render_mock.call_args[0][0]
 
@@ -394,3 +410,66 @@ def test_site_detail_404s_a_malformed_slug_without_touching_the_db():
     assert resp.status_code == 404
     render_mock.assert_not_called()
     shell_mock.assert_not_called()
+
+
+def _image_route(width: int | None) -> dict:
+    img_rows = [
+        SimpleNamespace(
+            filename="Göbekli Tepe, Urfa.webp",
+            author=None,
+            license=None,
+            license_url=None,
+            commons_page_url=None,
+            width=width,
+            height=None if width is None else 584,
+        )
+    ]
+    news_chain = MagicMock()
+    news_chain.filter.return_value.order_by.return_value.limit.return_value.all.return_value = []
+    render, shell = _patched()
+    with (
+        render as render_mock,
+        shell,
+        patch("api.routes.sites_html.public_stories_query", return_value=news_chain),
+    ):
+        asyncio.run(
+            site_detail(
+                "denmark",
+                "borremose-5281654c",
+                db=FakeDb([_borremose_row()], [], img_rows, [], [], [], []),
+            )
+        )
+    return render_mock.call_args[0][0]["image"]
+
+
+@pytest.mark.parametrize(
+    ("width", "expected"),
+    [
+        (1600, "/data/images/wiki-800/5281654c/Göbekli Tepe, Urfa.webp"),
+        (801, "/data/images/wiki-800/5281654c/Göbekli Tepe, Urfa.webp"),
+        # Not wider than the copy: pipeline/wiki_thumbs.py writes none, the page keeps one file.
+        (800, None),
+        (640, None),
+        # Width not backfilled yet: the srcset could not name the original's width.
+        (None, None),
+    ],
+)
+def test_the_hero_offers_its_800_px_copy_only_when_the_original_is_wider(width, expected):
+    assert _image_route(width)["url_800"] == expected
+
+
+def test_the_hero_copy_width_is_the_one_the_thumbnail_job_writes():
+    from api.routes import sites_html
+    from pipeline import wiki_thumbs
+
+    assert sites_html._HERO_800_WIDTH == wiki_thumbs.HERO_WIDTH
+    assert wiki_thumbs.HERO_DIR.as_posix().endswith("/data/images/wiki-800")
+
+
+def test_the_site_papers_query_reads_public_papers_of_the_reviewed_links():
+    from api.routes import sites_html
+
+    sql = " ".join(str(sites_html._SITE_PAPERS_SQL).split())
+    assert "FROM research_paper_sites ps JOIN research_requests r ON r.id = ps.request_id" in sql
+    assert "ps.site_id = CAST(:sid AS uuid)" in sql
+    assert "r.is_public = TRUE AND r.status = 'completed' AND r.slug IS NOT NULL" in sql

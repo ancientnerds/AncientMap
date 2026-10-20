@@ -342,6 +342,19 @@ server {
         rewrite ^/data/images/wiki-thumbs/(.*)$ /data/images/wiki/$1 last;
     }
 
+    # The site page's hero on a phone (srcset, pipeline/wiki_thumbs.py): an 800 px
+    # copy under the same <id8>/<filename>, built and answered like the gallery
+    # tree above. The 1600 px hero was shown 412 px wide, 534-557 KiB of it wasted
+    # (SEO audit 2026-10-19, cwv-6); owner decision 2026-10-20.
+    location ^~ /data/images/wiki-800/ {
+        root /var/www/ancientnerds/public;
+        try_files $uri @wiki_image_800;
+        add_header Cache-Control "public, max-age=86400";
+    }
+    location @wiki_image_800 {
+        rewrite ^/data/images/wiki-800/(.*)$ /data/images/wiki/$1 last;
+    }
+
     # Wiki images — served by API container (files are inside Docker)
     location /data/images/wiki/ {
         proxy_pass http://an_api/data/images/wiki/;

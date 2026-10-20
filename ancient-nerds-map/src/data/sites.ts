@@ -39,6 +39,8 @@ export interface SiteData {
   periodStart?: number | null
   description: string
   image?: string
+  /** The srcset of `image` (utils/heroSrcSet.ts): set on the SSR site page only. */
+  imageSrcSet?: string
   imageAttribution?: ImageAttribution
   sourceUrl?: string
   sourceId: string
