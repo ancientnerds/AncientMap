@@ -3,6 +3,8 @@
 import json
 import logging
 import re
+import uuid
+from datetime import datetime
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -298,8 +300,28 @@ def _correct_text_fields(item: NewsItem, canonical_name: str) -> None:
             item.facts = corrected
 
 
+#: Stories created from here on (UTC; the column is naive, the DB runs in UTC)
+#: are also read by the story-text matcher (story_site_matcher.py). The stock
+#: before it - the proposal run of 2026-10-20 17:01 UTC read every story up to
+#: the newest, created 13:33 - gets a proposal list that a person checks line
+#: by line and writes through story_site_link.py (owner decision C1). Without
+#: the cutoff the first cycle after the deploy would link the 840 public
+#: stories without an extracted name unreviewed: none of them was ever tried.
+TEXT_MATCH_SINCE = datetime(2026, 10, 20, 17, 0)
+
+
 def match_sites_for_pending_items() -> int:
-    """Match site names for all NewsItems that have site_name_extracted but no site_id.
+    """Link new stories to sites.
+
+    A story with an extracted name: its name by the exact key against every
+    source (_find_site_by_name). A story created since TEXT_MATCH_SINCE is also
+    read by the story-text matcher, which knows only curated sites: it decides
+    where the exact key found nothing, and it replaces a bulk-imported site
+    when the extracted name itself is a curated site's name under the
+    matcher's tolerance ("Great Pyramid of Giza" is "The Great Pyramid of
+    Giza": 105 public stories sat on a bulk-imported or retired site that way
+    on 2026-10-20). A story without an extracted name is read by the text
+    matcher alone.
 
     Returns number of items matched.
     """
@@ -330,16 +352,49 @@ def match_sites_for_pending_items() -> int:
             )
             .all()
         )
+        unnamed = (
+            session.query(NewsItem)
+            .filter(
+                NewsItem.site_name_extracted.is_(None),
+                NewsItem.site_id.is_(None),
+                NewsItem.site_match_tried.is_(False),
+                NewsItem.created_at >= TEXT_MATCH_SINCE,
+            )
+            .all()
+        )
 
-        if not items:
+        if not items and not unnamed:
             return 0
 
-        logger.info(f"Attempting site matching for {len(items)} news items")
+        total = len(items) + len(unnamed)
+        logger.info(f"Attempting site matching for {total} news items")
+        # Imported here: story_site_matcher reads this module's blocklist.
+        from pipeline.lyra.story_site_matcher import StorySiteMatcher
+
+        text_matcher = (
+            StorySiteMatcher(session)
+            if any(i.created_at >= TEXT_MATCH_SINCE for i in [*items, *unnamed])
+            else None
+        )
+
+        for item in unnamed:
+            if _link_by_text(item, None, text_matcher):
+                matched += 1
+            item.site_match_tried = True
 
         for item in items:
             site = _find_site_by_name(
                 session, item.site_name_extracted, matchable_sources, source_priority
             )
+            found = _link_by_text(item, site, text_matcher)
+            if found:
+                matched += 1
+                if found.reason != "extracted_name":
+                    # The curated site is where the story is, not what it
+                    # names: the named place still goes to the Radar.
+                    _upsert_lyra_suggestion(session, item)
+                item.site_match_tried = True
+                continue
             if site:
                 item.site_id = site.id
                 _correct_text_fields(item, site.name)
@@ -366,8 +421,28 @@ def match_sites_for_pending_items() -> int:
         session.flush()
         recount_mentions(session)
 
-    logger.info(f"Site matching complete: {matched}/{len(items)} items matched")
+    logger.info(f"Site matching complete: {matched}/{total} items matched")
     return matched
+
+
+def _link_by_text(item: NewsItem, site: UnifiedSite | None, text_matcher):
+    """Set the curated site the story-text matcher finds, and return its match;
+    None leaves the item to the exact-key path. Only for stories created since
+    TEXT_MATCH_SINCE, never over a curated exact-key hit, and over a
+    bulk-imported one only when the extracted name is the curated site's name."""
+    if item.created_at < TEXT_MATCH_SINCE:
+        return None
+    if site is not None and site.source_id == "ancient_nerds":
+        return None
+    found = text_matcher.match_item(item)
+    if found is None or (site is not None and found.reason != "extracted_name"):
+        return None
+    item.site_id = uuid.UUID(found.site_id)
+    logger.info(
+        f"Matched item {item.id} '{item.site_name_extracted}' by its text -> "
+        f"site '{found.site_name}' ({found.site_id}) [{found.reason}: {found.via}]"
+    )
+    return found
 
 
 def recount_mentions(session: Session) -> int:
