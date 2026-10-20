@@ -22,3 +22,9 @@ def public_story_criteria():
         NewsItem.post_text.isnot(None),
         NewsItem.significance >= 2,
     )
+
+
+def is_public_story(item: NewsItem) -> bool:
+    """The same rule for one loaded row, for a writer that must know whether
+    the story has a public page right now (story_reverify --withdraw)."""
+    return item.post_text is not None and item.significance is not None and item.significance >= 2

@@ -41,12 +41,25 @@ carries significance, category, speculative tag and score reason as well, so
 Console, which the Lyra image cannot reach (no google-auth): pull them in the
 API container (api.services.search_console) and pass them here.
 
+--withdraw ID ... --reason TEXT takes public stories off the site by the
+owner's hand: significance 1, so public_story_criteria (which needs 2) drops
+them and the page answers 410 (owner, 2026-10-20: four junk stories, 7858,
+5608, 4747 and 4755, found in the stats/SEO evaluation of 2026-10-19). Only a
+story that is public right now can be withdrawn; any other id stops the whole
+run before anything changes. The journal line keeps significance, category,
+speculative tag and score reason, so --rollback ID makes the story public
+again. "withdrawn" settles a story: no wave picks it, and --reinstate leaves it
+alone unless --include-withdrawn names it on purpose - a web check that passes
+says the story is true, not that it is worth a page, which is what the owner
+judged.
+
 Run inside the Lyra container (it mounts logs/ and has the MiniMax key):
 
     docker exec ancient_nerds_lyra python -m pipeline.lyra.story_reverify --limit 50
     docker exec ancient_nerds_lyra python -m pipeline.lyra.story_reverify --limit 20 --dry-run
     docker exec ancient_nerds_lyra python -m pipeline.lyra.story_reverify --rollback 6609
     docker exec ancient_nerds_lyra python -m pipeline.lyra.story_reverify --reinstate 6937 7278 --dry-run
+    docker exec ancient_nerds_lyra python -m pipeline.lyra.story_reverify --withdraw 7858 --reason "junk" --dry-run
 """
 
 from __future__ import annotations
@@ -64,7 +77,7 @@ from pipeline.indexnow import page_url, paths_for, submit
 from pipeline.lyra.config import _get_settings
 from pipeline.lyra.significance_scorer import apply_rescore, score_item
 from pipeline.lyra.tweet_verifier import apply_web_verdict, open_web_verifier, web_verify_item
-from pipeline.news_visibility import public_story_criteria
+from pipeline.news_visibility import is_public_story, public_story_criteria
 
 logger = logging.getLogger(__name__)
 
@@ -73,13 +86,24 @@ JOURNAL_DIR = Path("/app/logs/story_reverify")
 #: 2556cc4, UTC): stories written since were born with it and need no re-run.
 SUMMARY_FIX_LIVE = datetime(2026, 10, 9, 8, 42)
 #: Outcomes that settle a story. A failed check or one without search results
-#: settled nothing, so a later wave tries the story again.
-SETTLED = ("corrected", "verified", "reject_held", "not_applied", "reinstated", "still_withdrawn")
+#: settled nothing, so a later wave tries the story again. "withdrawn" is the
+#: owner's own decision (--withdraw): settled, so neither a wave nor a plain
+#: --reinstate brings the story back unasked.
+SETTLED = (
+    "corrected",
+    "verified",
+    "reject_held",
+    "not_applied",
+    "reinstated",
+    "still_withdrawn",
+    "withdrawn",
+)
 
 #: The fields a correction may change (and the sources the check appends): what a rollback restores.
 FIELDS = ("headline", "facts", "post_text", "web_sources")
 #: A reinstatement also rewrites the scorer's verdict, which a rollback puts back.
-REINSTATE_FIELDS = (*FIELDS, "significance", "news_category", "speculative_tag", "score_reason")
+SCORE_FIELDS = ("significance", "news_category", "speculative_tag", "score_reason")
+REINSTATE_FIELDS = (*FIELDS, *SCORE_FIELDS)
 #: Alt-history channels first (owner: "zuerst Alt-Kanäle"): 10 of 25 of their
 #: stories in the audit sample stated a disputed claim as fact, 1 of 15 of the
 #: mainstream ones. Names as in pipeline/lyra/channels.json.
@@ -140,6 +164,16 @@ def journalled_ids(journal: Path) -> set[int]:
         json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines() if line
     )
     return {e["item_id"] for e in entries if e["outcome"] in SETTLED}
+
+
+def last_outcomes(journal: Path) -> dict[int, str]:
+    """Each journalled story's latest outcome."""
+    if not journal.exists():
+        return {}
+    entries = (
+        json.loads(line) for line in journal.read_text(encoding="utf-8").splitlines() if line
+    )
+    return {e["item_id"]: e["outcome"] for e in entries}
 
 
 def pick(session, limit: int, done: set[int], alt_first: bool) -> list[NewsItem]:
@@ -225,8 +259,10 @@ def _reinstate_one(session, item: NewsItem, verifier, settings) -> tuple[str, st
     return "reinstated", score.get("reason")
 
 
-def reinstate(item_ids: list[int], dry_run: bool) -> Counter[str]:
-    """Check withdrawn stories again; see --reinstate in the module docstring."""
+def reinstate(item_ids: list[int], dry_run: bool, include_withdrawn: bool = False) -> Counter[str]:
+    """Check withdrawn stories again; see --reinstate in the module docstring.
+    A story the owner withdrew (latest journal outcome "withdrawn") is checked
+    only with include_withdrawn."""
     JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
     journal = JOURNAL_DIR / "journal.jsonl"
     out = JOURNAL_DIR / ("dry_run.jsonl" if dry_run else "journal.jsonl")
@@ -235,6 +271,8 @@ def reinstate(item_ids: list[int], dry_run: bool) -> Counter[str]:
     if verifier is None:
         raise SystemExit("story_reverify: MiniMax is not configured (no MiniMax key)")
     done = journalled_ids(journal)
+    if include_withdrawn:
+        done -= {i for i, outcome in last_outcomes(journal).items() if outcome == "withdrawn"}
     outcomes: Counter[str] = Counter()
     changed: list[tuple[int, str, str]] = []
     with get_session() as session:
@@ -271,6 +309,52 @@ def reinstate(item_ids: list[int], dry_run: bool) -> Counter[str]:
     return outcomes
 
 
+def withdraw(item_ids: list[int], reason: str, dry_run: bool) -> Counter[str]:
+    """Take public stories off the site; see --withdraw in the module docstring."""
+    JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
+    out = JOURNAL_DIR / ("dry_run.jsonl" if dry_run else "journal.jsonl")
+    outcomes: Counter[str] = Counter()
+    changed: list[tuple[int, str, str]] = []
+    with get_session() as session:
+        items = {item_id: session.get(NewsItem, item_id) for item_id in item_ids}
+        refused = [
+            f"{item_id} (no such story)"
+            if item is None
+            else f"{item_id} (not public: significance {item.significance}, "
+            f"post_text {'set' if item.post_text is not None else 'missing'})"
+            for item_id, item in items.items()
+            if item is None or not is_public_story(item)
+        ]
+        if refused:
+            raise SystemExit(
+                "story_reverify: --withdraw takes only stories that are public now; "
+                "nothing was changed. Refused: " + ", ".join(refused)
+            )
+        for item_id, item in items.items():
+            before = _snapshot(item, SCORE_FIELDS)
+            item.significance = 1
+            line = {
+                "at": datetime.now(UTC).isoformat(),
+                "item_id": item_id,
+                "outcome": "withdrawn",
+                "reason": reason,
+                "before": before,
+                "after": {"significance": 1},
+                "dry_run": dry_run,
+            }
+            with out.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(line, ensure_ascii=False, default=str) + "\n")
+            if dry_run:
+                session.rollback()
+            else:
+                session.commit()
+                changed.append((item_id, item.headline, item.headline))
+            outcomes["withdrawn"] += 1
+            logger.info("story %s: withdrawn", item_id)
+    logger.info("IndexNow: %d URLs for %d withdrawn stories", announce(changed), len(changed))
+    return outcomes
+
+
 def rollback(item_id: int) -> dict[str, Any]:
     """Put the before-values of the item's journal line back."""
     lines = [
@@ -296,13 +380,29 @@ def main() -> None:
     parser.add_argument("--all-channels", action="store_true", help="no alt-history channels first")
     parser.add_argument("--rollback", type=int, metavar="ITEM_ID")
     parser.add_argument("--reinstate", type=int, nargs="+", metavar="ITEM_ID")
+    parser.add_argument(
+        "--include-withdrawn",
+        action="store_true",
+        help="--reinstate may check stories the owner withdrew with --withdraw",
+    )
+    parser.add_argument("--withdraw", type=int, nargs="+", metavar="ITEM_ID")
+    parser.add_argument("--reason", help="why --withdraw takes the stories off (journalled)")
     args = parser.parse_args()
+    if args.withdraw and not args.reason:
+        parser.error("--withdraw needs --reason")
+    if args.reason and not args.withdraw:
+        parser.error("--reason belongs to --withdraw")
+    if args.include_withdrawn and not args.reinstate:
+        parser.error("--include-withdrawn belongs to --reinstate")
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     if args.rollback is not None:
         print(json.dumps(rollback(args.rollback), ensure_ascii=False, default=str))
         return
+    if args.withdraw:
+        print(dict(withdraw(args.withdraw, args.reason, args.dry_run)))
+        return
     if args.reinstate:
-        print(dict(reinstate(args.reinstate, args.dry_run)))
+        print(dict(reinstate(args.reinstate, args.dry_run, args.include_withdrawn)))
         return
     print(dict(run_wave(args.limit, args.dry_run, alt_first=not args.all_channels)))
 

@@ -4,6 +4,8 @@ import json
 from contextlib import contextmanager
 from types import SimpleNamespace
 
+import pytest
+
 from pipeline.lyra import story_reverify as sr
 from pipeline.lyra.tweet_verifier import apply_web_verdict
 
@@ -60,7 +62,8 @@ class _Session:
         self.rollbacks += 1
 
     def get(self, _model, item_id):
-        return self.items[item_id]
+        # Session.get answers None for an id with no row.
+        return self.items.get(item_id)
 
 
 def _wave(monkeypatch, tmp_path, story, verdict=CORRECTED):
@@ -275,3 +278,102 @@ def test_rollback_withdraws_a_reinstated_story_again(monkeypatch, tmp_path):
 
     assert (story.significance, story.news_category) == (1, "unverified")
     assert story.headline == "Baalbek's megaliths predate the Romans"
+
+
+STORY_URL = "https://ancientnerds.com/news-archive/baalbeks-megaliths-predate-the-romans-7858"
+
+
+def _journal(tmp_path, name="journal.jsonl"):
+    return [json.loads(x) for x in (tmp_path / name).read_text(encoding="utf-8").splitlines()]
+
+
+def test_withdraw_takes_a_public_story_off_and_journals_its_scores(monkeypatch, tmp_path):
+    """Owner, 2026-10-20: four junk stories off the site, journalled and reversible."""
+    story = _story(7858, speculative_tag="speculative", score_reason="mystery video")
+    session = _wave(monkeypatch, tmp_path, story)
+
+    assert sr.withdraw([7858], reason="junk", dry_run=False) == {"withdrawn": 1}
+
+    assert story.significance == 1
+    assert session.commits == 1
+    [line] = _journal(tmp_path)
+    assert line["item_id"] == 7858 and line["outcome"] == "withdrawn"
+    assert line["reason"] == "junk" and line["dry_run"] is False
+    assert line["before"] == {
+        "significance": 7,
+        "news_category": "architecture",
+        "speculative_tag": "speculative",
+        "score_reason": "mystery video",
+    }
+    assert line["after"] == {"significance": 1}
+    # The page now answers 410: IndexNow hears of the URL and the hub.
+    assert session.announced == [[STORY_URL, "https://ancientnerds.com/news-archive/"]]
+
+
+def test_a_withdraw_dry_run_changes_nothing_and_announces_nothing(monkeypatch, tmp_path):
+    story = _story(7858, speculative_tag=None, score_reason=None)
+    session = _wave(monkeypatch, tmp_path, story)
+
+    assert sr.withdraw([7858], reason="junk", dry_run=True) == {"withdrawn": 1}
+
+    assert session.commits == 0 and session.rollbacks == 1
+    assert _journal(tmp_path, "dry_run.jsonl")[0]["dry_run"] is True
+    assert not (tmp_path / "journal.jsonl").exists()
+    assert session.announced == []
+
+
+def test_withdraw_refuses_the_whole_run_when_one_story_is_not_public(monkeypatch, tmp_path):
+    public = _story(7858, speculative_tag=None, score_reason=None)
+    session = _wave(monkeypatch, tmp_path, public)
+    session.items[5608] = _withdrawn(5608)
+
+    with pytest.raises(SystemExit, match=r"5608 \(not public: significance 1") as err:
+        sr.withdraw([7858, 5608, 4747], reason="junk", dry_run=False)
+
+    assert "4747 (no such story)" in str(err.value)
+    assert public.significance == 7
+    assert session.commits == 0
+    assert not (tmp_path / "journal.jsonl").exists()
+
+
+def test_rollback_makes_a_withdrawn_story_public_again(monkeypatch, tmp_path):
+    story = _story(7858, speculative_tag=None, score_reason="solid")
+    session = _wave(monkeypatch, tmp_path, story)
+    sr.withdraw([7858], reason="junk", dry_run=False)
+    session.announced.clear()
+
+    sr.rollback(7858)
+
+    assert story.significance == 7
+    assert session.announced == [[STORY_URL, "https://ancientnerds.com/news-archive/"]]
+
+
+def test_a_withdrawn_story_is_settled_for_waves_and_a_plain_reinstate(monkeypatch, tmp_path):
+    story = _story(7858, speculative_tag=None, score_reason=None)
+    session = _reinstate(monkeypatch, tmp_path, story, CORRECTED, SCORE_OK)
+    sr.withdraw([7858], reason="junk", dry_run=False)
+
+    assert 7858 in sr.journalled_ids(tmp_path / "journal.jsonl")
+    assert sr.run_wave(limit=10, dry_run=False) == {}
+    assert sr.reinstate([7858], dry_run=False) == {"skipped": 1}
+    assert story.significance == 1 and session.commits == 1
+
+
+def test_reinstate_checks_a_withdrawn_story_only_when_asked(monkeypatch, tmp_path):
+    story = _story(7858, speculative_tag=None, score_reason=None)
+    _reinstate(monkeypatch, tmp_path, story, CORRECTED, SCORE_OK)
+    sr.withdraw([7858], reason="junk", dry_run=False)
+
+    assert sr.reinstate([7858], dry_run=False, include_withdrawn=True) == {"reinstated": 1}
+
+    assert story.significance == 4
+    assert _journal(tmp_path)[-1]["outcome"] == "reinstated"
+    # Settled again: a second explicit run does not check it twice.
+    assert sr.reinstate([7858], dry_run=False, include_withdrawn=True) == {"skipped": 1}
+
+
+def test_withdraw_needs_a_reason(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["story_reverify", "--withdraw", "7858"])
+    with pytest.raises(SystemExit) as err:
+        sr.main()
+    assert err.value.code == 2
