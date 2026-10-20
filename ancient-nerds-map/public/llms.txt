@@ -5,7 +5,7 @@
 > hand across 91 countries, plus AI-written story summaries, weekly journals and
 > open-access research papers.
 
-Operated by Dominiak Consulting. Contact: contact@ancientnerds.com
+Operated by Dominiak Consulting. Contact: ancient.nerds@protonmail.com
 
 ## How to read this site
 
@@ -57,7 +57,8 @@ the research papers over the AI-written narrative text.
 - API documentation: https://ancientnerds.com/api.html
 
 The API itself is for applications, not for crawling: robots.txt disallows /api/
-apart from the OpenAPI description, and its endpoints are rate-limited. The pages
+except the OpenAPI description and a few paths the pages fetch while they render,
+and its endpoints are rate-limited. The pages
 listed above carry the same records.
 
 ## Licensing

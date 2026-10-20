@@ -338,7 +338,10 @@ def create_public_api() -> FastAPI:
         contact={
             "name": "Ancient Nerds",
             "url": "https://ancientnerds.com/api.html",
-            "email": "contact@ancientnerds.com",
+            # The imprint's address (imprint.html, privacy.html): the one contact the site
+            # publishes as reachable. contact@ancientnerds.com had no verified alias behind
+            # the ImprovMX forwarding (review 2026-10-20).
+            "email": "ancient.nerds@protonmail.com",
         },
         license_info={
             "name": "CC BY 4.0 for Ancient Nerds content; source licences for third-party records",

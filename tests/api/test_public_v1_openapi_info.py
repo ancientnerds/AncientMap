@@ -18,5 +18,6 @@ def test_openapi_info_names_the_real_size_the_licence_and_a_contact():
         "name": "CC BY 4.0 for Ancient Nerds content; source licences for third-party records",
         "url": "https://ancientnerds.com/terms.html",
     }
-    assert info["contact"]["email"] == "contact@ancientnerds.com"
+    # The imprint's address, the one the legal pages publish.
+    assert info["contact"]["email"] == "ancient.nerds@protonmail.com"
     assert info["contact"]["url"] == "https://ancientnerds.com/api.html"

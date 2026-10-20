@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -46,13 +46,13 @@ STORIES = [
         id=8817,
         headline='Göbekli Tepe\'s pillar 43 & the "vulture stone"',
         summary="A new reading of the vulture stone.",
-        published=datetime(2026, 10, 18, 14, 3),
+        created_at=datetime(2026, 10, 18, 14, 3),
     ),
     SimpleNamespace(
         id=8815,
         headline="Roman road found under Cologne",
         summary="Excavators found a paved road.",
-        published=datetime(2026, 10, 16, 9, 0),
+        created_at=datetime(2026, 10, 16, 9, 0),
     ),
 ]
 
@@ -80,8 +80,8 @@ PAPERS = [
 ]
 
 
-def _stories_feed() -> tuple[ET.Element, MagicMock, MagicMock]:
-    q = _stories_query(STORIES)
+def _stories_feed(rows: list = STORIES) -> tuple[ET.Element, MagicMock, MagicMock]:
+    q = _stories_query(rows)
     db = MagicMock()
     with patch.object(feeds, "public_stories_query", return_value=q) as psq:
         root = _root(asyncio.run(feeds.stories_feed(db=db)))
@@ -119,6 +119,46 @@ def test_stories_feed_lists_the_public_stories_as_atom():
     assert first.findtext(f"{A}published") == "2026-10-18T14:03:00+00:00"
     assert first.findtext(f"{A}updated") == "2026-10-18T14:03:00+00:00"
     assert first.findtext(f"{A}summary") == "A new reading of the vulture stone."
+
+
+def test_a_story_is_dated_by_when_it_appeared_not_by_its_video():
+    # A story written on 2026-10-19 about a video of 2026-09-02: its entry and the feed
+    # carry the 19th, so readers that sort by <updated> show it as new (review 2026-10-20).
+    from pipeline.database import NewsItem, NewsVideo
+
+    root, _, q = _stories_feed()
+    selected = q.with_entities.call_args[0]
+    assert NewsItem.created_at in selected
+    assert not any(NewsVideo.published_at is col for col in selected)
+    assert "published_at" not in " ".join(str(col) for col in selected)
+
+    old_video_story = SimpleNamespace(
+        id=8820,
+        headline="A new look at an old video",
+        summary=None,
+        created_at=datetime(2026, 10, 19, 7, 30),
+        video_published_at=datetime(2026, 9, 2, 10, 0),
+    )
+    root, _, _ = _stories_feed([old_video_story, *STORIES])
+    assert root.findtext(f"{A}updated") == "2026-10-19T07:30:00+00:00"
+    entry = root.findall(f"{A}entry")[0]
+    assert entry.findtext(f"{A}published") == "2026-10-19T07:30:00+00:00"
+    assert entry.findtext(f"{A}updated") == "2026-10-19T07:30:00+00:00"
+
+
+def test_an_empty_public_set_is_a_valid_empty_feed():
+    # No public story or paper is a data state, not an error: 200 with no entries and
+    # the answer's own time as the required <updated> (max() over no rows was a 500).
+    before = datetime.now(UTC)
+    stories, _, _ = _stories_feed([])
+    db = MagicMock()
+    db.execute.return_value.fetchall.return_value = []
+    research = _root(asyncio.run(feeds.research_feed(db=db)))
+    after = datetime.now(UTC)
+    for root in (stories, research):
+        assert root.findall(f"{A}entry") == []
+        updated = datetime.fromisoformat(root.findtext(f"{A}updated"))
+        assert before.replace(microsecond=0) <= updated <= after
 
 
 def test_research_feed_reads_the_public_papers_with_their_page_lastmod():

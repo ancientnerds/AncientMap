@@ -16,12 +16,12 @@ from datetime import UTC, datetime
 from html import escape
 
 from fastapi import APIRouter, Depends, Response
-from sqlalchemy import func, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.routes.articles_html import public_stories_query
 from api.routes.sitemap import BASE_URL, PAPER_LASTMOD_SQL
-from pipeline.database import NewsItem, NewsVideo, get_db
+from pipeline.database import NewsItem, get_db
 from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
 from pipeline.sites_html_renderer import encode_path
 from pipeline.utils.slugs import story_slug
@@ -100,9 +100,17 @@ def _feed(
     subtitle: str,
     hub: str,
     entries: list[str],
-    updated: datetime,
+    updated: datetime | None,
 ) -> Response:
-    """The feed document; `updated` is its newest entry's, as RFC 4287 4.2.15 asks."""
+    """The feed document; `updated` is its newest entry's, as RFC 4287 4.2.15 asks.
+
+    None means the public set is empty, a legitimate state (no public paper or story
+    yet, or all withdrawn): the feed is then valid and empty, and its required
+    <updated> is the moment of the answer, since no entry dates it. max() over the
+    empty rows raised ValueError and answered 500 before (review 2026-10-20).
+    """
+    if updated is None:
+        updated = datetime.now(UTC).replace(tzinfo=None)
     self_url = f"{BASE_URL}/feeds/{name}.xml"
     body = "\n".join(
         [
@@ -129,16 +137,15 @@ async def stories_feed(db: Session = Depends(get_db)):
     """The newest public stories: public_stories_query, the set the sitemap and the
     archive list (significance >= 2, scored, not speculative).
 
-    Ordered by when the story appeared here (created_at), so a new story about an
-    older video still reaches subscribers; each entry's date is the story's own
-    (the video's publish time, else the row's), as on its page and in the sitemap.
+    Ordered by when the story appeared here (created_at), and dated by it too:
+    Atom's <published>/<updated> say when the entry appeared, and readers sort by
+    <updated>. The video's publish time (the page's and the sitemap's date) put a new
+    story about a weeks-old video weeks down a reader's list and left the feed's
+    <updated> unmoved (review 2026-10-20); the page's JSON-LD keeps the video date.
     """
-    story_date = func.coalesce(NewsVideo.published_at, NewsItem.created_at)
     rows = (
         public_stories_query(db)
-        .with_entities(
-            NewsItem.id, NewsItem.headline, NewsItem.summary, story_date.label("published")
-        )
+        .with_entities(NewsItem.id, NewsItem.headline, NewsItem.summary, NewsItem.created_at)
         .order_by(NewsItem.created_at.desc(), NewsItem.id.desc())
         .limit(FEED_ENTRIES)
         .all()
@@ -148,8 +155,8 @@ async def stories_feed(db: Session = Depends(get_db)):
             entry_id=f"{_TAG}:story-{row.id}",
             title=row.headline,
             path=f"/news-archive/{story_slug(row.headline, row.id)}",
-            published=row.published,
-            updated=row.published,
+            published=row.created_at,
+            updated=row.created_at,
             summary=row.summary,
         )
         for row in rows
@@ -163,7 +170,7 @@ async def stories_feed(db: Session = Depends(get_db)):
         ),
         hub="/news-archive/",
         entries=entries,
-        updated=max(row.published for row in rows),
+        updated=max((row.created_at for row in rows), default=None),
     )
 
 
@@ -199,5 +206,5 @@ async def research_feed(db: Session = Depends(get_db)):
         ),
         hub="/research/",
         entries=entries,
-        updated=max(row.updated for row in rows),
+        updated=max((row.updated for row in rows), default=None),
     )
