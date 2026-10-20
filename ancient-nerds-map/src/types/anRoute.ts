@@ -173,8 +173,15 @@ export interface SiteRoute {
     /** Pixelmasse für `<img width height>` — ohne sie springt das Layout. */
     width: number | null
     height: number | null
+    /** The hero's 800 px copy for phones (pipeline/wiki_thumbs.py), for the srcset; null
+     *  when the original is not wider than 800 px (utils/heroSrcSet.ts). */
+    url_800: string | null
   } | null
   news: { slug: string; headline: string }[]
+  /** The public Theo papers that treat the site, newest first: reviewed links
+   *  (migration 0031), shown as "Research on this site". Present only when the site has
+   *  one (api/routes/sites_html.py), like the parts of a ResearchRoute. */
+  papers?: { slug: string; title: string }[]
   links: { title: string | null; url: string; content_type: string | null }[]
   parent: { name: string; path: string } | null
   siblings: { name: string; path: string }[]
@@ -284,6 +291,11 @@ export interface ResearchRoute {
   videos?: ResearchVideo[]
   corrections?: ResearchCorrection[]
   writer?: ResearchWriter
+  /**
+   * The curated sites the paper treats, in name order, with their page paths (reviewed
+   * links, migration 0031). Present only when the paper has one, like the parts above.
+   */
+  sites?: { name: string; path: string }[]
 }
 
 /**

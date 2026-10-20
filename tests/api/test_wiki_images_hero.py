@@ -96,6 +96,48 @@ def test_set_hero_stores_a_1600_px_file_and_records_its_real_size(tmp_path, monk
     assert db.commits == 1
 
 
+def test_set_hero_removes_the_small_copies_of_the_old_hero(tmp_path, monkeypatch):
+    """Review 2026-10-20: the site page's phone srcset names wiki-800/<id8>/hero.webp, which
+    pipeline.wiki_thumbs writes under the same name as the hero this endpoint overwrites. Left
+    in place, phones kept the replaced picture until the next sync; gone, nginx serves the new
+    original. Other files of the site and other sites' copies stay."""
+    wiki = tmp_path / "wiki"
+    monkeypatch.setattr(wiki_images, "IMAGE_DIR", wiki)
+    monkeypatch.setattr(wiki_images, "cache_delete_pattern", lambda pattern: 0)
+    monkeypatch.setattr(wiki_images.httpx, "AsyncClient", _fake_async_client(_jpeg(4000, 2250)))
+    kept = []
+    for tree in ("wiki-thumbs", "wiki-800"):
+        (tmp_path / tree / "abcdef12").mkdir(parents=True)
+        (tmp_path / tree / "abcdef12" / "hero.webp").write_bytes(b"old hero")
+        (tmp_path / tree / "abcdef12" / "Temple_gate.webp").write_bytes(b"gallery")
+        (tmp_path / tree / "99999999").mkdir()
+        (tmp_path / tree / "99999999" / "hero.webp").write_bytes(b"other site")
+        kept += [tmp_path / tree / "abcdef12" / "Temple_gate.webp"]
+        kept += [tmp_path / tree / "99999999" / "hero.webp"]
+    db = RecordingSession({"SELECT id FROM unified_sites": [(SITE_ID,)], "RETURNING id": [(1,)]})
+    body = wiki_images.SetHeroRequest(
+        image_url="https://upload.wikimedia.org/wikipedia/commons/a/ab/Temple.jpg",
+        attribution_url="https://commons.wikimedia.org/wiki/File:Temple.jpg",
+    )
+    out = asyncio.run(wiki_images.set_hero(SITE_ID, body, db=db, _user=None))
+
+    assert out["success"] is True
+    assert (wiki / "abcdef12" / "hero.webp").exists()
+    assert not (tmp_path / "wiki-thumbs" / "abcdef12" / "hero.webp").exists()
+    assert not (tmp_path / "wiki-800" / "abcdef12" / "hero.webp").exists()
+    assert all(path.exists() for path in kept)
+
+
+def test_the_derived_trees_are_the_ones_wiki_thumbs_writes():
+    from pipeline import wiki_thumbs
+
+    assert wiki_images.DERIVED_TREES == (wiki_thumbs.THUMB_DIR.name, wiki_thumbs.HERO_DIR.name)
+    assert (
+        wiki_thumbs.THUMB_DIR.parent == wiki_thumbs.WIKI_DIR.parent == wiki_thumbs.HERO_DIR.parent
+    )
+    assert wiki_images.IMAGE_DIR.name == wiki_thumbs.WIKI_DIR.name
+
+
 # --------------------------------------------------------------------------------------
 # hero-status
 # --------------------------------------------------------------------------------------

@@ -73,6 +73,8 @@ def _paper_row(**overrides) -> SimpleNamespace:
         "videos": None,
         "corrections": None,
         "writer": None,
+        # _PAPER_SITES_COLUMN: json NULL for a paper no site is linked to (migration 0031).
+        "paper_sites": None,
     }
     row.update(overrides)
     return SimpleNamespace(**row)
@@ -391,3 +393,44 @@ def test_fetch_paper_selects_the_extras_columns():
     sql = db.statement_with("WHERE r.slug = :slug")
     for key in ("evidence", "videos", "corrections", "writer"):
         assert f"r.result_json::jsonb->'{key}' AS {key}" in sql
+
+
+def test_the_sites_a_paper_treats_join_the_payload_as_page_links():
+    """Owner decision 2026-10-20 (SEO evaluation 2026-10-19, A2): the paper page links its
+    sites. The reviewed links arrive as one json array in the paper's statement, and each
+    becomes the site's canonical page path."""
+    route = _route_for(
+        _paper_row(
+            paper_sites=[
+                {
+                    "id": "d953e9b3-de33-4c7d-9357-bbc5d94d2a16",
+                    "name": "Göbekli Tepe",
+                    "country": "Türkiye",
+                },
+                {
+                    "id": "21b2278e-c3f2-4723-ae40-fa8a6161e3fb",
+                    "name": "Stonehenge",
+                    "country": "England",
+                },
+            ]
+        )
+    )
+    assert route["sites"] == [
+        {"name": "Göbekli Tepe", "path": "/sites/türkiye/göbekli-tepe-d953e9b3"},
+        {"name": "Stonehenge", "path": "/sites/england/stonehenge-21b2278e"},
+    ]
+    assert set(route) == OLD_KEYS | {"sites"}
+
+
+def test_a_paper_without_sites_gets_no_sites_key():
+    assert "sites" not in _route_for(_paper_row(paper_sites=None))
+
+
+def test_fetch_paper_reads_only_curated_sites_of_the_reviewed_links():
+    db = RecordingSession({"WHERE r.slug = :slug": [_paper_row()]})
+    fetch_paper("obsidian-trade-networks-anatolia", db)
+    sql = " ".join(db.statement_with("WHERE r.slug = :slug").split())
+    assert "FROM research_paper_sites ps JOIN unified_sites u ON u.id = ps.site_id" in sql
+    assert "u.source_id = 'ancient_nerds'" in sql
+    assert "u.scope_status IS DISTINCT FROM 'retired'" in sql
+    assert ") AS paper_sites" in sql

@@ -16,6 +16,8 @@ export interface ApiSiteDetail {
   description?: string
   cardDescription?: string
   thumbnailUrl?: string
+  /** The hero's srcset (utils/heroSrcSet.ts); the SSR site page sets it, /api/sites/{id} not. */
+  thumbnailSrcSet?: string
   sourceUrl?: string
   bestWikiUrl?: string
   sourceLanguage?: string
@@ -49,6 +51,7 @@ export function apiDetailToSiteData(detail: ApiSiteDetail): SiteData {
     description: detail.description || '',
     cardDescription: detail.cardDescription,
     image: detail.thumbnailUrl || undefined,
+    imageSrcSet: detail.thumbnailSrcSet,
     sourceId: detail.sourceId || 'unknown',
     sourceUrl: detail.sourceUrl,
     bestWikiUrl: detail.bestWikiUrl,

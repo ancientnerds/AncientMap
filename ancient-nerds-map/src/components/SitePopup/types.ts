@@ -149,6 +149,8 @@ export interface AlternateSource {
 export interface HeroHeaderProps {
   title: string
   heroImageSrc?: string
+  /** The srcset of heroImageSrc, only while it is the site's own hero (utils/heroSrcSet.ts). */
+  heroImageSrcSet?: string
   isLoadingImages?: boolean
   isSettingHero?: boolean
   sourceInfo: { name: string; url?: string } | undefined
