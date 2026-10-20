@@ -98,6 +98,8 @@ export interface StoryRoute {
   web_sources: { url?: string | null; title?: string | null; snippet?: string | null }[] | null
   timestamp_seconds: number | null
   speculative_tag: string | null
+  /** kind is why the story was picked: site | place | country | topic |
+   *  category (api/services/story_related.py, 2026-10-20). */
   related: { slug: string; headline: string; kind: string }[]
 }
 

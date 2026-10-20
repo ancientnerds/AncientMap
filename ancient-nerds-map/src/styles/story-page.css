@@ -391,6 +391,10 @@
   border: 1px solid rgba(245, 197, 24, 0.45);
   color: var(--accent-warm, #f5c518);
 }
+/* The story page's badge sits under the <h1> instead of inside it
+   (2026-10-20): same badge, flush with the headline. */
+.story-title-tag { margin: -4px 0 12px; }
+.story-title-tag .story-badge { margin-left: 0; }
 
 /* Site chips: the only links from a story back into the globe. */
 .story-chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 4px; }

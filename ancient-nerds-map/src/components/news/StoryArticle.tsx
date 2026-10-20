@@ -103,10 +103,16 @@ export default function StoryArticle({ story, related, children }: StoryArticleP
 
   return (
     <>
-      <h1 className="story-title">
-        {story.headline}
-        {story.speculative_tag && <span className="story-badge">{story.speculative_tag}</span>}
-      </h1>
+      <h1 className="story-title">{story.headline}</h1>
+      {/* Outside the <h1> since 2026-10-20: inside it the raw tag became part
+          of the indexed heading ("…anomaliesancient_astronauts", story 5380,
+          SEO audit 2026-10-19 tech-9). Same badge, now with the label the
+          feed cards show (owner decision 2026-10-20). */}
+      {story.speculative_tag && (
+        <p className="story-title-tag">
+          <span className="story-badge">{getNewsCategoryLabel(story.speculative_tag)}</span>
+        </p>
+      )}
 
       {/* Dieselben Metadaten wie auf der Karte, mit denselben Komponenten:
           Flagge, Typ- und Zeitalter-Badge, Kategorie-Label statt rohem
@@ -222,8 +228,12 @@ export default function StoryArticle({ story, related, children }: StoryArticleP
             )}
             {/* Ohne kuratierte Detailseite endete der Block hier als toter
                 Text. Die Länderseite existiert für jede Site mit Land und
-                führt den Leser weiter statt zurück zu Google. */}
-            {!sitePagePath && story.site_country && (
+                führt den Leser weiter statt zurück zu Google. Seit 2026-10-20
+                auch neben der Detailseite: der Länder-Hub schickte 15 von 69
+                Suchlandern weiter auf Ortsseiten (SEO-Audit 2026-10-19
+                traffic-14), die Story mit kuratierter Site verlinkte ihn nie
+                (Owner-Entscheidung 2026-10-20). */}
+            {story.site_country && (
               <a className="story-chip" href={countryPath(story.site_country)}>
                 🗺️ More sites in {story.site_country}
               </a>
