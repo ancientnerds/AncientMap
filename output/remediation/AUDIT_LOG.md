@@ -14282,3 +14282,6 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   `fix/2026-10-20-fk-exempt-research-paper-sites`, worktree `AncientMap-fkfix`): the table joins the exemption tuple,
   and `tests/api/test_fk_policy_exemptions.py` now also scans `migrations/*.sql` (the model check could not see a
   table only SQL creates). Pushed to main through the pre-push gates.
+- Incident closed: another session pushed the identical fix first (`e1a57d8`, incl. a migration-scanning test); my push
+  was rejected (main moved during the gates), my branch and worktree removed (junctions unlinked with rmdir first, the
+  shared .venv intact). Both APIs healthy on e1a57d8c. Then `rebuild_static` (276 s), freshness 0 differing sites.
