@@ -7,9 +7,12 @@ are the contract anRoute.ts::LandingRoute declares.
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
+from contextlib import nullcontext
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.middleware.gzip import GZipMiddleware
@@ -29,6 +32,23 @@ _SITE_STATS = {
     "by_source": {"ancient_nerds": 5004, "pleiades": 13780},
     "curated_countries": 98,
 }
+# The document's cache key under the fixed shell build the store fixture sets.
+_KEY = "landing:home:build-1"
+
+
+@pytest.fixture(autouse=True)
+def store():
+    """The Redis document cache as a dict, and a fixed shell build."""
+    data: dict[str, bytes] = {}
+    with (
+        patch.object(landing_html, "entry_version", return_value="build-1"),
+        patch.object(landing_html, "cache_get_bytes", side_effect=data.get),
+        patch.object(
+            landing_html, "cache_set_bytes", side_effect=lambda k, v, ttl: data.__setitem__(k, v)
+        ),
+        patch.object(landing_html, "cache_delete", side_effect=lambda k: data.pop(k, None)),
+    ):
+        yield data
 
 
 def test_number_formats():
@@ -80,7 +100,6 @@ def _landing_data():
 
 
 def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
-    landing_html._cache.clear()
     # render_app_shell is mocked, so the "injected" body is part of the fake shell
     shell = (
         '<html><div class="hero-stat-value" data-stat="sites">1.7M+</div>'
@@ -140,7 +159,6 @@ def test_home_route_hands_the_landing_payload_and_substitutes_hero_counts():
 
 
 def test_home_route_omits_sections_without_rows_and_serves_from_cache():
-    landing_html._cache.clear()
     data = _landing_data()
     data.update(paper_total=0, journal_total=0)
     with (
@@ -167,7 +185,7 @@ def test_home_route_omits_sections_without_rows_and_serves_from_cache():
 
     route = render.call_args[0][0]
     assert route["journals"] is None and route["papers"] is None
-    assert fetch.call_count == 1  # second call came from the 300 s cache
+    assert fetch.call_count == 1  # second call came from the cached document
 
 
 def test_home_stays_decodable_when_the_client_accepts_gzip():
@@ -180,7 +198,6 @@ def test_home_stays_decodable_when_the_client_accepts_gzip():
     (`content_encoding_set`), which is ERR_CONTENT_DECODING_FAILED in the
     browser. The cache holds bytes for exactly this reason.
     """
-    landing_html._cache.clear()
     shell = "<html>" + _SHELL_MARKERS + '<div id="root">' + "<p>live</p>" * 60 + "</div></html>"
     app = FastAPI()
     app.add_middleware(GZipMiddleware, minimum_size=500)
@@ -209,9 +226,8 @@ def test_home_stays_decodable_when_the_client_accepts_gzip():
     assert '<div id="root">' in second.text and "<p>live</p>" in second.text
 
 
-def test_home_answers_head_from_the_cache_without_a_body():
-    landing_html._cache.clear()
-    landing_html._cache["home"] = (time.monotonic() + 300, b"<html>cached</html>")
+def test_home_answers_head_from_the_cache_without_a_body(store):
+    store[_KEY] = landing_html._pack(time.time(), b"<html>cached</html>")
     app = FastAPI()
     app.include_router(landing_html.router)
     app.dependency_overrides[get_db] = lambda: object()
@@ -221,3 +237,108 @@ def test_home_answers_head_from_the_cache_without_a_body():
     assert head.status_code == 200 and head.content == b""
     assert head.headers["cache-control"] == "public, max-age=300"
     assert client.get("/home").text == "<html>cached</html>"
+
+
+# --- The shared document cache (TTFB audit 2026-10-20) -----------------------
+# Measured that day: 41 % of the browser requests for "/" waited for a rebuild
+# of up to ~1 s, because each API process kept its own 300 s copy and rebuilt
+# it inside the request. The copy is shared now and refreshed behind the reply.
+
+
+def _patched_build(render):
+    return (
+        patch.object(landing_html, "_render_document", side_effect=render),
+        patch.object(
+            landing_html, "get_current_research", new=AsyncMock(return_value={"running": None})
+        ),
+        patch.object(landing_html, "get_session", return_value=nullcontext(object())),
+    )
+
+
+async def _home_then_drain():
+    resp = await landing_html.home(db=object())
+    await asyncio.gather(*landing_html._refreshing)
+    return resp
+
+
+def test_a_stale_copy_is_served_at_once_and_rebuilt_behind_the_reply(store):
+    store[_KEY] = landing_html._pack(time.time() - 301, b"<html>old</html>")
+    a, b, c = _patched_build(lambda db, theo: b"<html>new</html>")
+    with a as render, b, c:
+        resp = asyncio.run(_home_then_drain())
+
+    assert resp.body == b"<html>old</html>"  # the visitor did not wait for the build
+    assert render.call_count == 1
+    built_at, body = landing_html._unpack(store[_KEY])
+    assert body == b"<html>new</html>" and time.time() - built_at < 5
+
+
+def test_a_fresh_copy_triggers_no_rebuild(store):
+    store[_KEY] = landing_html._pack(time.time() - 10, b"<html>fresh</html>")
+    a, b, c = _patched_build(lambda db, theo: b"<html>new</html>")
+    with a as render, b, c:
+        resp = asyncio.run(_home_then_drain())
+
+    assert resp.body == b"<html>fresh</html>"
+    assert render.call_count == 0
+
+
+def test_one_rebuild_per_process_however_many_requests_find_the_copy_stale(store):
+    store[_KEY] = landing_html._pack(time.time() - 301, b"<html>old</html>")
+
+    async def three_requests():
+        replies = [await landing_html.home(db=object()) for _ in range(3)]
+        await asyncio.gather(*landing_html._refreshing)
+        return replies
+
+    a, b, c = _patched_build(lambda db, theo: b"<html>new</html>")
+    with a as render, b, c:
+        replies = asyncio.run(three_requests())
+
+    assert [r.body for r in replies] == [b"<html>old</html>"] * 3
+    assert render.call_count == 1
+
+
+def test_a_failed_background_rebuild_drops_the_copy(store):
+    """Behind a broken build the next request must build, and fail, itself."""
+    store[_KEY] = landing_html._pack(time.time() - 301, b"<html>old</html>")
+
+    def broken(db, theo):
+        raise RuntimeError("sidecar down")
+
+    a, b, c = _patched_build(broken)
+    with a, b, c:
+        resp = asyncio.run(_home_then_drain())
+
+    assert resp.body == b"<html>old</html>"
+    assert _KEY not in store
+
+
+def test_a_new_frontend_build_is_never_answered_with_the_old_document(store):
+    store[_KEY] = landing_html._pack(time.time(), b"<html>build 1</html>")
+    a, b, c = _patched_build(lambda db, theo: b"<html>build 2</html>")
+    with (
+        a as render,
+        b,
+        c,
+        patch.object(landing_html, "entry_version", return_value="build-2"),
+    ):
+        resp = asyncio.run(_home_then_drain())
+
+    assert resp.body == b"<html>build 2</html>"
+    assert render.call_count == 1
+    assert landing_html._unpack(store["landing:home:build-2"])[1] == b"<html>build 2</html>"
+
+
+def test_the_build_runs_off_the_event_loop(store):
+    threads = []
+
+    def render(db, theo):
+        threads.append(threading.get_ident())
+        return b"<html>new</html>"
+
+    a, b, c = _patched_build(render)
+    with a, b, c:
+        asyncio.run(_home_then_drain())
+
+    assert threads and threads[0] != threading.get_ident()

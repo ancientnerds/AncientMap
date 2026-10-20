@@ -101,6 +101,18 @@ server {
     access_log /var/www/ancientnerds/logs/referrals.log referral if=$log_referral;
     access_log /var/www/ancientnerds/logs/crawlers.log crawler if=$log_crawler;
 
+    # HSTS: a browser that has seen it goes to https:// itself, without the
+    # port-80 hop. Measured 2026-10-20 over the access log of 05.-20.10. (TTFB
+    # audit, output/seo-audit-2026-10-19/ttfb.md): 52 of 868 browser requests
+    # for "/" (HTTP/2, no bot UA) came seconds after a 301 over HTTP/1.1 -
+    # http:// links and typed addresses - and that hop costs a visitor a TCP
+    # connection to port 80 and a request round trip before the TLS connection
+    # even starts (~2 RTT; CrUX RTT p75 for "/" is 284 ms). No includeSubDomains:
+    # this file does not govern every subdomain. nginx hands a server-level
+    # add_header only to locations without an add_header of their own, which
+    # includes `location = /`; the browser keeps the policy from any response.
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
     # /etc/nginx/nginx.conf has `gzip on` but its gzip_types line is commented
     # out, so the default applied — text/html only. Result: 27 asset requests
     # per cold visit, 2.5 MB, none with content-encoding (measured 2026-08-09).

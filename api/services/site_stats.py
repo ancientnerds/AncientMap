@@ -21,7 +21,11 @@ CACHE_KEY = "api:stats:v2"
 
 _SHOWN = not_retired()
 
-_TOTAL_SQL = text("SELECT COUNT(*) FROM unified_sites WHERE " + _SHOWN)
+# The total is the sum of the per-source counts: the same rows, one scan. Until
+# 2026-10-20 a separate COUNT(*) scanned unified_sites a second time; measured
+# on production that day, the COUNT(*) took 278-297 ms and the GROUP BY
+# 337-383 ms (sum 1,759,573 = COUNT(*) 1,759,573), and both sat on the
+# homepage's cache-miss path (TTFB audit 2026-10-20, ttfb.md).
 _BY_SOURCE_SQL = text(
     "SELECT source_id, COUNT(*) AS count FROM unified_sites WHERE "
     + _SHOWN
@@ -38,11 +42,10 @@ def get_site_stats() -> dict:
     if cached:
         return cached
     with get_session() as session:
-        total_sites = session.execute(_TOTAL_SQL).scalar()
         by_source = {row.source_id: row.count for row in session.execute(_BY_SOURCE_SQL)}
         curated_countries = session.execute(_CURATED_COUNTRIES_SQL).scalar()
     response = {
-        "total_sites": total_sites,
+        "total_sites": sum(by_source.values()),
         "by_source": by_source,
         "curated_countries": curated_countries or 0,
     }

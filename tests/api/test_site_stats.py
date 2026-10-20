@@ -36,28 +36,29 @@ class FakeSession:
         return False
 
 
-def test_get_site_stats_counts_total_by_source_and_curated_countries():
-    total = [(1_759_673,)]
+def test_get_site_stats_counts_by_source_and_curated_countries_in_two_queries():
+    """The total is the sum of the per-source counts: one scan of unified_sites,
+    not two (TTFB audit 2026-10-20). FakeSession hands out exactly two results,
+    so a third query would fail on the empty list."""
     by_source = [
         SimpleNamespace(source_id="list_inscriptions", count=509_181),
         SimpleNamespace(source_id="ancient_nerds", count=5_004),
     ]
     countries = [(98,)]
+    session = FakeSession([by_source, countries])
     with (
         patch("api.services.site_stats.cache_get", return_value=None),
         patch("api.services.site_stats.cache_set") as cache_set,
-        patch(
-            "api.services.site_stats.get_session",
-            return_value=FakeSession([total, by_source, countries]),
-        ),
+        patch("api.services.site_stats.get_session", return_value=session),
     ):
         stats = get_site_stats()
 
     assert stats == {
-        "total_sites": 1_759_673,
+        "total_sites": 514_185,
         "by_source": {"list_inscriptions": 509_181, "ancient_nerds": 5_004},
         "curated_countries": 98,
     }
+    assert session._results == []
     assert cache_set.call_args.kwargs["ttl"] == 300
 
 
