@@ -14261,3 +14261,24 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
   reading, not a wrong fact; the D52 rule reads it as a state that no longer holds).
 - **Pilot 3 offline stages:** write 40 (thin 2, mechanical failures 0), check PASS at attempt 1 29/38 (76 %), rewrite
   rounds imported. Web stages and judge running after the release.
+- **Pilot 3 closed - gate FAILED on "0 disputed" only.** verify: VERIFIED 15 / CONTRADICTED 7 / DISPUTED 13 / UNPROVEN 2;
+  rewrite-v 22, check-v PASS 14 FAIL 8, verify2 VERIFIED 8 / CONTRADICTED 2 / DISPUTED 2 / UNPROVEN 2; outcomes 23
+  accepted, 17 kept. Judge: 23 cards, 142 claims, 139 supported, **0 contradicted, 0 unproven**, 3 disputed
+  (Stratonikeia "largest gymnasium", La Cobata "an Olmec head", Temple of Janus Autun "the god is unknown").
+  Trend over the pilots: wrong cards 1 / 1 / 0, unproven 5.3 % / 2.6 % / 0 %.
+- **D53** (owner): the judge gates every card. `f4051a1`: `mechanical/teaser.py` plans an accepted version-3 card only
+  when the run's JUDGE.jsonl holds a verdict on that card with every claim SUPPORTED and proven (`judge-not-clean`
+  otherwise, the site keeps its card); a missing verdict stops the plan. 2 mutation cases fire (26/26 in the family);
+  tests/remediation 10,566 passed + the sweep needle fix.
+- **Lane WB steps 36-38 - the judge-clean pilot cards written.** s036 pilot 3: 20 cards (judge-not-clean 3, kept 17);
+  s037 pilot 2: 23 (judge-not-clean 6, kept 11); s038 pilot 1: 16 (judge-not-clean 5, kept 19). Each lane: emit,
+  rehearse, probe-guards (5 / 6 refused), apply "APPLY OK", rehearse-rollback; accept 0 deviations each. Journal
+  recounted: 20/23/16 rows per lane stamp. IndexNow `--lastmod-since 2026-10-20`: 151 URLs accepted. The static export
+  did NOT run: see the next entry.
+- **Production incident, not of this lane:** the deploy of `86209d9` (another session's SEO integration, 20:49 local)
+  put migration 0031 `research_paper_sites` (site_id in its PRIMARY KEY, ON DELETE CASCADE onto unified_sites) live;
+  `api/boot_schema.py`'s FK policy then failed at boot with `column "site_id" is in a primary key` and
+  `ancient_nerds_api` crash-looped (25 restarts), `ancient_nerds_api2` kept serving 977af8eb. Fix `68d6311` (branch
+  `fix/2026-10-20-fk-exempt-research-paper-sites`, worktree `AncientMap-fkfix`): the table joins the exemption tuple,
+  and `tests/api/test_fk_policy_exemptions.py` now also scans `migrations/*.sql` (the model check could not see a
+  table only SQL creates). Pushed to main through the pre-push gates.
