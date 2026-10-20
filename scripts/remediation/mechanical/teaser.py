@@ -463,6 +463,9 @@ KEPT = "kept"
 CONFIRMED = "confirmed"
 #: A version-3 card gives its site away against the live name, aliases or country.
 NAME_CHANGED = "name-changed"
+#: Owner decision D53 (2026-10-19): the pilot judge (Opus xhigh) judges every accepted version-3 card
+#: as the last gate before the write; a card with a claim it did not prove SUPPORTED is not written.
+JUDGE_NOT_CLEAN = "judge-not-clean"
 #: A re-check clear (contract recheck-v1) judged another card than the one the site holds now: a
 #: newer card was written through the journal after the run seeded the live one. The spelling is
 #: `teaser/run.py`'s `CARD_CHANGED` (a test pins it).
@@ -473,6 +476,8 @@ REFUSAL_MEANING = {
     CONFIRMED: "a re-check run confirmed the live card: it stands (owner decision D10)",
     CARD_CHANGED: "a re-check clear judged another card than the live one (a newer card was "
     "written after the run seeded it): the live card is not cleared on the old verdict",
+    JUDGE_NOT_CLEAN: "the run's web judge found a claim of the card CONTRADICTED, DISPUTED or "
+    "unproven (owner decision D53): never written - the site keeps its card (D5)",
     NAME_CHANGED: "the card gives its site away against the live name, aliases or country (a name "
     "changed or an alias was added since it was written): write the card again",
     NOT_VERIFIED: "the accepted card carries no VERIFIED web verification (an outcome written "
@@ -585,20 +590,51 @@ def _evidence(outcome: Mapping[str, Any], run: str) -> tuple[dict[str, Any], ...
     return ({"source": f"lane WB run {run}: {outcome['reason']}", "url": source, "quote": reasons},)
 
 
+def judge_problem(
+    outcome: Mapping[str, Any], judged: Mapping[str, Mapping[str, Any]] | None
+) -> str | None:
+    """Owner decision D53: why an accepted version-3 card may not be written on its run's judge
+    (`JUDGE.jsonl`, `teaser/run.py judge-import`), or `None` when every claim the judge listed is
+    SUPPORTED with a quote the machine found. A card the judge never saw is no refusal but a plan
+    error: the judge round of the run is missing."""
+    row = None if judged is None else judged.get(outcome["site_id"])
+    if row is None:
+        raise PlanError(
+            f"{outcome['site_id']}: an accepted version-3 card without a judge verdict - owner "
+            "decision D53 has the judge judge every card: `run.py judge-export`, the answers, "
+            "`judge-import`, then plan"
+        )
+    if row["card"] != outcome["card"]:
+        raise PlanError(f"{outcome['site_id']}: the judge judged another card than the outcome's")
+    failed = [c for c in row["claims"] if not (c["proven"] and c["verdict"] == "SUPPORTED")]
+    if not failed:
+        return None
+    return "; ".join(
+        f"{c['claim']} [{c['verdict']}{'' if c['proven'] else ', no proving quote'}]"
+        for c in failed
+    )
+
+
 def classify(
     outcome: Mapping[str, Any],
     live: Live | None,
     journal: Mapping[tuple[str, str], Sequence[JournalLink]],
     run: str,
+    judged: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> tuple[Verdict | None, Verdict | None] | Verdict:
     """One site's two cells - (provenance, card), either `None` when it needs no change - or the
-    refusal that lists it."""
+    refusal that lists it. `judged` is the run's judge verdicts by site (`JUDGE.jsonl`), which an
+    accepted version-3 card needs (owner decision D53)."""
     site_id, name = outcome["site_id"], outcome["name"]
     if outcome["status"] in (KEPT, CONFIRMED):
         return _refused(site_id, name, outcome["status"], REFUSAL_MEANING[outcome["status"]])
     # only a VERIFIED card is written; an OUTCOMES.jsonl from before the verify stage has no key
     if outcome["status"] == ACCEPTED and outcome.get("verification") != CP.VERIFIED:
         return _refused(site_id, name, NOT_VERIFIED, "no VERIFIED web verification")
+    shorts_card = outcome["status"] == ACCEPTED and outcome["provenance"]["v"] == CP.VERSION_3
+    judge_failed = judge_problem(outcome, judged) if shorts_card else None
+    if judge_failed is not None:
+        return _refused(site_id, name, JUDGE_NOT_CLEAN, judge_failed)
     if (
         outcome["status"] == ACCEPTED
         and site_id in CORRECTED.SITE_IDS
@@ -721,6 +757,7 @@ def build_step(
     journal: Mapping[tuple[str, str], Sequence[JournalLink]],
     *,
     built_at: str,
+    judged: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> StepPlan:
     """The two lane plans of one step over `outcomes` (at most 100 sites). Pure."""
     if len(outcomes) > MAX_SITES:
@@ -729,7 +766,7 @@ def build_step(
     card: list[Verdict] = []
     skipped: list[Verdict] = []
     for outcome in sorted(outcomes, key=lambda o: o["site_id"]):
-        decided = classify(outcome, live.get(outcome["site_id"]), journal, run)
+        decided = classify(outcome, live.get(outcome["site_id"]), journal, run, judged)
         if isinstance(decided, Verdict):
             skipped.append(decided)
             continue
@@ -864,6 +901,12 @@ def _read_outcomes(run: str) -> list[dict[str, Any]]:
     return read_jsonl(path)
 
 
+def _read_judged(run: str) -> dict[str, dict[str, Any]] | None:
+    """The run's judge verdicts by site (`JUDGE.jsonl`), or `None` for a run that has none."""
+    path = RUNS / run / "JUDGE.jsonl"
+    return {row["site_id"]: row for row in read_jsonl(path)} if path.exists() else None
+
+
 def plan_step(
     run: str,
     step: int,
@@ -871,6 +914,7 @@ def plan_step(
     read: Callable[[str], str] = read_production,
     root: Path = ROOT,
     outcomes: Sequence[Mapping[str, Any]] | None = None,
+    judged: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Plan step `step` from the run's next outcomes and a fresh read-only production read."""
     steps = read_steps(root)
@@ -891,7 +935,15 @@ def plan_step(
         raise PlanError(f"{out} exists but STEPS.jsonl has no step {step}: settle it by hand")
     text = read(export_script([o["site_id"] for o in todo]))
     live, journal = parse_export(text)
-    plan = build_step(step, run, todo, live, journal, built_at=datetime.now(UTC).isoformat())
+    plan = build_step(
+        step,
+        run,
+        todo,
+        live,
+        journal,
+        built_at=datetime.now(UTC).isoformat(),
+        judged=_read_judged(run) if outcomes is None else judged,
+    )
     out.mkdir(parents=True)
     (out / "export.jsonl").write_text(text, encoding="utf-8", newline="\n")
     lanes: dict[str, Any] = {}

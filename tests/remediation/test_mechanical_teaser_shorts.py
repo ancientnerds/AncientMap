@@ -69,6 +69,26 @@ def shorts_outcome(**over: Any) -> dict[str, Any]:
     return outcome(**{**fields, **over})
 
 
+def clean_judge(row: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The run's judge verdicts (`JUDGE.jsonl` by site) for one accepted card: every claim proven."""
+    claim = {"claim": "a storm exposed houses", "proven": True, "verdict": "SUPPORTED"}
+    return {row["site_id"]: {"site_id": row["site_id"], "card": row["card"], "claims": [claim]}}
+
+
+def classify(
+    row: dict[str, Any],
+    held: W.Live | None,
+    journal: dict[Any, Any],
+    run: str,
+    judged: dict[str, dict[str, Any]] | None = None,
+) -> Any:
+    """`W.classify` with a clean judge verdict for an accepted card (owner decision D53), unless the
+    test names its own."""
+    if judged is None and row["status"] == W.ACCEPTED:
+        judged = clean_judge(row)
+    return W.classify(row, held, journal, run, judged)
+
+
 class TestTheSpellings:
     def test_the_planner_reads_the_outcome_statuses_in_the_run_cli_s_spelling(self) -> None:
         assert (W.KEPT, W.CONFIRMED) == (R.KEPT, R.CONFIRMED)
@@ -83,22 +103,22 @@ class TestAnOutcomeThatWritesNothing:
         kept = outcome(
             status=W.KEPT, reason="failed-after-two-rewrites", card=None, provenance=None
         )
-        decided = W.classify(kept, live(), {}, "wb-test")
+        decided = classify(kept, live(), {}, "wb-test")
         assert decided.reason == W.KEPT and not decided.ok
         assert "keeps its card" in decided.note
 
     def test_a_thin_decline_keeps_the_card_too(self) -> None:
         kept = outcome(status=W.KEPT, reason="thin-declined", card=None, provenance=None)
-        assert W.classify(kept, live(), {}, "wb-test").reason == W.KEPT
+        assert classify(kept, live(), {}, "wb-test").reason == W.KEPT
 
     def test_a_confirmed_card_stands(self) -> None:
         confirmed = outcome(status=W.CONFIRMED, reason=None, card="the live card", provenance=None)
-        assert W.classify(confirmed, live(), {}, "wb-test").reason == W.CONFIRMED
+        assert classify(confirmed, live(), {}, "wb-test").reason == W.CONFIRMED
 
     def test_a_kept_site_writes_no_clear_row_even_when_its_description_moved(self) -> None:
         kept = outcome(status=W.KEPT, reason="thin-declined", card=None, provenance=None)
         moved = live(description="Another description.")
-        assert W.classify(kept, moved, {}, "wb-test").reason == W.KEPT
+        assert classify(kept, moved, {}, "wb-test").reason == W.KEPT
 
     def test_a_step_lists_them_beside_the_cards_it_writes(self, tmp_path: Path) -> None:
         kept = outcome(
@@ -113,6 +133,7 @@ class TestAnOutcomeThatWritesNothing:
             read=lambda _sql: export_for(lives),
             root=root,
             outcomes=[written, kept],
+            judged=clean_judge(written),
         )
         assert record["skipped"] == {"kept": 1}
         assert record["card"]["cells"] == 1 and record["prov"]["cells"] == 1
@@ -143,7 +164,7 @@ def seeded_live(**over: Any) -> W.Live:
 
 class TestAFailedReCheckIsAClear:
     def test_a_cleared_recheck_card_is_a_journalled_clear_with_its_reason(self) -> None:
-        prov, card = W.classify(recheck_clear(), seeded_live(), {}, "wb-recheck")
+        prov, card = classify(recheck_clear(), seeded_live(), {}, "wb-recheck")
         assert (card.old_value, card.new_value) == (T.OLD_CARD, None)
         assert card.rule == "card-clear-recheck-contradicted"
         assert card.note == "card cleared (recheck-contradicted)"
@@ -152,7 +173,7 @@ class TestAFailedReCheckIsAClear:
 
     def test_a_card_written_after_the_seed_is_not_cleared_on_the_old_verdict(self) -> None:
         newer = seeded_live(card=NAMELESS)
-        refused = W.classify(recheck_clear(), newer, {}, "wb-recheck")
+        refused = classify(recheck_clear(), newer, {}, "wb-recheck")
         assert refused.reason == W.CARD_CHANGED and not refused.ok
 
     def test_a_card_of_another_run_with_the_same_text_is_not_cleared_either(self) -> None:
@@ -160,13 +181,13 @@ class TestAFailedReCheckIsAClear:
         raw = json.loads(held.raw_data or "{}")
         raw["_card_provenance"] = {"run": "wb-shorts-test"}
         newer = replace(held, raw_data=W.reprint(raw))
-        refused = W.classify(recheck_clear(), newer, {}, "wb-recheck")
+        refused = classify(recheck_clear(), newer, {}, "wb-recheck")
         assert refused.reason == W.CARD_CHANGED and "wb-cardgap-test" in refused.note
 
     def test_a_listed_site_without_a_description_pins_the_card_text_only(self) -> None:
         listed = recheck_clear(reason="no-description", seeded_run=None)
-        assert W.classify(listed, live(), {}, "wb-recheck")[1].new_value is None
-        assert W.classify(listed, live(card=NAMELESS), {}, "wb-recheck").reason == W.CARD_CHANGED
+        assert classify(listed, live(), {}, "wb-recheck")[1].new_value is None
+        assert classify(listed, live(card=NAMELESS), {}, "wb-recheck").reason == W.CARD_CHANGED
 
     def test_the_spelling_is_the_run_cli_s(self) -> None:
         assert W.CARD_CHANGED == R.CARD_CHANGED
@@ -175,7 +196,7 @@ class TestAFailedReCheckIsAClear:
 
 class TestAVersion3Card:
     def test_it_is_written_with_its_provenance(self) -> None:
-        prov, card = W.classify(shorts_outcome(), live(country="Scotland"), {}, "wb-shorts-test")
+        prov, card = classify(shorts_outcome(), live(country="Scotland"), {}, "wb-shorts-test")
         written = json.loads(prov.new_value)["_card_provenance"]
         assert written["v"] == 3 and written["contract"] == "shorts-v1"
         assert written["models"] == CLAUDE and written["ai_system"] == M.AI_SYSTEM_CLAUDE
@@ -194,7 +215,7 @@ class TestAVersion3Card:
     def test_its_ai_system_is_derived_from_its_models(self, models: dict[str, str | None]) -> None:
         provenance = v3(models)
         outcome_row = shorts_outcome(provenance=provenance)
-        prov, _card = W.classify(outcome_row, live(country="Scotland"), {}, "wb-shorts-test")
+        prov, _card = classify(outcome_row, live(country="Scotland"), {}, "wb-shorts-test")
         written = json.loads(prov.new_value)["_card_provenance"]
         derived = M.ai_system_for(m for m in models.values() if m is not None)
         assert written["ai_system"] == derived and derived in M.AI_SYSTEMS
@@ -202,20 +223,20 @@ class TestAVersion3Card:
     def test_an_ai_system_that_is_not_the_derived_one_is_refused(self) -> None:
         lying = v3(ai_system=M.AI_SYSTEM_OPUS)
         with pytest.raises(ValueError, match="is not the one derived from its models"):
-            W.classify(shorts_outcome(provenance=lying), live(country="Scotland"), {}, "wb")
+            classify(shorts_outcome(provenance=lying), live(country="Scotland"), {}, "wb")
         lying_claude = v3({**CLAUDE, "verify": OH.MINIMAX_MODEL}, ai_system=M.AI_SYSTEM_CLAUDE)
         with pytest.raises(ValueError, match="is not the one derived from its models"):
-            W.classify(shorts_outcome(provenance=lying_claude), live(country="Scotland"), {}, "wb")
+            classify(shorts_outcome(provenance=lying_claude), live(country="Scotland"), {}, "wb")
 
     def test_a_string_outside_the_known_disclosures_is_still_refused(self) -> None:
         third = v3(ai_system="Claude Opus (Anthropic): test")
         with pytest.raises(ValueError, match="is not one of"):
-            W.classify(shorts_outcome(provenance=third), live(country="Scotland"), {}, "wb")
+            classify(shorts_outcome(provenance=third), live(country="Scotland"), {}, "wb")
 
 
 class TestTheNameRuleAgainstTheLiveName:
     def decide(self, **over: Any) -> Any:
-        return W.classify(shorts_outcome(), live(country="Scotland", **over), {}, "wb-shorts-test")
+        return classify(shorts_outcome(), live(country="Scotland", **over), {}, "wb-shorts-test")
 
     def test_a_clean_card_is_written(self) -> None:
         assert isinstance(self.decide(), tuple)
@@ -233,17 +254,17 @@ class TestTheNameRuleAgainstTheLiveName:
         )
 
     def test_a_country_that_moved_into_the_card_is_refused(self) -> None:
-        decided = W.classify(shorts_outcome(), live(country="Dunes"), {}, "wb-shorts-test")
+        decided = classify(shorts_outcome(), live(country="Dunes"), {}, "wb-shorts-test")
         assert decided.reason == W.NAME_CHANGED and "country" in decided.note
 
     def test_the_rule_is_run_only_for_version_3(self) -> None:
         """A version-2 card names its site by contract: it is written, whatever the live name."""
-        decided = W.classify(outcome(), live(), {}, "wb-test")
+        decided = classify(outcome(), live(), {}, "wb-test")
         assert isinstance(decided, tuple)
 
     def test_a_version_3_outcome_needs_the_country_in_the_export(self) -> None:
         with pytest.raises(W.PlanError, match="carries no country"):
-            W.classify(shorts_outcome(), live(), {}, "wb-shorts-test")
+            classify(shorts_outcome(), live(), {}, "wb-shorts-test")
 
     def test_a_null_country_in_the_export_is_no_country(self) -> None:
         """SQL NULL read as the text "None" would pass the rule's guard and be compared as a word."""
@@ -254,10 +275,10 @@ class TestTheNameRuleAgainstTheLiveName:
         (site,) = parsed.values()
         assert site.country == ""
         with pytest.raises(W.PlanError, match="carries no country"):
-            W.classify(shorts_outcome(), site, {}, "wb-shorts-test")
+            classify(shorts_outcome(), site, {}, "wb-shorts-test")
 
     def test_the_name_rule_is_run_after_the_description_check(self) -> None:
-        decided = W.classify(
+        decided = classify(
             shorts_outcome(), live(country="Scotland", description="Changed."), {}, "wb"
         )
         assert decided.reason == W.STALE_DESCRIPTION
@@ -289,3 +310,45 @@ class TestTheAcceptanceOfAVersion3Card:
         stale = live(T.SKARA, card=NAMELESS, raw_data=json.dumps(raw), description="Edited.")
         again = W.deviations(step, [], [], {T.SKARA: stale}, [], {T.SKARA: shorts_outcome()})
         assert f"{T.SKARA}: the teaser provenance is stale" in again
+
+
+class TestTheJudgeGatesEveryCard:
+    """Owner decision D53: the pilot judge judges every accepted version-3 card before the write."""
+
+    @pytest.mark.parametrize(
+        ("verdict", "proven"),
+        [("CONTRADICTED", True), ("DISPUTED", True), ("UNVERIFIABLE", False), ("SUPPORTED", False)],
+    )
+    def test_a_card_with_a_claim_the_judge_did_not_prove_is_not_written(
+        self, verdict: str, proven: bool
+    ) -> None:
+        row = shorts_outcome()
+        judged = clean_judge(row)
+        judged[row["site_id"]]["claims"].append(
+            {"claim": "the village was lived in from 3180 BC", "proven": proven, "verdict": verdict}
+        )
+        refused = classify(row, live(country="Scotland"), {}, "wb-shorts-test", judged)
+        assert refused.reason == W.JUDGE_NOT_CLEAN and not refused.ok
+        assert "the village was lived in from 3180 BC" in refused.note
+        assert W.REFUSAL_MEANING[W.JUDGE_NOT_CLEAN]
+
+    def test_a_card_the_judge_never_saw_stops_the_plan(self) -> None:
+        with pytest.raises(W.PlanError, match="D53"):
+            W.classify(shorts_outcome(), live(country="Scotland"), {}, "wb-shorts-test", {})
+        with pytest.raises(W.PlanError, match="D53"):
+            W.classify(shorts_outcome(), live(country="Scotland"), {}, "wb-shorts-test", None)
+
+    def test_a_verdict_on_another_card_stops_the_plan(self) -> None:
+        row = shorts_outcome()
+        judged = clean_judge({**row, "card": "Another card."})
+        with pytest.raises(W.PlanError, match="another card"):
+            W.classify(row, live(country="Scotland"), {}, "wb-shorts-test", judged)
+
+    def test_a_clean_verdict_lets_the_card_be_written(self) -> None:
+        row = shorts_outcome()
+        prov, card = classify(row, live(country="Scotland"), {}, "wb-shorts-test")
+        assert card.new_value == NAMELESS and prov is not None
+
+    def test_the_gate_holds_only_for_accepted_version_3_cards(self) -> None:
+        kept = outcome(status=W.KEPT, reason="thin-declined", card=None, provenance=None)
+        assert W.classify(kept, live(), {}, "wb-test", None).reason == W.KEPT

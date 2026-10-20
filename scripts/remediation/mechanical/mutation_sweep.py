@@ -11600,6 +11600,16 @@ TEASER_SHORTS_CASES: list[Case] = [
                 "test_a_version_3_outcome_needs_the_country_in_the_export",
             ),
             (
+                "the judge gates every accepted version-3 card (owner decision D53)",
+                "    if judge_failed is not None:",
+                "test_a_card_with_a_claim_the_judge_did_not_prove_is_not_written",
+            ),
+            (
+                "a card the judge proved SUPPORTED claim by claim is written",
+                "    if not failed:",
+                "test_a_clean_verdict_lets_the_card_be_written",
+            ),
+            (
                 "a card that gives its site away is listed",
                 "        if leaks:",
                 "test_a_renamed_site_whose_new_name_is_in_the_card_is_refused",

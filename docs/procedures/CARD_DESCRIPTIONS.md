@@ -1133,8 +1133,16 @@ for each stage S in write rate check verify (then rewrite1 rate1 check1 ... whil
   opus_handoff.py validate --dir $H-S
   $T import  --run $R --stage S                # CanaryPassed: void-batch, answer again
 $T outcomes --run $R                           # OUTCOMES.jsonl: accepted / kept
-$T judge-export --run $R --handoff $H-judge    # the pilot only: a fresh pilot_judge
+$T judge-export --run $R --handoff $H-judge    # EVERY run (owner decision D53): a fresh pilot_judge
+$T judge-import --run $R                       # JUDGE.jsonl; the pilot gate is its "pilot" field
 ```
+
+**The judge gates every write (owner decision D53, 2026-10-19).** After pilots 1-3 the Opus xhigh judge
+still found claims the verifier had passed (pilot 3: 0 contradicted, 0 unproven, 3 disputed of 142), so
+the judge round runs for every run, not only the pilot, and `mechanical/teaser.py plan` reads the run's
+`JUDGE.jsonl`: an accepted version-3 card is written only when every claim the judge listed is SUPPORTED
+with a quote the machine found; otherwise it is listed `judge-not-clean` and the site keeps its card
+(D5). A version-3 card without a judge verdict, or a verdict on another card, stops the plan.
 
 The write steps are 5.4's (`mechanical/teaser.py plan`, `apply.py`, `accept`); journal stamps continue
 at `wb-teaser-prov-s035` / `wb-teaser-card-s035`. `select --exclude-run` takes only runs of the
