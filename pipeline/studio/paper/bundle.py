@@ -32,6 +32,7 @@ import re
 from pathlib import PurePosixPath
 from typing import Any
 
+from pipeline.studio import mcode
 from pipeline.studio.errors import StudioError
 from pipeline.studio.paper.claims import source_texts
 from pipeline.studio.paper.evidence_card import build_evidence_card
@@ -45,11 +46,12 @@ from pipeline.studio.paper.workspace import (
 )
 
 #: The writer record every bundle carries. A stamp is never a guess: since 2026-10-03 the
-#: studio runs on MiniMax Code (`mcode`, model `MiniMax-M3.1-Flash-Preview`, owner decision
-#: 2026-10-03), so a new paper names the model that wrote it. Papers published earlier keep
-#: the writer they were published with.
+#: studio runs on MiniMax Code (`mcode`, owner decision 2026-10-03), so a new paper names
+#: the model that wrote it: `MiniMax-M3.1-Flash` since mcode 0.6.12 (2026-10-20), before
+#: that `MiniMax-M3.1-Flash-Preview`. Papers published earlier keep the writer they were
+#: published with.
 WRITER = {
-    "model": "MiniMax-M3.1-Flash-Preview",
+    "model": mcode.MODEL,
     "tool": "mcode",
     "research_model": "MiniMax-M3",
     "published": "automatic",

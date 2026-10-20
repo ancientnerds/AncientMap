@@ -36,7 +36,11 @@ PUBLIC_PAPER_WHERE = "r.is_public = TRUE AND r.status = 'completed' AND r.slug I
 _REFERENCES_HEADING_RE = re.compile(
     r"^#{1,3}\s*(References|Sources|Bibliography)\b.*$", re.M | re.I
 )
-_BARE_URL_RE = re.compile(r"(?<![(<\[])(https?://[^\s<>()\[\]]+)")
+# A bare URL runs to the next whitespace; its trailing punctuation is trimmed
+# by _link_bare_url. Parentheses are part of the URL (Wikipedia titles such as
+# Observer_effect_(physics)), so the class must not stop at "(".
+_BARE_URL_RE = re.compile(r"(?<![(<\[])(https?://[^\s<>\[\]]+)")
+_URL_TRAILING_PUNCT = ".,:;!?"
 _DOI_RE = re.compile(r"\bDOI:\s*(10\.\S+?)(?=[\s,;]|$)")
 
 
@@ -74,8 +78,28 @@ def format_references_md(content_md: str) -> str:
     body, refs = content_md[: m.end()], content_md[m.end() :]
     refs = re.sub(r"\n(?=\[\d+\]\s)", "\n\n", refs)
     refs = _DOI_RE.sub(r"DOI: [\1](https://doi.org/\1)", refs)
-    refs = _BARE_URL_RE.sub(r"<\1>", refs)
+    refs = _BARE_URL_RE.sub(_link_bare_url, refs)
     return body + refs
+
+
+def _link_bare_url(m: re.Match[str]) -> str:
+    """Wrap a bare URL in <...>, leaving trailing prose punctuation outside.
+
+    The GFM autolink rule: trailing ".,:;!?" is sentence punctuation, and a
+    trailing ")" belongs to the URL only while it closes a "(" inside the URL
+    (".../Observer_effect_(physics)" keeps it, "see https://x.com/a)." does not).
+    """
+    url = m.group(1)
+    end = len(url)
+    while end:
+        last = url[end - 1]
+        if last in _URL_TRAILING_PUNCT:
+            end -= 1
+        elif last == ")" and url.count(")", 0, end) > url.count("(", 0, end):
+            end -= 1
+        else:
+            break
+    return f"<{url[:end]}>{url[end:]}"
 
 
 # Image block as Theo stores it: image line, blank line, italic caption

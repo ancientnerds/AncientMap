@@ -1,6 +1,6 @@
 """One `mcode exec` run per judgement: the harness the studio runs on.
 
-Owner decision 2026-10-03: MiniMax Code (`mcode`, model `MiniMax-M3.1-Flash-Preview`,
+Owner decision 2026-10-03: MiniMax Code (`mcode`, model `MiniMax-M3.1-Flash`,
 M Plan login) replaces Claude Code in this project. This module is the only place that
 shells out to it. A judgement is never made in this process: a run is a prompt in, one
 exec JSON out, and the caller decides what to do with the model's own answer file.
@@ -44,8 +44,10 @@ from pipeline.lyra.minimax_shared import probe_minimax_quota
 from pipeline.studio.errors import StudioError
 from pipeline.utils import git_env
 
-#: The model every studio judgement runs on, exactly as the exec JSON names it.
-MODEL = "MiniMax-M3.1-Flash-Preview"
+#: The model every studio judgement runs on, exactly as the exec JSON names it. mcode
+#: 0.6.12 dropped `MiniMax-M3.1-Flash-Preview` from its model list ("not in this
+#: Session's model list", measured 2026-10-20); the id it serves is the released name.
+MODEL = "MiniMax-M3.1-Flash"
 #: What `mcode exec --model` takes.
 MODEL_REF = f"minimax/{MODEL}"
 #: The tool, as a paper's writer record and a ledger row name it.

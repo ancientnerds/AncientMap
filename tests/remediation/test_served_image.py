@@ -36,6 +36,9 @@ from served_image import vision as V  # noqa: E402
 
 from pipeline.studio import mcode  # noqa: E402
 
+#: The MiniMax id the lane's answers were calibrated under (opus_handoff.ANSWER_MODELS).
+CALIBRATED_MINIMAX = "MiniMax-M3.1-Flash-Preview"
+
 THASOS = "33d2d754-e50a-4305-beff-87d2ad2c0227"
 HABU = "0088c7e5-4a78-4b89-945d-3d5c787818e5"
 BARE = "5b36f014-cb4a-4c2f-84b3-80996c503702"
@@ -1662,6 +1665,14 @@ class TestTheMcodeDriver:
         with pytest.raises(ST.StateError, match="no key of opus_handoff.ANSWER_MODELS"):
             D.stamp_of("gpt-5.2")
 
+    def test_the_studio_model_is_refused_until_the_lane_calibrates_it(self) -> None:
+        """mcode 0.6.12 serves only `MiniMax-M3.1-Flash` (2026-10-20), and the studio moved to
+        it; this lane's answers enter production only under a calibrated stamp, so a run on the
+        new id is refused instead of being recorded under the Preview's stamp."""
+        assert mcode.MODEL != CALIBRATED_MINIMAX
+        with pytest.raises(ST.StateError, match="no key of opus_handoff.ANSWER_MODELS"):
+            D.stamp_of(mcode.MODEL)
+
     def test_the_answer_is_recorded_with_the_stamp_of_the_model_that_wrote_it(
         self, tmp_path: Path
     ) -> None:
@@ -1670,7 +1681,7 @@ class TestTheMcodeDriver:
         gallery = [c.label for c in job.question.candidates if c.kind == V.GALLERY_CANDIDATE]
         given = {c.label: V.OTHER_SITE for c in job.question.candidates}
         given[gallery[0]] = V.DEPICTS
-        got = D.record(job, handoff, self._answer(job, given, gallery[0]), mcode.MODEL)
+        got = D.record(job, handoff, self._answer(job, given, gallery[0]), CALIBRATED_MINIMAX)
         assert got == {"label": job.label, "wrote": True, "pick": gallery[0]}
         answer = OH.read_answer(
             handoff,
@@ -1694,7 +1705,7 @@ class TestTheMcodeDriver:
                 job,
                 handoff,
                 self._answer(job, dict.fromkeys(labels, "yes"), None),
-                mcode.MODEL,
+                CALIBRATED_MINIMAX,
             )
         assert D.jobs(run, handoff) == [job]
 
@@ -1711,7 +1722,7 @@ class TestTheMcodeDriver:
         given[commons[0]] = V.DEPICTS
         given[gallery[0]] = V.DEPICTS
         with pytest.raises(V.AnswerError, match="G candidates"):
-            D.record(job, handoff, self._answer(job, given, commons[0]), mcode.MODEL)
+            D.record(job, handoff, self._answer(job, given, commons[0]), CALIBRATED_MINIMAX)
         assert D.jobs(run, handoff) == [job]
 
 

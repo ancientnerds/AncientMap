@@ -14,7 +14,7 @@ publishes it through the gated VPS CLI `theo_publish`. **Publishing is automatic
 passes (spec §0): there is no owner approval step.** The apply itself sends the owner notice.
 
 Core rule: the code validates, the model judges. Every judgement is made in this session or by
-`studio mcode …` (one `mcode exec` per task, model `MiniMax-M3.1-Flash-Preview`, effort max).
+`studio mcode …` (one `mcode exec` per task, model `MiniMax-M3.1-Flash`, effort max).
 A red gate is fixed in the paper, never in a derived file or a handoff answer.
 
 Run every command from the checkout root as `./.venv/Scripts/python.exe -m pipeline.studio …`;
@@ -180,7 +180,7 @@ is IndexNow.
   `prompts/`, `accepted.json`, `verdicts.jsonl`, `mcode_runs/`).
 - Keep an evidence entry the claim check did not support, or give one another verdict.
 - Name another model in a stamp, a provenance, a ledger row or a disclosure: a stamp names the
-  model that produced the text, and this is `MiniMax-M3.1-Flash-Preview`.
+  model that produced the text, and this is `MiniMax-M3.1-Flash`.
 - Write to the production database or copy files to the VPS by hand: the CLIs are the only path.
 - Re-run a write whose outcome is unknown before reading the journal.
 - Use `--rewrite` for a small fix, or `paper publish` for a paper that is already public.

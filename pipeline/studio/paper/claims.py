@@ -103,7 +103,7 @@ Verdicts:
   quote_source_id stay "".
 - A `supported` verdict on kind "evidence" or "paragraph" stands only after an adversarial
   skeptic tried to refute it against the same files and failed: `skeptic_by` names that
-  skeptic (for example "MiniMax-M3.1-Flash-Preview (skeptic, mcode exec, <run id>, <task
+  skeptic (for example "MiniMax-M3.1-Flash (skeptic, mcode exec, <run id>, <task
   id>)"). Otherwise `skeptic_by` is "".
 
 Answer with one JSON object: {{"task_id", "verdict", "quote", "quote_source_id",

@@ -320,7 +320,7 @@ def test_register_youtube_proves_the_paper_then_ledger_then_paper(monkeypatch, t
     assert events[4][2]["evidence_timestamps"] == {"ev-01": 0}
     assert (
         events[4][2]["version"] == 1
-        and events[4][2]["writer"]["model"] == "MiniMax-M3.1-Flash-Preview"
+        and events[4][2]["writer"]["model"] == "MiniMax-M3.1-Flash"
         and events[4][2]["writer"]["tool"] == "mcode"
     )
 
