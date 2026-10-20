@@ -967,21 +967,22 @@ describe('site <-> paper links (owner decision 2026-10-20, SEO evaluation 2026-1
 
 describe('the site hero srcset (owner decision 2026-10-20, SEO audit 2026-10-19 cwv-6)', () => {
   const image = {
-    url: '/data/images/wiki/d953e9b3/Göbekli Tepe, Urfa.webp',
+    // As the payload carries it: percent-encoded once (encode_path, api/routes/sites_html.py).
+    url: '/data/images/wiki/d953e9b3/G%C3%B6bekli%20Tepe%2C%20Urfa.webp',
     author: null,
     license: null,
     license_url: null,
     commons_url: null,
     width: 1600,
     height: 1062,
-    url_800: '/data/images/wiki-800/d953e9b3/Göbekli Tepe, Urfa.webp',
+    url_800: '/data/images/wiki-800/d953e9b3/G%C3%B6bekli%20Tepe%2C%20Urfa.webp',
   }
 
   it('offers the 800 px copy and the original by its width, the src stays the original', () => {
     const html = renderRoute({ ...FIXTURES.site, image })
     const img = html.match(/<img[^>]*fetchPriority="high"[^>]*>/)?.[0] ?? ''
-    expect(img).toContain('src="/data/images/wiki/d953e9b3/Göbekli Tepe, Urfa.webp"')
-    // A space and a comma in a srcset URL would split the candidate: both are encoded.
+    expect(img).toContain('src="/data/images/wiki/d953e9b3/G%C3%B6bekli%20Tepe%2C%20Urfa.webp"')
+    // A space and a comma in a srcset URL would split the candidate: both arrive encoded.
     expect(img).toContain(
       'srcSet="/data/images/wiki-800/d953e9b3/G%C3%B6bekli%20Tepe%2C%20Urfa.webp 800w, ' +
         '/data/images/wiki/d953e9b3/G%C3%B6bekli%20Tepe%2C%20Urfa.webp 1600w"',
