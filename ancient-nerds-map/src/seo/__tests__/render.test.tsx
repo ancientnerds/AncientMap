@@ -539,9 +539,45 @@ describe('story-Seite (Task 14): der SSR-Body trägt den Python-Fragment-Inhalt'
     expect(uncurated).toContain('/globe.html#focus=1b2c3d4e-0000-4000-8000-000000000000')
   })
 
-  it('kuratierte Site behält den Detaillink und bekommt KEINEN Länder-Chip', () => {
+  // Seit 2026-10-20 auch neben der Detailseite (Owner-Entscheidung; SEO-Audit
+  // 2026-10-19 traffic-14): vorher verlinkte eine Story mit kuratierter Site
+  // den Länder-Hub nie.
+  it('kuratierte Site behält den Detaillink und bekommt den Länder-Chip dazu', () => {
     expect(html).toContain('href="/sites/denmark/trundholm-mose-1b2c3d4e"')
-    expect(html).not.toContain('More sites in')
+    expect(html).toContain('href="/sites/denmark"')
+    expect(html).toContain('More sites in <!-- -->Denmark')
+  })
+
+  it('ohne Land kein Länder-Chip', () => {
+    const noCountry = renderRoute({ ...FIXTURES.story, site_country: '' })
+    expect(noCountry).not.toContain('More sites in')
+  })
+
+  // Bis 2026-10-20 stand das Rohwort IN der h1 ("…anomaliesancient_astronauts",
+  // Story 5380, SEO-Audit 2026-10-19 tech-9).
+  it('Spekulations-Tag: lesbares Badge neben, nicht in der h1', () => {
+    const tagged = renderRoute({ ...FIXTURES.story, speculative_tag: 'ancient_astronauts' })
+    const h1 = tagged.match(/<h1[^>]*>(.*?)<\/h1>/s)?.[1] ?? ''
+    expect(h1).not.toContain('story-badge')
+    expect(h1).not.toContain('Ancient Astronauts')
+    expect(tagged).toContain('<span class="story-badge">Ancient Astronauts</span>')
+    expect(tagged).not.toContain('ancient_astronauts')
+    expect(html).not.toContain('story-badge')
+  })
+
+  it('jeder in der DB vorkommende Tag hat ein Label (SQL 2026-10-20)', () => {
+    for (const [tag, label] of [
+      ['lost_civilization', 'Lost Civilization'],
+      ['conspiracy', 'Conspiracy'],
+      ['supernatural', 'Supernatural'],
+      ['ancient_astronauts', 'Ancient Astronauts'],
+      ['giants', 'Giants'],
+      ['annunaki', 'Annunaki'],
+    ]) {
+      expect(renderRoute({ ...FIXTURES.story, speculative_tag: tag })).toContain(
+        `<span class="story-badge">${label}</span>`,
+      )
+    }
   })
 
   // Seit 2026-08-21 trägt das Payload site_type/period/significance, damit die
@@ -594,6 +630,21 @@ describe('story-Seite (Task 14): der SSR-Body trägt den Python-Fragment-Inhalt'
   it('Related-Block mit Site-Überschrift und Story-Link', () => {
     expect(html).toContain('More about Trundholm Mose')
     expect(html).toContain('href="/news-archive/trundholm-bog-survey-planned-4600"')
+  })
+
+  it('gemischte Gründe: die Site-Überschrift nur, wenn jede Story die Site teilt', () => {
+    const mixed = renderRoute({
+      ...FIXTURES.story,
+      related: [
+        ...FIXTURES.story.related,
+        { slug: 'chinook-elongated-skulls-5839', headline: 'Chinook elongated skulls', kind: 'topic' },
+      ],
+    })
+    expect(mixed).not.toContain('More about Trundholm Mose')
+    expect(mixed).toContain('Related stories')
+    expect(mixed).toContain('href="/news-archive/chinook-elongated-skulls-5839"')
+    // Vor den Quellen (Owner-Entscheidung 2026-10-09: Related vor Sources).
+    expect(mixed.indexOf('Related stories')).toBeLessThan(mixed.indexOf('>Sources<'))
   })
 
   // Seit 2026-08-21 rendert <Breadcrumbs> Markup UND BreadcrumbList-Schema

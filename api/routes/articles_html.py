@@ -13,6 +13,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from api.seo_shell import ssr_shell_response
+from api.services.story_related import StoryRow, related_stories
 from pipeline.article_html_renderer import (
     journal_citation_anchors,
     journal_thumbnail,
@@ -24,7 +25,7 @@ from pipeline.article_html_renderer import (
     render_medium_copy_html,
     story_recovery_html,
 )
-from pipeline.database import NewsArticle, NewsItem, NewsVideo, get_db
+from pipeline.database import NewsArticle, NewsItem, NewsVideo, UnifiedSite, get_db
 from pipeline.news_visibility import public_story_criteria
 from pipeline.utils.public_sites import RETIRED
 from pipeline.utils.slugs import BASE_URL, slugify, story_id_from_slug, story_slug
@@ -287,40 +288,79 @@ async def news_archive_page(page: int, q: str = "", db: Session = Depends(get_db
     return await _render_news_archive_page(page, db, q)
 
 
-def _related_stories(db: Session, item: NewsItem, limit: int = 5) -> list[dict]:
-    """Other stories worth reading after this one.
+def _story_row(
+    item_id: int,
+    headline: str,
+    tags: list | None,
+    site_id,
+    site_name_extracted: str | None,
+    site_name: str | None,
+    site_country: str | None,
+    significance: int,
+    created_at,
+    news_category: str,
+) -> StoryRow:
+    """A story as the ranking reads it; the place is the matched site's name,
+    else the extractor's raw find (what the page shows as "Site mentioned")."""
+    return StoryRow(
+        id=item_id,
+        headline=headline,
+        tags=tuple(tags or ()),
+        site_id=str(site_id) if site_id else "",
+        place=site_name or site_name_extracted or "",
+        country=site_country or "",
+        significance=significance,
+        created_at=created_at,
+        news_category=news_category,
+    )
 
-    Same site first — that is the strongest link the data offers. Most
-    stories never match a site (the extractor only resolves a minority), so
-    those fall back to the same category, otherwise an indexed story would
-    be a dead end with a single link back to the archive.
+
+def _related_stories(db: Session, item: NewsItem) -> list[dict]:
+    """Other stories worth reading after this one: same site, same place,
+    same country, shared topic words, a specific category last — the rules
+    and the 2026-10-20 measurement are in api/services/story_related.py.
+
+    Candidates are the index set (public_stories_query), loaded in one
+    column query: 2,317 rows on 2026-10-20.
     """
-    base = public_stories_query(db).filter(NewsItem.id != item.id)
-    rows: list[NewsItem] = []
-    kind = ""
-    if item.site_id:
-        rows = (
-            base.filter(NewsItem.site_id == item.site_id)
-            .order_by(NewsItem.created_at.desc())
-            .limit(limit)
-            .all()
+    candidates = [
+        _story_row(*r)
+        for r in public_stories_query(db)
+        .outerjoin(UnifiedSite, NewsItem.site_id == UnifiedSite.id)
+        .with_entities(
+            NewsItem.id,
+            NewsItem.headline,
+            NewsItem.tags,
+            NewsItem.site_id,
+            NewsItem.site_name_extracted,
+            UnifiedSite.name,
+            UnifiedSite.country,
+            NewsItem.significance,
+            NewsItem.created_at,
+            NewsItem.news_category,
         )
-        kind = "site"
-    if not rows and item.news_category:
-        rows = (
-            base.filter(NewsItem.news_category == item.news_category)
-            .order_by(NewsItem.created_at.desc())
-            .limit(limit)
-            .all()
-        )
-        kind = "category"
+        .all()
+    ]
+    site = item.site
+    story = _story_row(
+        item.id,
+        item.headline,
+        item.tags,
+        item.site_id,
+        item.site_name_extracted,
+        site.name if site else None,
+        site.country if site else None,
+        item.significance,
+        item.created_at,
+        item.news_category,
+    )
     return [
         {
             "slug": story_slug(r.headline, r.id),
             "headline": r.headline,
             "kind": kind,
         }
-        for r in rows
+        for r, kind in related_stories(story, candidates)
     ]
 
 
