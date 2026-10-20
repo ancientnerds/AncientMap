@@ -98,6 +98,16 @@ def test_shell_is_reread_when_the_build_changes(shell_dir):
     assert "/assets/story-def456.js" not in _render()
 
 
+def test_entry_version_changes_with_the_build_and_fails_loudly_without_one(shell_dir):
+    """The homepage's document cache keys on it (landing_html.py, 2026-10-20)."""
+    before = app_shell.entry_version("story.html")
+    assert before == app_shell.entry_version("story.html")
+    (shell_dir / "story.html").write_text(SHELL + "<!-- rebuilt -->", encoding="utf-8")
+    assert app_shell.entry_version("story.html") != before
+    with pytest.raises(app_shell.ShellUnavailableError, match="missing"):
+        app_shell.entry_version("absent.html")
+
+
 class TestCanonical:
     """Every indexed document must carry exactly one canonical.
 

@@ -6,8 +6,10 @@ nginx proxies "/" here (ancientnerds-nginx-config, location = /). The route
 builds a {type: "landing"} payload from the DB, renders it through the SSR
 sidecar into index.html's #root (api/seo_shell.py, same path as every other
 indexed page), substitutes the live counts into the hero and caches the
-document for 300 s. When the API or the sidecar is down nginx serves the
-static index.html instead — the page stays up, the four sections are empty.
+document in Redis: fresh for 300 s, and a visitor never waits for a rebuild
+while a copy exists (see _FRESH_S). When the API or the sidecar is down nginx
+serves the static index.html instead — the page stays up, the four sections
+are empty.
 
 Since 2026-09-10 each section is a portal on the live page and nothing else
 (owner: "Why do we still have the list of stories, journals and research
@@ -24,22 +26,27 @@ docs/superpowers/specs/2026-09-09-landing-live-sections-design.md
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import math
 import re
-import threading
 import time
 
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from api.cache import cache_delete, cache_get_bytes, cache_set_bytes
 from api.routes.news import get_news_stats
 from api.routes.theo import get_current_research
 from api.seo_shell import ssr_shell_response
 from api.services.site_stats import get_site_stats
+from pipeline.app_shell import entry_version
 from pipeline.article_html_renderer import render_error_html
-from pipeline.database import get_db
+from pipeline.database import get_db, get_session
 from pipeline.research_html_renderer import PUBLIC_PAPER_WHERE
+
+logger = logging.getLogger(__name__)
 
 # The newest papers the research portal links by title (owner, 2026-10-09). Since
 # 2026-09-10 papers hung on /research/ alone, which Googlebot fetched once in 14
@@ -76,16 +83,42 @@ def apply_stats(html: str, stats: dict) -> str:
 
 router = APIRouter()
 _HTML_HEADERS = {"Cache-Control": "public, max-age=300"}
-_CACHE_TTL = 300.0
-# (expires_at, document bytes) — one document per process; ~200 hits/day need
-# no more. Bytes, not the Response object: GZipMiddleware writes
-# Content-Encoding into the very raw_headers list a Response carries, so a
-# cached object comes back on the next hit already labelled gzip and the
-# middleware then passes the uncompressed body through untouched —
-# ERR_CONTENT_DECODING_FAILED in the browser. The body is kept as Starlette holds it
-# (Response.body is bytes | memoryview).
-_cache: dict[str, tuple[float, bytes | memoryview]] = {}
-_cache_lock = threading.Lock()
+
+# The document cache. Until 2026-10-20 it was one copy per API process, valid
+# 300 s, rebuilt inside the request that found it expired. Measured that day
+# (TTFB audit, output/seo-audit-2026-10-19/ttfb.md): a rebuild cost 0.79-1.04 s
+# when the site counts were cold too (get_site_stats 606-643 ms, news counts
+# 78-152 ms, SSR 2-3 ms) and 0.09 s when they were warm, and replayed over the
+# 868 browser requests for "/" of 2026-10-05..20 in the nginx log, 41 % of
+# them waited for one (23 % the slow kind): nginx spreads "/" over two
+# processes, so each kept its own copy, and at ~58 browser visits a day most
+# copies had expired. Now there is one copy in Redis for both processes, keyed
+# by the shell's build (a deploy never serves the previous build's document),
+# and a copy older than _FRESH_S is still served while one task per process
+# rebuilds it in the background. A visitor waits only when no copy exists:
+# after a deploy, a Redis flush, or _KEEP_S without any request ("/" draws
+# ~730 requests a day, crawlers included).
+#
+# Bytes, not the Response object: GZipMiddleware writes Content-Encoding into
+# the very raw_headers list a Response carries, so a cached object comes back
+# on the next hit already labelled gzip and the middleware then passes the
+# uncompressed body through untouched — ERR_CONTENT_DECODING_FAILED in the
+# browser.
+_FRESH_S = 300.0
+_KEEP_S = 3600
+_DOC_KEY = "landing:home:{build}"
+# The rebuild in flight in this process (a strong reference: the event loop
+# keeps only weak ones). At most one; both processes may rebuild at once.
+_refreshing: set[asyncio.Task] = set()
+
+
+def _pack(built_at: float, body: bytes) -> bytes:
+    return f"{built_at:.3f}\n".encode() + body
+
+
+def _unpack(raw: bytes) -> tuple[float, bytes]:
+    stamp, body = raw.split(b"\n", 1)
+    return float(stamp), body
 
 
 def fetch_landing_data(db: Session) -> dict:
@@ -153,24 +186,54 @@ def build_route(data: dict, site_stats: dict, theo_running: dict | None) -> dict
     }
 
 
+def _render_document(db: Session, theo_running: dict | None) -> bytes:
+    """Every blocking step of a build: the DB counts, the SSR render, the hero."""
+    site_stats = get_site_stats()
+    route = build_route(fetch_landing_data(db), site_stats, theo_running)
+    response = ssr_shell_response(
+        "index.html", route, _HTML_HEADERS, postprocess=lambda html: apply_stats(html, site_stats)
+    )
+    return bytes(response.body)
+
+
+async def _build_and_store(key: str, db: Session) -> bytes:
+    current = await get_current_research()
+    # In a worker thread: a build blocks for up to a second, and on the event
+    # loop it stalled every other request of this process meanwhile.
+    body = await asyncio.to_thread(_render_document, db, current.get("running"))
+    cache_set_bytes(key, _pack(time.time(), body), ttl=_KEEP_S)
+    return body
+
+
+async def _refresh(key: str) -> None:
+    try:
+        # Its own session: the request's closes with the response already sent.
+        with get_session() as db:
+            await _build_and_store(key, db)
+    except Exception:
+        # No older and older homepage behind a broken build: dropping the copy
+        # hands the next request the build itself, and with it the error (502,
+        # which nginx answers with the static index.html, location = /).
+        logger.exception("Homepage rebuild failed; dropped the cached document")
+        cache_delete(key)
+
+
 # HEAD too: uptime checks and link checkers probe the homepage with HEAD, and
 # the static file answered it before this route took over "/".
 @router.api_route("/home", methods=["GET", "HEAD"])
 async def home(db: Session = Depends(get_db)):
     """The homepage document. nginx maps "/" here; see the module docstring."""
-    with _cache_lock:
-        hit = _cache.get("home")
-        if hit and hit[0] > time.monotonic():
-            return Response(content=hit[1], media_type="text/html", headers=_HTML_HEADERS)
-    site_stats = get_site_stats()
-    current = await get_current_research()
-    route = build_route(fetch_landing_data(db), site_stats, current.get("running"))
-    response = ssr_shell_response(
-        "index.html", route, _HTML_HEADERS, postprocess=lambda html: apply_stats(html, site_stats)
-    )
-    with _cache_lock:
-        _cache["home"] = (time.monotonic() + _CACHE_TTL, response.body)
-    return response
+    key = _DOC_KEY.format(build=entry_version("index.html"))
+    raw = cache_get_bytes(key)
+    if raw is None:
+        body = await _build_and_store(key, db)
+    else:
+        built_at, body = _unpack(raw)
+        if time.time() - built_at >= _FRESH_S and not _refreshing:
+            task = asyncio.create_task(_refresh(key))
+            _refreshing.add(task)
+            task.add_done_callback(_refreshing.discard)
+    return Response(content=body, media_type="text/html", headers=_HTML_HEADERS)
 
 
 @router.api_route("/not-found", methods=["GET", "HEAD"])

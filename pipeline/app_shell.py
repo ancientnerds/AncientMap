@@ -44,17 +44,31 @@ class ShellUnavailableError(RuntimeError):
     """The built frontend shell is missing — the deploy is broken, not the request."""
 
 
-def _read_entry(entry: str) -> str:
-    """Read a built entry HTML, re-reading whenever the file changes on disk."""
-    path = FRONTEND_DIR / entry
+def _stat_entry(path: Path) -> os.stat_result:
     try:
-        stat = path.stat()
+        return path.stat()
     except OSError as exc:
         raise ShellUnavailableError(
             f"Built frontend shell {path} is missing. The API container needs "
             f"the frontend bind mount (./ancient-nerds-map:/app/frontend:ro) and "
             f"`npm run build` must have run. Set FRONTEND_DIST_DIR to override."
         ) from exc
+
+
+def entry_version(entry: str) -> str:
+    """The build of an entry as "<mtime_ns>-<size>": it changes with every frontend build.
+
+    A cache of a document built from the shell keys on it, so a deploy that swaps
+    dist/ is never answered with the previous build's document (landing_html.py).
+    """
+    stat = _stat_entry(FRONTEND_DIR / entry)
+    return f"{stat.st_mtime_ns}-{stat.st_size}"
+
+
+def _read_entry(entry: str) -> str:
+    """Read a built entry HTML, re-reading whenever the file changes on disk."""
+    path = FRONTEND_DIR / entry
+    stat = _stat_entry(path)
 
     key = str(path)
     with _cache_lock:
