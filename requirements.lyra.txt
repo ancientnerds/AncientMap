@@ -17,7 +17,7 @@ youtube-transcript-api>=1.0.0
 # for 2026.7.4 (403 on every clip). Naming a .dev0 version also tells pip it
 # may install pre-releases for this package (PEP 440).
 yt-dlp>=2026.8.17.73947.dev0
-Pillow>=10.0.0              # screenshot width check (hi-res backfill)
+Pillow>=13.0.0              # screenshot width check (hi-res backfill)
 requests>=2.31.0
 httpx>=0.26.0
 tenacity>=8.2.0
