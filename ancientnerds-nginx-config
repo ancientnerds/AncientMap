@@ -89,6 +89,22 @@ map $uri $log_crawler {
     ~*\.(js|mjs|css|map|png|jpe?g|webp|avif|gif|svg|ico|woff2?|ttf|json|geojson|webmanifest|mp4|webm)$ 0;
 }
 
+# Every page request of every client, with its IP: the founders dashboard's
+# "Who is visiting?" (pipeline/request_log.py). Pages plus the three requests
+# only JavaScript sends, so a page without one marks a client that ran no JS.
+# Rotated daily, deleted after 30 days (ops/logrotate/ancientnerds).
+log_format request escape=json '{"t":"$time_iso8601","ip":"$remote_addr","req":"$request_method $request_uri","status":$status,"ua":"$http_user_agent","ref":"$http_referer","proto":"$server_protocol","purpose":"$http_sec_purpose","dest":"$http_sec_fetch_dest","dnt":"$http_dnt","gpc":"$http_sec_gpc"}';
+
+map $uri $log_request {
+    default 1;
+    /pulse.js 1;
+    /api/pulse 1;
+    /api/app/interactive 1;
+    ~^/api/ 0;
+    ~^/(assets|data|landing|fonts|icons)/ 0;
+    ~*\.(js|mjs|css|map|png|jpe?g|webp|avif|gif|svg|ico|woff2?|ttf|json|geojson|webmanifest|mp4|webm)$ 0;
+}
+
 server {
     server_name ancientnerds.com www.ancientnerds.com;
 
@@ -101,6 +117,7 @@ server {
     access_log /var/log/nginx/access.log;
     access_log /var/www/ancientnerds/logs/referrals.log referral if=$log_referral;
     access_log /var/www/ancientnerds/logs/crawlers.log crawler if=$log_crawler;
+    access_log /var/www/ancientnerds/logs/requests.log request if=$log_request;
 
     # HSTS: a browser that has seen it goes to https:// itself, without the
     # port-80 hop. Measured 2026-10-20 over the access log of 05.-20.10. (TTFB
@@ -239,6 +256,10 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_intercept_errors on;
     }
+
+    # Honeypot (pipeline/visitor_class.py HONEYPOT_PATH): disallowed in robots.txt,
+    # linked only by a hidden text-less anchor; whoever fetches it ignores robots.txt.
+    location ^~ /index-all/ { add_header X-Robots-Tag "noindex, nofollow" always; return 404; }
 
     # Funnel measurement: same-origin Discord redirect. The API logs one
     # structured line per click (src + bot flag, no IP/referer) and answers
