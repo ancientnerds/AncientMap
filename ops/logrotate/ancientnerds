@@ -1,0 +1,53 @@
+# /etc/logrotate.d/ancientnerds - installed by hand, see ops/logrotate/INSTALL.md.
+# logrotate ignores a config that root does not own, so the deploy cannot
+# install it; any edit of this file needs the same `install` again.
+#
+# The nginx logs the founders dashboard reads (pipeline/crawler_log.py,
+# pipeline/referral_log.py, pipeline/request_log.py). privacy.html promises
+# 30 days for logs with IP addresses: one file per day (dateext), the live
+# file plus 29 rotated days, and maxage deletes a day file by its mtime.
+# dateyesterday names each file after the day its lines belong to (the timer
+# runs at 00:00 local time), the same names the one-time split in INSTALL.md
+# gives the older lines. The newest rotated file stays plain (delaycompress);
+# pipeline/log_files.py reads both.
+# su: the directory is group-writable by deploy, and logrotate refuses such a
+# directory without it.
+/var/www/ancientnerds/logs/crawlers.log
+/var/www/ancientnerds/logs/referrals.log
+/var/www/ancientnerds/logs/requests.log {
+    su root root
+    daily
+    dateext
+    dateyesterday
+    dateformat -%Y%m%d
+    rotate 29
+    maxage 30
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0644 www-data root
+    sharedscripts
+    postrotate
+        invoke-rc.d nginx rotate >/dev/null 2>&1
+    endscript
+}
+
+# tcpdump output of the smtp_watch container (SYN-ACK reflection guard,
+# 2026-07-18; exited since 2026-10-18): remote IP addresses, so the same 30
+# days apply. copytruncate because tcpdump keeps its own file handle and has
+# no reopen signal.
+/var/www/ancientnerds/logs/smtp_syn.log
+/var/www/ancientnerds/logs/smtp_watch.log {
+    su root root
+    daily
+    dateext
+    dateyesterday
+    dateformat -%Y%m%d
+    rotate 29
+    maxage 30
+    missingok
+    notifempty
+    compress
+    copytruncate
+}

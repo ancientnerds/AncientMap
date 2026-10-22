@@ -1,14 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""api/services/crawler_log.py: nginx's crawler lines, checked against the
+"""pipeline/crawler_log.py: nginx's crawler lines, checked against the
 operators' published addresses and folded into the dashboard's answer."""
 
 from __future__ import annotations
 
+import gzip
 import ipaddress
 import json
+import re
 from datetime import UTC, datetime, timedelta
 
-from api.services import crawler_log as cl
+from pipeline import crawler_log as cl
 
 GOOGLE_IP = "66.249.66.1"
 RANGES = {
@@ -27,7 +29,7 @@ def line(ua, ip=GOOGLE_IP, req="GET /sites/peru/x-1", status=200, t="2026-10-10T
 def test_parse_keeps_known_bots_and_skips_half_lines_and_strangers():
     fetches = cl.parse_lines(
         [
-            'ip":"1.2.3.4","req":"GET /"}',  # the tail starts mid-line
+            'ip":"1.2.3.4","req":"GET /"}',  # a half line
             line(GOOGLEBOT, req="GET /news-archive/x-1?utm_source=a"),
             line("Mozilla/5.0 (Windows NT 10.0) Chrome/130.0"),
             "{broken",
@@ -106,6 +108,7 @@ def test_the_report_buckets_days_in_utc_and_honours_the_window():
 def test_reading_a_missing_log_answers_none(monkeypatch, tmp_path):
     monkeypatch.setattr(cl, "LOG_PATH", tmp_path / "crawlers.log")
     monkeypatch.setattr(cl, "_parsed", None)
+    monkeypatch.setattr(cl, "_files", {})
     assert cl.read_fetches() is None
 
 
@@ -117,6 +120,7 @@ def test_reading_the_log_parses_its_lines(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(cl, "LOG_PATH", log)
     monkeypatch.setattr(cl, "_parsed", None)
+    monkeypatch.setattr(cl, "_files", {})
     assert [f.bot.name for f in cl.read_fetches() or []] == ["Googlebot"]
 
 
@@ -130,3 +134,81 @@ def test_the_nginx_token_list_names_every_bot_the_reader_knows():
     start = config.index("map $http_user_agent $crawler_ua")
     tokens = config[config.index("~*(", start) + 3 : config.index(")", config.index("~*(", start))]
     assert {t.lower() for t in tokens.split("|")} == set(cl.BOTS)
+
+
+def test_every_bots_key_is_lower_case():
+    """bot_of looks the matched token up lower-cased."""
+    assert all(k == k.lower() for k in cl.BOTS)
+
+
+def test_the_longest_token_wins():
+    # A token inside a longer one must not shadow it, whatever the dict order:
+    # every token, alone in a user agent, names its own bot.
+    for token, bot in cl.BOTS.items():
+        assert cl.bot_of(f"Mozilla/5.0 (compatible; {bot.name}/1.0)") is bot, token
+    tokens = [re.sub(r"\\(.)", r"\1", t) for t in cl.BOT_RE.pattern.split("|")]
+    assert [len(t) for t in tokens] == sorted((len(t) for t in tokens), reverse=True)
+    assert cl.bot_of("Mozilla/5.0 (compatible; OAI-AdsBot/1.0)").name == "OAI-AdsBot"
+    assert cl.bot_of("Mozilla/5.0 (compatible; DuckAssistBot/1.2)").kind == "ai_search"
+    assert cl.bot_of("Mozilla/5.0 (compatible; Google-GeminiNotebook)").kind == "ai_user"
+    assert cl.bot_of("facebookexternalhit/1.1").operator == "meta"
+
+
+def test_amazonbot_is_a_training_crawler():
+    assert cl.bot_of("Mozilla/5.0 (compatible; Amazonbot/0.1)").kind == "training"
+
+
+def test_mistral_training_has_no_list_and_is_never_an_impostor():
+    ranges = {"mistral": [ipaddress.ip_network("20.240.160.0/24")]}
+    (training,) = cl.parse_lines([line("MistralAI-Training/1.0", ip="47.79.1.1")])
+    (user,) = cl.parse_lines([line("MistralAI-User/1.0", ip="47.79.1.1")])
+    assert cl.verified(training, ranges) is None
+    assert cl.verified(user, ranges) is False
+
+
+def test_verified_ip_checks_a_bot_and_an_address_from_any_log():
+    googlebot = cl.BOTS["googlebot"]
+    assert cl.verified_ip(googlebot, GOOGLE_IP, RANGES) is True
+    assert cl.verified_ip(googlebot, "47.79.1.1", RANGES) is False
+    assert cl.verified_ip(cl.BOTS["bytespider"], "47.79.1.1", RANGES) is None
+
+
+def test_every_operator_list_url_is_https_json():
+    for urls in cl.RANGE_URLS.values():
+        assert all(u.startswith("https://") and u.endswith(".json") for u in urls)
+    assert "amazon" not in cl.RANGE_URLS  # HTML only, no scraper for it
+
+
+def test_reading_the_log_reads_the_rotated_family_oldest_first(monkeypatch, tmp_path):
+    log = tmp_path / "crawlers.log"
+    (tmp_path / "crawlers.log-20261020.gz").write_bytes(
+        gzip.compress((line(GOOGLEBOT, req="GET /a") + "\n").encode())
+    )
+    (tmp_path / "crawlers.log-20261021").write_text(
+        line(GOOGLEBOT, req="GET /b") + "\n", encoding="utf-8"
+    )
+    log.write_text(line(GOOGLEBOT, req="GET /c") + "\n", encoding="utf-8")
+    monkeypatch.setattr(cl, "LOG_PATH", log)
+    monkeypatch.setattr(cl, "_parsed", None)
+    monkeypatch.setattr(cl, "_files", {})
+    assert [f.path for f in cl.read_fetches() or []] == ["/a", "/b", "/c"]
+
+
+def test_a_rotated_file_is_parsed_once_and_the_live_one_again(monkeypatch, tmp_path):
+    log = tmp_path / "crawlers.log"
+    (tmp_path / "crawlers.log-20261021").write_text(
+        line(GOOGLEBOT, req="GET /a") + "\n", encoding="utf-8"
+    )
+    log.write_text(line(GOOGLEBOT, req="GET /b") + "\n", encoding="utf-8")
+    monkeypatch.setattr(cl, "LOG_PATH", log)
+    monkeypatch.setattr(cl, "CACHE_MIN_SECONDS", 0.0)
+    monkeypatch.setattr(cl, "_parsed", None)
+    monkeypatch.setattr(cl, "_files", {})
+    parsed: list[str] = []
+    real = cl.parse_lines
+    monkeypatch.setattr(cl, "parse_lines", lambda lines: parsed.extend(lines) or real(lines))
+    cl.read_fetches()
+    with log.open("a", encoding="utf-8") as fh:
+        fh.write(line(GOOGLEBOT, req="GET /c") + "\n")
+    assert [f.path for f in cl.read_fetches() or []] == ["/a", "/b", "/c"]
+    assert sum('"GET /a"' in p for p in parsed) == 1

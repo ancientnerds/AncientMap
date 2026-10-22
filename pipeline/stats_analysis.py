@@ -22,6 +22,8 @@ The rules are the ones locked in the plan (2026-09-17):
   load alone). The page view became a condition on 2026-09-19: eight sessions
   fired one ``scroll_depth`` and never loaded a page at all, and all eight sit
   inside the two fingerprints ``/clusters`` proves are a single machine.
+  One machine rule overrides it: a lockstep crawl (pipeline/visitor_class.py
+  LOCKSTEP_MIN, owner 2026-10-22) is never human.
 * session type = the first match in the order researcher → explorer →
   searcher → reader → other, which are the five values Session.kind returns.
 """
@@ -30,9 +32,12 @@ from __future__ import annotations
 
 import re
 from collections import Counter, defaultdict
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+
+from pipeline.visitor_class import HUMAN_CLASSES, cluster_ids, machine_marks, session_class
 
 #: Events only a visitor can raise. A session with one of them and a page view
 #: is a person. `outbound_click` and `discord_click` are in here because
@@ -220,6 +225,25 @@ class Session:
     #: them with google.com as referer again (2026-09-17..10-08) - not a reader
     #: going on to another page.
     urls: set[str] = field(default_factory=set)
+    #: The rest of the fingerprint pipeline/visitor_class.py groups by
+    #: (browser, os, screen, language), and Umami's session.created_at, the
+    #: start its machine rules key on. Every SQL_SESSION_EVENTS row carries
+    #: them; the defaults only keep the dataclass's positional fields first.
+    os: str | None = None
+    screen: str | None = None
+    language: str | None = None
+    created: datetime | None = None
+    #: The latest visit_id seen and the time of its first event. A session id
+    #: lasts a calendar month, so "just arrived" is about the latest visit,
+    #: not about the session: 660 of 11,359 sessions had more than one
+    #: visit_id over the 30 days to 2026-10-22.
+    visit_id: str | None = None
+    visit_start: datetime | None = None
+    #: True when the session shares a path and a clock minute with
+    #: CLUSTER_MIN_IDS - 1 other sessions (visitor_class.cluster_ids).
+    cluster: bool = False
+    #: visitor_class.machine_marks' reason: "lockstep", "burst" or "volume".
+    machine: str | None = None
 
     @property
     def pages(self) -> int:
@@ -236,6 +260,11 @@ class Session:
         # /clusters proves are a single machine.
         if not self.page_steps:
             return False
+        # The one machine mark that overrides this rule: crawls started in
+        # lockstep were human only by the pre-CAPTURE_FIX second-URL
+        # allowance below (visitor_class.LOCKSTEP_MIN says why).
+        if self.machine == "lockstep":
+            return False
         # A second URL proves a person only where a scraper does not supply
         # one. From CAPTURE_FIX on, a reader scrolls the page and says so;
         # a direct session that walks several URLs without one act of its own
@@ -246,6 +275,12 @@ class Session:
         # scroll depth, and stay human (SEO evaluation 2026-10-19, traffic-2).
         if len(self.urls) >= 2 and (self.entry != "direct" or self.started < CAPTURE_FIX):
             return True
+        return self.acted
+
+    @property
+    def acted(self) -> bool:
+        """At least one act of the visitor's own: an interaction the page did
+        not fire by itself."""
         return sum(self.events[n] for n in INTERACTIONS) > self.auto_opens
 
     @property
@@ -276,8 +311,15 @@ def human_ids(sessions: list[Session]) -> list[str]:
     return [str(s.id) for s in sessions if s.human]
 
 
-def sessions_from_rows(rows: list[dict[str, Any]]) -> list[Session]:
-    """Fold SQL_SESSION_EVENTS rows (ordered by session, time) into sessions."""
+def sessions_from_rows(
+    rows: list[dict[str, Any]], marks: dict[str, str] | None = None
+) -> list[Session]:
+    """Fold SQL_SESSION_EVENTS rows (ordered by session, time) into sessions.
+
+    `marks` are visitor_class.machine_marks over a wider fold (daily_visitors
+    passes the whole fetch's, so a burst across 00:00 UTC is not split);
+    None computes them over these same rows.
+    """
     by_id: dict[str, Session] = {}
     for r in rows:
         s = by_id.get(r["session_id"])
@@ -288,11 +330,20 @@ def sessions_from_rows(rows: list[dict[str, Any]]) -> list[Session]:
                 r.get("country"),
                 r.get("device"),
                 r.get("browser"),
+                os=r["os"],
+                screen=r["screen"],
+                language=r["language"],
+                created=r["session_created"],
             )
         # The rows arrive ordered by session and time, but a max() costs
         # nothing and does not depend on that order holding.
         if s.last_seen is None or r["created_at"] > s.last_seen:
             s.last_seen = r["created_at"]
+        # A new visit_id starts a new visit. This one does lean on the order:
+        # the visits of one session follow each other, they do not interleave.
+        if s.visit_start is None or r["visit_id"] != s.visit_id:
+            s.visit_id = r["visit_id"]
+            s.visit_start = r["created_at"]
         data = r.get("data") or {}
         if r["event_type"] == 1:
             if s.entry is None:
@@ -314,6 +365,12 @@ def sessions_from_rows(rows: list[dict[str, Any]]) -> list[Session]:
                 s.depth = max(s.depth, int(float(data.get("depth", 0) or 0)))
             if name in JOURNEY_EVENTS:
                 s.steps.append(name)
+    for i in cluster_ids(rows):
+        by_id[i].cluster = True
+    if marks is None:
+        marks = machine_marks(by_id.values())
+    for s in by_id.values():
+        s.machine = marks.get(s.id)
     return sorted(by_id.values(), key=lambda s: s.started)
 
 
@@ -339,21 +396,25 @@ UNKNOWN_COUNTRY = "??"
 
 def countries(
     sessions: list[Session],
+    *,
+    now: datetime,
     since: datetime | None = None,
-    human_only: bool = True,
+    classes: AbstractSet[str] | None = HUMAN_CLASSES,
 ) -> list[dict[str, Any]]:
     """Sessions per country, biggest first — the flag row of the pulse panel.
 
     `since` keeps the sessions still alive after that moment, so one fetch
-    serves every window the panel shows. `human_only` is off for the live
-    tile: a visitor who arrived thirty seconds ago has one page view and no
-    act to their name yet, and leaving them out would make "now" read zero.
+    serves every window the panel shows. `classes` keeps the sessions whose
+    visitor_class.session_class at `now` is one of them, the humans by
+    default; None keeps every session. The live tile adds "undecided": a
+    visitor who arrived thirty seconds ago has one page view and no act to
+    their name yet, and leaving them out would make "now" read zero.
     """
     c: Counter[str] = Counter()
     for s in sessions:
         if since is not None and (s.last_seen is None or s.last_seen < since):
             continue
-        if human_only and not s.human:
+        if classes is not None and session_class(s, now)[0] not in classes:
             continue
         c[s.country or UNKNOWN_COUNTRY] += 1
     # Alphabetical inside a tie, so a refresh does not shuffle equal counts.
@@ -662,6 +723,18 @@ def hourly_sessions(
 TRACKER_FIRST_FULL_DAY = date(2026, 9, 18)
 
 
+def sessions_per_day(rows: list[dict[str, Any]], fold: list[Session]) -> dict[date, list[Session]]:
+    """The rows folded one UTC day at a time, each day on its own rows, with
+    the machine marks of `fold` (sessions_from_rows over all the rows), so a
+    burst that crosses 00:00 UTC is judged as one burst on both of its days.
+    Only days with a row are keys."""
+    marks = {s.id: s.machine for s in fold if s.machine is not None}
+    by_day: defaultdict[date, list[dict[str, Any]]] = defaultdict(list)
+    for r in rows:
+        by_day[r["created_at"].astimezone(UTC).date()].append(r)
+    return {day: sessions_from_rows(day_rows, marks) for day, day_rows in by_day.items()}
+
+
 def daily_visitors(rows: list[dict[str, Any]], today: date) -> dict[str, Any]:
     """Visitors per UTC day from TRACKER_FIRST_FULL_DAY on: `days` through
     yesterday, newest last, one point for every day (a day without a row is a
@@ -674,13 +747,12 @@ def daily_visitors(rows: list[dict[str, Any]], today: date) -> dict[str, Any]:
     Tuesday is a visitor on Monday and on Tuesday, which is what a line per
     day has to count. `visitors` is the distinct ids of the day, the number
     Umami's own chart shows; `human` and `ai` are subsets of it that overlap.
+    The machine marks are computed once over all the rows (sessions_per_day).
     """
-    by_day: defaultdict[date, list[dict[str, Any]]] = defaultdict(list)
-    for r in rows:
-        by_day[r["created_at"].astimezone(UTC).date()].append(r)
+    per_day = sessions_per_day(rows, sessions_from_rows(rows))
 
     def point(day: date) -> dict[str, Any]:
-        sessions = sessions_from_rows(by_day[day])
+        sessions = per_day.get(day, [])
         return {
             "day": day.isoformat(),
             "visitors": len(sessions),

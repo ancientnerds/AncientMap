@@ -203,7 +203,7 @@ export interface CountryCount {
 
 /** One tile of the pulse panel: the total and the flags behind it. */
 export interface CountryWindow {
-  /** Human sessions — every session on the live tile, where nobody has acted yet. */
+  /** Humans; on the live tile humans plus arrivals not yet decided. */
   sessions: number
   /** Every session in the window, human or not. */
   all: number
@@ -213,6 +213,11 @@ export interface CountryWindow {
    *  alone; null while the one before reaches past the tracker's first day,
    *  absent on the two windows that have no comparison (now, today). */
   change?: { now: number; before: number } | null
+  /** Only on the live tile: the sessions a machine rule marked as JS
+   *  scrapers, and the country most of them came from (null when there are
+   *  none). Absent from an API older than this bundle (ci.yml swaps the
+   *  frontend first). */
+  bots?: { sessions: number; country: string | null }
 }
 
 /** GET /api/stats/countries — fixed windows, not the page's range switch. */
@@ -494,6 +499,10 @@ export interface LiveVisitor extends Visitor {
   /** Seconds since this page view started. */
   here: number
   last_seen: string
+  /** What the visitor is (pipeline/visitor_class.py), from the thirty-day
+   *  fold the server reuses for up to 90 s: null for a session that arrived
+   *  after it, absent from an API older than this bundle. */
+  class?: SessionClass | null
 }
 /** GET /api/stats/live — fixed windows, not the page's range switch. */
 export interface LiveData {
@@ -551,4 +560,95 @@ export interface DevicesData {
   /** Folded onto the primary subtag: en-US and en-GB are one audience, and
    *  "en 114 of 168" is the only headline five small rows carry. */
   language_groups: LanguageCount[]
+}
+
+/** pipeline/visitor_class.py SESSION_CLASSES, in its order (a Python test
+ *  compares the three unions below with the module). */
+export type SessionClass = 'human' | 'human_ai' | 'scraper_js' | 'undecided' | 'unclear'
+
+/** visitor_class.SESSION_REASONS: why a session is a JS scraper (the first
+ *  three) or stays unclear (the rest). */
+export type SessionReason = 'burst' | 'volume' | 'lockstep' | 'no_pageview' | 'one_page' | 'cluster' | 'multi_direct'
+
+/** visitor_class.REQUEST_CLASSES: what sent a page request nginx logged. */
+export type RequestClass =
+  | 'browser_js'
+  | 'scraper_nojs'
+  | 'robots_ignorer'
+  | 'self_declared_bot'
+  | 'impostor'
+  | 'search'
+  | 'ai_training'
+  | 'ai_live'
+  | 'bot_other'
+  | 'prefetch'
+  | 'unclear'
+
+export interface RequestClassCount {
+  /** Page requests (and honeypot fetches) of the class. */
+  requests: number
+  /** Clients behind them: one (ip, user agent) per UTC day. */
+  clients: number
+  /** Of those clients, the ones that also fetched the honeypot. */
+  honeypot: number
+  /** Of those clients, the known bots whose operator publishes no addresses. */
+  unverified: number
+  /** Of those clients, the ones in a datacenter network; absent without the ASN table. */
+  datacenter?: number
+}
+
+export interface AsnCount {
+  /** 0 is an address in no routed range. */
+  asn: number
+  name: string
+  clients: number
+}
+
+/** pipeline/request_log.py report(): the last seven days of nginx's request log. */
+export interface RequestReport {
+  covered_from: string | null
+  /** The ASN table's date; null without the table. */
+  asn_as_of: string | null
+  classes: Record<RequestClass, RequestClassCount>
+  /** The five biggest networks per class; absent without the ASN table. */
+  top_asns?: Record<RequestClass, AsnCount[]>
+  daily: Array<{ day: string } & Record<RequestClass, number>>
+  /** Page views on the server-rendered paths, search arrivals left out:
+   *  nginx's browser_js requests beside Umami's page views, as aggregates. */
+  beacon_check: { pages_with_js: number; umami_pageviews: number }
+}
+
+export interface Burst {
+  start: string
+  end: string
+  sessions: number
+  browser: string | null
+  os: string | null
+  screen: string | null
+  language: string | null
+  country: string | null
+}
+
+/** GET /api/stats/visitors?days=N */
+export interface VisitorsData {
+  days: number
+  /** visitor_class.LABELS: the English name of every class and reason. */
+  labels: Record<string, string>
+  sessions: {
+    total: number
+    classes: Record<SessionClass, number>
+    reasons: Record<SessionReason, number>
+    /** Rule-humans whose fingerprint crossed a burst or volume threshold. */
+    humans_in_machine_groups: number
+  }
+  daily: Array<{ day: string } & Record<SessionClass, number>>
+  /** The bursts that ended in the last seven days, newest first, at most ten. */
+  bursts: Burst[]
+  requests: {
+    /** null while requests.log is missing; `log_reason` then says why. */
+    report: RequestReport | null
+    log_reason: string | null
+    /** Why the report has no network columns; null when it has them. */
+    asn_reason: string | null
+  }
 }

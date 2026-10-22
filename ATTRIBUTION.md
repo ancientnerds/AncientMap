@@ -258,6 +258,16 @@ This project uses open source software. Key dependencies include:
 - Qdrant (Apache 2.0)
 - SearXNG (AGPL-3.0 - self-hosted)
 
+### Visitor statistics (founders dashboard)
+- **X4BNet lists_vpn** - https://github.com/X4BNet/lists_vpn
+  - **License**: MIT, Copyright (c) 2024 X4B (Mathew Heard)
+  - **Data**: the datacenter AS numbers (`input/datacenter/ASN.txt`), vendored in
+    `pipeline/data/datacenter_asns.txt` with the full license notice in its header
+- **iptoasn.com** - https://iptoasn.com/
+  - **License**: Public Domain Dedication and License (PDDL)
+  - **Data**: `ip2asn-v4-u32.tsv.gz`, the IPv4 range to AS number table; downloaded by the
+    deploy and looked up locally (`pipeline/asn.py`); no address is ever sent to it
+
 ---
 
 ## AI/ML Components

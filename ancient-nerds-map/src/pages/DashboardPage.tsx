@@ -1,5 +1,5 @@
 /**
- * The founders dashboard at https://stats.ancientnerds.com/ — twenty-one panels,
+ * The founders dashboard at https://stats.ancientnerds.com/ — twenty-two panels,
  * each titled with the question it answers, fed by /api/stats/* behind the
  * an_stats cookie (api/routes/stats_access.py). Mobile first: one column,
  * two from 720 px. Umami itself stays one link away.
@@ -47,9 +47,11 @@ import type {
   SearchData,
   ServerData,
   SourcesData,
+  VisitorsData,
 } from '../components/dashboard/types'
 import { useStats } from '../components/dashboard/useStats'
 import { VisitorMap } from '../components/dashboard/VisitorMap'
+import { Visitors } from '../components/dashboard/Visitors'
 
 /** Same target as the entry page's button (stats_access.gate_html): OAuth on the main host, handoff back here. */
 const ENTRY_HREF = 'https://ancientnerds.com/api/auth/discord?return_to=%2Fapi%2Fauth%2Fstats-handoff'
@@ -74,7 +76,7 @@ const ALL_DAYS = Math.ceil((Date.now() - TRACKER_START) / DAY_MS) + 1
 const PROBLEM_DAYS = 7
 
 /** The jump bar: a short name for every panel, in the page's order, linked to
- *  the panel's anchor (panelId of its question). Twenty-one panels run to
+ *  the panel's anchor (panelId of its question). Twenty-two panels run to
  *  11,000 px on a desktop and 16,000 on a phone; this is the way across. */
 const JUMPS: Array<[string, string]> = [
   ['Now', 'Who is here right now?'],
@@ -86,6 +88,7 @@ const JUMPS: Array<[string, string]> = [
   ['Content', 'What gets opened, what gets searched?'],
   ['Creators', 'How much do we send to the creators?'],
   ['Crawlers', 'Who crawls us?'],
+  ['Visitors', 'Who is visiting?'],
   ['Speed', 'Are we fast for Google?'],
   ['Globe', 'Does the globe actually come up?'],
   ['Paths', 'How do they move through the site, and where do they leave?'],
@@ -139,6 +142,8 @@ export default function DashboardPage() {
   const search = useStats<SearchData>('search', 600_000)
   const vitals = useStats<FieldVitalsData>('field-vitals', 3_600_000)
   const crawlers = useStats<CrawlersData>(`crawlers?days=${ALL_DAYS}`, 300_000)
+  // Cached five minutes on the server, like the crawler log beside it.
+  const visitors = useStats<VisitorsData>(`visitors?days=${ALL_DAYS}`, 300_000)
   // The host samples itself every five minutes; asking more often shows nothing new.
   const server = useStats<ServerData>('server', 300_000)
   const globe = useStats<GlobeData>(`globe?days=${ALL_DAYS}`)
@@ -158,9 +163,9 @@ export default function DashboardPage() {
   const members = useStats<MembersData>('members', 300_000)
   // `members` is deliberately not in this array. It is the only route on a
   // different database behind a different dependency, and one hiccup there must
-  // not replace the other twenty panels with "Session expired".
+  // not replace the other twenty-one panels with "Session expired".
   const panels = [
-    overview, countries, daily, search, vitals, crawlers, server, map, live, globe,
+    overview, countries, daily, search, vitals, crawlers, visitors, server, map, live, globe,
     clusters, content, creators, feedback, sources, journeys, problems, devices,
   ]
   const unauthorized = panels.some(s => s.error === 'unauthorized')
@@ -196,6 +201,7 @@ export default function DashboardPage() {
           <TopContent state={content} />
           <Creators state={creators} />
           <Crawlers state={crawlers} />
+          <Visitors state={visitors} />
           <FieldVitals state={vitals} />
           <GlobeReach state={globe} />
           <Paths state={journeys} />

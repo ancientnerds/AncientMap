@@ -53,9 +53,11 @@ import type {
   SearchData,
   ServerData,
   SourcesData,
+  VisitorsData,
 } from '../types'
 import type { Loaded } from '../useStats'
 import { VisitorMap } from '../VisitorMap'
+import { Visitors } from '../Visitors'
 
 const ok = <T,>(data: T): Loaded<T> => ({ data, error: null })
 const failed = { data: null, error: 'failed' } as const
@@ -73,6 +75,22 @@ function body(html: string): string {
 }
 
 const window0: CountryWindow = { sessions: 0, all: 0, countries: [] }
+
+/** visitor_class.LABELS, the part the panel prints in these tests. */
+const LABELS: Record<string, string> = {
+  human: 'Humans',
+  human_ai: 'Humans from AI answers',
+  scraper_js: 'JS scrapers',
+  undecided: 'Just arrived, not decided yet',
+  unclear: 'Unclear',
+  burst: '8+ starts of one fingerprint in 10 minutes',
+  lockstep: 'Crawls of a fingerprint seen starting 3+ crawls in one minute (within 7 days)',
+  browser_js: 'Browsers that ran our JavaScript',
+  scraper_nojs: 'Browser-like clients without JavaScript',
+  robots_ignorer: 'Clients that ignore robots.txt',
+  search: 'Search engines',
+  ai_training: 'AI training crawlers',
+}
 const hour = { hour: '2026-09-19T08:00:00+00:00', sessions: 0, human: 0, ai: 0 }
 
 const EMPTY = {
@@ -142,6 +160,20 @@ const EMPTY = {
     log_reason: null,
   } as SourcesData,
   devices: { sessions: 0, devices: [], languages: [], language_groups: [] } as DevicesData,
+  visitors: {
+    days: 36,
+    labels: LABELS,
+    sessions: {
+      total: 0,
+      classes: { human: 0, human_ai: 0, scraper_js: 0, undecided: 0, unclear: 0 },
+      reasons: { burst: 0, volume: 0, lockstep: 0, no_pageview: 0, one_page: 0, cluster: 0, multi_direct: 0 },
+      humans_in_machine_groups: 0,
+    },
+    daily: [],
+    bursts: [],
+    // The VPS before the deploy that adds nginx's request log.
+    requests: { report: null, log_reason: 'requests.log does not exist yet.', asn_reason: null },
+  } as VisitorsData,
   members: {
     members: 0,
     founders: 2,
@@ -158,6 +190,7 @@ const emptyPanels: Array<[string, JSX.Element]> = [
   ['SearchGoogle', <SearchGoogle state={ok(EMPTY.search)} />],
   ['FieldVitals', <FieldVitals state={ok(EMPTY.vitals)} />],
   ['Crawlers', <Crawlers state={ok(EMPTY.crawlers)} />],
+  ['Visitors', <Visitors state={ok(EMPTY.visitors)} />],
   ['ServerLoad', <ServerLoad state={ok(EMPTY.server)} />],
   ['Creators', <Creators state={ok(EMPTY.creators)} />],
   ['LiveNow', <LiveNow state={ok(EMPTY.live)} />],
@@ -182,6 +215,7 @@ const failedPanels: Array<[string, JSX.Element]> = [
   ['SearchGoogle', <SearchGoogle state={failed} />],
   ['FieldVitals', <FieldVitals state={failed} />],
   ['Crawlers', <Crawlers state={failed} />],
+  ['Visitors', <Visitors state={failed} />],
   ['ServerLoad', <ServerLoad state={failed} />],
   ['Creators', <Creators state={failed} />],
   ['LiveNow', <LiveNow state={failed} />],
@@ -419,5 +453,119 @@ describe('Problems', () => {
     // Severity is not carried by colour alone: the dot names its own tier.
     expect(html).toContain('aria-label="high"')
     expect(html).toContain('aria-label="low"')
+  })
+})
+
+describe('Pulse Now tile', () => {
+  const now = (over: Partial<CountryWindow>): CountriesData => ({
+    ...EMPTY.countries,
+    now: { sessions: 2, all: 1431, countries: [{ country: 'DE', sessions: 2 }], ...over },
+  })
+
+  it('counts people and puts the scrapers beside them, with their country', () => {
+    const html = renderToString(
+      <Pulse state={failed} countries={ok(now({ bots: { sessions: 1427, country: 'SG' } }))} />
+    ).replace(/<!-- -->/g, '')
+    expect(html).toContain('people, last 5 min')
+    expect(html).toContain('plus 1,427 bots/scrapers (mostly Singapore)')
+    expect(html).toContain('dash-delta--down')
+  })
+
+  it('names no country it does not know', () => {
+    const html = renderToString(<Pulse state={failed} countries={ok(now({ bots: { sessions: 3, country: '??' } }))} />)
+    expect(html.replace(/<!-- -->/g, '')).toContain('plus 3 bots/scrapers<')
+  })
+
+  it('adds no line while no machine rule marked a live session', () => {
+    const html = renderToString(<Pulse state={failed} countries={ok(now({ bots: { sessions: 0, country: null } }))} />)
+    expect(html).toContain('people, last 5 min')
+    expect(html).not.toContain('bots/scrapers')
+  })
+
+  it('says the bots are included while the API predates the split', () => {
+    // ci.yml swaps the frontend before it rebuilds the API.
+    const html = renderToString(<Pulse state={failed} countries={ok(now({}))} />)
+    expect(html).toContain('sessions, last 5 min (bots included)')
+    expect(html).not.toContain('bots/scrapers')
+  })
+})
+
+describe('Visitors', () => {
+  const some: VisitorsData = {
+    ...EMPTY.visitors,
+    sessions: {
+      ...EMPTY.visitors.sessions,
+      total: 11357,
+      classes: { human: 1506, human_ai: 90, scraper_js: 3905, undecided: 1, unclear: 5855 },
+      reasons: { ...EMPTY.visitors.sessions.reasons, burst: 3382, lockstep: 49 },
+      humans_in_machine_groups: 1,
+    },
+    daily: [
+      { day: '2026-10-21', human: 50, human_ai: 3, scraper_js: 12, undecided: 0, unclear: 200 },
+      { day: '2026-10-22', human: 40, human_ai: 2, scraper_js: 1427, undecided: 1, unclear: 180 },
+    ],
+    bursts: [
+      {
+        start: '2026-10-22T16:42:42+00:00',
+        end: '2026-10-22T16:54:54+00:00',
+        sessions: 1427,
+        browser: 'chrome',
+        os: 'Windows 10',
+        screen: '1280x1200',
+        language: 'en-US',
+        country: 'SG',
+      },
+    ],
+  }
+
+  it('prints why the request log is missing instead of an empty list', () => {
+    const html = renderToString(<Visitors state={ok(EMPTY.visitors)} />)
+    expect(html).toContain('requests.log does not exist yet.')
+    expect(html).not.toContain('server-rendered pages and without arrivals')
+  })
+
+  it('names the recent bursts and the humans inside machine groups in the open', () => {
+    const html = renderToString(<Visitors state={ok(some)} />).replace(/<!-- -->/g, '')
+    expect(html).toContain(
+      'Bursts in the last 7 days: 22 Oct 16:42-16:54 UTC: 1,427 sessions of chrome / Windows 10 / 1280x1200 / en-US, mostly Singapore.'
+    )
+    expect(html).toContain('1 confirmed human shares a fingerprint with a burst or a day&#x27;s volume and still counts as human')
+    expect(html).toContain('Crawls of a fingerprint seen starting 3+ crawls in one minute (within 7 days)')
+    expect(html).toContain('Sessions per UTC day, by class')
+    expect(html).toContain('Plus 1 just arrived and not decided yet, of 11,357 sessions.')
+  })
+
+  it('lists every page request by what sent it, with the networks behind the unknown ones', () => {
+    const zero = { requests: 0, clients: 0, honeypot: 0, unverified: 0, datacenter: 0 }
+    const classes = Object.fromEntries(
+      ['browser_js', 'scraper_nojs', 'robots_ignorer', 'self_declared_bot', 'impostor', 'search', 'ai_training', 'ai_live', 'bot_other', 'prefetch', 'unclear'].map(c => [c, zero])
+    ) as NonNullable<VisitorsData['requests']['report']>['classes']
+    const report = {
+      covered_from: '2026-10-23T00:00:05+00:00',
+      asn_as_of: '2026-10-22T17:12:50+00:00',
+      classes: {
+        ...classes,
+        browser_js: { requests: 900, clients: 300, honeypot: 0, unverified: 0, datacenter: 4 },
+        scraper_nojs: { requests: 1500, clients: 120, honeypot: 7, unverified: 0, datacenter: 110 },
+        ai_training: { requests: 40, clients: 2, honeypot: 0, unverified: 2, datacenter: 2 },
+      },
+      top_asns: Object.fromEntries(Object.keys(classes).map(c => [c, []])) as unknown as NonNullable<
+        NonNullable<VisitorsData['requests']['report']>['top_asns']
+      >,
+      daily: [],
+      beacon_check: { pages_with_js: 512, umami_pageviews: 480 },
+    }
+    report.top_asns.scraper_nojs = [{ asn: 45102, name: 'ALIBABA US', clients: 80 }]
+    const data = { ...some, requests: { report, log_reason: null, asn_reason: null } }
+    const html = renderToString(<Visitors state={ok(data)} />).replace(/<!-- -->/g, '')
+    expect(html).toContain('Browser-like clients without JavaScript')
+    expect(html).toContain('120 clients · 110 from datacenters · 7 hit the trap')
+    expect(html).toContain('2 clients · 2 from datacenters · unverified')
+    expect(html).toContain('AS45102 ALIBABA US')
+    expect(html).toContain('nginx saw 512 page requests from browsers that ran our JavaScript, Umami counted 480 page views.')
+    // The biggest class first.
+    expect(html.indexOf('without JavaScript')).toBeLessThan(html.indexOf('Browsers that ran our JavaScript'))
+    // A class that sent nothing is not listed.
+    expect(html).not.toContain('Search engines')
   })
 })

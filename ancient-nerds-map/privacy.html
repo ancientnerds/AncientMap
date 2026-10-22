@@ -53,22 +53,26 @@
 
     <main class="legal-main">
       <h1>Privacy Policy</h1>
-      <p class="subtitle">Last updated: 2026-09-17 · GDPR-compliant disclosure</p>
+      <p class="subtitle">Last updated: 2026-10-22 · GDPR-compliant disclosure</p>
 
       <h2>1. Data Controller</h2>
       <p>Martin Dominiak — Dominiak Consulting (sole proprietorship), c/o Autorenglück #43603, Albert-Einstein-Straße 47, 02977 Hoyerswerda, Germany. Contact: <a href="mailto:ancient.nerds@protonmail.com">ancient.nerds@protonmail.com</a>. Full operator details in the <a href="/imprint.html">Imprint</a>. No data protection officer is required for the size of this operation.</p>
 
       <h2>2. What We Process When You Visit the Site</h2>
-      <p>Standard web-server logs (Caddy / nginx, JSON format):</p>
+      <p>Web-server logs (nginx, JSON format). Every page request is logged, also from browsers that send Do Not Track or Global Privacy Control:</p>
       <ul>
         <li>IP address</li>
         <li>Browser user agent</li>
         <li>HTTP referer</li>
         <li>Requested URL and timestamp</li>
         <li>HTTP status code and bytes transferred</li>
+        <li>HTTP protocol version</li>
+        <li>The browser's Sec-Purpose and Sec-Fetch-Dest headers (whether a request is a prefetch, and what kind of resource it asks for)</li>
+        <li>The Do-Not-Track (DNT) and Global-Privacy-Control (Sec-GPC) signals</li>
       </ul>
       <p><strong>Legal basis:</strong> Art. 6 (1) lit. f GDPR (legitimate interest — operation and security of the service).<br>
-      <strong>Purpose:</strong> delivery of the service, abuse protection, error analysis.<br>
+      <strong>Purpose:</strong> delivery of the service, abuse protection, error analysis, and telling people from automated clients (bots, scrapers) in our visitor statistics.<br>
+      <strong>Bot detection:</strong> the network operator (AS number) of an IP address is looked up in a local copy of a public database (iptoasn.com, public domain); no IP address is sent to a third party.<br>
       <strong>Retention:</strong> 30 days, after which logs are automatically rotated and deleted. IP addresses are not separately anonymised; they are removed together with the log entry on expiry.</p>
 
       <h2>2a. Reach Measurement (Umami, self-hosted)</h2>
@@ -138,7 +142,7 @@
       <p><strong>Third-country transfer:</strong> Discord (USA) is based on Standard Contractual Clauses and, where applicable, the EU-US Data Privacy Framework. MEE6 (France) and Stripe Payments Europe (Ireland) are within the EU/EEA; no third-country transfer.</p>
 
       <h2>7. Hosting and Infrastructure</h2>
-      <p>The site is hosted on dedicated servers operated within the European Union. The stack runs in Docker (Caddy, nginx, FastAPI, PostgreSQL + PostGIS, Redis, Qdrant). Server logs and database content are stored on this infrastructure.</p>
+      <p>The site is hosted on dedicated servers operated within the European Union. The stack runs in Docker behind nginx (FastAPI, PostgreSQL + PostGIS, Redis, Qdrant). Server logs and database content are stored on this infrastructure.</p>
 
       <h2>8. Recipients and Third-Country Transfers (Summary)</h2>
       <table>

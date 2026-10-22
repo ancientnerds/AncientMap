@@ -38,6 +38,13 @@ def ev(
         "country": "DE",
         "device": "mobile",
         "data": data or {},
+        # Umami's session columns. A screen of its own per session keeps it
+        # out of the machine rules' fingerprint groups unless a test sets one.
+        "os": "Android",
+        "screen": f"{session}-screen",
+        "language": "de-DE",
+        "session_created": T,
+        "visit_id": f"v-{session}",
     }
 
 
@@ -252,12 +259,21 @@ def test_countries_rank_by_sessions_and_keep_only_humans():
     for r in rows:
         r["country"] = {"de1": "DE", "de2": "DE", "us": "US", "bot": "SG"}[r["session_id"]]
     sessions = fs.sessions_from_rows(rows)
-    assert fs.countries(sessions) == [
+    later = T + timedelta(hours=1)
+    assert fs.countries(sessions, now=later) == [
         {"country": "DE", "sessions": 2},
         {"country": "US", "sessions": 1},
     ]
-    # The live tile counts everybody: nobody has acted thirty seconds in.
-    assert fs.countries(sessions, human_only=False) == [
+    # The live tile adds the arrivals not decided yet: nobody has acted
+    # thirty seconds in.
+    live = {"human", "human_ai", "undecided"}
+    assert fs.countries(sessions, now=T, classes=live) == [
+        {"country": "DE", "sessions": 2},
+        {"country": "SG", "sessions": 1},
+        {"country": "US", "sessions": 1},
+    ]
+    assert fs.countries(sessions, now=later, classes=live) == fs.countries(sessions, now=later)
+    assert fs.countries(sessions, now=later, classes=None) == [
         {"country": "DE", "sessions": 2},
         {"country": "SG", "sessions": 1},
         {"country": "US", "sessions": 1},
@@ -276,9 +292,9 @@ def test_countries_slice_by_the_last_sign_of_life_not_by_arrival():
     sessions = fs.sessions_from_rows(rows)
     for s in sessions:
         s.country = "DE"
-    recent = fs.countries(sessions, since=T.replace(minute=45))
+    recent = fs.countries(sessions, now=T, since=T.replace(minute=45))
     assert recent == [{"country": "DE", "sessions": 1}]
-    assert fs.countries(sessions, since=None) == [{"country": "DE", "sessions": 2}]
+    assert fs.countries(sessions, now=T, since=None) == [{"country": "DE", "sessions": 2}]
 
 
 def test_a_country_umami_could_not_place_still_counts():
@@ -287,7 +303,7 @@ def test_a_country_umami_could_not_place_still_counts():
         ev("a", path="/globe.html", minute=1),
     ]
     rows[0]["country"] = rows[1]["country"] = None
-    assert fs.countries(fs.sessions_from_rows(rows)) == [
+    assert fs.countries(fs.sessions_from_rows(rows), now=T) == [
         {"country": fs.UNKNOWN_COUNTRY, "sessions": 1}
     ]
 
@@ -721,6 +737,30 @@ def test_daily_visitors_counts_a_returning_id_on_each_day_and_judges_each_day_al
     ]
 
 
+def test_daily_visitors_judges_a_lockstep_across_midnight_with_one_marks_map():
+    """Three crawls started within a minute around 00:00 UTC: two on the
+    18th, one on the 19th. Each day alone holds fewer than LOCKSTEP_MIN, so
+    only the marks of the whole fetch see the lockstep."""
+    fp = {"browser": "chrome", "os": "Windows 10", "screen": "1600x1600", "language": "zh-CN"}
+    midnight = datetime(2026, 9, 19, tzinfo=UTC)
+    rows = []
+    for sid, start in (("a", -40), ("b", -20), ("c", 10)):
+        at = midnight + timedelta(seconds=start)
+        for i in range(5):
+            row = ev(sid, path=f"/sites/cn/{sid}-{i}")
+            row.update(fp, created_at=at + timedelta(seconds=2 * i), session_created=at)
+            rows.append(row)
+    by_day = [
+        [r for r in rows if r["created_at"] < midnight],
+        [r for r in rows if r["created_at"] >= midnight],
+    ]
+    # Folded a day at a time, each of them is a person (five URLs before CAPTURE_FIX).
+    assert [sum(s.human for s in fs.sessions_from_rows(day)) for day in by_day] == [2, 1]
+    out = fs.daily_visitors(rows, fs.TRACKER_FIRST_FULL_DAY + timedelta(days=2))
+    assert [p["visitors"] for p in out["days"]] == [2, 1]
+    assert [p["human"] for p in out["days"]] == [0, 0]
+
+
 # ---- globe ----------------------------------------------------------------
 
 
@@ -1012,12 +1052,19 @@ def test_clusters_report_the_flagged_total_and_the_fingerprints():
 
 
 def _after_fix(row, **change):
-    return {**row, "created_at": fs.CAPTURE_FIX + timedelta(hours=1, minutes=row["created_at"].minute), **change}
+    return {
+        **row,
+        "created_at": fs.CAPTURE_FIX + timedelta(hours=1, minutes=row["created_at"].minute),
+        **change,
+    }
 
 
 def test_a_direct_session_needs_an_act_of_its_own_after_the_capture_fix():
     # Der CN/SG-Desktop-Crawl: direkt, Ort -> Ort, kein Scrollen.
-    crawl = [_after_fix(ev("c", path="/sites/peru/a-1")), _after_fix(ev("c", path="/sites/peru/b-2", minute=1))]
+    crawl = [
+        _after_fix(ev("c", path="/sites/peru/a-1")),
+        _after_fix(ev("c", path="/sites/peru/b-2", minute=1)),
+    ]
     reader = [
         _after_fix(ev("r", path="/sites/peru/a-1")),
         _after_fix(ev("r", "scroll_depth", event_type=2, data={"depth": 25}, minute=1)),

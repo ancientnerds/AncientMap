@@ -1,5 +1,5 @@
-import { fmtDay, fmtDayHour, fmtInt, fmtShare } from './format'
-import { Explain, Panel, Status } from './Panel'
+import { countryName, fmtDay, fmtDayHour, fmtInt, fmtShare } from './format'
+import { Explain, HowCounted, Panel, Status } from './Panel'
 import { Tile } from './Tile'
 import type { CountriesData, CountryWindow, HourBucket, Overview } from './types'
 import type { Loaded } from './useStats'
@@ -48,6 +48,22 @@ export function changeNote(w: CountryWindow, days: number): { text: string; cls?
     text: `${pct >= 0 ? '+' : '−'}${Math.abs(pct)} % on the ${days} days before`,
     cls: pct >= 0 ? 'dash-delta--up' : 'dash-delta--down',
   }
+}
+
+/** The Now tile's sub-line. An API older than this bundle sends no `bots`
+ *  and still counts every session on the tile, so the line says so. */
+export function nowSub(w: CountryWindow): string {
+  return w.bots ? 'people, last 5 min' : 'sessions, last 5 min (bots included)'
+}
+
+/** "plus 1,427 bots/scrapers (mostly Singapore)" under the Now tile; nothing
+ *  while no machine rule marked a live session. */
+export function botsNote(w: CountryWindow): { text: string; cls: string } | undefined {
+  if (!w.bots || w.bots.sessions === 0) return undefined
+  const { sessions, country } = w.bots
+  // "??" is a session Umami could not place: no country to name.
+  const where = country && country !== '??' ? ` (mostly ${countryName(country)})` : ''
+  return { text: `plus ${fmtInt(sessions)} bots/scrapers${where}`, cls: 'dash-delta--down' }
 }
 
 /** "human sessions, 34 % of 154" — the same sentence for every closed window. */
@@ -117,11 +133,21 @@ export function Pulse({ state, countries }: { state: Loaded<Overview>; countries
       <Status state={countries} />
       {c && (
         <div className="dash-tiles">
-          <Tile label="Now" value={c.now.sessions} sub="sessions, last 5 min" countries={c.now.countries} />
+          <Tile label="Now" value={c.now.sessions} sub={nowSub(c.now)} countries={c.now.countries} note={botsNote(c.now)} />
           <Tile label="Today" value={c.today.sessions} sub={humanSub(c.today)} countries={c.today.countries} />
           <Tile label="7 days" value={c.d7.sessions} sub={humanSub(c.d7)} countries={c.d7.countries} note={changeNote(c.d7, 7)} />
           <Tile label="30 days" value={c.d30.sessions} sub={humanSub(c.d30)} countries={c.d30.countries} note={changeNote(c.d30, 30)} />
         </div>
+      )}
+      {c && (
+        <HowCounted>
+          Now counts people: the confirmed humans of the last five minutes plus the arrivals whose latest visit
+          started under 30 minutes ago and that no machine rule has marked - someone who arrived a minute ago has
+          not had the chance to act yet. The bots beside it are the sessions a machine rule marked: 8 or more
+          starts of one browser, operating system, screen size and language within 10 minutes, 50 or more in one
+          UTC day, or 3 or more page-walking crawls of one such fingerprint started within one minute. Who
+          visits by class, and why: Who is visiting? below.
+        </HowCounted>
       )}
       {/* Two resources, two statuses. /overview is the heaviest query on the
           page and fails on its own; without this line the panel keeps its four

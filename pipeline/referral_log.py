@@ -89,6 +89,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from pipeline import log_files
+
 #: Where the log is mounted inside the API container (docker-compose.yml binds
 #: ./logs:/app/logs:ro on the api service anchor, which api2 inherits). The
 #: environment variable exists so the CLI and the tests can point elsewhere.
@@ -100,8 +102,10 @@ LOG_PATH = Path(os.getenv("REFERRAL_LOG_PATH", "/app/logs/referrals.log"))
 #: (the rule until 2026-10-19) covered 5.3 days of a 4.4 MB log that reaches
 #: back to 2026-09-17, so every window past five days was a silent lower bound
 #: (SEO evaluation 2026-10-19, traffic-15). An appended file costs the new
-#: lines only; a replaced or truncated one (another inode, a smaller size) is
-#: read from the start again.
+#: lines only. A replaced or truncated one (another inode, a smaller size) is
+#: logrotate's daily rotation (ops/logrotate/ancientnerds, 30 days): the whole
+#: family is read again, the rotated days (pipeline/log_files.py) and the new
+#: live file from its start, so the history survives the rotation.
 
 #: The parse is skipped unless the file changed AND this long has passed. The
 #: file identity alone is not enough: at ten times today's traffic a new line
@@ -322,8 +326,8 @@ _cache: _Followed | None = None
 
 
 def read_visits() -> list[Visit] | None:
-    """Every visit the log holds, parsed. None when the file is not there -
-    every dev box.
+    """Every visit the log's family holds, oldest first. None when the
+    current file is not there - every dev box.
 
     Re-read only when the file changed and at least CACHE_MIN_SECONDS have
     passed since the last read, so a busy log cannot turn the dashboard's
@@ -343,7 +347,13 @@ def read_visits() -> list[Visit] | None:
     ):
         return _cache.visits
     if _cache is None or _cache.inode != stat.st_ino or stat.st_size < _cache.offset:
-        offset, visits = 0, []
+        offset = 0
+        visits = [
+            v
+            for rotated in log_files.family(LOG_PATH)
+            if rotated != LOG_PATH
+            for v in parse_lines(log_files.read_file(rotated))
+        ]
     else:
         offset, visits = _cache.offset, _cache.visits
     with LOG_PATH.open("rb") as fh:

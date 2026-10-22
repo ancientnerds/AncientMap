@@ -10,6 +10,7 @@ des Coverage-Blocks, die auf dem Status beruht und nicht auf dem User-Agent.
 
 from __future__ import annotations
 
+import gzip
 import json
 from datetime import UTC, datetime, timedelta
 
@@ -370,7 +371,36 @@ def test_read_visits_parses_only_what_was_appended(monkeypatch, tmp_path):
     assert parsed == [1, 0, 1]
 
 
-def test_read_visits_starts_over_on_a_truncated_log(monkeypatch, tmp_path):
+def test_read_visits_reads_the_family_again_after_a_rotation(monkeypatch, tmp_path):
+    # Bis 22.10. begann er nach einer Rotation leer. Seitdem rotiert logrotate
+    # täglich (dateext), und die Historie liegt in den rotierten Dateien.
+    log = tmp_path / "referrals.log"
+    two = [_line("https://example.org/", "GET /a"), _line("https://example.org/", "GET /b")]
+    log.write_text("\n".join(two) + "\n", encoding="utf-8")
+    monkeypatch.setattr(rl, "LOG_PATH", log)
+    monkeypatch.setattr(rl, "CACHE_MIN_SECONDS", 0.0)
+    assert len(rl.read_visits() or []) == 2
+    log.rename(tmp_path / "referrals.log-20261022")
+    log.write_text(_line("https://chatgpt.com/", "GET /c") + "\n", encoding="utf-8")
+    hosts = [v.host for v in rl.read_visits() or []]
+    assert hosts == ["example.org", "example.org", "chatgpt.com"]
+
+
+def test_read_visits_reads_gzipped_days_oldest_first(monkeypatch, tmp_path):
+    log = tmp_path / "referrals.log"
+    (tmp_path / "referrals.log-20261020.gz").write_bytes(
+        gzip.compress((_line("https://bing.com/", "GET /a") + "\n").encode())
+    )
+    (tmp_path / "referrals.log-20261021").write_text(
+        _line("https://duckduckgo.com/", "GET /b") + "\n", encoding="utf-8"
+    )
+    log.write_text(_line("https://chatgpt.com/", "GET /c") + "\n", encoding="utf-8")
+    monkeypatch.setattr(rl, "LOG_PATH", log)
+    hosts = [v.host for v in rl.read_visits() or []]
+    assert hosts == ["bing.com", "duckduckgo.com", "chatgpt.com"]
+
+
+def test_read_visits_starts_over_on_a_truncated_log_without_rotated_days(monkeypatch, tmp_path):
     log = tmp_path / "referrals.log"
     two = [_line("https://example.org/", "GET /a"), _line("https://example.org/", "GET /b")]
     log.write_text("\n".join(two) + "\n", encoding="utf-8")

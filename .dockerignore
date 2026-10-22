@@ -16,3 +16,5 @@ logs
 .pytest_cache
 .mypy_cache
 bash.exe.stackdump
+# IP-to-ASN table the deploy downloads (pipeline/asn.py)
+asn

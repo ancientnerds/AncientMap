@@ -658,3 +658,5 @@ output/remediation/calibration/*
 output/remediation/candidate_search/*/pictures/
 output/remediation/candidate_search/*/cache/
 output/remediation/candidate_search/pilotte-2026-10-06-100/
+# IP-to-ASN table the deploy downloads (pipeline/asn.py)
+/asn/

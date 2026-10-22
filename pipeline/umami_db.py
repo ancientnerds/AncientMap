@@ -6,10 +6,11 @@ scoped to one website and a half-open time window [:since, :until); nothing
 here writes.
 
 Umami 3 columns this relies on (verified on production, 2026-09-17):
-``website_event`` (event_id, website_id, session_id, created_at, url_path,
-referrer_domain, utm_source, event_type, event_name), ``event_data``
-(website_event_id, data_key, string_value, number_value) and ``session``
-(session_id, country, city, device, browser, screen, os, language).
+``website_event`` (event_id, website_id, session_id, visit_id, created_at,
+url_path, referrer_domain, utm_source, event_type, event_name),
+``event_data`` (website_event_id, data_key, string_value, number_value) and
+``session`` (session_id, created_at, country, city, device, browser, screen,
+os, language).
 event_type 1 = pageview, 2 = custom event.
 """
 
@@ -24,6 +25,7 @@ from typing import Any
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, Engine
 
+from pipeline import visitor_class
 from pipeline.config import settings
 
 #: The Umami website whose events we read — the same id the tracker tag carries.
@@ -95,7 +97,8 @@ GROUP BY 1, 2, 3
 
 SQL_SESSION_EVENTS = """
 SELECT e.session_id, e.created_at, e.event_type, e.event_name, e.url_path, e.referrer_domain,
-       e.utm_source, s.country, s.device, s.browser,
+       e.utm_source, s.country, s.device, s.browser, s.os, s.screen, s.language,
+       s.created_at AS session_created, e.visit_id,
        (SELECT jsonb_object_agg(d.data_key, coalesce(d.string_value, d.number_value::text))
           FROM event_data d WHERE d.website_event_id = e.event_id) AS data
 FROM website_event e JOIN session s ON s.session_id = e.session_id
@@ -521,8 +524,10 @@ GROUP BY session_id
 #: there are exactly two fingerprints and no false positive; at two the result
 #: is six rows and 52 sessions, because one real visitor whose browser reports
 #: itself as both "safari" and "ios-webview" and one Android phone counted
-#: under two operating system strings each split into two rows.
-CLUSTER_MIN_IDS = 3
+#: under two operating system strings each split into two rows. One
+#: definition: pipeline/visitor_class.py applies the same group to the
+#: SQL_SESSION_EVENTS rows.
+CLUSTER_MIN_IDS = visitor_class.CLUSTER_MIN_IDS
 
 #: Cookieless analytics gives every request a fresh session id when the
 #: client keeps no state. A headless fetcher that touches one path with three

@@ -33,6 +33,12 @@ from urllib.request import urlopen
 from playwright.sync_api import Route, sync_playwright
 
 ROOT = Path(__file__).resolve().parent.parent
+# `python scripts/dashboard_screenshots.py` puts scripts/ first on the path,
+# and the Visitors fixture takes its labels from the one definition.
+sys.path.insert(0, str(ROOT))
+
+from pipeline.visitor_class import LABELS, REQUEST_CLASSES  # noqa: E402
+
 FRONTEND = ROOT / "ancient-nerds-map"
 OUT = ROOT / "docs" / "reports" / "screenshots"
 PORT = 4173
@@ -137,6 +143,8 @@ def live_rows() -> list[dict]:
             "title": titles[i],
             "here": heres[i],
             "last_seen": (datetime.now(UTC) - timedelta(minutes=i * 3)).isoformat(),
+            # Every word the row can print, the longest first (LiveNow.tsx).
+            "class": ["human_ai", "human", None, "scraper_js", "undecided", "unclear"][i],
         }
         for i in range(6)
     ]
@@ -242,6 +250,74 @@ CRAWLER_BOTS = [
     ("Perplexity-User", "perplexity", "ai_user", True, 3, 3, {"2xx": 3}),
 ]
 
+
+def visitors_daily(days: int = 22) -> list[dict]:
+    """Sessions per day by class, ending today: a steady human line under a
+    big scraper day, the shape the SG burst of 2026-10-22 drew."""
+    end = datetime.now(UTC).date()
+    return [
+        {
+            "day": (end - timedelta(days=days - 1 - i)).isoformat(),
+            "human": 40 + (i * 7) % 23,
+            "human_ai": 2 + i % 4,
+            "scraper_js": 1427 if i == days - 1 else 60 + (i * 37) % 140,
+            "undecided": 1 if i == days - 1 else 0,
+            "unclear": 150 + (i * 13) % 90,
+        }
+        for i in range(days)
+    ]
+
+
+def request_classes() -> dict:
+    """Every request class with a count, so the list draws its longest labels."""
+    counts = dict(
+        zip(REQUEST_CLASSES, (2210, 1830, 41, 905, 388, 3120, 2604, 377, 211, 640, 96), strict=True)
+    )
+    return {
+        c: {"requests": n, "clients": max(1, n // 7), "honeypot": 3 if c == "scraper_nojs" else 0,
+            "unverified": max(1, n // 7) if c == "ai_training" else 0, "datacenter": n // 11}
+        for c, n in counts.items()
+    }  # fmt: skip
+
+
+VISITORS = {
+    "days": 36,
+    "labels": LABELS,
+    "sessions": {
+        "total": 11357,
+        "classes": {"human": 1506, "human_ai": 90, "scraper_js": 3905, "undecided": 1, "unclear": 5855},
+        "reasons": {"burst": 3382, "volume": 474, "lockstep": 49, "no_pageview": 369, "one_page": 5127, "cluster": 195, "multi_direct": 164},
+        "humans_in_machine_groups": 1,
+    },
+    "daily": visitors_daily(),
+    "bursts": [
+        {"start": "2026-10-22T16:42:42+00:00", "end": "2026-10-22T16:54:54+00:00", "sessions": 1427,
+         "browser": "chrome", "os": "Windows 10", "screen": "1280x1200", "language": "en-US", "country": "SG"},
+        {"start": "2026-10-16T03:10:05+00:00", "end": "2026-10-16T05:58:41+00:00", "sessions": 612,
+         "browser": "chrome", "os": "Windows 10", "screen": "800x600", "language": "zh-CN", "country": "US"},
+    ],
+    "requests": {
+        "report": {
+            "covered_from": (datetime.now(UTC) - timedelta(days=7)).isoformat(),
+            "asn_as_of": "2026-10-22T17:12:50+00:00",
+            "classes": request_classes(),
+            "top_asns": {
+                c: [
+                    {"asn": 45102, "name": "ALIBABA-CN-NET Alibaba US Technology Co., Ltd.", "clients": 120},
+                    {"asn": 16509, "name": "AMAZON-02", "clients": 74},
+                    {"asn": 14061, "name": "DIGITALOCEAN-ASN", "clients": 31},
+                    {"asn": 0, "name": "Not routed", "clients": 2},
+                ]
+                for c in REQUEST_CLASSES
+            },
+            "daily": [],
+            "beacon_check": {"pages_with_js": 1912, "umami_pageviews": 1804},
+        },
+        "log_reason": None,
+        "asn_reason": None,
+    },
+}  # fmt: skip
+
 CRAWLERS = {
     "report": {
         "covered_from": "2026-10-09T21:40:00+02:00",
@@ -346,11 +422,13 @@ FIXTURES: dict[str, dict] = {
     "search": SEARCH,
     "field-vitals": FIELD_VITALS,
     "crawlers": CRAWLERS,
+    "visitors": VISITORS,
     "countries": {
         "now": {
             "sessions": 3,
-            "all": 3,
+            "all": 1430,
             "countries": [{"country": "US", "sessions": 2}, {"country": "DE", "sessions": 1}],
+            "bots": {"sessions": 1427, "country": "SG"},
         },
         "today": country_window(24),
         "d7": country_window(4),
@@ -762,8 +840,35 @@ EMPTY_FIXTURES: dict[str, dict] = {
         "report": None,
         "log_reason": "nginx's crawler log is not readable at /app/logs/crawlers.log.",
     },
+    # The VPS before the deploy that adds nginx's request log.
+    "visitors": {
+        "days": 1,
+        "labels": LABELS,
+        "sessions": {
+            "total": 0,
+            "classes": {"human": 0, "human_ai": 0, "scraper_js": 0, "undecided": 0, "unclear": 0},
+            "reasons": {
+                "burst": 0,
+                "volume": 0,
+                "lockstep": 0,
+                "no_pageview": 0,
+                "one_page": 0,
+                "cluster": 0,
+                "multi_direct": 0,
+            },
+            "humans_in_machine_groups": 0,
+        },
+        "daily": [],
+        "bursts": [],
+        "requests": {
+            "report": None,
+            "log_reason": "nginx's request log is not readable at /app/logs/requests.log: requests.log does not exist yet, or this is a development box.",
+            "asn_reason": None,
+        },
+    },
     "countries": {
-        w: {"sessions": 0, "all": 0, "countries": []} for w in ("now", "today", "d7", "d30")
+        **{w: {"sessions": 0, "all": 0, "countries": []} for w in ("today", "d7", "d30")},
+        "now": {"sessions": 0, "all": 0, "countries": [], "bots": {"sessions": 0, "country": None}},
     },
     "overview": {
         "days": 7,

@@ -1,7 +1,7 @@
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { LiveNow, fmtSpan, pageUrl, secondsSince } from '../LiveNow'
+import { LiveNow, classWord, fmtSpan, pageUrl, secondsSince } from '../LiveNow'
 import type { LiveData, LiveVisitor } from '../types'
 import type { Loaded } from '../useStats'
 
@@ -95,5 +95,22 @@ describe('LiveNow row', () => {
     const html = renderToString(<LiveNow state={live({ visitors: [visitor({ path: '' })] })} />)
     expect(html).toContain('href="https://ancientnerds.com/"')
     expect(html).toContain('Temple of Diana')
+  })
+})
+
+describe('LiveNow class', () => {
+  it('keeps the bots in the list and says what each row is', () => {
+    const html = renderToString(
+      <LiveNow state={live({ total: 2, shown: 2, visitors: [visitor({ class: 'scraper_js' }), visitor({ session: 'b', class: 'human' })] })} />
+    )
+    expect(html).toContain('chrome · mobile · JS scraper')
+    expect(html).toContain('chrome · mobile · human')
+  })
+
+  it('says a session newer than the server fold is not classed yet, and an older API nothing', () => {
+    expect(classWord(visitor({ class: null }))).toBe('not classed yet')
+    expect(classWord(visitor({ class: 'undecided' }))).toBe('just arrived')
+    expect(classWord(visitor())).toBeUndefined()
+    expect(renderToString(<LiveNow state={live()} />)).toContain('chrome · mobile<')
   })
 })
