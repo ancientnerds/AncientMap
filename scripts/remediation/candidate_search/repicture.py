@@ -47,6 +47,7 @@ import argparse
 import hashlib
 import io
 import json
+import re
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
@@ -160,7 +161,10 @@ def rendering_problem(url: str) -> str | None:
     parts = urlsplit(url)
     if parts.scheme != "https" or (parts.hostname or "") not in HOSTS:
         return f"{url!r} is no Commons rendering"
-    if "/thumb/" in parts.path and f"/{CM.RENDER_WIDTH}px-" not in parts.path:
+    # A multi-page original (TIFF, PDF, DjVu) renders as `[lossy-|lossless-]page<N>-<W>px-<name>`.
+    if "/thumb/" in parts.path and not re.match(
+        rf"(?:(?:lossy|lossless)-)?(?:page\d+-)?{CM.RENDER_WIDTH}px-", parts.path.rsplit("/", 1)[-1]
+    ):
         return f"{url!r} names another width than the lane's {CM.RENDER_WIDTH} px"
     return None
 

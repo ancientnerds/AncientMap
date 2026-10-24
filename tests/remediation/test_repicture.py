@@ -167,6 +167,30 @@ def test_only_a_commons_rendering_of_the_lanes_width_is_fetched(tmp_path: Path, 
     assert out["statuses"] == {RP.REFUSED: 1} and commons.asked == []
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ab/Vouni.tiff/"
+        "lossy-page1-1280px-Vouni.tiff.jpg",
+        "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ab/Plan.pdf/page2-1280px-Plan.pdf.jpg",
+    ],
+)
+def test_a_multi_page_rendering_of_the_lanes_width_is_the_lanes(url: str) -> None:
+    assert RP.rendering_problem(url) is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ab/Vouni.tiff/"
+        "lossy-page1-960px-Vouni.tiff.jpg",
+        "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ab/Tomb.jpg/x1280px-Tomb.jpg",
+    ],
+)
+def test_a_multi_page_rendering_of_another_width_is_refused(url: str) -> None:
+    assert "names another width" in RP.rendering_problem(url)
+
+
 def test_an_original_smaller_than_the_width_is_its_own_rendering() -> None:
     assert (
         RP.rendering_problem("https://upload.wikimedia.org/wikipedia/commons/a/ab/Tomb.jpg") is None

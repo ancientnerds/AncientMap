@@ -1873,9 +1873,16 @@ CLOSEOUT_CASES: list[Case] = [
     g("gap1: a Commons host over https", REPICTURE,
       '    if parts.scheme != "https" or (parts.hostname or "") not in HOSTS:',
       "test_only_a_commons_rendering_of_the_lanes_width_is_fetched", T_REPIC),
-    g("gap1: the lane's width", REPICTURE,
-      '    if "/thumb/" in parts.path and f"/{CM.RENDER_WIDTH}px-" not in parts.path:',
+    c("gap1: the lane's width", REPICTURE,
+      '    if "/thumb/" in parts.path and not re.match(\n'
+      r'        rf"(?:(?:lossy|lossless)-)?(?:page\d+-)?{CM.RENDER_WIDTH}px-", parts.path.rsplit("/", 1)[-1]'
+      '\n    ):',
+      "    if False:",
       "test_only_a_commons_rendering_of_the_lanes_width_is_fetched", T_REPIC),
+    c("gap1: a multi-page rendering keeps the lane's width", REPICTURE,
+      r'rf"(?:(?:lossy|lossless)-)?(?:page\d+-)?{CM.RENDER_WIDTH}px-"',
+      r'rf"(?:(?:lossy|lossless)-)?(?:page\d+-)?\d+px-"',
+      "test_a_multi_page_rendering_of_another_width_is_refused", T_REPIC),
     g("gap1: a still-picture Content-Type", REPICTURE,
       "    if content_type is not None and mime not in RENDER_MIMES:",
       "test_a_rendering_that_is_not_the_lanes_is_refused", T_REPIC),
