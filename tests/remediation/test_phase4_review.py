@@ -510,6 +510,47 @@ def test_the_stamps_are_the_sites_own_calls_in_its_own_batch() -> None:
     assert A.site_ai_system(minimax, batch_id="p4-0001", site_id="site-1") == M.AI_SYSTEM
 
 
+def test_a_re_asked_call_discloses_only_the_model_whose_answer_is_stored() -> None:
+    """The review of 2026-10-24 (D56, exact): deleting a stored answer is how a human asks again
+    (`model_stage.judge_site`), and the new call adds a second ledger line for the label. A selector
+    answered first by a MiniMax agent and asked again under D6 by Sonnet rests on Sonnet alone."""
+    first = {"kind": "model_call", "batch_id": "p4-0001", "label": "site-1/select"}
+    rows = [
+        {**first, "model": X.MS.OH.MINIMAX_MODEL},
+        {**first, "label": "site-1/review", "model": X.MS.OH.OPUS_MODEL},
+        {**first, "model": X.MS.OH.SONNET_MODEL},
+    ]
+    assert A.answer_stamps(rows, batch_id="p4-0001", site_id="site-1") == {
+        X.MS.OH.SONNET_MODEL,
+        X.MS.OH.OPUS_MODEL,
+    }
+    assert A.site_ai_system(rows, batch_id="p4-0001", site_id="site-1") == M.AI_SYSTEM_CLAUDE
+    asked_back = [*rows, {**first, "model": X.MS.OH.MINIMAX_MODEL}]
+    assert A.site_ai_system(asked_back, batch_id="p4-0001", site_id="site-1") == M.AI_SYSTEM
+
+
+def test_the_review_reads_the_run_ledger_once_per_batch(tmp_path: Path, monkeypatch) -> None:
+    """S6 reads the ledger once and adds each bought review call to the rows it read, so the
+    disclosure after the review names the reviewer without re-parsing the file per site."""
+    batch_dir = X.make_batch(tmp_path, [X.w_site("site-1"), X.w_site("site-2")])
+    ledger = tmp_path / "L.jsonl"
+    script = {("site-1", "select"): SELECT, ("site-2", "select"): SELECT}
+    selector = _Stamped(script, X.MS.OH.SONNET_MODEL)
+    assert SEL.select_batch(batch_dir, ledger=ledger, runner=selector) == 0
+    B.write_records(batch_dir / B.TRANSLATIONS_FILE, [])
+    B.write_records(batch_dir / B.RESTATEMENTS_FILE, [])
+    assert A.assemble_batch(batch_dir, ledger=ledger) == 0
+    reads: list[Path] = []
+    real = A.read_ledger
+    monkeypatch.setattr(A, "read_ledger", lambda path: reads.append(path) or real(path))
+    review = {("site-1", "review"): ALL_KEEP, ("site-2", "review"): ALL_KEEP}
+    reviewer = _Stamped(review, X.MS.OH.HAIKU_MODEL)
+    assert RV.review_batch(batch_dir, ledger=ledger, runner=reviewer, reverify=Verifier()) == 0
+    assert reads == [ledger]
+    both = M.ai_system_for([X.MS.OH.SONNET_MODEL, X.MS.OH.HAIKU_MODEL])
+    assert {a.provenance.ai_system for a in _written(batch_dir)} == {both}
+
+
 def _empty_ledger(tmp_path: Path) -> Path:
     path = tmp_path / "empty.jsonl"
     path.write_text("", encoding="utf-8")

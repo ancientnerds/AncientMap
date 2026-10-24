@@ -348,6 +348,9 @@ def review_batch(
     run = B.run_name(batch_dir)
     reviews = F.EvidenceStore(batch_dir / B.REVIEWS_DIR)
     book = L.Ledger(ledger)
+    # The run ledger, read once: each bought review call's line is added to these rows as the
+    # ledger gets it, so the disclosure of a reviewed text is computed without re-reading the file.
+    calls = A.read_ledger(ledger) if assembled else []
     written: list[M.Assembly] = []
     holds: list[M.Hold] = []
     rows: list[dict[str, Any]] = []
@@ -359,7 +362,7 @@ def review_batch(
         built = A.build_site(
             site_inputs,
             run=run,
-            ai_system=A.site_ai_system(A.read_ledger(ledger), batch_id=batch_id, site_id=site_id),
+            ai_system=A.site_ai_system(calls, batch_id=batch_id, site_id=site_id),
         )
         row: dict[str, Any] = {"site_id": site_id, "sentences": len(built.sentences)}
         rows.append(row)
@@ -383,6 +386,15 @@ def review_batch(
             error = str(exc)
             row["outcome"] = "not-asked"
             break
+        if bought.model is not None:  # a call was made: `judge_site` appended its ledger line
+            calls.append(
+                {
+                    "kind": L.LedgerKind.MODEL_CALL.value,
+                    "batch_id": batch_id,
+                    "label": bought.label,
+                    "model": bought.model,
+                }
+            )
         row.update(
             label=bought.label,
             prompt_sha256=bought.prompt_sha256,
@@ -405,7 +417,7 @@ def review_batch(
             verdict,
             reverify,
             run=run,
-            ai_system=A.site_ai_system(A.read_ledger(ledger), batch_id=batch_id, site_id=site_id),
+            ai_system=A.site_ai_system(calls, batch_id=batch_id, site_id=site_id),
         )
         holds.extend(outcome.holds)
         row.update(

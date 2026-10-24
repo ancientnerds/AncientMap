@@ -456,6 +456,18 @@ D1; rule 1 of section 1 otherwise holds):
   requires (decision D5: the selector's answer by name, the reviewer's, each with its prompt and
   its ledger line) holds for these answers unchanged; a ledger line says `metering: unmetered`
   and carries zero tokens and a cost of 0.
+- **The disclosure is derived from the answering stamps** (orchestrator item X10, 2026-10-24; the
+  exact strings are owner decision D56's, in `model4.ai_system_for`). S4 (`assemble._finish`) no
+  longer stamps a constant: `assemble.site_ai_system` passes the stamps of the answers the site's
+  text rests on to `ai_system_for`, read from the run's own ledger (`<run>/LEDGER.jsonl`) -
+  per label of the site in the batch (`<site_id>/<answer_key>`) the stamp of its **last**
+  `model_call` line, because that call's answer is the one stored: `judge_site` writes the line
+  before it stores the answer and asks nothing while an answer is stored, so a second line for a
+  label is a re-ask after a deleted answer, and the text does not rest on the first one (a
+  selector answered by MiniMax, deleted and re-asked by Sonnet, discloses Claude only). S6
+  (`review4.review_batch`) reads the ledger once per batch and adds each bought review call's
+  stamp to the rows it read, so a reviewed text names its reviewer. No recorded call, a missing
+  ledger or a stamp no handoff answer carries is refused, never guessed.
 
 ## 7. What Track B built against these contracts (WB-B1 ... WB-B4)
 

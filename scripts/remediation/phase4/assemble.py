@@ -156,16 +156,23 @@ def read_ledger(path: Path) -> list[dict]:
 def answer_stamps(
     ledger: Sequence[Mapping[str, object]], *, batch_id: str, site_id: str
 ) -> set[str]:
-    """The stamps of this site's model calls in this batch: every `model_call` line of the run's
-    ledger whose label is the site's (`<site_id>/<answer_key>`, the labels `write4.ledger_labels`
-    puts into the journal evidence)."""
-    return {
-        str(row["model"])
-        for row in ledger
-        if row.get("kind") == LedgerKind.MODEL_CALL.value
-        and row.get("batch_id") == batch_id
-        and str(row.get("label", "")).startswith(f"{site_id}/")
-    }
+    """The stamps of the answers this site's text rests on in this batch: per label of the site
+    (`<site_id>/<answer_key>`, the labels `write4.ledger_labels` puts into the journal evidence),
+    the stamp of its **last** `model_call` line in the run's ledger. That call's answer is the one
+    stored: `model_stage.judge_site` appends the line before it stores the answer and asks nothing
+    while an answer is stored, so a second line for a label is a re-ask - the answer of the line
+    before was deleted (or never stored), and the text does not rest on it (D56: the disclosure
+    names exactly the models the text rests on)."""
+    last: dict[str, str] = {}
+    for row in ledger:
+        label = str(row.get("label", ""))
+        if (
+            row.get("kind") == LedgerKind.MODEL_CALL.value
+            and row.get("batch_id") == batch_id
+            and label.startswith(f"{site_id}/")
+        ):
+            last[label] = str(row["model"])
+    return set(last.values())
 
 
 def site_ai_system(ledger: Sequence[Mapping[str, object]], *, batch_id: str, site_id: str) -> str:

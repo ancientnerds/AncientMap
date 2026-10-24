@@ -260,6 +260,10 @@ class Bought:
     answer_sha256: str
     cost_usd: float
     wrote: bool
+    #: The stamp of the model that answered, `None` when a stored answer was reused (nothing was
+    #: asked, so no ledger line was written): the line `judge_site` appended, as the caller's
+    #: in-memory ledger rows need it (`review4.review_batch`).
+    model: str | None
 
 
 def buy(
@@ -301,4 +305,5 @@ def buy(
         answer_sha256=M.text_sha256(judged.answer.text),
         cost_usd=judged.answer.cost_usd,
         wrote=judged.wrote,
+        model=judged.answer.model,
     )
