@@ -218,11 +218,13 @@ sonst nicht kennt. Quellen und Datum stehen jeweils dabei; Stand ist der 19.09.2
   liegt als Prompt-LABEL (`summary.txt`, PERIOD SCOPE) vor, nicht als Datumscheck — nur
   1,45 % der Sites sind datiert. Sichtbarkeit ab `significance>=2`, Rückzug = HTTP 410.
   *(`project-medieval-scope-rule`, 2026-09-11)* **Seit D58 (Eigentümer, 2026-10-24) gilt das Label
-  auch in der kuratierten DB:** nur das mittelalterliche Alte Welt (Europa, Byzanz = Türkei/Zypern,
+  auch in der kuratierten DB:** nur das mittelalterliche Alte Welt (Europa, Byzanz = Zypern,
   Wikinger) endet bei 500 AD, alle anderen Regionen bei 1500 AD (`scope_region`,
-  `passes_date_cutoff`, SQL `outside_label_window`); Levante, Ägypten, Byzantinisch-Afrika,
-  Kaukasus und Grönland sind Grenzfälle, die ein Scope-Urteil nach dem Subjekt entscheidet;
-  L'Anse aux Meadows bleibt draußen (Q189113). Runbook `WD2_SERVED_IMAGE_AND_SCOPE.md` 1b/2.2.
+  `passes_date_cutoff`, SQL `outside_label_window`); Anatolien (Türkei), Levante, Ägypten,
+  Byzantinisch-Afrika, Kaukasus und Grönland sind Grenzfälle, die ein Scope-Urteil nach dem Subjekt
+  entscheidet; L'Anse aux Meadows bleibt draußen (Q189113). Wo kein Urteil gefragt wird (Loader,
+  Lyra-Promotion, Prospector), gilt `label_scope`: ein Grenzfall wird gehalten, nicht durchgelassen,
+  und ein Wikinger-Item ist draußen. Runbook `WD2_SERVED_IMAGE_AND_SCOPE.md` 1b/2.2.
 - **Jede Zitatstelle muss maschinell belegbar sein.** LLM setzt nie Zitationsnummern.
   *(`feedback_no_ai_slop`, 2026-04-08)*
 - **A Commons `thumburl` is no proof of a picture, and an original is no thumbnail.**
