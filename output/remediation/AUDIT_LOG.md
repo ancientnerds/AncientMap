@@ -14285,3 +14285,36 @@ What changed (code and tests only; **nothing was sealed, answered, released or w
 - Incident closed: another session pushed the identical fix first (`e1a57d8`, incl. a migration-scanning test); my push
   was rejected (main moved during the gates), my branch and worktree removed (junctions unlinked with rmdir first, the
   shared .venv intact). Both APIs healthy on e1a57d8c. Then `rebuild_static` (276 s), freshness 0 differing sites.
+
+## 2026-10-24 - Close-out (Claude Code, Opus 5.5, ultracode): owner decisions D54-D66, S1-S3
+
+- **D54-D66** (`OWNER_DECISIONS_2026-10-08.md`, asked after a read-only scout workflow `wf_06def1d9-46f` of 7 area
+  agents + 1 adversarial verifier: 24 candidate questions, 12 already decided). Live log and resume point of this run:
+  `output/remediation/final-2026-10-08/CLOSEOUT_2026-10-24.md`.
+- **S1 housekeeping**: 6 dead worktrees removed (junctions unlinked first; p4-pilot's 113,476 unique output files archived
+  as `output/remediation/archive/p4-pilot-output-unique-2026-10-24.tar.gz`), the two SEO/stats reports committed (D64),
+  the untracked wd3/wd4 and card_stats 2026-09-30 proof trails committed (the two void 47/48 MB card_stats SQL files stay
+  local). Story backbone restarted on the VPS (D61, alt-history first).
+- **Visitor classes (D66)**: the owner ran the logrotate install (10:38 CEST; verified: root-owned rule, 14 + 29 day files,
+  nginx appending); push 2a `062d52f` live (api+api2 062d52f9, robots Disallow `/index-all/`, 404 noindex, requests.log
+  written). Pitfall: a push worktree made with `GIT_LFS_SKIP_SMUDGE=1` fails 29 tests + 10 errors on LFS pointers
+  (countries.geojson, historical boundaries) - `git lfs checkout` (local store, 17 s) fixed it; the gate takes ~18 min
+  (15,337 tests). Push 2b scheduled >= 48 h later.
+- **S2 build** (`wf_749de555-4cf`, 9 tasks in sparse worktrees, each adversarially reviewed by a fresh Opus agent until
+  approve; 38 agents): D56 exact disclosure (`model4.ai_system_for` exact per model set, lane `card-exact-sNNN` for the 43
+  all-Opus pilot cards), `card_adversarial` (Opus high; the stale card-context tier move of `adversarial` recorded as
+  `SETTLED_TIER_MOVES`), D60 correct kinds in `theo_publish --correct` (`probative_image_changes`, `hero_image`,
+  `card_description`, `evidence_changes`; mogollon's block was `extract_title_terms` dropping an inner article), D57 insert
+  lane (`scripts/remediation/insert_site/`), D58 label scope rule + un-retire lane + D50 disputed gating (also the
+  prospector and the public scope statement in `disclaimerContent.ts`, which would otherwise state the old numeric cut),
+  images (D48/D49 hero moves, D59 thumbnails, gap-1 repicture, gap-3 binding), description blockers (X10 via
+  `ai_system_for`, the closed WN batch p4wc-4325 reconstructed from the journal, the raw_data stale-read scope, the 160
+  defects), the beta label (D62, held on `closeout/beta-label` until S11), phase-8 tools (site_type merge lane, card_stats
+  extension, owner-list builder). Review rounds caught 3 blocking and ~15 major findings, all fixed.
+- **S3**: merged into the run tree with `-c core.autocrlf=false` (sealed modules stay LF; checked), two conflicts resolved
+  (WD2 runbook test list: both kept; `mechanical/mutation_sweep.py`: the duplicate card_stats insert pair kept once, as the
+  phase8 comment asked); sweeps `d25-` + `insert-site` 158/158 fired; gitleaks over 62 commits clean; `ruff format`,
+  `generate_shared_data --verify`, lint-imports, the Lyra import check green; pushed `fc35e09` through the pre-push gates;
+  CI green, deploy live (api+api2 fc35e092, all containers healthy, no new migration).
+- Lesson: sparse build worktrees without `public/data/` and `pfps/` (301 PNGs, 1.5 GB, tracked without LFS, read by no
+  code) cost ~0.6 GB instead of 4.3 GB.
