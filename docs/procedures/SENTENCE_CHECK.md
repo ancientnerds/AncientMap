@@ -1534,14 +1534,21 @@ rebuilt: the journal of the run's card steps carries no description defect, and 
 only, so a rebuilt line would invent its URL and quote. The record
 `output/remediation/final-2026-10-08/reconstructed/wb-cardgap-2026-10-07.DESCRIPTION_DEFECTS.lost.json` names the five sites
 (Wamanmarka, Chumbivilcas; Tanqa Tanqa; Lakhan-Jo-Daro; Wain's Hill; Cave of Niaux) and why; the card lane finds them
-again (a re-card's verify writes new lines), and the population counts them as `lost` until then. Measured 2026-10-24
-(read `6136de87`): 197 lines in 10 files, 0 skipped, **population 160 = 136 asked by defects-2026-10-02 + 19 new** (the
-three shorts pilots: 5, 8, 8 sites) **+ 5 lost**.
+again (a re-card's verify writes new lines), and the population counts them as `lost` until then.
+
+A site an earlier run asks is `asked` only while that run's frozen prompt carried every standing claim of it (the
+entry's `defects`, compared by sentence text and claim: the URL and quote are evidence). A claim a later pilot found
+that the prompt did not carry makes it `asked+new-claims`: it goes on the new list with **every** standing claim,
+because the new run's plan is the later one and takes the site over in the gate (`asked-again-later`), so its agent
+must see the earlier claims too. Measured 2026-10-24 (read `6136de87`): 197 lines in 10 files, 0 skipped,
+**population 160 = 134 asked by defects-2026-10-02 + 2 asked+new-claims + 19 new** (the three shorts pilots: 5, 8, 8
+sites) **+ 5 lost**; the list holds 21 sites. The two are Hatun Uchku (`7a1fc276`, "2,206 metres") and Larisa, Argos
+(`e7f9d07d`): `wb-shorts-pilot2-2026-10-19` found the claim of `wb-ws-2026-09-27-0x` again in other words.
 
     # 1. the continuation of defects-2026-10-02 (136 sites, 45 answered by Sonnet, 91 held): its frozen prompts are
     #    answered now by the fact checker (brief, validate, import, verify, build --first-batch 4700), exactly as 11.3.
     #    Its 19 sites whose raw_data lane WB moved since the read (_card_provenance only, measured) are NOT read again:
-    #    the gate plans them over the live raw_data (15.10).
+    #    the gate plans them over the live raw_data (15.10). Its 2 asked+new-claims sites are taken over by step 2.
     # 2. the new sites: a run after it
     R=defects-2026-10-24
     $C read --run-dir $RUNS/$R
@@ -1549,7 +1556,8 @@ three shorts pilots: 5, 8, 8 sites) **+ 5 lost**.
     $C defect-population --run-dir $RUNS/$R $DEF --asked $RUNS/defects-2026-10-02 \
         --lost $M/final-2026-10-08/reconstructed/wb-cardgap-2026-10-07.DESCRIPTION_DEFECTS.lost.json \
         --out $RUNS/$R/DEFECT_SITES.txt
-    #   DEFECT_SITES.txt: the new sites only; .report.json their claims; .population.json all 160 with their state
+    #   DEFECT_SITES.txt: the new and the asked+new-claims sites; .report.json their claims; .population.json all
+    #   160 with their state (and new_claims per asked site)
     $C export --run-dir $RUNS/$R --handoff $H/wc-$R-r1 --sites $RUNS/$R/DEFECT_SITES.txt \
         --defects $RUNS/$R/DEFECT_SITES.txt.report.json
     #   ...answer, import, verify, build --first-batch 4710, write in the chain (15.8)
@@ -1582,12 +1590,17 @@ Every repaired site's WB card turns stale (the `desc_sha256` tie): `lane WB sele
     $C minimax-sites --run-dir $RUNS/$R --from $RUNS/mass-2026-09-27-01 --from $RUNS/mass-2026-09-27-02 \
         --closed $M/final-2026-10-08/reconstructed/p4wc-4325.closed.json \
         --out $RUNS/$R/MINIMAX_SITES.txt
+    #   run it in the main checkout: a --closed record is read only while it holds against lane WC's apply root
+    #   (--apply-root names another), as the gate reads it; the report's closed[].holds_against says where
 
 Each source run is read against the checkout it lives in (`<tree>/output/remediation/wc_runner/runs/<name>`
 records its handoffs relative to that tree), and a round whose handoff is not there stops the command. **The WN pilot
 `wn-2026-10-06` is lost** (its run and handoffs lived in the removed worktree `db-finish`): its 17 texts are named from the
 record of its closed batch (`--closed`, 15.10) - all 17 MiniMax-shaped (the journal's `checker` is `model4.AI_SYSTEM`) -
-under the same rule as a source run's: the live text still the one `wn-2026-10-06` wrote. A site is on the list when an answer stamped MiniMax stands in a check, write or verification round of a source run
+under the same rule as a source run's: the live text still the one `wn-2026-10-06` wrote. The record is read strictly
+(`closed_wc_batches.read_record`) and only while `verify` finds nothing - the batch files, the journal rows, the
+acceptance, and a site list whose `minimax` flags are its journal rows' checkers - so an edited or stale record stops
+the command instead of shortening the list. A site is on the list when an answer stamped MiniMax stands in a check, write or verification round of a source run
 (the judge only measured) **and** the live text is still the one that run wrote (`_description_check` names the run
 and hashes the text). Measured on the owner's side before: 63 verify2 answers of mass-02 (57 sites still hold their
 text, 5 cleared, 1 without a record) and the 17 WN texts; the report names the others by reason (`cleared`: lane
@@ -1656,6 +1669,18 @@ accepted on, the lost files, who and why). The gate (`write_gate4.wc_batches`, `
 directory) accepts the batch in the apply root only while the record holds, never plans it again and keeps its
 `PLAN.jsonl` in the lane plan, so every acceptance still judges its rows against the journal; a batch neither named nor
 closed is refused as before. Its 17 texts go to the D10 re-check (15.6).
+
+**The closed batch is a link of the chain.** All 17 sites were cleared earlier by named batches (the pilot `p4wc-4003`
+and mass-02), which re-plan those clears; the D10 re-check then plans the WN text again. The one-site-one-batch check
+(`write4.wc_sites_planned_twice`) accepts two batches on one cell only when their rows chain, and without the closed
+batch's rows the clear's NULL never meets the re-check's old value (the WN text): the gate would stop the whole lane
+again. `write_gate4.wc_chain` therefore puts each closed batch's recorded `PLAN.jsonl` rows (verified through its
+record, never rendered) into that check at the place they were written: before the first named plan not accepted on an
+earlier step (not written, pending, or accepted later). A raw_data link chains on the description's own state
+(`write4._links`, `description_part` without the card sub-key), because 2 of the 17 carry lane WB's `_card_provenance`
+since; the transaction still holds the full old value. Measured 2026-10-24 (read-only, a copy of the apply root): the
+real chain plus a re-check of the 17 texts at production's live values gives 17 sites planned twice without the
+closed batch and 0 with it.
 
 **Stale reads.** The gate compared the whole description and raw_data pair a site was checked with, so a write of
 another lane to `raw_data` voided a built plan as `moved-since-check` (19 of the 136 sites of `defects-2026-10-02`, by

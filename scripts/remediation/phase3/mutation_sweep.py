@@ -23492,7 +23492,7 @@ WC_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "wc gate: two batches may plan one site",
         P4_WRITE_GATE,
-        "        twice = W4.wc_sites_planned_twice(plans)\n",
+        "        twice = W4.wc_sites_planned_twice(wc_chain(plans, closed, apply_root=apply_root))\n",
         "        twice = {}  # mutant\n",
         WC_WRITE_TEST,
         "test_one_site_planned_by_two_batches_stops_the_gate_before_anything_is_rendered",
@@ -23928,6 +23928,8 @@ WCR_ROLES_TEST = "tests/remediation/test_wc_roles.py"
 WCR_VOID_TEST = "tests/remediation/test_wc_void.py"
 WCR_REPAIRS_TEST = "tests/remediation/test_wc_repairs.py"
 WCR_POPULATION_TEST = "tests/remediation/test_wc_desc_population.py"
+#: A closed batch's texts on the D10 list, from a record that holds (the review of 2026-10-24).
+WCR_CLOSED_D10 = "test_minimax_sites_names_a_closed_batchs_texts_only_from_a_record_that_holds"
 WCR_CAL_TEST = "tests/remediation/test_wc_calibration.py"
 WCR_MINIMAX_CHECK = "test_a_minimax_check_answer_is_never_imported"
 WCR_MINIMAX_VERIFY = (
@@ -24259,38 +24261,62 @@ WCR_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         WCR_CLI,
         "            touched.setdefault(site_id, set()).add(lost_run)\n",
         "            pass  # mutant\n",
-        WCR_POPULATION_TEST,
-        "test_the_texts_of_a_closed_batch_whose_run_is_lost_are_on_the_d10_list",
+        CLOSED_TEST,
+        WCR_CLOSED_D10,
     ),
     (
         "wc minimax: a record of another kind is read as closed",
-        WCR_CLI,
-        '    if record.get("kind") != CLOSED_BATCH_KIND or record.get("reconstructed") is not True:\n',
-        "    if False:  # mutant\n",
+        CLOSED_TOOL,
+        '        raise ClosedBatchError(f"{path}: not a closed-batch record of version {VERSION}")\n',
+        "        pass  # mutant\n",
         WCR_POPULATION_TEST,
-        "test_the_texts_of_a_closed_batch_whose_run_is_lost_are_on_the_d10_list",
+        "test_a_file_that_is_no_closed_batch_record_is_refused",
     ),
     (
         "wc minimax: a Claude text of a closed batch is listed",
-        WCR_CLI,
+        CLOSED_TOOL,
         '    return {site["site_id"]: site["run"] for site in record["site_list"] if site["minimax"]}\n',
         '    return {site["site_id"]: site["run"] for site in record["site_list"]}  # mutant\n',
-        WCR_POPULATION_TEST,
-        "test_the_texts_of_a_closed_batch_whose_run_is_lost_are_on_the_d10_list",
+        CLOSED_TEST,
+        WCR_CLOSED_D10,
+    ),
+    (
+        "wc minimax: a record that does not hold is read",
+        WCR_CLI,
+        "    problems = closed.verify(record, apply_root)\n    if problems:\n",
+        "    problems = closed.verify(record, apply_root)\n    if False:  # mutant\n",
+        CLOSED_TEST,
+        WCR_CLOSED_D10,
+    ),
+    (
+        "closed batches: an edited minimax flag holds",
+        CLOSED_TOOL,
+        "    problems: list[str] = _site_list_problems(record)\n",
+        "    problems: list[str] = []  # mutant\n",
+        CLOSED_TEST,
+        WCR_CLOSED_D10,
     ),
     (
         "wc defects population: a site an earlier run asks counts as new",
         WCR_CLI,
-        '        state = f"asked:{earlier[site_id]}" if site_id in earlier else "new"\n',
-        '        state = "new"  # mutant\n',
+        '            state = f"asked:{earlier[site_id]}"\n',
+        '            state = "new"  # mutant\n',
         WCR_POPULATION_TEST,
         "test_the_defect_population_is_every_standing_line_the_asked_the_new_and_the_lost",
     ),
     (
+        "wc defects population: a claim the asked run did not carry is dropped",
+        WCR_CLI,
+        "        elif uncarried:\n",
+        "        elif False:  # mutant\n",
+        WCR_POPULATION_TEST,
+        "test_a_claim_a_later_pilot_found_on_an_asked_site_puts_the_site_on_the_list_again",
+    ),
+    (
         "wc defects population: a lost site is put on the list to ask",
         WCR_CLI,
-        '    new = [site_id for site_id, state in states.items() if state["state"] == "new"]\n',
-        "    new = list(states)  # mutant\n",
+        '        if state["state"] == "new" or state["state"].startswith(f"{ASKED_NEW_CLAIMS}:")\n',
+        "        if True  # mutant\n",
         WCR_POPULATION_TEST,
         "test_the_defect_population_is_every_standing_line_the_asked_the_new_and_the_lost",
     ),
@@ -25673,16 +25699,16 @@ X10_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
     (
         "p4 disclosure: another batch's calls count",
         "scripts/remediation/phase4/assemble.py",
-        '        and row.get("batch_id") == batch_id\n',
-        "        and True  # mutant\n",
+        '            and row.get("batch_id") == batch_id\n',
+        "            and True  # mutant\n",
         P4_DISCLOSURE_TEST,
         "test_the_stamps_are_the_sites_own_calls_in_its_own_batch",
     ),
     (
         "p4 disclosure: another site's calls count",
         "scripts/remediation/phase4/assemble.py",
-        '        and str(row.get("label", "")).startswith(f"{site_id}/")\n',
-        "        and True  # mutant\n",
+        '            and label.startswith(f"{site_id}/")\n',
+        "            and True  # mutant\n",
         P4_DISCLOSURE_TEST,
         "test_the_stamps_are_the_sites_own_calls_in_its_own_batch",
     ),
@@ -25711,8 +25737,81 @@ X10_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
         "tests/remediation/test_phase4_v3.py",
         "test_check_answer_reads_the_review_whole",
     ),
+    # -- the review of 2026-10-24: a re-asked call, the ledger read once per batch
+    (
+        "p4 disclosure: every call of a label counts, not the stored one",
+        "scripts/remediation/phase4/assemble.py",
+        '            last[label] = str(row["model"])\n',
+        '            last[f"{label}#{len(last)}"] = str(row["model"])  # mutant\n',
+        P4_DISCLOSURE_TEST,
+        "test_a_re_asked_call_discloses_only_the_model_whose_answer_is_stored",
+    ),
+    (
+        "p4 disclosure: the bought review call is not added to the rows read",
+        "scripts/remediation/phase4/review4.py",
+        "            calls.append(\n",
+        "            [].append(  # mutant\n",
+        P4_DISCLOSURE_TEST,
+        "test_the_review_reads_the_run_ledger_once_per_batch",
+    ),
+    (
+        "p4 disclosure: the review re-reads the ledger per site",
+        "scripts/remediation/phase4/review4.py",
+        "            ai_system=A.site_ai_system(calls, batch_id=batch_id, site_id=site_id),\n",
+        "            ai_system=A.site_ai_system(\n"
+        "                A.read_ledger(ledger), batch_id=batch_id, site_id=site_id\n"
+        "            ),  # mutant\n",
+        P4_DISCLOSURE_TEST,
+        "test_the_review_reads_the_run_ledger_once_per_batch",
+    ),
 ]
 MUTATIONS += X10_MUTATIONS
+
+# ---- the review of 2026-10-24: the closed batch in the WC chain check, raw_data links
+WC_CHAIN_TEST = "test_a_later_plan_rechecks_a_text_the_closed_batch_wrote_over_an_earlier_clear"
+WC_CHAIN_MUTATIONS: list[tuple[str, str, str, str, str, str]] = [
+    (
+        "wc gate: the closed batch is left out of the chain",
+        P4_WRITE_GATE,
+        "        twice = W4.wc_sites_planned_twice(wc_chain(plans, closed, apply_root=apply_root))\n",
+        "        twice = W4.wc_sites_planned_twice(plans)  # mutant\n",
+        CLOSED_TEST,
+        WC_CHAIN_TEST,
+    ),
+    (
+        "wc gate: a closed batch goes to the end of the chain",
+        P4_WRITE_GATE,
+        "                if plan.batch_id not in steps or steps[plan.batch_id] > steps[batch_id]\n",
+        "                if False  # mutant\n",
+        CLOSED_TEST,
+        WC_CHAIN_TEST,
+    ),
+    (
+        "wc gate: a closed batch goes before the batches written before it",
+        P4_WRITE_GATE,
+        "                if plan.batch_id not in steps or steps[plan.batch_id] > steps[batch_id]\n",
+        "                if True  # mutant\n",
+        CLOSED_TEST,
+        "test_a_closed_batch_goes_where_it_was_written_in_the_chain",
+    ),
+    (
+        "wc write4: a raw_data link chains byte for byte",
+        P4_WRITE,
+        '    if before.column != "raw_data":\n',
+        "    if True:  # mutant\n",
+        CLOSED_TEST,
+        WC_CHAIN_TEST,
+    ),
+    (
+        "wc write4: a raw_data link chains whatever the description state",
+        P4_WRITE,
+        "    return state(before.new_value) == state(after.old_value)\n",
+        "    return True  # mutant\n",
+        CLOSED_TEST,
+        "test_a_later_plan_whose_old_value_is_not_the_closed_batchs_text_is_refused",
+    ),
+]
+MUTATIONS += WC_CHAIN_MUTATIONS
 
 # ---- lane E's writer calibration (`wc/enrich_calibration.py`, the leave-one-out pool `enrich-writer`)
 ENRICH_CAL = "scripts/remediation/wc/enrich_calibration.py"
