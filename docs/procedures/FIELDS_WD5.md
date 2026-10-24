@@ -321,7 +321,7 @@ done
 
 Then, in this order, the work of other packages that depends on this one: the stale-id wave (`qid_repair.py`
 wave 5), the site-type merge lane, the card_stats waves and the five dead columns, the static export. A type or period
-write voids every earlier card_stats wave's ROLLBACK.sql, so card_stats comes last (map, "Type merge, then card_stats").
+write voids every earlier card_stats wave's ROLLBACK.sql, so card_stats comes last (map, "Type merge, then card_stats"). The tools and their commands: section 13.
 
 ## 8. Undo
 
@@ -436,3 +436,114 @@ Tremeca, Chongbang Fortress) and 84 from the rest run. Some of the 84 give up fo
 cover (a Spanish period name, a date of the fortification and not of the start): the fresh agent decides, and an
 `unresolved` costs nothing but its question. Tests: `tests/remediation/test_fields_wd5_reask.py`; mutation family
 `wd5r:`.
+
+## 13. Phase 8: the type merge, card_stats and its five dead columns, the owner list (2026-10-24)
+
+The close-out order of the map (`plans/fields.md`, "Type merge, then card_stats (last)"), after the last wd5 wave and
+the marker lanes of section 7: (1) the site_type merge, (2) a card_stats wave and its `b` read-back, (3) the five dead
+columns, (4) a second card_stats wave after the description and image lanes, (5) the owner list. A type or period write
+voids every earlier card_stats wave's `ROLLBACK.sql`, so nothing of (2)-(4) is undone from its file once a later type
+or period write landed (`card_stats.py`'s docstring). Every write is a step of at most 100 sites (D8) with the apply
+sequence of section 6; tests and the mutation family `d25-` (`mutation_sweep.py d25-`) cover every guard below.
+
+### 13.1 The site_type merge (D25, `mechanical/site_type_merge.py`)
+
+The map `scripts/remediation/mechanical/site_type_merge.json` (pinned by `MAP_SHA256`) merges 15 canonical aliases into
+the curated compound type of **their own category group** (`api/cardgame/constants.py`): Settlement, Town, Urban ->
+City/town/settlement; Villa -> Residence/villa/farmhouse; Fortress, Citadel -> Fortress/citadel; Gate ->
+Gate/archway/bridge; Church -> Church/cathedral; Necropolis -> Necropolis/tombs complex; Megalithic -> Megalithic
+structures; Cave -> Cave Structures; Road -> Road/avenue/trackway; Mine, Quarry -> Mine/quarry; Theater -> Theatre. A
+pair across groups, a target that is not a fixed point of `normalize_site_type` or itself an alias is refused when the
+map is read. `not_merged` names what was considered and kept (City 92, Village 32, Castle 9 - covered by a compound type
+but not in the plan's proposal; Fort, Bridge, Aqueduct, Tomb, Temple; Museum and the natural types are scope
+questions). `CANONICAL_TYPES` and the globe colours stay unchanged: only data moves.
+
+**The map is a proposal** (`"decision": null`): `report` reads it, `wave` refuses it until `decision` names `by`, `at`
+and `check` (fields.md item 8: Opus high decides, plus an adversarial check) and `MAP_SHA256` moves with the edit.
+`fields/p31_site_types.json` offers no alias any more (each replaced by its target, 363 classes; `classify.TABLE_SHA256`
+`38140ab2...` -> `ea527cac...`), so a later field lane cannot bring the old names back; a test ties table and map.
+
+Measured read-only 2026-10-24 (`report`): **212 curated rows** (209 shown, 3 retired: Fortress 2, Settlement 1) -
+Settlement 110, Fortress 20, Cave 14, Villa 12, Town 11, Necropolis 9, Gate 9, Church 7, Megalithic 5, Road 3,
+Citadel 3, Quarry 3, Urban 3, Mine 2, Theater 1 - and 0 the plan would refuse. Retired rows are merged too.
+
+```bash
+M=scripts/remediation/mechanical
+$PY $M/site_type_merge.py report                       # read-only: map, counts, refusals
+# after the decision is recorded in the map and MAP_SHA256 moved:
+$PY $M/site_type_merge.py wave --wave W                # WAVE.json, 3 steps
+# per step N: site_type_merge.py step --wave W --step N; apply.py --lane site-type-merge-W-sNNN
+#   --emit --verify --rehearse --probe-guards --apply --verify --rehearse-rollback; site_type_merge.py accept --wave W --step N
+```
+
+### 13.2 card_stats after the card waves (`mechanical/card_stats.py`)
+
+The recompute still runs after lane WB's card writes: `card_description` is neither an input nor one of the twelve
+columns, so `basis_pointer` reads past it. Measured 2026-10-24 (a probe wave planned into `C:/tmp`, nothing applied):
+basis wave 2026-10-04f, counterfactual **0 of 59,724 cells differ** (5,113 journal rows put back); the wave would write
+**7,138 cells over 1,751 cards** (mystery 1,382, rarity_score 1,593, rarity_tier 501, antiquity 763, empires 446,
+category_group 17), 29 refused (no description).
+
+New since 2026-10-24: a curated site **added since the basis** (the D57 insert lane) is left out of the proof - the
+basis names every curated site its export held, so it was no curated row then (`counterfactual_sites_added_since_basis`
+counts them); its `mystery` share moves the cards of its pair, which the plan writes. A site the basis names that is
+gone still refuses. A new site without a `card_stats` row is listed `no-card-stats-row` (the writer only updates; the
+API boot's `backfill_placeholder_stats` fills a zeroed placeholder row, FIELD_CONTRACT 2.3).
+
+```bash
+$PY $M/card_stats.py --wave Z --export && $PY $M/card_stats.py --wave Z --write     # Z unused, e.g. 2026-10-26
+# apply.py --lane card-stats-Z with the 7-step sequence, then --wave Zb --export --write must print "cells": 0
+```
+
+### 13.3 The five dead columns (`mechanical/card_stats_ext.py`)
+
+`wikidata_qid` and `best_wiki_url` (`https://en.wikipedia.org/wiki/<title>`) from `site_external_ids`;
+`commons_image` (P18, the first best-rank value), `heritage_designation` (the English labels of every best-rank P1435,
+`; `-joined; an unlabelled value refuses the cell) and `inception_year` (P571 at year precision or finer, one year,
+before 1500 - a later one is the park or museum) from the item in a field harvest. A merged item (`qid-redirects`)
+refuses the item cells: the id wave repairs the QID first. The lane only fills NULL cells, guards the site's two
+external ids (guard 5) and never touches `civilization` or `source_language`. The five columns are not cells of the
+recompute, so the two lanes never void each other's proof.
+
+Measured read-only 2026-10-24 over the wd5 harvest (labels fetched into `C:/tmp`, nothing written): 4,900 shown
+cards, **14,643 cells** - wikidata_qid 4,539, best_wiki_url 4,518, commons_image 3,529, heritage_designation 1,873,
+inception_year 184; refused: 172 inceptions coarser than a year, 63 modern, 7 conflicting, 3 unlabelled designations,
+1 merged item; 361 sites have no QID and 382 no English article. 49 steps.
+
+```bash
+H=output/remediation/fields/wd5/harvest     # a field harvest; `fetch` adds the items it lacks
+$PY $M/card_stats_ext.py fetch --wave W --harvest $H   # production read-only; Wikidata GETs; LABELS.json
+$PY $M/card_stats_ext.py wave  --wave W --harvest $H   # WAVE.json pins every item file and LABELS.json
+# per step N: card_stats_ext.py step --wave W --step N; apply.py --lane card-stats-ext-W-sNNN
+#   --emit --verify --rehearse --probe-guards --apply --verify --rehearse-rollback; card_stats_ext.py accept --wave W --step N
+```
+
+### 13.4 The dead card file
+
+`public/data/card_descriptions.json` was deleted on 2026-10-24 (D25, `CARD_DESCRIPTIONS.md` 5.5): nothing in `api/`,
+`pipeline/`, `ancient-nerds-map/src` or the deploy reads it. `scripts/import_card_descriptions.py` no longer copies
+into it; `scripts/merge_rewrites.py` stays retired.
+
+### 13.5 The owner list (`scripts/remediation/owner_list_final.py`)
+
+One list of everything that stays empty, unsourced or open: the field runs (each rebuilt with `owner_list.build`, the
+**last** run that asked a `(site, field)` decides it), the identity lanes' `OWNER_LIST.jsonl` (retarget, scope
+window), and production's own gaps (no description, no card, an old card kept under D5, no picture, a thumbnail
+without a credited row, a hero below 1600x900 or without the credit its licence asks, no type, Undated, a rule-made or
+unmarked period, an unsourced or unmarked point, no source URL, no Wikidata item, a pending scope). A lane row of a
+retired site or of a value a later write replaced is set aside and counted. Any owner list under `output/remediation`
+no source covers is named. **Run it from the main checkout** (the waves name their run by the main checkout's path):
+
+```bash
+cd C:/PythonProjects/AncientMap
+./.venv/Scripts/python.exe scripts/remediation/owner_list_final.py build           # rerunnable
+./.venv/Scripts/python.exe scripts/remediation/owner_list_final.py build --final   # at the very end
+```
+
+It writes `output/remediation/final-2026-10-08/OWNER_LIST_FINAL.{jsonl,md}`. `--final` refuses while a source is
+missing, a list is unregistered or an open field row is `pending`. A dry run of 2026-10-24 (before the identity lanes,
+the marker lanes and the card waves) listed 18,420 rows over all 4,900 shown sites: image-none 952,
+image-thumbnail-only 140, hero-small 809 (the census's "433" is not reproducible, its SQL is gone), hero-credit-missing
+50, description-empty 28, card-empty 169, card-old-kept 4,672, Undated 619, site-type-empty 86, source-url-empty 47,
+wikidata-id-none 361, scope-pending 5, both markers absent on 4,900, open field rows 682 (1,381 superseded by later
+writes).
