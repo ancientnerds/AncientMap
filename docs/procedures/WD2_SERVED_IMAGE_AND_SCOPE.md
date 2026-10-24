@@ -1326,7 +1326,10 @@ done
   draw that does not look at the disk.
 * `tests/remediation/test_image_recheck_binding.py` - gap 3: the re-check's role and the seal.
 * `scripts/remediation/image_roles/mutation_sweep.py` - the image lanes' sweep; the close-out added
-  52 cases (`CLOSEOUT_CASES`, labels `img d48`, `img d49`, `img d59`, `img gap1`, `img gap3`).
+  53 cases (`CLOSEOUT_CASES`, labels `img d48`, `img d49`, `img d59`, `img gap1`, `img gap3`,
+  and `img d17` for the empty thumbnail the INSERT plan now keeps as the empty string). Last full run
+  2026-10-24: 282 image cases, 281 fired and 1 survived (an equivalent mutant since D36, fixed in the
+  test and fired on its re-run); `mechanical/mutation_sweep.py wd2` 114 of 114 fired.
 * `scripts/remediation/mechanical/mutation_sweep.py wd2` - every WD2 guard removed one at a time
   must turn its named test red (the group `WD2_CASES`, 84 cases; the last run's output is
   `output/remediation/mechanical/evidence/23_mutation_sweep_wd2.txt`). It rewrites the source
