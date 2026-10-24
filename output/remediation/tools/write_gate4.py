@@ -103,13 +103,18 @@ the mass run's; `scripts/remediation/wc/cli.py build` writes each from the run's
 owner decision O5 of 2026-09-26, runbook `docs/procedures/SENTENCE_CHECK.md`). Like L it takes no
 `--run` and no scope. Production is asked, read-only, for each planned site's description and
 `raw_data` (`wc_live`, windows of 200): a site whose text Phase 4 wrote since is refused
-(`written-by-p4`), one whose pair moved since it was checked (`moved-since-check`), so a later
-write elsewhere never blocks a whole batch at the preflight. A written site stays its batch's while
-its description and WC's own `raw_data` keys are the outcome's (lane WB stamps others later), and a
-site a later WC plan asks again is that plan's (`asked-again-later`); should two batches still both
-plan one site, nothing is rendered (`write4.wc_sites_planned_twice`) - unless their rows chain (a
-clear, then a text for the same cell: lane WN's population). The apply root holds these
-plans' write batches or none (`wc_batches`). A plan with a text of lane N (recorded marking `none` or
+(`written-by-p4`), one whose description or the description's own state in `raw_data` moved since
+it was checked (`moved-since-check`, `write4.description_part`), so a later write elsewhere never
+blocks a whole batch at the preflight; a key of another lane that moved (lane WB's
+`_card_provenance`, a field lane's marker) is kept and the site is planned over the live raw_data,
+which the transaction holds whole (2026-10-24, the stale reads). A site a written batch wrote stays
+its batch's - re-planned from what the batch wrote (`wc_bases`), whatever a later lane or a later
+write did since - and a site a later WC plan asks again is that plan's (`asked-again-later`);
+should two batches still both plan one site, nothing is rendered (`write4.wc_sites_planned_twice`) -
+unless their rows chain (a clear, then a text for the same cell: lane WN's population). The apply
+root holds these plans' write batches or none (`wc_batches`) - or a batch whose plan is lost and
+that a versioned record closes (`closed_wc_batches.py`, `--closed-batches`: `p4wc-4325`, the WN
+pilot of 2026-10-06), which is never planned again and stays in the lane plan. A plan with a text of lane N (recorded marking `none` or
 `web`) is refused unless the live API's commit contains the change that lets its pages render
 (`require_lane_n_api`). The step's acceptance is `verify_writes4.py --lane
 p4wc --plan <apply root>/LANE_PLAN.jsonl --allow-stamp 'wb-teaser-prov-%'`, which reads no run.
